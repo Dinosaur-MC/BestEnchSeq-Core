@@ -22,7 +22,7 @@ struct Ench {
     std::string get_name() const;
     MCE get_supported_platform() const;
     int32_t get_max_level() const;
-    int32_t get_multiplier() const;
+    int32_t get_current_multiplier() const;
     const std::unordered_set<int32_t> &get_incompatible() const;
 
     bool is_incompatible(const Ench &other) const;

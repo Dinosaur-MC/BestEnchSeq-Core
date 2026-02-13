@@ -1,6 +1,5 @@
 #include "EnchInfo.h"
 #include "EnchSet.h"
-#include "common.h"
 
 void EnchSet::update_cache() const {
     cache.incompatible.clear();
@@ -9,7 +8,7 @@ void EnchSet::update_cache() const {
         for (auto &e : ench.get_incompatible()) {
             cache.incompatible.insert(e);
         }
-        level_cost += ench.get_multiplier() * ench.lvl;
+        level_cost += ench.get_current_multiplier() * ench.lvl;
     }
     cache.level_cost = level_cost;
 }
@@ -30,12 +29,12 @@ int32_t EnchSet::combine(const EnchSet &other) {
             // 有冲突，不合并
             result += EnchInfo::get_active_platform() == MCE::Java ? 2 : 1;
         } else {
-            auto it = this->find(e);
+            int32_t multiplier = e.get_current_multiplier();
+            auto it            = this->find(e);
             if (it != this->end()) {
                 int32_t old_lvl = it->lvl;
                 int32_t new_lvl =
                     std::min(e.get_max_level(), old_lvl == e.lvl ? e.lvl + 1 : std::max(old_lvl, e.lvl));
-                int32_t multiplier = e.get_multiplier();
 
                 if (multiplier > 0) {
                     if (EnchInfo::get_active_platform() == MCE::Java) {
@@ -46,13 +45,12 @@ int32_t EnchSet::combine(const EnchSet &other) {
                 }
 
                 // 用新元素替换旧元素
-                auto new_e = Ench{it->id, new_lvl};
                 this->erase(it);
-                this->emplace(std::move(new_e));
+                this->emplace(e.id, new_lvl);
             } else {
                 // 插入新元素
                 this->emplace(e);
-                result += e.get_multiplier() * e.lvl;
+                result += multiplier * e.lvl;
             }
         }
     }
