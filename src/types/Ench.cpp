@@ -24,8 +24,9 @@ int32_t Ench::get_current_multiplier() const {
     auto active_platform = EnchInfo::get_active_platform();
 
     // 检查当前类型是否被支持
-    if (static_cast<int32_t>(info.supported_platform) & static_cast<int32_t>(active_platform)) {
-        return info.multiplier[static_cast<size_t>(active_platform)];
+    if (active_platform != MCE::None &&
+        static_cast<int8_t>(info.supported_platform) & static_cast<int8_t>(active_platform)) {
+        return info.multiplier[active_platform == MCE::Bedrock ? 1 : 0];
     }
     return 0; // 如果不支持当前类型，返回0
 }

@@ -11,9 +11,13 @@ class EnchSet : public std::unordered_set<Ench, Ench::Hash> {
     } mutable cache;
 
   public:
+    using std::unordered_set<Ench, Ench::Hash>::unordered_set;
+
     void update_cache() const;
     const Cache &get_cache() const;
 
     bool is_incompatible(const int32_t e) const;
+    bool is_incompatible_s(const int32_t e) const;
     int32_t combine(const EnchSet &other);
+    int32_t combine_s(const EnchSet &other);
 };

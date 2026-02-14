@@ -18,12 +18,16 @@ const EnchSet::Cache &EnchSet::get_cache() const { return cache; }
 bool EnchSet::is_incompatible(const int32_t e) const {
     return cache.incompatible.find(e) != cache.incompatible.end();
 }
+bool EnchSet::is_incompatible_s(const int32_t e) const {
+    update_cache();
+    return cache.incompatible.find(e) != cache.incompatible.end();
+}
 
 int32_t EnchSet::combine(const EnchSet &other) {
     int32_t result = 0;
     if (other.empty())
         return 0;
-    update_cache();
+    bool need_update = false;
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
@@ -52,8 +56,14 @@ int32_t EnchSet::combine(const EnchSet &other) {
                 this->emplace(e);
                 result += multiplier * e.lvl;
             }
+            need_update = true;
         }
     }
-    update_cache();
+    if (need_update)
+        update_cache();
     return result;
+}
+int32_t EnchSet::combine_s(const EnchSet &other) {
+    update_cache();
+    return combine(other);
 }
