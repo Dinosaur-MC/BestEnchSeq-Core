@@ -5,7 +5,7 @@
 
 struct Ench {
     const int32_t id; // A nonnegative number
-    int32_t lvl;      // A positive number
+    int32_t level;      // A positive number
 
   public:
     struct Hash {
@@ -16,7 +16,7 @@ struct Ench {
 
     // 构造函数
     Ench(int32_t id);
-    Ench(int32_t id, int32_t lvl);
+    Ench(int32_t id, int32_t level);
 
     // 成员方法
     std::string get_name() const;

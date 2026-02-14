@@ -5,10 +5,9 @@ void EnchSet::update_cache() const {
     cache.incompatible.clear();
     int32_t level_cost = 0;
     for (auto &ench : *this) {
-        for (auto &e : ench.get_incompatible()) {
-            cache.incompatible.insert(e);
-        }
-        level_cost += ench.get_current_multiplier() * ench.lvl;
+        for (auto &e : ench.get_incompatible())
+            cache.incompatible.emplace(e);
+        level_cost += ench.get_current_multiplier() * ench.level;
     }
     cache.level_cost = level_cost;
 }
@@ -36,25 +35,26 @@ int32_t EnchSet::combine(const EnchSet &other) {
             int32_t multiplier = e.get_current_multiplier();
             auto it            = this->find(e);
             if (it != this->end()) {
-                int32_t old_lvl = it->lvl;
-                int32_t new_lvl =
-                    std::min(e.get_max_level(), old_lvl == e.lvl ? e.lvl + 1 : std::max(old_lvl, e.lvl));
+                int32_t old_level = it->level;
+                int32_t new_level = std::min(
+                    e.get_max_level(), old_level == e.level ? e.level + 1 : std::max(old_level, e.level)
+                );
 
                 if (multiplier > 0) {
-                    if (EnchInfo::get_active_platform() == MCE::Java) {
-                        result += multiplier * new_lvl;
-                    } else {
-                        result += multiplier * (new_lvl - old_lvl);
-                    }
+                    if (EnchInfo::get_active_platform() == MCE::Java)
+                        result += multiplier * new_level;
+                    else
+                        result += multiplier * (new_level - old_level);
                 }
 
                 // 用新元素替换旧元素
                 this->erase(it);
-                this->emplace(e.id, new_lvl);
+                this->emplace(e.id, new_level);
             } else {
                 // 插入新元素
                 this->emplace(e);
-                result += multiplier * e.lvl;
+                if (multiplier > 0)
+                    result += multiplier * e.level;
             }
             need_update = true;
         }

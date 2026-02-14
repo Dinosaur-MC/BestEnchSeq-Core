@@ -7,10 +7,10 @@
 #include <vector>
 
 struct Equipment {
-    std::string id;
-    std::string name;
-    int32_t max_durability;
-    std::unordered_set<std::string> applicable_enchantments;
+    const std::string id;
+    const std::string name;
+    const int32_t max_durability;
+    const std::unordered_set<std::string> applicable_enchantments;
 
   public:
     struct Hash {

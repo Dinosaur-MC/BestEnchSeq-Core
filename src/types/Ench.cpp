@@ -5,12 +5,12 @@
 
 bool Ench::operator==(const Ench &other) const { return id == other.id; }
 
-Ench::Ench(int32_t id) : id(id), lvl(1) {
+Ench::Ench(int32_t id) : id(id), level(1) {
     if (id < 0 || id >= static_cast<int32_t>(EnchInfo::get_instances().size())) {
         throw std::out_of_range("Invalid Ench id");
     }
 }
-Ench::Ench(int32_t id, int32_t lvl) : id(id), lvl(lvl) {
+Ench::Ench(int32_t id, int32_t level) : id(id), level(level) {
     if (id < 0 || id >= static_cast<int32_t>(EnchInfo::get_instances().size())) {
         throw std::out_of_range("Invalid Ench id");
     }

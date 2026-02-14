@@ -7,11 +7,11 @@
 #include "common.h"
 
 struct EnchInfo {
-    std::string name;                             // Unique id
-    MCE supported_platform;                       // Supported platform
-    int32_t max_level;                            // Maximum level
-    int32_t multiplier[2];                        // Positive multipliers for Java and Bedrock
-    std::unordered_set<std::string> incompatible; // Incompatible enchantments (by name)
+    const std::string name;                             // Unique id
+    const MCE supported_platform;                       // Supported platform
+    const int32_t max_level;                            // Maximum level
+    const int32_t multiplier[2];                        // Positive multipliers for Java and Bedrock
+    const std::unordered_set<std::string> incompatible; // Incompatible enchantments (by name)
 
   private:
     static std::vector<std::unique_ptr<EnchInfo>> instances;       // All instances
