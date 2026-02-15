@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
-std::vector<std::unique_ptr<EnchInfo>> EnchInfo::instances;
+std::vector<EnchInfo> EnchInfo::instances;
 std::unordered_map<std::string, int32_t> EnchInfo::name_to_index;
 std::unordered_map<int32_t, std::unordered_set<int32_t>> EnchInfo::incompatible_table;
 
@@ -36,7 +36,7 @@ void EnchInfo::initialize(const std::vector<EnchInfo> &infos) {
     instances.reserve(instances.size());
     for (int32_t i = 0; i < infos.size(); i++) {
         auto &info = infos[i];
-        instances.push_back(std::make_unique<EnchInfo>(info));
+        instances.push_back(info);
         name_to_index[info.name] = i;
     }
     for (int32_t i = 0; i < infos.size(); i++) {
@@ -46,20 +46,20 @@ void EnchInfo::initialize(const std::vector<EnchInfo> &infos) {
         }
     }
 }
-const std::vector<std::unique_ptr<EnchInfo>> &EnchInfo::get_instances() { return instances; }
+const std::vector<EnchInfo> &EnchInfo::get_instances() { return instances; }
 
 const EnchInfo &EnchInfo::get(int32_t index) {
     if (index < 0 || index >= static_cast<int32_t>(instances.size())) {
         throw std::out_of_range("EnchInfo index out of range");
     }
-    return *instances[index];
+    return instances[index];
 }
 const EnchInfo &EnchInfo::get(const std::string &name) {
     auto it = name_to_index.find(name);
     if (it == name_to_index.end()) {
         throw std::runtime_error("EnchInfo not found: " + name);
     }
-    return *instances[it->second];
+    return instances[it->second];
 }
 int32_t EnchInfo::get_id(const std::string &name) {
     return name_to_index.find(name) != name_to_index.end() ? name_to_index[name] : -1;

@@ -1,5 +1,4 @@
 #pragma once
-#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -14,7 +13,7 @@ struct EnchInfo {
     const std::unordered_set<std::string> incompatible; // Incompatible enchantments (by name)
 
   private:
-    static std::vector<std::unique_ptr<EnchInfo>> instances;       // All instances
+    static std::vector<EnchInfo> instances;                        // All instances
     static std::unordered_map<std::string, int32_t> name_to_index; // Name to index mapping
     static std::unordered_map<int32_t, std::unordered_set<int32_t>>
         incompatible_table; // Incompatible table (by index)
@@ -32,7 +31,7 @@ struct EnchInfo {
     };
 
     static void initialize(const std::vector<EnchInfo> &infos);
-    static const std::vector<std::unique_ptr<EnchInfo>> &get_instances();
+    static const std::vector<EnchInfo> &get_instances();
 
     static const EnchInfo &get(int32_t index);
     static const EnchInfo &get(const std::string &name);
