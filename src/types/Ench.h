@@ -5,7 +5,7 @@
 
 struct Ench {
     const int32_t id; // A nonnegative number
-    int32_t level;      // A positive number
+    int32_t level;    // A positive number
 
   public:
     struct Hash {
@@ -22,6 +22,7 @@ struct Ench {
     std::string get_name() const;
     MCE get_supported_platform() const;
     int32_t get_max_level() const;
+    int32_t get_multiplier(MCE type) const;
     int32_t get_current_multiplier() const;
     const std::unordered_set<int32_t> &get_incompatible() const;
 

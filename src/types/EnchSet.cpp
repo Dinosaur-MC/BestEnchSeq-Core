@@ -23,16 +23,17 @@ bool EnchSet::is_incompatible_s(const int32_t e) const {
 }
 
 int32_t EnchSet::combine(const EnchSet &other) {
-    int32_t result = 0;
     if (other.empty())
         return 0;
     bool need_update = false;
+    int32_t result   = 0;
+    MCE type         = EnchInfo::get_active_platform();
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
-            result += EnchInfo::get_active_platform() == MCE::Java ? 2 : 1;
+            result += type == MCE::Java ? 2 : 1;
         } else {
-            int32_t multiplier = e.get_current_multiplier();
+            int32_t multiplier = e.get_multiplier(type);
             auto it            = this->find(e);
             if (it != this->end()) {
                 int32_t old_level = it->level;
@@ -41,7 +42,7 @@ int32_t EnchSet::combine(const EnchSet &other) {
                 );
 
                 if (multiplier > 0) {
-                    if (EnchInfo::get_active_platform() == MCE::Java)
+                    if (type == MCE::Java)
                         result += multiplier * new_level;
                     else
                         result += multiplier * (new_level - old_level);

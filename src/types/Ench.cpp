@@ -19,6 +19,9 @@ Ench::Ench(int32_t id, int32_t level) : id(id), level(level) {
 std::string Ench::get_name() const { return EnchInfo::get(id).name; }
 MCE Ench::get_supported_platform() const { return EnchInfo::get(id).supported_platform; }
 int32_t Ench::get_max_level() const { return EnchInfo::get(id).max_level; }
+int32_t Ench::get_multiplier(MCE type) const {
+    return EnchInfo::get(id).multiplier[type == MCE::Bedrock ? 1 : 0];
+};
 int32_t Ench::get_current_multiplier() const {
     const auto &info     = EnchInfo::get(id);
     auto active_platform = EnchInfo::get_active_platform();
