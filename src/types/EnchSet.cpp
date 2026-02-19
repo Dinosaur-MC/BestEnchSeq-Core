@@ -3,21 +3,42 @@
 #include <cstdint>
 
 void EnchSet::update_cache() const {
-    cache.incompatible.clear();
+    _cache.incompatible.clear();
     for (auto &ench : *this) {
         for (auto &e : ench.get_incompatible())
-            cache.incompatible.emplace(e);
+            _cache.incompatible.emplace(e);
     }
 }
 
-const EnchSet::Cache &EnchSet::get_cache() const { return cache; }
+const EnchSet::Cache &EnchSet::get_cache() const { return _cache; }
 
 bool EnchSet::is_incompatible(const int32_t e) const {
-    return cache.incompatible.find(e) != cache.incompatible.end();
+    return _cache.incompatible.find(e) != _cache.incompatible.end();
 }
 bool EnchSet::is_incompatible_s(const int32_t e) const {
     update_cache();
-    return cache.incompatible.find(e) != cache.incompatible.end();
+    return _cache.incompatible.find(e) != _cache.incompatible.end();
+}
+
+EnchSet EnchSet::combine(const EnchSet &other) const {
+    EnchSet result = *this;
+    for (const Ench &e : other) {
+        if (!is_incompatible(e.id)) {
+            auto it = result.find(e);
+            if (it != result.end()) {
+                int32_t new_level = *it + e.level;
+                result.erase(it);
+                result.emplace(e.id, new_level);
+            } else {
+                result.emplace(e);
+            }
+        }
+    }
+    return result;
+}
+EnchSet EnchSet::combine_s(const EnchSet &other) const {
+    update_cache();
+    return combine(other);
 }
 
 int32_t EnchSet::combine(const EnchSet &other, int32_t multiplier_index) {
