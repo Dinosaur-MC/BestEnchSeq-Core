@@ -35,9 +35,11 @@ int32_t EnchSet::combine(const EnchSet &other, int32_t multiplier_index) {
             auto it            = this->find(e);
             if (it != this->end()) {
                 int32_t old_level = it->level;
-                int32_t new_level = std::min(
-                    e.get_max_level(), old_level == e.level ? e.level + 1 : std::max(old_level, e.level)
-                );
+                int32_t new_level = *it + e.level;
+
+                // 用新元素替换旧元素
+                this->erase(it);
+                this->emplace(e.id, new_level);
 
                 if (multiplier > 0) {
                     if (type == MCE::Java)
@@ -45,13 +47,10 @@ int32_t EnchSet::combine(const EnchSet &other, int32_t multiplier_index) {
                     else
                         result += multiplier * (new_level - old_level);
                 }
-
-                // 用新元素替换旧元素
-                this->erase(it);
-                this->emplace(e.id, new_level);
             } else {
                 // 插入新元素
                 this->emplace(e);
+
                 if (multiplier > 0)
                     result += multiplier * e.level;
             }

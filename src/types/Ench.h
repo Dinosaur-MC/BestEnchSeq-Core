@@ -13,6 +13,10 @@ struct Ench {
     };
 
     bool operator==(const Ench &other) const;
+    int32_t operator+(int32_t lvl) const;
+    int32_t operator+=(int32_t lvl);
+    Ench operator+(const Ench &other) const;
+    Ench &operator+=(const Ench &other);
 
     // 构造函数
     Ench(int32_t id);
