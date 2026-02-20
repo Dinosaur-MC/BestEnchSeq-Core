@@ -26,6 +26,7 @@ struct Ench {
     std::string get_name() const;
     MCE get_supported_platform() const;
     int32_t get_max_level() const;
+    int32_t get_limited_level() const;
     int32_t get_multiplier(int32_t index) const;
     const std::unordered_set<int32_t> &get_incompatible() const;
 

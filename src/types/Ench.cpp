@@ -37,6 +37,7 @@ Ench::Ench(int32_t id, int32_t level) : id(id), level(level) {
 std::string Ench::get_name() const { return EnchInfo::get(id).name; }
 MCE Ench::get_supported_platform() const { return EnchInfo::get(id).supported_platform; }
 int32_t Ench::get_max_level() const { return EnchInfo::get(id).max_level; }
+int32_t Ench::get_limited_level() const { return EnchInfo::get(id).limited_level; }
 int32_t Ench::get_multiplier(int32_t index) const { return EnchInfo::get(id).multiplier[index]; };
 const std::unordered_set<int32_t> &Ench::get_incompatible() const { return EnchInfo::get_incompatible(id); }
 
