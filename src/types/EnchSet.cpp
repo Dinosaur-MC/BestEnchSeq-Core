@@ -1,6 +1,6 @@
-#include "EnchInfo.h"
 #include "EnchSet.h"
-#include <cstdint>
+
+#include "EnchInfo.h"
 
 void EnchSet::update_cache() const {
     _cache.incompatible.clear();
@@ -83,6 +83,50 @@ int32_t EnchSet::combine(const EnchSet &other, int32_t multiplier_index) {
     return result;
 }
 int32_t EnchSet::combine_s(const EnchSet &other, int32_t multiplier_index) {
+    update_cache();
+    return combine(other, multiplier_index);
+}
+
+std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, int32_t multiplier_index) const {
+    if (other.empty())
+        return {*this, 0};
+
+    EnchSet ret_ench = *this;
+    int32_t ret_cost = 0;
+    MCE type         = EnchInfo::get_active_platform();
+    for (const Ench &e : other) {
+        if (is_incompatible(e.id)) {
+            // 有冲突，不合并
+            ret_cost += type == MCE::Java ? 2 : 1;
+        } else {
+            int32_t multiplier = e.get_multiplier(multiplier_index);
+            auto it            = ret_ench.find(e);
+            if (it != ret_ench.end()) {
+                int32_t old_level = it->level;
+                int32_t new_level = *it + e.level;
+
+                // 用新元素替换旧元素
+                ret_ench.erase(it);
+                ret_ench.emplace(e.id, new_level);
+
+                if (multiplier > 0) {
+                    if (type == MCE::Java)
+                        ret_cost += multiplier * new_level;
+                    else
+                        ret_cost += multiplier * (new_level - old_level);
+                }
+            } else {
+                // 插入新元素
+                ret_ench.emplace(e);
+
+                if (multiplier > 0)
+                    ret_cost += multiplier * e.level;
+            }
+        }
+    }
+    return {ret_ench, ret_cost};
+}
+std::pair<EnchSet, int32_t> EnchSet::combine_s(const EnchSet &other, int32_t multiplier_index) const {
     update_cache();
     return combine(other, multiplier_index);
 }

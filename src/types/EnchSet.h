@@ -1,7 +1,5 @@
 #pragma once
 #include "Ench.h"
-#include <cstdint>
-#include <unordered_set>
 
 class EnchSet : public std::unordered_set<Ench, Ench::Hash> {
   private:
@@ -21,4 +19,6 @@ class EnchSet : public std::unordered_set<Ench, Ench::Hash> {
     EnchSet combine_s(const EnchSet &other) const;
     int32_t combine(const EnchSet &other, int32_t multiplier_index);
     int32_t combine_s(const EnchSet &other, int32_t multiplier_index);
+    std::pair<EnchSet, int32_t> combine(const EnchSet &other, int32_t multiplier_index) const;
+    std::pair<EnchSet, int32_t> combine_s(const EnchSet &other, int32_t multiplier_index) const;
 };

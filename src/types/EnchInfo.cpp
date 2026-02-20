@@ -1,7 +1,6 @@
 #include "EnchInfo.h"
 
 #include <stdexcept>
-#include <unordered_set>
 
 std::vector<EnchInfo> EnchInfo::instances;
 std::unordered_map<std::string, int32_t> EnchInfo::name_to_index;

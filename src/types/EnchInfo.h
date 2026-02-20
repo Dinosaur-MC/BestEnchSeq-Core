@@ -2,6 +2,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "common.h"
 
@@ -43,3 +44,5 @@ struct EnchInfo {
     static const std::unordered_set<int32_t> &get_incompatible(int32_t e);
     static bool is_incompatible(int32_t e1, int32_t e2);
 };
+
+using EnchInfoList = std::vector<EnchInfo>;

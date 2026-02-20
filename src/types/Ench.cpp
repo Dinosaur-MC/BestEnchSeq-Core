@@ -1,7 +1,6 @@
 #include "Ench.h"
-#include "EnchInfo.h"
 
-#include <cstdint>
+#include "EnchInfo.h"
 #include <stdexcept>
 
 bool Ench::operator==(const Ench &other) const { return id == other.id; }

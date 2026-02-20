@@ -1,11 +1,6 @@
 #pragma once
 #include "EnchInfo.h"
 #include "EnchSet.h"
-#include "ItemStack.h"
-#include <cstdint>
-#include <string>
-#include <unordered_set>
-#include <vector>
 
 struct Equipment {
     const std::string id;
@@ -23,8 +18,7 @@ struct Equipment {
     bool is_applicable(const Ench &ench) const;
 
     EnchSet filter_enchantments(const EnchSet &enchantments) const;
-    std::vector<EnchInfo> filter_enchantments(const std::vector<EnchInfo> &enchantments) const;
-    std::vector<ItemStack> filter_items(const ItemCollection &items) const;
+    EnchInfoList filter_enchantments(const EnchInfoList &enchantments) const;
 
     static int32_t merge_durability(int32_t d1, int32_t d2, int32_t max_d);
     static int32_t repair_durability(int32_t d, int32_t n, int32_t max_d);
