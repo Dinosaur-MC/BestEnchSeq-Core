@@ -15,7 +15,7 @@ struct ItemStack {
     } mutable _cache;
 
   public:
-    explicit ItemStack();
+    ItemStack();
     ItemStack(const EnchSet &enchs, int32_t prior_penalty = 0);
     ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability);
     ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty = 0);
