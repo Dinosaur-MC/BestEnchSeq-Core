@@ -2,7 +2,7 @@
 #include "ItemStack.h"
 
 /*
- * 锻造顺序存储容器
+ * 锻造流程容器
  */
 struct ForgeOrder {
     struct Step {
@@ -20,5 +20,10 @@ struct ForgeOrder {
     int32_t total_exp_cost;
     std::vector<Step> steps;
     size_t max_cost_step_index;
-    size_t calculation_time;
+    bool is_success;
+
+    static ForgeOrder make(
+        const EnchSet &original_ench, const ItemStack &target_item, const ItemCollection &available_items,
+        const std::vector<Step> &steps
+    );
 };
