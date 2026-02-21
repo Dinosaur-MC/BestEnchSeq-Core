@@ -1,6 +1,27 @@
 #include "BaseAlgorithm.h"
 
-BaseAlgorithm::State BaseAlgorithm::get_state() const { return _state; }
+void BaseAlgorithm::init(const Config &config) {
+    if (_state == Running)
+        return;
+    _state  = None;
+    _config = config;
+    _init(config);
+    _state = Ready;
+}
+void BaseAlgorithm::run(const Input &input) {
+    if (_state != Ready)
+        return;
+    _state = Running;
+    _input = input;
+    _run(input);
+}
+void BaseAlgorithm::stop() {
+    if (_state != Running)
+        return;
+    _state = _stop() ? Finished : Ready;
+}
+
+BaseAlgorithm::State BaseAlgorithm::get_state() const noexcept { return _state; }
 BaseAlgorithm::Output BaseAlgorithm::get_output() const {
     if (_state != State::Finished)
         return {.is_valid = false};

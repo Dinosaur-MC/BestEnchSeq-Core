@@ -12,12 +12,10 @@ class BaseAlgorithm {
         Finished,
     };
 
-    template <class ExtraConfig> struct _Config {
+    struct Config {
         bool ignore_penalty_cost;
         bool ignore_repair_cost;
-        ExtraConfig get_extra_config();
     };
-    using Config = _Config<void>;
 
     struct Input {
         EnchSet original_ench;
@@ -40,13 +38,18 @@ class BaseAlgorithm {
     Input _input;
     Output _output;
 
+    virtual void _init(const Config &config) = 0;
+    virtual void _run(const Input &input)    = 0;
+    virtual bool _stop()                     = 0;
+
   public:
-    BaseAlgorithm()                               = default;
-    virtual ~BaseAlgorithm()                      = default;
-    virtual void initialize(const Config &config) = 0;
-    virtual void run(const Input &input)          = 0;
-    virtual void stop()                           = 0;
-    State get_state() const;
+    BaseAlgorithm()          = default;
+    virtual ~BaseAlgorithm() = default;
+
+    void init(const Config &config);
+    void run(const Input &input);
+    void stop();
+    State get_state() const noexcept;
     Output get_output() const;
 
     virtual std::pair<ItemStack, int32_t>
