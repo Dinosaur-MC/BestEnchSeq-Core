@@ -28,7 +28,7 @@ class BaseAlgorithm {
         std::string algorithm_version;
         size_t created_at;
         size_t computation_time;
-        ForgeOrder order;
+        EnchStepList steps;
         bool is_valid;
     };
 
@@ -56,4 +56,13 @@ class BaseAlgorithm {
     forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated = false) const;
 };
 
+namespace Utils {
+
 int32_t calc_exp(int32_t level);
+
+bool is_forgeable(const ItemStack &item_a, const ItemStack &item_b);
+
+std::pair<ItemStack, int32_t>
+forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated = false);
+
+}; // namespace Utils

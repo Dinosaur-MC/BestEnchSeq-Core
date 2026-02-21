@@ -1,5 +1,7 @@
 #include "BaseAlgorithm.h"
 
+#include <stdexcept>
+
 void BaseAlgorithm::init(const Config &config) {
     if (_state == Running)
         return;
@@ -30,6 +32,9 @@ BaseAlgorithm::Output BaseAlgorithm::get_output() const {
 
 std::pair<ItemStack, int32_t>
 BaseAlgorithm::forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated) const {
+    if (!Utils::is_forgeable(item_a, item_b))
+        throw std::invalid_argument("Invalid item combination");
+
     auto combination_ret =
         updated ? item_a.enchantments.combine(item_b.enchantments, item_b.get_multiplier_index())
                 : item_a.enchantments.combine_s(item_b.enchantments, item_b.get_multiplier_index());
@@ -66,6 +71,8 @@ BaseAlgorithm::forge_item(const ItemStack &item_a, const ItemStack &item_b, bool
     };
 }
 
+namespace Utils {
+
 int32_t calc_exp(int32_t level) {
     if (level <= 16)
         return level * level + 6 * level;
@@ -74,3 +81,45 @@ int32_t calc_exp(int32_t level) {
     else
         return 4.5 * level * level - 162.5 * level + 2220;
 }
+
+bool is_forgeable(const ItemStack &item_a, const ItemStack &item_b) {
+    return item_a.is_equipment() || item_a.is_book() && item_b.is_book();
+}
+
+std::pair<ItemStack, int32_t> forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated) {
+    if (!is_forgeable(item_a, item_b))
+        throw std::invalid_argument("Invalid item combination");
+
+    auto combination_ret =
+        updated ? item_a.enchantments.combine(item_b.enchantments, item_b.get_multiplier_index())
+                : item_a.enchantments.combine_s(item_b.enchantments, item_b.get_multiplier_index());
+
+    int32_t cost = combination_ret.second + ItemStack::get_penalty_cost(item_a.prior_penalty) +
+                   ItemStack::get_penalty_cost(item_b.prior_penalty);
+
+    int32_t prior_penalty =
+        1 + (item_a.prior_penalty >= item_b.prior_penalty ? item_a.prior_penalty : item_b.prior_penalty);
+
+    int32_t durability = 0;
+    if (item_a.is_equipment()) {
+        if (item_b.is_equipment()) {
+            durability = item_a.equipment->calc_merge_durability(item_a.durability, item_b.durability);
+            cost += 2;
+        } else if (!item_b.is_book()) {
+            durability = item_a.equipment->calc_repair_durability(item_a.durability, item_b.durability);
+            cost += 1;
+        }
+    }
+
+    return {
+        {
+            item_a.equipment,
+            combination_ret.first,
+            prior_penalty,
+            durability,
+        },
+        cost,
+    };
+}
+
+}; // namespace Utils
