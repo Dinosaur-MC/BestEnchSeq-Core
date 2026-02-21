@@ -13,7 +13,7 @@ bool EnchInfo::check_validation(const std::vector<EnchInfo> &infos) {
     for (int32_t i = 0; i < infos.size(); i++) {
         auto &info = infos[i];
         registration.insert(info.name);
-        for (auto &incomp : info.incompatible) {
+        for (auto &incomp : info.exclusive_set) {
             unchecked_names.insert(incomp);
         }
     }
@@ -40,7 +40,7 @@ void EnchInfo::initialize(const std::vector<EnchInfo> &infos) {
     }
     for (int32_t i = 0; i < infos.size(); i++) {
         auto &info = infos[i];
-        for (auto &incomp : info.incompatible) {
+        for (auto &incomp : info.exclusive_set) {
             incompatible_table[i].insert(name_to_index[incomp]);
         }
     }

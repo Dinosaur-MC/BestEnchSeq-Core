@@ -7,12 +7,12 @@
 #include "common.h"
 
 struct EnchInfo {
-    const std::string name;                             // Unique id
-    const MCE supported_platform;                       // Supported platform
-    const int32_t max_level;                            // Maximum level
-    const int32_t limited_level;                        // 0 <= Limmited level <= maximum level
-    const int32_t multiplier;                           // Positive integer
-    const std::unordered_set<std::string> incompatible; // Incompatible enchantments (by name)
+    const std::string name;                              // Unique id
+    const MCE supported_platform;                        // Supported platform
+    const int32_t max_level;                             // Maximum level
+    const int32_t limited_level;                         // 0 <= Limmited level <= maximum level
+    const int32_t multiplier;                            // Positive integer
+    const std::unordered_set<std::string> exclusive_set; // Incompatible enchantments (by name)
 
   private:
     static std::vector<EnchInfo> instances;                        // All instances
