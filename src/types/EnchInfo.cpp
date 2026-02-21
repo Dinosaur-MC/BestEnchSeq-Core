@@ -32,7 +32,7 @@ void EnchInfo::initialize(const std::vector<EnchInfo> &infos) {
         throw std::runtime_error("Validation check failed");
     instances.clear();
     name_to_index.clear();
-    instances.reserve(instances.size());
+    instances.reserve(infos.size());
     for (int32_t i = 0; i < infos.size(); i++) {
         auto &info = infos[i];
         instances.push_back(info);
