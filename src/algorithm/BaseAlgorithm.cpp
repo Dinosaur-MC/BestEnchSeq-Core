@@ -35,9 +35,8 @@ BaseAlgorithm::forge_item(const ItemStack &item_a, const ItemStack &item_b, bool
     if (!Utils::is_forgeable(item_a, item_b))
         throw std::invalid_argument("Invalid item combination");
 
-    auto combination_ret =
-        updated ? item_a.enchantments.combine(item_b.enchantments, item_b.get_multiplier_index())
-                : item_a.enchantments.combine_s(item_b.enchantments, item_b.get_multiplier_index());
+    auto combination_ret = updated ? item_a.enchantments.combine(item_b.enchantments, item_b.is_book())
+                                   : item_a.enchantments.combine_s(item_b.enchantments, item_b.is_book());
 
     int32_t cost = combination_ret.second;
     if (!_config.ignore_penalty_cost)
@@ -90,9 +89,8 @@ std::pair<ItemStack, int32_t> forge_item(const ItemStack &item_a, const ItemStac
     if (!is_forgeable(item_a, item_b))
         throw std::invalid_argument("Invalid item combination");
 
-    auto combination_ret =
-        updated ? item_a.enchantments.combine(item_b.enchantments, item_b.get_multiplier_index())
-                : item_a.enchantments.combine_s(item_b.enchantments, item_b.get_multiplier_index());
+    auto combination_ret = updated ? item_a.enchantments.combine(item_b.enchantments, item_b.is_book())
+                                   : item_a.enchantments.combine_s(item_b.enchantments, item_b.is_book());
 
     int32_t cost = combination_ret.second + ItemStack::get_penalty_cost(item_a.prior_penalty) +
                    ItemStack::get_penalty_cost(item_b.prior_penalty);

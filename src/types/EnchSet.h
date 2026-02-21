@@ -17,8 +17,8 @@ class EnchSet : public std::unordered_set<Ench, Ench::Hash> {
     bool is_incompatible_s(const int32_t e) const;
     EnchSet combine(const EnchSet &other) const;
     EnchSet combine_s(const EnchSet &other) const;
-    int32_t combine(const EnchSet &other, int32_t multiplier_index);
-    int32_t combine_s(const EnchSet &other, int32_t multiplier_index);
-    std::pair<EnchSet, int32_t> combine(const EnchSet &other, int32_t multiplier_index) const;
-    std::pair<EnchSet, int32_t> combine_s(const EnchSet &other, int32_t multiplier_index) const;
+    int32_t combine(const EnchSet &other, bool is_book);
+    int32_t combine_s(const EnchSet &other, bool is_book);
+    std::pair<EnchSet, int32_t> combine(const EnchSet &other, bool is_book) const;
+    std::pair<EnchSet, int32_t> combine_s(const EnchSet &other, bool is_book) const;
 };

@@ -11,7 +11,7 @@ struct EnchInfo {
     const MCE supported_platform;                       // Supported platform
     const int32_t max_level;                            // Maximum level
     const int32_t limited_level;                        // 0 <= Limmited level <= maximum level
-    const int32_t multiplier[2];                        // Positive multipliers for Java and Bedrock
+    const int32_t multiplier;                           // Positive integer
     const std::unordered_set<std::string> incompatible; // Incompatible enchantments (by name)
 
   private:

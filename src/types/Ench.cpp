@@ -38,7 +38,9 @@ std::string Ench::get_name() const { return EnchInfo::get(id).name; }
 MCE Ench::get_supported_platform() const { return EnchInfo::get(id).supported_platform; }
 int32_t Ench::get_max_level() const { return EnchInfo::get(id).max_level; }
 int32_t Ench::get_limited_level() const { return EnchInfo::get(id).limited_level; }
-int32_t Ench::get_multiplier(int32_t index) const { return EnchInfo::get(id).multiplier[index]; };
+int32_t Ench::get_multiplier(bool is_book) const {
+    return is_book ? std::max(1, EnchInfo::get(id).multiplier >> 1) : EnchInfo::get(id).multiplier;
+};
 const std::unordered_set<int32_t> &Ench::get_incompatible() const { return EnchInfo::get_incompatible(id); }
 
 bool Ench::is_incompatible(const Ench &other) const { return EnchInfo::is_incompatible(id, other.id); }

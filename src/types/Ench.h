@@ -27,7 +27,7 @@ struct Ench {
     MCE get_supported_platform() const;
     int32_t get_max_level() const;
     int32_t get_limited_level() const;
-    int32_t get_multiplier(int32_t index) const;
+    int32_t get_multiplier(bool is_book = false) const;
     const std::unordered_set<int32_t> &get_incompatible() const;
 
     bool is_incompatible(const Ench &other) const;

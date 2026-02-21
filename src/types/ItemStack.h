@@ -25,7 +25,6 @@ struct ItemStack {
 
     bool is_book() const;
     bool is_equipment() const;
-    int32_t get_multiplier_index() const;
 
     static int32_t get_penalty_cost(int32_t n);
     int32_t get_penalty_cost() const;

@@ -41,7 +41,7 @@ EnchSet EnchSet::combine_s(const EnchSet &other) const {
     return combine(other);
 }
 
-int32_t EnchSet::combine(const EnchSet &other, int32_t multiplier_index) {
+int32_t EnchSet::combine(const EnchSet &other, bool is_book) {
     if (other.empty())
         return 0;
     bool need_update = false;
@@ -52,7 +52,7 @@ int32_t EnchSet::combine(const EnchSet &other, int32_t multiplier_index) {
             // 有冲突，不合并
             result += type == MCE::Java ? 2 : 1;
         } else {
-            int32_t multiplier = e.get_multiplier(multiplier_index);
+            int32_t multiplier = e.get_multiplier(is_book);
             auto it            = this->find(e);
             if (it != this->end()) {
                 int32_t old_level = it->level;
@@ -82,12 +82,12 @@ int32_t EnchSet::combine(const EnchSet &other, int32_t multiplier_index) {
         update_cache();
     return result;
 }
-int32_t EnchSet::combine_s(const EnchSet &other, int32_t multiplier_index) {
+int32_t EnchSet::combine_s(const EnchSet &other, bool is_book) {
     update_cache();
-    return combine(other, multiplier_index);
+    return combine(other, is_book);
 }
 
-std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, int32_t multiplier_index) const {
+std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, bool is_book) const {
     if (other.empty())
         return {*this, 0};
 
@@ -99,7 +99,7 @@ std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, int32_t multi
             // 有冲突，不合并
             ret_cost += type == MCE::Java ? 2 : 1;
         } else {
-            int32_t multiplier = e.get_multiplier(multiplier_index);
+            int32_t multiplier = e.get_multiplier(is_book);
             auto it            = ret_ench.find(e);
             if (it != ret_ench.end()) {
                 int32_t old_level = it->level;
@@ -126,7 +126,7 @@ std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, int32_t multi
     }
     return {ret_ench, ret_cost};
 }
-std::pair<EnchSet, int32_t> EnchSet::combine_s(const EnchSet &other, int32_t multiplier_index) const {
+std::pair<EnchSet, int32_t> EnchSet::combine_s(const EnchSet &other, bool is_book) const {
     update_cache();
-    return combine(other, multiplier_index);
+    return combine(other, is_book);
 }
