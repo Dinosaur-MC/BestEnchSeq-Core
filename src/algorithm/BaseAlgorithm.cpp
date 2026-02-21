@@ -122,4 +122,17 @@ std::pair<ItemStack, int32_t> forge_item(const ItemStack &item_a, const ItemStac
     };
 }
 
+EnchSolution make_solution(const BaseAlgorithm::Input &input, const BaseAlgorithm::Output &output) {
+    return EnchSolution::make(
+        input.platform, input.original_ench, input.target_item, input.available_items, output.steps,
+        output.is_valid,
+        {
+            output.algorithm_name,
+            output.algorithm_version,
+            output.created_at,
+            output.computation_time,
+        }
+    );
+}
+
 }; // namespace Utils

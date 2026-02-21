@@ -18,6 +18,7 @@ class BaseAlgorithm {
     };
 
     struct Input {
+        MCE platform;
         EnchSet original_ench;
         ItemStack target_item;
         ItemCollection available_items;
@@ -64,5 +65,7 @@ bool is_forgeable(const ItemStack &item_a, const ItemStack &item_b);
 
 std::pair<ItemStack, int32_t>
 forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated = false);
+
+EnchSolution make_solution(const BaseAlgorithm::Input &input, const BaseAlgorithm::Output &output);
 
 }; // namespace Utils
