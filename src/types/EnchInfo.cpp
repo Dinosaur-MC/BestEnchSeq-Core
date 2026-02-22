@@ -1,5 +1,6 @@
 #include "EnchInfo.h"
 
+#include <ranges>
 #include <stdexcept>
 
 std::vector<EnchInfo> EnchInfo::instances;
@@ -12,9 +13,12 @@ bool EnchInfo::check_validation(const std::vector<EnchInfo> &infos) {
     std::unordered_set<std::string> registration, unchecked_names;
     for (int32_t i = 0; i < infos.size(); i++) {
         auto &info = infos[i];
+        if (info.name.empty() || info.max_level <= 0 || info.multiplier <= 0 || info.limited_level < 0 ||
+            info.limited_level > info.max_level)
+            return false;
         registration.insert(info.name);
-        for (auto &incomp : info.exclusive_set) {
-            unchecked_names.insert(incomp);
+        for (auto &exclusive : info.exclusive_set) {
+            unchecked_names.insert(exclusive);
         }
     }
     for (auto &name : unchecked_names) {
@@ -27,6 +31,31 @@ bool EnchInfo::check_validation(const std::vector<EnchInfo> &infos) {
 
 bool EnchInfo::operator==(const EnchInfo &other) const { return name == other.name; }
 
+std::vector<EnchInfo> EnchInfo::preprocess(const std::vector<EnchInfo> &infos) {
+    std::unordered_set<std::string> registration;
+    for (auto &info : infos)
+        registration.insert(info.name);
+
+    auto filter = [&registration](const std::unordered_set<std::string> &exclusive_set) {
+        return exclusive_set | std::views::filter([&registration](const std::string &name) {
+                   return registration.contains(name);
+               });
+    };
+
+    std::vector<EnchInfo> new_infos;
+    for (auto &info : infos) {
+        auto view = filter(info.exclusive_set);
+        new_infos.push_back(EnchInfo({
+            info.name,
+            info.supported_platform,
+            info.max_level,
+            info.limited_level,
+            info.multiplier,
+            {view.begin(), view.end()},
+        }));
+    }
+    return new_infos;
+}
 void EnchInfo::initialize(const std::vector<EnchInfo> &infos) {
     if (!check_validation(infos))
         throw std::runtime_error("Validation check failed");
@@ -66,7 +95,7 @@ int32_t EnchInfo::get_id(const std::string &name) {
 void EnchInfo::set_active_platform(MCE type) { active_platform = type; }
 MCE EnchInfo::get_active_platform() { return active_platform; }
 
-const std::unordered_set<int32_t> &EnchInfo::get_incompatible(int32_t e) {
+const std::unordered_set<int32_t> &EnchInfo::get_exclusive_set(int32_t e) {
     static const std::unordered_set<int32_t> empty_set;
     auto it = incompatible_table.find(e);
     if (it == incompatible_table.end())

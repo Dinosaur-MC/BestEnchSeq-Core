@@ -5,7 +5,7 @@
 void EnchSet::update_cache() const {
     _cache.incompatible.clear();
     for (auto &ench : *this) {
-        for (auto &e : ench.get_incompatible())
+        for (auto &e : ench.get_exclusive_set())
             _cache.incompatible.emplace(e);
     }
 }

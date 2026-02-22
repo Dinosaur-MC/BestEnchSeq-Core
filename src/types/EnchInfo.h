@@ -32,6 +32,7 @@ struct EnchInfo {
         size_t operator()(const EnchInfo &info) const { return std::hash<std::string>()(info.name); }
     };
 
+    static std::vector<EnchInfo> preprocess(const std::vector<EnchInfo> &infos);
     static void initialize(const std::vector<EnchInfo> &infos);
     static const std::vector<EnchInfo> &get_instances();
 
@@ -42,7 +43,7 @@ struct EnchInfo {
     static void set_active_platform(MCE type);
     static MCE get_active_platform();
 
-    static const std::unordered_set<int32_t> &get_incompatible(int32_t e);
+    static const std::unordered_set<int32_t> &get_exclusive_set(int32_t e);
     static bool is_incompatible(int32_t e1, int32_t e2);
 };
 
