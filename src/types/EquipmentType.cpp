@@ -19,7 +19,7 @@ EnchSet EquipmentType::filter_enchantments(const EnchSet &enchantments) const {
 }
 EnchInfoList EquipmentType::filter_enchantments(const EnchInfoList &enchantments) const {
     auto view =
-        enchantments | std::views::filter([this](const EnchInfo &ench) { return is_applicable(ench.name); });
+        enchantments | std::views::filter([this](const EnchInfo &ench) { return is_applicable(ench.name_id); });
     return EnchInfoList{view.begin(), view.end()};
 }
 

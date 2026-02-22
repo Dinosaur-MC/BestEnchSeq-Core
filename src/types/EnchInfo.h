@@ -7,7 +7,8 @@
 #include "common.h"
 
 struct EnchInfo {
-    const std::string name;                                           // Unique id
+    const std::string name_id;                                        // Unique id
+    const std::string name;                                           // Enchantment name
     const platform::MCE supported_platform;                           // Supported platform
     const int32_t max_level;                                          // Maximum level
     const int32_t limited_level;                                      // 0 <= Limmited level <= maximum level
@@ -30,7 +31,7 @@ struct EnchInfo {
 
     // Hash function for unordered_map
     struct Hash {
-        size_t operator()(const EnchInfo &info) const { return std::hash<std::string>()(info.name); }
+        size_t operator()(const EnchInfo &info) const { return std::hash<std::string>()(info.name_id); }
     };
 
     static std::vector<EnchInfo> preprocess(const std::vector<EnchInfo> &infos);
@@ -38,8 +39,8 @@ struct EnchInfo {
     static const std::vector<EnchInfo> &get_instances();
 
     static const EnchInfo &get(int32_t index);
-    static const EnchInfo &get(const std::string &name);
-    static int32_t get_id(const std::string &name);
+    static const EnchInfo &get(const std::string &name_id);
+    static int32_t get_id(const std::string &name_id);
 
     static void set_active_platform(platform::MCE type);
     static platform::MCE get_active_platform();
