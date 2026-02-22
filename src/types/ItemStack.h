@@ -1,9 +1,9 @@
 #pragma once
 #include "EnchSet.h"
-#include "Equipment.h"
+#include "EquipmentType.h"
 
 struct ItemStack {
-    const Equipment *equipment;
+    const EquipmentType *equipment;
     EnchSet enchantments;
     int32_t prior_penalty;
     int32_t durability;
@@ -17,8 +17,8 @@ struct ItemStack {
   public:
     ItemStack();
     ItemStack(const EnchSet &enchs, int32_t prior_penalty = 0);
-    ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability);
-    ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty = 0);
+    ItemStack(const EquipmentType *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability);
+    ItemStack(const EquipmentType *equipment, const EnchSet &enchs, int32_t prior_penalty = 0);
 
     void update_cache() const;
     const Cache &get_cache() const;

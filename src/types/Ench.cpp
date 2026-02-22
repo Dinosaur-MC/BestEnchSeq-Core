@@ -42,5 +42,8 @@ int32_t Ench::get_multiplier(bool is_book) const {
     return is_book ? std::max(1, EnchInfo::get(id).multiplier >> 1) : EnchInfo::get(id).multiplier;
 };
 const std::unordered_set<int32_t> &Ench::get_exclusive_set() const { return EnchInfo::get_exclusive_set(id); }
+const std::unordered_set<EquipmentCategory> &Ench::get_applicable_equipment() const {
+    return EnchInfo::get(id).applicable_equipment;
+}
 
 bool Ench::is_incompatible(const Ench &other) const { return EnchInfo::is_incompatible(id, other.id); }

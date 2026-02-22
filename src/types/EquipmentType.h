@@ -2,17 +2,17 @@
 #include "EnchInfo.h"
 #include "EnchSet.h"
 
-struct Equipment {
+struct EquipmentType {
     const std::string id;
     const std::string name;
+    const EquipmentCategory category;
     const int32_t max_durability;
-    const std::unordered_set<std::string> applicable_enchantments;
 
   public:
     struct Hash {
-        size_t operator()(const Equipment &equi) const { return std::hash<std::string>()(equi.id); }
+        size_t operator()(const EquipmentType &equi) const { return std::hash<std::string>()(equi.id); }
     };
-    bool operator==(const Equipment &other) const;
+    bool operator==(const EquipmentType &other) const;
 
     bool is_applicable(const std::string &ench) const;
     bool is_applicable(const Ench &ench) const;
