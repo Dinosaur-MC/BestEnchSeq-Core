@@ -18,7 +18,7 @@ class BaseAlgorithm {
     };
 
     struct Input {
-        MCE platform;
+        platform::MCE platform;
         EnchSet original_ench;
         ItemStack target_item;
         ItemCollection available_items;

@@ -15,7 +15,7 @@ int32_t EnchSolution::get_peek_exp_cost() const {
 }
 
 EnchSolution EnchSolution::make(
-    MCE platform, const EnchSet &original_ench, const ItemStack &target_item,
+    platform::MCE platform, const EnchSet &original_ench, const ItemStack &target_item,
     const ItemCollection &available_items, const EnchStepList &steps, bool is_valid, MetaData meta_data
 ) {
     int32_t total_exp_level_cost = 0;

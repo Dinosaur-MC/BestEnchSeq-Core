@@ -7,7 +7,7 @@ std::vector<EnchInfo> EnchInfo::instances;
 std::unordered_map<std::string, int32_t> EnchInfo::name_to_index;
 std::unordered_map<int32_t, std::unordered_set<int32_t>> EnchInfo::incompatible_table;
 
-MCE EnchInfo::active_platform = MCE::Java;
+platform::MCE EnchInfo::active_platform = platform::MCE::Java;
 
 bool EnchInfo::check_validation(const std::vector<EnchInfo> &infos) {
     std::unordered_set<std::string> registration, unchecked_names;
@@ -92,8 +92,8 @@ const EnchInfo &EnchInfo::get(const std::string &name) {
 int32_t EnchInfo::get_id(const std::string &name) {
     return name_to_index.find(name) != name_to_index.end() ? name_to_index[name] : -1;
 }
-void EnchInfo::set_active_platform(MCE type) { active_platform = type; }
-MCE EnchInfo::get_active_platform() { return active_platform; }
+void EnchInfo::set_active_platform(platform::MCE type) { active_platform = type; }
+platform::MCE EnchInfo::get_active_platform() { return active_platform; }
 
 const std::unordered_set<int32_t> &EnchInfo::get_exclusive_set(int32_t e) {
     static const std::unordered_set<int32_t> empty_set;

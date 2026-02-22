@@ -24,7 +24,7 @@ struct Ench {
 
     // 成员方法
     std::string get_name() const;
-    MCE get_supported_platform() const;
+    platform::MCE get_supported_platform() const;
     int32_t get_max_level() const;
     int32_t get_limited_level() const;
     int32_t get_multiplier(bool is_book = false) const;

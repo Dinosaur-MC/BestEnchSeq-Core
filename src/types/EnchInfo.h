@@ -8,7 +8,7 @@
 
 struct EnchInfo {
     const std::string name;                              // Unique id
-    const MCE supported_platform;                        // Supported platform
+    const platform::MCE supported_platform;                        // Supported platform
     const int32_t max_level;                             // Maximum level
     const int32_t limited_level;                         // 0 <= Limmited level <= maximum level
     const int32_t multiplier;                            // Positive integer
@@ -20,7 +20,7 @@ struct EnchInfo {
     static std::unordered_map<int32_t, std::unordered_set<int32_t>>
         incompatible_table; // Incompatible table (by index)
 
-    static MCE active_platform; // Active platform
+    static platform::MCE active_platform; // Active platform
 
     static bool check_validation(const std::vector<EnchInfo> &infos);
 
@@ -40,8 +40,8 @@ struct EnchInfo {
     static const EnchInfo &get(const std::string &name);
     static int32_t get_id(const std::string &name);
 
-    static void set_active_platform(MCE type);
-    static MCE get_active_platform();
+    static void set_active_platform(platform::MCE type);
+    static platform::MCE get_active_platform();
 
     static const std::unordered_set<int32_t> &get_exclusive_set(int32_t e);
     static bool is_incompatible(int32_t e1, int32_t e2);

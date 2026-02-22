@@ -46,11 +46,11 @@ int32_t EnchSet::combine(const EnchSet &other, bool is_book) {
         return 0;
     bool need_update = false;
     int32_t result   = 0;
-    MCE type         = EnchInfo::get_active_platform();
+    platform::MCE type         = EnchInfo::get_active_platform();
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
-            result += type == MCE::Java ? 2 : 1;
+            result += type == platform::MCE::Java ? 2 : 1;
         } else {
             int32_t multiplier = e.get_multiplier(is_book);
             auto it            = this->find(e);
@@ -63,7 +63,7 @@ int32_t EnchSet::combine(const EnchSet &other, bool is_book) {
                 this->emplace(e.id, new_level);
 
                 if (multiplier > 0) {
-                    if (type == MCE::Java)
+                    if (type == platform::MCE::Java)
                         result += multiplier * new_level;
                     else
                         result += multiplier * (new_level - old_level);
@@ -93,11 +93,11 @@ std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, bool is_book)
 
     EnchSet ret_ench = *this;
     int32_t ret_cost = 0;
-    MCE type         = EnchInfo::get_active_platform();
+    platform::MCE type         = EnchInfo::get_active_platform();
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
-            ret_cost += type == MCE::Java ? 2 : 1;
+            ret_cost += type == platform::MCE::Java ? 2 : 1;
         } else {
             int32_t multiplier = e.get_multiplier(is_book);
             auto it            = ret_ench.find(e);
@@ -110,7 +110,7 @@ std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, bool is_book)
                 ret_ench.emplace(e.id, new_level);
 
                 if (multiplier > 0) {
-                    if (type == MCE::Java)
+                    if (type == platform::MCE::Java)
                         ret_cost += multiplier * new_level;
                     else
                         ret_cost += multiplier * (new_level - old_level);

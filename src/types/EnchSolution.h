@@ -16,7 +16,7 @@ struct EnchSolution {
         size_t computation_time;
     } metadata;
 
-    MCE platform;
+    platform::MCE platform;
     EnchSet original_ench;
     ItemStack target_item;
     ItemCollection available_items;
@@ -31,7 +31,7 @@ struct EnchSolution {
     int32_t get_peek_exp_cost() const;
 
     static EnchSolution make(
-        MCE platform, const EnchSet &original_ench, const ItemStack &target_item,
+        platform::MCE platform, const EnchSet &original_ench, const ItemStack &target_item,
         const ItemCollection &available_items, const std::vector<EnchStep> &steps, bool is_valid = true,
         MetaData meta_data = MetaData()
     );
