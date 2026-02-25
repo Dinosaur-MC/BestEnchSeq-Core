@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 namespace platform {
 
@@ -31,4 +32,12 @@ struct EquipmentCategory : public std::string {
     static constexpr const EquipmentCategory Crossbow() { return EquipmentCategory("crossbow"); }
     static constexpr const EquipmentCategory Trident() { return EquipmentCategory("trident"); }
     static constexpr const EquipmentCategory FishingRod() { return EquipmentCategory("fishing_rod"); }
+
+  private:
+    static std::unordered_set<EquipmentCategory> _custom_equipments;
+
+  public:
+    static void register_custom_equipment(const EquipmentCategory &category);
+    static void reset_custom_equipment();
+    static const std::unordered_set<EquipmentCategory> &get_custom_equipments();
 };
