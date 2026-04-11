@@ -30,5 +30,7 @@ endif()
 # Executable Output Path
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 
-aux_source_directory(src MAIN_SRC_LIST)
+file(GLOB_RECURSE MAIN_SRC_LIST CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+)
 add_executable(${PROJECT_NAME} ${MAIN_SRC_LIST})
