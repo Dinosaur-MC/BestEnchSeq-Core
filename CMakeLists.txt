@@ -34,3 +34,19 @@ file(GLOB_RECURSE MAIN_SRC_LIST CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 add_executable(${PROJECT_NAME} ${MAIN_SRC_LIST})
+
+enable_testing()
+
+add_executable(json_tests
+    tests/json_tests.cpp
+    src/io/json.cpp
+)
+
+target_include_directories(json_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+add_test(NAME json_tests COMMAND json_tests)
+set_tests_properties(json_tests PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)

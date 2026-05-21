@@ -37,6 +37,7 @@ struct EquipmentCategory : public std::string {
     static std::unordered_set<EquipmentCategory> _custom_equipments;
 
   public:
+    EquipmentCategory() = default;
     static void register_custom_equipment(const EquipmentCategory &category);
     static void reset_custom_equipment();
     static const std::unordered_set<EquipmentCategory> &get_custom_equipments();
