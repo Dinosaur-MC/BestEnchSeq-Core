@@ -661,9 +661,13 @@ void EnchInfoParser::export_to_mc_official(
         // supported_items — convert EquipmentCategory back to item IDs
         Json::Array supp;
         for (const auto &cat : info.applicable_equipment) {
-            supp.push_back(Json(Json::String(
-                "minecraft:" + static_cast<const std::string &>(cat)
-            )));
+            std::string cat_str = static_cast<const std::string &>(cat);
+            // Avoid double-namespacing: cat may already contain "mod:item"
+            if (cat_str.find(':') != std::string::npos) {
+                supp.push_back(Json(Json::String(cat_str)));
+            } else {
+                supp.push_back(Json(Json::String("minecraft:" + cat_str)));
+            }
         }
         obj["supported_items"] = Json(supp);
 
@@ -673,8 +677,11 @@ void EnchInfoParser::export_to_mc_official(
         std::ofstream f(file_path);
         if (f.is_open()) {
             f << json_str;
+            if (!f.good()) {
+                std::cerr << "Warning: Write error for " << file_path << std::endl;
+            }
         } else {
-            std::cerr << "Warning: Could not write " << file_path << std::endl;
+            std::cerr << "Warning: Could not open " << file_path << " for writing" << std::endl;
         }
     }
 }

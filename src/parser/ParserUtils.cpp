@@ -41,9 +41,10 @@ std::string platform_to_string(platform::MCE p) {
         return "bedrock";
     case platform::MCE::All:
         return "all";
-    default:
-        return "java";
+    case platform::MCE::None:
+        return "none";
     }
+    return "java";
 }
 
 // ---------------------------------------------------------------------------
