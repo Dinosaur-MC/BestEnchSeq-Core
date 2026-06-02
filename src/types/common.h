@@ -6,10 +6,10 @@
 namespace platform {
 
 enum MCE : int8_t {
-    None    = 0x00,
-    Java    = 0x01,
+    None = 0x00,
+    Java = 0x01,
     Bedrock = 0x02,
-    All     = 0x03,
+    All = 0x03,
 };
 
 }; // namespace platform
@@ -41,3 +41,9 @@ struct EquipmentCategory : public std::string {
     static void reset_custom_equipment();
     static const std::unordered_set<EquipmentCategory> &get_custom_equipments();
 };
+
+namespace std {
+template <> struct hash<EquipmentCategory> {
+    size_t operator()(const EquipmentCategory &cat) const { return hash<string>()(cat); }
+};
+} // namespace std
