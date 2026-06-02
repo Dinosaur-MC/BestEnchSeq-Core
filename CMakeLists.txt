@@ -67,6 +67,9 @@ set_tests_properties(test_parser_utils PROPERTIES
 
 add_executable(test_tag_resolver
     tests/test_tag_resolver.cpp
+    src/parser/TagResolver.cpp
+    src/parser/ParserUtils.cpp
+    src/io/json.cpp
 )
 target_include_directories(test_tag_resolver PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
