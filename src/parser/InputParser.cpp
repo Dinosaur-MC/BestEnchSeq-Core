@@ -117,6 +117,9 @@ ItemCollection InputParser::parse_inventory(
                     int32_t ench_id = resolve_ench_id(ench_id_str);
                     if (ench_id >= 0) {
                         ench_set.emplace(ench_id, ench_level);
+                    } else {
+                        std::cerr << "Warning: unknown enchantment '" << ench_id_str
+                                  << "' in item, skipping" << std::endl;
                     }
                 }
             }
@@ -266,5 +269,5 @@ BaseAlgorithm::Input InputParser::assemble_input(
         target = build_target(target_spec, equipment_registry, ench_name_to_id);
     }
 
-    return BaseAlgorithm::Input{platform, EnchSet{}, target, available_items};
+    return BaseAlgorithm::Input{platform, target.enchantments, target, available_items};
 }
