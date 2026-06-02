@@ -2,10 +2,58 @@
 
 #include <cctype>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
 namespace ParserUtils {
+
+// ---------------------------------------------------------------------------
+// Platform string parsing
+// ---------------------------------------------------------------------------
+platform::MCE parse_platform(const std::string &str) {
+    std::string lower;
+    lower.reserve(str.size());
+    for (char c : str) {
+        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    if (lower == "java" || lower == "je") {
+        return platform::MCE::Java;
+    }
+    if (lower == "bedrock" || lower == "be") {
+        return platform::MCE::Bedrock;
+    }
+    if (lower == "all" || lower == "both") {
+        return platform::MCE::All;
+    }
+    std::cerr << "Warning: Unknown platform '" << str << "', defaulting to Java." << std::endl;
+    return platform::MCE::Java;
+}
+
+// ---------------------------------------------------------------------------
+// String splitting
+// ---------------------------------------------------------------------------
+std::vector<std::string> split_string(const std::string &str, char delimiter) {
+    std::vector<std::string> tokens;
+    if (str.empty()) {
+        return tokens;
+    }
+    size_t start = 0;
+    while (true) {
+        size_t end = str.find(delimiter, start);
+        if (end == std::string::npos) {
+            if (start < str.size()) {
+                tokens.push_back(str.substr(start));
+            }
+            break;
+        }
+        if (end > start) {
+            tokens.push_back(str.substr(start, end - start));
+        }
+        start = end + 1;
+    }
+    return tokens;
+}
 
 // ---------------------------------------------------------------------------
 // File format detection

@@ -4,7 +4,15 @@
 #include <utility>
 #include <vector>
 
+#include "types/common.h"
+
 namespace ParserUtils {
+
+// Platform string parsing
+platform::MCE parse_platform(const std::string &str);
+
+// String splitting
+std::vector<std::string> split_string(const std::string &str, char delimiter);
 
 enum class DataFormat {
     Unknown,

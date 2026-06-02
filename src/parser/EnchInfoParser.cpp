@@ -11,28 +11,6 @@
 namespace {
 
 // ---------------------------------------------------------------------------
-// Platform string → enum (case-insensitive)
-// ---------------------------------------------------------------------------
-platform::MCE parse_platform(const std::string &str) {
-    std::string lower;
-    lower.reserve(str.size());
-    for (char c : str) {
-        lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-    }
-    if (lower == "java" || lower == "je") {
-        return platform::MCE::Java;
-    }
-    if (lower == "bedrock" || lower == "be") {
-        return platform::MCE::Bedrock;
-    }
-    if (lower == "all" || lower == "both") {
-        return platform::MCE::All;
-    }
-    std::cerr << "Warning: Unknown platform '" << str << "', defaulting to Java." << std::endl;
-    return platform::MCE::Java;
-}
-
-// ---------------------------------------------------------------------------
 // JSON field extraction helpers
 // ---------------------------------------------------------------------------
 
@@ -288,7 +266,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
 
         std::string platform_str = get_string_field(elem_obj, "platform");
         platform::MCE platform =
-            platform_str.empty() ? platform::MCE::Java : parse_platform(platform_str);
+            platform_str.empty() ? platform::MCE::Java : ParserUtils::parse_platform(platform_str);
 
         int32_t limited_level = get_int_field(elem_obj, "limited_level");
         if (limited_level <= 0) {
@@ -380,29 +358,6 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
         return fields[it->second];
     };
 
-    // Helper to parse a semi-colon separated string into a vector of tokens
-    auto split_semicolon = [](const std::string &str) -> std::vector<std::string> {
-        std::vector<std::string> tokens;
-        if (str.empty()) {
-            return tokens;
-        }
-        size_t start = 0;
-        while (true) {
-            size_t end = str.find(';', start);
-            if (end == std::string::npos) {
-                if (start < str.size()) {
-                    tokens.push_back(str.substr(start));
-                }
-                break;
-            }
-            if (end > start) {
-                tokens.push_back(str.substr(start, end - start));
-            }
-            start = end + 1;
-        }
-        return tokens;
-    };
-
     std::vector<EnchInfo> result;
     for (size_t r = 1; r < rows.size(); ++r) {
         const auto &fields = rows[r];
@@ -448,7 +403,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
 
         std::string platform_str = get_field(fields, "platform");
         platform::MCE platform =
-            platform_str.empty() ? platform::MCE::Java : parse_platform(platform_str);
+            platform_str.empty() ? platform::MCE::Java : ParserUtils::parse_platform(platform_str);
 
         int32_t limited_level = max_level;
         try {
@@ -464,7 +419,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
         {
             std::string excl_str = get_field(fields, "exclusive_set");
             if (!excl_str.empty()) {
-                auto items    = split_semicolon(excl_str);
+                auto items    = ParserUtils::split_string(excl_str, ';');
                 auto resolved = resolve_references(items, tag_resolver);
                 exclusive_set = std::move(resolved);
             }
@@ -475,7 +430,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
         {
             std::string eq_str = get_field(fields, "applicable_equipment");
             if (!eq_str.empty()) {
-                auto items    = split_semicolon(eq_str);
+                auto items    = ParserUtils::split_string(eq_str, ';');
                 auto resolved = resolve_references(items, tag_resolver);
                 for (const auto &eq : resolved) {
                     applicable_equipment.insert(EquipmentCategory(eq.c_str()));

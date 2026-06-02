@@ -100,6 +100,9 @@ set_tests_properties(test_ench_info_parser PROPERTIES
 
 add_executable(test_equipment_parser
     tests/test_equipment_parser.cpp
+    src/parser/EquipmentParser.cpp
+    src/parser/ParserUtils.cpp
+    src/io/json.cpp
 )
 target_include_directories(test_equipment_parser PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
