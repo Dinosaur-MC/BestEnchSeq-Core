@@ -55,6 +55,7 @@ set_tests_properties(json_tests PROPERTIES
 
 add_executable(test_parser_utils
     tests/test_parser_utils.cpp
+    src/parser/ParserUtils.cpp
 )
 target_include_directories(test_parser_utils PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
