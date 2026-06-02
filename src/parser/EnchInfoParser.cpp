@@ -333,12 +333,316 @@ std::vector<EnchInfo> EnchInfoParser::parse(
     case ParserUtils::DataFormat::NativeJSON:
         return parse_native_json(path, tag_resolver);
     case ParserUtils::DataFormat::NativeCSV:
-        // TODO: Task 5 — CSV format parsing
-        return {};
+        return parse_native_csv(path, tag_resolver);
     case ParserUtils::DataFormat::MCOfficial:
-        // TODO: Task 5 — MC official format parsing
-        return {};
+        return parse_mc_official(path, tag_resolver);
     default:
+        throw std::runtime_error("Unknown format: " + path.string());
+    }
+}
+
+// ============================================================================
+
+std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
+    const std::filesystem::path &path, TagResolver &tag_resolver
+) {
+    auto rows = ParserUtils::parse_csv(path);
+    if (rows.empty()) {
         return {};
     }
+
+    // First row is header — map column names to indices
+    const auto &header = rows[0];
+    std::unordered_map<std::string, size_t> col_index;
+    for (size_t i = 0; i < header.size(); ++i) {
+        col_index[header[i]] = i;
+    }
+
+    // Verify required columns exist
+    auto req_id     = col_index.find("id");
+    auto req_max    = col_index.find("max_level");
+    auto req_mult   = col_index.find("multiplier");
+    if (req_id == col_index.end() || req_max == col_index.end() ||
+        req_mult == col_index.end()) {
+        std::cerr << "Warning: CSV file missing required columns (id, max_level, multiplier)."
+                  << std::endl;
+        return {};
+    }
+
+    // Helper to extract a field value from a row by column name
+    auto get_field = [&](const std::vector<std::string> &fields,
+                         const std::string &col_name) -> const std::string & {
+        static const std::string empty;
+        auto it = col_index.find(col_name);
+        if (it == col_index.end() || it->second >= fields.size()) {
+            return empty;
+        }
+        return fields[it->second];
+    };
+
+    // Helper to parse a semi-colon separated string into a vector of tokens
+    auto split_semicolon = [](const std::string &str) -> std::vector<std::string> {
+        std::vector<std::string> tokens;
+        if (str.empty()) {
+            return tokens;
+        }
+        size_t start = 0;
+        while (true) {
+            size_t end = str.find(';', start);
+            if (end == std::string::npos) {
+                if (start < str.size()) {
+                    tokens.push_back(str.substr(start));
+                }
+                break;
+            }
+            if (end > start) {
+                tokens.push_back(str.substr(start, end - start));
+            }
+            start = end + 1;
+        }
+        return tokens;
+    };
+
+    std::vector<EnchInfo> result;
+    for (size_t r = 1; r < rows.size(); ++r) {
+        const auto &fields = rows[r];
+        if (fields.empty()) {
+            continue;
+        }
+
+        // Required fields
+        const std::string &id = get_field(fields, "id");
+        if (id.empty()) {
+            std::cerr << "Warning: Skipping CSV row " << (r + 1)
+                      << " with empty id." << std::endl;
+            continue;
+        }
+
+        int32_t max_level = 0;
+        try {
+            max_level = std::stoi(get_field(fields, "max_level"));
+        } catch (...) {
+        }
+        if (max_level <= 0) {
+            std::cerr << "Warning: Skipping CSV row " << (r + 1)
+                      << " with invalid max_level." << std::endl;
+            continue;
+        }
+
+        int32_t multiplier = 0;
+        try {
+            multiplier = std::stoi(get_field(fields, "multiplier"));
+        } catch (...) {
+        }
+        if (multiplier <= 0) {
+            std::cerr << "Warning: Skipping CSV row " << (r + 1)
+                      << " with invalid multiplier." << std::endl;
+            continue;
+        }
+
+        // Optional fields
+        std::string name = get_field(fields, "name");
+        if (name.empty()) {
+            name = id;
+        }
+
+        std::string platform_str = get_field(fields, "platform");
+        platform::MCE platform =
+            platform_str.empty() ? platform::MCE::Java : parse_platform(platform_str);
+
+        int32_t limited_level = max_level;
+        try {
+            limited_level = std::stoi(get_field(fields, "limited_level"));
+        } catch (...) {
+        }
+        if (limited_level <= 0) {
+            limited_level = max_level;
+        }
+
+        // Exclusive set — semi-colon separated tokens, resolve #tag refs
+        std::unordered_set<std::string> exclusive_set;
+        {
+            std::string excl_str = get_field(fields, "exclusive_set");
+            if (!excl_str.empty()) {
+                auto items    = split_semicolon(excl_str);
+                auto resolved = resolve_references(items, tag_resolver);
+                exclusive_set = std::move(resolved);
+            }
+        }
+
+        // Applicable equipment — semi-colon separated tokens, resolve #tag refs
+        std::unordered_set<EquipmentCategory> applicable_equipment;
+        {
+            std::string eq_str = get_field(fields, "applicable_equipment");
+            if (!eq_str.empty()) {
+                auto items    = split_semicolon(eq_str);
+                auto resolved = resolve_references(items, tag_resolver);
+                for (const auto &eq : resolved) {
+                    applicable_equipment.insert(EquipmentCategory(eq.c_str()));
+                }
+            }
+        }
+
+        result.emplace_back(
+            std::move(id),
+            std::move(name),
+            platform,
+            max_level,
+            limited_level,
+            multiplier,
+            std::move(exclusive_set),
+            std::move(applicable_equipment)
+        );
+    }
+
+    return result;
+}
+
+// ============================================================================
+
+std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
+    const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver
+) {
+    // Load tags from the data pack directory
+    tag_resolver.load_from(data_pack_dir);
+
+    std::vector<EnchInfo> result;
+
+    std::filesystem::path data_dir = data_pack_dir / "data";
+    if (!std::filesystem::is_directory(data_dir)) {
+        return result;
+    }
+
+    // Known equipment category IDs (without namespace prefix)
+    std::unordered_set<std::string> known_equipment_ids = {
+        "sword",      "helmet",    "chestplate", "leggings",
+        "boots",      "bow",       "axe",        "pickaxe",
+        "shovel",     "hoe",       "trident",    "shield",
+        "crossbow",   "fishing_rod"
+    };
+
+    for (const auto &ns_entry : std::filesystem::directory_iterator(data_dir)) {
+        if (!ns_entry.is_directory()) {
+            continue;
+        }
+
+        std::string ns = ns_entry.path().filename().string();
+
+        std::filesystem::path ench_dir = ns_entry.path() / "enchantment";
+        if (!std::filesystem::is_directory(ench_dir)) {
+            continue;
+        }
+
+        for (const auto &ench_file : std::filesystem::directory_iterator(ench_dir)) {
+            if (!ench_file.is_regular_file()) {
+                continue;
+            }
+
+            // Check extension is .json (case-insensitive)
+            std::string ext = ench_file.path().extension().string();
+            for (auto &c : ext) {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            if (ext != ".json") {
+                continue;
+            }
+
+            std::string filename = ench_file.path().stem().string();
+
+            // Read and parse the JSON file
+            std::string content;
+            try {
+                content = ParserUtils::read_file(ench_file.path());
+            } catch (const std::exception &) {
+                std::cerr << "Warning: Could not read " << ench_file.path() << std::endl;
+                continue;
+            }
+
+            Json root;
+            try {
+                root = Json::parse(content);
+            } catch (const std::exception &) {
+                std::cerr << "Warning: Could not parse " << ench_file.path() << std::endl;
+                continue;
+            }
+
+            auto root_var = root.get_value();
+            if (!std::holds_alternative<Json::Object>(root_var)) {
+                continue;
+            }
+            const auto &obj = std::get<Json::Object>(root_var);
+
+            // Map MC official fields to EnchInfo
+            int32_t multiplier = get_int_field(obj, "anvil_cost");
+            int32_t max_level  = get_int_field(obj, "max_level");
+
+            if (max_level <= 0 || multiplier <= 0) {
+                std::cerr << "Warning: Skipping " << ns << ":" << filename
+                          << " — invalid max_level or anvil_cost (max_level="
+                          << max_level << ", anvil_cost=" << multiplier << ")"
+                          << std::endl;
+                continue;
+            }
+
+            // Limited level defaults to max_level (no field in MC format)
+            int32_t limited_level = max_level;
+
+            // Platform defaults to All (MC official is cross-platform)
+            platform::MCE platform = platform::MCE::All;
+
+            // Derive display name from filename
+            std::string name = filename;
+            if (!name.empty()) {
+                name[0] = static_cast<char>(
+                    std::toupper(static_cast<unsigned char>(name[0]))
+                );
+            }
+            for (auto &c : name) {
+                if (c == '_') {
+                    c = ' ';
+                }
+            }
+
+            // Namespaced id
+            std::string name_id = ns + ":" + filename;
+
+            // Exclusive set — resolve #tag refs
+            auto excl_items    = get_string_array_field(obj, "exclusive_set");
+            auto exclusive_set = resolve_references(excl_items, tag_resolver);
+
+            // Supported items → applicable equipment
+            auto supp_items      = get_string_array_field(obj, "supported_items");
+            auto resolved_supp   = resolve_references(supp_items, tag_resolver);
+
+            std::unordered_set<EquipmentCategory> applicable_equipment;
+            for (const auto &item_id : resolved_supp) {
+                // Strip namespace prefix to check against known equipment categories
+                std::string stripped = item_id;
+                size_t colon_pos     = stripped.find(':');
+                if (colon_pos != std::string::npos) {
+                    stripped = stripped.substr(colon_pos + 1);
+                }
+
+                if (known_equipment_ids.count(stripped)) {
+                    applicable_equipment.insert(EquipmentCategory(stripped.c_str()));
+                } else {
+                    // Use the raw item ID as a custom EquipmentCategory
+                    applicable_equipment.insert(EquipmentCategory(item_id.c_str()));
+                }
+            }
+
+            result.emplace_back(
+                std::move(name_id),
+                std::move(name),
+                platform,
+                max_level,
+                limited_level,
+                multiplier,
+                std::move(exclusive_set),
+                std::move(applicable_equipment)
+            );
+        }
+    }
+
+    return result;
 }

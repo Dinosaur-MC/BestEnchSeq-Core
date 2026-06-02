@@ -464,6 +464,268 @@ void test_cyclic_inline_tag() {
     std::filesystem::remove(file);
 }
 
+// ---------------------------------------------------------------------------
+// test_csv_basic_parsing
+// ---------------------------------------------------------------------------
+void test_csv_basic_parsing() {
+    std::string file = "test_ench_csv.csv";
+    {
+        std::ofstream f(file);
+        f << "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
+             "applicable_equipment\n";
+        f << "sharpness,Sharpness,java,5,5,1,\"smite\",\"sword;axe\"\n";
+        f << "knockback,Knockback,java,2,2,1,,\"sword\"\n";
+    }
+
+    TagResolver resolver;
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
+
+    expect(infos.size() == 2, "csv: 2 enchantments");
+    expect(infos[0].name_id == "sharpness", "csv: first ench id");
+    expect(infos[0].name == "Sharpness", "csv: first ench name");
+    expect(infos[0].max_level == 5, "csv: first max_level");
+    expect(infos[0].multiplier == 1, "csv: first multiplier");
+    expect(infos[0].exclusive_set.size() == 1, "csv: first exclusive set size");
+    expect(infos[0].exclusive_set.contains("smite"), "csv: first exclusive contains smite");
+    expect(infos[0].applicable_equipment.size() == 2, "csv: first has 2 equipments");
+    expect(infos[0].applicable_equipment.contains(EquipmentCategory("sword")),
+           "csv: first contains sword");
+    expect(infos[0].applicable_equipment.contains(EquipmentCategory("axe")),
+           "csv: first contains axe");
+
+    expect(infos[1].name_id == "knockback", "csv: second ench id");
+    expect(infos[1].name == "Knockback", "csv: second ench name");
+    expect(infos[1].max_level == 2, "csv: second max_level");
+    expect(infos[1].multiplier == 1, "csv: second multiplier");
+    expect(infos[1].exclusive_set.empty(), "csv: second has no exclusives");
+    expect(infos[1].applicable_equipment.size() == 1, "csv: second has 1 equipment");
+    expect(infos[1].applicable_equipment.contains(EquipmentCategory("sword")),
+           "csv: second contains sword");
+
+    std::filesystem::remove(file);
+}
+
+// ---------------------------------------------------------------------------
+// test_csv_missing_required_columns
+// ---------------------------------------------------------------------------
+void test_csv_missing_required_columns() {
+    std::string file = "test_csv_missing_cols.csv";
+    {
+        std::ofstream f(file);
+        f << "id,name,platform\n";
+        f << "sharpness,Sharpness,java\n";
+    }
+
+    TagResolver resolver;
+    // Missing max_level and multiplier columns should return empty
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
+    expect(infos.empty(), "csv missing required columns: empty result");
+
+    std::filesystem::remove(file);
+}
+
+// ---------------------------------------------------------------------------
+// test_csv_with_tag_references
+// ---------------------------------------------------------------------------
+void test_csv_with_tag_references() {
+    std::string tag_dir = "test_csv_tags";
+    create_json(
+        tag_dir + "/data/minecraft/tags/enchantment/exclusive_set/undead.json",
+        R"({"values": ["smite", "bane_of_arthropods"]})"
+    );
+
+    TagResolver resolver;
+    resolver.load_from(tag_dir);
+
+    std::string file = "test_csv_tags.csv";
+    {
+        std::ofstream f(file);
+        f << "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
+             "applicable_equipment\n";
+        f << "sharpness,Sharpness,java,5,5,1,\"#minecraft:exclusive_set/undead\",\"sword\"\n";
+    }
+
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
+
+    expect(infos.size() == 1, "csv with tags: 1 enchantment");
+    expect(infos[0].exclusive_set.size() == 2, "csv with tags: resolved 2 exclusives");
+    expect(infos[0].exclusive_set.contains("smite"), "csv with tags: contains smite");
+    expect(infos[0].exclusive_set.contains("bane_of_arthropods"),
+           "csv with tags: contains bane_of_arthropods");
+
+    std::filesystem::remove_all(tag_dir);
+    std::filesystem::remove(file);
+}
+
+// ---------------------------------------------------------------------------
+// test_csv_empty_file
+// ---------------------------------------------------------------------------
+void test_csv_empty_file() {
+    std::string file = "test_csv_empty.csv";
+    {
+        std::ofstream f(file);
+        f << "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
+             "applicable_equipment\n";
+    }
+
+    TagResolver resolver;
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
+    expect(infos.empty(), "csv with only header: empty result");
+
+    std::filesystem::remove(file);
+}
+
+// ---------------------------------------------------------------------------
+// test_mc_official_basic
+// ---------------------------------------------------------------------------
+void test_mc_official_basic() {
+    std::string dir = "test_mc_off";
+    std::filesystem::create_directories(dir + "/data/minecraft/enchantment");
+
+    create_json(dir + "/data/minecraft/enchantment/sharpness.json", R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "exclusive_set": ["minecraft:smite"],
+        "supported_items": ["#minecraft:sword"]
+    })");
+
+    TagResolver resolver;
+    // Create a tag file for the # reference at data/minecraft/tags/enchantable/sword.json
+    // TagResolver stores the key as "minecraft:sword" (relative path from category dir)
+    std::filesystem::create_directories(dir + "/data/minecraft/tags/enchantable");
+    create_json(dir + "/data/minecraft/tags/enchantable/sword.json",
+                R"({"values": ["minecraft:sword"]})");
+
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
+
+    expect(infos.size() == 1, "mc: 1 enchantment");
+    expect(infos[0].name_id == "minecraft:sharpness", "mc: namespaced id");
+    expect(infos[0].name == "Sharpness", "mc: derived name");
+    expect(infos[0].multiplier == 1, "mc: anvil_cost maps to multiplier");
+    expect(infos[0].max_level == 5, "mc: max_level");
+    expect(infos[0].limited_level == 5, "mc: limited_level defaults to max_level");
+    expect(infos[0].supported_platform == platform::MCE::All, "mc: platform defaults to All");
+    expect(infos[0].exclusive_set.size() == 1, "mc: exclusive set size");
+    expect(infos[0].exclusive_set.contains("minecraft:smite"), "mc: exclusive contains smite");
+    expect(infos[0].applicable_equipment.size() == 1, "mc: 1 applicable equipment");
+    expect(infos[0].applicable_equipment.contains(EquipmentCategory("sword")),
+           "mc: applicable equipment matches sword");
+
+    std::filesystem::remove_all(dir);
+}
+
+// ---------------------------------------------------------------------------
+// test_mc_official_multiple_enchantments
+// ---------------------------------------------------------------------------
+void test_mc_official_multiple_enchantments() {
+    std::string dir = "test_mc_off_multi";
+    std::filesystem::create_directories(dir + "/data/minecraft/enchantment");
+
+    create_json(dir + "/data/minecraft/enchantment/sharpness.json", R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "supported_items": ["minecraft:sword"]
+    })");
+
+    create_json(dir + "/data/minecraft/enchantment/protection.json", R"({
+        "anvil_cost": 2,
+        "max_level": 4,
+        "exclusive_set": ["minecraft:fire_protection", "minecraft:blast_protection"],
+        "supported_items": ["minecraft:helmet", "minecraft:chestplate"]
+    })");
+
+    TagResolver resolver;
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
+
+    expect(infos.size() == 2, "mc multi: 2 enchantments");
+
+    // Find each enchantment by id (directory iteration order is not guaranteed)
+    const EnchInfo *sharpness = nullptr;
+    const EnchInfo *protection = nullptr;
+    for (const auto &info : infos) {
+        if (info.name_id == "minecraft:sharpness") {
+            sharpness = &info;
+        } else if (info.name_id == "minecraft:protection") {
+            protection = &info;
+        }
+    }
+
+    expect(sharpness != nullptr, "mc multi: sharpness found");
+    expect(protection != nullptr, "mc multi: protection found");
+    expect(protection->multiplier == 2, "mc multi: protection multiplier");
+    expect(protection->max_level == 4, "mc multi: protection max_level");
+    expect(protection->exclusive_set.size() == 2, "mc multi: protection 2 exclusives");
+    expect(protection->applicable_equipment.size() == 2, "mc multi: protection 2 equipments");
+
+    std::filesystem::remove_all(dir);
+}
+
+// ---------------------------------------------------------------------------
+// test_mc_official_invalid_entries_skipped
+// ---------------------------------------------------------------------------
+void test_mc_official_invalid_entries_skipped() {
+    std::string dir = "test_mc_off_skip";
+    std::filesystem::create_directories(dir + "/data/minecraft/enchantment");
+
+    // Valid
+    create_json(dir + "/data/minecraft/enchantment/valid.json", R"({
+        "anvil_cost": 1,
+        "max_level": 3,
+        "supported_items": ["minecraft:sword"]
+    })");
+
+    // Missing max_level (defaults to 0, will be skipped)
+    create_json(dir + "/data/minecraft/enchantment/no_max.json", R"({
+        "anvil_cost": 1,
+        "supported_items": ["minecraft:sword"]
+    })");
+
+    // Missing anvil_cost (defaults to 0, will be skipped)
+    create_json(dir + "/data/minecraft/enchantment/no_cost.json", R"({
+        "max_level": 3,
+        "supported_items": ["minecraft:sword"]
+    })");
+
+    // Not valid JSON
+    {
+        std::ofstream f(dir + "/data/minecraft/enchantment/bad_json.json");
+        f << "not valid json";
+    }
+
+    TagResolver resolver;
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
+
+    expect(infos.size() == 1, "mc skip: only 1 valid enchantment");
+    expect(infos[0].name_id == "minecraft:valid", "mc skip: valid one parsed");
+
+    std::filesystem::remove_all(dir);
+}
+
+// ---------------------------------------------------------------------------
+// test_mc_official_namespaced_name
+// ---------------------------------------------------------------------------
+void test_mc_official_namespaced_name() {
+    std::string dir = "test_mc_off_ns";
+    std::filesystem::create_directories(dir + "/data/custommod/enchantment");
+
+    create_json(dir + "/data/custommod/enchantment/fire_aspect.json", R"({
+        "anvil_cost": 4,
+        "max_level": 2,
+        "supported_items": ["minecraft:sword"]
+    })");
+
+    TagResolver resolver;
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
+
+    expect(infos.size() == 1, "mc ns: 1 enchantment");
+    expect(infos[0].name_id == "custommod:fire_aspect", "mc ns: namespaced id");
+    expect(infos[0].name == "Fire aspect", "mc ns: derived name with underscore replaced");
+    expect(infos[0].multiplier == 4, "mc ns: anvil_cost");
+    expect(infos[0].max_level == 2, "mc ns: max_level");
+
+    std::filesystem::remove_all(dir);
+}
+
 } // namespace
 
 int main() {
@@ -483,6 +745,14 @@ int main() {
         test_equipment_tag_resolution();
         test_parse_method_auto_detect_json();
         test_cyclic_inline_tag();
+        test_csv_basic_parsing();
+        test_csv_missing_required_columns();
+        test_csv_with_tag_references();
+        test_csv_empty_file();
+        test_mc_official_basic();
+        test_mc_official_multiple_enchantments();
+        test_mc_official_invalid_entries_skipped();
+        test_mc_official_namespaced_name();
         std::cout << "PASS" << std::endl;
         return 0;
     } catch (const std::exception &e) {

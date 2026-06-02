@@ -20,7 +20,19 @@ struct EnchInfoParser {
         EnchantmentDataPack *metadata = nullptr
     );
 
-    // Auto-detect format and parse (placeholder for CSV/MC official in Task 5)
+    // Parse native CSV format (enchantments.csv)
+    static std::vector<EnchInfo> parse_native_csv(
+        const std::filesystem::path &path,
+        TagResolver &tag_resolver
+    );
+
+    // Parse MC official data-driven format (data/<ns>/enchantment/<id>.json)
+    static std::vector<EnchInfo> parse_mc_official(
+        const std::filesystem::path &data_pack_dir,
+        TagResolver &tag_resolver
+    );
+
+    // Auto-detect format and parse
     static std::vector<EnchInfo> parse(
         const std::filesystem::path &path,
         TagResolver &tag_resolver
