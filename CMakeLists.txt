@@ -39,6 +39,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+)
+
 enable_testing()
 
 add_executable(json_tests
@@ -166,5 +170,32 @@ target_include_directories(test_output_formatter PRIVATE
 )
 add_test(NAME test_output_formatter COMMAND test_output_formatter)
 set_tests_properties(test_output_formatter PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_executable(test_integration
+    tests/test_integration.cpp
+    src/parser/CLIParser.cpp
+    src/parser/InputParser.cpp
+    src/parser/EnchInfoParser.cpp
+    src/parser/EquipmentParser.cpp
+    src/parser/TagResolver.cpp
+    src/parser/ParserUtils.cpp
+    src/parser/OutputFormatter.cpp
+    src/io/json.cpp
+    src/types/EnchInfo.cpp
+    src/types/Ench.cpp
+    src/types/EnchSet.cpp
+    src/types/EnchSolution.cpp
+    src/types/ItemStack.cpp
+    src/types/EquipmentType.cpp
+    src/types/common.cpp
+    src/algorithm/BaseAlgorithm.cpp
+)
+target_include_directories(test_integration PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+add_test(NAME test_integration COMMAND test_integration)
+set_tests_properties(test_integration PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
