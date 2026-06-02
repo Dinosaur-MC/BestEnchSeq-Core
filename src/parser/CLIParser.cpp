@@ -1,4 +1,5 @@
 #include "parser/CLIParser.h"
+#include "parser/ParserUtils.h"
 
 #include <cctype>
 #include <iostream>
@@ -51,7 +52,11 @@ EnchantmentSpec CLIParser::parse_enchantment(const std::string &spec) {
     if (eq_pos != std::string::npos) {
         // Level is everything after '='
         std::string level_str = spec.substr(eq_pos + 1);
-        result.level = std::stoi(level_str);
+        try {
+            result.level = std::stoi(level_str);
+        } catch (const std::exception &) {
+            throw std::runtime_error("Invalid enchantment level: '" + level_str + "' in '" + spec + "'");
+        }
 
         // Spec part is everything before '='
         std::string spec_part = spec.substr(0, eq_pos);
@@ -74,7 +79,11 @@ EnchantmentSpec CLIParser::parse_enchantment(const std::string &spec) {
                 // Colon shorthand: id:level
                 result.ns = "minecraft";
                 result.id = spec.substr(0, colon_pos);
-                result.level = std::stoi(after);
+                try {
+                    result.level = std::stoi(after);
+                } catch (const std::exception &) {
+                    throw std::runtime_error("Invalid enchantment level: '" + after + "' in '" + spec + "'");
+                }
             } else {
                 // Namespace prefix: ns:id
                 result.ns = spec.substr(0, colon_pos);
@@ -97,29 +106,10 @@ EnchantmentSpec CLIParser::parse_enchantment(const std::string &spec) {
 // ---------------------------------------------------------------------------
 std::vector<EnchantmentSpec> CLIParser::parse_enchantment_list(const std::string &list) {
     std::vector<EnchantmentSpec> result;
-
-    if (list.empty()) {
-        return result;
+    auto tokens = ParserUtils::split_string(list, ',');
+    for (const auto &token : tokens) {
+        result.push_back(parse_enchantment(token));
     }
-
-    size_t start = 0;
-    while (true) {
-        size_t end = list.find(',', start);
-        std::string token;
-        if (end == std::string::npos) {
-            token = list.substr(start);
-            if (!token.empty()) {
-                result.push_back(parse_enchantment(token));
-            }
-            break;
-        }
-        token = list.substr(start, end - start);
-        if (!token.empty()) {
-            result.push_back(parse_enchantment(token));
-        }
-        start = end + 1;
-    }
-
     return result;
 }
 
@@ -235,7 +225,7 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
                     );
                 }
                 config.solutions = n;
-            } catch (const std::invalid_argument &) {
+            } catch (const std::exception &) {
                 throw std::runtime_error(
                     "Invalid --solutions value: '" + value + "'. Expected an integer.\n" + get_help_text()
                 );

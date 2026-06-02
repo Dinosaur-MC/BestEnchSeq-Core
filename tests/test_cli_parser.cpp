@@ -292,6 +292,51 @@ void test_ench_custom_ns_with_level() {
 }
 
 // ---------------------------------------------------------------------------
+// Invalid level throws
+// ---------------------------------------------------------------------------
+
+void test_ench_invalid_level_throws() {
+    bool threw = false;
+    try {
+        CLIParser::parse_enchantment("sharpness=abc");
+    } catch (const std::runtime_error &) {
+        threw = true;
+    }
+    expect(threw, "invalid level 'abc' after '=' should throw");
+
+    std::cout << "  [OK] test_ench_invalid_level_throws" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// --solutions with invalid values throws
+// ---------------------------------------------------------------------------
+
+void test_solutions_invalid_throws() {
+    {
+        const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "abc"};
+        bool threw = false;
+        try {
+            CLIParser().parse(7, const_cast<char **>(argv));
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        expect(threw, "invalid --solutions 'abc' should throw");
+    }
+    {
+        const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "-1"};
+        bool threw = false;
+        try {
+            CLIParser().parse(7, const_cast<char **>(argv));
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        expect(threw, "negative --solutions should throw");
+    }
+
+    std::cout << "  [OK] test_solutions_invalid_throws" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
 // -- signals end of options
 // ---------------------------------------------------------------------------
 
@@ -346,6 +391,8 @@ int main() {
         test_colon_shorthand();
         test_ench_ns_only();
         test_ench_custom_ns_with_level();
+        test_ench_invalid_level_throws();
+        test_solutions_invalid_throws();
         test_target_with_inline();
         test_target_with_ns_inline();
         test_parse_target_no_brackets();
