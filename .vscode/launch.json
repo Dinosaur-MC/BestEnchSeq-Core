@@ -1,17 +1,26 @@
 {
-	// 使用 IntelliSense 了解相关属性。
-	// 悬停以查看现有属性的描述。
-	// 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
-	"version": "0.2.0",
-	"configurations": [
+    // 使用 IntelliSense 了解相关属性。
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "LLDB 启动",
+            "program": "${workspaceFolder}/build/bin/BestEnchSeq-Core.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "CMake: 生成"
+        },
         {
             "name": "(gdb) 启动",
             "type": "cppdbg",
             "request": "launch",
-			"program": "${workspaceFolder}/build/bin/BestEnchSeq-Core.exe",
+            "program": "${workspaceFolder}/build/bin/BestEnchSeq-Core.exe",
             "args": [],
             "stopAtEntry": false,
-			"cwd": "${workspaceFolder}/build/bin",
+            "cwd": "${workspaceFolder}/build/bin",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -28,7 +37,7 @@
                     "ignoreFailures": true
                 }
             ],
-			"preLaunchTask": "CMake: 生成"
+            "preLaunchTask": "CMake: 生成"
         }
-	]
+    ]
 }
