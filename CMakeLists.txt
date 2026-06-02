@@ -129,6 +129,16 @@ set_tests_properties(test_cli_parser PROPERTIES
 
 add_executable(test_input_parser
     tests/test_input_parser.cpp
+    src/parser/InputParser.cpp
+    src/parser/CLIParser.cpp
+    src/parser/ParserUtils.cpp
+    src/io/json.cpp
+    src/types/EnchInfo.cpp
+    src/types/Ench.cpp
+    src/types/EnchSet.cpp
+    src/types/ItemStack.cpp
+    src/types/EquipmentType.cpp
+    src/types/common.cpp
 )
 target_include_directories(test_input_parser PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
