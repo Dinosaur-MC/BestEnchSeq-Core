@@ -31,6 +31,78 @@ platform::MCE parse_platform(const std::string &str) {
 }
 
 // ---------------------------------------------------------------------------
+// Platform enum to string
+// ---------------------------------------------------------------------------
+std::string platform_to_string(platform::MCE p) {
+    switch (p) {
+    case platform::MCE::Java:
+        return "java";
+    case platform::MCE::Bedrock:
+        return "bedrock";
+    case platform::MCE::All:
+        return "all";
+    default:
+        return "java";
+    }
+}
+
+// ---------------------------------------------------------------------------
+// JSON field extraction helpers
+// ---------------------------------------------------------------------------
+
+std::string get_json_string(const Json::Object &obj, const std::string &key) {
+    auto it = obj.find(key);
+    if (it == obj.end()) {
+        return {};
+    }
+    auto val = it->second.get_value();
+    if (std::holds_alternative<Json::String>(val)) {
+        return std::get<Json::String>(val);
+    }
+    return {};
+}
+
+int32_t get_json_int(const Json::Object &obj, const std::string &key) {
+    auto it = obj.find(key);
+    if (it == obj.end()) {
+        return 0;
+    }
+    auto val = it->second.get_value();
+    if (std::holds_alternative<Json::Number>(val)) {
+        const auto &num = std::get<Json::Number>(val);
+        if (std::holds_alternative<int32_t>(num)) {
+            return std::get<int32_t>(num);
+        }
+        if (std::holds_alternative<int64_t>(num)) {
+            int64_t v = std::get<int64_t>(num);
+            return static_cast<int32_t>(v);
+        }
+    }
+    return 0;
+}
+
+std::vector<std::string> get_json_string_array(const Json::Object &obj, const std::string &key) {
+    std::vector<std::string> result;
+    auto it = obj.find(key);
+    if (it == obj.end()) {
+        return result;
+    }
+    auto val = it->second.get_value();
+    if (!std::holds_alternative<Json::Array>(val)) {
+        return result;
+    }
+    const auto &arr = std::get<Json::Array>(val);
+    result.reserve(arr.size());
+    for (const auto &elem : arr) {
+        auto elem_val = elem.get_value();
+        if (std::holds_alternative<Json::String>(elem_val)) {
+            result.push_back(std::get<Json::String>(elem_val));
+        }
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
 // String splitting
 // ---------------------------------------------------------------------------
 std::vector<std::string> split_string(const std::string &str, char delimiter) {

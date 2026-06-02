@@ -7,45 +7,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace {
-
-// ---------------------------------------------------------------------------
-// JSON field extraction helpers
-// ---------------------------------------------------------------------------
-
-std::string get_string_field(const Json::Object &obj, const std::string &key) {
-    auto it = obj.find(key);
-    if (it == obj.end()) {
-        return {};
-    }
-    auto val = it->second.get_value();
-    if (std::holds_alternative<Json::String>(val)) {
-        return std::get<Json::String>(val);
-    }
-    return {};
-}
-
-int32_t get_int_field(const Json::Object &obj, const std::string &key) {
-    auto it = obj.find(key);
-    if (it == obj.end()) {
-        return 0;
-    }
-    auto val = it->second.get_value();
-    if (std::holds_alternative<Json::Number>(val)) {
-        const auto &num = std::get<Json::Number>(val);
-        if (std::holds_alternative<int32_t>(num)) {
-            return std::get<int32_t>(num);
-        }
-        if (std::holds_alternative<int64_t>(num)) {
-            int64_t v = std::get<int64_t>(num);
-            return static_cast<int32_t>(v);
-        }
-    }
-    return 0;
-}
-
-} // anonymous namespace
-
 // ============================================================================
 
 std::vector<EquipmentType> EquipmentParser::parse_native_json(
@@ -99,8 +60,8 @@ std::vector<EquipmentType> EquipmentParser::parse_native_json(
         const auto &elem_obj = std::get<Json::Object>(elem_val);
 
         // Required fields
-        std::string id       = get_string_field(elem_obj, "id");
-        std::string category = get_string_field(elem_obj, "category");
+        std::string id       = ParserUtils::get_json_string(elem_obj, "id");
+        std::string category = ParserUtils::get_json_string(elem_obj, "category");
 
         if (id.empty() || category.empty()) {
             std::cerr << "Warning: Skipping equipment entry with missing id or category."
@@ -109,12 +70,12 @@ std::vector<EquipmentType> EquipmentParser::parse_native_json(
         }
 
         // Optional fields
-        std::string name = get_string_field(elem_obj, "name");
+        std::string name = ParserUtils::get_json_string(elem_obj, "name");
         if (name.empty()) {
             name = id;
         }
 
-        int32_t max_durability = get_int_field(elem_obj, "max_durability");
+        int32_t max_durability = ParserUtils::get_json_int(elem_obj, "max_durability");
         if (max_durability <= 0) {
             max_durability = 0;
         }
@@ -308,9 +269,9 @@ std::vector<EquipmentType> EquipmentParser::parse_mc_official(
                 auto comp_val = components_it->second.get_value();
                 if (std::holds_alternative<Json::Object>(comp_val)) {
                     const auto &comp_obj = std::get<Json::Object>(comp_val);
-                    durability = get_int_field(comp_obj, "max_damage");
+                    durability = ParserUtils::get_json_int(comp_obj, "max_damage");
                     if (durability <= 0) {
-                        durability = get_int_field(comp_obj, "durability");
+                        durability = ParserUtils::get_json_int(comp_obj, "durability");
                     }
                 }
             }
@@ -380,4 +341,35 @@ std::vector<EquipmentType> EquipmentParser::parse(
     default:
         throw std::runtime_error("Unknown format: " + path.string());
     }
+}
+
+// ============================================================================
+
+std::string EquipmentParser::to_json(const std::vector<EquipmentType> &equipments) {
+    Json::Array eq_arr;
+    for (const auto &eq : equipments) {
+        Json::Object obj;
+        obj["id"]             = Json(Json::String(eq.id));
+        obj["name"]           = Json(Json::String(eq.name));
+        obj["category"]       = Json(Json::String(static_cast<const std::string &>(eq.category)));
+        obj["max_durability"] = Json(Json::Number(static_cast<int32_t>(eq.max_durability)));
+        eq_arr.push_back(Json(obj));
+    }
+
+    Json::Object root;
+    root["equipments"] = Json(eq_arr);
+    return Json(root).to_string(Json::Pretty);
+}
+
+// ============================================================================
+
+std::string EquipmentParser::to_csv(const std::vector<EquipmentType> &equipments) {
+    std::string csv = "id,name,category,max_durability\n";
+    for (const auto &eq : equipments) {
+        csv += eq.id + ",";
+        csv += eq.name + ",";
+        csv += static_cast<const std::string &>(eq.category) + ",";
+        csv += std::to_string(eq.max_durability) + "\n";
+    }
+    return csv;
 }

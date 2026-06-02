@@ -401,6 +401,69 @@ void test_parse_with_invalid_format() {
     std::filesystem::remove(file);
 }
 
+// ---------------------------------------------------------------------------
+// test_to_json_round_trip
+// ---------------------------------------------------------------------------
+void test_to_json_round_trip() {
+    std::vector<EquipmentType> original = {
+        {"diamond_sword", "Diamond Sword", EquipmentCategory("sword"), 1561},
+        {"diamond_pickaxe", "Diamond Pickaxe", EquipmentCategory("pickaxe"), 1561}
+    };
+
+    // Serialize to JSON
+    std::string json_str = EquipmentParser::to_json(original);
+
+    // Write to temp file, parse back
+    std::string file = "test_rt_eq.json";
+    {
+        std::ofstream f(file);
+        f << json_str;
+    }
+
+    TagResolver resolver;
+    auto parsed = EquipmentParser::parse_native_json(file, resolver);
+
+    expect(parsed.size() == original.size(), "eq JSON round-trip: same count");
+    if (parsed.size() >= 1) {
+        expect(parsed[0].id == original[0].id, "eq JSON round-trip: id preserved");
+        expect(parsed[0].name == original[0].name, "eq JSON round-trip: name preserved");
+        expect(parsed[0].category == EquipmentCategory("sword"), "eq JSON round-trip: category");
+        expect(parsed[0].max_durability == 1561, "eq JSON round-trip: durability");
+    }
+
+    std::filesystem::remove(file);
+}
+
+// ---------------------------------------------------------------------------
+// test_to_csv_round_trip
+// ---------------------------------------------------------------------------
+void test_to_csv_round_trip() {
+    std::vector<EquipmentType> original = {
+        {"diamond_sword", "Diamond Sword", EquipmentCategory("sword"), 1561},
+        {"diamond_pickaxe", "Diamond Pickaxe", EquipmentCategory("pickaxe"), 1561}
+    };
+
+    // Serialize to CSV
+    std::string csv_str = EquipmentParser::to_csv(original);
+
+    // Write to temp file, parse back
+    std::string file = "test_rt_eq.csv";
+    {
+        std::ofstream f(file);
+        f << csv_str;
+    }
+
+    auto parsed = EquipmentParser::parse_native_csv(file);
+
+    expect(parsed.size() == original.size(), "eq CSV round-trip: same count");
+    if (parsed.size() >= 1) {
+        expect(parsed[0].id == original[0].id, "eq CSV round-trip: id preserved");
+        expect(parsed[0].max_durability == 1561, "eq CSV round-trip: durability");
+    }
+
+    std::filesystem::remove(file);
+}
+
 } // namespace
 
 int main() {
@@ -423,6 +486,8 @@ int main() {
         test_invalid_json_handling();
         test_non_existent_file();
         test_parse_with_invalid_format();
+        test_to_json_round_trip();
+        test_to_csv_round_trip();
         std::cout << "PASS" << std::endl;
         return 0;
     } catch (const std::exception &e) {

@@ -726,6 +726,121 @@ void test_mc_official_namespaced_name() {
     std::filesystem::remove_all(dir);
 }
 
+// ---------------------------------------------------------------------------
+// test_to_json_round_trip
+// ---------------------------------------------------------------------------
+void test_to_json_round_trip() {
+    // Create test data
+    std::vector<EnchInfo> original;
+    original.emplace_back("minecraft:sharpness", "Sharpness", platform::MCE::Java,
+                          5, 5, 1,
+                          std::unordered_set<std::string>{"minecraft:smite", "minecraft:bane_of_arthropods"},
+                          std::unordered_set<EquipmentCategory>{EquipmentCategory("sword"), EquipmentCategory("axe")});
+    original.emplace_back("minecraft:protection", "Protection", platform::MCE::All,
+                          4, 4, 2,
+                          std::unordered_set<std::string>{},
+                          std::unordered_set<EquipmentCategory>{EquipmentCategory("helmet"), EquipmentCategory("chestplate")});
+
+    // Serialize to JSON
+    std::string json_str = EnchInfoParser::to_json(original);
+
+    // Write to temp file, parse back
+    std::string file = "test_rt_ench.json";
+    {
+        std::ofstream f(file);
+        f << json_str;
+    }
+
+    TagResolver resolver;
+    auto parsed = EnchInfoParser::parse_native_json(file, resolver);
+
+    expect(parsed.size() == original.size(), "ench JSON round-trip: same count");
+
+    if (parsed.size() >= 1) {
+        expect(parsed[0].name_id == original[0].name_id, "ench JSON round-trip: id preserved");
+        expect(parsed[0].name == original[0].name, "ench JSON round-trip: name preserved");
+        expect(parsed[0].supported_platform == original[0].supported_platform,
+               "ench JSON round-trip: platform preserved");
+        expect(parsed[0].max_level == original[0].max_level, "ench JSON round-trip: max_level");
+        expect(parsed[0].limited_level == original[0].limited_level, "ench JSON round-trip: limited_level");
+        expect(parsed[0].multiplier == original[0].multiplier, "ench JSON round-trip: multiplier");
+        expect(parsed[0].exclusive_set.size() == original[0].exclusive_set.size(),
+               "ench JSON round-trip: exclusive_set size");
+    }
+
+    std::filesystem::remove(file);
+}
+
+// ---------------------------------------------------------------------------
+// test_to_csv_round_trip
+// ---------------------------------------------------------------------------
+void test_to_csv_round_trip() {
+    // Create test data
+    std::vector<EnchInfo> original;
+    original.emplace_back("sharpness", "Sharpness", platform::MCE::Java,
+                          5, 5, 1,
+                          std::unordered_set<std::string>{"smite"},
+                          std::unordered_set<EquipmentCategory>{EquipmentCategory("sword")});
+    original.emplace_back("knockback", "Knockback", platform::MCE::Java,
+                          2, 2, 1,
+                          std::unordered_set<std::string>{},
+                          std::unordered_set<EquipmentCategory>{EquipmentCategory("sword")});
+
+    // Serialize to CSV
+    std::string csv_str = EnchInfoParser::to_csv(original);
+
+    // Write to temp file, parse back
+    std::string file = "test_rt_ench.csv";
+    {
+        std::ofstream f(file);
+        f << csv_str;
+    }
+
+    TagResolver resolver;
+    auto parsed = EnchInfoParser::parse_native_csv(file, resolver);
+
+    expect(parsed.size() == original.size(), "ench CSV round-trip: same count");
+
+    if (parsed.size() >= 1) {
+        expect(parsed[0].name_id == original[0].name_id, "ench CSV round-trip: id preserved");
+        expect(parsed[0].max_level == original[0].max_level, "ench CSV round-trip: max_level");
+        expect(parsed[0].multiplier == original[0].multiplier, "ench CSV round-trip: multiplier");
+        expect(parsed[0].exclusive_set.size() == original[0].exclusive_set.size(),
+               "ench CSV round-trip: exclusive_set size");
+    }
+
+    std::filesystem::remove(file);
+}
+
+// ---------------------------------------------------------------------------
+// test_export_mc_official_round_trip
+// ---------------------------------------------------------------------------
+void test_export_mc_official_round_trip() {
+    // Create test data
+    std::vector<EnchInfo> original;
+    original.emplace_back("minecraft:sharpness", "Sharpness", platform::MCE::All,
+                          5, 5, 1,
+                          std::unordered_set<std::string>{"minecraft:smite"},
+                          std::unordered_set<EquipmentCategory>{EquipmentCategory("sword")});
+
+    // Export to MC official format
+    std::string output_dir = "test_rt_mc_off";
+    EnchInfoParser::export_to_mc_official(original, output_dir);
+
+    // Parse back
+    TagResolver resolver;
+    auto parsed = EnchInfoParser::parse_mc_official(output_dir, resolver);
+
+    expect(parsed.size() == original.size(), "mc official round-trip: same count");
+    if (!parsed.empty()) {
+        expect(parsed[0].name_id == original[0].name_id, "mc official round-trip: id preserved");
+        expect(parsed[0].multiplier == original[0].multiplier, "mc official round-trip: multiplier");
+        expect(parsed[0].max_level == original[0].max_level, "mc official round-trip: max_level");
+    }
+
+    std::filesystem::remove_all(output_dir);
+}
+
 } // namespace
 
 int main() {
@@ -753,6 +868,9 @@ int main() {
         test_mc_official_multiple_enchantments();
         test_mc_official_invalid_entries_skipped();
         test_mc_official_namespaced_name();
+        test_to_json_round_trip();
+        test_to_csv_round_trip();
+        test_export_mc_official_round_trip();
         std::cout << "PASS" << std::endl;
         return 0;
     } catch (const std::exception &e) {

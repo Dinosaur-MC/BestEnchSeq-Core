@@ -3,68 +3,13 @@
 #include "io/json.h"
 
 #include <cctype>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
 
 namespace {
-
-// ---------------------------------------------------------------------------
-// JSON field extraction helpers
-// ---------------------------------------------------------------------------
-
-std::string get_string_field(const Json::Object &obj, const std::string &key) {
-    auto it = obj.find(key);
-    if (it == obj.end()) {
-        return {};
-    }
-    auto val = it->second.get_value();
-    if (std::holds_alternative<Json::String>(val)) {
-        return std::get<Json::String>(val);
-    }
-    return {};
-}
-
-int32_t get_int_field(const Json::Object &obj, const std::string &key) {
-    auto it = obj.find(key);
-    if (it == obj.end()) {
-        return 0;
-    }
-    auto val = it->second.get_value();
-    if (std::holds_alternative<Json::Number>(val)) {
-        const auto &num = std::get<Json::Number>(val);
-        if (std::holds_alternative<int32_t>(num)) {
-            return std::get<int32_t>(num);
-        }
-        if (std::holds_alternative<int64_t>(num)) {
-            int64_t v = std::get<int64_t>(num);
-            return static_cast<int32_t>(v);
-        }
-    }
-    return 0;
-}
-
-std::vector<std::string> get_string_array_field(const Json::Object &obj, const std::string &key) {
-    std::vector<std::string> result;
-    auto it = obj.find(key);
-    if (it == obj.end()) {
-        return result;
-    }
-    auto val = it->second.get_value();
-    if (!std::holds_alternative<Json::Array>(val)) {
-        return result;
-    }
-    const auto &arr = std::get<Json::Array>(val);
-    result.reserve(arr.size());
-    for (const auto &elem : arr) {
-        auto elem_val = elem.get_value();
-        if (std::holds_alternative<Json::String>(elem_val)) {
-            result.push_back(std::get<Json::String>(elem_val));
-        }
-    }
-    return result;
-}
 
 // ---------------------------------------------------------------------------
 // Inline tag processing
@@ -215,10 +160,10 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
 
     // --- Extract metadata --------------------------------------------------
     if (metadata) {
-        metadata->name        = get_string_field(root_obj, "name");
-        metadata->description = get_string_field(root_obj, "description");
-        metadata->author      = get_string_field(root_obj, "author");
-        metadata->version     = get_string_field(root_obj, "version");
+        metadata->name        = ParserUtils::get_json_string(root_obj, "name");
+        metadata->description = ParserUtils::get_json_string(root_obj, "description");
+        metadata->author      = ParserUtils::get_json_string(root_obj, "author");
+        metadata->version     = ParserUtils::get_json_string(root_obj, "version");
     }
 
     // --- Process inline tags -----------------------------------------------
@@ -246,9 +191,9 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
         const auto &elem_obj = std::get<Json::Object>(elem_val);
 
         // Required fields
-        std::string id        = get_string_field(elem_obj, "id");
-        int32_t max_level     = get_int_field(elem_obj, "max_level");
-        int32_t multiplier    = get_int_field(elem_obj, "multiplier");
+        std::string id        = ParserUtils::get_json_string(elem_obj, "id");
+        int32_t max_level     = ParserUtils::get_json_int(elem_obj, "max_level");
+        int32_t multiplier    = ParserUtils::get_json_int(elem_obj, "multiplier");
 
         if (id.empty() || max_level <= 0 || multiplier <= 0) {
             std::cerr << "Warning: Skipping enchantment entry with missing or invalid "
@@ -259,26 +204,26 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
         }
 
         // Optional fields with defaults
-        std::string name = get_string_field(elem_obj, "name");
+        std::string name = ParserUtils::get_json_string(elem_obj, "name");
         if (name.empty()) {
             name = id; // fallback to id
         }
 
-        std::string platform_str = get_string_field(elem_obj, "platform");
+        std::string platform_str = ParserUtils::get_json_string(elem_obj, "platform");
         platform::MCE platform =
             platform_str.empty() ? platform::MCE::Java : ParserUtils::parse_platform(platform_str);
 
-        int32_t limited_level = get_int_field(elem_obj, "limited_level");
+        int32_t limited_level = ParserUtils::get_json_int(elem_obj, "limited_level");
         if (limited_level <= 0) {
             limited_level = max_level;
         }
 
         // Exclusive set — resolve #tag references
-        auto exclusive_set_items = get_string_array_field(elem_obj, "exclusive_set");
+        auto exclusive_set_items = ParserUtils::get_json_string_array(elem_obj, "exclusive_set");
         auto exclusive_set       = resolve_references(exclusive_set_items, tag_resolver);
 
         // Applicable equipment — resolve #tag references
-        auto equipment_items = get_string_array_field(elem_obj, "applicable_equipment");
+        auto equipment_items = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
         std::unordered_set<EquipmentCategory> applicable_equipment;
         auto resolved_equipment = resolve_references(equipment_items, tag_resolver);
         for (const auto &eq : resolved_equipment) {
@@ -528,8 +473,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
             const auto &obj = std::get<Json::Object>(root_var);
 
             // Map MC official fields to EnchInfo
-            int32_t multiplier = get_int_field(obj, "anvil_cost");
-            int32_t max_level  = get_int_field(obj, "max_level");
+            int32_t multiplier = ParserUtils::get_json_int(obj, "anvil_cost");
+            int32_t max_level  = ParserUtils::get_json_int(obj, "max_level");
 
             if (max_level <= 0 || multiplier <= 0) {
                 std::cerr << "Warning: Skipping " << ns << ":" << filename
@@ -562,11 +507,11 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
             std::string name_id = ns + ":" + filename;
 
             // Exclusive set — resolve #tag refs
-            auto excl_items    = get_string_array_field(obj, "exclusive_set");
+            auto excl_items    = ParserUtils::get_json_string_array(obj, "exclusive_set");
             auto exclusive_set = resolve_references(excl_items, tag_resolver);
 
             // Supported items → applicable equipment
-            auto supp_items      = get_string_array_field(obj, "supported_items");
+            auto supp_items      = ParserUtils::get_json_string_array(obj, "supported_items");
             auto resolved_supp   = resolve_references(supp_items, tag_resolver);
 
             std::unordered_set<EquipmentCategory> applicable_equipment;
@@ -600,4 +545,136 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
     }
 
     return result;
+}
+
+// ============================================================================
+
+std::string EnchInfoParser::to_json(
+    const std::vector<EnchInfo> &infos, const EnchantmentDataPack *metadata
+) {
+    Json::Object root;
+
+    // Add metadata if provided
+    if (metadata) {
+        root["name"]        = Json(Json::String(metadata->name));
+        root["description"] = Json(Json::String(metadata->description));
+        root["author"]      = Json(Json::String(metadata->author));
+        root["version"]     = Json(Json::String(metadata->version));
+    }
+
+    // Build enchantments array
+    Json::Array enchants;
+    for (const auto &info : infos) {
+        Json::Object obj;
+        obj["id"]       = Json(Json::String(info.name_id));
+        obj["name"]     = Json(Json::String(info.name));
+        obj["platform"] = Json(Json::String(ParserUtils::platform_to_string(info.supported_platform)));
+        obj["max_level"] = Json(Json::Number(static_cast<int32_t>(info.max_level)));
+        obj["limited_level"] = Json(Json::Number(static_cast<int32_t>(info.limited_level)));
+        obj["multiplier"] = Json(Json::Number(static_cast<int32_t>(info.multiplier)));
+
+        // exclusive_set array
+        Json::Array excl;
+        for (const auto &e : info.exclusive_set) {
+            excl.push_back(Json(Json::String(e)));
+        }
+        obj["exclusive_set"] = Json(excl);
+
+        // applicable_equipment array
+        Json::Array eq;
+        for (const auto &cat : info.applicable_equipment) {
+            eq.push_back(Json(Json::String(static_cast<const std::string &>(cat))));
+        }
+        obj["applicable_equipment"] = Json(eq);
+
+        enchants.push_back(Json(obj));
+    }
+    root["enchantments"] = Json(enchants);
+
+    return Json(root).to_string(Json::Pretty);
+}
+
+// ============================================================================
+
+std::string EnchInfoParser::to_csv(const std::vector<EnchInfo> &infos) {
+    std::string csv =
+        "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
+        "applicable_equipment\n";
+
+    for (const auto &info : infos) {
+        csv += info.name_id + ",";
+        csv += info.name + ",";
+        csv += ParserUtils::platform_to_string(info.supported_platform) + ",";
+        csv += std::to_string(info.max_level) + ",";
+        csv += std::to_string(info.limited_level) + ",";
+        csv += std::to_string(info.multiplier) + ",";
+
+        // exclusive_set: join with ;
+        csv += "\"";
+        bool first = true;
+        for (const auto &e : info.exclusive_set) {
+            if (!first) csv += ";";
+            first = false;
+            csv += e;
+        }
+        csv += "\",";
+
+        // applicable_equipment: join with ;
+        csv += "\"";
+        first = true;
+        for (const auto &cat : info.applicable_equipment) {
+            if (!first) csv += ";";
+            first = false;
+            csv += static_cast<const std::string &>(cat);
+        }
+        csv += "\"\n";
+    }
+
+    return csv;
+}
+
+// ============================================================================
+
+void EnchInfoParser::export_to_mc_official(
+    const std::vector<EnchInfo> &infos, const std::filesystem::path &output_dir
+) {
+    for (const auto &info : infos) {
+        // Split name_id into namespace and id
+        auto [ns, id] = ParserUtils::split_namespace(info.name_id);
+
+        // Construct output path: <output_dir>/data/<ns>/enchantment/<id>.json
+        std::filesystem::path ench_dir = output_dir / "data" / ns / "enchantment";
+        std::filesystem::create_directories(ench_dir);
+
+        Json::Object obj;
+        obj["anvil_cost"] = Json(Json::Number(static_cast<int32_t>(info.multiplier)));
+        obj["max_level"]  = Json(Json::Number(static_cast<int32_t>(info.max_level)));
+
+        // exclusive_set as namespaced IDs
+        Json::Array excl;
+        for (const auto &e : info.exclusive_set) {
+            std::string qualified = ParserUtils::qualify_id(e);
+            excl.push_back(Json(Json::String(qualified)));
+        }
+        obj["exclusive_set"] = Json(excl);
+
+        // supported_items — convert EquipmentCategory back to item IDs
+        Json::Array supp;
+        for (const auto &cat : info.applicable_equipment) {
+            supp.push_back(Json(Json::String(
+                "minecraft:" + static_cast<const std::string &>(cat)
+            )));
+        }
+        obj["supported_items"] = Json(supp);
+
+        // Write the file
+        std::string json_str = Json(obj).to_string(Json::Pretty);
+        std::filesystem::path file_path = ench_dir / (id + ".json");
+        std::ofstream f(file_path);
+        if (f.is_open()) {
+            f << json_str;
+        } else {
+            std::cerr << "Warning: Could not write " << file_path << std::endl;
+        }
+    }
 }

@@ -26,4 +26,10 @@ struct EquipmentParser {
         const std::filesystem::path &path,
         TagResolver &tag_resolver
     );
+
+    // Serialize to JSON format
+    static std::string to_json(const std::vector<EquipmentType> &equipments);
+
+    // Serialize to CSV format
+    static std::string to_csv(const std::vector<EquipmentType> &equipments);
 };
