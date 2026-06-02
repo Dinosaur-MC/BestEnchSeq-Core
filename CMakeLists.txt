@@ -115,6 +115,7 @@ set_tests_properties(test_equipment_parser PROPERTIES
 
 add_executable(test_cli_parser
     tests/test_cli_parser.cpp
+    src/parser/CLIParser.cpp
 )
 target_include_directories(test_cli_parser PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
