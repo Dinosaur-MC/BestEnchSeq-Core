@@ -321,10 +321,21 @@ std::string OutputFormatter::format_compact(
         if (!sol.is_feasible()) continue;
 
         for (const auto &step : sol.steps) {
+            // Compute result description (best-effort)
+            std::string result_desc;
+            try {
+                EnchSet combined = step.item_a.enchantments.combine_s(step.item_b.enchantments);
+                ItemStack result_item(step.item_a.equipment, combined,
+                                      step.item_a.prior_penalty, step.item_a.durability);
+                result_desc = describe_item_compact(result_item);
+            } catch (const std::exception &) {
+                result_desc = "...";
+            }
+
             out += std::to_string(i + 1) + "|" +          // solution rank
                    describe_item_compact(step.item_a) + "|" +
                    describe_item_compact(step.item_b) + "|" +
-                   "..." + "|" +
+                   result_desc + "|" +
                    std::to_string(step.exp_level_cost) + "|" +
                    std::to_string(step.exp_cost) + "\n";
         }
@@ -345,8 +356,10 @@ std::string OutputFormatter::format_json(
     root["mode"]           = Json(Json::String(mode_name));
 
     Json::Array sol_arr;
-    for (const auto &sol : solutions) {
+    for (size_t si = 0; si < solutions.size(); ++si) {
+        const auto &sol = solutions[si];
         Json::Object s;
+        s["rank"] = Json(Json::Number(static_cast<int32_t>(si + 1)));
 
         // Platform
         switch (sol.platform) {
@@ -386,6 +399,8 @@ std::string OutputFormatter::format_json(
         // Summary
         s["total_exp_level_cost"] = Json(Json::Number(sol.total_exp_level_cost));
         s["total_exp_cost"]       = Json(Json::Number(sol.total_exp_cost));
+        s["peek_level_cost"]      = Json(Json::Number(sol.get_peek_level_cost()));
+        s["peek_exp_cost"]        = Json(Json::Number(sol.get_peek_exp_cost()));
         s["max_cost_step_index"]  = Json(Json::Number(static_cast<int64_t>(sol.max_cost_step_index)));
         s["is_success"]           = Json(Json::Bool(sol.is_success));
 
