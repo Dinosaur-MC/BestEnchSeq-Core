@@ -21,6 +21,9 @@ class TagResolver {
     // Direct tag access. Returns nullptr if the tag does not exist.
     const std::unordered_set<std::string> *get_tag(const std::string &ns, const std::string &name) const;
 
+    // Programmatically add a resolved tag (for inline JSON tags).
+    void add_tag(const std::string &key, const std::unordered_set<std::string> &values);
+
     // Check if a reference looks like a tag (starts with '#').
     static bool is_tag(const std::string &reference);
 

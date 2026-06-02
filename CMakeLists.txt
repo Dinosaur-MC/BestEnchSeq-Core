@@ -35,6 +35,10 @@ file(GLOB_RECURSE MAIN_SRC_LIST CONFIGURE_DEPENDS
 )
 add_executable(${PROJECT_NAME} ${MAIN_SRC_LIST})
 
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 enable_testing()
 
 add_executable(json_tests
@@ -81,6 +85,10 @@ set_tests_properties(test_tag_resolver PROPERTIES
 
 add_executable(test_ench_info_parser
     tests/test_ench_info_parser.cpp
+    src/parser/EnchInfoParser.cpp
+    src/parser/TagResolver.cpp
+    src/parser/ParserUtils.cpp
+    src/io/json.cpp
 )
 target_include_directories(test_ench_info_parser PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

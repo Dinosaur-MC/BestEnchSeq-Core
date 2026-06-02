@@ -225,6 +225,13 @@ const std::unordered_set<std::string> *TagResolver::get_tag(
 }
 
 // ---------------------------------------------------------------------------
+// add_tag
+// ---------------------------------------------------------------------------
+void TagResolver::add_tag(const std::string &key, const std::unordered_set<std::string> &values) {
+    _tags[key] = values;
+}
+
+// ---------------------------------------------------------------------------
 // is_tag (static)
 // ---------------------------------------------------------------------------
 bool TagResolver::is_tag(const std::string &reference) {
