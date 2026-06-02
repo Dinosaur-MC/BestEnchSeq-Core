@@ -4,8 +4,8 @@
 #include <unordered_set>
 
 struct Ench {
-    const int32_t id; // A nonnegative number
-    int32_t level;    // A positive number
+    int32_t id;    // A nonnegative number
+    int32_t level; // A positive number
 
   public:
     struct Hash {
