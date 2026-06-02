@@ -29,7 +29,7 @@ class BaseAlgorithm {
         std::string algorithm_version;
         size_t created_at;
         size_t computation_time;
-        EnchStepList steps;
+        std::vector<EnchStepList> steps;
         bool is_valid;
     };
 
@@ -66,6 +66,6 @@ bool is_forgeable(const ItemStack &item_a, const ItemStack &item_b);
 std::pair<ItemStack, int32_t>
 forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated = false);
 
-EnchSolution make_solution(const BaseAlgorithm::Input &input, const BaseAlgorithm::Output &output);
+std::vector<EnchSolution> make_solution(const BaseAlgorithm::Input &input, const BaseAlgorithm::Output &output);
 
 }; // namespace Utils

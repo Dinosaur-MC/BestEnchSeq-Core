@@ -5,7 +5,7 @@
 void BaseAlgorithm::init(const Config &config) {
     if (_state == Running)
         return;
-    _state  = None;
+    _state = None;
     _config = config;
     _init(config);
     _state = Ready;
@@ -30,8 +30,7 @@ BaseAlgorithm::Output BaseAlgorithm::get_output() const {
     return _output;
 }
 
-std::pair<ItemStack, int32_t>
-BaseAlgorithm::forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated) const {
+std::pair<ItemStack, int32_t> BaseAlgorithm::forge_item(const ItemStack &item_a, const ItemStack &item_b, bool updated) const {
     if (!Utils::is_forgeable(item_a, item_b))
         throw std::invalid_argument("Invalid item combination");
 
@@ -40,11 +39,9 @@ BaseAlgorithm::forge_item(const ItemStack &item_a, const ItemStack &item_b, bool
 
     int32_t cost = combination_ret.second;
     if (!_config.ignore_penalty_cost)
-        cost += ItemStack::get_penalty_cost(item_a.prior_penalty) +
-                ItemStack::get_penalty_cost(item_b.prior_penalty);
+        cost += ItemStack::get_penalty_cost(item_a.prior_penalty) + ItemStack::get_penalty_cost(item_b.prior_penalty);
 
-    int32_t prior_penalty =
-        1 + (item_a.prior_penalty >= item_b.prior_penalty ? item_a.prior_penalty : item_b.prior_penalty);
+    int32_t prior_penalty = 1 + (item_a.prior_penalty >= item_b.prior_penalty ? item_a.prior_penalty : item_b.prior_penalty);
 
     int32_t durability = 0;
     if (item_a.is_equipment()) {
@@ -95,8 +92,7 @@ std::pair<ItemStack, int32_t> forge_item(const ItemStack &item_a, const ItemStac
     int32_t cost = combination_ret.second + ItemStack::get_penalty_cost(item_a.prior_penalty) +
                    ItemStack::get_penalty_cost(item_b.prior_penalty);
 
-    int32_t prior_penalty =
-        1 + (item_a.prior_penalty >= item_b.prior_penalty ? item_a.prior_penalty : item_b.prior_penalty);
+    int32_t prior_penalty = 1 + (item_a.prior_penalty >= item_b.prior_penalty ? item_a.prior_penalty : item_b.prior_penalty);
 
     int32_t durability = 0;
     if (item_a.is_equipment()) {
@@ -120,17 +116,19 @@ std::pair<ItemStack, int32_t> forge_item(const ItemStack &item_a, const ItemStac
     };
 }
 
-EnchSolution make_solution(const BaseAlgorithm::Input &input, const BaseAlgorithm::Output &output) {
-    return EnchSolution::make(
-        input.platform, input.original_ench, input.target_item, input.available_items, output.steps,
-        output.is_valid,
-        {
-            output.algorithm_name,
-            output.algorithm_version,
-            output.created_at,
-            output.computation_time,
-        }
-    );
+std::vector<EnchSolution> make_solution(const BaseAlgorithm::Input &input, const BaseAlgorithm::Output &output) {
+    std::vector<EnchSolution> solutions;
+    for (const auto &step : output.steps) {
+        solutions.emplace_back(EnchSolution::make(input.platform, input.original_ench, input.target_item, input.available_items,
+                                                  step, output.is_valid,
+                                                  {
+                                                      output.algorithm_name,
+                                                      output.algorithm_version,
+                                                      output.created_at,
+                                                      output.computation_time,
+                                                  }));
+    }
+    return solutions;
 }
 
 }; // namespace Utils
