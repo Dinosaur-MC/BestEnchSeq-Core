@@ -1,112 +1,1373 @@
 {
   "name": "Vanilla",
-  "description": "Built-in vanilla Minecraft data pack (Java Edition 1.21+)",
+  "description": "Built-in vanilla Minecraft data pack (Java Edition 26.1.2)",
   "author": "BestEnchSeq",
   "version": "2.0.0",
   "enchantments": [
-    { "id": "sharpness",         "name": "锋利",     "platform": "java", "max_level": 5, "limited_level": 5, "multiplier": 1, "exclusive_set": ["smite", "bane_of_arthropods"],                          "applicable_equipment": ["sword", "axe"] },
-    { "id": "smite",             "name": "亡灵杀手", "platform": "java", "max_level": 5, "limited_level": 5, "multiplier": 2, "exclusive_set": ["sharpness", "bane_of_arthropods"],                      "applicable_equipment": ["sword", "axe"] },
-    { "id": "bane_of_arthropods","name": "节肢杀手", "platform": "java", "max_level": 5, "limited_level": 5, "multiplier": 2, "exclusive_set": ["sharpness", "smite"],                                   "applicable_equipment": ["sword", "axe"] },
-    { "id": "knockback",         "name": "击退",     "platform": "java", "max_level": 2, "limited_level": 2, "multiplier": 2, "exclusive_set": [],                                                         "applicable_equipment": ["sword"] },
-    { "id": "fire_aspect",       "name": "火焰附加", "platform": "java", "max_level": 2, "limited_level": 2, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["sword"] },
-    { "id": "looting",           "name": "抢夺",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["sword"] },
-    { "id": "sweeping_edge",     "name": "横扫之刃", "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["sword"] },
-    { "id": "efficiency",        "name": "效率",     "platform": "java", "max_level": 5, "limited_level": 5, "multiplier": 1, "exclusive_set": [],                                                         "applicable_equipment": ["pickaxe", "shovel", "axe", "hoe"] },
-    { "id": "silk_touch",        "name": "精准采集", "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 8, "exclusive_set": ["fortune"],                                               "applicable_equipment": ["pickaxe", "shovel", "axe", "hoe"] },
-    { "id": "fortune",           "name": "时运",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": ["silk_touch"],                                             "applicable_equipment": ["pickaxe", "shovel", "axe", "hoe"] },
-    { "id": "unbreaking",        "name": "耐久",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 2, "exclusive_set": [],                                                         "applicable_equipment": ["any"] },
-    { "id": "protection",        "name": "保护",     "platform": "java", "max_level": 4, "limited_level": 4, "multiplier": 1, "exclusive_set": ["fire_protection", "blast_protection", "projectile_protection"], "applicable_equipment": ["helmet", "chestplate", "leggings", "boots"] },
-    { "id": "fire_protection",   "name": "火焰保护", "platform": "java", "max_level": 4, "limited_level": 4, "multiplier": 2, "exclusive_set": ["protection", "blast_protection", "projectile_protection"],       "applicable_equipment": ["helmet", "chestplate", "leggings", "boots"] },
-    { "id": "blast_protection",  "name": "爆炸保护", "platform": "java", "max_level": 4, "limited_level": 4, "multiplier": 4, "exclusive_set": ["protection", "fire_protection", "projectile_protection"],        "applicable_equipment": ["helmet", "chestplate", "leggings", "boots"] },
-    { "id": "projectile_protection", "name": "弹射物保护", "platform": "java", "max_level": 4, "limited_level": 4, "multiplier": 2, "exclusive_set": ["protection", "fire_protection", "blast_protection"],    "applicable_equipment": ["helmet", "chestplate", "leggings", "boots"] },
-    { "id": "feather_falling",   "name": "摔落保护", "platform": "java", "max_level": 4, "limited_level": 4, "multiplier": 2, "exclusive_set": [],                                                         "applicable_equipment": ["boots"] },
-    { "id": "respiration",       "name": "水下呼吸", "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["helmet"] },
-    { "id": "aqua_affinity",     "name": "水下速掘", "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["helmet"] },
-    { "id": "thorns",            "name": "荆棘",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 8, "exclusive_set": [],                                                         "applicable_equipment": ["helmet", "chestplate", "leggings", "boots"] },
-    { "id": "depth_strider",     "name": "深海探索者","platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": ["frost_walker", "soul_speed"],                            "applicable_equipment": ["boots"] },
-    { "id": "frost_walker",      "name": "冰霜行者", "platform": "java", "max_level": 2, "limited_level": 2, "multiplier": 4, "exclusive_set": ["depth_strider", "soul_speed"],                             "applicable_equipment": ["boots"] },
-    { "id": "soul_speed",        "name": "灵魂疾行", "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 8, "exclusive_set": ["depth_strider", "frost_walker"],                          "applicable_equipment": ["boots"] },
-    { "id": "swift_sneak",       "name": "迅捷潜行", "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 8, "exclusive_set": [],                                                         "applicable_equipment": ["leggings"] },
-    { "id": "binding_curse",     "name": "绑定诅咒", "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 8, "exclusive_set": [],                                                         "applicable_equipment": ["helmet", "chestplate", "leggings", "boots"] },
-    { "id": "vanishing_curse",   "name": "消失诅咒", "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 8, "exclusive_set": [],                                                         "applicable_equipment": ["any"] },
-    { "id": "power",             "name": "力量",     "platform": "java", "max_level": 5, "limited_level": 5, "multiplier": 1, "exclusive_set": [],                                                         "applicable_equipment": ["bow"] },
-    { "id": "punch",             "name": "冲击",     "platform": "java", "max_level": 2, "limited_level": 2, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["bow"] },
-    { "id": "flame",             "name": "火矢",     "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["bow"] },
-    { "id": "infinity",          "name": "无限",     "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 8, "exclusive_set": ["mending"],                                               "applicable_equipment": ["bow"] },
-    { "id": "luck_of_the_sea",   "name": "海之眷顾", "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["fishing_rod"] },
-    { "id": "lure",              "name": "饵钓",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["fishing_rod"] },
-    { "id": "mending",           "name": "经验修补", "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 4, "exclusive_set": ["infinity"],                                              "applicable_equipment": ["any"] },
-    { "id": "impaling",          "name": "穿刺",     "platform": "java", "max_level": 5, "limited_level": 5, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["trident"] },
-    { "id": "riptide",           "name": "激流",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": ["loyalty", "channeling"],                                 "applicable_equipment": ["trident"] },
-    { "id": "loyalty",           "name": "忠诚",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 1, "exclusive_set": ["riptide"],                                               "applicable_equipment": ["trident"] },
-    { "id": "channeling",        "name": "引雷",     "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 8, "exclusive_set": ["riptide"],                                               "applicable_equipment": ["trident"] },
-    { "id": "multishot",         "name": "多重射击", "platform": "java", "max_level": 1, "limited_level": 1, "multiplier": 4, "exclusive_set": ["piercing"],                                              "applicable_equipment": ["crossbow"] },
-    { "id": "piercing",          "name": "穿透",     "platform": "java", "max_level": 4, "limited_level": 4, "multiplier": 1, "exclusive_set": ["multishot"],                                             "applicable_equipment": ["crossbow"] },
-    { "id": "quick_charge",      "name": "快速装填", "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 2, "exclusive_set": [],                                                         "applicable_equipment": ["crossbow"] },
-    { "id": "wind_burst",        "name": "风爆",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["mace"] },
-    { "id": "density",           "name": "致密",     "platform": "java", "max_level": 5, "limited_level": 5, "multiplier": 2, "exclusive_set": ["breach"],                                                "applicable_equipment": ["mace"] },
-    { "id": "breach",            "name": "破甲",     "platform": "java", "max_level": 4, "limited_level": 4, "multiplier": 4, "exclusive_set": ["density"],                                                "applicable_equipment": ["mace"] },
-    { "id": "lunge",             "name": "突进",     "platform": "java", "max_level": 3, "limited_level": 3, "multiplier": 4, "exclusive_set": [],                                                         "applicable_equipment": ["mace"] }
+    {
+      "id": "aqua_affinity",
+      "name": "Aqua Affinity",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "helmet"
+      ]
+    },
+    {
+      "id": "bane_of_arthropods",
+      "name": "Bane of Arthropods",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 2,
+      "exclusive_set": [
+        "breach",
+        "density",
+        "impaling",
+        "sharpness",
+        "smite"
+      ],
+      "applicable_equipment": [
+        "axe",
+        "mace",
+        "spear",
+        "sword"
+      ]
+    },
+    {
+      "id": "binding_curse",
+      "name": "Curse of Binding",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 8,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "boots",
+        "chestplate",
+        "elytra",
+        "head",
+        "helmet",
+        "leggings",
+        "pumpkin",
+        "skull"
+      ]
+    },
+    {
+      "id": "blast_protection",
+      "name": "Blast Protection",
+      "platform": "java",
+      "max_level": 4,
+      "limited_level": 4,
+      "multiplier": 4,
+      "exclusive_set": [
+        "fire_protection",
+        "projectile_protection",
+        "protection"
+      ],
+      "applicable_equipment": [
+        "boots",
+        "chestplate",
+        "helmet",
+        "leggings"
+      ]
+    },
+    {
+      "id": "breach",
+      "name": "Breach",
+      "platform": "java",
+      "max_level": 4,
+      "limited_level": 4,
+      "multiplier": 4,
+      "exclusive_set": [
+        "bane_of_arthropods",
+        "density",
+        "impaling",
+        "sharpness",
+        "smite"
+      ],
+      "applicable_equipment": [
+        "mace"
+      ]
+    },
+    {
+      "id": "channeling",
+      "name": "Channeling",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 8,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "trident"
+      ]
+    },
+    {
+      "id": "density",
+      "name": "Density",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 2,
+      "exclusive_set": [
+        "bane_of_arthropods",
+        "breach",
+        "impaling",
+        "sharpness",
+        "smite"
+      ],
+      "applicable_equipment": [
+        "mace"
+      ]
+    },
+    {
+      "id": "depth_strider",
+      "name": "Depth Strider",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [
+        "frost_walker"
+      ],
+      "applicable_equipment": [
+        "boots"
+      ]
+    },
+    {
+      "id": "efficiency",
+      "name": "Efficiency",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 1,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "axe",
+        "hoe",
+        "pickaxe",
+        "shears",
+        "shovel"
+      ]
+    },
+    {
+      "id": "feather_falling",
+      "name": "Feather Falling",
+      "platform": "java",
+      "max_level": 4,
+      "limited_level": 4,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "boots"
+      ]
+    },
+    {
+      "id": "fire_aspect",
+      "name": "Fire Aspect",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "mace",
+        "spear",
+        "sword"
+      ]
+    },
+    {
+      "id": "fire_protection",
+      "name": "Fire Protection",
+      "platform": "java",
+      "max_level": 4,
+      "limited_level": 4,
+      "multiplier": 2,
+      "exclusive_set": [
+        "blast_protection",
+        "projectile_protection",
+        "protection"
+      ],
+      "applicable_equipment": [
+        "boots",
+        "chestplate",
+        "helmet",
+        "leggings"
+      ]
+    },
+    {
+      "id": "flame",
+      "name": "Flame",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "bow"
+      ]
+    },
+    {
+      "id": "fortune",
+      "name": "Fortune",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [
+        "silk_touch"
+      ],
+      "applicable_equipment": [
+        "axe",
+        "hoe",
+        "pickaxe",
+        "shovel"
+      ]
+    },
+    {
+      "id": "frost_walker",
+      "name": "Frost Walker",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 4,
+      "exclusive_set": [
+        "depth_strider"
+      ],
+      "applicable_equipment": [
+        "boots"
+      ]
+    },
+    {
+      "id": "impaling",
+      "name": "Impaling",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 4,
+      "exclusive_set": [
+        "bane_of_arthropods",
+        "breach",
+        "density",
+        "sharpness",
+        "smite"
+      ],
+      "applicable_equipment": [
+        "trident"
+      ]
+    },
+    {
+      "id": "infinity",
+      "name": "Infinity",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 8,
+      "exclusive_set": [
+        "mending"
+      ],
+      "applicable_equipment": [
+        "bow"
+      ]
+    },
+    {
+      "id": "knockback",
+      "name": "Knockback",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "spear",
+        "sword"
+      ]
+    },
+    {
+      "id": "looting",
+      "name": "Looting",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "spear",
+        "sword"
+      ]
+    },
+    {
+      "id": "loyalty",
+      "name": "Loyalty",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "trident"
+      ]
+    },
+    {
+      "id": "luck_of_the_sea",
+      "name": "Luck of the Sea",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "rod"
+      ]
+    },
+    {
+      "id": "lunge",
+      "name": "Lunge",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "spear"
+      ]
+    },
+    {
+      "id": "lure",
+      "name": "Lure",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "rod"
+      ]
+    },
+    {
+      "id": "mending",
+      "name": "Mending",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "axe",
+        "boots",
+        "bow",
+        "brush",
+        "chestplate",
+        "crossbow",
+        "elytra",
+        "helmet",
+        "hoe",
+        "leggings",
+        "mace",
+        "pickaxe",
+        "rod",
+        "shears",
+        "shield",
+        "shovel",
+        "spear",
+        "steel",
+        "stick",
+        "sword",
+        "trident"
+      ]
+    },
+    {
+      "id": "multishot",
+      "name": "Multishot",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 4,
+      "exclusive_set": [
+        "piercing"
+      ],
+      "applicable_equipment": [
+        "crossbow"
+      ]
+    },
+    {
+      "id": "piercing",
+      "name": "Piercing",
+      "platform": "java",
+      "max_level": 4,
+      "limited_level": 4,
+      "multiplier": 1,
+      "exclusive_set": [
+        "multishot"
+      ],
+      "applicable_equipment": [
+        "crossbow"
+      ]
+    },
+    {
+      "id": "power",
+      "name": "Power",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 1,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "bow"
+      ]
+    },
+    {
+      "id": "projectile_protection",
+      "name": "Projectile Protection",
+      "platform": "java",
+      "max_level": 4,
+      "limited_level": 4,
+      "multiplier": 2,
+      "exclusive_set": [
+        "blast_protection",
+        "fire_protection",
+        "protection"
+      ],
+      "applicable_equipment": [
+        "boots",
+        "chestplate",
+        "helmet",
+        "leggings"
+      ]
+    },
+    {
+      "id": "protection",
+      "name": "Protection",
+      "platform": "java",
+      "max_level": 4,
+      "limited_level": 4,
+      "multiplier": 1,
+      "exclusive_set": [
+        "blast_protection",
+        "fire_protection",
+        "projectile_protection"
+      ],
+      "applicable_equipment": [
+        "boots",
+        "chestplate",
+        "helmet",
+        "leggings"
+      ]
+    },
+    {
+      "id": "punch",
+      "name": "Punch",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "bow"
+      ]
+    },
+    {
+      "id": "quick_charge",
+      "name": "Quick Charge",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "crossbow"
+      ]
+    },
+    {
+      "id": "respiration",
+      "name": "Respiration",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "helmet"
+      ]
+    },
+    {
+      "id": "riptide",
+      "name": "Riptide",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [
+        "channeling",
+        "loyalty"
+      ],
+      "applicable_equipment": [
+        "trident"
+      ]
+    },
+    {
+      "id": "sharpness",
+      "name": "Sharpness",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 1,
+      "exclusive_set": [
+        "bane_of_arthropods",
+        "breach",
+        "density",
+        "impaling",
+        "smite"
+      ],
+      "applicable_equipment": [
+        "axe",
+        "spear",
+        "sword"
+      ]
+    },
+    {
+      "id": "silk_touch",
+      "name": "Silk Touch",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 8,
+      "exclusive_set": [
+        "fortune"
+      ],
+      "applicable_equipment": [
+        "axe",
+        "hoe",
+        "pickaxe",
+        "shovel"
+      ]
+    },
+    {
+      "id": "smite",
+      "name": "Smite",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 2,
+      "exclusive_set": [
+        "bane_of_arthropods",
+        "breach",
+        "density",
+        "impaling",
+        "sharpness"
+      ],
+      "applicable_equipment": [
+        "axe",
+        "mace",
+        "spear",
+        "sword"
+      ]
+    },
+    {
+      "id": "soul_speed",
+      "name": "Soul Speed",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 8,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "boots"
+      ]
+    },
+    {
+      "id": "sweeping_edge",
+      "name": "Sweeping Edge",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ]
+    },
+    {
+      "id": "swift_sneak",
+      "name": "Swift Sneak",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 8,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "leggings"
+      ]
+    },
+    {
+      "id": "thorns",
+      "name": "Thorns",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 8,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "boots",
+        "chestplate",
+        "helmet",
+        "leggings"
+      ]
+    },
+    {
+      "id": "unbreaking",
+      "name": "Unbreaking",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "axe",
+        "boots",
+        "bow",
+        "brush",
+        "chestplate",
+        "crossbow",
+        "elytra",
+        "helmet",
+        "hoe",
+        "leggings",
+        "mace",
+        "pickaxe",
+        "rod",
+        "shears",
+        "shield",
+        "shovel",
+        "spear",
+        "steel",
+        "stick",
+        "sword",
+        "trident"
+      ]
+    },
+    {
+      "id": "vanishing_curse",
+      "name": "Curse of Vanishing",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 8,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "axe",
+        "boots",
+        "bow",
+        "brush",
+        "chestplate",
+        "compass",
+        "crossbow",
+        "elytra",
+        "head",
+        "helmet",
+        "hoe",
+        "leggings",
+        "mace",
+        "pickaxe",
+        "pumpkin",
+        "rod",
+        "shears",
+        "shield",
+        "shovel",
+        "skull",
+        "spear",
+        "steel",
+        "stick",
+        "sword",
+        "trident"
+      ]
+    },
+    {
+      "id": "wind_burst",
+      "name": "Wind Burst",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "mace"
+      ]
+    }
   ],
   "equipments": [
-    { "id": "wooden_sword",     "name": "Wooden Sword",     "category": "sword",     "max_durability": 59 },
-    { "id": "wooden_pickaxe",   "name": "Wooden Pickaxe",   "category": "pickaxe",   "max_durability": 59 },
-    { "id": "wooden_axe",       "name": "Wooden Axe",       "category": "axe",       "max_durability": 59 },
-    { "id": "wooden_shovel",    "name": "Wooden Shovel",    "category": "shovel",    "max_durability": 59 },
-    { "id": "wooden_hoe",       "name": "Wooden Hoe",       "category": "hoe",       "max_durability": 59 },
-    { "id": "stone_sword",      "name": "Stone Sword",      "category": "sword",     "max_durability": 131 },
-    { "id": "stone_pickaxe",    "name": "Stone Pickaxe",    "category": "pickaxe",   "max_durability": 131 },
-    { "id": "stone_axe",        "name": "Stone Axe",        "category": "axe",       "max_durability": 131 },
-    { "id": "stone_shovel",     "name": "Stone Shovel",     "category": "shovel",    "max_durability": 131 },
-    { "id": "stone_hoe",        "name": "Stone Hoe",        "category": "hoe",       "max_durability": 131 },
-    { "id": "iron_sword",       "name": "Iron Sword",       "category": "sword",     "max_durability": 250 },
-    { "id": "iron_pickaxe",     "name": "Iron Pickaxe",     "category": "pickaxe",   "max_durability": 250 },
-    { "id": "iron_axe",         "name": "Iron Axe",         "category": "axe",       "max_durability": 250 },
-    { "id": "iron_shovel",      "name": "Iron Shovel",      "category": "shovel",    "max_durability": 250 },
-    { "id": "iron_hoe",         "name": "Iron Hoe",         "category": "hoe",       "max_durability": 250 },
-    { "id": "golden_sword",     "name": "Golden Sword",     "category": "sword",     "max_durability": 32 },
-    { "id": "golden_pickaxe",   "name": "Golden Pickaxe",   "category": "pickaxe",   "max_durability": 32 },
-    { "id": "golden_axe",       "name": "Golden Axe",       "category": "axe",       "max_durability": 32 },
-    { "id": "golden_shovel",    "name": "Golden Shovel",    "category": "shovel",    "max_durability": 32 },
-    { "id": "golden_hoe",       "name": "Golden Hoe",       "category": "hoe",       "max_durability": 32 },
-    { "id": "diamond_sword",    "name": "Diamond Sword",    "category": "sword",     "max_durability": 1561 },
-    { "id": "diamond_pickaxe",  "name": "Diamond Pickaxe",  "category": "pickaxe",   "max_durability": 1561 },
-    { "id": "diamond_axe",      "name": "Diamond Axe",      "category": "axe",       "max_durability": 1561 },
-    { "id": "diamond_shovel",   "name": "Diamond Shovel",   "category": "shovel",    "max_durability": 1561 },
-    { "id": "diamond_hoe",      "name": "Diamond Hoe",      "category": "hoe",       "max_durability": 1561 },
-    { "id": "netherite_sword",  "name": "Netherite Sword",  "category": "sword",     "max_durability": 2031 },
-    { "id": "netherite_pickaxe","name": "Netherite Pickaxe","category": "pickaxe",   "max_durability": 2031 },
-    { "id": "netherite_axe",    "name": "Netherite Axe",    "category": "axe",       "max_durability": 2031 },
-    { "id": "netherite_shovel", "name": "Netherite Shovel", "category": "shovel",    "max_durability": 2031 },
-    { "id": "netherite_hoe",    "name": "Netherite Hoe",    "category": "hoe",       "max_durability": 2031 },
-    { "id": "turtle_shell",     "name": "Turtle Shell",     "category": "helmet",    "max_durability": 275 },
-    { "id": "leather_helmet",   "name": "Leather Helmet",   "category": "helmet",    "max_durability": 55 },
-    { "id": "leather_chestplate","name": "Leather Chestplate","category": "chestplate","max_durability": 80 },
-    { "id": "leather_leggings", "name": "Leather Leggings", "category": "leggings",  "max_durability": 75 },
-    { "id": "leather_boots",    "name": "Leather Boots",    "category": "boots",     "max_durability": 65 },
-    { "id": "iron_helmet",      "name": "Iron Helmet",      "category": "helmet",    "max_durability": 165 },
-    { "id": "iron_chestplate",  "name": "Iron Chestplate",  "category": "chestplate","max_durability": 240 },
-    { "id": "iron_leggings",    "name": "Iron Leggings",    "category": "leggings",  "max_durability": 225 },
-    { "id": "iron_boots",       "name": "Iron Boots",       "category": "boots",     "max_durability": 195 },
-    { "id": "diamond_helmet",   "name": "Diamond Helmet",   "category": "helmet",    "max_durability": 363 },
-    { "id": "diamond_chestplate","name": "Diamond Chestplate","category": "chestplate","max_durability": 528 },
-    { "id": "diamond_leggings", "name": "Diamond Leggings", "category": "leggings",  "max_durability": 495 },
-    { "id": "diamond_boots",    "name": "Diamond Boots",    "category": "boots",     "max_durability": 429 },
-    { "id": "netherite_helmet", "name": "Netherite Helmet", "category": "helmet",    "max_durability": 407 },
-    { "id": "netherite_chestplate","name":"Netherite Chestplate","category":"chestplate","max_durability":592 },
-    { "id": "netherite_leggings","name": "Netherite Leggings","category": "leggings", "max_durability": 555 },
-    { "id": "netherite_boots",  "name": "Netherite Boots",  "category": "boots",     "max_durability": 481 },
-    { "id": "chainmail_helmet", "name": "Chainmail Helmet", "category": "helmet",    "max_durability": 165 },
-    { "id": "chainmail_chestplate","name":"Chainmail Chestplate","category":"chestplate","max_durability":240 },
-    { "id": "chainmail_leggings","name":"Chainmail Leggings","category":"leggings",  "max_durability": 225 },
-    { "id": "chainmail_boots",  "name": "Chainmail Boots",  "category": "boots",     "max_durability": 195 },
-    { "id": "bow",              "name": "Bow",              "category": "bow",       "max_durability": 384 },
-    { "id": "crossbow",         "name": "Crossbow",         "category": "crossbow",  "max_durability": 465 },
-    { "id": "trident",          "name": "Trident",          "category": "trident",   "max_durability": 250 },
-    { "id": "mace",             "name": "Mace",             "category": "mace",      "max_durability": 250 },
-    { "id": "fishing_rod",      "name": "Fishing Rod",      "category": "fishing_rod","max_durability": 64 },
-    { "id": "elytra",           "name": "Elytra",           "category": "chestplate","max_durability": 432 },
-    { "id": "shield",           "name": "Shield",           "category": "offhand",   "max_durability": 336 }
+    {
+      "id": "bow",
+      "name": "Bow",
+      "category": "bow",
+      "max_durability": 384
+    },
+    {
+      "id": "brush",
+      "name": "Brush",
+      "category": "brush",
+      "max_durability": 64
+    },
+    {
+      "id": "carrot_on_a_stick",
+      "name": "Carrot on a Stick",
+      "category": "stick",
+      "max_durability": 25
+    },
+    {
+      "id": "chainmail_boots",
+      "name": "Chainmail Boots",
+      "category": "boots",
+      "max_durability": 195
+    },
+    {
+      "id": "chainmail_chestplate",
+      "name": "Chainmail Chestplate",
+      "category": "chestplate",
+      "max_durability": 240
+    },
+    {
+      "id": "chainmail_helmet",
+      "name": "Chainmail Helmet",
+      "category": "helmet",
+      "max_durability": 165
+    },
+    {
+      "id": "chainmail_leggings",
+      "name": "Chainmail Leggings",
+      "category": "leggings",
+      "max_durability": 225
+    },
+    {
+      "id": "copper_axe",
+      "name": "Copper Axe",
+      "category": "axe",
+      "max_durability": 190
+    },
+    {
+      "id": "copper_boots",
+      "name": "Copper Boots",
+      "category": "boots",
+      "max_durability": 143
+    },
+    {
+      "id": "copper_chestplate",
+      "name": "Copper Chestplate",
+      "category": "chestplate",
+      "max_durability": 176
+    },
+    {
+      "id": "copper_helmet",
+      "name": "Copper Helmet",
+      "category": "helmet",
+      "max_durability": 121
+    },
+    {
+      "id": "copper_hoe",
+      "name": "Copper Hoe",
+      "category": "hoe",
+      "max_durability": 190
+    },
+    {
+      "id": "copper_leggings",
+      "name": "Copper Leggings",
+      "category": "leggings",
+      "max_durability": 165
+    },
+    {
+      "id": "copper_pickaxe",
+      "name": "Copper Pickaxe",
+      "category": "pickaxe",
+      "max_durability": 190
+    },
+    {
+      "id": "copper_shovel",
+      "name": "Copper Shovel",
+      "category": "shovel",
+      "max_durability": 190
+    },
+    {
+      "id": "copper_sword",
+      "name": "Copper Sword",
+      "category": "sword",
+      "max_durability": 190
+    },
+    {
+      "id": "crossbow",
+      "name": "Crossbow",
+      "category": "crossbow",
+      "max_durability": 465
+    },
+    {
+      "id": "diamond_axe",
+      "name": "Diamond Axe",
+      "category": "axe",
+      "max_durability": 1561
+    },
+    {
+      "id": "diamond_boots",
+      "name": "Diamond Boots",
+      "category": "boots",
+      "max_durability": 429
+    },
+    {
+      "id": "diamond_chestplate",
+      "name": "Diamond Chestplate",
+      "category": "chestplate",
+      "max_durability": 528
+    },
+    {
+      "id": "diamond_helmet",
+      "name": "Diamond Helmet",
+      "category": "helmet",
+      "max_durability": 363
+    },
+    {
+      "id": "diamond_hoe",
+      "name": "Diamond Hoe",
+      "category": "hoe",
+      "max_durability": 1561
+    },
+    {
+      "id": "diamond_leggings",
+      "name": "Diamond Leggings",
+      "category": "leggings",
+      "max_durability": 495
+    },
+    {
+      "id": "diamond_pickaxe",
+      "name": "Diamond Pickaxe",
+      "category": "pickaxe",
+      "max_durability": 1561
+    },
+    {
+      "id": "diamond_shovel",
+      "name": "Diamond Shovel",
+      "category": "shovel",
+      "max_durability": 1561
+    },
+    {
+      "id": "diamond_sword",
+      "name": "Diamond Sword",
+      "category": "sword",
+      "max_durability": 1561
+    },
+    {
+      "id": "elytra",
+      "name": "Elytra",
+      "category": "elytra",
+      "max_durability": 432
+    },
+    {
+      "id": "fishing_rod",
+      "name": "Fishing Rod",
+      "category": "rod",
+      "max_durability": 64
+    },
+    {
+      "id": "flint_and_steel",
+      "name": "Flint and Steel",
+      "category": "steel",
+      "max_durability": 64
+    },
+    {
+      "id": "golden_axe",
+      "name": "Golden Axe",
+      "category": "axe",
+      "max_durability": 32
+    },
+    {
+      "id": "golden_boots",
+      "name": "Golden Boots",
+      "category": "boots",
+      "max_durability": 91
+    },
+    {
+      "id": "golden_chestplate",
+      "name": "Golden Chestplate",
+      "category": "chestplate",
+      "max_durability": 112
+    },
+    {
+      "id": "golden_helmet",
+      "name": "Golden Helmet",
+      "category": "helmet",
+      "max_durability": 77
+    },
+    {
+      "id": "golden_hoe",
+      "name": "Golden Hoe",
+      "category": "hoe",
+      "max_durability": 32
+    },
+    {
+      "id": "golden_leggings",
+      "name": "Golden Leggings",
+      "category": "leggings",
+      "max_durability": 105
+    },
+    {
+      "id": "golden_pickaxe",
+      "name": "Golden Pickaxe",
+      "category": "pickaxe",
+      "max_durability": 32
+    },
+    {
+      "id": "golden_shovel",
+      "name": "Golden Shovel",
+      "category": "shovel",
+      "max_durability": 32
+    },
+    {
+      "id": "golden_sword",
+      "name": "Golden Sword",
+      "category": "sword",
+      "max_durability": 32
+    },
+    {
+      "id": "iron_axe",
+      "name": "Iron Axe",
+      "category": "axe",
+      "max_durability": 250
+    },
+    {
+      "id": "iron_boots",
+      "name": "Iron Boots",
+      "category": "boots",
+      "max_durability": 195
+    },
+    {
+      "id": "iron_chestplate",
+      "name": "Iron Chestplate",
+      "category": "chestplate",
+      "max_durability": 240
+    },
+    {
+      "id": "iron_helmet",
+      "name": "Iron Helmet",
+      "category": "helmet",
+      "max_durability": 165
+    },
+    {
+      "id": "iron_hoe",
+      "name": "Iron Hoe",
+      "category": "hoe",
+      "max_durability": 250
+    },
+    {
+      "id": "iron_leggings",
+      "name": "Iron Leggings",
+      "category": "leggings",
+      "max_durability": 225
+    },
+    {
+      "id": "iron_pickaxe",
+      "name": "Iron Pickaxe",
+      "category": "pickaxe",
+      "max_durability": 250
+    },
+    {
+      "id": "iron_shovel",
+      "name": "Iron Shovel",
+      "category": "shovel",
+      "max_durability": 250
+    },
+    {
+      "id": "iron_sword",
+      "name": "Iron Sword",
+      "category": "sword",
+      "max_durability": 250
+    },
+    {
+      "id": "leather_boots",
+      "name": "Leather Boots",
+      "category": "boots",
+      "max_durability": 65
+    },
+    {
+      "id": "leather_chestplate",
+      "name": "Leather Tunic",
+      "category": "chestplate",
+      "max_durability": 80
+    },
+    {
+      "id": "leather_helmet",
+      "name": "Leather Cap",
+      "category": "helmet",
+      "max_durability": 55
+    },
+    {
+      "id": "leather_leggings",
+      "name": "Leather Pants",
+      "category": "leggings",
+      "max_durability": 75
+    },
+    {
+      "id": "mace",
+      "name": "Mace",
+      "category": "mace",
+      "max_durability": 500
+    },
+    {
+      "id": "netherite_axe",
+      "name": "Netherite Axe",
+      "category": "axe",
+      "max_durability": 2031
+    },
+    {
+      "id": "netherite_boots",
+      "name": "Netherite Boots",
+      "category": "boots",
+      "max_durability": 481
+    },
+    {
+      "id": "netherite_chestplate",
+      "name": "Netherite Chestplate",
+      "category": "chestplate",
+      "max_durability": 592
+    },
+    {
+      "id": "netherite_helmet",
+      "name": "Netherite Helmet",
+      "category": "helmet",
+      "max_durability": 407
+    },
+    {
+      "id": "netherite_hoe",
+      "name": "Netherite Hoe",
+      "category": "hoe",
+      "max_durability": 2031
+    },
+    {
+      "id": "netherite_leggings",
+      "name": "Netherite Leggings",
+      "category": "leggings",
+      "max_durability": 555
+    },
+    {
+      "id": "netherite_pickaxe",
+      "name": "Netherite Pickaxe",
+      "category": "pickaxe",
+      "max_durability": 2031
+    },
+    {
+      "id": "netherite_shovel",
+      "name": "Netherite Shovel",
+      "category": "shovel",
+      "max_durability": 2031
+    },
+    {
+      "id": "netherite_sword",
+      "name": "Netherite Sword",
+      "category": "sword",
+      "max_durability": 2031
+    },
+    {
+      "id": "shears",
+      "name": "Shears",
+      "category": "shears",
+      "max_durability": 238
+    },
+    {
+      "id": "shield",
+      "name": "Shield",
+      "category": "shield",
+      "max_durability": 336
+    },
+    {
+      "id": "stone_axe",
+      "name": "Stone Axe",
+      "category": "axe",
+      "max_durability": 131
+    },
+    {
+      "id": "stone_hoe",
+      "name": "Stone Hoe",
+      "category": "hoe",
+      "max_durability": 131
+    },
+    {
+      "id": "stone_pickaxe",
+      "name": "Stone Pickaxe",
+      "category": "pickaxe",
+      "max_durability": 131
+    },
+    {
+      "id": "stone_shovel",
+      "name": "Stone Shovel",
+      "category": "shovel",
+      "max_durability": 131
+    },
+    {
+      "id": "stone_sword",
+      "name": "Stone Sword",
+      "category": "sword",
+      "max_durability": 131
+    },
+    {
+      "id": "trident",
+      "name": "Trident",
+      "category": "trident",
+      "max_durability": 250
+    },
+    {
+      "id": "turtle_helmet",
+      "name": "Turtle Shell",
+      "category": "helmet",
+      "max_durability": 275
+    },
+    {
+      "id": "turtle_shell",
+      "name": "Turtle Shell",
+      "category": "shell",
+      "max_durability": 275
+    },
+    {
+      "id": "warped_fungus_on_a_stick",
+      "name": "Warped Fungus on a Stick",
+      "category": "stick",
+      "max_durability": 100
+    },
+    {
+      "id": "wooden_axe",
+      "name": "Wooden Axe",
+      "category": "axe",
+      "max_durability": 59
+    },
+    {
+      "id": "wooden_hoe",
+      "name": "Wooden Hoe",
+      "category": "hoe",
+      "max_durability": 59
+    },
+    {
+      "id": "wooden_pickaxe",
+      "name": "Wooden Pickaxe",
+      "category": "pickaxe",
+      "max_durability": 59
+    },
+    {
+      "id": "wooden_shovel",
+      "name": "Wooden Shovel",
+      "category": "shovel",
+      "max_durability": 59
+    },
+    {
+      "id": "wooden_sword",
+      "name": "Wooden Sword",
+      "category": "sword",
+      "max_durability": 59
+    }
   ],
-  "tags": {}
+  "tags": {
+    "minecraft:trade_rebalance/data/minecraft/tags/enchantment/trades/desert_common": [
+      "minecraft:fire_protection",
+      "minecraft:thorns",
+      "minecraft:infinity"
+    ],
+    "minecraft:trade_rebalance/data/minecraft/tags/enchantment/trades/jungle_common": [
+      "minecraft:feather_falling",
+      "minecraft:projectile_protection",
+      "minecraft:power"
+    ],
+    "minecraft:trade_rebalance/data/minecraft/tags/enchantment/trades/plains_common": [
+      "minecraft:punch",
+      "minecraft:smite",
+      "minecraft:bane_of_arthropods"
+    ],
+    "minecraft:trade_rebalance/data/minecraft/tags/enchantment/trades/savanna_common": [
+      "minecraft:knockback",
+      "minecraft:binding_curse",
+      "minecraft:sweeping_edge"
+    ],
+    "minecraft:trade_rebalance/data/minecraft/tags/enchantment/trades/snow_common": [
+      "minecraft:aqua_affinity",
+      "minecraft:looting",
+      "minecraft:frost_walker"
+    ],
+    "minecraft:trade_rebalance/data/minecraft/tags/enchantment/trades/swamp_common": [
+      "minecraft:depth_strider",
+      "minecraft:respiration",
+      "minecraft:vanishing_curse"
+    ],
+    "minecraft:trade_rebalance/data/minecraft/tags/enchantment/trades/taiga_common": [
+      "minecraft:blast_protection",
+      "minecraft:fire_aspect",
+      "minecraft:flame"
+    ],
+    "minecraft:enchantment/curse": [
+      "minecraft:binding_curse",
+      "minecraft:vanishing_curse"
+    ],
+    "minecraft:enchantment/double_trade_price": [
+      "#minecraft:treasure"
+    ],
+    "minecraft:enchantment/exclusive_set/armor": [
+      "minecraft:protection",
+      "minecraft:blast_protection",
+      "minecraft:fire_protection",
+      "minecraft:projectile_protection"
+    ],
+    "minecraft:enchantment/exclusive_set/boots": [
+      "minecraft:frost_walker",
+      "minecraft:depth_strider"
+    ],
+    "minecraft:enchantment/exclusive_set/bow": [
+      "minecraft:infinity",
+      "minecraft:mending"
+    ],
+    "minecraft:enchantment/exclusive_set/crossbow": [
+      "minecraft:multishot",
+      "minecraft:piercing"
+    ],
+    "minecraft:enchantment/exclusive_set/damage": [
+      "minecraft:sharpness",
+      "minecraft:smite",
+      "minecraft:bane_of_arthropods",
+      "minecraft:impaling",
+      "minecraft:density",
+      "minecraft:breach"
+    ],
+    "minecraft:enchantment/exclusive_set/mining": [
+      "minecraft:fortune",
+      "minecraft:silk_touch"
+    ],
+    "minecraft:enchantment/exclusive_set/riptide": [
+      "minecraft:loyalty",
+      "minecraft:channeling"
+    ],
+    "minecraft:enchantment/in_enchanting_table": [
+      "#minecraft:non_treasure"
+    ],
+    "minecraft:enchantment/non_treasure": [
+      "minecraft:protection",
+      "minecraft:fire_protection",
+      "minecraft:feather_falling",
+      "minecraft:blast_protection",
+      "minecraft:projectile_protection",
+      "minecraft:respiration",
+      "minecraft:aqua_affinity",
+      "minecraft:thorns",
+      "minecraft:depth_strider",
+      "minecraft:sharpness",
+      "minecraft:smite",
+      "minecraft:bane_of_arthropods",
+      "minecraft:knockback",
+      "minecraft:fire_aspect",
+      "minecraft:looting",
+      "minecraft:sweeping_edge",
+      "minecraft:efficiency",
+      "minecraft:silk_touch",
+      "minecraft:unbreaking",
+      "minecraft:fortune",
+      "minecraft:power",
+      "minecraft:punch",
+      "minecraft:flame",
+      "minecraft:infinity",
+      "minecraft:luck_of_the_sea",
+      "minecraft:lure",
+      "minecraft:loyalty",
+      "minecraft:impaling",
+      "minecraft:riptide",
+      "minecraft:channeling",
+      "minecraft:multishot",
+      "minecraft:quick_charge",
+      "minecraft:piercing",
+      "minecraft:density",
+      "minecraft:breach",
+      "minecraft:lunge"
+    ],
+    "minecraft:enchantment/on_mob_spawn_equipment": [
+      "#minecraft:non_treasure"
+    ],
+    "minecraft:enchantment/on_random_loot": [
+      "#minecraft:non_treasure",
+      "minecraft:binding_curse",
+      "minecraft:vanishing_curse",
+      "minecraft:frost_walker",
+      "minecraft:mending"
+    ],
+    "minecraft:enchantment/on_traded_equipment": [
+      "#minecraft:non_treasure"
+    ],
+    "minecraft:enchantment/prevents_bee_spawns_when_mining": [
+      "minecraft:silk_touch"
+    ],
+    "minecraft:enchantment/prevents_decorated_pot_shattering": [
+      "minecraft:silk_touch"
+    ],
+    "minecraft:enchantment/prevents_ice_melting": [
+      "minecraft:silk_touch"
+    ],
+    "minecraft:enchantment/prevents_infested_spawns": [
+      "minecraft:silk_touch"
+    ],
+    "minecraft:enchantment/smelts_loot": [
+      "minecraft:fire_aspect"
+    ],
+    "minecraft:enchantment/tooltip_order": [
+      "minecraft:binding_curse",
+      "minecraft:vanishing_curse",
+      "minecraft:riptide",
+      "minecraft:channeling",
+      "minecraft:wind_burst",
+      "minecraft:frost_walker",
+      "minecraft:lunge",
+      "minecraft:sharpness",
+      "minecraft:smite",
+      "minecraft:bane_of_arthropods",
+      "minecraft:impaling",
+      "minecraft:power",
+      "minecraft:density",
+      "minecraft:breach",
+      "minecraft:piercing",
+      "minecraft:sweeping_edge",
+      "minecraft:multishot",
+      "minecraft:fire_aspect",
+      "minecraft:flame",
+      "minecraft:knockback",
+      "minecraft:punch",
+      "minecraft:protection",
+      "minecraft:blast_protection",
+      "minecraft:fire_protection",
+      "minecraft:projectile_protection",
+      "minecraft:feather_falling",
+      "minecraft:fortune",
+      "minecraft:looting",
+      "minecraft:silk_touch",
+      "minecraft:luck_of_the_sea",
+      "minecraft:efficiency",
+      "minecraft:quick_charge",
+      "minecraft:lure",
+      "minecraft:respiration",
+      "minecraft:aqua_affinity",
+      "minecraft:soul_speed",
+      "minecraft:swift_sneak",
+      "minecraft:depth_strider",
+      "minecraft:thorns",
+      "minecraft:loyalty",
+      "minecraft:unbreaking",
+      "minecraft:infinity",
+      "minecraft:mending"
+    ],
+    "minecraft:enchantment/tradeable": [
+      "#minecraft:non_treasure",
+      "minecraft:binding_curse",
+      "minecraft:vanishing_curse",
+      "minecraft:frost_walker",
+      "minecraft:mending"
+    ],
+    "minecraft:enchantment/treasure": [
+      "minecraft:binding_curse",
+      "minecraft:vanishing_curse",
+      "minecraft:swift_sneak",
+      "minecraft:soul_speed",
+      "minecraft:frost_walker",
+      "minecraft:mending",
+      "minecraft:wind_burst"
+    ]
+  }
 }
