@@ -22,7 +22,7 @@ namespace {
 void test_full_pipeline_direct() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla_enchantments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
     EnchInfo::initialize(ench_infos);
     EnchInfo::set_active_platform(platform::MCE::Java);
 
@@ -31,7 +31,7 @@ void test_full_pipeline_direct() {
     auto config = cli_parser.parse(5, const_cast<char **>(argv));
 
     auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla_equipments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
     std::unordered_map<std::string, const EquipmentType *> eq_map;
     for (auto &eq : equipments) eq_map[eq.id] = &eq;
 
@@ -62,12 +62,12 @@ void test_full_pipeline_direct() {
 void test_full_pipeline_inventory() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla_enchantments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
     EnchInfo::initialize(ench_infos);
     EnchInfo::set_active_platform(platform::MCE::Java);
 
     auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla_equipments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
     std::unordered_map<std::string, const EquipmentType *> eq_map;
     for (auto &eq : equipments) eq_map[eq.id] = &eq;
 
@@ -114,7 +114,7 @@ void test_full_pipeline_inventory() {
 void test_platform_switching() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla_enchantments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
     EnchInfo::initialize(ench_infos);
 
     EnchInfo::set_active_platform(platform::MCE::Java);
@@ -134,7 +134,7 @@ void test_platform_switching() {
 void test_builtin_enchantment_lookup() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla_enchantments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
     EnchInfo::initialize(ench_infos);
 
     expect(EnchInfo::get_id("sharpness") >= 0, "builtin: sharpness found");
@@ -155,7 +155,7 @@ void test_builtin_enchantment_lookup() {
 void test_builtin_equipment_lookup() {
     TagResolver resolver;
     auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla_equipments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
 
     bool found_sword = false;
     bool found_netherite_helmet = false;
@@ -184,7 +184,7 @@ void test_builtin_equipment_lookup() {
 void test_output_formatting_empty() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla_enchantments.json", resolver);
+        "data/builtin/vanilla.json", resolver);
     EnchInfo::initialize(ench_infos);
     EnchInfo::set_active_platform(platform::MCE::Java);
 

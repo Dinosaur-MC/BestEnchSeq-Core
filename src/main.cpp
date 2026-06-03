@@ -4,7 +4,6 @@
 #include "parser/EquipmentParser.h"
 #include "parser/InputParser.h"
 #include "parser/OutputFormatter.h"
-#include "parser/ParserUtils.h"
 #include "parser/TagResolver.h"
 
 #include <filesystem>
@@ -15,7 +14,7 @@
 
 namespace {
 
-const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path(DATA_DIR) / "builtin";
+const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path("data") / "builtin";
 
 struct Registry {
     std::unordered_map<std::string, const EquipmentType*> equipment_map;
@@ -36,10 +35,10 @@ struct Registry {
 
 Registry load_builtin_data(TagResolver &tag_resolver) {
     Registry registry;
-    auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla_enchantments.json", tag_resolver);
+    auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
     EnchInfo::initialize(ench_infos);
 
-    auto equipments = EquipmentParser::parse(BUILTIN_DATA_DIR / "vanilla_equipments.json", tag_resolver);
+    auto equipments = EquipmentParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
     registry.init_equipment(equipments);
     return registry;
 }

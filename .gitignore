@@ -79,3 +79,4 @@ CLAUDE.md
 docs/superpowers
 .cache/
 .temp/
+*.jar
