@@ -1,5 +1,6 @@
 ﻿#include "test_utils.h"
 #include "parser/OutputFormatter.h"
+#include "registries/EnchantmentRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/Ench.h"
 #include "types/EnchSet.h"
@@ -54,7 +55,7 @@ void setup_enchinfo() {
         5, 5, 1, {},
         {EquipmentCategory::Bow()},
     });
-    EnchInfo::initialize(infos);
+    EnchantmentRegistry::get_instance().initialize(infos);
 }
 
 // ---------------------------------------------------------------------------

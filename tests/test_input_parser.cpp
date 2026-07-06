@@ -3,6 +3,7 @@
 #include "parser/CLIParser.h"
 #include "parser/ParserUtils.h"
 #include "io/json.h"
+#include "registries/EnchantmentRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/Ench.h"
 #include "types/EnchSet.h"
@@ -64,7 +65,7 @@ void setup_enchinfo() {
         {},  // exclusive_set
         {EquipmentCategory::Sword()},
     });
-    EnchInfo::initialize(infos);
+    EnchantmentRegistry::get_instance().initialize(infos);
 }
 
 // Helper to create a temporary JSON file

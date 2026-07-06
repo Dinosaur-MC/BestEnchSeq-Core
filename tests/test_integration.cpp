@@ -6,6 +6,8 @@
 #include "parser/OutputFormatter.h"
 #include "parser/ParserUtils.h"
 #include "parser/TagResolver.h"
+#include "registries/EnchantmentRegistry.h"
+#include "registries/PlatformConfig.h"
 #include "test_utils.h"
 
 #include <filesystem>
@@ -23,8 +25,8 @@ void test_full_pipeline_direct() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchInfo::initialize(ench_infos);
-    EnchInfo::set_active_platform(platform::MCE::Java);
+    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    platform::Config::get_instance().set_active(platform::MCE::Java);
 
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
     CLIParser cli_parser;
@@ -36,8 +38,8 @@ void test_full_pipeline_direct() {
     for (auto &eq : equipments) eq_map[eq.id] = &eq;
 
     std::unordered_map<std::string, int32_t> ench_map;
-    for (const auto &info : EnchInfo::get_instances()) {
-        int32_t id = EnchInfo::get_id(info.name_id);
+    for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
+        int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
         ench_map[info.name_id] = id;
         if (info.name_id.find(':') == std::string::npos) {
             ench_map["minecraft:" + info.name_id] = id;
@@ -63,8 +65,8 @@ void test_full_pipeline_inventory() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchInfo::initialize(ench_infos);
-    EnchInfo::set_active_platform(platform::MCE::Java);
+    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    platform::Config::get_instance().set_active(platform::MCE::Java);
 
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
@@ -72,8 +74,8 @@ void test_full_pipeline_inventory() {
     for (auto &eq : equipments) eq_map[eq.id] = &eq;
 
     std::unordered_map<std::string, int32_t> ench_map;
-    for (const auto &info : EnchInfo::get_instances()) {
-        int32_t id = EnchInfo::get_id(info.name_id);
+    for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
+        int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
         ench_map[info.name_id] = id;
         if (info.name_id.find(':') == std::string::npos) {
             ench_map["minecraft:" + info.name_id] = id;
@@ -115,14 +117,14 @@ void test_platform_switching() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchInfo::initialize(ench_infos);
+    EnchantmentRegistry::get_instance().initialize(ench_infos);
 
-    EnchInfo::set_active_platform(platform::MCE::Java);
-    expect(EnchInfo::get_active_platform() == platform::MCE::Java,
+    platform::Config::get_instance().set_active(platform::MCE::Java);
+    expect(platform::get_active_platform() == platform::MCE::Java,
            "platform_switch: Java set correctly");
 
-    EnchInfo::set_active_platform(platform::MCE::Bedrock);
-    expect(EnchInfo::get_active_platform() == platform::MCE::Bedrock,
+    platform::Config::get_instance().set_active(platform::MCE::Bedrock);
+    expect(platform::get_active_platform() == platform::MCE::Bedrock,
            "platform_switch: Bedrock set correctly");
 
     std::cout << "  [OK] test_platform_switching" << std::endl;
@@ -135,12 +137,12 @@ void test_builtin_enchantment_lookup() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchInfo::initialize(ench_infos);
+    EnchantmentRegistry::get_instance().initialize(ench_infos);
 
-    expect(EnchInfo::get_id("sharpness") >= 0, "builtin: sharpness found");
-    expect(EnchInfo::get_id("nonexistent") < 0, "builtin: nonexistent not found");
+    expect(EnchantmentRegistry::get_instance().get_id("sharpness") >= 0, "builtin: sharpness found");
+    expect(EnchantmentRegistry::get_instance().get_id("nonexistent") < 0, "builtin: nonexistent not found");
 
-    auto &sharpness = EnchInfo::get("sharpness");
+    auto &sharpness = EnchantmentRegistry::get_instance().get("sharpness");
     expect(sharpness.name_id == "sharpness",
            "builtin: sharpness name_id is sharpness");
     expect(sharpness.max_level == 5, "builtin: sharpness max_level is 5");
@@ -185,8 +187,8 @@ void test_output_formatting_empty() {
     TagResolver resolver;
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchInfo::initialize(ench_infos);
-    EnchInfo::set_active_platform(platform::MCE::Java);
+    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    platform::Config::get_instance().set_active(platform::MCE::Java);
 
     std::vector<EnchSolution> empty_solutions;
 
