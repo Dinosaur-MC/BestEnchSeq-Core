@@ -1,6 +1,6 @@
 {
   "name": "Vanilla",
-  "description": "Built-in vanilla Minecraft data pack (Java Edition 26.1.2)",
+  "description": "Built-in vanilla Minecraft data pack (Java Edition 26.2)",
   "author": "BestEnchSeq",
   "version": "2.0.0",
   "enchantments": [
@@ -328,7 +328,7 @@
       "name": "Lunge",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
+      "limited_level": 1,
       "multiplier": 2,
       "exclusive_set": [],
       "applicable_equipment": [
@@ -412,7 +412,7 @@
       "name": "Power",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
+      "limited_level": 4,
       "multiplier": 1,
       "exclusive_set": [],
       "applicable_equipment": [
@@ -474,7 +474,7 @@
       "name": "Quick Charge",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
+      "limited_level": 2,
       "multiplier": 2,
       "exclusive_set": [],
       "applicable_equipment": [
@@ -595,7 +595,7 @@
       "name": "Swift Sneak",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
+      "limited_level": 1,
       "multiplier": 8,
       "exclusive_set": [],
       "applicable_equipment": [
@@ -607,7 +607,7 @@
       "name": "Thorns",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
+      "limited_level": 2,
       "multiplier": 8,
       "exclusive_set": [],
       "applicable_equipment": [

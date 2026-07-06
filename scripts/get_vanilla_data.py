@@ -146,7 +146,8 @@ def resolve_ref(refs: list[str], context: str | None,
 
 def load_enchantments(base: Path, lang: dict[str, str],
                       tags: dict[str, list[str]],
-                      prefixes: list[str]) -> list[dict]:
+                      prefixes: list[str],
+                      enchantability_map: dict[str, int]) -> list[dict]:
     ench = []
     for f in sorted(base.glob("data/*/enchantment/*.json")):
         rel = PurePosixPath(f.relative_to(base)).as_posix()
@@ -183,12 +184,19 @@ def load_enchantments(base: Path, lang: dict[str, str],
         sup_ids = resolve_ref(raw_sup, "supported_items", tags, prefixes)
         eq_cats = items_to_categories(sup_ids, tags, prefixes, base)
 
+        # min_cost / max_cost — used to compute limited_level
+        min_cost_data = data.get("min_cost", {"base": 1, "per_level_above_first": 10})
+        max_level_val = data.get("max_level", 1)
+        limited_level = calc_limited_level(
+            max_level_val, min_cost_data, sup_ids, enchantability_map
+        )
+
         ench.append({
             "id": eid,
             "name": name,
             "platform": "java",
-            "max_level": data.get("max_level", 1),
-            "limited_level": data.get("max_level", 1),
+            "max_level": max_level_val,
+            "limited_level": limited_level,
             "multiplier": multiplier,
             "exclusive_set": excl,
             "applicable_equipment": eq_cats,
@@ -459,6 +467,112 @@ def load_durability_from_source(res_dir: Path) -> dict[str, int]:
     return dur
 
 
+# ── step 4b: enchantability ─────────────────────────────────────────────
+
+def load_enchantability_from_source(res_dir: Path) -> dict[str, int]:
+    """
+    Return item enchantability values, extracted from the Java source.
+
+    Sources (1.21.2+ / 26w+):
+      - ToolMaterial.java lines 23-29
+      - ArmorMaterials.java lines 12-38
+      - Items.java explicit .enchantable() calls
+
+    Items NOT in this map have enchantability 0 and cannot receive
+    enchantments from the enchanting table.
+    """
+    ench: dict[str, int] = {}
+
+    # Tool materials (each applies to: sword, pickaxe, axe, shovel, hoe)
+    tool_materials = {
+        "wooden": 15, "stone": 5, "copper": 13, "iron": 14,
+        "diamond": 10, "golden": 22, "netherite": 15,
+    }
+    for pfx, val in tool_materials.items():
+        for suf in ("sword", "pickaxe", "axe", "shovel", "hoe"):
+            ench[f"{pfx}_{suf}"] = val
+
+    # Armor materials (each applies to: helmet, chestplate, leggings, boots)
+    armor_materials = {
+        "leather": 15, "copper": 8, "chainmail": 12, "iron": 9,
+        "golden": 25, "diamond": 10, "netherite": 15,
+    }
+    # turtle uses ArmorMaterials.TURTLE_SCUTE → enchantmentValue = 9
+    # It is registered as a humanoid armor so the value is 9
+    for pfx, val in armor_materials.items():
+        for slot in ("helmet", "chestplate", "leggings", "boots"):
+            ench[f"{pfx}_{slot}"] = val
+    ench["turtle_helmet"] = 9
+
+    # Special items with explicit .enchantable(N) calls in Items.java
+    specials: dict[str, int] = {
+        "bow": 1,
+        "crossbow": 1,
+        "trident": 1,
+        "fishing_rod": 1,
+        "book": 1,
+        "mace": 15,
+    }
+    ench.update(specials)
+
+    print(f"  Loaded {len(ench)} enchantability values from source")
+    return ench
+
+
+# ── step 4c: limited-level calculation ───────────────────────────────────
+
+def _min_cost(cost_obj: dict, level: int) -> int:
+    """Compute the minimum enchanting-table cost for a given level.
+
+    cost_obj has the same shape as the JSON field ``min_cost``:
+        {"base": int, "per_level_above_first": int}
+    """
+    base = cost_obj.get("base", 1)
+    per  = cost_obj.get("per_level_above_first", 10)
+    return base + per * (level - 1)
+
+
+def _max_power(enchantability: int) -> int:
+    """Maximum enchanting-table 'power' for an item with the given
+    enchantability, assuming 15 bookshelves and the best possible random
+    rolls (slot 2 of the table UI).
+
+    Formula from EnchantmentHelper.getEnchantmentCost / selectEnchantment:
+        base = max(selected, 30)     # selected ∈ [8, 30]  → 30
+        added = 1 + 2×floor(ench / 4)
+        power = round((base + added) × 1.15)
+    """
+    base = 30
+    added = 1 + 2 * (enchantability // 4)
+    return round((base + added) * 1.15)
+
+
+def calc_limited_level(
+    max_level: int,
+    min_cost_data: dict,
+    sup_ids: set[str],
+    enchantability_map: dict[str, int],
+) -> int:
+    """Calculate the highest enchantment level obtainable from an
+    enchanting table, by simulating the best-case table power for each
+    supported item and checking which levels pass the cost gate.
+
+    Returns 1 at minimum if any item is enchantable.
+    """
+    best = 0
+    for item_id in sup_ids:
+        short = _item_short(item_id)
+        ench = enchantability_map.get(short, 0)
+        if ench <= 0:
+            continue
+        power = _max_power(ench)
+        for level in range(max_level, 0, -1):
+            if _min_cost(min_cost_data, level) <= power:
+                best = max(best, level)
+                break
+    return max(1, best)
+
+
 # ── step 5: output ──────────────────────────────────────────────────────
 
 def write_output(version: str, ench: list[dict], eq: list[dict],
@@ -532,8 +646,11 @@ def main() -> None:
     tags = load_tags(base)
     pfx = known_prefixes(base)
 
+    print("Loading enchantability…")
+    ench_map = load_enchantability_from_source(RES_DIR)
+
     print("Loading enchantments…")
-    ench = load_enchantments(base, lang, tags, pfx)
+    ench = load_enchantments(base, lang, tags, pfx, ench_map)
     ench.sort(key=lambda e: e["id"])
 
     print("Building equipment list…")
