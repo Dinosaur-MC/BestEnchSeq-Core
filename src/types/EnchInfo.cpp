@@ -91,7 +91,8 @@ const EnchInfo &EnchInfo::get(const std::string &name_id) {
     return instances[it->second];
 }
 int32_t EnchInfo::get_id(const std::string &name_id) {
-    return name_to_index.find(name_id) != name_to_index.end() ? name_to_index[name_id] : -1;
+    auto it = name_to_index.find(name_id);
+    return it != name_to_index.end() ? it->second : -1;
 }
 void EnchInfo::set_active_platform(platform::MCE type) { active_platform = type; }
 platform::MCE EnchInfo::get_active_platform() { return active_platform; }

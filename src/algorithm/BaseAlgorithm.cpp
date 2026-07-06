@@ -73,9 +73,9 @@ int32_t calc_exp(int32_t level) {
     if (level <= 16)
         return level * level + 6 * level;
     else if (level <= 31)
-        return 2.5 * level * level - 40.5 * level + 360;
+        return (5 * level * level - 81 * level + 720) / 2;
     else
-        return 4.5 * level * level - 162.5 * level + 2220;
+        return (9 * level * level - 325 * level + 4440) / 2;
 }
 
 bool is_forgeable(const ItemStack &item_a, const ItemStack &item_b) {
