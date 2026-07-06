@@ -1,4 +1,5 @@
 ﻿#include "parser/OutputFormatter.h"
+#include "registries/EnchantmentRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/EnchSet.h"
 
@@ -38,7 +39,7 @@ std::string to_roman(int level) {
 // ---------------------------------------------------------------------------
 std::string ench_name_id(int32_t id) {
     try {
-        return EnchInfo::get(id).name_id;
+        return EnchantmentRegistry::get_instance().get(id).name_id;
     } catch (const std::exception &) {
         return "ench_" + std::to_string(id);
     }
@@ -46,7 +47,7 @@ std::string ench_name_id(int32_t id) {
 
 std::string ench_display_name(int32_t id) {
     try {
-        return EnchInfo::get(id).name;
+        return EnchantmentRegistry::get_instance().get(id).name;
     } catch (const std::exception &) {
         return "ench_" + std::to_string(id);
     }
@@ -101,7 +102,7 @@ EnchSet enchset_from_json_array(const Json::Array &arr) {
         const Json::Object &obj = std::get<Json::Object>(elem_val);
         std::string eid = json_str(obj.at("id"));
         int32_t level   = json_int(obj.at("level"));
-        int32_t id      = EnchInfo::get_id(eid);
+        int32_t id      = EnchantmentRegistry::get_instance().get_id(eid);
         if (id >= 0) {
             result.emplace(id, level);
         }

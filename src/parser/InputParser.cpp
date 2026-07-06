@@ -1,6 +1,7 @@
 #include "parser/InputParser.h"
 #include "parser/ParserUtils.h"
 #include "io/json.h"
+#include "registries/EnchantmentRegistry.h"
 #include "types/EnchInfo.h"
 
 #include <iostream>
@@ -29,13 +30,13 @@ int32_t resolve_ench_id(
 
 // ---------------------------------------------------------------------------
 // Resolve a plain enchantment name (from JSON) to an integer ench_id via the
-// global EnchInfo registry.  Tries the raw name first, then prepends
+// global EnchantmentRegistry.  Tries the raw name first, then prepends
 // "minecraft:" as a fallback.
 // ---------------------------------------------------------------------------
 int32_t resolve_ench_id(const std::string &name) {
-    int32_t id = EnchInfo::get_id(name);
+    int32_t id = EnchantmentRegistry::get_instance().get_id(name);
     if (id < 0) {
-        id = EnchInfo::get_id("minecraft:" + name);
+        id = EnchantmentRegistry::get_instance().get_id("minecraft:" + name);
     }
     return id;
 }
