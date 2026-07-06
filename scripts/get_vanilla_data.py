@@ -399,6 +399,313 @@ def _javap_c(rel_class: Path) -> str:
     return r.stdout
 
 
+# ── javap line helpers ──────────────────────────────────────────────────
+
+def _extract_int(line: str) -> int | None:
+    """Extract a pushed integer from a javap bytecode line.
+
+    Handles ``bipush``, ``sipush``, and ``iconst_<0..5>``.
+    """
+    s = line.strip()
+    m = re.search(r'(bipush|sipush)\s+(-?\d+)', s)
+    if m:
+        return int(m.group(2))
+    m = re.search(r'iconst_([0-5])', s)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def _extract_field_name(line: str) -> str | None:
+    """Extract the simple field name from a ``putstatic`` javap line.
+
+    Input:  ``putstatic #123 // Field <CLASS>.<NAME>:L...``
+    Output: ``<NAME>``
+    """
+    # Format may be "Field FIELDNAME:L..." (current class) or
+    # "Field CLASS.FIELDNAME:L..." (external class).
+    m = re.search(r'putstatic\s+#\d+\s+//\s+Field\s+(?:\S+\.)?(\w+):', line.strip())
+    return m.group(1) if m else None
+
+
+def _extract_ldc_string(line: str) -> str | None:
+    """Extract a ``ldc`` / ``ldc_w`` string constant from a javap line.
+
+    Input:  ``ldc_w #6318 // String book``
+    Output: ``book``
+    """
+    m = re.search(r'ldc\w*\s+#\d+\s+//\s+String\s+(\w+)', line.strip())
+    return m.group(1) if m else None
+
+
+# ── class parsers ───────────────────────────────────────────────────────
+
+def _parse_tool_materials_javap(text: str) -> dict[str, int]:
+    """Parse javap -c -p output of ToolMaterial.class.
+
+    Returns a mapping of material name → enchantmentValue.
+
+    Constructor: ``(TagKey, int durability, float speed, float attackDamageBonus,
+                    int enchantmentValue, TagKey)``
+    In bytecode the 2nd integer push before ``invokespecial <init>`` is the
+    enchantmentValue.
+    """
+    result: dict[str, int] = {}
+    lines = text.split("\n")
+
+    i = 0
+    while i < len(lines):
+        s = lines[i].strip()
+
+        # Look for ``new ToolMaterial`` (javap format: ``N: new #M // class ...``)
+        if " new " not in s or "ToolMaterial" not in s:
+            i += 1
+            continue
+
+        # Scan forward until ``invokespecial <init>``, collecting integer values
+        ints: list[int] = []
+        i += 1
+        while i < len(lines):
+            s2 = lines[i].strip()
+            if "invokespecial" in s2 and "<init>" in s2:
+                break
+            v = _extract_int(s2)
+            if v is not None:
+                ints.append(v)
+            i += 1
+
+        if len(ints) < 2:
+            i += 1
+            continue
+
+        enchantability = ints[1]  # 2nd int = enchantmentValue
+
+        # Look ahead for the field name (putstatic after invokespecial)
+        name = None
+        for lookahead in range(i + 1, min(i + 5, len(lines))):
+            n = _extract_field_name(lines[lookahead])
+            if n:
+                name = n
+                break
+
+        if name:
+            result[name] = enchantability
+        i += 1
+
+    return result
+
+
+def _parse_armor_materials_javap(text: str) -> dict[str, int]:
+    """Parse javap -c -p output of ArmorMaterials.class.
+
+    Returns a mapping of material name → enchantmentValue.
+
+    Constructor params after the defense map::
+
+        makeDefense(a, b, c, d, e) ← pushed as 5 ints
+        int enchantmentValue         ← 1st int after invokestatic makeDefense
+        Holder<SoundEvent>
+        float toughness
+        float knockbackResistance
+        TagKey repairItems
+        ResourceKey assetId
+    """
+    result: dict[str, int] = {}
+    lines = text.split("\n")
+
+    i = 0
+    while i < len(lines):
+        s = lines[i].strip()
+
+        # Look for ``new ArmorMaterial`` (javap format: ``N: new #M // class ...``)
+        if " new " not in s or "ArmorMaterial" not in s:
+            i += 1
+            continue
+
+        # Scan forward past ``invokestatic makeDefense``, then capture the 1st int
+        found_defense = False
+        enchantability = None
+        j = i + 1
+        while j < len(lines):
+            s2 = lines[j].strip()
+            if "invokestatic" in s2 and "makeDefense" in s2:
+                found_defense = True
+                j += 1
+                continue
+            if found_defense:
+                if "invokespecial" in s2 and "<init>" in s2:
+                    break
+                v = _extract_int(s2)
+                if v is not None:
+                    enchantability = v
+                    break
+            j += 1
+
+        if enchantability is None:
+            i += 1
+            continue
+
+        # Find the field name from the following putstatic
+        name = None
+        for k in range(j + 1, min(j + 15, len(lines))):
+            n = _extract_field_name(lines[k])
+            if n:
+                name = n
+                break
+
+        if name:
+            result[name] = enchantability
+        i = j + 1
+
+    return result
+
+
+def _parse_items_enchantability_javap(text: str) -> dict[str, int]:
+    """Parse javap -c -p output of Items.class to extract ``.enchantable(N)``
+    values for items that are NOT covered by tool/armor material inheritance.
+
+    Looks for ``invokevirtual ... enchantable`` preceded by an integer push
+    and followed by a ``putstatic`` giving the item field name.
+    """
+    result: dict[str, int] = {}
+    lines = text.split("\n")
+
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if "invokevirtual" not in s or "enchantable" not in s:
+            continue
+
+        # Extract the value: the integer push immediately before the call
+        val = None
+        for lookback in range(i - 1, max(i - 6, -1), -1):
+            v = _extract_int(lines[lookback])
+            if v is not None:
+                val = v
+                break
+        if val is None:
+            continue
+
+        # Find the item name from the next putstatic
+        name = None
+        for lookahead in range(i + 1, min(i + 10, len(lines))):
+            n = _extract_field_name(lines[lookahead])
+            if n:
+                name = n.lower()
+                break
+        if name:
+            result[name] = val
+
+    return result
+
+
+# ── tool / armour prefix tables (MC design constants, version-stable) ───
+
+_TOOL_SUFFIXES = ("sword", "pickaxe", "axe", "shovel", "hoe")
+_ARMOR_SLOTS = ("helmet", "chestplate", "leggings", "boots")
+
+# Map javap field names → item name prefix
+_TOOL_PREFIX = {
+    "WOOD": "wooden", "STONE": "stone", "COPPER": "copper",
+    "IRON": "iron", "DIAMOND": "diamond", "GOLD": "golden",
+    "NETHERITE": "netherite",
+}
+
+_ARMOR_PREFIX = {
+    "LEATHER": "leather", "COPPER": "copper", "CHAINMAIL": "chainmail",
+    "IRON": "iron", "GOLD": "golden", "DIAMOND": "diamond",
+    "NETHERITE": "netherite",
+}
+
+# Items whose enchantability is set directly in Items.class bytecode.
+# (They call ``.enchantable(N)`` directly rather than inheriting from a material.)
+_SPECIAL_ENCH_ITEMS = frozenset({
+    "bow", "crossbow", "trident", "fishing_rod", "book", "mace",
+})
+
+
+def load_enchantability_from_source(res_dir: Path) -> dict[str, int]:
+    """
+    Return item enchantability values, dynamically extracted from the
+    client jar class files via javap.
+
+    Sources:
+      - ``ToolMaterial.class``   — tool material enchantmentValue
+      - ``ArmorMaterials.class`` — armour material enchantmentValue
+      - ``Items.class``          — ``.enchantable(N)`` calls for special items
+
+    Items NOT in this map have enchantability 0 and cannot receive
+    enchantments from the enchanting table.
+    """
+    extract_dir = res_dir / "vanilla"
+    ench: dict[str, int] = {}
+
+    # ── 1. Tool materials ──────────────────────────────────────────────
+    tm_class = extract_dir / "net" / "minecraft" / "world" / "item" / "ToolMaterial.class"
+    if tm_class.exists():
+        raw = _parse_tool_materials_javap(_javap_c(tm_class))
+        for field_name, value in raw.items():
+            pfx = _TOOL_PREFIX.get(field_name)
+            if pfx:
+                for suf in _TOOL_SUFFIXES:
+                    ench[f"{pfx}_{suf}"] = value
+        print(f"  Tool enchantability: {len(raw)} materials from {tm_class.name}")
+    else:
+        # Fallback hardcoded
+        fallback = {"wooden": 15, "stone": 5, "copper": 13, "iron": 14,
+                    "diamond": 10, "golden": 22, "netherite": 15}
+        for pfx, val in fallback.items():
+            for suf in _TOOL_SUFFIXES:
+                ench[f"{pfx}_{suf}"] = val
+        print(f"  Tool enchantability: fallback ({len(fallback)} materials)")
+
+    # ── 2. Armour materials ────────────────────────────────────────────
+    am_class = extract_dir / "net" / "minecraft" / "world" / "item" / "equipment" / "ArmorMaterials.class"
+    if am_class.exists():
+        raw = _parse_armor_materials_javap(_javap_c(am_class))
+        # turtle / armadillo are special (not humanoid)
+        turtle_val = 9  # TURTLE_SCUTE.enchantmentValue if present
+        for field_name, value in raw.items():
+            pfx = _ARMOR_PREFIX.get(field_name)
+            if pfx:
+                for slot in _ARMOR_SLOTS:
+                    ench[f"{pfx}_{slot}"] = value
+            elif field_name == "TURTLE_SCUTE":
+                turtle_val = value
+                ench["turtle_helmet"] = value
+        # Ensure turtle is always present (armor material may not be humanoid)
+        if "turtle_helmet" not in ench:
+            ench["turtle_helmet"] = turtle_val
+        print(f"  Armor enchantability: {len(raw)} materials from {am_class.name}")
+    else:
+        fallback = {"leather": 15, "copper": 8, "chainmail": 12, "iron": 9,
+                    "golden": 25, "diamond": 10, "netherite": 15}
+        for pfx, val in fallback.items():
+            for slot in _ARMOR_SLOTS:
+                ench[f"{pfx}_{slot}"] = val
+        ench["turtle_helmet"] = 9
+        print(f"  Armor enchantability: fallback ({len(fallback)} materials)")
+
+    # ── 3. Special items (Items.class .enchantable calls) ───────────────
+    items_class = extract_dir / "net" / "minecraft" / "world" / "item" / "Items.class"
+    if items_class.exists():
+        raw = _parse_items_enchantability_javap(_javap_c(items_class))
+        for item_name, value in raw.items():
+            if item_name in _SPECIAL_ENCH_ITEMS:
+                ench[item_name] = value
+        covered = [k for k in raw if k in _SPECIAL_ENCH_ITEMS]
+        print(f"  Special enchantability: {len(covered)} items from {items_class.name}")
+    else:
+        fallback = {"bow": 1, "crossbow": 1, "trident": 1,
+                    "fishing_rod": 1, "book": 1, "mace": 15}
+        ench.update(fallback)
+        print(f"  Special enchantability: fallback ({len(fallback)} items)")
+
+    print(f"  Total: {len(ench)} enchantability values")
+    return ench
+
+
+# ── durability extraction (Items.class javap) ──────────────────────────
+
 def _parse_items_class(text: str, dur: dict[str, int]) -> None:
     """Parse javap -c output for Items.class to extract item durabilities."""
     last_name = None

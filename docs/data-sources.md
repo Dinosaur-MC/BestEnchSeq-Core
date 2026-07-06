@@ -273,15 +273,18 @@ invokevirtual ...durability... ← 耐久度方法调用
 
 ### 来源
 
-附魔值通过分析 Java 源码得到，硬编码为常量表。
+附魔值通过 `javap -c -p` 自动从客户端 jar 中的 class 文件提取。
 
-> **⚠️ 不依赖运行时反编译。** 此表是通过阅读 Minecraft 开源/反编译源码
-> （`ToolMaterial.java`、`ArmorMaterials.java`、`Items.java`）手动整理的常量，
-> 在脚本中以 `load_enchantability_from_source()` 硬编码维护。
-> 更新 Minecraft 版本时需要人工核对是否有变动。
+| 来源文件 | 提取方法 | 条目数 |
+|---------|---------|:------:|
+| `ToolMaterial.class` | 解析构造器参数的 2nd int（`enchantmentValue`） | 7 材料 → 35 物品 |
+| `ArmorMaterials.class` | 解析 `makeDefense` 后的 1st int | 8 材料 → 33 物品 |
+| `Items.class` | 匹配 `.enchantable(N)` 调用 + 前序 int push | 6 特殊物品 |
 
-在 Java 代码中，附魔值存储在物品数据的 `DataComponents.ENCHANTABLE` 组件中，
-通过 `Item.Properties.enchantable(int)` 方法设置。
+> **不再硬编码。** 脚本动态解析 3 个 class 文件，任何版本更新只需重新运行即可。
+
+提取逻辑见 `_parse_tool_materials_javap()`、`_parse_armor_materials_javap()`、
+`_parse_items_enchantability_javap()` 和 `load_enchantability_from_source()`。
 
 ### 映射表
 
