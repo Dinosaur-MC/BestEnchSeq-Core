@@ -23,6 +23,7 @@ _deps
 CMakeUserPresets.json
 
 build/
+build-*/
 *.exe
 
 # CLion

@@ -134,12 +134,12 @@ add_executable(test_input_parser
     src/parser/CLIParser.cpp
     src/parser/ParserUtils.cpp
     src/io/json.cpp
+    src/registries/EnchantmentRegistry.cpp
     src/types/EnchInfo.cpp
     src/types/Ench.cpp
     src/types/EnchSet.cpp
     src/types/ItemStack.cpp
     src/types/EquipmentType.cpp
-    src/types/common.cpp
 )
 target_include_directories(test_input_parser PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -153,13 +153,15 @@ add_executable(test_output_formatter
     tests/test_output_formatter.cpp
     src/parser/OutputFormatter.cpp
     src/io/json.cpp
+    src/registries/EnchantmentRegistry.cpp
     src/types/EnchInfo.cpp
     src/types/Ench.cpp
     src/types/EnchSet.cpp
     src/types/EnchSolution.cpp
     src/types/ItemStack.cpp
     src/types/EquipmentType.cpp
-    src/types/common.cpp
+    src/registries/EquipmentRegistry.cpp
+    src/registries/PlatformConfig.cpp
     src/algorithm/BaseAlgorithm.cpp
 )
 target_include_directories(test_output_formatter PRIVATE
@@ -180,13 +182,15 @@ add_executable(test_integration
     src/parser/ParserUtils.cpp
     src/parser/OutputFormatter.cpp
     src/io/json.cpp
+    src/registries/EnchantmentRegistry.cpp
     src/types/EnchInfo.cpp
     src/types/Ench.cpp
     src/types/EnchSet.cpp
     src/types/EnchSolution.cpp
     src/types/ItemStack.cpp
     src/types/EquipmentType.cpp
-    src/types/common.cpp
+    src/registries/EquipmentRegistry.cpp
+    src/registries/PlatformConfig.cpp
     src/algorithm/BaseAlgorithm.cpp
 )
 target_include_directories(test_integration PRIVATE

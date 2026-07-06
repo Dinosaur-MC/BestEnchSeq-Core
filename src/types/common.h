@@ -12,39 +12,33 @@ enum MCE : int8_t {
     All = 0x03,
 };
 
-}; // namespace platform
+} // namespace platform
 
 struct EquipmentCategory : public std::string {
     using std::string::string;
 
-    static constexpr const EquipmentCategory Any() { return EquipmentCategory("any"); }
-    static constexpr const EquipmentCategory Helmet() { return EquipmentCategory("helmet"); }
-    static constexpr const EquipmentCategory Chestplate() { return EquipmentCategory("chestplate"); }
-    static constexpr const EquipmentCategory Leggings() { return EquipmentCategory("leggings"); }
-    static constexpr const EquipmentCategory Boots() { return EquipmentCategory("boots"); }
-    static constexpr const EquipmentCategory Sword() { return EquipmentCategory("sword"); }
-    static constexpr const EquipmentCategory Pickaxe() { return EquipmentCategory("pickaxe"); }
-    static constexpr const EquipmentCategory Axe() { return EquipmentCategory("axe"); }
-    static constexpr const EquipmentCategory Shovel() { return EquipmentCategory("shovel"); }
-    static constexpr const EquipmentCategory Hoe() { return EquipmentCategory("hoe"); }
-    static constexpr const EquipmentCategory Bow() { return EquipmentCategory("bow"); }
-    static constexpr const EquipmentCategory Shield() { return EquipmentCategory("shield"); }
-    static constexpr const EquipmentCategory Crossbow() { return EquipmentCategory("crossbow"); }
-    static constexpr const EquipmentCategory Trident() { return EquipmentCategory("trident"); }
-    static constexpr const EquipmentCategory FishingRod() { return EquipmentCategory("fishing_rod"); }
+    static constexpr EquipmentCategory Any() { return "any"; }
+    static constexpr EquipmentCategory Helmet() { return "helmet"; }
+    static constexpr EquipmentCategory Chestplate() { return "chestplate"; }
+    static constexpr EquipmentCategory Leggings() { return "leggings"; }
+    static constexpr EquipmentCategory Boots() { return "boots"; }
+    static constexpr EquipmentCategory Sword() { return "sword"; }
+    static constexpr EquipmentCategory Pickaxe() { return "pickaxe"; }
+    static constexpr EquipmentCategory Axe() { return "axe"; }
+    static constexpr EquipmentCategory Shovel() { return "shovel"; }
+    static constexpr EquipmentCategory Hoe() { return "hoe"; }
+    static constexpr EquipmentCategory Bow() { return "bow"; }
+    static constexpr EquipmentCategory Shield() { return "shield"; }
+    static constexpr EquipmentCategory Crossbow() { return "crossbow"; }
+    static constexpr EquipmentCategory Trident() { return "trident"; }
+    static constexpr EquipmentCategory FishingRod() { return "fishing_rod"; }
 
-  private:
-    static std::unordered_set<EquipmentCategory> _custom_equipments;
-
-  public:
     EquipmentCategory() = default;
-    static void register_custom_equipment(const EquipmentCategory &category);
-    static void reset_custom_equipment();
-    static const std::unordered_set<EquipmentCategory> &get_custom_equipments();
+    // No _custom_equipments statics — moved to EquipmentRegistry
 };
 
 namespace std {
 template <> struct hash<EquipmentCategory> {
-    size_t operator()(const EquipmentCategory &cat) const { return hash<string>()(cat); }
+    size_t operator()(const EquipmentCategory& cat) const { return hash<string>()(cat); }
 };
 } // namespace std

@@ -1,11 +1,13 @@
 #include "EquipmentType.h"
 
+#include "registries/EnchantmentRegistry.h"
+
 #include <ranges>
 
 bool EquipmentType::operator==(const EquipmentType &other) const { return id == other.id; }
 
 bool EquipmentType::is_applicable(const std::string &ench) const {
-    auto set = EnchInfo::get(ench).applicable_equipment;
+    auto set = EnchantmentRegistry::get_instance().get(ench).applicable_equipment;
     return set.find(this->category) != set.end();
 }
 bool EquipmentType::is_applicable(const Ench &ench) const {

@@ -1,6 +1,6 @@
 #include "EnchSet.h"
 
-#include "EnchInfo.h"
+#include "registries/PlatformConfig.h"
 
 void EnchSet::update_cache() const {
     _cache.incompatible.clear();
@@ -46,7 +46,7 @@ int32_t EnchSet::combine(const EnchSet &other, bool is_book) {
         return 0;
     bool need_update = false;
     int32_t result   = 0;
-    platform::MCE type         = EnchInfo::get_active_platform();
+    platform::MCE type         = platform::get_active_platform();
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
@@ -93,7 +93,7 @@ std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, bool is_book)
 
     EnchSet ret_ench = *this;
     int32_t ret_cost = 0;
-    platform::MCE type         = EnchInfo::get_active_platform();
+    platform::MCE type         = platform::get_active_platform();
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
