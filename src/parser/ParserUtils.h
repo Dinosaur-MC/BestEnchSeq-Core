@@ -45,10 +45,6 @@ std::vector<std::filesystem::path> find_files(
 // MC official structure detection
 bool is_mc_official_structure(const std::filesystem::path &dir);
 
-// CSV parsing
-std::vector<std::string> split_csv_line(const std::string &line);
-std::vector<std::vector<std::string>> parse_csv(const std::filesystem::path &path);
-
 // Namespace helpers
 std::string qualify_id(const std::string &id, const std::string &default_ns = "minecraft");
 std::pair<std::string, std::string> split_namespace(const std::string &qualified_id);

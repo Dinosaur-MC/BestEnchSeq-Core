@@ -62,6 +62,7 @@ add_executable(test_parser_utils
     tests/test_parser_utils.cpp
     src/parser/ParserUtils.cpp
     src/io/json.cpp
+    src/io/CsvIO.cpp
 )
 target_include_directories(test_parser_utils PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -91,6 +92,7 @@ add_executable(test_ench_info_parser
     src/parser/TagResolver.cpp
     src/parser/ParserUtils.cpp
     src/io/json.cpp
+    src/io/CsvIO.cpp
 )
 target_include_directories(test_ench_info_parser PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -105,6 +107,7 @@ add_executable(test_equipment_parser
     src/parser/EquipmentParser.cpp
     src/parser/ParserUtils.cpp
     src/io/json.cpp
+    src/io/CsvIO.cpp
 )
 target_include_directories(test_equipment_parser PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -182,6 +185,7 @@ add_executable(test_integration
     src/parser/ParserUtils.cpp
     src/parser/OutputFormatter.cpp
     src/io/json.cpp
+    src/io/CsvIO.cpp
     src/registries/EnchantmentRegistry.cpp
     src/types/EnchInfo.cpp
     src/types/Ench.cpp

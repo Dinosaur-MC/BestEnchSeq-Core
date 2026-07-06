@@ -1,5 +1,6 @@
 #include "parser/EquipmentParser.h"
 #include "parser/ParserUtils.h"
+#include "io/CsvIO.h"
 #include "io/json.h"
 
 #include <cctype>
@@ -96,7 +97,7 @@ std::vector<EquipmentType> EquipmentParser::parse_native_json(
 std::vector<EquipmentType> EquipmentParser::parse_native_csv(
     const std::filesystem::path &path
 ) {
-    auto rows = ParserUtils::parse_csv(path);
+    auto rows = csv::parse(path);
     if (rows.empty()) {
         return {};
     }
@@ -364,12 +365,17 @@ std::string EquipmentParser::to_json(const std::vector<EquipmentType> &equipment
 // ============================================================================
 
 std::string EquipmentParser::to_csv(const std::vector<EquipmentType> &equipments) {
-    std::string csv = "id,name,category,max_durability\n";
+    csv::CsvTable table;
+    table.push_back({"id", "name", "category", "max_durability"});
+
     for (const auto &eq : equipments) {
-        csv += eq.id + ",";
-        csv += eq.name + ",";
-        csv += static_cast<const std::string &>(eq.category) + ",";
-        csv += std::to_string(eq.max_durability) + "\n";
+        table.push_back({
+            eq.id,
+            eq.name,
+            static_cast<const std::string &>(eq.category),
+            std::to_string(eq.max_durability),
+        });
     }
-    return csv;
+
+    return csv::format(table);
 }

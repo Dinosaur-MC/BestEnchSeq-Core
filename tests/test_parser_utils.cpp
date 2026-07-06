@@ -1,4 +1,5 @@
 #include "parser/ParserUtils.h"
+#include "io/CsvIO.h"
 #include "test_utils.h"
 
 #include <filesystem>
@@ -50,59 +51,59 @@ void test_format_detection() {
 
 void test_csv_line_parsing() {
     // Basic
-    auto fields = ParserUtils::split_csv_line("a,b,c");
+    auto fields = csv::split_line("a,b,c");
     expect(fields.size() == 3, "basic csv size");
     expect(fields[0] == "a", "first field basic");
     expect(fields[1] == "b", "second field basic");
     expect(fields[2] == "c", "third field basic");
 
     // Quoted with comma
-    fields = ParserUtils::split_csv_line("a,b,\"c,d\",e");
+    fields = csv::split_line("a,b,\"c,d\",e");
     expect(fields.size() == 4, "csv with quoted field size");
     expect(fields[0] == "a", "first field quoted");
     expect(fields[2] == "c,d", "quoted field with comma");
 
     // Escaped quotes inside quoted field
-    fields = ParserUtils::split_csv_line("\"a\"\"b\"");
+    fields = csv::split_line("\"a\"\"b\"");
     expect(fields.size() == 1, "escaped quotes size");
     expect(fields[0] == "a\"b", "escaped quotes content");
 
     // Empty fields
-    fields = ParserUtils::split_csv_line("a,,c");
+    fields = csv::split_line("a,,c");
     expect(fields.size() == 3, "empty field size");
     expect(fields[0] == "a", "first before empty");
     expect(fields[1] == "", "empty field");
     expect(fields[2] == "c", "last after empty");
 
     // Empty line
-    fields = ParserUtils::split_csv_line("");
+    fields = csv::split_line("");
     expect(fields.size() == 0, "empty line returns empty vector");
 
     // Single field
-    fields = ParserUtils::split_csv_line("hello");
+    fields = csv::split_line("hello");
     expect(fields.size() == 1, "single field size");
     expect(fields[0] == "hello", "single field content");
 
     // Trailing comma (empty last field)
-    fields = ParserUtils::split_csv_line("a,");
+    fields = csv::split_line("a,");
     expect(fields.size() == 2, "trailing comma size");
     expect(fields[0] == "a", "first with trailing comma");
     expect(fields[1] == "", "empty trailing field");
 
     // Leading comma (empty first field)
-    fields = ParserUtils::split_csv_line(",b");
+    fields = csv::split_line(",b");
     expect(fields.size() == 2, "leading comma size");
     expect(fields[0] == "", "empty leading field");
     expect(fields[1] == "b", "second with leading comma");
 
     // Multiple quotes in sequence not at boundaries
-    fields = ParserUtils::split_csv_line("\"x\",\"y\"");
+    fields = csv::split_line("\"x\",\"y\"");
     expect(fields.size() == 2, "multiple quoted fields size");
     expect(fields[0] == "x", "first quoted field");
     expect(fields[1] == "y", "second quoted field");
 
     // Escaped double-quote adjacent to delimiter
-    fields = ParserUtils::split_csv_line("\"\"\"\",x");
+    fields = csv::split_line("\"\"\"\",x");
     // This is: """," -> first field is """, x is second
     // Inside quotes: we see "" (escaped quote -> "), then " (end quote), then , (delimiter)
     // Wait, actually: """," means:
@@ -293,7 +294,7 @@ void test_parse_csv() {
 
     auto file_path = create_temp_file(tmp, "test.csv", csv_content);
 
-    auto rows = ParserUtils::parse_csv(file_path);
+    auto rows = csv::parse(file_path);
     expect(rows.size() == 3, "csv has 3 rows including header");
     expect(rows[0].size() == 3, "header has 3 fields");
     expect(rows[0][0] == "name", "header first field");
@@ -307,7 +308,7 @@ void test_parse_csv() {
         "2,\"has \"\"quotes\"\" inside\"\n";
 
     auto file_quoted = create_temp_file(tmp, "quoted.csv", csv_quoted);
-    auto rows2 = ParserUtils::parse_csv(file_quoted);
+    auto rows2 = csv::parse(file_quoted);
     expect(rows2.size() == 3, "quoted csv has 3 rows");
     expect(rows2[1][1] == "has a comma, inside",
            "quoted field with comma");

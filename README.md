@@ -150,7 +150,8 @@ src/
 │   ├── ParserUtils.h/cpp        ← Shared parsing utilities
 │   └── TagResolver.h/cpp        ← Minecraft tag reference resolution
 ├── io/
-│   └── json.h/cpp               ← JSON library
+│   ├── json.h/cpp               ← JSON library
+│   └── CsvIO.h/cpp              ← CSV read/write primitives (quoted fields, escaping)
 └─ data/
     ├── builtin/
     │   └── vanilla.json         ← Built-in Vanilla Minecraft enchantment data

@@ -1,5 +1,6 @@
 #include "parser/EnchInfoParser.h"
 #include "parser/ParserUtils.h"
+#include "io/CsvIO.h"
 #include "io/json.h"
 
 #include <cctype>
@@ -269,7 +270,7 @@ std::vector<EnchInfo> EnchInfoParser::parse(
 std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
     const std::filesystem::path &path, TagResolver &tag_resolver
 ) {
-    auto rows = ParserUtils::parse_csv(path);
+    auto rows = csv::parse(path);
     if (rows.empty()) {
         return {};
     }
@@ -597,40 +598,44 @@ std::string EnchInfoParser::to_json(
 // ============================================================================
 
 std::string EnchInfoParser::to_csv(const std::vector<EnchInfo> &infos) {
-    std::string csv =
-        "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
-        "applicable_equipment\n";
+    csv::CsvTable table;
+
+    // Header row
+    table.push_back({"id", "name", "platform", "max_level", "limited_level",
+                     "multiplier", "exclusive_set", "applicable_equipment"});
 
     for (const auto &info : infos) {
-        csv += info.name_id + ",";
-        csv += info.name + ",";
-        csv += ParserUtils::platform_to_string(info.supported_platform) + ",";
-        csv += std::to_string(info.max_level) + ",";
-        csv += std::to_string(info.limited_level) + ",";
-        csv += std::to_string(info.multiplier) + ",";
-
         // exclusive_set: join with ;
-        csv += "\"";
+        std::string excl_set;
         bool first = true;
         for (const auto &e : info.exclusive_set) {
-            if (!first) csv += ";";
+            if (!first) excl_set += ";";
             first = false;
-            csv += e;
+            excl_set += e;
         }
-        csv += "\",";
 
         // applicable_equipment: join with ;
-        csv += "\"";
+        std::string app_eq;
         first = true;
         for (const auto &cat : info.applicable_equipment) {
-            if (!first) csv += ";";
+            if (!first) app_eq += ";";
             first = false;
-            csv += static_cast<const std::string &>(cat);
+            app_eq += static_cast<const std::string &>(cat);
         }
-        csv += "\"\n";
+
+        table.push_back({
+            info.name_id,
+            info.name,
+            ParserUtils::platform_to_string(info.supported_platform),
+            std::to_string(info.max_level),
+            std::to_string(info.limited_level),
+            std::to_string(info.multiplier),
+            excl_set,
+            app_eq,
+        });
     }
 
-    return csv;
+    return csv::format(table);
 }
 
 // ============================================================================
