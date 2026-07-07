@@ -6,13 +6,13 @@ A C++20 tool to calculate the best enchanting order for your enchantments and en
 
 ### Key Features
 
-- [ ] Calculate the mostly best enchanting order/forging sequence by your given needs
+- [x] Calculate the best enchanting order/forging sequence by your given needs
 - [ ] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
-- [ ] Support third-party/custom enchantments by editing custom enchantment sheet
-- [ ] Support third-party/custom equipments by editing custom equipment sheet
-- [ ] High performance hamming/enumeration algorithm for super fast calculating
-%% - [ ] Support hot loading custom algorithm to feed special needs %%
-- [ ] Easily export to share calculation results with others
+- [x] Support third-party/custom enchantments by editing custom enchantment sheet
+- [x] Support third-party/custom equipments by editing custom equipment sheet
+- [x] Pluggable algorithm strategies (Greedy, with more to come)
+- [x] Asynchronous execution with pause/resume/cancel and streaming progress
+- [x] Easily export to share calculation results with others
 - [ ] Optionally hosting a RESTful API service for external applications
 
 ### Quick Start
@@ -26,7 +26,7 @@ A C++20 tool to calculate the best enchanting order for your enchantments and en
 ```bash
 cmake -S . -B build
 cmake --build build
-./build/bin/BestEnchSeq-Core.exe
+./build/bin/BestEnchSeq-Core.exe --target diamond_sword --wanted "sharpness=5,knockback=2"
 ```
 
 CMake options:
@@ -37,6 +37,12 @@ cmake -S . -B build -DENABLE_NETWORK=ON -DENABLE_API_SERVICE=OFF
 
 - `ENABLE_NETWORK` defaults to `ON`.
 - `ENABLE_API_SERVICE` defaults to `OFF`.
+
+### Running tests
+
+```bash
+cd build && ctest --output-on-failure
+```
 
 ## Architecture
 
@@ -108,10 +114,14 @@ Pure value types with **no global state**. All types are movable and copyable PO
 
 ### Algorithm Layer (`src/algorithm/`)
 
-`BaseAlgorithm` provides an abstract lifecycle:
-- `init(config)` → `run(input)` → `stop()` → `get_output()`
-- Input includes target platform, original enchantments, target item, and available source items
-- Output includes ordered step lists and algorithm metadata
+The algorithm layer uses an **interface + strategy + executor** pattern:
+
+- **`IAlgorithm`** — Pure virtual interface. Each strategy (Greedy, DFS, etc.) implements `execute(input, ctx)`.
+- **`IForgeEngine` / `DefaultForgeEngine`** — Forge logic abstraction. `DefaultForgeEngine` implements vanilla Minecraft rules; subclass or reimplement for modded behavior. `ForgeConfig` (ignore penalty/repair/cost-cap) is constructor-injected and immutable.
+- **`AlgorithmExecutor`** — Async engine managing thread lifecycle, state machine (`Idle → Running → Paused → Completed | Failed | Cancelled`), pause/resume/cancel, and streaming callbacks via `AlgorithmObserver`.
+- **`AlgorithmRegistry`** — Singleton factory for registration and lookup of named algorithms.
+
+**Legacy**: `BaseAlgorithm` is `[[deprecated]]`. New code should use `IAlgorithm` + `AlgorithmExecutor`.
 
 ### Parser Layer (`src/parser/`)
 
@@ -140,7 +150,17 @@ src/
 │   ├── ItemStack.h/cpp          ← Forgeable item stack
 │   └── EnchSolution.h/cpp       ← Computed solution
 ├── algorithm/
-│   └── BaseAlgorithm.h/cpp      ← Abstract algorithm interface
+│   ├── IAlgorithm.h              ← Pure algorithm interface + AlgorithmInput/Output
+│   ├── IForgeEngine.h            ← Forge logic interface + ForgeConfig
+│   ├── DefaultForgeEngine.h/cpp  ← Vanilla forge rules implementation
+│   ├── AlgorithmExecutor.h/cpp   ← Async execution engine + ExecutionContext + Observer
+│   ├── AlgorithmRegistry.h/cpp   ← Algorithm strategy factory
+│   ├── strategies/
+│   │   └── GreedyAlgorithm.h/cpp ← First concrete strategy
+│   └── BaseAlgorithm.h/cpp       ← [deprecated] replaced by IAlgorithm + Executor
+├── utils/
+│   ├── ExpCalculator.h/cpp       ← EXP level ↔ experience point conversion
+│   └── SolutionFactory.h/cpp     ← Assemble EnchSolution from AlgorithmOutput
 ├── parser/
 │   ├── CLIParser.h/cpp          ← Command-line argument parsing
 │   ├── InputParser.h/cpp        ← Input assembly (CLI + inventory → algorithm Input)
