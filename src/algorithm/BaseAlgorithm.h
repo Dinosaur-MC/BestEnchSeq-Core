@@ -3,7 +3,7 @@
 #include <algorithm> // IWYU pragma: export
 #include <atomic>
 
-class BaseAlgorithm {
+class [[deprecated("Use IAlgorithm + AlgorithmExecutor instead")]] BaseAlgorithm {
   public:
     enum State {
         None = 0,

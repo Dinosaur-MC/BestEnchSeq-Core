@@ -1,4 +1,3 @@
-#include "algorithm/BaseAlgorithm.h"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"

@@ -1,7 +1,6 @@
 #include "algorithm/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/strategies/GreedyAlgorithm.h"
-#include "algorithm/DefaultForgeEngine.h"
 #include "utils/SolutionFactory.h"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
