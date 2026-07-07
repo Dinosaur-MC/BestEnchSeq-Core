@@ -40,7 +40,9 @@ void EnchantmentRegistry::initialize(const std::vector<EnchInfo>& infos) {
     for (int32_t i = 0; i < static_cast<int32_t>(infos.size()); i++) {
         auto& info = infos[i];
         for (auto& exclusive : info.exclusive_set) {
-            incompatible_table_[i].insert(name_to_index_[exclusive]);
+            int32_t j = name_to_index_[exclusive];
+            incompatible_table_[i].insert(j);
+            incompatible_table_[j].insert(i);
         }
     }
 }
