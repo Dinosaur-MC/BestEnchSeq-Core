@@ -134,7 +134,9 @@ void write(const std::filesystem::path &path, const CsvTable &table) {
     if (!file.is_open()) {
         throw std::runtime_error("Could not write CSV file: " + path.string());
     }
-    file << format(table);
+    for (const auto &row : table) {
+        file << format_row(row);
+    }
 }
 
 } // namespace csv

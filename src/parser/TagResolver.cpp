@@ -2,7 +2,6 @@
 #include "parser/ParserUtils.h"
 #include "io/json.h"
 
-#include <stdexcept>
 #include <utility>
 #include <variant>
 

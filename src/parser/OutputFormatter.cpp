@@ -3,11 +3,6 @@
 #include "types/EnchInfo.h"
 #include "types/EnchSet.h"
 
-#include <algorithm>
-#include <cctype>
-#include <sstream>
-#include <stdexcept>
-
 namespace {
 
 // ---------------------------------------------------------------------------

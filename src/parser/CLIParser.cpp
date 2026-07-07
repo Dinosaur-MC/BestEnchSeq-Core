@@ -3,7 +3,6 @@
 
 #include <cctype>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 
 // ---------------------------------------------------------------------------
