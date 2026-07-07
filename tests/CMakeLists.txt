@@ -213,6 +213,13 @@ add_executable(test_algorithm_registry
     test_algorithm_registry.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_algorithm_registry PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_registry COMMAND test_algorithm_registry)
