@@ -1,10 +1,10 @@
 #pragma once
 #include "../types/EnchSolution.h"
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Forward declarations
-class IAlgorithm;
 struct AlgorithmOutput;
 
 class SolutionFactory {
