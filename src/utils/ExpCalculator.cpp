@@ -10,10 +10,6 @@ int32_t ExpCalculator::level_to_exp(int32_t level) noexcept {
         return (9 * level * level - 325 * level + 4440) / 2;
 }
 
-int32_t ExpCalculator::forge_cost_to_level(int32_t forge_cost) noexcept {
-    return forge_cost;  // forge cost IS the level cost
-}
-
 int32_t ExpCalculator::peak_level_cost(const EnchStepList& steps) noexcept {
     if (steps.empty()) return 0;
     int32_t peak = 0;
