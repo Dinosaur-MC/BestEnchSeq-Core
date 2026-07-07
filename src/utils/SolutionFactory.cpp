@@ -1,4 +1,5 @@
 #include "SolutionFactory.h"
+#include "../algorithm/IAlgorithm.h"  // AlgorithmOutput full definition
 
 // Note: Full create() implementation requires AlgorithmOutput (defined in Task 4).
 // For now the method body is a stub that returns an empty vector.
@@ -9,13 +10,14 @@ std::vector<EnchSolution> SolutionFactory::create(
     const ItemCollection& available_items,
     const AlgorithmOutput& output)
 {
-    (void)platform;
-    (void)original_ench;
-    (void)target_item;
-    (void)available_items;
-    (void)output;
-    // TODO: iterate output.steps and call create_single for each step list
-    return {};
+    std::vector<EnchSolution> solutions;
+    for (const auto& step_list : output.steps) {
+        solutions.push_back(create_single(
+            platform, original_ench, target_item, available_items,
+            step_list, output.algorithm_name, output.algorithm_version, output.is_valid
+        ));
+    }
+    return solutions;
 }
 
 EnchSolution SolutionFactory::create_single(

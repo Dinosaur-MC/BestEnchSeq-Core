@@ -140,6 +140,11 @@ public:
         _accumulated_steps.push_back(steps);
     }
 
+    std::vector<EnchStepList> get_accumulated_steps() const {
+        std::unique_lock lock(_output_mtx);
+        return _accumulated_steps;
+    }
+
     double progress() const noexcept {
         return _progress.load(std::memory_order_acquire);
     }
