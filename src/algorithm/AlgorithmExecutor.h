@@ -6,13 +6,17 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
-// Forward declaration (full definition in Task 4)
+// Forward declarations (full definitions in IAlgorithm.h, included in .cpp)
 struct AlgorithmOutput;
+struct AlgorithmInput;
+class IAlgorithm;
 
 // ─── Diagnostic info (placeholder for now) ───
 struct DiagnosticInfo {
@@ -156,4 +160,48 @@ private:
     mutable std::mutex _output_mtx;
     std::vector<EnchStepList> _accumulated_steps;
     std::atomic<double> _progress{0.0};
+};
+
+// ─── AlgorithmExecutor (async execution engine) ───
+class AlgorithmExecutor {
+public:
+    explicit AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm);
+    ~AlgorithmExecutor();
+
+    // Non-copyable, non-movable
+    AlgorithmExecutor(const AlgorithmExecutor&) = delete;
+    AlgorithmExecutor& operator=(const AlgorithmExecutor&) = delete;
+
+    // Lifecycle
+    void start(const AlgorithmInput& input);
+    void pause();
+    void resume();
+    void cancel();
+    AlgorithmState wait();
+    AlgorithmState wait_for(std::chrono::milliseconds timeout);
+
+    // State queries
+    AlgorithmState state() const noexcept;
+    double progress() const noexcept;
+
+    // Observer
+    void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
+    void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
+
+    // Result
+    AlgorithmOutput output() const;
+
+    // Serialization (phase 2 — stubs)
+    std::vector<uint8_t> serialize_state() const { return {}; }
+    bool restore_state(const std::vector<uint8_t>&) { return false; }
+
+private:
+    void _join_worker() noexcept;
+    void _set_state(AlgorithmState new_state) noexcept;
+
+    std::unique_ptr<IAlgorithm> _algorithm;
+    std::unique_ptr<ExecutionContext> _ctx;
+    std::optional<std::thread> _worker;
+    std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
+    std::unique_ptr<AlgorithmInput> _input;  // stored for reference
 };
