@@ -179,6 +179,13 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_exp_calculator.cpp)
 add_executable(test_exp_calculator
     test_exp_calculator.cpp
     ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_exp_calculator PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_exp_calculator COMMAND test_exp_calculator)
