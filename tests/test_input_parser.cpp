@@ -209,18 +209,27 @@ void test_generate_books_auto_complete() {
         wanted, existing
     );
 
-    expect(books.size() == 1,
-           "generate_books: should generate 1 upgrade book");
+    // Graduated book generation: levels existing+1 .. wanted
+    expect(books.size() == 2,
+           "generate_books: should generate 2 graduated books (4,5)");
     expect(books[0].is_book(),
            "generate_books: should be a book");
     expect(books[0].enchantments.size() == 1,
            "generate_books: book should have 1 enchantment");
 
+    // First book should be at level 4 (existing+1)
     auto it = books[0].enchantments.find(Ench(0, 0));
     expect(it != books[0].enchantments.end(),
-           "generate_books: should have sharpness");
-    expect(it->level == 5,
-           "generate_books: level should be 5 (wanted level)");
+           "generate_books: first book should have sharpness");
+    expect(it->level == 4,
+           "generate_books: first book level should be 4 (existing+1)");
+
+    // Second book should be at level 5 (wanted level)
+    auto it2 = books[1].enchantments.find(Ench(0, 0));
+    expect(it2 != books[1].enchantments.end(),
+           "generate_books: second book should have sharpness");
+    expect(it2->level == 5,
+           "generate_books: second book level should be 5 (wanted level)");
 
     // Test case where existing has same level --> skip
     EnchSet existing_same;
@@ -245,8 +254,8 @@ void test_generate_books_auto_complete() {
     auto books_missing = InputParser::generate_books(
         wanted, existing_empty
     );
-    expect(books_missing.size() == 1,
-           "generate_books: should generate book when missing entirely");
+    expect(books_missing.size() == 5,
+           "generate_books: should generate 5 graduated books (1..5) when missing entirely");
 
     std::cout << "  [OK] test_generate_books_auto_complete" << std::endl;
 }
@@ -274,13 +283,13 @@ void test_assemble_input_direct_mode() {
     expect(input.original_ench.empty(),
            "assemble_input: original_ench should be same as target enchants");
 
-    // Two wanted enchants, neither on target, so 2 books
-    expect(input.available_items.size() == 2,
-           "assemble_input: should have 2 books for 2 new enchants");
-    expect(input.available_items[0].is_book(),
-           "assemble_input: available item[0] should be a book");
-    expect(input.available_items[1].is_book(),
-           "assemble_input: available item[1] should be a book");
+    // Two wanted enchants: sharpness=5 -> 5 graduated books, knockback=2 -> 2 graduated books
+    expect(input.available_items.size() == 7,
+           "assemble_input: should have 7 graduated books for 2 new enchants");
+    for (const auto &item : input.available_items) {
+        expect(item.is_book(),
+               "assemble_input: available item should be a book");
+    }
 
     std::cout << "  [OK] test_assemble_input_direct_mode" << std::endl;
 }

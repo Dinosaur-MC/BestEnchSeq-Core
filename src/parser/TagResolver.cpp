@@ -56,7 +56,10 @@ std::unordered_set<std::string> resolve_raw_value(
 // load_from
 // ---------------------------------------------------------------------------
 void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
-    _tags.clear();
+    // NOTE: _tags is NOT cleared before loading. Tags from inline JSON and
+    // from the filesystem are expected to merge. This allows multiple calls
+    // to load_from to accumulate tags without invalidating previously loaded
+    // inline tag definitions.
 
     std::filesystem::path data_dir = data_pack_dir / "data";
     if (!std::filesystem::is_directory(data_dir)) {

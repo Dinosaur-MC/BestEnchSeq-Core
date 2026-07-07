@@ -78,6 +78,14 @@ int32_t get_json_int(const Json::Object &obj, const std::string &key) {
             int64_t v = std::get<int64_t>(num);
             return static_cast<int32_t>(v);
         }
+        if (std::holds_alternative<float>(num)) {
+            float v = std::get<float>(num);
+            return static_cast<int32_t>(v);
+        }
+        if (std::holds_alternative<double>(num)) {
+            double v = std::get<double>(num);
+            return static_cast<int32_t>(v);
+        }
     }
     return 0;
 }

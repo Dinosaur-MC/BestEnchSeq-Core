@@ -211,14 +211,22 @@ ItemCollection InputParser::generate_books(
     ItemCollection books;
     for (const Ench &wanted_ench : wanted) {
         auto it = existing.find(wanted_ench);
-        if (it != existing.end() && it->level >= wanted_ench.level) {
+        int32_t existing_level = (it != existing.end()) ? it->level : 0;
+
+        if (existing_level >= wanted_ench.level) {
             // Already have it at the same or higher level -- skip
             continue;
         }
-        // Each generated book holds exactly one enchantment
-        EnchSet book_enchs;
-        book_enchs.emplace(wanted_ench.id, wanted_ench.level);
-        books.emplace_back(book_enchs, 0);
+
+        // Generate graduated books from existing_level+1 up to wanted_ench.level.
+        // This gives the algorithm more intermediate options to find cheaper
+        // sequences (e.g. existing=Sharpness III, wanted=Sharpness V will produce
+        // books at IV and V rather than only V).
+        for (int32_t lvl = existing_level + 1; lvl <= wanted_ench.level; ++lvl) {
+            EnchSet book_enchs;
+            book_enchs.emplace(wanted_ench.id, lvl);
+            books.emplace_back(book_enchs, 0);
+        }
     }
     return books;
 }

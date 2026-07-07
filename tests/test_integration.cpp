@@ -47,8 +47,9 @@ void test_full_pipeline_direct() {
 
     auto input = InputParser::assemble_input(config, eq_map, ench_map);
 
-    expect(input.available_items.size() == 2,
-           "full_pipeline_direct: auto-complete should generate 2 books");
+    // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
+    expect(input.available_items.size() == 7,
+           "full_pipeline_direct: auto-complete should generate 7 graduated books");
     expect(input.target_item.equipment != nullptr,
            "full_pipeline_direct: target should have equipment");
     expect(input.target_item.equipment->id == "diamond_sword",

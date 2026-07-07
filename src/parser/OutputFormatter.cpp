@@ -419,8 +419,11 @@ std::string OutputFormatter::format_json(
 // Parse JSON
 // ===========================================================================
 std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) {
-    // Clear equipment cache so parsed EquipmentType objects are fresh
-    _json_eq_cache.clear();
+    // NOTE: _json_eq_cache is intentionally NOT cleared here.
+    // itemstack_from_json and step_from_json store EquipmentType objects in this
+    // cache and return const EquipmentType* pointers into it. Clearing would
+    // invalidate those pointers. The cache grows monotonically per process,
+    // which is acceptable for a CLI tool.
 
     Json root  = Json::parse(input);
     Json::Value root_val = root.get_value();
