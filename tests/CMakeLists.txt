@@ -117,6 +117,7 @@ add_executable(test_output_formatter
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
     ${PROJECT_ROOT}/src/algorithm/BaseAlgorithm.cpp
+    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
 )
 target_include_directories(test_output_formatter PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_output_formatter COMMAND test_output_formatter)
@@ -145,6 +146,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
     ${PROJECT_ROOT}/src/algorithm/BaseAlgorithm.cpp
+    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)

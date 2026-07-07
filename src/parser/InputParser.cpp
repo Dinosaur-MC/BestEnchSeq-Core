@@ -226,7 +226,7 @@ ItemCollection InputParser::generate_books(
 // ===========================================================================
 //  assemble_input
 // ===========================================================================
-BaseAlgorithm::Input InputParser::assemble_input(
+AlgorithmInput InputParser::assemble_input(
     const CLIConfig &cli_config,
     const std::unordered_map<std::string, const EquipmentType*> &equipment_registry,
     const std::unordered_map<std::string, int32_t> &ench_name_to_id
@@ -260,7 +260,7 @@ BaseAlgorithm::Input InputParser::assemble_input(
                 return a.priority < b.priority;
             });
 
-        return BaseAlgorithm::Input{platform, target.enchantments, target, books};
+        return AlgorithmInput{platform, target.enchantments, target, books};
     }
 
     // ---- inventory mode ---------------------------------------------------
@@ -285,5 +285,5 @@ BaseAlgorithm::Input InputParser::assemble_input(
             return a.priority < b.priority;
         });
 
-    return BaseAlgorithm::Input{platform, target.enchantments, target, available_items};
+    return AlgorithmInput{platform, target.enchantments, target, available_items};
 }

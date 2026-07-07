@@ -1,6 +1,6 @@
 #include "EnchSolution.h"
 
-#include "../algorithm/BaseAlgorithm.h"
+#include "../utils/ExpCalculator.h"
 
 bool EnchSolution::is_feasible() const { return is_success && steps.size() > 0; }
 int32_t EnchSolution::get_peek_level_cost() const {
@@ -23,7 +23,7 @@ EnchSolution EnchSolution::make(
     size_t max_cost_step_index   = 0;
     for (size_t i = 0; i < steps.size(); i++) {
         total_exp_level_cost += steps[i].exp_level_cost;
-        total_exp_cost += Utils::calc_exp(steps[i].exp_level_cost);
+        total_exp_cost += ExpCalculator::level_to_exp(steps[i].exp_level_cost);
         if (steps[i].exp_level_cost > steps[max_cost_step_index].exp_level_cost)
             max_cost_step_index = i;
     }

@@ -1,4 +1,8 @@
-#include "algorithm/BaseAlgorithm.h"
+#include "algorithm/AlgorithmRegistry.h"
+#include "algorithm/AlgorithmExecutor.h"
+#include "algorithm/strategies/GreedyAlgorithm.h"
+#include "algorithm/DefaultForgeEngine.h"
+#include "utils/SolutionFactory.h"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
@@ -12,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -22,7 +27,6 @@ const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path("data") / "
 void load_builtin_data(TagResolver& tag_resolver) {
     auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-
     auto equipments = EquipmentParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
     EquipmentRegistry::get_instance().initialize(equipments);
 }
@@ -32,7 +36,6 @@ void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& t
         throw std::runtime_error("Data pack directory not found: " + data_pack_dir.string());
 
     tag_resolver.load_from(data_pack_dir);
-
     // Combine custom enchantments with existing
     auto ench_infos = EnchInfoParser::parse(data_pack_dir, tag_resolver);
     auto existing_ench = EnchantmentRegistry::get_instance().get_instances();
@@ -42,7 +45,6 @@ void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& t
     for (const auto &info : ench_infos) combined_ench.push_back(info);
     EnchantmentRegistry::get_instance().initialize(combined_ench);
 
-    // Combine custom equipment with existing
     auto equipments = EquipmentParser::parse(data_pack_dir, tag_resolver);
     auto existing_eq = EquipmentRegistry::get_instance().get_instances();
     std::vector<EquipmentType> combined_eq;
@@ -50,6 +52,13 @@ void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& t
     for (const auto &eq : existing_eq) combined_eq.push_back(eq);
     for (const auto &eq : equipments) combined_eq.push_back(eq);
     EquipmentRegistry::get_instance().initialize(combined_eq);
+}
+
+void register_builtin_algorithms() {
+    AlgorithmRegistry::instance().register_algorithm("greedy", []{
+        return std::make_unique<GreedyAlgorithm>();
+    });
+    // Future: register DFS, BFS etc.
 }
 
 } // anonymous namespace
@@ -89,18 +98,31 @@ int main(int argc, char *argv[]) {
         for (const auto& eq : EquipmentRegistry::get_instance().get_instances()) {
             equipment_map[eq.id] = &eq;
         }
-        auto input = InputParser::assemble_input(config, equipment_map, ench_name_to_id);
 
-        BaseAlgorithm::Output algo_output;
-        algo_output.algorithm_name = "default";
-        algo_output.algorithm_version = "0.1.0";
-        algo_output.created_at = 0;
-        algo_output.computation_time = 0;
-        algo_output.steps = {};
-        algo_output.is_valid = false;
+        auto algo_input = InputParser::assemble_input(config, equipment_map, ench_name_to_id);
 
-        auto solutions = Utils::make_solution(input, algo_output);
+        // Register and create algorithm
+        register_builtin_algorithms();
+        auto algo = AlgorithmRegistry::instance().create("greedy");
+        if (!algo) {
+            throw std::runtime_error("Failed to create algorithm 'greedy'");
+        }
 
+        // Execute
+        AlgorithmExecutor executor(std::move(algo));
+        executor.start(algo_input);
+        executor.wait();
+
+        // Assemble solutions
+        auto solutions = SolutionFactory::create(
+            algo_input.platform,
+            algo_input.original_ench,
+            algo_input.target_item,
+            algo_input.available_items,
+            executor.output()
+        );
+
+        // Format output
         std::string output_text;
         if (config.format == "json") {
             output_text = OutputFormatter::format_json(solutions, config.mode);

@@ -1,5 +1,5 @@
 #pragma once
-#include "algorithm/BaseAlgorithm.h"
+#include "algorithm/IAlgorithm.h"
 #include "parser/CLIParser.h"
 #include "parser/TagResolver.h"
 #include <filesystem>
@@ -28,7 +28,7 @@ class InputParser {
     );
 
     // Full assembly: CLI config to algorithm Input
-    static BaseAlgorithm::Input assemble_input(
+    static AlgorithmInput assemble_input(
         const CLIConfig &cli_config,
         const std::unordered_map<std::string, const EquipmentType*> &equipment_registry,
         const std::unordered_map<std::string, int32_t> &ench_name_to_id
