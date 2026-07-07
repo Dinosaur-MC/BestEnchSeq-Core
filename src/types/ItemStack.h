@@ -2,6 +2,15 @@
 #include "EnchSet.h"
 #include "EquipmentType.h"
 
+// ─── Forgeable item stack ───
+//
+// Cache: `_cache` stores precomputed evaluation costs for algorithm use.
+// Validity is the caller's responsibility — call `update_cache()` after
+// mutating `enchantments` or `prior_penalty` before reading evaluation cost.
+//
+// Thread safety: NOT safe for concurrent access. A single `ItemStack`
+// must not be read or written from multiple threads simultaneously.
+
 struct ItemStack {
     const EquipmentType *equipment;
     EnchSet enchantments;

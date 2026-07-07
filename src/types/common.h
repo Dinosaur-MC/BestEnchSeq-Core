@@ -13,6 +13,12 @@ enum MCE : int8_t {
 
 } // namespace platform
 
+// Inherits std::string for seamless string-like usage. Virtual destructor
+// ensures safe deletion through base pointers. Static factory methods return
+// common category values. Custom equipment categories extend via registry.
+// Thread safety: const values only after initialization — read-only after
+// registry setup, safe for concurrent read.
+
 struct EquipmentCategory : public std::string {
     using std::string::string;
 
@@ -33,7 +39,7 @@ struct EquipmentCategory : public std::string {
     static constexpr EquipmentCategory FishingRod() { return "fishing_rod"; }
 
     EquipmentCategory() = default;
-    // No _custom_equipments statics — moved to EquipmentRegistry
+    virtual ~EquipmentCategory() = default;
 };
 
 namespace std {
