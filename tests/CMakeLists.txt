@@ -197,6 +197,9 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_execution_context.cpp)
 add_executable(test_execution_context
     test_execution_context.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
 )
 target_include_directories(test_execution_context PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_execution_context COMMAND test_execution_context)
