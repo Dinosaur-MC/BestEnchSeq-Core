@@ -4,6 +4,7 @@
 #include "registries/EnchantmentRegistry.h"
 #include "types/EnchInfo.h"
 
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
@@ -127,10 +128,13 @@ ItemCollection InputParser::parse_inventory(
         }
 
         int32_t prior_penalty = ParserUtils::get_json_int(item_obj, "prior_penalty");
+        int32_t priority = ParserUtils::get_json_int(item_obj, "priority");
+        if (priority <= 0) priority = 99;
 
         // ---- Dispatch by type ---------------------------------------------
         if (type == "book") {
-            result.emplace_back(ench_set, prior_penalty);
+            auto &item = result.emplace_back(ench_set, prior_penalty);
+            item.priority = priority;
         } else if (type == "equipment") {
             std::string equip_id = ParserUtils::get_json_string(item_obj, "id");
             auto equip_it = equipment_registry.find(equip_id);
@@ -142,7 +146,8 @@ ItemCollection InputParser::parse_inventory(
                 if (durability <= 0) {
                     durability = equip->max_durability;
                 }
-                result.emplace_back(equip, ench_set, prior_penalty, durability);
+                auto &item = result.emplace_back(equip, ench_set, prior_penalty, durability);
+                item.priority = priority;
             } else {
                 // Equipment not found in registry, treat as book-like
                 std::cerr << "Warning: equipment '" << equip_id
@@ -201,8 +206,7 @@ EnchSet InputParser::build_wanted_enchset(
 // ===========================================================================
 ItemCollection InputParser::generate_books(
     const EnchSet &wanted,
-    const EnchSet &existing,
-    const std::unordered_map<std::string, int32_t> & /*ench_name_to_id*/
+    const EnchSet &existing
 ) {
     ItemCollection books;
     for (const Ench &wanted_ench : wanted) {
@@ -249,7 +253,12 @@ BaseAlgorithm::Input InputParser::assemble_input(
         EnchSet existing = target.enchantments;
 
         // Auto-generate books for missing / upgrade enchantments
-        ItemCollection books = generate_books(wanted, existing, ench_name_to_id);
+        ItemCollection books = generate_books(wanted, existing);
+        // Stable sort by priority (lower = more preferred)
+        std::stable_sort(books.begin(), books.end(),
+            [](const ItemStack &a, const ItemStack &b) {
+                return a.priority < b.priority;
+            });
 
         return BaseAlgorithm::Input{platform, target.enchantments, target, books};
     }
@@ -269,6 +278,12 @@ BaseAlgorithm::Input InputParser::assemble_input(
         TargetSpec target_spec = CLIParser::parse_target(cli_config.target);
         target = build_target(target_spec, equipment_registry, ench_name_to_id);
     }
+
+    // Sort available items by priority (lower = more preferred)
+    std::stable_sort(available_items.begin(), available_items.end(),
+        [](const ItemStack &a, const ItemStack &b) {
+            return a.priority < b.priority;
+        });
 
     return BaseAlgorithm::Input{platform, target.enchantments, target, available_items};
 }

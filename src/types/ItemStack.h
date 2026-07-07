@@ -7,6 +7,7 @@ struct ItemStack {
     EnchSet enchantments;
     int32_t prior_penalty;
     int32_t durability;
+    int32_t priority = 99;  // lower = more preferred (inventory mode)
 
   private:
     struct Cache {

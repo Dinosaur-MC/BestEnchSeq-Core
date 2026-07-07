@@ -23,6 +23,7 @@ std::string CLIParser::get_help_text() {
         "  --input <file>          Input file path (inventory mode)\n"
         "  --output <file>         Output file path (default: stdout)\n"
         "  --data-pack <dir>       Custom data pack directory\n"
+        "  --ignore-cost-cap       Bypass the survival-mode 39-level cap (for modded play)\n"
         "\n"
         "Enchantment formats:\n"
         "  id=level                e.g., sharpness=5\n"
@@ -169,10 +170,14 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
             key = arg.substr(2);
         }
 
-        // --help is a boolean flag with no value
+        // Boolean flags with no value
         if (key == "help") {
             config.help = true;
             std::cout << get_help_text() << std::endl;
+            continue;
+        }
+        if (key == "ignore-cost-cap") {
+            config.ignore_cost_cap = true;
             continue;
         }
 

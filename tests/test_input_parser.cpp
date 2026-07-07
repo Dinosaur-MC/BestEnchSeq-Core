@@ -206,7 +206,7 @@ void test_generate_books_auto_complete() {
     existing.emplace(0, 3);
 
     auto books = InputParser::generate_books(
-        wanted, existing, test_ench_map
+        wanted, existing
     );
 
     expect(books.size() == 1,
@@ -226,7 +226,7 @@ void test_generate_books_auto_complete() {
     EnchSet existing_same;
     existing_same.emplace(0, 5);
     auto books_same = InputParser::generate_books(
-        wanted, existing_same, test_ench_map
+        wanted, existing_same
     );
     expect(books_same.empty(),
            "generate_books: no book when existing has same level");
@@ -235,7 +235,7 @@ void test_generate_books_auto_complete() {
     EnchSet existing_higher;
     existing_higher.emplace(0, 7);
     auto books_higher = InputParser::generate_books(
-        wanted, existing_higher, test_ench_map
+        wanted, existing_higher
     );
     expect(books_higher.empty(),
            "generate_books: no book when existing has higher level");
@@ -243,7 +243,7 @@ void test_generate_books_auto_complete() {
     // Test case where wanted is not in existing at all --> generate
     EnchSet existing_empty;
     auto books_missing = InputParser::generate_books(
-        wanted, existing_empty, test_ench_map
+        wanted, existing_empty
     );
     expect(books_missing.size() == 1,
            "generate_books: should generate book when missing entirely");

@@ -37,7 +37,6 @@ class InputParser {
     // Generate books for missing/upgrade enchants (direct mode)
     static ItemCollection generate_books(
         const EnchSet &wanted,
-        const EnchSet &existing,
-        const std::unordered_map<std::string, int32_t> &ench_name_to_id
+        const EnchSet &existing
     );
 };

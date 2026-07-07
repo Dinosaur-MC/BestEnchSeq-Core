@@ -13,6 +13,7 @@ struct CLIConfig {
     std::optional<std::string> output;    // output file path (default stdout)
     std::string format = "text";          // "text" | "compact" | "json"
     int solutions = 1;                    // max solutions (0 = unlimited)
+    bool ignore_cost_cap = false; // bypass 39-level survival cap
     bool help = false;
 };
 
