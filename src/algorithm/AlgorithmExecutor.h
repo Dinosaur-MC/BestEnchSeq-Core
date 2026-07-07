@@ -203,5 +203,4 @@ private:
     std::unique_ptr<ExecutionContext> _ctx;
     std::optional<std::thread> _worker;
     std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
-    std::unique_ptr<AlgorithmInput> _input;  // stored for reference
 };

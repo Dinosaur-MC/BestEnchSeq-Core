@@ -37,22 +37,17 @@ void AlgorithmExecutor::start(const AlgorithmInput& input) {
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
-    _input = std::make_unique<AlgorithmInput>(input);
-
     _worker.emplace([this, input]() {
         try {
             _algorithm->execute(input, *_ctx);
 
             if (_ctx->is_cancelled()) {
-                _state.store(AlgorithmState::Cancelled, std::memory_order_release);
-                _ctx->report_state_change(AlgorithmState::Running, AlgorithmState::Cancelled);
+                _set_state(AlgorithmState::Cancelled);
             } else {
-                _state.store(AlgorithmState::Completed, std::memory_order_release);
-                _ctx->report_state_change(AlgorithmState::Running, AlgorithmState::Completed);
+                _set_state(AlgorithmState::Completed);
             }
         } catch (...) {
-            _state.store(AlgorithmState::Failed, std::memory_order_release);
-            _ctx->report_state_change(AlgorithmState::Running, AlgorithmState::Failed);
+            _set_state(AlgorithmState::Failed);
         }
     });
 }
