@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-// ─── Algorithm metadata ───
+// ─── Algorithm metadata (bridge between AlgorithmOutput and EnchSolution::MetaData) ───
 struct AlgorithmMetadata {
     std::string name;
     std::string version;
