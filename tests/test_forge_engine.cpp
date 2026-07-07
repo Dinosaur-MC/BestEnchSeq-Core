@@ -32,7 +32,7 @@ void test_forge_books() {
     expect(result.is_book(), "result should be book");
     auto it = result.enchantments.find(Ench(0, 5));
     expect(it != result.enchantments.end(), "result should have sharpness 5");
-    expect(cost > 0, "forge cost should be positive");
+    expect(cost == 4, "forge cost should be 4 for sharpness 4 + 3 -> 4 (Java, max(4,3)=4)");
     std::cout << "PASS: test_forge_books (cost=" << cost << ")" << std::endl;
 }
 
@@ -47,6 +47,7 @@ void test_forge_equipment_with_book() {
     expect(result.is_equipment(), "result should be equipment");
     auto it = result.enchantments.find(Ench(0, 5));
     expect(it != result.enchantments.end(), "result should have sharpness 5");
+    expect(cost == 5, "forge cost should be 5 for adding sharpness 5 to empty sword (Java)");
     std::cout << "PASS: test_forge_equipment_with_book (cost=" << cost << ")" << std::endl;
 }
 
@@ -62,6 +63,7 @@ void test_forge_incompatible_rejected() {
     // Bane should not be applied
     auto it = result.enchantments.find(Ench(2, 4));
     expect(it == result.enchantments.end(), "incompatible enchant should not be applied");
+    expect(cost == 2, "forge cost should be 2 for incompatible enchant (Java penalty)");
     std::cout << "PASS: test_forge_incompatible_rejected (cost=" << cost << ")" << std::endl;
 }
 

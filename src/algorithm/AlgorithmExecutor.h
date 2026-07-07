@@ -208,4 +208,6 @@ private:
     std::unique_ptr<ExecutionContext> _ctx;
     std::optional<std::thread> _worker;
     std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
+    std::mutex _state_mtx;
+    std::condition_variable _state_cv;
 };

@@ -56,21 +56,24 @@ std::pair<ItemStack, int32_t> DefaultForgeEngine::forge(
     int32_t prior_penalty = 1 + (item_a.prior_penalty >= item_b.prior_penalty
                                   ? item_a.prior_penalty : item_b.prior_penalty);
 
+    bool has_durability = false;
     int32_t durability = 0;
     if (item_a.is_equipment()) {
         if (item_b.is_equipment()) {
             durability = calc_durability(item_a.equipment, item_a.durability, item_b.durability, true);
+            has_durability = true;
             if (!_config.ignore_repair_cost)
                 cost += 2;
         } else if (!is_book) {
             durability = calc_durability(item_a.equipment, item_a.durability, item_b.durability, false);
+            has_durability = true;
             if (!_config.ignore_repair_cost)
                 cost += 1;
         }
     }
 
     // Books or items without durability operation keep original durability
-    if (durability == 0 && item_a.is_equipment())
+    if (!has_durability && item_a.is_equipment())
         durability = item_a.durability;
 
     return {

@@ -10,6 +10,10 @@ project(BestEnchSeq-Core
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+if(MSVC)
+    add_compile_options(/FS)
+endif()
+
 # Metadata Options
 option(ENABLE_NETWORK "Enable network" ON)
 

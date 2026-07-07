@@ -26,8 +26,15 @@ void AlgorithmExecutor::_join_worker() noexcept {
 }
 
 void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
-    auto prev = _state.exchange(new_state, std::memory_order_acq_rel);
-    _ctx->report_state_change(prev, new_state);
+    auto prev = _state.load(std::memory_order_acquire);
+    while (prev != AlgorithmState::Cancelled && prev != AlgorithmState::Failed) {
+        if (_state.compare_exchange_weak(prev, new_state,
+                std::memory_order_acq_rel, std::memory_order_acquire)) {
+            _ctx->report_state_change(prev, new_state);
+            _state_cv.notify_all();
+            return;
+        }
+    }
 }
 
 // ─── Lifecycle ───
@@ -68,10 +75,12 @@ void AlgorithmExecutor::resume() {
 
 void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
+    _ctx->report_state_change(prev, AlgorithmState::Cancelled);
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
         _ctx->cancel();
         _ctx->resume();  // unblock if paused
     }
+    _state_cv.notify_all();
 }
 
 AlgorithmState AlgorithmExecutor::wait() {
@@ -86,20 +95,22 @@ AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
     if (!_worker->joinable())
         return _state.load(std::memory_order_acquire);
 
-    auto start = std::chrono::steady_clock::now();
-    while (std::chrono::steady_clock::now() - start < timeout) {
+    std::unique_lock lock(_state_mtx);
+    _state_cv.wait_for(lock, timeout, [this] {
         auto s = _state.load(std::memory_order_acquire);
-        if (s == AlgorithmState::Completed ||
-            s == AlgorithmState::Failed ||
-            s == AlgorithmState::Cancelled) {
-            _join_worker();
-            return s;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+        return s == AlgorithmState::Completed ||
+               s == AlgorithmState::Failed ||
+               s == AlgorithmState::Cancelled;
+    });
 
-    // Timed out — thread still running
-    return _state.load(std::memory_order_acquire);
+    // Timed out or state reached
+    auto s = _state.load(std::memory_order_acquire);
+    if (s == AlgorithmState::Completed ||
+        s == AlgorithmState::Failed ||
+        s == AlgorithmState::Cancelled) {
+        _join_worker();
+    }
+    return s;
 }
 
 // ─── State queries ───

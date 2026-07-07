@@ -2,6 +2,7 @@
 #include "IAlgorithm.h"
 #include <functional>
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -21,4 +22,5 @@ public:
 private:
     AlgorithmRegistry() = default;
     std::unordered_map<std::string, AlgorithmFactory> _registry;
+    mutable std::shared_mutex _mutex;
 };

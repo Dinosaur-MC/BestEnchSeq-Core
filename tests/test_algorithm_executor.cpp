@@ -223,6 +223,24 @@ void test_output_not_valid_before_completion() {
     std::cout << "PASS: test_output_not_valid_before_completion" << std::endl;
 }
 
+void test_output_has_steps_after_completion() {
+    auto algo = std::make_unique<TestAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+
+    AlgorithmInput input{platform::MCE::Java, {}, {}, {}};
+    executor.start(input);
+    executor.wait();
+
+    expect(executor.state() == AlgorithmState::Completed, "should complete");
+    auto out = executor.output();
+    expect(out.is_valid, "output should be valid after completion");
+    expect(!out.steps.empty(), "output steps should be populated after completion");
+    expect(out.steps.size() == 1, "should have one solution");
+    expect(out.steps[0].size() == 1, "solution should have one step");
+    expect(out.steps[0][0].exp_level_cost == 4, "step cost should match reported value");
+    std::cout << "PASS: test_output_has_steps_after_completion" << std::endl;
+}
+
 void test_serialization_stubs() {
     auto algo = std::make_unique<TestAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
@@ -247,6 +265,7 @@ int main() {
     test_executor_observer();
     test_executor_detach_observer();
     test_output_not_valid_before_completion();
+    test_output_has_steps_after_completion();
     test_serialization_stubs();
     std::cout << "All AlgorithmExecutor tests passed!" << std::endl;
     return 0;

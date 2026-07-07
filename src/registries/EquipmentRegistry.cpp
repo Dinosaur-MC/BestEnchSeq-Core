@@ -3,7 +3,6 @@
 void EquipmentRegistry::initialize(const std::vector<EquipmentType>& eq_list) {
     equipment_list_.clear();
     equipment_map_.clear();
-    equipment_list_.reserve(eq_list.size());
     for (const auto& eq : eq_list) {
         equipment_list_.push_back(eq);
     }
