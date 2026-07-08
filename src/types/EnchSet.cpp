@@ -50,7 +50,7 @@ int32_t EnchSet::combine(const EnchSet &other, bool is_book) {
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
-            result += type == platform::MCE::Java ? 2 : 1;
+            result += type == platform::MCE::Java ? 1 : 0;
         } else {
             int32_t multiplier = e.get_multiplier(is_book);
             auto it            = this->find(e);
@@ -97,7 +97,7 @@ std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, bool is_book)
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
-            ret_cost += type == platform::MCE::Java ? 2 : 1;
+            ret_cost += type == platform::MCE::Java ? 1 : 0;
         } else {
             int32_t multiplier = e.get_multiplier(is_book);
             auto it            = ret_ench.find(e);

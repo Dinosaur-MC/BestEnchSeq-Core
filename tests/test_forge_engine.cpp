@@ -24,15 +24,15 @@ void test_forge_books() {
     setup_enchinfo();
     DefaultForgeEngine engine(ForgeConfig{});
 
-    // Forge two books: sharpness 4 + sharpness 3 -> sharpness 5
+    // Forge two books: sharpness 4 + sharpness 3 -> sharpness 4 (max, not sum)
     ItemStack book_a(EnchSet{Ench(0, 4)});
     ItemStack book_b(EnchSet{Ench(0, 3)});
 
     auto [result, cost] = engine.forge(book_a, book_b);
     expect(result.is_book(), "result should be book");
-    auto it = result.enchantments.find(Ench(0, 5));
-    expect(it != result.enchantments.end(), "result should have sharpness 5");
-    expect(cost == 4, "forge cost should be 4 for sharpness 4 + 3 -> 4 (Java, max(4,3)=4)");
+    auto it = result.enchantments.find(Ench(0, 4));
+    expect(it != result.enchantments.end(), "result should have sharpness 4");
+    expect(cost == 4, "forge cost should be 4 for sharpness 4 + 3 -> 4 (Java, multiplier*4)");
     std::cout << "PASS: test_forge_books (cost=" << cost << ")" << std::endl;
 }
 
@@ -63,7 +63,7 @@ void test_forge_incompatible_rejected() {
     // Bane should not be applied
     auto it = result.enchantments.find(Ench(2, 4));
     expect(it == result.enchantments.end(), "incompatible enchant should not be applied");
-    expect(cost == 2, "forge cost should be 2 for incompatible enchant (Java penalty)");
+    expect(cost == 1, "forge cost should be 1 for incompatible enchant (Java penalty)");
     std::cout << "PASS: test_forge_incompatible_rejected (cost=" << cost << ")" << std::endl;
 }
 
