@@ -338,3 +338,67 @@ set_tests_properties(test_spsc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_utils.cpp)
+add_executable(test_algorithm_utils
+    test_algorithm_utils.cpp
+    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
+)
+target_include_directories(test_algorithm_utils PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_algorithm_utils COMMAND test_algorithm_utils)
+set_tests_properties(test_algorithm_utils PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_penalty_balancing.cpp)
+add_executable(test_penalty_balancing
+    test_penalty_balancing.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
+    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
+)
+target_include_directories(test_penalty_balancing PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_penalty_balancing COMMAND test_penalty_balancing)
+set_tests_properties(test_penalty_balancing PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_hierarchical_merge.cpp)
+add_executable(test_hierarchical_merge
+    test_hierarchical_merge.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
+    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
+)
+target_include_directories(test_hierarchical_merge PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_hierarchical_merge COMMAND test_hierarchical_merge)
+set_tests_properties(test_hierarchical_merge PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()

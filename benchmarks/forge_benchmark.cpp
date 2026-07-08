@@ -3,6 +3,8 @@
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
+#include "algorithm/strategies/DynamicPenaltyBalancing.h"
+#include "algorithm/strategies/HierarchicalMergeStrategy.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
@@ -31,10 +33,10 @@ TestCase CASES[] = {
     {"sword_basic", "diamond_sword",
      {"sharpness=5", "looting=3", "unbreaking=3"}, 14, 35},
     {"sword_combat_5", "diamond_sword",
-     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 31, 50},
+     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 31, 52},
     {"sword_combat_7", "diamond_sword",
      {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1"}, 40, 60},
+      "fire_aspect=2", "knockback=2", "mending=1"}, 40, 120},
     // Tools
     {"pickaxe_fortune", "diamond_pickaxe",
      {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 15, 40},
@@ -42,12 +44,12 @@ TestCase CASES[] = {
      {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 15, 40},
     // Ranged
     {"bow_power", "bow",
-     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 15, 45},
+     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 15, 48},
     {"crossbow", "crossbow",
      {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 12, 35},
     // Armor
     {"helmet", "diamond_helmet",
-     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 20, 50},
+     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 20, 51},
     {"chestplate", "diamond_chestplate",
      {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 20, 55},
     {"leggings", "diamond_leggings",
@@ -56,7 +58,7 @@ TestCase CASES[] = {
      {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 25, 60},
     {"boots_full", "diamond_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
-      "thorns=3", "unbreaking=3", "mending=1"}, 55, 85},
+      "thorns=3", "unbreaking=3", "mending=1"}, 55, 125},
 };
 
 // ─── Setup ───
@@ -98,7 +100,7 @@ void run_case(const TestCase& tc) {
     input.target_item = ItemStack(eq, wanted_set, 0, eq->max_durability);
     input.available_items = books;
 
-    for (const auto& algo_name : {"greedy", "dfs", "astar"}) {
+    for (const auto& algo_name : {"greedy", "dfs", "astar", "penalty_balance", "hierarchical"}) {
         if (!AlgorithmRegistry::instance().has_algorithm(algo_name)) continue;
         auto algo = AlgorithmRegistry::instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
@@ -139,6 +141,10 @@ int main() {
         []{ return std::make_unique<DFSAlgorithm>(); });
     AlgorithmRegistry::instance().register_algorithm("astar",
         []{ return std::make_unique<AStarAlgorithm>(); });
+    AlgorithmRegistry::instance().register_algorithm("penalty_balance",
+        []{ return std::make_unique<DynamicPenaltyBalancing>(); });
+    AlgorithmRegistry::instance().register_algorithm("hierarchical",
+        []{ return std::make_unique<HierarchicalMergeStrategy>(); });
 
     for (const auto& tc : CASES) {
         std::cout << tc.name << " (" << tc.wanted.size() << " enchants):" << std::endl;

@@ -15,7 +15,8 @@ std::string CLIParser::get_help_text(const std::string &program_name) {
         "\n"
         "Options:\n"
         "  --help                  Show this help message\n"
-        "  --algorithm <name>      Search algorithm: greedy (default), dfs, or astar\n"
+        "  --algorithm <name>      Search algorithm: greedy (default), dfs, astar,\n"
+        "                           penalty_balance, or hierarchical\n"
         "  --target <spec>         Target item (e.g., diamond_sword or diamond_sword[sharpness=3])\n"
         "  --wanted <list>         Wanted enchantments (e.g., sharpness=5,knockback=2)\n"
         "  --mode <mode>           Operation mode: direct (default) or inventory\n"
@@ -229,9 +230,11 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
             }
             config.format = value;
         } else if (key == "algorithm") {
-            if (value != "greedy" && value != "dfs" && value != "astar") {
+            if (value != "greedy" && value != "dfs" && value != "astar"
+                && value != "penalty_balance" && value != "hierarchical") {
                 throw std::runtime_error(
-                    "Invalid algorithm: '" + value + "'. Expected 'greedy', 'dfs', or 'astar'.\n" + get_help_text(program_name)
+                    "Invalid algorithm: '" + value + "'. Expected 'greedy', 'dfs', 'astar',\n"
+                    "'penalty_balance', or 'hierarchical'.\n" + get_help_text(program_name)
                 );
             }
             config.algorithm = value;

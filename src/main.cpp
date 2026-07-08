@@ -3,6 +3,8 @@
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
+#include "algorithm/strategies/DynamicPenaltyBalancing.h"
+#include "algorithm/strategies/HierarchicalMergeStrategy.h"
 #include "utils/SolutionFactory.hpp"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
@@ -65,6 +67,12 @@ void register_builtin_algorithms() {
     AlgorithmRegistry::instance().register_algorithm("astar", []{
         return std::make_unique<AStarAlgorithm>();
     });
+    AlgorithmRegistry::instance().register_algorithm("penalty_balance", []{
+        return std::make_unique<DynamicPenaltyBalancing>();
+    });
+    AlgorithmRegistry::instance().register_algorithm("hierarchical", []{
+        return std::make_unique<HierarchicalMergeStrategy>();
+    });
 }
 
 } // anonymous namespace
@@ -112,7 +120,7 @@ int main(int argc, char *argv[]) {
         auto algo = AlgorithmRegistry::instance().create(config.algorithm);
         if (!algo) {
             throw std::runtime_error("Unknown algorithm: '" + config.algorithm +
-                "'. Available: greedy, dfs, astar");
+                "'. Available: greedy, dfs, astar, penalty_balance, hierarchical");
         }
 
         // Execute

@@ -9,6 +9,8 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
