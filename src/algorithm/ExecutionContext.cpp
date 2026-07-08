@@ -13,19 +13,33 @@ void ExecutionContext::wait_if_paused() {
 
 void ExecutionContext::report_progress(double percent, std::string_view status) {
     _progress.store(percent, std::memory_order_release);
-    if (_has_observers.load(std::memory_order_acquire))
-        _events.push({ObserverEvent::Progress, percent, std::string(status), {}, {}});
+    if (_has_observers.load(std::memory_order_acquire)) {
+        ObserverEvent e;
+        e.type = ObserverEvent::Progress;
+        e.progress_val = percent;
+        e.status = std::string(status);
+        _events.push(std::move(e));
+    }
 }
 
 void ExecutionContext::report_solution_found(const EnchStepList& solution) {
-    if (_has_observers.load(std::memory_order_acquire))
-        _events.push({ObserverEvent::Solution, 0, {}, solution, {}});
+    if (_has_observers.load(std::memory_order_acquire)) {
+        ObserverEvent e;
+        e.type = ObserverEvent::Solution;
+        e.steps = solution;
+        _events.push(std::move(e));
+    }
     append_output_steps(solution);
 }
 
 void ExecutionContext::report_state_change(AlgorithmState prev, AlgorithmState curr) {
-    if (_has_observers.load(std::memory_order_acquire))
-        _events.push({ObserverEvent::StateChange, 0, {}, {}, prev, curr});
+    if (_has_observers.load(std::memory_order_acquire)) {
+        ObserverEvent e;
+        e.type = ObserverEvent::StateChange;
+        e.prev_state = prev;
+        e.curr_state = curr;
+        _events.push(std::move(e));
+    }
 }
 
 void ExecutionContext::dispatch_events() {

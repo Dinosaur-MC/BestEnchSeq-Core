@@ -81,7 +81,9 @@ void AlgorithmExecutor::resume() {
 
 void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
-    _ctx->report_state_change(prev, AlgorithmState::Cancelled);
+    // Note: not calling _ctx->report_state_change() here — the worker thread
+    // detects is_cancelled() and calls _set_state() which notifies observers.
+    // This avoids multi-producer writes to the SPSC event queue.
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
         _ctx->cancel();
         _ctx->resume();  // unblock if paused
@@ -116,6 +118,7 @@ AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
         s == AlgorithmState::Failed ||
         s == AlgorithmState::Cancelled) {
         _join_worker();
+        _ctx->dispatch_events();
     }
     return s;
 }
