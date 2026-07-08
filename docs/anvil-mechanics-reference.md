@@ -19,7 +19,7 @@ $$S = (\text{type},\ d,\ E,\ N,\ P)$$
 | $d$ | 耐久度，$0\le d\le D_{\max}$ | `int32_t` |
 | $E$ | 附魔集合，形如 $\{(e_i,\ell_i)\}$ | `EnchSet` |
 | $N$ | 物品名称 | `std::string` |
-| $P$ | 累积惩罚值（RepairCost），公式 $2^n-1$ | `int32_t` |
+| $n$ | 累积惩罚计数（RepairCost 的指数），惩罚值 $2^n-1$，存于 `prior_penalty` | `int32_t` |
 
 ### 操作定义
 
@@ -45,15 +45,17 @@ $$\text{Cost}(S_A,S_B) = P_A + P_B + R_E + R_D + C_{\text{ench}}$$
 
 ### 累积惩罚更新
 
-$$P_C = 2 \cdot \max(P_A, P_B) + 1$$
+操作次数 $n$ 更新：$n_C = \max(n_A, n_B) + 1$
 
-等价于 $P_C = 2^{\max(n_A,n_B)+1} - 1$，其中 $n_A,n_B$ 为各自操作次数。
+对应惩罚值：$P = 2^n - 1$，或由惩罚值直接计算：
+
+$$P_C = 2 \cdot \max(P_A, P_B) + 1$$
 
 ### 状态变换
 
 `forge()` 实现状态变换 $S_A \rightarrow S_C$：
 - `S_C.E` = 合并后的附魔集合
-- `S_C.P` = $2 \cdot \max(P_A, P_B) + 1$
+- `S_C.n` = $\max(n_A, n_B) + 1$
 - `S_C.d` = 合并后的耐久度
 - `S_C.type` = `S_A.type`
 
@@ -167,7 +169,7 @@ incompatible_penalty = count(incompatible_enchants) × 1
 
 - 冲突附魔不会被转移到结果物品上
 - 每个冲突 +1 级
-- Bedrock 版无冲突费用，且操作被拒绝
+- Bedrock 版无冲突费用，冲突附魔被忽略，操作正常进行
 
 ### 实现对应
 
@@ -212,10 +214,10 @@ book_mult = max(1, item_mult >> 1);    // item_mult 右移 1 位，最小 1
 ### 双物品合并修复
 
 ```
-repair_cost = 2
+repair_cost = 2    （仅目标耐久未满时）
 ```
 
-两个同种装备合并时，结果耐久 = `target.durability + sacrifice.durability + max_durability × 12%`。费用 +2 级。
+两个同种装备合并时，结果耐久 = `target.durability + sacrifice.durability + max_durability × 12%`。若目标耐久已满，无修复费用。费用 +2 级仅当目标耐久未满时适用。
 
 ### 材料修复（单物品 + 材料）
 
@@ -244,15 +246,14 @@ final_cost = min(raw_cost, 39);    // 当 ignore_cost_cap == false
 
 ## 7. 总费用公式
 
-$$\text{总费用} = C_{\text{ench}} + P_A + P_B + R_E + R_D + I$$
+$$\text{总费用} = C_{\text{ench}} + P_A + P_B + R_E + R_D$$
 
 | 项 | 含义 |
 |----|------|
-| $C_{\text{ench}}$ | 附魔合并费用 |
+| $C_{\text{ench}}$ | 附魔合并费用（含不兼容惩罚：Java +1/冲突，Bedrock +0） |
 | $P_A + P_B$ | 前次工作惩罚（目标+牺牲） |
 | $R_E$ | 更名费用（1 或 0） |
 | $R_D$ | 耐久修复费用（2 或 1 或 0） |
-| $I$ | 不兼容惩罚（Java: 冲突数 × 1, Bedrock: 0） |
 
 费用上限 39 级在最后应用：
 
@@ -289,7 +290,7 @@ bool is_forgeable(const ItemStack& a, const ItemStack& b) const noexcept {
 | 规则 | Java | Bedrock |
 |------|------|---------|
 | 费用计算 | final_level × multiplier | (new - old) × multiplier |
-| 不兼容惩罚 | +1/冲突 | 无，操作被拒绝 |
+| 不兼容惩罚 | +1/冲突 | 无，冲突附魔被忽略 |
 | 费用上限 | 39 级 | 39 级 |
 
 ---
@@ -298,28 +299,32 @@ bool is_forgeable(const ItemStack& a, const ItemStack& b) const noexcept {
 
 ### 示例：三书合并到剑
 
+牺牲物品为附魔书时，使用书本乘数（普通乘数右移一位，最小 1）。
+锋利 V：书本乘数 1；耐久 III：书本乘数 1；抢夺 III：书本乘数 2。
+
 目标：钻石剑 {锋利 V, 耐久 III, 抢夺 III}
 初始：无附魔剑 + 锋利 V 书 + 耐久 III 书 + 抢夺 III 书
 
 **Step 1：合并锋利 V 书 + 耐久 III 书**
 - 惩罚：均为 0 → 成本 $0+0=0$
-- 附魔成本：$5\times1 + 3\times2 = 5 + 6 = 11$
-- 总费用：$11$
+- 附魔成本：$5\times1 + 3\times1 = 5 + 3 = 8$
+- 总费用：$8$
 - 结果惩罚：$2\cdot\max(0,0)+1 = 1$
 
 **Step 2：合并结果 + 抢夺 III 书**
 - 惩罚：$1 + 0 = 1$
-- 附魔成本：$5\times1 + 3\times2 + 3\times4 = 5 + 6 + 12 = 23$
-- 总费用：$1 + 23 = 24$
+- 附魔成本：$5\times1 + 3\times1 + 3\times2 = 5 + 3 + 6 = 14$
+- 总费用：$1 + 14 = 15$
 - 结果惩罚：$2\cdot\max(1,0)+1 = 3$
 
 **Step 3：合并三合一书 + 无附魔剑**
 - 惩罚：$3 + 0 = 3$
-- 附魔成本：$5\times1 + 3\times2 + 3\times4 = 23$
-- 总费用：$3 + 23 + 2 = 28$（修复 +2）
+- 附魔成本：$5\times1 + 3\times1 + 3\times2 = 5 + 3 + 6 = 14$
+- 剑无损伤，无修复费用
+- 总费用：$3 + 14 = 17$
 - 结果惩罚：$2\cdot\max(3,0)+1 = 7$
 
-**总消耗：** $11 + 24 + 28 = 63$ 级
+**总消耗：** $8 + 15 + 17 = 40$ 级
 
 ### 测试用例参考
 

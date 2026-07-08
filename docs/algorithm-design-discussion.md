@@ -309,16 +309,18 @@ private:
 
         // 下界剪枝
         if (cost_so_far + lower_bound(items) >= _best_cost)
-            return;
+                return;
 
-        // 检查是否达到目标
-        if (meets_target(items[0], _input->target_item)) {
-            if (cost_so_far < _best_cost) {
-                _best_cost = cost_so_far;
-                // 记录解
-                ctx.report_solution_found(_current_steps);
+        // 检查是否达到目标（遍历所有物品）
+        for (const auto& item : items) {
+            if (meets_target(item, _input->target_item)) {
+                if (cost_so_far < _best_cost) {
+                    _best_cost = cost_so_far;
+                    // 记录解
+                    ctx.report_solution_found(_current_steps);
+                }
+                return;
             }
-            return;
         }
 
         // 尝试所有合并对
@@ -329,21 +331,24 @@ private:
 
                 // 保存状态
                 auto saved_i = items[i];
+                auto saved_j = items[j];
                 int32_t step_cost = _engine.forge_into(items[i], items[j]);
 
-                _current_steps.push_back({saved_i, items[j], step_cost, {}});
+                _current_steps.push_back({saved_i, saved_j, step_cost, {}});
+
+                // 移除牺牲物品 j，修正 i 下标
                 items.erase(items.begin() + j);
+                size_t adjusted_i = (j < i) ? i - 1 : i;
 
                 ctx.report_progress(/*...*/);
                 dfs(items, cost_so_far + step_cost, ctx);
 
-                // 回溯
-                items.insert(items.begin() + j, items[j]);
-                _current_steps.pop_back();
-                items[i] = saved_i;
+                // 回溯：逆序恢复
+                items.insert(items.begin() + j, saved_j);
+                items[adjusted_i] = saved_i;
 
                 if (ctx.is_cancelled()) return;
-            }
+                }
         }
     }
 
