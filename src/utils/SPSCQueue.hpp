@@ -26,6 +26,16 @@ class SPSCQueue {
         std::atomic<size_t> value{0};
     };
 
+private:
+    T* ptr(size_t idx) noexcept {
+        return std::launder(reinterpret_cast<T*>(
+            &_buffer[(idx % Capacity) * sizeof(T)]));
+    }
+    const T* ptr(size_t idx) const noexcept {
+        return std::launder(reinterpret_cast<const T*>(
+            &_buffer[(idx % Capacity) * sizeof(T)]));
+    }
+
 public:
     SPSCQueue() = default;
 

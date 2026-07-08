@@ -19,23 +19,28 @@ void test_push_pop() {
     std::cout << "PASS: test_push_pop" << std::endl;
 }
 
-void test_overflow_drops_oldest() {
+void test_drop_on_full() {
     SPSCQueue<int, 4> q;
 
-    q.push(1); q.push(2); q.push(3); q.push(4);
-    // Now full. Next push overwrites oldest (1)
-    q.push(5);  // overwrites slot 0
-    q.push(6);  // overwrites slot 1
+    // Fill queue
+    expect(q.push(1), "push 1");
+    expect(q.push(2), "push 2");
+    expect(q.push(3), "push 3");
+    expect(q.push(4), "push 4");
 
-    // Should now read 3, 4, 5, 6
+    // Full — next pushes should return false (drop newest)
+    expect(!q.push(5), "push 5 should be dropped (full)");
+    expect(!q.push(6), "push 6 should be dropped (full)");
+
+    // Read back only the first 4 values
     int val{};
-    expect(q.pop(val) && val == 3, "first should be 3");
-    expect(q.pop(val) && val == 4, "second should be 4");
-    expect(q.pop(val) && val == 5, "third should be 5");
-    expect(q.pop(val) && val == 6, "fourth should be 6");
+    expect(q.pop(val) && val == 1, "first should be 1");
+    expect(q.pop(val) && val == 2, "second should be 2");
+    expect(q.pop(val) && val == 3, "third should be 3");
+    expect(q.pop(val) && val == 4, "fourth should be 4");
     expect(!q.pop(val), "queue should be empty");
 
-    std::cout << "PASS: test_overflow_drops_oldest" << std::endl;
+    std::cout << "PASS: test_drop_on_full" << std::endl;
 }
 
 void test_sequential_producer_consumer() {
@@ -96,7 +101,7 @@ void test_peek() {
 int main() {
     std::cout << "=== SPSCQueue Tests ===" << std::endl;
     test_push_pop();
-    test_overflow_drops_oldest();
+    test_drop_on_full();
     test_sequential_producer_consumer();
     test_consumer_catch_up();
     test_peek();
