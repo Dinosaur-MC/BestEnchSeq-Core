@@ -1,44 +1,87 @@
 # 铁砧机制算法参考
 
-> 依据 Minecraft Wiki (minecraft.wiki) 整理，对齐 Java Edition 最新版本。
+> 依据 Minecraft Wiki (minecraft.wiki) 及 JE 源码整理，对齐 Java Edition 最新版本。
 > 本文件作为算法层开发的权威参考，所有 forge 逻辑应与此保持一致。
 
-## 1. 基本概念
+---
 
-### 铁砧操作
+## 1. 形式化模型
 
-铁砧可执行三类操作（可同时进行）：
+### 物品状态
 
-1. **附魔合并**（Enchantment Combining）— 将牺牲物品的魔咒合并到目标物品
-2. **更名**（Renaming）— 为物品命名，费用固定 1 级
-3. **耐久修复**（Durability Repair）— 使用材料修复或双物品合并修复
+物品 $S$ 定义为五元组：
 
-### 操作前提
+$$S = (\text{type},\ d,\ E,\ N,\ P)$$
 
-- 目标物品和牺牲物品必须可锻造组合（forgeable）
-- 总费用 ≤ 39 级，否则提示「过于昂贵！」（Too Expensive!）
-- 附魔书可同时作为目标或牺牲物品，但不可用于耐久修复
-- 更名本身不会使前次工作惩罚升级
+| 分量 | 含义 | 类型 |
+|------|------|------|
+| $\text{type}$ | 物品类型与材料（如钻石剑、附魔书） | `const EquipmentType*` |
+| $d$ | 耐久度，$0\le d\le D_{\max}$ | `int32_t` |
+| $E$ | 附魔集合，形如 $\{(e_i,\ell_i)\}$ | `EnchSet` |
+| $N$ | 物品名称 | `std::string` |
+| $P$ | 累积惩罚值（RepairCost），公式 $2^n-1$ | `int32_t` |
+
+### 操作定义
+
+一次铁砧操作接收目标物品 $S_A$ 和牺牲物品 $S_B$，产生新物品 $S_C$ 并消耗经验等级：
+
+$$(S_A, S_B) \xrightarrow{\text{forge}} S_C,\quad \text{Cost}(S_A,S_B) \in \mathbb{N}$$
+
+操作类型：
+1. **附魔合并** — $B$ 为附魔书或同类型装备
+2. **耐久修复** — $B$ 为修复材料或同类型装备
+3. **更名** — 可附加在任何操作中，固定 +1 级，不增加 $P$
+
+### 成本函数
+
+$$\text{Cost}(S_A,S_B) = P_A + P_B + R_E + R_D + C_{\text{ench}}$$
+
+| 项 | 含义 | 代码对应 |
+|----|------|---------|
+| $P_A + P_B$ | 前次工作惩罚和 | `get_penalty_cost(a) + get_penalty_cost(b)` |
+| $R_E$ | 更名费用 | 1（若更名）或 0 |
+| $R_D$ | 耐久修复费用 | 2（装备+装备）或 1（装备+材料）或 0 |
+| $C_{\text{ench}}$ | 附魔合并费用 | `combine_enchantments()` |
+
+### 累积惩罚更新
+
+$$P_C = 2 \cdot \max(P_A, P_B) + 1$$
+
+等价于 $P_C = 2^{\max(n_A,n_B)+1} - 1$，其中 $n_A,n_B$ 为各自操作次数。
+
+### 状态变换
+
+`forge()` 实现状态变换 $S_A \rightarrow S_C$：
+- `S_C.E` = 合并后的附魔集合
+- `S_C.P` = $2 \cdot \max(P_A, P_B) + 1$
+- `S_C.d` = 合并后的耐久度
+- `S_C.type` = `S_A.type`
+
+`forge_into()` 等价于上述变换的原地版本（直接修改 `S_A` 作为 `S_C`）。
+
+---
 
 ## 2. 前次工作惩罚（Prior Work Penalty）
 
 ### 惩罚计数
 
-物品每次经历铁砧操作（更名除外），惩罚计数增加：
+物品每次经历铁砧操作（更名除外），惩罚计数 $n$ 增加：
 
-```
-result_count = max(count_target, count_sacrifice) + 1
-```
+$$n_C = \max(n_A, n_B) + 1$$
 
-| 操作次数 | 0   | 1   | 2   | 3   | 4   | 5   | 6   |
-| -------- | --- | --- | --- | --- | --- | --- | --- |
-| 惩罚值   | 0   | 1   | 3   | 7   | 15  | 31  | 63  |
+### 惩罚值
 
-### 惩罚值公式
+惩罚值 $P$ 与计数 $n$ 的关系：
 
-```cpp
-penalty_value = 2^count - 1        // (1 << count) - 1
-```
+$$P = 2^n - 1$$
+
+等价形式（直接由惩罚值计算）：
+
+$$P_C = 2 \cdot \max(P_A, P_B) + 1$$
+
+| $n$ | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+|-----|---|---|---|---|---|---|---|
+| $P$ | 0 | 1 | 3 | 7 | 15 | 31 | 63 |
 
 ### 总惩罚费用
 
@@ -47,6 +90,22 @@ total_penalty_cost = penalty(target) + penalty(sacrifice)
 ```
 
 两个物品的惩罚值**相加**，作为操作总成本的组成部分。
+
+### 实现对应
+
+```cpp
+// ItemStack::get_penalty_cost
+int32_t ItemStack::get_penalty_cost(int32_t n) { return (1 << n) - 1; }
+
+// DefaultForgeEngine::forge() 中的惩罚计算
+cost += calc_penalty_cost(item_a.prior_penalty, item_b.prior_penalty);
+// 其中 calc_penalty_cost = get_penalty_cost(a) + get_penalty_cost(b)
+
+// 结果物品惩罚计数
+prior_penalty = 1 + std::max(item_a.prior_penalty, item_b.prior_penalty);
+```
+
+---
 
 ## 3. 附魔合并费用
 
@@ -57,7 +116,7 @@ ench_cost = final_level × multiplier
 ```
 
 - `final_level`：附魔在结果物品上的最终等级
-- `multiplier`：附魔的费用乘数（见下文）
+- `multiplier`：附魔的费用乘数（见乘数表）
 
 **与 Bedrock 的关键区别**：Java 始终基于最终等级计算费用，无论等级是否提升。
 
@@ -74,18 +133,16 @@ ench_cost = (new_level - old_level) × multiplier
 
 适用于书籍合并和装备合并：
 
-| 牺牲等级 vs 目标       | 结果等级       |
-| ---------------------- | -------------- |
-| 牺牲 > 目标            | 提升至牺牲等级 |
-| 牺牲 == 目标（未满级） | 目标等级 +1    |
-| 牺牲 == 目标（已满级） | 不变           |
-| 牺牲 < 目标            | 不变           |
+| 牺牲等级 vs 目标 | 结果等级 |
+|-----------------|---------|
+| 牺牲 > 目标 | 提升至牺牲等级 |
+| 牺牲 == 目标（未满级） | 目标等级 +1 |
+| 牺牲 == 目标（已满级） | 不变 |
+| 牺牲 < 目标 | 不变 |
 
 ```cpp
-// 合并逻辑（略去满级检查）
-new_level = (sacrifice_level == target_level)
-          ? target_level + 1
-          : max(target_level, sacrifice_level);
+// Ench::operator+(int32_t) — 实现 max-or-increment 语义
+return std::min(level == lvl ? level + 1 : std::max(level, lvl), get_max_level());
 ```
 
 ### 新增 vs 升级
@@ -112,26 +169,43 @@ incompatible_penalty = count(incompatible_enchants) × 1
 - 每个冲突 +1 级
 - Bedrock 版无冲突费用，且操作被拒绝
 
-### 不适用附魔
+### 实现对应
 
-- 牺牲物品上的魔咒若对目标物品类型不适用，则被忽略
-- 不产生费用，不转移
+```cpp
+// EnchSet::combine() Java 分支
+if (type == platform::MCE::Java)
+    result += multiplier * new_level;        // final_level × multiplier
+else
+    result += multiplier * (new_level - old_level);  // Bedrock: diff × multiplier
+
+// 不兼容惩罚
+result += type == platform::MCE::Java ? 1 : 0;
+
+// 书本乘数：item_mult >> 1，最小 1
+int32_t Ench::get_multiplier(bool is_book) const {
+    return is_book ? std::max(1, EnchantmentRegistry::get_instance().get(id).multiplier >> 1)
+                   : EnchantmentRegistry::get_instance().get(id).multiplier;
+}
+```
+
+---
 
 ## 4. 附魔乘数表
 
 乘数定义在 `EnchInfo::multiplier` 字段中。书本乘数自动派生：
 
 ```cpp
-// Ench::get_multiplier(is_book)
 book_mult = max(1, item_mult >> 1);    // item_mult 右移 1 位，最小 1
 ```
 
-| 魔咒                 | 物品乘数 | 书本乘数 |
-| -------------------- | -------- | -------- |
-| 效率 / 保护 / 锋利等 | 1        | 1        |
-| 击退等               | 2        | 1        |
-| 抢夺 / 火焰附加等    | 4        | 2        |
-| 荆棘等               | 8        | 4        |
+| 魔咒 | 物品乘数 | 书本乘数 |
+|------|---------|---------|
+| 效率 / 保护 / 锋利等 | 1 | 1 |
+| 击退等 | 2 | 1 |
+| 抢夺 / 火焰附加等 | 4 | 2 |
+| 荆棘等 | 8 | 4 |
+
+---
 
 ## 5. 耐久修复费用
 
@@ -152,7 +226,9 @@ repair_cost = 1 × unit
 - 每单位材料恢复最多 25% 总耐久度
 - 每次操作费用 +1 级
 
-注意：ignore_repair_cost 配置可忽略修复费用。
+注意：`ignore_repair_cost` 配置可忽略修复费用。
+
+---
 
 ## 6. 费用上限
 
@@ -162,59 +238,98 @@ repair_cost = 1 × unit
 final_cost = min(raw_cost, 39);    // 当 ignore_cost_cap == false
 ```
 
-ignore_cost_cap 配置可禁用于模组环境。
+`ignore_cost_cap` 配置可禁用于模组环境。
+
+---
 
 ## 7. 总费用公式
 
-```
-总费用 = 附魔合并费用
-       + 前次工作惩罚(目标) + 前次工作惩罚(牺牲)
-       + 更名费用 (if applicable, 1级)
-       + 耐久修复费用 (if applicable, 1或2级)
-       + 不兼容惩罚 (Java: 冲突数 × 1, Bedrock: 0)
-```
+$$\text{总费用} = C_{\text{ench}} + P_A + P_B + R_E + R_D + I$$
 
-费用上限 39 级在最后应用。
+| 项 | 含义 |
+|----|------|
+| $C_{\text{ench}}$ | 附魔合并费用 |
+| $P_A + P_B$ | 前次工作惩罚（目标+牺牲） |
+| $R_E$ | 更名费用（1 或 0） |
+| $R_D$ | 耐久修复费用（2 或 1 或 0） |
+| $I$ | 不兼容惩罚（Java: 冲突数 × 1, Bedrock: 0） |
+
+费用上限 39 级在最后应用：
+
+$$\text{最终费用} = \min(\text{总费用}, 39)$$
+
+---
 
 ## 8. 物品合法性
 
 ### 可锻造组合
 
-| 目标   | 牺牲   | 可锻造                    |
-| ------ | ------ | ------------------------- |
-| 装备   | 装备   | ✅ 合并附魔 + 耐久修复    |
-| 装备   | 附魔书 | ✅ 合并附魔（无耐久修复） |
-| 装备   | 材料   | ✅ 仅耐久修复             |
-| 附魔书 | 附魔书 | ✅ 合并附魔               |
-| 附魔书 | 装备   | ❌                        |
-| 附魔书 | 材料   | ❌                        |
+| 目标 | 牺牲 | 可锻造 |
+|------|------|-------|
+| 装备 | 装备 | ✅ 合并附魔 + 耐久修复 |
+| 装备 | 附魔书 | ✅ 合并附魔（无耐久修复） |
+| 装备 | 材料 | ✅ 仅耐久修复 |
+| 附魔书 | 附魔书 | ✅ 合并附魔 |
+| 附魔书 | 装备 | ❌ |
+| 附魔书 | 材料 | ❌ |
 
-### 不可锻造情况
+### 实现对应
 
 ```cpp
-is_forgeable(a, b)
-    = a.is_equipment() || (a.is_book() && b.is_book());
+// DefaultForgeEngine::is_forgeable
+bool is_forgeable(const ItemStack& a, const ItemStack& b) const noexcept {
+    return a.is_equipment() || (a.is_book() && b.is_book());
+}
 ```
+
+---
 
 ## 9. Java vs Bedrock 差异汇总
 
-| 规则       | Java                     | Bedrock                  |
-| ---------- | ------------------------ | ------------------------ |
-| 费用计算   | final_level × multiplier | (new - old) × multiplier |
-| 不兼容惩罚 | +1/冲突                  | 无，操作被拒绝           |
-| 费用上限   | 39 级                    | 39 级                    |
+| 规则 | Java | Bedrock |
+|------|------|---------|
+| 费用计算 | final_level × multiplier | (new - old) × multiplier |
+| 不兼容惩罚 | +1/冲突 | 无，操作被拒绝 |
+| 费用上限 | 39 级 | 39 级 |
 
-## 10. 测试用例参考
+---
 
-以下典型组合用于验证算法正确性：
+## 10. 操作示例：完整成本计算
 
-| 场景        | 目标        | 牺牲           | 结果等级 | Java 费用    |
-| ----------- | ----------- | -------------- | -------- | ------------ |
-| 新增附魔    | 无附魔剑    | 锋利 V 书      | 锋利 V   | 1 × 5 = 5    |
-| 升级        | 锋利 III 剑 | 锋利 V 书      | 锋利 V   | 1 × 5 = 5    |
-| 同级升级    | 锋利 IV 剑  | 锋利 IV 书     | 锋利 V   | 1 × 5 = 5    |
-| 高级 + 低级 | 锋利 IV 剑  | 锋利 II 书     | 锋利 IV  | 1 × 4 = 4    |
-| 合并书本    | 锋利 IV 书  | 锋利 III 书    | 锋利 IV  | 1 × 4 = 4    |
-| 不兼容      | 锋利 V 剑   | 节肢杀手 IV 书 | 锋利 V   | +1（无转移） |
+### 示例：三书合并到剑
+
+目标：钻石剑 {锋利 V, 耐久 III, 抢夺 III}
+初始：无附魔剑 + 锋利 V 书 + 耐久 III 书 + 抢夺 III 书
+
+**Step 1：合并锋利 V 书 + 耐久 III 书**
+- 惩罚：均为 0 → 成本 $0+0=0$
+- 附魔成本：$5\times1 + 3\times2 = 5 + 6 = 11$
+- 总费用：$11$
+- 结果惩罚：$2\cdot\max(0,0)+1 = 1$
+
+**Step 2：合并结果 + 抢夺 III 书**
+- 惩罚：$1 + 0 = 1$
+- 附魔成本：$5\times1 + 3\times2 + 3\times4 = 5 + 6 + 12 = 23$
+- 总费用：$1 + 23 = 24$
+- 结果惩罚：$2\cdot\max(1,0)+1 = 3$
+
+**Step 3：合并三合一书 + 无附魔剑**
+- 惩罚：$3 + 0 = 3$
+- 附魔成本：$5\times1 + 3\times2 + 3\times4 = 23$
+- 总费用：$3 + 23 + 2 = 28$（修复 +2）
+- 结果惩罚：$2\cdot\max(3,0)+1 = 7$
+
+**总消耗：** $11 + 24 + 28 = 63$ 级
+
+### 测试用例参考
+
+| 场景 | 目标 | 牺牲 | 结果等级 | Java 费用 |
+|------|------|------|---------|----------|
+| 新增附魔 | 无附魔剑 | 锋利 V 书 | 锋利 V | 1 × 5 = 5 |
+| 升级 | 锋利 III 剑 | 锋利 V 书 | 锋利 V | 1 × 5 = 5 |
+| 同级升级 | 锋利 IV 剑 | 锋利 IV 书 | 锋利 V | 1 × 5 = 5 |
+| 高级 + 低级 | 锋利 IV 剑 | 锋利 II 书 | 锋利 IV | 1 × 4 = 4 |
+| 合并书本 | 锋利 IV 书 | 锋利 III 书 | 锋利 IV | 1 × 4 = 4 |
+| 不兼容 | 锋利 V 剑 | 节肢杀手 IV 书 | 锋利 V | +1（无转移）|
 
 前次工作惩罚为 0 时的预期费用。
