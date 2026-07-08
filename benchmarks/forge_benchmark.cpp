@@ -27,17 +27,36 @@ struct TestCase {
 };
 
 TestCase CASES[] = {
-    {"sword_3enchants", "diamond_sword",
-     {"sharpness=5", "knockback=2", "unbreaking=3"}, 14, 30},
-    {"sword_5enchants", "diamond_sword",
-     {"sharpness=5", "knockback=2", "fire_aspect=2", "looting=3", "unbreaking=3"}, 31, 50},
-    // 7+ books: A* can solve, DFS may timeout
-    {"sword_7enchants", "diamond_sword",
-     {"sharpness=5", "sweeping_edge=3", "fire_aspect=2", "knockback=2",
-      "looting=3", "unbreaking=3", "mending=1"}, 40, 55},
+    // Swords
+    {"sword_basic", "diamond_sword",
+     {"sharpness=5", "looting=3", "unbreaking=3"}, 14, 35},
+    {"sword_combat_5", "diamond_sword",
+     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 31, 50},
+    {"sword_combat_7", "diamond_sword",
+     {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
+      "fire_aspect=2", "knockback=2", "mending=1"}, 40, 60},
+    // Tools
+    {"pickaxe_fortune", "diamond_pickaxe",
+     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 15, 40},
+    {"pickaxe_silk", "diamond_pickaxe",
+     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 15, 40},
+    // Ranged
+    {"bow_power", "bow",
+     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 15, 45},
+    {"crossbow", "crossbow",
+     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 12, 35},
+    // Armor
+    {"helmet", "diamond_helmet",
+     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 20, 50},
+    {"chestplate", "diamond_chestplate",
+     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 20, 55},
+    {"leggings", "diamond_leggings",
+     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 20, 50},
+    {"boots", "diamond_boots",
+     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 25, 60},
     {"boots_full", "diamond_boots",
-     {"soul_speed=3", "thorns=3", "feather_falling=4", "depth_strider=3",
-      "protection=4", "unbreaking=3", "mending=1"}, 55, 70},
+     {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
+      "thorns=3", "unbreaking=3", "mending=1"}, 55, 80},
 };
 
 // ─── Setup ───
