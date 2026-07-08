@@ -210,4 +210,5 @@ private:
     std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
     std::mutex _state_mtx;
     std::condition_variable _state_cv;
+    std::chrono::steady_clock::time_point _start_time;
 };

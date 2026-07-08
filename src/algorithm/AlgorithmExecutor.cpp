@@ -44,6 +44,7 @@ void AlgorithmExecutor::start(const AlgorithmInput& input) {
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
+    _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
 
     _worker.emplace([this, input]() {
@@ -143,6 +144,8 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.algorithm_name = std::string(_algorithm->name());
     out.algorithm_version = std::string(_algorithm->version());
     out.created_at = std::chrono::system_clock::now();
+    auto elapsed = std::chrono::steady_clock::now() - _start_time;
+    out.computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
     out.steps = _ctx->get_accumulated_steps();
     out.is_valid = true;
     return out;
