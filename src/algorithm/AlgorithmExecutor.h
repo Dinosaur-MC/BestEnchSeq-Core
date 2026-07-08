@@ -46,6 +46,9 @@ public:
     // Result
     AlgorithmOutput output() const;
 
+    // Hot-update search config (applied at algorithm's next checkpoint)
+    void update_search_config(ExecutionContext::SearchConfig cfg);
+
     // Serialization
     // Captures algorithm search state (best solution, visited set) for
     // cross-session checkpointing. Only works for resumable algorithms (DFS).

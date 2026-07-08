@@ -3,6 +3,7 @@
 #include "AlgorithmObserver.h"
 #include "../utils/SPSCQueue.hpp"
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -64,6 +65,26 @@ public:
         return _progress.load(std::memory_order_acquire);
     }
 
+    // ── Search config (hot-updatable at runtime) ──
+    // These parameters can be changed while the algorithm is running/paused.
+    // The algorithm reads the latest values at its next checkpoint.
+    struct SearchConfig {
+        int32_t max_solutions = 0;   // 0 = unlimited
+        int32_t max_depth = 0;       // 0 = unlimited
+        std::chrono::milliseconds max_search_time{0}; // 0 = unlimited
+    };
+
+    SearchConfig get_search_config() const {
+        auto ptr = _search_config.load(std::memory_order_acquire);
+        return ptr ? *ptr : SearchConfig{};
+    }
+
+    void set_search_config(SearchConfig cfg) {
+        _search_config.store(
+            std::make_shared<const SearchConfig>(std::move(cfg)),
+            std::memory_order_release);
+    }
+
 private:
     std::atomic<bool> _cancelled{false};
     std::atomic<bool> _paused{false};
@@ -85,4 +106,8 @@ private:
     // actually pushes an event (when (counter & 0x3F) == 1).
     // Non-atomic: only accessed from the single producer thread.
     uint32_t _progress_downsample{0};
+
+    // ── Search config (read by algorithm, written by external thread) ──
+    // Uses shared_ptr atomic swap for lock-free reads on the algorithm side.
+    std::atomic<std::shared_ptr<const SearchConfig>> _search_config{nullptr};
 };

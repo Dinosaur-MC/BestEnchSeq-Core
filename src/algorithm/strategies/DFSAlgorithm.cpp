@@ -161,7 +161,24 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             continue;
         }
 
-        // ── 5. Lazy pair building ──
+        // ── 5. Hot-update config check ──
+        {
+            auto cfg = ctx.get_search_config();
+            if (cfg.max_depth > 0 &&
+                static_cast<int32_t>(_stack.size()) > cfg.max_depth) {
+                _stack.pop_back();
+                _frame_pairs.pop_back();
+                continue;
+            }
+            if (cfg.max_solutions > 0 &&
+                static_cast<int32_t>(_best_steps.size()) >= cfg.max_solutions) {
+                // Found enough solutions — stop entirely
+                _best_steps.resize(cfg.max_solutions);
+                break;
+            }
+        }
+
+        // ── 6. Lazy pair building ──
         auto& pairs = _frame_pairs.back();
         if (pairs.empty() && frame.pair_index == 0) {
             pairs = _collect_pairs(frame.items);

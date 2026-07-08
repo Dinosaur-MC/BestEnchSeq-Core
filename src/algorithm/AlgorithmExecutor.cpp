@@ -186,3 +186,9 @@ void AlgorithmExecutor::start(const AlgorithmInput& input, const std::vector<uin
     }
     start(input);
 }
+
+void AlgorithmExecutor::update_search_config(ExecutionContext::SearchConfig cfg) {
+    if (_ctx) {
+        _ctx->set_search_config(std::move(cfg));
+    }
+}
