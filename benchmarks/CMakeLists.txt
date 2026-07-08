@@ -8,6 +8,7 @@ add_executable(forge_benchmark
     forge_benchmark.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
