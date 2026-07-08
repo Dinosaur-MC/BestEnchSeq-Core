@@ -1,6 +1,7 @@
 #include "algorithm/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/strategies/GreedyAlgorithm.h"
+#include "algorithm/strategies/DFSAlgorithm.h"
 #include "utils/SolutionFactory.h"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
@@ -57,7 +58,9 @@ void register_builtin_algorithms() {
     AlgorithmRegistry::instance().register_algorithm("greedy", []{
         return std::make_unique<GreedyAlgorithm>();
     });
-    // Future: register DFS, BFS etc.
+    AlgorithmRegistry::instance().register_algorithm("dfs", []{
+        return std::make_unique<DFSAlgorithm>();
+    });
 }
 
 } // anonymous namespace
@@ -104,7 +107,7 @@ int main(int argc, char *argv[]) {
         register_builtin_algorithms();
         auto algo = AlgorithmRegistry::instance().create("greedy");
         if (!algo) {
-            throw std::runtime_error("Failed to create algorithm 'greedy'");
+            throw std::runtime_error("Failed to create algorithm");
         }
 
         // Execute
