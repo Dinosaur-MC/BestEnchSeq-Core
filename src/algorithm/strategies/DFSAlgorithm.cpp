@@ -45,21 +45,38 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
 
 int32_t DFSAlgorithm::greedy_upper_bound(const std::vector<ItemStack>& items) {
     if (items.empty()) return 0;
+    if (items.size() == 1) {
+        if (meets_target(items[0], _input->target_item))
+            _best_cost = 0;
+        return 0;
+    }
 
-    // Work on a copy so the original items vector is unmodified for DFS
-    ItemStack current = items[0];
+    // P1: Book-first merging strategy.
+    // Phase 1: Merge all books together so penalty grows on the book stack
+    // instead of on the equipment.  This keeps equipment penalty at 0 for
+    // all but the final forge, producing a significantly tighter upper bound
+    // than the linear approach (which would compound penalty on the equipment
+    // with every step).
+    ItemStack combined_book = items[1];
     int32_t total = 0;
 
-    // Forge each available book onto the current item greedily, in order
-    for (size_t k = 1; k < items.size(); ++k) {
-        if (!_forge_engine.is_forgeable(current, items[k]))
+    for (size_t k = 2; k < items.size(); ++k) {
+        if (!_forge_engine.is_forgeable(combined_book, items[k]))
             continue;
-        auto [result, cost] = _forge_engine.forge(current, items[k]);
+        auto [result, cost] = _forge_engine.forge(combined_book, items[k]);
+        total += cost;
+        combined_book = result;
+    }
+
+    // Phase 2: Apply the combined book to the target equipment in one forge.
+    ItemStack current = items[0];
+    if (_forge_engine.is_forgeable(current, combined_book)) {
+        auto [result, cost] = _forge_engine.forge(current, combined_book);
         total += cost;
         current = result;
     }
 
-    // If greedy reached the goal, use its cost as the initial upper bound
+    // If the book-first greedy reached the goal, use its cost as the bound.
     if (meets_target(current, _input->target_item)) {
         _best_cost = total;
     }
@@ -107,7 +124,7 @@ void DFSAlgorithm::dfs(std::vector<ItemStack>& items, int32_t cost_so_far, Execu
         return;
     ctx.wait_if_paused();
 
-    // ── P1: State memoization — generate canonical signature from item multiset ──
+    // ── State memoization — generate canonical signature from item multiset ──
     {
         std::string sig;
         for (const auto& item : items) {
@@ -128,8 +145,6 @@ void DFSAlgorithm::dfs(std::vector<ItemStack>& items, int32_t cost_so_far, Execu
     // ── Goal check (before pruning: a goal state must always be recorded) ──
     if (meets_target(items[0], _input->target_item)) {
         // Record the first solution found, or any strictly better solution.
-        // Using `<=` would let tied-cost alternatives overwrite the first
-        // solution, which can change the step structure observed by tests.
         if (_best_steps.empty() || cost_so_far < _best_cost) {
             _best_cost  = cost_so_far;
             _best_steps = _current_steps;
@@ -143,8 +158,15 @@ void DFSAlgorithm::dfs(std::vector<ItemStack>& items, int32_t cost_so_far, Execu
         return;
     }
 
-    // ── Try every forge pair (i = base, j = sacrifice) ──
+    // ── P2: Collect all valid forge pairs, sorted by estimated cost ──
+    // Ordering by cost means cheaper pairs (which are more likely to lead to
+    // good solutions) are explored first.  This lets aggressive pruning from
+    // a tight _best_cost kick in much earlier.
     const size_t n = items.size();
+    struct ForgePair { size_t i, j; int32_t est_cost; };
+    std::vector<ForgePair> pairs;
+    pairs.reserve(n * (n - 1));
+
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
             if (i == j)
@@ -153,39 +175,59 @@ void DFSAlgorithm::dfs(std::vector<ItemStack>& items, int32_t cost_so_far, Execu
             if (!_forge_engine.is_forgeable(items[i], items[j]))
                 continue;
 
-            // Save state for backtracking
-            ItemStack saved_i = items[i];
-            ItemStack saved_j = items[j];
-
-            // Perform forge: result replaces the base, sacrifice is consumed
-            auto [result, step_cost] = _forge_engine.forge(items[i], items[j]);
-
-            // Record step
-            _current_steps.push_back({
-                saved_i,
-                saved_j,
-                step_cost,
-                ExpCalculator::level_to_exp(step_cost)
-            });
-
-            // Update state: replace base, remove sacrifice
-            items[i] = result;
-            items.erase(items.begin() + j);
-
-            // Adjust i index if the erase happened before i
-            size_t adjusted_i = (j < i) ? i - 1 : i;
-
-            // Recurse
-            dfs(items, cost_so_far + step_cost, ctx);
-
-            // Restore state
-            items[adjusted_i] = saved_i;
-            items.insert(items.begin() + j, saved_j);
-            _current_steps.pop_back();
-
-            // Early exit if cancelled during recursion
-            if (ctx.is_cancelled())
-                return;
+            // Quick cost estimate: penalty cost + sacrifice's enchantment value.
+            // This is a cheap proxy; the actual forge cost includes the same terms.
+            int32_t est = ItemStack::get_penalty_cost(items[i].prior_penalty)
+                        + ItemStack::get_penalty_cost(items[j].prior_penalty);
+            for (const Ench& e : items[j].enchantments) {
+                est += e.level * e.get_multiplier(items[j].is_book());
+            }
+            pairs.push_back({i, j, est});
         }
+    }
+
+    std::sort(pairs.begin(), pairs.end(),
+              [](const ForgePair& a, const ForgePair& b) { return a.est_cost < b.est_cost; });
+
+    // ── Try each pair in cost order ──
+    for (const auto& p : pairs) {
+        size_t i = p.i;
+        size_t j = p.j;
+
+        // Save state for backtracking
+        ItemStack saved_i = items[i];
+        ItemStack saved_j = items[j];
+
+        // P0: Use forge_into — modifies items[i] in-place with zero EnchSet copies.
+        // The old code called forge() (returns a new ItemStack) and then assigned
+        // it to items[i], which copied the EnchSet twice.
+        int32_t step_cost = _forge_engine.forge_into(items[i], items[j]);
+
+        // Record step (use saved copies for the pre-forge state)
+        _current_steps.push_back({
+            saved_i,
+            saved_j,
+            step_cost,
+            ExpCalculator::level_to_exp(step_cost)
+        });
+
+        // Remove sacrifice
+        items.erase(items.begin() + j);
+
+        // Adjust i index if the erase happened before i
+        size_t adjusted_i = (j < i) ? i - 1 : i;
+
+        // Recurse
+        dfs(items, cost_so_far + step_cost, ctx);
+
+        // Restore state: first restore the modified item, then re-insert the sacrifice.
+        // This order is critical — inserting shifts indices >= j to the right.
+        items[adjusted_i] = saved_i;
+        items.insert(items.begin() + j, saved_j);
+        _current_steps.pop_back();
+
+        // Early exit if cancelled during recursion
+        if (ctx.is_cancelled())
+            return;
     }
 }

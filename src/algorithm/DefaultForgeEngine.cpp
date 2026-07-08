@@ -81,3 +81,39 @@ std::pair<ItemStack, int32_t> DefaultForgeEngine::forge(
         _apply_forge_cost_cap(cost)
     };
 }
+
+int32_t DefaultForgeEngine::forge_into(ItemStack& item_a, const ItemStack& item_b, bool updated) const {
+    if (!is_forgeable(item_a, item_b))
+        throw std::invalid_argument("Invalid item combination: items cannot be forged");
+
+    bool is_book = item_b.is_book();
+    auto [combined_ench, ench_cost] = combine_enchantments(
+        item_a.enchantments, item_b.enchantments, is_book, updated);
+
+    int32_t cost = ench_cost;
+
+    if (!_config.ignore_penalty_cost)
+        cost += calc_penalty_cost(item_a.prior_penalty, item_b.prior_penalty);
+
+    item_a.prior_penalty = 1 + (item_a.prior_penalty >= item_b.prior_penalty
+                                  ? item_a.prior_penalty : item_b.prior_penalty);
+
+    // Move-assign combined enchantments — avoids the copy that
+    // constructing a new ItemStack would incur.
+    item_a.enchantments = std::move(combined_ench);
+
+    if (item_a.is_equipment()) {
+        if (item_b.is_equipment()) {
+            item_a.durability = calc_durability(item_a.equipment, item_a.durability, item_b.durability, true);
+            if (!_config.ignore_repair_cost)
+                cost += 2;
+        } else if (!is_book) {
+            item_a.durability = calc_durability(item_a.equipment, item_a.durability, item_b.durability, false);
+            if (!_config.ignore_repair_cost)
+                cost += 1;
+        }
+    }
+    // Books and items without durability keep the original durability.
+
+    return _apply_forge_cost_cap(cost);
+}

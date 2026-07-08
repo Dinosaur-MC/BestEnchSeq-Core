@@ -10,6 +10,10 @@ public:
         const ItemStack& item_a, const ItemStack& item_b, bool updated = false
     ) const override;
 
+    int32_t forge_into(
+        ItemStack& item_a, const ItemStack& item_b, bool updated = false
+    ) const override;
+
     bool is_forgeable(const ItemStack& a, const ItemStack& b) const noexcept override;
     const ForgeConfig& get_config() const noexcept override;
 

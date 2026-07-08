@@ -10,6 +10,7 @@
 #include "registries/EquipmentRegistry.h"
 #include "registries/PlatformConfig.h"
 
+#include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -98,19 +99,16 @@ void run_case(const TestCase& tc) {
     input.target_item = ItemStack(eq, wanted_set, 0, eq->max_durability);
     input.available_items = books;
 
-    bool is_large = tc.wanted.size() >= 7;
     for (const auto& algo_name : {"greedy", "dfs", "astar"}) {
         if (!AlgorithmRegistry::instance().has_algorithm(algo_name)) continue;
-        // Skip DFS/A* for large cases (search space explosion)
-        if (is_large && std::string(algo_name) == "dfs") {
-            if (std::string(algo_name) == "dfs")
-                std::cout << "  dfs: skipped (large search space)" << std::endl;
-            continue;
-        }
         auto algo = AlgorithmRegistry::instance().create(algo_name);
+
+        auto t0 = std::chrono::steady_clock::now();
         AlgorithmExecutor executor(std::move(algo));
         executor.start(input);
         executor.wait();
+        auto t1 = std::chrono::steady_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 
         if (executor.state() != AlgorithmState::Completed) {
             std::cout << "  " << algo_name << ": FAILED" << std::endl;
@@ -129,7 +127,8 @@ void run_case(const TestCase& tc) {
         bool ok = total >= tc.min_cost && total <= tc.max_cost;
         std::cout << "  " << algo_name << ": " << total << "L ["
                   << tc.min_cost << "-" << tc.max_cost << "L]"
-                  << (ok ? " ✅" : " ⚠️  out of range") << std::endl;
+                  << (ok ? " ✅" : " ⚠️  out of range")
+                  << " (" << ms << "ms)" << std::endl;
     }
 }
 

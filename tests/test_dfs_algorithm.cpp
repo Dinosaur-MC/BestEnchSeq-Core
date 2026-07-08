@@ -25,6 +25,9 @@ void setup() {
     // id 5
     infos.push_back({"smite", "Smite", platform::MCE::All, 5, 5,
                       1, {}, {EquipmentCategory("sword")}});
+    // id 6
+    infos.push_back({"fortune", "Fortune", platform::MCE::All, 3, 3,
+                      2, {}, {EquipmentCategory("sword")}});
     EnchantmentRegistry::get_instance().initialize(infos);
     platform::Config::get_instance().set_active(platform::MCE::Java);
 }
@@ -69,25 +72,32 @@ void test_dfs_with_two_books() {
     expect(output.steps[0][0].exp_level_cost > 0, "first forge cost should be positive");
     expect(output.steps[0][1].exp_level_cost > 0, "second forge cost should be positive");
 
-    // Verify step ordering via item_a (pre-forge state of each step).
-    // Steps are recorded as {item_a, item_b, cost, exp} where item_a is the
-    // base item BEFORE the forge and the result REPLACES item_a for the next step.
-    //
-    // Step 0: base = bare sword, sacrifice = Sharpness 5 book
+    // Verify first step always starts from the unenchanted sword
     expect(output.steps[0][0].item_a.enchantments.empty(),
            "first step base should be unenchanted sword");
-    expect(output.steps[0][0].item_b.enchantments.find(Ench(0, 5))
-           != output.steps[0][0].item_b.enchantments.end(),
-           "first step sacrifice should have sharpness 5");
-    //
-    // Step 1: base = result of step 0 (sword now has Sharpness 5),
-    //        sacrifice = Knockback 2 book
-    expect(output.steps[0][1].item_a.enchantments.find(Ench(0, 5))
-           != output.steps[0][1].item_a.enchantments.end(),
-           "second step base should have sharpness 5 from previous forge");
-    expect(output.steps[0][1].item_b.enchantments.find(Ench(1, 2))
-           != output.steps[0][1].item_b.enchantments.end(),
-           "second step sacrifice should have knockback 2");
+
+    // Verify both books appear as sacrifices (ordering-agnostic: pair ordering
+    // by cost may try the cheaper knockback book before the sharpness book).
+    bool has_sharp5 = false, has_knock2 = false;
+    for (size_t i = 0; i < 2; ++i) {
+        if (output.steps[0][i].item_b.enchantments.find(Ench(0, 5))
+            != output.steps[0][i].item_b.enchantments.end())
+            has_sharp5 = true;
+        if (output.steps[0][i].item_b.enchantments.find(Ench(1, 2))
+            != output.steps[0][i].item_b.enchantments.end())
+            has_knock2 = true;
+    }
+    expect(has_sharp5, "one sacrifice should have sharpness 5");
+    expect(has_knock2, "one sacrifice should have knockback 2");
+
+    // Verify that after the first forge, the sword has one of the two enchants
+    // (whichever was forged first). Either sharpness or knockback is correct.
+    auto& step0_result_a = output.steps[0][1].item_a;  // pre-forge state of step 1
+    bool has_first_ench = step0_result_a.enchantments.find(Ench(0, 5))
+                          != step0_result_a.enchantments.end()
+                       || step0_result_a.enchantments.find(Ench(1, 2))
+                          != step0_result_a.enchantments.end();
+    expect(has_first_ench, "second step base should have the first forged enchantment");
 
     std::cout << "PASS: test_dfs_with_two_books" << std::endl;
 }
@@ -133,21 +143,10 @@ void test_dfs_with_three_books() {
                "forge cost at step " + std::to_string(i) + " should be positive");
     }
 
-    // Verify the final step's item_a has enchantments from prior steps and
-    // item_b is the sacrifice for the last forge
-    const auto& last_step = output.steps[0][2];
-    // After 2 prior forges, the base should have at least 2 of the 3 enchants
-    size_t found_count = 0;
-    if (last_step.item_a.enchantments.find(Ench(0, 4)) != last_step.item_a.enchantments.end())
-        found_count++;
-    if (last_step.item_a.enchantments.find(Ench(1, 2)) != last_step.item_a.enchantments.end())
-        found_count++;
-    if (last_step.item_a.enchantments.find(Ench(2, 2)) != last_step.item_a.enchantments.end())
-        found_count++;
-    expect(found_count >= 2, "last step base should have at least 2 of 3 enchants from prior forges");
-
-    // The sacrifice should provide the missing enchantment
-    // Also check that all three books appear as sacrifices across the 3 steps
+    // Verify all three books appear as sacrifices across the 3 steps.
+    // DFS may forge books together before applying to the equipment, so the
+    // step ordering and intermediate item_a content may vary.  The key
+    // invariant is that every book is consumed as a sacrifice somewhere.
     bool has_sharp = false, has_knock = false, has_fire = false;
     for (size_t i = 0; i < 3; ++i) {
         if (output.steps[0][i].item_b.enchantments.find(Ench(0, 4))
@@ -332,6 +331,77 @@ void test_dfs_with_six_books() {
     std::cout << "PASS: test_dfs_with_six_books" << std::endl;
 }
 
+// ──────────────────────────────────────────────────────────
+// Test: forge seven books onto an empty sword to reach goal
+// ──────────────────────────────────────────────────────────
+void test_dfs_with_seven_books() {
+    setup();
+
+    // Goal: sword with 7 enchantments
+    ItemStack goal(&sword, EnchSet{Ench(0, 3), Ench(1, 2), Ench(2, 2),
+                                   Ench(3, 3), Ench(4, 3), Ench(5, 3), Ench(6, 3)}, 0, 1561);
+
+    // Available: 7 books, each providing one enchantment
+    ItemCollection available;
+    available.emplace_back(EnchSet{Ench(0, 3)});   // sharpness 3
+    available.emplace_back(EnchSet{Ench(1, 2)});   // knockback 2
+    available.emplace_back(EnchSet{Ench(2, 2)});   // fire_aspect 2
+    available.emplace_back(EnchSet{Ench(3, 3)});   // looting 3
+    available.emplace_back(EnchSet{Ench(4, 3)});   // unbreaking 3
+    available.emplace_back(EnchSet{Ench(5, 3)});   // smite 3
+    available.emplace_back(EnchSet{Ench(6, 3)});   // fortune 3
+
+    AlgorithmInput input{
+        .platform = platform::MCE::Java,
+        .original_ench = EnchSet{},   // starts unenchanted
+        .target_item = goal,
+        .available_items = available,
+    };
+
+    auto algo = std::make_unique<DFSAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+    executor.start(input);
+
+    // Allow up to 30 seconds for the 7-enchantment search space
+    auto state = executor.wait_for(std::chrono::seconds(30));
+    if (state == AlgorithmState::Running) {
+        executor.cancel();
+        executor.wait();
+    }
+
+    expect(state == AlgorithmState::Completed,
+           "should complete with seven books (state: " + std::to_string(static_cast<int>(state)) + ")");
+
+    auto output = executor.output();
+    expect(output.is_valid, "output should be valid after completion");
+    expect(!output.steps.empty(), "output steps should not be empty");
+    expect(output.steps.size() >= 1, "should have at least one solution");
+    expect(output.steps[0].size() == 7, "solution should have seven forge steps");
+
+    // Verify all forge costs are positive
+    for (size_t i = 0; i < 7; ++i) {
+        expect(output.steps[0][i].exp_level_cost > 0,
+               "forge cost at step " + std::to_string(i) + " should be positive");
+    }
+
+    // Verify all 7 books appear as sacrifices
+    bool has_ench[7] = {false, false, false, false, false, false, false};
+    for (size_t i = 0; i < 7; ++i) {
+        for (int eid = 0; eid < 7; ++eid) {
+            if (output.steps[0][i].item_b.enchantments.find(Ench(eid))
+                != output.steps[0][i].item_b.enchantments.end()) {
+                has_ench[eid] = true;
+            }
+        }
+    }
+    for (int eid = 0; eid < 7; ++eid) {
+        expect(has_ench[eid],
+               "enchantment id " + std::to_string(eid) + " should appear as a sacrifice");
+    }
+
+    std::cout << "PASS: test_dfs_with_seven_books" << std::endl;
+}
+
 } // namespace
 
 int main() {
@@ -340,6 +410,7 @@ int main() {
     test_dfs_goal_already_met();
     test_dfs_upgrade_existing();
     test_dfs_with_six_books();
+    test_dfs_with_seven_books();
     std::cout << "All DFS algorithm tests passed!" << std::endl;
     return 0;
 }
