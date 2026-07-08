@@ -1,8 +1,8 @@
 #include "AStarAlgorithm.h"
 #include "utils/AlgorithmUtils.hpp"
+#include "utils/ExpCalculator.hpp"
 
 #include <queue>
-#include <string>
 #include <unordered_map>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ bool AStarAlgorithm::meets_target(const ItemStack& item, const ItemStack& target
 // the heuristic is admissible (never overestimates).
 // ─────────────────────────────────────────────────────────────────────────────
 void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    ctx.report_progress(0.0, "starting A* search");
+    ctx.report_progress(0.0, ProgressStatus::Starting);
 
     _input = &input;
     _step_pool.clear();
@@ -85,7 +85,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
 
     // Quick check: goal already met?
     if (meets_target(items[0], input.target_item)) {
-        ctx.report_progress(1.0, "goal already met");
+        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         ctx.report_solution_found({});
         return;
     }
@@ -124,19 +124,14 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         // Periodic progress reporting
         if (explored % 1000 == 0) {
             double progress = std::min(1.0 - 1.0 / (1.0 + explored * 0.0001), 0.99);
-            ctx.report_progress(
-                progress,
-                "A* explored " + std::to_string(explored) +
-                " states, open set: " + std::to_string(open_set.size()));
+            ctx.report_progress(progress, ProgressStatus::Exploring);
         }
 
         // ── Goal check ───────────────────────────────────────────────────
         if (meets_target(current.state.items[0], input.target_item)) {
             // First goal popped = optimal (admissible heuristic guarantee)
             ctx.report_solution_found(current.state.flatten_steps());
-            ctx.report_progress(
-                1.0,
-                "A* complete: optimal cost " + std::to_string(current.state.g));
+            ctx.report_progress(1.0, ProgressStatus::Complete);
             return;
         }
 
@@ -194,8 +189,8 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
 
     // ── Termination without solution ─────────────────────────────────────
     if (ctx.is_cancelled()) {
-        ctx.report_progress(1.0, "A* search cancelled");
+        ctx.report_progress(1.0, ProgressStatus::Cancelled);
     } else {
-        ctx.report_progress(1.0, "A* search complete: no solution found");
+        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
     }
 }

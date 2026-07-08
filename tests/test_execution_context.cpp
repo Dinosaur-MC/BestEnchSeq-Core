@@ -22,7 +22,7 @@ void test_pause_resume() {
 
 void test_progress() {
     ExecutionContext ctx;
-    ctx.report_progress(0.5, "halfway");
+    ctx.report_progress(0.5, ProgressStatus::Exploring);
     expect(ctx.progress() == 0.5, "progress should be 0.5");
     std::cout << "PASS: test_progress" << std::endl;
 }

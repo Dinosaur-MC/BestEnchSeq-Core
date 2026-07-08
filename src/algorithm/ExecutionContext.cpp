@@ -1,4 +1,5 @@
 #include "ExecutionContext.h"
+#include "AlgorithmObserver.h"
 #include <iostream>
 
 void ExecutionContext::wait_if_paused() {
@@ -11,13 +12,13 @@ void ExecutionContext::wait_if_paused() {
     });
 }
 
-void ExecutionContext::report_progress(double percent, std::string_view status) {
+void ExecutionContext::report_progress(double percent, ProgressStatus status) {
     _progress.store(percent, std::memory_order_release);
     if (_has_observers.load(std::memory_order_acquire)) {
         ObserverEvent e;
         e.type = ObserverEvent::Progress;
         e.progress_val = percent;
-        e.status = std::string(status);
+        e.status = status;
         _events.push(std::move(e));
     }
 }

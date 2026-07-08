@@ -17,7 +17,7 @@ public:
         for (int i = 0; i < 5; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
-            ctx.report_progress((i + 1) * 20.0, "working");
+            ctx.report_progress((i + 1) * 20.0, ProgressStatus::Exploring);
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
         EnchStepList solution;
@@ -58,7 +58,7 @@ public:
 class TestProgressObserver : public AlgorithmObserver {
 public:
     double last_progress = 0.0;
-    void on_progress(double percent, std::string_view) override { last_progress = percent; }
+    void on_progress(double percent, ProgressStatus) override { last_progress = percent; }
 };
 
 // ─── Tests ───

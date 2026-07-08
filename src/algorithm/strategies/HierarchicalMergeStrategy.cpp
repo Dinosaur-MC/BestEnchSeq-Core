@@ -73,7 +73,7 @@ ItemStack HierarchicalMergeStrategy::merge_group(
 void HierarchicalMergeStrategy::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
 {
-    ctx.report_progress(0.0, "starting hierarchical merge");
+    ctx.report_progress(0.0, ProgressStatus::Starting);
 
     ItemStack equipment(
         input.target_item.equipment,
@@ -83,7 +83,7 @@ void HierarchicalMergeStrategy::execute(
 
     if (input.available_items.empty()) {
         ctx.report_solution_found({});
-        ctx.report_progress(1.0, "goal already met");
+        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
     }
 
@@ -148,7 +148,7 @@ void HierarchicalMergeStrategy::execute(
             high_group.push_back(std::move(book));
     }
 
-    ctx.report_progress(0.3, "phase 2: merging within groups");
+    ctx.report_progress(0.3, ProgressStatus::MergingWithinGroups);
 
     // Merge each group into a single book
     ItemStack low_merged  = merge_group(low_group, steps, ctx);
@@ -167,11 +167,11 @@ void HierarchicalMergeStrategy::execute(
         group_results.push_back({std::move(high_merged), 3});
 
     // Phase 3: Merge groups together (low multiplier first), then apply to equipment
-    ctx.report_progress(0.6, "phase 3: applying to equipment");
+    ctx.report_progress(0.6, ProgressStatus::ApplyingToEquipment);
 
     if (group_results.empty()) {
         ctx.report_solution_found(steps);
-        ctx.report_progress(1.0, "hierarchical merge complete");
+        ctx.report_progress(1.0, ProgressStatus::Complete);
         return;
     }
 
@@ -199,5 +199,6 @@ void HierarchicalMergeStrategy::execute(
     }
 
     ctx.report_solution_found(steps);
-    ctx.report_progress(1.0, "hierarchical merge complete");
+    ctx.report_progress(1.0, ProgressStatus::Complete);
 }
+

@@ -8,7 +8,7 @@
 void DynamicPenaltyBalancing::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
 {
-    ctx.report_progress(0.0, "starting penalty balancing");
+    ctx.report_progress(0.0, ProgressStatus::Starting);
 
     // Build initial item list: equipment + books
     ItemStack equipment(
@@ -27,7 +27,7 @@ void DynamicPenaltyBalancing::execute(
     // Quick check: goal already met?
     if (AlgorithmUtils::meets_target(items[0], input.target_item)) {
         ctx.report_solution_found({});
-        ctx.report_progress(1.0, "goal already met");
+        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
     }
 
@@ -107,9 +107,10 @@ void DynamicPenaltyBalancing::execute(
         items.erase(items.begin() + best_j);
 
         double progress = 1.0 - static_cast<double>(items.size()) / initial_count;
-        ctx.report_progress(progress, "penalty balancing: " + std::to_string(items.size()) + " items remaining");
+        ctx.report_progress(progress, ProgressStatus::MergingGroups);
     }
 
     ctx.report_solution_found(steps);
-    ctx.report_progress(1.0, "penalty balancing complete (cost: " + std::to_string(total_cost) + ")");
+    ctx.report_progress(1.0, ProgressStatus::Complete);
 }
+

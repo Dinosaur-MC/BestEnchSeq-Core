@@ -4,7 +4,7 @@
 #include <vector>
 
 void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    ctx.report_progress(0.0, "starting greedy search");
+    ctx.report_progress(0.0, ProgressStatus::Starting);
 
     // Greedy strategy: forge each available book sequentially onto the
     // equipment.  At each step, pick the forgeable sacrifice with the
@@ -60,11 +60,11 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
 
         ctx.report_progress(
             (step_index + 1.0) / input.available_items.size(),
-            "applying sacrifice"
+            ProgressStatus::ApplyingSacrifice
         );
         step_index++;
     }
 
     ctx.report_solution_found(steps);
-    ctx.report_progress(1.0, "done");
+    ctx.report_progress(1.0, ProgressStatus::Complete);
 }

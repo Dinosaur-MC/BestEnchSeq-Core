@@ -39,7 +39,7 @@ DFSAlgorithm::StateKey DFSAlgorithm::make_state_key(
 }
 
 void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    ctx.report_progress(0.0, "starting DFS search");
+    ctx.report_progress(0.0, ProgressStatus::Starting);
 
     _input       = &input;
     _best_cost   = INT32_MAX;
@@ -77,7 +77,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
         ctx.report_solution_found(_best_steps);
     }
 
-    ctx.report_progress(1.0, "DFS search complete");
+    ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 
 void DFSAlgorithm::dfs(std::vector<ItemStack>& items, int32_t cost_so_far, ExecutionContext& ctx) {

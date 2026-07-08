@@ -6,8 +6,6 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <string>
-#include <string_view>
 #include <vector>
 
 // ─── Observer event (for async queue) ───
@@ -15,7 +13,7 @@ struct ObserverEvent {
     enum Type { Progress, Solution, StateChange, Diagnostic, Completed };
     Type type;
     double progress_val{0};
-    std::string status;
+    ProgressStatus status{ProgressStatus::Starting};
     EnchStepList steps;
     AlgorithmState prev_state{AlgorithmState::Idle};
     AlgorithmState curr_state{AlgorithmState::Idle};
@@ -42,7 +40,7 @@ public:
     void wait_if_paused();
 
     // Event pushing (lock-free)
-    void report_progress(double percent, std::string_view status);
+    void report_progress(double percent, ProgressStatus status);
     void report_solution_found(const EnchStepList& solution);
     void report_state_change(AlgorithmState prev, AlgorithmState curr);
 
