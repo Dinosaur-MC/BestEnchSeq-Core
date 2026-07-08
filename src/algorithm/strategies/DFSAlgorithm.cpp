@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <vector>
 
 DFSAlgorithm::StateKey DFSAlgorithm::make_state_key(
     const std::vector<ItemStack>& items) const
@@ -21,7 +22,14 @@ DFSAlgorithm::StateKey DFSAlgorithm::make_state_key(
 
     for (const auto& item : items) {
         key.penalties.push_back(item.prior_penalty);
-        for (const Ench& e : item.enchantments) {
+
+        // Canonical order: sort enchantments by id.
+        // EnchSet is std::unordered_set — iteration order is NOT deterministic,
+        // so we must sort to produce a consistent state key for memoization.
+        std::vector<Ench> sorted(item.enchantments.begin(), item.enchantments.end());
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const Ench& a, const Ench& b) { return a.id < b.id; });
+        for (const Ench& e : sorted) {
             key.ench_ids.push_back(e.id);
             key.ench_levels.push_back(e.level);
         }
