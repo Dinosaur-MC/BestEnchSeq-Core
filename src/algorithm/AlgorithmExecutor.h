@@ -25,6 +25,10 @@ public:
 
     // Lifecycle
     void start(const AlgorithmInput& input);
+    // Start with a previously-serialized state to resume a paused search.
+    // The algorithm must be resumable (DFS) and the state must have been
+    // produced by serialize_state() from the same algorithm type.
+    void start(const AlgorithmInput& input, const std::vector<uint8_t>& previous_state);
     void pause();
     void resume();
     void cancel();
@@ -42,9 +46,11 @@ public:
     // Result
     AlgorithmOutput output() const;
 
-    // Serialization (phase 2 — stubs)
-    std::vector<uint8_t> serialize_state() const { return {}; }
-    bool restore_state(const std::vector<uint8_t>&) { return false; }
+    // Serialization
+    // Captures algorithm search state (best solution, visited set) for
+    // cross-session checkpointing. Only works for resumable algorithms (DFS).
+    std::vector<uint8_t> serialize_state() const;
+    bool restore_state(const std::vector<uint8_t>& data);
 
 private:
     void _join_worker() noexcept;

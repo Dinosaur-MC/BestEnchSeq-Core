@@ -1,6 +1,7 @@
 #include "DFSAlgorithm.h"
 #include "utils/AlgorithmUtils.hpp"
 #include "utils/ExpCalculator.hpp"
+#include "utils/Serializer.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -41,36 +42,57 @@ DFSAlgorithm::StateKey DFSAlgorithm::make_state_key(
 void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
-    _input       = &input;
-    _best_cost   = INT32_MAX;
-    _best_steps.clear();
-    _current_steps.clear();
-    _visited.clear();
+    _input = &input;
 
-    // Build initial items: items[0] starts as the target equipment with
-    // original_ench (the enchantments already present before forging).
-    // target_item.enchantments defines the GOAL state (what we want to achieve).
-    ItemStack start_item(
-        input.target_item.equipment,
-        input.original_ench,
-        0  // prior_penalty: starting item has not been forged yet
-    );
+    if (!_state_restored) {
+        // Fresh start: initialize all state, compute greedy upper bound.
+        _best_cost   = INT32_MAX;
+        _best_steps.clear();
+        _current_steps.clear();
+        _visited.clear();
 
-    std::vector<ItemStack> items;
-    items.reserve(1 + input.available_items.size());
-    items.push_back(start_item);
-    items.insert(items.end(), input.available_items.begin(), input.available_items.end());
+        // Build initial items
+        ItemStack start_item(
+            input.target_item.equipment,
+            input.original_ench,
+            0
+        );
+        std::vector<ItemStack> items;
+        items.reserve(1 + input.available_items.size());
+        items.push_back(start_item);
+        items.insert(items.end(), input.available_items.begin(), input.available_items.end());
 
-    // Greedy upper bound — compute a solution estimate to establish a tight
-    // _best_cost before DFS starts, so branch-and-bound can prune from step one.
-    if (items.size() > 1) {
-        auto bound = AlgorithmUtils::book_first_merge(
-            items[0], input.available_items, _forge_engine, ctx);
-        _best_cost = bound.total_cost;
+        // Greedy upper bound for pruning
+        if (items.size() > 1) {
+            auto bound = AlgorithmUtils::book_first_merge(
+                items[0], input.available_items, _forge_engine, ctx);
+            _best_cost = bound.total_cost;
+        }
+
+        _state_restored = false;
+
+        // Launch recursive DFS
+        dfs(items, 0, ctx);
+    } else {
+        // Restored from checkpoint: _best_cost, _best_steps, _visited are
+        // already populated by deserialize_state(). Only clear current path.
+        _current_steps.clear();
+        _state_restored = false;
+
+        // Rebuild initial items from the input
+        ItemStack start_item(
+            input.target_item.equipment,
+            input.original_ench,
+            0
+        );
+        std::vector<ItemStack> items;
+        items.reserve(1 + input.available_items.size());
+        items.push_back(start_item);
+        items.insert(items.end(), input.available_items.begin(), input.available_items.end());
+
+        // Launch DFS with existing _best_cost as the bound
+        dfs(items, 0, ctx);
     }
-
-    // Launch recursive DFS
-    dfs(items, 0, ctx);
 
     // Report the best solution found
     if (!_best_steps.empty()) {
@@ -164,4 +186,75 @@ void DFSAlgorithm::dfs(std::vector<ItemStack>& items, int32_t cost_so_far, Execu
         if (ctx.is_cancelled())
             return;
     }
+}
+
+std::vector<uint8_t> DFSAlgorithm::serialize_state() const {
+    Serializer s;
+
+    // Magic header
+    s.u32(Serializer::MAGIC);
+    s.u32(Serializer::VERSION);
+
+    // Serialize algorithm name for identification
+    s.string(name());
+
+    // Best cost and best steps
+    s.i32(_best_cost);
+    s.u32(static_cast<uint32_t>(_best_steps.size()));
+    for (const auto& step : _best_steps)
+        s.write(step);
+
+    // Visited state keys
+    s.u32(static_cast<uint32_t>(_visited.size()));
+    for (const auto& key : _visited) {
+        s.write(key.penalties);
+        s.write(key.ench_ids);
+        s.write(key.ench_levels);
+    }
+
+    return s.data();
+}
+
+void DFSAlgorithm::deserialize_state(const std::vector<uint8_t>& data) {
+    Deserializer d(data);
+
+    // Validate magic
+    uint32_t magic = d.u32();
+    if (magic != Serializer::MAGIC || !d.ok())
+        return;  // Invalid data -- silently ignore
+
+    uint32_t version = d.u32();
+    (void)version;  // Reserved for future format migration
+
+    std::string algo_name = d.string();
+    if (algo_name != name() || !d.ok())
+        return;  // Wrong algorithm type -- silently ignore
+
+    // Read best cost
+    _best_cost = d.i32();
+
+    // Read best steps
+    uint32_t step_count = d.u32();
+    _best_steps.clear();
+    _best_steps.reserve(step_count);
+    for (uint32_t i = 0; i < step_count; ++i) {
+        if (!d.ok()) break;
+        _best_steps.push_back(d.read_step());
+    }
+
+    // Read visited state keys
+    uint32_t visit_count = d.u32();
+    _visited.clear();
+    _visited.reserve(visit_count);
+    for (uint32_t i = 0; i < visit_count; ++i) {
+        if (!d.ok()) break;
+        StateKey key;
+        key.penalties = d.read_i32_vec();
+        key.ench_ids = d.read_i32_vec();
+        key.ench_levels = d.read_i32_vec();
+        _visited.insert(std::move(key));
+    }
+
+    if (d.ok())
+        _state_restored = true;
 }

@@ -402,6 +402,65 @@ void test_dfs_with_seven_books() {
     std::cout << "PASS: test_dfs_with_seven_books" << std::endl;
 }
 
+void test_dfs_serialization_roundtrip() {
+    setup();
+
+    // Goal: sword with 3 enchantments
+    ItemStack goal(&sword, EnchSet{Ench(0, 3), Ench(1, 2), Ench(2, 2)}, 0, 1561);
+
+    ItemCollection available;
+    available.emplace_back(EnchSet{Ench(0, 3)});   // sharpness 3
+    available.emplace_back(EnchSet{Ench(1, 2)});   // knockback 2
+    available.emplace_back(EnchSet{Ench(2, 2)});   // fire_aspect 2
+
+    AlgorithmInput input{
+        .platform = platform::MCE::Java,
+        .original_ench = EnchSet{},
+        .target_item = goal,
+        .available_items = available,
+    };
+
+    // First run: complete DFS
+    auto algo1 = std::make_unique<DFSAlgorithm>();
+    AlgorithmExecutor exec1(std::move(algo1));
+    exec1.start(input);
+    exec1.wait();
+
+    expect(exec1.state() == AlgorithmState::Completed, "first run should complete");
+    auto output1 = exec1.output();
+    expect(output1.is_valid, "first run output should be valid");
+
+    // Serialize state from the completed executor
+    auto saved_state = exec1.serialize_state();
+    expect(!saved_state.empty(), "serialized state should not be empty");
+
+    // Second run: restore state into a fresh DFS
+    auto algo2 = std::make_unique<DFSAlgorithm>();
+    AlgorithmExecutor exec2(std::move(algo2));
+    bool restored = exec2.restore_state(saved_state);
+    expect(restored, "restore_state should return true");
+
+    // Start with the same input but pre-populated state
+    exec2.start(input, saved_state);
+    exec2.wait();
+
+    expect(exec2.state() == AlgorithmState::Completed, "restored run should complete");
+    auto output2 = exec2.output();
+    expect(output2.is_valid, "restored run output should be valid");
+
+    // Verify both runs produce the same total cost
+    int32_t total1 = 0, total2 = 0;
+    for (const auto& sl : output1.steps)
+        for (const auto& s : sl) total1 += s.exp_level_cost;
+    for (const auto& sl : output2.steps)
+        for (const auto& s : sl) total2 += s.exp_level_cost;
+
+    expect(total1 == total2,
+           "costs should match: " + std::to_string(total1) + " vs " + std::to_string(total2));
+
+    std::cout << "PASS: test_dfs_serialization_roundtrip" << std::endl;
+}
+
 } // namespace
 
 int main() {
@@ -411,6 +470,8 @@ int main() {
     test_dfs_upgrade_existing();
     test_dfs_with_six_books();
     test_dfs_with_seven_books();
+    test_dfs_serialization_roundtrip();
     std::cout << "All DFS algorithm tests passed!" << std::endl;
     return 0;
 }
+

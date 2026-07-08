@@ -280,6 +280,7 @@ add_executable(test_dfs_algorithm
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
@@ -377,6 +378,25 @@ add_executable(test_penalty_balancing
 target_include_directories(test_penalty_balancing PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_penalty_balancing COMMAND test_penalty_balancing)
 set_tests_properties(test_penalty_balancing PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_serializer.cpp)
+add_executable(test_serializer
+    test_serializer.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
+)
+target_include_directories(test_serializer PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_serializer COMMAND test_serializer)
+set_tests_properties(test_serializer PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()

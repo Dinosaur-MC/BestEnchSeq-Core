@@ -17,6 +17,11 @@ public:
 
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
+    // ── Serialization (cross-session checkpoint) ──
+    bool is_resumable() const noexcept override { return true; }
+    std::vector<uint8_t> serialize_state() const override;
+    void deserialize_state(const std::vector<uint8_t>& data) override;
+
 private:
     // ─── State key for memoization ───
     // Lightweight representation of item multiset state for hashing and equality.
@@ -59,4 +64,8 @@ private:
 
     // Hash-based state memoization (replaces old std::unordered_set<std::string>)
     std::unordered_set<StateKey, StateKeyHash> _visited;
+
+    // True when state was restored via deserialize_state() — execute() skips
+    // re-initialization and uses the pre-populated _best_cost, _best_steps, _visited.
+    bool _state_restored{false};
 };

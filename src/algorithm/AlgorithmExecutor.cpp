@@ -158,3 +158,31 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.is_valid = true;
     return out;
 }
+
+std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
+    auto s = _state.load(std::memory_order_acquire);
+    // Only meaningful when the algorithm has been started and has state
+    if (s == AlgorithmState::Idle)
+        return {};
+    if (!_algorithm->is_resumable())
+        return {};
+    return _algorithm->serialize_state();
+}
+
+bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
+    if (_state.load(std::memory_order_acquire) != AlgorithmState::Idle)
+        return false;
+    if (!_algorithm->is_resumable())
+        return false;
+    if (data.empty())
+        return false;
+    _algorithm->deserialize_state(data);
+    return true;
+}
+
+void AlgorithmExecutor::start(const AlgorithmInput& input, const std::vector<uint8_t>& previous_state) {
+    if (!previous_state.empty()) {
+        _algorithm->deserialize_state(previous_state);
+    }
+    start(input);
+}
