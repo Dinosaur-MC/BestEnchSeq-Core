@@ -9,6 +9,13 @@
 #include <mutex>
 #include <vector>
 
+// ─── Hard limit on stored solutions ───
+// Any algorithm holding or outputting solutions MUST cap at this value.
+// When exceeded, only the cheapest solutions are retained.
+#ifndef BESQ_MAX_SOLUTIONS
+#define BESQ_MAX_SOLUTIONS 128
+#endif
+
 // ─── Observer event (for async queue) ───
 struct ObserverEvent {
     enum Type { Progress, Solution, StateChange, Diagnostic, Completed };
@@ -98,7 +105,9 @@ private:
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
 
     mutable std::mutex _accum_mtx;
-    std::vector<EnchStepList> _accumulated_steps;
+    // Stored as (total_cost, steps) pairs, sorted by cost ascending.
+    // Only the top BESQ_MAX_SOLUTIONS are retained.
+    std::vector<std::pair<int32_t, EnchStepList>> _accumulated;
     std::atomic<double> _progress{0.0};
 
     // ── Progress downsampling ──

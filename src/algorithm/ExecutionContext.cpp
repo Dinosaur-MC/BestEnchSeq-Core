@@ -1,5 +1,6 @@
 #include "ExecutionContext.h"
 #include "AlgorithmObserver.h"
+#include <algorithm>
 #include <iostream>
 
 void ExecutionContext::wait_if_paused() {
@@ -120,11 +121,27 @@ void ExecutionContext::detach_observer(std::shared_ptr<AlgorithmObserver> observ
 }
 
 void ExecutionContext::append_output_steps(const EnchStepList& steps) {
+    // Compute total cost of this solution
+    int32_t total = 0;
+    for (const auto& s : steps)
+        total += s.exp_level_cost;
+
     std::lock_guard lock(_accum_mtx);
-    _accumulated_steps.push_back(steps);
+    _accumulated.emplace_back(total, steps);
+
+    // Keep only the top BESQ_MAX_SOLUTIONS by total cost.
+    // Sort by cost ascending; when tied, earlier insertion wins (stable).
+    std::sort(_accumulated.begin(), _accumulated.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    if (_accumulated.size() > BESQ_MAX_SOLUTIONS)
+        _accumulated.resize(BESQ_MAX_SOLUTIONS);
 }
 
 std::vector<EnchStepList> ExecutionContext::get_accumulated_steps() const {
     std::lock_guard lock(_accum_mtx);
-    return _accumulated_steps;
+    std::vector<EnchStepList> result;
+    result.reserve(_accumulated.size());
+    for (const auto& p : _accumulated)
+        result.push_back(p.second);
+    return result;
 }

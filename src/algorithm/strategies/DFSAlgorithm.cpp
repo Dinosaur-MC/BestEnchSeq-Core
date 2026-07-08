@@ -74,6 +74,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
         _visited.clear();
         _stack.clear();
         _frame_pairs.clear();
+        _solutions_found = 0;
 
         ItemStack start_item(
             input.target_item.equipment,
@@ -100,6 +101,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
         // ── Restored from serialized state ──
         // _best_cost, _best_steps, _visited, _stack are pre-populated
         _current_steps.clear();
+        _solutions_found = 0;
         _state_restored = false;
     }
 
@@ -143,9 +145,10 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         // ── 3. Goal check ──
         if (AlgorithmUtils::meets_target(frame.items[0], _input->target_item)) {
+            ++_solutions_found;
             if (_best_steps.empty() || frame.cost_so_far < _best_cost) {
                 _best_cost  = frame.cost_so_far;
-                _best_steps = _current_steps;  // steps leading to this state
+                _best_steps = _current_steps;
             }
             _stack.pop_back();
             _frame_pairs.pop_back();
@@ -170,12 +173,10 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
                 _frame_pairs.pop_back();
                 continue;
             }
-            if (cfg.max_solutions > 0 &&
-                static_cast<int32_t>(_best_steps.size()) >= cfg.max_solutions) {
-                // Found enough solutions — stop entirely
-                _best_steps.resize(cfg.max_solutions);
-                break;
-            }
+            if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions)
+                break; // Enough solutions found
+            if (_solutions_found >= BESQ_MAX_SOLUTIONS)
+                break; // Hard cap at BESQ_MAX_SOLUTIONS
         }
 
         // ── 6. Lazy pair building ──

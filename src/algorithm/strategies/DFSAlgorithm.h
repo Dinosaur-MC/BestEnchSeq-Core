@@ -93,5 +93,6 @@ private:
     // Lazy-computed forge pairs for each frame (parallel to _stack indices)
     std::deque<std::vector<ForgePair>> _frame_pairs;
 
+    int32_t _solutions_found{0};
     bool _state_restored{false};
 };
