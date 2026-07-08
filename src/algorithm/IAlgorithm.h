@@ -7,14 +7,6 @@
 #include <string>
 #include <vector>
 
-// ─── Algorithm metadata (bridge between AlgorithmOutput and EnchSolution::MetaData) ───
-struct AlgorithmMetadata {
-    std::string name;
-    std::string version;
-    std::chrono::system_clock::time_point created_at;
-    std::chrono::milliseconds computation_time{0};
-};
-
 // ─── Algorithm output (produced by Executor after execution) ───
 struct AlgorithmOutput {
     std::string algorithm_name;
