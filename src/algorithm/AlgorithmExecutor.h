@@ -83,43 +83,54 @@ public:
         });
     }
 
-    // --- Progress reporting ---
+    // --- Progress reporting (with _has_observers fast path) ---
     void report_progress(double percent, std::string_view status) {
         _progress.store(percent, std::memory_order_release);
-        auto guard = shared_lock_observers();
-        for (auto& obs : _observers)
-            obs->on_progress(percent, status);
+        if (_has_observers.load(std::memory_order_acquire)) {
+            auto guard = shared_lock_observers();
+            for (auto& obs : _observers)
+                obs->on_progress(percent, status);
+        }
     }
 
     void report_solution_found(const EnchStepList& solution) {
-        auto guard = shared_lock_observers();
-        for (auto& obs : _observers)
-            obs->on_solution_found(solution);
+        if (_has_observers.load(std::memory_order_acquire)) {
+            auto guard = shared_lock_observers();
+            for (auto& obs : _observers)
+                obs->on_solution_found(solution);
+        }
         append_output_steps(solution);
     }
 
     void report_diagnostic(const DiagnosticInfo& info) {
-        auto guard = shared_lock_observers();
-        for (auto& obs : _observers)
-            obs->on_diagnostic(info);
+        if (_has_observers.load(std::memory_order_acquire)) {
+            auto guard = shared_lock_observers();
+            for (auto& obs : _observers)
+                obs->on_diagnostic(info);
+        }
     }
 
     void report_state_change(AlgorithmState prev, AlgorithmState curr) {
-        auto guard = shared_lock_observers();
-        for (auto& obs : _observers)
-            obs->on_state_changed(prev, curr);
+        if (_has_observers.load(std::memory_order_acquire)) {
+            auto guard = shared_lock_observers();
+            for (auto& obs : _observers)
+                obs->on_state_changed(prev, curr);
+        }
     }
 
     void report_completed(const AlgorithmOutput& output) {
-        auto guard = shared_lock_observers();
-        for (auto& obs : _observers)
-            obs->on_completed(output);
+        if (_has_observers.load(std::memory_order_acquire)) {
+            auto guard = shared_lock_observers();
+            for (auto& obs : _observers)
+                obs->on_completed(output);
+        }
     }
 
     // --- Observer management ---
     void attach_observer(std::shared_ptr<AlgorithmObserver> observer) {
         std::unique_lock lock(_observer_mtx);
         _observers.push_back(std::move(observer));
+        _has_observers.store(true, std::memory_order_release);
     }
 
     void detach_observer(std::shared_ptr<AlgorithmObserver> observer) {
@@ -127,11 +138,11 @@ public:
         auto it = std::find(_observers.begin(), _observers.end(), observer);
         if (it != _observers.end())
             _observers.erase(it);
+        _has_observers.store(!_observers.empty(), std::memory_order_release);
     }
 
     bool has_observers() const noexcept {
-        std::shared_lock lock(_observer_mtx);
-        return !_observers.empty();
+        return _has_observers.load(std::memory_order_acquire);
     }
 
     // --- Result accumulation ---
@@ -158,6 +169,8 @@ private:
     std::atomic<bool> _paused{false};
     mutable std::mutex _pause_mtx;
     std::condition_variable _pause_cv;
+
+    std::atomic<bool> _has_observers{false};
 
     mutable std::shared_mutex _observer_mtx;
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
