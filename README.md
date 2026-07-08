@@ -10,7 +10,7 @@ A C++20 tool to calculate the best enchanting order for your enchantments and en
 - [ ] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
 - [x] Support third-party/custom enchantments by editing custom enchantment sheet
 - [x] Support third-party/custom equipments by editing custom equipment sheet
-- [x] Pluggable algorithm strategies (Greedy, with more to come)
+- [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Easily export to share calculation results with others
 - [ ] Optionally hosting a RESTful API service for external applications
@@ -27,6 +27,8 @@ A C++20 tool to calculate the best enchanting order for your enchantments and en
 cmake -S . -B build
 cmake --build build
 ./build/bin/BestEnchSeq-Core.exe --target diamond_sword --wanted "sharpness=5,knockback=2"
+./build/bin/BestEnchSeq-Core.exe --algorithm astar --target diamond_sword --wanted "sharpness=5,looting=3,unbreaking=3"
+./build/bin/BestEnchSeq-Core.exe --algorithm penalty_balance --target diamond_chestplate --wanted "protection=4,thorns=3,unbreaking=3,mending=1"
 ```
 
 CMake options:
@@ -156,11 +158,16 @@ src/
 │   ├── AlgorithmExecutor.h/cpp   ← Async execution engine + ExecutionContext + Observer
 │   ├── AlgorithmRegistry.h/cpp   ← Algorithm strategy factory
 │   ├── strategies/
-│   │   └── GreedyAlgorithm.h/cpp ← First concrete strategy
+│   │   ├── GreedyAlgorithm.h/cpp           ← Fast approximate (cost-ordered)
+	│   │   ├── DFSAlgorithm.h/cpp              ← Exact search (branch-and-bound)
+	│   │   ├── AStarAlgorithm.h/cpp            ← Exact optimal (admissible heuristic)
+	│   │   ├── DynamicPenaltyBalancing.h/cpp   ← High-quality approx (penalty-closest)
+	│   │   └── HierarchicalMergeStrategy.h/cpp ← Large-scale approx (phased merge)
 │   └── BaseAlgorithm.h/cpp       ← [deprecated] replaced by IAlgorithm + Executor
 ├── utils/
-│   ├── ExpCalculator.h/cpp       ← EXP level ↔ experience point conversion
-│   └── SolutionFactory.h/cpp     ← Assemble EnchSolution from AlgorithmOutput
+│   ├── AlgorithmUtils.hpp        ← Shared algorithm utilities (book-first merge, heuristic)
+│   ├── ExpCalculator.hpp         ← EXP level ↔ experience point conversion (header-only)
+│   └── SolutionFactory.hpp       ← Assemble EnchSolution from AlgorithmOutput (header-only)
 ├── parser/
 │   ├── CLIParser.h/cpp          ← Command-line argument parsing
 │   ├── InputParser.h/cpp        ← Input assembly (CLI + inventory → algorithm Input)
@@ -194,3 +201,5 @@ src/
 ## License
 
 > MIT License
+
+
