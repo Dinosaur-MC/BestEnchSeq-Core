@@ -46,3 +46,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Tests
 enable_testing()
 add_subdirectory(tests)
+
+# Benchmarks (optional, not part of test suite)
+add_subdirectory(benchmarks)

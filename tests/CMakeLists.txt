@@ -294,3 +294,26 @@ set_tests_properties(test_dfs_algorithm PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_astar_algorithm.cpp)
+add_executable(test_astar_algorithm
+    test_astar_algorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
+)
+target_include_directories(test_astar_algorithm PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_astar_algorithm COMMAND test_astar_algorithm)
+set_tests_properties(test_astar_algorithm PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()

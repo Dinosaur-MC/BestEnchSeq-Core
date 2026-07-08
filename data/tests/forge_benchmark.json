@@ -1,0 +1,51 @@
+{
+    "schema_version": "1.0",
+    "description": "Benchmark dataset for forging sequence algorithms",
+    "cases": [
+        {
+            "name": "sword_3enchants",
+            "description": "Diamond sword with 3 basic enchants",
+            "item_type": "diamond_sword",
+            "base_enchs": [],
+            "wanted": ["sharpness=5", "knockback=2", "unbreaking=3"],
+            "expected_cost_min": 15,
+            "expected_cost_max": 35
+        },
+        {
+            "name": "sword_7enchants",
+            "description": "Fully enchanted diamond sword (7 enchants)",
+            "item_type": "diamond_sword",
+            "base_enchs": [],
+            "wanted": ["sharpness=5", "sweeping_edge=3", "fire_aspect=2", "knockback=2", "looting=3", "unbreaking=3", "mending=1"],
+            "expected_cost_min": 35,
+            "expected_cost_max": 55
+        },
+        {
+            "name": "boots_full",
+            "description": "Fully enchanted diamond boots",
+            "item_type": "diamond_boots",
+            "base_enchs": [],
+            "wanted": ["soul_speed=3", "thorns=3", "feather_falling=4", "depth_strider=3", "protection=4", "unbreaking=3", "mending=1"],
+            "expected_cost_min": 50,
+            "expected_cost_max": 75
+        },
+        {
+            "name": "sword_upgrade",
+            "description": "Sword with sharpness 3, upgrade to sharpness 5 + add knockback",
+            "item_type": "diamond_sword",
+            "base_enchs": ["sharpness=3"],
+            "wanted": ["sharpness=5", "knockback=2", "unbreaking=3"],
+            "expected_cost_min": 10,
+            "expected_cost_max": 40
+        },
+        {
+            "name": "sword_5enchants",
+            "description": "Sword with 5 standard combat enchants",
+            "item_type": "diamond_sword",
+            "base_enchs": [],
+            "wanted": ["sharpness=5", "knockback=2", "fire_aspect=2", "looting=3", "unbreaking=3"],
+            "expected_cost_min": 25,
+            "expected_cost_max": 45
+        }
+    ]
+}
