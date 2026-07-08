@@ -31,13 +31,13 @@ TestCase CASES[] = {
      {"sharpness=5", "knockback=2", "unbreaking=3"}, 14, 30},
     {"sword_5enchants", "diamond_sword",
      {"sharpness=5", "knockback=2", "fire_aspect=2", "looting=3", "unbreaking=3"}, 31, 50},
-    // 7+ books: DFS/A* search space is large — only run greedy
+    // 7+ books: A* can solve, DFS may timeout
     {"sword_7enchants", "diamond_sword",
      {"sharpness=5", "sweeping_edge=3", "fire_aspect=2", "knockback=2",
-      "looting=3", "unbreaking=3", "mending=1"}, 0, 200},
+      "looting=3", "unbreaking=3", "mending=1"}, 40, 55},
     {"boots_full", "diamond_boots",
      {"soul_speed=3", "thorns=3", "feather_falling=4", "depth_strider=3",
-      "protection=4", "unbreaking=3", "mending=1"}, 0, 200},
+      "protection=4", "unbreaking=3", "mending=1"}, 55, 70},
 };
 
 // ─── Setup ───
@@ -83,7 +83,7 @@ void run_case(const TestCase& tc) {
     for (const auto& algo_name : {"greedy", "dfs", "astar"}) {
         if (!AlgorithmRegistry::instance().has_algorithm(algo_name)) continue;
         // Skip DFS/A* for large cases (search space explosion)
-        if (is_large && std::string(algo_name) != "greedy") {
+        if (is_large && std::string(algo_name) == "dfs") {
             if (std::string(algo_name) == "dfs")
                 std::cout << "  dfs: skipped (large search space)" << std::endl;
             continue;
