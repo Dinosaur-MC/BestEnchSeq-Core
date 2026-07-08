@@ -1,5 +1,5 @@
 #include "test_utils.h"
-#include "utils/SPMCQueue.h"
+#include "utils/SPMCQueue.hpp"
 #include <vector>
 
 void test_push_read() {

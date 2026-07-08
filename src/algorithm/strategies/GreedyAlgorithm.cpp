@@ -1,5 +1,5 @@
 #include "GreedyAlgorithm.h"
-#include "utils/ExpCalculator.h"
+#include "utils/ExpCalculator.hpp"
 
 void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     // Greedy strategy — simplified placeholder that demonstrates the pattern:

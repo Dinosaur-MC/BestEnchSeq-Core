@@ -1,6 +1,6 @@
 #include "EnchSolution.h"
 
-#include "../utils/ExpCalculator.h"
+#include "../utils/ExpCalculator.hpp"
 
 bool EnchSolution::is_feasible() const { return is_success && steps.size() > 0; }
 int32_t EnchSolution::get_peek_level_cost() const {

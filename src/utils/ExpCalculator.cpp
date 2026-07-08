@@ -1,4 +1,4 @@
-#include "ExpCalculator.h"
+#include "ExpCalculator.hpp"
 
 int32_t ExpCalculator::level_to_exp(int32_t level) noexcept {
     // Same formula as old Utils::calc_exp

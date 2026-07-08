@@ -1,4 +1,4 @@
-#include "SolutionFactory.h"
+#include "SolutionFactory.hpp"
 #include "../algorithm/IAlgorithm.h"  // AlgorithmOutput full definition
 
 // Note: Full create() implementation requires AlgorithmOutput (defined in Task 4).

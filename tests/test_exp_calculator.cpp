@@ -1,5 +1,5 @@
 #include "test_utils.h"
-#include "utils/ExpCalculator.h"
+#include "utils/ExpCalculator.hpp"
 
 void test_level_to_exp() {
     // Level 0 → 0

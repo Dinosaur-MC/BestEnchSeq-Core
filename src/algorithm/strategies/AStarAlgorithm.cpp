@@ -1,5 +1,5 @@
 #include "AStarAlgorithm.h"
-#include "utils/ExpCalculator.h"
+#include "utils/ExpCalculator.hpp"
 
 #include <climits>
 #include <string>

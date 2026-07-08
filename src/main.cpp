@@ -3,7 +3,7 @@
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
-#include "utils/SolutionFactory.h"
+#include "utils/SolutionFactory.hpp"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
