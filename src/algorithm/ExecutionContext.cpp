@@ -54,13 +54,13 @@ void ExecutionContext::report_progress(double percent, ProgressStatus status) {
 }
 
 void ExecutionContext::report_solution_found(const EnchStepList& solution) {
-    if (_has_observers.load(std::memory_order_acquire)) {
-        ObserverEvent e;
-        e.type = ObserverEvent::Solution;
-        e.steps = solution;
-        _events.push(std::move(e));
-    }
-    append_output_steps(solution);
+    // Always push to event queue (lock-free, ~20ns).
+    // dispatch_events drains the queue and accumulates solutions
+    // in append_output_steps (sort + truncate) on the consumer thread.
+    ObserverEvent e;
+    e.type = ObserverEvent::Solution;
+    e.steps = solution;
+    _events.push(std::move(e));
 }
 
 void ExecutionContext::report_state_change(AlgorithmState prev, AlgorithmState curr) {
@@ -74,18 +74,20 @@ void ExecutionContext::report_state_change(AlgorithmState prev, AlgorithmState c
 }
 
 void ExecutionContext::dispatch_events() {
-    if (!_has_observers.load(std::memory_order_acquire))
-        return;
-
+    // Snapshot observers (may be empty — solution events still need draining)
     std::vector<std::shared_ptr<AlgorithmObserver>> obs_snapshot;
     {
         std::lock_guard lock(_obs_mtx);
         obs_snapshot = _observers;
     }
-    if (obs_snapshot.empty()) return;
 
     ObserverEvent e;
     while (_events.pop(e)) {
+        // Accumulate solution steps on consumer thread (sort+truncate)
+        if (e.type == ObserverEvent::Solution)
+            append_output_steps(e.steps);
+
+        if (obs_snapshot.empty()) continue;
         for (auto& obs : obs_snapshot) {
             try {
                 switch (e.type) {
