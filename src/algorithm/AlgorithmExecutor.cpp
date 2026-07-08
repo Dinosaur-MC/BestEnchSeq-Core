@@ -91,6 +91,7 @@ void AlgorithmExecutor::cancel() {
 
 AlgorithmState AlgorithmExecutor::wait() {
     _join_worker();
+    _ctx->dispatch_events();
     return _state.load(std::memory_order_acquire);
 }
 

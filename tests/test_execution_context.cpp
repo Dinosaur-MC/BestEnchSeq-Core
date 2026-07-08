@@ -40,9 +40,11 @@ void test_observer_solution() {
     EnchStepList steps;
     steps.push_back({{}, {}, 4, 9});
     ctx.report_solution_found(steps);
+    ctx.dispatch_events();
     expect(obs->found_count == 1, "observer should be called once");
     ctx.detach_observer(obs);
     ctx.report_solution_found(steps);
+    ctx.dispatch_events();
     expect(obs->found_count == 1, "observer should not be called after detach");
     std::cout << "PASS: test_observer_solution" << std::endl;
 }
