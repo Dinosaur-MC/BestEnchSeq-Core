@@ -2,7 +2,7 @@
 #include "../IAlgorithm.h"
 #include "../DefaultForgeEngine.h"
 #include <cstdint>
-#include <queue>
+#include <deque>
 #include <vector>
 
 class AStarAlgorithm : public IAlgorithm {
@@ -17,14 +17,35 @@ public:
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
-    // ─── State: a multiset of items (by content identity) ───
-    struct SearchState {
-        std::vector<ItemStack> items;  // current multiset
-        int32_t g;                     // cost so far (sum of forge costs)
-        EnchStepList steps;            // forge steps taken
+    // ─── Step linked-list ───
+    // Instead of copying EnchStepList on every state expansion (O(depth) copy),
+    // we link steps backward. The full list is flattened only when a solution
+    // is found. This eliminates the O(d) step-copy cost per expansion.
+    struct StepNode {
+        EnchSolution::EnchStep step;
+        const StepNode* prev = nullptr;
     };
 
-    // ─── Hash for SearchState (items only; ignores g and steps) ───
+    // ─── State ───
+    struct SearchState {
+        std::vector<ItemStack> items;
+        int32_t g{0};
+        const StepNode* steps_tail = nullptr;
+
+        // Flatten linked list to vector (called once per solution found)
+        EnchStepList flatten_steps() const {
+            EnchStepList result;
+            std::vector<const StepNode*> nodes;
+            for (auto* s = steps_tail; s; s = s->prev)
+                nodes.push_back(s);
+            result.reserve(nodes.size());
+            for (auto it = nodes.rbegin(); it != nodes.rend(); ++it)
+                result.push_back((*it)->step);
+            return result;
+        }
+    };
+
+    // ─── Hash for SearchState (items only; ignores g, steps) ───
     struct StateHash {
         size_t operator()(const SearchState& s) const noexcept {
             size_t h = 0;
@@ -41,7 +62,7 @@ private:
         }
     };
 
-    // ─── Equality for SearchState (items only, with level-aware comparison) ───
+    // ─── Equality for SearchState (items only) ───
     struct StateEqual {
         bool operator()(const SearchState& a, const SearchState& b) const noexcept {
             if (a.items.size() != b.items.size())
@@ -64,17 +85,24 @@ private:
     // ─── Priority queue entry (min-heap by f = g + h) ───
     struct PriorityState {
         SearchState state;
-        int32_t f;  // g + h
+        int32_t f;
         bool operator>(const PriorityState& o) const { return f > o.f; }
     };
 
-    // Admissible heuristic: sum of missing enchantment costs (book multiplier),
-    // ignoring penalty, incompatibility, and cost cap.
-    int32_t heuristic(const std::vector<ItemStack>& items, const EnchSet& target) const;
+    // Allocate a StepNode from the pool. Nodes are never freed until the
+    // search completes — safe because the pool uses std::deque (no reallocation).
+    const StepNode* alloc_step(const StepNode* prev, EnchSolution::EnchStep step) {
+        _step_pool.push_back({std::move(step), prev});
+        return &_step_pool.back();
+    }
 
-    // True if item meets or exceeds all target requirements (equipment + enchants).
+    // Admissible heuristic
+    int32_t heuristic(const std::vector<ItemStack>& items, const EnchSet& target) const;
     bool meets_target(const ItemStack& item, const ItemStack& target) const;
 
     DefaultForgeEngine _forge_engine;
     const AlgorithmInput* _input;
+
+    // Pool of StepNodes for the lifetime of the search
+    std::deque<StepNode> _step_pool;
 };

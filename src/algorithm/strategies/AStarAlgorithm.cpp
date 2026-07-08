@@ -1,7 +1,7 @@
 #include "AStarAlgorithm.h"
-#include "utils/ExpCalculator.hpp"
+#include "utils/AlgorithmUtils.hpp"
 
-#include <climits>
+#include <queue>
 #include <string>
 #include <unordered_map>
 
@@ -45,14 +45,7 @@ int32_t AStarAlgorithm::heuristic(
 // at or above the required level.
 // ─────────────────────────────────────────────────────────────────────────────
 bool AStarAlgorithm::meets_target(const ItemStack& item, const ItemStack& target) const {
-    if (item.equipment != target.equipment)
-        return false;
-    for (const Ench& e : target.enchantments) {
-        auto it = item.enchantments.find(e);
-        if (it == item.enchantments.end() || it->level < e.level)
-            return false;
-    }
-    return true;
+    return AlgorithmUtils::meets_target(item, target);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,6 +58,10 @@ bool AStarAlgorithm::meets_target(const ItemStack& item, const ItemStack& target
 // State identity is based on item MULTISET content (enchantments + prior_penalty
 // for each item). items[0] is always the equipment; remaining indices are books.
 //
+// Optimization: steps are stored as a linked list (StepNode) rather than a
+// flat vector, so copying from parent to child is O(1) instead of O(depth).
+// The full list is flattened only when a solution is found.
+//
 // The first goal state popped from the open set is guaranteed optimal because
 // the heuristic is admissible (never overestimates).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,9 +69,9 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     ctx.report_progress(0.0, "starting A* search");
 
     _input = &input;
+    _step_pool.clear();
 
     // ── Initial state ─────────────────────────────────────────────────────
-    // items[0] = equipment with original_ench, prior_penalty = 0
     ItemStack start_item(
         input.target_item.equipment,
         input.original_ench,
@@ -101,10 +98,10 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                         std::vector<PriorityState>,
                         std::greater<>> open_set;
 
-    open_set.push({{std::move(items), 0, {}}, h0});
+    SearchState init_state{std::move(items), 0, nullptr};
+    open_set.push({std::move(init_state), h0});
 
     // ── Closed set: state -> best known g-cost ────────────────────────────
-    // StateEqual and StateHash compare by items content only (not g or steps).
     std::unordered_map<SearchState, int32_t, StateHash, StateEqual> best_g;
 
     int64_t explored = 0;
@@ -113,12 +110,11 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     while (!open_set.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
 
-        // Pop the state with lowest f = g + h
         PriorityState current = std::move(
             const_cast<PriorityState&>(open_set.top()));
         open_set.pop();
 
-        // Skip stale entries: a better path to this state was already expanded
+        // Skip stale entries
         auto bg_it = best_g.find(current.state);
         if (bg_it != best_g.end() && bg_it->second < current.state.g)
             continue;
@@ -135,11 +131,9 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         }
 
         // ── Goal check ───────────────────────────────────────────────────
-        // items[0] is always the equipment (equipment can never be sacrificed
-        // because is_forgeable(book, equipment) is false).
         if (meets_target(current.state.items[0], input.target_item)) {
             // First goal popped = optimal (admissible heuristic guarantee)
-            ctx.report_solution_found(current.state.steps);
+            ctx.report_solution_found(current.state.flatten_steps());
             ctx.report_progress(
                 1.0,
                 "A* complete: optimal cost " + std::to_string(current.state.g));
@@ -156,7 +150,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                         current.state.items[i], current.state.items[j]))
                     continue;
 
-                // Build child items by copying parent and applying forge
+                // Build child items by copying parent
                 std::vector<ItemStack> child_items = current.state.items;
 
                 auto [result, step_cost] =
@@ -167,19 +161,20 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
 
                 int32_t child_g = current.state.g + step_cost;
 
-                // Build step list for the child
-                EnchStepList child_steps = current.state.steps;
-                child_steps.push_back({
-                    current.state.items[i],  // item_a before forge
-                    current.state.items[j],  // item_b (sacrifice)
-                    step_cost,
-                    ExpCalculator::level_to_exp(step_cost)
-                });
+                // O(1): allocate step node linked to parent's tail
+                const StepNode* step_node = alloc_step(
+                    current.state.steps_tail,
+                    EnchSolution::EnchStep{
+                        current.state.items[i],
+                        current.state.items[j],
+                        step_cost,
+                        ExpCalculator::level_to_exp(step_cost)
+                    });
 
                 SearchState child_state{
                     std::move(child_items),
                     child_g,
-                    std::move(child_steps)
+                    step_node
                 };
 
                 // Skip if we already know a better or equal path to this state
@@ -187,7 +182,6 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 if (c_it != best_g.end() && c_it->second <= child_g)
                     continue;
 
-                // Compute heuristic for the child and push
                 int32_t child_h =
                     heuristic(child_state.items, input.target_item.enchantments);
                 int32_t child_f = child_g + child_h;
