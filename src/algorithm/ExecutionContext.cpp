@@ -40,16 +40,17 @@ void ExecutionContext::dispatch_events() {
     if (obs_snapshot.empty()) return;
 
     auto cursor = _events.read_cursor();
-    while (const auto* e = _events.read(cursor)) {
+    ObserverEvent e;
+    while (_events.read(cursor, e)) {
         for (auto& obs : obs_snapshot) {
             try {
-                switch (e->type) {
+                switch (e.type) {
                     case ObserverEvent::Progress:
-                        obs->on_progress(e->progress_val, e->status); break;
+                        obs->on_progress(e.progress_val, e.status); break;
                     case ObserverEvent::Solution:
-                        obs->on_solution_found(e->steps); break;
+                        obs->on_solution_found(e.steps); break;
                     case ObserverEvent::StateChange:
-                        obs->on_state_changed(e->prev_state, e->curr_state); break;
+                        obs->on_state_changed(e.prev_state, e.curr_state); break;
                     default: break;
                 }
             } catch (const std::exception& ex) {
