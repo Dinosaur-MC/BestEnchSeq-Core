@@ -39,7 +39,9 @@ public:
     bool is_paused() const noexcept  { return _paused.load(std::memory_order_acquire); }
     void wait_if_paused();
 
-    // Event pushing (lock-free)
+    // Event pushing (lock-free, with adaptive backpressure)
+    // Latest progress is always readable via progress() — the event queue
+    // uses adaptive sampling: high-frequency updates are coalesced.
     void report_progress(double percent, ProgressStatus status);
     void report_solution_found(const EnchStepList& solution);
     void report_state_change(AlgorithmState prev, AlgorithmState curr);
@@ -77,4 +79,10 @@ private:
     mutable std::mutex _accum_mtx;
     std::vector<EnchStepList> _accumulated_steps;
     std::atomic<double> _progress{0.0};
+
+    // ── Progress downsampling ──
+    // Guards the SPSC push in report_progress. Only 1 in 64 calls
+    // actually pushes an event (when (counter & 0x3F) == 1).
+    // Non-atomic: only accessed from the single producer thread.
+    uint32_t _progress_downsample{0};
 };

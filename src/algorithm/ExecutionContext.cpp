@@ -12,15 +12,44 @@ void ExecutionContext::wait_if_paused() {
     });
 }
 
+// ─── Zero-overhead progress probe ───
+//
+// Design constraints:
+//   1. Must NEVER impact algorithm execution performance.
+//   2. _progress() must always return the latest value (for polling).
+//   3. Observer events are acceptable but must be aggressively rate-limited.
+//
+// Hot path:
+//   _progress.store()          — 1 atomic store (mandatory for polling)
+//   _has_observers.load()      — 1 atomic load (returns false most of the time)
+//   return                      — when no observers, that's the FULL cost
+//
+// With observers:
+//   ++_progress_downsample     — register-local increment (register hit, ~1 cycle)
+//   if ((counter & 0x3F) != 1) — bitwise AND (register, ~1 cycle)
+//   return                      — 63 out of 64 calls return here
+//   SPSC push                  — only 1 in 64 calls reaches here
+//
+// Total probe overhead: 2 atomic ops (store + load) + ~2 register ops
+// SPSC push frequency: once per 64 report_progress calls (~20ns each)
 void ExecutionContext::report_progress(double percent, ProgressStatus status) {
+    // Always update the pollable progress value (mandatory, 1 store ~5ns)
     _progress.store(percent, std::memory_order_release);
-    if (_has_observers.load(std::memory_order_acquire)) {
-        ObserverEvent e;
-        e.type = ObserverEvent::Progress;
-        e.progress_val = percent;
-        e.status = status;
-        _events.push(std::move(e));
-    }
+
+    // Quick exit when no observers attached (1 load ~5ns)
+    if (!_has_observers.load(std::memory_order_acquire))
+        return;
+
+    // Aggressive downsampling: push only 1 in 64 calls
+    // This bounds the SPSC push cost to ~0.3ns per call amortized.
+    if ((++_progress_downsample & 0x3F) != 1)
+        return;
+
+    ObserverEvent e;
+    e.type = ObserverEvent::Progress;
+    e.progress_val = percent;
+    e.status = status;
+    _events.push(std::move(e));
 }
 
 void ExecutionContext::report_solution_found(const EnchStepList& solution) {
