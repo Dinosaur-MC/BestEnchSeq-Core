@@ -317,3 +317,14 @@ set_tests_properties(test_astar_algorithm PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_spmc_queue.cpp)
+add_executable(test_spmc_queue
+    test_spmc_queue.cpp
+)
+target_include_directories(test_spmc_queue PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_spmc_queue COMMAND test_spmc_queue)
+set_tests_properties(test_spmc_queue PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()

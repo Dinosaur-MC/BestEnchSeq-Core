@@ -1,7 +1,7 @@
 #pragma once
 #include "../BESQTypes.h"
+#include "../utils/SPMCQueue.h"
 #include <algorithm> // IWYU pragma: export
-#include <deque>
 #include <iostream>
 #include <atomic>
 #include <chrono>
@@ -96,56 +96,48 @@ public:
         });
     }
 
-    // --- Event pushing (called by algorithm, non-blocking) ---
+    // --- Event pushing (called by algorithm, lock-free SPMCQueue) ---
     void report_progress(double percent, std::string_view status) {
         _progress.store(percent, std::memory_order_release);
-        if (_has_observers.load(std::memory_order_acquire)) {
-            std::lock_guard lock(_event_mtx);
-            _events.push_back({ObserverEvent::Progress, percent, std::string(status), {}, {}});
-        }
+        if (_has_observers.load(std::memory_order_acquire))
+            _events.push({ObserverEvent::Progress, percent, std::string(status), {}, {}});
     }
 
     void report_solution_found(const EnchStepList& solution) {
-        if (_has_observers.load(std::memory_order_acquire)) {
-            std::lock_guard lock(_event_mtx);
-            _events.push_back({ObserverEvent::Solution, 0, {}, solution, {}});
-        }
+        if (_has_observers.load(std::memory_order_acquire))
+            _events.push({ObserverEvent::Solution, 0, {}, solution, {}});
         append_output_steps(solution);
     }
 
     void report_state_change(AlgorithmState prev, AlgorithmState curr) {
-        if (_has_observers.load(std::memory_order_acquire)) {
-            std::lock_guard lock(_event_mtx);
-            _events.push_back({ObserverEvent::StateChange, 0, {}, {}, prev, curr});
-        }
+        if (_has_observers.load(std::memory_order_acquire))
+            _events.push({ObserverEvent::StateChange, 0, {}, {}, prev, curr});
     }
 
     // --- Event dispatch (called by Executor after execution completes) ---
-    // Flushes all queued events to attached observers.
+    // Drains the lock-free SPMCQueue and distributes events to observers.
     void dispatch_events() {
         if (!_has_observers.load(std::memory_order_acquire))
             return;
 
-        std::deque<ObserverEvent> batch;
         std::vector<std::shared_ptr<AlgorithmObserver>> obs_snapshot;
-        {
-            std::lock_guard lock(_event_mtx);
-            batch.swap(_events);
-        }
         {
             std::lock_guard lock(_obs_mtx);
             obs_snapshot = _observers;
         }
-        for (auto& e : batch) {
+        if (obs_snapshot.empty()) return;
+
+        auto cursor = _events.read_cursor();
+        while (const auto* e = _events.read(cursor)) {
             for (auto& obs : obs_snapshot) {
                 try {
-                    switch (e.type) {
+                    switch (e->type) {
                         case ObserverEvent::Progress:
-                            obs->on_progress(e.progress_val, e.status); break;
+                            obs->on_progress(e->progress_val, e->status); break;
                         case ObserverEvent::Solution:
-                            obs->on_solution_found(e.steps); break;
+                            obs->on_solution_found(e->steps); break;
                         case ObserverEvent::StateChange:
-                            obs->on_state_changed(e.prev_state, e.curr_state); break;
+                            obs->on_state_changed(e->prev_state, e->curr_state); break;
                         default: break;
                     }
                 } catch (const std::exception& ex) {
@@ -200,8 +192,8 @@ private:
 
     std::atomic<bool> _has_observers{false};
 
-    mutable std::mutex _event_mtx;
-    std::deque<ObserverEvent> _events;
+    // Lock-free event queue: algorithm pushes, dispatch_events drains
+    SPMCQueue<ObserverEvent, 256> _events;
 
     mutable std::mutex _obs_mtx;
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
