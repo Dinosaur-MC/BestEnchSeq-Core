@@ -57,7 +57,7 @@ TestCase CASES[] = {
      {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 25, 60},
     {"boots_full", "diamond_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
-      "thorns=3", "unbreaking=3", "mending=1"}, 55, 80},
+      "thorns=3", "unbreaking=3", "mending=1"}, 55, 85},
 };
 
 // ─── Setup ───
