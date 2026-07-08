@@ -108,10 +108,8 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     // ── Iterative search loop ──
     _dfs_iterative(ctx);
 
-    // ── Report best solution ──
-    if (!_best_steps.empty()) {
-        ctx.report_solution_found(_best_steps);
-    }
+    // Note: individual solutions are reported via report_solution_found
+    // inside the goal check (_dfs_iterative). No final report needed.
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 
@@ -146,6 +144,10 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         // ── 3. Goal check ──
         if (AlgorithmUtils::meets_target(frame.items[0], _input->target_item)) {
             ++_solutions_found;
+            // Report every solution immediately.
+            // append_output_steps keeps only the top BESQ_MAX_SOLUTIONS
+            // by total cost — the search continues for better ones.
+            ctx.report_solution_found(_current_steps);
             if (_best_steps.empty() || frame.cost_so_far < _best_cost) {
                 _best_cost  = frame.cost_so_far;
                 _best_steps = _current_steps;
@@ -174,14 +176,12 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
                 continue;
             }
             if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions)
-                break; // Enough solutions found
-            if (_solutions_found >= BESQ_MAX_SOLUTIONS)
-                break; // Hard cap at BESQ_MAX_SOLUTIONS
+                break; // Enough solutions found (config-driven)
         }
 
         // ── 6. Lazy pair building ──
         auto& pairs = _frame_pairs.back();
-        if (pairs.empty() && frame.pair_index == 0) {
+        if (pairs.empty()) {
             pairs = _collect_pairs(frame.items);
         }
 
