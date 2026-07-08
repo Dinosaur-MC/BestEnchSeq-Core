@@ -105,9 +105,10 @@ int main(int argc, char *argv[]) {
 
         // Register and create algorithm
         register_builtin_algorithms();
-        auto algo = AlgorithmRegistry::instance().create("greedy");
+        auto algo = AlgorithmRegistry::instance().create(config.algorithm);
         if (!algo) {
-            throw std::runtime_error("Failed to create algorithm");
+            throw std::runtime_error("Unknown algorithm: '" + config.algorithm +
+                "'. Available: greedy, dfs");
         }
 
         // Execute

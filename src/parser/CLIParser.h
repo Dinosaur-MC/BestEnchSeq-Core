@@ -4,6 +4,7 @@
 #include <vector>
 
 struct CLIConfig {
+    std::string algorithm = "greedy";     // "greedy" | "dfs"
     std::string mode = "direct";          // "direct" | "inventory"
     std::string target;                   // target item spec (may include inline enchants)
     std::string wanted;                   // wanted enchantment list string
