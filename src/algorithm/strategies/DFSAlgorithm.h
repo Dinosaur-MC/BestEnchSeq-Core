@@ -1,8 +1,8 @@
 #pragma once
 #include "../IAlgorithm.h"
 #include "../DefaultForgeEngine.h"
+#include "../../utils/AlgorithmUtils.hpp"
 #include <cstdint>
-#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -18,21 +18,38 @@ public:
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
-    // Returns lower bound cost estimate for remaining work (admissible heuristic).
-    // For each target enchantment not fully satisfied by current, computes
-    // (missing_level * book_multiplier), ignoring conflicts and penalty costs.
-    int32_t lower_bound(const EnchSet& current, const EnchSet& target) const;
+    // ─── State key for memoization ───
+    // Lightweight representation of item multiset state for hashing and equality.
+    // Replaces the old string-based serialization with direct integer hashing.
+    struct StateKey {
+        std::vector<int32_t> penalties;     // prior_penalty of each item
+        std::vector<int32_t> ench_ids;      // all enchantment IDs in canonical order
+        std::vector<int32_t> ench_levels;   // corresponding levels
 
-    // Check if item meets all requirements of the target.
-    bool meets_target(const ItemStack& item, const ItemStack& target) const;
+        bool operator==(const StateKey& o) const noexcept {
+            return penalties == o.penalties
+                && ench_ids == o.ench_ids
+                && ench_levels == o.ench_levels;
+        }
+    };
+
+    struct StateKeyHash {
+        size_t operator()(const StateKey& k) const noexcept {
+            size_t h = 0;
+            for (auto p : k.penalties)           AlgorithmUtils::hash_combine(h, (size_t)p);
+            for (auto id : k.ench_ids)           AlgorithmUtils::hash_combine(h, (size_t)id);
+            for (auto lv : k.ench_levels)        AlgorithmUtils::hash_combine(h, (size_t)lv);
+            return h;
+        }
+    };
+
+    // Build a StateKey from the current item multiset.
+    // Enchantments are iterated in canonical order (EnchSet is std::set, sorted
+    // by Ench::operator<) so no additional sorting is needed.
+    StateKey make_state_key(const std::vector<ItemStack>& items) const;
 
     // Core recursive DFS with branch-and-bound pruning.
-    // Tries all forge pair orderings, pruning when cost_so_far + lower_bound >= _best_cost.
     void dfs(std::vector<ItemStack>& items, int32_t cost_so_far, ExecutionContext& ctx);
-
-    // P0: Greedy upper bound — runs a quick greedy pass before DFS to establish
-    // a tight _best_cost so branch-and-bound can prune aggressively from the start.
-    int32_t greedy_upper_bound(const std::vector<ItemStack>& items);
 
     DefaultForgeEngine _forge_engine;
     int32_t _best_cost;
@@ -40,7 +57,6 @@ private:
     EnchStepList _current_steps;
     const AlgorithmInput* _input;
 
-    // P1: State memoization — maps canonical item-multiset signatures to visited
-    // status, avoiding redundant exploration of the same state via different orderings.
-    std::unordered_set<std::string> _visited;
+    // Hash-based state memoization (replaces old std::unordered_set<std::string>)
+    std::unordered_set<StateKey, StateKeyHash> _visited;
 };
