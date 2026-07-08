@@ -211,4 +211,5 @@ private:
     std::mutex _state_mtx;
     std::condition_variable _state_cv;
     std::chrono::steady_clock::time_point _start_time;
+    std::chrono::milliseconds _computation_time{0};
 };

@@ -51,12 +51,17 @@ void AlgorithmExecutor::start(const AlgorithmInput& input) {
         try {
             _algorithm->execute(input, *_ctx);
 
+            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - _start_time);
+
             if (_ctx->is_cancelled()) {
                 _set_state(AlgorithmState::Cancelled);
             } else {
                 _set_state(AlgorithmState::Completed);
             }
         } catch (...) {
+            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - _start_time);
             _set_state(AlgorithmState::Failed);
         }
     });
@@ -144,8 +149,7 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.algorithm_name = std::string(_algorithm->name());
     out.algorithm_version = std::string(_algorithm->version());
     out.created_at = std::chrono::system_clock::now();
-    auto elapsed = std::chrono::steady_clock::now() - _start_time;
-    out.computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
+    out.computation_time = _computation_time;
     out.steps = _ctx->get_accumulated_steps();
     out.is_valid = true;
     return out;
