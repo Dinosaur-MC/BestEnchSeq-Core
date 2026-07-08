@@ -3,6 +3,7 @@
 #include "../DefaultForgeEngine.h"
 #include "../../utils/AlgorithmUtils.hpp"
 #include <cstdint>
+#include <deque>
 #include <unordered_set>
 #include <vector>
 
@@ -23,13 +24,17 @@ public:
     void deserialize_state(const std::vector<uint8_t>& data) override;
 
 private:
+    // ─── Forge pair (local to search) ───
+    struct ForgePair {
+        size_t i, j;
+        int32_t est_cost;
+    };
+
     // ─── State key for memoization ───
-    // Lightweight representation of item multiset state for hashing and equality.
-    // Replaces the old string-based serialization with direct integer hashing.
     struct StateKey {
-        std::vector<int32_t> penalties;     // prior_penalty of each item
-        std::vector<int32_t> ench_ids;      // all enchantment IDs in canonical order
-        std::vector<int32_t> ench_levels;   // corresponding levels
+        std::vector<int32_t> penalties;
+        std::vector<int32_t> ench_ids;
+        std::vector<int32_t> ench_levels;
 
         bool operator==(const StateKey& o) const noexcept {
             return penalties == o.penalties
@@ -48,24 +53,45 @@ private:
         }
     };
 
-    // Build a StateKey from the current item multiset.
-    // Enchantments are iterated in canonical order (EnchSet is std::set, sorted
-    // by Ench::operator<) so no additional sorting is needed.
+    // ─── Iterative DFS frame ───
+    // Each frame corresponds to one level of the search tree.
+    // The full stack is serialized for pause-and-resume support.
+    struct DFSFrame {
+        std::vector<ItemStack> items;
+        int32_t cost_so_far{0};
+        size_t pair_index{0};
+        size_t saved_steps_size{0};
+
+        // Backtrack restore (valid when has_backtrack is true)
+        ItemStack saved_base;
+        ItemStack saved_sac;
+        size_t base_idx{0};
+        size_t sac_idx{0};
+        bool has_backtrack{false};
+    };
+
     StateKey make_state_key(const std::vector<ItemStack>& items) const;
 
-    // Core recursive DFS with branch-and-bound pruning.
-    void dfs(std::vector<ItemStack>& items, int32_t cost_so_far, ExecutionContext& ctx);
+    // Core iterative search loop
+    void _dfs_iterative(ExecutionContext& ctx);
+
+    // Collect and sort forge pairs for a given item set
+    std::vector<ForgePair> _collect_pairs(const std::vector<ItemStack>& items) const;
 
     DefaultForgeEngine _forge_engine;
-    int32_t _best_cost;
+    int32_t _best_cost{INT32_MAX};
     EnchStepList _best_steps;
     EnchStepList _current_steps;
-    const AlgorithmInput* _input;
+    const AlgorithmInput* _input{nullptr};
 
-    // Hash-based state memoization (replaces old std::unordered_set<std::string>)
+    // Hash-based state memoization
     std::unordered_set<StateKey, StateKeyHash> _visited;
 
-    // True when state was restored via deserialize_state() — execute() skips
-    // re-initialization and uses the pre-populated _best_cost, _best_steps, _visited.
+    // Iterative DFS execution stack
+    std::vector<DFSFrame> _stack;
+
+    // Lazy-computed forge pairs for each frame (parallel to _stack indices)
+    std::deque<std::vector<ForgePair>> _frame_pairs;
+
     bool _state_restored{false};
 };

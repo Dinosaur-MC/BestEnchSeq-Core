@@ -461,6 +461,71 @@ void test_dfs_serialization_roundtrip() {
     std::cout << "PASS: test_dfs_serialization_roundtrip" << std::endl;
 }
 
+void test_dfs_pause_resume_roundtrip() {
+    setup();
+
+    // Use 6 enchantments so there is meaningful work to pause
+    ItemStack goal(&sword, EnchSet{Ench(0, 3), Ench(1, 2), Ench(2, 2),
+                                   Ench(3, 3), Ench(4, 3), Ench(5, 3)}, 0, 1561);
+
+    ItemCollection available;
+    available.emplace_back(EnchSet{Ench(0, 3)});
+    available.emplace_back(EnchSet{Ench(1, 2)});
+    available.emplace_back(EnchSet{Ench(2, 2)});
+    available.emplace_back(EnchSet{Ench(3, 3)});
+    available.emplace_back(EnchSet{Ench(4, 3)});
+    available.emplace_back(EnchSet{Ench(5, 3)});
+
+    AlgorithmInput input{
+        .platform = platform::MCE::Java,
+        .original_ench = EnchSet{},
+        .target_item = goal,
+        .available_items = available,
+    };
+
+    // First run: start, let it explore a bit, then pause and serialize
+    auto algo1 = std::make_unique<DFSAlgorithm>();
+    AlgorithmExecutor exec1(std::move(algo1));
+    exec1.start(input);
+
+    // Let it search for a moment to accumulate some state
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    exec1.pause();
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    // Serialize the paused state (should include stack frames)
+    auto saved_state = exec1.serialize_state();
+    expect(!saved_state.empty(), "paused state should not be empty");
+
+    // Cancel the first executor
+    exec1.cancel();
+    exec1.wait();
+
+    // Second run: restore and continue
+    auto algo2 = std::make_unique<DFSAlgorithm>();
+    AlgorithmExecutor exec2(std::move(algo2));
+    bool restored = exec2.restore_state(saved_state);
+    expect(restored, "restore_state should succeed");
+
+    exec2.start(input, saved_state);
+    exec2.wait();
+
+    expect(exec2.state() == AlgorithmState::Completed,
+           "restored+continued run should complete");
+
+    auto output = exec2.output();
+    expect(output.is_valid, "output should be valid");
+
+    // Verify we found a solution
+    int32_t total = 0;
+    for (const auto& sl : output.steps)
+        for (const auto& s : sl) total += s.exp_level_cost;
+    expect(total > 0, "total cost should be positive");
+
+    std::cout << "PASS: test_dfs_pause_resume_roundtrip" << std::endl;
+}
+
+
 } // namespace
 
 int main() {
@@ -471,7 +536,7 @@ int main() {
     test_dfs_with_six_books();
     test_dfs_with_seven_books();
     test_dfs_serialization_roundtrip();
+    test_dfs_pause_resume_roundtrip();
     std::cout << "All DFS algorithm tests passed!" << std::endl;
     return 0;
 }
-
