@@ -16,6 +16,15 @@ void setup() {
     // id 2
     infos.push_back({"fire_aspect", "Fire Aspect", platform::MCE::All, 2, 2,
                       2, {}, {EquipmentCategory("sword")}});
+    // id 3
+    infos.push_back({"looting", "Looting", platform::MCE::All, 3, 3,
+                      2, {}, {EquipmentCategory("sword")}});
+    // id 4
+    infos.push_back({"unbreaking", "Unbreaking", platform::MCE::All, 3, 3,
+                      1, {}, {EquipmentCategory("sword")}});
+    // id 5
+    infos.push_back({"smite", "Smite", platform::MCE::All, 5, 5,
+                      1, {}, {EquipmentCategory("sword")}});
     EnchantmentRegistry::get_instance().initialize(infos);
     platform::Config::get_instance().set_active(platform::MCE::Java);
 }
@@ -253,6 +262,76 @@ void test_dfs_upgrade_existing() {
     std::cout << "PASS: test_dfs_upgrade_existing" << std::endl;
 }
 
+// ──────────────────────────────────────────────────────────
+// Test: forge six books onto an empty sword to reach goal
+// ──────────────────────────────────────────────────────────
+void test_dfs_with_six_books() {
+    setup();
+
+    // Goal: sword with 6 enchantments
+    ItemStack goal(&sword, EnchSet{Ench(0, 3), Ench(1, 2), Ench(2, 2),
+                                   Ench(3, 3), Ench(4, 3), Ench(5, 3)}, 0, 1561);
+
+    // Available: 6 books, each providing one enchantment
+    ItemCollection available;
+    available.emplace_back(EnchSet{Ench(0, 3)});   // sharpness 3
+    available.emplace_back(EnchSet{Ench(1, 2)});   // knockback 2
+    available.emplace_back(EnchSet{Ench(2, 2)});   // fire_aspect 2
+    available.emplace_back(EnchSet{Ench(3, 3)});   // looting 3
+    available.emplace_back(EnchSet{Ench(4, 3)});   // unbreaking 3
+    available.emplace_back(EnchSet{Ench(5, 3)});   // smite 3
+
+    AlgorithmInput input{
+        .platform = platform::MCE::Java,
+        .original_ench = EnchSet{},   // starts unenchanted
+        .target_item = goal,
+        .available_items = available,
+    };
+
+    auto algo = std::make_unique<DFSAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+    executor.start(input);
+
+    // Allow up to 30 seconds; cancel if still running after timeout
+    auto state = executor.wait_for(std::chrono::seconds(30));
+    if (state == AlgorithmState::Running) {
+        executor.cancel();
+        executor.wait();
+    }
+
+    expect(state == AlgorithmState::Completed,
+           "should complete with six books (state: " + std::to_string(static_cast<int>(state)) + ")");
+
+    auto output = executor.output();
+    expect(output.is_valid, "output should be valid after completion");
+    expect(!output.steps.empty(), "output steps should not be empty");
+    expect(output.steps.size() >= 1, "should have at least one solution");
+    expect(output.steps[0].size() == 6, "solution should have six forge steps");
+
+    // Verify all forge costs are positive
+    for (size_t i = 0; i < 6; ++i) {
+        expect(output.steps[0][i].exp_level_cost > 0,
+               "forge cost at step " + std::to_string(i) + " should be positive");
+    }
+
+    // Verify all 6 books appear as sacrifices across the 6 steps
+    bool has_ench[6] = {false, false, false, false, false, false};
+    for (size_t i = 0; i < 6; ++i) {
+        for (int eid = 0; eid < 6; ++eid) {
+            if (output.steps[0][i].item_b.enchantments.find(Ench(eid))
+                != output.steps[0][i].item_b.enchantments.end()) {
+                has_ench[eid] = true;
+            }
+        }
+    }
+    for (int eid = 0; eid < 6; ++eid) {
+        expect(has_ench[eid],
+               "enchantment id " + std::to_string(eid) + " should appear as a sacrifice");
+    }
+
+    std::cout << "PASS: test_dfs_with_six_books" << std::endl;
+}
+
 } // namespace
 
 int main() {
@@ -260,6 +339,7 @@ int main() {
     test_dfs_with_three_books();
     test_dfs_goal_already_met();
     test_dfs_upgrade_existing();
+    test_dfs_with_six_books();
     std::cout << "All DFS algorithm tests passed!" << std::endl;
     return 0;
 }

@@ -2,6 +2,8 @@
 #include "../IAlgorithm.h"
 #include "../DefaultForgeEngine.h"
 #include <cstdint>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 class DFSAlgorithm : public IAlgorithm {
@@ -28,9 +30,17 @@ private:
     // Tries all forge pair orderings, pruning when cost_so_far + lower_bound >= _best_cost.
     void dfs(std::vector<ItemStack>& items, int32_t cost_so_far, ExecutionContext& ctx);
 
+    // P0: Greedy upper bound — runs a quick greedy pass before DFS to establish
+    // a tight _best_cost so branch-and-bound can prune aggressively from the start.
+    int32_t greedy_upper_bound(const std::vector<ItemStack>& items);
+
     DefaultForgeEngine _forge_engine;
     int32_t _best_cost;
     EnchStepList _best_steps;
     EnchStepList _current_steps;
     const AlgorithmInput* _input;
+
+    // P1: State memoization — maps canonical item-multiset signatures to visited
+    // status, avoiding redundant exploration of the same state via different orderings.
+    std::unordered_set<std::string> _visited;
 };
