@@ -116,7 +116,6 @@ add_executable(test_output_formatter
     ${PROJECT_ROOT}/src/types/EquipmentType.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
-    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
 )
 target_include_directories(test_output_formatter PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_output_formatter COMMAND test_output_formatter)
@@ -144,7 +143,6 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/types/EquipmentType.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
-    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -178,7 +176,6 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_exp_calculator.cpp)
 add_executable(test_exp_calculator
     test_exp_calculator.cpp
-    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -197,6 +194,7 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_execution_context.cpp)
 add_executable(test_execution_context
     test_execution_context.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
@@ -232,6 +230,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_executor.cpp)
 add_executable(test_algorithm_executor
     test_algorithm_executor.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
@@ -254,9 +253,9 @@ add_executable(test_greedy_algorithm
     test_greedy_algorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -277,9 +276,9 @@ add_executable(test_dfs_algorithm
     test_dfs_algorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -300,9 +299,9 @@ add_executable(test_astar_algorithm
     test_astar_algorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp

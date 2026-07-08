@@ -21,15 +21,17 @@ void test_peak_analysis() {
     expect(ExpCalculator::peak_level_cost(steps) == 0, "empty → peak 0");
 
     // Add some steps
-    EnchSolution::EnchStep s1{{}, {}, 4, 9};
-    EnchSolution::EnchStep s2{{}, {}, 10, 67};
-    EnchSolution::EnchStep s3{{}, {}, 7, 37};
+    // exp_cost should match level_to_exp(exp_level_cost) for consistency
+    EnchSolution::EnchStep s1{{}, {}, 4, ExpCalculator::level_to_exp(4)};
+    EnchSolution::EnchStep s2{{}, {}, 10, ExpCalculator::level_to_exp(10)};
+    EnchSolution::EnchStep s3{{}, {}, 7, ExpCalculator::level_to_exp(7)};
     steps.push_back(s1);
     steps.push_back(s2);
     steps.push_back(s3);
 
     expect(ExpCalculator::peak_level_cost(steps) == 10, "peak level cost should be 10");
-    expect(ExpCalculator::peak_exp_cost(steps) == 67, "peak exp cost should be 67");
+    expect(ExpCalculator::peak_exp_cost(steps) == ExpCalculator::level_to_exp(10),
+           "peak exp cost should match level_to_exp(10)");
     std::cout << "PASS: test_peak_analysis" << std::endl;
 }
 

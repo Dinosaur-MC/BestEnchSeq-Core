@@ -10,9 +10,9 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/utils/ExpCalculator.cpp
     ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
