@@ -39,9 +39,8 @@ void ExecutionContext::dispatch_events() {
     }
     if (obs_snapshot.empty()) return;
 
-    auto cursor = _events.read_cursor();
     ObserverEvent e;
-    while (_events.read(cursor, e)) {
+    while (_events.pop(e)) {
         for (auto& obs : obs_snapshot) {
             try {
                 switch (e.type) {

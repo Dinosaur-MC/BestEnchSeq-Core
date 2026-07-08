@@ -1,7 +1,7 @@
 #pragma once
 #include "../BESQTypes.h"
 #include "AlgorithmObserver.h"
-#include "../utils/SPMCQueue.hpp"
+#include "../utils/SPSCQueue.hpp"
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -71,7 +71,7 @@ private:
     std::condition_variable _pause_cv;
 
     std::atomic<bool> _has_observers{false};
-    SPMCQueue<ObserverEvent, 256> _events;
+    SPSCQueue<ObserverEvent, 256> _events;
 
     mutable std::mutex _obs_mtx;
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
