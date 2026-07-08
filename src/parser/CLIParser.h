@@ -35,5 +35,5 @@ class CLIParser {
     static EnchantmentSpec parse_enchantment(const std::string &spec);
     static std::vector<EnchantmentSpec> parse_enchantment_list(const std::string &list);
     static TargetSpec parse_target(const std::string &target);
-    static std::string get_help_text();
+    static std::string get_help_text(const std::string &program_name = "besq");
 };

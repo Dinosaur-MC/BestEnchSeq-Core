@@ -4,13 +4,14 @@
 #include <cctype>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 // ---------------------------------------------------------------------------
 // Help text
 // ---------------------------------------------------------------------------
-std::string CLIParser::get_help_text() {
+std::string CLIParser::get_help_text(const std::string &program_name) {
     return
-        "Usage: besq [options] --target <item> --wanted <enchants>\n"
+        "Usage: " + program_name + " [options] --target <item> --wanted <enchants>\n"
         "\n"
         "Options:\n"
         "  --help                  Show this help message\n"
@@ -141,6 +142,12 @@ TargetSpec CLIParser::parse_target(const std::string &target) {
 // ---------------------------------------------------------------------------
 CLIConfig CLIParser::parse(int argc, char *argv[]) {
     CLIConfig config;
+    std::string program_name = "besq";
+    if (argc > 0) {
+        program_name = argv[0];
+        auto it = program_name.find_last_of("/\\");
+        program_name = program_name.substr(it + 1);
+    }
     bool options_terminated = false;
 
     for (int i = 1; i < argc; ++i) {
@@ -154,7 +161,7 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
 
         // All options must start with --
         if (arg.size() < 2 || arg[0] != '-' || arg[1] != '-') {
-            throw std::runtime_error("Unknown argument: '" + arg + "'\n" + get_help_text());
+            throw std::runtime_error("Unknown argument: '" + arg + "'\n" + get_help_text(program_name));
         }
 
         std::string key;
@@ -173,7 +180,7 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
         // Boolean flags with no value
         if (key == "help") {
             config.help = true;
-            std::cout << get_help_text() << std::endl;
+            std::cout << get_help_text(program_name) << std::endl;
             continue;
         }
         if (key == "ignore-cost-cap") {
@@ -184,7 +191,7 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
         // All remaining options need a value
         if (!has_equals) {
             if (i + 1 >= argc) {
-                throw std::runtime_error("Missing value for --" + key + "\n" + get_help_text());
+                throw std::runtime_error("Missing value for --" + key + "\n" + get_help_text(program_name));
             }
             value = argv[++i];
         }
@@ -192,7 +199,7 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
         if (key == "mode") {
             if (value != "direct" && value != "inventory") {
                 throw std::runtime_error(
-                    "Invalid mode: '" + value + "'. Expected 'direct' or 'inventory'.\n" + get_help_text()
+                    "Invalid mode: '" + value + "'. Expected 'direct' or 'inventory'.\n" + get_help_text(program_name)
                 );
             }
             config.mode = value;
@@ -209,14 +216,14 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
         } else if (key == "platform") {
             if (value != "java" && value != "bedrock" && value != "auto") {
                 throw std::runtime_error(
-                    "Invalid platform: '" + value + "'. Expected 'java', 'bedrock', or 'auto'.\n" + get_help_text()
+                    "Invalid platform: '" + value + "'. Expected 'java', 'bedrock', or 'auto'.\n" + get_help_text(program_name)
                 );
             }
             config.platform = value;
         } else if (key == "format") {
             if (value != "text" && value != "compact" && value != "json") {
                 throw std::runtime_error(
-                    "Invalid format: '" + value + "'. Expected 'text', 'compact', or 'json'.\n" + get_help_text()
+                    "Invalid format: '" + value + "'. Expected 'text', 'compact', or 'json'.\n" + get_help_text(program_name)
                 );
             }
             config.format = value;
@@ -225,27 +232,27 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
                 int n = std::stoi(value);
                 if (n < 0) {
                     throw std::runtime_error(
-                        "Invalid --solutions value: " + value + ". Must be >= 0.\n" + get_help_text()
+                        "Invalid --solutions value: " + value + ". Must be >= 0.\n" + get_help_text(program_name)
                     );
                 }
                 config.solutions = n;
             } catch (const std::exception &) {
                 throw std::runtime_error(
-                    "Invalid --solutions value: '" + value + "'. Expected an integer.\n" + get_help_text()
+                    "Invalid --solutions value: '" + value + "'. Expected an integer.\n" + get_help_text(program_name)
                 );
             }
         } else {
-            throw std::runtime_error("Unknown option: --" + key + "\n" + get_help_text());
+            throw std::runtime_error("Unknown option: --" + key + "\n" + get_help_text(program_name));
         }
     }
 
     // Validate required arguments (skip if --help or -- was used)
     if (!config.help && !options_terminated) {
         if (config.target.empty()) {
-            throw std::runtime_error("Missing required argument: --target\n" + get_help_text());
+            throw std::runtime_error("Missing required argument: --target\n" + get_help_text(program_name));
         }
         if (config.wanted.empty()) {
-            throw std::runtime_error("Missing required argument: --wanted\n" + get_help_text());
+            throw std::runtime_error("Missing required argument: --wanted\n" + get_help_text(program_name));
         }
     }
 
