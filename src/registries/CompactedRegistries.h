@@ -1,6 +1,6 @@
 #pragma once
-#include "types/CompactedTypes.h"
 #include "registries/EnchantmentRegistry.h"
+#include "types/CompactedTypes.h"
 #include "types/Equipment.h"
 #include <vector>
 
@@ -11,16 +11,16 @@ using RichEnchInfo = ::EnchInfo;
 /// Compacted registry — precomputes EnchInfo for all enchantments against
 /// a specific target equipment. Provides O(1) lookup and conflict checking.
 class EnchReg {
-private:
-    EnchantmentRegistry _registry;        // sub-registry (copied for lifetime safety)
-    std::vector<EnchInfo> _ench_infos;    // compacted info, indexed by ench id
+  private:
+    EnchantmentRegistry _registry;     // sub-registry (copied for lifetime safety)
+    std::vector<EnchInfo> _ench_infos; // compacted info, indexed by ench id
     Equipment _target_equip;
-    size_t _mask_size;                    // exc_mask vector size
+    size_t _mask_size; // exc_mask vector size
 
     std::vector<std::vector<char>> _conflict_matrix;
     void _build_conflict_matrix();
 
-public:
+  public:
     static EnchReg &get_instance();
 
     EnchReg() = default;
