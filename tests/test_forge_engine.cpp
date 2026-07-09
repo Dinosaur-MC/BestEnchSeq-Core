@@ -21,15 +21,15 @@ void setup_enchinfo() {
 
 Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
 
-compact::EnchReg& init_reg() {
-    auto& reg = compact::EnchReg::get_instance();
+compact::EnchReg init_reg() {
+    compact::EnchReg reg;
     reg.init(EnchantmentRegistry::get_instance(), sword);
     return reg;
 }
 
 void test_forge_books() {
     setup_enchinfo();
-    auto& reg = init_reg();
+    auto reg = init_reg();
     ForgeEngine engine;
 
     // Forge two books: sharpness 4 + sharpness 3 → sharpness 5 (max level combine)
@@ -49,7 +49,7 @@ void test_forge_books() {
 
 void test_forge_equipment_with_book() {
     setup_enchinfo();
-    auto& reg = init_reg();
+    auto reg = init_reg();
     ForgeEngine engine;
 
     compact::Item sword_item{compact::ItemType::Equip, static_cast<int16_t>(sword.max_durability), 0, {}};
@@ -66,7 +66,7 @@ void test_forge_equipment_with_book() {
 
 void test_forge_incompatible_rejected() {
     setup_enchinfo();
-    auto& reg = init_reg();
+    auto reg = init_reg();
     ForgeEngine engine;
 
     compact::Item sword_item{compact::ItemType::Equip, 1561, 0, {}};
@@ -84,7 +84,7 @@ void test_forge_incompatible_rejected() {
 
 void test_forge_not_forgeable() {
     setup_enchinfo();
-    auto& reg = init_reg();
+    auto reg = init_reg();
     ForgeEngine engine;
 
     // Material-type cannot be forged as target
@@ -98,7 +98,7 @@ void test_forge_not_forgeable() {
 
 void test_ignore_cost_cap() {
     setup_enchinfo();
-    auto& reg = init_reg();
+    auto reg = init_reg();
     ForgeEngine engine(ForgeConfig{false, false, true, platform::MCE::Java});
     expect(true, "ignore_cost_cap constructs without error");
     std::cout << "PASS: test_ignore_cost_cap" << std::endl;

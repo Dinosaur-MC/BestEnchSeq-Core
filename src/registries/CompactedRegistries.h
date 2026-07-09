@@ -21,9 +21,8 @@ class EnchReg {
     void _build_conflict_matrix();
 
   public:
-    static EnchReg &get_instance();
-
     EnchReg() = default;
+
     void init(const EnchantmentRegistry &registry, const Equipment &target_equip);
 
     size_t size() const noexcept { return _ench_infos.size(); }

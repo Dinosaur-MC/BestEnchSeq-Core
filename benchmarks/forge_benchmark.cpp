@@ -176,12 +176,13 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
 
-    auto& ench_reg = compact::EnchReg::get_instance();
+    compact::EnchReg ench_reg;
     ench_reg.init(EnchantmentRegistry::get_instance(), eq);
 
     AlgorithmInput algo_input;
     algo_input.platform = platform::MCE::Java;
     algo_input.equipment = &eq;
+    algo_input.ench_reg = &ench_reg;
 
     ItemStack start_item(&eq, ::EnchSet{}, 0, eq.max_durability);
     algo_input.items.push_back(compact::from_domain(start_item, ench_reg));

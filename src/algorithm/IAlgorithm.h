@@ -12,12 +12,12 @@ class EnchReg;
 }
 
 // ─── Algorithm input (compact types only) ───
-// Built by main.cpp from parser output via CompactAdapter.
 struct AlgorithmInput {
     platform::MCE platform;
-    compact::ItemCollection items;  // items[0] = equipment, rest = books
-    compact::EnchCollection target; // desired final enchantments
-    const Equipment *equipment;     // for output step conversion
+    compact::ItemCollection items;      // items[0] = equipment, rest = books
+    compact::EnchCollection target;     // desired final enchantments
+    const Equipment *equipment;         // for output step conversion
+    const compact::EnchReg *ench_reg{}; // compact registry (must be initialized)
 };
 
 // ─── Algorithm output (compact steps) ───

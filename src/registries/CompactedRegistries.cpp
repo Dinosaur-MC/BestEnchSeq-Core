@@ -2,11 +2,6 @@
 
 namespace compact {
 
-EnchReg &EnchReg::get_instance() {
-    static EnchReg instance;
-    return instance;
-}
-
 void EnchReg::_build_conflict_matrix() {
     const size_t N = _registry.size();
     _conflict_matrix.assign(N * N, 0);

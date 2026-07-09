@@ -128,12 +128,13 @@ int main(int argc, char *argv[]) {
         }
 
         //── Boundary: domain → compact ─────────────────────────────────────
-        auto& ench_reg = compact::EnchReg::get_instance();
+        compact::EnchReg ench_reg;
         ench_reg.init(EnchantmentRegistry::get_instance(), *parsed.target_item.equipment);
 
         AlgorithmInput algo_input;
         algo_input.platform = parsed.platform;
         algo_input.equipment = parsed.target_item.equipment;
+        algo_input.ench_reg = &ench_reg;
 
         ItemStack start_item(algo_input.equipment, parsed.original_ench, 0);
         algo_input.items.reserve(1 + parsed.available_items.size());

@@ -1,5 +1,4 @@
 #include "AlgorithmExecutor.h"
-#include "registries/CompactedRegistries.h"
 #include <stdexcept>
 #include <utility>
 
@@ -48,11 +47,9 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
     _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
 
-    // Capture reg pointer for the worker (lifetime guaranteed by caller)
     _worker.emplace([this, input = std::move(input)]() mutable {
         try {
-            auto& reg = compact::EnchReg::get_instance();
-            _algorithm->execute(input.items, reg, input.target, *_ctx);
+            _algorithm->execute(input.items, *input.ench_reg, input.target, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
