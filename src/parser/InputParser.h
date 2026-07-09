@@ -11,13 +11,13 @@ class InputParser {
     // Parse inventory JSON file into ItemCollection
     static ItemCollection parse_inventory(
         const std::filesystem::path &path,
-        const std::unordered_map<std::string, const EquipmentType*> &equipment_registry
+        const std::unordered_map<std::string, const Equipment*> &equipment_registry
     );
 
     // Build target ItemStack from target spec + inline enchantments
     static ItemStack build_target(
         const TargetSpec &target_spec,
-        const std::unordered_map<std::string, const EquipmentType*> &equipment_registry,
+        const std::unordered_map<std::string, const Equipment*> &equipment_registry,
         const std::unordered_map<std::string, int32_t> &ench_name_to_id
     );
 
@@ -30,7 +30,7 @@ class InputParser {
     // Full assembly: CLI config to algorithm Input
     static AlgorithmInput assemble_input(
         const CLIConfig &cli_config,
-        const std::unordered_map<std::string, const EquipmentType*> &equipment_registry,
+        const std::unordered_map<std::string, const Equipment*> &equipment_registry,
         const std::unordered_map<std::string, int32_t> &ench_name_to_id
     );
 

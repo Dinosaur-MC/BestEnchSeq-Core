@@ -1,5 +1,6 @@
 ﻿#include "parser/OutputFormatter.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/EquipmentCategoryRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/EnchSet.h"
 
@@ -8,7 +9,7 @@ namespace {
 // ---------------------------------------------------------------------------
 // Equipment cache for JSON deserialization (cleared on each parse_json call)
 // ---------------------------------------------------------------------------
-std::vector<EquipmentType> _json_eq_cache;
+std::vector<Equipment> _json_eq_cache;
 
 // ---------------------------------------------------------------------------
 // Roman numeral conversion (1 .. 10)
@@ -168,7 +169,7 @@ std::string OutputFormatter::describe_item_compact(const ItemStack &item) {
     }
 
     // Equipment
-    std::string result = "E;" + item.equipment->id + ";";
+    std::string result = "E;" + item.equipment->name_id + ";";
     bool first = true;
     for (const auto &ench : item.enchantments) {
         if (!first) result += ",";
@@ -420,8 +421,8 @@ std::string OutputFormatter::format_json(
 // ===========================================================================
 std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) {
     // NOTE: _json_eq_cache is intentionally NOT cleared here.
-    // itemstack_from_json and step_from_json store EquipmentType objects in this
-    // cache and return const EquipmentType* pointers into it. Clearing would
+    // itemstack_from_json and step_from_json store Equipment objects in this
+    // cache and return const Equipment* pointers into it. Clearing would
     // invalidate those pointers. The cache grows monotonically per process,
     // which is acceptable for a CLI tool.
 
@@ -526,8 +527,10 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
     // Equipment
     if (item.equipment != nullptr) {
         Json::Object eq;
-        eq["id"]             = Json(Json::String(item.equipment->id));
-        eq["category"]       = Json(Json::String(item.equipment->category));
+        auto* cat = EquipmentCategoryRegistry::get_instance().get(item.equipment->category_id);
+        std::string cat_name = cat ? cat->name_id : "unknown";
+        eq["id"]             = Json(Json::String(item.equipment->name_id));
+        eq["category"]       = Json(Json::String(cat_name));
         eq["name"]           = Json(Json::String(item.equipment->name));
         eq["max_durability"] = Json(Json::Number(item.equipment->max_durability));
         obj["equipment"]     = Json(eq);
@@ -558,13 +561,13 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
 // ---------------------------------------------------------------------------
 ItemStack OutputFormatter::itemstack_from_json(
     const Json &j,
-    std::vector<EquipmentType> &equipment_cache
+    std::vector<Equipment> &equipment_cache
 ) {
     Json::Value j_val = j.get_value();
     const Json::Object &obj = std::get<Json::Object>(j_val);
 
     // Equipment (may be null for books)
-    const EquipmentType *eq_ptr = nullptr;
+    const Equipment *eq_ptr = nullptr;
     auto eq_it = obj.find("equipment");
     if (eq_it != obj.end()) {
         if (std::holds_alternative<Json::Null>(eq_it->second.get_value())) {
@@ -581,8 +584,10 @@ ItemStack OutputFormatter::itemstack_from_json(
                 max_dur = json_int(md_it->second);
             }
 
-            equipment_cache.emplace_back(EquipmentType{
-                id, name, EquipmentCategory(cat.c_str()), max_dur
+            int32_t cat_id = EquipmentCategoryRegistry::get_instance().get_id(cat);
+            if (cat_id < 0) cat_id = EquipmentCategoryRegistry::ID_ANY;
+            equipment_cache.emplace_back(Equipment{
+                id, name, cat_id, max_dur
             });
             eq_ptr = &equipment_cache.back();
         }
@@ -632,7 +637,7 @@ Json OutputFormatter::step_to_json(const EnchSolution::EnchStep &step) {
 // ---------------------------------------------------------------------------
 EnchSolution::EnchStep OutputFormatter::step_from_json(
     const Json &j,
-    std::vector<EquipmentType> &equipment_cache
+    std::vector<Equipment> &equipment_cache
 ) {
     Json::Value j_val = j.get_value();
     const Json::Object &obj = std::get<Json::Object>(j_val);

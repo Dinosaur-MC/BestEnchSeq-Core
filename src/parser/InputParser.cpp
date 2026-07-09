@@ -49,7 +49,7 @@ int32_t resolve_ench_id(const std::string &name) {
 // ===========================================================================
 ItemCollection InputParser::parse_inventory(
     const std::filesystem::path &path,
-    const std::unordered_map<std::string, const EquipmentType*> &equipment_registry
+    const std::unordered_map<std::string, const Equipment*> &equipment_registry
 ) {
     std::string content = ParserUtils::read_file(path);
     Json root = Json::parse(content);
@@ -138,7 +138,7 @@ ItemCollection InputParser::parse_inventory(
         } else if (type == "equipment") {
             std::string equip_id = ParserUtils::get_json_string(item_obj, "id");
             auto equip_it = equipment_registry.find(equip_id);
-            const EquipmentType *equip =
+            const Equipment *equip =
                 (equip_it != equipment_registry.end()) ? equip_it->second : nullptr;
 
             if (equip != nullptr) {
@@ -167,7 +167,7 @@ ItemCollection InputParser::parse_inventory(
 // ===========================================================================
 ItemStack InputParser::build_target(
     const TargetSpec &target_spec,
-    const std::unordered_map<std::string, const EquipmentType*> &equipment_registry,
+    const std::unordered_map<std::string, const Equipment*> &equipment_registry,
     const std::unordered_map<std::string, int32_t> &ench_name_to_id
 ) {
     // Look up equipment
@@ -236,7 +236,7 @@ ItemCollection InputParser::generate_books(
 // ===========================================================================
 AlgorithmInput InputParser::assemble_input(
     const CLIConfig &cli_config,
-    const std::unordered_map<std::string, const EquipmentType*> &equipment_registry,
+    const std::unordered_map<std::string, const Equipment*> &equipment_registry,
     const std::unordered_map<std::string, int32_t> &ench_name_to_id
 ) {
     // 1. Determine platform

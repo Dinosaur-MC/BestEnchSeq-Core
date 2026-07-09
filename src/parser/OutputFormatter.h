@@ -36,7 +36,7 @@ class OutputFormatter {
 
     // JSON helpers
     static Json itemstack_to_json(const ItemStack &item);
-    static ItemStack itemstack_from_json(const Json &j, std::vector<EquipmentType> &equipment_cache);
+    static ItemStack itemstack_from_json(const Json &j, std::vector<Equipment> &equipment_cache);
     static Json step_to_json(const EnchSolution::EnchStep &step);
-    static EnchSolution::EnchStep step_from_json(const Json &j, std::vector<EquipmentType> &equipment_cache);
+    static EnchSolution::EnchStep step_from_json(const Json &j, std::vector<Equipment> &equipment_cache);
 };

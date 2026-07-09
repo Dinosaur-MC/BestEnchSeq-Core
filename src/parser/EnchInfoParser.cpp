@@ -2,6 +2,7 @@
 #include "parser/ParserUtils.h"
 #include "io/CsvIO.h"
 #include "io/json.h"
+#include "registries/EquipmentCategoryRegistry.h"
 
 #include <cctype>
 #include <fstream>
@@ -225,10 +226,11 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
 
         // Applicable equipment — resolve #tag references
         auto equipment_items = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
-        std::unordered_set<EquipmentCategory> applicable_equipment;
+        std::unordered_set<int32_t> applicable_category_ids;
         auto resolved_equipment = resolve_references(equipment_items, tag_resolver);
         for (const auto &eq : resolved_equipment) {
-            applicable_equipment.insert(EquipmentCategory(eq.c_str()));
+            applicable_category_ids.insert(
+                EquipmentCategoryRegistry::get_instance().register_or_get_id(eq));
         }
 
         result.emplace_back(
@@ -239,7 +241,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
             limited_level,
             multiplier,
             std::move(exclusive_set),
-            std::move(applicable_equipment)
+            std::move(applicable_category_ids)
         );
     }
 
@@ -372,14 +374,15 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
         }
 
         // Applicable equipment — semi-colon separated tokens, resolve #tag refs
-        std::unordered_set<EquipmentCategory> applicable_equipment;
+        std::unordered_set<int32_t> applicable_category_ids;
         {
             std::string eq_str = get_field(fields, "applicable_equipment");
             if (!eq_str.empty()) {
                 auto items    = ParserUtils::split_string(eq_str, ';');
                 auto resolved = resolve_references(items, tag_resolver);
                 for (const auto &eq : resolved) {
-                    applicable_equipment.insert(EquipmentCategory(eq.c_str()));
+                    applicable_category_ids.insert(
+                        EquipmentCategoryRegistry::get_instance().register_or_get_id(eq));
                 }
             }
         }
@@ -392,7 +395,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
             limited_level,
             multiplier,
             std::move(exclusive_set),
-            std::move(applicable_equipment)
+            std::move(applicable_category_ids)
         );
     }
 
@@ -515,7 +518,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
             auto supp_items      = ParserUtils::get_json_string_array(obj, "supported_items");
             auto resolved_supp   = resolve_references(supp_items, tag_resolver);
 
-            std::unordered_set<EquipmentCategory> applicable_equipment;
+            std::unordered_set<int32_t> applicable_category_ids;
             for (const auto &item_id : resolved_supp) {
                 // Strip namespace prefix to check against known equipment categories
                 std::string stripped = item_id;
@@ -524,12 +527,13 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
                     stripped = stripped.substr(colon_pos + 1);
                 }
 
+                int32_t cat_id;
                 if (known_equipment_ids.count(stripped)) {
-                    applicable_equipment.insert(EquipmentCategory(stripped.c_str()));
+                    cat_id = EquipmentCategoryRegistry::get_instance().register_or_get_id(stripped);
                 } else {
-                    // Use the raw item ID as a custom EquipmentCategory
-                    applicable_equipment.insert(EquipmentCategory(item_id.c_str()));
+                    cat_id = EquipmentCategoryRegistry::get_instance().register_or_get_id(item_id);
                 }
+                applicable_category_ids.insert(cat_id);
             }
 
             result.emplace_back(
@@ -540,7 +544,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
                 limited_level,
                 multiplier,
                 std::move(exclusive_set),
-                std::move(applicable_equipment)
+                std::move(applicable_category_ids)
             );
         }
     }
@@ -583,8 +587,9 @@ std::string EnchInfoParser::to_json(
 
         // applicable_equipment array
         Json::Array eq;
-        for (const auto &cat : info.applicable_equipment) {
-            eq.push_back(Json(Json::String(static_cast<const std::string &>(cat))));
+        for (const auto &cat_id : info.applicable_category_ids) {
+            auto* cat = EquipmentCategoryRegistry::get_instance().get(cat_id);
+            eq.push_back(Json(Json::String(cat ? cat->name_id : "unknown")));
         }
         obj["applicable_equipment"] = Json(eq);
 
@@ -617,10 +622,11 @@ std::string EnchInfoParser::to_csv(const std::vector<EnchInfo> &infos) {
         // applicable_equipment: join with ;
         std::string app_eq;
         first = true;
-        for (const auto &cat : info.applicable_equipment) {
+        for (const auto &cat_id : info.applicable_category_ids) {
             if (!first) app_eq += ";";
             first = false;
-            app_eq += static_cast<const std::string &>(cat);
+            auto* cat = EquipmentCategoryRegistry::get_instance().get(cat_id);
+            app_eq += cat ? cat->name_id : "unknown";
         }
 
         table.push_back({
@@ -663,10 +669,11 @@ void EnchInfoParser::export_to_mc_official(
         }
         obj["exclusive_set"] = Json(excl);
 
-        // supported_items — convert EquipmentCategory back to item IDs
+        // supported_items — convert category IDs back to item IDs
         Json::Array supp;
-        for (const auto &cat : info.applicable_equipment) {
-            std::string cat_str = static_cast<const std::string &>(cat);
+        for (const auto &cat_id : info.applicable_category_ids) {
+            auto* cat = EquipmentCategoryRegistry::get_instance().get(cat_id);
+            std::string cat_str = cat ? cat->name_id : "unknown";
             // Avoid double-namespacing: cat may already contain "mod:item"
             if (cat_str.find(':') != std::string::npos) {
                 supp.push_back(Json(Json::String(cat_str)));
