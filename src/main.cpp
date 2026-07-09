@@ -133,10 +133,11 @@ int main(int argc, char *argv[]) {
 
         AlgorithmInput algo_input;
         algo_input.platform = parsed.platform;
-        algo_input.equipment = parsed.target_item.equipment;
-        algo_input.ench_reg = &ench_reg;
+        algo_input.equipment = *parsed.target_item.equipment;
+        algo_input.ench_reg = std::move(ench_reg);
 
-        ItemStack start_item(algo_input.equipment, parsed.original_ench, 0);
+        const Equipment* out_eq = parsed.target_item.equipment;
+        ItemStack start_item(out_eq, parsed.original_ench, 0);
         algo_input.items.reserve(1 + parsed.available_items.size());
         algo_input.items.push_back(compact::from_domain(start_item, ench_reg));
         for (const auto& book : parsed.available_items)
@@ -160,7 +161,7 @@ int main(int argc, char *argv[]) {
             solutions.reserve(compact_out.steps.size());
             for (const auto& step_list : compact_out.steps) {
                 auto domain_steps = compact::to_domain(
-                    step_list.begin(), step_list.end(), algo_input.equipment);
+                    step_list.begin(), step_list.end(), out_eq);
                 solutions.push_back(
                     SolutionFactory::create_single(
                         parsed.platform,

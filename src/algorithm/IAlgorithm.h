@@ -1,23 +1,20 @@
 #pragma once
 #include "types/CompactedTypes.h"
+#include "types/Equipment.h"
+#include "registries/CompactedRegistries.h"
 #include "types/common.h"
 #include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
 
-class Equipment; // for output conversion pointer
-namespace compact {
-class EnchReg;
-}
-
 // ─── Algorithm input (compact types only) ───
 struct AlgorithmInput {
     platform::MCE platform;
-    compact::ItemCollection items;      // items[0] = equipment, rest = books
-    compact::EnchCollection target;     // desired final enchantments
-    const Equipment *equipment;         // for output step conversion
-    const compact::EnchReg *ench_reg{}; // compact registry (must be initialized)
+    compact::ItemCollection items;   // items[0] = equipment, rest = books
+    compact::EnchCollection target;  // desired final enchantments
+    Equipment equipment;             // for output step conversion
+    compact::EnchReg ench_reg;       // compact registry (must be initialized)
 };
 
 // ─── Algorithm output (compact steps) ───

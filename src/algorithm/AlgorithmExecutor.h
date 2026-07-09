@@ -63,7 +63,4 @@ private:
     std::condition_variable _state_cv;
     std::chrono::steady_clock::time_point _start_time;
     std::chrono::milliseconds _computation_time{0};
-
-    // Boundary data for output conversion
-    const Equipment* _out_equipment{nullptr};
 };

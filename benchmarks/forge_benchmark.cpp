@@ -181,8 +181,8 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
 
     AlgorithmInput algo_input;
     algo_input.platform = platform::MCE::Java;
-    algo_input.equipment = &eq;
-    algo_input.ench_reg = &ench_reg;
+    algo_input.equipment = eq;
+    algo_input.ench_reg = std::move(ench_reg);
 
     ItemStack start_item(&eq, ::EnchSet{}, 0, eq.max_durability);
     algo_input.items.push_back(compact::from_domain(start_item, ench_reg));

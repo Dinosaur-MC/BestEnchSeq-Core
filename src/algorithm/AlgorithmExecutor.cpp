@@ -43,13 +43,12 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
-    _out_equipment = input.equipment;
     _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
 
     _worker.emplace([this, input = std::move(input)]() mutable {
         try {
-            _algorithm->execute(input.items, *input.ench_reg, input.target, *_ctx);
+            _algorithm->execute(input.items, input.ench_reg, input.target, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);

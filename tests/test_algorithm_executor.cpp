@@ -6,9 +6,9 @@
 #include "registries/CompactedRegistries.h"
 #include <thread>
 
-// Default-constructed EnchReg for tests that don't need real registry data.
-static compact::EnchReg g_test_reg;
-static AlgorithmInput g_test_input{{}, {}, {}, {}, &g_test_reg};
+// Empty AlgorithmInput for tests that don't need real data.
+// EnchReg is default-constructed (uninitialized — fine for TestAlgorithm).
+static AlgorithmInput g_test_input;
 
 // ─── Test IAlgorithm implementation (compact-only) ───
 
