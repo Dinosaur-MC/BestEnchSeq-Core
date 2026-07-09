@@ -14,6 +14,8 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/algorithm/strategies/CompactGreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/CompactDFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/CompactAStarAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/CompactDynamicPenaltyBalancing.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/CompactHierarchicalMergeStrategy.cpp
     ${PROJECT_ROOT}/src/algorithm/CompactForgeEngine.cpp
     ${PROJECT_ROOT}/src/utils/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
