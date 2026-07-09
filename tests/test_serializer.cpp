@@ -129,12 +129,11 @@ void test_itemstack_roundtrip_book() {
 void test_itemstack_roundtrip_equipment() {
     setup();
 
-    auto* eq = EquipmentRegistry::get_instance().get("diamond_sword");
-    expect(eq != nullptr, "diamond_sword should be registered");
+    auto& eq = EquipmentRegistry::get_instance().get("diamond_sword");
 
     EnchSet ench;
     ench.insert(Ench(0, 5, Ench::unchecked));
-    ItemStack item(eq, ench, 2, 1000);
+    ItemStack item(&eq, ench, 2, 1000);
 
     Serializer s;
     s.write(item);
@@ -167,3 +166,4 @@ int main() {
     std::cout << "All Serializer tests passed!" << std::endl;
     return 0;
 }
+

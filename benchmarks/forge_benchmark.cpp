@@ -76,11 +76,12 @@ void load_builtin_data() {
 }
 
 void run_case(const TestCase& tc) {
-    const Equipment* eq = EquipmentRegistry::get_instance().get(tc.item_type);
-    if (!eq) {
+    int32_t eq_id = EquipmentRegistry::get_instance().get_id(tc.item_type);
+    if (eq_id < 0) {
         std::cout << "  SKIP: unknown equipment '" << tc.item_type << "'" << std::endl;
         return;
     }
+    const Equipment& eq = EquipmentRegistry::get_instance().get(eq_id);
 
     // Parse wanted enchantments
     EnchSet wanted_set;
@@ -99,7 +100,7 @@ void run_case(const TestCase& tc) {
     input.platform = platform::MCE::Java;
     input.original_ench = EnchSet{};
     // target_item.enchantments = GOAL state for DFS/AStar
-    input.target_item = ItemStack(eq, wanted_set, 0, eq->max_durability);
+    input.target_item = ItemStack(&eq, wanted_set, 0, eq.max_durability);
     input.available_items = books;
 
     for (const auto& algo_name : {"greedy", "dfs", "astar", "penalty_balance", "hierarchical"}) {

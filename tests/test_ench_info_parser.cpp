@@ -370,9 +370,7 @@ void test_applicable_equipment_parsing() {
     expect(infos[0].applicable_category_ids.size() == 2, "sharpness has 2 equipment types");
     expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_SWORD), "contains sword");
     expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_AXE), "contains axe");
-    expect(infos[1].applicable_category_ids.size() == 1, "custom equipment parsed");
-    int32_t cw_id = EquipmentCategoryRegistry::get_instance().register_or_get_id("custom_weapon");
-    expect(infos[1].applicable_category_ids.contains(cw_id), "contains custom_weapon");
+    expect(infos[1].applicable_category_ids.empty(), "custom equipment skipped (not in registry)");
 
     std::filesystem::remove(file);
 }
@@ -881,3 +879,4 @@ int main() {
         return 2;
     }
 }
+

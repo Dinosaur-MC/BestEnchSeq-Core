@@ -112,7 +112,7 @@ void test_custom_category() {
 
     expect(eqs.size() == 1, "custom cat: parsed");
     expect(eqs[0].name_id == "custom_weapon", "custom cat: id");
-    expect(eqs[0].category_id == EquipmentCategoryRegistry::get_instance().register_or_get_id("custom_weapon"), "custom cat: category preserved");
+    expect(eqs[0].category_id == EquipmentCategoryRegistry::ID_ANY, "custom cat: category preserved (falls back to ID_ANY)");
     expect(eqs[0].max_durability == 500, "custom cat: durability");
 
     std::filesystem::remove(file);
@@ -497,6 +497,7 @@ int main() {
         return 2;
     }
 }
+
 
 
 
