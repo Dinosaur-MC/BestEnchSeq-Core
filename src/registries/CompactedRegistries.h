@@ -17,7 +17,7 @@ class EnchReg {
     Equipment _target_equip;
     size_t _mask_size; // exc_mask vector size
 
-    std::vector<std::vector<char>> _conflict_matrix;
+    std::vector<char> _conflict_matrix; // flat N×N, row-major
     void _build_conflict_matrix();
 
   public:
@@ -36,7 +36,7 @@ class EnchReg {
 
     uint16_t get_multiplier(int16_t id) const noexcept { return (*this)[id].mul; }
     uint16_t get_max_level(int16_t id) const noexcept { return (*this)[id].max_lvl; }
-    bool is_conflict(int16_t id1, int16_t id2) const noexcept { return _conflict_matrix[id1][id2]; }
+    bool is_conflict(int16_t id1, int16_t id2) const noexcept { return _conflict_matrix[id1 * _ench_infos.size() + id2]; }
 };
 
 } // namespace compact

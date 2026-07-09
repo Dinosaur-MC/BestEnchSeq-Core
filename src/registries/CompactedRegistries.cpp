@@ -9,7 +9,7 @@ EnchReg &EnchReg::get_instance() {
 
 void EnchReg::_build_conflict_matrix() {
     const size_t N = _registry.size();
-    _conflict_matrix.assign(N, std::vector<char>(N, 0));
+    _conflict_matrix.assign(N * N, 0);
     for (size_t i = 0; i < N; ++i) {
         const auto &mask_i = _ench_infos[i].exc_mask;
         for (size_t j = i + 1; j < N; ++j) {
@@ -21,8 +21,8 @@ void EnchReg::_build_conflict_matrix() {
                     break;
                 }
             }
-            _conflict_matrix[i][j] = conflict;
-            _conflict_matrix[j][i] = conflict;
+            _conflict_matrix[i * N + j] = static_cast<char>(conflict);
+            _conflict_matrix[j * N + i] = static_cast<char>(conflict);
         }
     }
 }
