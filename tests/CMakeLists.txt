@@ -52,6 +52,7 @@ add_executable(test_ench_info_parser
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_ench_info_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_ench_info_parser COMMAND test_ench_info_parser)
@@ -65,6 +66,7 @@ add_executable(test_equipment_parser
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_equipment_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_equipment_parser COMMAND test_equipment_parser)
@@ -95,7 +97,8 @@ add_executable(test_input_parser
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_input_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_input_parser COMMAND test_input_parser)
@@ -113,7 +116,8 @@ add_executable(test_output_formatter
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/EnchSolution.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
@@ -140,7 +144,8 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/EnchSolution.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
@@ -163,7 +168,8 @@ add_executable(test_forge_engine
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_forge_engine PRIVATE ${TEST_INCLUDE})
@@ -180,7 +186,8 @@ add_executable(test_exp_calculator
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
@@ -216,7 +223,8 @@ add_executable(test_algorithm_registry
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_algorithm_registry PRIVATE ${TEST_INCLUDE})
@@ -237,7 +245,8 @@ add_executable(test_algorithm_executor
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
@@ -261,7 +270,8 @@ add_executable(test_greedy_algorithm
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_greedy_algorithm PRIVATE ${TEST_INCLUDE})
@@ -285,7 +295,8 @@ add_executable(test_dfs_algorithm
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_dfs_algorithm PRIVATE ${TEST_INCLUDE})
@@ -308,7 +319,8 @@ add_executable(test_astar_algorithm
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_astar_algorithm PRIVATE ${TEST_INCLUDE})
@@ -350,7 +362,8 @@ add_executable(test_algorithm_utils
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_algorithm_utils PRIVATE ${TEST_INCLUDE})
@@ -372,7 +385,8 @@ add_executable(test_penalty_balancing
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_penalty_balancing PRIVATE ${TEST_INCLUDE})
@@ -390,7 +404,8 @@ add_executable(test_serializer
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
@@ -413,7 +428,8 @@ add_executable(test_hierarchical_merge
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_hierarchical_merge PRIVATE ${TEST_INCLUDE})
@@ -422,3 +438,4 @@ set_tests_properties(test_hierarchical_merge PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()
+

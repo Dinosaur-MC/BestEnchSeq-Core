@@ -9,6 +9,7 @@
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "registries/PlatformConfig.h"
 
@@ -65,6 +66,7 @@ TestCase CASES[] = {
 void load_builtin_data() {
     auto dir = std::filesystem::path("data") / "builtin";
     TagResolver tags;
+    EquipmentCategoryRegistry::get_instance().initialize();
     auto ench_infos = EnchInfoParser::parse(dir / "vanilla.json", tags);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
     auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags);
@@ -74,7 +76,7 @@ void load_builtin_data() {
 }
 
 void run_case(const TestCase& tc) {
-    const EquipmentType* eq = EquipmentRegistry::get_instance().get(tc.item_type);
+    const Equipment* eq = EquipmentRegistry::get_instance().get(tc.item_type);
     if (!eq) {
         std::cout << "  SKIP: unknown equipment '" << tc.item_type << "'" << std::endl;
         return;

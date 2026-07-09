@@ -13,6 +13,7 @@
 #include "parser/OutputFormatter.h"
 #include "parser/TagResolver.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "registries/PlatformConfig.h"
 
@@ -28,6 +29,10 @@ namespace {
 const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path("data") / "builtin";
 
 void load_builtin_data(TagResolver& tag_resolver) {
+    // EquipmentCategoryRegistry must be initialized before EnchInfoParser
+    // (enchantments reference categories) and EquipmentParser (equipment references categories).
+    EquipmentCategoryRegistry::get_instance().initialize();
+
     auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
     auto equipments = EquipmentParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
@@ -49,8 +54,8 @@ void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& t
     EnchantmentRegistry::get_instance().initialize(combined_ench);
 
     auto equipments = EquipmentParser::parse(data_pack_dir, tag_resolver);
-    auto existing_eq = EquipmentRegistry::get_instance().get_instances();
-    std::vector<EquipmentType> combined_eq;
+    auto& existing_eq = EquipmentRegistry::get_instance().get_instances();
+    std::vector<Equipment> combined_eq;
     combined_eq.reserve(existing_eq.size() + equipments.size());
     for (const auto &eq : existing_eq) combined_eq.push_back(eq);
     for (const auto &eq : equipments) combined_eq.push_back(eq);
@@ -108,9 +113,9 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        std::unordered_map<std::string, const EquipmentType*> equipment_map;
+        std::unordered_map<std::string, const Equipment*> equipment_map;
         for (const auto& eq : EquipmentRegistry::get_instance().get_instances()) {
-            equipment_map[eq.id] = &eq;
+            equipment_map[eq.name_id] = &eq;
         }
 
         auto algo_input = InputParser::assemble_input(config, equipment_map, ench_name_to_id);

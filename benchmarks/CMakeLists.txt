@@ -26,7 +26,8 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EquipmentType.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
