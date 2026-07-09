@@ -200,8 +200,8 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
 
-        auto items_copy = algo_input.items;
-        executor.start(std::move(items_copy), ench_reg, algo_input.target, algo_input.equipment);
+        AlgorithmInput run_input = algo_input;
+        executor.start(std::move(run_input));
         executor.wait();
 
         if (executor.state() != AlgorithmState::Completed) {

@@ -89,7 +89,7 @@ void test_executor_lifecycle() {
     AlgorithmExecutor executor(std::move(algo));
     expect(executor.state() == AlgorithmState::Idle, "initial state should be Idle");
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
     expect(executor.state() == AlgorithmState::Running, "state should be Running after start");
 
     auto final_state = executor.wait();
@@ -102,11 +102,11 @@ void test_double_start() {
     auto algo = std::make_unique<TestAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
 
     bool threw = false;
     try {
-        executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+        executor.start(AlgorithmInput{});
     } catch (const std::logic_error&) {
         threw = true;
     }
@@ -119,7 +119,7 @@ void test_executor_cancel() {
     auto algo = std::make_unique<SlowAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
 
     expect(executor.state() == AlgorithmState::Running, "should be Running after start");
@@ -136,7 +136,7 @@ void test_executor_pause_resume() {
     auto algo = std::make_unique<SlowAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
 
     executor.pause();
@@ -159,7 +159,7 @@ void test_executor_progress() {
     auto progress_obs = std::make_shared<TestProgressObserver>();
     executor.attach_observer(progress_obs);
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
     executor.wait();
 
     expect(progress_obs->last_progress > 0, "progress should be reported");
@@ -174,7 +174,7 @@ void test_executor_observer() {
     auto obs = std::make_shared<TestSolutionObserver>();
     executor.attach_observer(obs);
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
     executor.wait();
 
     expect(obs->found_count >= 1, "observer should have been called for solution");
@@ -189,7 +189,7 @@ void test_executor_detach_observer() {
     executor.attach_observer(obs);
     executor.detach_observer(obs);
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
     executor.wait();
 
     expect(obs->found_count == 0, "detached observer should not be called");
@@ -200,7 +200,7 @@ void test_output_not_valid_before_completion() {
     auto algo = std::make_unique<SlowAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
 
     auto out = executor.output();
     expect(!out.is_valid, "output should not be valid while running");
@@ -214,7 +214,7 @@ void test_output_has_steps_after_completion() {
     auto algo = std::make_unique<TestAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
 
-    executor.start({}, compact::EnchReg::get_instance(), {}, nullptr);
+    executor.start(AlgorithmInput{});
     executor.wait();
 
     expect(executor.state() == AlgorithmState::Completed, "should complete");

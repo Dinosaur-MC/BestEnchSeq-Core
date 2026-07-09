@@ -1,5 +1,5 @@
 #include "AlgorithmExecutor.h"
-#include "IAlgorithm.h"
+#include "registries/CompactedRegistries.h"
 #include <stdexcept>
 #include <utility>
 
@@ -39,32 +39,28 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
 
 // ─── Lifecycle ───
 
-void AlgorithmExecutor::start(
-    std::vector<compact::Item> items,
-    const compact::EnchReg& reg,
-    std::vector<compact::Ench> target,
-    const Equipment* out_eq)
-{
+void AlgorithmExecutor::start(AlgorithmInput input) {
     AlgorithmState expected = AlgorithmState::Idle;
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
-    _out_equipment = out_eq;
+    _out_equipment = input.equipment;
     _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
 
-    _worker.emplace([this, items = std::move(items), &reg, target = std::move(target)]() mutable {
+    // Capture reg pointer for the worker (lifetime guaranteed by caller)
+    _worker.emplace([this, input = std::move(input)]() mutable {
         try {
-            _algorithm->execute(items, reg, target, *_ctx);
+            auto& reg = compact::EnchReg::get_instance();
+            _algorithm->execute(input.items, reg, input.target, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
 
-            if (_ctx->is_cancelled()) {
+            if (_ctx->is_cancelled())
                 _set_state(AlgorithmState::Cancelled);
-            } else {
+            else
                 _set_state(AlgorithmState::Completed);
-            }
         } catch (...) {
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
@@ -73,17 +69,10 @@ void AlgorithmExecutor::start(
     });
 }
 
-void AlgorithmExecutor::start(
-    std::vector<compact::Item> items,
-    const compact::EnchReg& reg,
-    std::vector<compact::Ench> target,
-    const Equipment* out_eq,
-    const std::vector<uint8_t>& previous_state)
-{
-    if (!previous_state.empty()) {
+void AlgorithmExecutor::start(AlgorithmInput input, const std::vector<uint8_t>& previous_state) {
+    if (!previous_state.empty())
         _algorithm->deserialize_state(previous_state);
-    }
-    start(std::move(items), reg, std::move(target), out_eq);
+    start(std::move(input));
 }
 
 void AlgorithmExecutor::pause() {
@@ -114,10 +103,7 @@ AlgorithmState AlgorithmExecutor::wait() {
 }
 
 AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
-    if (!_worker)
-        return _state.load(std::memory_order_acquire);
-
-    if (!_worker->joinable())
+    if (!_worker || !_worker->joinable())
         return _state.load(std::memory_order_acquire);
 
     std::unique_lock lock(_state_mtx);
@@ -138,8 +124,6 @@ AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
     return s;
 }
 
-// ─── State queries ───
-
 AlgorithmState AlgorithmExecutor::state() const noexcept {
     return _state.load(std::memory_order_acquire);
 }
@@ -148,8 +132,6 @@ double AlgorithmExecutor::progress() const noexcept {
     return _ctx ? _ctx->progress() : 0.0;
 }
 
-// ─── Observer ───
-
 void AlgorithmExecutor::attach_observer(std::shared_ptr<AlgorithmObserver> observer) {
     if (_ctx) _ctx->attach_observer(std::move(observer));
 }
@@ -157,8 +139,6 @@ void AlgorithmExecutor::attach_observer(std::shared_ptr<AlgorithmObserver> obser
 void AlgorithmExecutor::detach_observer(std::shared_ptr<AlgorithmObserver> observer) {
     if (_ctx) _ctx->detach_observer(std::move(observer));
 }
-
-// ─── Result (convert compact steps → domain at output boundary) ───
 
 AlgorithmOutput AlgorithmExecutor::output() const {
     if (_state.load(std::memory_order_acquire) != AlgorithmState::Completed)
@@ -169,19 +149,14 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.algorithm_version = std::string(_algorithm->version());
     out.created_at = std::chrono::system_clock::now();
     out.computation_time = _computation_time;
-
-    auto compact_steps = _ctx->get_accumulated_compact_steps();
-    out.steps = std::move(compact_steps);
-
+    out.steps = _ctx->get_accumulated_compact_steps();
     out.is_valid = true;
     return out;
 }
 
 std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
     auto s = _state.load(std::memory_order_acquire);
-    if (s == AlgorithmState::Idle)
-        return {};
-    if (!_algorithm->is_resumable())
+    if (s == AlgorithmState::Idle || !_algorithm->is_resumable())
         return {};
     return _algorithm->serialize_state();
 }
@@ -189,16 +164,12 @@ std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
 bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
     if (_state.load(std::memory_order_acquire) != AlgorithmState::Idle)
         return false;
-    if (!_algorithm->is_resumable())
-        return false;
-    if (data.empty())
+    if (!_algorithm->is_resumable() || data.empty())
         return false;
     _algorithm->deserialize_state(data);
     return true;
 }
 
 void AlgorithmExecutor::update_search_config(ExecutionContext::SearchConfig cfg) {
-    if (_ctx) {
-        _ctx->set_search_config(std::move(cfg));
-    }
+    if (_ctx) _ctx->set_search_config(std::move(cfg));
 }

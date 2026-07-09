@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
-        executor.start(std::move(algo_input.items), ench_reg, std::move(algo_input.target), algo_input.equipment);
+        executor.start(std::move(algo_input));
         executor.wait();
 
         //── Boundary: compact → domain ────────────────────────────────────

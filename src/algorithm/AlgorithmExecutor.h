@@ -1,7 +1,6 @@
 #pragma once
+#include "IAlgorithm.h"
 #include "ExecutionContext.h"
-#include "types/CompactedTypes.h"
-#include "registries/CompactedRegistries.h"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -25,26 +24,11 @@ public:
     AlgorithmExecutor(const AlgorithmExecutor&) = delete;
     AlgorithmExecutor& operator=(const AlgorithmExecutor&) = delete;
 
-    // Start with compact types (algorithm layer has zero domain dependencies).
-    // @param items        items[0] = target equipment, rest = available books
-    // @param reg          compact registry (must be initialized before call)
-    // @param target       desired enchantment set on the equipment
-    // @param out_eq       equipment pointer for output conversion (can be null)
-    void start(
-        std::vector<compact::Item> items,
-        const compact::EnchReg& reg,
-        std::vector<compact::Ench> target,
-        const Equipment* out_eq
-    );
+    /// Start with compact AlgorithmInput.
+    void start(AlgorithmInput input);
 
-    // Resume from a previously-serialized state.
-    void start(
-        std::vector<compact::Item> items,
-        const compact::EnchReg& reg,
-        std::vector<compact::Ench> target,
-        const Equipment* out_eq,
-        const std::vector<uint8_t>& previous_state
-    );
+    /// Resume from a previously-serialized state.
+    void start(AlgorithmInput input, const std::vector<uint8_t>& previous_state);
 
     void pause();
     void resume();
