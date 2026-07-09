@@ -24,12 +24,6 @@ struct Ench {
     bool operator==(const Ench &o) const noexcept { return id == o.id && level == o.level; }
 };
 
-enum class ItemType : uint8_t {
-    Book,
-    Equip,
-    Material,
-};
-
 /// Compact set of Ench stored as sorted vector<Ench>.
 ///
 /// Invariant: elements are always sorted by id (ascending). This makes
@@ -63,12 +57,27 @@ class EnchSet {
     void insert(const Ench &ench);
     void clear() { _enchs.clear(); }
 
+    // ── Hash (inline, avoids std::hash<Ench> before its specialization) ──
+    size_t hash() const noexcept {
+        size_t h = _enchs.size();
+        for (const auto &e : _enchs)
+            h ^= static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16)
+               + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+
     // ── Comparison (inline) ──
     bool operator==(const EnchSet &o) const noexcept { return _enchs == o._enchs; }
     bool operator!=(const EnchSet &o) const noexcept { return _enchs != o._enchs; }
 
   private:
     std::vector<Ench> _enchs;
+};
+
+enum class ItemType : uint8_t {
+    Book,
+    Equip,
+    Material,
 };
 
 struct Item {
@@ -98,9 +107,11 @@ template <> struct std::hash<compact::Item> {
     size_t operator()(const compact::Item &item) const noexcept {
         size_t h =
             static_cast<size_t>(item.type) ^ (static_cast<size_t>(item.ppn) << 8) ^ (static_cast<size_t>(item.dur) << 16);
-        // Combine enchantment hashes
-        for (const auto &e : item.enchs)
-            h ^= std::hash<compact::Ench>{}(e) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= item.enchs.hash() + 0x9e3779b9 + (h << 6) + (h >> 2);
         return h;
     }
+};
+
+template <> struct std::hash<compact::EnchSet> {
+    size_t operator()(const compact::EnchSet &s) const noexcept { return s.hash(); }
 };
