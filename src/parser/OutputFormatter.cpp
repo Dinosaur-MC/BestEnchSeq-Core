@@ -527,8 +527,10 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
     // Equipment
     if (item.equipment != nullptr) {
         Json::Object eq;
-        auto* cat = EquipmentCategoryRegistry::get_instance().get(item.equipment->category_id);
-        std::string cat_name = cat ? cat->name_id : "unknown";
+        int32_t cid = item.equipment->category_id;
+        std::string cat_name = "unknown";
+        if (cid >= 0 && static_cast<size_t>(cid) < EquipmentCategoryRegistry::get_instance().size())
+            cat_name = EquipmentCategoryRegistry::get_instance().get(cid).name_id;
         eq["id"]             = Json(Json::String(item.equipment->name_id));
         eq["category"]       = Json(Json::String(cat_name));
         eq["name"]           = Json(Json::String(item.equipment->name));

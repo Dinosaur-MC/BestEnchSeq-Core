@@ -229,8 +229,9 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
         std::unordered_set<int32_t> applicable_category_ids;
         auto resolved_equipment = resolve_references(equipment_items, tag_resolver);
         for (const auto &eq : resolved_equipment) {
-            applicable_category_ids.insert(
-                EquipmentCategoryRegistry::get_instance().register_or_get_id(eq));
+            int32_t cid = EquipmentCategoryRegistry::get_instance().get_id(eq);
+            if (cid >= 0)
+                applicable_category_ids.insert(cid);
         }
 
         result.emplace_back(
@@ -381,8 +382,9 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
                 auto items    = ParserUtils::split_string(eq_str, ';');
                 auto resolved = resolve_references(items, tag_resolver);
                 for (const auto &eq : resolved) {
-                    applicable_category_ids.insert(
-                        EquipmentCategoryRegistry::get_instance().register_or_get_id(eq));
+                    int32_t cid = EquipmentCategoryRegistry::get_instance().get_id(eq);
+                    if (cid >= 0)
+                        applicable_category_ids.insert(cid);
                 }
             }
         }
@@ -529,11 +531,12 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
 
                 int32_t cat_id;
                 if (known_equipment_ids.count(stripped)) {
-                    cat_id = EquipmentCategoryRegistry::get_instance().register_or_get_id(stripped);
+                    cat_id = EquipmentCategoryRegistry::get_instance().get_id(stripped);
                 } else {
-                    cat_id = EquipmentCategoryRegistry::get_instance().register_or_get_id(item_id);
+                    cat_id = EquipmentCategoryRegistry::get_instance().get_id(item_id);
                 }
-                applicable_category_ids.insert(cat_id);
+                if (cat_id >= 0)
+                    applicable_category_ids.insert(cat_id);
             }
 
             result.emplace_back(
@@ -588,8 +591,10 @@ std::string EnchInfoParser::to_json(
         // applicable_equipment array
         Json::Array eq;
         for (const auto &cat_id : info.applicable_category_ids) {
-            auto* cat = EquipmentCategoryRegistry::get_instance().get(cat_id);
-            eq.push_back(Json(Json::String(cat ? cat->name_id : "unknown")));
+            std::string cat_name = "unknown";
+            if (cat_id >= 0 && static_cast<size_t>(cat_id) < EquipmentCategoryRegistry::get_instance().size())
+                cat_name = EquipmentCategoryRegistry::get_instance().get(cat_id).name_id;
+            eq.push_back(Json(Json::String(cat_name)));
         }
         obj["applicable_equipment"] = Json(eq);
 
@@ -625,8 +630,10 @@ std::string EnchInfoParser::to_csv(const std::vector<EnchInfo> &infos) {
         for (const auto &cat_id : info.applicable_category_ids) {
             if (!first) app_eq += ";";
             first = false;
-            auto* cat = EquipmentCategoryRegistry::get_instance().get(cat_id);
-            app_eq += cat ? cat->name_id : "unknown";
+            std::string cat_name = "unknown";
+            if (cat_id >= 0 && static_cast<size_t>(cat_id) < EquipmentCategoryRegistry::get_instance().size())
+                cat_name = EquipmentCategoryRegistry::get_instance().get(cat_id).name_id;
+            app_eq += cat_name;
         }
 
         table.push_back({
@@ -672,8 +679,9 @@ void EnchInfoParser::export_to_mc_official(
         // supported_items — convert category IDs back to item IDs
         Json::Array supp;
         for (const auto &cat_id : info.applicable_category_ids) {
-            auto* cat = EquipmentCategoryRegistry::get_instance().get(cat_id);
-            std::string cat_str = cat ? cat->name_id : "unknown";
+            std::string cat_str = "unknown";
+            if (cat_id >= 0 && static_cast<size_t>(cat_id) < EquipmentCategoryRegistry::get_instance().size())
+                cat_str = EquipmentCategoryRegistry::get_instance().get(cat_id).name_id;
             // Avoid double-namespacing: cat may already contain "mod:item"
             if (cat_str.find(':') != std::string::npos) {
                 supp.push_back(Json(Json::String(cat_str)));

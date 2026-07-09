@@ -144,7 +144,9 @@ public:
 
         const Equipment* eq = nullptr;
         if (!eq_id.empty()) {
-            eq = EquipmentRegistry::get_instance().get(eq_id);
+            int32_t eid = EquipmentRegistry::get_instance().get_id(eq_id);
+            if (eid >= 0)
+                eq = &EquipmentRegistry::get_instance().get(eid);
         }
         ItemStack item(eq, ench, pp, dur);
         item.priority = prio;
