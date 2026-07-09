@@ -1,6 +1,5 @@
 #include "HierarchicalMergeStrategy.h"
 #include "../ExecutionContext.h"
-#include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>
@@ -9,14 +8,13 @@
 using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
-using compact::book_multiplier;
 
 int32_t HierarchicalMergeStrategy::effective_multiplier(
-    const Item& item, const EnchReg& reg)
+    const Item& item, const EnchReg& reg) const
 {
     int32_t max_mult = 1;
     for (const auto& e : item.enchs) {
-        int32_t m = book_multiplier(reg.get_multiplier(e.id));
+        int32_t m = _forge_engine.book_multiplier(reg.get_multiplier(e.id));
         if (m > max_mult) max_mult = m;
     }
     return max_mult;

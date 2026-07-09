@@ -1,6 +1,5 @@
 #include "DFSAlgorithm.h"
 #include "../ExecutionContext.h"
-#include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>
@@ -9,8 +8,6 @@
 using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
-using compact::estimate_forge_cost;
-using compact::book_multiplier;
 
 // ─── Compact-only greedy bound ─────────────────────────────────────────────
 
@@ -31,7 +28,7 @@ int32_t DFSAlgorithm::_greedy_bound(
 
     std::vector<std::pair<size_t, int32_t>> ordered;
     for (size_t i = 0; i < books.size(); ++i)
-        ordered.emplace_back(i, estimate_forge_cost(equip, books[i], reg));
+        ordered.emplace_back(i, _compact_forge.estimate_forge_cost(equip, books[i], reg));
     std::sort(ordered.begin(), ordered.end(),
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
@@ -60,7 +57,7 @@ std::vector<DFSAlgorithm::ForgePair> DFSAlgorithm::_collect_pairs(
             if (!_compact_forge.is_forgeable(items[i], items[j]))
                 continue;
 
-            int32_t est = estimate_forge_cost(items[i], items[j], *_ench_reg);
+            int32_t est = _compact_forge.estimate_forge_cost(items[i], items[j], *_ench_reg);
             pairs.push_back({i, j, est});
         }
     }
@@ -100,7 +97,7 @@ int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
         auto it = max_levels.find(t.id);
         int16_t have = (it == max_levels.end()) ? 0 : it->second;
         if (have < t.level) {
-            int32_t bm = book_multiplier(_ench_reg->get_multiplier(t.id));
+            int32_t bm = _compact_forge.book_multiplier(_ench_reg->get_multiplier(t.id));
             h += (t.level - have) * bm;
         }
     }

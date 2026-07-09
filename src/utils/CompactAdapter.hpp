@@ -4,7 +4,6 @@
 #include "types/ItemStack.h"
 #include "types/EnchSolution.h"
 #include "types/AlgorithmInput.h"
-#include "utils/CompactForgeUtils.hpp"
 #include <iterator>
 #include <vector>
 

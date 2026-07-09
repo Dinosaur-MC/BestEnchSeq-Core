@@ -28,7 +28,7 @@ private:
         const compact::EnchReg& reg,
         ExecutionContext& ctx);
 
-    static int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg);
+    int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg) const;
 
     ForgeEngine _forge_engine;
 };

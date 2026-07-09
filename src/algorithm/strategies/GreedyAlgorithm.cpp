@@ -1,13 +1,10 @@
 #include "GreedyAlgorithm.h"
 #include "../ExecutionContext.h"
-#include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
 
 using compact::Item;
-using compact::ItemType;
 using compact::EnchStep;
 using compact::EnchReg;
-using compact::estimate_forge_cost;
 
 void GreedyAlgorithm::execute(
     const std::vector<Item>& items,
@@ -21,7 +18,7 @@ void GreedyAlgorithm::execute(
     std::vector<BookCost> ordered;
     ordered.reserve(items.size() - 1);
     for (size_t i = 1; i < items.size(); ++i) {
-        int32_t est = estimate_forge_cost(items[0], items[i], reg);
+        int32_t est = _forge_engine.estimate_forge_cost(items[0], items[i], reg);
         ordered.push_back({i, est});
     }
     std::sort(ordered.begin(), ordered.end(),

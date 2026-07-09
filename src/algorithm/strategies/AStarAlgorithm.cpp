@@ -1,13 +1,11 @@
 #include "AStarAlgorithm.h"
 #include "../ExecutionContext.h"
-#include "utils/CompactForgeUtils.hpp"
 #include <queue>
 #include <unordered_map>
 
 using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
-using compact::book_multiplier;
 
 // ─── Heuristic: admissible lower bound ─────────────────────────────────────
 
@@ -30,7 +28,7 @@ int32_t AStarAlgorithm::heuristic(const std::vector<Item>& items) const {
         auto it = max_levels.find(t.id);
         int16_t have = (it == max_levels.end()) ? 0 : it->second;
         if (have < t.level) {
-            int32_t bm = book_multiplier(_ench_reg->get_multiplier(t.id));
+            int32_t bm = _compact_forge.book_multiplier(_ench_reg->get_multiplier(t.id));
             h += (t.level - have) * bm;
         }
     }

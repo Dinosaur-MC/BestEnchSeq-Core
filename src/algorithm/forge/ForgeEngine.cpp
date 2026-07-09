@@ -2,15 +2,33 @@
 #include "ForgeEngine.h"
 #include <algorithm>
 
-// ─── Static helpers ─────────────────────────────────────────────────────────
+// ─── IForgeEngine sub-operations ──────────────────────────────────────────────
 
-int32_t ForgeEngine::_penalty_cost(int8_t ppn) noexcept {
+int32_t ForgeEngine::penalty_cost(int8_t ppn) const noexcept {
     return (1 << ppn) - 1;
 }
 
-int32_t ForgeEngine::_apply_cap(int32_t raw) const noexcept {
-    if (_ignore_cap) return raw;
-    return raw > 39 ? 39 : raw;
+int32_t ForgeEngine::book_multiplier(int32_t equip_mult) const noexcept {
+    return std::max(1, equip_mult >> 1);
+}
+
+int32_t ForgeEngine::apply_cap(int32_t raw_cost) const noexcept {
+    if (_ignore_cap) return raw_cost;
+    return raw_cost > 39 ? 39 : raw_cost;
+}
+
+int32_t ForgeEngine::estimate_forge_cost(const compact::Item& target,
+                                          const compact::Item& sacrifice,
+                                          const compact::EnchReg& reg) const noexcept {
+    int32_t cost = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
+    bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
+    for (const auto& e : sacrifice.enchs) {
+        int32_t mult = sac_is_book
+            ? book_multiplier(reg.get_multiplier(e.id))
+            : reg.get_multiplier(e.id);
+        cost += e.level * mult;
+    }
+    return cost;
 }
 
 // ─── Forgeability check ─────────────────────────────────────────────────────
@@ -28,7 +46,7 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
     int32_t cost = 0;
 
     if (!_ignore_penalty)
-        cost += _penalty_cost(target.ppn) + _penalty_cost(sacrifice.ppn);
+        cost += penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
 
     platform::MCE plat = platform::get_active_platform();
     bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
@@ -49,7 +67,7 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
         }
 
         int32_t mult = sac_is_book
-            ? std::max(1, reg.get_multiplier(se.id) >> 1)
+            ? book_multiplier(reg.get_multiplier(se.id))
             : reg.get_multiplier(se.id);
 
         auto it = target.enchs.find(se.id);
@@ -73,7 +91,6 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
             }
         } else {
             target.enchs.insert(se);
-
             if (mult > 0)
                 cost += mult * se.level;
         }
@@ -82,7 +99,7 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
     target.ppn = static_cast<int8_t>(
         1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
 
-    return _apply_cap(cost);
+    return apply_cap(cost);
 }
 
 // ─── Forge (non-mutating) ───────────────────────────────────────────────────

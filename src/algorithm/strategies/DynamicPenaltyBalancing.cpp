@@ -1,6 +1,5 @@
 #include "DynamicPenaltyBalancing.h"
 #include "../ExecutionContext.h"
-#include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
 #include <climits>
 #include <cstdint>
@@ -10,7 +9,6 @@ using compact::Item;
 using compact::ItemType;
 using compact::EnchStep;
 using compact::EnchReg;
-using compact::estimate_forge_cost;
 
 void DynamicPenaltyBalancing::execute(
     const std::vector<Item>& items,
@@ -60,7 +58,7 @@ void DynamicPenaltyBalancing::execute(
 
                 int32_t pen_diff = std::abs(static_cast<int32_t>(mut_items[i].ppn)
                                           - static_cast<int32_t>(mut_items[j].ppn));
-                int32_t est = estimate_forge_cost(mut_items[i], mut_items[j], reg);
+                int32_t est = _forge_engine.estimate_forge_cost(mut_items[i], mut_items[j], reg);
                 bool both_books = (mut_items[i].type == ItemType::Book
                                 && mut_items[j].type == ItemType::Book);
 
