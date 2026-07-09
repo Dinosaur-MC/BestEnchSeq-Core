@@ -22,5 +22,5 @@ public:
     ) override;
 
 private:
-    compact::ForgeEngine _forge_engine;
+    ForgeEngine _forge_engine;
 };

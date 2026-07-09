@@ -27,5 +27,5 @@ private:
         int32_t est_cost;
     };
 
-    compact::ForgeEngine _forge_engine;
+    ForgeEngine _forge_engine;
 };

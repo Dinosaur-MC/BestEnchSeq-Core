@@ -30,5 +30,5 @@ private:
 
     static int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg);
 
-    compact::ForgeEngine _forge_engine;
+    ForgeEngine _forge_engine;
 };

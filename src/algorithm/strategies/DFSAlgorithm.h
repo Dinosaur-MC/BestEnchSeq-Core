@@ -67,7 +67,7 @@ private:
     int32_t _greedy_bound(const std::vector<compact::Item>& items,
                            const compact::EnchReg& reg) const;
 
-    compact::ForgeEngine _compact_forge;
+    ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
 
     std::vector<compact::Ench> _target;

@@ -2,8 +2,6 @@
 #include "ForgeEngine.h"
 #include <algorithm>
 
-namespace compact {
-
 // ─── Static helpers ─────────────────────────────────────────────────────────
 
 int32_t ForgeEngine::_penalty_cost(int8_t ppn) noexcept {
@@ -17,28 +15,25 @@ int32_t ForgeEngine::_apply_cap(int32_t raw) const noexcept {
 
 // ─── Forgeability check ─────────────────────────────────────────────────────
 
-bool ForgeEngine::is_forgeable(const Item& a, const Item& b) const noexcept {
-    // Target must be equipment, or both must be books
-    return a.type == ItemType::Equip || (a.type == ItemType::Book && b.type == ItemType::Book);
+bool ForgeEngine::is_forgeable(const compact::Item& a, const compact::Item& b) const noexcept {
+    return a.type == compact::ItemType::Equip
+        || (a.type == compact::ItemType::Book && b.type == compact::ItemType::Book);
 }
 
 // ─── Forge (mutating) ───────────────────────────────────────────────────────
 
-int32_t ForgeEngine::forge_into(Item& target, const Item& sacrifice,
-                                       const EnchReg& reg) const
+int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacrifice,
+                                const compact::EnchReg& reg) const
 {
     int32_t cost = 0;
 
-    // 1. Penalty cost
     if (!_ignore_penalty)
         cost += _penalty_cost(target.ppn) + _penalty_cost(sacrifice.ppn);
 
     platform::MCE plat = platform::get_active_platform();
-    bool sac_is_book = (sacrifice.type == ItemType::Book);
+    bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
 
-    // 2. Process each sacrifice enchantment
     for (const auto& se : sacrifice.enchs) {
-        // 2a. Check incompatibility with existing target enchantments
         bool conflict = false;
         for (const auto& te : target.enchs) {
             if (reg.is_conflict(te.id, se.id)) {
@@ -48,21 +43,17 @@ int32_t ForgeEngine::forge_into(Item& target, const Item& sacrifice,
         }
 
         if (conflict) {
-            // Incompatible — skip the enchantment
             if (plat == platform::MCE::Java)
                 cost += 1;
             continue;
         }
 
-        // 2b. Determine multiplier based on sacrifice type
         int32_t mult = sac_is_book
             ? std::max(1, reg.get_multiplier(se.id) >> 1)
             : reg.get_multiplier(se.id);
 
-        // 2c. Lookup + insert via EnchSet (sorted by id, binary search)
         auto it = target.enchs.find(se.id);
         if (it != target.enchs.end()) {
-            // Existing enchantment — combine levels
             int16_t old_level = it->level;
             int16_t new_level;
             if (old_level == se.level)
@@ -81,7 +72,6 @@ int32_t ForgeEngine::forge_into(Item& target, const Item& sacrifice,
                     cost += mult * (new_level - old_level);
             }
         } else {
-            // New enchantment — EnchSet::insert maintains sorted order
             target.enchs.insert(se);
 
             if (mult > 0)
@@ -89,7 +79,6 @@ int32_t ForgeEngine::forge_into(Item& target, const Item& sacrifice,
         }
     }
 
-    // 3. Update penalty count: result = 1 + max(ppn_a, ppn_b)
     target.ppn = static_cast<int8_t>(
         1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
 
@@ -98,12 +87,11 @@ int32_t ForgeEngine::forge_into(Item& target, const Item& sacrifice,
 
 // ─── Forge (non-mutating) ───────────────────────────────────────────────────
 
-std::pair<Item, int32_t> ForgeEngine::forge(
-    const Item& target, const Item& sacrifice, const EnchReg& reg) const
+std::pair<compact::Item, int32_t> ForgeEngine::forge(
+    const compact::Item& target, const compact::Item& sacrifice,
+    const compact::EnchReg& reg) const
 {
-    Item result = target;
+    compact::Item result = target;
     int32_t cost = forge_into(result, sacrifice, reg);
     return {std::move(result), cost};
 }
-
-} // namespace compact

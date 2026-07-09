@@ -65,7 +65,7 @@ private:
     int32_t heuristic(const std::vector<compact::Item>& items) const;
     bool meets_target(const compact::Item& equipment) const;
 
-    compact::ForgeEngine _compact_forge;
+    ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
 
     std::vector<compact::Ench> _target;

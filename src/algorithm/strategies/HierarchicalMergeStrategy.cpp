@@ -9,7 +9,6 @@
 using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
-using compact::ForgeEngine;
 using compact::book_multiplier;
 
 int32_t HierarchicalMergeStrategy::effective_multiplier(

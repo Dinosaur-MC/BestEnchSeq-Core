@@ -9,7 +9,6 @@
 using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
-using compact::ForgeEngine;
 using compact::estimate_forge_cost;
 using compact::book_multiplier;
 

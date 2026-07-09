@@ -8,7 +8,6 @@ using compact::ItemType;
 using compact::EnchStep;
 using compact::EnchReg;
 using compact::estimate_forge_cost;
-using compact::ForgeEngine;
 
 void GreedyAlgorithm::execute(
     const std::vector<Item>& items,
