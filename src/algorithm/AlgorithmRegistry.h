@@ -12,7 +12,7 @@ using AlgorithmFactory = std::function<std::unique_ptr<IAlgorithm>()>;
 
 class AlgorithmRegistry {
 public:
-    static AlgorithmRegistry& instance();
+    static AlgorithmRegistry& get_instance();
 
     void register_algorithm(std::string_view name, AlgorithmFactory factory);
     std::unique_ptr<IAlgorithm> create(std::string_view name) const;

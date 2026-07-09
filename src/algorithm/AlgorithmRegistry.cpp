@@ -1,8 +1,8 @@
 #include "AlgorithmRegistry.h"
 
-AlgorithmRegistry& AlgorithmRegistry::instance() {
-    static AlgorithmRegistry inst;
-    return inst;
+AlgorithmRegistry& AlgorithmRegistry::get_instance() {
+    static AlgorithmRegistry instance;
+    return instance;
 }
 
 void AlgorithmRegistry::register_algorithm(std::string_view name, AlgorithmFactory factory) {

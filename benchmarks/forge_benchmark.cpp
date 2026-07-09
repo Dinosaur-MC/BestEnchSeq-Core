@@ -104,8 +104,8 @@ void run_case(const TestCase& tc) {
     input.available_items = books;
 
     for (const auto& algo_name : {"greedy", "dfs", "astar", "penalty_balance", "hierarchical"}) {
-        if (!AlgorithmRegistry::instance().has_algorithm(algo_name)) continue;
-        auto algo = AlgorithmRegistry::instance().create(algo_name);
+        if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) continue;
+        auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
         executor.start(input);
         executor.wait();
@@ -138,15 +138,15 @@ int main() {
     std::cout << "=== Dataset Benchmark ===" << std::endl;
     load_builtin_data();
 
-    AlgorithmRegistry::instance().register_algorithm("greedy",
+    AlgorithmRegistry::get_instance().register_algorithm("greedy",
         []{ return std::make_unique<GreedyAlgorithm>(); });
-    AlgorithmRegistry::instance().register_algorithm("dfs",
+    AlgorithmRegistry::get_instance().register_algorithm("dfs",
         []{ return std::make_unique<DFSAlgorithm>(); });
-    AlgorithmRegistry::instance().register_algorithm("astar",
+    AlgorithmRegistry::get_instance().register_algorithm("astar",
         []{ return std::make_unique<AStarAlgorithm>(); });
-    AlgorithmRegistry::instance().register_algorithm("penalty_balance",
+    AlgorithmRegistry::get_instance().register_algorithm("penalty_balance",
         []{ return std::make_unique<DynamicPenaltyBalancing>(); });
-    AlgorithmRegistry::instance().register_algorithm("hierarchical",
+    AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
         []{ return std::make_unique<HierarchicalMergeStrategy>(); });
 
     for (const auto& tc : CASES) {
