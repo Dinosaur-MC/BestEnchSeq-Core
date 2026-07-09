@@ -7,6 +7,7 @@
 #include "algorithm/strategies/HierarchicalMergeStrategy.h"
 #include "algorithm/strategies/CompactGreedyAlgorithm.h"
 #include "algorithm/strategies/CompactDFSAlgorithm.h"
+#include "algorithm/strategies/CompactAStarAlgorithm.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
@@ -105,7 +106,7 @@ void run_case(const TestCase& tc) {
     input.target_item = ItemStack(&eq, wanted_set, 0, eq.max_durability);
     input.available_items = books;
 
-    for (const auto& algo_name : {"greedy", "compact_greedy", "dfs", "compact_dfs", "astar", "penalty_balance", "hierarchical"}) {
+    for (const auto& algo_name : {"greedy", "compact_greedy", "dfs", "compact_dfs", "astar", "compact_astar", "penalty_balance", "hierarchical"}) {
         if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) continue;
         auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
@@ -155,6 +156,8 @@ int main() {
         []{ return std::make_unique<CompactGreedyAlgorithm>(); });
     AlgorithmRegistry::get_instance().register_algorithm("compact_dfs",
         []{ return std::make_unique<CompactDFSAlgorithm>(); });
+    AlgorithmRegistry::get_instance().register_algorithm("compact_astar",
+        []{ return std::make_unique<CompactAStarAlgorithm>(); });
 
     for (const auto& tc : CASES) {
         std::cout << tc.name << " (" << tc.wanted.size() << " enchants):" << std::endl;
