@@ -29,13 +29,6 @@ public:
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
-    // ─── Compact step (no domain types during search) ───
-    struct CompactStep {
-        compact::Item base;
-        compact::Item sacrifice;
-        int32_t cost;
-    };
-
     // ─── Forge pair ───
     struct ForgePair {
         size_t i, j;
@@ -74,10 +67,6 @@ private:
     bool _meets_target(const compact::Item& equipment) const;
     int32_t _heuristic(const compact::Item& equipment) const;
 
-    // Convert compact step list to domain EnchStepList
-    EnchStepList _convert_steps(const std::vector<CompactStep>& steps,
-                                const Equipment* eq) const;
-
     compact::CompactForgeEngine _compact_forge;
     DefaultForgeEngine _bound_engine;
     const compact::EnchReg* _ench_reg{nullptr};
@@ -87,7 +76,7 @@ private:
 
     int32_t _best_cost{INT32_MAX};
     EnchStepList _best_steps;
-    std::vector<CompactStep> _current_steps;
+    std::vector<compact::EnchStep> _current_steps;
 
     std::unordered_set<std::vector<compact::Item>, ItemVectorHash> _visited;
     std::vector<DFSFrame> _stack;

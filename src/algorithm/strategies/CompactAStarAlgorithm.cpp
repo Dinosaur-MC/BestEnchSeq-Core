@@ -106,14 +106,8 @@ void CompactAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContex
                 for (auto* s = current.state.steps_tail; s; s = s->prev)
                     nodes.push_back(s);
                 steps.reserve(nodes.size());
-                for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
-                    steps.push_back({
-                        compact::to_domain((*it)->base, ci.equipment),
-                        compact::to_domain((*it)->sacrifice, ci.equipment),
-                        (*it)->cost,
-                        ExpCalculator::level_to_exp((*it)->cost)
-                    });
-                }
+                for (auto it = nodes.rbegin(); it != nodes.rend(); ++it)
+                    steps.push_back(compact::to_domain((*it)->step, ci.equipment));
             }
             ctx.report_solution_found(steps);
             ctx.report_progress(1.0, ProgressStatus::Complete);
@@ -149,7 +143,11 @@ void CompactAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContex
                 // Record step (compact — no conversion)
                 const CompactStepNode* step_node = alloc_step(
                     current.state.steps_tail,
-                    std::move(base_item), std::move(sac_item), step_cost);
+                    compact::EnchStep{
+                        std::move(base_item),
+                        std::move(sac_item),
+                        step_cost
+                    });
 
                 SearchState child_state{
                     std::move(child_items),

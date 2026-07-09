@@ -43,6 +43,12 @@ struct Item {
     }
 };
 
+struct EnchStep {
+    Item base;         // 锻造前的目标物品
+    Item sacrifice;    // 锻造前的祭品
+    int32_t cost;      // 经验等级消耗
+};
+
 } // namespace compact
 
 template<>

@@ -27,11 +27,9 @@ public:
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
-    // ─── Step node using compact items (no domain types during search) ───
+    // ─── Step node using compact::EnchStep (no domain types during search) ───
     struct CompactStepNode {
-        compact::Item base;
-        compact::Item sacrifice;
-        int32_t cost;
+        compact::EnchStep step;
         const CompactStepNode* prev = nullptr;
     };
 
@@ -67,12 +65,8 @@ private:
     };
 
     const CompactStepNode* alloc_step(const CompactStepNode* prev,
-                                       compact::Item base,
-                                       compact::Item sacrifice,
-                                       int32_t cost) {
-        _step_pool.push_back({
-            std::move(base), std::move(sacrifice), cost, prev
-        });
+                                       compact::EnchStep step) {
+        _step_pool.push_back({std::move(step), prev});
         return &_step_pool.back();
     }
 

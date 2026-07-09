@@ -30,11 +30,5 @@ private:
         int32_t est_cost;
     };
 
-    struct CompactStep {
-        compact::Item base;
-        compact::Item sacrifice;
-        int32_t cost;
-    };
-
     compact::CompactForgeEngine _forge_engine;
 };

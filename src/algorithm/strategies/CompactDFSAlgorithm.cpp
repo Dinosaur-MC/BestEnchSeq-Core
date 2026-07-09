@@ -57,24 +57,6 @@ int32_t CompactDFSAlgorithm::_heuristic(const compact::Item& equipment) const {
     return h;
 }
 
-// ─── Output conversion (boundary only) ─────────────────────────────────────
-
-EnchStepList CompactDFSAlgorithm::_convert_steps(
-    const std::vector<CompactStep>& steps, const Equipment* eq) const
-{
-    EnchStepList result;
-    result.reserve(steps.size());
-    for (const auto& cs : steps) {
-        result.push_back({
-            compact::to_domain(cs.base, eq),
-            compact::to_domain(cs.sacrifice, eq),
-            cs.cost,
-            ExpCalculator::level_to_exp(cs.cost)
-        });
-    }
-    return result;
-}
-
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void CompactDFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
@@ -154,7 +136,8 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx, const Equipment*
             ++_solutions_found;
 
             //── Boundary: convert compact steps to domain for reporting ──
-            auto domain_steps = _convert_steps(_current_steps, out_eq);
+            auto domain_steps = compact::to_domain(
+                _current_steps.begin(), _current_steps.end(), out_eq);
             ctx.report_solution_found(domain_steps);
 
             if (_best_steps.empty() || frame.cost_so_far < _best_cost) {

@@ -3,6 +3,7 @@
 #include "registries/CompactedRegistries.h"
 #include "types/ItemStack.h"
 #include "algorithm/IAlgorithm.h"
+#include <iterator>
 #include <vector>
 
 namespace compact {
@@ -22,6 +23,21 @@ std::vector<Item> from_domain(const std::vector<ItemStack>& items, const EnchReg
 /// @param item  Compact item (Book or Equip)
 /// @param eq    Equipment pointer (nullptr for books; from original AlgorithmInput for equipment)
 ItemStack to_domain(const Item& item, const Equipment* eq);
+
+/// Convert a compact::EnchStep (base, sacrifice, cost) to domain EnchSolution::EnchStep.
+/// The equipment pointer from the original AlgorithmInput is needed for ItemStack
+/// reconstruction of equipment-type items.
+EnchSolution::EnchStep to_domain(const EnchStep& step, const Equipment* eq);
+
+/// Convert a range of compact::EnchStep to a domain EnchStepList.
+template <typename Iter>
+EnchStepList to_domain(Iter begin, Iter end, const Equipment* eq) {
+    EnchStepList result;
+    result.reserve(static_cast<size_t>(std::distance(begin, end)));
+    for (auto it = begin; it != end; ++it)
+        result.push_back(to_domain(*it, eq));
+    return result;
+}
 
 // ─── High-level input adapter ───────────────────────────────────────────────
 

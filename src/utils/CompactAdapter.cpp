@@ -1,7 +1,5 @@
 #include "CompactAdapter.hpp"
-#include <algorithm>
-#include <cstdint>
-#include <stdexcept>
+#include "utils/ExpCalculator.hpp"
 
 namespace compact {
 
@@ -61,6 +59,15 @@ ItemStack to_domain(const Item& item, const Equipment* eq) {
         return ItemStack(ench_set, item.ppn);
     else // Equip or Material
         return ItemStack(eq, ench_set, item.ppn, item.dur);
+}
+
+EnchSolution::EnchStep to_domain(const EnchStep& step, const Equipment* eq) {
+    return {
+        to_domain(step.base, eq),
+        to_domain(step.sacrifice, eq),
+        step.cost,
+        ExpCalculator::level_to_exp(step.cost)
+    };
 }
 
 // ─── High-level adapter ─────────────────────────────────────────────────────
