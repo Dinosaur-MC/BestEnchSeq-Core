@@ -1,37 +1,39 @@
 #pragma once
-#include "types/common.h"
-#include "types/EquipmentType.h"
+#include "types/Equipment.h"
 
-#include <deque>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
+// ─── Equipment registry ───
+//
+// Singleton registry managing Equipment instances, matching EnchantmentRegistry's
+// pattern. Numeric ID = index in instances_. initialize() is called once at
+// startup, after which instances_ is never modified — pointers are stable.
+// Supports bidirectional lookup: int32_t id ↔ string name_id.
 class EquipmentRegistry {
 public:
-    static EquipmentRegistry& get_instance() {
-        static EquipmentRegistry instance;
-        return instance;
-    }
+    static EquipmentRegistry& get_instance();
 
     EquipmentRegistry() = default;
     EquipmentRegistry(const EquipmentRegistry&) = delete;
     EquipmentRegistry& operator=(const EquipmentRegistry&) = delete;
 
-    void initialize(const std::vector<EquipmentType>& eq_list);
+    void initialize(const std::vector<Equipment>& eq_list);
 
-    const EquipmentType* get(const std::string& id) const;
-    const std::deque<EquipmentType>& get_instances() const { return equipment_list_; }
+    // Numeric ID lookup (O(1)). Returns nullptr if out of range.
+    const Equipment* get(int32_t id) const;
 
-    // Custom equipment categories (moved from EquipmentCategory statics)
-    void register_custom_equipment(const EquipmentCategory& category);
-    void reset_custom_equipment();
-    bool is_custom_equipment(const EquipmentCategory& category) const;
-    const std::unordered_set<EquipmentCategory>& get_custom_equipments() const { return custom_equipments_; }
+    // String lookup (O(1) average). Returns nullptr if not found.
+    const Equipment* get(const std::string& name_id) const;
+
+    // String → numeric ID. Returns -1 if not found.
+    int32_t get_id(const std::string& name_id) const;
+
+    // All instances (for iteration)
+    const std::vector<Equipment>& get_instances() const { return instances_; }
 
 private:
-    std::deque<EquipmentType> equipment_list_;
-    std::unordered_map<std::string, const EquipmentType*> equipment_map_;
-    std::unordered_set<EquipmentCategory> custom_equipments_;
+    std::vector<Equipment> instances_;
+    std::unordered_map<std::string, int32_t> name_to_id_;
 };

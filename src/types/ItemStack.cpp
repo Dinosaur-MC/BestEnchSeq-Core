@@ -10,14 +10,14 @@ ItemStack::ItemStack(const EnchSet &enchs, int32_t prior_penalty)
     update_cache();
 }
 ItemStack::ItemStack(
-    const EquipmentType *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability
+    const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability
 )
     : equipment(equipment), prior_penalty(prior_penalty), durability(durability), enchantments(enchs) {
     if (prior_penalty < 0 || durability < 0)
         throw std::invalid_argument("Negative prior penalty or durability");
     update_cache();
 }
-ItemStack::ItemStack(const EquipmentType *equipment, const EnchSet &enchs, int32_t prior_penalty)
+ItemStack::ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty)
     : equipment(equipment), prior_penalty(prior_penalty), enchantments(enchs) {
     if (prior_penalty < 0)
         throw std::invalid_argument("Negative prior penalty");

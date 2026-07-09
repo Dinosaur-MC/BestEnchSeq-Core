@@ -1,6 +1,6 @@
 #pragma once
 #include "EnchSet.h"
-#include "EquipmentType.h"
+#include "Equipment.h"
 
 // ─── Forgeable item stack ───
 //
@@ -12,7 +12,7 @@
 // must not be read or written from multiple threads simultaneously.
 
 struct ItemStack {
-    const EquipmentType *equipment;
+    const Equipment *equipment;
     EnchSet enchantments;
     int32_t prior_penalty;
     int32_t durability;
@@ -27,8 +27,8 @@ struct ItemStack {
   public:
     ItemStack();
     ItemStack(const EnchSet &enchs, int32_t prior_penalty = 0);
-    ItemStack(const EquipmentType *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability);
-    ItemStack(const EquipmentType *equipment, const EnchSet &enchs, int32_t prior_penalty = 0);
+    ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability);
+    ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty = 0);
 
     void update_cache() const;
     const Cache &get_cache() const;
