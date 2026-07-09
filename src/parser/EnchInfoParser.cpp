@@ -355,9 +355,13 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
             platform_str.empty() ? platform::MCE::Java : ParserUtils::parse_platform(platform_str);
 
         int32_t limited_level = max_level;
-        try {
-            limited_level = std::stoi(get_field(fields, "limited_level"));
-        } catch (...) {
+        {
+            auto limited_str = get_field(fields, "limited_level");
+            if (!limited_str.empty()) {
+                try {
+                    limited_level = std::stoi(limited_str);
+                } catch (...) {}
+            }
         }
         if (limited_level <= 0) {
             limited_level = max_level;
