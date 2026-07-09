@@ -35,15 +35,13 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
 
     platform::MCE plat = platform::get_active_platform();
     bool sac_is_book = (sacrifice.type == ItemType::Book);
-    const size_t mask_size = target.exc_mask.size();
 
     // 2. Process each sacrifice enchantment
     for (const auto& se : sacrifice.enchs) {
-        // 2a. Check incompatibility via exclusion masks
-        const auto& se_mask = reg[se.id].exc_mask;
+        // 2a. Check incompatibility with existing target enchantments
         bool conflict = false;
-        for (size_t k = 0; k < mask_size; ++k) {
-            if (target.exc_mask[k] & se_mask[k]) {
+        for (const auto& te : target.enchs) {
+            if (reg.is_conflict(te.id, se.id)) {
                 conflict = true;
                 break;
             }
@@ -87,10 +85,6 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
         } else {
             // New enchantment — add to target
             target.enchs.push_back(se);
-
-            // Update target's combined exclusion mask
-            for (size_t k = 0; k < mask_size; ++k)
-                target.exc_mask[k] |= se_mask[k];
 
             if (mult > 0)
                 cost += mult * se.level;

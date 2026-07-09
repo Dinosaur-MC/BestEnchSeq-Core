@@ -35,7 +35,6 @@ struct Item {
     int16_t dur;                    // 耐久度
     uint8_t ppn;                    // 前次惩罚次数
     uint16_t lsum;                  // 经验等级总和
-    std::vector<MaskType> exc_mask; // 互斥附魔位掩码
     std::vector<Ench> enchs;        // 附魔列表
 
     bool operator==(const Item& o) const noexcept {

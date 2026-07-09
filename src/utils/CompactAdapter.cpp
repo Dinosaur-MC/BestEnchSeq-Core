@@ -19,23 +19,15 @@ Item from_domain(const ItemStack& item, const EnchReg& reg) {
     citem.ppn = static_cast<int8_t>(item.prior_penalty);
     citem.dur = static_cast<int16_t>(item.durability);
 
-    const size_t mask_size = reg.get_mask_size();
-    citem.exc_mask.assign(mask_size, 0);
     citem.enchs.reserve(item.enchantments.size());
 
-    // Sort EnchSet by id for deterministic compact representation
-    // (EnchSet is a sorted set, iterate in order)
+    // EnchSet is already sorted by id, iterate in order for deterministic output
     int32_t total_lsum = 0;
     for (const auto& ench : item.enchantments) {
         int16_t eid = static_cast<int16_t>(ench.id);
         int16_t elv = static_cast<int16_t>(ench.level);
 
         citem.enchs.push_back({eid, elv});
-
-        // OR in the exclusion mask for this enchantment id
-        const auto& info_mask = reg[eid].exc_mask;
-        for (size_t k = 0; k < mask_size; ++k)
-            citem.exc_mask[k] |= info_mask[k];
 
         // lsum: sum of (level * multiplier) for all enchantments.
         // Uses book multiplier for books, equipment multiplier for equipment.

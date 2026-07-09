@@ -51,19 +51,15 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
             _ench_infos[i].exc_mask[p] |= 1ULL << (e % MASK_ELEM_SIZE);
         }
     }
+
+    _build_conflict_matrix();
 }
 
 Item &EnchReg::refresh_item(Item &item) const {
-    // Rebuild combined exclusion mask from current enchantments
-    item.exc_mask.assign(_mask_size, 0);
     uint16_t total_lsum = 0;
     bool is_book = (item.type == ItemType::Book);
 
     for (const auto &ench : item.enchs) {
-        const auto &info_mask = (*this)[ench.id].exc_mask;
-        for (size_t k = 0; k < _mask_size; ++k)
-            item.exc_mask[k] |= info_mask[k];
-
         uint16_t mult = is_book ? static_cast<uint16_t>(std::max(1, get_multiplier(ench.id) >> 1)) : get_multiplier(ench.id);
         total_lsum += ench.level * mult;
     }
