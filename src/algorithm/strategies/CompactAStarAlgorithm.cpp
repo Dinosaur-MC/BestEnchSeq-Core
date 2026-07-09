@@ -39,8 +39,7 @@ int32_t CompactAStarAlgorithm::heuristic(const std::vector<compact::Item>& items
 
 bool CompactAStarAlgorithm::meets_target(const compact::Item& equipment) const {
     for (const auto& t : _target) {
-        auto it = std::find_if(equipment.enchs.begin(), equipment.enchs.end(),
-            [&](const compact::Ench& e) { return e.id == t.id; });
+        auto it = equipment.enchs.find(t.id);
         if (it == equipment.enchs.end() || it->level < t.level)
             return false;
     }

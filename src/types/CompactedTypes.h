@@ -30,11 +30,53 @@ enum class ItemType : uint8_t {
     Material,
 };
 
+/// Compact set of Ench stored as sorted vector<Ench>.
+///
+/// Invariant: elements are always sorted by id (ascending). This makes
+/// comparison, hashing, and binary-search lookup O(N) or O(log N) with
+/// cache-friendly contiguous storage.
+class EnchSet {
+public:
+    using value_type = Ench;
+    using iterator = std::vector<Ench>::iterator;
+    using const_iterator = std::vector<Ench>::const_iterator;
+
+    EnchSet() = default;
+
+    // ── Iterators (inline) ──
+    iterator       begin()       noexcept { return _enchs.begin(); }
+    iterator       end()         noexcept { return _enchs.end(); }
+    const_iterator begin() const noexcept { return _enchs.begin(); }
+    const_iterator end()   const noexcept { return _enchs.end(); }
+
+    // ── Capacity (inline) ──
+    size_t size()    const noexcept { return _enchs.size(); }
+    bool   empty()   const noexcept { return _enchs.empty(); }
+    void   reserve(size_t n)        { _enchs.reserve(n); }
+
+    // ── Lookup ──
+    iterator       find(int16_t id)       noexcept;
+    const_iterator find(int16_t id) const noexcept;
+    bool contains(int16_t id) const noexcept;
+
+    // ── Modifiers ──
+    void insert(Ench ench);
+    void merge(const EnchSet& other);
+    void clear() { _enchs.clear(); }
+
+    // ── Comparison (inline) ──
+    bool operator==(const EnchSet& o) const noexcept { return _enchs == o._enchs; }
+    bool operator!=(const EnchSet& o) const noexcept { return _enchs != o._enchs; }
+
+private:
+    std::vector<Ench> _enchs;
+};
+
 struct Item {
     ItemType type;                  // 物品类型
     int16_t dur;                    // 耐久度
     uint8_t ppn;                    // 前次惩罚次数
-    std::vector<Ench> enchs;        // 附魔列表
+    EnchSet enchs;                  // 附魔列表（按 id 排序）
 
     bool operator==(const Item& o) const noexcept {
         return type == o.type && dur == o.dur && ppn == o.ppn

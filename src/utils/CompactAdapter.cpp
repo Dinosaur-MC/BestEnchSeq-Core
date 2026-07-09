@@ -19,11 +19,11 @@ Item from_domain(const ItemStack& item, const EnchReg& reg) {
 
     citem.enchs.reserve(item.enchantments.size());
 
-    // EnchSet is already sorted by id, iterate in order for deterministic output
+    // Domain EnchSet iterates in sorted order — insert maintains canonical order
     for (const auto& ench : item.enchantments) {
         int16_t eid = static_cast<int16_t>(ench.id);
         int16_t elv = static_cast<int16_t>(ench.level);
-        citem.enchs.push_back({eid, elv});
+        citem.enchs.insert({eid, elv});
     }
 
     return citem;
@@ -40,8 +40,8 @@ std::vector<Item> from_domain(const std::vector<ItemStack>& items, const EnchReg
 // ─── Compact → domain ───────────────────────────────────────────────────────
 
 ItemStack to_domain(const Item& item, const Equipment* eq) {
-    // Rebuild EnchSet from flat ench list
-    EnchSet ench_set;
+    // Rebuild domain ::EnchSet from compact ench list
+    ::EnchSet ench_set;
     for (const auto& e : item.enchs)
         ench_set.emplace(e.id, e.level);
 

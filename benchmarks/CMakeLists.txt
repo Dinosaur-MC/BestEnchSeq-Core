@@ -28,6 +28,7 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp

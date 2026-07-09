@@ -59,12 +59,9 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
             ? std::max(1, reg.get_multiplier(se.id) >> 1)
             : reg.get_multiplier(se.id);
 
-        // 2c. Binary-search for this enchantment on target (enchs is sorted by id)
-        auto it = std::lower_bound(
-            target.enchs.begin(), target.enchs.end(), se.id,
-            [](const Ench& e, int16_t id) { return e.id < id; });
-
-        if (it != target.enchs.end() && it->id == se.id) {
+        // 2c. Lookup + insert via EnchSet (sorted by id, binary search)
+        auto it = target.enchs.find(se.id);
+        if (it != target.enchs.end()) {
             // Existing enchantment — combine levels
             int16_t old_level = it->level;
             int16_t new_level;
@@ -84,13 +81,8 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
                     cost += mult * (new_level - old_level);
             }
         } else {
-            // New enchantment — insert at sorted position by id.
-            // This maintains canonical ordering so two items with the same
-            // enchantments compare equal regardless of forge sequence.
-            auto pos = std::lower_bound(
-                target.enchs.begin(), target.enchs.end(), se.id,
-                [](const Ench& e, int16_t id) { return e.id < id; });
-            target.enchs.insert(pos, se);
+            // New enchantment — EnchSet::insert maintains sorted order
+            target.enchs.insert(se);
 
             if (mult > 0)
                 cost += mult * se.level;
