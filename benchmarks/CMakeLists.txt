@@ -11,6 +11,10 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/CompactGreedyAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/CompactForgeEngine.cpp
+    ${PROJECT_ROOT}/src/utils/CompactAdapter.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
