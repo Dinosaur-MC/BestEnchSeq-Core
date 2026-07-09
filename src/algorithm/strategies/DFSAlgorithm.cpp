@@ -1,4 +1,4 @@
-#include "CompactDFSAlgorithm.h"
+#include "DFSAlgorithm.h"
 #include "../ExecutionContext.h"
 #include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
@@ -6,34 +6,38 @@
 #include <unordered_map>
 #include <vector>
 
-// ─── Compact-only greedy bound (replaces AlgorithmUtils::book_first_merge) ──
+using compact::Item;
+using compact::EnchStep;
+using compact::EnchReg;
+using compact::ForgeEngine;
+using compact::estimate_forge_cost;
+using compact::book_multiplier;
 
-int32_t CompactDFSAlgorithm::_greedy_bound(
-    const std::vector<compact::Item>& items,
-    const compact::EnchReg& reg) const
+// ─── Compact-only greedy bound ─────────────────────────────────────────────
+
+int32_t DFSAlgorithm::_greedy_bound(
+    const std::vector<Item>& items,
+    const EnchReg& reg) const
 {
     if (items.size() <= 1) return 0;
 
-    // Separate equipment and books
-    compact::Item equip = items[0];
-    std::vector<compact::Item> books;
+    Item equip = items[0];
+    std::vector<Item> books;
     books.reserve(items.size() - 1);
     for (size_t k = 1; k < items.size(); ++k)
         books.push_back(items[k]);
 
     int32_t total_cost = 0;
-    auto& forge = const_cast<compact::CompactForgeEngine&>(_compact_forge);
+    auto& forge = const_cast<ForgeEngine&>(_compact_forge);
 
-    // Sort books by estimated forge cost with equipment
     std::vector<std::pair<size_t, int32_t>> ordered;
     for (size_t i = 0; i < books.size(); ++i)
-        ordered.emplace_back(i, compact::estimate_forge_cost(equip, books[i], reg));
+        ordered.emplace_back(i, estimate_forge_cost(equip, books[i], reg));
     std::sort(ordered.begin(), ordered.end(),
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
-    // Merge cheap books first onto equipment
     for (const auto& [idx, _] : ordered) {
-        if (!compact::CompactForgeEngine::is_forgeable(equip, books[idx]))
+        if (!_compact_forge.is_forgeable(equip, books[idx]))
             continue;
         int32_t cost = forge.forge_into(equip, books[idx], reg);
         total_cost += cost;
@@ -44,8 +48,8 @@ int32_t CompactDFSAlgorithm::_greedy_bound(
 
 // ─── Collect forge pairs ───────────────────────────────────────────────────
 
-std::vector<CompactDFSAlgorithm::ForgePair> CompactDFSAlgorithm::_collect_pairs(
-    const std::vector<compact::Item>& items) const
+std::vector<DFSAlgorithm::ForgePair> DFSAlgorithm::_collect_pairs(
+    const std::vector<Item>& items) const
 {
     const size_t n = items.size();
     std::vector<ForgePair> pairs;
@@ -54,10 +58,10 @@ std::vector<CompactDFSAlgorithm::ForgePair> CompactDFSAlgorithm::_collect_pairs(
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
             if (i == j) continue;
-            if (!compact::CompactForgeEngine::is_forgeable(items[i], items[j]))
+            if (!_compact_forge.is_forgeable(items[i], items[j]))
                 continue;
 
-            int32_t est = compact::estimate_forge_cost(items[i], items[j], *_ench_reg);
+            int32_t est = estimate_forge_cost(items[i], items[j], *_ench_reg);
             pairs.push_back({i, j, est});
         }
     }
@@ -69,7 +73,7 @@ std::vector<CompactDFSAlgorithm::ForgePair> CompactDFSAlgorithm::_collect_pairs(
 
 // ─── Hot-path helpers ──────────────────────────────────────────────────────
 
-bool CompactDFSAlgorithm::_meets_target(const compact::Item& equipment) const {
+bool DFSAlgorithm::_meets_target(const Item& equipment) const {
     for (const auto& t : _target) {
         auto it = equipment.enchs.find(t.id);
         if (it == equipment.enchs.end() || it->level < t.level)
@@ -78,7 +82,7 @@ bool CompactDFSAlgorithm::_meets_target(const compact::Item& equipment) const {
     return true;
 }
 
-int32_t CompactDFSAlgorithm::_heuristic(const std::vector<compact::Item>& items) const {
+int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
     int32_t h = 0;
     if (items.empty()) return h;
 
@@ -97,7 +101,7 @@ int32_t CompactDFSAlgorithm::_heuristic(const std::vector<compact::Item>& items)
         auto it = max_levels.find(t.id);
         int16_t have = (it == max_levels.end()) ? 0 : it->second;
         if (have < t.level) {
-            int32_t bm = compact::book_multiplier(_ench_reg->get_multiplier(t.id));
+            int32_t bm = book_multiplier(_ench_reg->get_multiplier(t.id));
             h += (t.level - have) * bm;
         }
     }
@@ -106,9 +110,9 @@ int32_t CompactDFSAlgorithm::_heuristic(const std::vector<compact::Item>& items)
 
 // ─── execute ───────────────────────────────────────────────────────────────
 
-void CompactDFSAlgorithm::execute(
-    const std::vector<compact::Item>& items,
-    const compact::EnchReg& reg,
+void DFSAlgorithm::execute(
+    const std::vector<Item>& items,
+    const EnchReg& reg,
     const std::vector<compact::Ench>& target,
     ExecutionContext& ctx)
 {
@@ -117,7 +121,6 @@ void CompactDFSAlgorithm::execute(
     _ench_reg = &reg;
     _target = target;
 
-    // Reset state
     _best_cost = INT32_MAX;
     _best_steps.clear();
     _current_steps.clear();
@@ -126,29 +129,25 @@ void CompactDFSAlgorithm::execute(
     _frame_pairs.clear();
     _solutions_found = 0;
 
-    // Compact-only greedy upper bound
     if (items.size() > 1)
         _best_cost = _greedy_bound(items, reg);
 
-    // Push root frame
     _stack.push_back({items, 0, 0, 0, {}, {}, 0, 0, false});
     _frame_pairs.emplace_back();
 
-    // Run iterative search (compact-only)
     _dfs_iterative(ctx);
 
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 
-// ─── Iterative search (compact-only) ───────────────────────────────────────
+// ─── Iterative search ──────────────────────────────────────────────────────
 
-void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
+void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
     while (!_stack.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
 
         auto& frame = _stack.back();
 
-        // 1. Backtrack restore
         if (frame.has_backtrack) {
             size_t adj_base = (frame.sac_idx < frame.base_idx)
                 ? frame.base_idx - 1 : frame.base_idx;
@@ -159,7 +158,6 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             frame.has_backtrack = false;
         }
 
-        // 2. State memoization
         {
             auto [it, inserted] = _visited.insert(frame.items);
             if (!inserted) {
@@ -169,10 +167,8 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             }
         }
 
-        // 3. Goal check
         if (_meets_target(frame.items[0])) {
             ++_solutions_found;
-
             ctx.report_compact_solution(_current_steps);
 
             if (_best_steps.empty() || frame.cost_so_far < _best_cost) {
@@ -184,14 +180,12 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             continue;
         }
 
-        // 4. Branch-and-bound pruning
         if (frame.cost_so_far + _heuristic(frame.items) >= _best_cost) {
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        // 5. Config check
         {
             auto cfg = ctx.get_search_config();
             if (cfg.max_depth > 0 &&
@@ -204,19 +198,16 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
                 break;
         }
 
-        // 6. Lazy pair building
         auto& pairs = _frame_pairs.back();
         if (pairs.empty())
             pairs = _collect_pairs(frame.items);
 
-        // 7. Next valid pair
         if (frame.pair_index >= pairs.size()) {
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        // 8. Execute forge and push child frame
         const auto& p = pairs[frame.pair_index++];
 
         frame.saved_base = frame.items[p.i];
@@ -228,21 +219,14 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             frame.items[p.i], frame.items[p.j], *_ench_reg);
 
         _current_steps.push_back({
-            frame.saved_base,
-            frame.saved_sac,
-            step_cost
+            frame.saved_base, frame.saved_sac, step_cost
         });
 
         frame.items.erase(frame.items.begin() + p.j);
 
-        std::vector<compact::Item> child_items = frame.items;
-
         _stack.push_back({
-            std::move(child_items),
-            frame.cost_so_far + step_cost,
-            0,
-            _current_steps.size(),
-            {}, {}, 0, 0, false
+            std::move(frame.items), frame.cost_so_far + step_cost,
+            0, _current_steps.size(), {}, {}, 0, 0, false
         });
         _frame_pairs.emplace_back();
 

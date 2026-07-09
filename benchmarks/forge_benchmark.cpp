@@ -1,10 +1,10 @@
 #include "registries/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/CompactGreedyAlgorithm.h"
-#include "algorithm/strategies/CompactDFSAlgorithm.h"
-#include "algorithm/strategies/CompactAStarAlgorithm.h"
-#include "algorithm/strategies/CompactDynamicPenaltyBalancing.h"
-#include "algorithm/strategies/CompactHierarchicalMergeStrategy.h"
+#include "algorithm/strategies/GreedyAlgorithm.h"
+#include "algorithm/strategies/DFSAlgorithm.h"
+#include "algorithm/strategies/AStarAlgorithm.h"
+#include "algorithm/strategies/DynamicPenaltyBalancing.h"
+#include "algorithm/strategies/HierarchicalMergeStrategy.h"
 #include "utils/CompactAdapter.hpp"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
@@ -254,15 +254,15 @@ int main(int argc, char* argv[]) {
     load_builtin_data();
 
     AlgorithmRegistry::get_instance().register_algorithm("greedy",
-        []{ return std::make_unique<CompactGreedyAlgorithm>(); });
+        []{ return std::make_unique<GreedyAlgorithm>(); });
     AlgorithmRegistry::get_instance().register_algorithm("dfs",
-        []{ return std::make_unique<CompactDFSAlgorithm>(); });
+        []{ return std::make_unique<DFSAlgorithm>(); });
     AlgorithmRegistry::get_instance().register_algorithm("astar",
-        []{ return std::make_unique<CompactAStarAlgorithm>(); });
+        []{ return std::make_unique<AStarAlgorithm>(); });
     AlgorithmRegistry::get_instance().register_algorithm("penalty_balance",
-        []{ return std::make_unique<CompactDynamicPenaltyBalancing>(); });
+        []{ return std::make_unique<DynamicPenaltyBalancing>(); });
     AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
-        []{ return std::make_unique<CompactHierarchicalMergeStrategy>(); });
+        []{ return std::make_unique<HierarchicalMergeStrategy>(); });
 
     // Filter tests
     std::vector<const TestCase*> queue;

@@ -1,30 +1,30 @@
 #include "registries/PlatformConfig.h"
-#include "CompactForgeEngine.h"
+#include "ForgeEngine.h"
 #include <algorithm>
 
 namespace compact {
 
 // ─── Static helpers ─────────────────────────────────────────────────────────
 
-int32_t CompactForgeEngine::_penalty_cost(int8_t ppn) noexcept {
+int32_t ForgeEngine::_penalty_cost(int8_t ppn) noexcept {
     return (1 << ppn) - 1;
 }
 
-int32_t CompactForgeEngine::_apply_cap(int32_t raw) const noexcept {
+int32_t ForgeEngine::_apply_cap(int32_t raw) const noexcept {
     if (_ignore_cap) return raw;
     return raw > 39 ? 39 : raw;
 }
 
 // ─── Forgeability check ─────────────────────────────────────────────────────
 
-bool CompactForgeEngine::is_forgeable(const Item& a, const Item& b) noexcept {
+bool ForgeEngine::is_forgeable(const Item& a, const Item& b) const noexcept {
     // Target must be equipment, or both must be books
     return a.type == ItemType::Equip || (a.type == ItemType::Book && b.type == ItemType::Book);
 }
 
 // ─── Forge (mutating) ───────────────────────────────────────────────────────
 
-int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
+int32_t ForgeEngine::forge_into(Item& target, const Item& sacrifice,
                                        const EnchReg& reg) const
 {
     int32_t cost = 0;
@@ -98,7 +98,7 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
 
 // ─── Forge (non-mutating) ───────────────────────────────────────────────────
 
-std::pair<Item, int32_t> CompactForgeEngine::forge(
+std::pair<Item, int32_t> ForgeEngine::forge(
     const Item& target, const Item& sacrifice, const EnchReg& reg) const
 {
     Item result = target;

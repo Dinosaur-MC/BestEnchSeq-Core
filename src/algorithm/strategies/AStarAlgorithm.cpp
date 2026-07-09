@@ -1,12 +1,17 @@
-#include "CompactAStarAlgorithm.h"
+#include "AStarAlgorithm.h"
 #include "../ExecutionContext.h"
 #include "utils/CompactForgeUtils.hpp"
 #include <queue>
 #include <unordered_map>
 
-// ─── Heuristic: admissible lower bound on compact items ────────────────────
+using compact::Item;
+using compact::EnchStep;
+using compact::EnchReg;
+using compact::book_multiplier;
 
-int32_t CompactAStarAlgorithm::heuristic(const std::vector<compact::Item>& items) const {
+// ─── Heuristic: admissible lower bound ─────────────────────────────────────
+
+int32_t AStarAlgorithm::heuristic(const std::vector<Item>& items) const {
     int32_t h = 0;
     if (items.empty()) return h;
 
@@ -25,16 +30,16 @@ int32_t CompactAStarAlgorithm::heuristic(const std::vector<compact::Item>& items
         auto it = max_levels.find(t.id);
         int16_t have = (it == max_levels.end()) ? 0 : it->second;
         if (have < t.level) {
-            int32_t bm = compact::book_multiplier(_ench_reg->get_multiplier(t.id));
+            int32_t bm = book_multiplier(_ench_reg->get_multiplier(t.id));
             h += (t.level - have) * bm;
         }
     }
     return h;
 }
 
-// ─── Goal check on compact items ──────────────────────────────────────────
+// ─── Goal check ────────────────────────────────────────────────────────────
 
-bool CompactAStarAlgorithm::meets_target(const compact::Item& equipment) const {
+bool AStarAlgorithm::meets_target(const Item& equipment) const {
     for (const auto& t : _target) {
         auto it = equipment.enchs.find(t.id);
         if (it == equipment.enchs.end() || it->level < t.level)
@@ -43,11 +48,11 @@ bool CompactAStarAlgorithm::meets_target(const compact::Item& equipment) const {
     return true;
 }
 
-// ─── A* execute (compact-only) ────────────────────────────────────────────
+// ─── A* execute (compact-only) ─────────────────────────────────────────────
 
-void CompactAStarAlgorithm::execute(
-    const std::vector<compact::Item>& items,
-    const compact::EnchReg& reg,
+void AStarAlgorithm::execute(
+    const std::vector<Item>& items,
+    const EnchReg& reg,
     const std::vector<compact::Ench>& target,
     ExecutionContext& ctx)
 {
@@ -56,7 +61,6 @@ void CompactAStarAlgorithm::execute(
     _ench_reg = &reg;
     _target = target;
 
-    // Quick check: goal already met?
     if (meets_target(items[0])) {
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         ctx.report_compact_solution({});
@@ -73,7 +77,6 @@ void CompactAStarAlgorithm::execute(
     open_set.push({std::move(init_state), h0});
 
     std::unordered_map<SearchState, int32_t, StateHash, StateEqual> best_g;
-
     int64_t explored = 0;
 
     while (!open_set.empty() && !ctx.is_cancelled()) {
@@ -95,8 +98,7 @@ void CompactAStarAlgorithm::execute(
         }
 
         if (meets_target(current.state.items[0])) {
-            // Flatten step chain into compact step vector
-            std::vector<compact::EnchStep> steps;
+            std::vector<EnchStep> steps;
             {
                 std::vector<const CompactStepNode*> nodes;
                 for (auto* s = current.state.steps_tail; s; s = s->prev)
@@ -115,14 +117,14 @@ void CompactAStarAlgorithm::execute(
             for (size_t j = 0; j < n; ++j) {
                 if (i == j) continue;
 
-                if (!compact::CompactForgeEngine::is_forgeable(
+                if (!_compact_forge.is_forgeable(
                         current.state.items[i], current.state.items[j]))
                     continue;
 
-                compact::Item base_item = current.state.items[i];
-                compact::Item sac_item  = current.state.items[j];
+                Item base_item = current.state.items[i];
+                Item sac_item  = current.state.items[j];
 
-                std::vector<compact::Item> child_items = current.state.items;
+                std::vector<Item> child_items = current.state.items;
 
                 auto [result, step_cost] = _compact_forge.forge(
                     child_items[i], child_items[j], *_ench_reg);
@@ -134,17 +136,9 @@ void CompactAStarAlgorithm::execute(
 
                 const CompactStepNode* step_node = alloc_step(
                     current.state.steps_tail,
-                    compact::EnchStep{
-                        std::move(base_item),
-                        std::move(sac_item),
-                        step_cost
-                    });
+                    EnchStep{std::move(base_item), std::move(sac_item), step_cost});
 
-                SearchState child_state{
-                    std::move(child_items),
-                    child_g,
-                    step_node
-                };
+                SearchState child_state{std::move(child_items), child_g, step_node};
 
                 auto c_it = best_g.find(child_state);
                 if (c_it != best_g.end() && c_it->second <= child_g)
@@ -159,9 +153,8 @@ void CompactAStarAlgorithm::execute(
         }
     }
 
-    if (ctx.is_cancelled()) {
+    if (ctx.is_cancelled())
         ctx.report_progress(1.0, ProgressStatus::Cancelled);
-    } else {
+    else
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
-    }
 }

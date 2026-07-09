@@ -1,17 +1,17 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../forge/CompactForgeEngine.h"
+#include "../forge/ForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <vector>
 
-class CompactGreedyAlgorithm : public IAlgorithm {
+class DynamicPenaltyBalancing : public IAlgorithm {
 public:
-    explicit CompactGreedyAlgorithm(bool ignore_penalty_cost = false,
-                                     bool ignore_cost_cap = false) noexcept
+    explicit DynamicPenaltyBalancing(bool ignore_penalty_cost = false,
+                                             bool ignore_cost_cap = false) noexcept
         : _forge_engine(ignore_penalty_cost, ignore_cost_cap) {}
 
-    std::string_view name() const noexcept override { return "compact_greedy"; }
+    std::string_view name() const noexcept override { return "compact_penalty_balance"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
     void execute(
@@ -22,10 +22,5 @@ public:
     ) override;
 
 private:
-    struct BookCost {
-        size_t index;
-        int32_t est_cost;
-    };
-
-    compact::CompactForgeEngine _forge_engine;
+    compact::ForgeEngine _forge_engine;
 };

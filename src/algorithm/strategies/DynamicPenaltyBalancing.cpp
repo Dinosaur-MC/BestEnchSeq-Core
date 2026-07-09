@@ -1,4 +1,4 @@
-#include "CompactDynamicPenaltyBalancing.h"
+#include "DynamicPenaltyBalancing.h"
 #include "../ExecutionContext.h"
 #include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
@@ -6,16 +6,22 @@
 #include <cstdint>
 #include <vector>
 
-void CompactDynamicPenaltyBalancing::execute(
-    const std::vector<compact::Item>& items,
-    const compact::EnchReg& reg,
+using compact::Item;
+using compact::ItemType;
+using compact::EnchStep;
+using compact::EnchReg;
+using compact::estimate_forge_cost;
+using compact::ForgeEngine;
+
+void DynamicPenaltyBalancing::execute(
+    const std::vector<Item>& items,
+    const EnchReg& reg,
     const std::vector<compact::Ench>& target,
     ExecutionContext& ctx)
 {
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
-    // Mutable local copy
-    std::vector<compact::Item> mut_items = items;
+    std::vector<Item> mut_items = items;
 
     // Quick check: goal already met?
     {
@@ -34,7 +40,7 @@ void CompactDynamicPenaltyBalancing::execute(
         }
     }
 
-    std::vector<compact::EnchStep> compact_steps;
+    std::vector<EnchStep> compact_steps;
     const size_t initial_count = mut_items.size();
 
     while (mut_items.size() > 1) {
@@ -50,14 +56,14 @@ void CompactDynamicPenaltyBalancing::execute(
         for (size_t i = 0; i < mut_items.size(); ++i) {
             for (size_t j = 0; j < mut_items.size(); ++j) {
                 if (i == j) continue;
-                if (!compact::CompactForgeEngine::is_forgeable(mut_items[i], mut_items[j]))
+                if (!_forge_engine.is_forgeable(mut_items[i], mut_items[j]))
                     continue;
 
                 int32_t pen_diff = std::abs(static_cast<int32_t>(mut_items[i].ppn)
                                           - static_cast<int32_t>(mut_items[j].ppn));
-                int32_t est = compact::estimate_forge_cost(mut_items[i], mut_items[j], reg);
-                bool both_books = (mut_items[i].type == compact::ItemType::Book
-                                && mut_items[j].type == compact::ItemType::Book);
+                int32_t est = estimate_forge_cost(mut_items[i], mut_items[j], reg);
+                bool both_books = (mut_items[i].type == ItemType::Book
+                                && mut_items[j].type == ItemType::Book);
 
                 if (!found || pen_diff < best_pen_diff) {
                     best_pen_diff = pen_diff;
@@ -80,8 +86,8 @@ void CompactDynamicPenaltyBalancing::execute(
 
         if (!found) break;
 
-        compact::Item saved_i = mut_items[best_i];
-        compact::Item saved_j = mut_items[best_j];
+        Item saved_i = mut_items[best_i];
+        Item saved_j = mut_items[best_j];
 
         int32_t step_cost = _forge_engine.forge_into(mut_items[best_i], mut_items[best_j], reg);
 

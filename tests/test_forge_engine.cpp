@@ -1,5 +1,5 @@
 #include "test_utils.h"
-#include "algorithm/forge/CompactForgeEngine.h"
+#include "algorithm/forge/ForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
@@ -30,7 +30,7 @@ compact::EnchReg& init_reg() {
 void test_forge_books() {
     setup_enchinfo();
     auto& reg = init_reg();
-    compact::CompactForgeEngine engine;
+    compact::ForgeEngine engine;
 
     // Forge two books: sharpness 4 + sharpness 3 → sharpness 5 (max level combine)
     compact::Item book_a{compact::ItemType::Book, 0, 0, {}};
@@ -50,7 +50,7 @@ void test_forge_books() {
 void test_forge_equipment_with_book() {
     setup_enchinfo();
     auto& reg = init_reg();
-    compact::CompactForgeEngine engine;
+    compact::ForgeEngine engine;
 
     compact::Item sword_item{compact::ItemType::Equip, static_cast<int16_t>(sword.max_durability), 0, {}};
     compact::Item book{compact::ItemType::Book, 0, 0, {}};
@@ -67,7 +67,7 @@ void test_forge_equipment_with_book() {
 void test_forge_incompatible_rejected() {
     setup_enchinfo();
     auto& reg = init_reg();
-    compact::CompactForgeEngine engine;
+    compact::ForgeEngine engine;
 
     compact::Item sword_item{compact::ItemType::Equip, 1561, 0, {}};
     sword_item.enchs.insert({0, 5});  // sharpness 5
@@ -85,7 +85,7 @@ void test_forge_incompatible_rejected() {
 void test_forge_not_forgeable() {
     setup_enchinfo();
     auto& reg = init_reg();
-    compact::CompactForgeEngine engine;
+    compact::ForgeEngine engine;
 
     // Material-type cannot be forged as target
     compact::Item mat{compact::ItemType::Material, 0, 0, {}};
@@ -99,7 +99,7 @@ void test_forge_not_forgeable() {
 void test_ignore_cost_cap() {
     setup_enchinfo();
     auto& reg = init_reg();
-    compact::CompactForgeEngine engine(false, true);
+    compact::ForgeEngine engine(false, true);
     expect(true, "ignore_cost_cap constructs without error");
     std::cout << "PASS: test_ignore_cost_cap" << std::endl;
 }

@@ -1,4 +1,4 @@
-#include "CompactHierarchicalMergeStrategy.h"
+#include "HierarchicalMergeStrategy.h"
 #include "../ExecutionContext.h"
 #include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
@@ -6,21 +6,27 @@
 #include <unordered_map>
 #include <vector>
 
-int32_t CompactHierarchicalMergeStrategy::effective_multiplier(
-    const compact::Item& item, const compact::EnchReg& reg)
+using compact::Item;
+using compact::EnchStep;
+using compact::EnchReg;
+using compact::ForgeEngine;
+using compact::book_multiplier;
+
+int32_t HierarchicalMergeStrategy::effective_multiplier(
+    const Item& item, const EnchReg& reg)
 {
     int32_t max_mult = 1;
     for (const auto& e : item.enchs) {
-        int32_t m = compact::book_multiplier(reg.get_multiplier(e.id));
+        int32_t m = book_multiplier(reg.get_multiplier(e.id));
         if (m > max_mult) max_mult = m;
     }
     return max_mult;
 }
 
-compact::Item CompactHierarchicalMergeStrategy::merge_group(
-    std::vector<compact::Item>& group,
-    std::vector<compact::EnchStep>& steps,
-    const compact::EnchReg& reg,
+Item HierarchicalMergeStrategy::merge_group(
+    std::vector<Item>& group,
+    std::vector<EnchStep>& steps,
+    const EnchReg& reg,
     ExecutionContext& ctx)
 {
     if (group.empty()) return {};
@@ -36,8 +42,8 @@ compact::Item CompactHierarchicalMergeStrategy::merge_group(
 
         for (size_t i = 0; i < group.size(); ++i) {
             for (size_t j = i + 1; j < group.size(); ++j) {
-                if (!compact::CompactForgeEngine::is_forgeable(group[i], group[j]) &&
-                    !compact::CompactForgeEngine::is_forgeable(group[j], group[i]))
+                if (!_forge_engine.is_forgeable(group[i], group[j]) &&
+                    !_forge_engine.is_forgeable(group[j], group[i]))
                     continue;
 
                 int32_t diff = std::abs(static_cast<int32_t>(group[i].ppn)
@@ -50,14 +56,14 @@ compact::Item CompactHierarchicalMergeStrategy::merge_group(
         }
 
         size_t base_idx, sac_idx;
-        if (compact::CompactForgeEngine::is_forgeable(group[best_i], group[best_j])) {
+        if (_forge_engine.is_forgeable(group[best_i], group[best_j])) {
             base_idx = best_i; sac_idx = best_j;
         } else {
             base_idx = best_j; sac_idx = best_i;
         }
 
-        compact::Item saved_base = group[base_idx];
-        compact::Item saved_sac  = group[sac_idx];
+        Item saved_base = group[base_idx];
+        Item saved_sac  = group[sac_idx];
 
         int32_t cost = _forge_engine.forge_into(group[base_idx], group[sac_idx], reg);
         steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
@@ -68,9 +74,9 @@ compact::Item CompactHierarchicalMergeStrategy::merge_group(
     return group[0];
 }
 
-void CompactHierarchicalMergeStrategy::execute(
-    const std::vector<compact::Item>& items,
-    const compact::EnchReg& reg,
+void HierarchicalMergeStrategy::execute(
+    const std::vector<Item>& items,
+    const EnchReg& reg,
     const std::vector<compact::Ench>& target,
     ExecutionContext& ctx)
 {
@@ -82,14 +88,13 @@ void CompactHierarchicalMergeStrategy::execute(
         return;
     }
 
-    // items[0] = equipment, items[1..] = books
     auto equip = items[0];
-    std::vector<compact::Item> books;
+    std::vector<Item> books;
     books.reserve(items.size() - 1);
     for (size_t k = 1; k < items.size(); ++k)
         books.push_back(items[k]);
 
-    std::vector<compact::EnchStep> compact_steps;
+    std::vector<EnchStep> compact_steps;
 
     // Phase 1: Dedup same-enchantment books (when >7 books)
     if (books.size() > 7) {
@@ -109,11 +114,11 @@ void CompactHierarchicalMergeStrategy::execute(
             for (size_t idx_idx = 1; idx_idx < indices.size(); ++idx_idx) {
                 size_t sac_idx = indices[idx_idx];
                 if (sac_idx >= books.size()) continue;
-                if (!compact::CompactForgeEngine::is_forgeable(base, books[sac_idx]))
+                if (!_forge_engine.is_forgeable(base, books[sac_idx]))
                     continue;
 
-                compact::Item saved_base = base;
-                compact::Item saved_sac  = books[sac_idx];
+                Item saved_base = base;
+                Item saved_sac  = books[sac_idx];
 
                 int32_t cost = _forge_engine.forge_into(base, books[sac_idx], reg);
                 compact_steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
@@ -125,8 +130,7 @@ void CompactHierarchicalMergeStrategy::execute(
     }
 
     // Phase 2: Group by effective multiplier tier
-    std::vector<compact::Item> low_group, mid_group, high_group;
-
+    std::vector<Item> low_group, mid_group, high_group;
     for (auto& book : books) {
         int32_t mult = effective_multiplier(book, reg);
         if (mult <= 1)
@@ -143,7 +147,7 @@ void CompactHierarchicalMergeStrategy::execute(
     auto mid_merged  = merge_group(mid_group, compact_steps, reg, ctx);
     auto high_merged = merge_group(high_group, compact_steps, reg, ctx);
 
-    struct GroupResult { compact::Item book; int32_t mult; };
+    struct GroupResult { Item book; int32_t mult; };
     std::vector<GroupResult> group_results;
     if (!low_merged.enchs.empty())
         group_results.push_back({std::move(low_merged), 1});
@@ -160,24 +164,23 @@ void CompactHierarchicalMergeStrategy::execute(
         return;
     }
 
-    // Phase 3: Merge group books together, then apply to equipment
-    compact::Item combined = group_results[0].book;
+    // Phase 3: Merge groups together, then apply to equipment
+    Item combined = group_results[0].book;
     for (size_t g = 1; g < group_results.size(); ++g) {
         if (ctx.is_cancelled()) return;
         ctx.wait_if_paused();
 
         auto& next_book = group_results[g].book;
-        if (!compact::CompactForgeEngine::is_forgeable(combined, next_book))
+        if (!_forge_engine.is_forgeable(combined, next_book))
             continue;
 
-        compact::Item saved_base = combined;
+        Item saved_base = combined;
         int32_t cost = _forge_engine.forge_into(combined, next_book, reg);
         compact_steps.push_back({std::move(saved_base), std::move(next_book), cost});
     }
 
-    // Apply combined book to equipment
-    if (compact::CompactForgeEngine::is_forgeable(equip, combined)) {
-        compact::Item saved_equip = equip;
+    if (_forge_engine.is_forgeable(equip, combined)) {
+        Item saved_equip = equip;
         int32_t cost = _forge_engine.forge_into(equip, combined, reg);
         compact_steps.push_back({std::move(saved_equip), std::move(combined), cost});
     }

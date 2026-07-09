@@ -162,7 +162,7 @@ set_tests_properties(test_integration PROPERTIES
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_forge_engine.cpp)
 add_executable(test_forge_engine
     test_forge_engine.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/CompactForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
@@ -237,7 +237,7 @@ add_executable(test_algorithm_executor
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/CompactForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp

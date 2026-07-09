@@ -1,15 +1,15 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../forge/CompactForgeEngine.h"
+#include "../forge/ForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <deque>
 #include <unordered_set>
 #include <vector>
 
-class CompactDFSAlgorithm : public IAlgorithm {
+class DFSAlgorithm : public IAlgorithm {
 public:
-    explicit CompactDFSAlgorithm(bool ignore_penalty_cost = false,
+    explicit DFSAlgorithm(bool ignore_penalty_cost = false,
                                   bool ignore_cost_cap = false) noexcept
         : _compact_forge(ignore_penalty_cost, ignore_cost_cap) {}
 
@@ -67,7 +67,7 @@ private:
     int32_t _greedy_bound(const std::vector<compact::Item>& items,
                            const compact::EnchReg& reg) const;
 
-    compact::CompactForgeEngine _compact_forge;
+    compact::ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
 
     std::vector<compact::Ench> _target;

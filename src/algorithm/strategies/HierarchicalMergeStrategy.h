@@ -1,13 +1,13 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../forge/CompactForgeEngine.h"
+#include "../forge/ForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <vector>
 
-class CompactHierarchicalMergeStrategy : public IAlgorithm {
+class HierarchicalMergeStrategy : public IAlgorithm {
 public:
-    explicit CompactHierarchicalMergeStrategy(bool ignore_penalty_cost = false,
+    explicit HierarchicalMergeStrategy(bool ignore_penalty_cost = false,
                                                bool ignore_cost_cap = false) noexcept
         : _forge_engine(ignore_penalty_cost, ignore_cost_cap) {}
 
@@ -30,5 +30,5 @@ private:
 
     static int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg);
 
-    compact::CompactForgeEngine _forge_engine;
+    compact::ForgeEngine _forge_engine;
 };

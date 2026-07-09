@@ -1,7 +1,7 @@
 #include "test_utils.h"
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/forge/CompactForgeEngine.h"
+#include "algorithm/forge/ForgeEngine.h"
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
 #include <thread>

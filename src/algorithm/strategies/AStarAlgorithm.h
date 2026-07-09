@@ -1,15 +1,15 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../forge/CompactForgeEngine.h"
+#include "../forge/ForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <deque>
 #include <vector>
 
 /// A* algorithm using compact internal representation.
-class CompactAStarAlgorithm : public IAlgorithm {
+class AStarAlgorithm : public IAlgorithm {
 public:
-    explicit CompactAStarAlgorithm(bool ignore_penalty_cost = false,
+    explicit AStarAlgorithm(bool ignore_penalty_cost = false,
                                     bool ignore_cost_cap = false) noexcept
         : _compact_forge(ignore_penalty_cost, ignore_cost_cap) {}
 
@@ -65,7 +65,7 @@ private:
     int32_t heuristic(const std::vector<compact::Item>& items) const;
     bool meets_target(const compact::Item& equipment) const;
 
-    compact::CompactForgeEngine _compact_forge;
+    compact::ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
 
     std::vector<compact::Ench> _target;
