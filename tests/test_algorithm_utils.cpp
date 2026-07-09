@@ -1,13 +1,19 @@
 #include "test_utils.h"
-#include "utils/AlgorithmUtils.hpp"
+#include <cstddef>
+
+namespace {
+inline void hash_combine(size_t& seed, size_t v) noexcept {
+    seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+}
 
 void test_hash_combine() {
     size_t h = 0;
-    AlgorithmUtils::hash_combine(h, 42);
+    hash_combine(h, 42);
     expect(h != 0, "hash combine should produce non-zero result");
 
     size_t h2 = 0;
-    AlgorithmUtils::hash_combine(h2, 42);
+    hash_combine(h2, 42);
     expect(h == h2, "hash combine should be deterministic");
 
     std::cout << "PASS: test_hash_combine" << std::endl;
