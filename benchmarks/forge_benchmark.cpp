@@ -6,6 +6,7 @@
 #include "algorithm/strategies/DynamicPenaltyBalancing.h"
 #include "algorithm/strategies/HierarchicalMergeStrategy.h"
 #include "algorithm/strategies/CompactGreedyAlgorithm.h"
+#include "algorithm/strategies/CompactDFSAlgorithm.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
@@ -104,7 +105,7 @@ void run_case(const TestCase& tc) {
     input.target_item = ItemStack(&eq, wanted_set, 0, eq.max_durability);
     input.available_items = books;
 
-    for (const auto& algo_name : {"greedy", "compact_greedy", "dfs", "astar", "penalty_balance", "hierarchical"}) {
+    for (const auto& algo_name : {"greedy", "compact_greedy", "dfs", "compact_dfs", "astar", "penalty_balance", "hierarchical"}) {
         if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) continue;
         auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
@@ -136,6 +137,7 @@ void run_case(const TestCase& tc) {
 } // namespace
 
 int main() {
+    std::cout << "Time: " << std::chrono::current_zone()->to_local(std::chrono::system_clock::now()) << std::endl;
     std::cout << "=== Dataset Benchmark ===" << std::endl;
     load_builtin_data();
 
@@ -151,6 +153,8 @@ int main() {
         []{ return std::make_unique<HierarchicalMergeStrategy>(); });
     AlgorithmRegistry::get_instance().register_algorithm("compact_greedy",
         []{ return std::make_unique<CompactGreedyAlgorithm>(); });
+    AlgorithmRegistry::get_instance().register_algorithm("compact_dfs",
+        []{ return std::make_unique<CompactDFSAlgorithm>(); });
 
     for (const auto& tc : CASES) {
         std::cout << tc.name << " (" << tc.wanted.size() << " enchants):" << std::endl;
