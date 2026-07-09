@@ -59,11 +59,12 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
             ? std::max(1, reg.get_multiplier(se.id) >> 1)
             : reg.get_multiplier(se.id);
 
-        // 2c. Look for this enchantment on target
-        auto it = std::find_if(target.enchs.begin(), target.enchs.end(),
-            [&](const Ench& e) { return e.id == se.id; });
+        // 2c. Binary-search for this enchantment on target (enchs is sorted by id)
+        auto it = std::lower_bound(
+            target.enchs.begin(), target.enchs.end(), se.id,
+            [](const Ench& e, int16_t id) { return e.id < id; });
 
-        if (it != target.enchs.end()) {
+        if (it != target.enchs.end() && it->id == se.id) {
             // Existing enchantment — combine levels
             int16_t old_level = it->level;
             int16_t new_level;
