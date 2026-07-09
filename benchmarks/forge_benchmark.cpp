@@ -65,6 +65,14 @@ TestCase CASES[] = {
     {"boots_full", "diamond_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
       "thorns=3", "unbreaking=3", "mending=1"}, 55, 125},
+    // Netherite
+    {"netherite_sword", "netherite_sword",
+     {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
+      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 45, 160},
+    {"netherite_boots", "netherite_boots",
+     {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
+      "thorns=3", "unbreaking=3", "mending=1",
+      "vanishing_curse=1", "binding_curse=1"}, 60, 200},
 };
 
 // ─── Setup ───
