@@ -291,12 +291,12 @@ A+B → AB, 然后 AB+C → ABC  vs  A+C → AC, 然后 AC+B → ABC
 ### 执行引擎集成
 
 ```
-AlgorithmExecutor
-  └─ DFSAlgorithm / AStarAlgorithm
-       ├─ 搜索循环（同步）
-       ├─ 调用 IForgeEngine::forge_into()
+AlgorithmExecutor (compact-only)
+  └─ DFSAlgorithm / AStarAlgorithm (compact types)
+       ├─ 搜索循环（同步，纯 compact::Item / compact::EnchStep）
+       ├─ 调用 ForgeEngine::forge_into() / penalty_cost()
        ├─ 调用 ExecutionContext::report_progress()
-       ├─ 调用 ExecutionContext::report_solution_found()
+       ├─ 调用 ExecutionContext::report_compact_solution()
        └─ 定期检查 ExecutionContext::is_cancelled() / wait_if_paused()
 ```
 
@@ -329,80 +329,47 @@ class DFSAlgorithm : public IAlgorithm {
 public:
     std::string_view name() const noexcept override { return "dfs"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
-    const IForgeEngine& forge_engine() const noexcept override { return _engine; }
 
-    void execute(const AlgorithmInput& input, ExecutionContext& ctx) override {
-        _best_cost = std::numeric_limits<int32_t>::max();
-        _input = &input;
-
-        // 物品集合初始化
-        std::vector<ItemStack> items = {input.target_item};
-        items.insert(items.end(), input.available_items.begin(), input.available_items.end());
-
-        // 贪心预跑获得上界
-        _best_cost = greedy_upper_bound(input, ctx);
-        ctx.report_progress(0.0, "greedy bound: " + std::to_string(_best_cost));
-
-        // DFS 搜索
-        dfs(items, 0, ctx);
-
-        ctx.report_progress(1.0, "done");
+    void execute(
+        const std::vector<compact::Item>& items,
+        const compact::EnchReg& reg,
+        const std::vector<compact::Ench>& target,
+        ExecutionContext& ctx
+    ) override {
+        _target = target;
+        _best_cost = _greedy_bound(items, reg);
+        _stack.push_back({items, 0, 0, 0, {}, {}, 0, 0, false});
+        _dfs_iterative(ctx);
     }
 
 private:
-    void dfs(std::vector<ItemStack>& items, int32_t cost_so_far, ExecutionContext& ctx) {
-        if (ctx.is_cancelled()) return;
-        ctx.wait_if_paused();
+    struct DFSFrame {
+        std::vector<compact::Item> items;
+        int32_t cost_so_far{0};
+        size_t pair_index{0}, saved_steps_size{0};
+        compact::Item saved_base, saved_sac;
+        size_t base_idx{0}, sac_idx{0};
+        bool has_backtrack{false};
+    };
 
-        // 下界剪枝
-        if (cost_so_far + lower_bound(items) >= _best_cost)
-                return;
+    void _dfs_iterative(ExecutionContext& ctx) {
+        while (!_stack.empty() && !ctx.is_cancelled()) {
+            ctx.wait_if_paused();
+            auto& frame = _stack.back();
 
-        // 检查是否达到目标（遍历所有物品）
-        for (const auto& item : items) {
-            if (meets_target(item, _input->target_item)) {
-                if (cost_so_far < _best_cost) {
-                    _best_cost = cost_so_far;
-                    // 记录解
-                    ctx.report_solution_found(_current_steps);
-                }
-                return;
-            }
-        }
+            // Backtrack, memoization, goal check, pruning, pair expansion
+            // (see CompactDFSAlgorithm.cpp for full details)
 
-        // 尝试所有合并对
-        for (size_t i = 0; i < items.size(); i++) {
-            for (size_t j = 0; j < items.size(); j++) {
-                if (i == j) continue;
-                if (!_engine.is_forgeable(items[i], items[j])) continue;
-
-                // 保存状态
-                auto saved_i = items[i];
-                auto saved_j = items[j];
-                int32_t step_cost = _engine.forge_into(items[i], items[j]);
-
-                _current_steps.push_back({saved_i, saved_j, step_cost, {}});
-
-                // 移除牺牲物品 j，修正 i 下标
-                items.erase(items.begin() + j);
-                size_t adjusted_i = (j < i) ? i - 1 : i;
-
-                ctx.report_progress(/*...*/);
-                dfs(items, cost_so_far + step_cost, ctx);
-
-                // 回溯：逆序恢复
-                items.insert(items.begin() + j, saved_j);
-                items[adjusted_i] = saved_i;
-
-                if (ctx.is_cancelled()) return;
-                }
+            // Report solutions in compact form (no domain conversion)
+            ctx.report_compact_solution(_current_steps);
         }
     }
 
-    DefaultForgeEngine _engine;
-    int32_t _best_cost;
-    const AlgorithmInput* _input;
-    std::vector<EnchSolution::EnchStep> _current_steps;
+    ForgeEngine _compact_forge;
+    std::vector<compact::Ench> _target;
+    std::vector<DFSFrame> _stack;
+    int32_t _best_cost{INT32_MAX};
+    std::vector<compact::EnchStep> _current_steps;
 };
 ```
 
@@ -477,14 +444,16 @@ private:
 ## 参考
 
 - `docs/anvil-mechanics-reference.md` — 铁砧机制算法参考
-- `src/algorithm/strategies/GreedyAlgorithm.h/cpp` — 贪心实现（成本排序）
-- `src/algorithm/strategies/DFSAlgorithm.h/cpp` — DFS + 分支定界
-- `src/algorithm/strategies/AStarAlgorithm.h/cpp` — A* 搜索
+- `src/algorithm/strategies/GreedyAlgorithm.h/cpp` — 贪心实现（compact 类型）
+- `src/algorithm/strategies/DFSAlgorithm.h/cpp` — DFS + 分支定界（迭代框架）
+- `src/algorithm/strategies/AStarAlgorithm.h/cpp` — A* 搜索（步骤链表优化）
 - `src/algorithm/strategies/DynamicPenaltyBalancing.h/cpp` — 动态惩罚均衡
 - `src/algorithm/strategies/HierarchicalMergeStrategy.h/cpp` — 分层合成策略
-- `src/utils/AlgorithmUtils.hpp` — 共享算法工具函数
-- `src/algorithm/DefaultForgeEngine.h/cpp` — 锻造引擎
-- `src/algorithm/AlgorithmExecutor.h/cpp` — 异步执行引擎
+- `src/algorithm/forge/ForgeEngine.h/cpp` — IForgeEngine 的原版实现
+- `src/algorithm/forge/IForgeEngine.h` — 锻造引擎虚接口 + ForgeConfig + 默认子操作实现
+- `src/algorithm/AlgorithmExecutor.h/cpp` — 异步执行引擎（compact-only）
+- `src/types/CompactedTypes.h/cpp` — 紧凑算法类型（namespace compact）
+- `src/registries/CompactedRegistries.h/cpp` — 紧凑注册表（EnchReg）
 - `.temp/qwen/algorithm_design.md` — 外部研究：A* 框架与分层合成策略
 - `.temp/qwen/theoretical_framework.md` — 外部研究：形式化建模与双场景分析
 - `https://minecraft.wiki/w/Anvil_mechanics` — Minecraft Wiki 铁砧机制（英文）
