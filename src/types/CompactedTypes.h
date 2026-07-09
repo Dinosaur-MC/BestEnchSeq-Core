@@ -21,7 +21,7 @@ struct Ench {
     int16_t id;
     int16_t level;
 
-    bool operator==(const Ench& o) const noexcept { return id == o.id && level == o.level; }
+    bool operator==(const Ench &o) const noexcept { return id == o.id && level == o.level; }
 };
 
 enum class ItemType : uint8_t {
@@ -36,7 +36,7 @@ enum class ItemType : uint8_t {
 /// comparison, hashing, and binary-search lookup O(N) or O(log N) with
 /// cache-friendly contiguous storage.
 class EnchSet {
-public:
+  public:
     using value_type = Ench;
     using iterator = std::vector<Ench>::iterator;
     using const_iterator = std::vector<Ench>::const_iterator;
@@ -44,69 +44,62 @@ public:
     EnchSet() = default;
 
     // ── Iterators (inline) ──
-    iterator       begin()       noexcept { return _enchs.begin(); }
-    iterator       end()         noexcept { return _enchs.end(); }
+    iterator begin() noexcept { return _enchs.begin(); }
+    iterator end() noexcept { return _enchs.end(); }
     const_iterator begin() const noexcept { return _enchs.begin(); }
-    const_iterator end()   const noexcept { return _enchs.end(); }
+    const_iterator end() const noexcept { return _enchs.end(); }
 
     // ── Capacity (inline) ──
-    size_t size()    const noexcept { return _enchs.size(); }
-    bool   empty()   const noexcept { return _enchs.empty(); }
-    void   reserve(size_t n)        { _enchs.reserve(n); }
+    size_t size() const noexcept { return _enchs.size(); }
+    bool empty() const noexcept { return _enchs.empty(); }
+    void reserve(size_t n) { _enchs.reserve(n); }
 
     // ── Lookup ──
-    iterator       find(int16_t id)       noexcept;
+    iterator find(int16_t id) noexcept;
     const_iterator find(int16_t id) const noexcept;
     bool contains(int16_t id) const noexcept;
 
     // ── Modifiers ──
-    void insert(Ench ench);
-    void merge(const EnchSet& other);
+    void insert(const Ench &ench);
     void clear() { _enchs.clear(); }
 
     // ── Comparison (inline) ──
-    bool operator==(const EnchSet& o) const noexcept { return _enchs == o._enchs; }
-    bool operator!=(const EnchSet& o) const noexcept { return _enchs != o._enchs; }
+    bool operator==(const EnchSet &o) const noexcept { return _enchs == o._enchs; }
+    bool operator!=(const EnchSet &o) const noexcept { return _enchs != o._enchs; }
 
-private:
+  private:
     std::vector<Ench> _enchs;
 };
 
 struct Item {
-    ItemType type;                  // 物品类型
-    int16_t dur;                    // 耐久度
-    uint8_t ppn;                    // 前次惩罚次数
-    EnchSet enchs;                  // 附魔列表（按 id 排序）
+    ItemType type; // 物品类型
+    int16_t dur;   // 耐久度
+    uint8_t ppn;   // 前次惩罚次数
+    EnchSet enchs; // 附魔列表（按 id 排序）
 
-    bool operator==(const Item& o) const noexcept {
-        return type == o.type && dur == o.dur && ppn == o.ppn
-            && enchs == o.enchs;
-    }
+    bool operator==(const Item &o) const noexcept { return type == o.type && dur == o.dur && ppn == o.ppn && enchs == o.enchs; }
 };
 
 struct EnchStep {
-    Item base;         // 锻造前的目标物品
-    Item sacrifice;    // 锻造前的祭品
-    int32_t cost;      // 经验等级消耗
+    Item base;      // 锻造前的目标物品
+    Item sacrifice; // 锻造前的祭品
+    int32_t cost;   // 经验等级消耗
 };
 
 } // namespace compact
 
-template<>
-struct std::hash<compact::Ench> {
-    size_t operator()(const compact::Ench& e) const noexcept {
+template <> struct std::hash<compact::Ench> {
+    size_t operator()(const compact::Ench &e) const noexcept {
         return static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);
     }
 };
 
-template<>
-struct std::hash<compact::Item> {
-    size_t operator()(const compact::Item& item) const noexcept {
-        size_t h = static_cast<size_t>(item.type)
-                 ^ (static_cast<size_t>(item.ppn) << 8)
-                 ^ (static_cast<size_t>(item.dur) << 16);
+template <> struct std::hash<compact::Item> {
+    size_t operator()(const compact::Item &item) const noexcept {
+        size_t h =
+            static_cast<size_t>(item.type) ^ (static_cast<size_t>(item.ppn) << 8) ^ (static_cast<size_t>(item.dur) << 16);
         // Combine enchantment hashes
-        for (const auto& e : item.enchs)
+        for (const auto &e : item.enchs)
             h ^= std::hash<compact::Ench>{}(e) + 0x9e3779b9 + (h << 6) + (h >> 2);
         return h;
     }
