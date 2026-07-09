@@ -9,27 +9,26 @@
 //
 // Singleton registry managing EquipmentCategory definitions.
 // Builtin categories are hardcoded with stable numeric IDs.
-// Custom categories can be added at runtime via add_custom() or register_or_get_id().
+// Optional custom categories can be passed to initialize().
+// After initialize(), the registry is immutable — no add_custom/register.
 //
-// Initialization order:
-//   1. initialize() — loads builtins
-//   2. (optional) add_custom() — extends with custom categories from data files
-//   3. EnchInfoParser / EquipmentParser resolve strings to IDs via this registry
+// Matches EnchantmentRegistry pattern: get() returns reference, throws on invalid.
 class EquipmentCategoryRegistry {
 public:
     static EquipmentCategoryRegistry& get_instance();
 
-    // Lifecycle
-    void initialize();
-    void add_custom(const std::vector<EquipmentCategory>& categories);
+    EquipmentCategoryRegistry() = default;
+    EquipmentCategoryRegistry(const EquipmentCategoryRegistry&) = delete;
+    EquipmentCategoryRegistry& operator=(const EquipmentCategoryRegistry&) = delete;
 
-    // Lookup (O(1))
-    const EquipmentCategory* get(int32_t id) const;
-    const EquipmentCategory* get(const std::string& name_id) const;
+    // Lifecycle — sets up builtins + optional custom categories.
+    // After this call the registry is immutable.
+    void initialize(const std::vector<EquipmentCategory>& custom_categories = {});
+
+    // Lookup (O(1)) — throws std::out_of_range on invalid input
+    const EquipmentCategory& get(int32_t id) const;
+    const EquipmentCategory& get(const std::string& name_id) const;
     int32_t get_id(const std::string& name_id) const;  // -1 if not found
-
-    // Like get_id(), but registers the category as custom if not found
-    int32_t register_or_get_id(const std::string& name_id);
 
     const std::vector<EquipmentCategory>& get_instances() const { return instances_; }
     size_t size() const { return instances_.size(); }

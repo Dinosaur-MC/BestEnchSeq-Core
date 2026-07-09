@@ -21,17 +21,18 @@ public:
 
     void initialize(const std::vector<Equipment>& eq_list);
 
-    // Numeric ID lookup (O(1)). Returns nullptr if out of range.
-    const Equipment* get(int32_t id) const;
+    // Numeric ID lookup (O(1)). Throws std::out_of_range on invalid.
+    const Equipment& get(int32_t id) const;
 
-    // String lookup (O(1) average). Returns nullptr if not found.
-    const Equipment* get(const std::string& name_id) const;
+    // String lookup (O(1) average). Throws std::out_of_range if not found.
+    const Equipment& get(const std::string& name_id) const;
 
     // String → numeric ID. Returns -1 if not found.
     int32_t get_id(const std::string& name_id) const;
 
     // All instances (for iteration)
     const std::vector<Equipment>& get_instances() const { return instances_; }
+    size_t size() const { return instances_.size(); }
 
 private:
     std::vector<Equipment> instances_;

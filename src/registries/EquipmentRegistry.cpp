@@ -1,4 +1,5 @@
 #include "registries/EquipmentRegistry.h"
+#include <stdexcept>
 
 EquipmentRegistry& EquipmentRegistry::get_instance() {
     static EquipmentRegistry instance;
@@ -15,17 +16,17 @@ void EquipmentRegistry::initialize(const std::vector<Equipment>& eq_list) {
     }
 }
 
-const Equipment* EquipmentRegistry::get(int32_t id) const {
-    if (id >= 0 && id < static_cast<int32_t>(instances_.size()))
-        return &instances_[static_cast<size_t>(id)];
-    return nullptr;
+const Equipment& EquipmentRegistry::get(int32_t id) const {
+    if (id >= 0 && static_cast<size_t>(id) < instances_.size())
+        return instances_[static_cast<size_t>(id)];
+    throw std::out_of_range("Unknown Equipment id: " + std::to_string(id));
 }
 
-const Equipment* EquipmentRegistry::get(const std::string& name_id) const {
+const Equipment& EquipmentRegistry::get(const std::string& name_id) const {
     auto it = name_to_id_.find(name_id);
     if (it != name_to_id_.end())
-        return &instances_[static_cast<size_t>(it->second)];
-    return nullptr;
+        return instances_[static_cast<size_t>(it->second)];
+    throw std::out_of_range("Unknown Equipment: " + name_id);
 }
 
 int32_t EquipmentRegistry::get_id(const std::string& name_id) const {
