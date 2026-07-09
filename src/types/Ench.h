@@ -42,7 +42,7 @@ struct Ench {
     int32_t get_limited_level() const;
     int32_t get_multiplier(bool is_book = false) const;
     const std::unordered_set<int32_t>& get_exclusive_set() const;
-    const std::unordered_set<EquipmentCategory>& get_applicable_equipment() const;
+    const std::unordered_set<int32_t>& get_applicable_equipment() const;
 
     bool is_incompatible(const Ench& other) const;
 };

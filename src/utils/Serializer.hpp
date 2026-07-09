@@ -52,7 +52,7 @@ public:
     void write(const ItemStack& item) {
         // Equipment: store as name_id string (empty if book)
         if (item.equipment) {
-            string(item.equipment->id);
+            string(item.equipment->name_id);
         } else {
             string(std::string_view{});
         }
@@ -142,7 +142,7 @@ public:
         int32_t prio = i32();
         if (!_ok) return {};
 
-        const EquipmentType* eq = nullptr;
+        const Equipment* eq = nullptr;
         if (!eq_id.empty()) {
             eq = EquipmentRegistry::get_instance().get(eq_id);
         }

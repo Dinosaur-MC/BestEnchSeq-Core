@@ -13,7 +13,7 @@ struct EnchInfo {
     const int32_t limited_level;
     const int32_t multiplier;
     const std::unordered_set<std::string> exclusive_set;
-    const std::unordered_set<EquipmentCategory> applicable_equipment;
+    const std::unordered_set<int32_t> applicable_category_ids;
 
     bool operator==(const EnchInfo& other) const;
 

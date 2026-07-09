@@ -49,8 +49,8 @@ int32_t Ench::get_multiplier(bool is_book) const {
 const std::unordered_set<int32_t>& Ench::get_exclusive_set() const {
     return EnchantmentRegistry::get_instance().get_exclusive_set(id);
 }
-const std::unordered_set<EquipmentCategory>& Ench::get_applicable_equipment() const {
-    return EnchantmentRegistry::get_instance().get(id).applicable_equipment;
+const std::unordered_set<int32_t>& Ench::get_applicable_equipment() const {
+    return EnchantmentRegistry::get_instance().get(id).applicable_category_ids;
 }
 
 bool Ench::is_incompatible(const Ench& other) const {

@@ -24,7 +24,7 @@ int32_t DefaultForgeEngine::calc_penalty_cost(int32_t penalty_a, int32_t penalty
 }
 
 int32_t DefaultForgeEngine::calc_durability(
-    const EquipmentType* equipment, int32_t durability_a,
+    const Equipment* equipment, int32_t durability_a,
     int32_t durability_b, bool is_equip_b) const noexcept
 {
     if (!equipment) return 0;

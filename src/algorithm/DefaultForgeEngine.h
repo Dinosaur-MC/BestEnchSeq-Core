@@ -24,7 +24,7 @@ protected:
 
     virtual int32_t calc_penalty_cost(int32_t penalty_a, int32_t penalty_b) const noexcept;
     virtual int32_t calc_durability(
-        const EquipmentType* equipment, int32_t durability_a,
+        const Equipment* equipment, int32_t durability_a,
         int32_t durability_b, bool is_equip_b) const noexcept;
 
 private:
