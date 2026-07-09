@@ -1,6 +1,6 @@
+#include "registries/PlatformConfig.h"
 #include "CompactForgeEngine.h"
 #include <algorithm>
-#include <cstdint>
 
 namespace compact {
 
@@ -83,8 +83,13 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
                     cost += mult * (new_level - old_level);
             }
         } else {
-            // New enchantment — add to target
-            target.enchs.push_back(se);
+            // New enchantment — insert at sorted position by id.
+            // This maintains canonical ordering so two items with the same
+            // enchantments compare equal regardless of forge sequence.
+            auto pos = std::lower_bound(
+                target.enchs.begin(), target.enchs.end(), se.id,
+                [](const Ench& e, int16_t id) { return e.id < id; });
+            target.enchs.insert(pos, se);
 
             if (mult > 0)
                 cost += mult * se.level;

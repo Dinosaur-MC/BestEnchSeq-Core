@@ -8,12 +8,25 @@
 
 int32_t CompactAStarAlgorithm::heuristic(const std::vector<compact::Item>& items) const {
     int32_t h = 0;
-    const auto& equipment = items[0];
+    if (items.empty()) return h;
+
+    // Build max level per ench ID across ALL items (same as domain A* heuristic).
+    // Using unordered_map gives O(M*N + T) with O(1) lookups — avoids the O(T*M*N)
+    // triple-nested linear scan that made the naive all-items version 600s.
+    std::unordered_map<int16_t, int16_t> max_levels;
+    for (const auto& item : items) {
+        for (const auto& e : item.enchs) {
+            auto it = max_levels.find(e.id);
+            if (it == max_levels.end())
+                max_levels[e.id] = e.level;
+            else if (e.level > it->second)
+                it->second = e.level;
+        }
+    }
 
     for (const auto& t : _target) {
-        auto it = std::find_if(equipment.enchs.begin(), equipment.enchs.end(),
-            [&](const compact::Ench& e) { return e.id == t.id; });
-        int32_t have = (it == equipment.enchs.end()) ? 0 : it->level;
+        auto it = max_levels.find(t.id);
+        int16_t have = (it == max_levels.end()) ? 0 : it->second;
         if (have < t.level) {
             int32_t bm = compact::book_multiplier(_ench_reg->get_multiplier(t.id));
             h += (t.level - have) * bm;

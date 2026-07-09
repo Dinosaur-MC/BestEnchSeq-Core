@@ -3,6 +3,7 @@
 #include "utils/AlgorithmUtils.hpp"
 #include <algorithm>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 // ─── Collect forge pairs ───────────────────────────────────────────────────
@@ -44,17 +45,26 @@ bool CompactDFSAlgorithm::_meets_target(const compact::Item& equipment) const {
 
 int32_t CompactDFSAlgorithm::_heuristic(const std::vector<compact::Item>& items) const {
     int32_t h = 0;
-    for (const auto& t : _target) {
-        int32_t max_have = 0;
-        for (const auto& item : items) {
-            auto it = std::find_if(item.enchs.begin(), item.enchs.end(),
-                [&](const compact::Ench& e) { return e.id == t.id; });
-            if (it != item.enchs.end() && it->level > max_have)
-                max_have = it->level;
+    if (items.empty()) return h;
+
+    // Build max level per ench ID across all items (unordered_map for O(M*N + T)).
+    std::unordered_map<int16_t, int16_t> max_levels;
+    for (const auto& item : items) {
+        for (const auto& e : item.enchs) {
+            auto it = max_levels.find(e.id);
+            if (it == max_levels.end())
+                max_levels[e.id] = e.level;
+            else if (e.level > it->second)
+                it->second = e.level;
         }
-        if (max_have < t.level) {
+    }
+
+    for (const auto& t : _target) {
+        auto it = max_levels.find(t.id);
+        int16_t have = (it == max_levels.end()) ? 0 : it->second;
+        if (have < t.level) {
             int32_t bm = compact::book_multiplier(_ench_reg->get_multiplier(t.id));
-            h += (t.level - max_have) * bm;
+            h += (t.level - have) * bm;
         }
     }
     return h;
