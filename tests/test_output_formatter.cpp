@@ -5,7 +5,8 @@
 #include "types/Ench.h"
 #include "types/EnchSet.h"
 #include "types/ItemStack.h"
-#include "types/EquipmentType.h"
+#include "types/Equipment.h"
+#include "registries/EquipmentCategoryRegistry.h"
 
 #include <iostream>
 #include <string>
@@ -17,11 +18,11 @@ namespace {
 // Test fixtures
 // ---------------------------------------------------------------------------
 
-EquipmentType diamond_sword{
-    "diamond_sword", "Diamond Sword", EquipmentCategory::Sword(), 1561
+Equipment diamond_sword{
+    "diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561
 };
-EquipmentType bow{
-    "bow", "Bow", EquipmentCategory::Bow(), 384
+Equipment bow{
+    "bow", "Bow", EquipmentCategoryRegistry::ID_BOW, 384
 };
 
 void setup_enchinfo() {
@@ -32,28 +33,28 @@ void setup_enchinfo() {
         "Sharpness",
         platform::MCE::All,
         5, 5, 1, {},
-        {EquipmentCategory::Sword()},
+        {EquipmentCategoryRegistry::ID_SWORD},
     });
     infos.push_back({
         "minecraft:knockback",
         "Knockback",
         platform::MCE::All,
         2, 2, 2, {},
-        {EquipmentCategory::Sword()},
+        {EquipmentCategoryRegistry::ID_SWORD},
     });
     infos.push_back({
         "minecraft:smite",
         "Smite",
         platform::MCE::All,
         5, 5, 1, {},
-        {EquipmentCategory::Sword()},
+        {EquipmentCategoryRegistry::ID_SWORD},
     });
     infos.push_back({
         "minecraft:power",
         "Power",
         platform::MCE::All,
         5, 5, 1, {},
-        {EquipmentCategory::Bow()},
+        {EquipmentCategoryRegistry::ID_BOW},
     });
     EnchantmentRegistry::get_instance().initialize(infos);
 }

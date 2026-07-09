@@ -1,6 +1,7 @@
 #include "test_utils.h"
 #include "utils/AlgorithmUtils.hpp"
 #include "algorithm/DefaultForgeEngine.h"
+#include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/PlatformConfig.h"
 
@@ -9,16 +10,16 @@ namespace {
 void setup() {
     std::vector<EnchInfo> infos;
     infos.push_back({"sharpness", "Sharpness", platform::MCE::All, 5, 5,
-                      1, {}, {EquipmentCategory("sword")}});
+                      1, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     infos.push_back({"knockback", "Knockback", platform::MCE::All, 2, 2,
-                      2, {}, {EquipmentCategory("sword")}});
+                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     infos.push_back({"fire_aspect", "Fire Aspect", platform::MCE::All, 2, 2,
-                      2, {}, {EquipmentCategory("sword")}});
+                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     EnchantmentRegistry::get_instance().initialize(infos);
     platform::Config::get_instance().set_active(platform::MCE::Java);
 }
 
-EquipmentType sword{"diamond_sword", "Diamond Sword", EquipmentCategory::Sword(), 1561};
+Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
 
 void test_admissible_heuristic_all_missing() {
     setup();
@@ -78,7 +79,7 @@ void test_meets_target() {
     expect(!AlgorithmUtils::meets_target(missing, goal), "missing ench should fail");
 
     // Wrong equipment type
-    EquipmentType other_sword{"other_sword", "Other Sword", EquipmentCategory::Sword(), 1561};
+    Equipment other_sword{"other_sword", "Other Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
     ItemStack wrong_eq(&other_sword, EnchSet{Ench(0, 5), Ench(1, 2)}, 0, 1561);
     expect(!AlgorithmUtils::meets_target(wrong_eq, goal), "wrong equipment should fail");
 

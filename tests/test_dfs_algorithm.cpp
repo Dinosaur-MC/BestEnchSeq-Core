@@ -1,6 +1,7 @@
 #include "test_utils.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/AlgorithmExecutor.h"
+#include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/PlatformConfig.h"
 
@@ -9,30 +10,30 @@ void setup() {
     std::vector<EnchInfo> infos;
     // id 0
     infos.push_back({"sharpness", "Sharpness", platform::MCE::All, 5, 5,
-                      1, {}, {EquipmentCategory("sword")}});
+                      1, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     // id 1
     infos.push_back({"knockback", "Knockback", platform::MCE::All, 2, 2,
-                      2, {}, {EquipmentCategory("sword")}});
+                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     // id 2
     infos.push_back({"fire_aspect", "Fire Aspect", platform::MCE::All, 2, 2,
-                      2, {}, {EquipmentCategory("sword")}});
+                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     // id 3
     infos.push_back({"looting", "Looting", platform::MCE::All, 3, 3,
-                      2, {}, {EquipmentCategory("sword")}});
+                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     // id 4
     infos.push_back({"unbreaking", "Unbreaking", platform::MCE::All, 3, 3,
-                      1, {}, {EquipmentCategory("sword")}});
+                      1, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     // id 5
     infos.push_back({"smite", "Smite", platform::MCE::All, 5, 5,
-                      1, {}, {EquipmentCategory("sword")}});
+                      1, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     // id 6
     infos.push_back({"fortune", "Fortune", platform::MCE::All, 3, 3,
-                      2, {}, {EquipmentCategory("sword")}});
+                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     EnchantmentRegistry::get_instance().initialize(infos);
     platform::Config::get_instance().set_active(platform::MCE::Java);
 }
 
-EquipmentType sword{"diamond_sword", "Diamond Sword", EquipmentCategory::Sword(), 1561};
+Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
 
 // ──────────────────────────────────────────────────────────
 // Test: forge two books onto an empty sword to reach goal

@@ -1,8 +1,9 @@
 #include "test_utils.h"
 #include "utils/Serializer.hpp"
 #include "registries/EnchantmentRegistry.h"
-#include "registries/PlatformConfig.h"
+#include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
+#include "registries/PlatformConfig.h"
 
 namespace {
 
@@ -16,8 +17,8 @@ void setup() {
     platform::Config::get_instance().set_active(platform::MCE::Java);
 
     // Equipment registry for ItemStack tests
-    EquipmentType sword{"diamond_sword", "Diamond Sword", EquipmentCategory("sword"), 1561};
-    EquipmentType boots{"diamond_boots", "Diamond Boots", EquipmentCategory("boots"), 433};
+    Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
+    Equipment boots{"diamond_boots", "Diamond Boots", EquipmentCategoryRegistry::ID_BOOTS, 433};
     EquipmentRegistry::get_instance().initialize({sword, boots});
 }
 
@@ -142,8 +143,8 @@ void test_itemstack_roundtrip_equipment() {
     ItemStack result = d.read_item_stack();
     expect(!result.is_book(), "round-tripped equipment should not be a book");
     expect(result.equipment != nullptr, "equipment pointer should not be null");
-    expect(result.equipment->id == "diamond_sword",
-           "equipment id should be diamond_sword, got: " + result.equipment->id);
+    expect(result.equipment->name_id == "diamond_sword",
+           "equipment id should be diamond_sword, got: " + result.equipment->name_id);
     expect(result.prior_penalty == 2, "prior_penalty should be 2");
     expect(result.durability == 1000, "durability should be 1000");
     expect(result.enchantments.find(Ench(0, 5)) != result.enchantments.end(),

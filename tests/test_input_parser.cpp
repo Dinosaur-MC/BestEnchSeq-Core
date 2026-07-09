@@ -8,7 +8,8 @@
 #include "types/Ench.h"
 #include "types/EnchSet.h"
 #include "types/ItemStack.h"
-#include "types/EquipmentType.h"
+#include "types/Equipment.h"
+#include "registries/EquipmentCategoryRegistry.h"
 
 #include <filesystem>
 #include <fstream>
@@ -25,14 +26,14 @@ namespace {
 // ---------------------------------------------------------------------------
 
 // Static equipment instances (must outlive all tests)
-EquipmentType diamond_sword{
-    "diamond_sword", "Diamond Sword", EquipmentCategory::Sword(), 1561
+Equipment diamond_sword{
+    "diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561
 };
-EquipmentType diamond_pickaxe{
-    "diamond_pickaxe", "Diamond Pickaxe", EquipmentCategory::Pickaxe(), 1561
+Equipment diamond_pickaxe{
+    "diamond_pickaxe", "Diamond Pickaxe", EquipmentCategoryRegistry::ID_PICKAXE, 1561
 };
 
-std::unordered_map<std::string, const EquipmentType*> test_equipment_registry = {
+std::unordered_map<std::string, const Equipment*> test_equipment_registry = {
     {"diamond_sword", &diamond_sword},
     {"diamond_pickaxe", &diamond_pickaxe},
 };
@@ -53,7 +54,7 @@ void setup_enchinfo() {
         5,   // limited_level
         1,   // multiplier
         {},  // exclusive_set
-        {EquipmentCategory::Sword()},
+        {EquipmentCategoryRegistry::ID_SWORD},
     });
     infos.push_back({
         "minecraft:knockback",
@@ -63,7 +64,7 @@ void setup_enchinfo() {
         2,   // limited_level
         2,   // multiplier
         {},  // exclusive_set
-        {EquipmentCategory::Sword()},
+        {EquipmentCategoryRegistry::ID_SWORD},
     });
     EnchantmentRegistry::get_instance().initialize(infos);
 }
@@ -108,7 +109,7 @@ void test_parse_inventory_json() {
            "parse_inventory: item[1] should be equipment");
     expect(items[1].equipment != nullptr,
            "parse_inventory: item[1] equipment pointer not null");
-    expect(items[1].equipment->id == "diamond_sword",
+    expect(items[1].equipment->name_id == "diamond_sword",
            "parse_inventory: item[1] equipment id should be diamond_sword");
     expect(items[1].prior_penalty == 1,
            "parse_inventory: item[1] prior_penalty should be 1");
@@ -138,7 +139,7 @@ void test_build_target() {
            "build_target: should be equipment");
     expect(target.equipment != nullptr,
            "build_target: equipment pointer not null");
-    expect(target.equipment->id == "diamond_sword",
+    expect(target.equipment->name_id == "diamond_sword",
            "build_target: equipment id should be diamond_sword");
     expect(target.enchantments.empty(),
            "build_target: no inline enchants, should be empty");
@@ -276,7 +277,7 @@ void test_assemble_input_direct_mode() {
 
     expect(input.target_item.is_equipment(),
            "assemble_input: target should be equipment");
-    expect(input.target_item.equipment->id == "diamond_sword",
+    expect(input.target_item.equipment->name_id == "diamond_sword",
            "assemble_input: target id should be diamond_sword");
     expect(input.target_item.enchantments.empty(),
            "assemble_input: target should have no inline enchantments");

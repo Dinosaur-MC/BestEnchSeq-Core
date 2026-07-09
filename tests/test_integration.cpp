@@ -6,6 +6,8 @@
 #include "parser/ParserUtils.h"
 #include "parser/TagResolver.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/EquipmentCategoryRegistry.h"
+#include "registries/EquipmentRegistry.h"
 #include "registries/PlatformConfig.h"
 #include "test_utils.h"
 
@@ -22,6 +24,7 @@ namespace {
 // ---------------------------------------------------------------------------
 void test_full_pipeline_direct() {
     TagResolver resolver;
+    EquipmentCategoryRegistry::get_instance().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
@@ -33,8 +36,8 @@ void test_full_pipeline_direct() {
 
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    std::unordered_map<std::string, const EquipmentType *> eq_map;
-    for (auto &eq : equipments) eq_map[eq.id] = &eq;
+    std::unordered_map<std::string, const Equipment *> eq_map;
+    for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
     std::unordered_map<std::string, int32_t> ench_map;
     for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
@@ -52,7 +55,7 @@ void test_full_pipeline_direct() {
            "full_pipeline_direct: auto-complete should generate 7 graduated books");
     expect(input.target_item.equipment != nullptr,
            "full_pipeline_direct: target should have equipment");
-    expect(input.target_item.equipment->id == "diamond_sword",
+    expect(input.target_item.equipment->name_id == "diamond_sword",
            "full_pipeline_direct: target should be diamond sword");
 
     std::cout << "  [OK] test_full_pipeline_direct" << std::endl;
@@ -63,6 +66,7 @@ void test_full_pipeline_direct() {
 // ---------------------------------------------------------------------------
 void test_full_pipeline_inventory() {
     TagResolver resolver;
+    EquipmentCategoryRegistry::get_instance().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
@@ -70,8 +74,8 @@ void test_full_pipeline_inventory() {
 
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    std::unordered_map<std::string, const EquipmentType *> eq_map;
-    for (auto &eq : equipments) eq_map[eq.id] = &eq;
+    std::unordered_map<std::string, const Equipment *> eq_map;
+    for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
     std::unordered_map<std::string, int32_t> ench_map;
     for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
@@ -115,6 +119,7 @@ void test_full_pipeline_inventory() {
 // ---------------------------------------------------------------------------
 void test_platform_switching() {
     TagResolver resolver;
+    EquipmentCategoryRegistry::get_instance().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
@@ -135,6 +140,7 @@ void test_platform_switching() {
 // ---------------------------------------------------------------------------
 void test_builtin_enchantment_lookup() {
     TagResolver resolver;
+    EquipmentCategoryRegistry::get_instance().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
@@ -156,20 +162,21 @@ void test_builtin_enchantment_lookup() {
 // ---------------------------------------------------------------------------
 void test_builtin_equipment_lookup() {
     TagResolver resolver;
+    EquipmentCategoryRegistry::get_instance().initialize();
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
 
     bool found_sword = false;
     bool found_netherite_helmet = false;
     for (const auto &eq : equipments) {
-        if (eq.id == "diamond_sword") {
+        if (eq.name_id == "diamond_sword") {
             found_sword = true;
-            expect(eq.category == EquipmentCategory("sword"),
+            expect(eq.category_id == EquipmentCategoryRegistry::ID_SWORD,
                    "builtin_eq: diamond_sword category is sword");
             expect(eq.max_durability == 1561,
                    "builtin_eq: diamond_sword max_durability is 1561");
         }
-        if (eq.id == "netherite_helmet") {
+        if (eq.name_id == "netherite_helmet") {
             found_netherite_helmet = true;
         }
     }
@@ -185,6 +192,7 @@ void test_builtin_equipment_lookup() {
 // ---------------------------------------------------------------------------
 void test_output_formatting_empty() {
     TagResolver resolver;
+    EquipmentCategoryRegistry::get_instance().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);

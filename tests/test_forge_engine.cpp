@@ -1,5 +1,6 @@
 #include "test_utils.h"
 #include "algorithm/DefaultForgeEngine.h"
+#include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/PlatformConfig.h"
 
@@ -8,17 +9,17 @@ void setup_enchinfo() {
     // Minimal enchantment registry for forge tests
     std::vector<EnchInfo> infos;
     infos.push_back({"sharpness", "Sharpness", platform::MCE::All, 5, 5,
-                     1, {}, {EquipmentCategory::Sword()}});
+                     1, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     infos.push_back({"knockback", "Knockback", platform::MCE::All, 2, 2,
-                     2, {}, {EquipmentCategory::Sword()}});
+                     2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     // Add incompatibility test: sharpness and bane_of_arthropods are mutually exclusive
     infos.push_back({"bane_of_arthropods", "Bane of Arthropods", platform::MCE::All, 5, 5,
-                     1, {"sharpness"}, {EquipmentCategory::Sword()}});
+                     1, {"sharpness"}, {EquipmentCategoryRegistry::ID_SWORD}});
     EnchantmentRegistry::get_instance().initialize(infos);
     platform::Config::get_instance().set_active(platform::MCE::Java);
 }
 
-EquipmentType sword{"diamond_sword", "Diamond Sword", EquipmentCategory::Sword(), 1561};
+Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
 
 void test_forge_books() {
     setup_enchinfo();
