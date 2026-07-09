@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <string>
 
 namespace platform {
 
@@ -13,37 +12,8 @@ enum MCE : int8_t {
 
 } // namespace platform
 
-// Inherits std::string for seamless string-like usage. Virtual destructor
-// ensures safe deletion through base pointers. Static factory methods return
-// common category values. Custom equipment categories extend via registry.
-// Thread safety: const values only after initialization — read-only after
-// registry setup, safe for concurrent read.
-
-struct EquipmentCategory : public std::string {
-    using std::string::string;
-
-    static constexpr EquipmentCategory Any() { return "any"; }
-    static constexpr EquipmentCategory Helmet() { return "helmet"; }
-    static constexpr EquipmentCategory Chestplate() { return "chestplate"; }
-    static constexpr EquipmentCategory Leggings() { return "leggings"; }
-    static constexpr EquipmentCategory Boots() { return "boots"; }
-    static constexpr EquipmentCategory Sword() { return "sword"; }
-    static constexpr EquipmentCategory Pickaxe() { return "pickaxe"; }
-    static constexpr EquipmentCategory Axe() { return "axe"; }
-    static constexpr EquipmentCategory Shovel() { return "shovel"; }
-    static constexpr EquipmentCategory Hoe() { return "hoe"; }
-    static constexpr EquipmentCategory Bow() { return "bow"; }
-    static constexpr EquipmentCategory Shield() { return "shield"; }
-    static constexpr EquipmentCategory Crossbow() { return "crossbow"; }
-    static constexpr EquipmentCategory Trident() { return "trident"; }
-    static constexpr EquipmentCategory FishingRod() { return "fishing_rod"; }
-
-    EquipmentCategory() = default;
-    virtual ~EquipmentCategory() = default;
-};
-
-namespace std {
-template <> struct hash<EquipmentCategory> {
-    size_t operator()(const EquipmentCategory& cat) const { return hash<string>()(cat); }
-};
-} // namespace std
+// EquipmentCategory has been moved to types/EquipmentCategory.h
+// - Now uses numeric IDs managed by EquipmentCategoryRegistry
+// - No longer inherits std::string or has virtual destructor
+// - Include path: #include "types/EquipmentCategory.h"
+// - Header provides std::hash<EquipmentCategory> specialization
