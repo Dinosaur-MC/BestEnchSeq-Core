@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace compact {
@@ -19,6 +20,8 @@ struct EnchInfo {
 struct Ench {
     int16_t id;
     int16_t level;
+
+    bool operator==(const Ench& o) const noexcept { return id == o.id && level == o.level; }
 };
 
 enum class ItemType : uint8_t {
@@ -30,10 +33,35 @@ enum class ItemType : uint8_t {
 struct Item {
     ItemType type;                  // 物品类型
     int16_t dur;                    // 耐久度
-    uint8_t ppn;                     // 前次惩罚次数
-    uint16_t lsum;                   // 经验等级总和
+    uint8_t ppn;                    // 前次惩罚次数
+    uint16_t lsum;                  // 经验等级总和
     std::vector<MaskType> exc_mask; // 互斥附魔位掩码
     std::vector<Ench> enchs;        // 附魔列表
+
+    bool operator==(const Item& o) const noexcept {
+        return type == o.type && dur == o.dur && ppn == o.ppn
+            && enchs == o.enchs;
+    }
 };
 
 } // namespace compact
+
+template<>
+struct std::hash<compact::Ench> {
+    size_t operator()(const compact::Ench& e) const noexcept {
+        return static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);
+    }
+};
+
+template<>
+struct std::hash<compact::Item> {
+    size_t operator()(const compact::Item& item) const noexcept {
+        size_t h = static_cast<size_t>(item.type)
+                 ^ (static_cast<size_t>(item.ppn) << 8)
+                 ^ (static_cast<size_t>(item.dur) << 16);
+        // Combine enchantment hashes
+        for (const auto& e : item.enchs)
+            h ^= std::hash<compact::Ench>{}(e) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
