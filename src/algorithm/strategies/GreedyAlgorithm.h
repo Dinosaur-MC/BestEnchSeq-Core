@@ -7,9 +7,8 @@
 
 class GreedyAlgorithm : public IAlgorithm {
 public:
-    explicit GreedyAlgorithm(bool ignore_penalty_cost = false,
-                                     bool ignore_cost_cap = false) noexcept
-        : _forge_engine(ignore_penalty_cost, ignore_cost_cap) {}
+    explicit GreedyAlgorithm(ForgeConfig cfg = {}) noexcept
+        : _forge_engine(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "compact_greedy"; }
     std::string_view version() const noexcept override { return "1.0.0"; }

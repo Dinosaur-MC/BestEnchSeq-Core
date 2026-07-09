@@ -1,9 +1,19 @@
 #pragma once
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
+#include "types/common.h"
 #include <algorithm>
 #include <cstdint>
 #include <utility>
+
+/// Configuration for a single forge engine instance.
+/// Defaults match vanilla Java Edition behavior.
+struct ForgeConfig {
+    bool ignore_penalty_cost = false;
+    bool ignore_repair_cost  = false;
+    bool ignore_cost_cap     = false;
+    platform::MCE platform   = platform::MCE::Java;
+};
 
 /// Virtual forge engine interface for mod customization.
 /// All forge sub-operations have default vanilla implementations;
@@ -11,6 +21,14 @@
 class IForgeEngine {
 public:
     virtual ~IForgeEngine() = default;
+
+    // ── Configuration ────────────────────────────────────────────────────────
+
+    /// Return the current forge configuration.
+    virtual const ForgeConfig& get_config() const noexcept = 0;
+
+    /// Replace the current forge configuration.
+    virtual void set_config(const ForgeConfig& cfg) noexcept = 0;
 
     // ── Core forge operations ────────────────────────────────────────────────
 

@@ -1,10 +1,10 @@
-#include "registries/PlatformConfig.h"
 #include "ForgeEngine.h"
 #include <algorithm>
 
 // ─── IForgeEngine sub-operations ──────────────────────────────────────────────
 
 int32_t ForgeEngine::penalty_cost(int8_t ppn) const noexcept {
+    if (_config.ignore_penalty_cost) return 0;
     return (1 << ppn) - 1;
 }
 
@@ -13,7 +13,7 @@ int32_t ForgeEngine::book_multiplier(int32_t equip_mult) const noexcept {
 }
 
 int32_t ForgeEngine::apply_cap(int32_t raw_cost) const noexcept {
-    if (_ignore_cap) return raw_cost;
+    if (_config.ignore_cost_cap) return raw_cost;
     return raw_cost > 39 ? 39 : raw_cost;
 }
 
@@ -45,10 +45,10 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
 {
     int32_t cost = 0;
 
-    if (!_ignore_penalty)
+    if (!_config.ignore_penalty_cost)
         cost += penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
 
-    platform::MCE plat = platform::get_active_platform();
+    auto plat = _config.platform;
     bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
 
     for (const auto& se : sacrifice.enchs) {

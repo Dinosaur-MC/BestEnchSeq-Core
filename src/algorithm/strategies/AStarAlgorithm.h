@@ -9,9 +9,8 @@
 /// A* algorithm using compact internal representation.
 class AStarAlgorithm : public IAlgorithm {
 public:
-    explicit AStarAlgorithm(bool ignore_penalty_cost = false,
-                                    bool ignore_cost_cap = false) noexcept
-        : _compact_forge(ignore_penalty_cost, ignore_cost_cap) {}
+    explicit AStarAlgorithm(ForgeConfig cfg = {}) noexcept
+        : _compact_forge(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "compact_astar"; }
     std::string_view version() const noexcept override { return "1.0.0"; }

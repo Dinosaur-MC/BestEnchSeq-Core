@@ -9,9 +9,8 @@
 
 class DFSAlgorithm : public IAlgorithm {
 public:
-    explicit DFSAlgorithm(bool ignore_penalty_cost = false,
-                                  bool ignore_cost_cap = false) noexcept
-        : _compact_forge(ignore_penalty_cost, ignore_cost_cap) {}
+    explicit DFSAlgorithm(ForgeConfig cfg = {}) noexcept
+        : _compact_forge(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "compact_dfs"; }
     std::string_view version() const noexcept override { return "1.0.0"; }

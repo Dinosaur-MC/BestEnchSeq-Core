@@ -4,10 +4,13 @@
 /// Default forge engine implementing vanilla Minecraft rules.
 class ForgeEngine : public IForgeEngine {
 public:
-    explicit ForgeEngine(bool ignore_penalty_cost = false,
-                         bool ignore_cost_cap = false) noexcept
-        : _ignore_penalty(ignore_penalty_cost)
-        , _ignore_cap(ignore_cost_cap) {}
+    explicit ForgeEngine(ForgeConfig cfg = {}) noexcept
+        : _config(std::move(cfg)) {}
+
+    // ── IForgeEngine configuration ────────────────────────────────────────────
+
+    const ForgeConfig& get_config() const noexcept override { return _config; }
+    void set_config(const ForgeConfig& cfg) noexcept override { _config = cfg; }
 
     // ── IForgeEngine core ─────────────────────────────────────────────────────
 
@@ -31,6 +34,5 @@ public:
                                  const compact::EnchReg& reg) const noexcept override;
 
 private:
-    bool _ignore_penalty;
-    bool _ignore_cap;
+    ForgeConfig _config;
 };

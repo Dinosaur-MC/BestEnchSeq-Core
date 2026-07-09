@@ -7,9 +7,8 @@
 
 class HierarchicalMergeStrategy : public IAlgorithm {
 public:
-    explicit HierarchicalMergeStrategy(bool ignore_penalty_cost = false,
-                                               bool ignore_cost_cap = false) noexcept
-        : _forge_engine(ignore_penalty_cost, ignore_cost_cap) {}
+    explicit HierarchicalMergeStrategy(ForgeConfig cfg = {}) noexcept
+        : _forge_engine(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "compact_hierarchical"; }
     std::string_view version() const noexcept override { return "1.0.0"; }

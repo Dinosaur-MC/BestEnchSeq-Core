@@ -99,7 +99,7 @@ void test_forge_not_forgeable() {
 void test_ignore_cost_cap() {
     setup_enchinfo();
     auto& reg = init_reg();
-    ForgeEngine engine(false, true);
+    ForgeEngine engine(ForgeConfig{false, false, true, platform::MCE::Java});
     expect(true, "ignore_cost_cap constructs without error");
     std::cout << "PASS: test_ignore_cost_cap" << std::endl;
 }
