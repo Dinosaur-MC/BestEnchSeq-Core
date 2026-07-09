@@ -3,12 +3,6 @@
 
 namespace compact {
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-static int32_t penalty_cost(int8_t ppn) noexcept {
-    return (1 << ppn) - 1;
-}
-
 // ─── Domain → compact ───────────────────────────────────────────────────────
 
 Item from_domain(const ItemStack& item, const EnchReg& reg) {
@@ -76,22 +70,6 @@ CompactInput prepare(const AlgorithmInput& input, const EnchReg& reg) {
         ci.items.push_back(from_domain(book, reg));
 
     return ci;
-}
-
-// ─── Cost estimation ────────────────────────────────────────────────────────
-
-int32_t estimate_forge_cost(const Item& target, const Item& sacrifice, const EnchReg& reg) {
-    int32_t cost = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
-
-    bool sac_is_book = (sacrifice.type == ItemType::Book);
-    for (const auto& e : sacrifice.enchs) {
-        int32_t mult = sac_is_book
-            ? book_multiplier(reg.get_multiplier(e.id))
-            : reg.get_multiplier(e.id);
-        cost += e.level * mult;
-    }
-
-    return cost;
 }
 
 } // namespace compact

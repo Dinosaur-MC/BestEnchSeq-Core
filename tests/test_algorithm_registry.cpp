@@ -1,16 +1,17 @@
 #include "test_utils.h"
 #include "registries/AlgorithmRegistry.h"
-#include "algorithm/forge/DefaultForgeEngine.h"
 
 class TestAlgorithm : public IAlgorithm {
 public:
-    TestAlgorithm() : _engine(ForgeConfig{}) {}
     std::string_view name() const noexcept override { return "test_algo"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
-    const IForgeEngine& forge_engine() const noexcept override { return _engine; }
-    void execute(const AlgorithmInput&, ExecutionContext&) override {}
-private:
-    DefaultForgeEngine _engine;
+
+    void execute(
+        const std::vector<compact::Item>&,
+        const compact::EnchReg&,
+        const std::vector<compact::Ench>&,
+        ExecutionContext&
+    ) override {}
 };
 
 void test_registry() {

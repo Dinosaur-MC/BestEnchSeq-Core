@@ -1,5 +1,6 @@
 #include "CompactHierarchicalMergeStrategy.h"
-#include "utils/CompactAdapter.hpp"
+#include "../ExecutionContext.h"
+#include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>
@@ -68,32 +69,29 @@ compact::Item CompactHierarchicalMergeStrategy::merge_group(
 }
 
 void CompactHierarchicalMergeStrategy::execute(
-    const AlgorithmInput& input, ExecutionContext& ctx)
+    const std::vector<compact::Item>& items,
+    const compact::EnchReg& reg,
+    const std::vector<compact::Ench>& target,
+    ExecutionContext& ctx)
 {
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
-    //── Boundary: prepare compact data ────────────────────────────────────
-    auto& ench_reg = compact::EnchReg::get_instance();
-    ench_reg.init(EnchantmentRegistry::get_instance(), *input.target_item.equipment);
-    auto ci = compact::prepare(input, ench_reg);
-    auto& items = ci.items;
-
     if (items.size() <= 1) {
-        ctx.report_solution_found({});
+        ctx.report_compact_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
     }
 
     // items[0] = equipment, items[1..] = books
-    auto equip = std::move(items[0]);
+    auto equip = items[0];
     std::vector<compact::Item> books;
     books.reserve(items.size() - 1);
     for (size_t k = 1; k < items.size(); ++k)
-        books.push_back(std::move(items[k]));
+        books.push_back(items[k]);
 
     std::vector<compact::EnchStep> compact_steps;
 
-    // Phase 1: Optional dedup — merge same-enchantment books (>7 items)
+    // Phase 1: Dedup same-enchantment books (when >7 books)
     if (books.size() > 7) {
         std::unordered_map<int32_t, std::vector<size_t>> ench_to_books;
         for (size_t i = 0; i < books.size(); ++i) {
@@ -117,7 +115,7 @@ void CompactHierarchicalMergeStrategy::execute(
                 compact::Item saved_base = base;
                 compact::Item saved_sac  = books[sac_idx];
 
-                int32_t cost = _forge_engine.forge_into(base, books[sac_idx], ench_reg);
+                int32_t cost = _forge_engine.forge_into(base, books[sac_idx], reg);
                 compact_steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
 
                 if (sac_idx < books.size())
@@ -130,7 +128,7 @@ void CompactHierarchicalMergeStrategy::execute(
     std::vector<compact::Item> low_group, mid_group, high_group;
 
     for (auto& book : books) {
-        int32_t mult = effective_multiplier(book, ench_reg);
+        int32_t mult = effective_multiplier(book, reg);
         if (mult <= 1)
             low_group.push_back(std::move(book));
         else if (mult <= 2)
@@ -141,11 +139,10 @@ void CompactHierarchicalMergeStrategy::execute(
 
     ctx.report_progress(0.3, ProgressStatus::MergingWithinGroups);
 
-    auto low_merged  = merge_group(low_group, compact_steps, ench_reg, ctx);
-    auto mid_merged  = merge_group(mid_group, compact_steps, ench_reg, ctx);
-    auto high_merged = merge_group(high_group, compact_steps, ench_reg, ctx);
+    auto low_merged  = merge_group(low_group, compact_steps, reg, ctx);
+    auto mid_merged  = merge_group(mid_group, compact_steps, reg, ctx);
+    auto high_merged = merge_group(high_group, compact_steps, reg, ctx);
 
-    // Collect non-empty results, ordered by multiplier
     struct GroupResult { compact::Item book; int32_t mult; };
     std::vector<GroupResult> group_results;
     if (!low_merged.enchs.empty())
@@ -158,8 +155,7 @@ void CompactHierarchicalMergeStrategy::execute(
     ctx.report_progress(0.6, ProgressStatus::ApplyingToEquipment);
 
     if (group_results.empty()) {
-        auto steps = compact::to_domain(compact_steps.begin(), compact_steps.end(), ci.equipment);
-        ctx.report_solution_found(steps);
+        ctx.report_compact_solution(compact_steps);
         ctx.report_progress(1.0, ProgressStatus::Complete);
         return;
     }
@@ -175,19 +171,17 @@ void CompactHierarchicalMergeStrategy::execute(
             continue;
 
         compact::Item saved_base = combined;
-        int32_t cost = _forge_engine.forge_into(combined, next_book, ench_reg);
+        int32_t cost = _forge_engine.forge_into(combined, next_book, reg);
         compact_steps.push_back({std::move(saved_base), std::move(next_book), cost});
     }
 
     // Apply combined book to equipment
     if (compact::CompactForgeEngine::is_forgeable(equip, combined)) {
         compact::Item saved_equip = equip;
-        int32_t cost = _forge_engine.forge_into(equip, combined, ench_reg);
+        int32_t cost = _forge_engine.forge_into(equip, combined, reg);
         compact_steps.push_back({std::move(saved_equip), std::move(combined), cost});
     }
 
-    //── Boundary: convert to domain for output ───────────────────────────
-    auto steps = compact::to_domain(compact_steps.begin(), compact_steps.end(), ci.equipment);
-    ctx.report_solution_found(steps);
+    ctx.report_compact_solution(compact_steps);
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }

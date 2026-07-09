@@ -1,18 +1,15 @@
 #include "registries/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/GreedyAlgorithm.h"
-#include "algorithm/strategies/DFSAlgorithm.h"
-#include "algorithm/strategies/AStarAlgorithm.h"
-#include "algorithm/strategies/DynamicPenaltyBalancing.h"
-#include "algorithm/strategies/HierarchicalMergeStrategy.h"
 #include "algorithm/strategies/CompactGreedyAlgorithm.h"
 #include "algorithm/strategies/CompactDFSAlgorithm.h"
 #include "algorithm/strategies/CompactAStarAlgorithm.h"
 #include "algorithm/strategies/CompactDynamicPenaltyBalancing.h"
 #include "algorithm/strategies/CompactHierarchicalMergeStrategy.h"
+#include "utils/CompactAdapter.hpp"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
+#include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
@@ -85,7 +82,6 @@ void load_builtin_data() {
     auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags);
     EquipmentRegistry::get_instance().initialize(equipments);
     platform::Config::get_instance().set_active(platform::MCE::Java);
-
 }
 
 void run_case(const TestCase& tc) {
@@ -97,7 +93,7 @@ void run_case(const TestCase& tc) {
     const Equipment& eq = EquipmentRegistry::get_instance().get(eq_id);
 
     // Parse wanted enchantments
-    EnchSet wanted_set;
+    ::EnchSet wanted_set;
     ItemCollection books;
     for (const auto& spec : tc.wanted) {
         auto p = spec.find('=');
@@ -106,36 +102,51 @@ void run_case(const TestCase& tc) {
         int32_t eid = EnchantmentRegistry::get_instance().get_id(id);
         if (eid < 0) { std::cout << "  SKIP: unknown enchant '" << id << "'" << std::endl; return; }
         wanted_set.emplace(eid, lv);
-        books.emplace_back(EnchSet{Ench(eid, lv)});
+        books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
 
+    // Build domain AlgorithmInput for adapter
     AlgorithmInput input;
     input.platform = platform::MCE::Java;
-    input.original_ench = EnchSet{};
-    // target_item.enchantments = GOAL state for DFS/AStar
+    input.original_ench = ::EnchSet{};
     input.target_item = ItemStack(&eq, wanted_set, 0, eq.max_durability);
     input.available_items = books;
 
-    for (const auto& algo_name : {"greedy", "compact_greedy", "dfs", "compact_dfs", "astar", "compact_astar", "penalty_balance", "compact_penalty_balance", "hierarchical", "compact_hierarchical"}) {
+    //── Compact boundary ─────────────────────────────────────────────────
+    auto& ench_reg = compact::EnchReg::get_instance();
+    ench_reg.init(EnchantmentRegistry::get_instance(), eq);
+    auto ci = compact::prepare(input, ench_reg);
+
+    std::vector<compact::Ench> target;
+    target.reserve(wanted_set.size());
+    for (const auto& e : wanted_set)
+        target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+
+    for (const auto& algo_name : {"greedy", "dfs", "astar", "penalty_balance", "hierarchical"}) {
         if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) continue;
         auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
-        executor.start(input);
+
+        // Copy items for each algorithm run (they mutate)
+        auto items_copy = ci.items;
+        executor.start(std::move(items_copy), ench_reg, target, ci.equipment);
         executor.wait();
 
         if (executor.state() != AlgorithmState::Completed) {
             std::cout << "  " << algo_name << ": FAILED" << std::endl;
             continue;
         }
-        auto out = executor.output();
+        AlgorithmOutput out = executor.output();
         if (out.steps.empty()) {
             std::cout << "  " << algo_name << ": no solution" << std::endl;
             continue;
         }
 
+        // Total cost from compact steps
         int32_t total = 0;
-        for (auto& sl : out.steps)
-            for (auto& s : sl) total += s.exp_level_cost;
+        for (const auto& step_list : out.steps)
+            for (const auto& s : step_list)
+                total += s.cost;
 
         bool ok = total >= tc.min_cost && total <= tc.max_cost;
         std::cout << "  " << algo_name << ": " << total << "L ["
@@ -153,24 +164,14 @@ int main() {
     load_builtin_data();
 
     AlgorithmRegistry::get_instance().register_algorithm("greedy",
-        []{ return std::make_unique<GreedyAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("dfs",
-        []{ return std::make_unique<DFSAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("astar",
-        []{ return std::make_unique<AStarAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("penalty_balance",
-        []{ return std::make_unique<DynamicPenaltyBalancing>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
-        []{ return std::make_unique<HierarchicalMergeStrategy>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("compact_greedy",
         []{ return std::make_unique<CompactGreedyAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("compact_dfs",
+    AlgorithmRegistry::get_instance().register_algorithm("dfs",
         []{ return std::make_unique<CompactDFSAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("compact_astar",
+    AlgorithmRegistry::get_instance().register_algorithm("astar",
         []{ return std::make_unique<CompactAStarAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("compact_penalty_balance",
+    AlgorithmRegistry::get_instance().register_algorithm("penalty_balance",
         []{ return std::make_unique<CompactDynamicPenaltyBalancing>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("compact_hierarchical",
+    AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
         []{ return std::make_unique<CompactHierarchicalMergeStrategy>(); });
 
     for (const auto& tc : CASES) {

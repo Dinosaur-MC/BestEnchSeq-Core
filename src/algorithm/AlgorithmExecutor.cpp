@@ -39,17 +39,23 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
 
 // ─── Lifecycle ───
 
-void AlgorithmExecutor::start(const AlgorithmInput& input) {
+void AlgorithmExecutor::start(
+    std::vector<compact::Item> items,
+    const compact::EnchReg& reg,
+    std::vector<compact::Ench> target,
+    const Equipment* out_eq)
+{
     AlgorithmState expected = AlgorithmState::Idle;
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
+    _out_equipment = out_eq;
     _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
 
-    _worker.emplace([this, input]() {
+    _worker.emplace([this, items = std::move(items), &reg, target = std::move(target)]() mutable {
         try {
-            _algorithm->execute(input, *_ctx);
+            _algorithm->execute(items, reg, target, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
@@ -67,6 +73,19 @@ void AlgorithmExecutor::start(const AlgorithmInput& input) {
     });
 }
 
+void AlgorithmExecutor::start(
+    std::vector<compact::Item> items,
+    const compact::EnchReg& reg,
+    std::vector<compact::Ench> target,
+    const Equipment* out_eq,
+    const std::vector<uint8_t>& previous_state)
+{
+    if (!previous_state.empty()) {
+        _algorithm->deserialize_state(previous_state);
+    }
+    start(std::move(items), reg, std::move(target), out_eq);
+}
+
 void AlgorithmExecutor::pause() {
     AlgorithmState expected = AlgorithmState::Running;
     if (_state.compare_exchange_strong(expected, AlgorithmState::Paused))
@@ -81,12 +100,9 @@ void AlgorithmExecutor::resume() {
 
 void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
-    // Note: not calling _ctx->report_state_change() here — the worker thread
-    // detects is_cancelled() and calls _set_state() which notifies observers.
-    // This avoids multi-producer writes to the SPSC event queue.
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
         _ctx->cancel();
-        _ctx->resume();  // unblock if paused
+        _ctx->resume();
     }
     _state_cv.notify_all();
 }
@@ -112,7 +128,6 @@ AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
                s == AlgorithmState::Cancelled;
     });
 
-    // Timed out or state reached
     auto s = _state.load(std::memory_order_acquire);
     if (s == AlgorithmState::Completed ||
         s == AlgorithmState::Failed ||
@@ -143,7 +158,7 @@ void AlgorithmExecutor::detach_observer(std::shared_ptr<AlgorithmObserver> obser
     if (_ctx) _ctx->detach_observer(std::move(observer));
 }
 
-// ─── Result ───
+// ─── Result (convert compact steps → domain at output boundary) ───
 
 AlgorithmOutput AlgorithmExecutor::output() const {
     if (_state.load(std::memory_order_acquire) != AlgorithmState::Completed)
@@ -154,14 +169,16 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.algorithm_version = std::string(_algorithm->version());
     out.created_at = std::chrono::system_clock::now();
     out.computation_time = _computation_time;
-    out.steps = _ctx->get_accumulated_steps();
+
+    auto compact_steps = _ctx->get_accumulated_compact_steps();
+    out.steps = std::move(compact_steps);
+
     out.is_valid = true;
     return out;
 }
 
 std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
     auto s = _state.load(std::memory_order_acquire);
-    // Only meaningful when the algorithm has been started and has state
     if (s == AlgorithmState::Idle)
         return {};
     if (!_algorithm->is_resumable())
@@ -178,13 +195,6 @@ bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
         return false;
     _algorithm->deserialize_state(data);
     return true;
-}
-
-void AlgorithmExecutor::start(const AlgorithmInput& input, const std::vector<uint8_t>& previous_state) {
-    if (!previous_state.empty()) {
-        _algorithm->deserialize_state(previous_state);
-    }
-    start(input);
 }
 
 void AlgorithmExecutor::update_search_config(ExecutionContext::SearchConfig cfg) {

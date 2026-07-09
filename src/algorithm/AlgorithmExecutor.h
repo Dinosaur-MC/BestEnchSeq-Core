@@ -1,5 +1,7 @@
 #pragma once
 #include "ExecutionContext.h"
+#include "types/CompactedTypes.h"
+#include "registries/CompactedRegistries.h"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -8,50 +10,60 @@
 #include <optional>
 #include <thread>
 
-// Forward declarations (full definitions in IAlgorithm.h, included in .cpp)
+namespace compact { class EnchReg; }
+
+// Forward declarations (full definitions in IAlgorithm.h)
 struct AlgorithmOutput;
-struct AlgorithmInput;
 class IAlgorithm;
 
-// ─── AlgorithmExecutor (async execution engine) ───
+// ─── AlgorithmExecutor (async execution engine, compact-only) ───
 class AlgorithmExecutor {
 public:
     explicit AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm);
     ~AlgorithmExecutor();
 
-    // Non-copyable, non-movable
     AlgorithmExecutor(const AlgorithmExecutor&) = delete;
     AlgorithmExecutor& operator=(const AlgorithmExecutor&) = delete;
 
-    // Lifecycle
-    void start(const AlgorithmInput& input);
-    // Start with a previously-serialized state to resume a paused search.
-    // The algorithm must be resumable (DFS) and the state must have been
-    // produced by serialize_state() from the same algorithm type.
-    void start(const AlgorithmInput& input, const std::vector<uint8_t>& previous_state);
+    // Start with compact types (algorithm layer has zero domain dependencies).
+    // @param items        items[0] = target equipment, rest = available books
+    // @param reg          compact registry (must be initialized before call)
+    // @param target       desired enchantment set on the equipment
+    // @param out_eq       equipment pointer for output conversion (can be null)
+    void start(
+        std::vector<compact::Item> items,
+        const compact::EnchReg& reg,
+        std::vector<compact::Ench> target,
+        const Equipment* out_eq
+    );
+
+    // Resume from a previously-serialized state.
+    void start(
+        std::vector<compact::Item> items,
+        const compact::EnchReg& reg,
+        std::vector<compact::Ench> target,
+        const Equipment* out_eq,
+        const std::vector<uint8_t>& previous_state
+    );
+
     void pause();
     void resume();
     void cancel();
     AlgorithmState wait();
     AlgorithmState wait_for(std::chrono::milliseconds timeout);
 
-    // State queries
     AlgorithmState state() const noexcept;
     double progress() const noexcept;
 
-    // Observer
     void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
     void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
 
-    // Result
+    // Result (returns compact AlgorithmOutput; caller converts to domain if needed)
     AlgorithmOutput output() const;
 
-    // Hot-update search config (applied at algorithm's next checkpoint)
     void update_search_config(ExecutionContext::SearchConfig cfg);
 
     // Serialization
-    // Captures algorithm search state (best solution, visited set) for
-    // cross-session checkpointing. Only works for resumable algorithms (DFS).
     std::vector<uint8_t> serialize_state() const;
     bool restore_state(const std::vector<uint8_t>& data);
 
@@ -67,4 +79,7 @@ private:
     std::condition_variable _state_cv;
     std::chrono::steady_clock::time_point _start_time;
     std::chrono::milliseconds _computation_time{0};
+
+    // Boundary data for output conversion
+    const Equipment* _out_equipment{nullptr};
 };

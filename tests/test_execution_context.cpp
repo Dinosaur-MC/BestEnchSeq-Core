@@ -1,5 +1,6 @@
 #include "test_utils.h"
 #include "algorithm/AlgorithmExecutor.h"
+#include "types/CompactedTypes.h"
 #include <thread>
 
 void test_cancel() {
@@ -29,7 +30,7 @@ void test_progress() {
 
 struct TestSolutionObserver : AlgorithmObserver {
     int found_count = 0;
-    void on_solution_found(const EnchStepList&) override { ++found_count; }
+    void on_solution_found(const std::vector<compact::EnchStep>&) override { ++found_count; }
 };
 
 void test_observer_solution() {
@@ -37,13 +38,13 @@ void test_observer_solution() {
     auto obs = std::make_shared<TestSolutionObserver>();
     ctx.attach_observer(obs);
 
-    EnchStepList steps;
-    steps.push_back({{}, {}, 4, 9});
-    ctx.report_solution_found(steps);
+    std::vector<compact::EnchStep> steps;
+    steps.push_back(compact::EnchStep{{}, {}, 4});
+    ctx.report_compact_solution(steps);
     ctx.dispatch_events();
     expect(obs->found_count == 1, "observer should be called once");
     ctx.detach_observer(obs);
-    ctx.report_solution_found(steps);
+    ctx.report_compact_solution(steps);
     ctx.dispatch_events();
     expect(obs->found_count == 1, "observer should not be called after detach");
     std::cout << "PASS: test_observer_solution" << std::endl;
@@ -54,7 +55,7 @@ void test_wait_if_paused_resume() {
     bool resumed = false;
     std::thread algo_thread([&] {
         ctx.pause();
-        ctx.wait_if_paused();  // should block until resume
+        ctx.wait_if_paused();
         resumed = true;
     });
 

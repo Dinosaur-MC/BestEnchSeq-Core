@@ -1,10 +1,46 @@
 #include "CompactDFSAlgorithm.h"
-#include "utils/CompactAdapter.hpp"
-#include "utils/AlgorithmUtils.hpp"
+#include "../ExecutionContext.h"
+#include "utils/CompactForgeUtils.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
+
+// ─── Compact-only greedy bound (replaces AlgorithmUtils::book_first_merge) ──
+
+int32_t CompactDFSAlgorithm::_greedy_bound(
+    const std::vector<compact::Item>& items,
+    const compact::EnchReg& reg) const
+{
+    if (items.size() <= 1) return 0;
+
+    // Separate equipment and books
+    compact::Item equip = items[0];
+    std::vector<compact::Item> books;
+    books.reserve(items.size() - 1);
+    for (size_t k = 1; k < items.size(); ++k)
+        books.push_back(items[k]);
+
+    int32_t total_cost = 0;
+    auto& forge = const_cast<compact::CompactForgeEngine&>(_compact_forge);
+
+    // Sort books by estimated forge cost with equipment
+    std::vector<std::pair<size_t, int32_t>> ordered;
+    for (size_t i = 0; i < books.size(); ++i)
+        ordered.emplace_back(i, compact::estimate_forge_cost(equip, books[i], reg));
+    std::sort(ordered.begin(), ordered.end(),
+              [](const auto& a, const auto& b) { return a.second < b.second; });
+
+    // Merge cheap books first onto equipment
+    for (const auto& [idx, _] : ordered) {
+        if (!compact::CompactForgeEngine::is_forgeable(equip, books[idx]))
+            continue;
+        int32_t cost = forge.forge_into(equip, books[idx], reg);
+        total_cost += cost;
+    }
+
+    return total_cost;
+}
 
 // ─── Collect forge pairs ───────────────────────────────────────────────────
 
@@ -46,7 +82,6 @@ int32_t CompactDFSAlgorithm::_heuristic(const std::vector<compact::Item>& items)
     int32_t h = 0;
     if (items.empty()) return h;
 
-    // Build max level per ench ID across all items (unordered_map for O(M*N + T)).
     std::unordered_map<int16_t, int16_t> max_levels;
     for (const auto& item : items) {
         for (const auto& e : item.enchs) {
@@ -71,22 +106,16 @@ int32_t CompactDFSAlgorithm::_heuristic(const std::vector<compact::Item>& items)
 
 // ─── execute ───────────────────────────────────────────────────────────────
 
-void CompactDFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+void CompactDFSAlgorithm::execute(
+    const std::vector<compact::Item>& items,
+    const compact::EnchReg& reg,
+    const std::vector<compact::Ench>& target,
+    ExecutionContext& ctx)
+{
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
-    //── Boundary: prepare compact data ────────────────────────────────────
-    auto& ench_reg = compact::EnchReg::get_instance();
-    ench_reg.init(EnchantmentRegistry::get_instance(), *input.target_item.equipment);
-    _ench_reg = &ench_reg;
-
-    auto ci = compact::prepare(input, ench_reg);
-    auto& items = ci.items;
-
-    // Extract target enchantments in compact form
-    _target.clear();
-    _target.reserve(input.target_item.enchantments.size());
-    for (const auto& e : input.target_item.enchantments)
-        _target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+    _ench_reg = &reg;
+    _target = target;
 
     // Reset state
     _best_cost = INT32_MAX;
@@ -97,32 +126,29 @@ void CompactDFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext&
     _frame_pairs.clear();
     _solutions_found = 0;
 
-    // Greedy upper bound for pruning (uses domain engine, done once at boundary)
-    if (items.size() > 1) {
-        auto bound = AlgorithmUtils::book_first_merge(
-            input.target_item, input.available_items, _bound_engine, ctx);
-        _best_cost = bound.total_cost;
-    }
+    // Compact-only greedy upper bound
+    if (items.size() > 1)
+        _best_cost = _greedy_bound(items, reg);
 
     // Push root frame
-    _stack.push_back({std::move(items), 0, 0, 0, {}, {}, 0, 0, false});
+    _stack.push_back({items, 0, 0, 0, {}, {}, 0, 0, false});
     _frame_pairs.emplace_back();
 
     // Run iterative search (compact-only)
-    _dfs_iterative(ctx, ci.equipment);
+    _dfs_iterative(ctx);
 
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 
-// ─── Iterative search (compact-only, no domain deps) ───────────────────────
+// ─── Iterative search (compact-only) ───────────────────────────────────────
 
-void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx, const Equipment* out_eq) {
+void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
     while (!_stack.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
 
         auto& frame = _stack.back();
 
-        // 1. Handle backtrack restore
+        // 1. Backtrack restore
         if (frame.has_backtrack) {
             size_t adj_base = (frame.sac_idx < frame.base_idx)
                 ? frame.base_idx - 1 : frame.base_idx;
@@ -143,32 +169,29 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx, const Equipment*
             }
         }
 
-        // 3. Goal check (compact only)
+        // 3. Goal check
         if (_meets_target(frame.items[0])) {
             ++_solutions_found;
 
-            //── Boundary: convert compact steps to domain for reporting ──
-            auto domain_steps = compact::to_domain(
-                _current_steps.begin(), _current_steps.end(), out_eq);
-            ctx.report_solution_found(domain_steps);
+            ctx.report_compact_solution(_current_steps);
 
             if (_best_steps.empty() || frame.cost_so_far < _best_cost) {
                 _best_cost = frame.cost_so_far;
-                _best_steps = std::move(domain_steps);
+                _best_steps = _current_steps;
             }
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        // 4. Branch-and-bound pruning (compact heuristic)
+        // 4. Branch-and-bound pruning
         if (frame.cost_so_far + _heuristic(frame.items) >= _best_cost) {
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        // 5. Hot-update config check
+        // 5. Config check
         {
             auto cfg = ctx.get_search_config();
             if (cfg.max_depth > 0 &&
@@ -183,11 +206,10 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx, const Equipment*
 
         // 6. Lazy pair building
         auto& pairs = _frame_pairs.back();
-        if (pairs.empty()) {
+        if (pairs.empty())
             pairs = _collect_pairs(frame.items);
-        }
 
-        // 7. Find next valid pair
+        // 7. Next valid pair
         if (frame.pair_index >= pairs.size()) {
             _stack.pop_back();
             _frame_pairs.pop_back();
@@ -205,7 +227,6 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx, const Equipment*
         int32_t step_cost = _compact_forge.forge_into(
             frame.items[p.i], frame.items[p.j], *_ench_reg);
 
-        // Record step (compact — no domain conversion)
         _current_steps.push_back({
             frame.saved_base,
             frame.saved_sac,

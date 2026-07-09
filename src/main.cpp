@@ -1,17 +1,19 @@
 #include "registries/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/GreedyAlgorithm.h"
-#include "algorithm/strategies/DFSAlgorithm.h"
-#include "algorithm/strategies/AStarAlgorithm.h"
-#include "algorithm/strategies/DynamicPenaltyBalancing.h"
-#include "algorithm/strategies/HierarchicalMergeStrategy.h"
+#include "algorithm/strategies/CompactGreedyAlgorithm.h"
+#include "algorithm/strategies/CompactDFSAlgorithm.h"
+#include "algorithm/strategies/CompactAStarAlgorithm.h"
+#include "algorithm/strategies/CompactDynamicPenaltyBalancing.h"
+#include "algorithm/strategies/CompactHierarchicalMergeStrategy.h"
 #include "utils/SolutionFactory.hpp"
+#include "utils/CompactAdapter.hpp"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
 #include "parser/InputParser.h"
 #include "parser/OutputFormatter.h"
 #include "parser/TagResolver.h"
+#include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
@@ -29,8 +31,6 @@ namespace {
 const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path("data") / "builtin";
 
 void load_builtin_data(TagResolver& tag_resolver) {
-    // EquipmentCategoryRegistry must be initialized before EnchInfoParser
-    // (enchantments reference categories) and EquipmentParser (equipment references categories).
     EquipmentCategoryRegistry::get_instance().initialize();
 
     auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
@@ -44,7 +44,6 @@ void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& t
         throw std::runtime_error("Data pack directory not found: " + data_pack_dir.string());
 
     tag_resolver.load_from(data_pack_dir);
-    // Combine custom enchantments with existing
     auto ench_infos = EnchInfoParser::parse(data_pack_dir, tag_resolver);
     auto existing_ench = EnchantmentRegistry::get_instance().get_instances();
     std::vector<EnchInfo> combined_ench;
@@ -64,19 +63,19 @@ void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& t
 
 void register_builtin_algorithms() {
     AlgorithmRegistry::get_instance().register_algorithm("greedy", []{
-        return std::make_unique<GreedyAlgorithm>();
+        return std::make_unique<CompactGreedyAlgorithm>();
     });
     AlgorithmRegistry::get_instance().register_algorithm("dfs", []{
-        return std::make_unique<DFSAlgorithm>();
+        return std::make_unique<CompactDFSAlgorithm>();
     });
     AlgorithmRegistry::get_instance().register_algorithm("astar", []{
-        return std::make_unique<AStarAlgorithm>();
+        return std::make_unique<CompactAStarAlgorithm>();
     });
     AlgorithmRegistry::get_instance().register_algorithm("penalty_balance", []{
-        return std::make_unique<DynamicPenaltyBalancing>();
+        return std::make_unique<CompactDynamicPenaltyBalancing>();
     });
     AlgorithmRegistry::get_instance().register_algorithm("hierarchical", []{
-        return std::make_unique<HierarchicalMergeStrategy>();
+        return std::make_unique<CompactHierarchicalMergeStrategy>();
     });
 }
 
@@ -128,19 +127,46 @@ int main(int argc, char *argv[]) {
                 "'. Available: greedy, dfs, astar, penalty_balance, hierarchical");
         }
 
-        // Execute
+        //── Boundary: domain → compact ─────────────────────────────────────
+        auto& ench_reg = compact::EnchReg::get_instance();
+        ench_reg.init(EnchantmentRegistry::get_instance(), *algo_input.target_item.equipment);
+        auto ci = compact::prepare(algo_input, ench_reg);
+
+        // Extract target enchantments in compact form
+        std::vector<compact::Ench> target;
+        target.reserve(algo_input.target_item.enchantments.size());
+        for (const auto& e : algo_input.target_item.enchantments)
+            target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+
+        // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
-        executor.start(algo_input);
+        executor.start(std::move(ci.items), ench_reg, std::move(target), ci.equipment);
         executor.wait();
 
-        // Assemble solutions
-        auto solutions = SolutionFactory::create(
-            algo_input.platform,
-            algo_input.original_ench,
-            algo_input.target_item,
-            algo_input.available_items,
-            executor.output()
-        );
+        //── Boundary: compact → domain ────────────────────────────────────
+        AlgorithmOutput compact_out = executor.output();
+
+        // Assemble solutions: convert each compact step list to domain
+        std::vector<EnchSolution> solutions;
+        if (compact_out.is_valid) {
+            solutions.reserve(compact_out.steps.size());
+            for (const auto& step_list : compact_out.steps) {
+                auto domain_steps = compact::to_domain(
+                    step_list.begin(), step_list.end(), ci.equipment);
+                solutions.push_back(
+                    SolutionFactory::create_single(
+                        algo_input.platform,
+                        algo_input.original_ench,
+                        algo_input.target_item,
+                        algo_input.available_items,
+                        domain_steps,
+                        compact_out.algorithm_name,
+                        compact_out.algorithm_version,
+                        compact_out.is_valid
+                    )
+                );
+            }
+        }
 
         // Format output
         std::string output_text;

@@ -1,5 +1,5 @@
 #pragma once
-#include "algorithm/IAlgorithm.h"
+#include "types/AlgorithmInput.h"
 #include "parser/CLIParser.h"
 #include "parser/TagResolver.h"
 #include <filesystem>

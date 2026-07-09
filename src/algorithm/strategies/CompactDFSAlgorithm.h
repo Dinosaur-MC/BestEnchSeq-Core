@@ -1,6 +1,5 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../forge/DefaultForgeEngine.h"
 #include "../forge/CompactForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
@@ -8,34 +7,28 @@
 #include <unordered_set>
 #include <vector>
 
-/// DFS algorithm using compact internal representation.
-///
-/// During search, NO domain types are touched — only compact::Item and
-/// compact::EnchReg. The CompactAdapter is used ONLY at the input boundary
-/// (prepare) and output boundary (step conversion to domain).
 class CompactDFSAlgorithm : public IAlgorithm {
 public:
-    explicit CompactDFSAlgorithm(ForgeConfig forge_cfg = {})
-        : _compact_forge(forge_cfg.ignore_penalty_cost, forge_cfg.ignore_cost_cap)
-        , _bound_engine(forge_cfg) {}
+    explicit CompactDFSAlgorithm(bool ignore_penalty_cost = false,
+                                  bool ignore_cost_cap = false) noexcept
+        : _compact_forge(ignore_penalty_cost, ignore_cost_cap) {}
 
     std::string_view name() const noexcept override { return "compact_dfs"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
-    const IForgeEngine& forge_engine() const noexcept override {
-        static DefaultForgeEngine fallback;
-        return fallback;
-    }
 
-    void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
+    void execute(
+        const std::vector<compact::Item>& items,
+        const compact::EnchReg& reg,
+        const std::vector<compact::Ench>& target,
+        ExecutionContext& ctx
+    ) override;
 
 private:
-    // ─── Forge pair ───
     struct ForgePair {
         size_t i, j;
         int32_t est_cost;
     };
 
-    // ─── Hash for vector of items (visited set key) ───
     struct ItemVectorHash {
         size_t operator()(const std::vector<compact::Item>& items) const noexcept {
             size_t h = 0;
@@ -53,14 +46,12 @@ private:
         }
     };
 
-    // ─── Iterative DFS frame ───
     struct DFSFrame {
         std::vector<compact::Item> items;
         int32_t cost_so_far{0};
         size_t pair_index{0};
         size_t saved_steps_size{0};
 
-        // Backtrack restore (valid when has_backtrack is true)
         compact::Item saved_base;
         compact::Item saved_sac;
         size_t base_idx{0};
@@ -68,22 +59,21 @@ private:
         bool has_backtrack{false};
     };
 
-    void _dfs_iterative(ExecutionContext& ctx, const Equipment* out_eq);
+    void _dfs_iterative(ExecutionContext& ctx);
     std::vector<ForgePair> _collect_pairs(const std::vector<compact::Item>& items) const;
 
-    // Hot-path helpers (compact only, no domain deps)
     bool _meets_target(const compact::Item& equipment) const;
     int32_t _heuristic(const std::vector<compact::Item>& items) const;
+    int32_t _greedy_bound(const std::vector<compact::Item>& items,
+                           const compact::EnchReg& reg) const;
 
     compact::CompactForgeEngine _compact_forge;
-    DefaultForgeEngine _bound_engine;
     const compact::EnchReg* _ench_reg{nullptr};
 
-    // Target enchantments in compact form
     std::vector<compact::Ench> _target;
 
     int32_t _best_cost{INT32_MAX};
-    EnchStepList _best_steps;
+    std::vector<compact::EnchStep> _best_steps;
     std::vector<compact::EnchStep> _current_steps;
 
     std::unordered_set<std::vector<compact::Item>, ItemVectorHash> _visited;

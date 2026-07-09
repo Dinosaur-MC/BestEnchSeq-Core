@@ -162,12 +162,12 @@ set_tests_properties(test_integration PROPERTIES
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_forge_engine.cpp)
 add_executable(test_forge_engine
     test_forge_engine.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/CompactForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
@@ -202,9 +202,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_execution_context.cpp)
 add_executable(test_execution_context
     test_execution_context.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
 )
 target_include_directories(test_execution_context PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_execution_context COMMAND test_execution_context)
@@ -217,7 +215,6 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_registry.cpp)
 add_executable(test_algorithm_registry
     test_algorithm_registry.cpp
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -240,92 +237,15 @@ add_executable(test_algorithm_executor
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/CompactForgeEngine.cpp
+    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_algorithm_executor PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_executor COMMAND test_algorithm_executor)
 set_tests_properties(test_algorithm_executor PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_greedy_algorithm.cpp)
-add_executable(test_greedy_algorithm
-    test_greedy_algorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
-)
-target_include_directories(test_greedy_algorithm PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_greedy_algorithm COMMAND test_greedy_algorithm)
-set_tests_properties(test_greedy_algorithm PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_dfs_algorithm.cpp)
-add_executable(test_dfs_algorithm
-    test_dfs_algorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
-)
-target_include_directories(test_dfs_algorithm PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_dfs_algorithm COMMAND test_dfs_algorithm)
-set_tests_properties(test_dfs_algorithm PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_astar_algorithm.cpp)
-add_executable(test_astar_algorithm
-    test_astar_algorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
-)
-target_include_directories(test_astar_algorithm PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_astar_algorithm COMMAND test_astar_algorithm)
-set_tests_properties(test_astar_algorithm PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()
@@ -355,43 +275,10 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_utils.cpp)
 add_executable(test_algorithm_utils
     test_algorithm_utils.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_algorithm_utils PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_utils COMMAND test_algorithm_utils)
 set_tests_properties(test_algorithm_utils PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_penalty_balancing.cpp)
-add_executable(test_penalty_balancing
-    test_penalty_balancing.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
-)
-target_include_directories(test_penalty_balancing PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_penalty_balancing COMMAND test_penalty_balancing)
-set_tests_properties(test_penalty_balancing PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()
@@ -416,26 +303,5 @@ set_tests_properties(test_serializer PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_hierarchical_merge.cpp)
-add_executable(test_hierarchical_merge
-    test_hierarchical_merge.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
-)
-target_include_directories(test_hierarchical_merge PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_hierarchical_merge COMMAND test_hierarchical_merge)
-set_tests_properties(test_hierarchical_merge PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-endif()
+
 
