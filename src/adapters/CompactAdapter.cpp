@@ -132,8 +132,49 @@ compact::Item CompactAdapter::from_domain(const ItemStack& item, const compact::
 
 ItemStack CompactAdapter::to_domain(const compact::Item& item, const Equipment& eq,
                                      const compact::EnchReg& reg) {
-    (void)item;
-    (void)eq;
-    (void)reg;
-    return ItemStack(); // stub — implemented in Task 3
+    ::EnchSet ench_set;
+    for (const auto& e : item.enchs) {
+        int32_t global_id = reg.get_registry().to_global_id(e.id);
+        ench_set.emplace(global_id, e.level);
+    }
+
+    if (item.type == compact::ItemType::Book)
+        return ItemStack(std::move(ench_set), item.ppn);
+    else
+        return ItemStack(&eq, std::move(ench_set), item.ppn, item.dur);
+}
+
+std::vector<EnchSolution> CompactAdapter::recall(
+    const AlgorithmOutput& output,
+    const AlgorithmInput& input,
+    const EnchSet& original_ench,
+    const ItemStack& target_item,
+    const ItemCollection& available_items)
+{
+    std::vector<EnchSolution> solutions;
+    if (!output.is_valid) return solutions;
+
+    solutions.reserve(output.steps.size());
+    for (const auto& step_list : output.steps) {
+        EnchStepList domain_steps;
+        domain_steps.reserve(step_list.size());
+        for (const auto& s : step_list) {
+            auto base = to_domain(s.base, input.equipment, input.ench_reg);
+            auto sac  = to_domain(s.sacrifice, input.equipment, input.ench_reg);
+
+            domain_steps.push_back(EnchSolution::EnchStep{
+                std::move(base), std::move(sac), s.cost,
+                ExpCalculator::level_to_exp(s.cost)
+            });
+        }
+
+        solutions.push_back(EnchSolution::make(
+            input.platform, original_ench, target_item, available_items,
+            domain_steps, true,
+            EnchSolution::MetaData{
+                output.algorithm_name, output.algorithm_version, 0, 0
+            }
+        ));
+    }
+    return solutions;
 }

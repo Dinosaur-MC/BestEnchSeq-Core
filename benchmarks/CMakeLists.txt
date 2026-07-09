@@ -26,6 +26,7 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSolution.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp

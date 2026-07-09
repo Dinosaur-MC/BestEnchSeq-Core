@@ -147,37 +147,8 @@ int main(int argc, char *argv[]) {
         executor.wait();
 
         //── Boundary: compact → domain ────────────────────────────────────
-        AlgorithmOutput compact_out = executor.output();
-
-        // Assemble solutions: convert each compact step list to domain
-        std::vector<EnchSolution> solutions;
-        if (compact_out.is_valid) {
-            solutions.reserve(compact_out.steps.size());
-            for (const auto& step_list : compact_out.steps) {
-                EnchStepList domain_steps;
-                domain_steps.reserve(step_list.size());
-                for (const auto& step : step_list) {
-                    EnchSolution::EnchStep domain_step;
-                    domain_step.item_a = CompactAdapter::to_domain(step.base, algo_input.equipment, algo_input.ench_reg);
-                    domain_step.item_b = CompactAdapter::to_domain(step.sacrifice, algo_input.equipment, algo_input.ench_reg);
-                    domain_step.exp_level_cost = step.cost;
-                    domain_step.exp_cost = ExpCalculator::level_to_exp(step.cost);
-                    domain_steps.push_back(std::move(domain_step));
-                }
-                solutions.push_back(
-                    SolutionFactory::create_single(
-                        parsed.platform,
-                        parsed.original_ench,
-                        parsed.target_item,
-                        parsed.available_items,
-                        domain_steps,
-                        compact_out.algorithm_name,
-                        compact_out.algorithm_version,
-                        compact_out.is_valid
-                    )
-                );
-            }
-        }
+        auto solutions = adapter.recall(executor.output(), algo_input,
+            parsed.original_ench, parsed.target_item, parsed.available_items);
 
         // Format output
         std::string output_text;
