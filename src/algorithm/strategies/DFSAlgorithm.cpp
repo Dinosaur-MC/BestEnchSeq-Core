@@ -223,8 +223,10 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         frame.items.erase(frame.items.begin() + p.j);
 
+        std::vector<compact::Item> child_items = frame.items;
+
         _stack.push_back({
-            std::move(frame.items), frame.cost_so_far + step_cost,
+            std::move(child_items), frame.cost_so_far + step_cost,
             0, _current_steps.size(), {}, {}, 0, 0, false
         });
         _frame_pairs.emplace_back();
