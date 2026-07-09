@@ -36,6 +36,9 @@ class EnchReg {
     uint16_t get_multiplier(int16_t id) const noexcept { return (*this)[id].mul; }
     uint16_t get_max_level(int16_t id) const noexcept { return (*this)[id].max_lvl; }
     bool is_conflict(int16_t id1, int16_t id2) const noexcept { return _conflict_matrix[id1 * _ench_infos.size() + id2]; }
+
+    int32_t to_local_id(int32_t global_id) const { return _registry.to_local_id(global_id); }
+    const EnchantmentRegistry& get_registry() const { return _registry; }
 };
 
 } // namespace compact

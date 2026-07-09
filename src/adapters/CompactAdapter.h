@@ -3,30 +3,30 @@
 #include "registries/CompactedRegistries.h"
 #include "types/ItemStack.h"
 #include "types/EnchSolution.h"
-#include <iterator>
+#include "registries/EnchantmentRegistry.h"
+#include "algorithm/IAlgorithm.h"
+#include "algorithm/forge/IForgeEngine.h"
 #include <vector>
 
-namespace compact {
+class CompactAdapter {
+public:
+    AlgorithmInput apply(
+        const ItemStack& target_item,
+        const EnchSet& original_ench,
+        const ItemCollection& available_items,
+        const ForgeConfig& config,
+        const EnchantmentRegistry& global_registry
+    );
 
-// ─── Domain → compact conversions ───────────────────────────────────────────
+    std::vector<EnchSolution> recall(
+        const AlgorithmOutput& output,
+        const AlgorithmInput& input,
+        const EnchSet& original_ench,
+        const ItemStack& target_item,
+        const ItemCollection& available_items
+    );
 
-Item from_domain(const ItemStack& item, const EnchReg& reg);
-
-std::vector<Item> from_domain(const std::vector<ItemStack>& items, const EnchReg& reg);
-
-// ─── Compact → domain conversions ───────────────────────────────────────────
-
-ItemStack to_domain(const Item& item, const Equipment* eq);
-
-EnchSolution::EnchStep to_domain(const EnchStep& step, const Equipment* eq);
-
-template <typename Iter>
-EnchStepList to_domain(Iter begin, Iter end, const Equipment* eq) {
-    EnchStepList result;
-    result.reserve(static_cast<size_t>(std::distance(begin, end)));
-    for (auto it = begin; it != end; ++it)
-        result.push_back(to_domain(*it, eq));
-    return result;
-}
-
-} // namespace compact
+    static compact::Item from_domain(const ItemStack& item, const compact::EnchReg& reg);
+    static ItemStack to_domain(const compact::Item& item, const Equipment& eq,
+                               const compact::EnchReg& reg);
+};

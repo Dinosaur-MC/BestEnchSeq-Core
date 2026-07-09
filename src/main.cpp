@@ -1,5 +1,7 @@
 #include "registries/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
+#include "algorithm/forge/IForgeEngine.h"
+#include "utils/ExpCalculator.hpp"
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
@@ -128,24 +130,16 @@ int main(int argc, char *argv[]) {
         }
 
         //── Boundary: domain → compact ─────────────────────────────────────
-        compact::EnchReg ench_reg;
-        ench_reg.init(EnchantmentRegistry::get_instance(), *parsed.target_item.equipment);
-
-        AlgorithmInput algo_input;
-        algo_input.platform = parsed.platform;
-        algo_input.equipment = *parsed.target_item.equipment;
-        algo_input.ench_reg = std::move(ench_reg);
-
-        const Equipment* out_eq = parsed.target_item.equipment;
-        ItemStack start_item(out_eq, parsed.original_ench, 0);
-        algo_input.items.reserve(1 + parsed.available_items.size());
-        algo_input.items.push_back(compact::from_domain(start_item, ench_reg));
-        for (const auto& book : parsed.available_items)
-            algo_input.items.push_back(compact::from_domain(book, ench_reg));
-
-        algo_input.target.reserve(parsed.target_item.enchantments.size());
-        for (const auto& e : parsed.target_item.enchantments)
-            algo_input.target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+        CompactAdapter adapter;
+        ForgeConfig forge_config;
+        forge_config.platform = parsed.platform;
+        AlgorithmInput algo_input = adapter.apply(
+            parsed.target_item,
+            parsed.original_ench,
+            parsed.available_items,
+            forge_config,
+            EnchantmentRegistry::get_instance()
+        );
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
@@ -160,8 +154,16 @@ int main(int argc, char *argv[]) {
         if (compact_out.is_valid) {
             solutions.reserve(compact_out.steps.size());
             for (const auto& step_list : compact_out.steps) {
-                auto domain_steps = compact::to_domain(
-                    step_list.begin(), step_list.end(), out_eq);
+                EnchStepList domain_steps;
+                domain_steps.reserve(step_list.size());
+                for (const auto& step : step_list) {
+                    EnchSolution::EnchStep domain_step;
+                    domain_step.item_a = CompactAdapter::to_domain(step.base, algo_input.equipment, algo_input.ench_reg);
+                    domain_step.item_b = CompactAdapter::to_domain(step.sacrifice, algo_input.equipment, algo_input.ench_reg);
+                    domain_step.exp_level_cost = step.cost;
+                    domain_step.exp_cost = ExpCalculator::level_to_exp(step.cost);
+                    domain_steps.push_back(std::move(domain_step));
+                }
                 solutions.push_back(
                     SolutionFactory::create_single(
                         parsed.platform,

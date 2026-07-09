@@ -5,7 +5,7 @@
 #include "algorithm/strategies/AStarAlgorithm.h"
 #include "algorithm/strategies/DynamicPenaltyBalancing.h"
 #include "algorithm/strategies/HierarchicalMergeStrategy.h"
-#include "adapters/CompactAdapter.hpp"
+#include "adapters/CompactAdapter.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
@@ -179,15 +179,16 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
     compact::EnchReg ench_reg;
     ench_reg.init(EnchantmentRegistry::get_instance(), eq);
 
+    ItemStack start_item(&eq, ::EnchSet{}, 0, eq.max_durability);
+
     AlgorithmInput algo_input;
     algo_input.platform = platform::MCE::Java;
     algo_input.equipment = eq;
     algo_input.ench_reg = std::move(ench_reg);
 
-    ItemStack start_item(&eq, ::EnchSet{}, 0, eq.max_durability);
-    algo_input.items.push_back(compact::from_domain(start_item, ench_reg));
+    algo_input.items.push_back(CompactAdapter::from_domain(start_item, algo_input.ench_reg));
     for (const auto& book : books)
-        algo_input.items.push_back(compact::from_domain(book, ench_reg));
+        algo_input.items.push_back(CompactAdapter::from_domain(book, algo_input.ench_reg));
 
     algo_input.target.reserve(wanted_set.size());
     for (const auto& e : wanted_set)
