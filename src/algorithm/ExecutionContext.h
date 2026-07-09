@@ -44,7 +44,7 @@ public:
 
     // Event pushing (lock-free, with adaptive backpressure)
     void report_progress(double percent, ProgressStatus status);
-    void report_compact_solution(const std::vector<compact::EnchStep>& solution);
+    void report_compact_solution(std::vector<compact::EnchStep> solution);
     void report_state_change(AlgorithmState prev, AlgorithmState curr);
 
     // Event dispatch (drains queue to observers)

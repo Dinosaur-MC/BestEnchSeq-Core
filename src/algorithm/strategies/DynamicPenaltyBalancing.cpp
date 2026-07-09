@@ -98,6 +98,6 @@ void DynamicPenaltyBalancing::execute(
         ctx.report_progress(progress, ProgressStatus::MergingGroups);
     }
 
-    ctx.report_compact_solution(compact_steps);
+    ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }

@@ -40,11 +40,11 @@ void test_observer_solution() {
 
     std::vector<compact::EnchStep> steps;
     steps.push_back(compact::EnchStep{{}, {}, 4});
-    ctx.report_compact_solution(steps);
+    ctx.report_compact_solution(std::move(steps));
     ctx.dispatch_events();
     expect(obs->found_count == 1, "observer should be called once");
     ctx.detach_observer(obs);
-    ctx.report_compact_solution(steps);
+    ctx.report_compact_solution(std::move(steps));
     ctx.dispatch_events();
     expect(obs->found_count == 1, "observer should not be called after detach");
     std::cout << "PASS: test_observer_solution" << std::endl;

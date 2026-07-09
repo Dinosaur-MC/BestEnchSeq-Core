@@ -29,10 +29,10 @@ void ExecutionContext::report_progress(double percent, ProgressStatus status) {
     _events.push(std::move(e));
 }
 
-void ExecutionContext::report_compact_solution(const std::vector<compact::EnchStep>& solution) {
+void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> solution) {
     ObserverEvent e;
     e.type = ObserverEvent::Solution;
-    e.steps = solution;
+    e.steps = std::move(solution);
     _events.push(std::move(e));
 }
 

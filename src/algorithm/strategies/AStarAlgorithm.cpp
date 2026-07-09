@@ -105,7 +105,7 @@ void AStarAlgorithm::execute(
                 for (auto it = nodes.rbegin(); it != nodes.rend(); ++it)
                     steps.push_back((*it)->step);
             }
-            ctx.report_compact_solution(steps);
+            ctx.report_compact_solution(std::move(steps));
             ctx.report_progress(1.0, ProgressStatus::Complete);
             return;
         }

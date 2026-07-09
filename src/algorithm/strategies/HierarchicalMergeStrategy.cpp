@@ -156,7 +156,7 @@ void HierarchicalMergeStrategy::execute(
     ctx.report_progress(0.6, ProgressStatus::ApplyingToEquipment);
 
     if (group_results.empty()) {
-        ctx.report_compact_solution(compact_steps);
+        ctx.report_compact_solution(std::move(compact_steps));
         ctx.report_progress(1.0, ProgressStatus::Complete);
         return;
     }
@@ -182,6 +182,6 @@ void HierarchicalMergeStrategy::execute(
         compact_steps.push_back({std::move(saved_equip), std::move(combined), cost});
     }
 
-    ctx.report_compact_solution(compact_steps);
+    ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }

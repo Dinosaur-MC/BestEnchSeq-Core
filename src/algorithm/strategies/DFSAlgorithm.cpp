@@ -165,7 +165,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         if (_meets_target(frame.items[0])) {
             ++_solutions_found;
-            ctx.report_compact_solution(_current_steps);
+            ctx.report_compact_solution(std::move(_current_steps));
 
             if (_best_steps.empty() || frame.cost_so_far < _best_cost) {
                 _best_cost = frame.cost_so_far;
