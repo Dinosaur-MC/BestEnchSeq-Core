@@ -6,7 +6,7 @@
 #include "algorithm/strategies/DynamicPenaltyBalancing.h"
 #include "algorithm/strategies/HierarchicalMergeStrategy.h"
 #include "utils/SolutionFactory.hpp"
-#include "utils/CompactAdapter.hpp"
+#include "adapters/CompactAdapter.h"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"

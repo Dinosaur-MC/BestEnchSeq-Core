@@ -5,7 +5,7 @@
 #include "algorithm/strategies/AStarAlgorithm.h"
 #include "algorithm/strategies/DynamicPenaltyBalancing.h"
 #include "algorithm/strategies/HierarchicalMergeStrategy.h"
-#include "utils/CompactAdapter.hpp"
+#include "adapters/CompactAdapter.hpp"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"

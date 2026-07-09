@@ -1,4 +1,4 @@
-#include "CompactAdapter.hpp"
+#include "adapters/CompactAdapter.h"
 #include "utils/ExpCalculator.hpp"
 
 namespace compact {
