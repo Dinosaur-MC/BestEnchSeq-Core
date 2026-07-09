@@ -117,7 +117,7 @@ int main(int argc, char *argv[]) {
             equipment_map[eq.name_id] = &eq;
         }
 
-        auto algo_input = InputParser::assemble_input(config, equipment_map, ench_name_to_id);
+        auto parsed = InputParser::assemble_input(config, equipment_map, ench_name_to_id);
 
         // Register and create algorithm
         register_builtin_algorithms();
@@ -129,18 +129,25 @@ int main(int argc, char *argv[]) {
 
         //── Boundary: domain → compact ─────────────────────────────────────
         auto& ench_reg = compact::EnchReg::get_instance();
-        ench_reg.init(EnchantmentRegistry::get_instance(), *algo_input.target_item.equipment);
-        auto ci = compact::prepare(algo_input, ench_reg);
+        ench_reg.init(EnchantmentRegistry::get_instance(), *parsed.target_item.equipment);
 
-        // Extract target enchantments in compact form
-        std::vector<compact::Ench> target;
-        target.reserve(algo_input.target_item.enchantments.size());
-        for (const auto& e : algo_input.target_item.enchantments)
-            target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+        AlgorithmInput algo_input;
+        algo_input.platform = parsed.platform;
+        algo_input.equipment = parsed.target_item.equipment;
+
+        ItemStack start_item(algo_input.equipment, parsed.original_ench, 0);
+        algo_input.items.reserve(1 + parsed.available_items.size());
+        algo_input.items.push_back(compact::from_domain(start_item, ench_reg));
+        for (const auto& book : parsed.available_items)
+            algo_input.items.push_back(compact::from_domain(book, ench_reg));
+
+        algo_input.target.reserve(parsed.target_item.enchantments.size());
+        for (const auto& e : parsed.target_item.enchantments)
+            algo_input.target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
-        executor.start(std::move(ci.items), ench_reg, std::move(target), ci.equipment);
+        executor.start(std::move(algo_input.items), ench_reg, std::move(algo_input.target), algo_input.equipment);
         executor.wait();
 
         //── Boundary: compact → domain ────────────────────────────────────
@@ -152,13 +159,13 @@ int main(int argc, char *argv[]) {
             solutions.reserve(compact_out.steps.size());
             for (const auto& step_list : compact_out.steps) {
                 auto domain_steps = compact::to_domain(
-                    step_list.begin(), step_list.end(), ci.equipment);
+                    step_list.begin(), step_list.end(), algo_input.equipment);
                 solutions.push_back(
                     SolutionFactory::create_single(
-                        algo_input.platform,
-                        algo_input.original_ench,
-                        algo_input.target_item,
-                        algo_input.available_items,
+                        parsed.platform,
+                        parsed.original_ench,
+                        parsed.target_item,
+                        parsed.available_items,
                         domain_steps,
                         compact_out.algorithm_name,
                         compact_out.algorithm_version,

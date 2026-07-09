@@ -176,20 +176,21 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
 
-    AlgorithmInput input;
-    input.platform = platform::MCE::Java;
-    input.original_ench = ::EnchSet{};
-    input.target_item = ItemStack(&eq, wanted_set, 0, eq.max_durability);
-    input.available_items = books;
-
     auto& ench_reg = compact::EnchReg::get_instance();
     ench_reg.init(EnchantmentRegistry::get_instance(), eq);
-    auto ci = compact::prepare(input, ench_reg);
 
-    std::vector<compact::Ench> target;
-    target.reserve(wanted_set.size());
+    AlgorithmInput algo_input;
+    algo_input.platform = platform::MCE::Java;
+    algo_input.equipment = &eq;
+
+    ItemStack start_item(&eq, ::EnchSet{}, 0, eq.max_durability);
+    algo_input.items.push_back(compact::from_domain(start_item, ench_reg));
+    for (const auto& book : books)
+        algo_input.items.push_back(compact::from_domain(book, ench_reg));
+
+    algo_input.target.reserve(wanted_set.size());
     for (const auto& e : wanted_set)
-        target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+        algo_input.target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
 
     for (const auto& algo_name : enabled_algos) {
         if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) {
@@ -199,8 +200,8 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
 
-        auto items_copy = ci.items;
-        executor.start(std::move(items_copy), ench_reg, target, ci.equipment);
+        auto items_copy = algo_input.items;
+        executor.start(std::move(items_copy), ench_reg, algo_input.target, algo_input.equipment);
         executor.wait();
 
         if (executor.state() != AlgorithmState::Completed) {

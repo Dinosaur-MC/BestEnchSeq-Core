@@ -54,22 +54,4 @@ EnchSolution::EnchStep to_domain(const EnchStep& step, const Equipment* eq) {
     };
 }
 
-// ─── High-level adapter ─────────────────────────────────────────────────────
-
-CompactInput prepare(const AlgorithmInput& input, const EnchReg& reg) {
-    CompactInput ci;
-    ci.equipment = input.target_item.equipment;
-
-    // Build target equipment item (with initial enchantments)
-    ItemStack start_item(ci.equipment, input.original_ench, 0);
-    ci.items.reserve(1 + input.available_items.size());
-    ci.items.push_back(from_domain(start_item, reg));
-
-    // Add available books
-    for (const auto& book : input.available_items)
-        ci.items.push_back(from_domain(book, reg));
-
-    return ci;
-}
-
 } // namespace compact

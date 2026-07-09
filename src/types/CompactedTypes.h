@@ -24,6 +24,8 @@ struct Ench {
     bool operator==(const Ench &o) const noexcept { return id == o.id && level == o.level; }
 };
 
+using EnchCollection = std::vector<Ench>;
+
 /// Compact set of Ench stored as sorted vector<Ench>.
 ///
 /// Invariant: elements are always sorted by id (ascending). This makes
@@ -61,8 +63,7 @@ class EnchSet {
     size_t hash() const noexcept {
         size_t h = _enchs.size();
         for (const auto &e : _enchs)
-            h ^= static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16)
-               + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16) + 0x9e3779b9 + (h << 6) + (h >> 2);
         return h;
     }
 
@@ -88,6 +89,8 @@ struct Item {
 
     bool operator==(const Item &o) const noexcept { return type == o.type && dur == o.dur && ppn == o.ppn && enchs == o.enchs; }
 };
+
+using ItemCollection = std::vector<Item>;
 
 struct EnchStep {
     Item base;      // 锻造前的目标物品

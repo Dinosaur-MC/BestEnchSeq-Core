@@ -3,7 +3,6 @@
 #include "registries/CompactedRegistries.h"
 #include "types/ItemStack.h"
 #include "types/EnchSolution.h"
-#include "types/AlgorithmInput.h"
 #include <iterator>
 #include <vector>
 
@@ -29,14 +28,5 @@ EnchStepList to_domain(Iter begin, Iter end, const Equipment* eq) {
         result.push_back(to_domain(*it, eq));
     return result;
 }
-
-// ─── High-level input adapter ───────────────────────────────────────────────
-
-struct CompactInput {
-    std::vector<Item> items;
-    const Equipment* equipment;
-};
-
-CompactInput prepare(const AlgorithmInput& input, const EnchReg& reg);
 
 } // namespace compact
