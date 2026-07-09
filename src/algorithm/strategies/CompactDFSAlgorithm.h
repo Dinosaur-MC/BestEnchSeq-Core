@@ -38,9 +38,17 @@ private:
     // ─── Hash for vector of items (visited set key) ───
     struct ItemVectorHash {
         size_t operator()(const std::vector<compact::Item>& items) const noexcept {
-            size_t h = items.size();
-            for (const auto& item : items)
-                h ^= std::hash<compact::Item>{}(item) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            size_t h = 0;
+            for (const auto& item : items) {
+                size_t item_hash = 0;
+                for (const auto& e : item.enchs) {
+                    size_t ench_hash = static_cast<size_t>(e.id)
+                                     ^ (static_cast<size_t>(e.level) << 16);
+                    item_hash ^= ench_hash * 0x9e3779b9;
+                }
+                item_hash ^= static_cast<size_t>(item.ppn) * 0x9e3779b9;
+                h ^= item_hash * 0x9e3779b9 + 0x9e3779b9;
+            }
             return h;
         }
     };
@@ -65,7 +73,7 @@ private:
 
     // Hot-path helpers (compact only, no domain deps)
     bool _meets_target(const compact::Item& equipment) const;
-    int32_t _heuristic(const compact::Item& equipment) const;
+    int32_t _heuristic(const std::vector<compact::Item>& items) const;
 
     compact::CompactForgeEngine _compact_forge;
     DefaultForgeEngine _bound_engine;

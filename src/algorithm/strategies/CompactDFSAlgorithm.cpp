@@ -1,7 +1,6 @@
 #include "CompactDFSAlgorithm.h"
 #include "utils/CompactAdapter.hpp"
 #include "utils/AlgorithmUtils.hpp"
-#include "utils/ExpCalculator.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <vector>
@@ -43,15 +42,19 @@ bool CompactDFSAlgorithm::_meets_target(const compact::Item& equipment) const {
     return true;
 }
 
-int32_t CompactDFSAlgorithm::_heuristic(const compact::Item& equipment) const {
+int32_t CompactDFSAlgorithm::_heuristic(const std::vector<compact::Item>& items) const {
     int32_t h = 0;
     for (const auto& t : _target) {
-        auto it = std::find_if(equipment.enchs.begin(), equipment.enchs.end(),
-            [&](const compact::Ench& e) { return e.id == t.id; });
-        int32_t have = (it == equipment.enchs.end()) ? 0 : it->level;
-        if (have < t.level) {
+        int32_t max_have = 0;
+        for (const auto& item : items) {
+            auto it = std::find_if(item.enchs.begin(), item.enchs.end(),
+                [&](const compact::Ench& e) { return e.id == t.id; });
+            if (it != item.enchs.end() && it->level > max_have)
+                max_have = it->level;
+        }
+        if (max_have < t.level) {
             int32_t bm = compact::book_multiplier(_ench_reg->get_multiplier(t.id));
-            h += (t.level - have) * bm;
+            h += (t.level - max_have) * bm;
         }
     }
     return h;
@@ -150,7 +153,7 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx, const Equipment*
         }
 
         // 4. Branch-and-bound pruning (compact heuristic)
-        if (frame.cost_so_far + _heuristic(frame.items[0]) >= _best_cost) {
+        if (frame.cost_so_far + _heuristic(frame.items) >= _best_cost) {
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;

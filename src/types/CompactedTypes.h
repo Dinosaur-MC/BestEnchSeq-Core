@@ -34,7 +34,6 @@ struct Item {
     ItemType type;                  // 物品类型
     int16_t dur;                    // 耐久度
     uint8_t ppn;                    // 前次惩罚次数
-    uint16_t lsum;                  // 经验等级总和
     std::vector<Ench> enchs;        // 附魔列表
 
     bool operator==(const Item& o) const noexcept {

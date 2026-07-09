@@ -20,22 +20,12 @@ Item from_domain(const ItemStack& item, const EnchReg& reg) {
     citem.enchs.reserve(item.enchantments.size());
 
     // EnchSet is already sorted by id, iterate in order for deterministic output
-    int32_t total_lsum = 0;
     for (const auto& ench : item.enchantments) {
         int16_t eid = static_cast<int16_t>(ench.id);
         int16_t elv = static_cast<int16_t>(ench.level);
-
         citem.enchs.push_back({eid, elv});
-
-        // lsum: sum of (level * multiplier) for all enchantments.
-        // Uses book multiplier for books, equipment multiplier for equipment.
-        int32_t mult = item.is_book()
-            ? book_multiplier(reg.get_multiplier(eid))
-            : reg.get_multiplier(eid);
-        total_lsum += elv * mult;
     }
 
-    citem.lsum = static_cast<int16_t>(total_lsum);
     return citem;
 }
 

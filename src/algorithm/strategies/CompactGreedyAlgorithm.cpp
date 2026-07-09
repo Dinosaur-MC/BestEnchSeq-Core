@@ -1,6 +1,5 @@
 #include "CompactGreedyAlgorithm.h"
 #include "utils/CompactAdapter.hpp"
-#include "utils/ExpCalculator.hpp"
 #include <algorithm>
 
 void CompactGreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {

@@ -37,7 +37,6 @@ class EnchReg {
     uint16_t get_multiplier(int16_t id) const noexcept { return (*this)[id].mul; }
     uint16_t get_max_level(int16_t id) const noexcept { return (*this)[id].max_lvl; }
     bool is_conflict(int16_t id1, int16_t id2) const noexcept { return _conflict_matrix[id1][id2]; }
-    Item &refresh_item(Item &item) const;
 };
 
 } // namespace compact

@@ -95,17 +95,6 @@ int32_t CompactForgeEngine::forge_into(Item& target, const Item& sacrifice,
     target.ppn = static_cast<int8_t>(
         1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
 
-    // 4. Recompute lsum (total XP levels)
-    int32_t total_lsum = 0;
-    bool item_is_book = (target.type == ItemType::Book);
-    for (const auto& e : target.enchs) {
-        int32_t mult = item_is_book
-            ? std::max(1, reg.get_multiplier(e.id) >> 1)
-            : reg.get_multiplier(e.id);
-        total_lsum += e.level * mult;
-    }
-    target.lsum = static_cast<int16_t>(total_lsum);
-
     return _apply_cap(cost);
 }
 
