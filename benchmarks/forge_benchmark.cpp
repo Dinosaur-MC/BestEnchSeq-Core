@@ -15,9 +15,13 @@
 #include "registries/EquipmentRegistry.h"
 #include "registries/PlatformConfig.h"
 
+#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -72,6 +76,74 @@ TestCase CASES[] = {
       "vanishing_curse=1", "binding_curse=1"}, 60, 200},
 };
 
+// ─── Groups ───
+struct GroupMap { const char* name; std::initializer_list<const char*> members; };
+const GroupMap GROUPS[] = {
+    {"sword",     {"sword_basic", "sword_combat_5", "sword_combat_7"}},
+    {"tool",      {"pickaxe_fortune", "pickaxe_silk"}},
+    {"ranged",    {"bow_power", "crossbow"}},
+    {"armor",     {"helmet", "chestplate", "leggings", "boots", "boots_full"}},
+    {"netherite", {"netherite_sword", "netherite_boots"}},
+};
+
+// ─── CLI flag parsing ───
+struct BenchConfig {
+    std::unordered_set<std::string> test_names; // empty = all
+    std::unordered_set<std::string> algos;      // empty = all
+    bool list_only = false;
+};
+
+BenchConfig parse_cli(int argc, char* argv[]) {
+    BenchConfig cfg;
+    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical"};
+    for (auto* a : all_algos) cfg.algos.insert(a);
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--list") {
+            cfg.list_only = true;
+        } else if (arg == "--test" && i + 1 < argc) {
+            cfg.test_names.clear();
+            std::istringstream ss(argv[++i]);
+            for (std::string tok; std::getline(ss, tok, ','); )
+                cfg.test_names.insert(tok);
+        } else if (arg == "--group" && i + 1 < argc) {
+            cfg.test_names.clear();
+            std::istringstream ss(argv[++i]);
+            for (std::string tok; std::getline(ss, tok, ','); ) {
+                bool found = false;
+                for (const auto& g : GROUPS) {
+                    if (tok == g.name) {
+                        for (auto* m : g.members) cfg.test_names.insert(m);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    std::cerr << "Warning: unknown group '" << tok << "'\n";
+            }
+        } else if (arg == "--algo" && i + 1 < argc) {
+            cfg.algos.clear();
+            std::istringstream ss(argv[++i]);
+            for (std::string tok; std::getline(ss, tok, ','); )
+                cfg.algos.insert(tok);
+        } else if (arg == "--help") {
+            std::cout << "Usage: forge_benchmark [options]\n"
+                      << "  --list                List test cases & groups\n"
+                      << "  --test  <names>       Comma-separated test names\n"
+                      << "  --group <names>       Comma-separated group names\n"
+                      << "  --algo  <names>       Comma-separated algorithm names\n"
+                      << "  --help                This help\n"
+                      << "\nExamples:\n"
+                      << "  forge_benchmark --group netherite\n"
+                      << "  forge_benchmark --test netherite_sword,boots_full --algo greedy,dfs\n"
+                      << "  forge_benchmark --group armor --algo astar\n";
+            std::exit(0);
+        }
+    }
+    return cfg;
+}
+
 // ─── Setup ───
 void load_builtin_data() {
     auto dir = std::filesystem::path("data") / "builtin";
@@ -84,7 +156,7 @@ void load_builtin_data() {
     platform::Config::get_instance().set_active(platform::MCE::Java);
 }
 
-void run_case(const TestCase& tc) {
+void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos) {
     int32_t eq_id = EquipmentRegistry::get_instance().get_id(tc.item_type);
     if (eq_id < 0) {
         std::cout << "  SKIP: unknown equipment '" << tc.item_type << "'" << std::endl;
@@ -92,7 +164,6 @@ void run_case(const TestCase& tc) {
     }
     const Equipment& eq = EquipmentRegistry::get_instance().get(eq_id);
 
-    // Parse wanted enchantments
     ::EnchSet wanted_set;
     ItemCollection books;
     for (const auto& spec : tc.wanted) {
@@ -105,14 +176,12 @@ void run_case(const TestCase& tc) {
         books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
 
-    // Build domain AlgorithmInput for adapter
     AlgorithmInput input;
     input.platform = platform::MCE::Java;
     input.original_ench = ::EnchSet{};
     input.target_item = ItemStack(&eq, wanted_set, 0, eq.max_durability);
     input.available_items = books;
 
-    //── Compact boundary ─────────────────────────────────────────────────
     auto& ench_reg = compact::EnchReg::get_instance();
     ench_reg.init(EnchantmentRegistry::get_instance(), eq);
     auto ci = compact::prepare(input, ench_reg);
@@ -122,12 +191,14 @@ void run_case(const TestCase& tc) {
     for (const auto& e : wanted_set)
         target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
 
-    for (const auto& algo_name : {"greedy", "dfs", "astar", "penalty_balance", "hierarchical"}) {
-        if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) continue;
+    for (const auto& algo_name : enabled_algos) {
+        if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) {
+            std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
+            continue;
+        }
         auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
 
-        // Copy items for each algorithm run (they mutate)
         auto items_copy = ci.items;
         executor.start(std::move(items_copy), ench_reg, target, ci.equipment);
         executor.wait();
@@ -142,7 +213,6 @@ void run_case(const TestCase& tc) {
             continue;
         }
 
-        // Total cost from compact steps
         int32_t total = 0;
         for (const auto& step_list : out.steps)
             for (const auto& s : step_list)
@@ -156,9 +226,29 @@ void run_case(const TestCase& tc) {
     }
 }
 
+void list_cases() {
+    std::cout << "Test cases (" << (sizeof(CASES)/sizeof(CASES[0])) << " total):\n";
+    for (const auto& tc : CASES)
+        std::cout << "  " << tc.name << "  (" << tc.item_type << ", "
+                  << tc.wanted.size() << " enchants)\n";
+    std::cout << "\nGroups:\n";
+    for (const auto& g : GROUPS) {
+        std::cout << "  " << g.name << ":";
+        for (auto* m : g.members) std::cout << " " << m;
+        std::cout << "\n";
+    }
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+    auto cfg = parse_cli(argc, argv);
+
+    if (cfg.list_only) {
+        list_cases();
+        return 0;
+    }
+
     std::cout << "Time: " << std::chrono::current_zone()->to_local(std::chrono::system_clock::now()) << std::endl;
     std::cout << "=== Dataset Benchmark ===" << std::endl;
     load_builtin_data();
@@ -174,9 +264,24 @@ int main() {
     AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
         []{ return std::make_unique<CompactHierarchicalMergeStrategy>(); });
 
-    for (const auto& tc : CASES) {
-        std::cout << tc.name << " (" << tc.wanted.size() << " enchants):" << std::endl;
-        run_case(tc);
+    // Filter tests
+    std::vector<const TestCase*> queue;
+    if (cfg.test_names.empty()) {
+        for (const auto& tc : CASES) queue.push_back(&tc);
+    } else {
+        for (const auto& tc : CASES)
+            if (cfg.test_names.count(tc.name))
+                queue.push_back(&tc);
+    }
+
+    if (queue.empty()) {
+        std::cerr << "No matching test cases. Use --list to see available tests." << std::endl;
+        return 1;
+    }
+
+    for (auto* tc : queue) {
+        std::cout << tc->name << " (" << tc->wanted.size() << " enchants):" << std::endl;
+        run_case(*tc, cfg.algos);
         std::cout << std::endl;
     }
     std::cout << "=== Done ===" << std::endl;
