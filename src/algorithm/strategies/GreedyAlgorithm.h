@@ -1,6 +1,6 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../DefaultForgeEngine.h"
+#include "../forge/DefaultForgeEngine.h"
 
 class GreedyAlgorithm : public IAlgorithm {
 public:

@@ -1,7 +1,7 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../DefaultForgeEngine.h"
-#include "../CompactForgeEngine.h"
+#include "../forge/DefaultForgeEngine.h"
+#include "../forge/CompactForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <deque>

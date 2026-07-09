@@ -1,5 +1,5 @@
 #include "test_utils.h"
-#include "algorithm/DefaultForgeEngine.h"
+#include "algorithm/forge/DefaultForgeEngine.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/PlatformConfig.h"

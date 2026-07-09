@@ -1,6 +1,6 @@
 #include "test_utils.h"
-#include "algorithm/AlgorithmRegistry.h"
-#include "algorithm/DefaultForgeEngine.h"
+#include "registries/AlgorithmRegistry.h"
+#include "algorithm/forge/DefaultForgeEngine.h"
 
 class TestAlgorithm : public IAlgorithm {
 public:

@@ -1,5 +1,5 @@
 #pragma once
-#include "../algorithm/IForgeEngine.h"
+#include "../algorithm/forge/IForgeEngine.h"
 #include "../algorithm/ExecutionContext.h"
 #include "../BESQTypes.h"
 #include "ExpCalculator.hpp"

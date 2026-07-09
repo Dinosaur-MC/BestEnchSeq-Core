@@ -1,6 +1,6 @@
 #pragma once
 #include "../BESQTypes.h"
-#include "IForgeEngine.h"
+#include "forge/IForgeEngine.h"
 #include "AlgorithmExecutor.h"
 #include <chrono>
 #include <cstdint>

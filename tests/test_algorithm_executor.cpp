@@ -1,7 +1,7 @@
 #include "test_utils.h"
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/DefaultForgeEngine.h"
+#include "algorithm/forge/DefaultForgeEngine.h"
 #include <thread>
 
 // ─── Test IAlgorithm implementations ───

@@ -162,7 +162,7 @@ set_tests_properties(test_integration PROPERTIES
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_forge_engine.cpp)
 add_executable(test_forge_engine
     test_forge_engine.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -216,8 +216,8 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_registry.cpp)
 add_executable(test_algorithm_registry
     test_algorithm_registry.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -239,8 +239,8 @@ add_executable(test_algorithm_executor
     test_algorithm_executor.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
@@ -263,8 +263,8 @@ add_executable(test_greedy_algorithm
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -287,8 +287,8 @@ add_executable(test_dfs_algorithm
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
@@ -312,8 +312,8 @@ add_executable(test_astar_algorithm
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -355,7 +355,7 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_utils.cpp)
 add_executable(test_algorithm_utils
     test_algorithm_utils.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
@@ -379,7 +379,7 @@ add_executable(test_penalty_balancing
     ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -422,7 +422,7 @@ add_executable(test_hierarchical_merge
     ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/DefaultForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/DefaultForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp

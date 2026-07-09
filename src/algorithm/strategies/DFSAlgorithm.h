@@ -1,6 +1,6 @@
 #pragma once
 #include "../IAlgorithm.h"
-#include "../DefaultForgeEngine.h"
+#include "../forge/DefaultForgeEngine.h"
 #include "../../utils/AlgorithmUtils.hpp"
 #include <cstdint>
 #include <deque>

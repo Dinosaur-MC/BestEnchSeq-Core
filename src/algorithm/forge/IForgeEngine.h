@@ -1,5 +1,5 @@
 #pragma once
-#include "../BESQTypes.h"
+#include "../../BESQTypes.h"
 #include <cstdint>
 #include <utility>
 

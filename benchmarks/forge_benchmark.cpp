@@ -1,4 +1,4 @@
-#include "algorithm/AlgorithmRegistry.h"
+#include "registries/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
