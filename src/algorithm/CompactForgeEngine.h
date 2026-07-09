@@ -1,9 +1,7 @@
 #pragma once
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
-#include "registries/PlatformConfig.h"
 #include <cstdint>
-#include <utility>
 
 namespace compact {
 
