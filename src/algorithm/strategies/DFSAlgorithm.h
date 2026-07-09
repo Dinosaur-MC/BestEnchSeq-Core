@@ -84,7 +84,7 @@ private:
     EnchStepList _current_steps;
     const AlgorithmInput* _input{nullptr};
 
-    // Hash-based state memoization
+    // Hash-based state memoization (simple visited set — first visit wins)
     std::unordered_set<StateKey, StateKeyHash> _visited;
 
     // Iterative DFS execution stack

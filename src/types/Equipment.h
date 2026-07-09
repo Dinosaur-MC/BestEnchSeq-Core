@@ -8,10 +8,10 @@
 // Each equipment has a category_id referencing EquipmentCategoryRegistry.
 // Equipment instances are managed by EquipmentRegistry (vector index = id).
 struct Equipment {
-    const std::string name_id;
-    const std::string name;
-    const int32_t category_id;
-    const int32_t max_durability;
+    std::string name_id;
+    std::string name;
+    int32_t category_id;
+    int32_t max_durability;
 
     struct Hash {
         size_t operator()(const Equipment& eq) const { return std::hash<std::string>()(eq.name_id); }

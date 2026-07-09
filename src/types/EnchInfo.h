@@ -6,14 +6,14 @@
 #include "common.h"
 
 struct EnchInfo {
-    const std::string name_id;
-    const std::string name;
-    const platform::MCE supported_platform;
-    const int32_t max_level;
-    const int32_t limited_level;
-    const int32_t multiplier;
-    const std::unordered_set<std::string> exclusive_set;
-    const std::unordered_set<int32_t> applicable_category_ids;
+    std::string name_id;
+    std::string name;
+    platform::MCE supported_platform;
+    int32_t max_level;
+    int32_t limited_level;
+    int32_t multiplier;
+    std::unordered_set<std::string> exclusive_set;
+    std::unordered_set<int32_t> applicable_category_ids;
 
     bool operator==(const EnchInfo& other) const;
 

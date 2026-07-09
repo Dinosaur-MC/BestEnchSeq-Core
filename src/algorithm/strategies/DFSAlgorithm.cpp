@@ -131,6 +131,9 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         }
 
         // ── 2. State memoization ──
+        // Skip states already visited via any path. This trades optimality
+        // for tractability — the first path to reach a state wins even if
+        // a cheaper path exists. For exact optimality, use A* instead.
         {
             StateKey key = make_state_key(frame.items);
             if (_visited.count(key)) {
