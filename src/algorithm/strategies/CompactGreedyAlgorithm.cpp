@@ -1,21 +1,21 @@
 #include "CompactGreedyAlgorithm.h"
+#include "utils/CompactAdapter.hpp"
 #include "utils/ExpCalculator.hpp"
 #include <algorithm>
 
 void CompactGreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
-    // 1. Initialize compact registry for target equipment
+    //── Boundary: prepare compact data ────────────────────────────────────
     auto& ench_reg = compact::EnchReg::get_instance();
     ench_reg.init(
         EnchantmentRegistry::get_instance(),
         *input.target_item.equipment);
 
-    // 2. Convert input to compact representation
     auto ci = compact::prepare(input, ench_reg);
-    auto& items = ci.items;  // items[0] = equipment, rest = books
+    auto& items = ci.items;
 
-    // 3. Sort books by estimated cost (cheapest first)
+    // Sort books by estimated cost (compact-only)
     std::vector<BookCost> ordered;
     ordered.reserve(items.size() - 1);
     for (size_t i = 1; i < items.size(); ++i) {
@@ -25,8 +25,8 @@ void CompactGreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionConte
     std::sort(ordered.begin(), ordered.end(),
               [](const BookCost& a, const BookCost& b) { return a.est_cost < b.est_cost; });
 
-    // 4. Forge in cost order
-    EnchStepList steps;
+    // Forge in cost order — compact-only, no domain types
+    std::vector<CompactStep> compact_steps;
     int32_t step_index = 0;
 
     for (const auto& bc : ordered) {
@@ -39,18 +39,16 @@ void CompactGreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionConte
         if (!compact::CompactForgeEngine::is_forgeable(target, sacrifice))
             continue;
 
-        // Record step BEFORE forge (capture domain representations)
-        ItemStack before_target = compact::to_domain(target, ci.equipment);
-        ItemStack before_sacrifice = compact::to_domain(sacrifice, ci.equipment);
+        // Save compact copies before forge
+        compact::Item before_target = target;
+        compact::Item before_sacrifice = sacrifice;
 
-        // Perform forge
         int32_t cost = _forge_engine.forge_into(target, sacrifice, ench_reg);
 
-        steps.push_back({
+        compact_steps.push_back({
             std::move(before_target),
             std::move(before_sacrifice),
-            cost,
-            ExpCalculator::level_to_exp(cost)
+            cost
         });
 
         ctx.report_progress(
@@ -58,6 +56,18 @@ void CompactGreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionConte
             ProgressStatus::ApplyingSacrifice
         );
         step_index++;
+    }
+
+    //── Boundary: convert compact steps to domain for output ──────────────
+    EnchStepList steps;
+    steps.reserve(compact_steps.size());
+    for (const auto& cs : compact_steps) {
+        steps.push_back({
+            compact::to_domain(cs.base, ci.equipment),
+            compact::to_domain(cs.sacrifice, ci.equipment),
+            cs.cost,
+            ExpCalculator::level_to_exp(cs.cost)
+        });
     }
 
     ctx.report_solution_found(steps);

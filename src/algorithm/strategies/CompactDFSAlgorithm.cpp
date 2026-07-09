@@ -1,9 +1,12 @@
 #include "CompactDFSAlgorithm.h"
+#include "utils/CompactAdapter.hpp"
 #include "utils/AlgorithmUtils.hpp"
 #include "utils/ExpCalculator.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <vector>
+
+// ─── Collect forge pairs ───────────────────────────────────────────────────
 
 std::vector<CompactDFSAlgorithm::ForgePair> CompactDFSAlgorithm::_collect_pairs(
     const std::vector<compact::Item>& items) const
@@ -28,21 +31,70 @@ std::vector<CompactDFSAlgorithm::ForgePair> CompactDFSAlgorithm::_collect_pairs(
     return pairs;
 }
 
+// ─── Hot-path helpers ──────────────────────────────────────────────────────
+
+bool CompactDFSAlgorithm::_meets_target(const compact::Item& equipment) const {
+    for (const auto& t : _target) {
+        auto it = std::find_if(equipment.enchs.begin(), equipment.enchs.end(),
+            [&](const compact::Ench& e) { return e.id == t.id; });
+        if (it == equipment.enchs.end() || it->level < t.level)
+            return false;
+    }
+    return true;
+}
+
+int32_t CompactDFSAlgorithm::_heuristic(const compact::Item& equipment) const {
+    int32_t h = 0;
+    for (const auto& t : _target) {
+        auto it = std::find_if(equipment.enchs.begin(), equipment.enchs.end(),
+            [&](const compact::Ench& e) { return e.id == t.id; });
+        int32_t have = (it == equipment.enchs.end()) ? 0 : it->level;
+        if (have < t.level) {
+            int32_t bm = compact::book_multiplier(_ench_reg->get_multiplier(t.id));
+            h += (t.level - have) * bm;
+        }
+    }
+    return h;
+}
+
+// ─── Output conversion (boundary only) ─────────────────────────────────────
+
+EnchStepList CompactDFSAlgorithm::_convert_steps(
+    const std::vector<CompactStep>& steps, const Equipment* eq) const
+{
+    EnchStepList result;
+    result.reserve(steps.size());
+    for (const auto& cs : steps) {
+        result.push_back({
+            compact::to_domain(cs.base, eq),
+            compact::to_domain(cs.sacrifice, eq),
+            cs.cost,
+            ExpCalculator::level_to_exp(cs.cost)
+        });
+    }
+    return result;
+}
+
+// ─── execute ───────────────────────────────────────────────────────────────
+
 void CompactDFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     ctx.report_progress(0.0, ProgressStatus::Starting);
-    _input = &input;
 
-    // 1. Initialize compact registry for target equipment
+    //── Boundary: prepare compact data ────────────────────────────────────
     auto& ench_reg = compact::EnchReg::get_instance();
     ench_reg.init(EnchantmentRegistry::get_instance(), *input.target_item.equipment);
     _ench_reg = &ench_reg;
-    _equipment = input.target_item.equipment;
 
-    // 2. Convert input to compact representation
     auto ci = compact::prepare(input, ench_reg);
     auto& items = ci.items;
 
-    // 3. Greedy upper bound for pruning
+    // Extract target enchantments in compact form
+    _target.clear();
+    _target.reserve(input.target_item.enchantments.size());
+    for (const auto& e : input.target_item.enchantments)
+        _target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+
+    // Reset state
     _best_cost = INT32_MAX;
     _best_steps.clear();
     _current_steps.clear();
@@ -51,30 +103,32 @@ void CompactDFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext&
     _frame_pairs.clear();
     _solutions_found = 0;
 
+    // Greedy upper bound for pruning (uses domain engine, done once at boundary)
     if (items.size() > 1) {
         auto bound = AlgorithmUtils::book_first_merge(
-            input.target_item, input.available_items,
-            _bound_engine, ctx);
+            input.target_item, input.available_items, _bound_engine, ctx);
         _best_cost = bound.total_cost;
     }
 
-    // 4. Push root frame
+    // Push root frame
     _stack.push_back({std::move(items), 0, 0, 0, {}, {}, 0, 0, false});
-    _frame_pairs.emplace_back();  // pairs for root, computed lazily
+    _frame_pairs.emplace_back();
 
-    // 5. Run iterative search
-    _dfs_iterative(ctx);
+    // Run iterative search (compact-only)
+    _dfs_iterative(ctx, ci.equipment);
 
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 
-void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
+// ─── Iterative search (compact-only, no domain deps) ───────────────────────
+
+void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx, const Equipment* out_eq) {
     while (!_stack.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
 
         auto& frame = _stack.back();
 
-        // ── 1. Handle backtrack restore (after child returned) ──
+        // 1. Handle backtrack restore
         if (frame.has_backtrack) {
             size_t adj_base = (frame.sac_idx < frame.base_idx)
                 ? frame.base_idx - 1 : frame.base_idx;
@@ -85,9 +139,7 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             frame.has_backtrack = false;
         }
 
-        // ── 2. State memoization ──
-        // Skip states already visited via any path. This trades optimality
-        // for tractability — the first path wins even if a cheaper path exists.
+        // 2. State memoization
         {
             auto [it, inserted] = _visited.insert(frame.items);
             if (!inserted) {
@@ -97,27 +149,31 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             }
         }
 
-        // ── 3. Goal check (on compact items without domain conversion) ──
+        // 3. Goal check (compact only)
         if (_meets_target(frame.items[0])) {
             ++_solutions_found;
-            ctx.report_solution_found(_current_steps);
+
+            //── Boundary: convert compact steps to domain for reporting ──
+            auto domain_steps = _convert_steps(_current_steps, out_eq);
+            ctx.report_solution_found(domain_steps);
+
             if (_best_steps.empty() || frame.cost_so_far < _best_cost) {
                 _best_cost = frame.cost_so_far;
-                _best_steps = _current_steps;
+                _best_steps = std::move(domain_steps);
             }
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        // ── 4. Branch-and-bound pruning (admissible heuristic on compact) ──
+        // 4. Branch-and-bound pruning (compact heuristic)
         if (frame.cost_so_far + _heuristic(frame.items[0]) >= _best_cost) {
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        // ── 5. Hot-update config check ──
+        // 5. Hot-update config check
         {
             auto cfg = ctx.get_search_config();
             if (cfg.max_depth > 0 &&
@@ -130,83 +186,50 @@ void CompactDFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
                 break;
         }
 
-        // ── 6. Lazy pair building ──
+        // 6. Lazy pair building
         auto& pairs = _frame_pairs.back();
         if (pairs.empty()) {
             pairs = _collect_pairs(frame.items);
         }
 
-        // ── 7. Find next valid pair ──
+        // 7. Find next valid pair
         if (frame.pair_index >= pairs.size()) {
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        // ── 8. Execute forge and push child frame ──
+        // 8. Execute forge and push child frame
         const auto& p = pairs[frame.pair_index++];
 
-        // Save state for backtrack
         frame.saved_base = frame.items[p.i];
         frame.saved_sac = frame.items[p.j];
         frame.base_idx = p.i;
         frame.sac_idx = p.j;
 
-        // Apply forge (modifies items[p.i] in-place)
         int32_t step_cost = _compact_forge.forge_into(
             frame.items[p.i], frame.items[p.j], *_ench_reg);
 
-        // Record step (convert compact → domain for the EnchStep)
+        // Record step (compact — no domain conversion)
         _current_steps.push_back({
-            compact::to_domain(frame.saved_base, _equipment),
-            compact::to_domain(frame.saved_sac, _equipment),
-            step_cost,
-            ExpCalculator::level_to_exp(step_cost)
+            frame.saved_base,
+            frame.saved_sac,
+            step_cost
         });
 
-        // Remove sacrifice
         frame.items.erase(frame.items.begin() + p.j);
 
-        // Build child items (copy of parent's current state)
         std::vector<compact::Item> child_items = frame.items;
 
-        // Push child frame
         _stack.push_back({
             std::move(child_items),
             frame.cost_so_far + step_cost,
-            0,                          // pair_index starts at 0
-            _current_steps.size(),      // saved_steps_size
-            {}, {}, 0, 0, false         // no backtrack state yet
+            0,
+            _current_steps.size(),
+            {}, {}, 0, 0, false
         });
-        _frame_pairs.emplace_back();    // pairs for child, computed lazily
+        _frame_pairs.emplace_back();
 
-        // Mark current frame for backtrack when child returns
         frame.has_backtrack = true;
     }
-}
-
-// ─── Hot-path helpers ──────────────────────────────────────────────────────
-
-bool CompactDFSAlgorithm::_meets_target(const compact::Item& equipment) const {
-    for (const Ench& t : _input->target_item.enchantments) {
-        auto it = std::find_if(equipment.enchs.begin(), equipment.enchs.end(),
-            [&](const compact::Ench& e) { return e.id == t.id; });
-        if (it == equipment.enchs.end() || it->level < t.level)
-            return false;
-    }
-    return true;
-}
-
-int32_t CompactDFSAlgorithm::_heuristic(const compact::Item& equipment) const {
-    int32_t h = 0;
-    for (const Ench& t : _input->target_item.enchantments) {
-        auto it = std::find_if(equipment.enchs.begin(), equipment.enchs.end(),
-            [&](const compact::Ench& e) { return e.id == t.id; });
-        int32_t have = (it == equipment.enchs.end()) ? 0 : it->level;
-        if (have < t.level) {
-            int32_t bm = compact::book_multiplier(_ench_reg->get_multiplier(t.id));
-            h += (t.level - have) * bm;
-        }
-    }
-    return h;
 }

@@ -3,15 +3,13 @@
 #include "../DefaultForgeEngine.h"
 #include "../CompactForgeEngine.h"
 #include "registries/CompactedRegistries.h"
-#include "utils/CompactAdapter.hpp"
 #include <cstdint>
 #include <vector>
 
 /// Greedy algorithm using compact internal representation.
 ///
-/// Proof-of-concept: same strategy as GreedyAlgorithm but operates on
-/// compact::Item internally for faster cost estimation and forge operations.
-/// Converts to domain types only for step recording.
+/// During search, NO domain types are touched. CompactAdapter is used only
+/// at the input boundary (prepare) and output boundary (step conversion).
 class CompactGreedyAlgorithm : public IAlgorithm {
 public:
     explicit CompactGreedyAlgorithm(ForgeConfig forge_cfg = {})
@@ -28,8 +26,14 @@ public:
 
 private:
     struct BookCost {
-        size_t index;      // index in the compact items vector (offset by 1 from equipment)
+        size_t index;
         int32_t est_cost;
+    };
+
+    struct CompactStep {
+        compact::Item base;
+        compact::Item sacrifice;
+        int32_t cost;
     };
 
     compact::CompactForgeEngine _forge_engine;

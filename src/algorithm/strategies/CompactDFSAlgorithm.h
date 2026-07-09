@@ -3,7 +3,6 @@
 #include "../DefaultForgeEngine.h"
 #include "../CompactForgeEngine.h"
 #include "registries/CompactedRegistries.h"
-#include "utils/CompactAdapter.hpp"
 #include <cstdint>
 #include <deque>
 #include <unordered_set>
@@ -11,12 +10,9 @@
 
 /// DFS algorithm using compact internal representation.
 ///
-/// Same branch-and-bound search as DFSAlgorithm but operates on compact::Item
-/// for faster state representation, O(1) conflict checking via bitmasks, and
-/// reduced memory per stack frame. Converted to domain types only for step
-/// recording.
-///
-/// Not yet serialization-aware (is_resumable = false).
+/// During search, NO domain types are touched — only compact::Item and
+/// compact::EnchReg. The CompactAdapter is used ONLY at the input boundary
+/// (prepare) and output boundary (step conversion to domain).
 class CompactDFSAlgorithm : public IAlgorithm {
 public:
     explicit CompactDFSAlgorithm(ForgeConfig forge_cfg = {})
@@ -33,7 +29,14 @@ public:
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
-    // ─── Forge pair (local to search) ───
+    // ─── Compact step (no domain types during search) ───
+    struct CompactStep {
+        compact::Item base;
+        compact::Item sacrifice;
+        int32_t cost;
+    };
+
+    // ─── Forge pair ───
     struct ForgePair {
         size_t i, j;
         int32_t est_cost;
@@ -64,37 +67,30 @@ private:
         bool has_backtrack{false};
     };
 
-    // Core iterative search loop
-    void _dfs_iterative(ExecutionContext& ctx);
+    void _dfs_iterative(ExecutionContext& ctx, const Equipment* out_eq);
+    std::vector<ForgePair> _collect_pairs(const std::vector<compact::Item>& items) const;
 
-    // ─── Hot-path helpers (avoid domain conversion in search loop) ───
-
-    // Check if items[0] meets all target enchantment requirements
+    // Hot-path helpers (compact only, no domain deps)
     bool _meets_target(const compact::Item& equipment) const;
-
-    // Admissible heuristic on compact items
     int32_t _heuristic(const compact::Item& equipment) const;
 
-    // Collect and sort forge pairs for a given item set
-    std::vector<ForgePair> _collect_pairs(const std::vector<compact::Item>& items) const;
+    // Convert compact step list to domain EnchStepList
+    EnchStepList _convert_steps(const std::vector<CompactStep>& steps,
+                                const Equipment* eq) const;
 
     compact::CompactForgeEngine _compact_forge;
     DefaultForgeEngine _bound_engine;
     const compact::EnchReg* _ench_reg{nullptr};
-    const Equipment* _equipment{nullptr};
-    const AlgorithmInput* _input{nullptr};
+
+    // Target enchantments in compact form
+    std::vector<compact::Ench> _target;
 
     int32_t _best_cost{INT32_MAX};
     EnchStepList _best_steps;
-    EnchStepList _current_steps;
+    std::vector<CompactStep> _current_steps;
 
-    // Visited set: vector of compact items as state key
     std::unordered_set<std::vector<compact::Item>, ItemVectorHash> _visited;
-
-    // Iterative DFS execution stack
     std::vector<DFSFrame> _stack;
-
-    // Lazy-computed forge pairs for each frame (parallel to _stack indices)
     std::deque<std::vector<ForgePair>> _frame_pairs;
 
     int32_t _solutions_found{0};
