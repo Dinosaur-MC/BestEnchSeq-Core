@@ -1,4 +1,5 @@
 #include "AlgorithmRegistry.h"
+#include <mutex>
 
 AlgorithmRegistry& AlgorithmRegistry::get_instance() {
     static AlgorithmRegistry instance;
