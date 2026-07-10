@@ -254,6 +254,7 @@ add_executable(test_algorithm_strategies
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/AStarMemoryBudget.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp

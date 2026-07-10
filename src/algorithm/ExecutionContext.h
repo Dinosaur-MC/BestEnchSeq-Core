@@ -74,6 +74,7 @@ public:
     struct SearchConfig {
         int32_t max_solutions = 0;   // 0 = unlimited
         int32_t max_depth = 0;       // 0 = unlimited
+        int32_t memory_mb = 0;       // 0 = auto detect (AStar only)
         std::chrono::milliseconds max_search_time{0}; // 0 = unlimited
     };
 

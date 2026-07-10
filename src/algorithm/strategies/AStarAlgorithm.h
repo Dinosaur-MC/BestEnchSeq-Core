@@ -1,20 +1,24 @@
 #pragma once
 #include "../IAlgorithm.h"
 #include "../forge/ForgeEngine.h"
+#include "AStarMemoryBudget.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
-#include <deque>
-#include <memory>
+#include <unordered_map>
 #include <vector>
+#include <string>
 
-/// A* algorithm using compact internal representation.
+/// A* using Item pool + flat ID-indexed states.
 class AStarAlgorithm : public IAlgorithm {
 public:
+    using ItemID = int32_t;
+    static constexpr ItemID INVALID_ITEM_ID = -1;
+
     explicit AStarAlgorithm(ForgeConfig cfg = {}) noexcept
         : _compact_forge(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "compact_astar"; }
-    std::string_view version() const noexcept override { return "1.0.0"; }
+    std::string_view version() const noexcept override { return "2.0.0"; }
 
     void execute(
         const std::vector<compact::Item>& items,
@@ -23,44 +27,84 @@ public:
         ExecutionContext& ctx
     ) override;
 
+    // Inject budget before execute().
+    void set_budget(AStarMemoryBudget budget) noexcept { _budget = budget; }
+
 private:
-    struct CompactStepNode {
-        compact::EnchStep step;
-        const CompactStepNode* prev = nullptr;
+    // ─── Item pool ────────────────────────────────────────────────────────
+    class ItemPool {
+        std::vector<compact::Item> _items;
+        size_t _max_items{10'000'000};
+    public:
+        void set_max(size_t n) noexcept { _max_items = n; }
+
+        ItemID add(compact::Item item) {
+            if (_items.size() >= _max_items) return INVALID_ITEM_ID;
+            ItemID id = static_cast<ItemID>(_items.size());
+            _items.push_back(std::move(item));
+            return id;
+        }
+
+        const compact::Item& operator[](ItemID id) const noexcept {
+            return _items[static_cast<size_t>(id)];
+        }
+
+        size_t size()     const noexcept { return _items.size(); }
+        size_t capacity() const noexcept { return _items.capacity(); }
+        void reserve(size_t n) { _items.reserve(n); }
+        void clear() { _items.clear(); }
     };
 
+    // ─── Step node (16 bytes) ─────────────────────────────────────────────
+    struct StepNode {
+        int32_t prev{-1};       // parent step index
+        ItemID  base_id;        // forge 前的 base Item
+        ItemID  sac_id;         // forge 前的 sacrifice Item
+        int32_t cost;           // 步骤消耗
+    };
+
+    // ─── Search state (flat ID array) ─────────────────────────────────────
     struct SearchState {
-        std::shared_ptr<const std::vector<compact::Item>> items;
-        int32_t g{0};
-        const CompactStepNode* steps_tail = nullptr;
+        int32_t  g{0};
+        int32_t  step_idx{-1};
+        std::vector<ItemID> ids;
     };
 
-    struct PriorityState {
+    // Priority queue entry (must be outside SearchState to avoid
+    // incomplete-type issue at the 'state' member).
+    struct PriorityEntry {
         SearchState state;
         int32_t f;
-        bool operator>(const PriorityState& o) const { return f > o.f; }
+        bool operator>(const PriorityEntry& o) const { return f > o.f; }
     };
 
-    const CompactStepNode* alloc_step(const CompactStepNode* prev,
-                                       compact::EnchStep step) {
-        _step_pool.push_back({std::move(step), prev});
-        return &_step_pool.back();
-    }
+    // ─── Pool storage (all vector — contiguous) ───────────────────────────
+    ItemPool _pool;
+    std::vector<StepNode> _step_pool;
+    std::vector<PriorityEntry> _open_heap;
 
-    int32_t heuristic(const std::vector<compact::Item>& items) const;
-    bool meets_target(const compact::Item& equipment) const;
+    // ─── Helpers ──────────────────────────────────────────────────────────
+    int32_t _heuristic(const std::vector<ItemID>& ids) const;
+    bool    _meets_target(ItemID equip_id) const;
+    size_t  _hash_ids(const std::vector<ItemID>& ids) const;
     int32_t _greedy_bound(const std::vector<compact::Item>& items,
                            const compact::EnchReg& reg) const;
+    void    _log_diagnostics(
+                 int64_t explored, const std::unordered_map<size_t, int32_t>& best_g,
+                 int64_t wall_ms, const char* status) const;
+    int64_t _estimate_peak() const noexcept;
 
+    // ─── Counters for diagnostics ─────────────────────────────────────────
+    int64_t _pruned_by_cost   = 0;
+    int64_t _pruned_by_f      = 0;
+    int64_t _pruned_by_best_g = 0;
+    int64_t _pruned_by_caps   = 0;
+    int64_t _steps_forged     = 0;
+
+    // ─── Config ───────────────────────────────────────────────────────────
     ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
-
     std::vector<compact::Ench> _target;
-
-    // Best complete-solution cost found so far (INT32_MAX = none yet).
-    // Used for pruning: any state with g >= _best_solution_cost cannot
-    // lead to a better solution and can be safely removed from best_g.
     int32_t _best_solution_cost{INT32_MAX};
-
-    std::deque<CompactStepNode> _step_pool;
+    AStarMemoryBudget _budget;
 };
