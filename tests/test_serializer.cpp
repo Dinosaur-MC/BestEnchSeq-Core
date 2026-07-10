@@ -3,18 +3,18 @@
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 
 namespace {
 
 void setup() {
     // Minimal enchantment registry for EnchSet tests
     std::vector<EnchInfo> infos;
-    infos.push_back({"sharpness", "Sharpness", platform::MCE::All, 5, 5, 1, {}, {}});
-    infos.push_back({"knockback", "Knockback", platform::MCE::All, 2, 2, 2, {}, {}});
-    infos.push_back({"fire_aspect", "Fire Aspect", platform::MCE::All, 2, 2, 2, {}, {}});
+    infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5, 1, {}, {}});
+    infos.push_back({"knockback", "Knockback", MCE::All, 2, 2, 2, {}, {}});
+    infos.push_back({"fire_aspect", "Fire Aspect", MCE::All, 2, 2, 2, {}, {}});
     EnchantmentRegistry::get_instance().initialize(infos);
-    platform::Config::get_instance().set_active(platform::MCE::Java);
+    set_active_platform(MCE::Java);
 
     // Equipment registry for ItemStack tests
     Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};

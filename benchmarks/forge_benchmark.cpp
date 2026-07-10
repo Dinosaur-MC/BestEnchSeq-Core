@@ -13,7 +13,7 @@
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -153,7 +153,7 @@ void load_builtin_data() {
     EnchantmentRegistry::get_instance().initialize(ench_infos);
     auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags);
     EquipmentRegistry::get_instance().initialize(equipments);
-    platform::Config::get_instance().set_active(platform::MCE::Java);
+    set_active_platform(MCE::Java);
 }
 
 void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos) {
@@ -182,7 +182,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
     ItemStack start_item(&eq, ::EnchSet{}, 0, eq.max_durability);
 
     AlgorithmInput algo_input;
-    algo_input.platform = platform::MCE::Java;
+    algo_input.config.platform = MCE::Java;
     algo_input.equipment = eq;
     algo_input.ench_reg = std::move(ench_reg);
 

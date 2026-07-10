@@ -49,7 +49,7 @@ void setup_enchinfo() {
     infos.push_back({
         "minecraft:sharpness",
         "Sharpness",
-        platform::MCE::All,
+        MCE::All,
         5,   // max_level
         5,   // limited_level
         1,   // multiplier
@@ -59,7 +59,7 @@ void setup_enchinfo() {
     infos.push_back({
         "minecraft:knockback",
         "Knockback",
-        platform::MCE::All,
+        MCE::All,
         2,   // max_level
         2,   // limited_level
         2,   // multiplier
@@ -272,7 +272,7 @@ void test_assemble_input_direct_mode() {
         config, test_equipment_registry, test_ench_map
     );
 
-    expect(input.platform == platform::MCE::All,
+    expect(input.platform == MCE::All,
            "assemble_input: platform should be All");
 
     expect(input.target_item.is_equipment(),

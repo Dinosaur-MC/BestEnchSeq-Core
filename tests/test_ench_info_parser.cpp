@@ -96,25 +96,25 @@ void test_platform_mapping() {
     expect(infos.size() == 10, "should parse all 10 platform entries");
 
     // "java" → Java
-    expect(infos[0].supported_platform == platform::MCE::Java, "java -> Java");
+    expect(infos[0].supported_platform == MCE::Java, "java -> Java");
     // "je" → Java
-    expect(infos[1].supported_platform == platform::MCE::Java, "je -> Java");
+    expect(infos[1].supported_platform == MCE::Java, "je -> Java");
     // "bedrock" → Bedrock
-    expect(infos[2].supported_platform == platform::MCE::Bedrock, "bedrock -> Bedrock");
+    expect(infos[2].supported_platform == MCE::Bedrock, "bedrock -> Bedrock");
     // "be" → Bedrock
-    expect(infos[3].supported_platform == platform::MCE::Bedrock, "be -> Bedrock");
+    expect(infos[3].supported_platform == MCE::Bedrock, "be -> Bedrock");
     // "all" → All
-    expect(infos[4].supported_platform == platform::MCE::All, "all -> All");
+    expect(infos[4].supported_platform == MCE::All, "all -> All");
     // "both" → All
-    expect(infos[5].supported_platform == platform::MCE::All, "both -> All");
+    expect(infos[5].supported_platform == MCE::All, "both -> All");
     // "JAVA" → Java (case-insensitive)
-    expect(infos[6].supported_platform == platform::MCE::Java, "JAVA -> Java");
+    expect(infos[6].supported_platform == MCE::Java, "JAVA -> Java");
     // "BedRock" → Bedrock (case-insensitive)
-    expect(infos[7].supported_platform == platform::MCE::Bedrock, "BedRock -> Bedrock");
+    expect(infos[7].supported_platform == MCE::Bedrock, "BedRock -> Bedrock");
     // "invalid" → Java (default)
-    expect(infos[8].supported_platform == platform::MCE::Java, "invalid -> Java (default)");
+    expect(infos[8].supported_platform == MCE::Java, "invalid -> Java (default)");
     // Missing → Java (default)
-    expect(infos[9].supported_platform == platform::MCE::Java, "missing -> Java (default)");
+    expect(infos[9].supported_platform == MCE::Java, "missing -> Java (default)");
 
     std::filesystem::remove(file);
 }
@@ -605,7 +605,7 @@ void test_mc_official_basic() {
     expect(infos[0].multiplier == 1, "mc: anvil_cost maps to multiplier");
     expect(infos[0].max_level == 5, "mc: max_level");
     expect(infos[0].limited_level == 5, "mc: limited_level defaults to max_level");
-    expect(infos[0].supported_platform == platform::MCE::All, "mc: platform defaults to All");
+    expect(infos[0].supported_platform == MCE::All, "mc: platform defaults to All");
     expect(infos[0].exclusive_set.size() == 1, "mc: exclusive set size");
     expect(infos[0].exclusive_set.contains("minecraft:smite"), "mc: exclusive contains smite");
     expect(infos[0].applicable_category_ids.size() == 1, "mc: 1 applicable equipment");
@@ -733,11 +733,11 @@ void test_mc_official_namespaced_name() {
 void test_to_json_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
-    original.emplace_back("minecraft:sharpness", "Sharpness", platform::MCE::Java,
+    original.emplace_back("minecraft:sharpness", "Sharpness", MCE::Java,
                           5, 5, 1,
                           std::unordered_set<std::string>{"minecraft:smite", "minecraft:bane_of_arthropods"},
                           std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD, EquipmentCategoryRegistry::ID_AXE});
-    original.emplace_back("minecraft:protection", "Protection", platform::MCE::All,
+    original.emplace_back("minecraft:protection", "Protection", MCE::All,
                           4, 4, 2,
                           std::unordered_set<std::string>{},
                           std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_HELMET, EquipmentCategoryRegistry::ID_CHESTPLATE});
@@ -778,11 +778,11 @@ void test_to_json_round_trip() {
 void test_to_csv_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
-    original.emplace_back("sharpness", "Sharpness", platform::MCE::Java,
+    original.emplace_back("sharpness", "Sharpness", MCE::Java,
                           5, 5, 1,
                           std::unordered_set<std::string>{"smite"},
                           std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD});
-    original.emplace_back("knockback", "Knockback", platform::MCE::Java,
+    original.emplace_back("knockback", "Knockback", MCE::Java,
                           2, 2, 1,
                           std::unordered_set<std::string>{},
                           std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD});
@@ -819,7 +819,7 @@ void test_to_csv_round_trip() {
 void test_export_mc_official_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
-    original.emplace_back("minecraft:sharpness", "Sharpness", platform::MCE::All,
+    original.emplace_back("minecraft:sharpness", "Sharpness", MCE::All,
                           5, 5, 1,
                           std::unordered_set<std::string>{"minecraft:smite"},
                           std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD});

@@ -2,7 +2,6 @@
 #include "parser/ParserUtils.h"
 #include "io/json.h"
 #include "registries/EnchantmentRegistry.h"
-#include "types/EnchInfo.h"
 
 #include <algorithm>
 #include <iostream>
@@ -240,9 +239,9 @@ ParsedInput InputParser::assemble_input(
     const std::unordered_map<std::string, int32_t> &ench_name_to_id
 ) {
     // 1. Determine platform
-    platform::MCE platform;
+    MCE platform;
     if (cli_config.platform == "auto") {
-        platform = platform::MCE::All;
+        platform = MCE::All;
     } else {
         platform = ParserUtils::parse_platform(cli_config.platform);
     }

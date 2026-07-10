@@ -212,8 +212,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
         }
 
         std::string platform_str = ParserUtils::get_json_string(elem_obj, "platform");
-        platform::MCE platform =
-            platform_str.empty() ? platform::MCE::Java : ParserUtils::parse_platform(platform_str);
+        MCE platform =
+            platform_str.empty() ? MCE::Java : ParserUtils::parse_platform(platform_str);
 
         int32_t limited_level = ParserUtils::get_json_int(elem_obj, "limited_level");
         if (limited_level <= 0) {
@@ -351,8 +351,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
         }
 
         std::string platform_str = get_field(fields, "platform");
-        platform::MCE platform =
-            platform_str.empty() ? platform::MCE::Java : ParserUtils::parse_platform(platform_str);
+        MCE platform =
+            platform_str.empty() ? MCE::Java : ParserUtils::parse_platform(platform_str);
 
         int32_t limited_level = max_level;
         {
@@ -498,7 +498,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
             int32_t limited_level = max_level;
 
             // Platform defaults to All (MC official is cross-platform)
-            platform::MCE platform = platform::MCE::All;
+            MCE platform = MCE::All;
 
             // Derive display name from filename
             std::string name = filename;

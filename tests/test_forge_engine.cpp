@@ -3,20 +3,20 @@
 #include "registries/CompactedRegistries.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 
 namespace {
 void setup_enchinfo() {
     std::vector<EnchInfo> infos;
-    infos.push_back({"sharpness", "Sharpness", platform::MCE::All, 5, 5,
+    infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5,
                      1, {}, {EquipmentCategoryRegistry::ID_SWORD}});
-    infos.push_back({"knockback", "Knockback", platform::MCE::All, 2, 2,
+    infos.push_back({"knockback", "Knockback", MCE::All, 2, 2,
                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
-    infos.push_back({"bane_of_arthropods", "Bane of Arthropods", platform::MCE::All, 5, 5,
+    infos.push_back({"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
                      1, {"sharpness"}, {EquipmentCategoryRegistry::ID_SWORD}});
     EnchantmentRegistry::get_instance().initialize(infos);
     EquipmentCategoryRegistry::get_instance().initialize();
-    platform::Config::get_instance().set_active(platform::MCE::Java);
+    set_active_platform(MCE::Java);
 }
 
 Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
@@ -99,7 +99,7 @@ void test_forge_not_forgeable() {
 void test_ignore_cost_cap() {
     setup_enchinfo();
     auto reg = init_reg();
-    ForgeEngine engine(ForgeConfig{false, false, true, platform::MCE::Java});
+    ForgeEngine engine(ForgeConfig{false, false, true, MCE::Java});
     expect(true, "ignore_cost_cap constructs without error");
     std::cout << "PASS: test_ignore_cost_cap" << std::endl;
 }

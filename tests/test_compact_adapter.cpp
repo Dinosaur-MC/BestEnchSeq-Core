@@ -3,7 +3,7 @@
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 #include "registries/CompactedRegistries.h"
 #include "types/Equipment.h"
 #include "types/CompactedTypes.h"
@@ -16,18 +16,18 @@ namespace {
 void setup() {
     EquipmentCategoryRegistry::get_instance().initialize();
     EnchantmentRegistry::get_instance().initialize({
-        {"sharpness", "Sharpness", platform::MCE::All, 5, 5,
+        {"sharpness", "Sharpness", MCE::All, 5, 5,
          1, {}, {EquipmentCategoryRegistry::ID_SWORD}},
-        {"knockback", "Knockback", platform::MCE::All, 2, 2,
+        {"knockback", "Knockback", MCE::All, 2, 2,
          2, {}, {EquipmentCategoryRegistry::ID_SWORD}},
-        {"protection", "Protection", platform::MCE::All, 4, 4,
+        {"protection", "Protection", MCE::All, 4, 4,
          1, {}, {EquipmentCategoryRegistry::ID_CHESTPLATE}},
     });
     EquipmentRegistry::get_instance().initialize({
         {"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561},
         {"diamond_chestplate", "Diamond Chestplate", EquipmentCategoryRegistry::ID_CHESTPLATE, 528},
     });
-    platform::Config::get_instance().set_active(platform::MCE::Java);
+    set_active_platform(MCE::Java);
 }
 
 Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
@@ -50,7 +50,7 @@ void test_apply_valid_input() {
 
     expect(input.items.size() == 2, "items should have 2 entries (equipment + 1 book)");
     expect(input.target.empty(), "target should be empty");
-    expect(input.config.platform == platform::MCE::Java, "platform should be Java");
+    expect(input.config.platform == MCE::Java, "platform should be Java");
     expect(input.equipment.name_id == "diamond_sword", "equipment name_id should be diamond_sword");
 
     std::cout << "PASS: test_apply_valid_input" << std::endl;
@@ -240,7 +240,7 @@ void test_recall_empty_output() {
     output.is_valid = false;
 
     AlgorithmInput input;
-    input.config.platform = platform::MCE::Java;
+    input.config.platform = MCE::Java;
     ItemStack target_item;
     EnchSet original_ench;
     ItemCollection available_items;

@@ -11,37 +11,37 @@ namespace ParserUtils {
 // ---------------------------------------------------------------------------
 // Platform string parsing
 // ---------------------------------------------------------------------------
-platform::MCE parse_platform(const std::string &str) {
+MCE parse_platform(const std::string &str) {
     std::string lower;
     lower.reserve(str.size());
     for (char c : str) {
         lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
     }
     if (lower == "java" || lower == "je") {
-        return platform::MCE::Java;
+        return MCE::Java;
     }
     if (lower == "bedrock" || lower == "be") {
-        return platform::MCE::Bedrock;
+        return MCE::Bedrock;
     }
     if (lower == "all" || lower == "both") {
-        return platform::MCE::All;
+        return MCE::All;
     }
     std::cerr << "Warning: Unknown platform '" << str << "', defaulting to Java." << std::endl;
-    return platform::MCE::Java;
+    return MCE::Java;
 }
 
 // ---------------------------------------------------------------------------
 // Platform enum to string
 // ---------------------------------------------------------------------------
-std::string platform_to_string(platform::MCE p) {
+std::string platform_to_string(MCE p) {
     switch (p) {
-    case platform::MCE::Java:
+    case MCE::Java:
         return "java";
-    case platform::MCE::Bedrock:
+    case MCE::Bedrock:
         return "bedrock";
-    case platform::MCE::All:
+    case MCE::All:
         return "all";
-    case platform::MCE::None:
+    case MCE::None:
         return "none";
     }
     return "java";

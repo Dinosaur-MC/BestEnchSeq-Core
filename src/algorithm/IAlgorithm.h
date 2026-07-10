@@ -2,8 +2,7 @@
 #include "types/CompactedTypes.h"
 #include "types/Equipment.h"
 #include "registries/CompactedRegistries.h"
-#include "registries/PlatformConfig.h"
-#include "algorithm/forge/IForgeEngine.h"
+#include "types/ForgeConfig.h"
 #include <chrono>
 #include <cstdint>
 #include <string>

@@ -1,7 +1,6 @@
 #pragma once
 #include "BESQTypes.h"
 #include "parser/CLIParser.h"
-#include "parser/TagResolver.h"
 #include <filesystem>
 #include <unordered_map>
 #include <vector>
@@ -9,7 +8,7 @@
 /// Domain-level parsed input (produced by InputParser, consumed by
 /// CompactAdapter to build compact AlgorithmInput).
 struct ParsedInput {
-    platform::MCE platform;
+    MCE platform;
     EnchSet original_ench;
     ItemStack target_item;
     ItemCollection available_items;

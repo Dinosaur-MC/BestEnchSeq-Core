@@ -1,7 +1,7 @@
 #pragma once
 #include "types/EnchSolution.h"
 #include "types/ItemStack.h"
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 
 #include "io/json.h"
 
@@ -32,7 +32,7 @@ class OutputFormatter {
     static std::string describe_item_compact(const ItemStack &item);
     static std::string describe_ench_roman(const Ench &ench);
     static std::string mode_display_name(const std::string &mode);
-    static std::string platform_to_display(platform::MCE p);
+    static std::string platform_to_display(MCE p);
 
     // JSON helpers
     static Json itemstack_to_json(const ItemStack &item);

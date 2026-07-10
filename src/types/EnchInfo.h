@@ -3,12 +3,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 
 struct EnchInfo {
     std::string name_id;
     std::string name;
-    platform::MCE supported_platform;
+    MCE supported_platform;
     int32_t max_level;
     int32_t limited_level;
     int32_t multiplier;

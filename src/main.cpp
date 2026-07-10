@@ -1,9 +1,8 @@
-#include "registries/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/GreedyAlgorithm.h"
-#include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
+#include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/DynamicPenaltyBalancing.h"
+#include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/HierarchicalMergeStrategy.h"
 
 #include "adapters/CompactAdapter.h"
@@ -13,11 +12,11 @@
 #include "parser/InputParser.h"
 #include "parser/OutputFormatter.h"
 #include "parser/TagResolver.h"
-#include "registries/CompactedRegistries.h"
+#include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "registries/PlatformConfig.h"
+
 
 #include <filesystem>
 #include <fstream>
@@ -30,7 +29,7 @@ namespace {
 
 const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path("data") / "builtin";
 
-void load_builtin_data(TagResolver& tag_resolver) {
+void load_builtin_data(TagResolver &tag_resolver) {
     EquipmentCategoryRegistry::get_instance().initialize();
 
     auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
@@ -39,7 +38,7 @@ void load_builtin_data(TagResolver& tag_resolver) {
     EquipmentRegistry::get_instance().initialize(equipments);
 }
 
-void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& tag_resolver) {
+void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver) {
     if (!std::filesystem::exists(data_pack_dir))
         throw std::runtime_error("Data pack directory not found: " + data_pack_dir.string());
 
@@ -48,35 +47,31 @@ void load_custom_data(const std::filesystem::path& data_pack_dir, TagResolver& t
     auto existing_ench = EnchantmentRegistry::get_instance().get_instances();
     std::vector<EnchInfo> combined_ench;
     combined_ench.reserve(existing_ench.size() + ench_infos.size());
-    for (const auto &info : existing_ench) combined_ench.push_back(info);
-    for (const auto &info : ench_infos) combined_ench.push_back(info);
+    for (const auto &info : existing_ench)
+        combined_ench.push_back(info);
+    for (const auto &info : ench_infos)
+        combined_ench.push_back(info);
     EnchantmentRegistry::get_instance().initialize(combined_ench);
 
     auto equipments = EquipmentParser::parse(data_pack_dir, tag_resolver);
-    auto& existing_eq = EquipmentRegistry::get_instance().get_instances();
+    auto &existing_eq = EquipmentRegistry::get_instance().get_instances();
     std::vector<Equipment> combined_eq;
     combined_eq.reserve(existing_eq.size() + equipments.size());
-    for (const auto &eq : existing_eq) combined_eq.push_back(eq);
-    for (const auto &eq : equipments) combined_eq.push_back(eq);
+    for (const auto &eq : existing_eq)
+        combined_eq.push_back(eq);
+    for (const auto &eq : equipments)
+        combined_eq.push_back(eq);
     EquipmentRegistry::get_instance().initialize(combined_eq);
 }
 
 void register_builtin_algorithms() {
-    AlgorithmRegistry::get_instance().register_algorithm("greedy", []{
-        return std::make_unique<GreedyAlgorithm>();
-    });
-    AlgorithmRegistry::get_instance().register_algorithm("dfs", []{
-        return std::make_unique<DFSAlgorithm>();
-    });
-    AlgorithmRegistry::get_instance().register_algorithm("astar", []{
-        return std::make_unique<AStarAlgorithm>();
-    });
-    AlgorithmRegistry::get_instance().register_algorithm("penalty_balance", []{
-        return std::make_unique<DynamicPenaltyBalancing>();
-    });
-    AlgorithmRegistry::get_instance().register_algorithm("hierarchical", []{
-        return std::make_unique<HierarchicalMergeStrategy>();
-    });
+    AlgorithmRegistry::get_instance().register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
+    AlgorithmRegistry::get_instance().register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
+    AlgorithmRegistry::get_instance().register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
+    AlgorithmRegistry::get_instance().register_algorithm("penalty_balance",
+                                                         [] { return std::make_unique<DynamicPenaltyBalancing>(); });
+    AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
+                                                         [] { return std::make_unique<HierarchicalMergeStrategy>(); });
 }
 
 } // anonymous namespace
@@ -98,9 +93,9 @@ int main(int argc, char *argv[]) {
         }
 
         if (config.platform == "bedrock") {
-            platform::Config::get_instance().set_active(platform::MCE::Bedrock);
+            set_active_platform(MCE::Bedrock);
         } else {
-            platform::Config::get_instance().set_active(platform::MCE::Java);
+            set_active_platform(MCE::Java);
         }
 
         std::unordered_map<std::string, int32_t> ench_name_to_id;
@@ -112,8 +107,8 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        std::unordered_map<std::string, const Equipment*> equipment_map;
-        for (const auto& eq : EquipmentRegistry::get_instance().get_instances()) {
+        std::unordered_map<std::string, const Equipment *> equipment_map;
+        for (const auto &eq : EquipmentRegistry::get_instance().get_instances()) {
             equipment_map[eq.name_id] = &eq;
         }
 
@@ -124,29 +119,24 @@ int main(int argc, char *argv[]) {
         auto algo = AlgorithmRegistry::get_instance().create(config.algorithm);
         if (!algo) {
             throw std::runtime_error("Unknown algorithm: '" + config.algorithm +
-                "'. Available: greedy, dfs, astar, penalty_balance, hierarchical");
+                                     "'. Available: greedy, dfs, astar, penalty_balance, hierarchical");
         }
 
-        //── Boundary: domain → compact ─────────────────────────────────────
+        // ── Boundary: domain → compact ─────────────────────────────────────
         CompactAdapter adapter;
         ForgeConfig forge_config;
         forge_config.platform = parsed.platform;
-        AlgorithmInput algo_input = adapter.apply(
-            parsed.target_item,
-            parsed.original_ench,
-            parsed.available_items,
-            forge_config,
-            EnchantmentRegistry::get_instance()
-        );
+        AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.original_ench, parsed.available_items,
+                                                  forge_config, EnchantmentRegistry::get_instance());
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
-        executor.start(algo_input);  // copy — keeps algo_input valid for recall() below
+        executor.start(algo_input); // copy — keeps algo_input valid for recall() below
         executor.wait();
 
-        //── Boundary: compact → domain ────────────────────────────────────
-        auto solutions = adapter.recall(executor.output(), algo_input,
-            parsed.original_ench, parsed.target_item, parsed.available_items);
+        // ── Boundary: compact → domain ────────────────────────────────────
+        auto solutions =
+            adapter.recall(executor.output(), algo_input, parsed.original_ench, parsed.target_item, parsed.available_items);
 
         // Format output
         std::string output_text;

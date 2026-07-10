@@ -201,11 +201,11 @@ std::string OutputFormatter::mode_display_name(const std::string &mode) {
 // ---------------------------------------------------------------------------
 // platform_to_display
 // ---------------------------------------------------------------------------
-std::string OutputFormatter::platform_to_display(platform::MCE p) {
+std::string OutputFormatter::platform_to_display(MCE p) {
     switch (p) {
-    case platform::MCE::Java:    return "Java版";
-    case platform::MCE::Bedrock: return "Bedrock版";
-    case platform::MCE::All:     return "通用";
+    case MCE::Java:    return "Java版";
+    case MCE::Bedrock: return "Bedrock版";
+    case MCE::All:     return "通用";
     default:                     return "未知";
     }
 }
@@ -360,9 +360,9 @@ std::string OutputFormatter::format_json(
 
         // Platform
         switch (sol.platform) {
-        case platform::MCE::Java:    s["platform"] = Json(Json::String("Java"));    break;
-        case platform::MCE::Bedrock: s["platform"] = Json(Json::String("Bedrock")); break;
-        case platform::MCE::All:     s["platform"] = Json(Json::String("All"));     break;
+        case MCE::Java:    s["platform"] = Json(Json::String("Java"));    break;
+        case MCE::Bedrock: s["platform"] = Json(Json::String("Bedrock")); break;
+        case MCE::All:     s["platform"] = Json(Json::String("All"));     break;
         default:                     s["platform"] = Json(Json::String("None"));    break;
         }
 
@@ -447,10 +447,10 @@ std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) 
 
         // Platform
         std::string plat_str = json_str(obj.at("platform"));
-        platform::MCE plat = platform::MCE::None;
-        if (plat_str == "Java")       plat = platform::MCE::Java;
-        else if (plat_str == "Bedrock") plat = platform::MCE::Bedrock;
-        else if (plat_str == "All")   plat = platform::MCE::All;
+        MCE plat = MCE::None;
+        if (plat_str == "Java")       plat = MCE::Java;
+        else if (plat_str == "Bedrock") plat = MCE::Bedrock;
+        else if (plat_str == "All")   plat = MCE::All;
 
         // Original enchantments
         Json::Value orig_ench_val = obj.at("original_ench").get_value();

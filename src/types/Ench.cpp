@@ -39,7 +39,7 @@ Ench Ench::checked(int32_t id, int32_t level, const EnchantmentRegistry& reg) {
 }
 
 std::string Ench::get_name() const { return EnchantmentRegistry::get_instance().get(id).name_id; }
-platform::MCE Ench::get_supported_platform() const { return EnchantmentRegistry::get_instance().get(id).supported_platform; }
+MCE Ench::get_supported_platform() const { return EnchantmentRegistry::get_instance().get(id).supported_platform; }
 int32_t Ench::get_max_level() const { return EnchantmentRegistry::get_instance().get(id).max_level; }
 int32_t Ench::get_limited_level() const { return EnchantmentRegistry::get_instance().get(id).limited_level; }
 int32_t Ench::get_multiplier(bool is_book) const {

@@ -31,28 +31,28 @@ void setup_enchinfo() {
     infos.push_back({
         "minecraft:sharpness",
         "Sharpness",
-        platform::MCE::All,
+        MCE::All,
         5, 5, 1, {},
         {EquipmentCategoryRegistry::ID_SWORD},
     });
     infos.push_back({
         "minecraft:knockback",
         "Knockback",
-        platform::MCE::All,
+        MCE::All,
         2, 2, 2, {},
         {EquipmentCategoryRegistry::ID_SWORD},
     });
     infos.push_back({
         "minecraft:smite",
         "Smite",
-        platform::MCE::All,
+        MCE::All,
         5, 5, 1, {},
         {EquipmentCategoryRegistry::ID_SWORD},
     });
     infos.push_back({
         "minecraft:power",
         "Power",
-        platform::MCE::All,
+        MCE::All,
         5, 5, 1, {},
         {EquipmentCategoryRegistry::ID_BOW},
     });
@@ -116,7 +116,7 @@ TestScenario make_scenario(bool two_steps) {
     meta.computation_time = 500;
 
     auto sol = EnchSolution::make(
-        platform::MCE::Java, wanted, target, avail, steps, true, meta
+        MCE::Java, wanted, target, avail, steps, true, meta
     );
 
     return {sol};
@@ -187,7 +187,7 @@ void test_describe_item_book() {
     step.exp_cost       = 55;
 
     auto sol = EnchSolution::make(
-        platform::MCE::Java, wanted, target, {book}, {step}, true,
+        MCE::Java, wanted, target, {book}, {step}, true,
         {"t", "1.0", 0, 0}
     );
 

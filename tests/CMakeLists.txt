@@ -119,7 +119,6 @@ add_executable(test_output_formatter
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_output_formatter PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_output_formatter COMMAND test_output_formatter)
@@ -147,7 +146,6 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -170,7 +168,6 @@ add_executable(test_forge_engine
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_forge_engine PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_forge_engine COMMAND test_forge_engine)
@@ -189,7 +186,6 @@ add_executable(test_exp_calculator
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_exp_calculator PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_exp_calculator COMMAND test_exp_calculator)
@@ -222,7 +218,6 @@ add_executable(test_algorithm_registry
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_algorithm_registry PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_registry COMMAND test_algorithm_registry)
@@ -291,7 +286,6 @@ add_executable(test_compact_adapter
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
@@ -318,7 +312,6 @@ add_executable(test_serializer
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
 )
 target_include_directories(test_serializer PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_serializer COMMAND test_serializer)

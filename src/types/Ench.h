@@ -1,5 +1,5 @@
 #pragma once
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 
 #include <cstdint>
 #include <string>
@@ -37,7 +37,7 @@ struct Ench {
 
     // Metadata queries — delegate to EnchantmentRegistry::get_instance()
     std::string get_name() const;
-    platform::MCE get_supported_platform() const;
+    MCE get_supported_platform() const;
     int32_t get_max_level() const;
     int32_t get_limited_level() const;
     int32_t get_multiplier(bool is_book = false) const;

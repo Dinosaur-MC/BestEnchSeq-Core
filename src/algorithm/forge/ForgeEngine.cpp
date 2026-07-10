@@ -61,7 +61,7 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
         }
 
         if (conflict) {
-            if (plat == platform::MCE::Java)
+            if (plat == MCE::Java)
                 cost += 1;
             continue;
         }
@@ -84,7 +84,7 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
             it->level = new_level;
 
             if (mult > 0) {
-                if (plat == platform::MCE::Java)
+                if (plat == MCE::Java)
                     cost += mult * new_level;
                 else
                     cost += mult * (new_level - old_level);

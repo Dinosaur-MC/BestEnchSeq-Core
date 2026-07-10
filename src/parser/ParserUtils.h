@@ -6,15 +6,15 @@
 #include <vector>
 
 #include "io/json.h"
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 
 namespace ParserUtils {
 
 // Platform string parsing
-platform::MCE parse_platform(const std::string &str);
+MCE parse_platform(const std::string &str);
 
 // Platform enum to string
-std::string platform_to_string(platform::MCE p);
+std::string platform_to_string(MCE p);
 
 // JSON field extraction helpers
 std::string get_json_string(const Json::Object &obj, const std::string &key);

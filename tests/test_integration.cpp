@@ -8,7 +8,7 @@
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "registries/PlatformConfig.h"
+#include "types/ForgeConfig.h"
 #include "test_utils.h"
 
 #include <filesystem>
@@ -28,7 +28,7 @@ void test_full_pipeline_direct() {
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-    platform::Config::get_instance().set_active(platform::MCE::Java);
+    set_active_platform(MCE::Java);
 
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
     CLIParser cli_parser;
@@ -70,7 +70,7 @@ void test_full_pipeline_inventory() {
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-    platform::Config::get_instance().set_active(platform::MCE::Java);
+    set_active_platform(MCE::Java);
 
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
@@ -124,12 +124,12 @@ void test_platform_switching() {
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
 
-    platform::Config::get_instance().set_active(platform::MCE::Java);
-    expect(platform::get_active_platform() == platform::MCE::Java,
+    set_active_platform(MCE::Java);
+    expect(get_active_platform() == MCE::Java,
            "platform_switch: Java set correctly");
 
-    platform::Config::get_instance().set_active(platform::MCE::Bedrock);
-    expect(platform::get_active_platform() == platform::MCE::Bedrock,
+    set_active_platform(MCE::Bedrock);
+    expect(get_active_platform() == MCE::Bedrock,
            "platform_switch: Bedrock set correctly");
 
     std::cout << "  [OK] test_platform_switching" << std::endl;
@@ -196,7 +196,7 @@ void test_output_formatting_empty() {
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-    platform::Config::get_instance().set_active(platform::MCE::Java);
+    set_active_platform(MCE::Java);
 
     std::vector<EnchSolution> empty_solutions;
 
