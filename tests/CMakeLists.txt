@@ -335,6 +335,18 @@ set_tests_properties(test_equipment_category_registry PROPERTIES
 )
 endif()
 
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_astar_memory_budget.cpp)
+add_executable(test_astar_memory_budget
+    test_astar_memory_budget.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/AStarMemoryBudget.cpp
+)
+target_include_directories(test_astar_memory_budget PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_astar_memory_budget COMMAND test_astar_memory_budget)
+set_tests_properties(test_astar_memory_budget PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_compact_adapter.cpp)
 add_executable(test_compact_adapter
     test_compact_adapter.cpp
