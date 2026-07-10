@@ -3,6 +3,7 @@
 #include "Equipment.h"
 
 #include <optional>
+#include <vector>
 
 /// Forgeable item stack — pure data container.
 struct ItemStack {
