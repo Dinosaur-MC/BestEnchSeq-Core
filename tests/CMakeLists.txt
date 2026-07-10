@@ -278,6 +278,36 @@ set_tests_properties(test_algorithm_utils PROPERTIES
 )
 endif()
 
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_ench_reg.cpp)
+add_executable(test_ench_reg
+    test_ench_reg.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
+)
+target_include_directories(test_ench_reg PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_ench_reg COMMAND test_ench_reg)
+set_tests_properties(test_ench_reg PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_equipment_category_registry.cpp)
+add_executable(test_equipment_category_registry
+    test_equipment_category_registry.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
+)
+target_include_directories(test_equipment_category_registry PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_equipment_category_registry COMMAND test_equipment_category_registry)
+set_tests_properties(test_equipment_category_registry PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_compact_adapter.cpp)
 add_executable(test_compact_adapter
     test_compact_adapter.cpp

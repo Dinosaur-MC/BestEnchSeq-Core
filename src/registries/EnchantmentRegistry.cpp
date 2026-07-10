@@ -22,6 +22,14 @@ bool EnchantmentRegistry::check_validation(const std::vector<EnchInfo>& infos) {
     return true;
 }
 
+void EnchantmentRegistry::reset_for_testing() {
+    instances_.clear();
+    name_to_index_.clear();
+    incompatible_table_.clear();
+    local_to_global_.clear();
+    global_to_local_.clear();
+}
+
 void EnchantmentRegistry::initialize(const std::vector<EnchInfo>& infos) {
     if (!check_validation(infos))
         throw std::runtime_error("Validation check failed");

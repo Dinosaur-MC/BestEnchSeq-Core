@@ -20,6 +20,8 @@ public:
     EquipmentRegistry& operator=(const EquipmentRegistry&) = delete;
 
     void initialize(const std::vector<Equipment>& eq_list);
+    /// Reset all state — for testing only. Invalidates all held references.
+    void reset_for_testing();
 
     // Numeric ID lookup (O(1)). Throws std::out_of_range on invalid.
     const Equipment& get(int32_t id) const;

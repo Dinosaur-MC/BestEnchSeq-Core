@@ -22,6 +22,8 @@ class EnchantmentRegistry {
 
     // Lifecycle
     void initialize(const std::vector<EnchInfo> &infos);
+    /// Reset all state — for testing only. Invalidates all held references.
+    void reset_for_testing();
 
     // Subset derivation — pick by global index, create dense remapped copy
     EnchantmentRegistry create_subset(const std::vector<int32_t> &global_ids) const;

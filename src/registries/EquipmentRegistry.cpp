@@ -6,9 +6,13 @@ EquipmentRegistry& EquipmentRegistry::get_instance() {
     return instance;
 }
 
-void EquipmentRegistry::initialize(const std::vector<Equipment>& eq_list) {
+void EquipmentRegistry::reset_for_testing() {
     instances_.clear();
     name_to_id_.clear();
+}
+
+void EquipmentRegistry::initialize(const std::vector<Equipment>& eq_list) {
+    reset_for_testing();
 
     for (const auto& eq : eq_list) {
         instances_.push_back(eq);
