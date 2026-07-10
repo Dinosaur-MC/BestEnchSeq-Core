@@ -209,7 +209,7 @@ ItemCollection InputParser::generate_books(
 ) {
     ItemCollection books;
     for (const Ench &wanted_ench : wanted) {
-        auto it = existing.find(wanted_ench);
+        auto it = existing.find_by_id(wanted_ench.id);
         int32_t existing_level = (it != existing.end()) ? it->level : 0;
 
         if (existing_level >= wanted_ench.level) {

@@ -1,8 +1,6 @@
 #include "test_utils.h"
 #include "parser/InputParser.h"
 #include "parser/CLIParser.h"
-#include "parser/ParserUtils.h"
-#include "io/json.h"
 #include "registries/EnchantmentRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/Ench.h"
@@ -14,7 +12,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -164,7 +161,7 @@ void test_build_target_with_inline() {
            "build_target_inline: should have 1 enchantment");
 
     // Find sharpness (id=0) by lookup
-    auto it = target.enchantments.find(Ench(0, 0));
+    auto it = target.enchantments.find_by_id(0);
     expect(it != target.enchantments.end(),
            "build_target_inline: sharpness should be present");
     expect(it->level == 3,
@@ -183,13 +180,13 @@ void test_build_wanted_enchset() {
     expect(wanted.size() == 2,
            "build_wanted_enchset: should have 2 enchantments");
 
-    auto it = wanted.find(Ench(0, 0));
+    auto it = wanted.find_by_id(0);
     expect(it != wanted.end(),
            "build_wanted_enchset: sharpness should be present");
     expect(it->level == 5,
            "build_wanted_enchset: sharpness level should be 5");
 
-    it = wanted.find(Ench(1, 0));
+    it = wanted.find_by_id(1);
     expect(it != wanted.end(),
            "build_wanted_enchset: knockback should be present");
     expect(it->level == 2,
@@ -219,14 +216,14 @@ void test_generate_books_auto_complete() {
            "generate_books: book should have 1 enchantment");
 
     // First book should be at level 4 (existing+1)
-    auto it = books[0].enchantments.find(Ench(0, 0));
+    auto it = books[0].enchantments.find_by_id(0);
     expect(it != books[0].enchantments.end(),
            "generate_books: first book should have sharpness");
     expect(it->level == 4,
            "generate_books: first book level should be 4 (existing+1)");
 
     // Second book should be at level 5 (wanted level)
-    auto it2 = books[1].enchantments.find(Ench(0, 0));
+    auto it2 = books[1].enchantments.find_by_id(0);
     expect(it2 != books[1].enchantments.end(),
            "generate_books: second book should have sharpness");
     expect(it2->level == 5,
