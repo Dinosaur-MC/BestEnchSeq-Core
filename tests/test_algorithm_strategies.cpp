@@ -281,6 +281,7 @@ int main() {
     // DFS
     test_dfs_simple();
     test_dfs_two_books();
+    test_dfs_target_unreachable();
 
     // AStar
     test_astar_simple();
