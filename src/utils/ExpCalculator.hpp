@@ -27,7 +27,7 @@ public:
         if (steps.empty()) return 0;
         int32_t peak = 0;
         for (auto& s : steps) {
-            int32_t exp = level_to_exp(s.exp_level_cost);
+            int32_t exp = s.exp_cost;
             if (exp > peak) peak = exp;
         }
         return peak;

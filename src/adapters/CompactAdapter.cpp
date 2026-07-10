@@ -1,5 +1,6 @@
 #include "adapters/CompactAdapter.h"
 #include "utils/ExpCalculator.hpp"
+#include <cassert>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -64,7 +65,7 @@ void validate_input(
         std::string msg;
         for (const auto& err : errors)
             msg += err + "; ";
-        msg.resize(msg.size() - 2);
+        if (msg.size() >= 2) msg.resize(msg.size() - 2);
         throw std::invalid_argument(std::move(msg));
     }
 }
@@ -109,6 +110,8 @@ AlgorithmInput CompactAdapter::apply(
     input.target.reserve(target_item.enchantments.size());
     for (const auto& e : target_item.enchantments) {
         int16_t local_id = static_cast<int16_t>(input.ench_reg.to_local_id(e.id));
+        assert(local_id >= 0);
+        if (local_id < 0) continue;
         input.target.push_back({local_id, static_cast<int16_t>(e.level)});
     }
 
@@ -118,7 +121,10 @@ AlgorithmInput CompactAdapter::apply(
 compact::Item CompactAdapter::from_domain(const ItemStack& item, const compact::EnchReg& reg) {
     compact::Item citem;
     citem.type = item.is_book() ? compact::ItemType::Book : compact::ItemType::Equip;
-    citem.ppn = static_cast<int8_t>(item.prior_penalty);
+    citem.ppn = [&]() {
+        assert(item.prior_penalty >= 0 && item.prior_penalty <= 31);
+        return static_cast<int8_t>(item.prior_penalty);
+    }();
     citem.dur = static_cast<int16_t>(item.durability);
     citem.enchs.reserve(item.enchantments.size());
     for (const auto& ench : item.enchantments) {

@@ -11,22 +11,23 @@
 namespace {
 
 // ---------------------------------------------------------------------------
-// Resolve an EnchantmentSpec to an integer ench_id via the lookup map.
-// The key is constructed as "ns:id" unless the id itself already contains a
-// namespace colon.
+// Resolve an EnchantmentSpec to an integer ench_id via the global
+// EnchantmentRegistry.  The key is constructed as "ns:id" unless the id
+// itself already contains a namespace colon.  Falls back to the bare id
+// for data registered without a namespace prefix.
 // ---------------------------------------------------------------------------
-int32_t resolve_ench_id(
-    const EnchantmentSpec &spec,
-    const std::unordered_map<std::string, int32_t> &ench_name_to_id
-) {
-    std::string key = spec.id.find(':') != std::string::npos
-                          ? spec.id
-                          : spec.ns + ":" + spec.id;
-    auto it = ench_name_to_id.find(key);
-    if (it == ench_name_to_id.end()) {
-        throw std::runtime_error("Unknown enchantment: " + key);
-    }
-    return it->second;
+int32_t resolve_ench_id(const EnchantmentSpec &spec) {
+    std::string namespaced = spec.id.find(':') != std::string::npos
+                                 ? spec.id
+                                 : spec.ns + ":" + spec.id;
+    int32_t id = EnchantmentRegistry::get_instance().get_id(namespaced);
+    if (id >= 0) return id;
+
+    // Fallback: try bare id (for data registered without namespace prefix)
+    id = EnchantmentRegistry::get_instance().get_id(spec.id);
+    if (id >= 0) return id;
+
+    throw std::runtime_error("Unknown enchantment: " + namespaced);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,8 +168,7 @@ ItemCollection InputParser::parse_inventory(
 // ===========================================================================
 ItemStack InputParser::build_target(
     const TargetSpec &target_spec,
-    const std::unordered_map<std::string, const Equipment*> &equipment_registry,
-    const std::unordered_map<std::string, int32_t> &ench_name_to_id
+    const std::unordered_map<std::string, const Equipment*> &equipment_registry
 ) {
     // Look up equipment
     auto equip_it = equipment_registry.find(target_spec.item_id);
@@ -179,7 +179,7 @@ ItemStack InputParser::build_target(
     // Build enchantment set from inline enchants
     EnchSet ench_set;
     for (const auto &spec : target_spec.inline_enchants) {
-        int32_t id = resolve_ench_id(spec, ench_name_to_id);
+        int32_t id = resolve_ench_id(spec);
         ench_set.emplace(id, spec.level);
     }
 
@@ -190,12 +190,11 @@ ItemStack InputParser::build_target(
 //  build_wanted_enchset
 // ===========================================================================
 EnchSet InputParser::build_wanted_enchset(
-    const std::vector<EnchantmentSpec> &wanted,
-    const std::unordered_map<std::string, int32_t> &ench_name_to_id
+    const std::vector<EnchantmentSpec> &wanted
 ) {
     EnchSet result;
     for (const auto &spec : wanted) {
-        int32_t id = resolve_ench_id(spec, ench_name_to_id);
+        int32_t id = resolve_ench_id(spec);
         result.emplace(id, spec.level);
     }
     return result;
@@ -236,8 +235,7 @@ ItemCollection InputParser::generate_books(
 // ===========================================================================
 ParsedInput InputParser::assemble_input(
     const CLIConfig &cli_config,
-    const std::unordered_map<std::string, const Equipment*> &equipment_registry,
-    const std::unordered_map<std::string, int32_t> &ench_name_to_id
+    const std::unordered_map<std::string, const Equipment*> &equipment_registry
 ) {
     // 1. Determine platform
     MCE platform;
@@ -250,12 +248,12 @@ ParsedInput InputParser::assemble_input(
     if (cli_config.mode == "direct") {
         // Parse target spec
         TargetSpec target_spec = CLIParser::parse_target(cli_config.target);
-        ItemStack target = build_target(target_spec, equipment_registry, ench_name_to_id);
+        ItemStack target = build_target(target_spec, equipment_registry);
 
         // Parse wanted enchantments
         std::vector<EnchantmentSpec> wanted_specs =
             CLIParser::parse_enchantment_list(cli_config.wanted);
-        EnchSet wanted = build_wanted_enchset(wanted_specs, ench_name_to_id);
+        EnchSet wanted = build_wanted_enchset(wanted_specs);
 
         // Existing enchants come from the target item
         EnchSet existing = target.enchantments;
@@ -284,7 +282,7 @@ ParsedInput InputParser::assemble_input(
     ItemStack target;
     if (!cli_config.target.empty()) {
         TargetSpec target_spec = CLIParser::parse_target(cli_config.target);
-        target = build_target(target_spec, equipment_registry, ench_name_to_id);
+        target = build_target(target_spec, equipment_registry);
     }
 
     // Sort available items by priority (lower = more preferred)

@@ -23,19 +23,16 @@ class InputParser {
 
     static ItemStack build_target(
         const TargetSpec &target_spec,
-        const std::unordered_map<std::string, const Equipment*> &equipment_registry,
-        const std::unordered_map<std::string, int32_t> &ench_name_to_id
+        const std::unordered_map<std::string, const Equipment*> &equipment_registry
     );
 
     static EnchSet build_wanted_enchset(
-        const std::vector<EnchantmentSpec> &wanted,
-        const std::unordered_map<std::string, int32_t> &ench_name_to_id
+        const std::vector<EnchantmentSpec> &wanted
     );
 
     static ParsedInput assemble_input(
         const CLIConfig& cli_config,
-        const std::unordered_map<std::string, const Equipment*> &equipment_registry,
-        const std::unordered_map<std::string, int32_t> &ench_name_to_id
+        const std::unordered_map<std::string, const Equipment*> &equipment_registry
     );
 
     static ItemCollection generate_books(
