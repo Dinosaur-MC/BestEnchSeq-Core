@@ -48,10 +48,3 @@ std::unique_ptr<IAlgorithm> AlgorithmRegistry::create(std::string_view name) con
     return it->second();
 }
 
-bool AlgorithmRegistry::has_algorithm(std::string_view name) const {
-    return contains(name);
-}
-
-std::vector<std::string> AlgorithmRegistry::available_algorithms() const {
-    return list();
-}

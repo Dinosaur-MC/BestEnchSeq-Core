@@ -37,12 +37,7 @@ public:
     std::vector<std::string> list() const;
     bool contains(std::string_view name) const;
 
-    // Deprecated — use contains() / list()
     std::unique_ptr<IAlgorithm> create(std::string_view name) const;
-    [[deprecated("Use contains() instead")]]
-    bool has_algorithm(std::string_view name) const;
-    [[deprecated("Use list() instead")]]
-    std::vector<std::string> available_algorithms() const;
 
 private:
     AlgorithmRegistry() = default;

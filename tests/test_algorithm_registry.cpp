@@ -70,26 +70,26 @@ void test_unregister() {
     std::cout << "PASS: test_unregister" << std::endl;
 }
 
-void test_deprecated_functions() {
+void test_contains_and_list() {
     auto& reg = AlgorithmRegistry::get_instance();
     reg.clear();
 
     reg.register_algorithm("legacy", []{ return std::make_unique<TestAlgorithm>(); });
 
-    expect(reg.has_algorithm("legacy"), "has_algorithm: legacy should work");
-    expect(!reg.has_algorithm("ghost"), "has_algorithm: ghost not found");
+    expect(reg.contains("legacy"), "contains: legacy should work");
+    expect(!reg.contains("ghost"), "contains: ghost not found");
 
-    auto avail = reg.available_algorithms();
-    expect(avail.size() == 1, "available_algorithms: should have 1");
+    auto items = reg.list();
+    expect(items.size() == 1, "list: should have 1 entry");
 
-    std::cout << "PASS: test_deprecated_functions" << std::endl;
+    std::cout << "PASS: test_contains_and_list" << std::endl;
 }
 
 int main() {
     test_basic_register_create();
     test_list_and_size();
     test_unregister();
-    test_deprecated_functions();
+    test_contains_and_list();
     std::cout << "All algorithm registry tests passed!" << std::endl;
     return 0;
 }

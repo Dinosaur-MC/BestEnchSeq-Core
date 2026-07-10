@@ -197,7 +197,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         algo_input.target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
 
     for (const auto& algo_name : enabled_algos) {
-        if (!AlgorithmRegistry::get_instance().has_algorithm(algo_name)) {
+        if (!AlgorithmRegistry::get_instance().contains(algo_name)) {
             std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
             continue;
         }
