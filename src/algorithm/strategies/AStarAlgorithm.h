@@ -2,11 +2,11 @@
 #include "../IAlgorithm.h"
 #include "../forge/ForgeEngine.h"
 #include "AStarMemoryBudget.h"
+#include "utils/AStarDiagnostics.hpp"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
-#include <string>
 
 /// A* using Item pool + flat ID-indexed states.
 class AStarAlgorithm : public IAlgorithm {
@@ -103,18 +103,6 @@ private:
     size_t  _hash_ids(const std::vector<ItemID>& ids) const;
     int32_t _greedy_bound(const std::vector<compact::Item>& items,
                            const compact::EnchReg& reg) const;
-    void    _log_diagnostics(
-                 int64_t explored, const std::unordered_map<size_t, int32_t>& best_g,
-                 int64_t wall_ms, const char* status,
-                 size_t open_set_pending = 0) const;
-    int64_t _estimate_peak() const noexcept;
-
-    // ─── Counters for diagnostics ─────────────────────────────────────────
-    int64_t _pruned_by_cost   = 0;
-    int64_t _pruned_by_f      = 0;
-    int64_t _pruned_by_best_g = 0;
-    int64_t _pruned_by_caps   = 0;
-    int64_t _steps_forged     = 0;
 
     // ─── Config ───────────────────────────────────────────────────────────
     ForgeEngine _compact_forge;
@@ -122,4 +110,7 @@ private:
     std::vector<compact::Ench> _target;
     int32_t _best_solution_cost{INT32_MAX};
     AStarMemoryBudget _budget;
+
+    // ─── Diagnostics (populated during execute, written on exit) ─────────
+    AStarDiagnostics _diag;
 };

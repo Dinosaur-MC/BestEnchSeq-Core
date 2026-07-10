@@ -2,11 +2,7 @@
 #include "../ExecutionContext.h"
 #include <algorithm>
 #include <chrono>
-#include <ctime>
-#include <filesystem>
-#include <fstream>
 #include <queue>
-#include <random>
 #include <unordered_map>
 
 using compact::Item;
@@ -122,8 +118,7 @@ void AStarAlgorithm::execute(
     _ench_reg = &reg;
     _target = target;
     _best_solution_cost = INT32_MAX;
-    _pruned_by_cost = _pruned_by_f = _pruned_by_best_g = _pruned_by_caps = 0;
-    _steps_forged = 0;
+    _diag = AStarDiagnostics{};
 
     // Seed ItemPool with initial items
     std::vector<ItemID> initial_ids;
@@ -225,10 +220,22 @@ void AStarAlgorithm::execute(
             ctx.report_compact_solution(std::move(steps));
             ctx.report_progress(1.0, ProgressStatus::Complete);
 
-            auto t1 = std::chrono::steady_clock::now();
-            _log_diagnostics(explored, best_g,
-                std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count(),
-                "Complete");
+            _diag.explored_count = explored;
+            _diag.best_g_size = best_g.size();
+            _diag.step_pool_used = _step_pool.size();
+            _diag.step_pool_capacity = _step_pool.capacity();
+            _diag.items_pool_size = _pool.size();
+            _diag.items_pool_capacity = _pool.capacity();
+            _diag.solution_cost = _best_solution_cost;
+            _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            _diag.open_set_pending = open_set.size();
+            _diag.estimated_peak_bytes =
+                static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
+              + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
+              + static_cast<int64_t>(_open_heap.capacity()) * static_cast<int64_t>(sizeof(PriorityEntry));
+            _diag.status = "Complete";
+            _diag.write();
             return;
         }
 
@@ -256,7 +263,7 @@ void AStarAlgorithm::execute(
                     _pool[cur_ids[i]], _pool[cur_ids[j]], reg);
                 int32_t child_est_g = current.g + est;
                 if (_best_solution_cost != INT32_MAX && child_est_g > _best_solution_cost) {
-                    ++_pruned_by_cost;
+                    ++_diag.pruned_by_cost;
                     continue;
                 }
 
@@ -269,7 +276,7 @@ void AStarAlgorithm::execute(
                 bool at_cap = (_step_pool.size() >= _budget.max_step_pool
                             || open_set.size() >= static_cast<size_t>(_budget.max_open_set));
                 if (at_cap) {
-                    ++_pruned_by_caps;
+                    ++_diag.pruned_by_caps;
                     continue;
                 }
 
@@ -279,7 +286,7 @@ void AStarAlgorithm::execute(
                 Item forged = _pool[old_base_id];
                 int32_t real_cost = _compact_forge.forge_into(forged, _pool[old_sac_id], reg);
                 int32_t child_g = current.g + real_cost;
-                ++_steps_forged;
+                ++_diag.steps_forged;
 
                 // Real cost may exceed estimate — recheck
                 if (_best_solution_cost != INT32_MAX && child_g > _best_solution_cost)
@@ -293,14 +300,14 @@ void AStarAlgorithm::execute(
                 // ── Phase C: heuristic + best_g + enqueue (real post-forge) ─
                 int32_t child_f = child_g + _heuristic(child_ids);
                 if (_best_solution_cost != INT32_MAX && child_f > _best_solution_cost) {
-                    ++_pruned_by_f;
+                    ++_diag.pruned_by_f;
                     continue;
                 }
 
                 size_t child_h = _hash_ids(child_ids);
                 auto c_it = best_g.find(child_h);
                 if (c_it != best_g.end() && c_it->second <= child_g) {
-                    ++_pruned_by_best_g;
+                    ++_diag.pruned_by_best_g;
                     continue;
                 }
                 best_g[child_h] = child_g;
@@ -323,79 +330,26 @@ void AStarAlgorithm::execute(
     }
 
     // ─── Exit diagnostics ────────────────────────────────────────────────
-    auto t1 = std::chrono::steady_clock::now();
-    size_t open_set_pending = open_set.size();
-    const char* status;
+    _diag.explored_count = explored;
+    _diag.best_g_size = best_g.size();
+    _diag.step_pool_used = _step_pool.size();
+    _diag.step_pool_capacity = _step_pool.capacity();
+    _diag.items_pool_size = _pool.size();
+    _diag.items_pool_capacity = _pool.capacity();
+    _diag.open_set_pending = open_set.size();
+    _diag.solution_cost = _best_solution_cost;
+    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+    _diag.estimated_peak_bytes =
+        static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
+      + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
+      + static_cast<int64_t>(_open_heap.capacity()) * static_cast<int64_t>(sizeof(PriorityEntry));
     if (ctx.is_cancelled()) {
         ctx.report_progress(1.0, ProgressStatus::Cancelled);
-        status = "Cancelled";
+        _diag.status = "Cancelled";
     } else {
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
-        status = "CompleteNoSolution";
+        _diag.status = "CompleteNoSolution";
     }
-    _log_diagnostics(explored, best_g,
-        std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count(),
-        status, open_set_pending);
-}
-
-// ─── Diagnostics ────────────────────────────────────────────────────────
-
-int64_t AStarAlgorithm::_estimate_peak() const noexcept {
-    int64_t total = 0;
-    total += static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item));
-    total += static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode));
-    total += static_cast<int64_t>(_open_heap.capacity()) * static_cast<int64_t>(sizeof(PriorityEntry));
-    return total;
-}
-
-void AStarAlgorithm::_log_diagnostics(
-    int64_t explored,
-    const std::unordered_map<size_t, int32_t>& best_g,
-    int64_t wall_ms,
-    const char* status,
-    size_t open_set_pending) const
-{
-    namespace fs = std::filesystem;
-    fs::create_directories("logs/auto");
-
-    // Generate unique filename
-    auto now = std::chrono::system_clock::now();
-    auto tt = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_buf;
-#if defined(_WIN32)
-    localtime_s(&tm_buf, &tt);
-#else
-    localtime_r(&tt, &tm_buf);
-#endif
-    char ts[32];
-    std::strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", &tm_buf);
-
-    std::random_device rd;
-    char rand_str[9];
-    for (int i = 0; i < 8; ++i)
-        rand_str[i] = "0123456789abcdef"[rd() % 16];
-    rand_str[8] = '\0';
-
-    std::string path = std::string("logs/auto/astar_") + ts + "_" + rand_str + ".log";
-    std::ofstream ofs(path);
-    if (!ofs) return;
-
-    ofs << "# AStar Exit Diagnostics\n"
-        << "timestamp=" << ts << "_" << rand_str << "\n"
-        << "status=" << status << "\n"
-        << "solution_cost=" << _best_solution_cost << "\n"
-        << "wall_ms=" << wall_ms << "\n"
-        << "explored_count=" << explored << "\n"
-        << "best_g_entries=" << best_g.size() << "\n"
-        << "step_pool_used=" << _step_pool.size() << "\n"
-        << "step_pool_capacity=" << _step_pool.capacity() << "\n"
-        << "items_pool=" << _pool.size() << "\n"
-        << "items_pool_capacity=" << _pool.capacity() << "\n"
-        << "open_set_pending=" << open_set_pending << "\n"
-        << "pruned_by_cost=" << _pruned_by_cost << "\n"
-        << "pruned_by_best_g=" << _pruned_by_best_g << "\n"
-        << "pruned_by_f=" << _pruned_by_f << "\n"
-        << "pruned_by_caps=" << _pruned_by_caps << "\n"
-        << "steps_forged=" << _steps_forged << "\n"
-        << "estimated_peak_bytes=" << _estimate_peak() << "\n";
+    _diag.write();
 }
