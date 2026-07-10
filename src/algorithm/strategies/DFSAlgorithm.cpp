@@ -6,7 +6,6 @@
 #include <vector>
 
 using compact::Item;
-using compact::EnchStep;
 using compact::EnchReg;
 
 // ─── Compact-only greedy bound ─────────────────────────────────────────────
@@ -24,7 +23,6 @@ int32_t DFSAlgorithm::_greedy_bound(
         books.push_back(items[k]);
 
     int32_t total_cost = 0;
-    auto& forge = const_cast<ForgeEngine&>(_compact_forge);
 
     std::vector<std::pair<size_t, int32_t>> ordered;
     for (size_t i = 0; i < books.size(); ++i)
@@ -35,7 +33,7 @@ int32_t DFSAlgorithm::_greedy_bound(
     for (const auto& [idx, _] : ordered) {
         if (!_compact_forge.is_forgeable(equip, books[idx]))
             continue;
-        int32_t cost = forge.forge_into(equip, books[idx], reg);
+        int32_t cost = _compact_forge.forge_into(equip, books[idx], reg);
         total_cost += cost;
     }
 
