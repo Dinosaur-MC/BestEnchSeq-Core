@@ -1,7 +1,5 @@
 #include "registries/AlgorithmRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/forge/IForgeEngine.h"
-#include "utils/ExpCalculator.hpp"
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
@@ -143,7 +141,7 @@ int main(int argc, char *argv[]) {
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
-        executor.start(std::move(algo_input));
+        executor.start(algo_input);  // copy — keeps algo_input valid for recall() below
         executor.wait();
 
         //── Boundary: compact → domain ────────────────────────────────────

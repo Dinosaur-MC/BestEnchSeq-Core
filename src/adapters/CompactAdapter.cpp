@@ -64,8 +64,7 @@ void validate_input(
         std::string msg;
         for (const auto& err : errors)
             msg += err + "; ";
-        if (!msg.empty())
-            msg.resize(msg.size() - 2);
+        msg.resize(msg.size() - 2);
         throw std::invalid_argument(std::move(msg));
     }
 }
