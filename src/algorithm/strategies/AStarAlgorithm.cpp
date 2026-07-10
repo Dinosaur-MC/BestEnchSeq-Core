@@ -129,8 +129,10 @@ void AStarAlgorithm::execute(
     // (hundreds of bytes).  This cuts memory ~10x for the visited map.
     std::unordered_map<size_t, int32_t> best_g;
     int64_t explored = 0;
-    // Hard limit on explored states to bound both time and memory.
-    constexpr int64_t MAX_EXPLORED = 3000000;
+    // Memory / time caps.
+    constexpr int64_t MAX_EXPLORED   = 3000000;  // total states expanded
+    constexpr size_t  MAX_OPEN_SET   = 1000000;  // queued states
+    constexpr size_t  MAX_STEP_POOL  = 2000000;  // CompactStepNode nodes
 
     while (!open_set.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
@@ -204,6 +206,12 @@ void AStarAlgorithm::execute(
 
                 // Compute hash BEFORE moving child_items into the state
                 size_t child_h = hash_items(child_items);
+
+                // Memory caps: once the step pool or open_set reach their
+                // limits, stop adding new children and drain what's queued.
+                if (_step_pool.size() >= MAX_STEP_POOL
+                    || open_set.size() >= MAX_OPEN_SET)
+                    continue;
 
                 const CompactStepNode* step_node = alloc_step(
                     current.state.steps_tail,
