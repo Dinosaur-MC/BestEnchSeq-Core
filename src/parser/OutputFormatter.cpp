@@ -272,21 +272,9 @@ std::string OutputFormatter::format_verbose(
         for (size_t j = 0; j < sol.steps.size(); ++j) {
             const auto &step = sol.steps[j];
 
-            // Compute result description (best-effort)
-            std::string result_desc;
-            try {
-                EnchSet combined = step.item_a.enchantments.combine_s(step.item_b.enchantments);
-                ItemStack result_item(step.item_a.equipment, combined,
-                                      step.item_a.prior_penalty, step.item_a.durability);
-                result_desc = describe_item_verbose(result_item);
-            } catch (const std::exception &) {
-                result_desc = "...";
-            }
-
             out += "  Step " + std::to_string(j + 1) + ": " +
                    describe_item_verbose(step.item_a) + " + " +
-                   describe_item_verbose(step.item_b) + " -> " +
-                   result_desc + "\n";
+                   describe_item_verbose(step.item_b) + "\n";
             out += "          - 消耗: " + std::to_string(step.exp_level_cost) +
                    " 等级 (" + std::to_string(step.exp_cost) + " 经验值)\n";
         }
@@ -318,21 +306,10 @@ std::string OutputFormatter::format_compact(
         if (!sol.is_feasible()) continue;
 
         for (const auto &step : sol.steps) {
-            // Compute result description (best-effort)
-            std::string result_desc;
-            try {
-                EnchSet combined = step.item_a.enchantments.combine_s(step.item_b.enchantments);
-                ItemStack result_item(step.item_a.equipment, combined,
-                                      step.item_a.prior_penalty, step.item_a.durability);
-                result_desc = describe_item_compact(result_item);
-            } catch (const std::exception &) {
-                result_desc = "...";
-            }
-
             out += std::to_string(i + 1) + "|" +          // solution rank
                    describe_item_compact(step.item_a) + "|" +
                    describe_item_compact(step.item_b) + "|" +
-                   result_desc + "|" +
+                   "|" +
                    std::to_string(step.exp_level_cost) + "|" +
                    std::to_string(step.exp_cost) + "\n";
         }

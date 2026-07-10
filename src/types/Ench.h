@@ -29,18 +29,13 @@ struct Ench {
         size_t operator()(const Ench& e) const { return std::hash<int32_t>()(e.id); }
     };
 
-    bool operator==(const Ench& other) const;
-    int32_t operator+(int32_t lvl) const;
-    int32_t operator+=(int32_t lvl);
-    Ench operator+(const Ench& other) const;
-    Ench& operator+=(const Ench& other);
+    bool operator==(const Ench& other) const { return id == other.id && level == other.level; }
 
     // Metadata queries — delegate to EnchantmentRegistry::get_instance()
     std::string get_name() const;
     MCE get_supported_platform() const;
     int32_t get_max_level() const;
     int32_t get_limited_level() const;
-    int32_t get_multiplier(bool is_book = false) const;
     const std::unordered_set<int32_t>& get_exclusive_set() const;
     const std::unordered_set<int32_t>& get_applicable_equipment() const;
 

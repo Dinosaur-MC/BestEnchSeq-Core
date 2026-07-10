@@ -84,7 +84,8 @@ void test_apply_invalid_enchant_id() {
     ItemStack target_item(&sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
-    // Construct empty book first (avoids update_cache() tripping on invalid ID),
+    // Construct empty book first, then add invalid enchant directly
+    // (ItemStack's checked Ench constructor would reject negative ID).
     // then add the invalid enchant directly.
     ItemStack book(EnchSet{}, 0);
     book.enchantments.insert(Ench(-1, 1, Ench::unchecked));
