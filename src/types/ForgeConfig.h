@@ -9,13 +9,6 @@ enum class MCE : int8_t {
     All     = 0x03,
 };
 
-inline MCE& active_platform_ref() {
-    static MCE active = MCE::Java;
-    return active;
-}
-inline MCE  get_active_platform()    { return active_platform_ref(); }
-inline void set_active_platform(MCE t) { active_platform_ref() = t; }
-
 // ─── Forge configuration ────────────────────────────────────────────────────
 struct ForgeConfig {
     bool ignore_penalty_cost = false;

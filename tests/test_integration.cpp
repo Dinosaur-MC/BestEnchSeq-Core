@@ -28,7 +28,6 @@ void test_full_pipeline_direct() {
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-    set_active_platform(MCE::Java);
 
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
     CLIParser cli_parser;
@@ -70,7 +69,6 @@ void test_full_pipeline_inventory() {
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-    set_active_platform(MCE::Java);
 
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
@@ -114,26 +112,6 @@ void test_full_pipeline_inventory() {
     std::cout << "  [OK] test_full_pipeline_inventory" << std::endl;
 }
 
-// ---------------------------------------------------------------------------
-// Platform switching
-// ---------------------------------------------------------------------------
-void test_platform_switching() {
-    TagResolver resolver;
-    EquipmentCategoryRegistry::get_instance().initialize();
-    auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
-    EnchantmentRegistry::get_instance().initialize(ench_infos);
-
-    set_active_platform(MCE::Java);
-    expect(get_active_platform() == MCE::Java,
-           "platform_switch: Java set correctly");
-
-    set_active_platform(MCE::Bedrock);
-    expect(get_active_platform() == MCE::Bedrock,
-           "platform_switch: Bedrock set correctly");
-
-    std::cout << "  [OK] test_platform_switching" << std::endl;
-}
 
 // ---------------------------------------------------------------------------
 // Enchantment lookup from builtin data
@@ -196,7 +174,6 @@ void test_output_formatting_empty() {
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-    set_active_platform(MCE::Java);
 
     std::vector<EnchSolution> empty_solutions;
 
@@ -222,7 +199,6 @@ int main() {
     try {
         test_full_pipeline_direct();
         test_full_pipeline_inventory();
-        test_platform_switching();
         test_builtin_enchantment_lookup();
         test_builtin_equipment_lookup();
         test_output_formatting_empty();

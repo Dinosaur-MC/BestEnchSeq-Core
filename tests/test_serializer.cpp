@@ -14,7 +14,6 @@ void setup() {
     infos.push_back({"knockback", "Knockback", MCE::All, 2, 2, 2, {}, {}});
     infos.push_back({"fire_aspect", "Fire Aspect", MCE::All, 2, 2, 2, {}, {}});
     EnchantmentRegistry::get_instance().initialize(infos);
-    set_active_platform(MCE::Java);
 
     // Equipment registry for ItemStack tests
     Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};

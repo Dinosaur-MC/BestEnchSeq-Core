@@ -16,7 +16,6 @@ void setup_enchinfo() {
                      1, {"sharpness"}, {EquipmentCategoryRegistry::ID_SWORD}});
     EnchantmentRegistry::get_instance().initialize(infos);
     EquipmentCategoryRegistry::get_instance().initialize();
-    set_active_platform(MCE::Java);
 }
 
 Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};

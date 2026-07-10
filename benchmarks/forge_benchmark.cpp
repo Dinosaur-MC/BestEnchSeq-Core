@@ -153,7 +153,6 @@ void load_builtin_data() {
     EnchantmentRegistry::get_instance().initialize(ench_infos);
     auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags);
     EquipmentRegistry::get_instance().initialize(equipments);
-    set_active_platform(MCE::Java);
 }
 
 void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos) {

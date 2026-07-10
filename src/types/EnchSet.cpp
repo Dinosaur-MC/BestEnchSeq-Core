@@ -1,6 +1,5 @@
 #include "EnchSet.h"
 
-#include "types/ForgeConfig.h"
 
 void EnchSet::update_cache() const {
     _cache.incompatible.clear();
@@ -46,7 +45,7 @@ int32_t EnchSet::combine(const EnchSet &other, bool is_book) {
         return 0;
     bool need_update = false;
     int32_t result   = 0;
-    MCE type         = get_active_platform();
+    MCE type         = MCE::Java;
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并
@@ -93,7 +92,7 @@ std::pair<EnchSet, int32_t> EnchSet::combine(const EnchSet &other, bool is_book)
 
     EnchSet ret_ench = *this;
     int32_t ret_cost = 0;
-    MCE type         = get_active_platform();
+    MCE type         = MCE::Java;
     for (const Ench &e : other) {
         if (is_incompatible(e.id)) {
             // 有冲突，不合并

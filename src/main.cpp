@@ -92,11 +92,7 @@ int main(int argc, char *argv[]) {
             load_custom_data(std::filesystem::path(*config.data_pack), tag_resolver);
         }
 
-        if (config.platform == "bedrock") {
-            set_active_platform(MCE::Bedrock);
-        } else {
-            set_active_platform(MCE::Java);
-        }
+        // platform is embedded in ForgeConfig via CompactAdapter::apply() below
 
         std::unordered_map<std::string, int32_t> ench_name_to_id;
         for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {

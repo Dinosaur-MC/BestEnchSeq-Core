@@ -27,7 +27,6 @@ void setup() {
         {"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561},
         {"diamond_chestplate", "Diamond Chestplate", EquipmentCategoryRegistry::ID_CHESTPLATE, 528},
     });
-    set_active_platform(MCE::Java);
 }
 
 Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
