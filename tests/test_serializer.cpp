@@ -1,6 +1,7 @@
 #include "test_utils.h"
 #include "utils/Serializer.hpp"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
@@ -13,12 +14,12 @@ void setup() {
     infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5, 1, {}, {}});
     infos.push_back({"knockback", "Knockback", MCE::All, 2, 2, 2, {}, {}});
     infos.push_back({"fire_aspect", "Fire Aspect", MCE::All, 2, 2, 2, {}, {}});
-    EnchantmentRegistry::get_instance().initialize(infos);
+    registries::enchants().initialize(infos);
 
     // Equipment registry for ItemStack tests
     Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
     Equipment boots{"diamond_boots", "Diamond Boots", EquipmentCategoryRegistry::ID_BOOTS, 433};
-    EquipmentRegistry::get_instance().initialize({sword, boots});
+    registries::equipment().initialize({sword, boots});
 }
 
 // ─── Primitive round-trips ───
@@ -128,7 +129,7 @@ void test_itemstack_roundtrip_book() {
 void test_itemstack_roundtrip_equipment() {
     setup();
 
-    auto& eq = EquipmentRegistry::get_instance().get("diamond_sword");
+    auto& eq = registries::equipment().get("diamond_sword");
 
     EnchSet ench;
     ench.insert(Ench(0, 5, Ench::unchecked));

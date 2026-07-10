@@ -6,6 +6,7 @@
 #include "parser/ParserUtils.h"
 #include "parser/TagResolver.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
@@ -24,10 +25,10 @@ namespace {
 // ---------------------------------------------------------------------------
 void test_full_pipeline_direct() {
     TagResolver resolver;
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    registries::enchants().initialize(ench_infos);
 
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
     CLIParser cli_parser;
@@ -39,8 +40,8 @@ void test_full_pipeline_direct() {
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
     std::unordered_map<std::string, int32_t> ench_map;
-    for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
-        int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
+    for (const auto &info : registries::enchants().get_instances()) {
+        int32_t id = registries::enchants().get_id(info.name_id);
         ench_map[info.name_id] = id;
         if (info.name_id.find(':') == std::string::npos) {
             ench_map["minecraft:" + info.name_id] = id;
@@ -65,10 +66,10 @@ void test_full_pipeline_direct() {
 // ---------------------------------------------------------------------------
 void test_full_pipeline_inventory() {
     TagResolver resolver;
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    registries::enchants().initialize(ench_infos);
 
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
@@ -76,8 +77,8 @@ void test_full_pipeline_inventory() {
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
     std::unordered_map<std::string, int32_t> ench_map;
-    for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
-        int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
+    for (const auto &info : registries::enchants().get_instances()) {
+        int32_t id = registries::enchants().get_id(info.name_id);
         ench_map[info.name_id] = id;
         if (info.name_id.find(':') == std::string::npos) {
             ench_map["minecraft:" + info.name_id] = id;
@@ -118,15 +119,15 @@ void test_full_pipeline_inventory() {
 // ---------------------------------------------------------------------------
 void test_builtin_enchantment_lookup() {
     TagResolver resolver;
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    registries::enchants().initialize(ench_infos);
 
-    expect(EnchantmentRegistry::get_instance().get_id("sharpness") >= 0, "builtin: sharpness found");
-    expect(EnchantmentRegistry::get_instance().get_id("nonexistent") < 0, "builtin: nonexistent not found");
+    expect(registries::enchants().get_id("sharpness") >= 0, "builtin: sharpness found");
+    expect(registries::enchants().get_id("nonexistent") < 0, "builtin: nonexistent not found");
 
-    auto &sharpness = EnchantmentRegistry::get_instance().get("sharpness");
+    auto &sharpness = registries::enchants().get("sharpness");
     expect(sharpness.name_id == "sharpness",
            "builtin: sharpness name_id is sharpness");
     expect(sharpness.max_level == 5, "builtin: sharpness max_level is 5");
@@ -140,7 +141,7 @@ void test_builtin_enchantment_lookup() {
 // ---------------------------------------------------------------------------
 void test_builtin_equipment_lookup() {
     TagResolver resolver;
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
     auto equipments = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
 
@@ -170,10 +171,10 @@ void test_builtin_equipment_lookup() {
 // ---------------------------------------------------------------------------
 void test_output_formatting_empty() {
     TagResolver resolver;
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
-    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    registries::enchants().initialize(ench_infos);
 
     std::vector<EnchSolution> empty_solutions;
 

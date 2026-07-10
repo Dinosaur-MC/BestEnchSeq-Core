@@ -1,5 +1,6 @@
 #include "test_utils.h"
 #include "registries/AlgorithmRegistry.h"
+#include "registries/RegistryAccess.h"
 
 class TestAlgorithm : public IAlgorithm {
 public:
@@ -15,7 +16,7 @@ public:
 };
 
 void test_basic_register_create() {
-    auto& reg = AlgorithmRegistry::get_instance();
+    auto& reg = registries::algorithms();
     reg.clear();
 
     reg.register_algorithm("test", []{ return std::make_unique<TestAlgorithm>(); });
@@ -34,7 +35,7 @@ void test_basic_register_create() {
 }
 
 void test_list_and_size() {
-    auto& reg = AlgorithmRegistry::get_instance();
+    auto& reg = registries::algorithms();
     reg.clear();
 
     expect(reg.size() == 0, "size: empty after clear");
@@ -54,7 +55,7 @@ void test_list_and_size() {
 }
 
 void test_unregister() {
-    auto& reg = AlgorithmRegistry::get_instance();
+    auto& reg = registries::algorithms();
     reg.clear();
 
     reg.register_algorithm("temp_algo", []{ return std::make_unique<TestAlgorithm>(); });
@@ -71,7 +72,7 @@ void test_unregister() {
 }
 
 void test_contains_and_list() {
-    auto& reg = AlgorithmRegistry::get_instance();
+    auto& reg = registries::algorithms();
     reg.clear();
 
     reg.register_algorithm("legacy", []{ return std::make_unique<TestAlgorithm>(); });

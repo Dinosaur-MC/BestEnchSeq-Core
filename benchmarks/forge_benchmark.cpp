@@ -1,4 +1,5 @@
 #include "registries/AlgorithmRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
@@ -151,20 +152,20 @@ BenchConfig parse_cli(int argc, char* argv[]) {
 void load_builtin_data() {
     auto dir = std::filesystem::path("data") / "builtin";
     TagResolver tags;
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse(dir / "vanilla.json", tags);
-    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    registries::enchants().initialize(ench_infos);
     auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags);
-    EquipmentRegistry::get_instance().initialize(equipments);
+    registries::equipment().initialize(equipments);
 }
 
 void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos, bool no_skip = false) {
-    int32_t eq_id = EquipmentRegistry::get_instance().get_id(tc.item_type);
+    int32_t eq_id = registries::equipment().get_id(tc.item_type);
     if (eq_id < 0) {
         std::cout << "  SKIP: unknown equipment '" << tc.item_type << "'" << std::endl;
         return;
     }
-    const Equipment& eq = EquipmentRegistry::get_instance().get(eq_id);
+    const Equipment& eq = registries::equipment().get(eq_id);
 
     ::EnchSet wanted_set;
     ItemCollection books;
@@ -172,14 +173,14 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         auto p = spec.find('=');
         std::string id = spec.substr(0, p);
         int32_t lv = std::stoi(spec.substr(p + 1));
-        int32_t eid = EnchantmentRegistry::get_instance().get_id(id);
+        int32_t eid = registries::enchants().get_id(id);
         if (eid < 0) { std::cout << "  SKIP: unknown enchant '" << id << "'" << std::endl; return; }
         wanted_set.emplace(eid, lv);
         books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
 
     compact::EnchReg ench_reg;
-    ench_reg.init(EnchantmentRegistry::get_instance(), eq);
+    ench_reg.init(registries::enchants(), eq);
 
     ItemStack start_item(eq, ::EnchSet{}, 0, eq.max_durability);
 
@@ -197,7 +198,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         algo_input.target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
 
     for (const auto& algo_name : enabled_algos) {
-        if (!AlgorithmRegistry::get_instance().contains(algo_name)) {
+        if (!registries::algorithms().contains(algo_name)) {
             std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
             continue;
         }
@@ -206,7 +207,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             continue;
         }
         
-        auto algo = AlgorithmRegistry::get_instance().create(algo_name);
+        auto algo = registries::algorithms().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
 
         AlgorithmInput run_input = algo_input;
@@ -263,15 +264,15 @@ int main(int argc, char* argv[]) {
     std::cout << "=== Dataset Benchmark ===" << std::endl;
     load_builtin_data();
 
-    AlgorithmRegistry::get_instance().register_algorithm("greedy",
+    registries::algorithms().register_algorithm("greedy",
         []{ return std::make_unique<GreedyAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("dfs",
+    registries::algorithms().register_algorithm("dfs",
         []{ return std::make_unique<DFSAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("astar",
+    registries::algorithms().register_algorithm("astar",
         []{ return std::make_unique<AStarAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("penalty_balance",
+    registries::algorithms().register_algorithm("penalty_balance",
         []{ return std::make_unique<DynamicPenaltyBalancing>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
+    registries::algorithms().register_algorithm("hierarchical",
         []{ return std::make_unique<HierarchicalMergeStrategy>(); });
 
     // Filter tests

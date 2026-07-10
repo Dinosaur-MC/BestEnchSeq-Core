@@ -13,6 +13,7 @@
 #include "parser/OutputFormatter.h"
 #include "parser/TagResolver.h"
 #include "registries/AlgorithmRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
@@ -30,12 +31,12 @@ namespace {
 const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path("data") / "builtin";
 
 void load_builtin_data(TagResolver &tag_resolver) {
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
 
     auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
-    EnchantmentRegistry::get_instance().initialize(ench_infos);
+    registries::enchants().initialize(ench_infos);
     auto equipments = EquipmentParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
-    EquipmentRegistry::get_instance().initialize(equipments);
+    registries::equipment().initialize(equipments);
 }
 
 void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver) {
@@ -44,33 +45,33 @@ void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &t
 
     tag_resolver.load_from(data_pack_dir);
     auto ench_infos = EnchInfoParser::parse(data_pack_dir, tag_resolver);
-    auto existing_ench = EnchantmentRegistry::get_instance().get_instances();
+    auto existing_ench = registries::enchants().get_instances();
     std::vector<EnchInfo> combined_ench;
     combined_ench.reserve(existing_ench.size() + ench_infos.size());
     for (const auto &info : existing_ench)
         combined_ench.push_back(info);
     for (const auto &info : ench_infos)
         combined_ench.push_back(info);
-    EnchantmentRegistry::get_instance().initialize(combined_ench);
+    registries::enchants().initialize(combined_ench);
 
     auto equipments = EquipmentParser::parse(data_pack_dir, tag_resolver);
-    auto &existing_eq = EquipmentRegistry::get_instance().get_instances();
+    auto &existing_eq = registries::equipment().get_instances();
     std::vector<Equipment> combined_eq;
     combined_eq.reserve(existing_eq.size() + equipments.size());
     for (const auto &eq : existing_eq)
         combined_eq.push_back(eq);
     for (const auto &eq : equipments)
         combined_eq.push_back(eq);
-    EquipmentRegistry::get_instance().initialize(combined_eq);
+    registries::equipment().initialize(combined_eq);
 }
 
 void register_builtin_algorithms() {
-    AlgorithmRegistry::get_instance().register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("penalty_balance",
+    registries::algorithms().register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
+    registries::algorithms().register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
+    registries::algorithms().register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
+    registries::algorithms().register_algorithm("penalty_balance",
                                                          [] { return std::make_unique<DynamicPenaltyBalancing>(); });
-    AlgorithmRegistry::get_instance().register_algorithm("hierarchical",
+    registries::algorithms().register_algorithm("hierarchical",
                                                          [] { return std::make_unique<HierarchicalMergeStrategy>(); });
 }
 
@@ -95,8 +96,8 @@ int main(int argc, char *argv[]) {
         // platform is embedded in ForgeConfig via CompactAdapter::apply() below
 
         std::unordered_map<std::string, int32_t> ench_name_to_id;
-        for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
-            int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
+        for (const auto &info : registries::enchants().get_instances()) {
+            int32_t id = registries::enchants().get_id(info.name_id);
             ench_name_to_id[info.name_id] = id;
             if (info.name_id.find(':') == std::string::npos) {
                 ench_name_to_id["minecraft:" + info.name_id] = id;
@@ -104,7 +105,7 @@ int main(int argc, char *argv[]) {
         }
 
         std::unordered_map<std::string, const Equipment *> equipment_map;
-        for (const auto &eq : EquipmentRegistry::get_instance().get_instances()) {
+        for (const auto &eq : registries::equipment().get_instances()) {
             equipment_map[eq.name_id] = &eq;
         }
 
@@ -112,7 +113,7 @@ int main(int argc, char *argv[]) {
 
         // Register and create algorithm
         register_builtin_algorithms();
-        auto algo = AlgorithmRegistry::get_instance().create(config.algorithm);
+        auto algo = registries::algorithms().create(config.algorithm);
         if (!algo) {
             throw std::runtime_error("Unknown algorithm: '" + config.algorithm +
                                      "'. Available: greedy, dfs, astar, penalty_balance, hierarchical");
@@ -123,7 +124,7 @@ int main(int argc, char *argv[]) {
         ForgeConfig forge_config;
         forge_config.platform = parsed.platform;
         AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.original_ench, parsed.available_items,
-                                                  forge_config, EnchantmentRegistry::get_instance());
+                                                  forge_config, registries::enchants());
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));

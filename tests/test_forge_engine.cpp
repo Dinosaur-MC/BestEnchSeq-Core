@@ -1,6 +1,7 @@
 #include "test_utils.h"
 #include "algorithm/forge/ForgeEngine.h"
 #include "registries/CompactedRegistries.h"
+#include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "types/ForgeConfig.h"
@@ -14,15 +15,15 @@ void setup_enchinfo() {
                      2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
     infos.push_back({"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
                      1, {"sharpness"}, {EquipmentCategoryRegistry::ID_SWORD}});
-    EnchantmentRegistry::get_instance().initialize(infos);
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::enchants().initialize(infos);
+    registries::categories().initialize();
 }
 
 Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
 
 compact::EnchReg init_reg() {
     compact::EnchReg reg;
-    reg.init(EnchantmentRegistry::get_instance(), sword);
+    reg.init(registries::enchants(), sword);
     return reg;
 }
 

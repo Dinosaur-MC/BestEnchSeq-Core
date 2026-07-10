@@ -2,6 +2,7 @@
 #include "parser/ParserUtils.h"
 #include "io/json.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/RegistryAccess.h"
 
 #include <algorithm>
 #include <iostream>
@@ -34,9 +35,9 @@ int32_t resolve_ench_id(
 // "minecraft:" as a fallback.
 // ---------------------------------------------------------------------------
 int32_t resolve_ench_id(const std::string &name) {
-    int32_t id = EnchantmentRegistry::get_instance().get_id(name);
+    int32_t id = registries::enchants().get_id(name);
     if (id < 0) {
-        id = EnchantmentRegistry::get_instance().get_id("minecraft:" + name);
+        id = registries::enchants().get_id("minecraft:" + name);
     }
     return id;
 }

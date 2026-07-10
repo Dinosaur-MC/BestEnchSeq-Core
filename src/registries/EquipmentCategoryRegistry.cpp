@@ -1,17 +1,6 @@
 #include "registries/EquipmentCategoryRegistry.h"
 #include <stdexcept>
 
-EquipmentCategoryRegistry* EquipmentCategoryRegistry::s_override_ = nullptr;
-
-EquipmentCategoryRegistry& EquipmentCategoryRegistry::get_instance() {
-    static EquipmentCategoryRegistry s_default;
-    return s_override_ ? *s_override_ : s_default;
-}
-
-void EquipmentCategoryRegistry::set_instance(EquipmentCategoryRegistry* reg) {
-    s_override_ = reg;
-}
-
 void EquipmentCategoryRegistry::reset() {
     instances_.clear();
     name_to_id_.clear();

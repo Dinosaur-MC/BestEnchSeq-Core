@@ -1,5 +1,6 @@
 #include "test_utils.h"
 #include "registries/CompactedRegistries.h"
+#include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "types/ForgeConfig.h"
@@ -8,8 +9,8 @@
 namespace {
 
 void setup() {
-    EquipmentCategoryRegistry::get_instance().initialize();
-    EnchantmentRegistry::get_instance().initialize({
+    registries::categories().initialize();
+    registries::enchants().initialize({
         {"sharpness", "Sharpness", MCE::All, 5, 5,
          1, {}, {EquipmentCategoryRegistry::ID_SWORD}},
         {"knockback", "Knockback", MCE::All, 2, 2,
@@ -22,13 +23,13 @@ void setup() {
 }
 
 void test_basic_init_and_size() {
-    EnchantmentRegistry::get_instance().reset_for_testing();
+    registries::enchants().reset_for_testing();
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
                     EquipmentCategoryRegistry::ID_SWORD, 1561};
     compact::EnchReg reg;
-    reg.init(EnchantmentRegistry::get_instance(), sword);
+    reg.init(registries::enchants(), sword);
 
     // 4 enchantments total, but only 3 applicable to sword
     // Actually init() takes ALL from the registry, applicability is per-ench
@@ -40,13 +41,13 @@ void test_basic_init_and_size() {
 }
 
 void test_safe_get_bounds() {
-    EnchantmentRegistry::get_instance().reset_for_testing();
+    registries::enchants().reset_for_testing();
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
                     EquipmentCategoryRegistry::ID_SWORD, 1561};
     compact::EnchReg reg;
-    reg.init(EnchantmentRegistry::get_instance(), sword);
+    reg.init(registries::enchants(), sword);
 
     // Valid access via .at() path
     expect(reg.get(0).mul > 0, "get(0): multiplier should be > 0");
@@ -73,13 +74,13 @@ void test_safe_get_bounds() {
 }
 
 void test_conflict_detection() {
-    EnchantmentRegistry::get_instance().reset_for_testing();
+    registries::enchants().reset_for_testing();
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
                     EquipmentCategoryRegistry::ID_SWORD, 1561};
     compact::EnchReg reg;
-    reg.init(EnchantmentRegistry::get_instance(), sword);
+    reg.init(registries::enchants(), sword);
 
     // sharpness(0) and bane_of_arthropods(2) should conflict
     expect(reg.is_conflict(0, 2), "conflict: sharpness vs bane should conflict");
@@ -96,13 +97,13 @@ void test_conflict_detection() {
 }
 
 void test_multiplier_and_max_level() {
-    EnchantmentRegistry::get_instance().reset_for_testing();
+    registries::enchants().reset_for_testing();
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
                     EquipmentCategoryRegistry::ID_SWORD, 1561};
     compact::EnchReg reg;
-    reg.init(EnchantmentRegistry::get_instance(), sword);
+    reg.init(registries::enchants(), sword);
 
     // sharpness: mult=1, max_lvl=5
     expect(reg.get_multiplier(0) == 1, "multiplier: sharpness should be 1");

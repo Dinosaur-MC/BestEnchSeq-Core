@@ -2,6 +2,7 @@
 #include "parser/InputParser.h"
 #include "parser/CLIParser.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "types/EnchInfo.h"
 #include "types/Ench.h"
 #include "types/EnchSet.h"
@@ -63,7 +64,7 @@ void setup_enchinfo() {
         {},  // exclusive_set
         {EquipmentCategoryRegistry::ID_SWORD},
     });
-    EnchantmentRegistry::get_instance().initialize(infos);
+    registries::enchants().initialize(infos);
 }
 
 // Helper to create a temporary JSON file

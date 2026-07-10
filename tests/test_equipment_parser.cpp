@@ -2,6 +2,7 @@
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
+#include "registries/RegistryAccess.h"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -469,7 +470,7 @@ void test_to_csv_round_trip() {
 
 int main() {
     try {
-        EquipmentCategoryRegistry::get_instance().initialize();
+        registries::categories().initialize();
         test_json_basic();
         test_csv_basic();
         test_csv_no_durability();

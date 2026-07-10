@@ -1,6 +1,7 @@
 #pragma once
 #include "../BESQTypes.h"
 #include "../registries/EquipmentRegistry.h"
+#include "../registries/RegistryAccess.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -143,9 +144,9 @@ public:
         if (!_ok) return {};
 
         if (!eq_id.empty()) {
-            int32_t eid = EquipmentRegistry::get_instance().get_id(eq_id);
+            int32_t eid = registries::equipment().get_id(eq_id);
             if (eid >= 0) {
-                const Equipment& eq_ref = EquipmentRegistry::get_instance().get(eid);
+                const Equipment& eq_ref = registries::equipment().get(eid);
                 ItemStack item(eq_ref, ench, pp, dur);
                 item.priority = prio;
                 return item;

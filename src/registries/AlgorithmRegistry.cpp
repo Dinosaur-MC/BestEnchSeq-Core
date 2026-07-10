@@ -1,11 +1,6 @@
 #include "AlgorithmRegistry.h"
 #include <mutex>
 
-AlgorithmRegistry& AlgorithmRegistry::get_instance() {
-    static AlgorithmRegistry instance;
-    return instance;
-}
-
 void AlgorithmRegistry::register_algorithm(std::string_view name, AlgorithmFactory factory) {
     std::unique_lock lock(_mutex);
     _registry[std::string(name)] = std::move(factory);

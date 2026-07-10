@@ -7,20 +7,16 @@
 
 // ─── Equipment category registry ───
 //
-// Singleton registry managing EquipmentCategory definitions.
-// Builtin categories are hardcoded with stable numeric IDs.
-// Optional custom category names can be passed to initialize().
+// Manages EquipmentCategory definitions. Builtin categories have stable
+// numeric IDs. Optional custom category names can be passed to initialize().
 // After initialize(), the registry is immutable — no add_custom/register.
 //
 // Matches EnchantmentRegistry pattern: get() returns reference, throws on invalid.
 class EquipmentCategoryRegistry {
 public:
-    static EquipmentCategoryRegistry& get_instance();
-    static void set_instance(EquipmentCategoryRegistry* reg);
-
     EquipmentCategoryRegistry() = default;
-    EquipmentCategoryRegistry(const EquipmentCategoryRegistry&) = delete;
-    EquipmentCategoryRegistry& operator=(const EquipmentCategoryRegistry&) = delete;
+    EquipmentCategoryRegistry(const EquipmentCategoryRegistry&) = default;
+    EquipmentCategoryRegistry& operator=(const EquipmentCategoryRegistry&) = default;
 
     // Lifecycle — resets builtins and optionally appends custom category names.
     // After this call the registry is immutable.
@@ -55,7 +51,6 @@ private:
     /// Reset to builtin defaults (clears any custom categories).
     void reset();
 
-    static EquipmentCategoryRegistry* s_override_;
     std::vector<EquipmentCategory> instances_;
     std::unordered_map<std::string, int32_t> name_to_id_;
 };

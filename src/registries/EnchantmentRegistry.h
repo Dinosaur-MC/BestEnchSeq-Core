@@ -9,9 +9,6 @@
 
 class EnchantmentRegistry {
   public:
-    static EnchantmentRegistry& get_instance();
-    static void set_instance(EnchantmentRegistry *reg);
-
     EnchantmentRegistry() = default;
     EnchantmentRegistry(const EnchantmentRegistry &) = default;            // copy constructor
     EnchantmentRegistry(EnchantmentRegistry &&) = default;                 // create_subset() returns by value
@@ -46,7 +43,6 @@ class EnchantmentRegistry {
     static bool check_validation(const std::vector<EnchInfo> &infos);
 
   private:
-    static EnchantmentRegistry *s_override_;
     std::vector<EnchInfo> instances_;
     std::unordered_map<std::string, int32_t> name_to_index_;
     std::unordered_map<int32_t, std::unordered_set<int32_t>> incompatible_table_;

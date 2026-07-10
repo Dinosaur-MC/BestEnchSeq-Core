@@ -3,6 +3,7 @@
 #include "io/CsvIO.h"
 #include "io/json.h"
 #include "registries/EquipmentCategoryRegistry.h"
+#include "registries/RegistryAccess.h"
 
 #include <cctype>
 #include <iostream>
@@ -82,7 +83,7 @@ std::vector<Equipment> EquipmentParser::parse_native_json(
             max_durability = 0;
         }
 
-        int32_t cat_id = EquipmentCategoryRegistry::get_instance().get_id(category);
+        int32_t cat_id = registries::categories().get_id(category);
         if (cat_id < 0) cat_id = EquipmentCategoryRegistry::ID_ANY;
 
         result.emplace_back(Equipment{
@@ -169,7 +170,7 @@ std::vector<Equipment> EquipmentParser::parse_native_csv(
             max_durability = 0;
         }
 
-        int32_t cat_id = EquipmentCategoryRegistry::get_instance().get_id(category);
+        int32_t cat_id = registries::categories().get_id(category);
         if (cat_id < 0) cat_id = EquipmentCategoryRegistry::ID_ANY;
 
         result.emplace_back(Equipment{
@@ -320,7 +321,7 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
                 category_str = filename;
             }
 
-            int32_t cat_id2 = EquipmentCategoryRegistry::get_instance().get_id(category_str);
+            int32_t cat_id2 = registries::categories().get_id(category_str);
             if (cat_id2 < 0) cat_id2 = EquipmentCategoryRegistry::ID_ANY;
 
             result.emplace_back(Equipment{
@@ -360,8 +361,8 @@ std::string EquipmentParser::to_json(const std::vector<Equipment> &equipments) {
     Json::Array eq_arr;
     for (const auto &eq : equipments) {
         std::string cat_name = "unknown";
-        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < EquipmentCategoryRegistry::get_instance().size())
-            cat_name = EquipmentCategoryRegistry::get_instance().get(eq.category_id).name_id;
+        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < registries::categories().size())
+            cat_name = registries::categories().get(eq.category_id).name_id;
         Json::Object obj;
         obj["id"]             = Json(Json::String(eq.name_id));
         obj["name"]           = Json(Json::String(eq.name));
@@ -383,8 +384,8 @@ std::string EquipmentParser::to_csv(const std::vector<Equipment> &equipments) {
 
     for (const auto &eq : equipments) {
         std::string cat_name2 = "unknown";
-        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < EquipmentCategoryRegistry::get_instance().size())
-            cat_name2 = EquipmentCategoryRegistry::get_instance().get(eq.category_id).name_id;
+        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < registries::categories().size())
+            cat_name2 = registries::categories().get(eq.category_id).name_id;
         table.push_back({
             eq.name_id,
             eq.name,

@@ -1,6 +1,7 @@
 #include "test_utils.h"
 #include "adapters/CompactAdapter.h"
 #include "registries/EquipmentCategoryRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
@@ -14,8 +15,8 @@
 namespace {
 
 void setup() {
-    EquipmentCategoryRegistry::get_instance().initialize();
-    EnchantmentRegistry::get_instance().initialize({
+    registries::categories().initialize();
+    registries::enchants().initialize({
         {"sharpness", "Sharpness", MCE::All, 5, 5,
          1, {}, {EquipmentCategoryRegistry::ID_SWORD}},
         {"knockback", "Knockback", MCE::All, 2, 2,
@@ -23,7 +24,7 @@ void setup() {
         {"protection", "Protection", MCE::All, 4, 4,
          1, {}, {EquipmentCategoryRegistry::ID_CHESTPLATE}},
     });
-    EquipmentRegistry::get_instance().initialize({
+    registries::equipment().initialize({
         {"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561},
         {"diamond_chestplate", "Diamond Chestplate", EquipmentCategoryRegistry::ID_CHESTPLATE, 528},
     });
@@ -45,7 +46,7 @@ void test_apply_valid_input() {
     books.push_back(ItemStack(EnchSet{Ench(0, 5)}, 0));
 
     auto input = adapter.apply(target_item, original_ench, books, config,
-                               EnchantmentRegistry::get_instance());
+                               registries::enchants());
 
     expect(input.items.size() == 2, "items should have 2 entries (equipment + 1 book)");
     expect(input.target.empty(), "target should be empty");
@@ -66,7 +67,7 @@ void test_apply_with_target() {
     ItemCollection books;
 
     auto input = adapter.apply(target_item, original_ench, books, config,
-                               EnchantmentRegistry::get_instance());
+                               registries::enchants());
 
     expect(input.target.size() == 1, "target should have 1 enchantment");
     expect(input.target[0].id >= 0, "target enchantment local ID should be >= 0");
@@ -94,7 +95,7 @@ void test_apply_invalid_enchant_id() {
     bool threw = false;
     try {
         adapter.apply(target_item, original_ench, books, config,
-                      EnchantmentRegistry::get_instance());
+                      registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
     }
@@ -117,7 +118,7 @@ void test_apply_invalid_level() {
     bool threw = false;
     try {
         adapter.apply(target_item, original_ench, books, config,
-                      EnchantmentRegistry::get_instance());
+                      registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
     }
@@ -141,7 +142,7 @@ void test_apply_inapplicable_enchant() {
     bool threw = false;
     try {
         adapter.apply(target_item, original_ench, books, config,
-                      EnchantmentRegistry::get_instance());
+                      registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
     }
@@ -163,7 +164,7 @@ void test_apply_penalty_overflow() {
     bool threw = false;
     try {
         adapter.apply(target_item, original_ench, books, config,
-                      EnchantmentRegistry::get_instance());
+                      registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
     }
@@ -183,7 +184,7 @@ void test_pruning_only_applicable() {
     ItemCollection books;
 
     auto input = adapter.apply(target_item, original_ench, books, config,
-                               EnchantmentRegistry::get_instance());
+                               registries::enchants());
 
     // Global registry has 3 enchants; only 2 (sharpness, knockback) are sword-applicable
     expect(input.ench_reg.size() == 2,
@@ -202,7 +203,7 @@ void test_from_domain_roundtrip() {
     setup();
 
     compact::EnchReg reg;
-    reg.init(EnchantmentRegistry::get_instance(), sword);
+    reg.init(registries::enchants(), sword);
 
     ItemStack domain_item(sword, EnchSet{Ench(0, 5)}, 3, sword.max_durability);
 

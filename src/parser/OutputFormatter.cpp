@@ -1,5 +1,6 @@
 ﻿#include "parser/OutputFormatter.h"
 #include "registries/EnchantmentRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/EnchSet.h"
@@ -35,7 +36,7 @@ std::string to_roman(int level) {
 // ---------------------------------------------------------------------------
 std::string ench_name_id(int32_t id) {
     try {
-        return EnchantmentRegistry::get_instance().get(id).name_id;
+        return registries::enchants().get(id).name_id;
     } catch (const std::exception &) {
         return "ench_" + std::to_string(id);
     }
@@ -43,7 +44,7 @@ std::string ench_name_id(int32_t id) {
 
 std::string ench_display_name(int32_t id) {
     try {
-        return EnchantmentRegistry::get_instance().get(id).name;
+        return registries::enchants().get(id).name;
     } catch (const std::exception &) {
         return "ench_" + std::to_string(id);
     }
@@ -98,7 +99,7 @@ EnchSet enchset_from_json_array(const Json::Array &arr) {
         const Json::Object &obj = std::get<Json::Object>(elem_val);
         std::string eid = json_str(obj.at("id"));
         int32_t level   = json_int(obj.at("level"));
-        int32_t id      = EnchantmentRegistry::get_instance().get_id(eid);
+        int32_t id      = registries::enchants().get_id(eid);
         if (id >= 0) {
             result.emplace(id, level);
         }
@@ -506,8 +507,8 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
         Json::Object eq;
         int32_t cid = item.equipment->category_id;
         std::string cat_name = "unknown";
-        if (cid >= 0 && static_cast<size_t>(cid) < EquipmentCategoryRegistry::get_instance().size())
-            cat_name = EquipmentCategoryRegistry::get_instance().get(cid).name_id;
+        if (cid >= 0 && static_cast<size_t>(cid) < registries::categories().size())
+            cat_name = registries::categories().get(cid).name_id;
         eq["id"]             = Json(Json::String(item.equipment->name_id));
         eq["category"]       = Json(Json::String(cat_name));
         eq["name"]           = Json(Json::String(item.equipment->name));
@@ -563,7 +564,7 @@ ItemStack OutputFormatter::itemstack_from_json(
                 max_dur = json_int(md_it->second);
             }
 
-            int32_t cat_id = EquipmentCategoryRegistry::get_instance().get_id(cat);
+            int32_t cat_id = registries::categories().get_id(cat);
             if (cat_id < 0) cat_id = EquipmentCategoryRegistry::ID_ANY;
             equipment_cache.emplace_back(Equipment{
                 id, name, cat_id, max_dur

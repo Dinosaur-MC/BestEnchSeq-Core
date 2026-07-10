@@ -28,7 +28,9 @@ struct TransparentStringEqual {
 
 class AlgorithmRegistry {
 public:
-    static AlgorithmRegistry& get_instance();
+    AlgorithmRegistry() = default;
+    AlgorithmRegistry(const AlgorithmRegistry&) = delete;
+    AlgorithmRegistry& operator=(const AlgorithmRegistry&) = delete;
 
     void register_algorithm(std::string_view name, AlgorithmFactory factory);
     void unregister_algorithm(std::string_view name);
@@ -40,7 +42,6 @@ public:
     std::unique_ptr<IAlgorithm> create(std::string_view name) const;
 
 private:
-    AlgorithmRegistry() = default;
     std::unordered_map<std::string, AlgorithmFactory,
                        TransparentStringHash, TransparentStringEqual> _registry;
     mutable std::shared_mutex _mutex;

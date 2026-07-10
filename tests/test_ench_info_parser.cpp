@@ -2,6 +2,7 @@
 #include "parser/EnchInfoParser.h"
 #include "parser/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "io/json.h"
 #include <iostream>
 #include <fstream>
@@ -344,7 +345,7 @@ void test_missing_enchantments_key() {
 // test_applicable_equipment_parsing
 // ---------------------------------------------------------------------------
 void test_applicable_equipment_parsing() {
-    EquipmentCategoryRegistry::get_instance().initialize();
+    registries::categories().initialize();
     std::string file = "test_equip.json";
     create_json(file, R"({
         "enchantments": [
