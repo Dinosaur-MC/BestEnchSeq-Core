@@ -71,6 +71,29 @@ void test_unregister() {
     std::cout << "PASS: test_unregister" << std::endl;
 }
 
+void test_unregister_preserves_others() {
+    auto& reg = registries::algorithms();
+    reg.clear();
+
+    reg.register_algorithm("keep_a", []{ return std::make_unique<TestAlgorithm>(); });
+    reg.register_algorithm("remove_b", []{ return std::make_unique<TestAlgorithm>(); });
+    reg.register_algorithm("keep_c", []{ return std::make_unique<TestAlgorithm>(); });
+
+    expect(reg.size() == 3, "unregister_multi: size 3 before");
+    expect(reg.contains("keep_a"), "unregister_multi: keep_a present");
+    expect(reg.contains("remove_b"), "unregister_multi: remove_b present");
+    expect(reg.contains("keep_c"), "unregister_multi: keep_c present");
+
+    reg.unregister_algorithm("remove_b");
+
+    expect(reg.size() == 2, "unregister_multi: size 2 after");
+    expect(reg.contains("keep_a"), "unregister_multi: keep_a still present");
+    expect(!reg.contains("remove_b"), "unregister_multi: remove_b gone");
+    expect(reg.contains("keep_c"), "unregister_multi: keep_c still present");
+
+    std::cout << "PASS: test_unregister_preserves_others" << std::endl;
+}
+
 void test_contains_and_list() {
     auto& reg = registries::algorithms();
     reg.clear();
@@ -90,6 +113,7 @@ int main() {
     test_basic_register_create();
     test_list_and_size();
     test_unregister();
+    test_unregister_preserves_others();
     test_contains_and_list();
     std::cout << "All algorithm registry tests passed!" << std::endl;
     return 0;

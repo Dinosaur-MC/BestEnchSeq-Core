@@ -8,7 +8,9 @@ void AlgorithmRegistry::register_algorithm(std::string_view name, AlgorithmFacto
 
 void AlgorithmRegistry::unregister_algorithm(std::string_view name) {
     std::unique_lock lock(_mutex);
-    _registry.erase(_registry.find(name), _registry.end());
+    auto it = _registry.find(name);
+    if (it != _registry.end())
+        _registry.erase(it);
 }
 
 void AlgorithmRegistry::clear() {
