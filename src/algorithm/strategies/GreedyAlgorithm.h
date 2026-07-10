@@ -26,5 +26,8 @@ private:
         int32_t est_cost;
     };
 
+    bool _meets_target(const compact::Item& equipment) const;
+
     ForgeEngine _forge_engine;
+    std::vector<compact::Ench> _target;
 };

@@ -12,7 +12,7 @@ void GreedyAlgorithm::execute(
     const std::vector<compact::Ench>& target,
     ExecutionContext& ctx)
 {
-    (void)target;
+    _target = target;
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
     std::vector<BookCost> ordered;
@@ -32,6 +32,10 @@ void GreedyAlgorithm::execute(
         if (ctx.is_cancelled()) return;
         ctx.wait_if_paused();
 
+        // Target already met — stop early
+        if (_meets_target(mutable_items[0]))
+            break;
+
         auto& target_item = mutable_items[0];
         const auto& sacrifice = mutable_items[bc.index];
 
@@ -46,8 +50,21 @@ void GreedyAlgorithm::execute(
 
         ctx.report_progress((step_index + 1.0) / ordered.size(), ProgressStatus::ApplyingSacrifice);
         step_index++;
+
+        // Check again after forge
+        if (_meets_target(mutable_items[0]))
+            break;
     }
 
     ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
+}
+
+bool GreedyAlgorithm::_meets_target(const compact::Item& equipment) const {
+    for (const auto& t : _target) {
+        auto it = equipment.enchs.find(t.id);
+        if (it == equipment.enchs.end() || it->level < t.level)
+            return false;
+    }
+    return true;
 }
