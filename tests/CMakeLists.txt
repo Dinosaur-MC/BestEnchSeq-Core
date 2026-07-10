@@ -283,6 +283,30 @@ set_tests_properties(test_algorithm_utils PROPERTIES
 )
 endif()
 
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_compact_adapter.cpp)
+add_executable(test_compact_adapter
+    test_compact_adapter.cpp
+    ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/PlatformConfig.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/EnchSolution.cpp
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+)
+target_include_directories(test_compact_adapter PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_compact_adapter COMMAND test_compact_adapter)
+set_tests_properties(test_compact_adapter PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_serializer.cpp)
 add_executable(test_serializer
     test_serializer.cpp
