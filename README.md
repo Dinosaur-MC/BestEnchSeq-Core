@@ -13,6 +13,7 @@ A C++20 tool to calculate the best enchanting order for your enchantments and en
 - [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Moddable forge engine via IForgeEngine virtual interface
+- [x] Input validation + EnchReg pruning via CompactAdapter::apply()
 - [x] Easily export to share calculation results with others
 - [ ] Optionally hosting a RESTful API service for external applications
 
@@ -56,43 +57,46 @@ cd build && ctest --output-on-failure
 The project uses a **two-tier type system**: compact types (`namespace compact`) for algorithm hot paths, and domain types for I/O boundaries. The algorithm layer has zero domain type dependencies.
 
 ```
-Input (domain) → CompactAdapter → Algorithm (compact) → CompactAdapter → Output (domain)
+CLI → InputParser (domain)
+  → CompactAdapter::apply() (validates + prunes EnchReg + converts)
+  → AlgorithmInput (compact) → AlgorithmExecutor → IAlgorithm
+  → AlgorithmOutput (compact steps)
+  → CompactAdapter::recall() (restores IDs + builds solutions)
+  → OutputFormatter (domain)
 ```
 
 ### Source Layout
 
 ```
 src/
-├── main.cpp                     ← Entrypoint: init registries → parse input → run algorithm → format output
+├── main.cpp                     ← Entrypoint: init registries → parse → CompactAdapter → executor → output
+├── adapters/
+│   └── CompactAdapter.h/.cpp    ← Domain ↔ compact boundary (apply / recall)
 ├── types/
-│   ├── common.h                 ← platform::MCE enum (Java/Bedrock/All)
-│   ├── AlgorithmInput.h         ← Domain boundary input struct
+│   ├── ForgeConfig.h            ← MCE enum class + ForgeConfig
 │   ├── CompactedTypes.h/.cpp    ← Compact types: Ench, EnchSet, Item, EnchStep (namespace compact)
-│   └── ...domain types          ← EnchInfo, Ench, EnchSet, ItemStack, EnchSolution, Equipment
+│   └── ...domain types          ← EnchInfo, Ench, EnchSet, ItemStack, EnchSolution (pure data)
 ├── registries/
 │   ├── AlgorithmRegistry.h/.cpp ← Algorithm factory (singleton)
 │   ├── CompactedRegistries.h/.cpp ← EnchReg: compact registry with O(1) conflict matrix
-│   ├── EnchantmentRegistry.h/.cpp
-│   ├── EquipmentRegistry.h/.cpp
-│   └── PlatformConfig.h/.cpp
+│   ├── EnchantmentRegistry.h/.cpp  ← Domain enchantment data with subset derivation
+│   └── EquipmentRegistry.h/.cpp
 ├── algorithm/                   ← Zero domain types
-│   ├── IAlgorithm.h             ← Pure compact execute() interface + AlgorithmOutput
+│   ├── IAlgorithm.h             ← AlgorithmInput + AlgorithmOutput + IAlgorithm interface
 │   ├── AlgorithmExecutor.h/.cpp ← Async execution engine
 │   ├── ExecutionContext.h/.cpp  ← Cancel/pause/progress
 │   ├── AlgorithmObserver.h      ← Streaming callbacks
 │   ├── forge/
-│   │   ├── IForgeEngine.h       ← Virtual interface + ForgeConfig
+│   │   ├── IForgeEngine.h       ← Virtual interface + ForgeConfig + default sub-ops
 │   │   └── ForgeEngine.h/.cpp   ← Vanilla implementation
 │   └── strategies/
-│       ├── GreedyAlgorithm.*
-│       ├── DFSAlgorithm.*
-│       ├── AStarAlgorithm.*
-│       ├── DynamicPenaltyBalancing.*
-│       └── HierarchicalMergeStrategy.*
+│       ├── GreedyAlgorithm.*    ← Fast approximate
+│       ├── DFSAlgorithm.*       ← Exact search (branch-and-bound)
+│       ├── AStarAlgorithm.*     ← Exact optimal (admissible heuristic)
+│       ├── DynamicPenaltyBalancing.* ← High-quality approx
+│       └── HierarchicalMergeStrategy.* ← Large-scale approx
 ├── utils/
-│   ├── CompactAdapter.hpp/.cpp  ← Domain ↔ compact boundary conversions
 │   ├── ExpCalculator.hpp        ← Level ↔ XP conversion
-│   └── SolutionFactory.hpp      ← Assemble EnchSolution from AlgorithmOutput
 ├── parser/                      ← CLI, JSON/CSV data parsing, output formatting
 ├── io/                          ← JSON library, CSV primitives
 └── data/
@@ -102,25 +106,19 @@ src/
 
 ### Key Design Decisions
 
-**Compact types** (`Ench`, `EnchSet`, `Item`): smaller (4-16 bytes), cache-friendly, sorted-vector-based `EnchSet` with O(log N) lookup. No pointer indirection, no virtual dispatch.
+**Compact types**: `Ench` (4 bytes), `compact::EnchSet` (sorted vector, O(log N) lookup), `Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
 
 **Flat conflict matrix**: `EnchReg` stores an N×N `vector<char>` for O(1) incompatibility checks — single allocation, contiguous memory.
 
-**IForgeEngine virtual interface**: all forge sub-operations (`penalty_cost`, `book_multiplier`, `apply_cap`, `estimate_forge_cost`) have default vanilla implementations. Subclass only what you need to change for modded rules.
+**EnchReg pruning**: `CompactAdapter::apply()` builds a subset of the global registry (via `EnchantmentRegistry::create_subset()`) that only includes enchantments applicable to the target equipment. Smaller conflict matrix, faster lookups.
 
-**Boundary isolation**: `CompactAdapter` is the only bridge between domain and compact types — used only in `main.cpp`, tests, and benchmarks.
+**IForgeEngine virtual interface**: All forge sub-operations (`penalty_cost`, `book_multiplier`, `apply_cap`, `estimate_forge_cost`) have default vanilla implementations. Subclass only what you need for modded rules. `ForgeEngine` overrides to respect `ForgeConfig` flags.
 
-## Persistence
+**AlgorithmInput owns data**: `EnchReg`, `Equipment`, and item collections are stored by value — no pointers, no external lifetime dependencies. Once passed to `executor.start()`, ownership transfers completely.
 
-*(Coming soon)*
+**Domain types are pure data**: `EnchSet`, `Ench`, `ItemStack` are containers only. All combine/cost/penalty computation moved to compact forge engine.
 
-## Workflow
-
-*(Coming soon)*
-
-## Contributing
-
-*(Coming soon)*
+**No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
 
 ## License
 
