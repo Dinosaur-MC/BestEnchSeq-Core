@@ -20,11 +20,11 @@ int32_t resolve_ench_id(const EnchantmentSpec &spec) {
     std::string namespaced = spec.id.find(':') != std::string::npos
                                  ? spec.id
                                  : spec.ns + ":" + spec.id;
-    int32_t id = EnchantmentRegistry::get_instance().get_id(namespaced);
+    int32_t id = registries::enchants().get_id(namespaced);
     if (id >= 0) return id;
 
     // Fallback: try bare id (for data registered without namespace prefix)
-    id = EnchantmentRegistry::get_instance().get_id(spec.id);
+    id = registries::enchants().get_id(spec.id);
     if (id >= 0) return id;
 
     throw std::runtime_error("Unknown enchantment: " + namespaced);
