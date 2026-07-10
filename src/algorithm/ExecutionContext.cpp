@@ -68,13 +68,33 @@ void ExecutionContext::dispatch_events() {
                         obs->on_solution_found(e.steps); break;
                     case ObserverEvent::StateChange:
                         obs->on_state_changed(e.prev_state, e.curr_state); break;
-                    default: break;
+                    case ObserverEvent::Diagnostic:
+                        obs->on_diagnostic(DiagnosticInfo{e.diagnostic_msg}); break;
+                    case ObserverEvent::Completed:
+                        break; // handled via notify_completed()
                 }
             } catch (const std::exception& ex) {
                 try { std::cerr << "[observer] " << ex.what() << std::endl; } catch (...) {}
             } catch (...) {
                 try { std::cerr << "[observer] unknown exception" << std::endl; } catch (...) {}
             }
+        }
+    }
+}
+
+void ExecutionContext::notify_completed(const AlgorithmOutput& output) {
+    std::vector<std::shared_ptr<AlgorithmObserver>> obs_snapshot;
+    {
+        std::lock_guard lock(_obs_mtx);
+        obs_snapshot = _observers;
+    }
+    for (auto& obs : obs_snapshot) {
+        try {
+            obs->on_completed(output);
+        } catch (const std::exception& ex) {
+            try { std::cerr << "[observer] " << ex.what() << std::endl; } catch (...) {}
+        } catch (...) {
+            try { std::cerr << "[observer] unknown exception" << std::endl; } catch (...) {}
         }
     }
 }

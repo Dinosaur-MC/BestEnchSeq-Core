@@ -95,7 +95,11 @@ void AlgorithmExecutor::cancel() {
 AlgorithmState AlgorithmExecutor::wait() {
     _join_worker();
     _ctx->dispatch_events();
-    return _state.load(std::memory_order_acquire);
+    // Notify completion observers
+    auto s = _state.load(std::memory_order_acquire);
+    if (s == AlgorithmState::Completed)
+        _ctx->notify_completed(output());
+    return s;
 }
 
 AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
@@ -116,6 +120,8 @@ AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
         s == AlgorithmState::Cancelled) {
         _join_worker();
         _ctx->dispatch_events();
+        if (s == AlgorithmState::Completed)
+            _ctx->notify_completed(output());
     }
     return s;
 }

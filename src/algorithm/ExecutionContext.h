@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 
 // ─── Hard limit on stored solutions ───
@@ -22,6 +23,7 @@ struct ObserverEvent {
     std::vector<compact::EnchStep> steps;
     AlgorithmState prev_state{AlgorithmState::Idle};
     AlgorithmState curr_state{AlgorithmState::Idle};
+    std::string diagnostic_msg;  // for Diagnostic type
 };
 
 // ─── Execution context (passed into IAlgorithm::execute) ───
@@ -56,6 +58,9 @@ public:
     bool has_observers() const noexcept {
         return _has_observers.load(std::memory_order_acquire);
     }
+
+    // Direct completion notification (dispatches on_completed to observers)
+    void notify_completed(const AlgorithmOutput& output);
 
     // Result accumulation (compact steps only)
     void append_compact_steps(const std::vector<compact::EnchStep>& steps);
@@ -100,8 +105,8 @@ private:
     std::vector<std::pair<int32_t, std::vector<compact::EnchStep>>> _accumulated;
     std::atomic<double> _progress{0.0};
 
-    // Progress downsampling
-    uint32_t _progress_downsample{0};
+    // Progress downsampling (thread-safe)
+    std::atomic<uint32_t> _progress_downsample{0};
 
     // Search config (shared_ptr atomic swap for lock-free reads)
     std::atomic<std::shared_ptr<const SearchConfig>> _search_config{nullptr};
