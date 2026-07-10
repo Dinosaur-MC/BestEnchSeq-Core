@@ -3,6 +3,7 @@
   "description": "Built-in vanilla Minecraft data pack (Java Edition 26.2)",
   "author": "BestEnchSeq",
   "version": "2.0.0",
+  "schema_version": "2.1.0",
   "enchantments": [
     {
       "id": "aqua_affinity",
@@ -12,6 +13,7 @@
       "limited_level": 1,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "helmet"
       ]
@@ -30,6 +32,7 @@
         "sharpness",
         "smite"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "axe",
         "mace",
@@ -45,6 +48,7 @@
       "limited_level": 1,
       "multiplier": 8,
       "exclusive_set": [],
+      "is_treasure": true,
       "applicable_equipment": [
         "boots",
         "chestplate",
@@ -68,6 +72,7 @@
         "projectile_protection",
         "protection"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "boots",
         "chestplate",
@@ -89,6 +94,7 @@
         "sharpness",
         "smite"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "mace"
       ]
@@ -100,7 +106,10 @@
       "max_level": 1,
       "limited_level": 1,
       "multiplier": 8,
-      "exclusive_set": [],
+      "exclusive_set": [
+        "riptide"
+      ],
+      "is_treasure": false,
       "applicable_equipment": [
         "trident"
       ]
@@ -119,6 +128,7 @@
         "sharpness",
         "smite"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "mace"
       ]
@@ -133,6 +143,7 @@
       "exclusive_set": [
         "frost_walker"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "boots"
       ]
@@ -145,6 +156,7 @@
       "limited_level": 5,
       "multiplier": 1,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "axe",
         "hoe",
@@ -161,6 +173,7 @@
       "limited_level": 4,
       "multiplier": 2,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "boots"
       ]
@@ -173,6 +186,7 @@
       "limited_level": 2,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "mace",
         "spear",
@@ -191,6 +205,7 @@
         "projectile_protection",
         "protection"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "boots",
         "chestplate",
@@ -206,6 +221,7 @@
       "limited_level": 1,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "bow"
       ]
@@ -220,6 +236,7 @@
       "exclusive_set": [
         "silk_touch"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "axe",
         "hoe",
@@ -237,6 +254,7 @@
       "exclusive_set": [
         "depth_strider"
       ],
+      "is_treasure": true,
       "applicable_equipment": [
         "boots"
       ]
@@ -255,6 +273,7 @@
         "sharpness",
         "smite"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "trident"
       ]
@@ -269,6 +288,7 @@
       "exclusive_set": [
         "mending"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "bow"
       ]
@@ -281,6 +301,7 @@
       "limited_level": 2,
       "multiplier": 2,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "spear",
         "sword"
@@ -294,6 +315,7 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "spear",
         "sword"
@@ -306,7 +328,10 @@
       "max_level": 3,
       "limited_level": 3,
       "multiplier": 2,
-      "exclusive_set": [],
+      "exclusive_set": [
+        "riptide"
+      ],
+      "is_treasure": false,
       "applicable_equipment": [
         "trident"
       ]
@@ -319,6 +344,7 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "rod"
       ]
@@ -331,6 +357,7 @@
       "limited_level": 1,
       "multiplier": 2,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "spear"
       ]
@@ -343,6 +370,7 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "rod"
       ]
@@ -354,7 +382,10 @@
       "max_level": 1,
       "limited_level": 1,
       "multiplier": 4,
-      "exclusive_set": [],
+      "exclusive_set": [
+        "infinity"
+      ],
+      "is_treasure": true,
       "applicable_equipment": [
         "axe",
         "boots",
@@ -389,6 +420,7 @@
       "exclusive_set": [
         "piercing"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "crossbow"
       ]
@@ -403,6 +435,7 @@
       "exclusive_set": [
         "multishot"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "crossbow"
       ]
@@ -415,6 +448,7 @@
       "limited_level": 4,
       "multiplier": 1,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "bow"
       ]
@@ -431,6 +465,7 @@
         "fire_protection",
         "protection"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "boots",
         "chestplate",
@@ -450,6 +485,7 @@
         "fire_protection",
         "projectile_protection"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "boots",
         "chestplate",
@@ -465,6 +501,7 @@
       "limited_level": 2,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "bow"
       ]
@@ -477,6 +514,7 @@
       "limited_level": 2,
       "multiplier": 2,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "crossbow"
       ]
@@ -489,6 +527,7 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "helmet"
       ]
@@ -504,6 +543,7 @@
         "channeling",
         "loyalty"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "trident"
       ]
@@ -522,6 +562,7 @@
         "impaling",
         "smite"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "axe",
         "spear",
@@ -538,6 +579,7 @@
       "exclusive_set": [
         "fortune"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "axe",
         "hoe",
@@ -559,6 +601,7 @@
         "impaling",
         "sharpness"
       ],
+      "is_treasure": false,
       "applicable_equipment": [
         "axe",
         "mace",
@@ -574,6 +617,7 @@
       "limited_level": 3,
       "multiplier": 8,
       "exclusive_set": [],
+      "is_treasure": true,
       "applicable_equipment": [
         "boots"
       ]
@@ -586,6 +630,7 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "sword"
       ]
@@ -598,6 +643,7 @@
       "limited_level": 1,
       "multiplier": 8,
       "exclusive_set": [],
+      "is_treasure": true,
       "applicable_equipment": [
         "leggings"
       ]
@@ -610,6 +656,7 @@
       "limited_level": 2,
       "multiplier": 8,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "boots",
         "chestplate",
@@ -625,6 +672,7 @@
       "limited_level": 3,
       "multiplier": 2,
       "exclusive_set": [],
+      "is_treasure": false,
       "applicable_equipment": [
         "axe",
         "boots",
@@ -657,6 +705,7 @@
       "limited_level": 1,
       "multiplier": 8,
       "exclusive_set": [],
+      "is_treasure": true,
       "applicable_equipment": [
         "axe",
         "boots",
@@ -693,6 +742,7 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
+      "is_treasure": true,
       "applicable_equipment": [
         "mace"
       ]
