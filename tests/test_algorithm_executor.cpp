@@ -1,9 +1,9 @@
 #include "test_utils.h"
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/forge/ForgeEngine.h"
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
+#include <chrono>
 #include <thread>
 
 // Empty AlgorithmInput for tests that don't need real data.
@@ -124,8 +124,12 @@ void test_executor_cancel() {
     AlgorithmExecutor executor(std::move(algo));
 
     executor.start(g_test_input);
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
 
+    // Poll until executor is actually running
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (executor.state() != AlgorithmState::Running &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     expect(executor.state() == AlgorithmState::Running, "should be Running after start");
 
     executor.cancel();
@@ -141,10 +145,17 @@ void test_executor_pause_resume() {
     AlgorithmExecutor executor(std::move(algo));
 
     executor.start(g_test_input);
-    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
+    // Poll until executor is running
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (executor.state() != AlgorithmState::Running &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     executor.pause();
     expect(executor.state() == AlgorithmState::Paused, "should be Paused after pause()");
+
+    // Brief poll to confirm it stays paused
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     expect(executor.state() == AlgorithmState::Paused, "should remain Paused while paused");
 

@@ -1,6 +1,8 @@
 #include "test_utils.h"
-#include "algorithm/AlgorithmExecutor.h"
+#include "algorithm/AlgorithmObserver.h"
+#include "algorithm/ExecutionContext.h"
 #include "types/CompactedTypes.h"
+#include <chrono>
 #include <thread>
 
 void test_cancel() {
@@ -59,7 +61,10 @@ void test_wait_if_paused_resume() {
         resumed = true;
     });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // Poll until the context confirms pause, with timeout
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!ctx.is_paused() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     expect(!resumed, "algo should be blocked on pause");
     ctx.resume();
     algo_thread.join();
