@@ -105,7 +105,8 @@ private:
                            const compact::EnchReg& reg) const;
     void    _log_diagnostics(
                  int64_t explored, const std::unordered_map<size_t, int32_t>& best_g,
-                 int64_t wall_ms, const char* status) const;
+                 int64_t wall_ms, const char* status,
+                 size_t open_set_pending = 0) const;
     int64_t _estimate_peak() const noexcept;
 
     // ─── Counters for diagnostics ─────────────────────────────────────────

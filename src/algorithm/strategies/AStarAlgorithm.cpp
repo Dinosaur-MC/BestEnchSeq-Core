@@ -133,6 +133,18 @@ void AStarAlgorithm::execute(
         initial_ids.push_back(id);
     }
 
+    // Guard: empty input produces no solution
+    if (initial_ids.empty()) {
+        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        return;
+    }
+
+    // Guard: single-item non-target — no books to forge
+    if (initial_ids.size() == 1 && !_meets_target(initial_ids[0])) {
+        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        return;
+    }
+
     // Greedy bound for pruning
     if (items.size() > 1) {
         _best_solution_cost = _greedy_bound(items, reg);
@@ -312,6 +324,7 @@ void AStarAlgorithm::execute(
 
     // ─── Exit diagnostics ────────────────────────────────────────────────
     auto t1 = std::chrono::steady_clock::now();
+    size_t open_set_pending = open_set.size();
     const char* status;
     if (ctx.is_cancelled()) {
         ctx.report_progress(1.0, ProgressStatus::Cancelled);
@@ -322,7 +335,7 @@ void AStarAlgorithm::execute(
     }
     _log_diagnostics(explored, best_g,
         std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count(),
-        status);
+        status, open_set_pending);
 }
 
 // ─── Diagnostics ────────────────────────────────────────────────────────
@@ -339,7 +352,8 @@ void AStarAlgorithm::_log_diagnostics(
     int64_t explored,
     const std::unordered_map<size_t, int32_t>& best_g,
     int64_t wall_ms,
-    const char* status) const
+    const char* status,
+    size_t open_set_pending) const
 {
     namespace fs = std::filesystem;
     fs::create_directories("logs/auto");
@@ -377,7 +391,7 @@ void AStarAlgorithm::_log_diagnostics(
         << "step_pool_capacity=" << _step_pool.capacity() << "\n"
         << "items_pool=" << _pool.size() << "\n"
         << "items_pool_capacity=" << _pool.capacity() << "\n"
-        << "open_set_pending=0\n"
+        << "open_set_pending=" << open_set_pending << "\n"
         << "pruned_by_cost=" << _pruned_by_cost << "\n"
         << "pruned_by_best_g=" << _pruned_by_best_g << "\n"
         << "pruned_by_f=" << _pruned_by_f << "\n"
