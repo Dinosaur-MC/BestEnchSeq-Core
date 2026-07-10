@@ -35,10 +35,6 @@ std::unordered_map<std::string, const Equipment*> test_equipment_registry = {
     {"diamond_pickaxe", &diamond_pickaxe},
 };
 
-std::unordered_map<std::string, int32_t> test_ench_map = {
-    {"minecraft:sharpness", 0},
-    {"minecraft:knockback", 1},
-};
 
 void setup_enchinfo() {
     std::vector<EnchInfo> infos;
@@ -129,7 +125,7 @@ void test_build_target() {
     spec.item_id = "diamond_sword";
 
     ItemStack target = InputParser::build_target(
-        spec, test_equipment_registry, test_ench_map
+        spec, test_equipment_registry
     );
 
     expect(target.is_equipment(),
@@ -152,7 +148,7 @@ void test_build_target_with_inline() {
     spec.inline_enchants.push_back({"minecraft", "sharpness", 3});
 
     ItemStack target = InputParser::build_target(
-        spec, test_equipment_registry, test_ench_map
+        spec, test_equipment_registry
     );
 
     expect(target.is_equipment(),
@@ -175,7 +171,7 @@ void test_build_wanted_enchset() {
     specs.push_back({"minecraft", "sharpness", 5});
     specs.push_back({"minecraft", "knockback", 2});
 
-    EnchSet wanted = InputParser::build_wanted_enchset(specs, test_ench_map);
+    EnchSet wanted = InputParser::build_wanted_enchset(specs);
 
     expect(wanted.size() == 2,
            "build_wanted_enchset: should have 2 enchantments");
@@ -266,7 +262,7 @@ void test_assemble_input_direct_mode() {
     config.platform = "auto";
 
     auto input = InputParser::assemble_input(
-        config, test_equipment_registry, test_ench_map
+        config, test_equipment_registry
     );
 
     expect(input.platform == MCE::All,

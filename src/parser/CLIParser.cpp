@@ -230,13 +230,6 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
             }
             config.format = value;
         } else if (key == "algorithm") {
-            if (value != "greedy" && value != "dfs" && value != "astar"
-                && value != "penalty_balance" && value != "hierarchical") {
-                throw std::runtime_error(
-                    "Invalid algorithm: '" + value + "'. Expected 'greedy', 'dfs', 'astar',\n"
-                    "'penalty_balance', or 'hierarchical'.\n" + get_help_text(program_name)
-                );
-            }
             config.algorithm = value;
         } else if (key == "solutions") {
             try {

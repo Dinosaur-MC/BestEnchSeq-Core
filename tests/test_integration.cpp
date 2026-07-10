@@ -38,16 +38,7 @@ void test_full_pipeline_direct() {
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
-    std::unordered_map<std::string, int32_t> ench_map;
-    for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
-        int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
-        ench_map[info.name_id] = id;
-        if (info.name_id.find(':') == std::string::npos) {
-            ench_map["minecraft:" + info.name_id] = id;
-        }
-    }
-
-    auto input = InputParser::assemble_input(config, eq_map, ench_map);
+    auto input = InputParser::assemble_input(config, eq_map);
 
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
     expect(input.available_items.size() == 7,
@@ -75,15 +66,6 @@ void test_full_pipeline_inventory() {
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
-    std::unordered_map<std::string, int32_t> ench_map;
-    for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
-        int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
-        ench_map[info.name_id] = id;
-        if (info.name_id.find(':') == std::string::npos) {
-            ench_map["minecraft:" + info.name_id] = id;
-        }
-    }
-
     // Write a temp inventory file
     {
         std::ofstream f("test_inv_pipeline.json");
@@ -101,7 +83,7 @@ void test_full_pipeline_inventory() {
     CLIParser cli_parser;
     auto config = cli_parser.parse(9, const_cast<char **>(argv));
 
-    auto input = InputParser::assemble_input(config, eq_map, ench_map);
+    auto input = InputParser::assemble_input(config, eq_map);
 
     expect(input.available_items.size() >= 2,
            "full_pipeline_inventory: should have at least 2 items");

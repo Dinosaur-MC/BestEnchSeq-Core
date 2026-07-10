@@ -27,14 +27,12 @@
 
 namespace {
 
-const std::filesystem::path BUILTIN_DATA_DIR = std::filesystem::path("data") / "builtin";
-
-void load_builtin_data(TagResolver &tag_resolver) {
+void load_builtin_data(const std::filesystem::path &builtin_data_dir, TagResolver &tag_resolver) {
     EquipmentCategoryRegistry::get_instance().initialize();
 
-    auto ench_infos = EnchInfoParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
+    auto ench_infos = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
     EnchantmentRegistry::get_instance().initialize(ench_infos);
-    auto equipments = EquipmentParser::parse(BUILTIN_DATA_DIR / "vanilla.json", tag_resolver);
+    auto equipments = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
     EquipmentRegistry::get_instance().initialize(equipments);
 }
 
@@ -86,7 +84,14 @@ int main(int argc, char *argv[]) {
         }
 
         TagResolver tag_resolver;
-        load_builtin_data(tag_resolver);
+
+        // Resolve builtin data directory: prefer path relative to executable,
+        // fall back to CWD-relative path for development builds.
+        auto builtin_data_dir = std::filesystem::absolute(argv[0]).parent_path() / "data" / "builtin";
+        if (!std::filesystem::exists(builtin_data_dir)) {
+            builtin_data_dir = std::filesystem::path("data") / "builtin";
+        }
+        load_builtin_data(builtin_data_dir, tag_resolver);
 
         if (config.data_pack) {
             load_custom_data(std::filesystem::path(*config.data_pack), tag_resolver);
@@ -94,28 +99,24 @@ int main(int argc, char *argv[]) {
 
         // platform is embedded in ForgeConfig via CompactAdapter::apply() below
 
-        std::unordered_map<std::string, int32_t> ench_name_to_id;
-        for (const auto &info : EnchantmentRegistry::get_instance().get_instances()) {
-            int32_t id = EnchantmentRegistry::get_instance().get_id(info.name_id);
-            ench_name_to_id[info.name_id] = id;
-            if (info.name_id.find(':') == std::string::npos) {
-                ench_name_to_id["minecraft:" + info.name_id] = id;
-            }
-        }
-
         std::unordered_map<std::string, const Equipment *> equipment_map;
         for (const auto &eq : EquipmentRegistry::get_instance().get_instances()) {
             equipment_map[eq.name_id] = &eq;
         }
 
-        auto parsed = InputParser::assemble_input(config, equipment_map, ench_name_to_id);
+        auto parsed = InputParser::assemble_input(config, equipment_map);
 
         // Register and create algorithm
         register_builtin_algorithms();
         auto algo = AlgorithmRegistry::get_instance().create(config.algorithm);
         if (!algo) {
-            throw std::runtime_error("Unknown algorithm: '" + config.algorithm +
-                                     "'. Available: greedy, dfs, astar, penalty_balance, hierarchical");
+            auto available = AlgorithmRegistry::get_instance().available_algorithms();
+            std::string msg = "Unknown algorithm: '" + config.algorithm + "'. Available: ";
+            for (size_t i = 0; i < available.size(); ++i) {
+                if (i > 0) msg += ", ";
+                msg += available[i];
+            }
+            throw std::runtime_error(msg);
         }
 
         // ── Boundary: domain → compact ─────────────────────────────────────
@@ -146,6 +147,9 @@ int main(int argc, char *argv[]) {
 
         if (config.output) {
             std::ofstream out(*config.output);
+            if (!out.is_open()) {
+                throw std::runtime_error("Failed to open output file: " + *config.output);
+            }
             out << output_text;
         } else {
             std::cout << output_text;
