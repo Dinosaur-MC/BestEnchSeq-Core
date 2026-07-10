@@ -16,6 +16,7 @@
 class EquipmentCategoryRegistry {
 public:
     static EquipmentCategoryRegistry& get_instance();
+    static void set_instance(EquipmentCategoryRegistry* reg);
 
     EquipmentCategoryRegistry() = default;
     EquipmentCategoryRegistry(const EquipmentCategoryRegistry&) = delete;
@@ -54,6 +55,7 @@ private:
     /// Reset to builtin defaults (clears any custom categories).
     void reset();
 
+    static EquipmentCategoryRegistry* s_override_;
     std::vector<EquipmentCategory> instances_;
     std::unordered_map<std::string, int32_t> name_to_id_;
 };

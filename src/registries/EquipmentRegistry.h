@@ -14,6 +14,7 @@
 class EquipmentRegistry {
 public:
     static EquipmentRegistry& get_instance();
+    static void set_instance(EquipmentRegistry* reg);
 
     EquipmentRegistry() = default;
     EquipmentRegistry(const EquipmentRegistry&) = delete;
@@ -37,6 +38,7 @@ public:
     size_t size() const { return instances_.size(); }
 
 private:
+    static EquipmentRegistry* s_override_;
     std::vector<Equipment> instances_;
     std::unordered_map<std::string, int32_t> name_to_id_;
 };

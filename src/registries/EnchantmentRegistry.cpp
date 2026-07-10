@@ -2,6 +2,17 @@
 
 #include <stdexcept>
 
+EnchantmentRegistry* EnchantmentRegistry::s_override_ = nullptr;
+
+EnchantmentRegistry& EnchantmentRegistry::get_instance() {
+    static EnchantmentRegistry s_default;
+    return s_override_ ? *s_override_ : s_default;
+}
+
+void EnchantmentRegistry::set_instance(EnchantmentRegistry* reg) {
+    s_override_ = reg;
+}
+
 bool EnchantmentRegistry::check_validation(const std::vector<EnchInfo>& infos) {
     std::unordered_set<std::string> registration, unchecked_names;
     for (int32_t i = 0; i < static_cast<int32_t>(infos.size()); i++) {

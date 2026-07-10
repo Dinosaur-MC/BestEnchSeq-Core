@@ -1,9 +1,15 @@
 #include "registries/EquipmentRegistry.h"
 #include <stdexcept>
 
+EquipmentRegistry* EquipmentRegistry::s_override_ = nullptr;
+
 EquipmentRegistry& EquipmentRegistry::get_instance() {
-    static EquipmentRegistry instance;
-    return instance;
+    static EquipmentRegistry s_default;
+    return s_override_ ? *s_override_ : s_default;
+}
+
+void EquipmentRegistry::set_instance(EquipmentRegistry* reg) {
+    s_override_ = reg;
 }
 
 void EquipmentRegistry::reset_for_testing() {
