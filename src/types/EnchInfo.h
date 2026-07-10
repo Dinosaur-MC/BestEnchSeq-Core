@@ -3,7 +3,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "common.h"
+#include "registries/PlatformConfig.h"
 
 struct EnchInfo {
     std::string name_id;

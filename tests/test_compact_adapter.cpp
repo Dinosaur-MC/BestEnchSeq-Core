@@ -50,7 +50,7 @@ void test_apply_valid_input() {
 
     expect(input.items.size() == 2, "items should have 2 entries (equipment + 1 book)");
     expect(input.target.empty(), "target should be empty");
-    expect(input.platform == platform::MCE::Java, "platform should be Java");
+    expect(input.config.platform == platform::MCE::Java, "platform should be Java");
     expect(input.equipment.name_id == "diamond_sword", "equipment name_id should be diamond_sword");
 
     std::cout << "PASS: test_apply_valid_input" << std::endl;
@@ -240,7 +240,7 @@ void test_recall_empty_output() {
     output.is_valid = false;
 
     AlgorithmInput input;
-    input.platform = platform::MCE::Java;
+    input.config.platform = platform::MCE::Java;
     ItemStack target_item;
     EnchSet original_ench;
     ItemCollection available_items;

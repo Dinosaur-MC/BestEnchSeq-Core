@@ -1,7 +1,7 @@
 #pragma once
 #include "types/EnchSolution.h"
 #include "types/ItemStack.h"
-#include "types/common.h"
+#include "registries/PlatformConfig.h"
 
 #include "io/json.h"
 

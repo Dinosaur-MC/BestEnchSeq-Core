@@ -1,5 +1,5 @@
 #pragma once
-#include "common.h"
+#include "registries/PlatformConfig.h"
 
 #include <cstdint>
 #include <string>

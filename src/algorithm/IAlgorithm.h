@@ -2,7 +2,8 @@
 #include "types/CompactedTypes.h"
 #include "types/Equipment.h"
 #include "registries/CompactedRegistries.h"
-#include "types/common.h"
+#include "registries/PlatformConfig.h"
+#include "algorithm/forge/IForgeEngine.h"
 #include <chrono>
 #include <cstdint>
 #include <string>
@@ -10,7 +11,7 @@
 
 // ─── Algorithm input (compact types only) ───
 struct AlgorithmInput {
-    platform::MCE platform;
+    ForgeConfig config;              // forge configuration (platform, flags)
     compact::ItemCollection items;   // items[0] = equipment, rest = books
     compact::EnchCollection target;  // desired final enchantments
     Equipment equipment;             // for output step conversion

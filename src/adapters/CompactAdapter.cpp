@@ -96,7 +96,7 @@ AlgorithmInput CompactAdapter::apply(
     ench_reg.init(subset, *target_item.equipment);
 
     AlgorithmInput input;
-    input.platform = config.platform;
+    input.config = config;
     input.equipment = *target_item.equipment;
     input.ench_reg = std::move(ench_reg);
 
@@ -168,7 +168,7 @@ std::vector<EnchSolution> CompactAdapter::recall(
         }
 
         solutions.push_back(EnchSolution::make(
-            input.platform, original_ench, target_item, available_items,
+            input.config.platform, original_ench, target_item, available_items,
             domain_steps, true,
             EnchSolution::MetaData{
                 output.algorithm_name, output.algorithm_version, 0, 0

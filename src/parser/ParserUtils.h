@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "io/json.h"
-#include "types/common.h"
+#include "registries/PlatformConfig.h"
 
 namespace ParserUtils {
 

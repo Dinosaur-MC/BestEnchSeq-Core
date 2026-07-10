@@ -1,7 +1,7 @@
 #pragma once
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
-#include "types/common.h"
+#include "registries/PlatformConfig.h"
 #include <algorithm>
 #include <cstdint>
 #include <utility>
