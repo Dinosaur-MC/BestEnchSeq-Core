@@ -63,11 +63,18 @@ private:
 
     int32_t heuristic(const std::vector<compact::Item>& items) const;
     bool meets_target(const compact::Item& equipment) const;
+    int32_t _greedy_bound(const std::vector<compact::Item>& items,
+                           const compact::EnchReg& reg) const;
 
     ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
 
     std::vector<compact::Ench> _target;
+
+    // Best complete-solution cost found so far (INT32_MAX = none yet).
+    // Used for pruning: any state with g >= _best_solution_cost cannot
+    // lead to a better solution and can be safely removed from best_g.
+    int32_t _best_solution_cost{INT32_MAX};
 
     std::deque<CompactStepNode> _step_pool;
 };
