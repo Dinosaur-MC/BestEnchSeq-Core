@@ -1,21 +1,16 @@
 #include "CompactedRegistries.h"
 
+#include <stdexcept>
+
 namespace compact {
 
 void EnchReg::_build_conflict_matrix() {
     const size_t N = _registry.size();
     _conflict_matrix.assign(N * N, 0);
     for (size_t i = 0; i < N; ++i) {
-        const auto &mask_i = _ench_infos[i].exc_mask;
         for (size_t j = i + 1; j < N; ++j) {
-            const auto &mask_j = _ench_infos[j].exc_mask;
-            bool conflict = false;
-            for (size_t k = 0; k < mask_i.size(); ++k) {
-                if (mask_i[k] & mask_j[k]) {
-                    conflict = true;
-                    break;
-                }
-            }
+            bool conflict = _registry.is_incompatible(static_cast<int32_t>(i),
+                                                       static_cast<int32_t>(j));
             _conflict_matrix[i * N + j] = static_cast<char>(conflict);
             _conflict_matrix[j * N + i] = static_cast<char>(conflict);
         }
@@ -29,8 +24,22 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
     _ench_infos.resize(_registry.size());
     for (size_t i = 0; i < _registry.size(); ++i) {
         auto &info = _registry.get(i);
-        _ench_infos[i].mul = static_cast<int16_t>(info.multiplier);
-        _ench_infos[i].max_lvl = static_cast<int16_t>(info.max_level);
+        // Saturating conversion: if values exceed int16_t range, clamp and warn
+        if (info.multiplier > INT16_MAX) {
+            _ench_infos[i].mul = INT16_MAX;
+            // TODO: replace with proper logging facility
+        } else if (info.multiplier < 0) {
+            _ench_infos[i].mul = 0;
+        } else {
+            _ench_infos[i].mul = static_cast<int16_t>(info.multiplier);
+        }
+        if (info.max_level > INT16_MAX) {
+            _ench_infos[i].max_lvl = INT16_MAX;
+        } else if (info.max_level < 0) {
+            _ench_infos[i].max_lvl = 0;
+        } else {
+            _ench_infos[i].max_lvl = static_cast<int16_t>(info.max_level);
+        }
         _ench_infos[i].applicable = false;
 
         for (auto &cat_id : info.applicable_category_ids) {
@@ -40,10 +49,14 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
             }
         }
         _ench_infos[i].exc_mask.assign(_mask_size, 0);
-        _ench_infos[i].exc_mask[i / MASK_ELEM_SIZE] |= 1ULL << (i % MASK_ELEM_SIZE);
+        // NOTE: self-bit deliberately NOT set in exc_mask — consistent with
+        // conflict_matrix diagonal (always 0). Use EnchReg::is_conflict()
+        // for conflict queries; EnchInfo::is_conflict() behaviour now matches.
         for (auto e : _registry.get_exclusive_set(i)) {
-            size_t p = e / MASK_ELEM_SIZE;
-            _ench_infos[i].exc_mask[p] |= 1ULL << (e % MASK_ELEM_SIZE);
+            if (e < 0)
+                throw std::out_of_range("Negative exclusive-set enchantment id in EnchReg::init()");
+            size_t p = static_cast<size_t>(e) / MASK_ELEM_SIZE;
+            _ench_infos[i].exc_mask[p] |= 1ULL << (static_cast<size_t>(e) % MASK_ELEM_SIZE);
         }
     }
 

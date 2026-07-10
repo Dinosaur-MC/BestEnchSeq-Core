@@ -39,4 +39,9 @@ void EnchSet::insert(const Ench &ench) {
     }
 }
 
+void EnchSet::sort() {
+    std::sort(_enchs.begin(), _enchs.end(),
+              [](const Ench &a, const Ench &b) { return a.id < b.id; });
+}
+
 } // namespace compact

@@ -6,7 +6,7 @@
 namespace compact {
 
 using MaskType = uint64_t;
-inline const constexpr size_t MASK_ELEM_SIZE = 8ULL * sizeof(MaskType);
+inline constexpr size_t MASK_ELEM_SIZE = 8ULL * sizeof(MaskType);
 
 struct EnchInfo {
     uint16_t mul;                   // 经验乘数
@@ -31,6 +31,11 @@ using EnchCollection = std::vector<Ench>;
 /// Invariant: elements are always sorted by id (ascending). This makes
 /// comparison, hashing, and binary-search lookup O(N) or O(log N) with
 /// cache-friendly contiguous storage.
+///
+/// ⚠️ Mutable iterators (begin/end) expose the internal storage. Modifying
+///    an element's id through them breaks the sorted invariant, causing
+///    undefined behaviour in find/contains/insert. Use sort() to restore
+///    the invariant if the underlying storage is mutated externally.
 class EnchSet {
   public:
     using value_type = Ench;
@@ -40,6 +45,8 @@ class EnchSet {
     EnchSet() = default;
 
     // ── Iterators (inline) ──
+    /// Mutable iterators — modifying element ids breaks the sorted invariant.
+    /// Call sort() to restore after external mutation.
     iterator begin() noexcept { return _enchs.begin(); }
     iterator end() noexcept { return _enchs.end(); }
     const_iterator begin() const noexcept { return _enchs.begin(); }
@@ -59,11 +66,17 @@ class EnchSet {
     void insert(const Ench &ench);
     void clear() { _enchs.clear(); }
 
+    /// Re-sort to restore the sorted-by-id invariant after external mutation
+    /// through mutable iterators.
+    void sort();
+
     // ── Hash (inline, avoids std::hash<Ench> before its specialization) ──
     size_t hash() const noexcept {
         size_t h = _enchs.size();
-        for (const auto &e : _enchs)
-            h ^= static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        for (const auto &e : _enchs) {
+            const size_t ench_hash = static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);
+            h ^= ench_hash + 0x9e3779b9 + (h << 6) + (h >> 2);
+        }
         return h;
     }
 
