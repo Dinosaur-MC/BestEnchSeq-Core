@@ -1,5 +1,6 @@
 #include "json.h"
 
+#include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -24,6 +25,8 @@ class Parser {
   private:
     const std::string &input_;
     std::size_t position_ = 0;
+    std::size_t depth_ = 0;
+    static constexpr std::size_t max_depth_ = 512;
 
     bool is_end() const { return position_ >= input_.size(); }
 
@@ -155,6 +158,28 @@ class Parser {
                     }
                     code_point = (code_point << 4) | static_cast<std::uint32_t>(value);
                 }
+                // Handle UTF-16 surrogate pairs
+                if (code_point >= 0xD800 && code_point <= 0xDBFF) {
+                    // High surrogate: expect \uXXXX low surrogate
+                    if (is_end() || consume() != '\\' || is_end() || consume() != 'u') {
+                        throw_error("Expected low surrogate after high surrogate");
+                    }
+                    std::uint32_t low = 0;
+                    for (int index = 0; index < 4; ++index) {
+                        if (is_end()) {
+                            throw_error("Incomplete Unicode escape");
+                        }
+                        int value = hex_value(consume());
+                        if (value < 0) {
+                            throw_error("Invalid Unicode escape");
+                        }
+                        low = (low << 4) | static_cast<std::uint32_t>(value);
+                    }
+                    if (low < 0xDC00 || low > 0xDFFF) {
+                        throw_error("Invalid low surrogate");
+                    }
+                    code_point = 0x10000 + (code_point - 0xD800) * 0x400 + (low - 0xDC00);
+                }
                 append_utf8(result, code_point);
                 break;
             }
@@ -213,6 +238,17 @@ class Parser {
         }
 
         std::string token = input_.substr(start, position_ - start);
+
+        // Reject NaN, Inf, Infinity (case-insensitive)
+        {
+            std::string lower = token;
+            for (char &c : lower) {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            if (lower == "nan" || lower == "inf" || lower == "infinity") {
+                throw_error("NaN, Inf, and Infinity are not allowed in JSON");
+            }
+        }
 
         try {
             if (is_floating) {
@@ -303,30 +339,45 @@ class Parser {
     }
 
     Json parse_value() {
+        ++depth_;
+        if (depth_ > max_depth_) {
+            throw_error("Exceeded maximum nesting depth");
+        }
         skip_whitespace();
 
+        Json result;
         switch (peek()) {
         case 'n':
             expect_literal("null");
-            return Json::null();
+            result = Json::null();
+            break;
         case 't':
             expect_literal("true");
-            return Json(Json::Bool(true));
+            result = Json(Json::Bool(true));
+            break;
         case 'f':
             expect_literal("false");
-            return Json(Json::Bool(false));
+            result = Json(Json::Bool(false));
+            break;
         case '"':
-            return Json(Json::String(parse_string_value()));
+            result = Json(Json::String(parse_string_value()));
+            break;
         case '[':
-            return parse_array_value();
+            result = parse_array_value();
+            break;
         case '{':
-            return parse_object_value();
+            result = parse_object_value();
+            break;
         default:
             if (peek() == '-' || std::isdigit(static_cast<unsigned char>(peek()))) {
-                return parse_number_value();
+                result = parse_number_value();
+            } else {
+                throw_error("Invalid value");
             }
-            throw_error("Invalid value");
+            break;
         }
+        --depth_;
+        return result;
     }
 };
 
@@ -504,7 +555,10 @@ JsonType Json::type() const {
     if (std::holds_alternative<Json::Bool>(value_)) {
         return JsonType::Bool;
     }
-    return JsonType::Null;
+    if (is_explicit_null_) {
+        return JsonType::Null;
+    }
+    return JsonType::Empty;
 }
 
 JsonType Json::type(const std::string &path) const {
@@ -543,7 +597,7 @@ JsonType Json::type(const std::string &path) const {
     return current->type();
 }
 
-bool Json::is_valid() const { return true; }
+bool Json::is_valid() const { return valid_; }
 
 Json::Value Json::get_value() { return value_; }
 
@@ -551,17 +605,24 @@ Json::Value Json::get_value() const { return value_; }
 
 std::string Json::to_string(JsonStyle style) const { return serialize_value(*this, style, 0); }
 
-Json Json::null() { return Json(Json::Null{}); }
+Json Json::null() {
+    Json result;
+    result.value_ = Json::Null{};
+    result.is_explicit_null_ = true;
+    return result;
+}
 
 Json Json::parse(const std::string &json) { return Parser(json).parse(); }
 
-Json Json::parse(std::string &json, std::string &error) {
+Json Json::parse(const std::string &json, std::string &error) {
     try {
         error.clear();
-        return parse(static_cast<const std::string &>(json));
+        return parse(json);
     } catch (const JsonException &exception) {
         error = exception.what();
-        return Json::null();
+        Json result = Json::null();
+        result.valid_ = false;
+        return result;
     }
 }
 
@@ -577,6 +638,8 @@ Json Json::parse(std::istream &json, std::string &error) {
         return parse(json);
     } catch (const JsonException &exception) {
         error = exception.what();
-        return Json::null();
+        Json result = Json::null();
+        result.valid_ = false;
+        return result;
     }
 }
