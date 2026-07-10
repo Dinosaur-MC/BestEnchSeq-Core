@@ -4,6 +4,7 @@
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <vector>
 
 /// A* algorithm using compact internal representation.
@@ -29,24 +30,9 @@ private:
     };
 
     struct SearchState {
-        std::vector<compact::Item> items;
+        std::shared_ptr<const std::vector<compact::Item>> items;
         int32_t g{0};
         const CompactStepNode* steps_tail = nullptr;
-    };
-
-    struct StateHash {
-        size_t operator()(const SearchState& s) const noexcept {
-            size_t h = s.items.size();
-            for (const auto& item : s.items)
-                h ^= std::hash<compact::Item>{}(item) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            return h;
-        }
-    };
-
-    struct StateEqual {
-        bool operator()(const SearchState& a, const SearchState& b) const noexcept {
-            return a.items == b.items;
-        }
     };
 
     struct PriorityState {
