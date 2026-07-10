@@ -10,21 +10,21 @@ void EquipmentCategoryRegistry::reset() {
         name_to_id_[std::move(name_id)] = id;
     };
 
-    add(ID_ANY,         "any");
-    add(ID_SWORD,       "sword");
-    add(ID_HELMET,      "helmet");
-    add(ID_CHESTPLATE,  "chestplate");
-    add(ID_LEGGINGS,    "leggings");
-    add(ID_BOOTS,       "boots");
-    add(ID_PICKAXE,     "pickaxe");
-    add(ID_AXE,         "axe");
-    add(ID_SHOVEL,      "shovel");
-    add(ID_HOE,         "hoe");
-    add(ID_BOW,         "bow");
-    add(ID_SHIELD,      "shield");
-    add(ID_CROSSBOW,    "crossbow");
-    add(ID_TRIDENT,     "trident");
-    add(ID_FISHING_ROD, "fishing_rod");
+    add(EquipmentCategory::ID_ANY,         std::string(EquipmentCategory::NAME_ANY));
+    add(EquipmentCategory::ID_SWORD,       std::string(EquipmentCategory::NAME_SWORD));
+    add(EquipmentCategory::ID_HELMET,      std::string(EquipmentCategory::NAME_HELMET));
+    add(EquipmentCategory::ID_CHESTPLATE,  std::string(EquipmentCategory::NAME_CHESTPLATE));
+    add(EquipmentCategory::ID_LEGGINGS,    std::string(EquipmentCategory::NAME_LEGGINGS));
+    add(EquipmentCategory::ID_BOOTS,       std::string(EquipmentCategory::NAME_BOOTS));
+    add(EquipmentCategory::ID_PICKAXE,     std::string(EquipmentCategory::NAME_PICKAXE));
+    add(EquipmentCategory::ID_AXE,         std::string(EquipmentCategory::NAME_AXE));
+    add(EquipmentCategory::ID_SHOVEL,      std::string(EquipmentCategory::NAME_SHOVEL));
+    add(EquipmentCategory::ID_HOE,         std::string(EquipmentCategory::NAME_HOE));
+    add(EquipmentCategory::ID_BOW,         std::string(EquipmentCategory::NAME_BOW));
+    add(EquipmentCategory::ID_SHIELD,      std::string(EquipmentCategory::NAME_SHIELD));
+    add(EquipmentCategory::ID_CROSSBOW,    std::string(EquipmentCategory::NAME_CROSSBOW));
+    add(EquipmentCategory::ID_TRIDENT,     std::string(EquipmentCategory::NAME_TRIDENT));
+    add(EquipmentCategory::ID_FISHING_ROD, std::string(EquipmentCategory::NAME_FISHING_ROD));
 }
 
 void EquipmentCategoryRegistry::initialize(const std::vector<std::string>& custom_category_names) {

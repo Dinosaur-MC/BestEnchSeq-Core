@@ -30,22 +30,8 @@ public:
     const std::vector<EquipmentCategory>& get_instances() const { return instances_; }
     size_t size() const { return instances_.size(); }
 
-    // ── Builtin category IDs (stable across versions) ──
-    static constexpr int32_t ID_ANY         = 0;
-    static constexpr int32_t ID_SWORD       = 1;
-    static constexpr int32_t ID_HELMET      = 2;
-    static constexpr int32_t ID_CHESTPLATE  = 3;
-    static constexpr int32_t ID_LEGGINGS    = 4;
-    static constexpr int32_t ID_BOOTS       = 5;
-    static constexpr int32_t ID_PICKAXE     = 6;
-    static constexpr int32_t ID_AXE         = 7;
-    static constexpr int32_t ID_SHOVEL      = 8;
-    static constexpr int32_t ID_HOE         = 9;
-    static constexpr int32_t ID_BOW         = 10;
-    static constexpr int32_t ID_SHIELD      = 11;
-    static constexpr int32_t ID_CROSSBOW    = 12;
-    static constexpr int32_t ID_TRIDENT     = 13;
-    static constexpr int32_t ID_FISHING_ROD = 14;
+    // Builtin category IDs moved to EquipmentCategory struct.
+    // Use EquipmentCategory::ID_SWORD, EquipmentCategory::NAME_SWORD, etc.
 
 private:
     /// Reset to builtin defaults (clears any custom categories).

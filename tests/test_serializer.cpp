@@ -17,8 +17,8 @@ void setup() {
     registries::enchants().initialize(infos);
 
     // Equipment registry for ItemStack tests
-    Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
-    Equipment boots{"diamond_boots", "Diamond Boots", EquipmentCategoryRegistry::ID_BOOTS, 433};
+    Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561};
+    Equipment boots{"diamond_boots", "Diamond Boots", EquipmentCategory::ID_BOOTS, 433};
     registries::equipment().initialize({sword, boots});
 }
 

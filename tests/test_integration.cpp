@@ -150,7 +150,7 @@ void test_builtin_equipment_lookup() {
     for (const auto &eq : equipments) {
         if (eq.name_id == "diamond_sword") {
             found_sword = true;
-            expect(eq.category_id == EquipmentCategoryRegistry::ID_SWORD,
+            expect(eq.category_id == EquipmentCategory::ID_SWORD,
                    "builtin_eq: diamond_sword category is sword");
             expect(eq.max_durability == 1561,
                    "builtin_eq: diamond_sword max_durability is 1561");

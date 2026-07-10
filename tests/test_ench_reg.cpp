@@ -12,13 +12,13 @@ void setup() {
     registries::categories().initialize();
     registries::enchants().initialize({
         {"sharpness", "Sharpness", MCE::All, 5, 5,
-         1, {}, {EquipmentCategoryRegistry::ID_SWORD}},
+         1, {}, {EquipmentCategory::ID_SWORD}},
         {"knockback", "Knockback", MCE::All, 2, 2,
-         2, {}, {EquipmentCategoryRegistry::ID_SWORD}},
+         2, {}, {EquipmentCategory::ID_SWORD}},
         {"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
-         1, {"sharpness"}, {EquipmentCategoryRegistry::ID_SWORD}},
+         1, {"sharpness"}, {EquipmentCategory::ID_SWORD}},
         {"protection", "Protection", MCE::All, 4, 4,
-         1, {}, {EquipmentCategoryRegistry::ID_CHESTPLATE}},
+         1, {}, {EquipmentCategory::ID_CHESTPLATE}},
     });
 }
 
@@ -27,7 +27,7 @@ void test_basic_init_and_size() {
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
-                    EquipmentCategoryRegistry::ID_SWORD, 1561};
+                    EquipmentCategory::ID_SWORD, 1561};
     compact::EnchReg reg;
     reg.init(registries::enchants(), sword);
 
@@ -45,7 +45,7 @@ void test_safe_get_bounds() {
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
-                    EquipmentCategoryRegistry::ID_SWORD, 1561};
+                    EquipmentCategory::ID_SWORD, 1561};
     compact::EnchReg reg;
     reg.init(registries::enchants(), sword);
 
@@ -78,7 +78,7 @@ void test_conflict_detection() {
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
-                    EquipmentCategoryRegistry::ID_SWORD, 1561};
+                    EquipmentCategory::ID_SWORD, 1561};
     compact::EnchReg reg;
     reg.init(registries::enchants(), sword);
 
@@ -101,7 +101,7 @@ void test_multiplier_and_max_level() {
     setup();
 
     Equipment sword{"diamond_sword", "Diamond Sword",
-                    EquipmentCategoryRegistry::ID_SWORD, 1561};
+                    EquipmentCategory::ID_SWORD, 1561};
     compact::EnchReg reg;
     reg.init(registries::enchants(), sword);
 

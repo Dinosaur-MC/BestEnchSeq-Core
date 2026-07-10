@@ -9,14 +9,14 @@ void test_builtins_present() {
     expect(registries::categories().size() == 15,
            "builtins: should have 15 builtin categories");
     expect(registries::categories().get_id("sword") ==
-               EquipmentCategoryRegistry::ID_SWORD,
+               EquipmentCategory::ID_SWORD,
            "builtins: sword id should match ID_SWORD");
     expect(registries::categories().get_id("any") ==
-               EquipmentCategoryRegistry::ID_ANY,
+               EquipmentCategory::ID_ANY,
            "builtins: any id should match ID_ANY");
 
     auto& cat = registries::categories().get("chestplate");
-    expect(cat.id == EquipmentCategoryRegistry::ID_CHESTPLATE,
+    expect(cat.id == EquipmentCategory::ID_CHESTPLATE,
            "builtins: chestplate id should match ID_CHESTPLATE");
     expect(cat.name_id == "chestplate",
            "builtins: chestplate name_id should be chestplate");
@@ -81,7 +81,7 @@ void test_duplicate_custom_skipped() {
 
     // boots should still have the builtin ID
     expect(registries::categories().get_id("boots") ==
-               EquipmentCategoryRegistry::ID_BOOTS,
+               EquipmentCategory::ID_BOOTS,
            "duplicate: boots should still have builtin ID");
 
     std::cout << "PASS: test_duplicate_custom_skipped" << std::endl;

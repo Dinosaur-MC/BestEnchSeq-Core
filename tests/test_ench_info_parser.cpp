@@ -369,8 +369,8 @@ void test_applicable_equipment_parsing() {
 
     expect(infos.size() == 2, "should parse 2 entries");
     expect(infos[0].applicable_category_ids.size() == 2, "sharpness has 2 equipment types");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_SWORD), "contains sword");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_AXE), "contains axe");
+    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD), "contains sword");
+    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE), "contains axe");
     expect(infos[1].applicable_category_ids.empty(), "custom equipment skipped (not in registry)");
 
     std::filesystem::remove(file);
@@ -405,8 +405,8 @@ void test_equipment_tag_resolution() {
 
     expect(infos.size() == 1, "should parse 1 entry");
     expect(infos[0].applicable_category_ids.size() == 2, "should resolve equipment tag to 2");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_SWORD), "resolved sword");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_AXE), "resolved axe");
+    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD), "resolved sword");
+    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE), "resolved axe");
 
     std::filesystem::remove_all(tag_dir);
     std::filesystem::remove(file);
@@ -490,9 +490,9 @@ void test_csv_basic_parsing() {
     expect(infos[0].exclusive_set.size() == 1, "csv: first exclusive set size");
     expect(infos[0].exclusive_set.contains("smite"), "csv: first exclusive contains smite");
     expect(infos[0].applicable_category_ids.size() == 2, "csv: first has 2 equipments");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_SWORD),
+    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
            "csv: first contains sword");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_AXE),
+    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE),
            "csv: first contains axe");
 
     expect(infos[1].name_id == "knockback", "csv: second ench id");
@@ -501,7 +501,7 @@ void test_csv_basic_parsing() {
     expect(infos[1].multiplier == 1, "csv: second multiplier");
     expect(infos[1].exclusive_set.empty(), "csv: second has no exclusives");
     expect(infos[1].applicable_category_ids.size() == 1, "csv: second has 1 equipment");
-    expect(infos[1].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_SWORD),
+    expect(infos[1].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
            "csv: second contains sword");
 
     std::filesystem::remove(file);
@@ -610,7 +610,7 @@ void test_mc_official_basic() {
     expect(infos[0].exclusive_set.size() == 1, "mc: exclusive set size");
     expect(infos[0].exclusive_set.contains("minecraft:smite"), "mc: exclusive contains smite");
     expect(infos[0].applicable_category_ids.size() == 1, "mc: 1 applicable equipment");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategoryRegistry::ID_SWORD),
+    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
            "mc: applicable equipment matches sword");
 
     std::filesystem::remove_all(dir);
@@ -737,11 +737,11 @@ void test_to_json_round_trip() {
     original.emplace_back("minecraft:sharpness", "Sharpness", MCE::Java,
                           5, 5, 1,
                           std::unordered_set<std::string>{"minecraft:smite", "minecraft:bane_of_arthropods"},
-                          std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD, EquipmentCategoryRegistry::ID_AXE});
+                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD, EquipmentCategory::ID_AXE});
     original.emplace_back("minecraft:protection", "Protection", MCE::All,
                           4, 4, 2,
                           std::unordered_set<std::string>{},
-                          std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_HELMET, EquipmentCategoryRegistry::ID_CHESTPLATE});
+                          std::unordered_set<int32_t>{EquipmentCategory::ID_HELMET, EquipmentCategory::ID_CHESTPLATE});
 
     // Serialize to JSON
     std::string json_str = EnchInfoParser::to_json(original);
@@ -782,11 +782,11 @@ void test_to_csv_round_trip() {
     original.emplace_back("sharpness", "Sharpness", MCE::Java,
                           5, 5, 1,
                           std::unordered_set<std::string>{"smite"},
-                          std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD});
+                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
     original.emplace_back("knockback", "Knockback", MCE::Java,
                           2, 2, 1,
                           std::unordered_set<std::string>{},
-                          std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD});
+                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
 
     // Serialize to CSV
     std::string csv_str = EnchInfoParser::to_csv(original);
@@ -823,7 +823,7 @@ void test_export_mc_official_round_trip() {
     original.emplace_back("minecraft:sharpness", "Sharpness", MCE::All,
                           5, 5, 1,
                           std::unordered_set<std::string>{"minecraft:smite"},
-                          std::unordered_set<int32_t>{EquipmentCategoryRegistry::ID_SWORD});
+                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
 
     // Export to MC official format
     std::string output_dir = "test_rt_mc_off";

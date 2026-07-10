@@ -25,10 +25,10 @@ namespace {
 
 // Static equipment instances (must outlive all tests)
 Equipment diamond_sword{
-    "diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561
+    "diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561
 };
 Equipment diamond_pickaxe{
-    "diamond_pickaxe", "Diamond Pickaxe", EquipmentCategoryRegistry::ID_PICKAXE, 1561
+    "diamond_pickaxe", "Diamond Pickaxe", EquipmentCategory::ID_PICKAXE, 1561
 };
 
 std::unordered_map<std::string, const Equipment*> test_equipment_registry = {
@@ -52,7 +52,7 @@ void setup_enchinfo() {
         5,   // limited_level
         1,   // multiplier
         {},  // exclusive_set
-        {EquipmentCategoryRegistry::ID_SWORD},
+        {EquipmentCategory::ID_SWORD},
     });
     infos.push_back({
         "minecraft:knockback",
@@ -62,7 +62,7 @@ void setup_enchinfo() {
         2,   // limited_level
         2,   // multiplier
         {},  // exclusive_set
-        {EquipmentCategoryRegistry::ID_SWORD},
+        {EquipmentCategory::ID_SWORD},
     });
     registries::enchants().initialize(infos);
 }

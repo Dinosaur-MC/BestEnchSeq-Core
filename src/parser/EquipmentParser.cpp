@@ -84,7 +84,7 @@ std::vector<Equipment> EquipmentParser::parse_native_json(
         }
 
         int32_t cat_id = registries::categories().get_id(category);
-        if (cat_id < 0) cat_id = EquipmentCategoryRegistry::ID_ANY;
+        if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
 
         result.emplace_back(Equipment{
             std::move(id),
@@ -171,7 +171,7 @@ std::vector<Equipment> EquipmentParser::parse_native_csv(
         }
 
         int32_t cat_id = registries::categories().get_id(category);
-        if (cat_id < 0) cat_id = EquipmentCategoryRegistry::ID_ANY;
+        if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
 
         result.emplace_back(Equipment{
             std::move(id),
@@ -322,7 +322,7 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
             }
 
             int32_t cat_id2 = registries::categories().get_id(category_str);
-            if (cat_id2 < 0) cat_id2 = EquipmentCategoryRegistry::ID_ANY;
+            if (cat_id2 < 0) cat_id2 = EquipmentCategory::ID_ANY;
 
             result.emplace_back(Equipment{
                 std::move(item_id),

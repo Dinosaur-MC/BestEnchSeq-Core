@@ -20,10 +20,10 @@ namespace {
 // ---------------------------------------------------------------------------
 
 Equipment diamond_sword{
-    "diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561
+    "diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561
 };
 Equipment bow{
-    "bow", "Bow", EquipmentCategoryRegistry::ID_BOW, 384
+    "bow", "Bow", EquipmentCategory::ID_BOW, 384
 };
 
 void setup_enchinfo() {
@@ -34,28 +34,28 @@ void setup_enchinfo() {
         "Sharpness",
         MCE::All,
         5, 5, 1, {},
-        {EquipmentCategoryRegistry::ID_SWORD},
+        {EquipmentCategory::ID_SWORD},
     });
     infos.push_back({
         "minecraft:knockback",
         "Knockback",
         MCE::All,
         2, 2, 2, {},
-        {EquipmentCategoryRegistry::ID_SWORD},
+        {EquipmentCategory::ID_SWORD},
     });
     infos.push_back({
         "minecraft:smite",
         "Smite",
         MCE::All,
         5, 5, 1, {},
-        {EquipmentCategoryRegistry::ID_SWORD},
+        {EquipmentCategory::ID_SWORD},
     });
     infos.push_back({
         "minecraft:power",
         "Power",
         MCE::All,
         5, 5, 1, {},
-        {EquipmentCategoryRegistry::ID_BOW},
+        {EquipmentCategory::ID_BOW},
     });
     registries::enchants().initialize(infos);
 }

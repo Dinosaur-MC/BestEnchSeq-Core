@@ -18,21 +18,21 @@ void setup() {
     registries::categories().initialize();
     registries::enchants().initialize({
         {"sharpness", "Sharpness", MCE::All, 5, 5,
-         1, {}, {EquipmentCategoryRegistry::ID_SWORD}},
+         1, {}, {EquipmentCategory::ID_SWORD}},
         {"knockback", "Knockback", MCE::All, 2, 2,
-         2, {}, {EquipmentCategoryRegistry::ID_SWORD}},
+         2, {}, {EquipmentCategory::ID_SWORD}},
         {"protection", "Protection", MCE::All, 4, 4,
-         1, {}, {EquipmentCategoryRegistry::ID_CHESTPLATE}},
+         1, {}, {EquipmentCategory::ID_CHESTPLATE}},
     });
     registries::equipment().initialize({
-        {"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561},
-        {"diamond_chestplate", "Diamond Chestplate", EquipmentCategoryRegistry::ID_CHESTPLATE, 528},
+        {"diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561},
+        {"diamond_chestplate", "Diamond Chestplate", EquipmentCategory::ID_CHESTPLATE, 528},
     });
 }
 
-Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
+Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561};
 Equipment chestplate{"diamond_chestplate", "Diamond Chestplate",
-                      EquipmentCategoryRegistry::ID_CHESTPLATE, 528};
+                      EquipmentCategory::ID_CHESTPLATE, 528};
 
 // ─── Test 1: minimal valid input produces correct AlgorithmInput ───
 void test_apply_valid_input() {

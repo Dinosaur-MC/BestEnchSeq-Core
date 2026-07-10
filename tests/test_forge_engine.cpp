@@ -10,16 +10,16 @@ namespace {
 void setup_enchinfo() {
     std::vector<EnchInfo> infos;
     infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5,
-                     1, {}, {EquipmentCategoryRegistry::ID_SWORD}});
+                     1, {}, {EquipmentCategory::ID_SWORD}});
     infos.push_back({"knockback", "Knockback", MCE::All, 2, 2,
-                     2, {}, {EquipmentCategoryRegistry::ID_SWORD}});
+                     2, {}, {EquipmentCategory::ID_SWORD}});
     infos.push_back({"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
-                     1, {"sharpness"}, {EquipmentCategoryRegistry::ID_SWORD}});
+                     1, {"sharpness"}, {EquipmentCategory::ID_SWORD}});
     registries::enchants().initialize(infos);
     registries::categories().initialize();
 }
 
-Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561};
+Equipment sword{"diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561};
 
 compact::EnchReg init_reg() {
     compact::EnchReg reg;

@@ -40,12 +40,12 @@ void test_json_basic() {
     expect(eqs.size() == 2, "json: 2 equipment");
     expect(eqs[0].name_id == "diamond_sword", "json: first id");
     expect(eqs[0].name == "Diamond Sword", "json: first name");
-    expect(eqs[0].category_id == EquipmentCategoryRegistry::ID_SWORD, "json: sword category");
+    expect(eqs[0].category_id == EquipmentCategory::ID_SWORD, "json: sword category");
     expect(eqs[0].max_durability == 1561, "json: first durability");
 
     expect(eqs[1].name_id == "diamond_pickaxe", "json: second id");
     expect(eqs[1].name == "Diamond Pickaxe", "json: second name");
-    expect(eqs[1].category_id == EquipmentCategoryRegistry::ID_PICKAXE, "json: pickaxe category");
+    expect(eqs[1].category_id == EquipmentCategory::ID_PICKAXE, "json: pickaxe category");
     expect(eqs[1].max_durability == 1561, "json: second durability");
 
     std::filesystem::remove(file);
@@ -68,7 +68,7 @@ void test_csv_basic() {
     expect(eqs.size() == 2, "csv: 2 equipment");
     expect(eqs[0].name_id == "diamond_sword", "csv: first id");
     expect(eqs[0].name == "Diamond Sword", "csv: first name");
-    expect(eqs[0].category_id == EquipmentCategoryRegistry::ID_SWORD, "csv: first category");
+    expect(eqs[0].category_id == EquipmentCategory::ID_SWORD, "csv: first category");
     expect(eqs[0].max_durability == 1561, "csv: first durability");
 
     expect(eqs[1].name_id == "diamond_pickaxe", "csv: second id");
@@ -113,7 +113,7 @@ void test_custom_category() {
 
     expect(eqs.size() == 1, "custom cat: parsed");
     expect(eqs[0].name_id == "custom_weapon", "custom cat: id");
-    expect(eqs[0].category_id == EquipmentCategoryRegistry::ID_ANY, "custom cat: category preserved (falls back to ID_ANY)");
+    expect(eqs[0].category_id == EquipmentCategory::ID_ANY, "custom cat: category preserved (falls back to ID_ANY)");
     expect(eqs[0].max_durability == 500, "custom cat: durability");
 
     std::filesystem::remove(file);
@@ -145,13 +145,13 @@ void test_missing_fields_skipped() {
         if (eq.name_id == "valid") {
             found_valid = true;
             expect(eq.name == "valid", "missing fields: name fallback to id");
-            expect(eq.category_id == EquipmentCategoryRegistry::ID_SWORD, "missing fields: valid category");
+            expect(eq.category_id == EquipmentCategory::ID_SWORD, "missing fields: valid category");
             expect(eq.max_durability == 100, "missing fields: valid durability");
         }
         if (eq.name_id == "no_name") {
             found_noname = true;
             expect(eq.name == "no_name", "missing fields: no_name fallback");
-            expect(eq.category_id == EquipmentCategoryRegistry::ID_PICKAXE, "missing fields: pickaxe category");
+            expect(eq.category_id == EquipmentCategory::ID_PICKAXE, "missing fields: pickaxe category");
             expect(eq.max_durability == 0, "missing fields: no durability defaults to 0");
         }
     }
@@ -215,7 +215,7 @@ void test_json_mixed_with_enchantments() {
 
     expect(eqs.size() == 1, "mixed json: 1 equipment");
     expect(eqs[0].name_id == "diamond_sword", "mixed json: id");
-    expect(eqs[0].category_id == EquipmentCategoryRegistry::ID_SWORD, "mixed json: category");
+    expect(eqs[0].category_id == EquipmentCategory::ID_SWORD, "mixed json: category");
 
     std::filesystem::remove(file);
 }
@@ -408,8 +408,8 @@ void test_parse_with_invalid_format() {
 // ---------------------------------------------------------------------------
 void test_to_json_round_trip() {
     std::vector<Equipment> original = {
-        {"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561},
-        {"diamond_pickaxe", "Diamond Pickaxe", EquipmentCategoryRegistry::ID_PICKAXE, 1561}
+        {"diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561},
+        {"diamond_pickaxe", "Diamond Pickaxe", EquipmentCategory::ID_PICKAXE, 1561}
     };
 
     // Serialize to JSON
@@ -429,7 +429,7 @@ void test_to_json_round_trip() {
     if (parsed.size() >= 1) {
         expect(parsed[0].name_id == original[0].name_id, "eq JSON round-trip: id preserved");
         expect(parsed[0].name == original[0].name, "eq JSON round-trip: name preserved");
-        expect(parsed[0].category_id == EquipmentCategoryRegistry::ID_SWORD, "eq JSON round-trip: category");
+        expect(parsed[0].category_id == EquipmentCategory::ID_SWORD, "eq JSON round-trip: category");
         expect(parsed[0].max_durability == 1561, "eq JSON round-trip: durability");
     }
 
@@ -441,8 +441,8 @@ void test_to_json_round_trip() {
 // ---------------------------------------------------------------------------
 void test_to_csv_round_trip() {
     std::vector<Equipment> original = {
-        {"diamond_sword", "Diamond Sword", EquipmentCategoryRegistry::ID_SWORD, 1561},
-        {"diamond_pickaxe", "Diamond Pickaxe", EquipmentCategoryRegistry::ID_PICKAXE, 1561}
+        {"diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561},
+        {"diamond_pickaxe", "Diamond Pickaxe", EquipmentCategory::ID_PICKAXE, 1561}
     };
 
     // Serialize to CSV

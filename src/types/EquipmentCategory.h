@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 // ─── Equipment category ───
 //
@@ -12,6 +13,40 @@ struct EquipmentCategory {
 
     bool operator==(const EquipmentCategory& other) const { return id == other.id; }
     bool operator!=(const EquipmentCategory& other) const { return id != other.id; }
+
+    // ── Builtin category IDs (stable across versions) ──
+    static constexpr int32_t ID_ANY         = 0;
+    static constexpr int32_t ID_SWORD       = 1;
+    static constexpr int32_t ID_HELMET      = 2;
+    static constexpr int32_t ID_CHESTPLATE  = 3;
+    static constexpr int32_t ID_LEGGINGS    = 4;
+    static constexpr int32_t ID_BOOTS       = 5;
+    static constexpr int32_t ID_PICKAXE     = 6;
+    static constexpr int32_t ID_AXE         = 7;
+    static constexpr int32_t ID_SHOVEL      = 8;
+    static constexpr int32_t ID_HOE         = 9;
+    static constexpr int32_t ID_BOW         = 10;
+    static constexpr int32_t ID_SHIELD      = 11;
+    static constexpr int32_t ID_CROSSBOW    = 12;
+    static constexpr int32_t ID_TRIDENT     = 13;
+    static constexpr int32_t ID_FISHING_ROD = 14;
+
+    // ── Builtin name IDs (no namespace prefix) ──
+    static constexpr std::string_view NAME_ANY         = "any";
+    static constexpr std::string_view NAME_SWORD       = "sword";
+    static constexpr std::string_view NAME_HELMET      = "helmet";
+    static constexpr std::string_view NAME_CHESTPLATE  = "chestplate";
+    static constexpr std::string_view NAME_LEGGINGS    = "leggings";
+    static constexpr std::string_view NAME_BOOTS       = "boots";
+    static constexpr std::string_view NAME_PICKAXE     = "pickaxe";
+    static constexpr std::string_view NAME_AXE         = "axe";
+    static constexpr std::string_view NAME_SHOVEL      = "shovel";
+    static constexpr std::string_view NAME_HOE         = "hoe";
+    static constexpr std::string_view NAME_BOW         = "bow";
+    static constexpr std::string_view NAME_SHIELD      = "shield";
+    static constexpr std::string_view NAME_CROSSBOW    = "crossbow";
+    static constexpr std::string_view NAME_TRIDENT     = "trident";
+    static constexpr std::string_view NAME_FISHING_ROD = "fishing_rod";
 };
 
 namespace std {

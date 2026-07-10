@@ -565,7 +565,7 @@ ItemStack OutputFormatter::itemstack_from_json(
             }
 
             int32_t cat_id = registries::categories().get_id(cat);
-            if (cat_id < 0) cat_id = EquipmentCategoryRegistry::ID_ANY;
+            if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
             equipment_cache.emplace_back(Equipment{
                 id, name, cat_id, max_dur
             });
