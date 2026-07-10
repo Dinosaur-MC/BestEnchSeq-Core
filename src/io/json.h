@@ -92,12 +92,14 @@ class Json {
 
     static Json null();
     static Json parse(const std::string &json);
-    static Json parse(std::string &json, std::string &error);
+    static Json parse(const std::string &json, std::string &error);
     static Json parse(std::istream &json);
     static Json parse(std::istream &json, std::string &error);
 
   private:
     Value value_;
+    bool valid_ = true;
+    bool is_explicit_null_ = false;
 };
 
 namespace std {

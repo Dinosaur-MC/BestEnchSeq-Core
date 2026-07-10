@@ -15,7 +15,7 @@ namespace {
 void test_default_json_is_null() {
     Json j;
     expect(j.is_valid(), "default Json should be valid");
-    expect(j.type() == JsonType::Null, "default Json should report Null type");
+    expect(j.type() == JsonType::Empty, "default Json should report Empty type");
     expect(j.to_string() == "null", "default Json serializes to null");
 
     std::cout << "  [OK] test_default_json_is_null" << std::endl;
@@ -297,7 +297,7 @@ void test_pretty_print() {
 
 void test_parse_errors() {
     // Error overload (returns null + populates error message)
-    // Note: parse(string&, string&) requires non-const lvalue string
+    // parse(const string&, string&) accepts const or non-const strings
     {
         std::string src = "01";
         std::string err;
