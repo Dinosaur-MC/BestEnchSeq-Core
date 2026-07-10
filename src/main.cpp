@@ -126,6 +126,14 @@ int main(int argc, char *argv[]) {
         AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.original_ench, parsed.available_items,
                                                   forge_config, registries::enchants());
 
+        // ── Memory budget for AStar (set before moving algo into executor) ─
+        if (config.memory_mb > 0) {
+            auto* astar = dynamic_cast<AStarAlgorithm*>(algo.get());
+            if (astar) {
+                astar->set_budget(AStarMemoryBudget::from_memory_mb(config.memory_mb, 0));
+            }
+        }
+
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
         executor.start(algo_input); // copy — keeps algo_input valid for recall() below

@@ -27,6 +27,7 @@ std::string CLIParser::get_help_text(const std::string &program_name) {
         "  --output <file>         Output file path (default: stdout)\n"
         "  --data-pack <dir>       Custom data pack directory\n"
         "  --ignore-cost-cap       Bypass the survival-mode 39-level cap (for modded play)\n"
+        "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
         "\n"
         "Enchantment formats:\n"
         "  id=level                e.g., sharpness=5\n"
@@ -251,6 +252,21 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
                 throw std::runtime_error(
                     "Invalid --solutions value: '" + value + "'. Expected an integer.\n" + get_help_text(program_name)
                 );
+            }
+        } else if (key == "memory") {
+            if (value == "auto") {
+                config.memory_mb = 0;
+            } else {
+                try {
+                    int n = std::stoi(value);
+                    if (n <= 0) throw std::runtime_error("must be positive");
+                    config.memory_mb = n;
+                } catch (const std::exception &) {
+                    throw std::runtime_error(
+                        "Invalid --memory value: '" + value + "'. Expected a positive integer or 'auto'.\n" +
+                        get_help_text(program_name)
+                    );
+                }
             }
         } else {
             throw std::runtime_error("Unknown option: --" + key + "\n" + get_help_text(program_name));
