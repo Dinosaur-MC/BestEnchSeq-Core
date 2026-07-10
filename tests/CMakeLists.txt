@@ -245,6 +245,33 @@ set_tests_properties(test_algorithm_executor PROPERTIES
 )
 endif()
 
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_strategies.cpp)
+add_executable(test_algorithm_strategies
+    test_algorithm_strategies.cpp
+    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
+    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
+)
+target_include_directories(test_algorithm_strategies PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_algorithm_strategies COMMAND test_algorithm_strategies)
+set_tests_properties(test_algorithm_strategies PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+endif()
+
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_spmc_queue.cpp)
 add_executable(test_spmc_queue
     test_spmc_queue.cpp
