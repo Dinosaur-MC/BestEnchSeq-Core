@@ -93,6 +93,24 @@ void AStarAlgorithm::execute(
         if (explored % 1000 == 0) {
             double progress = std::min(1.0 - 1.0 / (1.0 + explored * 0.0001), 0.99);
             ctx.report_progress(progress, ProgressStatus::Exploring);
+
+            // Periodically prune best_g to cap memory growth.
+            // Remove states whose g exceeds 2× the median g — they are unlikely
+            // to lead to an optimal path.
+            if (explored % 5000 == 0 && best_g.size() > 50000) {
+                std::vector<int32_t> g_vals;
+                g_vals.reserve(best_g.size());
+                for (const auto& kv : best_g)
+                    g_vals.push_back(kv.second);
+                std::sort(g_vals.begin(), g_vals.end());
+                int32_t threshold = g_vals[g_vals.size() / 2] * 2;
+                for (auto it = best_g.begin(); it != best_g.end(); ) {
+                    if (it->second > threshold)
+                        it = best_g.erase(it);
+                    else
+                        ++it;
+                }
+            }
         }
 
         if (meets_target(current.state.items[0])) {
