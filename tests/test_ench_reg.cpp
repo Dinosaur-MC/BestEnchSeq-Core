@@ -116,6 +116,82 @@ void test_multiplier_and_max_level() {
     std::cout << "PASS: test_multiplier_and_max_level" << std::endl;
 }
 
+// ─── compact::EnchSet dedicated tests ─────────────────────────────────────
+
+void test_enchset_hash_consistency() {
+    compact::EnchSet set;
+    set.insert({0, 5});
+    set.insert({1, 2});
+
+    auto h1 = set.hash();
+    auto h2 = set.hash();
+    expect(h1 == h2, "enchset hash: same set should produce same hash");
+
+    // Different levels should produce different hashes
+    compact::EnchSet set2;
+    set2.insert({0, 3});
+    set2.insert({1, 2});
+    auto h3 = set2.hash();
+    expect(h1 != h3, "enchset hash: different levels should differ");
+
+    // Different IDs should produce different hashes
+    compact::EnchSet set3;
+    set3.insert({0, 5});
+    set3.insert({2, 2});
+    auto h4 = set3.hash();
+    expect(h1 != h4, "enchset hash: different ids should differ");
+
+    std::cout << "PASS: test_enchset_hash_consistency" << std::endl;
+}
+
+void test_enchset_sort_restores_invariant() {
+    compact::EnchSet set;
+    set.insert({0, 5});
+    set.insert({2, 3});
+
+    // Mutate through mutable iterator to break sorting
+    auto it = set.begin();
+    std::swap(*it, *(it + 1));  // swap elements: now [id=2, id=0] — unsorted
+
+    // find() should fail on unsorted data
+    auto found = set.find(2);
+    // With broken invariant, find may still work via binary search luck
+    // but the real test is whether sort() fixes it
+    set.sort();
+
+    // After sort, find should work correctly
+    auto after = set.find(2);
+    expect(after != set.end() && after->level == 3,
+           "enchset sort: find(2) should work after sort");
+    auto after0 = set.find(0);
+    expect(after0 != set.end() && after0->level == 5,
+           "enchset sort: find(0) should work after sort");
+
+    std::cout << "PASS: test_enchset_sort_restores_invariant" << std::endl;
+}
+
+void test_enchset_empty_and_single() {
+    compact::EnchSet empty;
+    expect(empty.size() == 0, "enchset empty: size 0");
+    expect(empty.empty(), "enchset empty: empty() true");
+    expect(empty.find(0) == empty.end(), "enchset empty: find returns end");
+
+    compact::EnchSet single;
+    single.insert({3, 1});
+    expect(single.size() == 1, "enchset single: size 1");
+    expect(single.contains(3), "enchset single: contains 3");
+    expect(!single.contains(0), "enchset single: not contains 0");
+
+    // Insert same id should update level (not grow)
+    single.insert({3, 2});
+    expect(single.size() == 1, "enchset single: update same id, size still 1");
+    auto it = single.find(3);
+    expect(it != single.end() && it->level == 2,
+           "enchset single: find(3) level updated to 2");
+
+    std::cout << "PASS: test_enchset_empty_and_single" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -123,6 +199,9 @@ int main() {
     test_safe_get_bounds();
     test_conflict_detection();
     test_multiplier_and_max_level();
+    test_enchset_hash_consistency();
+    test_enchset_sort_restores_invariant();
+    test_enchset_empty_and_single();
     std::cout << "All EnchReg tests passed!" << std::endl;
     return 0;
 }
