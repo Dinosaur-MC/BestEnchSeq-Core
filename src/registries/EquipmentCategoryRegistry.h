@@ -9,7 +9,7 @@
 //
 // Singleton registry managing EquipmentCategory definitions.
 // Builtin categories are hardcoded with stable numeric IDs.
-// Optional custom categories can be passed to initialize().
+// Optional custom category names can be passed to initialize().
 // After initialize(), the registry is immutable — no add_custom/register.
 //
 // Matches EnchantmentRegistry pattern: get() returns reference, throws on invalid.
@@ -21,9 +21,9 @@ public:
     EquipmentCategoryRegistry(const EquipmentCategoryRegistry&) = delete;
     EquipmentCategoryRegistry& operator=(const EquipmentCategoryRegistry&) = delete;
 
-    // Lifecycle — sets up builtins + optional custom categories.
+    // Lifecycle — resets builtins and optionally appends custom category names.
     // After this call the registry is immutable.
-    void initialize(const std::vector<EquipmentCategory>& custom_categories = {});
+    void initialize(const std::vector<std::string>& custom_category_names = {});
 
     // Lookup (O(1)) — throws std::out_of_range on invalid input
     const EquipmentCategory& get(int32_t id) const;
@@ -51,7 +51,8 @@ public:
     static constexpr int32_t ID_FISHING_ROD = 14;
 
 private:
-    void add_builtin(int32_t id, std::string name_id);
+    /// Reset to builtin defaults (clears any custom categories).
+    void reset();
 
     std::vector<EquipmentCategory> instances_;
     std::unordered_map<std::string, int32_t> name_to_id_;

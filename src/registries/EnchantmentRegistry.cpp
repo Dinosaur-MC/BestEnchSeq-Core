@@ -56,7 +56,9 @@ EnchantmentRegistry EnchantmentRegistry::create_subset(const std::vector<int32_t
     int32_t local_id = 0;
     for (int32_t gid : global_ids) {
         if (gid < 0 || gid >= static_cast<int32_t>(instances_.size()))
-            continue;
+            throw std::out_of_range("EnchantmentRegistry::create_subset: global id "
+                                    + std::to_string(gid) + " out of range [0, "
+                                    + std::to_string(instances_.size()) + ")");
         subset.instances_.push_back(instances_[gid]);
         subset.name_to_index_[instances_[gid].name_id] = local_id;
         subset.local_to_global_.push_back(gid);
