@@ -302,7 +302,7 @@ AlgorithmExecutor (compact-only)
 
 ### 搜索专用优化
 
-对于搜索算法（非贪心），以下优化在 `DefaultForgeEngine` 之上是必要的：
+对于搜索算法（非贪心），以下优化在 `ForgeEngine` 之上是必要的：
 
 1. **`forge_into()` 原地操作** — 搜索树每个节点调用数百万次，必须避免 EnchSet 拷贝
 2. **状态快照/回滚** — DFS 可使用 copy-on-write 或 undo 日志回溯，而非深拷贝

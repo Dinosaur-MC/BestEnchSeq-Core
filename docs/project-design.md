@@ -1,0 +1,209 @@
+# BestEnchSeq-Core 项目设计
+
+> 版本：1.0 · 最后更新：2026-07-10
+
+---
+
+## 核心设计理念
+
+### 1. 双层类型系统
+
+项目区分两类数据类型，各自承担不同职责：
+
+| 层面 | 命名空间 | 用途 | 特点 |
+|------|---------|------|------|
+| **Domain 类型** | 全局（`::`） | 输入解析、输出格式化、边界 I/O | 字符串 ID、完整元数据、可抛异常 |
+| **Compact 类型** | `compact::` | 算法热路径、forge 引擎 | `int16_t` 稠密 ID、连续内存、零异常路径 |
+
+Domain 类型（`ItemStack`、`::EnchSet`、`EnchInfo` 等）是"胖对象"，包含字符串字段、Registry 指针、校验逻辑。它们适合在 CLI/JSON 边界处使用，但效率不足以支撑算法对数百万状态的搜索。
+
+Compact 类型（`compact::Item`、`compact::EnchSet`、`compact::Ench`）是"瘦值"，每个字段经过位宽裁剪，容器使用 `vector<Ench>` 而非 `unordered_set`。它们是为 L1 缓存行优化的算法内部表示。
+
+**转换边界**：两种模型在 `CompactAdapter` 中互转，`main.cpp` 的管线中转换各发生一次。
+
+### 2. 数据所有权通过值传递
+
+`AlgorithmInput` 是一个值类型，内部包含所有执行所需的数据：
+
+```cpp
+struct AlgorithmInput {
+    ForgeConfig config;
+    compact::ItemCollection items;   // 装备 + 书
+    compact::EnchCollection target;  // 目标附魔
+    Equipment equipment;             // 装备副本
+    compact::EnchReg ench_reg;       // 剪枝后的注册表
+};
+```
+
+没有指针、没有引用、没有全局单例依赖。`EnchReg` 作为值嵌入——传入 `AlgorithmExecutor` 后所有权一次性移交到工作线程。调用方不再持有任何共享状态。
+
+**推论**：`EnchReg` 不再是单例。每次 `apply()` 创建独立的 `EnchReg`，用 `create_subset()` 剪枝后直接放入 `AlgorithmInput`。
+
+### 3. 计算逻辑下沉到算法层
+
+Domain 类型逐渐剥离计算职责，成为纯数据容器：
+
+- `::EnchSet` — 删除 `combine()`、`combine_s()`、`is_incompatible()`、`update_cache()`
+- `Ench` — 删除 `get_multiplier()`、`operator+`
+- `ItemStack` — 删除 `update_cache()`、`get_penalty_cost()`
+
+所有 forge 逻辑集中到 `IForgeEngine` 虚接口中，由 `ForgeEngine`（原版）或其子类（mod）实现。
+
+**优势**：forge 规则变化只需修改 ForgeEngine，不用动 domain 类型。算法层使用 `compact::EnchReg` 的 `get_multiplier()` / `is_conflict()`，不接触 domain 注册表。
+
+### 4. 虚接口可扩展性
+
+`IForgeEngine` 定义完整的 forge 操作集合：
+
+```
+Core:      forge_into() / forge() / is_forgeable()
+Sub-ops:   penalty_cost() / book_multiplier() / apply_cap() / estimate_forge_cost()
+```
+
+所有 sub-op 提供默认原版实现。Mod 只要继承 `IForgeEngine`，覆盖需要的部分：
+
+```cpp
+class ModForgeEngine : public IForgeEngine {
+    int32_t penalty_cost(int8_t ppn) const noexcept override {
+        // 自定义惩罚公式
+    }
+    // 其他方法使用默认实现
+};
+```
+
+`estimate_forge_cost()` 默认实现调用了 `penalty_cost()` 和 `book_multiplier()`，所以覆盖这些 sub-op 会自动影响算法排序和启发式——无需改动算法代码。
+
+### 5. 配置驱动行为
+
+`ForgeConfig` 承载所有可调参数：
+
+```cpp
+struct ForgeConfig {
+    bool ignore_penalty_cost = false;  // 禁用惩罚成本
+    bool ignore_repair_cost  = false;  // 禁用修复成本
+    bool ignore_cost_cap     = false;  // 禁用 39 级上限
+    MCE  platform            = MCE::Java;  // 目标平台
+};
+```
+
+平台不再通过全局单例设置。每种配置可以独立构造 `ForgeEngine` 实例，支持在同一个进程中评测不同平台/规则下的锻造序列。
+
+---
+
+## 系统架构
+
+### 管线流程图
+
+```
+┌──────────┐    ┌──────────────┐    ┌───────────────┐    ┌────────────┐
+│  CLI/JSON │───→│  InputParser │───→│ CompactAdapter│───→│ Algorithm  │
+│  输入解析  │    │  (domain)   │    │ ::apply()     │    │  Executor  │
+└──────────┘    └──────────────┘    └───────┬───────┘    └─────┬──────┘
+                                            │                  │
+                                     ┌──────▼───────┐    ┌─────▼──────┐
+                                     │ AlgorithmInput│    │ IAlgorithm │
+                                     │ (compact)     │───→│ ::execute()│
+                                     │ ench_reg      │    │ (compact)  │
+                                     │ items, target │    └─────┬──────┘
+                                     └──────────────┘          │
+                                                          ┌─────▼──────┐
+                                                          │ Algorithm  │
+                                                          │ Output     │
+                                                          │ (compact)  │
+                                                          └─────┬──────┘
+                                                                │
+                                                ┌───────────────▼────┐
+                                                │ CompactAdapter    │
+                                                │ ::recall()        │
+                                                │ (restore IDs)     │
+                                                └───────┬───────────┘
+                                                        │
+                                            ┌───────────▼───────────┐
+                                            │  OutputFormatter     │
+                                            │  (domain EnchSolution)│
+                                            └───────────────────────┘
+```
+
+### 注册表体系
+
+```
+EnchantmentRegistry (global, full)
+       │
+       │ create_subset(applicable_ids)
+       ▼
+EnchantmentRegistry (subset, dense IDs 0..N-1)
+       │
+       │ EnchReg::init(subset, target_equip)
+       ▼
+compact::EnchReg (flat conflict matrix)
+       │
+       │ owned by AlgorithmInput → executor → worker thread
+       ▼
+算法搜索: is_conflict(), get_multiplier(), get_max_level()
+```
+
+`EnchantmentRegistry` 支持子集派生，新子集的 ID 重新映射为 `0..N-1` 的稠密序列，通过 `to_global_id()` / `to_local_id()` 双向映射。
+
+### 算法策略体系
+
+| 策略 | 类型 | 最优性 | 适用规模 | 核心机制 |
+|------|------|--------|---------|---------|
+| Greedy | 近似 | 否 | 任意 | 成本排序贪心 |
+| Penalty Balance | 近似 | 否 | 任意 | 惩罚值最接近对合并 |
+| Hierarchical | 近似 | 否 | 大量 | 分层分组 → 组内合并 |
+| DFS | 精确 | 是 | ≤ 8 | 迭代 B&B + 哈希记忆化 |
+| A* | 精确 | 是 | ≤ 9 | 可采启发 + 优先队列 |
+
+所有算法共用 `IForgeEngine` 接口和 compact 类型系统。新算法只需实现 `IAlgorithm::execute()`，自动获得线程管理、暂停/取消、进度报告能力。
+
+---
+
+## 模块职责
+
+### `src/adapters/`
+**CompactAdapter** 是 domain ↔ compact 双向转换的唯一边界：
+- `apply()`：验证输入 → `create_subset()` 剪枝 EnchReg → 转换物品 → 返回 `AlgorithmInput`
+- `recall()`：遍历 compact steps → `to_global_id()` 恢复附魔 ID → 构建 `EnchSolution`
+- `from_domain()` / `to_domain()`：单物品转换
+
+### `src/algorithm/forge/`
+**IForgeEngine**（虚接口）+ **ForgeEngine**（原版实现）：
+- `forge_into()`：原地锻造（修改 target），返回成本
+- `forge()`：非修改锻造，返回 `{result, cost}`
+- `is_forgeable()`：物品可锻造性
+- Sub-ops：`penalty_cost`、`book_multiplier`、`apply_cap`、`estimate_forge_cost`
+
+### `src/types/CompactedTypes.h`
+算法层使用的紧凑数据类型：
+- `compact::Ench`（int16_t id + level）
+- `compact::EnchSet`（vector<Ench> 有序存储，lower_bound 插入）
+- `compact::Item`（type + dur + ppn + enchs）
+- `compact::EnchStep`（base + sacrifice + cost）
+- `compact::EnchInfo`（mul + max_lvl + exc_mask + applicable）
+
+### `src/registries/CompactedRegistries.h`
+**compact::EnchReg**：预计算针对特定装备的紧凑注册表：
+- N×N 扁平冲突矩阵（`vector<char>`）
+- 预计算 `EnchInfo[]`（multiplier、max_level、applicable、exc_mask）
+
+---
+
+## 错误处理策略
+
+- **输入验证**：`CompactAdapter::apply()` 内部检查所有输入数据的语义正确性，聚合所有错误后抛出 `std::invalid_argument`
+- **算法执行**：异常被 `AlgorithmExecutor` 的 worker 线程捕获，状态置为 `Failed`
+- **forge 操作**：不抛异常——所有检查在 apply() 中完成，算法假设输入已通过校验
+
+---
+
+## 参考
+
+- `src/adapters/CompactAdapter.h/.cpp` — 边界转换
+- `src/algorithm/forge/IForgeEngine.h` — forge 接口
+- `src/algorithm/forge/ForgeEngine.h/.cpp` — 原版实现
+- `src/types/CompactedTypes.h/.cpp` — 紧凑类型
+- `src/registries/CompactedRegistries.h/.cpp` — 紧凑注册表
+- `src/algorithm/AlgorithmExecutor.h/.cpp` — 执行引擎
+- `src/algorithm/strategies/` — 5 种算法策略
+- `docs/algorithm-design-discussion.md` — 算法设计详细探讨
+- `docs/anvil-mechanics-reference.md` — 铁砧机制参考
