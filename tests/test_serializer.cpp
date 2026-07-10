@@ -72,8 +72,8 @@ void test_ench_roundtrip() {
     setup();
 
     Serializer s;
-    s.write(Ench(0, 5, Ench::unchecked));
-    s.write(Ench(1, 2, Ench::unchecked));
+    s.write(Ench(0, 5));
+    s.write(Ench(1, 2));
 
     Deserializer d(s.data());
     Ench e1 = d.read_ench();
@@ -90,8 +90,8 @@ void test_enchset_roundtrip() {
     setup();
 
     EnchSet set;
-    set.insert(Ench(1, 2, Ench::unchecked));
-    set.insert(Ench(0, 5, Ench::unchecked));
+    set.insert(Ench(1, 2));
+    set.insert(Ench(0, 5));
 
     Serializer s;
     s.write(set);
@@ -111,7 +111,7 @@ void test_itemstack_roundtrip_book() {
     setup();
 
     EnchSet ench;
-    ench.insert(Ench(0, 5, Ench::unchecked));
+    ench.insert(Ench(0, 5));
     ItemStack book(ench, 0);  // enchanted book
 
     Serializer s;
@@ -132,7 +132,7 @@ void test_itemstack_roundtrip_equipment() {
     auto& eq = registries::equipment().get("diamond_sword");
 
     EnchSet ench;
-    ench.insert(Ench(0, 5, Ench::unchecked));
+    ench.insert(Ench(0, 5));
     ItemStack item(eq, ench, 2, 1000);
 
     Serializer s;

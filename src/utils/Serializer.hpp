@@ -122,8 +122,8 @@ public:
     Ench read_ench() {
         int32_t id = i32();
         int32_t level = i32();
-        if (!_ok) return Ench(0, 0, Ench::unchecked);
-        return Ench(id, level, Ench::unchecked);
+        if (!_ok) return Ench(0, 0);
+        return Ench(id, level);
     }
     EnchSet read_ench_set() {
         EnchSet result;

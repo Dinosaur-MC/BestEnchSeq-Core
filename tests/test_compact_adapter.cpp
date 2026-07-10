@@ -89,7 +89,7 @@ void test_apply_invalid_enchant_id() {
     // (ItemStack's checked Ench constructor would reject negative ID).
     // then add the invalid enchant directly.
     ItemStack book(EnchSet{}, 0);
-    book.enchantments.insert(Ench(-1, 1, Ench::unchecked));
+    book.enchantments.insert(Ench(-1, 1));
     books.push_back(book);
 
     bool threw = false;
