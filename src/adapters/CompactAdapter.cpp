@@ -14,8 +14,8 @@ void validate_input(
 {
     std::vector<std::string> errors;
 
-    // Check 1: target_item.equipment != nullptr
-    if (target_item.equipment == nullptr)
+    // Check 1: target_item.equipment must be present
+    if (!target_item.equipment)
         errors.push_back("target_item.equipment is null");
 
     // Check 4: target_item.prior_penalty >= 0 && target_item.prior_penalty <= 31
@@ -23,7 +23,7 @@ void validate_input(
         errors.push_back("target_item.prior_penalty out of range [0, 31]: " + std::to_string(target_item.prior_penalty));
 
     // Check 5: target_item.durability >= 1 && target_item.durability <= target_item.equipment->max_durability
-    if (target_item.equipment != nullptr) {
+    if (target_item.equipment) {
         if (target_item.durability < 1 || target_item.durability > target_item.equipment->max_durability)
             errors.push_back("target_item.durability out of range [1, " + std::to_string(target_item.equipment->max_durability) + "]: " + std::to_string(target_item.durability));
     }
@@ -40,7 +40,7 @@ void validate_input(
                     errors.push_back(context + ": enchantment level " + std::to_string(ench.level) + " out of range [1, " + std::to_string(global_registry.get(ench.id).max_level) + "] for id " + std::to_string(ench.id));
 
                 // Check 6: equipment applicability
-                if (target_item.equipment != nullptr) {
+                if (target_item.equipment) {
                     bool applicable = false;
                     for (auto cat_id : global_registry.get(ench.id).applicable_category_ids) {
                         if (cat_id == target_item.equipment->category_id) {
@@ -100,7 +100,7 @@ AlgorithmInput CompactAdapter::apply(
     input.equipment = *target_item.equipment;
     input.ench_reg = std::move(ench_reg);
 
-    ItemStack start_equip(target_item.equipment, original_ench, 0);
+    ItemStack start_equip(*target_item.equipment, original_ench, 0);
     input.items.reserve(1 + available_items.size());
     input.items.push_back(from_domain(start_equip, input.ench_reg));
     for (const auto& book : available_items)
@@ -140,7 +140,7 @@ ItemStack CompactAdapter::to_domain(const compact::Item& item, const Equipment& 
     if (item.type == compact::ItemType::Book)
         return ItemStack(std::move(ench_set), item.ppn);
     else
-        return ItemStack(&eq, std::move(ench_set), item.ppn, item.dur);
+        return ItemStack(eq, std::move(ench_set), item.ppn, item.dur);
 }
 
 std::vector<EnchSolution> CompactAdapter::recall(

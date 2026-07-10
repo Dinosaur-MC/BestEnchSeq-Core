@@ -39,7 +39,7 @@ void test_apply_valid_input() {
     CompactAdapter adapter;
     ForgeConfig config;
 
-    ItemStack target_item(&sword, EnchSet{}, 0, sword.max_durability);
+    ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
     books.push_back(ItemStack(EnchSet{Ench(0, 5)}, 0));
@@ -61,7 +61,7 @@ void test_apply_with_target() {
     CompactAdapter adapter;
     ForgeConfig config;
 
-    ItemStack target_item(&sword, EnchSet{Ench(0, 5)}, 0, sword.max_durability);
+    ItemStack target_item(sword, EnchSet{Ench(0, 5)}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
 
@@ -81,7 +81,7 @@ void test_apply_invalid_enchant_id() {
     CompactAdapter adapter;
     ForgeConfig config;
 
-    ItemStack target_item(&sword, EnchSet{}, 0, sword.max_durability);
+    ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
     // Construct empty book first, then add invalid enchant directly
@@ -109,7 +109,7 @@ void test_apply_invalid_level() {
     CompactAdapter adapter;
     ForgeConfig config;
 
-    ItemStack target_item(&sword, EnchSet{}, 0, sword.max_durability);
+    ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
     books.push_back(ItemStack(EnchSet{Ench(0, 99)}, 0));
@@ -132,7 +132,7 @@ void test_apply_inapplicable_enchant() {
     CompactAdapter adapter;
     ForgeConfig config;
 
-    ItemStack target_item(&sword, EnchSet{}, 0, sword.max_durability);
+    ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
     // protection (id=2) is only applicable to chestplate, not sword
@@ -156,7 +156,7 @@ void test_apply_penalty_overflow() {
     CompactAdapter adapter;
     ForgeConfig config;
 
-    ItemStack target_item(&sword, EnchSet{}, 32, sword.max_durability);
+    ItemStack target_item(sword, EnchSet{}, 32, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
 
@@ -178,7 +178,7 @@ void test_pruning_only_applicable() {
     CompactAdapter adapter;
     ForgeConfig config;
 
-    ItemStack target_item(&sword, EnchSet{}, 0, sword.max_durability);
+    ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
 
@@ -204,7 +204,7 @@ void test_from_domain_roundtrip() {
     compact::EnchReg reg;
     reg.init(EnchantmentRegistry::get_instance(), sword);
 
-    ItemStack domain_item(&sword, EnchSet{Ench(0, 5)}, 3, sword.max_durability);
+    ItemStack domain_item(sword, EnchSet{Ench(0, 5)}, 3, sword.max_durability);
 
     auto compact_item = CompactAdapter::from_domain(domain_item, reg);
 
@@ -214,7 +214,7 @@ void test_from_domain_roundtrip() {
 
     auto back_item = CompactAdapter::to_domain(compact_item, sword, reg);
 
-    expect(back_item.equipment != nullptr, "back_item equipment should not be null");
+    expect(back_item.equipment.has_value(), "back_item equipment should not be null");
     expect(back_item.equipment->name_id == "diamond_sword",
            "back_item equipment name_id should match");
     expect(back_item.prior_penalty == 3, "back_item prior_penalty should be 3");

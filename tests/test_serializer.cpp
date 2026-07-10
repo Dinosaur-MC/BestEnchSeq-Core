@@ -132,7 +132,7 @@ void test_itemstack_roundtrip_equipment() {
 
     EnchSet ench;
     ench.insert(Ench(0, 5, Ench::unchecked));
-    ItemStack item(&eq, ench, 2, 1000);
+    ItemStack item(eq, ench, 2, 1000);
 
     Serializer s;
     s.write(item);
@@ -140,7 +140,7 @@ void test_itemstack_roundtrip_equipment() {
     Deserializer d(s.data());
     ItemStack result = d.read_item_stack();
     expect(!result.is_book(), "round-tripped equipment should not be a book");
-    expect(result.equipment != nullptr, "equipment pointer should not be null");
+    expect(result.equipment.has_value(), "equipment pointer should not be null");
     expect(result.equipment->name_id == "diamond_sword",
            "equipment id should be diamond_sword, got: " + result.equipment->name_id);
     expect(result.prior_penalty == 2, "prior_penalty should be 2");

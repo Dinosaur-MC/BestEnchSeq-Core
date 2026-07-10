@@ -142,13 +142,18 @@ public:
         int32_t prio = i32();
         if (!_ok) return {};
 
-        const Equipment* eq = nullptr;
         if (!eq_id.empty()) {
             int32_t eid = EquipmentRegistry::get_instance().get_id(eq_id);
-            if (eid >= 0)
-                eq = &EquipmentRegistry::get_instance().get(eid);
+            if (eid >= 0) {
+                const Equipment& eq_ref = EquipmentRegistry::get_instance().get(eid);
+                ItemStack item(eq_ref, ench, pp, dur);
+                item.priority = prio;
+                return item;
+            }
         }
-        ItemStack item(eq, ench, pp, dur);
+        // Book or unknown equipment — construct as book
+        ItemStack item(ench, pp);
+        item.durability = dur;
         item.priority = prio;
         return item;
     }

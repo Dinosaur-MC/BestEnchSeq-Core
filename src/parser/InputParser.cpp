@@ -145,7 +145,7 @@ ItemCollection InputParser::parse_inventory(
                 if (durability <= 0) {
                     durability = equip->max_durability;
                 }
-                auto &item = result.emplace_back(equip, ench_set, prior_penalty, durability);
+                auto &item = result.emplace_back(*equip, ench_set, prior_penalty, durability);
                 item.priority = priority;
             } else {
                 // Equipment not found in registry, treat as book-like
@@ -182,7 +182,7 @@ ItemStack InputParser::build_target(
         ench_set.emplace(id, spec.level);
     }
 
-    return ItemStack(equip_it->second, ench_set, 0);
+    return ItemStack(*equip_it->second, ench_set, 0);
 }
 
 // ===========================================================================

@@ -1,8 +1,6 @@
 #pragma once
-#include "EnchInfo.h"
-#include "EnchSet.h"
-
-// ─── Equipment type ───
+#include <cstdint>
+#include <string>
 //
 // Represents a specific piece of equipment (e.g. "minecraft:diamond_sword").
 // Each equipment has a category_id referencing EquipmentCategoryRegistry.
@@ -19,15 +17,7 @@ struct Equipment {
 
     bool operator==(const Equipment& other) const;
 
-    bool is_applicable(const std::string& ench) const;
-    bool is_applicable(const Ench& ench) const;
-
-    EnchSet filter_enchantments(const EnchSet& enchantments) const;
-    EnchInfoList filter_enchantments(const EnchInfoList& enchantments) const;
-
-    // Durability helpers
-    static int32_t merge_durability(int32_t d1, int32_t d2, int32_t max_d);
-    static int32_t repair_durability(int32_t d, int32_t n, int32_t max_d);
-    int32_t calc_merge_durability(int32_t d1, int32_t d2) const;
-    int32_t calc_repair_durability(int32_t d, int32_t n) const;
+    // NOTE: Registry-dependent queries (is_applicable, filter_enchantments)
+    // and forge utility (durability helpers) have been removed from the domain
+    // type. Use EnchantmentRegistry / a future DomainForgeUtil instead.
 };

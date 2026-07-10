@@ -73,7 +73,7 @@ TestScenario make_scenario(bool two_steps) {
     wanted.emplace(1, 2);
 
     // Target: fresh diamond sword
-    ItemStack target(&diamond_sword, EnchSet{}, 0, diamond_sword.max_durability);
+    ItemStack target(diamond_sword, EnchSet{}, 0, diamond_sword.max_durability);
 
     // Books
     EnchSet b1;
@@ -99,7 +99,7 @@ TestScenario make_scenario(bool two_steps) {
         // Step 2: forge knockback II book into sword (now with sharpness V)
         EnchSet t2;
         t2.emplace(0, 5);
-        ItemStack target2(&diamond_sword, t2, 1, diamond_sword.max_durability);
+        ItemStack target2(diamond_sword, t2, 1, diamond_sword.max_durability);
 
         EnchSolution::EnchStep step2;
         step2.item_a         = target2;
@@ -178,7 +178,7 @@ void test_describe_item_book() {
     EnchSet wanted;
     wanted.emplace(0, 5);
 
-    ItemStack target(&diamond_sword, EnchSet{}, 0, diamond_sword.max_durability);
+    ItemStack target(diamond_sword, EnchSet{}, 0, diamond_sword.max_durability);
 
     EnchSolution::EnchStep step;
     step.item_a         = target;

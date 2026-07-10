@@ -1,9 +1,6 @@
 #pragma once
-#include "types/ForgeConfig.h"
 
 #include <cstdint>
-#include <string>
-#include <unordered_set>
 
 class EnchantmentRegistry;  // forward decl for checked() factory
 
@@ -26,18 +23,17 @@ struct Ench {
     static Ench checked(int32_t id, int32_t level, const EnchantmentRegistry& reg);
 
     struct Hash {
-        size_t operator()(const Ench& e) const { return std::hash<int32_t>()(e.id); }
+        size_t operator()(const Ench& e) const {
+            return static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);
+        }
     };
 
     bool operator==(const Ench& other) const { return id == other.id && level == other.level; }
 
-    // Metadata queries — delegate to EnchantmentRegistry::get_instance()
-    std::string get_name() const;
-    MCE get_supported_platform() const;
-    int32_t get_max_level() const;
-    int32_t get_limited_level() const;
-    const std::unordered_set<int32_t>& get_exclusive_set() const;
-    const std::unordered_set<int32_t>& get_applicable_equipment() const;
-
-    bool is_incompatible(const Ench& other) const;
+    // NOTE: Registry-dependent metadata queries (get_name, get_max_level, etc.)
+    // have been removed from the domain type. Use EnchantmentRegistry directly:
+    //   reg.get(ench.id).name_id         // instead of ench.get_name()
+    //   reg.get(ench.id).max_level       // instead of ench.get_max_level()
+    //   reg.get_exclusive_set(ench.id)   // instead of ench.get_exclusive_set()
+    //   reg.is_incompatible(e1.id, e2.id)// instead of e1.is_incompatible(e2)
 };

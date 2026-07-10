@@ -15,7 +15,6 @@
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
 
-#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -91,6 +90,7 @@ struct BenchConfig {
     std::unordered_set<std::string> test_names; // empty = all
     std::unordered_set<std::string> algos;      // empty = all
     bool list_only = false;
+    bool no_skip = false;
 };
 
 BenchConfig parse_cli(int argc, char* argv[]) {
@@ -140,6 +140,9 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                       << "  forge_benchmark --group armor --algo astar\n";
             std::exit(0);
         }
+        else if (arg == "--no-skip") {
+            cfg.no_skip = true;
+        }
     }
     return cfg;
 }
@@ -155,7 +158,7 @@ void load_builtin_data() {
     EquipmentRegistry::get_instance().initialize(equipments);
 }
 
-void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos) {
+void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos, bool no_skip = false) {
     int32_t eq_id = EquipmentRegistry::get_instance().get_id(tc.item_type);
     if (eq_id < 0) {
         std::cout << "  SKIP: unknown equipment '" << tc.item_type << "'" << std::endl;
@@ -178,7 +181,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
     compact::EnchReg ench_reg;
     ench_reg.init(EnchantmentRegistry::get_instance(), eq);
 
-    ItemStack start_item(&eq, ::EnchSet{}, 0, eq.max_durability);
+    ItemStack start_item(eq, ::EnchSet{}, 0, eq.max_durability);
 
     AlgorithmInput algo_input;
     algo_input.config.platform = MCE::Java;
@@ -198,6 +201,11 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
             continue;
         }
+        if (!no_skip && algo_name == "astar" && tc.wanted.size() > 8) {
+            std::cout << "  " << algo_name << ": SKIP: too many enchants" << std::endl;
+            continue;
+        }
+        
         auto algo = AlgorithmRegistry::get_instance().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
 
@@ -244,7 +252,7 @@ void list_cases() {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    auto cfg = parse_cli(argc, argv);
+    BenchConfig cfg = parse_cli(argc, argv);
 
     if (cfg.list_only) {
         list_cases();
@@ -283,7 +291,7 @@ int main(int argc, char* argv[]) {
 
     for (auto* tc : queue) {
         std::cout << tc->name << " (" << tc->wanted.size() << " enchants):" << std::endl;
-        run_case(*tc, cfg.algos);
+        run_case(*tc, cfg.algos, cfg.no_skip);
         std::cout << std::endl;
     }
     std::cout << "=== Done ===" << std::endl;

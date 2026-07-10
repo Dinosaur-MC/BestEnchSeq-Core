@@ -104,8 +104,8 @@ void test_parse_inventory_json() {
     // Second: diamond sword with durability 500
     expect(items[1].is_equipment(),
            "parse_inventory: item[1] should be equipment");
-    expect(items[1].equipment != nullptr,
-           "parse_inventory: item[1] equipment pointer not null");
+    expect(items[1].equipment.has_value(),
+           "parse_inventory: item[1] equipment should be present");
     expect(items[1].equipment->name_id == "diamond_sword",
            "parse_inventory: item[1] equipment id should be diamond_sword");
     expect(items[1].prior_penalty == 1,
@@ -134,8 +134,8 @@ void test_build_target() {
 
     expect(target.is_equipment(),
            "build_target: should be equipment");
-    expect(target.equipment != nullptr,
-           "build_target: equipment pointer not null");
+    expect(target.equipment.has_value(),
+           "build_target: equipment should be present");
     expect(target.equipment->name_id == "diamond_sword",
            "build_target: equipment id should be diamond_sword");
     expect(target.enchantments.empty(),

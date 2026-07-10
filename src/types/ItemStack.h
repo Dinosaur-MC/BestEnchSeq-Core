@@ -2,9 +2,11 @@
 #include "EnchSet.h"
 #include "Equipment.h"
 
+#include <optional>
+
 /// Forgeable item stack — pure data container.
 struct ItemStack {
-    const Equipment *equipment;
+    std::optional<Equipment> equipment;
     EnchSet enchantments;
     int32_t prior_penalty;
     int32_t durability;
@@ -12,8 +14,9 @@ struct ItemStack {
 
     ItemStack();
     ItemStack(const EnchSet &enchs, int32_t prior_penalty = 0);
-    ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty, int32_t durability);
-    ItemStack(const Equipment *equipment, const EnchSet &enchs, int32_t prior_penalty = 0);
+    /// Construct an equipment item (copies the Equipment descriptor).
+    ItemStack(const Equipment &equip, const EnchSet &enchs, int32_t prior_penalty, int32_t durability);
+    ItemStack(const Equipment &equip, const EnchSet &enchs, int32_t prior_penalty = 0);
 
     bool is_book() const;
     bool is_equipment() const;

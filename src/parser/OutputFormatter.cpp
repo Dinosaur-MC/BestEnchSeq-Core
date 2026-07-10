@@ -118,7 +118,7 @@ EnchSet enchset_from_json_array(const Json::Array &arr) {
 std::string OutputFormatter::describe_item_verbose(const ItemStack &item) {
     std::string result;
 
-    if (item.is_book() || item.equipment == nullptr) {
+    if (item.is_book() || !item.equipment) {
         result = "附魔书(";
         if (item.enchantments.empty()) {
             result += "无魔咒";
@@ -156,7 +156,7 @@ std::string OutputFormatter::describe_item_verbose(const ItemStack &item) {
 // describe_item_compact
 // ---------------------------------------------------------------------------
 std::string OutputFormatter::describe_item_compact(const ItemStack &item) {
-    if (item.is_book() || item.equipment == nullptr) {
+    if (item.is_book() || !item.equipment) {
         std::string result = "B;";
         bool first = true;
         for (const auto &ench : item.enchantments) {
@@ -502,7 +502,7 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
     Json::Object obj;
 
     // Equipment
-    if (item.equipment != nullptr) {
+    if (item.equipment) {
         Json::Object eq;
         int32_t cid = item.equipment->category_id;
         std::string cat_name = "unknown";
@@ -596,7 +596,9 @@ ItemStack OutputFormatter::itemstack_from_json(
         durability = json_int(dur_it->second);
     }
 
-    return ItemStack(eq_ptr, ench_set, prior_penalty, durability);
+    if (eq_ptr)
+        return ItemStack(*eq_ptr, ench_set, prior_penalty, durability);
+    return ItemStack(ench_set, prior_penalty);
 }
 
 // ---------------------------------------------------------------------------

@@ -52,7 +52,7 @@ void test_full_pipeline_direct() {
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
     expect(input.available_items.size() == 7,
            "full_pipeline_direct: auto-complete should generate 7 graduated books");
-    expect(input.target_item.equipment != nullptr,
+    expect(input.target_item.equipment.has_value(),
            "full_pipeline_direct: target should have equipment");
     expect(input.target_item.equipment->name_id == "diamond_sword",
            "full_pipeline_direct: target should be diamond sword");
@@ -105,7 +105,7 @@ void test_full_pipeline_inventory() {
 
     expect(input.available_items.size() >= 2,
            "full_pipeline_inventory: should have at least 2 items");
-    expect(input.target_item.equipment != nullptr,
+    expect(input.target_item.equipment.has_value(),
            "full_pipeline_inventory: target should have equipment");
 
     std::filesystem::remove("test_inv_pipeline.json");
