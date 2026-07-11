@@ -78,7 +78,7 @@ while [ $# -gt 0 ]; do
             massif_check=1
             shift
             ;;
-        -b|--benchmark)
+        --benchmark)
             benchmark_check=1
             shift
             ;;
@@ -103,9 +103,9 @@ done
 # 剩下的全部当作 program_args
 program_args="$@"
 
-# check jobs
-if [ $leak_check -eq 0 -a $callgrind_check -eq 0 -a $massif_check -eq 0 -a $benchmark_check -eq 0 ]; then
-    echo "未选择分析工具。请使用 -a 或 -c/--check, --callgrind, --massif, -b/--benchmark." >&2
+# build/check jobs
+if [ $build_project -eq 0 -a $leak_check -eq 0 -a $callgrind_check -eq 0 -a $massif_check -eq 0 -a $benchmark_check -eq 0 ]; then
+    echo "未选择分析工具。请使用 -a 或 -c/--check, --callgrind, --massif, --benchmark." >&2
     exit 1
 fi
 
