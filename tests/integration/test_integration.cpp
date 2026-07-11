@@ -12,6 +12,9 @@
 #include "types/ForgeConfig.h"
 #include "framework/test_utils.h"
 
+static auto& test_ench_reg = registries::enchants();
+static auto& test_cat_reg  = registries::categories();
+
 #include "adapters/CompactAdapter.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/strategies/GreedyAlgorithm.h"
@@ -67,7 +70,7 @@ void test_full_pipeline_direct() {
     TagResolver resolver;
     registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
@@ -75,11 +78,11 @@ void test_full_pipeline_direct() {
     auto config = cli_parser.parse(5, const_cast<char **>(argv));
 
     auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
-    auto input = InputParser::assemble_input(config, eq_map);
+    auto input = InputParser::assemble_input(config, test_ench_reg, eq_map);
 
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
     expect(input.available_items.size() == 7,
@@ -99,11 +102,11 @@ void test_full_pipeline_inventory() {
     TagResolver resolver;
     registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
@@ -127,7 +130,7 @@ void test_full_pipeline_inventory() {
     CLIParser cli_parser;
     auto config = cli_parser.parse(9, const_cast<char **>(argv));
 
-    auto input = InputParser::assemble_input(config, eq_map);
+    auto input = InputParser::assemble_input(config, test_ench_reg, eq_map);
 
     expect(input.available_items.size() >= 2,
            "full_pipeline_inventory: should have at least 2 items");
@@ -146,7 +149,7 @@ void test_builtin_enchantment_lookup() {
     TagResolver resolver;
     registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     expect(registries::enchants().get_id("sharpness") >= 0, "builtin: sharpness found");
@@ -168,7 +171,7 @@ void test_builtin_equipment_lookup() {
     TagResolver resolver;
     registries::categories().initialize();
     auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
 
     bool found_sword = false;
     bool found_netherite_helmet = false;
@@ -198,19 +201,19 @@ void test_output_formatting_empty() {
     TagResolver resolver;
     registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     std::vector<EnchSolution> empty_solutions;
 
-    auto verbose = OutputFormatter::format_verbose(empty_solutions, "direct");
+    auto verbose = OutputFormatter::format_verbose(empty_solutions, test_ench_reg, test_cat_reg, "direct");
     expect(verbose.empty(), "format_verbose: empty solutions produce empty output");
 
-    auto compact = OutputFormatter::format_compact(empty_solutions, "direct");
+    auto compact = OutputFormatter::format_compact(empty_solutions, test_ench_reg, test_cat_reg, "direct");
     expect(compact.find("MODE=direct") != std::string::npos,
            "format_compact: should contain MODE=direct");
 
-    auto json_str = OutputFormatter::format_json(empty_solutions, "direct");
+    auto json_str = OutputFormatter::format_json(empty_solutions, test_ench_reg, test_cat_reg, "direct");
     expect(json_str.find("\"solutions\"") != std::string::npos,
            "format_json: should contain solutions array");
     // Structured JSON validation
@@ -226,11 +229,11 @@ void test_full_pipeline_execute() {
     TagResolver resolver;
     registries::categories().initialize();
     auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver);
+        "data/builtin/vanilla.json", resolver, test_cat_reg);
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
@@ -245,7 +248,7 @@ void test_full_pipeline_execute() {
            "execute: diamond_sword found in equipment map");
 
     auto wanted_specs = CLIParser::parse_enchantment_list(config.wanted);
-    EnchSet wanted = InputParser::build_wanted_enchset(wanted_specs);
+    EnchSet wanted = InputParser::build_wanted_enchset(wanted_specs, test_ench_reg);
     EnchSet existing;    // equipment starts empty
     ItemCollection books = InputParser::generate_books(wanted, existing);
     expect(books.size() == 3,
@@ -297,14 +300,14 @@ void test_full_pipeline_execute() {
 
     // 8. Format output in all 3 formats and verify content
     //    Verbose
-    auto verbose_text = OutputFormatter::format_verbose(solutions, "direct");
+    auto verbose_text = OutputFormatter::format_verbose(solutions, test_ench_reg, test_cat_reg, "direct");
     expect(!verbose_text.empty(),
            "execute: verbose output should not be empty");
     expect(verbose_text.find("sharpness") != std::string::npos,
            "execute: verbose output should contain 'sharpness'");
 
     //    Compact
-    auto compact_text = OutputFormatter::format_compact(solutions, "direct");
+    auto compact_text = OutputFormatter::format_compact(solutions, test_ench_reg, test_cat_reg, "direct");
     expect(!compact_text.empty(),
            "execute: compact output should not be empty");
     expect(compact_text.find("MODE=direct") != std::string::npos,
@@ -313,7 +316,7 @@ void test_full_pipeline_execute() {
            "execute: compact output should contain 'sharpness'");
 
     //    JSON
-    auto json_text = OutputFormatter::format_json(solutions, "direct");
+    auto json_text = OutputFormatter::format_json(solutions, test_ench_reg, test_cat_reg, "direct");
     expect(!json_text.empty(),
            "execute: JSON output should not be empty");
     expect(json_text.find("\"is_success\"") != std::string::npos,

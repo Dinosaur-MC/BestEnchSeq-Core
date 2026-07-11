@@ -13,6 +13,9 @@
 #include <string>
 #include <vector>
 
+static auto& test_ench_reg = registries::enchants();
+static auto& test_cat_reg  = registries::categories();
+
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -129,7 +132,7 @@ TestScenario make_scenario(bool two_steps) {
 
 void test_verbose_single_solution() {
     auto sc = make_scenario(true);
-    std::string out = OutputFormatter::format_verbose({sc.solution}, "direct");
+    std::string out = OutputFormatter::format_verbose({sc.solution}, test_ench_reg, test_cat_reg, "direct");
 
     // Check structural elements (ASCII-safe)
     expect(out.find("===========================================") != std::string::npos,
@@ -153,7 +156,7 @@ void test_verbose_multi_solution() {
     auto sc2 = make_scenario(true);
     sc2.solution.metadata.algorithm_name = "alt_algo";
 
-    std::string out = OutputFormatter::format_verbose({sc1.solution, sc2.solution}, "inventory");
+    std::string out = OutputFormatter::format_verbose({sc1.solution, sc2.solution}, test_ench_reg, test_cat_reg, "inventory");
 
     // Count solution separators
     size_t sep_count = 0;
@@ -193,7 +196,7 @@ void test_describe_item_book() {
     );
 
     // Compact format uses ASCII only and should show book as "B;..."
-    std::string compact = OutputFormatter::format_compact({sol}, "direct");
+    std::string compact = OutputFormatter::format_compact({sol}, test_ench_reg, test_cat_reg, "direct");
     expect(compact.find("B;") != std::string::npos,
            "book_desc: compact output should contain 'B;' for book items");
     expect(compact.find("minecraft:sharpness") != std::string::npos,
@@ -206,14 +209,14 @@ void test_describe_item_equipment() {
     auto sc = make_scenario(true);
 
     // Test through compact format
-    std::string compact = OutputFormatter::format_compact({sc.solution}, "direct");
+    std::string compact = OutputFormatter::format_compact({sc.solution}, test_ench_reg, test_cat_reg, "direct");
     expect(compact.find("E;") != std::string::npos,
            "equip_desc: compact output should contain 'E;' for equipment items");
     expect(compact.find("diamond_sword") != std::string::npos,
            "equip_desc: compact output should contain equipment id");
 
     // Also test through verbose for equipment name
-    std::string verbose = OutputFormatter::format_verbose({sc.solution}, "direct");
+    std::string verbose = OutputFormatter::format_verbose({sc.solution}, test_ench_reg, test_cat_reg, "direct");
     expect(verbose.find("Diamond Sword") != std::string::npos,
            "equip_desc: verbose output should contain equipment name");
 
@@ -222,7 +225,7 @@ void test_describe_item_equipment() {
 
 void test_compact_format() {
     auto sc = make_scenario(true);
-    std::string out = OutputFormatter::format_compact({sc.solution}, "direct");
+    std::string out = OutputFormatter::format_compact({sc.solution}, test_ench_reg, test_cat_reg, "direct");
 
     expect(out.find("#MODE=") != std::string::npos,
            "compact: should start with #MODE=");
@@ -238,7 +241,7 @@ void test_compact_multi_solution() {
     auto sc1 = make_scenario(true);
     auto sc2 = make_scenario(false); // single-step second solution
 
-    std::string out = OutputFormatter::format_compact({sc1.solution, sc2.solution}, "inventory");
+    std::string out = OutputFormatter::format_compact({sc1.solution, sc2.solution}, test_ench_reg, test_cat_reg, "inventory");
 
     expect(out.find("#SOLUTIONS=") != std::string::npos,
            "compact_multi: should contain #SOLUTIONS=");
@@ -250,7 +253,7 @@ void test_compact_multi_solution() {
 
 void test_json_round_trip() {
     auto sc = make_scenario(true);
-    std::string json_out = OutputFormatter::format_json({sc.solution}, "direct");
+    std::string json_out = OutputFormatter::format_json({sc.solution}, test_ench_reg, test_cat_reg, "direct");
 
     // Verify JSON structure
     expect(json_out.find("\"schema_version\"") != std::string::npos,
@@ -259,7 +262,7 @@ void test_json_round_trip() {
            "json: should contain solutions array");
 
     // Round-trip: parse the JSON string
-    auto parsed = OutputFormatter::parse_json(json_out);
+    auto parsed = OutputFormatter::parse_json(json_out, test_ench_reg, test_cat_reg);
 
     expect(parsed.size() == 1,
            "json_roundtrip: should parse 1 solution");
@@ -283,9 +286,9 @@ void test_json_multi_solution() {
     sc2.solution.metadata.algorithm_name = "alt_algo";
 
     std::vector<EnchSolution> solutions = {sc1.solution, sc2.solution};
-    std::string json_out = OutputFormatter::format_json(solutions, "direct");
+    std::string json_out = OutputFormatter::format_json(solutions, test_ench_reg, test_cat_reg, "direct");
 
-    auto parsed = OutputFormatter::parse_json(json_out);
+    auto parsed = OutputFormatter::parse_json(json_out, test_ench_reg, test_cat_reg);
 
     expect(parsed.size() == 2,
            "json_multi: should parse 2 solutions");
@@ -308,6 +311,7 @@ int main() {
     std::cout << "=== OutputFormatter Tests ===" << std::endl;
 
     try {
+        registries::categories().initialize();
         setup_enchinfo();
 
         test_verbose_single_solution();

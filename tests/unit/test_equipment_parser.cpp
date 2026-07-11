@@ -7,6 +7,8 @@
 #include <fstream>
 #include <filesystem>
 
+static auto& test_cat_reg = registries::categories();
+
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -37,7 +39,7 @@ void test_json_basic() {
     })");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json(file, resolver);
+    auto eqs = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
 
     expect(eqs.size() == 2, "json: 2 equipment");
     expect(eqs[0].name_id == "diamond_sword", "json: first id");
@@ -67,7 +69,7 @@ void test_csv_basic() {
         f << "diamond_pickaxe,Diamond Pickaxe,pickaxe,1561\n";
     }
 
-    auto eqs = EquipmentParser::parse_native_csv(file);
+    auto eqs = EquipmentParser::parse_native_csv(file, test_cat_reg);
 
     expect(eqs.size() == 2, "csv: 2 equipment");
     expect(eqs[0].name_id == "diamond_sword", "csv: first id");
@@ -95,7 +97,7 @@ void test_csv_no_durability() {
         f << "diamond_sword,Diamond Sword,sword\n";
     }
 
-    auto eqs = EquipmentParser::parse_native_csv(file);
+    auto eqs = EquipmentParser::parse_native_csv(file, test_cat_reg);
     expect(eqs.size() == 1, "csv no durability: parsed");
     expect(eqs[0].max_durability == 0, "csv no durability: defaults to 0");
 
@@ -117,7 +119,7 @@ void test_custom_category() {
     })");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json(file, resolver);
+    auto eqs = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
 
     expect(eqs.size() == 1, "custom cat: parsed");
     expect(eqs[0].name_id == "custom_weapon", "custom cat: id");
@@ -143,7 +145,7 @@ void test_missing_fields_skipped() {
     })");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json(file, resolver);
+    auto eqs = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
 
     // Only the first and last should be valid
     expect(eqs.size() == 2, "missing fields: 2 valid entries");
@@ -183,7 +185,7 @@ void test_empty_equipments() {
     })");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json(file, resolver);
+    auto eqs = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
 
     expect(eqs.empty(), "empty equipments array: empty result");
 
@@ -202,7 +204,7 @@ void test_missing_equipments_key() {
     })");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json(file, resolver);
+    auto eqs = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
 
     expect(eqs.empty(), "missing equipments key: empty result");
 
@@ -227,7 +229,7 @@ void test_json_mixed_with_enchantments() {
     })");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json(file, resolver);
+    auto eqs = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
 
     expect(eqs.size() == 1, "mixed json: 1 equipment");
     expect(eqs[0].name_id == "diamond_sword", "mixed json: id");
@@ -249,7 +251,7 @@ void test_csv_missing_required_columns() {
         f << "diamond_sword,Diamond Sword\n";
     }
 
-    auto eqs = EquipmentParser::parse_native_csv(file);
+    auto eqs = EquipmentParser::parse_native_csv(file, test_cat_reg);
     expect(eqs.empty(), "csv missing required columns: empty result");
 
     std::filesystem::remove_all(temp_dir);
@@ -267,7 +269,7 @@ void test_csv_empty_file() {
         f << "id,name,category,max_durability\n";
     }
 
-    auto eqs = EquipmentParser::parse_native_csv(file);
+    auto eqs = EquipmentParser::parse_native_csv(file, test_cat_reg);
     expect(eqs.empty(), "csv with only header: empty result");
 
     std::filesystem::remove_all(temp_dir);
@@ -288,7 +290,7 @@ void test_parse_auto_detect_json() {
     })");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse(file, resolver);
+    auto eqs = EquipmentParser::parse(file, resolver, test_cat_reg);
 
     expect(eqs.size() == 2, "auto-detect json: 2 equipment");
     expect(eqs[0].name_id == "item_a" || eqs[0].name_id == "item_b", "auto-detect json: valid id");
@@ -312,7 +314,7 @@ void test_parse_auto_detect_csv() {
     }
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse(file, resolver);
+    auto eqs = EquipmentParser::parse(file, resolver, test_cat_reg);
 
     expect(eqs.size() == 1, "auto-detect csv: 1 equipment");
     expect(eqs[0].name_id == "diamond_sword", "auto-detect csv: id");
@@ -329,7 +331,7 @@ void test_parse_mc_official_stub() {
     std::filesystem::create_directories(temp_dir);
     auto dir = (temp_dir / "test_eq_mc_off_empty").string();
 
-    auto eqs = EquipmentParser::parse_mc_official(dir);
+    auto eqs = EquipmentParser::parse_mc_official(dir, test_cat_reg);
     expect(eqs.empty(), "mc official empty dir: empty result");
 
     std::filesystem::remove_all(temp_dir);
@@ -360,7 +362,7 @@ void test_parse_mc_official_with_items() {
     create_file(dir + "/data/minecraft/items/readme.txt", "not an item");
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_mc_official(dir);
+    auto eqs = EquipmentParser::parse_mc_official(dir, test_cat_reg);
 
     expect(eqs.size() == 2, "mc official items: 2 equipment");
     expect(eqs[0].name_id == "minecraft:diamond_sword" || eqs[0].name_id == "minecraft:diamond_pickaxe",
@@ -379,7 +381,7 @@ void test_parse_mc_official_no_items_dir() {
     auto dir = (temp_dir / "test_eq_mc_off_no_items").string();
     std::filesystem::create_directories(dir + "/data/minecraft");
 
-    auto eqs = EquipmentParser::parse_mc_official(dir);
+    auto eqs = EquipmentParser::parse_mc_official(dir, test_cat_reg);
     expect(eqs.empty(), "mc official no items dir: empty result");
 
     std::filesystem::remove_all(temp_dir);
@@ -398,7 +400,7 @@ void test_invalid_json_handling() {
     }
 
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json(file, resolver);
+    auto eqs = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
     expect(eqs.empty(), "invalid json: empty result");
 
     std::filesystem::remove_all(temp_dir);
@@ -409,7 +411,7 @@ void test_invalid_json_handling() {
 // ---------------------------------------------------------------------------
 void test_non_existent_file() {
     TagResolver resolver;
-    auto eqs = EquipmentParser::parse_native_json("nonexistent.json", resolver);
+    auto eqs = EquipmentParser::parse_native_json("nonexistent.json", resolver, test_cat_reg);
     expect(eqs.empty(), "non-existent file: empty result");
 }
 
@@ -428,7 +430,7 @@ void test_parse_with_invalid_format() {
     TagResolver resolver;
     bool threw = false;
     try {
-        EquipmentParser::parse(file, resolver);
+        EquipmentParser::parse(file, resolver, test_cat_reg);
     } catch (const std::runtime_error &) {
         threw = true;
     }
@@ -447,7 +449,7 @@ void test_to_json_round_trip() {
     };
 
     // Serialize to JSON
-    std::string json_str = EquipmentParser::to_json(original);
+    std::string json_str = EquipmentParser::to_json(original, test_cat_reg);
 
     // Write to temp file, parse back
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_eq_json";
@@ -459,7 +461,7 @@ void test_to_json_round_trip() {
     }
 
     TagResolver resolver;
-    auto parsed = EquipmentParser::parse_native_json(file, resolver);
+    auto parsed = EquipmentParser::parse_native_json(file, resolver, test_cat_reg);
 
     expect(parsed.size() == original.size(), "eq JSON round-trip: same count");
     if (parsed.size() >= 1) {
@@ -482,7 +484,7 @@ void test_to_csv_round_trip() {
     };
 
     // Serialize to CSV
-    std::string csv_str = EquipmentParser::to_csv(original);
+    std::string csv_str = EquipmentParser::to_csv(original, test_cat_reg);
 
     // Write to temp file, parse back
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_eq_csv";
@@ -493,7 +495,7 @@ void test_to_csv_round_trip() {
         f << csv_str;
     }
 
-    auto parsed = EquipmentParser::parse_native_csv(file);
+    auto parsed = EquipmentParser::parse_native_csv(file, test_cat_reg);
 
     expect(parsed.size() == original.size(), "eq CSV round-trip: same count");
     if (parsed.size() >= 1) {

@@ -33,9 +33,10 @@ namespace {
 void load_builtin_data(const std::filesystem::path &builtin_data_dir, TagResolver &tag_resolver) {
     registries::categories().initialize();
 
-    auto ench_infos = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
+    auto &cat_reg = registries::categories();
+    auto ench_infos = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tag_resolver, cat_reg);
     registries::enchants().initialize(ench_infos);
-    auto equipments = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
+    auto equipments = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tag_resolver, cat_reg);
     registries::equipment().initialize(equipments);
 }
 
@@ -43,8 +44,9 @@ void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &t
     if (!std::filesystem::exists(data_pack_dir))
         throw std::runtime_error("Data pack directory not found: " + data_pack_dir.string());
 
+    auto &cat_reg = registries::categories();
     tag_resolver.load_from(data_pack_dir);
-    auto ench_infos = EnchInfoParser::parse(data_pack_dir, tag_resolver);
+    auto ench_infos = EnchInfoParser::parse(data_pack_dir, tag_resolver, cat_reg);
     auto existing_ench = registries::enchants().get_instances();
     std::vector<EnchInfo> combined_ench;
     combined_ench.reserve(existing_ench.size() + ench_infos.size());
@@ -54,7 +56,7 @@ void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &t
         combined_ench.push_back(info);
     registries::enchants().initialize(combined_ench);
 
-    auto equipments = EquipmentParser::parse(data_pack_dir, tag_resolver);
+    auto equipments = EquipmentParser::parse(data_pack_dir, tag_resolver, cat_reg);
     auto &existing_eq = registries::equipment().get_instances();
     std::vector<Equipment> combined_eq;
     combined_eq.reserve(existing_eq.size() + equipments.size());
@@ -109,7 +111,7 @@ int main(int argc, char *argv[]) {
             equipment_map[eq.name_id] = &eq;
         }
 
-        auto parsed = InputParser::assemble_input(config, equipment_map);
+        auto parsed = InputParser::assemble_input(config, registries::enchants(), equipment_map);
 
         // Register and create algorithm
         register_builtin_algorithms();
@@ -163,12 +165,14 @@ int main(int argc, char *argv[]) {
 
         // Format output
         std::string output_text;
+        auto &ench_reg = registries::enchants();
+        auto &cat_reg  = registries::categories();
         if (config.format == "json") {
-            output_text = OutputFormatter::format_json(solutions, config.mode);
+            output_text = OutputFormatter::format_json(solutions, ench_reg, cat_reg, config.mode);
         } else if (config.format == "compact") {
-            output_text = OutputFormatter::format_compact(solutions, config.mode);
+            output_text = OutputFormatter::format_compact(solutions, ench_reg, cat_reg, config.mode);
         } else {
-            output_text = OutputFormatter::format_verbose(solutions, config.mode);
+            output_text = OutputFormatter::format_verbose(solutions, ench_reg, cat_reg, config.mode);
         }
 
         if (config.output) {

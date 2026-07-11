@@ -154,9 +154,9 @@ void load_builtin_data() {
     auto dir = std::filesystem::path("data") / "builtin";
     TagResolver tags;
     registries::categories().initialize();
-    auto ench_infos = EnchInfoParser::parse(dir / "vanilla.json", tags);
+    auto ench_infos = EnchInfoParser::parse(dir / "vanilla.json", tags, registries::categories());
     registries::enchants().initialize(ench_infos);
-    auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags);
+    auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags, registries::categories());
     registries::equipment().initialize(equipments);
 }
 
