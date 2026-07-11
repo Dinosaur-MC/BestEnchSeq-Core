@@ -163,7 +163,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
-    ${PROJECT_ROOT}/src/parsers/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
     ${PROJECT_ROOT}/src/parsers/OutputFormatter.cpp
     # I/O layer

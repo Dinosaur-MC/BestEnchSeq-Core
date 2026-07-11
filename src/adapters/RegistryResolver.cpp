@@ -1,4 +1,4 @@
-#include "parsers/RegistryResolver.h"
+#include "adapters/RegistryResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "types/EquipmentCategory.h"
 

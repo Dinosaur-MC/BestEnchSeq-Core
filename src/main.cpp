@@ -13,7 +13,7 @@
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
 #include "parsers/OutputFormatter.h"
-#include "parsers/RegistryResolver.h"
+#include "adapters/RegistryResolver.h"
 #include "parsers/TagResolver.h"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/RegistryAccess.h"

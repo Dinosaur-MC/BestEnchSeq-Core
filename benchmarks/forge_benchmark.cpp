@@ -10,7 +10,7 @@
 #include "adapters/CompactAdapter.h"
 #include "parsers/EnchInfoParser.h"
 #include "parsers/EquipmentParser.h"
-#include "parsers/RegistryResolver.h"
+#include "adapters/RegistryResolver.h"
 #include "parsers/TagResolver.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"

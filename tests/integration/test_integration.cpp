@@ -4,7 +4,7 @@
 #include "parsers/InputParser.h"
 #include "parsers/OutputFormatter.h"
 #include "utils/ParserUtils.h"
-#include "parsers/RegistryResolver.h"
+#include "adapters/RegistryResolver.h"
 #include "parsers/TagResolver.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
