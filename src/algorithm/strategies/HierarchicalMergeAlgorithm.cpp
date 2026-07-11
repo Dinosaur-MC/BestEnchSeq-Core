@@ -1,5 +1,6 @@
 #include "HierarchicalMergeAlgorithm.h"
 #include "../ExecutionContext.h"
+#include <chrono>
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>
@@ -81,6 +82,9 @@ void HierarchicalMergeAlgorithm::execute(
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
     if (items.size() <= 1) {
+        _diag.label = "hierarchical";
+        _diag.status = "GoalAlreadyMet";
+        _diag.write();
         ctx.report_compact_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
@@ -159,6 +163,11 @@ void HierarchicalMergeAlgorithm::execute(
     ctx.report_progress(0.6, ProgressStatus::ApplyingToEquipment);
 
     if (group_results.empty()) {
+        _diag.label = "hierarchical";
+        _diag.steps_forged = compact_steps.size();
+        _diag.status = "Complete";
+        _diag.write();
+
         ctx.report_compact_solution(std::move(compact_steps));
         ctx.report_progress(1.0, ProgressStatus::Complete);
         return;
@@ -186,6 +195,11 @@ void HierarchicalMergeAlgorithm::execute(
         ctx.incr_steps_forged();
         compact_steps.push_back({std::move(saved_equip), std::move(combined), cost});
     }
+
+    _diag.label = "hierarchical";
+    _diag.steps_forged = compact_steps.size();
+    _diag.status = "Complete";
+    _diag.write();
 
     ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);

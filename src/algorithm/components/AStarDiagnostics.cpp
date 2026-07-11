@@ -1,4 +1,4 @@
-#include "AStarDiagnostics.hpp"
+#include "AStarDiagnostics.h"
 #ifndef ASTAR_DISABLE_DIAGNOSTICS
 #include <chrono>
 #include <ctime>

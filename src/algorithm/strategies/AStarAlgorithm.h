@@ -2,7 +2,7 @@
 #include "../IAlgorithm.h"
 #include "../forge/ForgeEngine.h"
 #include "algorithm/components/AStarMemoryBudget.h"
-#include "utils/AStarDiagnostics.hpp"
+#include "algorithm/components/AStarDiagnostics.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <unordered_map>

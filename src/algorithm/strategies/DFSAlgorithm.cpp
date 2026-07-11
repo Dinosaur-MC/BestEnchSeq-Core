@@ -2,6 +2,7 @@
 #include "../ExecutionContext.h"
 #include <algorithm>
 #include <cstdint>
+#include <chrono>
 
 #include <vector>
 
@@ -145,6 +146,11 @@ void DFSAlgorithm::execute(
     _frame_pairs.emplace_back();
 
     _dfs_iterative(ctx);
+
+    _diag.label = "dfs";
+    _diag.solution_cost = _best_cost < INT32_MAX ? _best_cost : -1;
+    _diag.status = _best_cost < INT32_MAX ? "Complete" : "CompleteNoSolution";
+    _diag.write();
 
     ctx.report_progress(1.0, _best_cost < INT32_MAX
         ? ProgressStatus::Complete

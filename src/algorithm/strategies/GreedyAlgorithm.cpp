@@ -1,5 +1,6 @@
 #include "GreedyAlgorithm.h"
 #include "../ExecutionContext.h"
+#include <chrono>
 #include <algorithm>
 
 using compact::Item;
@@ -56,6 +57,11 @@ void GreedyAlgorithm::execute(
         if (_meets_target(mutable_items[0]))
             break;
     }
+
+    _diag.label = "greedy";
+    _diag.steps_forged = compact_steps.size();
+    _diag.status = compact_steps.empty() ? "GoalAlreadyMet" : "Complete";
+    _diag.write();
 
     ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, compact_steps.empty()

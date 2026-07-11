@@ -189,6 +189,7 @@ add_executable(test_integration
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -298,7 +299,8 @@ add_executable(test_algorithm_strategies
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
-    ${PROJECT_ROOT}/src/utils/AStarDiagnostics.cpp
+    ${PROJECT_ROOT}/src/algorithm/components/AStarDiagnostics.cpp
+    ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancingAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeAlgorithm.cpp
     ${COMPACT_TYPE_SRCS}

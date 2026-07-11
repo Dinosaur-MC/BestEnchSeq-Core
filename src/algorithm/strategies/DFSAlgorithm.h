@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "algorithm/components/AlgorithmDiagnostics.h"
+
 class DFSAlgorithm : public IAlgorithm {
 public:
     explicit DFSAlgorithm(ForgeConfig cfg = {}) noexcept
@@ -84,4 +86,6 @@ private:
     std::deque<std::vector<ForgePair>> _frame_pairs;
 
     int32_t _solutions_found{0};
+
+    AlgorithmDiagnostics _diag;
 };

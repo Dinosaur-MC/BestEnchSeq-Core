@@ -5,7 +5,7 @@
 /// Diagnostics snapshot for AStar exit logging.
 ///
 /// Compiled out entirely when ASTAR_DISABLE_DIAGNOSTICS is defined.
-/// The write() method creates timestamped logs under logs/auto/.
+/// The write() method creates timestamped logs under logs/diag/.
 struct AStarDiagnostics {
     int64_t  explored_count      = 0;
     size_t   best_g_size         = 0;

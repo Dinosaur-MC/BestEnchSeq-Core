@@ -16,7 +16,8 @@ add_executable(forge_benchmark
     forge_benchmark.cpp
     ${ALGO_SRC}
     ${REG_SRC}
-    ${PROJECT_ROOT}/src/utils/AStarDiagnostics.cpp
+    ${PROJECT_ROOT}/src/algorithm/components/AStarDiagnostics.cpp
+    ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp

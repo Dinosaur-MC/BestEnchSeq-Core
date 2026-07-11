@@ -1,6 +1,7 @@
 #pragma once
 #include "../IAlgorithm.h"
 #include "../forge/ForgeEngine.h"
+#include "algorithm/components/AlgorithmDiagnostics.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <vector>
@@ -30,4 +31,5 @@ private:
     int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg) const;
 
     ForgeEngine _forge_engine;
+    AlgorithmDiagnostics _diag;
 };
