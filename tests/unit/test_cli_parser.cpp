@@ -1,4 +1,4 @@
-#include "parsers/CLIParser.h"
+#include "cli.h"
 #include "framework/test_utils.h"
 
 #include <iostream>
@@ -12,8 +12,8 @@ namespace {
 
 void test_basic_args() {
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5"};
-    CLIParser parser;
-    auto config = parser.parse(5, const_cast<char **>(argv));
+    
+    auto config = parse_cli(5, const_cast<char **>(argv));
 
     expect(config.mode == "direct", "mode should default to direct");
     expect(config.target == "diamond_sword", "target should be diamond_sword");
@@ -27,7 +27,7 @@ void test_basic_args() {
 // ---------------------------------------------------------------------------
 
 void test_ench_with_ns() {
-    auto ench = CLIParser::parse_enchantment("minecraft:sharpness=5");
+    auto ench = parse_enchantment("minecraft:sharpness=5");
 
     expect(ench.ns == "minecraft", "namespace should be minecraft");
     expect(ench.id == "sharpness", "id should be sharpness");
@@ -37,7 +37,7 @@ void test_ench_with_ns() {
 }
 
 void test_ench_without_ns() {
-    auto ench = CLIParser::parse_enchantment("sharpness=5");
+    auto ench = parse_enchantment("sharpness=5");
 
     expect(ench.ns == "minecraft", "default ns should be minecraft");
     expect(ench.id == "sharpness", "id should be sharpness");
@@ -47,7 +47,7 @@ void test_ench_without_ns() {
 }
 
 void test_colon_shorthand() {
-    auto ench = CLIParser::parse_enchantment("sharpness:5");
+    auto ench = parse_enchantment("sharpness:5");
 
     expect(ench.id == "sharpness", "id should be sharpness");
     expect(ench.level == 5, "level should be 5");
@@ -60,7 +60,7 @@ void test_colon_shorthand() {
 // ---------------------------------------------------------------------------
 
 void test_target_with_inline() {
-    auto target = CLIParser::parse_target("diamond_sword[sharpness=3]");
+    auto target = parse_target("diamond_sword[sharpness=3]");
 
     expect(target.item_id == "diamond_sword", "item_id should be diamond_sword");
     expect(target.inline_enchants.size() == 1, "should have one inline enchant");
@@ -71,7 +71,7 @@ void test_target_with_inline() {
 }
 
 void test_parse_target_no_brackets() {
-    auto target = CLIParser::parse_target("diamond_sword");
+    auto target = parse_target("diamond_sword");
 
     expect(target.item_id == "diamond_sword", "item_id should be diamond_sword without brackets");
     expect(target.inline_enchants.empty(), "no inline enchants when no brackets");
@@ -85,8 +85,8 @@ void test_parse_target_no_brackets() {
 
 void test_help_flag() {
     const char *argv[] = {"besq", "--help"};
-    CLIParser parser;
-    auto config = parser.parse(2, const_cast<char **>(argv));
+    
+    auto config = parse_cli(2, const_cast<char **>(argv));
 
     expect(config.help == true, "help should be true");
 
@@ -99,8 +99,8 @@ void test_help_flag() {
 
 void test_default_values() {
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5"};
-    CLIParser parser;
-    auto config = parser.parse(5, const_cast<char **>(argv));
+    
+    auto config = parse_cli(5, const_cast<char **>(argv));
 
     expect(config.mode == "direct", "default mode should be direct");
     expect(config.format == "text", "default format should be text");
@@ -115,11 +115,11 @@ void test_default_values() {
 
 void test_unknown_flag_throws() {
     const char *argv[] = {"besq", "--unknown_flag", "value"};
-    CLIParser parser;
+    
     bool threw = false;
 
     try {
-        parser.parse(3, const_cast<char **>(argv));
+        parse_cli(3, const_cast<char **>(argv));
     } catch (const std::runtime_error &) {
         threw = true;
     }
@@ -134,7 +134,7 @@ void test_unknown_flag_throws() {
 // ---------------------------------------------------------------------------
 
 void test_enchantment_list() {
-    auto list = CLIParser::parse_enchantment_list("sharpness=5,knockback=2");
+    auto list = parse_enchantment_list("sharpness=5,knockback=2");
 
     expect(list.size() == 2, "should parse two enchantments");
     expect(list[0].id == "sharpness", "first enchantment id should be sharpness");
@@ -151,8 +151,8 @@ void test_enchantment_list() {
 
 void test_key_value_equals_form() {
     const char *argv[] = {"besq", "--target=diamond_sword", "--wanted=sharpness=5"};
-    CLIParser parser;
-    auto config = parser.parse(3, const_cast<char **>(argv));
+    
+    auto config = parse_cli(3, const_cast<char **>(argv));
 
     expect(config.target == "diamond_sword", "target via --key=value form");
     expect(config.wanted == "sharpness=5", "wanted via --key=value form");
@@ -165,7 +165,7 @@ void test_key_value_equals_form() {
 // ---------------------------------------------------------------------------
 
 void test_empty_enchantment_list() {
-    auto list = CLIParser::parse_enchantment_list("");
+    auto list = parse_enchantment_list("");
     expect(list.empty(), "empty string should return empty list");
 
     std::cout << "  [OK] test_empty_enchantment_list" << std::endl;
@@ -176,7 +176,7 @@ void test_empty_enchantment_list() {
 // ---------------------------------------------------------------------------
 
 void test_target_multiple_inline() {
-    auto target = CLIParser::parse_target("diamond_sword[sharpness=5,knockback=2]");
+    auto target = parse_target("diamond_sword[sharpness=5,knockback=2]");
 
     expect(target.item_id == "diamond_sword", "item_id");
     expect(target.inline_enchants.size() == 2, "two inline enchants");
@@ -193,7 +193,7 @@ void test_target_multiple_inline() {
 // ---------------------------------------------------------------------------
 
 void test_target_with_ns_inline() {
-    auto target = CLIParser::parse_target("diamond_sword[minecraft:sharpness=3]");
+    auto target = parse_target("diamond_sword[minecraft:sharpness=3]");
 
     expect(target.item_id == "diamond_sword", "item_id");
     expect(target.inline_enchants.size() == 1, "one inline enchant");
@@ -211,12 +211,12 @@ void test_target_with_ns_inline() {
 void test_solutions_flag() {
     {
         const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "0"};
-        auto config = CLIParser().parse(7, const_cast<char **>(argv));
+        auto config = parse_cli(7, const_cast<char **>(argv));
         expect(config.solutions == 0, "--solutions 0");
     }
     {
         const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions=10"};
-        auto config = CLIParser().parse(6, const_cast<char **>(argv));
+        auto config = parse_cli(6, const_cast<char **>(argv));
         expect(config.solutions == 10, "--solutions=10");
     }
 
@@ -229,11 +229,11 @@ void test_solutions_flag() {
 
 void test_missing_target_throws() {
     const char *argv[] = {"besq", "--wanted", "sharpness=5"};
-    CLIParser parser;
+    
     bool threw = false;
 
     try {
-        parser.parse(3, const_cast<char **>(argv));
+        parse_cli(3, const_cast<char **>(argv));
     } catch (const std::runtime_error &) {
         threw = true;
     }
@@ -249,11 +249,11 @@ void test_missing_target_throws() {
 
 void test_missing_wanted_throws() {
     const char *argv[] = {"besq", "--target", "diamond_sword"};
-    CLIParser parser;
+    
     bool threw = false;
 
     try {
-        parser.parse(3, const_cast<char **>(argv));
+        parse_cli(3, const_cast<char **>(argv));
     } catch (const std::runtime_error &) {
         threw = true;
     }
@@ -268,7 +268,7 @@ void test_missing_wanted_throws() {
 // ---------------------------------------------------------------------------
 
 void test_ench_ns_only() {
-    auto ench = CLIParser::parse_enchantment("minecraft:sharpness");
+    auto ench = parse_enchantment("minecraft:sharpness");
 
     expect(ench.ns == "minecraft", "ns");
     expect(ench.id == "sharpness", "id");
@@ -282,7 +282,7 @@ void test_ench_ns_only() {
 // ---------------------------------------------------------------------------
 
 void test_ench_custom_ns_with_level() {
-    auto ench = CLIParser::parse_enchantment("thermalfoundation:excavate=3");
+    auto ench = parse_enchantment("thermalfoundation:excavate=3");
 
     expect(ench.ns == "thermalfoundation", "custom ns");
     expect(ench.id == "excavate", "id");
@@ -298,7 +298,7 @@ void test_ench_custom_ns_with_level() {
 void test_ench_invalid_level_throws() {
     bool threw = false;
     try {
-        CLIParser::parse_enchantment("sharpness=abc");
+        parse_enchantment("sharpness=abc");
     } catch (const std::runtime_error &) {
         threw = true;
     }
@@ -316,7 +316,7 @@ void test_solutions_invalid_throws() {
         const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "abc"};
         bool threw = false;
         try {
-            CLIParser().parse(7, const_cast<char **>(argv));
+            parse_cli(7, const_cast<char **>(argv));
         } catch (const std::runtime_error &) {
             threw = true;
         }
@@ -326,7 +326,7 @@ void test_solutions_invalid_throws() {
         const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "-1"};
         bool threw = false;
         try {
-            CLIParser().parse(7, const_cast<char **>(argv));
+            parse_cli(7, const_cast<char **>(argv));
         } catch (const std::runtime_error &) {
             threw = true;
         }
@@ -342,8 +342,8 @@ void test_solutions_invalid_throws() {
 
 void test_double_dash_stops_parsing() {
     const char *argv[] = {"besq", "--target", "sword", "--", "--wanted", "sharpness=5"};
-    CLIParser parser;
-    auto config = parser.parse(6, const_cast<char **>(argv));
+    
+    auto config = parse_cli(6, const_cast<char **>(argv));
 
     expect(config.target == "sword", "target parsed before --");
     // -- stops parsing, so --wanted is not consumed as an option
@@ -364,7 +364,7 @@ void test_all_options() {
         "--input", "in.json", "--output", "out.json",
         "--data-pack", "mypack"
     };
-    auto config = CLIParser().parse(19, const_cast<char **>(argv));
+    auto config = parse_cli(19, const_cast<char **>(argv));
 
     expect(config.target == "sword", "target");
     expect(config.wanted == "sharp=5", "wanted");

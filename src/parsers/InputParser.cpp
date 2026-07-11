@@ -214,12 +214,12 @@ ParsedInput InputParser::assemble_input(
 
     if (cli_config.mode == "direct") {
         // Parse target spec
-        TargetSpec target_spec = CLIParser::parse_target(cli_config.target);
+        TargetSpec target_spec = parse_target(cli_config.target);
         ItemStack target = build_target(target_spec, ench_reg, equipment_registry);
 
         // Parse wanted enchantments
         std::vector<EnchantmentSpec> wanted_specs =
-            CLIParser::parse_enchantment_list(cli_config.wanted);
+            parse_enchantment_list(cli_config.wanted);
         EnchSet wanted = build_wanted_enchset(wanted_specs, ench_reg);
 
         // Existing enchants come from the target item
@@ -249,7 +249,7 @@ ParsedInput InputParser::assemble_input(
 
     ItemStack target;
     if (!cli_config.target.empty()) {
-        TargetSpec target_spec = CLIParser::parse_target(cli_config.target);
+        TargetSpec target_spec = parse_target(cli_config.target);
         target = build_target(target_spec, ench_reg, equipment_registry);
     }
 

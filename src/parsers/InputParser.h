@@ -1,6 +1,6 @@
 #pragma once
 #include "BESQTypes.h"
-#include "parsers/CLIParser.h"
+#include "cli.h"
 #include <filesystem>
 #include <unordered_map>
 #include <vector>

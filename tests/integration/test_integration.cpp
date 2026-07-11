@@ -1,4 +1,4 @@
-#include "parsers/CLIParser.h"
+#include "cli.h"
 #include "parsers/EnchInfoParser.h"
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
@@ -77,8 +77,8 @@ void test_full_pipeline_direct() {
     registries::enchants().initialize(ench_infos);
 
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
-    CLIParser cli_parser;
-    auto config = cli_parser.parse(5, const_cast<char **>(argv));
+    
+    auto config = parse_cli(5, const_cast<char **>(argv));
 
     auto raw_eq = EquipmentParser::parse_native_json(
         "data/builtin/vanilla.json", resolver);
@@ -133,8 +133,8 @@ void test_full_pipeline_inventory() {
 
     const char *argv[] = {"besq", "--mode", "inventory", "--input", inv_path.c_str(),
                           "--target", "diamond_sword", "--wanted", "sharpness=5"};
-    CLIParser cli_parser;
-    auto config = cli_parser.parse(9, const_cast<char **>(argv));
+    
+    auto config = parse_cli(9, const_cast<char **>(argv));
 
     auto input = InputParser::assemble_input(config, test_ench_reg, eq_map);
 
@@ -250,15 +250,15 @@ void test_full_pipeline_execute() {
 
     // 1. Parse CLI for a simple case
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=3"};
-    CLIParser cli_parser;
-    auto config = cli_parser.parse(5, const_cast<char **>(argv));
+    
+    auto config = parse_cli(5, const_cast<char **>(argv));
 
     // 2. Build domain input
     auto equip_it = eq_map.find("diamond_sword");
     expect(equip_it != eq_map.end(),
            "execute: diamond_sword found in equipment map");
 
-    auto wanted_specs = CLIParser::parse_enchantment_list(config.wanted);
+    auto wanted_specs = parse_enchantment_list(config.wanted);
     EnchSet wanted = InputParser::build_wanted_enchset(wanted_specs, test_ench_reg);
     EnchSet existing;    // equipment starts empty
     ItemCollection books = InputParser::generate_books(wanted, existing);

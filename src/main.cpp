@@ -6,7 +6,7 @@
 #include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
 
 #include "adapters/CompactAdapter.h"
-#include "parsers/CLIParser.h"
+#include "cli.h"
 #include "parsers/EnchInfoParser.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "utils/Logger.hpp"
@@ -88,8 +88,7 @@ void register_builtin_algorithms(AlgorithmRegistry &registry) {
 
 int main(int argc, char *argv[]) {
     try {
-        CLIParser cli_parser;
-        auto config = cli_parser.parse(argc, argv);
+        auto config = parse_cli(argc, argv);
 
         if (config.help) {
             return 0;
