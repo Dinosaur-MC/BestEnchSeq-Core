@@ -8,13 +8,7 @@
 
 class EquipmentCategoryRegistry;
 
-/// Metadata about a data pack (optional header in native JSON files).
-struct EnchantmentDataPack {
-    std::string name;
-    std::string description;
-    std::string author;
-    std::string version;
-};
+struct EnchantmentDataPack; // defined in parsers/EnchInfoParser.h
 
 /// Serialization of domain EnchInfo / Equipment to JSON, CSV, or MC official
 /// data-driven format.  Requires an EquipmentCategoryRegistry for ID-to-name

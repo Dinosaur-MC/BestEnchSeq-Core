@@ -3,7 +3,6 @@
 #include "BESQTypes.h"
 #include <string>
 #include <unordered_set>
-#include <vector>
 
 // ─── Raw (pre-resolution) intermediate types ──────────────────────────────
 //

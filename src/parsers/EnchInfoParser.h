@@ -5,7 +5,13 @@
 #include <string>
 #include <vector>
 
-struct EnchantmentDataPack;
+/// Metadata about a data pack (optional header in native JSON files).
+struct EnchantmentDataPack {
+    std::string name;
+    std::string description;
+    std::string author;
+    std::string version;
+};
 
 struct EnchInfoParser {
     /// Parse native JSON format — single file with enchantments array.

@@ -1,4 +1,5 @@
 #include "adapters/EnchSerializer.h"
+#include "parsers/EnchInfoParser.h"   // EnchantmentDataPack
 #include "utils/ParserUtils.h"
 #include "io/CsvIO.h"
 #include "io/json.h"
