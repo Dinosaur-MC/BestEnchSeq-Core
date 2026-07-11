@@ -1,7 +1,6 @@
-#define _CRT_SECURE_NO_WARNINGS
 #include "AStarMemoryBudget.h"
+#include "utils/EnvUtil.hpp"
 #include <algorithm>
-#include <cstdlib>
 
 // Per-entry byte costs (adjusted for real platform)
 namespace {
@@ -17,13 +16,7 @@ namespace {
     constexpr int64_t RATIO_ITEMS_POOL = 5;
 
     int64_t available() noexcept {
-        auto env = std::getenv("BESQ_MEMORY_MB");
-        if (env) {
-            auto val = std::atoll(env);
-            if (val > 0) return val;
-        }
-        // Fallback: safe default
-        return 2048;
+        return util::get_env_int("BESQ_MEMORY_MB", 2048);
     }
 }
 
