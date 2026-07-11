@@ -148,7 +148,7 @@ int main(int argc, char *argv[]) {
 
         // ── Logger ────────────────────────────────────────────────────
         Logger logger;
-        logger.info("Starting algorithm: greedy");
+        logger.info("Starting algorithm: " + config.algorithm);
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));

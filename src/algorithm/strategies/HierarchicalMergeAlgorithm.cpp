@@ -63,6 +63,7 @@ Item HierarchicalMergeAlgorithm::merge_group(
         Item saved_sac  = group[sac_idx];
 
         int32_t cost = _forge_engine.forge_into(group[base_idx], group[sac_idx], reg);
+        ctx.incr_steps_forged();
         steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
 
         group.erase(group.begin() + sac_idx);
@@ -118,6 +119,7 @@ void HierarchicalMergeAlgorithm::execute(
                 Item saved_sac  = books[sac_idx];
 
                 int32_t cost = _forge_engine.forge_into(base, books[sac_idx], reg);
+                ctx.incr_steps_forged();
                 compact_steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
 
                 if (sac_idx < books.size())
@@ -173,12 +175,14 @@ void HierarchicalMergeAlgorithm::execute(
 
         Item saved_base = combined;
         int32_t cost = _forge_engine.forge_into(combined, next_book, reg);
+        ctx.incr_steps_forged();
         compact_steps.push_back({std::move(saved_base), std::move(next_book), cost});
     }
 
     if (_forge_engine.is_forgeable(equip, combined)) {
         Item saved_equip = equip;
         int32_t cost = _forge_engine.forge_into(equip, combined, reg);
+        ctx.incr_steps_forged();
         compact_steps.push_back({std::move(saved_equip), std::move(combined), cost});
     }
 

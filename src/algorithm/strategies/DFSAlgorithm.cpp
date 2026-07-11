@@ -139,6 +139,7 @@ void DFSAlgorithm::execute(
 void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
     while (!_stack.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
+        ctx.incr_nodes_visited();
 
         // Use index instead of reference — _stack.push_back() in the loop body
         // may reallocate the vector and invalidate all references/iterators.
@@ -157,6 +158,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         {
             auto [it, inserted] = _visited.insert(_stack[_frame_idx].items);
             if (!inserted) {
+                ctx.incr_nodes_pruned();
                 _stack.pop_back();
                 _frame_pairs.pop_back();
                 continue;
@@ -177,6 +179,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         }
 
         if (_stack[_frame_idx].cost_so_far + _heuristic(_stack[_frame_idx].items) >= _best_cost) {
+            ctx.incr_nodes_pruned();
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
@@ -186,6 +189,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             auto cfg = ctx.get_search_config();
             if (cfg.max_depth > 0 &&
                 static_cast<int32_t>(_stack.size()) > cfg.max_depth) {
+                ctx.incr_nodes_pruned();
                 _stack.pop_back();
                 _frame_pairs.pop_back();
                 continue;
@@ -213,6 +217,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         int32_t step_cost = _compact_forge.forge_into(
             _stack[_frame_idx].items[p.i], _stack[_frame_idx].items[p.j], *_ench_reg);
+        ctx.incr_steps_forged();
 
         _current_steps.push_back({
             _stack[_frame_idx].saved_base, _stack[_frame_idx].saved_sac, step_cost

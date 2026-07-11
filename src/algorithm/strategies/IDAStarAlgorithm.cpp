@@ -23,6 +23,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
                              int32_t& best_cost, ExecutionContext& ctx)
 {
     ctx.incr_nodes_visited();
+    ++_nodes_visited;
 
     if (_nodes_visited % 512 == 0) {
         if (ctx.is_cancelled()) return;
@@ -122,7 +123,6 @@ void IDAStarAlgorithm::execute(
     _ench_reg = &reg;
     _target = target;
     _nodes_visited = 0;
-    _nodes_pruned = 0;
 
     std::vector<ItemID> initial_ids;
     initial_ids.reserve(items.size());

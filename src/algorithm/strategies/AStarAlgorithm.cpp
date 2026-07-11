@@ -273,6 +273,7 @@ void AStarAlgorithm::execute(
         }
 
         explored++;
+        ctx.incr_nodes_visited();
         if (explored >= _budget.max_explored) break;
 
         if (explored % 1000 == 0) {
@@ -297,6 +298,7 @@ void AStarAlgorithm::execute(
                 int32_t child_est_g = current.g + est;
                 if (_best_solution_cost != INT32_MAX && child_est_g > _best_solution_cost) {
                     ++_diag.pruned_by_cost;
+                    ctx.incr_nodes_pruned();
                     continue;
                 }
 
@@ -310,6 +312,7 @@ void AStarAlgorithm::execute(
                             || open_set.size() >= static_cast<size_t>(_budget.max_open_set));
                 if (at_cap) {
                     ++_diag.pruned_by_caps;
+                    ctx.incr_nodes_pruned();
                     continue;
                 }
 
@@ -320,6 +323,7 @@ void AStarAlgorithm::execute(
                 int32_t real_cost = _compact_forge.forge_into(forged, _pool[old_sac_id], reg);
                 int32_t child_g = current.g + real_cost;
                 ++_diag.steps_forged;
+                ctx.incr_steps_forged();
 
                 // Real cost may exceed estimate — recheck
                 if (_best_solution_cost != INT32_MAX && child_g > _best_solution_cost)
@@ -334,6 +338,7 @@ void AStarAlgorithm::execute(
                 int32_t child_f = child_g + _heuristic(child_ids);
                 if (_best_solution_cost != INT32_MAX && child_f > _best_solution_cost) {
                     ++_diag.pruned_by_f;
+                    ctx.incr_nodes_pruned();
                     continue;
                 }
 
@@ -341,6 +346,7 @@ void AStarAlgorithm::execute(
                 if (int32_t* cg = best_g.find(child_h)) {
                     if (*cg <= child_g) {
                         ++_diag.pruned_by_best_g;
+                        ctx.incr_nodes_pruned();
                         continue;
                     }
                 }

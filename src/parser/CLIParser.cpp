@@ -28,6 +28,7 @@ std::string CLIParser::get_help_text(const std::string &program_name) {
         "  --data-pack <dir>       Custom data pack directory\n"
         "  --ignore-cost-cap       Bypass the survival-mode 39-level cap (for modded play)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
+        "  --verbose               Show algorithm diagnostic counters on completion\n"
         "\n"
         "Enchantment formats:\n"
         "  id=level                e.g., sharpness=5\n"

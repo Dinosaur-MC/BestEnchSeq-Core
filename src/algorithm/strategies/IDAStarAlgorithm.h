@@ -59,5 +59,4 @@ private:
     }
 
     int64_t _nodes_visited{0};
-    int64_t _nodes_pruned{0};
 };

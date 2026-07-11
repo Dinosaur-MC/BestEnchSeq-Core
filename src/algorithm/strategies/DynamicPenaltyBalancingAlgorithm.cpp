@@ -85,6 +85,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         Item saved_j = mut_items[best_j];
 
         int32_t step_cost = _forge_engine.forge_into(mut_items[best_i], mut_items[best_j], reg);
+        ctx.incr_steps_forged();
 
         compact_steps.push_back({
             std::move(saved_i), std::move(saved_j), step_cost

@@ -9,7 +9,7 @@
 
 void AStarDiagnostics::write() const {
     namespace fs = std::filesystem;
-    fs::create_directories("logs/auto");
+    fs::create_directories("logs/diag");
 
     auto now = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(now);

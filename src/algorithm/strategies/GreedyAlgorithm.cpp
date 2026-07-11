@@ -45,6 +45,7 @@ void GreedyAlgorithm::execute(
         Item before_target = target_item;
         Item before_sacrifice = sacrifice;
         int32_t cost = _forge_engine.forge_into(target_item, sacrifice, reg);
+        ctx.incr_steps_forged();
 
         compact_steps.push_back({std::move(before_target), std::move(before_sacrifice), cost});
 
