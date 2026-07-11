@@ -880,6 +880,50 @@ def calc_limited_level(
     return max(1, best)
 
 
+# ── step 4d: post-process enchantments ──────────────────────────────────
+
+def post_process_enchantments(ench: list[dict],
+                               tags: dict[str, list[str]],
+                               prefixes: list[str]) -> None:
+    """Post-process enchantment list to add computed fields and ensure
+    data consistency before output.
+
+    1. Mirror exclusive_set relationships for bidirectionality:
+       If A lists B as exclusive, ensure B also lists A.
+    2. Add ``is_treasure`` field from the ``minecraft:enchantment/treasure`` tag.
+    """
+    # ── 1. Mirror exclusive_set ────────────────────────────────────────
+    # Build reverse mapping: for each enchantment, collect which other
+    # enchantments list it in their exclusive_set.
+    reverse_excl: dict[str, set[str]] = {}
+    for e in ench:
+        for other_id in e["exclusive_set"]:
+            reverse_excl.setdefault(other_id, set()).add(e["id"])
+
+    # Apply missing reverse entries
+    for e in ench:
+        missing = reverse_excl.get(e["id"], set()) - set(e["exclusive_set"])
+        if missing:
+            e["exclusive_set"] = sorted(set(e["exclusive_set"]) | missing)
+
+    # ── 2. is_treasure ─────────────────────────────────────────────────
+    # Resolve the treasure tag to a set of enchantment IDs
+    treasure_raw = tags.get("minecraft:enchantment/treasure", [])
+    treasure_ids: set[str] = set()
+    for v in treasure_raw:
+        if not v.startswith("#"):
+            # Strip namespace prefix, keep bare id
+            treasure_ids.add(v.split(":", 1)[-1] if ":" in v else v)
+        else:
+            # Resolve nested tag references
+            resolved = resolve_ref([v], "enchantment", tags, prefixes)
+            for r in resolved:
+                treasure_ids.add(r.split(":", 1)[-1] if ":" in r else r)
+
+    for e in ench:
+        e["is_treasure"] = e["id"] in treasure_ids
+
+
 # ── step 5: output ──────────────────────────────────────────────────────
 
 def write_output(version: str, ench: list[dict], eq: list[dict],
@@ -895,6 +939,7 @@ def write_output(version: str, ench: list[dict], eq: list[dict],
         "description": f"Built-in vanilla Minecraft data pack (Java Edition {version})",
         "author": "BestEnchSeq",
         "version": "2.0.0",
+        "schema_version": "2.1.0",
         "enchantments": ench,
         "equipments": eq,
         "tags": kept,
@@ -959,6 +1004,9 @@ def main() -> None:
     print("Loading enchantments…")
     ench = load_enchantments(base, lang, tags, pfx, ench_map)
     ench.sort(key=lambda e: e["id"])
+
+    print("Post-processing enchantments…")
+    post_process_enchantments(ench, tags, pfx)
 
     print("Building equipment list…")
     eq = load_equipments(base, lang, tags, pfx)
