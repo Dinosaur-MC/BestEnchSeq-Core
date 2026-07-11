@@ -180,6 +180,7 @@ add_executable(test_integration
     ${COMPACT_REG_SRCS}
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)

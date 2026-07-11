@@ -12,13 +12,53 @@
 #include "types/ForgeConfig.h"
 #include "framework/test_utils.h"
 
+#include "adapters/CompactAdapter.h"
+#include "algorithm/AlgorithmExecutor.h"
+#include "algorithm/strategies/GreedyAlgorithm.h"
+#include "algorithm/IAlgorithm.h"
+#include "io/json.h"
+
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <unordered_map>
+#include <variant>
 
 namespace {
+
+// ---------------------------------------------------------------------------
+// Shared helper: validate JSON output structure
+// ---------------------------------------------------------------------------
+void check_json_solutions(const std::string &json_str, size_t expected_count) {
+    auto json = Json::parse(json_str);
+    expect(json.type() == JsonType::Object, "json output root must be an object");
+
+    auto root_val = json.get_value();
+    auto *root_obj = std::get_if<Json::Object>(&root_val);
+    expect(root_obj != nullptr, "json root should be a JSON object");
+    if (!root_obj) return;
+
+    // Check required top-level keys
+    expect(root_obj->find("solutions") != root_obj->end(),
+           "json output must have 'solutions' key");
+    expect(root_obj->find("schema_version") != root_obj->end(),
+           "json output must have 'schema_version' key");
+    expect(root_obj->find("mode") != root_obj->end(),
+           "json output must have 'mode' key");
+
+    // Validate solutions array
+    auto sol_it = root_obj->find("solutions");
+    if (sol_it == root_obj->end()) return;
+
+    auto sol_val = sol_it->second.get_value();
+    auto *sol_arr = std::get_if<Json::Array>(&sol_val);
+    expect(sol_arr != nullptr, "json 'solutions' must be an array");
+    if (!sol_arr) return;
+
+    expect(sol_arr->size() == expected_count,
+           "json solutions array size should match expected count");
+}
 
 // ---------------------------------------------------------------------------
 // Full pipeline: direct mode with builtin data
@@ -170,11 +210,119 @@ void test_output_formatting_empty() {
     expect(compact.find("MODE=direct") != std::string::npos,
            "format_compact: should contain MODE=direct");
 
-    auto json = OutputFormatter::format_json(empty_solutions, "direct");
-    expect(json.find("\"solutions\"") != std::string::npos,
+    auto json_str = OutputFormatter::format_json(empty_solutions, "direct");
+    expect(json_str.find("\"solutions\"") != std::string::npos,
            "format_json: should contain solutions array");
+    // Structured JSON validation
+    check_json_solutions(json_str, 0);
 
     std::cout << "  [OK] test_output_formatting_empty" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// End-to-end: full pipeline (parse -> execute -> format)
+// ---------------------------------------------------------------------------
+void test_full_pipeline_execute() {
+    TagResolver resolver;
+    registries::categories().initialize();
+    auto ench_infos = EnchInfoParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    registries::enchants().initialize(ench_infos);
+
+    auto equipments = EquipmentParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    std::unordered_map<std::string, const Equipment *> eq_map;
+    for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
+
+    // 1. Parse CLI for a simple case
+    const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=3"};
+    CLIParser cli_parser;
+    auto config = cli_parser.parse(5, const_cast<char **>(argv));
+
+    // 2. Build domain input
+    auto equip_it = eq_map.find("diamond_sword");
+    expect(equip_it != eq_map.end(),
+           "execute: diamond_sword found in equipment map");
+
+    auto wanted_specs = CLIParser::parse_enchantment_list(config.wanted);
+    EnchSet wanted = InputParser::build_wanted_enchset(wanted_specs);
+    EnchSet existing;    // equipment starts empty
+    ItemCollection books = InputParser::generate_books(wanted, existing);
+    expect(books.size() == 3,
+           "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
+
+    // 3. Build AlgorithmInput via CompactAdapter
+    ItemStack target_item(*equip_it->second, wanted, 0);
+
+    ForgeConfig forge_config;
+    forge_config.platform = MCE::Java;
+
+    CompactAdapter adapter;
+    AlgorithmInput algo_input = adapter.apply(
+        target_item, existing, books, forge_config, registries::enchants());
+
+    expect(algo_input.target.size() == 1,
+           "execute: target should have 1 enchantment (sharpness 3)");
+    expect(algo_input.items.size() == 1 + books.size(),
+           "execute: items = 1 equipment + N books");
+
+    // 4. Create algorithm (Greedy for speed) and executor
+    auto algo = std::make_unique<GreedyAlgorithm>(forge_config);
+    AlgorithmExecutor executor(std::move(algo));
+    executor.start(algo_input);
+
+    // 5. Wait for completion
+    auto state = executor.wait();
+    expect(state == AlgorithmState::Completed,
+           "execute: algorithm should complete successfully");
+    expect(executor.state() == AlgorithmState::Completed,
+           "execute: state should be Completed after wait");
+
+    // 6. Check output
+    auto output = executor.output();
+    expect(output.is_valid,
+           "execute: output should be valid");
+    expect(!output.steps.empty(),
+           "execute: should have at least one solution in steps");
+
+    // 7. Convert back to domain solutions
+    auto solutions = adapter.recall(output, algo_input,
+                                     existing, target_item, books);
+    expect(!solutions.empty(),
+           "execute: should have at least one domain solution");
+    expect(solutions[0].is_success,
+           "execute: solution should be a success");
+    expect(!solutions[0].steps.empty(),
+           "execute: solution should have at least one forge step");
+
+    // 8. Format output in all 3 formats and verify content
+    //    Verbose
+    auto verbose_text = OutputFormatter::format_verbose(solutions, "direct");
+    expect(!verbose_text.empty(),
+           "execute: verbose output should not be empty");
+    expect(verbose_text.find("sharpness") != std::string::npos,
+           "execute: verbose output should contain 'sharpness'");
+
+    //    Compact
+    auto compact_text = OutputFormatter::format_compact(solutions, "direct");
+    expect(!compact_text.empty(),
+           "execute: compact output should not be empty");
+    expect(compact_text.find("MODE=direct") != std::string::npos,
+           "execute: compact output should contain MODE=direct");
+    expect(compact_text.find("sharpness") != std::string::npos,
+           "execute: compact output should contain 'sharpness'");
+
+    //    JSON
+    auto json_text = OutputFormatter::format_json(solutions, "direct");
+    expect(!json_text.empty(),
+           "execute: JSON output should not be empty");
+    expect(json_text.find("\"is_success\"") != std::string::npos,
+           "execute: JSON output should contain is_success");
+    expect(json_text.find("sharpness") != std::string::npos,
+           "execute: JSON output should contain 'sharpness'");
+    check_json_solutions(json_text, 1);
+
+    std::cout << "  [OK] test_full_pipeline_execute" << std::endl;
 }
 
 } // anonymous namespace
@@ -188,6 +336,7 @@ int main() {
         test_builtin_enchantment_lookup();
         test_builtin_equipment_lookup();
         test_output_formatting_empty();
+        test_full_pipeline_execute();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
