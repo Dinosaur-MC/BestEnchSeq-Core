@@ -3,7 +3,6 @@
 #include "io/CsvIO.h"
 #include "io/json.h"
 #include "registries/EquipmentCategoryRegistry.h"
-#include "registries/RegistryAccess.h"
 
 #include <cctype>
 #include <iostream>
@@ -14,7 +13,8 @@
 
 std::vector<Equipment> EquipmentParser::parse_native_json(
     const std::filesystem::path &path,
-    TagResolver &tag_resolver
+    TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     (void)tag_resolver; // Equipment parsing may use tag resolver for categories in future
 
@@ -83,7 +83,7 @@ std::vector<Equipment> EquipmentParser::parse_native_json(
             max_durability = 0;
         }
 
-        int32_t cat_id = registries::categories().get_id(category);
+        int32_t cat_id = cat_reg.get_id(category);
         if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
 
         result.emplace_back(Equipment{
@@ -100,7 +100,8 @@ std::vector<Equipment> EquipmentParser::parse_native_json(
 // ============================================================================
 
 std::vector<Equipment> EquipmentParser::parse_native_csv(
-    const std::filesystem::path &path
+    const std::filesystem::path &path,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     auto rows = csv::parse(path);
     if (rows.empty()) {
@@ -170,7 +171,7 @@ std::vector<Equipment> EquipmentParser::parse_native_csv(
             max_durability = 0;
         }
 
-        int32_t cat_id = registries::categories().get_id(category);
+        int32_t cat_id = cat_reg.get_id(category);
         if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
 
         result.emplace_back(Equipment{
@@ -187,7 +188,8 @@ std::vector<Equipment> EquipmentParser::parse_native_csv(
 // ============================================================================
 
 std::vector<Equipment> EquipmentParser::parse_mc_official(
-    const std::filesystem::path &data_pack_dir
+    const std::filesystem::path &data_pack_dir,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     // MC does not have a native equipment-type registry.
     // For now, we derive equipment types from item definition files.
@@ -252,10 +254,6 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
             const auto &obj = std::get<Json::Object>(root_var);
 
             // Extract equipment-like fields from the item definition
-            // MC item JSON doesn't have an "equipment" concept directly,
-            // but we derive durable items from component structure.
-            // For now, derive the category from the item id's last segment
-            // and set a placeholder max_durability.
             std::string derived_name = filename;
             if (!derived_name.empty()) {
                 derived_name[0] = static_cast<char>(
@@ -270,7 +268,6 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
 
             // Check if this looks like a tool/armor item by looking for
             // durability or component structure
-            // (For now, all items found in items/ are treated as equipment)
             int32_t durability = 0;
             // Try to extract max_damage or durability from components
             auto components_it = obj.find("components");
@@ -321,7 +318,7 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
                 category_str = filename;
             }
 
-            int32_t cat_id2 = registries::categories().get_id(category_str);
+            int32_t cat_id2 = cat_reg.get_id(category_str);
             if (cat_id2 < 0) cat_id2 = EquipmentCategory::ID_ANY;
 
             result.emplace_back(Equipment{
@@ -340,16 +337,17 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
 
 std::vector<Equipment> EquipmentParser::parse(
     const std::filesystem::path &path,
-    TagResolver &tag_resolver
+    TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     auto format = ParserUtils::detect_format(path);
     switch (format) {
     case ParserUtils::DataFormat::NativeJSON:
-        return parse_native_json(path, tag_resolver);
+        return parse_native_json(path, tag_resolver, cat_reg);
     case ParserUtils::DataFormat::NativeCSV:
-        return parse_native_csv(path);
+        return parse_native_csv(path, cat_reg);
     case ParserUtils::DataFormat::MCOfficial:
-        return parse_mc_official(path);
+        return parse_mc_official(path, cat_reg);
     default:
         throw std::runtime_error("Unknown format: " + path.string());
     }
@@ -357,12 +355,15 @@ std::vector<Equipment> EquipmentParser::parse(
 
 // ============================================================================
 
-std::string EquipmentParser::to_json(const std::vector<Equipment> &equipments) {
+std::string EquipmentParser::to_json(
+    const std::vector<Equipment> &equipments,
+    const EquipmentCategoryRegistry &cat_reg
+) {
     Json::Array eq_arr;
     for (const auto &eq : equipments) {
         std::string cat_name = "unknown";
-        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < registries::categories().size())
-            cat_name = registries::categories().get(eq.category_id).name_id;
+        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < cat_reg.size())
+            cat_name = cat_reg.get(eq.category_id).name_id;
         Json::Object obj;
         obj["id"]             = Json(Json::String(eq.name_id));
         obj["name"]           = Json(Json::String(eq.name));
@@ -378,14 +379,17 @@ std::string EquipmentParser::to_json(const std::vector<Equipment> &equipments) {
 
 // ============================================================================
 
-std::string EquipmentParser::to_csv(const std::vector<Equipment> &equipments) {
+std::string EquipmentParser::to_csv(
+    const std::vector<Equipment> &equipments,
+    const EquipmentCategoryRegistry &cat_reg
+) {
     csv::CsvTable table;
     table.push_back({"id", "name", "category", "max_durability"});
 
     for (const auto &eq : equipments) {
         std::string cat_name2 = "unknown";
-        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < registries::categories().size())
-            cat_name2 = registries::categories().get(eq.category_id).name_id;
+        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < cat_reg.size())
+            cat_name2 = cat_reg.get(eq.category_id).name_id;
         table.push_back({
             eq.name_id,
             eq.name,

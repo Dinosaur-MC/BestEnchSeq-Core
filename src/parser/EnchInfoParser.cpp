@@ -3,7 +3,6 @@
 #include "io/CsvIO.h"
 #include "io/json.h"
 #include "registries/EquipmentCategoryRegistry.h"
-#include "registries/RegistryAccess.h"
 
 #include <cctype>
 #include <fstream>
@@ -149,6 +148,7 @@ std::unordered_set<std::string> resolve_references(
 std::vector<EnchInfo> EnchInfoParser::parse_native_json(
     const std::filesystem::path &path,
     TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg,
     EnchantmentDataPack *metadata
 ) {
     // Read and parse the JSON file
@@ -230,7 +230,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
         std::unordered_set<int32_t> applicable_category_ids;
         auto resolved_equipment = resolve_references(equipment_items, tag_resolver);
         for (const auto &eq : resolved_equipment) {
-            int32_t cid = registries::categories().get_id(eq);
+            int32_t cid = cat_reg.get_id(eq);
             if (cid >= 0)
                 applicable_category_ids.insert(cid);
         }
@@ -253,17 +253,18 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
 // ============================================================================
 
 std::vector<EnchInfo> EnchInfoParser::parse(
-    const std::filesystem::path &path, TagResolver &tag_resolver
+    const std::filesystem::path &path, TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     // Auto-detect format
     auto format = ParserUtils::detect_format(path);
     switch (format) {
     case ParserUtils::DataFormat::NativeJSON:
-        return parse_native_json(path, tag_resolver);
+        return parse_native_json(path, tag_resolver, cat_reg);
     case ParserUtils::DataFormat::NativeCSV:
-        return parse_native_csv(path, tag_resolver);
+        return parse_native_csv(path, tag_resolver, cat_reg);
     case ParserUtils::DataFormat::MCOfficial:
-        return parse_mc_official(path, tag_resolver);
+        return parse_mc_official(path, tag_resolver, cat_reg);
     default:
         throw std::runtime_error("Unknown format: " + path.string());
     }
@@ -272,7 +273,8 @@ std::vector<EnchInfo> EnchInfoParser::parse(
 // ============================================================================
 
 std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
-    const std::filesystem::path &path, TagResolver &tag_resolver
+    const std::filesystem::path &path, TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     auto rows = csv::parse(path);
     if (rows.empty()) {
@@ -387,7 +389,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
                 auto items    = ParserUtils::split_string(eq_str, ';');
                 auto resolved = resolve_references(items, tag_resolver);
                 for (const auto &eq : resolved) {
-                    int32_t cid = registries::categories().get_id(eq);
+                    int32_t cid = cat_reg.get_id(eq);
                     if (cid >= 0)
                         applicable_category_ids.insert(cid);
                 }
@@ -412,7 +414,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
 // ============================================================================
 
 std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
-    const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver
+    const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     // Load tags from the data pack directory
     tag_resolver.load_from(data_pack_dir);
@@ -536,9 +539,9 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
 
                 int32_t cat_id;
                 if (known_equipment_ids.count(stripped)) {
-                    cat_id = registries::categories().get_id(stripped);
+                    cat_id = cat_reg.get_id(stripped);
                 } else {
-                    cat_id = registries::categories().get_id(item_id);
+                    cat_id = cat_reg.get_id(item_id);
                 }
                 if (cat_id >= 0)
                     applicable_category_ids.insert(cat_id);
@@ -563,7 +566,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
 // ============================================================================
 
 std::string EnchInfoParser::to_json(
-    const std::vector<EnchInfo> &infos, const EnchantmentDataPack *metadata
+    const std::vector<EnchInfo> &infos, const EquipmentCategoryRegistry &cat_reg,
+    const EnchantmentDataPack *metadata
 ) {
     Json::Object root;
 
@@ -597,8 +601,8 @@ std::string EnchInfoParser::to_json(
         Json::Array eq;
         for (const auto &cat_id : info.applicable_category_ids) {
             std::string cat_name = "unknown";
-            if (cat_id >= 0 && static_cast<size_t>(cat_id) < registries::categories().size())
-                cat_name = registries::categories().get(cat_id).name_id;
+            if (cat_id >= 0 && static_cast<size_t>(cat_id) < cat_reg.size())
+                cat_name = cat_reg.get(cat_id).name_id;
             eq.push_back(Json(Json::String(cat_name)));
         }
         obj["applicable_equipment"] = Json(eq);
@@ -612,7 +616,9 @@ std::string EnchInfoParser::to_json(
 
 // ============================================================================
 
-std::string EnchInfoParser::to_csv(const std::vector<EnchInfo> &infos) {
+std::string EnchInfoParser::to_csv(
+    const std::vector<EnchInfo> &infos, const EquipmentCategoryRegistry &cat_reg
+) {
     csv::CsvTable table;
 
     // Header row
@@ -636,8 +642,8 @@ std::string EnchInfoParser::to_csv(const std::vector<EnchInfo> &infos) {
             if (!first) app_eq += ";";
             first = false;
             std::string cat_name = "unknown";
-            if (cat_id >= 0 && static_cast<size_t>(cat_id) < registries::categories().size())
-                cat_name = registries::categories().get(cat_id).name_id;
+            if (cat_id >= 0 && static_cast<size_t>(cat_id) < cat_reg.size())
+                cat_name = cat_reg.get(cat_id).name_id;
             app_eq += cat_name;
         }
 
@@ -659,7 +665,8 @@ std::string EnchInfoParser::to_csv(const std::vector<EnchInfo> &infos) {
 // ============================================================================
 
 void EnchInfoParser::export_to_mc_official(
-    const std::vector<EnchInfo> &infos, const std::filesystem::path &output_dir
+    const std::vector<EnchInfo> &infos, const EquipmentCategoryRegistry &cat_reg,
+    const std::filesystem::path &output_dir
 ) {
     for (const auto &info : infos) {
         // Split name_id into namespace and id
@@ -685,8 +692,8 @@ void EnchInfoParser::export_to_mc_official(
         Json::Array supp;
         for (const auto &cat_id : info.applicable_category_ids) {
             std::string cat_str = "unknown";
-            if (cat_id >= 0 && static_cast<size_t>(cat_id) < registries::categories().size())
-                cat_str = registries::categories().get(cat_id).name_id;
+            if (cat_id >= 0 && static_cast<size_t>(cat_id) < cat_reg.size())
+                cat_str = cat_reg.get(cat_id).name_id;
             // Avoid double-namespacing: cat may already contain "mod:item"
             if (cat_str.find(':') != std::string::npos) {
                 supp.push_back(Json(Json::String(cat_str)));
