@@ -1,6 +1,7 @@
 #include "AStarAlgorithm.h"
 #include "../ExecutionContext.h"
 #include "utils/FlatHashMap.hpp"
+#include "utils/HashUtils.hpp"
 #include <algorithm>
 #include <chrono>
 #include <queue>
@@ -17,7 +18,7 @@ size_t hash_item_data(const Item& item) noexcept {
     size_t h = static_cast<size_t>(item.type)
              ^ (static_cast<size_t>(item.ppn) << 8)
              ^ (static_cast<size_t>(item.dur) << 16);
-    h ^= item.enchs.hash() + 0x9e3779b9 + (h << 6) + (h >> 2);
+    hash_combine(h, item.enchs.hash());
     return h;
 }
 
@@ -28,7 +29,7 @@ size_t hash_item_data(const Item& item) noexcept {
 size_t AStarAlgorithm::_hash_ids(const std::vector<ItemID>& ids) const {
     size_t h = ids.size();
     for (auto id : ids)
-        h ^= hash_item_data(_pool[id]) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        hash_combine(h, hash_item_data(_pool[id]));
     return h;
 }
 

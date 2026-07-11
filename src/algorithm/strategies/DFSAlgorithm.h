@@ -1,6 +1,7 @@
 #pragma once
 #include "../IAlgorithm.h"
 #include "../forge/ForgeEngine.h"
+#include "utils/HashUtils.hpp"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <deque>
@@ -30,16 +31,15 @@ private:
 
     struct ItemVectorHash {
         size_t operator()(const std::vector<compact::Item>& items) const noexcept {
-            size_t h = 0;
+            size_t h = items.size();
             for (const auto& item : items) {
-                size_t item_hash = 0;
                 for (const auto& e : item.enchs) {
-                    size_t ench_hash = static_cast<size_t>(e.id)
-                                     ^ (static_cast<size_t>(e.level) << 16);
-                    item_hash ^= ench_hash * 0x9e3779b9;
+                    size_t eh = static_cast<size_t>(e.id)
+                              ^ (static_cast<size_t>(e.level) << 16);
+                    hash_combine(h, eh);
                 }
-                item_hash ^= static_cast<size_t>(item.ppn) * 0x9e3779b9;
-                h ^= item_hash * 0x9e3779b9 + 0x9e3779b9;
+                hash_combine(h, static_cast<size_t>(item.ppn));
+                hash_combine(h, static_cast<size_t>(item.dur));
             }
             return h;
         }

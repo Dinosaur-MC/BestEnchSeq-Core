@@ -3,6 +3,7 @@
 #include "../forge/ForgeEngine.h"
 #include "algorithm/components/AStarMemoryBudget.h"
 #include "utils/AStarDiagnostics.hpp"
+#include "utils/HashUtils.hpp"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <unordered_map>
@@ -41,9 +42,10 @@ private:
 
         ItemID add(compact::Item item) {
             // Dedup: check if identical item already exists
-            size_t h = item.enchs.hash() ^ (static_cast<size_t>(item.type) << 8)
-                     ^ (static_cast<size_t>(item.ppn) << 16)
-                     ^ (static_cast<size_t>(item.dur));
+            size_t h = static_cast<size_t>(item.type);
+            hash_combine(h, item.enchs.hash());
+            hash_combine(h, static_cast<size_t>(item.ppn));
+            hash_combine(h, static_cast<size_t>(item.dur));
             auto it = _dedup.find(h);
             if (it != _dedup.end()) {
                 const auto& existing = _items[it->second];

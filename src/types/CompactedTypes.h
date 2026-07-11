@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#include "utils/HashUtils.hpp"
 
 namespace compact {
 
@@ -75,7 +76,7 @@ class EnchSet {
         size_t h = _enchs.size();
         for (const auto &e : _enchs) {
             const size_t ench_hash = static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);
-            h ^= ench_hash + 0x9e3779b9 + (h << 6) + (h >> 2);
+            hash_combine(h, ench_hash);
         }
         return h;
     }
@@ -121,9 +122,10 @@ template <> struct std::hash<compact::Ench> {
 
 template <> struct std::hash<compact::Item> {
     size_t operator()(const compact::Item &item) const noexcept {
-        size_t h =
-            static_cast<size_t>(item.type) ^ (static_cast<size_t>(item.ppn) << 8) ^ (static_cast<size_t>(item.dur) << 16);
-        h ^= item.enchs.hash() + 0x9e3779b9 + (h << 6) + (h >> 2);
+        size_t h = static_cast<size_t>(item.type);
+        hash_combine(h, static_cast<size_t>(item.ppn));
+        hash_combine(h, static_cast<size_t>(item.dur));
+        hash_combine(h, item.enchs.hash());
         return h;
     }
 };
