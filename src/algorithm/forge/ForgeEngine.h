@@ -1,7 +1,21 @@
 #pragma once
 #include "IForgeEngine.h"
 
-/// Default forge engine implementing vanilla Minecraft rules.
+/// Vanilla forge engine — implements Minecraft anvil mechanics.
+///
+/// ## Cost model (see docs/anvil-mechanics-reference.md)
+///
+///   Cost = C_ench + P_A + P_B + R_E + R_D
+///          └─ forge_into()   └─ penalty_cost() (config-gated)
+///
+///   C_ench: Java (final_level × mult) or Bedrock (diff × mult),
+///           plus +1 per conflict on Java only.
+///   P_A+B:  (1 << ppn) - 1 each, gated by ignore_penalty_cost.
+///   R_E:    rename, currently not implemented.
+///   R_D:    repair, gated by ignore_repair_cost (reserved).
+///
+/// All sub-operations override IForgeEngine defaults with config checks.
+/// Subclass to customize specific behaviors for modded rules.
 class ForgeEngine : public IForgeEngine {
 public:
     explicit ForgeEngine(ForgeConfig cfg = {}) noexcept
@@ -14,13 +28,23 @@ public:
 
     // ── IForgeEngine core ─────────────────────────────────────────────────────
 
+    /// Forge sacrifice into target (mutating).
+    ///
+    /// Matches the formal model in docs/anvil-mechanics-reference.md §1-3, §5-7:
+    ///   Cost = P_A + P_B             (§2 penalty_cost, gated by ignore_penalty_cost)
+    ///        + C_ench                 (§3 ench merge, §9 JE/BE dispatching)
+    ///        + conflict_penalty       (§3 incompatibility, JE only)
+    ///   Result.ppn = max(a,b) + 1     (§2 penalty update)
+    ///   Return min(cost, 39)          (§6 apply_cap, gated by ignore_cost_cap)
     int32_t forge_into(compact::Item& target, const compact::Item& sacrifice,
                        const compact::EnchReg& reg) const override;
 
+    /// Non-mutating forge: copy target, call forge_into, return {result, cost}.
     std::pair<compact::Item, int32_t> forge(const compact::Item& target,
                                              const compact::Item& sacrifice,
                                              const compact::EnchReg& reg) const override;
 
+    /// Check whether (a → b) is a valid forge operation per §8.
     bool is_forgeable(const compact::Item& a, const compact::Item& b) const noexcept override;
 
     // ── IForgeEngine sub-operations ───────────────────────────────────────────

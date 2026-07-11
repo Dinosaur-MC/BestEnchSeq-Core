@@ -3,6 +3,8 @@
 > 依据 Minecraft Wiki (minecraft.wiki) 及 JE 源码整理，对齐 Java Edition 最新版本。
 > 本文件作为算法层开发的权威参考，所有 forge 逻辑应与此保持一致。
 > 参见：docs/MPMCQueue.md 了解算法引擎使用的并发原语。
+> 代码实现：src/algorithm/forge/ForgeEngine.h（Vanilla forge engine，所有子操作可通过继承覆写）。
+> 接口定义：src/algorithm/forge/IForgeEngine.h（虚接口 + 默认实现）。
 
 ---
 
@@ -226,7 +228,7 @@ repair_cost = 1 × unit
 - 每单位材料恢复最多 25% 总耐久度
 - 每次操作费用 +1 级
 
-注意：`ignore_repair_cost` 配置可忽略修复费用。
+注意：`ignore_repair_cost` 配置项已预留，后续用于忽略修复费用。当前 ForgeEngine 尚未实现 repair cost 计算。
 
 ---
 
