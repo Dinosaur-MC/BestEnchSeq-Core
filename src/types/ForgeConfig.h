@@ -12,7 +12,7 @@ enum class MCE : int8_t {
 // ─── Forge configuration ────────────────────────────────────────────────────
 struct ForgeConfig {
     bool ignore_penalty_cost = false;
-    bool ignore_repair_cost  = false;
+    bool ignore_repair_cost  = false; // [reserved] future: skip repair cost in forge_into
     bool ignore_cost_cap     = false;
     MCE platform             = MCE::Java;
 };

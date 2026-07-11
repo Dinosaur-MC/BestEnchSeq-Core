@@ -223,6 +223,9 @@ void AStarAlgorithm::execute(
     while (!open_set.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
 
+        // const_cast + move from top() is valid here because top() returns
+        // a const& to an element that is immediately popped.  All major
+        // stdlib implementations accept this pattern in practice.
         SearchState current = std::move(
             const_cast<PriorityEntry&>(open_set.top())).state;
         open_set.pop();

@@ -110,7 +110,10 @@ private:
     std::condition_variable _pause_cv;
 
     std::atomic<bool> _has_observers{false};
-    SPSCQueue<ObserverEvent, 256> _events;
+    SPSCQueue<ObserverEvent, 256> _events; // 256-entry bound: intentional.
+    // Non-critical progress events are downsampled; solution events are rare
+    // enough that 256 slots are sufficient.  Drops on full are acceptable —
+    // observers tolerate occasional missed progress snapshots.
 
     mutable std::mutex _obs_mtx;
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
