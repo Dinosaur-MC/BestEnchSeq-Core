@@ -5,7 +5,7 @@
 #include "adapters/OutputFormatter.h"
 #include "utils/ParserUtils.h"
 #include "adapters/RegistryResolver.h"
-#include "parsers/TagResolver.h"
+#include "utils/TagResolver.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"

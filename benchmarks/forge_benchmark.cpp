@@ -11,7 +11,7 @@
 #include "parsers/EnchInfoParser.h"
 #include "parsers/EquipmentParser.h"
 #include "adapters/RegistryResolver.h"
-#include "parsers/TagResolver.h"
+#include "utils/TagResolver.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"

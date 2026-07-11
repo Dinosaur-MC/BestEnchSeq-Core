@@ -21,7 +21,7 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
-    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
+    ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp

@@ -77,7 +77,7 @@ set_tests_properties(test_parser_utils PROPERTIES
 
 add_executable(test_tag_resolver
     unit/test_tag_resolver.cpp
-    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
+    ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
 )
 target_include_directories(test_tag_resolver PRIVATE ${TEST_INCLUDE})
@@ -90,7 +90,7 @@ add_executable(test_ench_info_parser
     unit/test_ench_info_parser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
-    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
+    ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
@@ -165,7 +165,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
-    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
+    ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
