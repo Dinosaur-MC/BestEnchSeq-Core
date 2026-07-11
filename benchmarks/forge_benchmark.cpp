@@ -6,6 +6,7 @@
 #include "algorithm/strategies/AStarAlgorithm.h"
 #include "algorithm/strategies/DynamicPenaltyBalancing.h"
 #include "algorithm/strategies/HierarchicalMergeStrategy.h"
+#include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "adapters/CompactAdapter.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
@@ -96,7 +97,7 @@ struct BenchConfig {
 
 BenchConfig parse_cli(int argc, char* argv[]) {
     BenchConfig cfg;
-    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical"};
+    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical", "idastar"};
     for (auto* a : all_algos) cfg.algos.insert(a);
 
     for (int i = 1; i < argc; ++i) {
@@ -274,6 +275,8 @@ int main(int argc, char* argv[]) {
         []{ return std::make_unique<DynamicPenaltyBalancing>(); });
     registries::algorithms().register_algorithm("hierarchical",
         []{ return std::make_unique<HierarchicalMergeStrategy>(); });
+    registries::algorithms().register_algorithm("idastar",
+        []{ return std::make_unique<IDAStarAlgorithm>(); });
 
     // Filter tests
     std::vector<const TestCase*> queue;

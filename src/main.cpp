@@ -8,6 +8,7 @@
 #include "adapters/CompactAdapter.h"
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
+#include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "parser/EquipmentParser.h"
 #include "parser/InputParser.h"
 #include "parser/OutputFormatter.h"
@@ -71,6 +72,8 @@ void register_builtin_algorithms() {
                                                          [] { return std::make_unique<DynamicPenaltyBalancing>(); });
     registries::algorithms().register_algorithm("hierarchical",
                                                          [] { return std::make_unique<HierarchicalMergeStrategy>(); });
+    registries::algorithms().register_algorithm("idastar",
+                                                         [] { return std::make_unique<IDAStarAlgorithm>(); });
 }
 
 } // anonymous namespace

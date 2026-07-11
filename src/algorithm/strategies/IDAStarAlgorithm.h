@@ -1,0 +1,63 @@
+#pragma once
+#include "../IAlgorithm.h"
+#include "../forge/ForgeEngine.h"
+#include "algorithm/components/ItemPool.h"
+#include "algorithm/components/TTTable.h"
+#include "registries/CompactedRegistries.h"
+#include <cstdint>
+#include <vector>
+
+/// DFS branch-and-bound with cost-aware transposition table.
+///
+/// Exhaustive search with best_g pruning (TT tracks min g per state).
+/// Combines DFS memory footprint with optimality guarantees.
+class IDAStarAlgorithm : public IAlgorithm {
+public:
+    using ItemID = ItemPool::ItemID;
+
+    explicit IDAStarAlgorithm(ForgeConfig cfg = {}) noexcept
+        : _compact_forge(std::move(cfg)) {}
+
+    std::string_view name() const noexcept override { return "idastar"; }
+    std::string_view version() const noexcept override { return "1.0.0"; }
+
+    void execute(
+        const std::vector<compact::Item>& items,
+        const compact::EnchReg& reg,
+        const std::vector<compact::Ench>& target,
+        ExecutionContext& ctx
+    ) override;
+
+private:
+    /// Lightweight step stored on the DFS path (IDs, not full Items).
+    struct IDALightStep {
+        ItemID base_id;
+        ItemID sac_id;
+        int32_t cost;
+    };
+
+    /// Exhaustive DFS branch-and-bound with best_g pruning.
+    void _dfs(std::vector<ItemID> ids, int32_t g,
+              int32_t& best_cost, ExecutionContext& ctx);
+
+    bool _meets_target(const std::vector<ItemID>& ids) const;
+
+    ItemPool _pool;
+    ForgeEngine _compact_forge;
+    const compact::EnchReg* _ench_reg{nullptr};
+    std::vector<compact::Ench> _target;
+
+    mutable std::vector<int16_t> _h_buf;
+    mutable std::vector<int16_t> _h_dirty;
+
+    TTTable _tt;
+    std::vector<IDALightStep> _current_path;
+    std::vector<IDALightStep> _solution_path;
+
+    static int32_t _book_mult(int32_t equip_mult) noexcept {
+        return std::max(1, equip_mult >> 1);
+    }
+
+    int64_t _nodes_visited{0};
+    int64_t _nodes_pruned{0};
+};
