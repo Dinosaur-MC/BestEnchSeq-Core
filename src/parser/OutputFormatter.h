@@ -1,7 +1,6 @@
 #pragma once
 #include "types/EnchSolution.h"
 #include "types/ItemStack.h"
-#include "types/ForgeConfig.h"
 
 #include "io/json.h"
 

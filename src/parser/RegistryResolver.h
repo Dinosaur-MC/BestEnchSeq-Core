@@ -2,7 +2,7 @@
 
 #include "types/EnchInfo.h"
 #include "types/Equipment.h"
-#include "types/RawEnchInfo.h"
+#include "types/RawTypes.h"
 #include <vector>
 
 class EquipmentCategoryRegistry;

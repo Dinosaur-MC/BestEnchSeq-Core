@@ -1,6 +1,6 @@
 #pragma once
 #include "types/Equipment.h"
-#include "types/RawEnchInfo.h"
+#include "types/RawTypes.h"
 #include "parser/TagResolver.h"
 #include <filesystem>
 #include <vector>
