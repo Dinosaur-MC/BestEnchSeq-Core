@@ -55,7 +55,7 @@ set(EQUIP_REG_SRCS ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp)
 # ============================================================================
 
 add_executable(json_tests
-    unit/json_tests.cpp
+    utils/json_tests.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
 )
 target_include_directories(json_tests PRIVATE ${TEST_INCLUDE})
@@ -65,7 +65,7 @@ set_tests_properties(json_tests PROPERTIES
 )
 
 add_executable(test_parser_utils
-    unit/test_parser_utils.cpp
+    utils/test_parser_utils.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
 )
@@ -76,7 +76,7 @@ set_tests_properties(test_parser_utils PROPERTIES
 )
 
 add_executable(test_tag_resolver
-    unit/test_tag_resolver.cpp
+    utils/test_tag_resolver.cpp
     ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
 )
@@ -87,7 +87,7 @@ set_tests_properties(test_tag_resolver PROPERTIES
 )
 
 add_executable(test_ench_info_parser
-    unit/test_ench_info_parser.cpp
+    parsers/test_ench_info_parser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
     ${PROJECT_ROOT}/src/utils/TagResolver.cpp
@@ -102,7 +102,7 @@ set_tests_properties(test_ench_info_parser PROPERTIES
 )
 
 add_executable(test_equipment_parser
-    unit/test_equipment_parser.cpp
+    parsers/test_equipment_parser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
     ${PARSER_UTIL_SRCS}
@@ -116,7 +116,7 @@ set_tests_properties(test_equipment_parser PROPERTIES
 )
 
 add_executable(test_cli_parser
-    unit/test_cli_parser.cpp
+    parsers/test_cli_parser.cpp
     ${PROJECT_ROOT}/src/cli.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PARSER_UTIL_SRCS}
@@ -128,7 +128,7 @@ set_tests_properties(test_cli_parser PROPERTIES
 )
 
 add_executable(test_input_parser
-    unit/test_input_parser.cpp
+    parsers/test_input_parser.cpp
     ${PROJECT_ROOT}/src/cli.cpp
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
@@ -145,7 +145,7 @@ set_tests_properties(test_input_parser PROPERTIES
 )
 
 add_executable(test_output_formatter
-    unit/test_output_formatter.cpp
+    adapters/test_output_formatter.cpp
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${REGISTRY_CORE_SRCS}
@@ -343,12 +343,12 @@ set_tests_properties(test_spsc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_utils.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_algorithm_utils.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_algorithm_utils.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_algorithm_utils.cpp")
 endif()
 
 add_executable(test_algorithm_utils
-    unit/test_algorithm_utils.cpp
+    utils/test_algorithm_utils.cpp
 )
 target_include_directories(test_algorithm_utils PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_utils COMMAND test_algorithm_utils)
@@ -403,12 +403,12 @@ set_tests_properties(test_astar_memory_budget PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_compact_adapter.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_compact_adapter.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/adapters/test_compact_adapter.cpp)
+    message(FATAL_ERROR "Required test source not found: adapters/test_compact_adapter.cpp")
 endif()
 
 add_executable(test_compact_adapter
-    unit/test_compact_adapter.cpp
+    adapters/test_compact_adapter.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
@@ -424,12 +424,12 @@ set_tests_properties(test_compact_adapter PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_serializer.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_serializer.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_serializer.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_serializer.cpp")
 endif()
 
 add_executable(test_serializer
-    unit/test_serializer.cpp
+    utils/test_serializer.cpp
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
@@ -441,12 +441,12 @@ set_tests_properties(test_serializer PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_env_util.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_env_util.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_env_util.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_env_util.cpp")
 endif()
 
 add_executable(test_env_util
-    unit/test_env_util.cpp
+    utils/test_env_util.cpp
 )
 target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_env_util COMMAND test_env_util)

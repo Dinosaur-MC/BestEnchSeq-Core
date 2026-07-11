@@ -144,12 +144,13 @@ TargetSpec parse_target(const std::string &target) {
 // ============================================================================
 
 CLIConfig parse_cli(int argc, char *argv[]) {
+    std::string prog = argc > 0 ? argv[0] : "besq";
     auto args = CLIParser::parse(argc, argv);
 
     CLIConfig config;
     if (args.empty()) {
-        // --help or -- was used; CLIParser already handled --help output
         config.help = true;
+        std::cout << get_cli_help_text(prog) << std::endl;
         return config;
     }
 
@@ -159,7 +160,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
         // Boolean flags
         if (key == "help") {
             config.help = true;
-            std::cout << get_cli_help_text(args.empty() ? "besq" : "") << std::endl;
+            std::cout << get_cli_help_text(prog) << std::endl;
             continue;
         }
         if (key == "verbose") {
