@@ -11,6 +11,46 @@ set(TEST_INCLUDE ${PROJECT_ROOT}/src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # ============================================================================
+# Shared dependency groups (reused across test targets)
+# ============================================================================
+
+# Core domain types
+set(DOMAIN_TYPE_SRCS
+    ${PROJECT_ROOT}/src/types/Ench.cpp
+    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${PROJECT_ROOT}/src/types/Equipment.cpp
+)
+
+# Core registries
+set(REGISTRY_CORE_SRCS
+    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
+)
+
+# Parser utilities (ParserUtils + json)
+set(PARSER_UTIL_SRCS
+    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
+    ${PROJECT_ROOT}/src/io/json.cpp
+)
+
+# Compact types
+set(COMPACT_TYPE_SRCS ${PROJECT_ROOT}/src/types/CompactedTypes.cpp)
+
+# Algorithm engine core (AlgorithmExecutor + ExecutionContext + ForgeEngine)
+set(ALGO_ENGINE_SRCS
+    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
+    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
+)
+
+# Compact registries
+set(COMPACT_REG_SRCS ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp)
+
+# Equipment registry
+set(EQUIP_REG_SRCS ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp)
+
+# ============================================================================
 # Existing tests
 # ============================================================================
 
@@ -26,8 +66,7 @@ set_tests_properties(json_tests PROPERTIES
 
 add_executable(test_parser_utils
     unit/test_parser_utils.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
 )
 target_include_directories(test_parser_utils PRIVATE ${TEST_INCLUDE})
@@ -39,8 +78,7 @@ set_tests_properties(test_parser_utils PROPERTIES
 add_executable(test_tag_resolver
     unit/test_tag_resolver.cpp
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PARSER_UTIL_SRCS}
 )
 target_include_directories(test_tag_resolver PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_tag_resolver COMMAND test_tag_resolver)
@@ -52,8 +90,7 @@ add_executable(test_ench_info_parser
     unit/test_ench_info_parser.cpp
     ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
@@ -66,8 +103,7 @@ set_tests_properties(test_ench_info_parser PROPERTIES
 add_executable(test_equipment_parser
     unit/test_equipment_parser.cpp
     ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
@@ -80,8 +116,7 @@ set_tests_properties(test_equipment_parser PROPERTIES
 add_executable(test_cli_parser
     unit/test_cli_parser.cpp
     ${PROJECT_ROOT}/src/parser/CLIParser.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PARSER_UTIL_SRCS}
 )
 target_include_directories(test_cli_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_cli_parser COMMAND test_cli_parser)
@@ -93,15 +128,10 @@ add_executable(test_input_parser
     unit/test_input_parser.cpp
     ${PROJECT_ROOT}/src/parser/InputParser.cpp
     ${PROJECT_ROOT}/src/parser/CLIParser.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/io/json.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${PARSER_UTIL_SRCS}
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_input_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_input_parser COMMAND test_input_parser)
@@ -113,15 +143,11 @@ add_executable(test_output_formatter
     unit/test_output_formatter.cpp
     ${PROJECT_ROOT}/src/parser/OutputFormatter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/EnchSolution.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
+    ${EQUIP_REG_SRCS}
 )
 target_include_directories(test_output_formatter PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_output_formatter COMMAND test_output_formatter)
@@ -131,6 +157,7 @@ set_tests_properties(test_output_formatter PROPERTIES
 
 add_executable(test_integration
     integration/test_integration.cpp
+    # Parser layer
     ${PROJECT_ROOT}/src/parser/CLIParser.cpp
     ${PROJECT_ROOT}/src/parser/InputParser.cpp
     ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
@@ -138,17 +165,21 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/parser/OutputFormatter.cpp
+    # I/O layer
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    # Registry layer
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    # Domain types
+    ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/EnchSolution.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
+    # Algorithm layer (integration tests)
+    ${ALGO_ENGINE_SRCS}
+    ${COMPACT_REG_SRCS}
+    ${COMPACT_TYPE_SRCS}
+    ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -157,87 +188,87 @@ set_tests_properties(test_integration PROPERTIES
 )
 
 # ============================================================================
-# New algorithm layer tests (to be enabled as implementation proceeds)
+# New algorithm layer tests
 # ============================================================================
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_forge_engine.cpp)
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_forge_engine.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_forge_engine.cpp")
+endif()
+
 add_executable(test_forge_engine
     unit/test_forge_engine.cpp
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
-    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${COMPACT_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
     ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_forge_engine PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_forge_engine COMMAND test_forge_engine)
 set_tests_properties(test_forge_engine PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_exp_calculator.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_exp_calculator.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_exp_calculator.cpp)
 add_executable(test_exp_calculator
     unit/test_exp_calculator.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${DOMAIN_TYPE_SRCS}
+    ${REGISTRY_CORE_SRCS}
 )
 target_include_directories(test_exp_calculator PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_exp_calculator COMMAND test_exp_calculator)
 set_tests_properties(test_exp_calculator PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_execution_context.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_execution_context.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_execution_context.cpp)
 add_executable(test_execution_context
     unit/test_execution_context.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${COMPACT_TYPE_SRCS}
 )
 target_include_directories(test_execution_context PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_execution_context COMMAND test_execution_context)
 set_tests_properties(test_execution_context PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_algorithm_registry.cpp)
+    message(FATAL_ERROR "Required test source not found: registry/test_algorithm_registry.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_algorithm_registry.cpp)
 add_executable(test_algorithm_registry
     registry/test_algorithm_registry.cpp
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_algorithm_registry PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_registry COMMAND test_algorithm_registry)
 set_tests_properties(test_algorithm_registry PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/integration/test_algorithm_executor.cpp)
+    message(FATAL_ERROR "Required test source not found: integration/test_algorithm_executor.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/integration/test_algorithm_executor.cpp)
 add_executable(test_algorithm_executor
     integration/test_algorithm_executor.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${ALGO_ENGINE_SRCS}
+    ${COMPACT_REG_SRCS}
+    ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
-    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
-    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
 )
@@ -246,14 +277,14 @@ add_test(NAME test_algorithm_executor COMMAND test_algorithm_executor)
 set_tests_properties(test_algorithm_executor PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_strategies.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_algorithm_strategies.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_strategies.cpp)
 add_executable(test_algorithm_strategies
     unit/test_algorithm_strategies.cpp
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
+    ${ALGO_ENGINE_SRCS}
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
@@ -261,23 +292,24 @@ add_executable(test_algorithm_strategies
     ${PROJECT_ROOT}/src/utils/AStarDiagnostics.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
-    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${COMPACT_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_algorithm_strategies PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_strategies COMMAND test_algorithm_strategies)
 set_tests_properties(test_algorithm_strategies PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spmc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_spmc_queue.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spmc_queue.cpp)
 add_executable(test_spmc_queue
     unit/test_spmc_queue.cpp
 )
@@ -286,9 +318,11 @@ add_test(NAME test_spmc_queue COMMAND test_spmc_queue)
 set_tests_properties(test_spmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spsc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_spsc_queue.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spsc_queue.cpp)
 add_executable(test_spsc_queue
     unit/test_spsc_queue.cpp
 )
@@ -297,9 +331,11 @@ add_test(NAME test_spsc_queue COMMAND test_spsc_queue)
 set_tests_properties(test_spsc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_utils.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_algorithm_utils.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_utils.cpp)
 add_executable(test_algorithm_utils
     unit/test_algorithm_utils.cpp
 )
@@ -308,27 +344,30 @@ add_test(NAME test_algorithm_utils COMMAND test_algorithm_utils)
 set_tests_properties(test_algorithm_utils PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_ench_reg.cpp)
+    message(FATAL_ERROR "Required test source not found: registry/test_ench_reg.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_ench_reg.cpp)
 add_executable(test_ench_reg
     registry/test_ench_reg.cpp
-    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${COMPACT_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_ench_reg PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_ench_reg COMMAND test_ench_reg)
 set_tests_properties(test_ench_reg PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_equipment_category_registry.cpp)
+    message(FATAL_ERROR "Required test source not found: registry/test_equipment_category_registry.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_equipment_category_registry.cpp)
 add_executable(test_equipment_category_registry
     registry/test_equipment_category_registry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
@@ -338,9 +377,11 @@ add_test(NAME test_equipment_category_registry COMMAND test_equipment_category_r
 set_tests_properties(test_equipment_category_registry PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_astar_memory_budget.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_astar_memory_budget.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_astar_memory_budget.cpp)
 add_executable(test_astar_memory_budget
     unit/test_astar_memory_budget.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarMemoryBudget.cpp
@@ -350,46 +391,41 @@ add_test(NAME test_astar_memory_budget COMMAND test_astar_memory_budget)
 set_tests_properties(test_astar_memory_budget PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_compact_adapter.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_compact_adapter.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_compact_adapter.cpp)
 add_executable(test_compact_adapter
     unit/test_compact_adapter.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
-    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${COMPACT_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/EnchSolution.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
+    ${COMPACT_TYPE_SRCS}
 )
 target_include_directories(test_compact_adapter PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_compact_adapter COMMAND test_compact_adapter)
 set_tests_properties(test_compact_adapter PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_serializer.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_serializer.cpp")
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_serializer.cpp)
 add_executable(test_serializer
     unit/test_serializer.cpp
-    ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp
+    ${EQUIP_REG_SRCS}
 )
 target_include_directories(test_serializer PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_serializer COMMAND test_serializer)
 set_tests_properties(test_serializer PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
-endif()
