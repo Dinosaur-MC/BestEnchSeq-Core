@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "parser/InputParser.h"
 #include "parser/CLIParser.h"
 #include "registries/EnchantmentRegistry.h"

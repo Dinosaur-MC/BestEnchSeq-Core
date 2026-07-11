@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"

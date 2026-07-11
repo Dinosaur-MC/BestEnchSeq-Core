@@ -7,12 +7,15 @@ set(PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # Shared include path for all test targets
 set(TEST_INCLUDE ${PROJECT_ROOT}/src)
 
+# Include tests/ so #include "framework/test_utils.h" resolves
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 # ============================================================================
 # Existing tests
 # ============================================================================
 
 add_executable(json_tests
-    json_tests.cpp
+    unit/json_tests.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
 )
 target_include_directories(json_tests PRIVATE ${TEST_INCLUDE})
@@ -22,7 +25,7 @@ set_tests_properties(json_tests PROPERTIES
 )
 
 add_executable(test_parser_utils
-    test_parser_utils.cpp
+    unit/test_parser_utils.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
@@ -34,7 +37,7 @@ set_tests_properties(test_parser_utils PROPERTIES
 )
 
 add_executable(test_tag_resolver
-    test_tag_resolver.cpp
+    unit/test_tag_resolver.cpp
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
@@ -46,7 +49,7 @@ set_tests_properties(test_tag_resolver PROPERTIES
 )
 
 add_executable(test_ench_info_parser
-    test_ench_info_parser.cpp
+    unit/test_ench_info_parser.cpp
     ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
@@ -61,7 +64,7 @@ set_tests_properties(test_ench_info_parser PROPERTIES
 )
 
 add_executable(test_equipment_parser
-    test_equipment_parser.cpp
+    unit/test_equipment_parser.cpp
     ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
@@ -75,7 +78,7 @@ set_tests_properties(test_equipment_parser PROPERTIES
 )
 
 add_executable(test_cli_parser
-    test_cli_parser.cpp
+    unit/test_cli_parser.cpp
     ${PROJECT_ROOT}/src/parser/CLIParser.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
@@ -87,7 +90,7 @@ set_tests_properties(test_cli_parser PROPERTIES
 )
 
 add_executable(test_input_parser
-    test_input_parser.cpp
+    unit/test_input_parser.cpp
     ${PROJECT_ROOT}/src/parser/InputParser.cpp
     ${PROJECT_ROOT}/src/parser/CLIParser.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
@@ -107,7 +110,7 @@ set_tests_properties(test_input_parser PROPERTIES
 )
 
 add_executable(test_output_formatter
-    test_output_formatter.cpp
+    unit/test_output_formatter.cpp
     ${PROJECT_ROOT}/src/parser/OutputFormatter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
@@ -127,7 +130,7 @@ set_tests_properties(test_output_formatter PROPERTIES
 )
 
 add_executable(test_integration
-    test_integration.cpp
+    integration/test_integration.cpp
     ${PROJECT_ROOT}/src/parser/CLIParser.cpp
     ${PROJECT_ROOT}/src/parser/InputParser.cpp
     ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
@@ -157,9 +160,9 @@ set_tests_properties(test_integration PROPERTIES
 # New algorithm layer tests (to be enabled as implementation proceeds)
 # ============================================================================
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_forge_engine.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_forge_engine.cpp)
 add_executable(test_forge_engine
-    test_forge_engine.cpp
+    unit/test_forge_engine.cpp
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
@@ -176,9 +179,9 @@ set_tests_properties(test_forge_engine PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_exp_calculator.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_exp_calculator.cpp)
 add_executable(test_exp_calculator
-    test_exp_calculator.cpp
+    unit/test_exp_calculator.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${PROJECT_ROOT}/src/types/EnchSet.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -194,9 +197,9 @@ set_tests_properties(test_exp_calculator PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_execution_context.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_execution_context.cpp)
 add_executable(test_execution_context
-    test_execution_context.cpp
+    unit/test_execution_context.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
 )
@@ -207,9 +210,9 @@ set_tests_properties(test_execution_context PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_registry.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_algorithm_registry.cpp)
 add_executable(test_algorithm_registry
-    test_algorithm_registry.cpp
+    registry/test_algorithm_registry.cpp
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
@@ -226,9 +229,9 @@ set_tests_properties(test_algorithm_registry PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_executor.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/integration/test_algorithm_executor.cpp)
 add_executable(test_algorithm_executor
-    test_algorithm_executor.cpp
+    integration/test_algorithm_executor.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
@@ -245,9 +248,9 @@ set_tests_properties(test_algorithm_executor PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_strategies.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_strategies.cpp)
 add_executable(test_algorithm_strategies
-    test_algorithm_strategies.cpp
+    unit/test_algorithm_strategies.cpp
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
@@ -274,9 +277,9 @@ set_tests_properties(test_algorithm_strategies PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_spmc_queue.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spmc_queue.cpp)
 add_executable(test_spmc_queue
-    test_spmc_queue.cpp
+    unit/test_spmc_queue.cpp
 )
 target_include_directories(test_spmc_queue PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_spmc_queue COMMAND test_spmc_queue)
@@ -285,9 +288,9 @@ set_tests_properties(test_spmc_queue PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_spsc_queue.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spsc_queue.cpp)
 add_executable(test_spsc_queue
-    test_spsc_queue.cpp
+    unit/test_spsc_queue.cpp
 )
 target_include_directories(test_spsc_queue PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_spsc_queue COMMAND test_spsc_queue)
@@ -296,9 +299,9 @@ set_tests_properties(test_spsc_queue PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_algorithm_utils.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_utils.cpp)
 add_executable(test_algorithm_utils
-    test_algorithm_utils.cpp
+    unit/test_algorithm_utils.cpp
 )
 target_include_directories(test_algorithm_utils PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_utils COMMAND test_algorithm_utils)
@@ -307,9 +310,9 @@ set_tests_properties(test_algorithm_utils PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_ench_reg.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_ench_reg.cpp)
 add_executable(test_ench_reg
-    test_ench_reg.cpp
+    registry/test_ench_reg.cpp
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
@@ -325,9 +328,9 @@ set_tests_properties(test_ench_reg PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_equipment_category_registry.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_equipment_category_registry.cpp)
 add_executable(test_equipment_category_registry
-    test_equipment_category_registry.cpp
+    registry/test_equipment_category_registry.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 target_include_directories(test_equipment_category_registry PRIVATE ${TEST_INCLUDE})
@@ -337,9 +340,9 @@ set_tests_properties(test_equipment_category_registry PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_astar_memory_budget.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_astar_memory_budget.cpp)
 add_executable(test_astar_memory_budget
-    test_astar_memory_budget.cpp
+    unit/test_astar_memory_budget.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarMemoryBudget.cpp
 )
 target_include_directories(test_astar_memory_budget PRIVATE ${TEST_INCLUDE})
@@ -349,9 +352,9 @@ set_tests_properties(test_astar_memory_budget PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_compact_adapter.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_compact_adapter.cpp)
 add_executable(test_compact_adapter
-    test_compact_adapter.cpp
+    unit/test_compact_adapter.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
@@ -372,9 +375,9 @@ set_tests_properties(test_compact_adapter PROPERTIES
 )
 endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_serializer.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_serializer.cpp)
 add_executable(test_serializer
-    test_serializer.cpp
+    unit/test_serializer.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
     ${PROJECT_ROOT}/src/types/EnchInfo.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
@@ -390,6 +393,3 @@ set_tests_properties(test_serializer PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 endif()
-
-
-

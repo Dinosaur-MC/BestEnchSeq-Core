@@ -10,7 +10,7 @@
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
-#include "test_utils.h"
+#include "framework/test_utils.h"
 
 #include <filesystem>
 #include <fstream>

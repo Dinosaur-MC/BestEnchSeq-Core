@@ -1,5 +1,5 @@
 #include "parser/CLIParser.h"
-#include "test_utils.h"
+#include "framework/test_utils.h"
 
 #include <iostream>
 #include <stdexcept>

@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "registries/RegistryAccess.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
