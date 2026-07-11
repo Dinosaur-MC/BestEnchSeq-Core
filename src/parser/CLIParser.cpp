@@ -186,6 +186,10 @@ CLIConfig CLIParser::parse(int argc, char *argv[]) {
             std::cout << get_help_text(program_name) << std::endl;
             continue;
         }
+        if (key == "verbose") {
+            config.verbose = true;
+            continue;
+        }
         if (key == "ignore-cost-cap") {
             config.ignore_cost_cap = true;
             continue;

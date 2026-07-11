@@ -306,3 +306,4 @@ docs/superpowers
 res/*
 !res/README.md
 logs/
+*.local.*

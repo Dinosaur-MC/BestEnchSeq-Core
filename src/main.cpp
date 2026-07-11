@@ -9,6 +9,7 @@
 #include "parser/CLIParser.h"
 #include "parser/EnchInfoParser.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
+#include "utils/Logger.hpp"
 #include "parser/EquipmentParser.h"
 #include "parser/InputParser.h"
 #include "parser/OutputFormatter.h"
@@ -138,10 +139,23 @@ int main(int argc, char *argv[]) {
             }
         }
 
+        // ── Logger ────────────────────────────────────────────────────
+        Logger logger;
+        logger.info("Starting algorithm: greedy");
+
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
         executor.start(algo_input); // copy — keeps algo_input valid for recall() below
         executor.wait();
+
+        // ── Verbose diagnostics ────────────────────────────────────────────
+        if (config.verbose) {
+            auto diag = executor.get_diagnostics(0);
+            logger.printf(LogLevel::Info,
+                "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
+                diag.nodes_visited, diag.nodes_pruned, diag.steps_forged,
+                diag.progress * 100.0);
+        }
 
         // ── Boundary: compact → domain ────────────────────────────────────
         auto solutions =

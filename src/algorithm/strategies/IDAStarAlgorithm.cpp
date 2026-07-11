@@ -22,7 +22,7 @@ bool IDAStarAlgorithm::_meets_target(const std::vector<ItemID>& ids) const {
 void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
                              int32_t& best_cost, ExecutionContext& ctx)
 {
-    ++_nodes_visited;
+    ctx.incr_nodes_visited();
 
     if (_nodes_visited % 512 == 0) {
         if (ctx.is_cancelled()) return;
@@ -42,7 +42,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
     int32_t h_val = Heuristic::compute(ids, _pool, *_ench_reg, _target,
                                         _book_mult, _h_buf, _h_dirty);
     if (g + h_val >= best_cost) {
-        ++_nodes_pruned;
+        ctx.incr_nodes_pruned();
         return;
     }
 
@@ -50,7 +50,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
     size_t h = StateHash::ids(ids, _pool);
     if (const int32_t* tt_g = _tt.lookup(h)) {
         if (*tt_g <= g) {
-            ++_nodes_pruned;
+            ctx.incr_nodes_pruned();
             return;
         }
     }
@@ -87,6 +87,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
         Item forged = _pool[old_base_id];
         int32_t real_cost = _compact_forge.forge_into(forged, _pool[old_sac_id], *_ench_reg);
         int32_t child_g = g + real_cost;
+        ctx.incr_steps_forged();
 
         if (child_g > best_cost) continue;
 

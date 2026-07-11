@@ -9,12 +9,10 @@
 #include <string>
 #include <vector>
 
-// ─── Hard limit on stored solutions ───
 #ifndef BESQ_MAX_SOLUTIONS
 #define BESQ_MAX_SOLUTIONS 128
 #endif
 
-// ─── Observer event (for async queue) ───
 struct ObserverEvent {
     enum Type { Progress, Solution, StateChange, Diagnostic, Completed };
     Type type;
@@ -23,17 +21,15 @@ struct ObserverEvent {
     std::vector<compact::EnchStep> steps;
     AlgorithmState prev_state{AlgorithmState::Idle};
     AlgorithmState curr_state{AlgorithmState::Idle};
-    std::string diagnostic_msg;  // for Diagnostic type
+    std::string diagnostic_msg;
 };
 
-// ─── Execution context (passed into IAlgorithm::execute) ───
 class ExecutionContext {
 public:
     ExecutionContext() = default;
     ExecutionContext(const ExecutionContext&) = delete;
     ExecutionContext& operator=(const ExecutionContext&) = delete;
 
-    // Cancel/pause
     void cancel() noexcept { _cancelled.store(true, std::memory_order_release); }
     void pause() noexcept { _paused.store(true, std::memory_order_release); }
     void resume() noexcept {
@@ -44,25 +40,18 @@ public:
     bool is_paused() const noexcept  { return _paused.load(std::memory_order_acquire); }
     void wait_if_paused();
 
-    // Event pushing (lock-free, with adaptive backpressure)
     void report_progress(double percent, ProgressStatus status);
     void report_compact_solution(std::vector<compact::EnchStep> solution);
     void report_state_change(AlgorithmState prev, AlgorithmState curr);
-
-    // Event dispatch (drains queue to observers)
     void dispatch_events();
 
-    // Observer management
     void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
     void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
     bool has_observers() const noexcept {
         return _has_observers.load(std::memory_order_acquire);
     }
 
-    // Direct completion notification (dispatches on_completed to observers)
     void notify_completed(const AlgorithmOutput& output);
-
-    // Result accumulation (compact steps only)
     void append_compact_steps(const std::vector<compact::EnchStep>& steps);
     std::vector<std::vector<compact::EnchStep>> get_accumulated_compact_steps() const;
 
@@ -70,12 +59,12 @@ public:
         return _progress.load(std::memory_order_acquire);
     }
 
-    // ── Search config (hot-updatable at runtime) ──
+    // ── Search config ──
     struct SearchConfig {
-        int32_t max_solutions = 0;   // 0 = unlimited
-        int32_t max_depth = 0;       // 0 = unlimited
-        int32_t memory_mb = 0;       // 0 = auto detect (AStar only)
-        std::chrono::milliseconds max_search_time{0}; // 0 = unlimited
+        int32_t max_solutions = 0;
+        int32_t max_depth = 0;
+        int32_t memory_mb = 0;
+        std::chrono::milliseconds max_search_time{0};
     };
 
     SearchConfig get_search_config() const {
@@ -87,6 +76,31 @@ public:
         _search_config.store(
             std::make_shared<const SearchConfig>(std::move(cfg)),
             std::memory_order_release);
+    }
+
+    // ── Diagnostic counters (atomic, read from verbose monitor) ─────────
+    struct DiagnosticSnapshot {
+        int64_t nodes_visited = 0;
+        int64_t nodes_pruned = 0;
+        int64_t steps_forged = 0;
+        int64_t pool_items   = 0;
+        double  progress     = 0.0;
+        int64_t elapsed_ms   = 0;
+    };
+
+    void incr_nodes_visited() noexcept { _diag_nodes_visited.fetch_add(1, std::memory_order_relaxed); }
+    void incr_nodes_pruned()   noexcept { _diag_nodes_pruned.fetch_add(1, std::memory_order_relaxed); }
+    void incr_steps_forged()   noexcept { _diag_steps_forged.fetch_add(1, std::memory_order_relaxed); }
+
+    DiagnosticSnapshot get_diagnostics(int64_t elapsed_ms = 0) const noexcept {
+        return {
+            _diag_nodes_visited.load(std::memory_order_relaxed),
+            _diag_nodes_pruned.load(std::memory_order_relaxed),
+            _diag_steps_forged.load(std::memory_order_relaxed),
+            0,
+            _progress.load(std::memory_order_acquire),
+            elapsed_ms
+        };
     }
 
 private:
@@ -102,13 +116,15 @@ private:
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
 
     mutable std::mutex _accum_mtx;
-    // Stored as (total_cost, steps) pairs, sorted by cost ascending.
     std::vector<std::pair<int32_t, std::vector<compact::EnchStep>>> _accumulated;
     std::atomic<double> _progress{0.0};
 
-    // Progress downsampling (thread-safe)
     std::atomic<uint32_t> _progress_downsample{0};
 
-    // Search config (shared_ptr atomic swap for lock-free reads)
     std::atomic<std::shared_ptr<const SearchConfig>> _search_config{nullptr};
+
+    // ── Atomic diagnostic counters ──
+    std::atomic<int64_t> _diag_nodes_visited{0};
+    std::atomic<int64_t> _diag_nodes_pruned{0};
+    std::atomic<int64_t> _diag_steps_forged{0};
 };

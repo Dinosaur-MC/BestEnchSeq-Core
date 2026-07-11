@@ -47,6 +47,10 @@ public:
 
     void update_search_config(ExecutionContext::SearchConfig cfg);
 
+    ExecutionContext::DiagnosticSnapshot get_diagnostics(int64_t elapsed_ms = 0) const {
+        return _ctx ? _ctx->get_diagnostics(elapsed_ms) : ExecutionContext::DiagnosticSnapshot{};
+    }
+
     // Serialization
     std::vector<uint8_t> serialize_state() const;
     bool restore_state(const std::vector<uint8_t>& data);
