@@ -1,5 +1,7 @@
 #include "framework/test_utils.h"
 #include "utils/SPSCQueue.hpp"
+#include <atomic>
+#include <chrono>
 #include <thread>
 
 void test_push_pop() {
@@ -98,6 +100,58 @@ void test_peek() {
     std::cout << "PASS: test_peek" << std::endl;
 }
 
+void test_concurrent_push_pop() {
+    // Concurrent producer and consumer — verify no lost/duplicated items
+    // and exact FIFO ordering.
+    constexpr int N = 100000;
+    SPSCQueue<int, 64> q;
+
+    std::atomic<bool> done{false};
+    std::atomic<int> consumed{0};
+    std::atomic<int> last_val{-1};
+    std::atomic<bool> order_ok{true};
+
+    std::thread producer([&] {
+        for (int i = 0; i < N; i++) {
+            while (!q.push(i)) {
+                // Queue full — yield and retry
+                std::this_thread::yield();
+            }
+        }
+        done.store(true);
+    });
+
+    std::thread consumer([&] {
+        using Clock = std::chrono::steady_clock;
+        auto deadline = Clock::now() + std::chrono::seconds(5);
+        int val{};
+        while (!done.load() || q.size() > 0) {
+            if (q.pop(val)) {
+                consumed.fetch_add(1);
+                if (val < last_val.load()) {
+                    order_ok.store(false);
+                }
+                last_val.store(val);
+            } else {
+                if (Clock::now() >= deadline) {
+                    std::cerr << "WARNING: SPSC concurrent consumer timed out"
+                              << std::endl;
+                    break;
+                }
+                std::this_thread::yield();
+            }
+        }
+    });
+
+    producer.join();
+    consumer.join();
+
+    expect(consumed.load() == N, "SPSC: should consume exactly all pushed items");
+    expect(order_ok.load(), "SPSC: items should be in FIFO order");
+    std::cout << "PASS: test_concurrent_push_pop (consumed "
+              << consumed.load() << "/" << N << " items)" << std::endl;
+}
+
 int main() {
     std::cout << "=== SPSCQueue Tests ===" << std::endl;
     try {
@@ -106,6 +160,7 @@ int main() {
         test_sequential_producer_consumer();
         test_consumer_catch_up();
         test_peek();
+        test_concurrent_push_pop();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
