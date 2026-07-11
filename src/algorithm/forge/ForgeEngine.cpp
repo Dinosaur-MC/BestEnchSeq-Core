@@ -96,7 +96,7 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
         }
     }
 
-    target.ppn = static_cast<int8_t>(
+    target.ppn = static_cast<uint8_t>(
         1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
 
     return apply_cap(cost);

@@ -2,7 +2,7 @@
 #include "../ExecutionContext.h"
 #include <algorithm>
 #include <cstdint>
-#include <unordered_map>
+
 #include <vector>
 
 using compact::Item;
@@ -85,25 +85,35 @@ int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
     int32_t h = 0;
     if (items.empty()) return h;
 
-    std::unordered_map<int16_t, int16_t> max_levels;
+    // Ensure scratch buffer is large enough
+    if (_h_buf.size() < _ench_reg->size())
+        _h_buf.assign(_ench_reg->size(), 0);
+    _h_dirty.clear();
+
+    // Collect max level per enchantment ID using flat array
     for (const auto& item : items) {
         for (const auto& e : item.enchs) {
-            auto it = max_levels.find(e.id);
-            if (it == max_levels.end())
-                max_levels[e.id] = e.level;
-            else if (e.level > it->second)
-                it->second = e.level;
+            if (e.level > _h_buf[e.id]) {
+                if (_h_buf[e.id] == 0)
+                    _h_dirty.push_back(e.id);
+                _h_buf[e.id] = e.level;
+            }
         }
     }
 
+    // Compute admissible lower bound
     for (const auto& t : _target) {
-        auto it = max_levels.find(t.id);
-        int16_t have = (it == max_levels.end()) ? 0 : it->second;
+        int16_t have = _h_buf[t.id];
         if (have < t.level) {
             int32_t bm = _compact_forge.book_multiplier(_ench_reg->get_multiplier(t.id));
             h += (t.level - have) * bm;
         }
     }
+
+    // Reset touched entries
+    for (auto id : _h_dirty)
+        _h_buf[id] = 0;
+
     return h;
 }
 
@@ -136,7 +146,9 @@ void DFSAlgorithm::execute(
 
     _dfs_iterative(ctx);
 
-    ctx.report_progress(1.0, ProgressStatus::Complete);
+    ctx.report_progress(1.0, _best_cost < INT32_MAX
+        ? ProgressStatus::Complete
+        : ProgressStatus::CompleteNoSolution);
 }
 
 // ─── Iterative search ──────────────────────────────────────────────────────

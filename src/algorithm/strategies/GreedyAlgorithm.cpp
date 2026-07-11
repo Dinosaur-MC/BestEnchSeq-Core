@@ -58,7 +58,9 @@ void GreedyAlgorithm::execute(
     }
 
     ctx.report_compact_solution(std::move(compact_steps));
-    ctx.report_progress(1.0, ProgressStatus::Complete);
+    ctx.report_progress(1.0, compact_steps.empty()
+        ? ProgressStatus::GoalAlreadyMet
+        : ProgressStatus::Complete);
 }
 
 bool GreedyAlgorithm::_meets_target(const compact::Item& equipment) const {

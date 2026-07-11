@@ -190,6 +190,7 @@ void AStarAlgorithm::execute(
     }
 
     int32_t h0 = _heuristic(initial_ids);
+    size_t _open_heap_cap = _open_heap.capacity();
 
     // Priority queue over backing heap
     std::priority_queue<
@@ -266,7 +267,7 @@ void AStarAlgorithm::execute(
             _diag.estimated_peak_bytes =
                 static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
               + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
-              + static_cast<int64_t>(_open_heap.capacity()) * static_cast<int64_t>(sizeof(PriorityEntry));
+              + static_cast<int64_t>(_open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
             _diag.status = "Complete";
             _diag.write();
             return;
@@ -383,7 +384,7 @@ void AStarAlgorithm::execute(
     _diag.estimated_peak_bytes =
         static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
       + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
-      + static_cast<int64_t>(_open_heap.capacity()) * static_cast<int64_t>(sizeof(PriorityEntry));
+      + static_cast<int64_t>(_open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
     if (ctx.is_cancelled()) {
         ctx.report_progress(1.0, ProgressStatus::Cancelled);
         _diag.status = "Cancelled";

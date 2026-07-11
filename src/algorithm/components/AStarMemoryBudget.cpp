@@ -4,7 +4,7 @@
 
 // Per-entry byte costs (adjusted for real platform)
 namespace {
-    constexpr int64_t COST_BEST_G     = 72;   // unordered_map pair + bucket
+    constexpr int64_t COST_BEST_G     = 16;   // FlatHashMap: key(8) + val(4) + occupied(1) + slack
     constexpr int64_t COST_OPEN_SET   = 88;   // SearchState in vector
     constexpr int64_t COST_STEP_POOL  = 16;   // StepNode
     constexpr int64_t COST_ITEM_POOL  = 100;  // avg Item + EnchSet capacity

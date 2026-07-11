@@ -69,6 +69,10 @@ private:
     ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
 
+    // Heuristic scratch buffers (reused across calls, avoids per-call allocation)
+    mutable std::vector<int16_t> _h_buf;
+    mutable std::vector<int16_t> _h_dirty;
+
     std::vector<compact::Ench> _target;
 
     int32_t _best_cost{INT32_MAX};
