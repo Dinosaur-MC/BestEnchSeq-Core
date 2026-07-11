@@ -113,4 +113,8 @@ private:
 
     // ─── Diagnostics (populated during execute, written on exit) ─────────
     AStarDiagnostics _diag;
+
+    // ─── Heuristic scratch buffers (mutable, reused across calls) ─────────
+    mutable std::vector<int16_t> _h_buf;        // max level per ench id
+    mutable std::vector<int16_t> _h_dirty;      // ids touched in current call
 };

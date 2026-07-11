@@ -1,9 +1,9 @@
 #include "AStarAlgorithm.h"
 #include "../ExecutionContext.h"
+#include "utils/FlatHashMap.hpp"
 #include <algorithm>
 #include <chrono>
 #include <queue>
-#include <unordered_map>
 
 using compact::Item;
 using compact::EnchStep;
@@ -36,25 +36,35 @@ int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID>& ids) const {
     int32_t h = 0;
     if (ids.empty()) return h;
 
-    std::unordered_map<int16_t, int16_t> max_levels;
+    // Ensure scratch buffer is large enough
+    if (_h_buf.size() < _ench_reg->size())
+        _h_buf.assign(_ench_reg->size(), 0);
+    _h_dirty.clear();
+
+    // Collect max level per enchantment ID using flat array
     for (auto id : ids) {
         for (const auto& e : _pool[id].enchs) {
-            auto it = max_levels.find(e.id);
-            if (it == max_levels.end())
-                max_levels[e.id] = e.level;
-            else if (e.level > it->second)
-                it->second = e.level;
+            if (e.level > _h_buf[e.id]) {
+                if (_h_buf[e.id] == 0)
+                    _h_dirty.push_back(e.id);
+                _h_buf[e.id] = e.level;
+            }
         }
     }
 
+    // Compute admissible lower bound
     for (const auto& t : _target) {
-        auto it = max_levels.find(t.id);
-        int16_t have = (it == max_levels.end()) ? 0 : it->second;
+        int16_t have = _h_buf[t.id];
         if (have < t.level) {
             int32_t bm = _compact_forge.book_multiplier(_ench_reg->get_multiplier(t.id));
             h += (t.level - have) * bm;
         }
     }
+
+    // Reset touched entries
+    for (auto id : _h_dirty)
+        _h_buf[id] = 0;
+
     return h;
 }
 
@@ -182,8 +192,8 @@ void AStarAlgorithm::execute(
         SearchState{0, -1, std::move(initial_ids)}, h0
     });
 
-    // best_g keyed by hash
-    std::unordered_map<size_t, int32_t> best_g;
+    // best_g keyed by hash — open-addressing flat map (contiguous, cache-friendly)
+    FlatHashMap<size_t, int32_t> best_g;
     best_g.reserve(static_cast<size_t>(_budget.max_explored));
     int64_t explored = 0;
 
@@ -196,9 +206,10 @@ void AStarAlgorithm::execute(
 
         // best_g check
         size_t cur_h = _hash_ids(current.ids);
-        auto bg_it = best_g.find(cur_h);
-        if (bg_it != best_g.end() && bg_it->second < current.g)
-            continue;
+        if (int32_t* bg = best_g.find(cur_h)) {
+            if (*bg < current.g)
+                continue;
+        }
 
         // Goal check
         if (_meets_target(current.ids[0])) {
@@ -305,10 +316,11 @@ void AStarAlgorithm::execute(
                 }
 
                 size_t child_h = _hash_ids(child_ids);
-                auto c_it = best_g.find(child_h);
-                if (c_it != best_g.end() && c_it->second <= child_g) {
-                    ++_diag.pruned_by_best_g;
-                    continue;
+                if (int32_t* cg = best_g.find(child_h)) {
+                    if (*cg <= child_g) {
+                        ++_diag.pruned_by_best_g;
+                        continue;
+                    }
                 }
                 best_g[child_h] = child_g;
 
