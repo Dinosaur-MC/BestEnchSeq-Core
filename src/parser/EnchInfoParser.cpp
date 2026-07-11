@@ -145,10 +145,9 @@ std::unordered_set<std::string> resolve_references(
 
 // ============================================================================
 
-std::vector<EnchInfo> EnchInfoParser::parse_native_json(
+std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
     const std::filesystem::path &path,
     TagResolver &tag_resolver,
-    const EquipmentCategoryRegistry &cat_reg,
     EnchantmentDataPack *metadata
 ) {
     // Read and parse the JSON file
@@ -185,7 +184,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
     const auto &ench_arr = std::get<Json::Array>(ench_val);
 
     // --- Parse each enchantment entry --------------------------------------
-    std::vector<EnchInfo> result;
+    std::vector<RawEnchInfo> result;
     for (const auto &ench_json : ench_arr) {
         auto elem_val = ench_json.get_value();
         if (!std::holds_alternative<Json::Object>(elem_val)) {
@@ -225,17 +224,11 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
         auto exclusive_set_items = ParserUtils::get_json_string_array(elem_obj, "exclusive_set");
         auto exclusive_set       = resolve_references(exclusive_set_items, tag_resolver);
 
-        // Applicable equipment — resolve #tag references
+        // Applicable equipment — resolve #tag references, keep as strings
         auto equipment_items = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
-        std::unordered_set<int32_t> applicable_category_ids;
-        auto resolved_equipment = resolve_references(equipment_items, tag_resolver);
-        for (const auto &eq : resolved_equipment) {
-            int32_t cid = cat_reg.get_id(eq);
-            if (cid >= 0)
-                applicable_category_ids.insert(cid);
-        }
+        auto applicable_equipment = resolve_references(equipment_items, tag_resolver);
 
-        result.emplace_back(
+        result.emplace_back(RawEnchInfo{
             std::move(id),
             std::move(name),
             platform,
@@ -243,8 +236,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
             limited_level,
             multiplier,
             std::move(exclusive_set),
-            std::move(applicable_category_ids)
-        );
+            std::move(applicable_equipment)
+        });
     }
 
     return result;
@@ -252,19 +245,18 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_json(
 
 // ============================================================================
 
-std::vector<EnchInfo> EnchInfoParser::parse(
-    const std::filesystem::path &path, TagResolver &tag_resolver,
-    const EquipmentCategoryRegistry &cat_reg
+std::vector<RawEnchInfo> EnchInfoParser::parse(
+    const std::filesystem::path &path, TagResolver &tag_resolver
 ) {
     // Auto-detect format
     auto format = ParserUtils::detect_format(path);
     switch (format) {
     case ParserUtils::DataFormat::NativeJSON:
-        return parse_native_json(path, tag_resolver, cat_reg);
+        return parse_native_json(path, tag_resolver);
     case ParserUtils::DataFormat::NativeCSV:
-        return parse_native_csv(path, tag_resolver, cat_reg);
+        return parse_native_csv(path, tag_resolver);
     case ParserUtils::DataFormat::MCOfficial:
-        return parse_mc_official(path, tag_resolver, cat_reg);
+        return parse_mc_official(path, tag_resolver);
     default:
         throw std::runtime_error("Unknown format: " + path.string());
     }
@@ -272,9 +264,8 @@ std::vector<EnchInfo> EnchInfoParser::parse(
 
 // ============================================================================
 
-std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
-    const std::filesystem::path &path, TagResolver &tag_resolver,
-    const EquipmentCategoryRegistry &cat_reg
+std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
+    const std::filesystem::path &path, TagResolver &tag_resolver
 ) {
     auto rows = csv::parse(path);
     if (rows.empty()) {
@@ -310,7 +301,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
         return fields[it->second];
     };
 
-    std::vector<EnchInfo> result;
+    std::vector<RawEnchInfo> result;
     for (size_t r = 1; r < rows.size(); ++r) {
         const auto &fields = rows[r];
         if (fields.empty()) {
@@ -381,22 +372,18 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
             }
         }
 
-        // Applicable equipment — semi-colon separated tokens, resolve #tag refs
-        std::unordered_set<int32_t> applicable_category_ids;
+        // Applicable equipment — semi-colon separated tokens, keep as strings
+        std::unordered_set<std::string> applicable_equipment;
         {
             std::string eq_str = get_field(fields, "applicable_equipment");
             if (!eq_str.empty()) {
                 auto items    = ParserUtils::split_string(eq_str, ';');
                 auto resolved = resolve_references(items, tag_resolver);
-                for (const auto &eq : resolved) {
-                    int32_t cid = cat_reg.get_id(eq);
-                    if (cid >= 0)
-                        applicable_category_ids.insert(cid);
-                }
+                applicable_equipment = std::move(resolved);
             }
         }
 
-        result.emplace_back(
+        result.emplace_back(RawEnchInfo{
             std::move(id),
             std::move(name),
             platform,
@@ -404,8 +391,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
             limited_level,
             multiplier,
             std::move(exclusive_set),
-            std::move(applicable_category_ids)
-        );
+            std::move(applicable_equipment)
+        });
     }
 
     return result;
@@ -413,14 +400,13 @@ std::vector<EnchInfo> EnchInfoParser::parse_native_csv(
 
 // ============================================================================
 
-std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
-    const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver,
-    const EquipmentCategoryRegistry &cat_reg
+std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
+    const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver
 ) {
     // Load tags from the data pack directory
     tag_resolver.load_from(data_pack_dir);
 
-    std::vector<EnchInfo> result;
+    std::vector<RawEnchInfo> result;
 
     std::filesystem::path data_dir = data_pack_dir / "data";
     if (!std::filesystem::is_directory(data_dir)) {
@@ -428,6 +414,7 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
     }
 
     // Known equipment category IDs (without namespace prefix)
+    // Used only for heuristics in MC official format parsing
     std::unordered_set<std::string> known_equipment_ids = {
         "sword",      "helmet",    "chestplate", "leggings",
         "boots",      "bow",       "axe",        "pickaxe",
@@ -524,11 +511,11 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
             auto excl_items    = ParserUtils::get_json_string_array(obj, "exclusive_set");
             auto exclusive_set = resolve_references(excl_items, tag_resolver);
 
-            // Supported items → applicable equipment
+            // Supported items → applicable equipment (keep as strings)
             auto supp_items      = ParserUtils::get_json_string_array(obj, "supported_items");
             auto resolved_supp   = resolve_references(supp_items, tag_resolver);
 
-            std::unordered_set<int32_t> applicable_category_ids;
+            std::unordered_set<std::string> applicable_equipment;
             for (const auto &item_id : resolved_supp) {
                 // Strip namespace prefix to check against known equipment categories
                 std::string stripped = item_id;
@@ -537,17 +524,16 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
                     stripped = stripped.substr(colon_pos + 1);
                 }
 
-                int32_t cat_id;
+                // Keep the item_id as-is for RegistryResolver to resolve later.
+                // Use stripped form if it's a known builtin category name.
                 if (known_equipment_ids.count(stripped)) {
-                    cat_id = cat_reg.get_id(stripped);
+                    applicable_equipment.insert(stripped);
                 } else {
-                    cat_id = cat_reg.get_id(item_id);
+                    applicable_equipment.insert(item_id);
                 }
-                if (cat_id >= 0)
-                    applicable_category_ids.insert(cat_id);
             }
 
-            result.emplace_back(
+            result.emplace_back(RawEnchInfo{
                 std::move(name_id),
                 std::move(name),
                 platform,
@@ -555,8 +541,8 @@ std::vector<EnchInfo> EnchInfoParser::parse_mc_official(
                 limited_level,
                 multiplier,
                 std::move(exclusive_set),
-                std::move(applicable_category_ids)
-            );
+                std::move(applicable_equipment)
+            });
         }
     }
 

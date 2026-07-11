@@ -1,5 +1,6 @@
 #pragma once
 #include "types/EnchInfo.h"
+#include "types/RawEnchInfo.h"
 #include "parser/TagResolver.h"
 #include <filesystem>
 #include <string>
@@ -16,35 +17,32 @@ struct EnchantmentDataPack {
 
 struct EnchInfoParser {
     // Parse native JSON format — single file with enchantments array
-    static std::vector<EnchInfo> parse_native_json(
+    // Returns string-based intermediate data (RawEnchInfo).
+    static std::vector<RawEnchInfo> parse_native_json(
         const std::filesystem::path &path,
         TagResolver &tag_resolver,
-        const EquipmentCategoryRegistry &cat_reg,
         EnchantmentDataPack *metadata = nullptr
     );
 
     // Parse native CSV format (enchantments.csv)
-    static std::vector<EnchInfo> parse_native_csv(
+    static std::vector<RawEnchInfo> parse_native_csv(
         const std::filesystem::path &path,
-        TagResolver &tag_resolver,
-        const EquipmentCategoryRegistry &cat_reg
+        TagResolver &tag_resolver
     );
 
     // Parse MC official data-driven format (data/<ns>/enchantment/<id>.json)
-    static std::vector<EnchInfo> parse_mc_official(
+    static std::vector<RawEnchInfo> parse_mc_official(
         const std::filesystem::path &data_pack_dir,
-        TagResolver &tag_resolver,
-        const EquipmentCategoryRegistry &cat_reg
+        TagResolver &tag_resolver
     );
 
     // Auto-detect format and parse
-    static std::vector<EnchInfo> parse(
+    static std::vector<RawEnchInfo> parse(
         const std::filesystem::path &path,
-        TagResolver &tag_resolver,
-        const EquipmentCategoryRegistry &cat_reg
+        TagResolver &tag_resolver
     );
 
-    // Serialize to JSON format
+    // Serialize to JSON format (requires category registry for ID→name resolution)
     static std::string to_json(
         const std::vector<EnchInfo> &infos,
         const EquipmentCategoryRegistry &cat_reg,

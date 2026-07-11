@@ -11,10 +11,9 @@
 
 // ============================================================================
 
-std::vector<Equipment> EquipmentParser::parse_native_json(
+std::vector<RawEquipment> EquipmentParser::parse_native_json(
     const std::filesystem::path &path,
-    TagResolver &tag_resolver,
-    const EquipmentCategoryRegistry &cat_reg
+    TagResolver &tag_resolver
 ) {
     (void)tag_resolver; // Equipment parsing may use tag resolver for categories in future
 
@@ -54,7 +53,7 @@ std::vector<Equipment> EquipmentParser::parse_native_json(
     const auto &eq_arr = std::get<Json::Array>(eq_val);
 
     // Parse each equipment entry
-    std::vector<Equipment> result;
+    std::vector<RawEquipment> result;
     for (const auto &eq_json : eq_arr) {
         auto elem_val = eq_json.get_value();
         if (!std::holds_alternative<Json::Object>(elem_val)) {
@@ -83,13 +82,10 @@ std::vector<Equipment> EquipmentParser::parse_native_json(
             max_durability = 0;
         }
 
-        int32_t cat_id = cat_reg.get_id(category);
-        if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
-
-        result.emplace_back(Equipment{
+        result.emplace_back(RawEquipment{
             std::move(id),
             std::move(name),
-            cat_id,
+            std::move(category),
             max_durability
         });
     }
@@ -99,9 +95,8 @@ std::vector<Equipment> EquipmentParser::parse_native_json(
 
 // ============================================================================
 
-std::vector<Equipment> EquipmentParser::parse_native_csv(
-    const std::filesystem::path &path,
-    const EquipmentCategoryRegistry &cat_reg
+std::vector<RawEquipment> EquipmentParser::parse_native_csv(
+    const std::filesystem::path &path
 ) {
     auto rows = csv::parse(path);
     if (rows.empty()) {
@@ -134,7 +129,7 @@ std::vector<Equipment> EquipmentParser::parse_native_csv(
         return fields[it->second];
     };
 
-    std::vector<Equipment> result;
+    std::vector<RawEquipment> result;
     for (size_t r = 1; r < rows.size(); ++r) {
         const auto &fields = rows[r];
         if (fields.empty()) {
@@ -171,13 +166,10 @@ std::vector<Equipment> EquipmentParser::parse_native_csv(
             max_durability = 0;
         }
 
-        int32_t cat_id = cat_reg.get_id(category);
-        if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
-
-        result.emplace_back(Equipment{
+        result.emplace_back(RawEquipment{
             std::move(id),
             std::move(name),
-            cat_id,
+            std::move(category),
             max_durability
         });
     }
@@ -187,14 +179,13 @@ std::vector<Equipment> EquipmentParser::parse_native_csv(
 
 // ============================================================================
 
-std::vector<Equipment> EquipmentParser::parse_mc_official(
-    const std::filesystem::path &data_pack_dir,
-    const EquipmentCategoryRegistry &cat_reg
+std::vector<RawEquipment> EquipmentParser::parse_mc_official(
+    const std::filesystem::path &data_pack_dir
 ) {
     // MC does not have a native equipment-type registry.
     // For now, we derive equipment types from item definition files.
     // Scan data/<ns>/items/ for item definition files.
-    std::vector<Equipment> result;
+    std::vector<RawEquipment> result;
 
     std::filesystem::path data_dir = data_pack_dir / "data";
     if (!std::filesystem::is_directory(data_dir)) {
@@ -282,7 +273,7 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
                 }
             }
 
-            // Derive category from the item type
+            // Derive category from the item type (string-based, no registry)
             std::string category_str = filename;
             // Use common tool/armor patterns to determine category
             static const std::unordered_map<std::string, std::string> suffix_to_category = {
@@ -318,13 +309,10 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
                 category_str = filename;
             }
 
-            int32_t cat_id2 = cat_reg.get_id(category_str);
-            if (cat_id2 < 0) cat_id2 = EquipmentCategory::ID_ANY;
-
-            result.emplace_back(Equipment{
+            result.emplace_back(RawEquipment{
                 std::move(item_id),
                 std::move(derived_name),
-                cat_id2,
+                std::move(category_str),
                 durability
             });
         }
@@ -335,19 +323,18 @@ std::vector<Equipment> EquipmentParser::parse_mc_official(
 
 // ============================================================================
 
-std::vector<Equipment> EquipmentParser::parse(
+std::vector<RawEquipment> EquipmentParser::parse(
     const std::filesystem::path &path,
-    TagResolver &tag_resolver,
-    const EquipmentCategoryRegistry &cat_reg
+    TagResolver &tag_resolver
 ) {
     auto format = ParserUtils::detect_format(path);
     switch (format) {
     case ParserUtils::DataFormat::NativeJSON:
-        return parse_native_json(path, tag_resolver, cat_reg);
+        return parse_native_json(path, tag_resolver);
     case ParserUtils::DataFormat::NativeCSV:
-        return parse_native_csv(path, cat_reg);
+        return parse_native_csv(path);
     case ParserUtils::DataFormat::MCOfficial:
-        return parse_mc_official(path, cat_reg);
+        return parse_mc_official(path);
     default:
         throw std::runtime_error("Unknown format: " + path.string());
     }
