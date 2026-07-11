@@ -1,6 +1,6 @@
 #include "framework/test_utils.h"
-#include "parser/EquipmentParser.h"
-#include "parser/TagResolver.h"
+#include "parsers/EquipmentParser.h"
+#include "parsers/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/RegistryAccess.h"
 #include <iostream>

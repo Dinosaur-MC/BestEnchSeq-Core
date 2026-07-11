@@ -1,5 +1,5 @@
-#include "parser/EquipmentParser.h"
-#include "parser/ParserUtils.h"
+#include "parsers/EquipmentParser.h"
+#include "utils/ParserUtils.h"
 #include "io/CsvIO.h"
 #include "io/json.h"
 #include "registries/EquipmentCategoryRegistry.h"

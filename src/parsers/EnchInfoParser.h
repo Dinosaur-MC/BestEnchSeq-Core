@@ -1,7 +1,7 @@
 #pragma once
 #include "types/EnchInfo.h"
 #include "types/RawTypes.h"
-#include "parser/TagResolver.h"
+#include "parsers/TagResolver.h"
 #include <filesystem>
 #include <string>
 #include <vector>

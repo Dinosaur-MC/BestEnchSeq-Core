@@ -1,6 +1,6 @@
 #include "framework/test_utils.h"
-#include "parser/InputParser.h"
-#include "parser/CLIParser.h"
+#include "parsers/InputParser.h"
+#include "parsers/CLIParser.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
 #include "types/EnchInfo.h"

@@ -1,4 +1,4 @@
-#include "parser/OutputFormatter.h"
+#include "parsers/OutputFormatter.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "types/EnchInfo.h"

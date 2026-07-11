@@ -1,5 +1,5 @@
-#include "parser/InputParser.h"
-#include "parser/ParserUtils.h"
+#include "parsers/InputParser.h"
+#include "utils/ParserUtils.h"
 #include "io/json.h"
 #include "registries/EnchantmentRegistry.h"
 

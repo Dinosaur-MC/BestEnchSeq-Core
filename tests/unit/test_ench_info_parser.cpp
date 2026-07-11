@@ -1,6 +1,6 @@
 #include "framework/test_utils.h"
-#include "parser/EnchInfoParser.h"
-#include "parser/TagResolver.h"
+#include "parsers/EnchInfoParser.h"
+#include "parsers/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/RegistryAccess.h"
 #include "io/json.h"

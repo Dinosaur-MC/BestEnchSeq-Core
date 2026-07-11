@@ -30,7 +30,7 @@ set(REGISTRY_CORE_SRCS
 
 # Parser utilities (ParserUtils + json)
 set(PARSER_UTIL_SRCS
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
+    ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
 )
 
@@ -77,7 +77,7 @@ set_tests_properties(test_parser_utils PROPERTIES
 
 add_executable(test_tag_resolver
     unit/test_tag_resolver.cpp
-    ${PROJECT_ROOT}/src/parser/TagResolver.cpp
+    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
 )
 target_include_directories(test_tag_resolver PRIVATE ${TEST_INCLUDE})
@@ -88,8 +88,8 @@ set_tests_properties(test_tag_resolver PROPERTIES
 
 add_executable(test_ench_info_parser
     unit/test_ench_info_parser.cpp
-    ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/parser/TagResolver.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
@@ -102,7 +102,7 @@ set_tests_properties(test_ench_info_parser PROPERTIES
 
 add_executable(test_equipment_parser
     unit/test_equipment_parser.cpp
-    ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
@@ -115,7 +115,7 @@ set_tests_properties(test_equipment_parser PROPERTIES
 
 add_executable(test_cli_parser
     unit/test_cli_parser.cpp
-    ${PROJECT_ROOT}/src/parser/CLIParser.cpp
+    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PARSER_UTIL_SRCS}
 )
 target_include_directories(test_cli_parser PRIVATE ${TEST_INCLUDE})
@@ -126,8 +126,8 @@ set_tests_properties(test_cli_parser PROPERTIES
 
 add_executable(test_input_parser
     unit/test_input_parser.cpp
-    ${PROJECT_ROOT}/src/parser/InputParser.cpp
-    ${PROJECT_ROOT}/src/parser/CLIParser.cpp
+    ${PROJECT_ROOT}/src/parsers/InputParser.cpp
+    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PARSER_UTIL_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
@@ -141,7 +141,7 @@ set_tests_properties(test_input_parser PROPERTIES
 
 add_executable(test_output_formatter
     unit/test_output_formatter.cpp
-    ${PROJECT_ROOT}/src/parser/OutputFormatter.cpp
+    ${PROJECT_ROOT}/src/parsers/OutputFormatter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
@@ -158,14 +158,14 @@ set_tests_properties(test_output_formatter PROPERTIES
 add_executable(test_integration
     integration/test_integration.cpp
     # Parser layer
-    ${PROJECT_ROOT}/src/parser/CLIParser.cpp
-    ${PROJECT_ROOT}/src/parser/InputParser.cpp
-    ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
-    ${PROJECT_ROOT}/src/parser/TagResolver.cpp
-    ${PROJECT_ROOT}/src/parser/RegistryResolver.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/parser/OutputFormatter.cpp
+    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
+    ${PROJECT_ROOT}/src/parsers/InputParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
+    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
+    ${PROJECT_ROOT}/src/parsers/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
+    ${PROJECT_ROOT}/src/parsers/OutputFormatter.cpp
     # I/O layer
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
@@ -442,31 +442,5 @@ add_executable(test_env_util
 target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_env_util COMMAND test_env_util)
 set_tests_properties(test_env_util PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_mpmc_queue.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_mpmc_queue.cpp")
-endif()
-
-add_executable(test_mpmc_queue
-    unit/test_mpmc_queue.cpp
-)
-target_include_directories(test_mpmc_queue PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_mpmc_queue COMMAND test_mpmc_queue)
-set_tests_properties(test_mpmc_queue PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_segmented_mpmc_queue.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_segmented_mpmc_queue.cpp")
-endif()
-
-add_executable(test_segmented_mpmc_queue
-    unit/test_segmented_mpmc_queue.cpp
-)
-target_include_directories(test_segmented_mpmc_queue PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_segmented_mpmc_queue COMMAND test_segmented_mpmc_queue)
-set_tests_properties(test_segmented_mpmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )

@@ -1,5 +1,5 @@
-#include "parser/CLIParser.h"
-#include "parser/ParserUtils.h"
+#include "parsers/CLIParser.h"
+#include "utils/ParserUtils.h"
 
 #include <cctype>
 #include <iostream>

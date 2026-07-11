@@ -18,11 +18,11 @@ add_executable(forge_benchmark
     ${REG_SRC}
     ${PROJECT_ROOT}/src/utils/AStarDiagnostics.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
-    ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
-    ${PROJECT_ROOT}/src/parser/RegistryResolver.cpp
-    ${PROJECT_ROOT}/src/parser/TagResolver.cpp
-    ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
+    ${PROJECT_ROOT}/src/parsers/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
+    ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
