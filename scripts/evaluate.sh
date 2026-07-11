@@ -30,6 +30,7 @@ show_help() {
   -h, --help          显示帮助
   -b, --build         重新构建项目
   -o, --output DIR    指定输出目录
+  -a, --all           开启所有分析工具
   -c, --check         开启泄漏检查
   --callgrind         开启 Callgrind 性能分析
   --massif            开启 Massif 堆内存分析
@@ -57,6 +58,13 @@ while [ $# -gt 0 ]; do
             fi
             output_dir="$2"
             shift 2
+            ;;
+        -a|--all)
+            leak_check=1
+            callgrind_check=1
+            massif_check=1
+            benchmark_check=1
+            shift
             ;;
         -c|--check)
             leak_check=1
@@ -94,6 +102,12 @@ done
 
 # 剩下的全部当作 program_args
 program_args="$@"
+
+# check jobs
+if [ $leak_check -eq 0 -a $callgrind_check -eq 0 -a $massif_check -eq 0 -a $benchmark_check -eq 0 ]; then
+    echo "未选择分析工具。请使用 -a 或 -c/--check, --callgrind, --massif, -b/--benchmark." >&2
+    exit 1
+fi
 
 # create output directory
 if [ ! -d "$output_dir" ]; then
