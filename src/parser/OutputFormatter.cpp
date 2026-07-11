@@ -1,6 +1,5 @@
-﻿#include "parser/OutputFormatter.h"
+#include "parser/OutputFormatter.h"
 #include "registries/EnchantmentRegistry.h"
-#include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/EnchSet.h"
@@ -34,17 +33,17 @@ std::string to_roman(int level) {
 // ---------------------------------------------------------------------------
 // Enchantment name helpers (with graceful fallback when EnchInfo is absent)
 // ---------------------------------------------------------------------------
-std::string ench_name_id(int32_t id) {
+std::string ench_name_id(int32_t id, const EnchantmentRegistry &ench_reg) {
     try {
-        return registries::enchants().get(id).name_id;
+        return ench_reg.get(id).name_id;
     } catch (const std::exception &) {
         return "ench_" + std::to_string(id);
     }
 }
 
-std::string ench_display_name(int32_t id) {
+std::string ench_display_name(int32_t id, const EnchantmentRegistry &ench_reg) {
     try {
-        return registries::enchants().get(id).name;
+        return ench_reg.get(id).name;
     } catch (const std::exception &) {
         return "ench_" + std::to_string(id);
     }
@@ -76,14 +75,14 @@ std::string json_str(const Json &j) {
 // ---------------------------------------------------------------------------
 // Enchantment summary for verbose header
 // ---------------------------------------------------------------------------
-std::string ench_summary_str(const EnchSet &enchs) {
+std::string ench_summary_str(const EnchSet &enchs, const EnchantmentRegistry &ench_reg) {
     if (enchs.empty()) return {};
     std::string result;
     bool first = true;
     for (const auto &ench : enchs) {
         if (!first) result += " + ";
         first = false;
-        result += ench_name_id(ench.id) + " " + to_roman(ench.level);
+        result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
     }
     return result;
 }
@@ -92,14 +91,14 @@ std::string ench_summary_str(const EnchSet &enchs) {
 // EnchSet from JSON array (used during JSON deserialization; unknown enchants
 // are silently skipped).
 // ---------------------------------------------------------------------------
-EnchSet enchset_from_json_array(const Json::Array &arr) {
+EnchSet enchset_from_json_array(const Json::Array &arr, const EnchantmentRegistry &ench_reg) {
     EnchSet result;
     for (const auto &elem : arr) {
         Json::Value elem_val = elem.get_value();
         const Json::Object &obj = std::get<Json::Object>(elem_val);
         std::string eid = json_str(obj.at("id"));
         int32_t level   = json_int(obj.at("level"));
-        int32_t id      = registries::enchants().get_id(eid);
+        int32_t id      = ench_reg.get_id(eid);
         if (id >= 0) {
             result.emplace(id, level);
         }
@@ -116,7 +115,9 @@ EnchSet enchset_from_json_array(const Json::Array &arr) {
 // ---------------------------------------------------------------------------
 // describe_item_verbose
 // ---------------------------------------------------------------------------
-std::string OutputFormatter::describe_item_verbose(const ItemStack &item) {
+std::string OutputFormatter::describe_item_verbose(
+    const ItemStack &item, const EnchantmentRegistry &ench_reg
+) {
     std::string result;
 
     if (item.is_book() || !item.equipment) {
@@ -128,7 +129,7 @@ std::string OutputFormatter::describe_item_verbose(const ItemStack &item) {
             for (const auto &ench : item.enchantments) {
                 if (!first) result += ", ";
                 first = false;
-                result += ench_name_id(ench.id) + " " + to_roman(ench.level);
+                result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
             }
         }
         result += ")";
@@ -139,7 +140,7 @@ std::string OutputFormatter::describe_item_verbose(const ItemStack &item) {
         for (const auto &ench : item.enchantments) {
             if (!first) result += ", ";
             first = false;
-            result += ench_name_id(ench.id) + " " + to_roman(ench.level);
+            result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
         }
         result += ")";
         result += "[铁砧惩罚 x" + std::to_string(item.prior_penalty) + "]";
@@ -156,14 +157,16 @@ std::string OutputFormatter::describe_item_verbose(const ItemStack &item) {
 // ---------------------------------------------------------------------------
 // describe_item_compact
 // ---------------------------------------------------------------------------
-std::string OutputFormatter::describe_item_compact(const ItemStack &item) {
+std::string OutputFormatter::describe_item_compact(
+    const ItemStack &item, const EnchantmentRegistry &ench_reg
+) {
     if (item.is_book() || !item.equipment) {
         std::string result = "B;";
         bool first = true;
         for (const auto &ench : item.enchantments) {
             if (!first) result += ",";
             first = false;
-            result += ench_name_id(ench.id) + ":" + std::to_string(ench.level);
+            result += ench_name_id(ench.id, ench_reg) + ":" + std::to_string(ench.level);
         }
         result += ";P;" + std::to_string(item.prior_penalty);
         return result;
@@ -175,7 +178,7 @@ std::string OutputFormatter::describe_item_compact(const ItemStack &item) {
     for (const auto &ench : item.enchantments) {
         if (!first) result += ",";
         first = false;
-        result += ench_name_id(ench.id) + ":" + std::to_string(ench.level);
+        result += ench_name_id(ench.id, ench_reg) + ":" + std::to_string(ench.level);
     }
     result += ";P;" + std::to_string(item.prior_penalty);
     result += ";D;" + std::to_string(item.durability);
@@ -185,8 +188,10 @@ std::string OutputFormatter::describe_item_compact(const ItemStack &item) {
 // ---------------------------------------------------------------------------
 // describe_ench_roman
 // ---------------------------------------------------------------------------
-std::string OutputFormatter::describe_ench_roman(const Ench &ench) {
-    return ench_name_id(ench.id) + " " + to_roman(ench.level);
+std::string OutputFormatter::describe_ench_roman(
+    const Ench &ench, const EnchantmentRegistry &ench_reg
+) {
+    return ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
 }
 
 // ---------------------------------------------------------------------------
@@ -216,8 +221,11 @@ std::string OutputFormatter::platform_to_display(MCE p) {
 // ===========================================================================
 std::string OutputFormatter::format_verbose(
     const std::vector<EnchSolution> &solutions,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg,
     const std::string &mode_name
 ) {
+    (void)cat_reg;
     if (solutions.empty()) return {};
 
     std::string out;
@@ -237,7 +245,7 @@ std::string OutputFormatter::format_verbose(
         if (!sol.is_success) {
             out += " [不可行]";
         }
-        out += " - " + ench_summary_str(sol.original_ench) + "\n";
+        out += " - " + ench_summary_str(sol.original_ench, ench_reg) + "\n";
         out += "===========================================\n";
 
         // Mode and platform
@@ -263,10 +271,10 @@ std::string OutputFormatter::format_verbose(
         }
 
         out += "\n输入:\n";
-        out += "  目标物品: " + describe_item_verbose(sol.target_item) + "\n";
+        out += "  目标物品: " + describe_item_verbose(sol.target_item, ench_reg) + "\n";
         out += "  可用物品:\n";
         for (const auto &item : sol.available_items) {
-            out += "    - " + describe_item_verbose(item) + "\n";
+            out += "    - " + describe_item_verbose(item, ench_reg) + "\n";
         }
 
         out += "-------------------------------------------\n";
@@ -274,8 +282,8 @@ std::string OutputFormatter::format_verbose(
             const auto &step = sol.steps[j];
 
             out += "  Step " + std::to_string(j + 1) + ": " +
-                   describe_item_verbose(step.item_a) + " + " +
-                   describe_item_verbose(step.item_b) + "\n";
+                   describe_item_verbose(step.item_a, ench_reg) + " + " +
+                   describe_item_verbose(step.item_b, ench_reg) + "\n";
             out += "          - 消耗: " + std::to_string(step.exp_level_cost) +
                    " 等级 (" + std::to_string(step.exp_cost) + " 经验值)\n";
         }
@@ -290,8 +298,11 @@ std::string OutputFormatter::format_verbose(
 // ===========================================================================
 std::string OutputFormatter::format_compact(
     const std::vector<EnchSolution> &solutions,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg,
     const std::string &mode_name
 ) {
+    (void)cat_reg;
     std::string out;
     out += "#MODE=" + mode_name + "\n";
     if (solutions.empty()) return out;
@@ -308,8 +319,8 @@ std::string OutputFormatter::format_compact(
 
         for (const auto &step : sol.steps) {
             out += std::to_string(i + 1) + "|" +          // solution rank
-                   describe_item_compact(step.item_a) + "|" +
-                   describe_item_compact(step.item_b) + "|" +
+                   describe_item_compact(step.item_a, ench_reg) + "|" +
+                   describe_item_compact(step.item_b, ench_reg) + "|" +
                    "|" +
                    std::to_string(step.exp_level_cost) + "|" +
                    std::to_string(step.exp_cost) + "\n";
@@ -324,6 +335,8 @@ std::string OutputFormatter::format_compact(
 // ===========================================================================
 std::string OutputFormatter::format_json(
     const std::vector<EnchSolution> &solutions,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg,
     const std::string &mode_name
 ) {
     Json::Object root;
@@ -348,26 +361,26 @@ std::string OutputFormatter::format_json(
         Json::Array orig_arr;
         for (const auto &ench : sol.original_ench) {
             Json::Object eo;
-            eo["id"]    = Json(Json::String(ench_name_id(ench.id)));
+            eo["id"]    = Json(Json::String(ench_name_id(ench.id, ench_reg)));
             eo["level"] = Json(Json::Number(static_cast<int32_t>(ench.level)));
             orig_arr.push_back(Json(eo));
         }
         s["original_ench"] = Json(orig_arr);
 
         // Target item
-        s["target_item"] = itemstack_to_json(sol.target_item);
+        s["target_item"] = itemstack_to_json(sol.target_item, ench_reg, cat_reg);
 
         // Available items
         Json::Array avail_arr;
         for (const auto &item : sol.available_items) {
-            avail_arr.push_back(itemstack_to_json(item));
+            avail_arr.push_back(itemstack_to_json(item, ench_reg, cat_reg));
         }
         s["available_items"] = Json(avail_arr);
 
         // Steps
         Json::Array steps_arr;
         for (const auto &step : sol.steps) {
-            steps_arr.push_back(step_to_json(step));
+            steps_arr.push_back(step_to_json(step, ench_reg, cat_reg));
         }
         s["steps"] = Json(steps_arr);
 
@@ -397,7 +410,11 @@ std::string OutputFormatter::format_json(
 // ===========================================================================
 // Parse JSON
 // ===========================================================================
-std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) {
+std::vector<EnchSolution> OutputFormatter::parse_json(
+    const std::string &input,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg
+) {
     // NOTE: _json_eq_cache is intentionally NOT cleared here.
     // itemstack_from_json and step_from_json store Equipment objects in this
     // cache and return const Equipment* pointers into it. Clearing would
@@ -433,11 +450,11 @@ std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) 
         // Original enchantments
         Json::Value orig_ench_val = obj.at("original_ench").get_value();
         EnchSet orig_ench = enchset_from_json_array(
-            std::get<Json::Array>(orig_ench_val)
+            std::get<Json::Array>(orig_ench_val), ench_reg
         );
 
         // Target item
-        ItemStack target_item = itemstack_from_json(obj.at("target_item"), _json_eq_cache);
+        ItemStack target_item = itemstack_from_json(obj.at("target_item"), _json_eq_cache, ench_reg, cat_reg);
 
         // Available items
         ItemCollection avail_items;
@@ -446,7 +463,7 @@ std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) 
             Json::Value avail_arr_val = avail_it->second.get_value();
             const Json::Array &avail_arr = std::get<Json::Array>(avail_arr_val);
             for (const auto &avail_j : avail_arr) {
-                avail_items.push_back(itemstack_from_json(avail_j, _json_eq_cache));
+                avail_items.push_back(itemstack_from_json(avail_j, _json_eq_cache, ench_reg, cat_reg));
             }
         }
 
@@ -457,7 +474,7 @@ std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) 
             Json::Value steps_arr_val = steps_it->second.get_value();
             const Json::Array &steps_arr = std::get<Json::Array>(steps_arr_val);
             for (const auto &step_j : steps_arr) {
-                steps.push_back(step_from_json(step_j, _json_eq_cache));
+                steps.push_back(step_from_json(step_j, _json_eq_cache, ench_reg, cat_reg));
             }
         }
 
@@ -499,7 +516,11 @@ std::vector<EnchSolution> OutputFormatter::parse_json(const std::string &input) 
 // ---------------------------------------------------------------------------
 // itemstack_to_json
 // ---------------------------------------------------------------------------
-Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
+Json OutputFormatter::itemstack_to_json(
+    const ItemStack &item,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg
+) {
     Json::Object obj;
 
     // Equipment
@@ -507,8 +528,8 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
         Json::Object eq;
         int32_t cid = item.equipment->category_id;
         std::string cat_name = "unknown";
-        if (cid >= 0 && static_cast<size_t>(cid) < registries::categories().size())
-            cat_name = registries::categories().get(cid).name_id;
+        if (cid >= 0 && static_cast<size_t>(cid) < cat_reg.size())
+            cat_name = cat_reg.get(cid).name_id;
         eq["id"]             = Json(Json::String(item.equipment->name_id));
         eq["category"]       = Json(Json::String(cat_name));
         eq["name"]           = Json(Json::String(item.equipment->name));
@@ -524,7 +545,7 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
     Json::Array ench_arr;
     for (const auto &ench : item.enchantments) {
         Json::Object eo;
-        eo["id"]    = Json(Json::String(ench_name_id(ench.id)));
+        eo["id"]    = Json(Json::String(ench_name_id(ench.id, ench_reg)));
         eo["level"] = Json(Json::Number(static_cast<int32_t>(ench.level)));
         ench_arr.push_back(Json(eo));
     }
@@ -541,7 +562,9 @@ Json OutputFormatter::itemstack_to_json(const ItemStack &item) {
 // ---------------------------------------------------------------------------
 ItemStack OutputFormatter::itemstack_from_json(
     const Json &j,
-    std::vector<Equipment> &equipment_cache
+    std::vector<Equipment> &equipment_cache,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     Json::Value j_val = j.get_value();
     const Json::Object &obj = std::get<Json::Object>(j_val);
@@ -564,7 +587,7 @@ ItemStack OutputFormatter::itemstack_from_json(
                 max_dur = json_int(md_it->second);
             }
 
-            int32_t cat_id = registries::categories().get_id(cat);
+            int32_t cat_id = cat_reg.get_id(cat);
             if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
             equipment_cache.emplace_back(Equipment{
                 id, name, cat_id, max_dur
@@ -579,7 +602,7 @@ ItemStack OutputFormatter::itemstack_from_json(
     if (ench_it != obj.end()) {
         Json::Value ench_arr_val = ench_it->second.get_value();
         ench_set = enchset_from_json_array(
-            std::get<Json::Array>(ench_arr_val)
+            std::get<Json::Array>(ench_arr_val), ench_reg
         );
     }
 
@@ -605,10 +628,14 @@ ItemStack OutputFormatter::itemstack_from_json(
 // ---------------------------------------------------------------------------
 // step_to_json
 // ---------------------------------------------------------------------------
-Json OutputFormatter::step_to_json(const EnchSolution::EnchStep &step) {
+Json OutputFormatter::step_to_json(
+    const EnchSolution::EnchStep &step,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg
+) {
     Json::Object obj;
-    obj["item_a"]         = itemstack_to_json(step.item_a);
-    obj["item_b"]         = itemstack_to_json(step.item_b);
+    obj["item_a"]         = itemstack_to_json(step.item_a, ench_reg, cat_reg);
+    obj["item_b"]         = itemstack_to_json(step.item_b, ench_reg, cat_reg);
     obj["exp_level_cost"] = Json(Json::Number(step.exp_level_cost));
     obj["exp_cost"]       = Json(Json::Number(step.exp_cost));
     return Json(obj);
@@ -619,13 +646,15 @@ Json OutputFormatter::step_to_json(const EnchSolution::EnchStep &step) {
 // ---------------------------------------------------------------------------
 EnchSolution::EnchStep OutputFormatter::step_from_json(
     const Json &j,
-    std::vector<Equipment> &equipment_cache
+    std::vector<Equipment> &equipment_cache,
+    const EnchantmentRegistry &ench_reg,
+    const EquipmentCategoryRegistry &cat_reg
 ) {
     Json::Value j_val = j.get_value();
     const Json::Object &obj = std::get<Json::Object>(j_val);
     EnchSolution::EnchStep step;
-    step.item_a         = itemstack_from_json(obj.at("item_a"), equipment_cache);
-    step.item_b         = itemstack_from_json(obj.at("item_b"), equipment_cache);
+    step.item_a         = itemstack_from_json(obj.at("item_a"), equipment_cache, ench_reg, cat_reg);
+    step.item_b         = itemstack_from_json(obj.at("item_b"), equipment_cache, ench_reg, cat_reg);
     step.exp_level_cost = json_int(obj.at("exp_level_cost"));
     step.exp_cost       = json_int(obj.at("exp_cost"));
     return step;
