@@ -1,9 +1,10 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
 #include <chrono>
+#include <stdexcept>
 #include <thread>
 
 // Empty AlgorithmInput for tests that don't need real data.
@@ -66,6 +67,23 @@ class TestProgressObserver : public AlgorithmObserver {
 public:
     double last_progress = 0.0;
     void on_progress(double percent, ProgressStatus) override { last_progress = percent; }
+};
+
+// ─── Throwing algorithm for error-path test ───
+
+class ThrowingAlgorithm : public IAlgorithm {
+public:
+    std::string_view name() const noexcept override { return "throwing"; }
+    std::string_view version() const noexcept override { return "1.0.0"; }
+
+    void execute(
+        const std::vector<compact::Item>&,
+        const compact::EnchReg&,
+        const std::vector<compact::Ench>&,
+        ExecutionContext&
+    ) override {
+        throw std::runtime_error("simulated failure");
+    }
 };
 
 // ─── Tests ───
@@ -254,19 +272,39 @@ void test_serialization_stubs() {
     std::cout << "PASS: test_serialization_stubs" << std::endl;
 }
 
+void test_executor_throwing_algorithm() {
+    auto algo = std::make_unique<ThrowingAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+
+    executor.start(g_test_input);
+
+    auto final_state = executor.wait();
+    expect(final_state == AlgorithmState::Failed,
+           "throwing algorithm should result in Failed state");
+    expect(executor.state() == AlgorithmState::Failed,
+           "state should be Failed after throwing algorithm");
+    std::cout << "PASS: test_executor_throwing_algorithm" << std::endl;
+}
+
 int main() {
-    test_constructor_null();
-    test_initial_state();
-    test_executor_lifecycle();
-    test_double_start();
-    test_executor_cancel();
-    test_executor_pause_resume();
-    test_executor_progress();
-    test_executor_observer();
-    test_executor_detach_observer();
-    test_output_not_valid_before_completion();
-    test_output_has_steps_after_completion();
-    test_serialization_stubs();
-    std::cout << "All AlgorithmExecutor tests passed!" << std::endl;
-    return 0;
+    try {
+        test_constructor_null();
+        test_initial_state();
+        test_executor_lifecycle();
+        test_double_start();
+        test_executor_cancel();
+        test_executor_pause_resume();
+        test_executor_progress();
+        test_executor_observer();
+        test_executor_detach_observer();
+        test_output_not_valid_before_completion();
+        test_output_has_steps_after_completion();
+        test_serialization_stubs();
+        test_executor_throwing_algorithm();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

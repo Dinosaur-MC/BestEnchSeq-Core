@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "parser/TagResolver.h"
 #include "io/json.h"
 
@@ -21,7 +21,9 @@ void create_tag_file(const std::string &path, const std::string &content) {
 // test_single_tag
 // ---------------------------------------------------------------------------
 void test_single_tag() {
-    std::string dir = "test_tags_single";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_tags_single";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_tags_single").string();
     create_tag_file(
         dir + "/data/minecraft/tags/enchantment/exclusive_set/weapon.json",
         R"({"values": ["minecraft:sharpness", "minecraft:smite"]})"
@@ -35,14 +37,16 @@ void test_single_tag() {
     expect(result.contains("minecraft:sharpness"), "should contain sharpness");
     expect(result.contains("minecraft:smite"), "should contain smite");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_nested_tags
 // ---------------------------------------------------------------------------
 void test_nested_tags() {
-    std::string dir = "test_tags_nested";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_tags_nested";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_tags_nested").string();
     create_tag_file(
         dir + "/data/minecraft/tags/enchantment/exclusive_set/weapon.json",
         R"({"values": ["minecraft:sharpness", "#minecraft:exclusive_set/undead"]})"
@@ -61,7 +65,7 @@ void test_nested_tags() {
     expect(result.contains("minecraft:smite"), "nested via undead tag");
     expect(result.contains("minecraft:bane_of_arthropods"), "nested via undead tag");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +100,9 @@ void test_missing_tag_returns_empty() {
 // test_cyclic_tag_detection
 // ---------------------------------------------------------------------------
 void test_cyclic_tag_detection() {
-    std::string dir = "test_tags_cyclic";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_tags_cyclic";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_tags_cyclic").string();
     create_tag_file(
         dir + "/data/minecraft/tags/enchantment/cycle_a.json",
         R"({"values": ["#minecraft:cycle_b"]})"
@@ -113,7 +119,7 @@ void test_cyclic_tag_detection() {
     auto result = resolver.resolve("#minecraft:cycle_a");
     expect(result.empty(), "cyclic tag should return empty or handled");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +138,9 @@ void test_resolve_vector() {
 // test_get_tag
 // ---------------------------------------------------------------------------
 void test_get_tag() {
-    std::string dir = "test_tags_get_tag";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_tags_get_tag";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_tags_get_tag").string();
     create_tag_file(
         dir + "/data/minecraft/tags/enchantment/weapon.json",
         R"({"values": ["minecraft:sharpness"]})"
@@ -149,14 +157,16 @@ void test_get_tag() {
     const auto *missing = resolver.get_tag("minecraft", "nonexistent");
     expect(missing == nullptr, "get_tag should return nullptr for missing tag");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_item_tags
 // ---------------------------------------------------------------------------
 void test_item_tags() {
-    std::string dir = "test_tags_item";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_tags_item";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_tags_item").string();
     create_tag_file(
         dir + "/data/minecraft/tags/item/swords.json",
         R"({"values": ["minecraft:diamond_sword", "minecraft:iron_sword"]})"
@@ -170,21 +180,26 @@ void test_item_tags() {
     expect(result.contains("minecraft:diamond_sword"), "should contain diamond_sword");
     expect(result.contains("minecraft:iron_sword"), "should contain iron_sword");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 } // namespace
 
 int main() {
-    test_single_tag();
-    test_nested_tags();
-    test_concrete_id_passthrough();
-    test_is_tag();
-    test_missing_tag_returns_empty();
-    test_cyclic_tag_detection();
-    test_resolve_vector();
-    test_get_tag();
-    test_item_tags();
-    std::cout << "PASS" << std::endl;
-    return 0;
+    try {
+        test_single_tag();
+        test_nested_tags();
+        test_concrete_id_passthrough();
+        test_is_tag();
+        test_missing_tag_returns_empty();
+        test_cyclic_tag_detection();
+        test_resolve_vector();
+        test_get_tag();
+        test_item_tags();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

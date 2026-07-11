@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "adapters/CompactAdapter.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/RegistryAccess.h"
@@ -255,15 +255,20 @@ void test_recall_empty_output() {
 } // anonymous namespace
 
 int main() {
-    test_apply_valid_input();
-    test_apply_with_target();
-    test_apply_invalid_enchant_id();
-    test_apply_invalid_level();
-    test_apply_inapplicable_enchant();
-    test_apply_penalty_overflow();
-    test_pruning_only_applicable();
-    test_from_domain_roundtrip();
-    test_recall_empty_output();
-    std::cout << "All CompactAdapter tests passed!" << std::endl;
-    return 0;
+    try {
+        test_apply_valid_input();
+        test_apply_with_target();
+        test_apply_invalid_enchant_id();
+        test_apply_invalid_level();
+        test_apply_inapplicable_enchant();
+        test_apply_penalty_overflow();
+        test_pruning_only_applicable();
+        test_from_domain_roundtrip();
+        test_recall_empty_output();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

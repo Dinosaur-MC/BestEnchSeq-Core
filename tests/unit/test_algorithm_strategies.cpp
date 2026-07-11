@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "registries/RegistryAccess.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
@@ -274,28 +274,32 @@ void test_hms_mixed_tiers() {
 } // anonymous namespace
 
 int main() {
-    // Greedy
-    test_greedy_simple();
-    test_greedy_target_already_met();
+    try {
+        // Greedy
+        test_greedy_simple();
+        test_greedy_target_already_met();
 
-    // DFS
-    test_dfs_simple();
-    test_dfs_two_books();
-    test_dfs_target_unreachable();
+        // DFS
+        test_dfs_simple();
+        test_dfs_two_books();
+        test_dfs_target_unreachable();
 
-    // AStar
-    test_astar_simple();
-    test_astar_target_already_met();
+        // AStar
+        test_astar_simple();
+        test_astar_target_already_met();
 
-    // DynamicPenaltyBalancingAlgorithm
-    test_dpb_simple();
-    test_dpb_two_books();
+        // DynamicPenaltyBalancingAlgorithm
+        test_dpb_simple();
+        test_dpb_two_books();
 
-    // HierarchicalMergeAlgorithm
-    test_hms_simple();
-    test_hms_many_books();
-    test_hms_mixed_tiers();
-
-    std::cout << "All algorithm strategy tests passed!" << std::endl;
-    return 0;
+        // HierarchicalMergeAlgorithm
+        test_hms_simple();
+        test_hms_many_books();
+        test_hms_mixed_tiers();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

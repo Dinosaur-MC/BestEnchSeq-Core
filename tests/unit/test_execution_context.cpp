@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "algorithm/AlgorithmObserver.h"
 #include "algorithm/ExecutionContext.h"
 #include "types/CompactedTypes.h"
@@ -73,11 +73,16 @@ void test_wait_if_paused_resume() {
 }
 
 int main() {
-    test_cancel();
-    test_pause_resume();
-    test_progress();
-    test_observer_solution();
-    test_wait_if_paused_resume();
-    std::cout << "All ExecutionContext tests passed!" << std::endl;
-    return 0;
+    try {
+        test_cancel();
+        test_pause_resume();
+        test_progress();
+        test_observer_solution();
+        test_wait_if_paused_resume();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

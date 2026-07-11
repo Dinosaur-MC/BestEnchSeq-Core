@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "parser/EquipmentParser.h"
 #include "parser/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -26,7 +26,9 @@ void create_file(const std::string &path, const std::string &content) {
 // test_json_basic
 // ---------------------------------------------------------------------------
 void test_json_basic() {
-    std::string file = "test_eq_json.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_json";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_json.json").string();
     create_file(file, R"({
         "equipments": [
             {"id": "diamond_sword", "name": "Diamond Sword", "category": "sword", "max_durability": 1561},
@@ -48,14 +50,16 @@ void test_json_basic() {
     expect(eqs[1].category_id == EquipmentCategory::ID_PICKAXE, "json: pickaxe category");
     expect(eqs[1].max_durability == 1561, "json: second durability");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_csv_basic
 // ---------------------------------------------------------------------------
 void test_csv_basic() {
-    std::string file = "test_eq_csv.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_csv";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_csv.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,category,max_durability\n";
@@ -74,7 +78,7 @@ void test_csv_basic() {
     expect(eqs[1].name_id == "diamond_pickaxe", "csv: second id");
     expect(eqs[1].max_durability == 1561, "csv: second durability");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +86,9 @@ void test_csv_basic() {
 // ---------------------------------------------------------------------------
 void test_csv_no_durability() {
     // max_durability column is optional; missing should default to 0
-    std::string file = "test_eq_csv_no_durability.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_csv_no_durability";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_csv_no_durability.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,category\n";
@@ -93,7 +99,7 @@ void test_csv_no_durability() {
     expect(eqs.size() == 1, "csv no durability: parsed");
     expect(eqs[0].max_durability == 0, "csv no durability: defaults to 0");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +107,9 @@ void test_csv_no_durability() {
 // ---------------------------------------------------------------------------
 void test_custom_category() {
     // Equipment with custom/unknown category should still work
-    std::string file = "test_eq_custom_cat.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_custom_cat";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_custom_cat.json").string();
     create_file(file, R"({
         "equipments": [
             {"id": "custom_weapon", "name": "Custom Weapon", "category": "custom_weapon", "max_durability": 500}
@@ -116,14 +124,16 @@ void test_custom_category() {
     expect(eqs[0].category_id == EquipmentCategory::ID_ANY, "custom cat: category preserved (falls back to ID_ANY)");
     expect(eqs[0].max_durability == 500, "custom cat: durability");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_missing_fields_skipped
 // ---------------------------------------------------------------------------
 void test_missing_fields_skipped() {
-    std::string file = "test_eq_missing.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_missing";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_missing.json").string();
     create_file(file, R"({
         "equipments": [
             {"id": "valid", "category": "sword", "max_durability": 100},
@@ -158,14 +168,16 @@ void test_missing_fields_skipped() {
     expect(found_valid, "missing fields: 'valid' found");
     expect(found_noname, "missing fields: 'no_name' found");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_empty_equipments
 // ---------------------------------------------------------------------------
 void test_empty_equipments() {
-    std::string file = "test_eq_empty.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_empty";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_empty.json").string();
     create_file(file, R"({
         "equipments": []
     })");
@@ -175,14 +187,16 @@ void test_empty_equipments() {
 
     expect(eqs.empty(), "empty equipments array: empty result");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_missing_equipments_key
 // ---------------------------------------------------------------------------
 void test_missing_equipments_key() {
-    std::string file = "test_eq_no_key.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_no_key";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_no_key.json").string();
     create_file(file, R"({
         "enchantments": []
     })");
@@ -192,7 +206,7 @@ void test_missing_equipments_key() {
 
     expect(eqs.empty(), "missing equipments key: empty result");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +214,9 @@ void test_missing_equipments_key() {
 // ---------------------------------------------------------------------------
 void test_json_mixed_with_enchantments() {
     // The native JSON combines both enchantments and equipments in one file
-    std::string file = "test_eq_mixed.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_mixed";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_mixed.json").string();
     create_file(file, R"({
         "enchantments": [
             {"id": "sharpness", "max_level": 5, "multiplier": 1}
@@ -217,14 +233,16 @@ void test_json_mixed_with_enchantments() {
     expect(eqs[0].name_id == "diamond_sword", "mixed json: id");
     expect(eqs[0].category_id == EquipmentCategory::ID_SWORD, "mixed json: category");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_csv_missing_required_columns
 // ---------------------------------------------------------------------------
 void test_csv_missing_required_columns() {
-    std::string file = "test_eq_csv_missing_cols.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_csv_missing_cols";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_csv_missing_cols.csv").string();
     {
         std::ofstream f(file);
         f << "id,name\n";
@@ -234,14 +252,16 @@ void test_csv_missing_required_columns() {
     auto eqs = EquipmentParser::parse_native_csv(file);
     expect(eqs.empty(), "csv missing required columns: empty result");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_csv_empty_file
 // ---------------------------------------------------------------------------
 void test_csv_empty_file() {
-    std::string file = "test_eq_csv_empty.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_csv_empty";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_csv_empty.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,category,max_durability\n";
@@ -250,14 +270,16 @@ void test_csv_empty_file() {
     auto eqs = EquipmentParser::parse_native_csv(file);
     expect(eqs.empty(), "csv with only header: empty result");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_parse_auto_detect_json
 // ---------------------------------------------------------------------------
 void test_parse_auto_detect_json() {
-    std::string file = "test_eq_auto.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_auto";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_auto.json").string();
     create_file(file, R"({
         "equipments": [
             {"id": "item_a", "category": "sword", "max_durability": 100},
@@ -273,14 +295,16 @@ void test_parse_auto_detect_json() {
     expect(eqs[0].max_durability == 100 || eqs[0].max_durability == 200,
            "auto-detect json: valid durability");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_parse_auto_detect_csv
 // ---------------------------------------------------------------------------
 void test_parse_auto_detect_csv() {
-    std::string file = "test_eq_auto.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_auto_csv";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_auto.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,category,max_durability\n";
@@ -293,7 +317,7 @@ void test_parse_auto_detect_csv() {
     expect(eqs.size() == 1, "auto-detect csv: 1 equipment");
     expect(eqs[0].name_id == "diamond_sword", "auto-detect csv: id");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -301,19 +325,23 @@ void test_parse_auto_detect_csv() {
 // ---------------------------------------------------------------------------
 void test_parse_mc_official_stub() {
     // MC official parsing should handle empty/non-existent directories gracefully
-    std::string dir = "test_eq_mc_off_empty";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_mc_off_empty";
+    std::filesystem::create_directories(temp_dir);
+    auto dir = (temp_dir / "test_eq_mc_off_empty").string();
 
     auto eqs = EquipmentParser::parse_mc_official(dir);
     expect(eqs.empty(), "mc official empty dir: empty result");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_parse_mc_official_with_items
 // ---------------------------------------------------------------------------
 void test_parse_mc_official_with_items() {
-    std::string dir = "test_eq_mc_off_items";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_mc_off_items";
+    std::filesystem::create_directories(temp_dir);
+    auto dir = (temp_dir / "test_eq_mc_off_items").string();
     std::filesystem::create_directories(dir + "/data/minecraft/items");
 
     create_file(dir + "/data/minecraft/items/diamond_sword.json", R"({
@@ -339,27 +367,31 @@ void test_parse_mc_official_with_items() {
            "mc official items: namespaced id");
     expect(eqs[0].max_durability == 1561, "mc official items: durability from max_damage");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_parse_mc_official_no_items_dir
 // ---------------------------------------------------------------------------
 void test_parse_mc_official_no_items_dir() {
-    std::string dir = "test_eq_mc_off_no_items";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_mc_off_no_items";
+    std::filesystem::create_directories(temp_dir);
+    auto dir = (temp_dir / "test_eq_mc_off_no_items").string();
     std::filesystem::create_directories(dir + "/data/minecraft");
 
     auto eqs = EquipmentParser::parse_mc_official(dir);
     expect(eqs.empty(), "mc official no items dir: empty result");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_invalid_json_handling
 // ---------------------------------------------------------------------------
 void test_invalid_json_handling() {
-    std::string file = "test_eq_invalid.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_invalid";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_invalid.json").string();
     {
         std::ofstream f(file);
         f << "not valid json";
@@ -369,7 +401,7 @@ void test_invalid_json_handling() {
     auto eqs = EquipmentParser::parse_native_json(file, resolver);
     expect(eqs.empty(), "invalid json: empty result");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -385,7 +417,9 @@ void test_non_existent_file() {
 // test_parse_with_invalid_format
 // ---------------------------------------------------------------------------
 void test_parse_with_invalid_format() {
-    std::string file = "test_eq_invalid_format.xyz";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_eq_invalid_format";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_eq_invalid_format.xyz").string();
     {
         std::ofstream f(file);
         f << "some content";
@@ -400,7 +434,7 @@ void test_parse_with_invalid_format() {
     }
     expect(threw, "invalid format: should throw runtime_error");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -416,7 +450,9 @@ void test_to_json_round_trip() {
     std::string json_str = EquipmentParser::to_json(original);
 
     // Write to temp file, parse back
-    std::string file = "test_rt_eq.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_eq_json";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_rt_eq.json").string();
     {
         std::ofstream f(file);
         f << json_str;
@@ -433,7 +469,7 @@ void test_to_json_round_trip() {
         expect(parsed[0].max_durability == 1561, "eq JSON round-trip: durability");
     }
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -449,7 +485,9 @@ void test_to_csv_round_trip() {
     std::string csv_str = EquipmentParser::to_csv(original);
 
     // Write to temp file, parse back
-    std::string file = "test_rt_eq.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_eq_csv";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_rt_eq.csv").string();
     {
         std::ofstream f(file);
         f << csv_str;
@@ -463,7 +501,7 @@ void test_to_csv_round_trip() {
         expect(parsed[0].max_durability == 1561, "eq CSV round-trip: durability");
     }
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 } // namespace
@@ -491,12 +529,12 @@ int main() {
         test_parse_with_invalid_format();
         test_to_json_round_trip();
         test_to_csv_round_trip();
-        std::cout << "PASS" << std::endl;
-        return 0;
-    } catch (const std::exception &e) {
-        std::cerr << "FATAL: " << e.what() << std::endl;
-        return 2;
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
     }
+    return print_summary();
 }
 
 

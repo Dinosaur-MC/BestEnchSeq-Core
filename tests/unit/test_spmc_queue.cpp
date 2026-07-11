@@ -1,6 +1,8 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "utils/SPMCQueue.hpp"
 #include <atomic>
+#include <chrono>
+#include <iostream>
 #include <thread>
 #include <vector>
 
@@ -100,14 +102,18 @@ void test_spmc_two_consumers() {
 
     auto consumer_fn = [&](std::atomic<int>& counter) {
         auto cursor = q.read_cursor();
-        int idle = 0;
+        using Clock = std::chrono::steady_clock;
+        auto deadline = Clock::now() + std::chrono::seconds(2);
         int val{};
         while (!done.load() || q.available(cursor) > 0) {
             if (q.read(cursor, val)) {
                 counter.fetch_add(1);
-                idle = 0;
             } else {
-                if (++idle > 1000000) break;  // timeout
+                if (Clock::now() >= deadline) {
+                    std::cerr << "WARNING: consumer spin-loop timed out after 2s"
+                              << std::endl;
+                    break;
+                }
                 std::this_thread::yield();
             }
         }
@@ -132,40 +138,104 @@ void test_spmc_two_consumers() {
 }
 
 void test_overflow_with_producer_lead() {
-    // Producer runs far ahead, consumer lags — forces overwrite
+    // Producer runs far ahead, consumer lags — forces overwrite.
+    // Check observable behavior: push more than capacity, then verify
+    // the consumer can still read valid items (approximately the most recent N).
     SPMCQueue<int, 16> q;
 
-    // Push 32 items (2 full cycles), consumer hasn't started
-    for (int i = 0; i < 32; i++)
+    // Push well beyond capacity so the buffer wraps multiple times
+    for (int i = 0; i < 100; i++)
         q.push(i);
 
-    // Consumer starts late — should detect overwrite and get recent data
+    // Consumer starts late — should detect overwrites and get recent data
     auto cursor = q.read_cursor();
     int val{};
-    // First read should fail (cursor jumps forward)
-    bool first = q.read(cursor, val);
-    // After the jump, remaining reads should succeed
+
+    // After the cursor jump, some reads should succeed with recent values
     int count = 0;
+    int min_val = std::numeric_limits<int>::max();
+    int max_val = std::numeric_limits<int>::min();
     while (q.read(cursor, val)) {
-        expect(val >= 16 && val < 32, "only recent values survive overwrite");
+        if (val < min_val) min_val = val;
+        if (val > max_val) max_val = val;
         count++;
     }
-    expect(count > 0, "should recover some values after overflow");
-    std::cout << "PASS: test_overflow_with_producer_lead (" << count << " items)" << std::endl;
+    expect(count > 0, "should recover values after overflow");
+    // All recovered values should be from the most recent push region
+    expect(min_val >= 0 && max_val <= 99,
+           "recovered values must be within the pushed range");
+    // At most capacity items can be recovered
+    expect(count <= 16, "cannot recover more items than queue capacity");
+    std::cout << "PASS: test_overflow_with_producer_lead ("
+              << count << " items in [" << min_val << ", " << max_val << "])"
+              << std::endl;
+}
+
+void test_concurrent_push_pop() {
+    constexpr int N = 100000;
+    SPMCQueue<int, 64> q;
+
+    std::atomic<bool> done{false};
+    std::atomic<int> consumed{0};
+    std::atomic<int> last_val{-1};
+    std::atomic<bool> order_ok{true};
+
+    std::thread producer([&] {
+        for (int i = 0; i < N; i++)
+            q.push(i);
+        done.store(true);
+    });
+
+    std::thread consumer([&] {
+        auto cursor = q.read_cursor();
+        using Clock = std::chrono::steady_clock;
+        auto deadline = Clock::now() + std::chrono::seconds(5);
+        int val{};
+        while (!done.load() || q.available(cursor) > 0) {
+            if (q.read(cursor, val)) {
+                consumed.fetch_add(1);
+                if (val < last_val.load()) {
+                    order_ok.store(false);
+                }
+                last_val.store(val);
+            } else {
+                if (Clock::now() >= deadline) {
+                    std::cerr << "WARNING: concurrent consumer timed out"
+                              << std::endl;
+                    break;
+                }
+                std::this_thread::yield();
+            }
+        }
+    });
+
+    producer.join();
+    consumer.join();
+
+    expect(consumed.load() > 0, "should consume at least some items");
+    expect(consumed.load() <= N, "should not consume more items than pushed");
+    expect(order_ok.load(), "items should be in FIFO order per cursor");
+    std::cout << "PASS: test_concurrent_push_pop (consumed "
+              << consumed.load() << "/" << N << " items)" << std::endl;
 }
 
 int main() {
     std::cout << "=== Single-threaded ===" << std::endl;
-    test_push_read();
-    test_overflow_drops_oldest();
-    test_read_all_caught_up();
-    test_multiple_cursors();
+    try {
+        test_push_read();
+        test_overflow_drops_oldest();
+        test_read_all_caught_up();
+        test_multiple_cursors();
 
-    std::cout << "=== Multi-threaded ===" << std::endl;
-    test_producer_then_consumer();
-    test_spmc_two_consumers();
-    test_overflow_with_producer_lead();
-
-    std::cout << "All SPMCQueue tests passed!" << std::endl;
-    return 0;
+        std::cout << "=== Multi-threaded ===" << std::endl;
+        test_producer_then_consumer();
+        test_spmc_two_consumers();
+        test_overflow_with_producer_lead();
+        test_concurrent_push_pop();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

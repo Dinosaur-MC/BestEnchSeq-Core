@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "algorithm/forge/ForgeEngine.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/RegistryAccess.h"
@@ -12,11 +12,22 @@ namespace {
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
-// Named compact IDs (correspond to registration order in setup_enchinfo)
-constexpr int16_t ID_SHARPNESS = 0;
-constexpr int16_t ID_KNOCKBACK = 1;
-constexpr int16_t ID_BANE      = 2;
-constexpr int16_t ID_PROTECTION = 3;
+// Named IDs resolved from the registry after setup_enchinfo() is called.
+struct NamedIDs {
+    int16_t sharpness;
+    int16_t knockback;
+    int16_t bane;
+    int16_t protection;
+};
+
+NamedIDs get_ids() {
+    NamedIDs ids;
+    ids.sharpness  = static_cast<int16_t>(registries::enchants().get_id("sharpness"));
+    ids.knockback  = static_cast<int16_t>(registries::enchants().get_id("knockback"));
+    ids.bane       = static_cast<int16_t>(registries::enchants().get_id("bane_of_arthropods"));
+    ids.protection = static_cast<int16_t>(registries::enchants().get_id("protection"));
+    return ids;
+}
 
 void setup_enchinfo() {
     std::vector<EnchInfo> infos;
@@ -58,15 +69,16 @@ compact::Item make_equip(int16_t ench_id, int16_t level) {
 
 void test_forge_books() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
-    auto book_a = make_book(ID_SHARPNESS, 4);
-    auto book_b = make_book(ID_SHARPNESS, 3);
+    auto book_a = make_book(ids.sharpness, 4);
+    auto book_b = make_book(ids.sharpness, 3);
 
     auto [result, cost] = engine.forge(book_a, book_b, reg);
     expect(result.type == compact::ItemType::Book, "result should be book");
-    auto it = result.enchs.find(ID_SHARPNESS);
+    auto it = result.enchs.find(ids.sharpness);
     expect(it != result.enchs.end() && it->level == 4,
            "book+book: should keep max level (4)");
     // Book-to-book: penalty(0)+penalty(0) + mult(1)*new_level(4) = 4
@@ -76,15 +88,16 @@ void test_forge_books() {
 
 void test_forge_equipment_with_book() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
     auto eq = compact::Item{compact::ItemType::Equip, 1561, 0, {}};
-    auto book = make_book(ID_SHARPNESS, 5);
+    auto book = make_book(ids.sharpness, 5);
 
     auto [result, cost] = engine.forge(eq, book, reg);
     expect(result.type == compact::ItemType::Equip, "result should be equipment");
-    auto it = result.enchs.find(ID_SHARPNESS);
+    auto it = result.enchs.find(ids.sharpness);
     expect(it != result.enchs.end() && it->level == 5, "result should have sharpness 5");
     // equip+book: penalty(0)+penalty(0) + mult(1)*5 = 5
     expect(cost == 5, "forge cost for sharpness 5 to empty sword should be 5");
@@ -93,26 +106,31 @@ void test_forge_equipment_with_book() {
 
 void test_forge_incompatible_rejected() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
-    auto eq = make_equip(ID_SHARPNESS, 5);
-    auto book = make_book(ID_BANE, 4);
+    auto eq = make_equip(ids.sharpness, 5);
+    auto book = make_book(ids.bane, 4);
 
     auto [result, cost] = engine.forge(eq, book, reg);
-    auto it = result.enchs.find(ID_BANE);
+    auto it = result.enchs.find(ids.bane);
     expect(it == result.enchs.end(), "incompatible enchant should not be applied");
+    auto sharp_it = result.enchs.find(ids.sharpness);
+    expect(sharp_it != result.enchs.end() && sharp_it->level == 5,
+           "non-conflicting sharpness 5 should be preserved after incompatible forge");
     expect(cost == 1, "incompatible penalty cost should be 1 (JE)");
     std::cout << "PASS: test_forge_incompatible_rejected (cost=" << cost << ")" << std::endl;
 }
 
 void test_forge_not_forgeable() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
     compact::Item mat{compact::ItemType::Material, 0, 0, {}};
-    auto book = make_book(ID_SHARPNESS, 1);
+    auto book = make_book(ids.sharpness, 1);
 
     expect(!engine.is_forgeable(mat, book), "material target should not be forgeable");
     std::cout << "PASS: test_forge_not_forgeable" << std::endl;
@@ -173,19 +191,20 @@ void test_apply_cap() {
 
 void test_estimate_forge_cost() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
     // Equip + Book: sharpness 5 book to empty sword
     // est = penalty(0) + penalty(0) + 5*mult(1) = 5
     auto eq = compact::Item{compact::ItemType::Equip, 1561, 0, {}};
-    auto book = make_book(ID_SHARPNESS, 5);
+    auto book = make_book(ids.sharpness, 5);
     int32_t est = engine.estimate_forge_cost(eq, book, reg);
     expect(est == 5, "estimate_forge_cost: equip+sharp5 should be 5");
 
     // Equip(PPN 2) + Book: PPN 2 adds penalty_cost(2)=3
     compact::Item eq_ppn{compact::ItemType::Equip, 1561, 2, {}};
-    auto book2 = make_book(ID_KNOCKBACK, 2);
+    auto book2 = make_book(ids.knockback, 2);
     // est = penalty(2) + penalty(0) + 2*bm(1) = 3 + 0 + 2 = 5
     int32_t est2 = engine.estimate_forge_cost(eq_ppn, book2, reg);
     expect(est2 == 5, "estimate_forge_cost: equip(ppn2)+knock2 should be 5");
@@ -197,14 +216,15 @@ void test_estimate_forge_cost() {
 
 void test_be_forge_cost() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
 
     // BE: cost = mult * (new_level - old_level) for existing enchants
     ForgeEngine be_engine{ForgeConfig{false, false, false, MCE::Bedrock}};
     ForgeEngine je_engine{ForgeConfig{false, false, false, MCE::Java}};
 
-    auto eq = make_equip(ID_SHARPNESS, 3);  // already has sharpness 3
-    auto book = make_book(ID_SHARPNESS, 4);  // sacrifice is sharpness 4
+    auto eq = make_equip(ids.sharpness, 3);  // already has sharpness 3
+    auto book = make_book(ids.sharpness, 4);  // sacrifice is sharpness 4
 
     auto [be_result, be_cost] = be_engine.forge(eq, book, reg);
     // BE: mult(1) * (new_level(4) - old_level(3)) = 1, but it should
@@ -232,13 +252,14 @@ void test_be_forge_cost() {
 
 void test_be_conflict_cost() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
 
     ForgeEngine be_engine{ForgeConfig{false, false, false, MCE::Bedrock}};
     ForgeEngine je_engine{ForgeConfig{false, false, false, MCE::Java}};
 
-    auto eq = make_equip(ID_SHARPNESS, 5);
-    auto book = make_book(ID_BANE, 4);
+    auto eq = make_equip(ids.sharpness, 5);
+    auto book = make_book(ids.bane, 4);
 
     // BE: conflict has no extra cost (BE doesn't have "+1 for conflict")
     auto [be_result, be_cost] = be_engine.forge(eq, book, reg);
@@ -262,13 +283,14 @@ void test_be_conflict_cost() {
 
 void test_ppn_recalculation() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
     // Two books with different PPN: 0 and 2
-    auto book_a = make_book(ID_SHARPNESS, 3);
+    auto book_a = make_book(ids.sharpness, 3);
     book_a.ppn = 0;
-    auto book_b = make_book(ID_KNOCKBACK, 2);
+    auto book_b = make_book(ids.knockback, 2);
     book_b.ppn = 2;
 
     auto [result, cost] = engine.forge(book_a, book_b, reg);
@@ -284,7 +306,7 @@ void test_ppn_recalculation() {
 
     // Forge equip(PPN 3) with book(PPN 0) → equip PPN should become 4 (3 >= 0)
     compact::Item equip{compact::ItemType::Equip, 1561, 3, {}};
-    auto book_c = make_book(ID_SHARPNESS, 1);
+    auto book_c = make_book(ids.sharpness, 1);
     book_c.ppn = 0;
     int32_t cost2 = engine.forge_into(equip, book_c, reg);
     expect(equip.ppn == 4, "PPN after equip(3)+book(0) should be 4");
@@ -295,23 +317,24 @@ void test_ppn_recalculation() {
 
 void test_same_level_upgrade() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
     // Same level → level up: sharpness 4 + sharpness 4 → sharpness 5
-    auto book_a = make_book(ID_SHARPNESS, 4);
-    auto book_b = make_book(ID_SHARPNESS, 4);
+    auto book_a = make_book(ids.sharpness, 4);
+    auto book_b = make_book(ids.sharpness, 4);
 
     auto [result, cost] = engine.forge(book_a, book_b, reg);
-    auto it = result.enchs.find(ID_SHARPNESS);
+    auto it = result.enchs.find(ids.sharpness);
     expect(it != result.enchs.end() && it->level == 5,
            "same level combine: 4+4 should become 5 (max_level of sharpness)");
 
     // Already at max: sharpness 5 + sharpness 5 → stays 5 (min(5+1, 5) = 5)
-    auto book_c = make_book(ID_SHARPNESS, 5);
-    auto book_d = make_book(ID_SHARPNESS, 5);
+    auto book_c = make_book(ids.sharpness, 5);
+    auto book_d = make_book(ids.sharpness, 5);
     auto [result2, cost2] = engine.forge(book_c, book_d, reg);
-    auto it2 = result2.enchs.find(ID_SHARPNESS);
+    auto it2 = result2.enchs.find(ids.sharpness);
     expect(it2 != result2.enchs.end() && it2->level == 5,
            "max level combine: 5+5 should stay 5");
 
@@ -320,15 +343,16 @@ void test_same_level_upgrade() {
 
 void test_different_level_max() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     ForgeEngine engine;
 
     // Different levels → take max: sharpness 5 + sharpness 3 → sharpness 5
-    auto book_a = make_book(ID_SHARPNESS, 5);
-    auto book_b = make_book(ID_SHARPNESS, 3);
+    auto book_a = make_book(ids.sharpness, 5);
+    auto book_b = make_book(ids.sharpness, 3);
 
     auto [result, cost] = engine.forge(book_a, book_b, reg);
-    auto it = result.enchs.find(ID_SHARPNESS);
+    auto it = result.enchs.find(ids.sharpness);
     expect(it != result.enchs.end() && it->level == 5,
            "different level combine: 5+3 should stay 5");
 
@@ -337,6 +361,7 @@ void test_different_level_max() {
 
 void test_cap_behavior() {
     setup_enchinfo();
+    auto ids = get_ids();
     auto reg = init_reg();
     auto reg2 = init_reg();
 
@@ -346,8 +371,8 @@ void test_cap_behavior() {
     // Build an expensive forge: many high-level enchants on a high-PPN item
     compact::Item equip{compact::ItemType::Equip, 1561, 4, {}};  // PPN 4 → penalty 15
     compact::Item book{compact::ItemType::Book, 0, 4, {}};       // PPN 4 → penalty 15
-    book.enchs.insert({ID_SHARPNESS, 5});  // mult 1 * 5 = 5
-    book.enchs.insert({ID_KNOCKBACK, 2});  // mult 2 * 2 = 4
+    book.enchs.insert({ids.sharpness, 5});  // mult 1 * 5 = 5
+    book.enchs.insert({ids.knockback, 2});  // mult 2 * 2 = 4
 
     // penalty(15)+penalty(15) + bm(1)*5 + bm(1)*2 = 30 + 5 + 2 = 37
     auto eq1 = equip;
@@ -362,7 +387,7 @@ void test_cap_behavior() {
     expect(uncapped_cost == 37, "uncapped cost should also be 37");
 
     // Add more enchants to exceed cap
-    book.enchs.insert({ID_PROTECTION, 4});  // Protection is chestplate-only...
+    book.enchs.insert({ids.protection, 4});  // Protection is chestplate-only...
     // Actually, protection won't apply to a sword. Let me use a different approach.
     // Just add knockback at max level - it has mult 2 so it adds more cost.
     // Actually the reg is initialized against sword, so protection can't apply to sword.
@@ -372,7 +397,7 @@ void test_cap_behavior() {
     // PPN 5 → penalty 31, PPN 5 → penalty 31. Total penalty = 62, already over cap.
     compact::Item equip_high{compact::ItemType::Equip, 1561, 5, {}};
     compact::Item book_high{compact::ItemType::Book, 0, 5, {}};
-    book_high.enchs.insert({ID_SHARPNESS, 5});
+    book_high.enchs.insert({ids.sharpness, 5});
     // uncapped: 31+31+5 = 67
 
     auto eq3 = equip_high;
@@ -390,33 +415,80 @@ void test_cap_behavior() {
               << ", uncapped=" << uncapped_high << ")" << std::endl;
 }
 
+// ─── Malformed item / error path tests ─────────────────────────────────────
+
+void test_negative_enchant_level() {
+    setup_enchinfo();
+    auto ids = get_ids();
+    auto reg = init_reg();
+    ForgeEngine engine;
+
+    // Book with negative enchantment level -- should not crash
+    compact::Item book{compact::ItemType::Book, 0, 0, {}};
+    book.enchs.insert({ids.sharpness, -5});
+
+    auto eq = make_equip(ids.sharpness, 3);
+
+    auto [result, cost] = engine.forge(eq, book, reg);
+    auto it = result.enchs.find(ids.sharpness);
+    // std::max(3, -5) = 3, so existing level should be preserved
+    expect(it != result.enchs.end() && it->level == 3,
+           "negative level book should not reduce equipment's enchantment level");
+    std::cout << "PASS: test_negative_enchant_level (cost=" << cost << ")" << std::endl;
+}
+
+void test_zero_level_enchant() {
+    setup_enchinfo();
+    auto ids = get_ids();
+    auto reg = init_reg();
+    ForgeEngine engine;
+
+    // Enchant with level 0 -- verify it is accepted and doesn't crash
+    auto book = make_book(ids.sharpness, 0);
+    auto eq = compact::Item{compact::ItemType::Equip, 1561, 0, {}};
+
+    auto [result, cost] = engine.forge(eq, book, reg);
+    auto it = result.enchs.find(ids.sharpness);
+    expect(it != result.enchs.end() && it->level == 0,
+           "zero-level enchant should be applied with level 0");
+    std::cout << "PASS: test_zero_level_enchant (cost=" << cost << ")" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
-    // Basic forge
-    test_forge_books();
-    test_forge_equipment_with_book();
-    test_forge_incompatible_rejected();
-    test_forge_not_forgeable();
+    try {
+        // Basic forge
+        test_forge_books();
+        test_forge_equipment_with_book();
+        test_forge_incompatible_rejected();
+        test_forge_not_forgeable();
 
-    // Sub-operations
-    test_penalty_cost();
-    test_book_multiplier();
-    test_apply_cap();
-    test_estimate_forge_cost();
+        // Sub-operations
+        test_penalty_cost();
+        test_book_multiplier();
+        test_apply_cap();
+        test_estimate_forge_cost();
 
-    // BE platform
-    test_be_forge_cost();
-    test_be_conflict_cost();
+        // BE platform
+        test_be_forge_cost();
+        test_be_conflict_cost();
 
-    // Mutation / PPN / level combine
-    test_ppn_recalculation();
-    test_same_level_upgrade();
-    test_different_level_max();
+        // Mutation / PPN / level combine
+        test_ppn_recalculation();
+        test_same_level_upgrade();
+        test_different_level_max();
 
-    // Cap behavior
-    test_cap_behavior();
+        // Cap behavior
+        test_cap_behavior();
 
-    std::cout << "All forge engine tests passed!" << std::endl;
-    return 0;
+        // Malformed item error paths
+        test_negative_enchant_level();
+        test_zero_level_enchant();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

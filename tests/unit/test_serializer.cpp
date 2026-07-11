@@ -1,4 +1,4 @@
-#include "test_utils.h"
+#include "framework/test_utils.h"
 #include "utils/Serializer.hpp"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
@@ -156,14 +156,19 @@ void test_itemstack_roundtrip_equipment() {
 
 int main() {
     std::cout << "=== Serializer Tests ===" << std::endl;
-    test_primitive_u32();
-    test_primitive_i32();
-    test_primitive_string();
-    test_ench_roundtrip();
-    test_enchset_roundtrip();
-    test_itemstack_roundtrip_book();
-    test_itemstack_roundtrip_equipment();
-    std::cout << "All Serializer tests passed!" << std::endl;
-    return 0;
+    try {
+        test_primitive_u32();
+        test_primitive_i32();
+        test_primitive_string();
+        test_ench_roundtrip();
+        test_enchset_roundtrip();
+        test_itemstack_roundtrip_book();
+        test_itemstack_roundtrip_equipment();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }
 
