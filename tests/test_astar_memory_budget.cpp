@@ -1,5 +1,5 @@
 #include "test_utils.h"
-#include "algorithm/strategies/AStarMemoryBudget.h"
+#include "algorithm/components/AStarMemoryBudget.h"
 
 void test_budget_from_1gb_9_items() {
     auto b = AStarMemoryBudget::from_memory_mb(1024, 9);

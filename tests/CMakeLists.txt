@@ -254,7 +254,7 @@ add_executable(test_algorithm_strategies
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/AStarMemoryBudget.cpp
+    ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
     ${PROJECT_ROOT}/src/utils/AStarDiagnostics.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
@@ -340,7 +340,7 @@ endif()
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_astar_memory_budget.cpp)
 add_executable(test_astar_memory_budget
     test_astar_memory_budget.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/AStarMemoryBudget.cpp
+    ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
 )
 target_include_directories(test_astar_memory_budget PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_astar_memory_budget COMMAND test_astar_memory_budget)

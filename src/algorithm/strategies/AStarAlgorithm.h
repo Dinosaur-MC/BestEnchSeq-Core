@@ -1,7 +1,7 @@
 #pragma once
 #include "../IAlgorithm.h"
 #include "../forge/ForgeEngine.h"
-#include "AStarMemoryBudget.h"
+#include "algorithm/components/AStarMemoryBudget.h"
 #include "utils/AStarDiagnostics.hpp"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
