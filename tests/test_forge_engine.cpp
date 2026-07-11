@@ -393,30 +393,34 @@ void test_cap_behavior() {
 } // anonymous namespace
 
 int main() {
-    // Basic forge
-    test_forge_books();
-    test_forge_equipment_with_book();
-    test_forge_incompatible_rejected();
-    test_forge_not_forgeable();
+    try {
+        // Basic forge
+        test_forge_books();
+        test_forge_equipment_with_book();
+        test_forge_incompatible_rejected();
+        test_forge_not_forgeable();
 
-    // Sub-operations
-    test_penalty_cost();
-    test_book_multiplier();
-    test_apply_cap();
-    test_estimate_forge_cost();
+        // Sub-operations
+        test_penalty_cost();
+        test_book_multiplier();
+        test_apply_cap();
+        test_estimate_forge_cost();
 
-    // BE platform
-    test_be_forge_cost();
-    test_be_conflict_cost();
+        // BE platform
+        test_be_forge_cost();
+        test_be_conflict_cost();
 
-    // Mutation / PPN / level combine
-    test_ppn_recalculation();
-    test_same_level_upgrade();
-    test_different_level_max();
+        // Mutation / PPN / level combine
+        test_ppn_recalculation();
+        test_same_level_upgrade();
+        test_different_level_max();
 
-    // Cap behavior
-    test_cap_behavior();
-
-    std::cout << "All forge engine tests passed!" << std::endl;
-    return 0;
+        // Cap behavior
+        test_cap_behavior();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

@@ -21,7 +21,12 @@ void test_hash_combine() {
 
 int main() {
     std::cout << "=== AlgorithmUtils Tests ===" << std::endl;
-    test_hash_combine();
-    std::cout << "All AlgorithmUtils tests passed!" << std::endl;
-    return 0;
+    try {
+        test_hash_combine();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

@@ -110,11 +110,16 @@ void test_contains_and_list() {
 }
 
 int main() {
-    test_basic_register_create();
-    test_list_and_size();
-    test_unregister();
-    test_unregister_preserves_others();
-    test_contains_and_list();
-    std::cout << "All algorithm registry tests passed!" << std::endl;
-    return 0;
+    try {
+        test_basic_register_create();
+        test_list_and_size();
+        test_unregister();
+        test_unregister_preserves_others();
+        test_contains_and_list();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

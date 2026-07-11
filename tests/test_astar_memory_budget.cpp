@@ -40,10 +40,15 @@ void test_budget_small_memory() {
 
 int main() {
     std::cout << "=== AStarMemoryBudget Tests ===" << std::endl;
-    test_budget_from_1gb_9_items();
-    test_budget_zero_memory();
-    test_budget_reserve_sizes();
-    test_budget_small_memory();
-    std::cout << "All AStarMemoryBudget tests passed!" << std::endl;
-    return 0;
+    try {
+        test_budget_from_1gb_9_items();
+        test_budget_zero_memory();
+        test_budget_reserve_sizes();
+        test_budget_small_memory();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

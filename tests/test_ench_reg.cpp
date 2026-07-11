@@ -195,13 +195,18 @@ void test_enchset_empty_and_single() {
 } // anonymous namespace
 
 int main() {
-    test_basic_init_and_size();
-    test_safe_get_bounds();
-    test_conflict_detection();
-    test_multiplier_and_max_level();
-    test_enchset_hash_consistency();
-    test_enchset_sort_restores_invariant();
-    test_enchset_empty_and_single();
-    std::cout << "All EnchReg tests passed!" << std::endl;
-    return 0;
+    try {
+        test_basic_init_and_size();
+        test_safe_get_bounds();
+        test_conflict_detection();
+        test_multiplier_and_max_level();
+        test_enchset_hash_consistency();
+        test_enchset_sort_restores_invariant();
+        test_enchset_empty_and_single();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

@@ -324,14 +324,17 @@ void test_parse_csv() {
 
 int main() {
     std::cout << "=== ParserUtils Tests ===" << std::endl;
-
-    test_format_detection();
-    test_csv_line_parsing();
-    test_namespace_helpers();
-    test_mc_official_structure();
-    test_file_io();
-    test_parse_csv();
-
-    std::cout << "PASS" << std::endl;
-    return 0;
+    try {
+        test_format_detection();
+        test_csv_line_parsing();
+        test_namespace_helpers();
+        test_mc_official_structure();
+        test_file_io();
+        test_parse_csv();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

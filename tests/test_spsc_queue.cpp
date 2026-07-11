@@ -100,11 +100,16 @@ void test_peek() {
 
 int main() {
     std::cout << "=== SPSCQueue Tests ===" << std::endl;
-    test_push_pop();
-    test_drop_on_full();
-    test_sequential_producer_consumer();
-    test_consumer_catch_up();
-    test_peek();
-    std::cout << "All SPSCQueue tests passed!" << std::endl;
-    return 0;
+    try {
+        test_push_pop();
+        test_drop_on_full();
+        test_sequential_producer_consumer();
+        test_consumer_catch_up();
+        test_peek();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

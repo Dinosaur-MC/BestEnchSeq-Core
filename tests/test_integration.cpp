@@ -185,11 +185,10 @@ int main() {
         test_builtin_enchantment_lookup();
         test_builtin_equipment_lookup();
         test_output_formatting_empty();
-
-        std::cout << "PASS" << std::endl;
-        return 0;
-    } catch (const std::exception &e) {
-        std::cerr << "FATAL: " << e.what() << std::endl;
-        return 1;
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
     }
+    return print_summary();
 }

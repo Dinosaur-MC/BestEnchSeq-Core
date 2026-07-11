@@ -255,18 +255,23 @@ void test_serialization_stubs() {
 }
 
 int main() {
-    test_constructor_null();
-    test_initial_state();
-    test_executor_lifecycle();
-    test_double_start();
-    test_executor_cancel();
-    test_executor_pause_resume();
-    test_executor_progress();
-    test_executor_observer();
-    test_executor_detach_observer();
-    test_output_not_valid_before_completion();
-    test_output_has_steps_after_completion();
-    test_serialization_stubs();
-    std::cout << "All AlgorithmExecutor tests passed!" << std::endl;
-    return 0;
+    try {
+        test_constructor_null();
+        test_initial_state();
+        test_executor_lifecycle();
+        test_double_start();
+        test_executor_cancel();
+        test_executor_pause_resume();
+        test_executor_progress();
+        test_executor_observer();
+        test_executor_detach_observer();
+        test_output_not_valid_before_completion();
+        test_output_has_steps_after_completion();
+        test_serialization_stubs();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

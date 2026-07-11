@@ -408,11 +408,10 @@ int main() {
         test_missing_wanted_throws();
         test_double_dash_stops_parsing();
         test_all_options();
-
-        std::cout << "PASS" << std::endl;
-        return 0;
-    } catch (const std::exception &e) {
-        std::cerr << "FATAL: " << e.what() << std::endl;
-        return 1;
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
     }
+    return print_summary();
 }

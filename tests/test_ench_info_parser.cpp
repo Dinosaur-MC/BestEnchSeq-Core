@@ -873,11 +873,11 @@ int main() {
         test_to_json_round_trip();
         test_to_csv_round_trip();
         test_export_mc_official_round_trip();
-        std::cout << "PASS" << std::endl;
-        return 0;
-    } catch (const std::exception &e) {
-        std::cerr << "FATAL: " << e.what() << std::endl;
-        return 2;
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
     }
+    return print_summary();
 }
 

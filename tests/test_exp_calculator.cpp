@@ -36,8 +36,13 @@ void test_peak_analysis() {
 }
 
 int main() {
-    test_level_to_exp();
-    test_peak_analysis();
-    std::cout << "All ExpCalculator tests passed!" << std::endl;
-    return 0;
+    try {
+        test_level_to_exp();
+        test_peak_analysis();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

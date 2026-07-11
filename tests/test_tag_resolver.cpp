@@ -176,15 +176,20 @@ void test_item_tags() {
 } // namespace
 
 int main() {
-    test_single_tag();
-    test_nested_tags();
-    test_concrete_id_passthrough();
-    test_is_tag();
-    test_missing_tag_returns_empty();
-    test_cyclic_tag_detection();
-    test_resolve_vector();
-    test_get_tag();
-    test_item_tags();
-    std::cout << "PASS" << std::endl;
-    return 0;
+    try {
+        test_single_tag();
+        test_nested_tags();
+        test_concrete_id_passthrough();
+        test_is_tag();
+        test_missing_tag_returns_empty();
+        test_cyclic_tag_detection();
+        test_resolve_vector();
+        test_get_tag();
+        test_item_tags();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

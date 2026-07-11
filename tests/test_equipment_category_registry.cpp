@@ -88,10 +88,15 @@ void test_duplicate_custom_skipped() {
 }
 
 int main() {
-    test_builtins_present();
-    test_lookup_throwing();
-    test_custom_categories();
-    test_duplicate_custom_skipped();
-    std::cout << "All EquipmentCategoryRegistry tests passed!" << std::endl;
-    return 0;
+    try {
+        test_builtins_present();
+        test_lookup_throwing();
+        test_custom_categories();
+        test_duplicate_custom_skipped();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

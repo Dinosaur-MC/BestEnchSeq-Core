@@ -156,16 +156,20 @@ void test_overflow_with_producer_lead() {
 
 int main() {
     std::cout << "=== Single-threaded ===" << std::endl;
-    test_push_read();
-    test_overflow_drops_oldest();
-    test_read_all_caught_up();
-    test_multiple_cursors();
+    try {
+        test_push_read();
+        test_overflow_drops_oldest();
+        test_read_all_caught_up();
+        test_multiple_cursors();
 
-    std::cout << "=== Multi-threaded ===" << std::endl;
-    test_producer_then_consumer();
-    test_spmc_two_consumers();
-    test_overflow_with_producer_lead();
-
-    std::cout << "All SPMCQueue tests passed!" << std::endl;
-    return 0;
+        std::cout << "=== Multi-threaded ===" << std::endl;
+        test_producer_then_consumer();
+        test_spmc_two_consumers();
+        test_overflow_with_producer_lead();
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
+    }
+    return print_summary();
 }

@@ -412,11 +412,10 @@ int main() {
         test_parse_errors();
         test_round_trip();
         test_stream_parsing();
-
-        std::cout << "PASS" << std::endl;
-        return 0;
-    } catch (const std::exception &e) {
-        std::cerr << "FATAL: " << e.what() << std::endl;
-        return 1;
+    } catch (const test_error& e) {
+        std::cerr << "FAILED: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
     }
+    return print_summary();
 }
