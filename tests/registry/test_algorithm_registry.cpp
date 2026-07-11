@@ -109,6 +109,23 @@ void test_contains_and_list() {
     std::cout << "PASS: test_contains_and_list" << std::endl;
 }
 
+void test_duplicate_registration() {
+    auto& reg = registries::algorithms();
+    reg.clear();
+
+    reg.register_algorithm("dup_test", []{ return std::make_unique<TestAlgorithm>(); });
+    expect(reg.contains("dup_test"), "duplicate: first registration works");
+
+    // Re-register same name should overwrite, not crash
+    reg.register_algorithm("dup_test", []{ return std::make_unique<TestAlgorithm>(); });
+    expect(reg.contains("dup_test"), "duplicate: still contains after second registration");
+
+    auto algo = reg.create("dup_test");
+    expect(algo != nullptr, "duplicate: create returns non-null after second registration");
+
+    std::cout << "PASS: test_duplicate_registration" << std::endl;
+}
+
 int main() {
     try {
         test_basic_register_create();
@@ -116,6 +133,7 @@ int main() {
         test_unregister();
         test_unregister_preserves_others();
         test_contains_and_list();
+        test_duplicate_registration();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
