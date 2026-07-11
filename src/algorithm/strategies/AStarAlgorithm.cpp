@@ -174,11 +174,20 @@ void AStarAlgorithm::execute(
         }
     }
 
-    // Pre-allocate
+    // Pre-allocate (task-size-aware — factorial estimate, capped at budget max)
     _pool.set_max(_budget.max_items_pool);
-    _pool.reserve(_budget.reserve_items_pool);
-    _step_pool.reserve(_budget.reserve_step_pool);
-    _open_heap.reserve(_budget.reserve_open_set);
+    {
+        size_t est = 64;
+        if (items.size() > 1) {
+            size_t f = 1;
+            for (size_t k = 2; k <= items.size() && f <= (1u << 20); ++k) f *= k;
+            est = std::max<size_t>(64, f);
+        }
+        _pool.reserve(std::min(est, static_cast<size_t>(_budget.max_items_pool)));
+        _step_pool.reserve(std::min(est, _budget.max_step_pool));
+        // Open set is typically smaller than explored set
+        _open_heap.reserve(std::min(est / 2 + 64, _budget.max_open_set));
+    }
 
     int32_t h0 = _heuristic(initial_ids);
 
@@ -193,9 +202,21 @@ void AStarAlgorithm::execute(
         SearchState{0, -1, std::move(initial_ids)}, h0
     });
 
-    // best_g keyed by hash — open-addressing flat map (contiguous, cache-friendly)
+    // best_g keyed by hash — open-addressing flat map (contiguous, cache-friendly).
+    // Initial capacity estimated from problem size to avoid over-allocation
+    // AND unnecessary rehashes.  Auto-grow in FlatHashMap handles overflow.
     FlatHashMap<size_t, int32_t> best_g;
-    best_g.reserve(static_cast<size_t>(_budget.max_explored));
+    {
+        // Upper bound on unique states for N items: roughly N!
+        size_t estimated = 64;
+        if (items.size() > 1) {
+            size_t f = 1;
+            for (size_t k = 2; k <= items.size() && f <= (1u << 20); ++k)
+                f *= k;
+            estimated = std::max<size_t>(64, f);
+        }
+        best_g.reserve(estimated);
+    }
     int64_t explored = 0;
 
     while (!open_set.empty() && !ctx.is_cancelled()) {
