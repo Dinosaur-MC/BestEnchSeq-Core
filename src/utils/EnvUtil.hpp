@@ -21,6 +21,35 @@ inline const char *getenv_safe(const char *name) noexcept {
 }
 } // namespace
 
+/// Set an environment variable (cross-platform).
+///
+/// On Windows uses ``_putenv_s``; on POSIX uses ``setenv``.
+/// Passing ``value = ""`` **unsets** the variable (calls ``unsetenv`` on POSIX,
+/// sets to empty string on Windows).
+inline void set_env(const char *name, const char *value) noexcept {
+    if (!name || !name[0])
+        return;
+#ifdef _WIN32
+    _putenv_s(name, value);
+#else
+    if (value && value[0])
+        setenv(name, value, 1);
+    else
+        unsetenv(name);
+#endif
+}
+
+/// Unset an environment variable (cross-platform).
+inline void unset_env(const char *name) noexcept {
+    if (!name || !name[0])
+        return;
+#ifdef _WIN32
+    _putenv_s(name, "");
+#else
+    unsetenv(name);
+#endif
+}
+
 /// Read an environment variable as a string.
 ///
 /// Returns \p default_val when the variable is not set or the name is

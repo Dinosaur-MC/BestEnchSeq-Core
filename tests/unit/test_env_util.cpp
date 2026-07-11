@@ -12,10 +12,10 @@ void test_get_env_str_not_set() {
 }
 
 void test_get_env_str_set() {
-    _putenv_s("BESQ_TEST_VAR", "hello");
+    set_env("BESQ_TEST_VAR", "hello");
     auto val = get_env_str("BESQ_TEST_VAR", "fallback");
     expect_eq(val, "hello", "set var returns its value");
-    _putenv_s("BESQ_TEST_VAR", "");  // cleanup
+    unset_env("BESQ_TEST_VAR");
 }
 
 void test_get_env_str_null_name() {
@@ -31,30 +31,30 @@ void test_get_env_str_empty_name() {
 void test_get_env_str_raw_pointer_lifetime() {
     // Verify that the returned string owns its data independently
     // of the getenv-internal buffer.
-    _putenv_s("BESQ_EPHEMERAL", "ephemeral_value");
+    set_env("BESQ_EPHEMERAL", "ephemeral_value");
     std::string s1 = get_env_str("BESQ_EPHEMERAL", "fallback");
     // Overwrite the env var to check that s1 still holds the original value
-    _putenv_s("BESQ_EPHEMERAL", "overwritten");
+    set_env("BESQ_EPHEMERAL", "overwritten");
     std::string s2 = get_env_str("BESQ_EPHEMERAL", "fallback");
     expect_eq(s1, "ephemeral_value", "first string still holds original value");
     expect_eq(s2, "overwritten", "second string reads new value");
-    _putenv_s("BESQ_EPHEMERAL", "");
+    unset_env("BESQ_EPHEMERAL");
 }
 
 // ── get_env<T> template ────────────────────────────────────────────────
 
 void test_get_env_int64() {
-    _putenv_s("BESQ_TEST_INT", "4096");
+    set_env("BESQ_TEST_INT", "4096");
     auto val = get_env<int64_t>("BESQ_TEST_INT", 2048);
     expect_eq(val, 4096, "int64 from env var");
-    _putenv_s("BESQ_TEST_INT", "");
+    unset_env("BESQ_TEST_INT");
 }
 
 void test_get_env_int64_invalid() {
-    _putenv_s("BESQ_TEST_INT", "not_a_number");
+    set_env("BESQ_TEST_INT", "not_a_number");
     auto val = get_env<int64_t>("BESQ_TEST_INT", 2048);
     expect_eq(val, 2048, "invalid int64 returns default");
-    _putenv_s("BESQ_TEST_INT", "");
+    unset_env("BESQ_TEST_INT");
 }
 
 void test_get_env_int64_unset() {
@@ -63,75 +63,75 @@ void test_get_env_int64_unset() {
 }
 
 void test_get_env_int64_overflow() {
-    _putenv_s("BESQ_TEST_INT", "999999999999999999999");
+    set_env("BESQ_TEST_INT", "999999999999999999999");
     auto val = get_env<int64_t>("BESQ_TEST_INT", 100);
     expect_eq(val, 100, "overflow returns default");
-    _putenv_s("BESQ_TEST_INT", "");
+    unset_env("BESQ_TEST_INT");
 }
 
 void test_get_env_int64_trailing_garbage() {
-    _putenv_s("BESQ_TEST_INT", "123abc");
+    set_env("BESQ_TEST_INT", "123abc");
     auto val = get_env<int64_t>("BESQ_TEST_INT", 50);
     expect_eq(val, 50, "trailing garbage returns default");
-    _putenv_s("BESQ_TEST_INT", "");
+    unset_env("BESQ_TEST_INT");
 }
 
 void test_get_env_bool_true() {
-    _putenv_s("BESQ_TEST_BOOL", "true");
+    set_env("BESQ_TEST_BOOL", "true");
     expect(get_env<bool>("BESQ_TEST_BOOL", false), "true parses to true");
-    _putenv_s("BESQ_TEST_BOOL", "1");
+    set_env("BESQ_TEST_BOOL", "1");
     expect(get_env<bool>("BESQ_TEST_BOOL", false), "1 parses to true");
-    _putenv_s("BESQ_TEST_BOOL", "");
+    unset_env("BESQ_TEST_BOOL");
 }
 
 void test_get_env_bool_false() {
-    _putenv_s("BESQ_TEST_BOOL", "false");
+    set_env("BESQ_TEST_BOOL", "false");
     expect(!get_env<bool>("BESQ_TEST_BOOL", true), "false parses to false");
-    _putenv_s("BESQ_TEST_BOOL", "0");
+    set_env("BESQ_TEST_BOOL", "0");
     expect(!get_env<bool>("BESQ_TEST_BOOL", true), "0 parses to false");
-    _putenv_s("BESQ_TEST_BOOL", "");
+    unset_env("BESQ_TEST_BOOL");
 }
 
 void test_get_env_bool_invalid() {
-    _putenv_s("BESQ_TEST_BOOL", "maybe");
+    set_env("BESQ_TEST_BOOL", "maybe");
     auto val = get_env<bool>("BESQ_TEST_BOOL", true);
     expect(val, "invalid bool returns default (true)");
-    _putenv_s("BESQ_TEST_BOOL", "");
+    unset_env("BESQ_TEST_BOOL");
 }
 
 void test_get_env_string() {
-    _putenv_s("BESQ_TEST_STR", "some_string_value");
+    set_env("BESQ_TEST_STR", "some_string_value");
     auto val = get_env<std::string>("BESQ_TEST_STR", "fallback");
     expect_eq(val, "some_string_value", "get_env<string> reads raw value");
-    _putenv_s("BESQ_TEST_STR", "");
+    unset_env("BESQ_TEST_STR");
 }
 
 void test_get_env_double() {
-    _putenv_s("BESQ_TEST_DBL", "3.14");
+    set_env("BESQ_TEST_DBL", "3.14");
     auto val = get_env<double>("BESQ_TEST_DBL", 0.0);
     expect_approx(val, 3.14, 0.001, "get_env<double> parses floating point");
-    _putenv_s("BESQ_TEST_DBL", "");
+    unset_env("BESQ_TEST_DBL");
 }
 
 // ── get_env<T> with custom converter ───────────────────────────────────
 
 void test_get_env_with_converter() {
-    _putenv_s("BESQ_TEST_CONV", "42");
+    set_env("BESQ_TEST_CONV", "42");
     auto val = get_env<int>("BESQ_TEST_CONV", -1,
         [](std::string_view sv) { return std::stoi(std::string(sv)); });
     expect_eq(val, 42, "converter translates string to int");
-    _putenv_s("BESQ_TEST_CONV", "");
+    unset_env("BESQ_TEST_CONV");
 }
 
 void test_get_env_with_converter_throws() {
-    _putenv_s("BESQ_TEST_CONV", "invalid");
+    set_env("BESQ_TEST_CONV", "invalid");
     auto val = get_env<int>("BESQ_TEST_CONV", -1,
         [](std::string_view sv) -> int {
             // This will throw std::invalid_argument
             return std::stoi(std::string(sv));
         });
     expect_eq(val, -1, "converter exception returns default");
-    _putenv_s("BESQ_TEST_CONV", "");
+    unset_env("BESQ_TEST_CONV");
 }
 
 void test_get_env_with_converter_unset() {
