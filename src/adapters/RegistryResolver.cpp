@@ -1,10 +1,15 @@
 #include "adapters/RegistryResolver.h"
+#include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "types/EquipmentCategory.h"
 
 #include <cstdint>
+#include <stdexcept>
+#include <string>
 #include <unordered_set>
 
+// ============================================================================
+// Raw → domain type resolution
 // ============================================================================
 
 std::vector<EnchInfo> RegistryResolver::resolve_ench_info(
@@ -62,4 +67,37 @@ std::vector<Equipment> RegistryResolver::resolve_equipment(
     }
 
     return result;
+}
+
+// ============================================================================
+// Enchantment name resolution
+// ============================================================================
+
+int32_t RegistryResolver::resolve_ench_id(
+    const std::string &name,
+    const EnchantmentRegistry &ench_reg
+) {
+    int32_t id = ench_reg.get_id(name);
+    if (id < 0) {
+        id = ench_reg.get_id("minecraft:" + name);
+    }
+    return id;
+}
+
+// ============================================================================
+
+int32_t RegistryResolver::resolve_ench_id(
+    const std::string &ns,
+    const std::string &id,
+    const EnchantmentRegistry &ench_reg
+) {
+    std::string namespaced = id.find(':') != std::string::npos ? id : ns + ":" + id;
+    int32_t ench_id = ench_reg.get_id(namespaced);
+    if (ench_id >= 0) return ench_id;
+
+    // Fallback: try bare id (for data registered without namespace prefix)
+    ench_id = ench_reg.get_id(id);
+    if (ench_id >= 0) return ench_id;
+
+    throw std::runtime_error("Unknown enchantment: " + namespaced);
 }

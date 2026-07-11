@@ -1,4 +1,5 @@
 #include "parsers/InputParser.h"
+#include "adapters/RegistryResolver.h"
 #include "utils/ParserUtils.h"
 #include "io/json.h"
 #include "registries/EnchantmentRegistry.h"
@@ -6,43 +7,6 @@
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
-
-namespace {
-
-// ---------------------------------------------------------------------------
-// Resolve an EnchantmentSpec to an integer ench_id via the given
-// EnchantmentRegistry.  The key is constructed as "ns:id" unless the id
-// itself already contains a namespace colon.  Falls back to the bare id
-// for data registered without a namespace prefix.
-// ---------------------------------------------------------------------------
-int32_t resolve_ench_id(const EnchantmentSpec &spec, const EnchantmentRegistry &ench_reg) {
-    std::string namespaced = spec.id.find(':') != std::string::npos
-                                 ? spec.id
-                                 : spec.ns + ":" + spec.id;
-    int32_t id = ench_reg.get_id(namespaced);
-    if (id >= 0) return id;
-
-    // Fallback: try bare id (for data registered without namespace prefix)
-    id = ench_reg.get_id(spec.id);
-    if (id >= 0) return id;
-
-    throw std::runtime_error("Unknown enchantment: " + namespaced);
-}
-
-// ---------------------------------------------------------------------------
-// Resolve a plain enchantment name (from JSON) to an integer ench_id via the
-// given EnchantmentRegistry.  Tries the raw name first, then prepends
-// "minecraft:" as a fallback.
-// ---------------------------------------------------------------------------
-int32_t resolve_ench_id(const std::string &name, const EnchantmentRegistry &ench_reg) {
-    int32_t id = ench_reg.get_id(name);
-    if (id < 0) {
-        id = ench_reg.get_id("minecraft:" + name);
-    }
-    return id;
-}
-
-} // anonymous namespace
 
 // ===========================================================================
 //  parse_inventory
@@ -117,7 +81,7 @@ ItemCollection InputParser::parse_inventory(
                     int32_t ench_level = ParserUtils::get_json_int(ench_obj, "level");
                     if (ench_level < 1) ench_level = 1;
 
-                    int32_t ench_id = resolve_ench_id(ench_id_str, ench_reg);
+                    int32_t ench_id = RegistryResolver::resolve_ench_id(ench_id_str, ench_reg);
                     if (ench_id >= 0) {
                         ench_set.emplace(ench_id, ench_level);
                     } else {
@@ -180,7 +144,7 @@ ItemStack InputParser::build_target(
     // Build enchantment set from inline enchants
     EnchSet ench_set;
     for (const auto &spec : target_spec.inline_enchants) {
-        int32_t id = resolve_ench_id(spec, ench_reg);
+        int32_t id = RegistryResolver::resolve_ench_id(spec.ns, spec.id, ench_reg);
         ench_set.emplace(id, spec.level);
     }
 
@@ -196,7 +160,7 @@ EnchSet InputParser::build_wanted_enchset(
 ) {
     EnchSet result;
     for (const auto &spec : wanted) {
-        int32_t id = resolve_ench_id(spec, ench_reg);
+        int32_t id = RegistryResolver::resolve_ench_id(spec.ns, spec.id, ench_reg);
         result.emplace(id, spec.level);
     }
     return result;
