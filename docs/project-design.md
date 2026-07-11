@@ -156,6 +156,20 @@ compact::EnchReg (flat conflict matrix)
 
 所有算法共用 `IForgeEngine` 接口和 compact 类型系统。新算法只需实现 `IAlgorithm::execute()`，自动获得线程管理、暂停/取消、进度报告能力。
 
+### 并发模型
+
+`AlgorithmExecutor` 管理工作线程生命周期（`Idle → Running → Paused → Completed | Failed | Cancelled`）。工作线程持有 `ExecutionContext`，算法通过它报告进度、投递解方案、响应暂停/取消。
+
+Observer 事件通过 **SPSC（单生产者单消费者）无锁队列** 传递：
+
+```
+算法线程 → SPSCQueue<ObserverEvent, 256> → dispatch_events() → AlgorithmObserver
+```
+
+`SPSCQueue` 是 `src/utils/SPSCQueue.hpp` 中定义的定长无锁队列（容量 256），属于本项目 MPMC 无锁队列家族的特化变体。容器、内存序、正确性证明等详细设计见 [`docs/MPMCQueue.md`](MPMCQueue.md)。
+
+工作线程调用 `ExecutionContext::report_progress()` / `report_compact_solution()` 等方法将事件推入队列；消费者线程（通常是主线程）通过 `dispatch_events()` 批量出队并分发给所有已注册的 `AlgorithmObserver` 回调。
+
 ---
 
 ## 模块职责
@@ -207,3 +221,4 @@ compact::EnchReg (flat conflict matrix)
 - `src/algorithm/strategies/` — 5 种算法策略
 - `docs/algorithm-design-discussion.md` — 算法设计详细探讨
 - `docs/anvil-mechanics-reference.md` — 铁砧机制参考
+- `docs/MPMCQueue.md` — MPMC/SPSC 无锁队列设计、正确性证明与性能模型

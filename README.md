@@ -2,7 +2,7 @@
 
 ## Overview
 
-A C++20 tool to calculate the best enchanting order for your enchantments and enchanted books, which will try reducing your enchanting cost on anvil as far as possible. It not only supports enchantments in Vanilla Minecraft, but also those in various mods, as it uses extensible enchantment sheets and a data-driven registry system to maintain enchantment information and can easily add third-party/custom enchantments.
+A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your enchantments and enchanted books, which will try reducing your enchanting cost on anvil as far as possible. It not only supports enchantments in Vanilla Minecraft, but also those in various mods, as it uses extensible enchantment sheets and a data-driven registry system to maintain enchantment information and can easily add third-party/custom enchantments.
 
 ### Key Features
 
@@ -24,9 +24,15 @@ A C++20 tool to calculate the best enchanting order for your enchantments and en
 ```bash
 cmake -S . -B build
 cmake --build build
-./build/bin/BestEnchSeq-Core.exe --target diamond_sword --wanted "sharpness=5,knockback=2"
-./build/bin/BestEnchSeq-Core.exe --algorithm astar --target diamond_sword --wanted "sharpness=5,looting=3,unbreaking=3"
-./build/bin/BestEnchSeq-Core.exe --algorithm penalty_balance --target diamond_chestplate --wanted "protection=4,thorns=3,unbreaking=3,mending=1"
+besq --target diamond_sword --wanted "sharpness=5,knockback=2"
+besq --algorithm astar --target diamond_sword --wanted "sharpness=5,looting=3,unbreaking=3"
+besq --algorithm penalty_balance --target diamond_chestplate --wanted "protection=4,thorns=3,unbreaking=3,mending=1"
+```
+
+Alternatively, invoke directly from the build directory:
+
+```bash
+./build/bin/besq --target diamond_sword --wanted "sharpness=5,knockback=2"
 ```
 
 CMake options:
@@ -96,13 +102,31 @@ src/
 │       ├── DynamicPenaltyBalancing.* ← High-quality approx
 │       └── HierarchicalMergeStrategy.* ← Large-scale approx
 ├── utils/
-│   ├── ExpCalculator.hpp        ← Level ↔ XP conversion
+│   ├── ExpCalculator.hpp        ← Level ↔ XP conversion (header-only)
+│   ├── SPSCQueue.hpp            ← Lock-free SPSC bounded queue
+│   ├── SPMCQueue.hpp            ← Lock-free SPMC bounded queue
+│   ├── BoundedMPMCQueue.hpp     ← Lock-free bounded MPMC queue (Vyukov algorithm)
+│   ├── SegmentedMPMCQueue.hpp   ← Lock-free unbounded MPMC queue (segmented blocks)
+│   └── Serializer.hpp           ← Binary serialization
 ├── parser/                      ← CLI, JSON/CSV data parsing, output formatting
 ├── io/                          ← JSON library, CSV primitives
 └── data/
     ├── builtin/vanilla.json     ← Vanilla Minecraft enchantment data
     └── examples/                ← Example inventory files
 ```
+
+### Concurrency Primitives
+
+The project provides a family of lock-free queue implementations for high-performance concurrent data transfer between algorithm worker threads and I/O / observer threads:
+
+```
+src/utils/SPSCQueue.hpp          — SPSC lock-free bounded
+src/utils/SPMCQueue.hpp          — SPMC lock-free bounded
+src/utils/BoundedMPMCQueue.hpp   — MPMC lock-free bounded (Vyukov)
+src/utils/SegmentedMPMCQueue.hpp — MPMC lock-free unbounded (segmented blocks)
+```
+
+See `docs/MPMCQueue.md` for the full design documentation.
 
 ### Key Design Decisions
 
@@ -119,6 +143,15 @@ src/
 **Domain types are pure data**: `EnchSet`, `Ench`, `ItemStack` are containers only. All combine/cost/penalty computation moved to compact forge engine.
 
 **No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/evaluate.sh` | WSL-based Valgrind evaluation — leak check, Callgrind/Massif profiling, benchmark |
+| `scripts/get_vanilla_data.py` | Extract enchantment/equipment data from official Minecraft client jar → `data/builtin/vanilla.json` |
+| `scripts/parse_callgrind.py` | Parse Callgrind `callgrind.out` → function hotspot ranking |
+| `scripts/parse_massif.py` | Parse Massif `ms_print` output → heap memory change chart + allocation hotspots |
 
 ## License
 

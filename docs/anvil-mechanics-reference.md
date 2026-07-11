@@ -2,6 +2,7 @@
 
 > 依据 Minecraft Wiki (minecraft.wiki) 及 JE 源码整理，对齐 Java Edition 最新版本。
 > 本文件作为算法层开发的权威参考，所有 forge 逻辑应与此保持一致。
+> 参见：docs/MPMCQueue.md 了解算法引擎使用的并发原语。
 
 ---
 
@@ -96,15 +97,14 @@ total_penalty_cost = penalty(target) + penalty(sacrifice)
 ### 实现对应
 
 ```cpp
-// ItemStack::get_penalty_cost
-int32_t ItemStack::get_penalty_cost(int32_t n) { return (1 << n) - 1; }
+// ForgeEngine::penalty_cost() — IForgeEngine 默认实现
+int32_t IForgeEngine::penalty_cost(int8_t ppn) const noexcept { return (1 << ppn) - 1; }
 
-// DefaultForgeEngine::forge() 中的惩罚计算
-cost += calc_penalty_cost(item_a.prior_penalty, item_b.prior_penalty);
-// 其中 calc_penalty_cost = get_penalty_cost(a) + get_penalty_cost(b)
+// ForgeEngine::forge_into() 中的惩罚计算
+cost += penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
 
-// 结果物品惩罚计数
-prior_penalty = 1 + std::max(item_a.prior_penalty, item_b.prior_penalty);
+// 结果物品惩罚计数（forge_into 原地修改 target）
+target.ppn = 1 + std::max(target.ppn, sacrifice.ppn);
 ```
 
 ---
@@ -143,8 +143,8 @@ ench_cost = (new_level - old_level) × multiplier
 | 牺牲 < 目标 | 不变 |
 
 ```cpp
-// Ench::operator+(int32_t) — 实现 max-or-increment 语义
-return std::min(level == lvl ? level + 1 : std::max(level, lvl), get_max_level());
+// ForgeEngine::forge_into() — 等级合并 max-or-increment 语义
+// (old_level == se.level) ? min(old_level + 1, max_lvl) : max(old_level, se.level)
 ```
 
 ### 新增 vs 升级
@@ -174,20 +174,18 @@ incompatible_penalty = count(incompatible_enchants) × 1
 ### 实现对应
 
 ```cpp
-// EnchSet::combine() Java 分支
-if (type == platform::MCE::Java)
-    result += multiplier * new_level;        // final_level × multiplier
+// ForgeEngine::forge_into() — Java 分支（简化，完整 API 见 IForgeEngine）
+if (plat == MCE::Java)
+    cost += mult * new_level;                // final_level × multiplier
 else
-    result += multiplier * (new_level - old_level);  // Bedrock: diff × multiplier
+    cost += mult * (new_level - old_level);  // Bedrock: diff × multiplier
 
 // 不兼容惩罚
-result += type == platform::MCE::Java ? 1 : 0;
+cost += (plat == MCE::Java && conflict) ? 1 : 0;
 
-// 书本乘数：item_mult >> 1，最小 1
-int32_t Ench::get_multiplier(bool is_book) const {
-    return is_book ? std::max(1, EnchantmentRegistry::get_instance().get(id).multiplier >> 1)
-                   : EnchantmentRegistry::get_instance().get(id).multiplier;
-}
+// 乘数查找：reg.get_multiplier(id) — compact::EnchReg O(1) 查找
+// 书本乘数在 forge_into 中通过 book_multiplier(reg.get_multiplier(e.id)) 计算
+// 简言之：sac_is_book ? book_multiplier(reg.get_multiplier(e.id)) : reg.get_multiplier(e.id)
 ```
 
 ---
@@ -277,9 +275,10 @@ $$\text{最终费用} = \min(\text{总费用}, 39)$$
 ### 实现对应
 
 ```cpp
-// DefaultForgeEngine::is_forgeable
-bool is_forgeable(const ItemStack& a, const ItemStack& b) const noexcept {
-    return a.is_equipment() || (a.is_book() && b.is_book());
+// ForgeEngine::is_forgeable
+bool ForgeEngine::is_forgeable(const compact::Item& a, const compact::Item& b) const noexcept {
+    return a.type == compact::ItemType::Equip
+        || (a.type == compact::ItemType::Book && b.type == compact::ItemType::Book);
 }
 ```
 
