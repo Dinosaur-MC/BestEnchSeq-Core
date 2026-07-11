@@ -1,9 +1,9 @@
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
-#include "algorithm/strategies/DynamicPenaltyBalancing.h"
+#include "algorithm/strategies/DynamicPenaltyBalancingAlgorithm.h"
 #include "algorithm/strategies/GreedyAlgorithm.h"
-#include "algorithm/strategies/HierarchicalMergeStrategy.h"
+#include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
 
 #include "adapters/CompactAdapter.h"
 #include "parser/CLIParser.h"
@@ -69,9 +69,9 @@ void register_builtin_algorithms() {
     registries::algorithms().register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
     registries::algorithms().register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
     registries::algorithms().register_algorithm("penalty_balance",
-                                                         [] { return std::make_unique<DynamicPenaltyBalancing>(); });
+                                                         [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
     registries::algorithms().register_algorithm("hierarchical",
-                                                         [] { return std::make_unique<HierarchicalMergeStrategy>(); });
+                                                         [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
     registries::algorithms().register_algorithm("idastar",
                                                          [] { return std::make_unique<IDAStarAlgorithm>(); });
 }

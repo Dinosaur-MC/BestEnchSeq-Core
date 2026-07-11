@@ -7,8 +7,8 @@
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
-#include "algorithm/strategies/DynamicPenaltyBalancing.h"
-#include "algorithm/strategies/HierarchicalMergeStrategy.h"
+#include "algorithm/strategies/DynamicPenaltyBalancingAlgorithm.h"
+#include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
 #include "types/ForgeConfig.h"
 #include <memory>
 #include <vector>
@@ -196,7 +196,7 @@ void test_astar_target_already_met() {
     std::cout << "PASS: test_astar_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
-// ─── DynamicPenaltyBalancing tests ───────────────────────────────────
+// ─── DynamicPenaltyBalancingAlgorithm tests ───────────────────────────────────
 
 void test_dpb_simple() {
     setup_registries();
@@ -206,7 +206,7 @@ void test_dpb_simple() {
     );
 
     int32_t cost = run_strategy("penalty_balance",
-        std::make_unique<DynamicPenaltyBalancing>(), ctx);
+        std::make_unique<DynamicPenaltyBalancingAlgorithm>(), ctx);
     expect(cost > 0, "dpb: simple forge should produce positive cost");
     std::cout << "PASS: test_dpb_simple (cost=" << cost << ")" << std::endl;
 }
@@ -219,12 +219,12 @@ void test_dpb_two_books() {
     );
 
     int32_t cost = run_strategy("penalty_balance",
-        std::make_unique<DynamicPenaltyBalancing>(), ctx);
+        std::make_unique<DynamicPenaltyBalancingAlgorithm>(), ctx);
     expect(cost > 0, "dpb: two books should produce positive cost");
     std::cout << "PASS: test_dpb_two_books (cost=" << cost << ")" << std::endl;
 }
 
-// ─── HierarchicalMergeStrategy tests ─────────────────────────────────
+// ─── HierarchicalMergeAlgorithm tests ─────────────────────────────────
 
 void test_hms_simple() {
     setup_registries();
@@ -234,7 +234,7 @@ void test_hms_simple() {
     );
 
     int32_t cost = run_strategy("hierarchical",
-        std::make_unique<HierarchicalMergeStrategy>(), ctx);
+        std::make_unique<HierarchicalMergeAlgorithm>(), ctx);
     expect(cost > 0, "hms: simple forge should produce positive cost");
     std::cout << "PASS: test_hms_simple (cost=" << cost << ")" << std::endl;
 }
@@ -251,7 +251,7 @@ void test_hms_many_books() {
     );
 
     int32_t cost = run_strategy("hierarchical",
-        std::make_unique<HierarchicalMergeStrategy>(), ctx);
+        std::make_unique<HierarchicalMergeAlgorithm>(), ctx);
     expect(cost > 0, "hms: many books should produce positive cost");
     std::cout << "PASS: test_hms_many_books (cost=" << cost << ")" << std::endl;
 }
@@ -266,7 +266,7 @@ void test_hms_mixed_tiers() {
     );
 
     int32_t cost = run_strategy("hierarchical",
-        std::make_unique<HierarchicalMergeStrategy>(), ctx);
+        std::make_unique<HierarchicalMergeAlgorithm>(), ctx);
     expect(cost > 0, "hms: mixed tiers should produce positive cost");
     std::cout << "PASS: test_hms_mixed_tiers (cost=" << cost << ")" << std::endl;
 }
@@ -287,11 +287,11 @@ int main() {
     test_astar_simple();
     test_astar_target_already_met();
 
-    // DynamicPenaltyBalancing
+    // DynamicPenaltyBalancingAlgorithm
     test_dpb_simple();
     test_dpb_two_books();
 
-    // HierarchicalMergeStrategy
+    // HierarchicalMergeAlgorithm
     test_hms_simple();
     test_hms_many_books();
     test_hms_mixed_tiers();

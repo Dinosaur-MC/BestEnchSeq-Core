@@ -1,7 +1,5 @@
-#include "DynamicPenaltyBalancing.h"
+#include "DynamicPenaltyBalancingAlgorithm.h"
 #include "../ExecutionContext.h"
-#include <algorithm>
-#include <climits>
 #include <cstdint>
 #include <vector>
 
@@ -10,7 +8,7 @@ using compact::ItemType;
 using compact::EnchStep;
 using compact::EnchReg;
 
-void DynamicPenaltyBalancing::execute(
+void DynamicPenaltyBalancingAlgorithm::execute(
     const std::vector<Item>& items,
     const EnchReg& reg,
     const std::vector<compact::Ench>& target,

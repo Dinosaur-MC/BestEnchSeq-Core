@@ -10,7 +10,7 @@ public:
     explicit GreedyAlgorithm(ForgeConfig cfg = {}) noexcept
         : _forge_engine(std::move(cfg)) {}
 
-    std::string_view name() const noexcept override { return "compact_greedy"; }
+    std::string_view name() const noexcept override { return "greedy"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
     void execute(

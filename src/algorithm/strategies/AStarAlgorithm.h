@@ -17,7 +17,7 @@ public:
     explicit AStarAlgorithm(ForgeConfig cfg = {}) noexcept
         : _compact_forge(std::move(cfg)) {}
 
-    std::string_view name() const noexcept override { return "compact_astar"; }
+    std::string_view name() const noexcept override { return "astar"; }
     std::string_view version() const noexcept override { return "2.0.0"; }
 
     void execute(

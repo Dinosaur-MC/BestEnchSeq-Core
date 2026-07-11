@@ -1,4 +1,4 @@
-#include "HierarchicalMergeStrategy.h"
+#include "HierarchicalMergeAlgorithm.h"
 #include "../ExecutionContext.h"
 #include <algorithm>
 #include <cstdint>
@@ -9,7 +9,7 @@ using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
 
-int32_t HierarchicalMergeStrategy::effective_multiplier(
+int32_t HierarchicalMergeAlgorithm::effective_multiplier(
     const Item& item, const EnchReg& reg) const
 {
     int32_t max_mult = 1;
@@ -20,7 +20,7 @@ int32_t HierarchicalMergeStrategy::effective_multiplier(
     return max_mult;
 }
 
-Item HierarchicalMergeStrategy::merge_group(
+Item HierarchicalMergeAlgorithm::merge_group(
     std::vector<Item>& group,
     std::vector<EnchStep>& steps,
     const EnchReg& reg,
@@ -71,7 +71,7 @@ Item HierarchicalMergeStrategy::merge_group(
     return group[0];
 }
 
-void HierarchicalMergeStrategy::execute(
+void HierarchicalMergeAlgorithm::execute(
     const std::vector<Item>& items,
     const EnchReg& reg,
     const std::vector<compact::Ench>& target,

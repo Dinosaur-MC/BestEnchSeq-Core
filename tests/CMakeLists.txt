@@ -256,8 +256,8 @@ add_executable(test_algorithm_strategies
     ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
     ${PROJECT_ROOT}/src/utils/AStarDiagnostics.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancing.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeStrategy.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancingAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeAlgorithm.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp

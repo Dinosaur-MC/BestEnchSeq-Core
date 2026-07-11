@@ -12,7 +12,7 @@ public:
     explicit DFSAlgorithm(ForgeConfig cfg = {}) noexcept
         : _compact_forge(std::move(cfg)) {}
 
-    std::string_view name() const noexcept override { return "compact_dfs"; }
+    std::string_view name() const noexcept override { return "dfs"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
     void execute(

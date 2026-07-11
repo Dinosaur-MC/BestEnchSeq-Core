@@ -4,8 +4,8 @@
 #include "algorithm/strategies/GreedyAlgorithm.h"
 #include "algorithm/strategies/DFSAlgorithm.h"
 #include "algorithm/strategies/AStarAlgorithm.h"
-#include "algorithm/strategies/DynamicPenaltyBalancing.h"
-#include "algorithm/strategies/HierarchicalMergeStrategy.h"
+#include "algorithm/strategies/DynamicPenaltyBalancingAlgorithm.h"
+#include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "adapters/CompactAdapter.h"
 #include "parser/EnchInfoParser.h"
@@ -203,7 +203,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
             continue;
         }
-        if (!no_skip && algo_name == "astar" && tc.wanted.size() > 8) {
+        if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && tc.wanted.size() > 8) {
             std::cout << "  " << algo_name << ": SKIP: too many enchants" << std::endl;
             continue;
         }
@@ -272,9 +272,9 @@ int main(int argc, char* argv[]) {
     registries::algorithms().register_algorithm("astar",
         []{ return std::make_unique<AStarAlgorithm>(); });
     registries::algorithms().register_algorithm("penalty_balance",
-        []{ return std::make_unique<DynamicPenaltyBalancing>(); });
+        []{ return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
     registries::algorithms().register_algorithm("hierarchical",
-        []{ return std::make_unique<HierarchicalMergeStrategy>(); });
+        []{ return std::make_unique<HierarchicalMergeAlgorithm>(); });
     registries::algorithms().register_algorithm("idastar",
         []{ return std::make_unique<IDAStarAlgorithm>(); });
 
