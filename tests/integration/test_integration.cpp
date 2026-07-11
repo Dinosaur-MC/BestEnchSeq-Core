@@ -68,8 +68,11 @@ void test_full_pipeline_inventory() {
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
     // Write a temp inventory file
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_inv_pipeline";
+    std::filesystem::create_directories(temp_dir);
+    auto inv_path = (temp_dir / "test_inv_pipeline.json").string();
     {
-        std::ofstream f("test_inv_pipeline.json");
+        std::ofstream f(inv_path);
         f << R"({
             "items": [
                 {"type": "book", "enchants": [{"id": "sharpness", "level": 5}], "prior_penalty": 0},
@@ -79,7 +82,7 @@ void test_full_pipeline_inventory() {
         })";
     }
 
-    const char *argv[] = {"besq", "--mode", "inventory", "--input", "test_inv_pipeline.json",
+    const char *argv[] = {"besq", "--mode", "inventory", "--input", inv_path.c_str(),
                           "--target", "diamond_sword", "--wanted", "sharpness=5"};
     CLIParser cli_parser;
     auto config = cli_parser.parse(9, const_cast<char **>(argv));
@@ -91,7 +94,7 @@ void test_full_pipeline_inventory() {
     expect(input.target_item.equipment.has_value(),
            "full_pipeline_inventory: target should have equipment");
 
-    std::filesystem::remove("test_inv_pipeline.json");
+    std::filesystem::remove_all(temp_dir);
     std::cout << "  [OK] test_full_pipeline_inventory" << std::endl;
 }
 

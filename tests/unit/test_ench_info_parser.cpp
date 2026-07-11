@@ -27,7 +27,9 @@ void create_json(const std::string &path, const std::string &content) {
 // test_parse_basic_enchantments
 // ---------------------------------------------------------------------------
 void test_parse_basic_enchantments() {
-    std::string file = "test_ench_basic.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_ench_basic";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_ench_basic.json").string();
     create_json(file, R"({
         "name": "Test Pack",
         "enchantments": [
@@ -68,14 +70,16 @@ void test_parse_basic_enchantments() {
     expect(infos[1].max_level == 2, "knockback max level");
     expect(infos[1].exclusive_set.empty(), "knockback has no exclusives");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_platform_mapping
 // ---------------------------------------------------------------------------
 void test_platform_mapping() {
-    std::string file = "test_platforms.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_platforms";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_platforms.json").string();
     create_json(file, R"({
         "enchantments": [
             { "id": "a", "max_level": 1, "multiplier": 1, "platform": "java" },
@@ -117,7 +121,7 @@ void test_platform_mapping() {
     // Missing → Java (default)
     expect(infos[9].supported_platform == MCE::Java, "missing -> Java (default)");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +129,9 @@ void test_platform_mapping() {
 // ---------------------------------------------------------------------------
 void test_tag_resolution_in_exclusive_set() {
     // Create a tag file on disk that the resolver can load
-    std::string tag_dir = "test_ench_tag_resolve";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_ench_tag_resolve";
+    std::filesystem::create_directories(temp_dir);
+    auto tag_dir = temp_dir.string();
     create_json(
         tag_dir + "/data/minecraft/tags/enchantment/exclusive_set/undead.json",
         R"({"values": ["smite", "bane_of_arthropods"]})"
@@ -135,7 +141,7 @@ void test_tag_resolution_in_exclusive_set() {
     resolver.load_from(tag_dir);
 
     // JSON that references the tag via #minecraft:exclusive_set/undead
-    std::string file = "test_ench_tags.json";
+    auto file = (temp_dir / "test_ench_tags.json").string();
     create_json(file, R"({
         "enchantments": [
             {
@@ -154,8 +160,7 @@ void test_tag_resolution_in_exclusive_set() {
     expect(infos[0].exclusive_set.contains("smite"), "resolved smite");
     expect(infos[0].exclusive_set.contains("bane_of_arthropods"), "resolved bane_of_arthropods");
 
-    std::filesystem::remove_all(tag_dir);
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +168,9 @@ void test_tag_resolution_in_exclusive_set() {
 // ---------------------------------------------------------------------------
 void test_inline_tag_resolution() {
     // JSON with inline tags and a reference to them
-    std::string file = "test_inline_tags.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_inline_tags";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_inline_tags.json").string();
     create_json(file, R"({
         "tags": {
             "enchantment": {
@@ -191,14 +198,16 @@ void test_inline_tag_resolution() {
     expect(infos[0].exclusive_set.contains("smite"), "inline resolved smite");
     expect(infos[0].exclusive_set.contains("bane_of_arthropods"), "inline resolved bane_of_arthropods");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_missing_fields_skipped
 // ---------------------------------------------------------------------------
 void test_missing_fields_skipped() {
-    std::string file = "test_missing_fields.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_missing_fields";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_missing_fields.json").string();
     create_json(file, R"({
         "enchantments": [
             { "id": "valid",          "max_level": 3, "multiplier": 2 },
@@ -217,14 +226,16 @@ void test_missing_fields_skipped() {
     expect(infos[0].max_level == 3, "max_level = 3");
     expect(infos[0].multiplier == 2, "multiplier = 2");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_limited_level_default
 // ---------------------------------------------------------------------------
 void test_limited_level_default() {
-    std::string file = "test_limited.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_limited";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_limited.json").string();
     create_json(file, R"({
         "enchantments": [
             { "id": "explicit", "max_level": 5, "limited_level": 3, "multiplier": 1 },
@@ -239,14 +250,16 @@ void test_limited_level_default() {
     expect(infos[0].limited_level == 3, "explicit limited_level = 3");
     expect(infos[1].limited_level == 5, "defaulted limited_level = max_level = 5");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_name_fallback
 // ---------------------------------------------------------------------------
 void test_name_fallback() {
-    std::string file = "test_name_fallback.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_name_fallback";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_name_fallback.json").string();
     create_json(file, R"({
         "enchantments": [
             { "id": "my_ench", "max_level": 1, "multiplier": 1 }
@@ -259,14 +272,16 @@ void test_name_fallback() {
     expect(infos.size() == 1, "should parse 1 entry");
     expect(infos[0].name == "my_ench", "name should fallback to id");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_metadata_parsing
 // ---------------------------------------------------------------------------
 void test_metadata_parsing() {
-    std::string file = "test_metadata.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_metadata";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_metadata.json").string();
     create_json(file, R"({
         "name": "My Custom Pack",
         "description": "Adds fantasy enchantments",
@@ -287,14 +302,16 @@ void test_metadata_parsing() {
     expect(metadata.author == "AuthorName", "pack author");
     expect(metadata.version == "1.0.0", "pack version");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_null_metadata_does_not_crash
 // ---------------------------------------------------------------------------
 void test_null_metadata_does_not_crash() {
-    std::string file = "test_null_meta.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_null_meta";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_null_meta.json").string();
     create_json(file, R"({
         "name": "Pack",
         "enchantments": [
@@ -306,14 +323,16 @@ void test_null_metadata_does_not_crash() {
     auto infos = EnchInfoParser::parse_native_json(file, resolver, nullptr);
     expect(infos.size() == 1, "null metadata should not crash");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_empty_enchantments_array
 // ---------------------------------------------------------------------------
 void test_empty_enchantments_array() {
-    std::string file = "test_empty_arr.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_empty_arr";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_empty_arr.json").string();
     create_json(file, R"({
         "enchantments": []
     })");
@@ -322,14 +341,16 @@ void test_empty_enchantments_array() {
     auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.empty(), "empty array should return empty vector");
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_missing_enchantments_key
 // ---------------------------------------------------------------------------
 void test_missing_enchantments_key() {
-    std::string file = "test_no_ench_key.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_no_ench_key";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_no_ench_key.json").string();
     create_json(file, R"({
         "name": "No Enchantments Here"
     })");
@@ -338,7 +359,7 @@ void test_missing_enchantments_key() {
     auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.empty(), "missing enchantments key should return empty vector");
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +367,9 @@ void test_missing_enchantments_key() {
 // ---------------------------------------------------------------------------
 void test_applicable_equipment_parsing() {
     registries::categories().initialize();
-    std::string file = "test_equip.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_equip";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_equip.json").string();
     create_json(file, R"({
         "enchantments": [
             {
@@ -373,14 +396,16 @@ void test_applicable_equipment_parsing() {
     expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE), "contains axe");
     expect(infos[1].applicable_category_ids.empty(), "custom equipment skipped (not in registry)");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_equipment_tag_resolution
 // ---------------------------------------------------------------------------
 void test_equipment_tag_resolution() {
-    std::string tag_dir = "test_ench_equip_tags";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_ench_equip_tags";
+    std::filesystem::create_directories(temp_dir);
+    auto tag_dir = temp_dir.string();
     create_json(
         tag_dir + "/data/minecraft/tags/item/weapons.json",
         R"({"values": ["sword", "axe"]})"
@@ -389,7 +414,7 @@ void test_equipment_tag_resolution() {
     TagResolver resolver;
     resolver.load_from(tag_dir);
 
-    std::string file = "test_equip_tags.json";
+    auto file = (temp_dir / "test_equip_tags.json").string();
     create_json(file, R"({
         "enchantments": [
             {
@@ -408,15 +433,16 @@ void test_equipment_tag_resolution() {
     expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD), "resolved sword");
     expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE), "resolved axe");
 
-    std::filesystem::remove_all(tag_dir);
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_parse_method_auto_detect_json
 // ---------------------------------------------------------------------------
 void test_parse_method_auto_detect_json() {
-    std::string file = "test_auto_detect.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_auto_detect";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_auto_detect.json").string();
     create_json(file, R"({
         "enchantments": [
             { "id": "a", "max_level": 1, "multiplier": 1 },
@@ -430,14 +456,16 @@ void test_parse_method_auto_detect_json() {
     expect(infos.size() == 2, "parse() should auto-detect JSON and return 2 entries");
     expect(infos[0].name_id == "a", "first ench via parse()");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_cyclic_inline_tag
 // ---------------------------------------------------------------------------
 void test_cyclic_inline_tag() {
-    std::string file = "test_cyclic_inline.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_cyclic_inline";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_cyclic_inline.json").string();
     create_json(file, R"({
         "tags": {
             "enchantment": {
@@ -463,14 +491,16 @@ void test_cyclic_inline_tag() {
     // The result may be empty due to cycle detection
     expect(infos[0].exclusive_set.empty(), "cyclic inline tag should resolve to empty");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_csv_basic_parsing
 // ---------------------------------------------------------------------------
 void test_csv_basic_parsing() {
-    std::string file = "test_ench_csv.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_ench_csv";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_ench_csv.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
@@ -504,14 +534,16 @@ void test_csv_basic_parsing() {
     expect(infos[1].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
            "csv: second contains sword");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_csv_missing_required_columns
 // ---------------------------------------------------------------------------
 void test_csv_missing_required_columns() {
-    std::string file = "test_csv_missing_cols.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_csv_missing_cols";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_csv_missing_cols.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,platform\n";
@@ -523,14 +555,16 @@ void test_csv_missing_required_columns() {
     auto infos = EnchInfoParser::parse_native_csv(file, resolver);
     expect(infos.empty(), "csv missing required columns: empty result");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_csv_with_tag_references
 // ---------------------------------------------------------------------------
 void test_csv_with_tag_references() {
-    std::string tag_dir = "test_csv_tags";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_csv_tags";
+    std::filesystem::create_directories(temp_dir);
+    auto tag_dir = temp_dir.string();
     create_json(
         tag_dir + "/data/minecraft/tags/enchantment/exclusive_set/undead.json",
         R"({"values": ["smite", "bane_of_arthropods"]})"
@@ -539,7 +573,7 @@ void test_csv_with_tag_references() {
     TagResolver resolver;
     resolver.load_from(tag_dir);
 
-    std::string file = "test_csv_tags.csv";
+    auto file = (temp_dir / "test_csv_tags.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
@@ -555,15 +589,16 @@ void test_csv_with_tag_references() {
     expect(infos[0].exclusive_set.contains("bane_of_arthropods"),
            "csv with tags: contains bane_of_arthropods");
 
-    std::filesystem::remove_all(tag_dir);
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_csv_empty_file
 // ---------------------------------------------------------------------------
 void test_csv_empty_file() {
-    std::string file = "test_csv_empty.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_csv_empty";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_csv_empty.csv").string();
     {
         std::ofstream f(file);
         f << "id,name,platform,max_level,limited_level,multiplier,exclusive_set,"
@@ -574,14 +609,16 @@ void test_csv_empty_file() {
     auto infos = EnchInfoParser::parse_native_csv(file, resolver);
     expect(infos.empty(), "csv with only header: empty result");
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_mc_official_basic
 // ---------------------------------------------------------------------------
 void test_mc_official_basic() {
-    std::string dir = "test_mc_off";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_mc_off";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_mc_off").string();
     std::filesystem::create_directories(dir + "/data/minecraft/enchantment");
 
     create_json(dir + "/data/minecraft/enchantment/sharpness.json", R"({
@@ -613,14 +650,16 @@ void test_mc_official_basic() {
     expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
            "mc: applicable equipment matches sword");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_mc_official_multiple_enchantments
 // ---------------------------------------------------------------------------
 void test_mc_official_multiple_enchantments() {
-    std::string dir = "test_mc_off_multi";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_mc_off_multi";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_mc_off_multi").string();
     std::filesystem::create_directories(dir + "/data/minecraft/enchantment");
 
     create_json(dir + "/data/minecraft/enchantment/sharpness.json", R"({
@@ -659,14 +698,16 @@ void test_mc_official_multiple_enchantments() {
     expect(protection->exclusive_set.size() == 2, "mc multi: protection 2 exclusives");
     expect(protection->applicable_category_ids.size() == 2, "mc multi: protection 2 equipments");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_mc_official_invalid_entries_skipped
 // ---------------------------------------------------------------------------
 void test_mc_official_invalid_entries_skipped() {
-    std::string dir = "test_mc_off_skip";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_mc_off_skip";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_mc_off_skip").string();
     std::filesystem::create_directories(dir + "/data/minecraft/enchantment");
 
     // Valid
@@ -700,14 +741,16 @@ void test_mc_official_invalid_entries_skipped() {
     expect(infos.size() == 1, "mc skip: only 1 valid enchantment");
     expect(infos[0].name_id == "minecraft:valid", "mc skip: valid one parsed");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
 // test_mc_official_namespaced_name
 // ---------------------------------------------------------------------------
 void test_mc_official_namespaced_name() {
-    std::string dir = "test_mc_off_ns";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_mc_off_ns";
+    std::filesystem::create_directories(temp_dir);
+    std::string dir = (temp_dir / "test_mc_off_ns").string();
     std::filesystem::create_directories(dir + "/data/custommod/enchantment");
 
     create_json(dir + "/data/custommod/enchantment/fire_aspect.json", R"({
@@ -725,7 +768,7 @@ void test_mc_official_namespaced_name() {
     expect(infos[0].multiplier == 4, "mc ns: anvil_cost");
     expect(infos[0].max_level == 2, "mc ns: max_level");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -747,7 +790,9 @@ void test_to_json_round_trip() {
     std::string json_str = EnchInfoParser::to_json(original);
 
     // Write to temp file, parse back
-    std::string file = "test_rt_ench.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_ench_json";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_rt_ench.json").string();
     {
         std::ofstream f(file);
         f << json_str;
@@ -770,7 +815,7 @@ void test_to_json_round_trip() {
                "ench JSON round-trip: exclusive_set size");
     }
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -792,7 +837,9 @@ void test_to_csv_round_trip() {
     std::string csv_str = EnchInfoParser::to_csv(original);
 
     // Write to temp file, parse back
-    std::string file = "test_rt_ench.csv";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_ench_csv";
+    std::filesystem::create_directories(temp_dir);
+    auto file = (temp_dir / "test_rt_ench.csv").string();
     {
         std::ofstream f(file);
         f << csv_str;
@@ -811,7 +858,7 @@ void test_to_csv_round_trip() {
                "ench CSV round-trip: exclusive_set size");
     }
 
-    std::filesystem::remove(file);
+    std::filesystem::remove_all(temp_dir);
 }
 
 // ---------------------------------------------------------------------------
@@ -826,7 +873,9 @@ void test_export_mc_official_round_trip() {
                           std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
 
     // Export to MC official format
-    std::string output_dir = "test_rt_mc_off";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_mc_off";
+    std::filesystem::create_directories(temp_dir);
+    std::string output_dir = (temp_dir / "output").string();
     EnchInfoParser::export_to_mc_official(original, output_dir);
 
     // Parse back
@@ -840,7 +889,7 @@ void test_export_mc_official_round_trip() {
         expect(parsed[0].max_level == original[0].max_level, "mc official round-trip: max_level");
     }
 
-    std::filesystem::remove_all(output_dir);
+    std::filesystem::remove_all(temp_dir);
 }
 
 } // namespace

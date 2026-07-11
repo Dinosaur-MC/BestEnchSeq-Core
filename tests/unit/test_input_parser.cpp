@@ -78,7 +78,9 @@ void create_json(const std::string &path, const std::string &content) {
 // ---------------------------------------------------------------------------
 
 void test_parse_inventory_json() {
-    std::string path = "test_inv_basic.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_inv_basic";
+    std::filesystem::create_directories(temp_dir);
+    auto path = (temp_dir / "test_inv_basic.json").string();
     create_json(path, R"({
         "items": [
             {"type": "book", "enchants": [{"id": "sharpness", "level": 5}], "prior_penalty": 0},
@@ -117,7 +119,7 @@ void test_parse_inventory_json() {
     expect(items[2].prior_penalty == 2,
            "parse_inventory: item[2] prior_penalty should be 2");
 
-    std::filesystem::remove(path);
+    std::filesystem::remove_all(temp_dir);
     std::cout << "  [OK] test_parse_inventory_json" << std::endl;
 }
 
@@ -290,7 +292,9 @@ void test_assemble_input_direct_mode() {
 }
 
 void test_inventory_missing_type_field() {
-    std::string path = "test_inv_no_type.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_inv_no_type";
+    std::filesystem::create_directories(temp_dir);
+    auto path = (temp_dir / "test_inv_no_type.json").string();
     create_json(path, R"({
         "items": [
             {"enchants": [{"id": "sharpness", "level": 5}], "prior_penalty": 1},
@@ -303,12 +307,14 @@ void test_inventory_missing_type_field() {
     expect(items.size() == 1,
            "inventory_missing_type: only the explicit book should be parsed");
 
-    std::filesystem::remove(path);
+    std::filesystem::remove_all(temp_dir);
     std::cout << "  [OK] test_inventory_missing_type_field" << std::endl;
 }
 
 void test_empty_inventory() {
-    std::string path = "test_inv_empty.json";
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_inv_empty";
+    std::filesystem::create_directories(temp_dir);
+    auto path = (temp_dir / "test_inv_empty.json").string();
     create_json(path, R"({
         "items": []
     })");
@@ -318,8 +324,87 @@ void test_empty_inventory() {
     expect(items.empty(),
            "empty_inventory: should have no items");
 
-    std::filesystem::remove(path);
+    std::filesystem::remove_all(temp_dir);
     std::cout << "  [OK] test_empty_inventory" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// Boundary tests (3.8)
+// ---------------------------------------------------------------------------
+
+void test_inventory_negative_ppn() {
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_neg_ppn";
+    std::filesystem::create_directories(temp_dir);
+    auto path = (temp_dir / "test_neg_ppn.json").string();
+    create_json(path, R"({
+        "items": [
+            {"type": "book", "enchants": [{"id": "sharpness", "level": 5}], "prior_penalty": -3}
+        ]
+    })");
+
+    bool threw = false;
+    try {
+        auto items = InputParser::parse_inventory(path, test_equipment_registry);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect(threw, "negative_ppn: should throw on negative prior_penalty");
+
+    std::filesystem::remove_all(temp_dir);
+    std::cout << "  [OK] test_inventory_negative_ppn" << std::endl;
+}
+
+void test_inventory_durability_exceeds_max() {
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_durability_exceeds";
+    std::filesystem::create_directories(temp_dir);
+    auto path = (temp_dir / "test_durability_exceeds.json").string();
+    create_json(path, R"({
+        "items": [
+            {"type": "equipment", "id": "diamond_sword", "durability": 9999, "prior_penalty": 0}
+        ]
+    })");
+
+    auto items = InputParser::parse_inventory(path, test_equipment_registry);
+
+    expect(items.size() == 1, "durability_exceeds: should parse 1 item");
+    expect(items[0].durability == 9999,
+           "durability_exceeds: durability should be 9999 as provided");
+
+    std::filesystem::remove_all(temp_dir);
+    std::cout << "  [OK] test_inventory_durability_exceeds_max" << std::endl;
+}
+
+void test_inventory_multi_ench_book() {
+    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_multi_ench";
+    std::filesystem::create_directories(temp_dir);
+    auto path = (temp_dir / "test_multi_ench.json").string();
+    create_json(path, R"({
+        "items": [
+            {"type": "book", "enchants": [{"id": "sharpness", "level": 5}, {"id": "knockback", "level": 2}], "prior_penalty": 0}
+        ]
+    })");
+
+    auto items = InputParser::parse_inventory(path, test_equipment_registry);
+
+    expect(items.size() == 1, "multi_ench_book: should parse 1 item");
+    expect(items[0].is_book(), "multi_ench_book: should be a book");
+    expect(items[0].enchantments.size() == 2,
+           "multi_ench_book: should have 2 enchantments");
+
+    auto it = items[0].enchantments.find_by_id(0);
+    expect(it != items[0].enchantments.end(),
+           "multi_ench_book: should contain sharpness");
+    expect(it->level == 5,
+           "multi_ench_book: sharpness level should be 5");
+
+    it = items[0].enchantments.find_by_id(1);
+    expect(it != items[0].enchantments.end(),
+           "multi_ench_book: should contain knockback");
+    expect(it->level == 2,
+           "multi_ench_book: knockback level should be 2");
+
+    std::filesystem::remove_all(temp_dir);
+    std::cout << "  [OK] test_inventory_multi_ench_book" << std::endl;
 }
 
 } // anonymous namespace
@@ -339,6 +424,9 @@ int main() {
         test_assemble_input_direct_mode();
         test_inventory_missing_type_field();
         test_empty_inventory();
+        test_inventory_negative_ppn();
+        test_inventory_durability_exceeds_max();
+        test_inventory_multi_ench_book();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
