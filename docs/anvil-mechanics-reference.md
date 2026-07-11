@@ -228,7 +228,7 @@ repair_cost = 1 × unit
 - 每单位材料恢复最多 25% 总耐久度
 - 每次操作费用 +1 级
 
-注意：`ignore_repair_cost` 配置项已预留，后续用于忽略修复费用。当前 ForgeEngine 尚未实现 repair cost 计算。
+注意：`ignore_repair_cost` 配置项控制是否计入修复费用（默认 false 表示计入）。当前实现仅覆盖 equip+equip 修复（+2 级），equip+material 修复尚未实现。
 
 ---
 

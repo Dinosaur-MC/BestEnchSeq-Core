@@ -48,6 +48,17 @@ int32_t ForgeEngine::forge_into(compact::Item& target, const compact::Item& sacr
     if (!_config.ignore_penalty_cost)
         cost += penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
 
+    // Repair cost: equip + equip → +2 if target not at full durability.
+    if (!_config.ignore_repair_cost) {
+        auto max_dur = reg.get_target_equip().max_durability;
+        if (target.dur < max_dur
+            && target.type == compact::ItemType::Equip
+            && sacrifice.type == compact::ItemType::Equip) {
+            target.dur = std::min(target.dur + sacrifice.dur + max_dur * 12 / 100, max_dur);
+            cost += 2;
+        }
+    }
+
     auto plat = _config.platform;
     bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
 
