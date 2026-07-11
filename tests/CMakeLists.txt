@@ -430,3 +430,16 @@ add_test(NAME test_serializer COMMAND test_serializer)
 set_tests_properties(test_serializer PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_env_util.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_env_util.cpp")
+endif()
+
+add_executable(test_env_util
+    unit/test_env_util.cpp
+)
+target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_env_util COMMAND test_env_util)
+set_tests_properties(test_env_util PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)

@@ -16,7 +16,7 @@ namespace {
     constexpr int64_t RATIO_ITEMS_POOL = 5;
 
     int64_t available() noexcept {
-        return util::get_env_int("BESQ_MEMORY_MB", 2048);
+        return get_env<int64_t>("BESQ_MEMORY_MB", 2048);
     }
 }
 

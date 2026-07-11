@@ -1,68 +1,104 @@
 #pragma once
+
 #define _CRT_SECURE_NO_WARNINGS
-#include <cstdint>
+
+#include <charconv>
 #include <cstdlib>
-#include <cctype>
-#include <limits>
+#include <string>
+#include <system_error>
+#include <type_traits>
 
-namespace util {
+namespace {
+inline const char *getenv_safe(const char *name) noexcept {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+    return std::getenv(name);
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+}
+} // namespace
 
-/// Read an environment variable as a signed 64-bit integer.
+/// Read an environment variable as a string.
 ///
-/// Returns \p default_val when:
-///   - The variable is not set (or set to an empty string).
-///   - The value is not a valid integer (non-digit characters, empty).
-///   - The value overflows int64_t.
-///
-/// Leading/trailing whitespace is NOT accepted (rejected as invalid)
-/// to avoid ambiguity with empty/unset variables.
-///
-/// Example:
-/// @code
-///   int64_t mb = util::get_env_int("BESQ_MEMORY_MB", 2048);
-/// @endcode
-inline int64_t get_env_int(const char* name, int64_t default_val) noexcept {
-    if (!name || !name[0]) return default_val;
-
-    const char* raw = std::getenv(name);
-    if (!raw || !raw[0]) return default_val;
-
-    // Parse with full validation
-    const char* p = raw;
-
-    // Optional sign
-    bool negative = false;
-    if (*p == '-') { negative = true; ++p; }
-    else if (*p == '+') { ++p; }
-
-    // Must have at least one digit
-    if (!*p || !std::isdigit(static_cast<unsigned char>(*p)))
+/// Returns \p default_val when the variable is not set or the name is
+/// null/empty.  An empty-string variable is treated as set (returns "").
+inline std::string get_env_str(const char *name, const std::string &default_val = "") noexcept {
+    if (!name || !name[0])
         return default_val;
-
-    // Accumulate with overflow check
-    int64_t val = 0;
-    constexpr int64_t MAX_PRE_DIV = std::numeric_limits<int64_t>::max() / 10;
-    while (*p && std::isdigit(static_cast<unsigned char>(*p))) {
-        int d = *p - '0';
-        if (val > MAX_PRE_DIV)
-            return default_val;          // would overflow on next multiply
-        val *= 10;
-        if (val > std::numeric_limits<int64_t>::max() - d)
-            return default_val;          // would overflow on addition
-        val += d;
-        ++p;
-    }
-
-    // Reject trailing non-digit characters (e.g. "123abc")
-    if (*p) return default_val;
-
-    if (negative)
-        val = -val;
-
-    // Reject zero / negative for physical quantities
-    if (val <= 0) return default_val;
-
-    return val;
+    const char *raw = getenv_safe(name);
+    if (!raw)
+        return default_val;
+    return std::string(raw); // construct immediately; raw pointer is ephemeral
 }
 
-} // namespace util
+/// Read an environment variable and convert to type \p T.
+///
+/// Supported types:
+///   - ``std::string``       — raw value
+///   - ``bool``              — ``"true"``/``"1"`` → true, ``"false"``/``"0"`` → false
+///   - Arithmetic types      — parsed via ``std::from_chars``
+///   - Any other type        — always returns \p default_val
+///
+/// Returns \p default_val when the variable is unset, empty, or
+/// conversion fails.
+///
+/// Example (built-in conversions):
+/// @code
+///   auto mb   = get_env<int64_t>("BESQ_MEMORY_MB", 2048);
+///   auto name = get_env<std::string>("BESQ_PROFILE", "default");
+///   auto flag = get_env<bool>("BESQ_VERBOSE", false);
+/// @endcode
+///
+/// When a \p convert callable is provided, it receives the string value
+/// and must return \p T.  Exceptions thrown by the converter are caught
+/// and cause \p default_val to be returned.
+///
+/// Example (custom converter):
+/// @code
+///   auto data = get_env<MyType>("VAR", MyType{},
+///                   [](std::string_view sv) { return MyType::parse(sv); });
+/// @endcode
+///   auto data = util::get_env<MyType>("VAR", MyType{},
+///                       [](std::string_view sv) { return MyType::parse(sv); });
+/// @endcode
+template <typename T> T get_env(const char *name, T default_val) noexcept {
+    auto raw = get_env_str(name, std::string{});
+    if (raw.empty())
+        return default_val;
+
+    if constexpr (std::is_same_v<T, std::string>) {
+        return raw;
+    } else if constexpr (std::is_same_v<T, bool>) {
+        if (raw == "true" || raw == "1")
+            return true;
+        if (raw == "false" || raw == "0")
+            return false;
+        return default_val;
+    } else if constexpr (std::is_arithmetic_v<T>) {
+        T val{};
+        auto [ptr, ec] = std::from_chars(raw.data(), raw.data() + raw.size(), val);
+        if (ec == std::errc{} && ptr == raw.data() + raw.size())
+            return val;
+        return default_val;
+    } else {
+        return default_val;
+    }
+}
+
+/// Overload with a custom converter.
+///
+/// The converter receives ``std::string_view`` and must return \p T.
+/// Exceptions are caught and cause \p default_val to be returned.
+template <typename T, typename Converter> T get_env(const char *name, T default_val, Converter &&convert) noexcept {
+    auto raw = get_env_str(name, std::string{});
+    if (raw.empty())
+        return default_val;
+    try {
+        return std::forward<Converter>(convert)(std::string_view{raw});
+    } catch (...) {
+        return default_val;
+    }
+}
