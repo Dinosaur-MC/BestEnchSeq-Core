@@ -924,9 +924,28 @@ def post_process_enchantments(ench: list[dict],
         e["is_treasure"] = e["id"] in treasure_ids
 
 
+# ── step 4e: collect categories ────────────────────────────────────────
+
+def collect_categories(ench: list[dict], eq: list[dict]) -> list[dict]:
+    """Collect all unique equipment category names from enchantment
+    ``applicable_equipment`` lists and equipment ``category`` fields.
+    Returns a sorted list of category name strings.
+    """
+    cats: set[str] = set()
+    for e in ench:
+        for cat in e.get("applicable_equipment", []):
+            cats.add(cat)
+    for e in eq:
+        cat = e.get("category")
+        if cat:
+            cats.add(cat)
+    return sorted(cats)
+
+
 # ── step 5: output ──────────────────────────────────────────────────────
 
 def write_output(version: str, ench: list[dict], eq: list[dict],
+                 cats: list[dict],
                  tags: dict[str, list[str]]) -> None:
     # Keep enchantment/ tags and exclusive_set tags
     kept: dict[str, list[str]] = {}
@@ -940,6 +959,7 @@ def write_output(version: str, ench: list[dict], eq: list[dict],
         "author": "BestEnchSeq",
         "version": "2.0.0",
         "schema_version": "2.1.0",
+        "categories": cats,
         "enchantments": ench,
         "equipments": eq,
         "tags": kept,
@@ -1014,6 +1034,9 @@ def main() -> None:
 
     print(f"\n  Enchantments: {len(ench)}  Equipments: {len(eq)}")
 
+    print("Collecting categories…")
+    cats = collect_categories(ench, eq)
+
     # Validate
     no_eq = [e["id"] for e in ench if not e["applicable_equipment"]]
     if no_eq:
@@ -1022,7 +1045,7 @@ def main() -> None:
     print(f"  Enchantments with empty exclusive_set: {len(no_excl)}")
 
     print("\nGenerating output…")
-    write_output(release, ench, eq, tags)
+    write_output(release, ench, eq, cats, tags)
     print("Done!")
 
 
