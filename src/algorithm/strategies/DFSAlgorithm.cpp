@@ -37,6 +37,11 @@ int32_t DFSAlgorithm::_greedy_bound(
         total_cost += cost;
     }
 
+    for (const auto& t : _target) {
+        auto it = equip.enchs.find(t.id);
+        if (it == equip.enchs.end() || it->level < t.level)
+            return INT32_MAX;
+    }
     return total_cost;
 }
 
@@ -118,7 +123,7 @@ void DFSAlgorithm::execute(
     _best_cost = INT32_MAX;
     _best_steps.clear();
     _current_steps.clear();
-    _visited.clear();
+    _visited_best.clear();
     _stack.clear();
     _frame_pairs.clear();
     _solutions_found = 0;
@@ -156,13 +161,14 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         }
 
         {
-            auto [it, inserted] = _visited.insert(_stack[_frame_idx].items);
-            if (!inserted) {
+            auto it = _visited_best.find(_stack[_frame_idx].items);
+            if (it != _visited_best.end() && it->second <= _stack[_frame_idx].cost_so_far) {
                 ctx.incr_nodes_pruned();
                 _stack.pop_back();
                 _frame_pairs.pop_back();
                 continue;
             }
+            _visited_best[_stack[_frame_idx].items] = _stack[_frame_idx].cost_so_far;
         }
 
         if (_meets_target(_stack[_frame_idx].items[0])) {

@@ -5,7 +5,7 @@
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <deque>
-#include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 class DFSAlgorithm : public IAlgorithm {
@@ -75,7 +75,7 @@ private:
     std::vector<compact::EnchStep> _best_steps;
     std::vector<compact::EnchStep> _current_steps;
 
-    std::unordered_set<std::vector<compact::Item>, ItemVectorHash> _visited;
+    std::unordered_map<std::vector<compact::Item>, int32_t, ItemVectorHash> _visited_best;
     std::vector<DFSFrame> _stack;
     std::deque<std::vector<ForgePair>> _frame_pairs;
 

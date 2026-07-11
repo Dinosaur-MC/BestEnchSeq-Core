@@ -97,6 +97,22 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         ctx.report_progress(progress, ProgressStatus::MergingGroups);
     }
 
+    // Verify target achieved
+    {
+        bool met = true;
+        for (const auto& t : target) {
+            auto it = mut_items[0].enchs.find(t.id);
+            if (it == mut_items[0].enchs.end() || it->level < t.level) {
+                met = false;
+                break;
+            }
+        }
+        if (!met) {
+            ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+            return;
+        }
+    }
+
     ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }

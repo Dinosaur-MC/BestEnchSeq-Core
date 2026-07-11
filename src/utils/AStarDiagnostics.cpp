@@ -28,7 +28,7 @@ void AStarDiagnostics::write() const {
         rand_str[i] = "0123456789abcdef"[rd() % 16];
     rand_str[8] = '\0';
 
-    std::string path = std::string("logs/auto/astar_") + ts + "_" + rand_str + ".log";
+    std::string path = std::string("logs/diag/astar_") + ts + "_" + rand_str + ".log";
     std::ofstream ofs(path);
     if (!ofs) return;
 

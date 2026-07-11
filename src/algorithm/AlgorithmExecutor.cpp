@@ -85,6 +85,11 @@ void AlgorithmExecutor::resume() {
 
 void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
+    // Don't clobber Completed — results would be lost
+    if (prev == AlgorithmState::Completed) {
+        _state.store(AlgorithmState::Completed, std::memory_order_release);
+        return;
+    }
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
         _ctx->cancel();
         _ctx->resume();

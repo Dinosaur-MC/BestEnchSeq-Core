@@ -112,6 +112,7 @@ void HierarchicalMergeAlgorithm::execute(
             for (size_t idx_idx = 1; idx_idx < indices.size(); ++idx_idx) {
                 size_t sac_idx = indices[idx_idx];
                 if (sac_idx >= books.size()) continue;
+                if (sac_idx == indices.back()) continue; // self-forge guard — don't forge base into itself
                 if (!_forge_engine.is_forgeable(base, books[sac_idx]))
                     continue;
 

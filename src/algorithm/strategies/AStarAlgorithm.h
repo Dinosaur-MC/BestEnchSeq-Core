@@ -3,7 +3,6 @@
 #include "../forge/ForgeEngine.h"
 #include "algorithm/components/AStarMemoryBudget.h"
 #include "utils/AStarDiagnostics.hpp"
-#include "utils/HashUtils.hpp"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <unordered_map>
@@ -35,29 +34,20 @@ private:
     // ─── Item pool (deduplicated) ─────────────────────────────────────────
     class ItemPool {
         std::vector<compact::Item> _items;
-        std::unordered_map<size_t, ItemID> _dedup;  // hash → existing ItemID
+        std::unordered_map<compact::Item, ItemID> _dedup;  // item → existing ItemID
         size_t _max_items{10'000'000};
     public:
         void set_max(size_t n) noexcept { _max_items = n; }
 
         ItemID add(compact::Item item) {
-            // Dedup: check if identical item already exists
-            size_t h = static_cast<size_t>(item.type);
-            hash_combine(h, item.enchs.hash());
-            hash_combine(h, static_cast<size_t>(item.ppn));
-            hash_combine(h, static_cast<size_t>(item.dur));
-            auto it = _dedup.find(h);
-            if (it != _dedup.end()) {
-                const auto& existing = _items[it->second];
-                if (existing.type == item.type && existing.ppn == item.ppn
-                    && existing.dur == item.dur && existing.enchs == item.enchs)
-                    return it->second;
-            }
+            auto it = _dedup.find(item);
+            if (it != _dedup.end())
+                return it->second;
 
             if (_items.size() >= _max_items) return INVALID_ITEM_ID;
             ItemID id = static_cast<ItemID>(_items.size());
             _items.push_back(std::move(item));
-            _dedup[h] = id;
+            _dedup[_items.back()] = id;
             return id;
         }
 

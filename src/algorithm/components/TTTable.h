@@ -25,12 +25,15 @@ public:
 
     /// Lookup: returns stored g value pointer if hit, nullptr otherwise.
     const int32_t* lookup(size_t hash) const noexcept {
-        for (size_t i = hash & (BUCKETS - 1); ; i = (i + 1) & (BUCKETS - 1)) {
+        for (size_t i = hash & (BUCKETS - 1), probe = 0;
+             probe < BUCKETS;
+             i = (i + 1) & (BUCKETS - 1), ++probe) {
             const auto& e = _table[i];
             if (!e.occupied) return nullptr;
             if (e.epoch == _epoch && e.hash == hash) return &e.g;
             // stale entry or hash collision → keep probing
         }
+        return nullptr;  // all slots occupied or all stale
     }
 
     /// Insert or update: stores hash → g if g is cheaper.
@@ -39,7 +42,9 @@ public:
         if (_total_occupied > static_cast<size_t>(BUCKETS * COMPACT_THRESHOLD))
             _compact();
 
-        for (size_t i = hash & (BUCKETS - 1); ; i = (i + 1) & (BUCKETS - 1)) {
+        for (size_t i = hash & (BUCKETS - 1), probe = 0;
+             probe < BUCKETS;
+             i = (i + 1) & (BUCKETS - 1), ++probe) {
             auto& e = _table[i];
 
             // Existing entry from this epoch — update if cheaper.
@@ -63,6 +68,27 @@ public:
             ++_live_count;
             return;
         }
+
+        // All slots occupied or all stale — force a compaction and retry once.
+        // const_cast is safe: _compact modifies epoch/occupancy but not
+        // the logical hash-payload mapping visible to concurrent readers.
+        const_cast<TTTable*>(this)->_compact();
+        for (size_t i = hash & (BUCKETS - 1), probe = 0;
+             probe < BUCKETS;
+             i = (i + 1) & (BUCKETS - 1), ++probe) {
+            auto& e = _table[i];
+            if (!e.occupied) {
+                e.hash = hash;
+                e.g = g;
+                e.epoch = _epoch;
+                e.occupied = true;
+                ++_total_occupied;
+                ++_live_count;
+                return;
+            }
+        }
+        // Should never reach here after compaction (BUCKETS > 0, compaction
+        // leaves at most _live_count < BUCKETS occupied entries).
     }
 
     /// O(1) clear: increment epoch.  Previous entries become stale and
