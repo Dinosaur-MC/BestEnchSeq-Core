@@ -1,5 +1,5 @@
 ﻿#include "framework/test_utils.h"
-#include "parsers/OutputFormatter.h"
+#include "adapters/OutputFormatter.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
 #include "types/EnchInfo.h"

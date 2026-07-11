@@ -141,7 +141,7 @@ set_tests_properties(test_input_parser PROPERTIES
 
 add_executable(test_output_formatter
     unit/test_output_formatter.cpp
-    ${PROJECT_ROOT}/src/parsers/OutputFormatter.cpp
+    ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
@@ -165,7 +165,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
-    ${PROJECT_ROOT}/src/parsers/OutputFormatter.cpp
+    ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
     # I/O layer
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp

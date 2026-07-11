@@ -2,7 +2,7 @@
 #include "parsers/EnchInfoParser.h"
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
-#include "parsers/OutputFormatter.h"
+#include "adapters/OutputFormatter.h"
 #include "utils/ParserUtils.h"
 #include "adapters/RegistryResolver.h"
 #include "parsers/TagResolver.h"

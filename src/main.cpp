@@ -12,7 +12,7 @@
 #include "utils/Logger.hpp"
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
-#include "parsers/OutputFormatter.h"
+#include "adapters/OutputFormatter.h"
 #include "adapters/RegistryResolver.h"
 #include "parsers/TagResolver.h"
 #include "registries/AlgorithmRegistry.h"
