@@ -72,16 +72,16 @@ void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &t
     registries::equipment().initialize(combined_eq);
 }
 
-void register_builtin_algorithms() {
-    registries::algorithms().register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
-    registries::algorithms().register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
-    registries::algorithms().register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
-    registries::algorithms().register_algorithm("penalty_balance",
-                                                         [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-    registries::algorithms().register_algorithm("hierarchical",
-                                                         [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
-    registries::algorithms().register_algorithm("idastar",
-                                                         [] { return std::make_unique<IDAStarAlgorithm>(); });
+void register_builtin_algorithms(AlgorithmRegistry &registry) {
+    registry.register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
+    registry.register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
+    registry.register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
+    registry.register_algorithm("penalty_balance",
+                                [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
+    registry.register_algorithm("hierarchical",
+                                [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
+    registry.register_algorithm("idastar",
+                                [] { return std::make_unique<IDAStarAlgorithm>(); });
 }
 
 } // anonymous namespace
@@ -118,11 +118,12 @@ int main(int argc, char *argv[]) {
 
         auto parsed = InputParser::assemble_input(config, registries::enchants(), equipment_map);
 
-        // Register and create algorithm
-        register_builtin_algorithms();
-        auto algo = registries::algorithms().create(config.algorithm);
+        // Register and create algorithm (local registry, no singleton)
+        AlgorithmRegistry algo_reg;
+        register_builtin_algorithms(algo_reg);
+        auto algo = algo_reg.create(config.algorithm);
         if (!algo) {
-            auto available = registries::algorithms().list();
+            auto available = algo_reg.list();
             std::string msg = "Unknown algorithm: '" + config.algorithm + "'. Available: ";
             for (size_t i = 0; i < available.size(); ++i) {
                 if (i > 0) msg += ", ";
