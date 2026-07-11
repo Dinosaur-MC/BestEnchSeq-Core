@@ -20,6 +20,7 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
+    ${PROJECT_ROOT}/src/parser/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/io/json.cpp

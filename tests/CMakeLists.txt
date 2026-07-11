@@ -163,6 +163,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parser/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parser/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/parser/TagResolver.cpp
+    ${PROJECT_ROOT}/src/parser/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/parser/ParserUtils.cpp
     ${PROJECT_ROOT}/src/parser/OutputFormatter.cpp
     # I/O layer
@@ -441,5 +442,31 @@ add_executable(test_env_util
 target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_env_util COMMAND test_env_util)
 set_tests_properties(test_env_util PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_mpmc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_mpmc_queue.cpp")
+endif()
+
+add_executable(test_mpmc_queue
+    unit/test_mpmc_queue.cpp
+)
+target_include_directories(test_mpmc_queue PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_mpmc_queue COMMAND test_mpmc_queue)
+set_tests_properties(test_mpmc_queue PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_segmented_mpmc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_segmented_mpmc_queue.cpp")
+endif()
+
+add_executable(test_segmented_mpmc_queue
+    unit/test_segmented_mpmc_queue.cpp
+)
+target_include_directories(test_segmented_mpmc_queue PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_segmented_mpmc_queue COMMAND test_segmented_mpmc_queue)
+set_tests_properties(test_segmented_mpmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )

@@ -13,6 +13,7 @@
 #include "parser/EquipmentParser.h"
 #include "parser/InputParser.h"
 #include "parser/OutputFormatter.h"
+#include "parser/RegistryResolver.h"
 #include "parser/TagResolver.h"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/RegistryAccess.h"
@@ -34,9 +35,11 @@ void load_builtin_data(const std::filesystem::path &builtin_data_dir, TagResolve
     registries::categories().initialize();
 
     auto &cat_reg = registries::categories();
-    auto ench_infos = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tag_resolver, cat_reg);
+    auto raw_ench = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
     registries::enchants().initialize(ench_infos);
-    auto equipments = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tag_resolver, cat_reg);
+    auto raw_eq = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
+    auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
     registries::equipment().initialize(equipments);
 }
 
@@ -46,7 +49,8 @@ void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &t
 
     auto &cat_reg = registries::categories();
     tag_resolver.load_from(data_pack_dir);
-    auto ench_infos = EnchInfoParser::parse(data_pack_dir, tag_resolver, cat_reg);
+    auto raw_ench = EnchInfoParser::parse(data_pack_dir, tag_resolver);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
     auto existing_ench = registries::enchants().get_instances();
     std::vector<EnchInfo> combined_ench;
     combined_ench.reserve(existing_ench.size() + ench_infos.size());
@@ -56,7 +60,8 @@ void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &t
         combined_ench.push_back(info);
     registries::enchants().initialize(combined_ench);
 
-    auto equipments = EquipmentParser::parse(data_pack_dir, tag_resolver, cat_reg);
+    auto raw_eq = EquipmentParser::parse(data_pack_dir, tag_resolver);
+    auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
     auto &existing_eq = registries::equipment().get_instances();
     std::vector<Equipment> combined_eq;
     combined_eq.reserve(existing_eq.size() + equipments.size());

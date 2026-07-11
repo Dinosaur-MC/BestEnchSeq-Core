@@ -60,7 +60,7 @@ void test_parse_basic_enchantments() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 2, "should parse 2 enchantments");
     expect(infos[0].name_id == "sharpness", "first ench id");
@@ -99,7 +99,7 @@ void test_platform_mapping() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 10, "should parse all 10 platform entries");
 
@@ -156,7 +156,7 @@ void test_tag_resolution_in_exclusive_set() {
         ]
     })");
 
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 1, "should parse 1 enchantment");
     expect(infos[0].exclusive_set.size() == 2, "should resolve tag to 2 exclusives");
@@ -193,7 +193,7 @@ void test_inline_tag_resolution() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 1, "should parse 1 enchantment with inline tags");
     expect(infos[0].exclusive_set.size() == 3, "should resolve inline tag to 3 exclusives");
@@ -222,7 +222,7 @@ void test_missing_fields_skipped() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 1, "only 1 valid enchantment should be parsed");
     expect(infos[0].name_id == "valid", "the valid one is 'valid'");
@@ -247,7 +247,7 @@ void test_limited_level_default() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 2, "should parse 2 entries");
     expect(infos[0].limited_level == 3, "explicit limited_level = 3");
@@ -270,7 +270,7 @@ void test_name_fallback() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 1, "should parse 1 entry");
     expect(infos[0].name == "my_ench", "name should fallback to id");
@@ -297,7 +297,7 @@ void test_metadata_parsing() {
 
     EnchantmentDataPack metadata;
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg, &metadata);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver, &metadata);
 
     expect(infos.size() == 1, "should parse 1 enchantment");
     expect(metadata.name == "My Custom Pack", "pack name");
@@ -323,7 +323,7 @@ void test_null_metadata_does_not_crash() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg, nullptr);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver, nullptr);
     expect(infos.size() == 1, "null metadata should not crash");
 
     std::filesystem::remove_all(temp_dir);
@@ -341,7 +341,7 @@ void test_empty_enchantments_array() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.empty(), "empty array should return empty vector");
     std::filesystem::remove_all(temp_dir);
@@ -359,7 +359,7 @@ void test_missing_enchantments_key() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.empty(), "missing enchantments key should return empty vector");
     std::filesystem::remove_all(temp_dir);
@@ -391,13 +391,14 @@ void test_applicable_equipment_parsing() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 2, "should parse 2 entries");
-    expect(infos[0].applicable_category_ids.size() == 2, "sharpness has 2 equipment types");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD), "contains sword");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE), "contains axe");
-    expect(infos[1].applicable_category_ids.empty(), "custom equipment skipped (not in registry)");
+    expect(infos[0].applicable_equipment.size() == 2, "sharpness has 2 equipment types");
+    expect(infos[0].applicable_equipment.contains("sword"), "contains sword");
+    expect(infos[0].applicable_equipment.contains("axe"), "contains axe");
+    expect(infos[1].applicable_equipment.size() == 1, "custom equipment preserved as string");
+    expect(infos[1].applicable_equipment.contains("custom_weapon"), "custom weapon string");
 
     std::filesystem::remove_all(temp_dir);
 }
@@ -429,12 +430,12 @@ void test_equipment_tag_resolution() {
         ]
     })");
 
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(infos.size() == 1, "should parse 1 entry");
-    expect(infos[0].applicable_category_ids.size() == 2, "should resolve equipment tag to 2");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD), "resolved sword");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE), "resolved axe");
+    expect(infos[0].applicable_equipment.size() == 2, "should resolve equipment tag to 2");
+    expect(infos[0].applicable_equipment.contains("sword"), "resolved sword");
+    expect(infos[0].applicable_equipment.contains("axe"), "resolved axe");
 
     std::filesystem::remove_all(temp_dir);
 }
@@ -454,7 +455,7 @@ void test_parse_method_auto_detect_json() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse(file, resolver);
 
     expect(infos.size() == 2, "parse() should auto-detect JSON and return 2 entries");
     expect(infos[0].name_id == "a", "first ench via parse()");
@@ -487,7 +488,7 @@ void test_cyclic_inline_tag() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_json(file, resolver);
 
     // Cycles should be handled gracefully (no crash), may return empty set
     expect(infos.size() == 1, "cyclic inline tags should not crash");
@@ -513,7 +514,7 @@ void test_csv_basic_parsing() {
     }
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_csv(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
 
     expect(infos.size() == 2, "csv: 2 enchantments");
     expect(infos[0].name_id == "sharpness", "csv: first ench id");
@@ -522,10 +523,10 @@ void test_csv_basic_parsing() {
     expect(infos[0].multiplier == 1, "csv: first multiplier");
     expect(infos[0].exclusive_set.size() == 1, "csv: first exclusive set size");
     expect(infos[0].exclusive_set.contains("smite"), "csv: first exclusive contains smite");
-    expect(infos[0].applicable_category_ids.size() == 2, "csv: first has 2 equipments");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
+    expect(infos[0].applicable_equipment.size() == 2, "csv: first has 2 equipments");
+    expect(infos[0].applicable_equipment.contains("sword"),
            "csv: first contains sword");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_AXE),
+    expect(infos[0].applicable_equipment.contains("axe"),
            "csv: first contains axe");
 
     expect(infos[1].name_id == "knockback", "csv: second ench id");
@@ -533,8 +534,8 @@ void test_csv_basic_parsing() {
     expect(infos[1].max_level == 2, "csv: second max_level");
     expect(infos[1].multiplier == 1, "csv: second multiplier");
     expect(infos[1].exclusive_set.empty(), "csv: second has no exclusives");
-    expect(infos[1].applicable_category_ids.size() == 1, "csv: second has 1 equipment");
-    expect(infos[1].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
+    expect(infos[1].applicable_equipment.size() == 1, "csv: second has 1 equipment");
+    expect(infos[1].applicable_equipment.contains("sword"),
            "csv: second contains sword");
 
     std::filesystem::remove_all(temp_dir);
@@ -555,7 +556,7 @@ void test_csv_missing_required_columns() {
 
     TagResolver resolver;
     // Missing max_level and multiplier columns should return empty
-    auto infos = EnchInfoParser::parse_native_csv(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
     expect(infos.empty(), "csv missing required columns: empty result");
 
     std::filesystem::remove_all(temp_dir);
@@ -584,7 +585,7 @@ void test_csv_with_tag_references() {
         f << "sharpness,Sharpness,java,5,5,1,\"#minecraft:exclusive_set/undead\",\"sword\"\n";
     }
 
-    auto infos = EnchInfoParser::parse_native_csv(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
 
     expect(infos.size() == 1, "csv with tags: 1 enchantment");
     expect(infos[0].exclusive_set.size() == 2, "csv with tags: resolved 2 exclusives");
@@ -609,7 +610,7 @@ void test_csv_empty_file() {
     }
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_native_csv(file, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_native_csv(file, resolver);
     expect(infos.empty(), "csv with only header: empty result");
 
     std::filesystem::remove_all(temp_dir);
@@ -638,7 +639,7 @@ void test_mc_official_basic() {
     create_json(dir + "/data/minecraft/tags/enchantable/sword.json",
                 R"({"values": ["minecraft:sword"]})");
 
-    auto infos = EnchInfoParser::parse_mc_official(dir, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
 
     expect(infos.size() == 1, "mc: 1 enchantment");
     expect(infos[0].name_id == "minecraft:sharpness", "mc: namespaced id");
@@ -649,8 +650,8 @@ void test_mc_official_basic() {
     expect(infos[0].supported_platform == MCE::All, "mc: platform defaults to All");
     expect(infos[0].exclusive_set.size() == 1, "mc: exclusive set size");
     expect(infos[0].exclusive_set.contains("minecraft:smite"), "mc: exclusive contains smite");
-    expect(infos[0].applicable_category_ids.size() == 1, "mc: 1 applicable equipment");
-    expect(infos[0].applicable_category_ids.contains(EquipmentCategory::ID_SWORD),
+    expect(infos[0].applicable_equipment.size() == 1, "mc: 1 applicable equipment");
+    expect(infos[0].applicable_equipment.contains("sword"),
            "mc: applicable equipment matches sword");
 
     std::filesystem::remove_all(temp_dir);
@@ -679,13 +680,13 @@ void test_mc_official_multiple_enchantments() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_mc_official(dir, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
 
     expect(infos.size() == 2, "mc multi: 2 enchantments");
 
     // Find each enchantment by id (directory iteration order is not guaranteed)
-    const EnchInfo *sharpness = nullptr;
-    const EnchInfo *protection = nullptr;
+    const RawEnchInfo *sharpness = nullptr;
+    const RawEnchInfo *protection = nullptr;
     for (const auto &info : infos) {
         if (info.name_id == "minecraft:sharpness") {
             sharpness = &info;
@@ -699,7 +700,7 @@ void test_mc_official_multiple_enchantments() {
     expect(protection->multiplier == 2, "mc multi: protection multiplier");
     expect(protection->max_level == 4, "mc multi: protection max_level");
     expect(protection->exclusive_set.size() == 2, "mc multi: protection 2 exclusives");
-    expect(protection->applicable_category_ids.size() == 2, "mc multi: protection 2 equipments");
+    expect(protection->applicable_equipment.size() == 2, "mc multi: protection 2 equipments");
 
     std::filesystem::remove_all(temp_dir);
 }
@@ -739,7 +740,7 @@ void test_mc_official_invalid_entries_skipped() {
     }
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_mc_official(dir, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
 
     expect(infos.size() == 1, "mc skip: only 1 valid enchantment");
     expect(infos[0].name_id == "minecraft:valid", "mc skip: valid one parsed");
@@ -763,7 +764,7 @@ void test_mc_official_namespaced_name() {
     })");
 
     TagResolver resolver;
-    auto infos = EnchInfoParser::parse_mc_official(dir, resolver, test_cat_reg);
+    auto infos = EnchInfoParser::parse_mc_official(dir, resolver);
 
     expect(infos.size() == 1, "mc ns: 1 enchantment");
     expect(infos[0].name_id == "custommod:fire_aspect", "mc ns: namespaced id");
@@ -802,7 +803,7 @@ void test_to_json_round_trip() {
     }
 
     TagResolver resolver;
-    auto parsed = EnchInfoParser::parse_native_json(file, resolver, test_cat_reg);
+    auto parsed = EnchInfoParser::parse_native_json(file, resolver);
 
     expect(parsed.size() == original.size(), "ench JSON round-trip: same count");
 
@@ -849,7 +850,7 @@ void test_to_csv_round_trip() {
     }
 
     TagResolver resolver;
-    auto parsed = EnchInfoParser::parse_native_csv(file, resolver, test_cat_reg);
+    auto parsed = EnchInfoParser::parse_native_csv(file, resolver);
 
     expect(parsed.size() == original.size(), "ench CSV round-trip: same count");
 
@@ -883,7 +884,7 @@ void test_export_mc_official_round_trip() {
 
     // Parse back
     TagResolver resolver;
-    auto parsed = EnchInfoParser::parse_mc_official(output_dir, resolver, test_cat_reg);
+    auto parsed = EnchInfoParser::parse_mc_official(output_dir, resolver);
 
     expect(parsed.size() == original.size(), "mc official round-trip: same count");
     if (!parsed.empty()) {

@@ -4,6 +4,7 @@
 #include "parser/InputParser.h"
 #include "parser/OutputFormatter.h"
 #include "parser/ParserUtils.h"
+#include "parser/RegistryResolver.h"
 #include "parser/TagResolver.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
@@ -69,16 +70,19 @@ void check_json_solutions(const std::string &json_str, size_t expected_count) {
 void test_full_pipeline_direct() {
     TagResolver resolver;
     registries::categories().initialize();
-    auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+
+    auto raw_ench = EnchInfoParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
     CLIParser cli_parser;
     auto config = cli_parser.parse(5, const_cast<char **>(argv));
 
-    auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_eq = EquipmentParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
@@ -101,12 +105,14 @@ void test_full_pipeline_direct() {
 void test_full_pipeline_inventory() {
     TagResolver resolver;
     registries::categories().initialize();
-    auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_ench = EnchInfoParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_eq = EquipmentParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
@@ -148,8 +154,9 @@ void test_full_pipeline_inventory() {
 void test_builtin_enchantment_lookup() {
     TagResolver resolver;
     registries::categories().initialize();
-    auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_ench = EnchInfoParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     expect(registries::enchants().get_id("sharpness") >= 0, "builtin: sharpness found");
@@ -170,8 +177,9 @@ void test_builtin_enchantment_lookup() {
 void test_builtin_equipment_lookup() {
     TagResolver resolver;
     registries::categories().initialize();
-    auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_eq = EquipmentParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
 
     bool found_sword = false;
     bool found_netherite_helmet = false;
@@ -200,8 +208,9 @@ void test_builtin_equipment_lookup() {
 void test_output_formatting_empty() {
     TagResolver resolver;
     registries::categories().initialize();
-    auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_ench = EnchInfoParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     std::vector<EnchSolution> empty_solutions;
@@ -228,12 +237,14 @@ void test_output_formatting_empty() {
 void test_full_pipeline_execute() {
     TagResolver resolver;
     registries::categories().initialize();
-    auto ench_infos = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_ench = EnchInfoParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    auto equipments = EquipmentParser::parse_native_json(
-        "data/builtin/vanilla.json", resolver, test_cat_reg);
+    auto raw_eq = EquipmentParser::parse_native_json(
+        "data/builtin/vanilla.json", resolver);
+    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 

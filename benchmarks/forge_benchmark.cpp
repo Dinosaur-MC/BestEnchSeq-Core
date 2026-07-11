@@ -10,6 +10,7 @@
 #include "adapters/CompactAdapter.h"
 #include "parser/EnchInfoParser.h"
 #include "parser/EquipmentParser.h"
+#include "parser/RegistryResolver.h"
 #include "parser/TagResolver.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
@@ -154,9 +155,12 @@ void load_builtin_data() {
     auto dir = std::filesystem::path("data") / "builtin";
     TagResolver tags;
     registries::categories().initialize();
-    auto ench_infos = EnchInfoParser::parse(dir / "vanilla.json", tags, registries::categories());
+    auto &cat_reg = registries::categories();
+    auto raw_ench = EnchInfoParser::parse(dir / "vanilla.json", tags);
+    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
     registries::enchants().initialize(ench_infos);
-    auto equipments = EquipmentParser::parse(dir / "vanilla.json", tags, registries::categories());
+    auto raw_eq = EquipmentParser::parse(dir / "vanilla.json", tags);
+    auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
     registries::equipment().initialize(equipments);
 }
 
