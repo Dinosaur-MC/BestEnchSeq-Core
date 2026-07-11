@@ -1,4 +1,5 @@
 #include "framework/test_utils.h"
+#include "adapters/EnchSerializer.h"
 #include "parsers/EnchInfoParser.h"
 #include "parsers/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -791,7 +792,7 @@ void test_to_json_round_trip() {
                           std::unordered_set<int32_t>{EquipmentCategory::ID_HELMET, EquipmentCategory::ID_CHESTPLATE});
 
     // Serialize to JSON
-    std::string json_str = EnchInfoParser::to_json(original, test_cat_reg);
+    std::string json_str = EnchSerializer::to_json(original, test_cat_reg);
 
     // Write to temp file, parse back
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_ench_json";
@@ -838,7 +839,7 @@ void test_to_csv_round_trip() {
                           std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
 
     // Serialize to CSV
-    std::string csv_str = EnchInfoParser::to_csv(original, test_cat_reg);
+    std::string csv_str = EnchSerializer::to_csv(original, test_cat_reg);
 
     // Write to temp file, parse back
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_ench_csv";
@@ -880,7 +881,7 @@ void test_export_mc_official_round_trip() {
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_mc_off";
     std::filesystem::create_directories(temp_dir);
     std::string output_dir = (temp_dir / "output").string();
-    EnchInfoParser::export_to_mc_official(original, test_cat_reg, output_dir);
+    EnchSerializer::export_to_mc_official(original, test_cat_reg, output_dir);
 
     // Parse back
     TagResolver resolver;

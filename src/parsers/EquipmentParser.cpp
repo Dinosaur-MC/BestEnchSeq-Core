@@ -2,12 +2,9 @@
 #include "utils/ParserUtils.h"
 #include "io/CsvIO.h"
 #include "io/json.h"
-#include "registries/EquipmentCategoryRegistry.h"
 
 #include <cctype>
 #include <iostream>
-#include <stdexcept>
-#include <unordered_map>
 
 // ============================================================================
 
@@ -338,52 +335,4 @@ std::vector<RawEquipment> EquipmentParser::parse(
     default:
         throw std::runtime_error("Unknown format: " + path.string());
     }
-}
-
-// ============================================================================
-
-std::string EquipmentParser::to_json(
-    const std::vector<Equipment> &equipments,
-    const EquipmentCategoryRegistry &cat_reg
-) {
-    Json::Array eq_arr;
-    for (const auto &eq : equipments) {
-        std::string cat_name = "unknown";
-        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < cat_reg.size())
-            cat_name = cat_reg.get(eq.category_id).name_id;
-        Json::Object obj;
-        obj["id"]             = Json(Json::String(eq.name_id));
-        obj["name"]           = Json(Json::String(eq.name));
-        obj["category"]       = Json(Json::String(cat_name));
-        obj["max_durability"] = Json(Json::Number(static_cast<int32_t>(eq.max_durability)));
-        eq_arr.push_back(Json(obj));
-    }
-
-    Json::Object root;
-    root["equipments"] = Json(eq_arr);
-    return Json(root).to_string(Json::Pretty);
-}
-
-// ============================================================================
-
-std::string EquipmentParser::to_csv(
-    const std::vector<Equipment> &equipments,
-    const EquipmentCategoryRegistry &cat_reg
-) {
-    csv::CsvTable table;
-    table.push_back({"id", "name", "category", "max_durability"});
-
-    for (const auto &eq : equipments) {
-        std::string cat_name2 = "unknown";
-        if (eq.category_id >= 0 && static_cast<size_t>(eq.category_id) < cat_reg.size())
-            cat_name2 = cat_reg.get(eq.category_id).name_id;
-        table.push_back({
-            eq.name_id,
-            eq.name,
-            cat_name2,
-            std::to_string(eq.max_durability),
-        });
-    }
-
-    return csv::format(table);
 }

@@ -89,6 +89,7 @@ set_tests_properties(test_tag_resolver PROPERTIES
 add_executable(test_ench_info_parser
     unit/test_ench_info_parser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
     ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
@@ -103,6 +104,7 @@ set_tests_properties(test_ench_info_parser PROPERTIES
 add_executable(test_equipment_parser
     unit/test_equipment_parser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
+    ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
@@ -162,6 +164,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
+    ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
     ${PROJECT_ROOT}/src/parsers/TagResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/utils/ParserUtils.cpp

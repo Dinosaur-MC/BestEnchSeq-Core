@@ -1,4 +1,5 @@
 #include "framework/test_utils.h"
+#include "adapters/EnchSerializer.h"
 #include "parsers/EquipmentParser.h"
 #include "parsers/TagResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -449,7 +450,7 @@ void test_to_json_round_trip() {
     };
 
     // Serialize to JSON
-    std::string json_str = EquipmentParser::to_json(original, test_cat_reg);
+    std::string json_str = EnchSerializer::to_json(original, test_cat_reg);
 
     // Write to temp file, parse back
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_eq_json";
@@ -484,7 +485,7 @@ void test_to_csv_round_trip() {
     };
 
     // Serialize to CSV
-    std::string csv_str = EquipmentParser::to_csv(original, test_cat_reg);
+    std::string csv_str = EnchSerializer::to_csv(original, test_cat_reg);
 
     // Write to temp file, parse back
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_eq_csv";
