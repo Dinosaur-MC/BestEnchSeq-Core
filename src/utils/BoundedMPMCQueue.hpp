@@ -7,27 +7,34 @@
 
 // ─── BoundedMPMCQueue ───
 // Multi-Producer, Multi-Consumer lock-free bounded queue.
-// Based on Dmitry Vyukov's bounded MPMC algorithm (sequence-number approach).
 //
-// Characteristics:
-//   - Fixed capacity (power-of-2, min 2)
-//   - Zero blocking: full → push() returns false, empty → pop() returns false
-//   - No spin-waiting, no yielding, no blocking syscalls
-//   - Single CAS per push/pop
-//   - Each slot carries a uint64_t sequence number for ABA protection + state
+// Design doc: docs/MPMCQueue.md
+// Algorithm:  Dmitry Vyukov's bounded MPMC (sequence-number + ring buffer)
 //
-// Memory ordering:
-//   - slot.sequence: acquire/release pairs create happens-before for data
-//   - head_ / tail_: relaxed (synchronization flows through sequence, not counters)
+// Lock-free guarantee:  single CAS per push/pop, zero mutex throughout.
 //
-// Thread safety:
-//   - Any number of concurrent producers: push()
-//   - Any number of concurrent consumers: pop()
-//   - Not safe to call push() and pop() on the same slot simultaneously
-//     (guaranteed by sequence protocol)
+// ┌─ Characteristics ─────────────────────────────────────────────────┐
+// │ Fixed capacity (power-of-2, min 2).                               │
+// │ Zero blocking: full → push() returns false, never spins.          │
+// │ Single CAS per push/pop.                                          │
+// │ uint64_t sequence per slot encodes free/ready/consumed tri-state. │
+// └───────────────────────────────────────────────────────────────────┘
+//
+// ┌─ Memory ordering ─────────────────────────────────────────────────┐
+// │ slot.sequence: acquire/release create happens-before for data.    │
+// │ head_ / tail_:  relaxed (synch flows through sequence, not head). │
+// └───────────────────────────────────────────────────────────────────┘
+//
+// ┌─ Thread safety ───────────────────────────────────────────────────┐
+// │ Any number of concurrent producers  — push() / try_push()         │
+// │ Any number of concurrent consumers — pop() / try_pop()            │
+// │ Not safe: concurrent push/pop on the *same* logical slot          │
+// │          (sequence protocol guarantees this never happens)        │
+// └───────────────────────────────────────────────────────────────────┘
 //
 // Requirements:
-//   T must be nothrow destructible and nothrow move-assignable.
+//   T: nothrow destructible, nothrow move-assignable.
+//   Capacity: power of two ≥ 2.
 //
 // Reference:
 //   Dmitry Vyukov, "Bounded MPMC queue"

@@ -4,6 +4,17 @@
 #include <cstdint>
 #include <type_traits>
 
+// ─── SPMCQueue ───
+// Single-Producer, Multi-Consumer lock-free bounded queue.
+//
+// See also: BoundedMPMCQueue (N producers + N consumers),
+//           SegmentedMPMCQueue (unbounded MPMC),
+//           SPSCQueue (1 producer + 1 consumer).
+// Design doc: docs/MPMCQueue.md
+//
+// Each consumer creates an independent Cursor; the producer overwrites
+// the oldest unread elements when capacity is exceeded.
+
 template <typename T, size_t Capacity>
 class SPMCQueue {
     static_assert(Capacity > 0 && (Capacity & (Capacity - 1)) == 0,

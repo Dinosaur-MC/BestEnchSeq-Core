@@ -9,23 +9,34 @@
 // ─── SegmentedMPMCQueue ───
 // Multi-Producer, Multi-Consumer lock-free unbounded queue.
 //
-// Lock-free guarantee:
-//   - EVERY operation uses only atomic RMW (fetch_add, CAS) — no mutex, no spinlock.
-//   - Block allocation uses compare_exchange_strong on the next pointer;
-//     unused allocations are safely deleted (never exposed to other threads).
-//   - Block memory is stable for the lifetime of the data structure
-//     (never freed during concurrent access). The destructor follows the
-//     chain from root_block_, deleting every block.
+// Design doc: docs/MPMCQueue.md
 //
-// Architecture:
-//   Segmented chain of fixed-size blocks. Each block is an independent ring
-//   buffer using the same sequence-number protocol as BoundedMPMCQueue.
-//   Blocks are linked atomically via CAS — no lock, no "double-checked locking".
+// ┌─ Lock-free guarantee ─────────────────────────────────────────────┐
+// │  EVERY operation uses only atomic RMW (fetch_add, CAS).           │
+// │  Block linking: compare_exchange_strong on next pointer.          │
+// │  No mutex, no spinlock, no blocking syscall on any path.          │
+// │  Unused allocations safely delete'd (never exposed to other       │
+// │  threads).                                                        │
+// └───────────────────────────────────────────────────────────────────┘
 //
-// Total FIFO ordering across all producers via global ticket counter.
+// ┌─ Architecture ────────────────────────────────────────────────────┐
+// │  Segmented singly-linked list of fixed-size blocks.               │
+// │  Each block is an independent ring buffer (same sequence protocol │
+// │  as BoundedMPMCQueue).                                            │
+// │  Blocks linked atomically via CAS — no "double-checked locking".  │
+// │  Global ticket counters (enqueue_pos_ / dequeue_pos_) enforce     │
+// │  total FIFO ordering across all producers and consumers.          │
+// └───────────────────────────────────────────────────────────────────┘
+//
+// ┌─ Thread safety ───────────────────────────────────────────────────┐
+// │  Any number of concurrent producers — push()                      │
+// │  Any number of concurrent consumers — try_pop()                   │
+// │  size() / empty() return point-in-time estimates.                 │
+// └───────────────────────────────────────────────────────────────────┘
 //
 // Requirements:
-//   T must be nothrow destructible and nothrow move assignable.
+//   T: nothrow destructible, nothrow move-assignable.
+//   BlockSize: power of two ≥ 64.
 
 template <typename T, size_t BlockSize = 1024>
 class SegmentedMPMCQueue {

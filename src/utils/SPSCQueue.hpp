@@ -6,6 +6,12 @@
 
 // ─── SPSCQueue ───
 // Single-Producer, Single-Consumer lock-free bounded queue.
+//
+// See also: BoundedMPMCQueue (N readers + N writers),
+//           SegmentedMPMCQueue (unbounded MPMC),
+//           SPMCQueue (1 writer + N readers).
+// Design doc: docs/MPMCQueue.md
+//
 // Fixed capacity. When full, push() silently drops the new value.
 // No data races: producer and consumer never touch the same atomic.
 //
