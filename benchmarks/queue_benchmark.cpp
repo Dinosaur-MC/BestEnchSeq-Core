@@ -17,11 +17,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Operation counts — Release needs more work for stable timing.
+// SegmentedMPMCQueue has its own lower count: being unbounded it never
+// frees blocks until destruction (~12 KB per 1024 items × OPS).
 #ifdef NDEBUG
-constexpr int64_t OPS_SEQ    = 200'000'000;  // push-pop pairs per queue type
+constexpr int64_t OPS_SEQ    = 200'000'000;  // push-pop pairs (bounded queues)
+constexpr int64_t OPS_SEG    =  20'000'000;  // SegmentedMPMCQueue (unbounded)
 constexpr int64_t OPS_VIRT   =  50'000'000;  // pairs for virtual-dispatch test
 #else
 constexpr int64_t OPS_SEQ    =  30'000'000;
+constexpr int64_t OPS_SEG    =   5'000'000;
 constexpr int64_t OPS_VIRT   =  10'000'000;
 #endif
 constexpr int64_t WARM_SEQ   =   1'000'000;  // warm-up pairs
@@ -202,7 +206,8 @@ int main() {
               << "║            Lock-Free Queue Benchmarks                    ║\n"
               << "╚══════════════════════════════════════════════════════════╝\n"
               << "  Pairs per test: " << OPS_SEQ / 1'000'000 << "M"
-              << "   warm-up: " << WARM_SEQ / 1'000'000 << "M\n"
+              << "  (segmented: " << OPS_SEG / 1'000'000 << "M)"
+              << "  warm-up: " << WARM_SEQ / 1'000'000 << "M\n"
               << "  Hardware concurrency: "
               << std::thread::hardware_concurrency() << "\n\n";
 
@@ -212,7 +217,7 @@ int main() {
         std::cout << "── Sequential throughput ────────────────────────\n";
         { SPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "SPSCQueue"); }
         { BoundedMPMCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "BoundedMPMCQueue"); }
-        { SegmentedMPMCQueue<int, 1024> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "SegmentedMPMCQueue"); }
+        { SegmentedMPMCQueue<int, 1024> q; bench_seq(q, OPS_SEG, WARM_SEQ, "SegmentedMPMCQueue"); }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 
