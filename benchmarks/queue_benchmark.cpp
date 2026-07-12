@@ -9,16 +9,34 @@
 #include <cstdio>
 #include <iostream>
 #include <numeric>
+#include <thread>
 #include <vector>
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Configuration  —  calibrate for ~5 s total on a modern CPU
+//  Configuration
 // ═══════════════════════════════════════════════════════════════════════════
 
-constexpr int64_t OPS_SEQ    = 30'000'000;   // push-pop pairs per queue type
-constexpr int64_t WARM_SEQ   =    500'000;   // warm-up pairs
-constexpr int64_t OPS_VIRT   = 10'000'000;   // pairs for virtual-dispatch test
-constexpr int     N_LATENCY  =     10'000;   // latency samples
+// Operation counts — Release needs more work for stable timing.
+#ifdef NDEBUG
+constexpr int64_t OPS_SEQ    = 200'000'000;  // push-pop pairs per queue type
+constexpr int64_t OPS_VIRT   =  50'000'000;  // pairs for virtual-dispatch test
+#else
+constexpr int64_t OPS_SEQ    =  30'000'000;
+constexpr int64_t OPS_VIRT   =  10'000'000;
+#endif
+constexpr int64_t WARM_SEQ   =   1'000'000;  // warm-up pairs
+constexpr int     N_LATENCY  =      10'000;  // latency samples
+
+// ─── Performance-sink helper ────────────────────────────────────────────
+// Accumulates checksum from popped values so the compiler cannot eliminate
+// push/pop as dead code.  A volatile write at the end enforces the side
+// effect across all optimisation levels.
+
+struct Sink {
+    int64_t val = 0;
+    void add(int64_t v) noexcept { val ^= v; }
+    void flush() noexcept { volatile int64_t _ = val; (void)_; }
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Timer
@@ -28,37 +46,11 @@ using Clock = std::chrono::high_resolution_clock;
 
 struct Timer {
     Clock::time_point start = Clock::now();
-
-    double elapsed_ms() const {
+    double elapsed_s() const {
         return std::chrono::duration_cast<std::chrono::microseconds>(
-                   Clock::now() - start).count() / 1000.0;
-    }
-
-    double elapsed_s() const { return elapsed_ms() / 1000.0; }
-
-    static double since(const Timer& begin) {
-        return std::chrono::duration_cast<std::chrono::microseconds>(
-                   Clock::now() - begin.start).count() / 1000.0 / 1000.0;
+                   Clock::now() - start).count() / 1'000'000.0;
     }
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  API normalisation
-// ═══════════════════════════════════════════════════════════════════════════
-
-template <typename Q, typename T>
-static bool push_item(Q& q, T&& val) {
-    return q.try_push(std::forward<T>(val));
-}
-
-template <typename Q, typename T>
-static bool pop_item(Q& q, T& out) {
-    return q.try_pop(out);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  Results  (threadsafe for single-threaded reporting)
-// ═══════════════════════════════════════════════════════════════════════════
 
 static void print_result(const char* label, double elapsed_s, int64_t items) {
     double rate = static_cast<double>(items) / elapsed_s / 1'000'000.0;
@@ -69,27 +61,32 @@ static void print_result(const char* label, double elapsed_s, int64_t items) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Sequential throughput  (push-pop pairs, bounded queues never overfill)
+//  Sequential throughput  (push-pop pairs)
 // ═══════════════════════════════════════════════════════════════════════════
 
 template <typename Queue>
 static void bench_seq(Queue& q, int64_t n_pairs, int64_t warmup,
                       const char* label)
 {
+    Sink sink;
     int v;
+
     for (int64_t i = 0; i < warmup; ++i) {
-        while (!push_item(q, static_cast<int>(i))) {}
-        pop_item(q, v);
+        while (!q.try_push(static_cast<int>(i))) {}
+        q.try_pop(v);
     }
 
     auto t0 = Clock::now();
     for (int64_t i = 0; i < n_pairs; ++i) {
-        while (!push_item(q, static_cast<int>(i & 0x7FFFFFFF))) {}
-        pop_item(q, v);
+        int val = static_cast<int>(i & 0x7FFFFFFF);
+        while (!q.try_push(val)) {}
+        q.try_pop(v);
+        sink.add(v);
     }
+    sink.flush();
+
     double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                      Clock::now() - t0).count() / 1'000'000.0;
-
     print_result(label, sec, n_pairs);
 }
 
@@ -101,16 +98,16 @@ template <typename Queue>
 static void bench_latency(Queue& q, int64_t n, const char* label) {
     int v;
     for (int i = 0; i < 2000; ++i) {
-        while (!push_item(q, i)) {}
-        pop_item(q, v);
+        while (!q.try_push(i)) {}
+        q.try_pop(v);
     }
 
     std::vector<double> samples;
     samples.reserve(static_cast<size_t>(n));
     for (int64_t i = 0; i < n; ++i) {
         auto t0 = Clock::now();
-        while (!push_item(q, 42)) {}
-        pop_item(q, v);
+        while (!q.try_push(42)) {}
+        q.try_pop(v);
         auto t1 = Clock::now();
         samples.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(
                               t1 - t0).count());
@@ -134,6 +131,7 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
 
     // 1. Direct SPSCQueue (baseline)
     {
+        Sink sink;
         SPSCQueue<int, 4096> q;
         for (int64_t i = 0; i < warmup; ++i) {
             while (!q.try_push(static_cast<int>(i))) {}
@@ -143,7 +141,9 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
         for (int64_t i = 0; i < n_pairs; ++i) {
             while (!q.try_push(i)) {}
             q.try_pop(v);
+            sink.add(v);
         }
+        sink.flush();
         double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                          Clock::now() - t0).count() / 1'000'000.0;
         print_result("SPSCQueue direct (baseline)", sec, n_pairs);
@@ -151,6 +151,7 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
 
     // 2. QueueAdaptor::underlying() — no virtual dispatch
     {
+        Sink sink;
         QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
         for (int64_t i = 0; i < warmup; ++i) {
             while (!adapted.underlying().try_push(i)) {}
@@ -160,7 +161,9 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
         for (int64_t i = 0; i < n_pairs; ++i) {
             while (!adapted.underlying().try_push(i)) {}
             adapted.underlying().try_pop(v);
+            sink.add(v);
         }
+        sink.flush();
         double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                          Clock::now() - t0).count() / 1'000'000.0;
         print_result("QueueAdaptor::underlying()", sec, n_pairs);
@@ -168,6 +171,7 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
 
     // 3. Virtual dispatch through IQueue<T>
     {
+        Sink sink;
         QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
         IQueue<int>& virt = adapted;
         for (int64_t i = 0; i < warmup; ++i) {
@@ -178,7 +182,9 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
         for (int64_t i = 0; i < n_pairs; ++i) {
             while (!virt.try_push(static_cast<int>(i))) {}
             virt.try_pop(v);
+            sink.add(v);
         }
+        sink.flush();
         double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                          Clock::now() - t0).count() / 1'000'000.0;
         print_result("IQueue virtual dispatch", sec, n_pairs);
@@ -196,7 +202,7 @@ int main() {
               << "║            Lock-Free Queue Benchmarks                    ║\n"
               << "╚══════════════════════════════════════════════════════════╝\n"
               << "  Pairs per test: " << OPS_SEQ / 1'000'000 << "M"
-              << "   warm-up: " << WARM_SEQ / 1000 << "k\n"
+              << "   warm-up: " << WARM_SEQ / 1'000'000 << "M\n"
               << "  Hardware concurrency: "
               << std::thread::hardware_concurrency() << "\n\n";
 
