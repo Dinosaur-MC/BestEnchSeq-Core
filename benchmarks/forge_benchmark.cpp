@@ -18,6 +18,7 @@
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iomanip>
@@ -205,6 +206,14 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             algo_input.target.push_back({_lid, static_cast<int16_t>(e.level)});
     }
 
+    struct BenchResult {
+        std::string algo;
+        int32_t cost;
+        int64_t ms;
+        bool ok;
+    };
+    std::vector<BenchResult> results;
+
     for (const auto& algo_name : enabled_algos) {
         if (!registries::algorithms().contains(algo_name)) {
             std::cout << "  " << std::left << std::setw(18) << algo_name
@@ -241,12 +250,23 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             for (const auto& s : step_list)
                 total += s.cost;
 
-        bool ok = total <= tc.max_cost;
-        std::cout << "  " << std::left << std::setw(18) << algo_name
-                  << std::right << std::setw(4) << total << "L"
+        results.push_back({algo_name, total,
+                           out.computation_time.count(),
+                           total <= tc.max_cost});
+    }
+
+    // Sort by algorithm name
+    std::sort(results.begin(), results.end(),
+              [](const BenchResult& a, const BenchResult& b) {
+                  return a.algo < b.algo;
+              });
+
+    for (const auto& r : results) {
+        std::cout << "  " << std::left << std::setw(18) << r.algo
+                  << std::right << std::setw(4) << r.cost << "L"
                   << "  ≤" << std::setw(4) << tc.max_cost << "L"
-                  << (ok ? "  ✅" : "  ⚠")
-                  << "  " << std::setw(4) << out.computation_time.count() << "ms"
+                  << (r.ok ? "  ✅" : "  ⚠")
+                  << "  " << std::setw(4) << r.ms << "ms"
                   << std::endl;
     }
 }
