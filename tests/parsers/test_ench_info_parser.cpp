@@ -783,11 +783,11 @@ void test_to_json_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
     original.emplace_back("minecraft:sharpness", "Sharpness", MCE::Java,
-                          5, 5, 1,
+                          5, 5, 1, true,
                           std::unordered_set<std::string>{"minecraft:smite", "minecraft:bane_of_arthropods"},
                           std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD, EquipmentCategory::ID_AXE});
     original.emplace_back("minecraft:protection", "Protection", MCE::All,
-                          4, 4, 2,
+                          4, 4, 2, false,
                           std::unordered_set<std::string>{},
                           std::unordered_set<int32_t>{EquipmentCategory::ID_HELMET, EquipmentCategory::ID_CHESTPLATE});
 
@@ -816,8 +816,15 @@ void test_to_json_round_trip() {
         expect(parsed[0].max_level == original[0].max_level, "ench JSON round-trip: max_level");
         expect(parsed[0].limited_level == original[0].limited_level, "ench JSON round-trip: limited_level");
         expect(parsed[0].multiplier == original[0].multiplier, "ench JSON round-trip: multiplier");
+        expect(parsed[0].is_treasure == original[0].is_treasure, "ench JSON round-trip: is_treasure");
         expect(parsed[0].exclusive_set.size() == original[0].exclusive_set.size(),
                "ench JSON round-trip: exclusive_set size");
+    }
+
+    // Verify is_treasure is preserved through round-trip
+    if (parsed.size() >= 2) {
+        expect(parsed[0].is_treasure == true, "ench JSON round-trip: sharpness is treasure");
+        expect(parsed[1].is_treasure == false, "ench JSON round-trip: protection is not treasure");
     }
 
     std::filesystem::remove_all(temp_dir);
@@ -830,11 +837,11 @@ void test_to_csv_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
     original.emplace_back("sharpness", "Sharpness", MCE::Java,
-                          5, 5, 1,
+                          5, 5, 1, false,
                           std::unordered_set<std::string>{"smite"},
                           std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
     original.emplace_back("knockback", "Knockback", MCE::Java,
-                          2, 2, 1,
+                          2, 2, 1, false,
                           std::unordered_set<std::string>{},
                           std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
 
@@ -873,7 +880,7 @@ void test_export_mc_official_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
     original.emplace_back("minecraft:sharpness", "Sharpness", MCE::All,
-                          5, 5, 1,
+                          5, 5, 1, false,
                           std::unordered_set<std::string>{"minecraft:smite"},
                           std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
 

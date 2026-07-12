@@ -10,7 +10,7 @@ namespace {
 void test_resolve_ench_id_bare_name() {
     EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
-    infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5, 1, {},
+    infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5, 1, false, {},
                      {EquipmentCategory::ID_SWORD}});
     reg.initialize(infos);
 
@@ -20,13 +20,13 @@ void test_resolve_ench_id_bare_name() {
     int32_t missing = RegistryResolver::resolve_ench_id("nonexistent", reg);
     expect(missing < 0, "unknown name should return -1");
 
-    std::cout << "  [OK] test_resolve_ench_id_bare_name" << std::endl;
+    std::cout << "  PASS: test_resolve_ench_id_bare_name" << std::endl;
 }
 
 void test_resolve_ench_id_namespaced() {
     EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
-    infos.push_back({"minecraft:sharpness", "Sharpness", MCE::All, 5, 5, 1, {},
+    infos.push_back({"minecraft:sharpness", "Sharpness", MCE::All, 5, 5, 1, false, {},
                      {EquipmentCategory::ID_SWORD}});
     reg.initialize(infos);
 
@@ -47,7 +47,7 @@ void test_resolve_ench_id_namespaced() {
     }
     expect(threw, "unknown ns:id should throw");
 
-    std::cout << "  [OK] test_resolve_ench_id_namespaced" << std::endl;
+    std::cout << "  PASS: test_resolve_ench_id_namespaced" << std::endl;
 }
 
 } // anonymous namespace

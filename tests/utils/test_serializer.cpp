@@ -11,9 +11,9 @@ namespace {
 void setup() {
     // Minimal enchantment registry for EnchSet tests
     std::vector<EnchInfo> infos;
-    infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5, 1, {}, {}});
-    infos.push_back({"knockback", "Knockback", MCE::All, 2, 2, 2, {}, {}});
-    infos.push_back({"fire_aspect", "Fire Aspect", MCE::All, 2, 2, 2, {}, {}});
+    infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5, 1, false, {}, {}});
+    infos.push_back({"knockback", "Knockback", MCE::All, 2, 2, 2, false, {}, {}});
+    infos.push_back({"fire_aspect", "Fire Aspect", MCE::All, 2, 2, 2, false, {}, {}});
     registries::enchants().initialize(infos);
 
     // Equipment registry for ItemStack tests

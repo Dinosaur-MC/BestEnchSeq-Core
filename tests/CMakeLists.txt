@@ -510,3 +510,34 @@ add_test(NAME test_segmented_mpmc_queue COMMAND test_segmented_mpmc_queue)
 set_tests_properties(test_segmented_mpmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_enchantment_registry.cpp)
+    message(FATAL_ERROR "Required test source not found: registry/test_enchantment_registry.cpp")
+endif()
+
+add_executable(test_enchantment_registry
+    registry/test_enchantment_registry.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
+)
+target_include_directories(test_enchantment_registry PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_enchantment_registry COMMAND test_enchantment_registry)
+set_tests_properties(test_enchantment_registry PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_equipment_registry.cpp)
+    message(FATAL_ERROR "Required test source not found: registry/test_equipment_registry.cpp")
+endif()
+
+add_executable(test_equipment_registry
+    registry/test_equipment_registry.cpp
+    ${EQUIP_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
+)
+target_include_directories(test_equipment_registry PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_equipment_registry COMMAND test_equipment_registry)
+set_tests_properties(test_equipment_registry PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)

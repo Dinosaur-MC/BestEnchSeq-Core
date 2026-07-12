@@ -36,28 +36,28 @@ void setup_enchinfo() {
         "minecraft:sharpness",
         "Sharpness",
         MCE::All,
-        5, 5, 1, {},
+        5, 5, 1, false, {},
         {EquipmentCategory::ID_SWORD},
     });
     infos.push_back({
         "minecraft:knockback",
         "Knockback",
         MCE::All,
-        2, 2, 2, {},
+        2, 2, 2, false, {},
         {EquipmentCategory::ID_SWORD},
     });
     infos.push_back({
         "minecraft:smite",
         "Smite",
         MCE::All,
-        5, 5, 1, {},
+        5, 5, 1, false, {},
         {EquipmentCategory::ID_SWORD},
     });
     infos.push_back({
         "minecraft:power",
         "Power",
         MCE::All,
-        5, 5, 1, {},
+        5, 5, 1, false, {},
         {EquipmentCategory::ID_BOW},
     });
     registries::enchants().initialize(infos);
@@ -148,7 +148,7 @@ void test_verbose_single_solution() {
     expect(out.find("V") != std::string::npos,
            "verbose_single: should contain Roman numeral V");
 
-    std::cout << "  [OK] test_verbose_single_solution" << std::endl;
+    std::cout << "  PASS: test_verbose_single_solution" << std::endl;
 }
 
 void test_verbose_multi_solution() {
@@ -169,7 +169,7 @@ void test_verbose_multi_solution() {
     expect(sep_count >= 3,
            "verbose_multi: should have multiple solution blocks");
 
-    std::cout << "  [OK] test_verbose_multi_solution" << std::endl;
+    std::cout << "  PASS: test_verbose_multi_solution" << std::endl;
 }
 
 void test_describe_item_book() {
@@ -202,7 +202,7 @@ void test_describe_item_book() {
     expect(compact.find("minecraft:sharpness") != std::string::npos,
            "book_desc: compact output should contain enchantment name_id");
 
-    std::cout << "  [OK] test_describe_item_book" << std::endl;
+    std::cout << "  PASS: test_describe_item_book" << std::endl;
 }
 
 void test_describe_item_equipment() {
@@ -220,7 +220,7 @@ void test_describe_item_equipment() {
     expect(verbose.find("Diamond Sword") != std::string::npos,
            "equip_desc: verbose output should contain equipment name");
 
-    std::cout << "  [OK] test_describe_item_equipment" << std::endl;
+    std::cout << "  PASS: test_describe_item_equipment" << std::endl;
 }
 
 void test_compact_format() {
@@ -234,7 +234,7 @@ void test_compact_format() {
     expect(out.find("|") != std::string::npos,
            "compact: should contain pipe-delimited fields");
 
-    std::cout << "  [OK] test_compact_format" << std::endl;
+    std::cout << "  PASS: test_compact_format" << std::endl;
 }
 
 void test_compact_multi_solution() {
@@ -248,7 +248,7 @@ void test_compact_multi_solution() {
     expect(out.find("===") != std::string::npos,
            "compact_multi: should contain === separator between solutions");
 
-    std::cout << "  [OK] test_compact_multi_solution" << std::endl;
+    std::cout << "  PASS: test_compact_multi_solution" << std::endl;
 }
 
 void test_json_round_trip() {
@@ -277,7 +277,7 @@ void test_json_round_trip() {
     expect(parsed[0].steps[0].exp_cost == sc.solution.steps[0].exp_cost,
            "json_roundtrip: step[0] exp_cost should match");
 
-    std::cout << "  [OK] test_json_round_trip" << std::endl;
+    std::cout << "  PASS: test_json_round_trip" << std::endl;
 }
 
 void test_json_multi_solution() {
@@ -301,7 +301,7 @@ void test_json_multi_solution() {
     expect(parsed[1].total_exp_level_cost > 0,
            "json_multi: second solution should have positive cost");
 
-    std::cout << "  [OK] test_json_multi_solution" << std::endl;
+    std::cout << "  PASS: test_json_multi_solution" << std::endl;
 }
 
 } // anonymous namespace

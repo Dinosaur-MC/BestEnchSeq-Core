@@ -18,11 +18,11 @@ void setup() {
     registries::categories().initialize();
     registries::enchants().initialize({
         {"sharpness", "Sharpness", MCE::All, 5, 5,
-         1, {}, {EquipmentCategory::ID_SWORD}},
+         1, false, {}, {EquipmentCategory::ID_SWORD}},
         {"knockback", "Knockback", MCE::All, 2, 2,
-         2, {}, {EquipmentCategory::ID_SWORD}},
+         2, false, {}, {EquipmentCategory::ID_SWORD}},
         {"protection", "Protection", MCE::All, 4, 4,
-         1, {}, {EquipmentCategory::ID_CHESTPLATE}},
+         1, false, {}, {EquipmentCategory::ID_CHESTPLATE}},
     });
     registries::equipment().initialize({
         {"diamond_sword", "Diamond Sword", EquipmentCategory::ID_SWORD, 1561},

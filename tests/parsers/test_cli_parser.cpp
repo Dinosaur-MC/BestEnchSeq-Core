@@ -19,7 +19,7 @@ void test_basic_args() {
     expect(config.target == "diamond_sword", "target should be diamond_sword");
     expect(config.wanted == "sharpness=5", "wanted should be sharpness=5");
 
-    std::cout << "  [OK] test_basic_args" << std::endl;
+    std::cout << "  PASS: test_basic_args" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ void test_ench_with_ns() {
     expect(ench.id == "sharpness", "id should be sharpness");
     expect(ench.level == 5, "level should be 5");
 
-    std::cout << "  [OK] test_ench_with_ns" << std::endl;
+    std::cout << "  PASS: test_ench_with_ns" << std::endl;
 }
 
 void test_ench_without_ns() {
@@ -43,7 +43,7 @@ void test_ench_without_ns() {
     expect(ench.id == "sharpness", "id should be sharpness");
     expect(ench.level == 5, "level should be 5");
 
-    std::cout << "  [OK] test_ench_without_ns" << std::endl;
+    std::cout << "  PASS: test_ench_without_ns" << std::endl;
 }
 
 void test_colon_shorthand() {
@@ -52,7 +52,7 @@ void test_colon_shorthand() {
     expect(ench.id == "sharpness", "id should be sharpness");
     expect(ench.level == 5, "level should be 5");
 
-    std::cout << "  [OK] test_colon_shorthand" << std::endl;
+    std::cout << "  PASS: test_colon_shorthand" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ void test_target_with_inline() {
     expect(target.inline_enchants[0].id == "sharpness", "inline enchant id should be sharpness");
     expect(target.inline_enchants[0].level == 3, "inline enchant level should be 3");
 
-    std::cout << "  [OK] test_target_with_inline" << std::endl;
+    std::cout << "  PASS: test_target_with_inline" << std::endl;
 }
 
 void test_parse_target_no_brackets() {
@@ -76,7 +76,7 @@ void test_parse_target_no_brackets() {
     expect(target.item_id == "diamond_sword", "item_id should be diamond_sword without brackets");
     expect(target.inline_enchants.empty(), "no inline enchants when no brackets");
 
-    std::cout << "  [OK] test_parse_target_no_brackets" << std::endl;
+    std::cout << "  PASS: test_parse_target_no_brackets" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ void test_help_flag() {
 
     expect(config.help == true, "--help should be true");
 
-    std::cout << "  [OK] test_help_flag" << std::endl;
+    std::cout << "  PASS: test_help_flag" << std::endl;
 }
 
 void test_help_short_flag() {
@@ -100,7 +100,7 @@ void test_help_short_flag() {
 
     expect(config.help == true, "-h should be true");
 
-    std::cout << "  [OK] test_help_short_flag" << std::endl;
+    std::cout << "  PASS: test_help_short_flag" << std::endl;
 }
 
 void test_verbose_short_flag() {
@@ -111,7 +111,7 @@ void test_verbose_short_flag() {
     expect(config.verbose == true, "-v should set verbose");
     expect(config.target == "sword", "target still parsed");
 
-    std::cout << "  [OK] test_verbose_short_flag" << std::endl;
+    std::cout << "  PASS: test_verbose_short_flag" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ void test_default_values() {
     expect(config.format == "text", "default format should be text");
     expect(config.solutions == 1, "default solutions should be 1");
 
-    std::cout << "  [OK] test_default_values" << std::endl;
+    std::cout << "  PASS: test_default_values" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ void test_unknown_flag_throws() {
 
     expect(threw, "unknown flag should throw std::runtime_error");
 
-    std::cout << "  [OK] test_unknown_flag_throws" << std::endl;
+    std::cout << "  PASS: test_unknown_flag_throws" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +163,7 @@ void test_enchantment_list() {
     expect(list[1].id == "knockback", "second enchantment id should be knockback");
     expect(list[1].level == 2, "second enchantment level should be 2");
 
-    std::cout << "  [OK] test_enchantment_list" << std::endl;
+    std::cout << "  PASS: test_enchantment_list" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +178,7 @@ void test_key_value_equals_form() {
     expect(config.target == "diamond_sword", "target via --key=value form");
     expect(config.wanted == "sharpness=5", "wanted via --key=value form");
 
-    std::cout << "  [OK] test_key_value_equals_form" << std::endl;
+    std::cout << "  PASS: test_key_value_equals_form" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +189,7 @@ void test_empty_enchantment_list() {
     auto list = parse_enchantment_list("");
     expect(list.empty(), "empty string should return empty list");
 
-    std::cout << "  [OK] test_empty_enchantment_list" << std::endl;
+    std::cout << "  PASS: test_empty_enchantment_list" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ void test_target_multiple_inline() {
     expect(target.inline_enchants[1].id == "knockback", "second inline id");
     expect(target.inline_enchants[1].level == 2, "second inline level");
 
-    std::cout << "  [OK] test_target_multiple_inline" << std::endl;
+    std::cout << "  PASS: test_target_multiple_inline" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ void test_target_with_ns_inline() {
     expect(target.inline_enchants[0].id == "sharpness", "inline id");
     expect(target.inline_enchants[0].level == 3, "inline level");
 
-    std::cout << "  [OK] test_target_with_ns_inline" << std::endl;
+    std::cout << "  PASS: test_target_with_ns_inline" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -241,7 +241,7 @@ void test_solutions_flag() {
         expect(config.solutions == 10, "--solutions=10");
     }
 
-    std::cout << "  [OK] test_solutions_flag" << std::endl;
+    std::cout << "  PASS: test_solutions_flag" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +261,7 @@ void test_missing_target_throws() {
 
     expect(threw, "missing --target should throw");
 
-    std::cout << "  [OK] test_missing_target_throws" << std::endl;
+    std::cout << "  PASS: test_missing_target_throws" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +281,7 @@ void test_missing_wanted_throws() {
 
     expect(threw, "missing --wanted should throw");
 
-    std::cout << "  [OK] test_missing_wanted_throws" << std::endl;
+    std::cout << "  PASS: test_missing_wanted_throws" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +295,7 @@ void test_ench_ns_only() {
     expect(ench.id == "sharpness", "id");
     expect(ench.level == 1, "default level should be 1");
 
-    std::cout << "  [OK] test_ench_ns_only" << std::endl;
+    std::cout << "  PASS: test_ench_ns_only" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -309,7 +309,7 @@ void test_ench_custom_ns_with_level() {
     expect(ench.id == "excavate", "id");
     expect(ench.level == 3, "level");
 
-    std::cout << "  [OK] test_ench_custom_ns_with_level" << std::endl;
+    std::cout << "  PASS: test_ench_custom_ns_with_level" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -325,7 +325,7 @@ void test_ench_invalid_level_throws() {
     }
     expect(threw, "invalid level 'abc' after '=' should throw");
 
-    std::cout << "  [OK] test_ench_invalid_level_throws" << std::endl;
+    std::cout << "  PASS: test_ench_invalid_level_throws" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +354,7 @@ void test_solutions_invalid_throws() {
         expect(threw, "negative --solutions should throw");
     }
 
-    std::cout << "  [OK] test_solutions_invalid_throws" << std::endl;
+    std::cout << "  PASS: test_solutions_invalid_throws" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -370,7 +370,7 @@ void test_double_dash_stops_parsing() {
     // -- stops parsing, so --wanted is not consumed as an option
     expect(config.wanted.empty(), "wanted should be empty because -- stops parsing");
 
-    std::cout << "  [OK] test_double_dash_stops_parsing" << std::endl;
+    std::cout << "  PASS: test_double_dash_stops_parsing" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -397,7 +397,7 @@ void test_all_options() {
     expect(config.output.has_value() && config.output.value() == "out.json", "output");
     expect(config.data_pack.has_value() && config.data_pack.value() == "mypack", "data-pack");
 
-    std::cout << "  [OK] test_all_options" << std::endl;
+    std::cout << "  PASS: test_all_options" << std::endl;
 }
 
 } // namespace

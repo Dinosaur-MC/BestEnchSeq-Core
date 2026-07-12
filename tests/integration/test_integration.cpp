@@ -96,7 +96,7 @@ void test_full_pipeline_direct() {
     expect(input.target_item.equipment->name_id == "diamond_sword",
            "full_pipeline_direct: target should be diamond sword");
 
-    std::cout << "  [OK] test_full_pipeline_direct" << std::endl;
+    std::cout << "  PASS: test_full_pipeline_direct" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +144,7 @@ void test_full_pipeline_inventory() {
            "full_pipeline_inventory: target should have equipment");
 
     std::filesystem::remove_all(temp_dir);
-    std::cout << "  [OK] test_full_pipeline_inventory" << std::endl;
+    std::cout << "  PASS: test_full_pipeline_inventory" << std::endl;
 }
 
 
@@ -168,7 +168,7 @@ void test_builtin_enchantment_lookup() {
     expect(sharpness.max_level == 5, "builtin: sharpness max_level is 5");
     expect(sharpness.multiplier == 1, "builtin: sharpness multiplier is 1");
 
-    std::cout << "  [OK] test_builtin_enchantment_lookup" << std::endl;
+    std::cout << "  PASS: test_builtin_enchantment_lookup" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ void test_builtin_equipment_lookup() {
     expect(found_sword, "builtin_eq: diamond_sword found");
     expect(found_netherite_helmet, "builtin_eq: netherite_helmet found");
 
-    std::cout << "  [OK] test_builtin_equipment_lookup" << std::endl;
+    std::cout << "  PASS: test_builtin_equipment_lookup" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,7 +228,7 @@ void test_output_formatting_empty() {
     // Structured JSON validation
     check_json_solutions(json_str, 0);
 
-    std::cout << "  [OK] test_output_formatting_empty" << std::endl;
+    std::cout << "  PASS: test_output_formatting_empty" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +336,7 @@ void test_full_pipeline_execute() {
            "execute: JSON output should contain 'sharpness'");
     check_json_solutions(json_text, 1);
 
-    std::cout << "  [OK] test_full_pipeline_execute" << std::endl;
+    std::cout << "  PASS: test_full_pipeline_execute" << std::endl;
 }
 
 } // anonymous namespace

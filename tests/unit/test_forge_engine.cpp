@@ -32,13 +32,13 @@ NamedIDs get_ids() {
 void setup_enchinfo() {
     std::vector<EnchInfo> infos;
     infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5,
-                     1, {}, {EquipmentCategory::ID_SWORD}});
+                     1, false, {}, {EquipmentCategory::ID_SWORD}});
     infos.push_back({"knockback", "Knockback", MCE::All, 2, 2,
-                     2, {}, {EquipmentCategory::ID_SWORD}});
+                     2, false, {}, {EquipmentCategory::ID_SWORD}});
     infos.push_back({"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
-                     1, {"sharpness"}, {EquipmentCategory::ID_SWORD}});
+                     1, false, {"sharpness"}, {EquipmentCategory::ID_SWORD}});
     infos.push_back({"protection", "Protection", MCE::All, 4, 4,
-                     1, {}, {EquipmentCategory::ID_CHESTPLATE}});
+                     1, false, {}, {EquipmentCategory::ID_CHESTPLATE}});
     registries::enchants().initialize(infos);
     registries::categories().initialize();
 }

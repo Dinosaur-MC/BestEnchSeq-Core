@@ -18,7 +18,7 @@ void test_default_json_is_null() {
     expect(j.type() == JsonType::Empty, "default Json should report Empty type");
     expect(j.to_string() == "null", "default Json serializes to null");
 
-    std::cout << "  [OK] test_default_json_is_null" << std::endl;
+    std::cout << "  PASS: test_default_json_is_null" << std::endl;
 }
 
 void test_null_static() {
@@ -27,7 +27,7 @@ void test_null_static() {
     expect(j.type() == JsonType::Null, "Json::null() type is Null");
     expect(j.to_string() == "null", "Json::null() serializes to null");
 
-    std::cout << "  [OK] test_null_static" << std::endl;
+    std::cout << "  PASS: test_null_static" << std::endl;
 }
 
 // ===========================================================================
@@ -42,7 +42,7 @@ void test_construct_bool() {
     Json f(false);
     expect(f.to_string() == "false", "Json(false) serializes");
 
-    std::cout << "  [OK] test_construct_bool" << std::endl;
+    std::cout << "  PASS: test_construct_bool" << std::endl;
 }
 
 void test_construct_number() {
@@ -61,7 +61,7 @@ void test_construct_number() {
     Json dbl(2.71828);
     expect(dbl.type() == JsonType::Number, "Json(double) type is Number");
 
-    std::cout << "  [OK] test_construct_number" << std::endl;
+    std::cout << "  PASS: test_construct_number" << std::endl;
 }
 
 void test_construct_string() {
@@ -77,7 +77,7 @@ void test_construct_string() {
     Json esc(Json::String("a\"b"));
     expect(esc.to_string() == "\"a\\\"b\"", "string with quote escapes");
 
-    std::cout << "  [OK] test_construct_string" << std::endl;
+    std::cout << "  PASS: test_construct_string" << std::endl;
 }
 
 void test_construct_array() {
@@ -94,7 +94,7 @@ void test_construct_array() {
     expect(empty_arr.type() == JsonType::Array, "empty array type is Array");
     expect(empty_arr.to_string() == "[]", "empty array serializes");
 
-    std::cout << "  [OK] test_construct_array" << std::endl;
+    std::cout << "  PASS: test_construct_array" << std::endl;
 }
 
 void test_construct_object() {
@@ -109,7 +109,7 @@ void test_construct_object() {
     expect(empty_obj.type() == JsonType::Object, "empty object type is Object");
     expect(empty_obj.to_string() == "{}", "empty object serializes");
 
-    std::cout << "  [OK] test_construct_object" << std::endl;
+    std::cout << "  PASS: test_construct_object" << std::endl;
 }
 
 // ===========================================================================
@@ -132,7 +132,7 @@ void test_copy_equality() {
     // After move, e is in a valid-but-unspecified state; f should be valid
     expect(f.type() == JsonType::Null, "move-constructed holds the data");
 
-    std::cout << "  [OK] test_copy_equality" << std::endl;
+    std::cout << "  PASS: test_copy_equality" << std::endl;
 }
 
 // ===========================================================================
@@ -160,7 +160,7 @@ void test_path_queries() {
     // Path on root itself
     expect(root.type("") == JsonType::Object, "empty path returns root type");
 
-    std::cout << "  [OK] test_path_queries" << std::endl;
+    std::cout << "  PASS: test_path_queries" << std::endl;
 }
 
 // ===========================================================================
@@ -181,7 +181,7 @@ void test_get_value() {
     Json::Value const_val = const_json.get_value();
     expect(std::holds_alternative<Json::String>(const_val), "const get_value should work");
 
-    std::cout << "  [OK] test_get_value" << std::endl;
+    std::cout << "  PASS: test_get_value" << std::endl;
 }
 
 // ===========================================================================
@@ -207,7 +207,7 @@ void test_parse_scalars() {
     expect(Json::parse("\"line\\nfeed\"").to_string() == "\"line\\nfeed\"",
            "escaped newline should round-trip");
 
-    std::cout << "  [OK] test_parse_scalars" << std::endl;
+    std::cout << "  PASS: test_parse_scalars" << std::endl;
 }
 
 void test_parse_unicode() {
@@ -225,7 +225,7 @@ void test_parse_unicode() {
     Json u = Json::parse(input2);
     expect(u.type() == JsonType::String, "CJK unicode escapes parse to String");
 
-    std::cout << "  [OK] test_parse_unicode" << std::endl;
+    std::cout << "  PASS: test_parse_unicode" << std::endl;
 }
 
 // ===========================================================================
@@ -244,7 +244,7 @@ void test_parse_arrays() {
     Json nested = Json::parse("[[1],[2,3]]");
     expect(nested.type() == JsonType::Array, "nested array parses");
 
-    std::cout << "  [OK] test_parse_arrays" << std::endl;
+    std::cout << "  PASS: test_parse_arrays" << std::endl;
 }
 
 void test_parse_objects() {
@@ -265,7 +265,7 @@ void test_parse_objects() {
     expect(nested.type("data.items") == JsonType::Array, "nested path resolves");
     expect(nested.type("data.items") == JsonType::Array, "nested path resolves after compact round-trip");
 
-    std::cout << "  [OK] test_parse_objects" << std::endl;
+    std::cout << "  PASS: test_parse_objects" << std::endl;
 }
 
 // ===========================================================================
@@ -288,7 +288,7 @@ void test_pretty_print() {
     // Verify compact still works
     expect(arr.to_string(Json::Compact) == "[1,2]", "compact after pretty still works");
 
-    std::cout << "  [OK] test_pretty_print" << std::endl;
+    std::cout << "  PASS: test_pretty_print" << std::endl;
 }
 
 // ===========================================================================
@@ -342,7 +342,7 @@ void test_parse_errors() {
         expect(threw, "invalid token throws JsonException");
     }
 
-    std::cout << "  [OK] test_parse_errors" << std::endl;
+    std::cout << "  PASS: test_parse_errors" << std::endl;
 }
 
 // ===========================================================================
@@ -365,7 +365,7 @@ void test_round_trip() {
     Json nested = Json::parse("{\"a\":[],\"b\":{}}");
     expect(Json::parse(nested.to_string()) == nested, "nested empty round-trips");
 
-    std::cout << "  [OK] test_round_trip" << std::endl;
+    std::cout << "  PASS: test_round_trip" << std::endl;
 }
 
 // ===========================================================================
@@ -385,7 +385,7 @@ void test_stream_parsing() {
     expect(bad_json.type() == JsonType::Null, "istream error overload returns Null on bad input");
     expect(!err2.empty(), "istream error overload populates error string");
 
-    std::cout << "  [OK] test_stream_parsing" << std::endl;
+    std::cout << "  PASS: test_stream_parsing" << std::endl;
 }
 
 } // anonymous namespace

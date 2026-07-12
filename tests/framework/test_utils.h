@@ -131,6 +131,10 @@ inline void expect_approx(double actual, double expected, double epsilon,
     }
 }
 
+// Helper macro: prints "PASS: name" and increments the test counter.
+// Provides consistent, machine-parseable success output across all test files.
+#define TEST_PASS(name) do { std::cout << "PASS: " << (name) << std::endl; ++tests_passed; } while(false)
+
 // Print test summary and return exit code (0 = all passed, 1 = failures).
 inline int print_summary() {
     int total = tests_passed + tests_failed;

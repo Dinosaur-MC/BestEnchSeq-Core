@@ -21,7 +21,7 @@ void test_default_values() {
     expect(cfg.data_dir == "data/builtin", "default data_dir");
     expect(cfg.log_dir == "logs", "default log_dir");
 
-    std::cout << "  [OK] test_default_values" << std::endl;
+    std::cout << "  PASS: test_default_values" << std::endl;
 }
 
 void test_env_memory_mb() {
@@ -34,7 +34,7 @@ void test_env_memory_mb() {
 
     unset_env("BESQ_MEMORY_MB");
 
-    std::cout << "  [OK] test_env_memory_mb" << std::endl;
+    std::cout << "  PASS: test_env_memory_mb" << std::endl;
 }
 
 void test_env_verbose() {
@@ -46,7 +46,7 @@ void test_env_verbose() {
 
     unset_env("BESQ_VERBOSE");
 
-    std::cout << "  [OK] test_env_verbose" << std::endl;
+    std::cout << "  PASS: test_env_verbose" << std::endl;
 }
 
 void test_env_data_dir() {
@@ -58,7 +58,7 @@ void test_env_data_dir() {
 
     unset_env("BESQ_DATA_DIR");
 
-    std::cout << "  [OK] test_env_data_dir" << std::endl;
+    std::cout << "  PASS: test_env_data_dir" << std::endl;
 }
 
 } // anonymous namespace

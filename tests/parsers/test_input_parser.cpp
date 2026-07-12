@@ -49,6 +49,7 @@ void setup_enchinfo() {
         5,   // max_level
         5,   // limited_level
         1,   // multiplier
+        false, // is_treasure
         {},  // exclusive_set
         {EquipmentCategory::ID_SWORD},
     });
@@ -59,6 +60,7 @@ void setup_enchinfo() {
         2,   // max_level
         2,   // limited_level
         2,   // multiplier
+        false, // is_treasure
         {},  // exclusive_set
         {EquipmentCategory::ID_SWORD},
     });
@@ -122,7 +124,7 @@ void test_parse_inventory_json() {
            "parse_inventory: item[2] prior_penalty should be 2");
 
     std::filesystem::remove_all(temp_dir);
-    std::cout << "  [OK] test_parse_inventory_json" << std::endl;
+    std::cout << "  PASS: test_parse_inventory_json" << std::endl;
 }
 
 void test_build_target() {
@@ -144,7 +146,7 @@ void test_build_target() {
     expect(target.prior_penalty == 0,
            "build_target: prior_penalty should be 0");
 
-    std::cout << "  [OK] test_build_target" << std::endl;
+    std::cout << "  PASS: test_build_target" << std::endl;
 }
 
 void test_build_target_with_inline() {
@@ -168,7 +170,7 @@ void test_build_target_with_inline() {
     expect(it->level == 3,
            "build_target_inline: sharpness level should be 3");
 
-    std::cout << "  [OK] test_build_target_with_inline" << std::endl;
+    std::cout << "  PASS: test_build_target_with_inline" << std::endl;
 }
 
 void test_build_wanted_enchset() {
@@ -193,7 +195,7 @@ void test_build_wanted_enchset() {
     expect(it->level == 2,
            "build_wanted_enchset: knockback level should be 2");
 
-    std::cout << "  [OK] test_build_wanted_enchset" << std::endl;
+    std::cout << "  PASS: test_build_wanted_enchset" << std::endl;
 }
 
 void test_generate_books_auto_complete() {
@@ -256,7 +258,7 @@ void test_generate_books_auto_complete() {
     expect(books_missing.size() == 5,
            "generate_books: should generate 5 graduated books (1..5) when missing entirely");
 
-    std::cout << "  [OK] test_generate_books_auto_complete" << std::endl;
+    std::cout << "  PASS: test_generate_books_auto_complete" << std::endl;
 }
 
 void test_assemble_input_direct_mode() {
@@ -290,7 +292,7 @@ void test_assemble_input_direct_mode() {
                "assemble_input: available item should be a book");
     }
 
-    std::cout << "  [OK] test_assemble_input_direct_mode" << std::endl;
+    std::cout << "  PASS: test_assemble_input_direct_mode" << std::endl;
 }
 
 void test_inventory_missing_type_field() {
@@ -310,7 +312,7 @@ void test_inventory_missing_type_field() {
            "inventory_missing_type: only the explicit book should be parsed");
 
     std::filesystem::remove_all(temp_dir);
-    std::cout << "  [OK] test_inventory_missing_type_field" << std::endl;
+    std::cout << "  PASS: test_inventory_missing_type_field" << std::endl;
 }
 
 void test_empty_inventory() {
@@ -327,7 +329,7 @@ void test_empty_inventory() {
            "empty_inventory: should have no items");
 
     std::filesystem::remove_all(temp_dir);
-    std::cout << "  [OK] test_empty_inventory" << std::endl;
+    std::cout << "  PASS: test_empty_inventory" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -353,7 +355,7 @@ void test_inventory_negative_ppn() {
     expect(threw, "negative_ppn: should throw on negative prior_penalty");
 
     std::filesystem::remove_all(temp_dir);
-    std::cout << "  [OK] test_inventory_negative_ppn" << std::endl;
+    std::cout << "  PASS: test_inventory_negative_ppn" << std::endl;
 }
 
 void test_inventory_durability_exceeds_max() {
@@ -373,7 +375,7 @@ void test_inventory_durability_exceeds_max() {
            "durability_exceeds: durability should be 9999 as provided");
 
     std::filesystem::remove_all(temp_dir);
-    std::cout << "  [OK] test_inventory_durability_exceeds_max" << std::endl;
+    std::cout << "  PASS: test_inventory_durability_exceeds_max" << std::endl;
 }
 
 void test_inventory_multi_ench_book() {
@@ -406,7 +408,7 @@ void test_inventory_multi_ench_book() {
            "multi_ench_book: knockback level should be 2");
 
     std::filesystem::remove_all(temp_dir);
-    std::cout << "  [OK] test_inventory_multi_ench_book" << std::endl;
+    std::cout << "  PASS: test_inventory_multi_ench_book" << std::endl;
 }
 
 } // anonymous namespace

@@ -42,7 +42,7 @@ void test_format_detection() {
     expect(ParserUtils::detect_format("noextension") == ParserUtils::DataFormat::Unknown,
            "path without extension");
 
-    std::cout << "  [OK] test_format_detection" << std::endl;
+    std::cout << "  PASS: test_format_detection" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ void test_csv_line_parsing() {
     expect(fields[0] == "\"", "adjacent escaped and closing quote content");
     expect(fields[1] == "x", "second field after tricky quoting");
 
-    std::cout << "  [OK] test_csv_line_parsing" << std::endl;
+    std::cout << "  PASS: test_csv_line_parsing" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +158,7 @@ void test_namespace_helpers() {
     expect(ParserUtils::qualify_id("foo", "custom") == "custom:foo",
            "custom default namespace");
 
-    std::cout << "  [OK] test_namespace_helpers" << std::endl;
+    std::cout << "  PASS: test_namespace_helpers" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ void test_mc_official_structure() {
            "data dir without enchantment/tags subdirs rejected");
     fs::remove_all(tmp);
 
-    std::cout << "  [OK] test_mc_official_structure" << std::endl;
+    std::cout << "  PASS: test_mc_official_structure" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ void test_file_io() {
 
     fs::remove_all(tmp);
 
-    std::cout << "  [OK] test_file_io" << std::endl;
+    std::cout << "  PASS: test_file_io" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ void test_parse_csv() {
 
     fs::remove_all(tmp);
 
-    std::cout << "  [OK] test_parse_csv" << std::endl;
+    std::cout << "  PASS: test_parse_csv" << std::endl;
 }
 
 } // namespace
