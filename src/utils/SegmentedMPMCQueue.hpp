@@ -90,6 +90,8 @@ class SegmentedMPMCQueue {
     };
 
 public:
+    using value_type = T;
+
     SegmentedMPMCQueue()
         : root_block_(new Block(0))
     {

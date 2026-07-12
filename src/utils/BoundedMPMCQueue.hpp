@@ -90,6 +90,8 @@ class BoundedMPMCQueue {
     //   >0 → another consumer claimed this slot, retry with fresh pos
 
 public:
+    using value_type = T;
+
     BoundedMPMCQueue() noexcept {
         for (size_t i = 0; i < Capacity; ++i) {
             _slots[i].sequence.store(i, std::memory_order_relaxed);

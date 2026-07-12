@@ -43,6 +43,8 @@ private:
     }
 
 public:
+    using value_type = T;
+
     SPSCQueue() = default;
 
     ~SPSCQueue() noexcept {

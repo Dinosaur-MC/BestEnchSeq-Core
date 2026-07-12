@@ -511,6 +511,19 @@ set_tests_properties(test_segmented_mpmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_event_loop.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_event_loop.cpp")
+endif()
+
+add_executable(test_event_loop
+    unit/test_event_loop.cpp
+)
+target_include_directories(test_event_loop PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_event_loop COMMAND test_event_loop)
+set_tests_properties(test_event_loop PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registry/test_enchantment_registry.cpp)
     message(FATAL_ERROR "Required test source not found: registry/test_enchantment_registry.cpp")
 endif()

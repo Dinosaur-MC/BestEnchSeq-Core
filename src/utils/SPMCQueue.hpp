@@ -26,6 +26,8 @@ class SPMCQueue {
     };
 
 public:
+    using value_type = T;
+
     SPMCQueue() : _write_idx(0) {
         for (size_t i = 0; i < Capacity; ++i)
             new (&_slots[i]) Slot();
