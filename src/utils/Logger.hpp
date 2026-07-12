@@ -1,10 +1,8 @@
 #pragma once
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
-#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
-#include <mutex>
 #include <string>
 #include <thread>
 
@@ -24,10 +22,8 @@ struct LogEntry {
 /// Dedicated worker writes to logs/<timestamp>.log + latest.log.
 /// Rotation keeps at most 5 historic runs.
 ///
-/// Poll-free idle: when no messages are queued the worker thread blocks on a
-/// condition variable (zero CPU, zero scheduler noise) instead of busy-waiting
-/// or short-sleep polling.  This eliminates ~200 context-switches/second that
-/// previously caused variable cache interference with computation threads.
+/// Zero-CPU idle: when no messages are queued the worker thread blocks on
+/// std::atomic::wait (C++20) — no mutex, no condition variable, no polling.
 ///
 /// Singleton (Meyer's): call Logger::instance() from anywhere.
 /// Constructed on first use; log dir defaults to "logs".
@@ -41,7 +37,7 @@ public:
     Logger& operator=(const Logger&) = delete;
 
     /// Push a log message (non-blocking). Silently drops when queue full.
-    /// Wakes the worker thread via condition variable.
+    /// Wakes the worker thread via atomic notify_one.
     void log(LogLevel level, std::string message);
 
     /// Convenience helpers.
@@ -72,8 +68,10 @@ private:
 
     BoundedMPMCQueue<LogEntry, 256> _queue;
     std::atomic<bool> _running{true};
-    std::mutex _wake_mtx;
-    std::condition_variable _wake_cv;
+    /// Wake sequence counter: every push() increments this and notifies the
+    /// worker via C++20 atomic::notify_one.  The worker blocks on wait()
+    /// instead of polling — zero CPU when idle, no mutex or CV involved.
+    std::atomic<uint64_t> _wake_seq{0};
     std::thread _worker_thread;
     std::string _log_dir;
 };

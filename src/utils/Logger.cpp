@@ -97,11 +97,20 @@ void Logger::_worker() {
         // Check again before blocking (messages may have arrived during drain)
         if (!_running.load(std::memory_order_acquire))
             break;
+
         // Block until next log message or shutdown (zero CPU while idle).
-        // This eliminates the previous 5ms polling loop (~200 context-switches
-        // per second) that caused variable cache interference.
-        std::unique_lock<std::mutex> lock(_wake_mtx);
-        _wake_cv.wait(lock);
+        // C++20 atomic::wait is lock-free — no mutex, no condition variable.
+        auto prev = _wake_seq.load(std::memory_order_acquire);
+        // Double-check: messages may have arrived between drain and load
+        if (_queue.try_pop(entry)) {
+            // process inline then continue the drain loop
+            auto line = "[" + now_str() + "] [" + level_str(entry.level) + "] "
+                      + entry.message + "\n";
+            if (run_file.is_open()) run_file << line;
+            if (latest_file.is_open()) latest_file << line;
+            continue;
+        }
+        _wake_seq.wait(prev, std::memory_order_acquire);
     }
 
     // Drain remaining
@@ -130,27 +139,23 @@ Logger::Logger(std::string log_dir)
 
 Logger::~Logger() {
     _running.store(false, std::memory_order_release);
-    {
-        std::lock_guard<std::mutex> lock(_wake_mtx);
-        _wake_cv.notify_all();
-    }
+    _wake_seq.fetch_add(1, std::memory_order_release);
+    _wake_seq.notify_all();
     if (_worker_thread.joinable())
         _worker_thread.join();
 }
 
 void Logger::log(LogLevel level, std::string message) {
     if (_queue.try_push(LogEntry{level, std::move(message)})) {
-        std::lock_guard<std::mutex> lock(_wake_mtx);
-        _wake_cv.notify_one();
+        _wake_seq.fetch_add(1, std::memory_order_release);
+        _wake_seq.notify_one();
     }
 }
 
 void Logger::flush() {
     _running.store(false, std::memory_order_release);
-    {
-        std::lock_guard<std::mutex> lock(_wake_mtx);
-        _wake_cv.notify_all();
-    }
+    _wake_seq.fetch_add(1, std::memory_order_release);
+    _wake_seq.notify_all();
     if (_worker_thread.joinable())
         _worker_thread.join();
     _running.store(true, std::memory_order_release);
