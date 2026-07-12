@@ -57,4 +57,21 @@ struct RegistryResolver {
         const std::string &id,
         const EnchantmentRegistry &ench_reg
     );
+
+    // ── Raw data merging (multi-source data pack support) ──────────────
+
+    /// Merge new raw enchantments into an existing vector.
+    /// Entries from \p extra whose name_id does not already appear in
+    /// \p base are appended.  This avoids duplicate resolution work when
+    /// loading multiple data packs.
+    static void merge_raw_ench_info(
+        std::vector<RawEnchInfo> &base,
+        const std::vector<RawEnchInfo> &extra
+    );
+
+    /// Merge new raw equipment into an existing vector (same dedup logic).
+    static void merge_raw_equipment(
+        std::vector<RawEquipment> &base,
+        const std::vector<RawEquipment> &extra
+    );
 };

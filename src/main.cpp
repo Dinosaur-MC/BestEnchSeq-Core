@@ -59,27 +59,33 @@ void load_custom_data(
 
     tag_resolver.load_from(data_pack_dir);
 
+    // Parse new data as raw
     auto raw_ench = EnchInfoParser::parse(data_pack_dir, tag_resolver);
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-    auto existing_ench = ench_reg.get_instances();
-    std::vector<EnchInfo> combined_ench;
-    combined_ench.reserve(existing_ench.size() + ench_infos.size());
-    for (const auto &info : existing_ench)
-        combined_ench.push_back(info);
-    for (const auto &info : ench_infos)
-        combined_ench.push_back(info);
-    ench_reg.initialize(combined_ench);
+    auto raw_eq   = EquipmentParser::parse(data_pack_dir, tag_resolver);
 
-    auto raw_eq = EquipmentParser::parse(data_pack_dir, tag_resolver);
-    auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-    auto &existing_eq = eq_reg.get_instances();
-    std::vector<Equipment> combined_eq;
-    combined_eq.reserve(existing_eq.size() + equipments.size());
-    for (const auto &eq : existing_eq)
-        combined_eq.push_back(eq);
-    for (const auto &eq : equipments)
-        combined_eq.push_back(eq);
-    eq_reg.initialize(combined_eq);
+    // Merge with already-loaded data and re-initialize
+    {
+        auto existing = ench_reg.get_instances();
+        std::vector<EnchInfo> combined;
+        combined.reserve(existing.size() + raw_ench.size());
+        for (const auto &info : existing)
+            combined.push_back(info);
+        auto new_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
+        for (const auto &info : new_infos)
+            combined.push_back(info);
+        ench_reg.initialize(combined);
+    }
+    {
+        auto &existing = eq_reg.get_instances();
+        std::vector<Equipment> combined;
+        combined.reserve(existing.size() + raw_eq.size());
+        for (const auto &eq : existing)
+            combined.push_back(eq);
+        auto new_eq = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
+        for (const auto &eq : new_eq)
+            combined.push_back(eq);
+        eq_reg.initialize(combined);
+    }
 }
 
 void register_builtin_algorithms(AlgorithmRegistry &registry) {

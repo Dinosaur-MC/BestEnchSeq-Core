@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 // ============================================================================
 // Raw → domain type resolution
@@ -100,4 +101,39 @@ int32_t RegistryResolver::resolve_ench_id(
     if (ench_id >= 0) return ench_id;
 
     throw std::runtime_error("Unknown enchantment: " + namespaced);
+}
+
+// ============================================================================
+// Raw data merging
+// ============================================================================
+
+void RegistryResolver::merge_raw_ench_info(
+    std::vector<RawEnchInfo> &base,
+    const std::vector<RawEnchInfo> &extra
+) {
+    // Build set of existing name_ids for O(1) dedup
+    std::unordered_set<std::string> existing;
+    existing.reserve(base.size());
+    for (const auto &r : base)
+        existing.insert(r.name_id);
+
+    for (const auto &r : extra) {
+        if (existing.insert(r.name_id).second)
+            base.push_back(r);
+    }
+}
+
+void RegistryResolver::merge_raw_equipment(
+    std::vector<RawEquipment> &base,
+    const std::vector<RawEquipment> &extra
+) {
+    std::unordered_set<std::string> existing;
+    existing.reserve(base.size());
+    for (const auto &r : base)
+        existing.insert(r.name_id);
+
+    for (const auto &r : extra) {
+        if (existing.insert(r.name_id).second)
+            base.push_back(r);
+    }
 }
