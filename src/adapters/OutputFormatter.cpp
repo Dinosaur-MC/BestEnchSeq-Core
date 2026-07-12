@@ -41,14 +41,6 @@ std::string ench_name_id(int32_t id, const EnchantmentRegistry &ench_reg) {
     }
 }
 
-std::string ench_display_name(int32_t id, const EnchantmentRegistry &ench_reg) {
-    try {
-        return ench_reg.get(id).name;
-    } catch (const std::exception &) {
-        return "ench_" + std::to_string(id);
-    }
-}
-
 // ---------------------------------------------------------------------------
 // JSON extraction helpers
 // ---------------------------------------------------------------------------

@@ -18,7 +18,10 @@
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
+#include <limits>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
@@ -151,15 +154,14 @@ BenchConfig parse_cli(int argc, char* argv[]) {
 }
 
 // ─── Setup ───
-void load_builtin_data() {
-    auto dir = std::filesystem::path("data") / "builtin";
+void load_builtin_data(const std::filesystem::path &builtin_data_dir) {
     TagResolver tags;
     registries::categories().initialize();
     auto &cat_reg = registries::categories();
-    auto raw_ench = EnchInfoParser::parse(dir / "vanilla.json", tags);
+    auto raw_ench = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tags);
     auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
     registries::enchants().initialize(ench_infos);
-    auto raw_eq = EquipmentParser::parse(dir / "vanilla.json", tags);
+    auto raw_eq = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tags);
     auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
     registries::equipment().initialize(equipments);
 }
@@ -172,6 +174,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
     }
     const Equipment& eq = registries::equipment().get(eq_id);
 
+    // ── Build wanted set and graduated books (Issue 5) ──
     ::EnchSet wanted_set;
     ItemCollection books;
     for (const auto& spec : tc.wanted) {
@@ -181,7 +184,10 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         int32_t eid = registries::enchants().get_id(id);
         if (eid < 0) { std::cout << "  SKIP: unknown enchant '" << id << "'" << std::endl; return; }
         wanted_set.emplace(eid, lv);
-        books.emplace_back(::EnchSet{Ench(eid, lv)});
+        // Create graduated books from level 1 up to max level,
+        // matching InputParser::generate_books() behavior.
+        for (int32_t lvl = 1; lvl <= lv; ++lvl)
+            books.emplace_back(::EnchSet{Ench(eid, lvl)});
     }
 
     compact::EnchReg ench_reg;
@@ -202,6 +208,20 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
     for (const auto& e : wanted_set)
         algo_input.target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
 
+    // ── Warmup: one greedy run before measurements (Issue 3) ──
+    {
+        if (registries::algorithms().contains("greedy")) {
+            auto warmup_algo = registries::algorithms().create("greedy");
+            AlgorithmExecutor warmup_exec(std::move(warmup_algo));
+            AlgorithmInput warmup_input = algo_input;
+            warmup_exec.start(std::move(warmup_input));
+            warmup_exec.wait();
+            // Result discarded
+        }
+    }
+
+    constexpr int NUM_RUNS = 3;
+
     for (const auto& algo_name : enabled_algos) {
         if (!registries::algorithms().contains(algo_name)) {
             std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
@@ -211,34 +231,80 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             std::cout << "  " << algo_name << ": SKIP: too many enchants" << std::endl;
             continue;
         }
-        
-        auto algo = registries::algorithms().create(algo_name);
-        AlgorithmExecutor executor(std::move(algo));
 
-        AlgorithmInput run_input = algo_input;
-        executor.start(std::move(run_input));
-        executor.wait();
+        // ── Aggregate results across 3 runs ──
+        int32_t cost_min = std::numeric_limits<int32_t>::max();
+        int32_t cost_max = std::numeric_limits<int32_t>::min();
+        double cost_sum = 0;
+        double self_min = std::numeric_limits<double>::max();
+        double self_max = std::numeric_limits<double>::min();
+        double self_sum = 0;
+        double wall_min = std::numeric_limits<double>::max();
+        double wall_max = std::numeric_limits<double>::min();
+        double wall_sum = 0;
+        int success_count = 0;
 
-        if (executor.state() != AlgorithmState::Completed) {
-            std::cout << "  " << algo_name << ": FAILED" << std::endl;
+        for (int run = 0; run < NUM_RUNS; ++run) {
+            auto algo = registries::algorithms().create(algo_name);
+            AlgorithmExecutor executor(std::move(algo));
+
+            AlgorithmInput run_input = algo_input;
+
+            auto wall_start = std::chrono::high_resolution_clock::now();
+            executor.start(std::move(run_input));
+            executor.wait();
+            auto wall_end = std::chrono::high_resolution_clock::now();
+            double wall_ms = std::chrono::duration<double, std::milli>(wall_end - wall_start).count();
+
+            if (executor.state() != AlgorithmState::Completed) {
+                continue;
+            }
+            AlgorithmOutput out = executor.output();
+            if (out.steps.empty()) {
+                continue;
+            }
+
+            int32_t total = 0;
+            for (const auto& step_list : out.steps)
+                for (const auto& s : step_list)
+                    total += s.cost;
+
+            double self_ms = static_cast<double>(out.computation_time.count());
+
+            cost_min = std::min(cost_min, total);
+            cost_max = std::max(cost_max, total);
+            cost_sum += total;
+            self_min = std::min(self_min, self_ms);
+            self_max = std::max(self_max, self_ms);
+            self_sum += self_ms;
+            wall_min = std::min(wall_min, wall_ms);
+            wall_max = std::max(wall_max, wall_ms);
+            wall_sum += wall_ms;
+            ++success_count;
+        }
+
+        if (success_count == 0) {
+            std::cout << "  " << algo_name << ": FAILED (" << NUM_RUNS << "/" << NUM_RUNS << " runs failed)" << std::endl;
             continue;
         }
-        AlgorithmOutput out = executor.output();
-        if (out.steps.empty()) {
-            std::cout << "  " << algo_name << ": no solution" << std::endl;
-            continue;
-        }
 
-        int32_t total = 0;
-        for (const auto& step_list : out.steps)
-            for (const auto& s : step_list)
-                total += s.cost;
+        double cost_avg = cost_sum / success_count;
+        double self_avg = self_sum / success_count;
+        double wall_avg = wall_sum / success_count;
 
-        bool ok = total >= tc.min_cost && total <= tc.max_cost;
-        std::cout << "  " << algo_name << ": " << total << "L ["
-                  << tc.min_cost << "-" << tc.max_cost << "L]"
-                  << (ok ? " ✅" : " ⚠️  out of range")
-                  << " (" << out.computation_time.count() << "ms)" << std::endl;
+        // All successful runs must be within range
+        bool all_ok = cost_min >= tc.min_cost && cost_max <= tc.max_cost;
+
+        std::cout << "  " << algo_name << ": cost(avg=" << cost_avg
+                  << " min=" << cost_min << " max=" << cost_max << ")"
+                  << " self(avg=" << self_avg << "ms"
+                  << " min=" << self_min << "ms"
+                  << " max=" << self_max << "ms)"
+                  << " wall(avg=" << wall_avg << "ms)"
+                  << " [" << tc.min_cost << "-" << tc.max_cost << "L]"
+                  << (all_ok ? " ✅" : " ⚠️  out of range")
+                  << " runs=" << success_count
+                  << std::endl;
     }
 }
 
@@ -267,7 +333,13 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Time: " << std::chrono::current_zone()->to_local(std::chrono::system_clock::now()) << std::endl;
     std::cout << "=== Dataset Benchmark ===" << std::endl;
-    load_builtin_data();
+
+    // Resolve data path: prefer path relative to executable, fall back to CWD
+    auto builtin_data_dir = std::filesystem::absolute(argv[0]).parent_path() / "data" / "builtin";
+    if (!std::filesystem::exists(builtin_data_dir)) {
+        builtin_data_dir = std::filesystem::path("data") / "builtin";
+    }
+    load_builtin_data(builtin_data_dir);
 
     registries::algorithms().register_algorithm("greedy",
         []{ return std::make_unique<GreedyAlgorithm>(); });

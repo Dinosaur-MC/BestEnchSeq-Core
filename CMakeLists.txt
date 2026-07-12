@@ -12,6 +12,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if(MSVC)
     add_compile_options(/FS)
+    add_compile_options(/W4)
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
 
 # Executable Output Path
@@ -27,6 +30,15 @@ set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+# Install rules
+include(GNUInstallDirs)
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(DIRECTORY data/
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/BestEnchSeq-Core/data
 )
 
 # Tests
