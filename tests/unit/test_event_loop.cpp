@@ -356,6 +356,54 @@ void test_concurrent_producers() {
 }
 
 // ============================================================================
+// Wakeup race regression test
+// ============================================================================
+
+void test_wakeup_race() {
+    // This test targets the lost-wakeup race between "drain empty" and
+    // "atomic::wait".  If the consumer reads _wake after the producer has
+    // notified but before wait() blocks, it can sleep forever on the old
+    // value while a task sits in the queue.
+    //
+    // The fix: double-check the queue after loading _wake but before
+    // entering wait().
+    MPMCEventLoop<> loop;
+    loop.start();
+
+    // Drain all tasks so the consumer enters idle-wait.
+    loop.post_and_wait([] {});
+
+    std::atomic<bool> task_done{false};
+
+    std::thread producer([&] {
+        // Yield repeatedly to maximise the chance that the consumer has
+        // entered wait() *before* we post.  On a loaded system this is
+        // still probabilistic, so we do it in a loop (see below).
+        for (int i = 0; i < 50; ++i)
+            std::this_thread::yield();
+        loop.post([&] { task_done.store(true); });
+    });
+
+    // Wait for the task with a generous timeout.
+    // Without the double-check fix this almost always times out.
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!task_done.load()) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            producer.join();
+            loop.stop();
+            throw test_error("wakeup race: task never executed (lost wakeup)");
+        }
+        std::this_thread::yield();
+    }
+
+    producer.join();
+    loop.stop();
+
+    expect(task_done.load(), "wakeup race: task executed");
+    std::cout << "PASS: test_wakeup_race" << std::endl;
+}
+
+// ============================================================================
 // Move-only callables (requires explicit Task type)
 // ============================================================================
 
@@ -454,6 +502,9 @@ int main() {
 
         // Concurrent
         test_concurrent_producers();
+
+        // Wakeup race (regression)
+        test_wakeup_race();
 
         // Move-only
         test_move_only_task();

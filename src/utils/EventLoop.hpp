@@ -200,22 +200,38 @@ private:
     }
 
     void _run(std::stop_token st) {
-        uint64_t last_wake = _wake.load(std::memory_order_acquire);
-
         while (!st.stop_requested()) {
-            // ── Drain all currently available tasks ──
+            // ── Drain ALL available tasks before checking stop ──
+            // This honours the "drain before exit" contract.  stop()
+            // will notify_one() to wake us if we are blocked in wait().
             Task task;
             while (consume(_queue, task)) {
-                if (st.stop_requested())
-                    return;             // honour stop even mid-drain
                 task();
             }
 
-            // ── Empty: wait until a producer increments _wake ──
-            // This is a blocking wait (futex on Linux, WaitOnAddress on
-            // Windows).  Zero CPU while blocked.
-            _wake.wait(last_wake, std::memory_order_acquire);
-            last_wake = _wake.load(std::memory_order_acquire);
+            // ── Queue empty — safe to check for stop ──
+            if (st.stop_requested())
+                return;
+
+            // ── Double-check: load _wake, then re-check the queue ──
+            // Without this double-check a producer could push + notify
+            // in the gap between our empty drain and _wake.wait(),
+            // causing a lost wakeup (the notification arrives before
+            // we enter the wait, so we block forever on the old value).
+            //
+            // By re-checking consume() after loading _wake we capture
+            // any task that arrived after the drain:
+            //   - consume() succeeds  → execute it, restart the loop.
+            //   - consume() fails     → nobody pushed → safe to wait().
+            auto prev = _wake.load(std::memory_order_acquire);
+            if (consume(_queue, task)) {
+                task();
+                continue;
+            }
+
+            // ── Block until a producer increments _wake ──
+            // Zero CPU (futex on Linux, WaitOnAddress on Windows).
+            _wake.wait(prev, std::memory_order_acquire);
         }
     }
 
