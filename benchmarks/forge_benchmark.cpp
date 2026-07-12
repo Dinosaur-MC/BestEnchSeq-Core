@@ -208,21 +208,20 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
 
     struct BenchResult {
         std::string algo;
-        int32_t cost;
-        int64_t ms;
-        bool ok;
+        enum Kind { Data, Skip, Fail } kind;
+        int32_t cost{0};
+        int64_t ms{0};
+        bool ok{false};
     };
     std::vector<BenchResult> results;
 
     for (const auto& algo_name : enabled_algos) {
         if (!registries::algorithms().contains(algo_name)) {
-            std::cout << "  " << std::left << std::setw(18) << algo_name
-                      << "unknown, skipping" << std::endl;
+            results.push_back({algo_name, BenchResult::Fail});
             continue;
         }
         if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && tc.wanted.size() > 8) {
-            std::cout << "  " << std::left << std::setw(18) << algo_name
-                      << "SKIP (too many enchants)" << std::endl;
+            results.push_back({algo_name, BenchResult::Skip});
             continue;
         }
 
@@ -234,14 +233,12 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         executor.wait();
 
         if (executor.state() != AlgorithmState::Completed) {
-            std::cout << "  " << std::left << std::setw(18) << algo_name
-                      << "FAILED" << std::endl;
+            results.push_back({algo_name, BenchResult::Fail});
             continue;
         }
         AlgorithmOutput out = executor.output();
         if (out.steps.empty()) {
-            std::cout << "  " << std::left << std::setw(18) << algo_name
-                      << "no solution" << std::endl;
+            results.push_back({algo_name, BenchResult::Fail});
             continue;
         }
 
@@ -250,24 +247,30 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             for (const auto& s : step_list)
                 total += s.cost;
 
-        results.push_back({algo_name, total,
+        results.push_back({algo_name, BenchResult::Data, total,
                            out.computation_time.count(),
                            total <= tc.max_cost});
     }
 
-    // Sort by algorithm name
+    // Sort by algorithm name (SKIP/FAIL interleaved correctly)
     std::sort(results.begin(), results.end(),
               [](const BenchResult& a, const BenchResult& b) {
                   return a.algo < b.algo;
               });
 
     for (const auto& r : results) {
-        std::cout << "  " << std::left << std::setw(18) << r.algo
-                  << std::right << std::setw(4) << r.cost << "L"
-                  << "  ≤" << std::setw(4) << tc.max_cost << "L"
-                  << (r.ok ? "  ✅" : "  ⚠")
-                  << "  " << std::setw(4) << r.ms << "ms"
-                  << std::endl;
+        std::cout << "  " << std::left << std::setw(18) << r.algo;
+        if (r.kind == BenchResult::Skip) {
+            std::cout << "SKIP (too many enchants)";
+        } else if (r.kind == BenchResult::Fail) {
+            std::cout << "no solution";
+        } else {
+            std::cout << std::right << std::setw(4) << r.cost << "L"
+                      << "  ≤" << std::setw(4) << tc.max_cost << "L"
+                      << (r.ok ? "  ✅" : "  ⚠")
+                      << "  " << std::setw(4) << r.ms << "ms";
+        }
+        std::cout << std::endl;
     }
 }
 
