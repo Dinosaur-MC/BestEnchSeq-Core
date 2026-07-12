@@ -20,8 +20,12 @@ AlgorithmExecutor::~AlgorithmExecutor() {
 // ─── Internal helpers ───
 
 void AlgorithmExecutor::_join_worker() noexcept {
+    // Worker first — stops producing events
     if (_worker && _worker->joinable())
         _worker->join();
+    // Dispatch thread second — drains remaining events
+    if (_dispatch && _dispatch->joinable())
+        _dispatch->join();
 }
 
 void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
@@ -43,8 +47,27 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
+    // Propagate forge configuration from input to the strategy
+    _algorithm->configure(input.config);
+
     _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
+
+    // Periodic observer dispatch — pumps ExecutionContext events so that
+    // observer callbacks (on_progress, on_solution_found, etc.) fire in
+    // near-real-time during algorithm execution, not just after the worker
+    // thread completes.
+    _dispatch.emplace([this]() {
+        while (true) {
+            auto s = _state.load(std::memory_order_acquire);
+            if (s != AlgorithmState::Running && s != AlgorithmState::Paused)
+                break;
+            _ctx->dispatch_events();
+            std::this_thread::sleep_for(std::chrono::milliseconds(BESQ_DISPATCH_MS));
+        }
+        // Final drain after worker has signalled completion
+        _ctx->dispatch_events();
+    });
 
     _worker.emplace([this, input = std::move(input)]() mutable {
         try {

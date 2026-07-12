@@ -9,6 +9,11 @@
 #include <optional>
 #include <thread>
 
+// ─── Observer dispatch period ───────────────────────────────────────────
+#ifndef BESQ_DISPATCH_MS
+#define BESQ_DISPATCH_MS 50  // dispatch observer events every 50 ms
+#endif
+
 namespace compact { class EnchReg; }
 
 // Forward declarations (full definitions in IAlgorithm.h)
@@ -62,6 +67,7 @@ private:
     std::unique_ptr<IAlgorithm> _algorithm;
     std::unique_ptr<ExecutionContext> _ctx;
     std::optional<std::thread> _worker;
+    std::optional<std::thread> _dispatch;  // periodic observer dispatch
     std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
     std::mutex _state_mtx;
     std::condition_variable _state_cv;

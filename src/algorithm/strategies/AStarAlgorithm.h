@@ -19,6 +19,7 @@ public:
 
     std::string_view name() const noexcept override { return "astar"; }
     std::string_view version() const noexcept override { return "2.0.0"; }
+    void configure(const ForgeConfig &cfg) noexcept override { _compact_forge.set_config(cfg); }
 
     void execute(
         const std::vector<compact::Item>& items,

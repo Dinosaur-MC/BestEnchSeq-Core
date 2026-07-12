@@ -40,6 +40,11 @@ class IAlgorithm {
     virtual void execute(const std::vector<compact::Item> &items, const compact::EnchReg &reg,
                          const std::vector<compact::Ench> &target, ExecutionContext &ctx) = 0;
 
+    /// Apply forge configuration before execute().
+    /// Called by AlgorithmExecutor::start() with AlgorithmInput::config.
+    /// Default no-op; strategies override to forward to their ForgeEngine.
+    virtual void configure(const ForgeConfig &cfg) noexcept { (void)cfg; }
+
     virtual bool is_resumable() const noexcept { return false; }
     virtual std::vector<uint8_t> serialize_state() const { return {}; }
     virtual void deserialize_state(const std::vector<uint8_t> &) {}
