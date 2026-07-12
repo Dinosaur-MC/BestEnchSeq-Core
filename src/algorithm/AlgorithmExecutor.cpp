@@ -172,7 +172,7 @@ void AlgorithmExecutor::detach_observer(std::shared_ptr<AlgorithmObserver> obser
 
 AlgorithmOutput AlgorithmExecutor::output() const {
     if (_state.load(std::memory_order_acquire) != AlgorithmState::Completed)
-        return {.is_valid = false};
+        return AlgorithmOutput{}; // is_valid defaults to false
 
     AlgorithmOutput out;
     out.algorithm_name = std::string(_algorithm->name());

@@ -16,6 +16,8 @@ void GreedyAlgorithm::execute(
     _target = target;
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
+    auto _start = std::chrono::steady_clock::now();
+
     std::vector<BookCost> ordered;
     ordered.reserve(items.size() - 1);
     for (size_t i = 1; i < items.size(); ++i) {
@@ -49,6 +51,14 @@ void GreedyAlgorithm::execute(
         ctx.incr_steps_forged();
 
         compact_steps.push_back({std::move(before_target), std::move(before_sacrifice), cost});
+
+        {
+            auto cfg = ctx.get_search_config();
+            if (cfg.max_search_time.count() > 0) {
+                auto elapsed = std::chrono::steady_clock::now() - _start;
+                if (elapsed > cfg.max_search_time) break;
+            }
+        }
 
         ctx.report_progress((step_index + 1.0) / ordered.size(), ProgressStatus::ApplyingSacrifice);
         step_index++;

@@ -3,6 +3,7 @@
 #include "../forge/ForgeEngine.h"
 #include "utils/HashUtils.hpp"
 #include "registries/CompactedRegistries.h"
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <unordered_map>
@@ -87,6 +88,7 @@ private:
     std::deque<std::vector<ForgePair>> _frame_pairs;
 
     int32_t _solutions_found{0};
+    std::chrono::steady_clock::time_point _start_time;
 
     AlgorithmDiagnostics _diag;
 };

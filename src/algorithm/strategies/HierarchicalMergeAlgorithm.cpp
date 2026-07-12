@@ -25,7 +25,8 @@ Item HierarchicalMergeAlgorithm::merge_group(
     std::vector<Item>& group,
     std::vector<EnchStep>& steps,
     const EnchReg& reg,
-    ExecutionContext& ctx)
+    ExecutionContext& ctx,
+    const std::chrono::steady_clock::time_point& _start)
 {
     if (group.empty()) return {};
     if (group.size() == 1) return group[0];
@@ -67,6 +68,14 @@ Item HierarchicalMergeAlgorithm::merge_group(
         ctx.incr_steps_forged();
         steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
 
+        {
+            auto cfg = ctx.get_search_config();
+            if (cfg.max_search_time.count() > 0) {
+                auto elapsed = std::chrono::steady_clock::now() - _start;
+                if (elapsed > cfg.max_search_time) break;
+            }
+        }
+
         group.erase(group.begin() + sac_idx);
     }
 
@@ -80,6 +89,9 @@ void HierarchicalMergeAlgorithm::execute(
     ExecutionContext& ctx)
 {
     ctx.report_progress(0.0, ProgressStatus::Starting);
+
+    auto _start = std::chrono::steady_clock::now();
+    int32_t _solutions_found = 0;
 
     if (items.size() <= 1) {
         _diag.label = "hierarchical";
@@ -127,6 +139,17 @@ void HierarchicalMergeAlgorithm::execute(
                 ctx.incr_steps_forged();
                 compact_steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
 
+                ++_solutions_found;
+
+                {
+                    auto cfg = ctx.get_search_config();
+                    if (cfg.max_search_time.count() > 0) {
+                        auto elapsed = std::chrono::steady_clock::now() - _start;
+                        if (elapsed > cfg.max_search_time) break;
+                    }
+                    if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) break;
+                }
+
                 if (sac_idx < books.size())
                     books.erase(books.begin() + sac_idx);
             }
@@ -147,9 +170,9 @@ void HierarchicalMergeAlgorithm::execute(
 
     ctx.report_progress(0.3, ProgressStatus::MergingWithinGroups);
 
-    auto low_merged  = merge_group(low_group, compact_steps, reg, ctx);
-    auto mid_merged  = merge_group(mid_group, compact_steps, reg, ctx);
-    auto high_merged = merge_group(high_group, compact_steps, reg, ctx);
+    auto low_merged  = merge_group(low_group, compact_steps, reg, ctx, _start);
+    auto mid_merged  = merge_group(mid_group, compact_steps, reg, ctx, _start);
+    auto high_merged = merge_group(high_group, compact_steps, reg, ctx, _start);
 
     struct GroupResult { Item book; int32_t mult; };
     std::vector<GroupResult> group_results;
@@ -187,6 +210,17 @@ void HierarchicalMergeAlgorithm::execute(
         int32_t cost = _forge_engine.forge_into(combined, next_book, reg);
         ctx.incr_steps_forged();
         compact_steps.push_back({std::move(saved_base), std::move(next_book), cost});
+
+        ++_solutions_found;
+
+        {
+            auto cfg = ctx.get_search_config();
+            if (cfg.max_search_time.count() > 0) {
+                auto elapsed = std::chrono::steady_clock::now() - _start;
+                if (elapsed > cfg.max_search_time) break;
+            }
+            if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) break;
+        }
     }
 
     if (_forge_engine.is_forgeable(equip, combined)) {
@@ -194,6 +228,8 @@ void HierarchicalMergeAlgorithm::execute(
         int32_t cost = _forge_engine.forge_into(equip, combined, reg);
         ctx.incr_steps_forged();
         compact_steps.push_back({std::move(saved_equip), std::move(combined), cost});
+
+        ++_solutions_found;
     }
 
     _diag.label = "hierarchical";

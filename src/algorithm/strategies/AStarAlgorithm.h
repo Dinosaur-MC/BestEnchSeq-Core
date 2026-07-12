@@ -102,6 +102,7 @@ private:
     const compact::EnchReg* _ench_reg{nullptr};
     std::vector<compact::Ench> _target;
     int32_t _best_solution_cost{INT32_MAX};
+    int32_t _solutions_found{0};
     AStarMemoryBudget _budget;
 
     // ─── Diagnostics (populated during execute, written on exit) ─────────

@@ -28,13 +28,25 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
     if (_nodes_visited % 512 == 0) {
         if (ctx.is_cancelled()) return;
         ctx.wait_if_paused();
+
+        auto cfg = ctx.get_search_config();
+        if (cfg.max_search_time.count() > 0) {
+            auto elapsed = std::chrono::steady_clock::now() - _start_time;
+            if (elapsed > cfg.max_search_time) return;
+        }
     }
 
     // Goal check BEFORE pruning — never prune a solution
     if (_meets_target(ids)) {
+        ++_solutions_found;
         if (g <= best_cost) {
             best_cost = g;
             _solution_path = _current_path;
+        }
+        {
+            auto cfg = ctx.get_search_config();
+            if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions)
+                ctx.cancel();
         }
         return;
     }
@@ -123,6 +135,8 @@ void IDAStarAlgorithm::execute(
     _ench_reg = &reg;
     _target = target;
     _nodes_visited = 0;
+    _solutions_found = 0;
+    _start_time = std::chrono::steady_clock::now();
 
     std::vector<ItemID> initial_ids;
     initial_ids.reserve(items.size());

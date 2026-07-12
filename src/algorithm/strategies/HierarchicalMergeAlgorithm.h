@@ -3,6 +3,7 @@
 #include "../forge/ForgeEngine.h"
 #include "algorithm/components/AlgorithmDiagnostics.h"
 #include "registries/CompactedRegistries.h"
+#include <chrono>
 #include <cstdint>
 #include <vector>
 
@@ -27,7 +28,8 @@ private:
         std::vector<compact::Item>& group,
         std::vector<compact::EnchStep>& steps,
         const compact::EnchReg& reg,
-        ExecutionContext& ctx);
+        ExecutionContext& ctx,
+        const std::chrono::steady_clock::time_point& _start);
 
     int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg) const;
 

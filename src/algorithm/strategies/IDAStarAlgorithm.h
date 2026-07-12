@@ -4,6 +4,7 @@
 #include "algorithm/components/ItemPool.h"
 #include "algorithm/components/TTTable.h"
 #include "registries/CompactedRegistries.h"
+#include <chrono>
 #include <cstdint>
 #include <vector>
 
@@ -60,4 +61,6 @@ private:
     }
 
     int64_t _nodes_visited{0};
+    int32_t _solutions_found{0};
+    std::chrono::steady_clock::time_point _start_time;
 };

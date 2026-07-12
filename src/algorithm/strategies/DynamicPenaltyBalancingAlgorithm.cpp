@@ -17,6 +17,9 @@ void DynamicPenaltyBalancingAlgorithm::execute(
 {
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
+    auto _start = std::chrono::steady_clock::now();
+    int32_t _solutions_found = 0;
+
     std::vector<Item> mut_items = items;
 
     // Quick check: goal already met?
@@ -91,6 +94,17 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         compact_steps.push_back({
             std::move(saved_i), std::move(saved_j), step_cost
         });
+
+        ++_solutions_found;
+
+        {
+            auto cfg = ctx.get_search_config();
+            if (cfg.max_search_time.count() > 0) {
+                auto elapsed = std::chrono::steady_clock::now() - _start;
+                if (elapsed > cfg.max_search_time) break;
+            }
+            if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) break;
+        }
 
         mut_items.erase(mut_items.begin() + best_j);
 

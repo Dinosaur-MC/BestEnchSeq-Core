@@ -1,5 +1,6 @@
 #include "DFSAlgorithm.h"
 #include "../ExecutionContext.h"
+#include "algorithm/components/Heuristic.h"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>
@@ -83,39 +84,9 @@ bool DFSAlgorithm::_meets_target(const Item& equipment) const {
 }
 
 int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
-    int32_t h = 0;
-    if (items.empty()) return h;
-
-    // Ensure scratch buffer is large enough
-    if (_h_buf.size() < _ench_reg->size())
-        _h_buf.assign(_ench_reg->size(), 0);
-    _h_dirty.clear();
-
-    // Collect max level per enchantment ID using flat array
-    for (const auto& item : items) {
-        for (const auto& e : item.enchs) {
-            if (e.level > _h_buf[e.id]) {
-                if (_h_buf[e.id] == 0)
-                    _h_dirty.push_back(e.id);
-                _h_buf[e.id] = e.level;
-            }
-        }
-    }
-
-    // Compute admissible lower bound
-    for (const auto& t : _target) {
-        int16_t have = _h_buf[t.id];
-        if (have < t.level) {
-            int32_t bm = _compact_forge.book_multiplier(_ench_reg->get_multiplier(t.id));
-            h += (t.level - have) * bm;
-        }
-    }
-
-    // Reset touched entries
-    for (auto id : _h_dirty)
-        _h_buf[id] = 0;
-
-    return h;
+    return Heuristic::compute(items, *_ench_reg, _target,
+        [this](int32_t mult) { return _compact_forge.book_multiplier(mult); },
+        _h_buf, _h_dirty);
 }
 
 // ─── execute ───────────────────────────────────────────────────────────────
@@ -127,6 +98,7 @@ void DFSAlgorithm::execute(
     ExecutionContext& ctx)
 {
     ctx.report_progress(0.0, ProgressStatus::Starting);
+    _start_time = std::chrono::steady_clock::now();
 
     _ench_reg = &reg;
     _target = target;
@@ -217,6 +189,10 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
                 _stack.pop_back();
                 _frame_pairs.pop_back();
                 continue;
+            }
+            if (cfg.max_search_time.count() > 0) {
+                auto elapsed = std::chrono::steady_clock::now() - _start_time;
+                if (elapsed > cfg.max_search_time) break;
             }
             if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions)
                 break;

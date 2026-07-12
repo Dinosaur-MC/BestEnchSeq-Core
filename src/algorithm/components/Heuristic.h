@@ -51,4 +51,43 @@ inline int32_t compute(
     return h;
 }
 
+// Overload for direct Item vectors (used by DFS, AStar — no pool indirection)
+template <typename Fn>
+inline int32_t compute(
+    const std::vector<compact::Item>& items,
+    const compact::EnchReg& reg,
+    const std::vector<compact::Ench>& target,
+    Fn&& book_multiplier_fn,
+    std::vector<int16_t>& buf,
+    std::vector<int16_t>& dirty)
+{
+    int32_t h = 0;
+    if (items.empty()) return h;
+
+    if (buf.size() < reg.size())
+        buf.assign(reg.size(), 0);
+    dirty.clear();
+
+    for (const auto& item : items) {
+        for (const auto& e : item.enchs) {
+            if (e.level > buf[e.id]) {
+                if (buf[e.id] == 0)
+                    dirty.push_back(e.id);
+                buf[e.id] = e.level;
+            }
+        }
+    }
+
+    for (const auto& t : target) {
+        int16_t have = buf[t.id];
+        if (have < t.level)
+            h += (t.level - have) * book_multiplier_fn(reg.get_multiplier(t.id));
+    }
+
+    for (auto id : dirty)
+        buf[id] = 0;
+
+    return h;
+}
+
 } // namespace Heuristic
