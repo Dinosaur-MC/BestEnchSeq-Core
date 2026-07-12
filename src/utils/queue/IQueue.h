@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <type_traits>
+#include <utility>
 
 // ─── IQueue<T> (virtual interface) ────────────────────────────────────────
 // Runtime-polymorphic wrapper for lock-free queues.

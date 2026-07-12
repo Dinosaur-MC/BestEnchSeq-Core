@@ -44,8 +44,7 @@ class SegmentedMPMCQueue final : public IQueue<T> {
         ~Block() noexcept {
             for (size_t i = 0; i < BlockSize; ++i) {
                 uint64_t seq = sequences[i].load(std::memory_order_relaxed);
-                uint64_t written = base_ticket + i + BlockSize;
-                if (seq < written) continue;
+                if (seq < base_ticket + i + BlockSize) continue;
                 if (seq < base_ticket + i + 2 * BlockSize)
                     std::launder(reinterpret_cast<T*>(data + i * sizeof(T)))->~T();
             }
@@ -59,9 +58,9 @@ class SegmentedMPMCQueue final : public IQueue<T> {
         }
     };
 
-    // Inline push logic directly to eliminate a call layer.
-    template <typename U>
-    void push_value(U&& value) {
+    // Claim a global enqueue ticket and locate the slot.
+    // Returns (block, idx) via out params.  Does not touch T.
+    void claim_enqueue_slot(Block*& out_block, size_t& out_idx) noexcept {
         uint64_t pos = enqueue_pos_.fetch_add(1, std::memory_order_release);
         Block* block = tail_block_.load(std::memory_order_acquire);
 
@@ -70,17 +69,14 @@ class SegmentedMPMCQueue final : public IQueue<T> {
             if (next) [[likely]] {
                 tail_block_.compare_exchange_weak(block, next,
                     std::memory_order_relaxed, std::memory_order_relaxed);
-                block = next;
-                continue;
+                block = next; continue;
             }
             auto* nb = new Block(block->base_ticket + BlockSize);
             Block* exp = nullptr;
             if (block->next.compare_exchange_strong(exp, nb,
-                    std::memory_order_release, std::memory_order_relaxed)) [[likely]] {
+                    std::memory_order_release, std::memory_order_relaxed)) [[likely]]
                 next = nb;
-            } else {
-                delete nb; next = exp;
-            }
+            else { delete nb; next = exp; }
             tail_block_.compare_exchange_weak(block, next,
                 std::memory_order_release, std::memory_order_relaxed);
             block = next;
@@ -96,8 +92,8 @@ class SegmentedMPMCQueue final : public IQueue<T> {
         while (block->sequences[idx].load(std::memory_order_acquire) != pos)
             std::this_thread::yield();
 
-        ::new (block->slot_at(idx)) T(std::forward<U>(value));
-        block->sequences[idx].store(pos + BlockSize, std::memory_order_release);
+        out_block = block;
+        out_idx = idx;
     }
 
 public:
@@ -125,14 +121,23 @@ public:
     // ─── Producer ─────────────────────────────────────────────────────
 
     bool try_push(const T& value) noexcept override final {
-        if constexpr (!std::is_copy_constructible_v<T>)
-            return false;
-        push_value(value);
-        return true;
+        if constexpr (std::is_copy_constructible_v<T>) {
+            Block* block; size_t idx;
+            claim_enqueue_slot(block, idx);
+            ::new (block->slot_at(idx)) T(value);
+            block->sequences[idx].store(idx + block->base_ticket + BlockSize,
+                                        std::memory_order_release);
+            return true;
+        }
+        return false;
     }
 
     bool try_push(T&& value) noexcept override final {
-        push_value(std::move(value));
+        Block* block; size_t idx;
+        claim_enqueue_slot(block, idx);
+        ::new (block->slot_at(idx)) T(std::move(value));
+        block->sequences[idx].store(idx + block->base_ticket + BlockSize,
+                                    std::memory_order_release);
         return true;
     }
 

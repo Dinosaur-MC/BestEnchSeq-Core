@@ -41,27 +41,38 @@ class BoundedMPMCQueue final : public IQueue<T> {
         alignas(T) unsigned char _storage[sizeof(T)];
     };
 
-    // ─── Push implementation (shared by both overloads) ──────────────
-    // Inlined into each override to avoid a function-call layer.
-    // U = const T& for copy, U = T&& for move.
-
-    template <typename U>
-    bool push_impl(U&& value) noexcept {
-        size_t pos = _write.value.load(std::memory_order_relaxed);
+    // CAS-based slot claiming — does NOT touch T at all, so it compiles
+    // cleanly even for move-only types.
+    bool claim_write_slot(size_t& pos) noexcept {
+        pos = _write.value.load(std::memory_order_relaxed);
         for (;;) {
             Slot& slot = _slots[pos & _mask];
             uint64_t seq = slot.sequence.load(std::memory_order_acquire);
             int64_t diff = static_cast<int64_t>(seq) - static_cast<int64_t>(pos);
             if (diff == 0) {
-                if (_write.value.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed)) {
-                    ::new (slot.ptr()) T(std::forward<U>(value));
-                    slot.sequence.store(pos + 1, std::memory_order_release);
+                if (_write.value.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
                     return true;
-                }
             } else if (diff < 0) {
                 return false;
             } else {
                 pos = _write.value.load(std::memory_order_relaxed);
+            }
+        }
+    }
+
+    bool claim_read_slot(size_t& pos) noexcept {
+        pos = _read.value.load(std::memory_order_relaxed);
+        for (;;) {
+            Slot& slot = _slots[pos & _mask];
+            uint64_t seq = slot.sequence.load(std::memory_order_acquire);
+            int64_t diff = static_cast<int64_t>(seq) - static_cast<int64_t>(pos + 1);
+            if (diff == 0) {
+                if (_read.value.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+                    return true;
+            } else if (diff < 0) {
+                return false;
+            } else {
+                pos = _read.value.load(std::memory_order_relaxed);
             }
         }
     }
@@ -90,36 +101,38 @@ public:
     // ─── Producer ─────────────────────────────────────────────────────
 
     bool try_push(const T& value) noexcept override final {
-        if constexpr (!std::is_copy_constructible_v<T>)
-            return false;
-        return push_impl(value);
+        // The whole body is inside if constexpr so the placement new
+        // is never compiled for non-copyable T.
+        if constexpr (std::is_copy_constructible_v<T>) {
+            size_t pos;
+            if (!claim_write_slot(pos)) return false;
+            auto& slot = _slots[pos & _mask];
+            ::new (slot.ptr()) T(value);
+            slot.sequence.store(pos + 1, std::memory_order_release);
+            return true;
+        }
+        return false;
     }
 
     bool try_push(T&& value) noexcept override final {
-        return push_impl(std::move(value));
+        size_t pos;
+        if (!claim_write_slot(pos)) return false;
+        auto& slot = _slots[pos & _mask];
+        ::new (slot.ptr()) T(std::move(value));
+        slot.sequence.store(pos + 1, std::memory_order_release);
+        return true;
     }
 
     // ─── Consumer ─────────────────────────────────────────────────────
 
     bool try_pop(T& out) noexcept override final {
-        size_t pos = _read.value.load(std::memory_order_relaxed);
-        for (;;) {
-            Slot& slot = _slots[pos & _mask];
-            uint64_t seq = slot.sequence.load(std::memory_order_acquire);
-            int64_t diff = static_cast<int64_t>(seq) - static_cast<int64_t>(pos + 1);
-            if (diff == 0) {
-                if (_read.value.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed)) {
-                    out = std::move(*slot.ptr());
-                    slot.ptr()->~T();
-                    slot.sequence.store(pos + Capacity, std::memory_order_release);
-                    return true;
-                }
-            } else if (diff < 0) {
-                return false;
-            } else {
-                pos = _read.value.load(std::memory_order_relaxed);
-            }
-        }
+        size_t pos;
+        if (!claim_read_slot(pos)) return false;
+        auto& slot = _slots[pos & _mask];
+        out = std::move(*slot.ptr());
+        slot.ptr()->~T();
+        slot.sequence.store(pos + Capacity, std::memory_order_release);
+        return true;
     }
 
     // ─── Observers ───────────────────────────────────────────────────
