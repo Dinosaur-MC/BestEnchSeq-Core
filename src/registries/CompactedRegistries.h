@@ -31,6 +31,13 @@ class EnchReg {
     const Equipment &get_target_equip() const noexcept { return _target_equip; }
     const RichEnchInfo &get_rich(int16_t id) const { return _registry.get(id); }
     const EnchInfo &get(int16_t id) const { return _ench_infos.at(id); }
+    /// Bounds-unchecked access — hot-path design.
+    ///
+    /// Intentionally uses `vector::operator[]` (no bounds check) unlike `get()`
+    /// which uses `.at()`.  All call paths in algorithm inner loops
+    /// (`get_multiplier`, `get_max_level`, `is_conflict`) receive IDs from
+    /// the pre-validated compact registry subset, so the check would be
+    /// redundant overhead.  Callers MUST ensure `0 <= id < size()`.
     const EnchInfo &operator[](int16_t id) const noexcept { return _ench_infos[id]; }
 
     uint16_t get_multiplier(int16_t id) const noexcept { return (*this)[id].mul; }
