@@ -1,5 +1,6 @@
 #include "parsers/EnchInfoParser.h"
 #include "utils/ParserUtils.h"
+#include "log/log.hpp"
 #include "io/CsvIO.h"
 #include "io/json.h"
 

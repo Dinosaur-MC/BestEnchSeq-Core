@@ -28,9 +28,10 @@ set(REGISTRY_CORE_SRCS
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 
-# Parser utilities (ParserUtils + json)
+# Parser utilities (ParserUtils + json + Logger for log/log.hpp dependency)
 set(PARSER_UTIL_SRCS
     ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
+    ${PROJECT_ROOT}/src/log/Logger.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
 )
 
@@ -240,6 +241,21 @@ set_tests_properties(test_exp_calculator PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_domain_types.cpp)
+    message(FATAL_ERROR "Required test source not found: unit/test_domain_types.cpp")
+endif()
+
+add_executable(test_domain_types
+    unit/test_domain_types.cpp
+    ${DOMAIN_TYPE_SRCS}
+    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+)
+target_include_directories(test_domain_types PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_domain_types COMMAND test_domain_types)
+set_tests_properties(test_domain_types PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_execution_context.cpp)
     message(FATAL_ERROR "Required test source not found: unit/test_execution_context.cpp")
 endif()
@@ -248,6 +264,7 @@ add_executable(test_execution_context
     unit/test_execution_context.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${COMPACT_TYPE_SRCS}
+    ${PROJECT_ROOT}/src/log/Logger.cpp
 )
 target_include_directories(test_execution_context PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_execution_context COMMAND test_execution_context)
