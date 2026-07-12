@@ -1,4 +1,5 @@
 #pragma once
+
 #include <atomic>
 #include <cstddef>
 #include <new>
@@ -7,18 +8,18 @@
 // ─── SPSCQueue ───
 // Single-Producer, Single-Consumer lock-free bounded queue.
 //
-// See also: BoundedMPMCQueue (N readers + N writers),
-//           SegmentedMPMCQueue (unbounded MPMC),
-//           SPMCQueue (1 writer + N readers).
-// Design doc: docs/MPMCQueue.md
-//
-// Fixed capacity. When full, push() silently drops the new value.
-// No data races: producer and consumer never touch the same atomic.
-//
 // Thread safety:
-//   - One writer: push()
-//   - One reader: pop()
+//   - One writer: push() / try_push()
+//   - One reader: pop() / try_pop()
 //   - No mutexes, no CAS loops
+//
+// Features:
+//   - FIFO order guaranteed
+//   - Fixed capacity; when full, push() silently drops the value
+//   - Peek without consuming via front()
+//
+// STL-style type aliases:
+//   value_type, reference, const_reference, size_type, difference_type
 
 template <typename T, size_t Capacity>
 class SPSCQueue {
@@ -43,13 +44,20 @@ private:
     }
 
 public:
-    using value_type = T;
+    // ─── STL style type aliases ───────────────────────────────────────
+    using value_type        = T;
+    using reference         = T&;
+    using const_reference   = const T&;
+    using size_type         = size_t;
+    using difference_type   = ptrdiff_t;
+
+    // ─── Construction / destruction ───────────────────────────────────
 
     SPSCQueue() = default;
 
     ~SPSCQueue() noexcept {
-        size_t r = _read.value.load(std::memory_order_relaxed);
-        size_t w = _write.value.load(std::memory_order_acquire);
+        size_type r = _read.value.load(std::memory_order_relaxed);
+        size_type w = _write.value.load(std::memory_order_acquire);
         while (r != w) {
             ptr(r)->~T();
             ++r;
@@ -59,58 +67,87 @@ public:
     SPSCQueue(const SPSCQueue&) = delete;
     SPSCQueue& operator=(const SPSCQueue&) = delete;
 
-    // ─── Producer ───
-    // Push a value. Returns false if the queue is full (no overwrite).
+    // ─── Producer API ─────────────────────────────────────────────────
+
+    /// Push a value.  Returns false if the queue is full (silently drops).
+    /// Thread-safe for a single producer thread.
     template <typename U>
-    bool push(U&& value) {
-        size_t w = _write.value.load(std::memory_order_relaxed);
-        size_t r = _read.value.load(std::memory_order_acquire);
+    bool push(U&& value) noexcept {
+        size_type w = _write.value.load(std::memory_order_relaxed);
+        size_type r = _read.value.load(std::memory_order_acquire);
 
         if (w - r >= Capacity)
-            return false;  // full, silently drop
+            return false;
 
-        T* slot = std::launder(reinterpret_cast<T*>(
-            &_buffer[(w % Capacity) * sizeof(T)]));
+        T* slot = ptr(w);
         ::new (slot) T(std::forward<U>(value));
         _write.value.store(w + 1, std::memory_order_release);
         return true;
     }
 
-    // ─── Consumer ───
-    // Read one item into `out`. Returns false if empty.
-    bool pop(T& out) noexcept {
-        size_t r = _read.value.load(std::memory_order_relaxed);
-        size_t w = _write.value.load(std::memory_order_acquire);
+    /// Non-blocking push.  Alias for push() (same semantics).
+    template <typename U>
+    bool try_push(U&& value) noexcept { return push(std::forward<U>(value)); }
+
+    // ─── Consumer API ─────────────────────────────────────────────────
+
+    /// Pop the oldest element into `out`.  Returns false if empty.
+    /// Thread-safe for a single consumer thread.
+    bool pop(value_type& out) noexcept {
+        size_type r = _read.value.load(std::memory_order_relaxed);
+        size_type w = _write.value.load(std::memory_order_acquire);
 
         if (r == w)
             return false;
 
-        T* item = std::launder(reinterpret_cast<T*>(
-            &_buffer[(r % Capacity) * sizeof(T)]));
+        T* item = ptr(r);
         out = std::move(*item);
         item->~T();
         _read.value.store(r + 1, std::memory_order_release);
         return true;
     }
 
-    // Peek without consuming (const, consumer only).
-    bool peek(T& out) const noexcept {
-        size_t r = _read.value.load(std::memory_order_relaxed);
-        size_t w = _write.value.load(std::memory_order_acquire);
+    /// Non-blocking pop.  Alias for pop() (same semantics).
+    bool try_pop(value_type& out) noexcept { return pop(out); }
+
+    /// Peek at the oldest element without consuming it.
+    /// Returns false if empty.  Consumer-only.
+    bool front(value_type& out) const noexcept { return peek(out); }
+
+    /// Peek (legacy name, same as front()).
+    bool peek(value_type& out) const noexcept {
+        size_type r = _read.value.load(std::memory_order_relaxed);
+        size_type w = _write.value.load(std::memory_order_acquire);
         if (r == w) return false;
         out = *std::launder(reinterpret_cast<const T*>(
             &_buffer[(r % Capacity) * sizeof(T)]));
         return true;
     }
 
-    size_t size() const noexcept {
-        size_t w = _write.value.load(std::memory_order_acquire);
-        size_t r = _read.value.load(std::memory_order_relaxed);
+    // ─── Observers ───────────────────────────────────────────────────
+
+    /// Number of elements currently in the queue (exact for SPSC).
+    size_type size() const noexcept {
+        size_type w = _write.value.load(std::memory_order_acquire);
+        size_type r = _read.value.load(std::memory_order_relaxed);
         return w > r ? w - r : 0;
     }
 
     bool empty() const noexcept { return size() == 0; }
-    static constexpr size_t capacity() noexcept { return Capacity; }
+
+    static constexpr size_type capacity() noexcept { return Capacity; }
+
+    /// Remove all elements.  NOT thread-safe — caller must ensure no
+    /// concurrent push or pop.
+    void clear() noexcept {
+        size_type r = _read.value.load(std::memory_order_relaxed);
+        size_type w = _write.value.load(std::memory_order_acquire);
+        while (r != w) {
+            ptr(r)->~T();
+            ++r;
+        }
+        _read.value.store(w, std::memory_order_release);
+    }
 
 private:
     // Producer cache line

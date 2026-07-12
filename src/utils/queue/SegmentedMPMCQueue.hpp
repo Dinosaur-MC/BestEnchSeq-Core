@@ -1,4 +1,5 @@
 #pragma once
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -7,9 +8,7 @@
 #include <type_traits>
 
 // ─── SegmentedMPMCQueue ───
-// Multi-Producer, Multi-Consumer lock-free unbounded queue.
-//
-// Design doc: docs/MPMCQueue.md
+// Multi-Producer, Multi-Consumer lock-free UNBOUNDED queue.
 //
 // ┌─ Lock-free guarantee ─────────────────────────────────────────────┐
 // │  EVERY operation uses only atomic RMW (fetch_add, CAS).           │
@@ -19,24 +18,20 @@
 // │  threads).                                                        │
 // └───────────────────────────────────────────────────────────────────┘
 //
-// ┌─ Architecture ────────────────────────────────────────────────────┐
-// │  Segmented singly-linked list of fixed-size blocks.               │
-// │  Each block is an independent ring buffer (same sequence protocol │
-// │  as BoundedMPMCQueue).                                            │
-// │  Blocks linked atomically via CAS — no "double-checked locking".  │
-// │  Global ticket counters (enqueue_pos_ / dequeue_pos_) enforce     │
-// │  total FIFO ordering across all producers and consumers.          │
-// └───────────────────────────────────────────────────────────────────┘
+// Architecture: segmented singly-linked list of fixed-size blocks.
+//   Each block is an independent ring buffer (same sequence protocol
+//   as BoundedMPMCQueue).  Blocks linked atomically via CAS.
+//   Global ticket counters enforce total FIFO ordering.
 //
-// ┌─ Thread safety ───────────────────────────────────────────────────┐
-// │  Any number of concurrent producers — push()                      │
-// │  Any number of concurrent consumers — try_pop()                   │
-// │  size() / empty() return point-in-time estimates.                 │
-// └───────────────────────────────────────────────────────────────────┘
+// Because the queue is unbounded, push() always succeeds (returns void).
+// For a bounded variant, see BoundedMPMCQueue.
 //
 // Requirements:
 //   T: nothrow destructible, nothrow move-assignable.
 //   BlockSize: power of two ≥ 64.
+//
+// STL-style type aliases:
+//   value_type, reference, const_reference, size_type, difference_type
 
 template <typename T, size_t BlockSize = 1024>
 class SegmentedMPMCQueue {
@@ -90,7 +85,14 @@ class SegmentedMPMCQueue {
     };
 
 public:
-    using value_type = T;
+    // ─── STL style type aliases ───────────────────────────────────────
+    using value_type        = T;
+    using reference         = T&;
+    using const_reference   = const T&;
+    using size_type         = size_t;
+    using difference_type   = ptrdiff_t;
+
+    // ─── Construction / destruction ───────────────────────────────────
 
     SegmentedMPMCQueue()
         : root_block_(new Block(0))
@@ -100,7 +102,6 @@ public:
     }
 
     ~SegmentedMPMCQueue() noexcept {
-        // Follow the chain from root; ~Block() destructs live elements.
         Block* block = root_block_;
         while (block) {
             Block* next = block->next.load(std::memory_order_relaxed);
@@ -112,8 +113,10 @@ public:
     SegmentedMPMCQueue(const SegmentedMPMCQueue&) = delete;
     SegmentedMPMCQueue& operator=(const SegmentedMPMCQueue&) = delete;
 
-    // ─── Producer ─────────────────────────────────────────────────────
-    // Fully lock-free. Uses CAS for block linking, never a mutex.
+    // ─── Producer API ─────────────────────────────────────────────────
+
+    /// Push a value.  Always succeeds (unbounded).  Fully lock-free.
+    /// Thread-safe for any number of concurrent producers.
     void push(T value) {
         uint64_t pos = enqueue_pos_.fetch_add(1, std::memory_order_release);
 
@@ -124,7 +127,6 @@ public:
             Block* next = block->next.load(std::memory_order_acquire);
 
             if (next) [[likely]] {
-                // Block already linked — follow and update hint.
                 tail_block_.compare_exchange_weak(block, next,
                     std::memory_order_relaxed,
                     std::memory_order_relaxed);
@@ -132,7 +134,6 @@ public:
                 continue;
             }
 
-            // ── Lock-free block allocation: CAS to link ──
             auto* new_block = new Block(block->base_ticket + BlockSize);
             Block* expected = nullptr;
 
@@ -140,15 +141,12 @@ public:
                     expected, new_block,
                     std::memory_order_release,
                     std::memory_order_relaxed)) [[likely]] {
-                // We linked it.
                 next = new_block;
             } else {
-                // Another producer linked first. Discard ours.
                 delete new_block;
                 next = expected;
             }
 
-            // Best-effort tail hint (harmless if CAS fails).
             tail_block_.compare_exchange_weak(block, next,
                 std::memory_order_release,
                 std::memory_order_relaxed);
@@ -175,12 +173,25 @@ public:
                                     std::memory_order_release);
     }
 
-    // ─── Consumer ─────────────────────────────────────────────────────
-    // Fully lock-free. Single CAS per pop for ticket claiming.
-    bool try_pop(T& out) {
+    /// Non-blocking push.  Always returns true (unbounded queue).
+    template <typename U>
+    bool try_push(U&& value) noexcept {
+        push(std::forward<U>(value));
+        return true;
+    }
+
+    // ─── Consumer API ─────────────────────────────────────────────────
+
+    /// Pop the oldest element into `out`.  Returns false if empty.
+    /// Thread-safe for any number of concurrent consumers.
+    bool pop(value_type& out) {
+        return try_pop(out);
+    }
+
+    /// Non-blocking pop.  Returns false if empty.
+    bool try_pop(value_type& out) {
         uint64_t pos;
 
-        // 1. Claim a global ticket
         for (;;) {
             pos = dequeue_pos_.load(std::memory_order_relaxed);
             uint64_t enq_pos = enqueue_pos_.load(std::memory_order_acquire);
@@ -192,7 +203,6 @@ public:
                 break;
         }
 
-        // 2. Find the block containing `pos`
         Block* block = head_block_.load(std::memory_order_acquire);
 
         while (pos >= block->base_ticket + BlockSize) {
@@ -207,7 +217,6 @@ public:
             block = next;
         }
 
-        // Safety net: if head was advanced past our block, restart from root
         if (pos < block->base_ticket) [[unlikely]] {
             block = root_block_;
             while (pos >= block->base_ticket + BlockSize) {
@@ -215,7 +224,6 @@ public:
             }
         }
 
-        // 3. Wait for data to be written
         size_t idx = static_cast<size_t>(pos - block->base_ticket);
 
         while (block->sequences[idx].load(std::memory_order_acquire) !=
@@ -223,14 +231,12 @@ public:
             std::this_thread::yield();
         }
 
-        // 4. Move out and destroy
         T* slot = block->slot_at(idx);
         out = std::move(*slot);
         slot->~T();
         block->sequences[idx].store(pos + 2 * BlockSize,
                                     std::memory_order_relaxed);
 
-        // 5. Advance head hint if last slot in block
         if (idx == BlockSize - 1) {
             Block* next = block->next.load(std::memory_order_acquire);
             if (next) {
@@ -243,14 +249,27 @@ public:
         return true;
     }
 
-    // ─── Observers ────────────────────────────────────────────────────
-    size_t size() const noexcept {
+    // ─── Observers ───────────────────────────────────────────────────
+
+    /// Approximate number of elements (point-in-time under concurrent
+    /// push/pop).
+    size_type size() const noexcept {
         uint64_t w = enqueue_pos_.load(std::memory_order_acquire);
         uint64_t r = dequeue_pos_.load(std::memory_order_relaxed);
-        return w > r ? static_cast<size_t>(w - r) : 0;
+        return w > r ? static_cast<size_type>(w - r) : 0;
     }
 
     bool empty() const noexcept { return size() == 0; }
+
+    /// Unbounded — always returns 0.
+    static constexpr size_type capacity() noexcept { return 0; }
+
+    /// Remove all elements.  NOT thread-safe — caller must ensure no
+    /// concurrent push or pop.
+    void clear() noexcept {
+        T item;
+        while (try_pop(item)) {}
+    }
 
 private:
     // ── Producer cache line ──

@@ -14,6 +14,13 @@
 template <typename T>
 class IQueue {
 public:
+    // ─── STL style type aliases ───────────────────────────────────────
+    using value_type        = T;
+    using reference         = T&;
+    using const_reference   = const T&;
+    using size_type         = size_t;
+    using difference_type   = ptrdiff_t;
+
     virtual ~IQueue() = default;
 
     /// Push a copy of `item`.  Returns false if the queue is full and
@@ -34,6 +41,12 @@ public:
 
     /// Maximum capacity (0 = unbounded / effectively unlimited).
     virtual size_t capacity() const = 0;
+
+    /// Remove all elements.  Default implementation drains via try_pop().
+    virtual void clear() {
+        T item;
+        while (try_pop(item)) {}
+    }
 };
 
 
