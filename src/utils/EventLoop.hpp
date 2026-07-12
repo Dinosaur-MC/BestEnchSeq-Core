@@ -138,11 +138,23 @@ public:
         auto prom = std::make_shared<std::promise<void>>();
         auto fut  = prom->get_future();
 
-        auto done = [t = std::forward<F>(task), prom]() mutable {
+        // Pre-wrap in std::function<Task> so that the move/copy of a
+        // move-only callable happens BEFORE we touch the bounded queue.
+        // If we let try_push() do implicit conversion from the raw lambda,
+        // the lambda would be consumed on EVERY conversion attempt, even
+        // when the queue is full — making retry impossible.
+        auto wrapped = Task([t = std::forward<F>(task),
+                                            prom]() mutable {
             t();
             prom->set_value();
-        };
-        while (!post(done)) {
+        });
+        // Move the wrapped task into the queue.  For move-only types
+        // (e.g. std::packaged_task) the queue accepts only rvalues; for
+        // copyable types this also avoids an extra copy.
+        // If the bounded queue is full, try_push returns false BEFORE
+        // the placement new (std::move is just a cast, no actual move),
+        // so wrapped remains valid for retry.
+        while (!post(std::move(wrapped))) {
             std::this_thread::yield();
         }
 

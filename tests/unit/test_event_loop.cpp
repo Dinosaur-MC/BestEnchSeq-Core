@@ -424,9 +424,25 @@ void test_move_only_task() {
     loop.start();
     loop.post(std::move(task));
     fut.wait();                         // wait for execution
-    expect(val.load() == 42, "move-only task executed");
+    expect(val.load() == 42, "move-only task executed via post()");
     loop.stop();
     std::cout << "PASS: test_move_only_task" << std::endl;
+}
+
+void test_move_only_post_and_wait() {
+    // post_and_wait with a move-only packaged_task must also compile
+    // and execute correctly.
+    using MoveTask = std::packaged_task<void()>;
+    EventLoop<SegmentedMPMCQueue<MoveTask, 128>> loop;
+
+    std::atomic<int> val{0};
+    auto task = std::packaged_task<void()>([&] { val.store(77); });
+
+    loop.start();
+    loop.post_and_wait(std::move(task));
+    expect(val.load() == 77, "move-only task executed via post_and_wait()");
+    loop.stop();
+    std::cout << "PASS: test_move_only_post_and_wait" << std::endl;
 }
 
 // ============================================================================
@@ -508,6 +524,7 @@ int main() {
 
         // Move-only
         test_move_only_task();
+        test_move_only_post_and_wait();
 
         // Cleanup
         test_destroy_on_stop();
