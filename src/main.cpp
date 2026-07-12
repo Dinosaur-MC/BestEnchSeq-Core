@@ -17,7 +17,6 @@
 #include "adapters/RegistryResolver.h"
 #include "utils/TagResolver.h"
 #include "registries/AlgorithmRegistry.h"
-#include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
@@ -32,45 +31,55 @@
 
 namespace {
 
-void load_builtin_data(const std::filesystem::path &builtin_data_dir, TagResolver &tag_resolver) {
-    registries::categories().initialize();
-
-    auto &cat_reg = registries::categories();
+void load_builtin_data(
+    const std::filesystem::path &builtin_data_dir,
+    TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg,
+    EnchantmentRegistry &ench_reg,
+    EquipmentRegistry &eq_reg
+) {
     auto raw_ench = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
     auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-    registries::enchants().initialize(ench_infos);
+    ench_reg.initialize(ench_infos);
+
     auto raw_eq = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
     auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-    registries::equipment().initialize(equipments);
+    eq_reg.initialize(equipments);
 }
 
-void load_custom_data(const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver) {
+void load_custom_data(
+    const std::filesystem::path &data_pack_dir,
+    TagResolver &tag_resolver,
+    const EquipmentCategoryRegistry &cat_reg,
+    EnchantmentRegistry &ench_reg,
+    EquipmentRegistry &eq_reg
+) {
     if (!std::filesystem::exists(data_pack_dir))
         throw std::runtime_error("Data pack directory not found: " + data_pack_dir.string());
 
-    auto &cat_reg = registries::categories();
     tag_resolver.load_from(data_pack_dir);
+
     auto raw_ench = EnchInfoParser::parse(data_pack_dir, tag_resolver);
     auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-    auto existing_ench = registries::enchants().get_instances();
+    auto existing_ench = ench_reg.get_instances();
     std::vector<EnchInfo> combined_ench;
     combined_ench.reserve(existing_ench.size() + ench_infos.size());
     for (const auto &info : existing_ench)
         combined_ench.push_back(info);
     for (const auto &info : ench_infos)
         combined_ench.push_back(info);
-    registries::enchants().initialize(combined_ench);
+    ench_reg.initialize(combined_ench);
 
     auto raw_eq = EquipmentParser::parse(data_pack_dir, tag_resolver);
     auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-    auto &existing_eq = registries::equipment().get_instances();
+    auto &existing_eq = eq_reg.get_instances();
     std::vector<Equipment> combined_eq;
     combined_eq.reserve(existing_eq.size() + equipments.size());
     for (const auto &eq : existing_eq)
         combined_eq.push_back(eq);
     for (const auto &eq : equipments)
         combined_eq.push_back(eq);
-    registries::equipment().initialize(combined_eq);
+    eq_reg.initialize(combined_eq);
 }
 
 void register_builtin_algorithms(AlgorithmRegistry &registry) {
@@ -99,26 +108,36 @@ int main(int argc, char *argv[]) {
 
         TagResolver tag_resolver;
 
+        // ── Load data ────────────────────────────────────────────────────────
+
         // Resolve builtin data directory: prefer path relative to executable,
         // fall back to CWD-relative path for development builds.
         auto builtin_data_dir = std::filesystem::absolute(argv[0]).parent_path() / "data" / "builtin";
         if (!std::filesystem::exists(builtin_data_dir)) {
             builtin_data_dir = std::filesystem::path("data") / "builtin";
         }
-        load_builtin_data(builtin_data_dir, tag_resolver);
+
+        // Local registries (no globals)
+        EquipmentCategoryRegistry cat_reg;
+        cat_reg.initialize();
+
+        EnchantmentRegistry ench_reg;
+        EquipmentRegistry eq_reg;
+
+        load_builtin_data(builtin_data_dir, tag_resolver, cat_reg, ench_reg, eq_reg);
 
         if (config.data_pack) {
-            load_custom_data(std::filesystem::path(*config.data_pack), tag_resolver);
+            load_custom_data(std::filesystem::path(*config.data_pack), tag_resolver,
+                             cat_reg, ench_reg, eq_reg);
         }
 
-        // platform is embedded in ForgeConfig via CompactAdapter::apply() below
-
+        // ── Build equipment map for InputParser ──────────────────────────
         std::unordered_map<std::string, const Equipment *> equipment_map;
-        for (const auto &eq : registries::equipment().get_instances()) {
+        for (const auto &eq : eq_reg.get_instances()) {
             equipment_map[eq.name_id] = &eq;
         }
 
-        auto parsed = InputParser::assemble_input(config, registries::enchants(), equipment_map);
+        auto parsed = InputParser::assemble_input(config, ench_reg, equipment_map);
 
         // Register and create algorithm (local registry, no singleton)
         AlgorithmRegistry algo_reg;
@@ -139,7 +158,7 @@ int main(int argc, char *argv[]) {
         ForgeConfig forge_config;
         forge_config.platform = parsed.platform;
         AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.original_ench, parsed.available_items,
-                                                  forge_config, registries::enchants());
+                                                  forge_config, ench_reg);
 
         // ── Memory budget for AStar (CLI → AppConfig → default) ────────────
         {
@@ -150,17 +169,17 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // ── Logger ────────────────────────────────────────────────────
+        // ── Logger ────────────────────────────────────────────────────────
         Logger logger;
         logger.info("Starting algorithm: " + config.algorithm);
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
-        executor.start(algo_input); // copy — keeps algo_input valid for recall() below
+        executor.start(algo_input);
         executor.wait();
 
         // ── Verbose diagnostics ────────────────────────────────────────────
-        if (config.verbose) {
+        if (config.verbose || app_cfg.verbose) {
             auto diag = executor.get_diagnostics(0);
             logger.printf(LogLevel::Info,
                 "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
@@ -174,8 +193,6 @@ int main(int argc, char *argv[]) {
 
         // Format output
         std::string output_text;
-        auto &ench_reg = registries::enchants();
-        auto &cat_reg  = registries::categories();
         if (config.format == "json") {
             output_text = OutputFormatter::format_json(solutions, ench_reg, cat_reg, config.mode);
         } else if (config.format == "compact") {
