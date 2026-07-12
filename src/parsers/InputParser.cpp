@@ -1,11 +1,11 @@
 #include "parsers/InputParser.h"
 #include "adapters/RegistryResolver.h"
 #include "utils/ParserUtils.h"
+#include "log/log.hpp"
 #include "io/json.h"
 #include "registries/EnchantmentRegistry.h"
 
 #include <algorithm>
-#include <iostream>
 #include <stdexcept>
 
 // ===========================================================================
@@ -56,7 +56,7 @@ ItemCollection InputParser::parse_inventory(
         std::string type = ParserUtils::get_json_string(item_obj, "type");
 
         if (type.empty()) {
-            std::cerr << "Warning: item missing 'type' field, skipping" << std::endl;
+            LOG_WARN("Warning: item missing 'type' field, skipping");
             continue;
         }
 
@@ -85,8 +85,7 @@ ItemCollection InputParser::parse_inventory(
                     if (ench_id >= 0) {
                         ench_set.emplace(ench_id, ench_level);
                     } else {
-                        std::cerr << "Warning: unknown enchantment '" << ench_id_str
-                                  << "' in item, skipping" << std::endl;
+                        LOG_WARN("Warning: unknown enchantment '%s' in item, skipping", ench_id_str.c_str());
                     }
                 }
             }
@@ -115,12 +114,11 @@ ItemCollection InputParser::parse_inventory(
                 item.priority = priority;
             } else {
                 // Equipment not found in registry, treat as book-like
-                std::cerr << "Warning: equipment '" << equip_id
-                          << "' not found in registry, treating as book" << std::endl;
+                LOG_WARN("Warning: equipment '%s' not found in registry, treating as book", equip_id.c_str());
                 result.emplace_back(ench_set, prior_penalty);
             }
         } else {
-            std::cerr << "Warning: unknown item type '" << type << "', skipping" << std::endl;
+            LOG_WARN("Warning: unknown item type '%s', skipping", type.c_str());
         }
     }
 

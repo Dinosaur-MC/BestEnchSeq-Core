@@ -1,7 +1,7 @@
 #include "ExecutionContext.h"
 #include "AlgorithmObserver.h"
+#include "log/log.hpp"
 #include <algorithm>
-#include <iostream>
 
 void ExecutionContext::wait_if_paused() {
     if (!_paused.load(std::memory_order_acquire))
@@ -74,9 +74,9 @@ void ExecutionContext::dispatch_events() {
                         break; // handled via notify_completed()
                 }
             } catch (const std::exception& ex) {
-                try { std::cerr << "[observer] " << ex.what() << std::endl; } catch (...) {}
+                try { LOG_ERROR("[observer] %s", ex.what()); } catch (...) {}
             } catch (...) {
-                try { std::cerr << "[observer] unknown exception" << std::endl; } catch (...) {}
+                try { LOG_ERROR("[observer] unknown exception"); } catch (...) {}
             }
         }
     }
@@ -92,9 +92,9 @@ void ExecutionContext::notify_completed(const AlgorithmOutput& output) {
         try {
             obs->on_completed(output);
         } catch (const std::exception& ex) {
-            try { std::cerr << "[observer] " << ex.what() << std::endl; } catch (...) {}
+            try { LOG_ERROR("[observer] %s", ex.what()); } catch (...) {}
         } catch (...) {
-            try { std::cerr << "[observer] unknown exception" << std::endl; } catch (...) {}
+            try { LOG_ERROR("[observer] unknown exception"); } catch (...) {}
         }
     }
 }

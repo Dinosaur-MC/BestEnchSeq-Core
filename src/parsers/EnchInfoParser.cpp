@@ -5,7 +5,6 @@
 #include "io/json.h"
 
 #include <cctype>
-#include <iostream>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
@@ -206,10 +205,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
         int32_t multiplier    = ParserUtils::get_json_int(elem_obj, "multiplier");
 
         if (id.empty() || max_level <= 0 || multiplier <= 0) {
-            std::cerr << "Warning: Skipping enchantment entry with missing or invalid "
-                         "required fields (id='"
-                      << id << "', max_level=" << max_level
-                      << ", multiplier=" << multiplier << ")" << std::endl;
+            LOG_WARN("Warning: Skipping enchantment entry with missing or invalid required fields (id='%s', max_level=%d, multiplier=%d)", id.c_str(), max_level, multiplier);
             continue;
         }
 
@@ -297,8 +293,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
     auto req_mult   = col_index.find("multiplier");
     if (req_id == col_index.end() || req_max == col_index.end() ||
         req_mult == col_index.end()) {
-        std::cerr << "Warning: CSV file missing required columns (id, max_level, multiplier)."
-                  << std::endl;
+        LOG_WARN("Warning: CSV file missing required columns (id, max_level, multiplier).");
         return {};
     }
 
@@ -323,8 +318,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
         // Required fields
         const std::string &id = get_field(fields, "id");
         if (id.empty()) {
-            std::cerr << "Warning: Skipping CSV row " << (r + 1)
-                      << " with empty id." << std::endl;
+            LOG_WARN("Warning: Skipping CSV row %d with empty id.", r + 1);
             continue;
         }
 
@@ -334,8 +328,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
         } catch (...) {
         }
         if (max_level <= 0) {
-            std::cerr << "Warning: Skipping CSV row " << (r + 1)
-                      << " with invalid max_level." << std::endl;
+            LOG_WARN("Warning: Skipping CSV row %d with invalid max_level.", r + 1);
             continue;
         }
 
@@ -345,8 +338,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
         } catch (...) {
         }
         if (multiplier <= 0) {
-            std::cerr << "Warning: Skipping CSV row " << (r + 1)
-                      << " with invalid multiplier." << std::endl;
+            LOG_WARN("Warning: Skipping CSV row %d with invalid multiplier.", r + 1);
             continue;
         }
 
@@ -468,7 +460,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
             try {
                 content = ParserUtils::read_file(ench_file.path());
             } catch (const std::exception &) {
-                std::cerr << "Warning: Could not read " << ench_file.path() << std::endl;
+                LOG_WARN("Warning: Could not read %s", ench_file.path().c_str());
                 continue;
             }
 
@@ -476,7 +468,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
             try {
                 root = Json::parse(content);
             } catch (const std::exception &) {
-                std::cerr << "Warning: Could not parse " << ench_file.path() << std::endl;
+                LOG_WARN("Warning: Could not parse %s", ench_file.path().c_str());
                 continue;
             }
 
@@ -491,10 +483,8 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
             int32_t max_level  = ParserUtils::get_json_int(obj, "max_level");
 
             if (max_level <= 0 || multiplier <= 0) {
-                std::cerr << "Warning: Skipping " << ns << ":" << filename
-                          << " — invalid max_level or anvil_cost (max_level="
-                          << max_level << ", anvil_cost=" << multiplier << ")"
-                          << std::endl;
+                LOG_WARN("Warning: Skipping %s:%s — invalid max_level or anvil_cost (max_level=%d, anvil_cost=%d)",
+                         ns.c_str(), filename.c_str(), max_level, multiplier);
                 continue;
             }
 

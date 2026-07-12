@@ -1,8 +1,8 @@
 #include "utils/ParserUtils.h"
+#include "log/log.hpp"
 
 #include <cctype>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
@@ -26,7 +26,7 @@ MCE parse_platform(const std::string &str) {
     if (lower == "all" || lower == "both") {
         return MCE::All;
     }
-    std::cerr << "Warning: Unknown platform '" << str << "', defaulting to Java." << std::endl;
+    LOG_WARN("Warning: Unknown platform '%s', defaulting to Java.", str.c_str());
     return MCE::Java;
 }
 

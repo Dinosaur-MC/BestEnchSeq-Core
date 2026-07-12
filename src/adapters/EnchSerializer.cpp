@@ -1,6 +1,7 @@
 #include "adapters/EnchSerializer.h"
 #include "parsers/EnchInfoParser.h"   // EnchantmentDataPack
 #include "utils/ParserUtils.h"
+#include "log/log.hpp"
 #include "io/CsvIO.h"
 #include "io/json.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -8,7 +9,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -166,10 +166,10 @@ void EnchSerializer::export_to_mc_official(
         if (f.is_open()) {
             f << json_str;
             if (!f.good()) {
-                std::cerr << "Warning: Write error for " << file_path << std::endl;
+                LOG_WARN("Warning: Write error for %s", file_path.c_str());
             }
         } else {
-            std::cerr << "Warning: Could not open " << file_path << " for writing" << std::endl;
+            LOG_WARN("Warning: Could not open %s for writing", file_path.c_str());
         }
     }
 }

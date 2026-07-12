@@ -1,10 +1,10 @@
 #include "parsers/EquipmentParser.h"
 #include "utils/ParserUtils.h"
+#include "log/log.hpp"
 #include "io/CsvIO.h"
 #include "io/json.h"
 
 #include <cctype>
-#include <iostream>
 
 // ============================================================================
 
@@ -19,7 +19,7 @@ std::vector<RawEquipment> EquipmentParser::parse_native_json(
     try {
         content = ParserUtils::read_file(path);
     } catch (const std::exception &e) {
-        std::cerr << "Warning: Could not read " << path << ": " << e.what() << std::endl;
+        LOG_WARN("Warning: Could not read %s: %s", path.c_str(), e.what());
         return {};
     }
 
@@ -27,7 +27,7 @@ std::vector<RawEquipment> EquipmentParser::parse_native_json(
     try {
         root = Json::parse(content);
     } catch (const std::exception &) {
-        std::cerr << "Warning: Could not parse " << path << std::endl;
+        LOG_WARN("Warning: Could not parse %s", path.c_str());
         return {};
     }
 
@@ -63,8 +63,7 @@ std::vector<RawEquipment> EquipmentParser::parse_native_json(
         std::string category = ParserUtils::get_json_string(elem_obj, "category");
 
         if (id.empty() || category.empty()) {
-            std::cerr << "Warning: Skipping equipment entry with missing id or category."
-                      << std::endl;
+            LOG_WARN("Warning: Skipping equipment entry with missing id or category.");
             continue;
         }
 
@@ -111,7 +110,7 @@ std::vector<RawEquipment> EquipmentParser::parse_native_csv(
     auto req_id       = col_index.find("id");
     auto req_category = col_index.find("category");
     if (req_id == col_index.end() || req_category == col_index.end()) {
-        std::cerr << "Warning: CSV file missing required columns (id, category)." << std::endl;
+        LOG_WARN("Warning: CSV file missing required columns (id, category).");
         return {};
     }
 
@@ -136,15 +135,13 @@ std::vector<RawEquipment> EquipmentParser::parse_native_csv(
         // Required fields
         const std::string &id = get_field(fields, "id");
         if (id.empty()) {
-            std::cerr << "Warning: Skipping CSV row " << (r + 1)
-                      << " with empty id." << std::endl;
+            LOG_WARN("Warning: Skipping CSV row %d with empty id.", r + 1);
             continue;
         }
 
         const std::string &category = get_field(fields, "category");
         if (category.empty()) {
-            std::cerr << "Warning: Skipping CSV row " << (r + 1)
-                      << " with empty category." << std::endl;
+            LOG_WARN("Warning: Skipping CSV row %d with empty category.", r + 1);
             continue;
         }
 
@@ -223,7 +220,7 @@ std::vector<RawEquipment> EquipmentParser::parse_mc_official(
             try {
                 content = ParserUtils::read_file(item_file.path());
             } catch (const std::exception &) {
-                std::cerr << "Warning: Could not read " << item_file.path() << std::endl;
+                LOG_WARN("Warning: Could not read %s", item_file.path().c_str());
                 continue;
             }
 
@@ -231,7 +228,7 @@ std::vector<RawEquipment> EquipmentParser::parse_mc_official(
             try {
                 root = Json::parse(content);
             } catch (const std::exception &) {
-                std::cerr << "Warning: Could not parse " << item_file.path() << std::endl;
+                LOG_WARN("Warning: Could not parse %s", item_file.path().c_str());
                 continue;
             }
 
