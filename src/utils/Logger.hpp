@@ -1,8 +1,10 @@
 #pragma once
-#include "utils/BoundedMPMCQueue.hpp"
+#include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -22,6 +24,11 @@ struct LogEntry {
 /// Dedicated worker writes to logs/<timestamp>.log + latest.log.
 /// Rotation keeps at most 5 historic runs.
 ///
+/// Poll-free idle: when no messages are queued the worker thread blocks on a
+/// condition variable (zero CPU, zero scheduler noise) instead of busy-waiting
+/// or short-sleep polling.  This eliminates ~200 context-switches/second that
+/// previously caused variable cache interference with computation threads.
+///
 /// Singleton (Meyer's): call Logger::instance() from anywhere.
 /// Constructed on first use; log dir defaults to "logs".
 class Logger {
@@ -34,6 +41,7 @@ public:
     Logger& operator=(const Logger&) = delete;
 
     /// Push a log message (non-blocking). Silently drops when queue full.
+    /// Wakes the worker thread via condition variable.
     void log(LogLevel level, std::string message);
 
     /// Convenience helpers.
@@ -64,6 +72,8 @@ private:
 
     BoundedMPMCQueue<LogEntry, 256> _queue;
     std::atomic<bool> _running{true};
+    std::mutex _wake_mtx;
+    std::condition_variable _wake_cv;
     std::thread _worker_thread;
     std::string _log_dir;
 };

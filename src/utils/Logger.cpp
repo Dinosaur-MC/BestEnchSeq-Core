@@ -81,7 +81,8 @@ void Logger::_worker() {
 
     LogEntry entry;
     while (_running.load(std::memory_order_acquire)) {
-        if (_queue.pop(entry)) {
+        // Drain all available entries (burst handling).
+        while (_queue.pop(entry)) {
             auto line = "[" + now_str() + "] [" + level_str(entry.level) + "] "
                       + entry.message + "\n";
             if (run_file.is_open()) {
@@ -92,9 +93,15 @@ void Logger::_worker() {
                 latest_file << line;
                 latest_file.flush();
             }
-        } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+        // Check again before blocking (messages may have arrived during drain)
+        if (!_running.load(std::memory_order_acquire))
+            break;
+        // Block until next log message or shutdown (zero CPU while idle).
+        // This eliminates the previous 5ms polling loop (~200 context-switches
+        // per second) that caused variable cache interference.
+        std::unique_lock<std::mutex> lock(_wake_mtx);
+        _wake_cv.wait(lock);
     }
 
     // Drain remaining
@@ -123,16 +130,27 @@ Logger::Logger(std::string log_dir)
 
 Logger::~Logger() {
     _running.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(_wake_mtx);
+        _wake_cv.notify_all();
+    }
     if (_worker_thread.joinable())
         _worker_thread.join();
 }
 
 void Logger::log(LogLevel level, std::string message) {
-    _queue.push(LogEntry{level, std::move(message)});
+    if (_queue.push(LogEntry{level, std::move(message)})) {
+        std::lock_guard<std::mutex> lock(_wake_mtx);
+        _wake_cv.notify_one();
+    }
 }
 
 void Logger::flush() {
     _running.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(_wake_mtx);
+        _wake_cv.notify_all();
+    }
     if (_worker_thread.joinable())
         _worker_thread.join();
     _running.store(true, std::memory_order_release);
