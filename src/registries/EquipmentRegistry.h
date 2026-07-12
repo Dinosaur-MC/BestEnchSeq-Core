@@ -29,6 +29,12 @@ public:
     // String → numeric ID. Returns -1 if not found.
     int32_t get_id(const std::string& name_id) const;
 
+    // Query by category
+    std::vector<const Equipment*> get_by_category(int32_t category_id) const;
+
+    // Name -> pointer map (for InputParser)
+    std::unordered_map<std::string, const Equipment*> get_name_map() const;
+
     // All instances (for iteration)
     const std::vector<Equipment>& get_instances() const { return instances_; }
     size_t size() const { return instances_.size(); }

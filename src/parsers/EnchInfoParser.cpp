@@ -227,6 +227,9 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
             limited_level = max_level;
         }
 
+        // Treasure enchantment flag (optional, defaults to false)
+        bool is_treasure = ParserUtils::get_json_bool(elem_obj, "is_treasure");
+
         // Exclusive set — resolve #tag references
         auto exclusive_set_items = ParserUtils::get_json_string_array(elem_obj, "exclusive_set");
         auto exclusive_set       = resolve_references(exclusive_set_items, tag_resolver);
@@ -242,6 +245,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
             max_level,
             limited_level,
             multiplier,
+            is_treasure,
             std::move(exclusive_set),
             std::move(applicable_equipment)
         });
@@ -397,6 +401,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
             max_level,
             limited_level,
             multiplier,
+            false, // is_treasure (not present in CSV format)
             std::move(exclusive_set),
             std::move(applicable_equipment)
         });
@@ -547,6 +552,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
                 max_level,
                 limited_level,
                 multiplier,
+                false, // is_treasure (not in MC official format)
                 std::move(exclusive_set),
                 std::move(applicable_equipment)
             });

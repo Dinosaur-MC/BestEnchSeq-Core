@@ -37,6 +37,7 @@ std::vector<EnchInfo> RegistryResolver::resolve_ench_info(
             r.max_level,
             r.limited_level,
             r.multiplier,
+            r.is_treasure,
             r.exclusive_set,     // already resolved strings (no further resolution needed)
             std::move(category_ids)
         );

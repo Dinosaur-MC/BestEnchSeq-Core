@@ -90,6 +90,18 @@ int32_t get_json_int(const Json::Object &obj, const std::string &key) {
     return 0;
 }
 
+bool get_json_bool(const Json::Object &obj, const std::string &key) {
+    auto it = obj.find(key);
+    if (it == obj.end()) {
+        return false;
+    }
+    auto val = it->second.get_value();
+    if (std::holds_alternative<Json::Bool>(val)) {
+        return std::get<Json::Bool>(val);
+    }
+    return false;
+}
+
 std::vector<std::string> get_json_string_array(const Json::Object &obj, const std::string &key) {
     std::vector<std::string> result;
     auto it = obj.find(key);

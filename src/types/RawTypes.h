@@ -23,6 +23,7 @@ struct RawEnchInfo {
     int32_t max_level        = 0;
     int32_t limited_level    = 0;
     int32_t multiplier       = 0;
+    bool is_treasure         = false;
     std::unordered_set<std::string> exclusive_set;          // strings (#tag refs resolved)
     std::unordered_set<std::string> applicable_equipment;    // category name strings
 };

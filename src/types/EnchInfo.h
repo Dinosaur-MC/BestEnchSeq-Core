@@ -12,6 +12,7 @@ struct EnchInfo {
     int32_t max_level;
     int32_t limited_level;
     int32_t multiplier;
+    bool is_treasure         = false;
     std::unordered_set<std::string> exclusive_set;
     std::unordered_set<int32_t> applicable_category_ids;
 

@@ -41,6 +41,7 @@ std::string EnchSerializer::to_json(
         obj["max_level"] = Json(Json::Number(static_cast<int32_t>(info.max_level)));
         obj["limited_level"] = Json(Json::Number(static_cast<int32_t>(info.limited_level)));
         obj["multiplier"] = Json(Json::Number(static_cast<int32_t>(info.multiplier)));
+        obj["is_treasure"] = Json(Json::Bool(info.is_treasure));
 
         // exclusive_set array
         Json::Array excl;
@@ -76,7 +77,7 @@ std::string EnchSerializer::to_csv(
 
     // Header row
     table.push_back({"id", "name", "platform", "max_level", "limited_level",
-                     "multiplier", "exclusive_set", "applicable_equipment"});
+                     "multiplier", "is_treasure", "exclusive_set", "applicable_equipment"});
 
     for (const auto &info : infos) {
         // exclusive_set: join with ;
@@ -107,6 +108,7 @@ std::string EnchSerializer::to_csv(
             std::to_string(info.max_level),
             std::to_string(info.limited_level),
             std::to_string(info.multiplier),
+            info.is_treasure ? "true" : "false",
             excl_set,
             app_eq,
         });

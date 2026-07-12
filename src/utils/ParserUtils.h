@@ -19,6 +19,7 @@ std::string platform_to_string(MCE p);
 // JSON field extraction helpers
 std::string get_json_string(const Json::Object &obj, const std::string &key);
 int32_t get_json_int(const Json::Object &obj, const std::string &key);
+bool get_json_bool(const Json::Object &obj, const std::string &key);
 std::vector<std::string> get_json_string_array(const Json::Object &obj, const std::string &key);
 
 // String splitting

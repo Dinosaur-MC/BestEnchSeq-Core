@@ -32,3 +32,22 @@ int32_t EquipmentRegistry::get_id(const std::string& name_id) const {
     auto it = name_to_id_.find(name_id);
     return it != name_to_id_.end() ? it->second : -1;
 }
+
+std::vector<const Equipment*> EquipmentRegistry::get_by_category(int32_t category_id) const {
+    std::vector<const Equipment*> result;
+    for (const auto& eq : instances_) {
+        if (eq.category_id == category_id) {
+            result.push_back(&eq);
+        }
+    }
+    return result;
+}
+
+std::unordered_map<std::string, const Equipment*> EquipmentRegistry::get_name_map() const {
+    std::unordered_map<std::string, const Equipment*> result;
+    result.reserve(instances_.size());
+    for (const auto& eq : instances_) {
+        result[eq.name_id] = &eq;
+    }
+    return result;
+}
