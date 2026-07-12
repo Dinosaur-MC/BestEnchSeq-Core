@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "utils/SegmentedMPMCQueue.hpp"
+#include "utils/queue/SegmentedMPMCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <cstdint>

@@ -9,9 +9,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "BoundedMPMCQueue.hpp"
-#include "SegmentedMPMCQueue.hpp"
-#include "SPSCQueue.hpp"
+#include "queue/BoundedMPMCQueue.hpp"
+#include "queue/SegmentedMPMCQueue.hpp"
+#include "queue/SPSCQueue.hpp"
 
 // ─── EventLoop ────────────────────────────────────────────────────────────
 // Zero-CPU-idle task event loop built on C++20 atomic wait/notify.
@@ -167,10 +167,15 @@ public:
         auto prom = std::make_shared<std::promise<void>>();
         auto fut  = prom->get_future();
 
-        post([t = std::forward<F>(task), p = std::move(prom)]() mutable {
+        // Build once, retry if bounded queue is full (otherwise the
+        // promise is never set and fut.wait() hangs).
+        auto done = [t = std::forward<F>(task), prom]() mutable {
             t();
-            p->set_value();
-        });
+            prom->set_value();
+        };
+        while (!post(done)) {
+            std::this_thread::yield();
+        }
 
         fut.wait();
     }

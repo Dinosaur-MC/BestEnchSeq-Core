@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "utils/SPSCQueue.hpp"
+#include "utils/queue/SPSCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <thread>

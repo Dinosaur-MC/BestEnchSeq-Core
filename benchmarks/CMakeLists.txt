@@ -4,6 +4,8 @@ set(PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # Shared include path
 set(BENCH_INCLUDE ${PROJECT_ROOT}/src)
 
+find_package(Threads REQUIRED)
+
 # GLOB all algorithm and registry sources (avoids manual listing per algorithm)
 file(GLOB_RECURSE ALGO_SRC CONFIGURE_DEPENDS
     ${PROJECT_ROOT}/src/algorithm/*.cpp
@@ -34,6 +36,12 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/types/Equipment.cpp
 )
 target_include_directories(forge_benchmark PRIVATE ${BENCH_INCLUDE})
+
+# ─── queue_benchmark (standalone, no project deps beyond src/utils) ───
+add_executable(queue_benchmark
+    queue_benchmark.cpp
+)
+target_include_directories(queue_benchmark PRIVATE ${BENCH_INCLUDE})
 
 # Quick smoke test for ctest — runs one small case with greedy algo (< 5s)
 add_test(NAME benchmark_smoke
