@@ -53,10 +53,11 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
     _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
 
-    // Periodic observer dispatch — pumps ExecutionContext events so that
-    // observer callbacks (on_progress, on_solution_found, etc.) fire in
-    // near-real-time during algorithm execution, not just after the worker
-    // thread completes.
+    // Periodic observer dispatch — only needed when observers are attached.
+    // Without observers, events are batch-drained at wait() time, avoiding
+    // the overhead of a dedicated dispatch thread (thread creation + join
+    // costs ~1-2ms per run, significant for sub-ms algorithms).
+    if (_ctx->has_observers()) {
     _dispatch.emplace([this]() {
         while (true) {
             auto s = _state.load(std::memory_order_acquire);
@@ -68,6 +69,7 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
         // Final drain after worker has signalled completion
         _ctx->dispatch_events();
     });
+    }  // if (has_observers)
 
     _worker.emplace([this, input = std::move(input)]() mutable {
         try {

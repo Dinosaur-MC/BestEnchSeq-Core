@@ -8,6 +8,10 @@
 #include <string>
 
 void AlgorithmDiagnostics::write() const {
+    // Skip file write for trivial runs (wall < 10ms) — avoids ~1ms I/O
+    // overhead for fast algorithms where diagnostics add no value.
+    if (wall_ms < 10) return;
+
     namespace fs = std::filesystem;
     fs::create_directories("logs/diag");
 
