@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-// ─── Algorithm input (compact types only) ───
+// ─── Algorithm input (compact types + Equipment for step conversion) ───
 struct AlgorithmInput {
     ForgeConfig config;              // forge configuration (platform, flags)
     compact::ItemCollection items;   // items[0] = equipment, rest = books

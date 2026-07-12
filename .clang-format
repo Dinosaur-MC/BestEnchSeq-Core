@@ -2,3 +2,9 @@ BasedOnStyle: LLVM
 IndentWidth: 4
 ColumnLimit: 128
 UseTab: Never
+PointerAlignment: Left
+SortIncludes: CaseInsensitive
+AccessModifierOffset: -4
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+BinPackParameters: false
