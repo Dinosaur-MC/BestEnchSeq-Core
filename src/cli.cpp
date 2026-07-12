@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "parsers/CLIParser.h"
 #include "utils/ParserUtils.h"
 
 #include <cctype>
@@ -11,9 +12,10 @@
 std::string get_cli_help_text(const std::string &program_name) {
     return
         "Usage: " + program_name + " [options] --target <item> --wanted <enchants>\n"
+        "   or: " + program_name + " (no args: show this help)\n"
         "\n"
         "Options:\n"
-        "  --help                  Show this help message\n"
+        "  -h, --help              Show this help message\n"
         "  --algorithm <name>      Search algorithm: greedy (default), dfs, astar,\n"
         "                           penalty_balance, hierarchical, or idastar\n"
         "  --target <spec>         Target item (e.g., diamond_sword or diamond_sword[sharpness=3])\n"
@@ -27,7 +29,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "  --data-pack <dir>       Custom data pack directory\n"
         "  --ignore-cost-cap       Bypass the survival-mode 39-level cap (for modded play)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
-        "  --verbose               Show algorithm diagnostic counters on completion\n"
+        "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
         "\n"
         "Enchantment formats:\n"
         "  id=level                e.g., sharpness=5\n"

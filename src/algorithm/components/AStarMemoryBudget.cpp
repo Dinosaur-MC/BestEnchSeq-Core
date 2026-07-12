@@ -1,5 +1,4 @@
 #include "AStarMemoryBudget.h"
-#include "utils/EnvUtil.hpp"
 #include <algorithm>
 
 // Per-entry byte costs (adjusted for real platform)
@@ -15,8 +14,8 @@ namespace {
     constexpr int64_t RATIO_STEP_POOL  = 20;
     constexpr int64_t RATIO_ITEMS_POOL = 5;
 
-    int64_t available() noexcept {
-        return get_env<int64_t>("BESQ_MEMORY_MB", 2048);
+    int64_t available(int64_t default_mb) noexcept {
+        return default_mb > 0 ? default_mb : 2048;
     }
 }
 
@@ -47,8 +46,8 @@ AStarMemoryBudget AStarMemoryBudget::from_memory_mb(int64_t total_mb, int32_t nu
     return b;
 }
 
-AStarMemoryBudget AStarMemoryBudget::auto_detect(int32_t num_items) noexcept {
-    int64_t mb = available();
+AStarMemoryBudget AStarMemoryBudget::auto_detect(int32_t num_items, int64_t default_mb) noexcept {
+    int64_t mb = available(default_mb);
     if (mb <= 0) mb = 2048;
     return from_memory_mb(mb, num_items);
 }

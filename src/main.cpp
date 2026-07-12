@@ -7,6 +7,7 @@
 
 #include "adapters/CompactAdapter.h"
 #include "cli.h"
+#include "types/AppConfig.h"
 #include "parsers/EnchInfoParser.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "utils/Logger.hpp"
@@ -88,6 +89,8 @@ void register_builtin_algorithms(AlgorithmRegistry &registry) {
 
 int main(int argc, char *argv[]) {
     try {
+        // Load environment-backed config (CLI overrides take precedence later)
+        auto app_cfg = AppConfig::load();
         auto config = parse_cli(argc, argv);
 
         if (config.help) {
@@ -138,11 +141,12 @@ int main(int argc, char *argv[]) {
         AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.original_ench, parsed.available_items,
                                                   forge_config, registries::enchants());
 
-        // ── Memory budget for AStar (set before moving algo into executor) ─
-        if (config.memory_mb > 0) {
+        // ── Memory budget for AStar (CLI → AppConfig → default) ────────────
+        {
+            int64_t mb = config.memory_mb > 0 ? config.memory_mb : app_cfg.memory_mb;
             auto* astar = dynamic_cast<AStarAlgorithm*>(algo.get());
             if (astar) {
-                astar->set_budget(AStarMemoryBudget::from_memory_mb(config.memory_mb, 0));
+                astar->set_budget(AStarMemoryBudget::from_memory_mb(mb > 0 ? mb : 2048, 0));
             }
         }
 

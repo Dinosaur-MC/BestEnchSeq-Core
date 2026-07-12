@@ -16,5 +16,5 @@ struct AStarMemoryBudget {
     size_t  reserve_items_pool = 0;
 
     static AStarMemoryBudget from_memory_mb(int64_t memory_mb, int32_t num_items) noexcept;
-    static AStarMemoryBudget auto_detect(int32_t num_items) noexcept;
+    static AStarMemoryBudget auto_detect(int32_t num_items, int64_t default_mb = 2048) noexcept;
 };
