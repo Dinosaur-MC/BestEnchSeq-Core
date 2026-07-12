@@ -111,50 +111,47 @@ void HierarchicalMergeAlgorithm::execute(
     std::vector<EnchStep> compact_steps;
 
     // Phase 1: Dedup same-enchantment books (when >7 books)
+    // Build a new book list by scanning and merging duplicates.
     if (books.size() > 7) {
-        std::unordered_map<int32_t, std::vector<size_t>> ench_to_books;
-        for (size_t i = 0; i < books.size(); ++i) {
-            if (books[i].enchs.size() == 1) {
-                int32_t eid = books[i].enchs.begin()->id;
-                ench_to_books[eid].push_back(i);
-            }
-        }
+        std::vector<Item> merged;
+        merged.reserve(books.size());
+        // Build map: enchantment ID → index in merged vector
+        std::unordered_map<int32_t, size_t> ench_to_idx;
+        for (auto& book : books) {
+            if (book.enchs.size() == 1) {
+                int32_t eid = book.enchs.begin()->id;
+                auto it = ench_to_idx.find(eid);
+                if (it != ench_to_idx.end()) {
+                    // Found a book with same single enchant — forge into existing
+                    auto& target = merged[it->second];
+                    if (_forge_engine.is_forgeable(target, book)) {
+                        Item saved_base = target;
+                        int32_t cost = _forge_engine.forge_into(target, book, reg);
+                        ctx.incr_steps_forged();
+                        compact_steps.push_back({std::move(saved_base), std::move(book), cost});
+                        ++_solutions_found;
 
-        for (auto& [eid, indices] : ench_to_books) {
-            if (indices.size() < 2) continue;
-            std::sort(indices.begin(), indices.end(), std::greater<>{});
-
-            auto& base = books[indices.back()];
-            for (size_t idx_idx = 1; idx_idx < indices.size(); ++idx_idx) {
-                size_t sac_idx = indices[idx_idx];
-                if (sac_idx >= books.size()) continue;
-                if (sac_idx == indices.back()) continue; // self-forge guard — don't forge base into itself
-                if (!_forge_engine.is_forgeable(base, books[sac_idx]))
-                    continue;
-
-                Item saved_base = base;
-                Item saved_sac  = books[sac_idx];
-
-                int32_t cost = _forge_engine.forge_into(base, books[sac_idx], reg);
-                ctx.incr_steps_forged();
-                compact_steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
-
-                ++_solutions_found;
-
-                {
-                    auto cfg = ctx.get_search_config();
-                    if (cfg.max_search_time.count() > 0) {
-                        auto elapsed = std::chrono::steady_clock::now() - _start;
-                        if (elapsed > cfg.max_search_time) break;
+                        auto cfg = ctx.get_search_config();
+                        if (cfg.max_search_time.count() > 0) {
+                            auto elapsed = std::chrono::steady_clock::now() - _start;
+                            if (elapsed > cfg.max_search_time) goto phase2;
+                        }
+                        if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) goto phase2;
+                    } else {
+                        merged.push_back(std::move(book));
                     }
-                    if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) break;
+                } else {
+                    ench_to_idx[eid] = merged.size();
+                    merged.push_back(std::move(book));
                 }
-
-                if (sac_idx < books.size())
-                    books.erase(books.begin() + sac_idx);
+            } else {
+                merged.push_back(std::move(book));
             }
         }
+        books = std::move(merged);
     }
+
+phase2:
 
     // Phase 2: Group by effective multiplier tier
     std::vector<Item> low_group, mid_group, high_group;

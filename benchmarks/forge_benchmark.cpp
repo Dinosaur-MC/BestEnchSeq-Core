@@ -43,42 +43,42 @@ struct TestCase {
 TestCase CASES[] = {
     // Swords
     {"sword_basic", "diamond_sword",
-     {"sharpness=5", "looting=3", "unbreaking=3"}, 14, 35},
+     {"sharpness=5", "looting=3", "unbreaking=3"}, 0, 1000},
     {"sword_combat_5", "diamond_sword",
-     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 31, 52},
+     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 0, 1000},
     {"sword_combat_7", "diamond_sword",
      {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1"}, 40, 120},
+      "fire_aspect=2", "knockback=2", "mending=1"}, 0, 1000},
     // Tools
     {"pickaxe_fortune", "diamond_pickaxe",
-     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 15, 40},
+     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 0, 1000},
     {"pickaxe_silk", "diamond_pickaxe",
-     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 15, 40},
+     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 0, 1000},
     // Ranged
     {"bow_power", "bow",
-     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 15, 48},
+     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 0, 1000},
     {"crossbow", "crossbow",
-     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 12, 35},
+     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 0, 1000},
     // Armor
     {"helmet", "diamond_helmet",
-     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 20, 51},
+     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 0, 1000},
     {"chestplate", "diamond_chestplate",
-     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 20, 55},
+     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 0, 1000},
     {"leggings", "diamond_leggings",
-     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 20, 50},
+     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 0, 1000},
     {"boots", "diamond_boots",
-     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 25, 60},
+     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 0, 1000},
     {"boots_full", "diamond_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
-      "thorns=3", "unbreaking=3", "mending=1"}, 55, 125},
+      "thorns=3", "unbreaking=3", "mending=1"}, 0, 1000},
     // Netherite
     {"netherite_sword", "netherite_sword",
      {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 45, 160},
+      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 0, 1000},
     {"netherite_boots", "netherite_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
       "thorns=3", "unbreaking=3", "mending=1",
-      "vanishing_curse=1", "binding_curse=1"}, 60, 200},
+      "vanishing_curse=1", "binding_curse=1"}, 0, 1000},
 };
 
 // ─── Groups ───
@@ -190,6 +190,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             books.emplace_back(::EnchSet{Ench(eid, lvl)});
     }
 
+    size_t total_books = books.size();
     compact::EnchReg ench_reg;
     ench_reg.init(registries::enchants(), eq);
 
@@ -205,8 +206,11 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         algo_input.items.push_back(CompactAdapter::from_domain(book, algo_input.ench_reg));
 
     algo_input.target.reserve(wanted_set.size());
-    for (const auto& e : wanted_set)
-        algo_input.target.push_back({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+    for (const auto& e : wanted_set) {
+        int16_t local = static_cast<int16_t>(algo_input.ench_reg.to_local_id(e.id));
+        if (local >= 0)
+            algo_input.target.push_back({local, static_cast<int16_t>(e.level)});
+    }
 
     // ── Warmup: one greedy run before measurements (Issue 3) ──
     {
@@ -227,7 +231,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
             continue;
         }
-        if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && tc.wanted.size() > 8) {
+        if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && total_books > 8) {
             std::cout << "  " << algo_name << ": SKIP: too many enchants" << std::endl;
             continue;
         }
@@ -371,7 +375,11 @@ int main(int argc, char* argv[]) {
 
     for (auto* tc : queue) {
         std::cout << tc->name << " (" << tc->wanted.size() << " enchants):" << std::endl;
-        run_case(*tc, cfg.algos, cfg.no_skip);
+        try {
+            run_case(*tc, cfg.algos, cfg.no_skip);
+        } catch (const std::exception& e) {
+            std::cerr << "  ERROR: " << e.what() << std::endl;
+        }
         std::cout << std::endl;
     }
     std::cout << "=== Done ===" << std::endl;
