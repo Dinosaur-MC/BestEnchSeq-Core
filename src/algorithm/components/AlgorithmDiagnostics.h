@@ -8,7 +8,7 @@
 /// (DFS, Greedy, DPB, HMS).  Writes a timestamped file to logs/diag/
 /// when write() is called.
 ///
-/// Compiled out entirely when ASTAR_DISABLE_DIAGNOSTICS is defined.
+/// Compiled out entirely when BESQ_DISABLE_DIAGNOSTICS is defined.
 /// (The macro name is historical — it applies to all algorithm diagnostics.)
 struct AlgorithmDiagnostics {
     int64_t  nodes_visited = 0;
@@ -19,7 +19,7 @@ struct AlgorithmDiagnostics {
     const char* label      = "";
     const char* status     = "";
 
-#ifndef ASTAR_DISABLE_DIAGNOSTICS
+#ifndef BESQ_DISABLE_DIAGNOSTICS
     void write() const;
 #else
     void write() const {}  // no-op

@@ -1,5 +1,5 @@
 #include "AlgorithmDiagnostics.h"
-#ifndef ASTAR_DISABLE_DIAGNOSTICS
+#ifndef BESQ_DISABLE_DIAGNOSTICS
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -47,4 +47,4 @@ void AlgorithmDiagnostics::write() const {
         << "steps_forged=" << steps_forged << "\n";
 }
 
-#endif // ASTAR_DISABLE_DIAGNOSTICS
+#endif // BESQ_DISABLE_DIAGNOSTICS

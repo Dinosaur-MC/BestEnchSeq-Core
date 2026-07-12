@@ -78,6 +78,18 @@ public:
     /// Flush pending messages synchronously.
     void flush();
 
+    /// ── Runtime configuration ────────────────────────────────────────────
+
+    /// Set minimum log level; messages below this level are dropped.
+    void set_level(LogLevel lv) noexcept { _level.store(lv, std::memory_order_release); }
+    LogLevel get_level() const noexcept {
+        return _level.load(std::memory_order_acquire);
+    }
+
+    /// Set maximum number of historic log files to retain during rotation.
+    void set_retention(size_t n) noexcept { _max_retention = n; }
+    size_t get_retention() const noexcept { return _max_retention; }
+
 private:
     explicit Logger(std::string log_dir = "logs");
 
@@ -90,6 +102,12 @@ private:
     /// worker via C++20 atomic::notify_one.  The worker blocks on wait()
     /// instead of polling — zero CPU when idle, no mutex or CV involved.
     std::atomic<uint64_t> _wake_seq{0};
+
+    /// Minimum log level (atomic for lock-free read in log()).
+    std::atomic<LogLevel> _level{LogLevel::Debug};
+    /// Max historic log files kept during rotation.
+    size_t _max_retention{5};
+
     std::thread _worker_thread;
     std::string _log_dir;
 };

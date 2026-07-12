@@ -4,7 +4,7 @@
 
 /// Diagnostics snapshot for AStar exit logging.
 ///
-/// Compiled out entirely when ASTAR_DISABLE_DIAGNOSTICS is defined.
+/// Compiled out entirely when BESQ_DISABLE_DIAGNOSTICS is defined.
 /// The write() method creates timestamped logs under logs/diag/.
 struct AStarDiagnostics {
     int64_t  explored_count      = 0;
@@ -24,7 +24,7 @@ struct AStarDiagnostics {
     int64_t  estimated_peak_bytes = 0;
     const char* status           = "";
 
-#ifndef ASTAR_DISABLE_DIAGNOSTICS
+#ifndef BESQ_DISABLE_DIAGNOSTICS
     void write() const;
 #else
     void write() const {}  // no-op

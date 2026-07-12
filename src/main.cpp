@@ -108,6 +108,14 @@ int main(int argc, char *argv[]) {
         auto app_cfg = AppConfig::load();
         auto config = parse_cli(argc, argv);
 
+        // ── Configure global Logger ─────────────────────────────────────────
+        Logger::instance().set_level(
+            app_cfg.log_level >= 3 ? LogLevel::Error
+          : app_cfg.log_level >= 2 ? LogLevel::Warn
+          : app_cfg.log_level >= 1 ? LogLevel::Info
+          :                          LogLevel::Debug);
+        Logger::instance().set_retention(app_cfg.log_retention);
+
         if (config.help) {
             return 0;
         }

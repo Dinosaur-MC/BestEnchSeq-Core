@@ -1,5 +1,5 @@
 #include "AStarDiagnostics.h"
-#ifndef ASTAR_DISABLE_DIAGNOSTICS
+#ifndef BESQ_DISABLE_DIAGNOSTICS
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -52,4 +52,4 @@ void AStarDiagnostics::write() const {
         << "estimated_peak_bytes=" << estimated_peak_bytes << "\n";
 }
 
-#endif // ASTAR_DISABLE_DIAGNOSTICS
+#endif // BESQ_DISABLE_DIAGNOSTICS

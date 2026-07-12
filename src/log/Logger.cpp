@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -56,9 +57,8 @@ void Logger::_rotate() {
                   return a.filename().string() > b.filename().string();
               });
 
-    // Remove oldest beyond retention
-    constexpr size_t MAX_KEEP = 5;
-    while (runs.size() >= MAX_KEEP) {
+    // Remove oldest beyond retention limit
+    while (runs.size() >= _max_retention) {
         fs::remove(runs.back());
         runs.pop_back();
     }
@@ -70,7 +70,12 @@ void Logger::_rotate() {
 // ─── Worker thread ───────────────────────────────────────────────────
 
 void Logger::_worker() {
-    _rotate();
+    try {
+        _rotate();
+    } catch (const std::exception&) {
+        // Rotate failures (permission, disk full) are non-fatal.
+        // Worker continues without rotation — next run will try again.
+    }
 
     auto dir = fs::path(_log_dir);
     auto run_path = dir / ("run_" + now_str() + ".log");
@@ -142,6 +147,9 @@ Logger::~Logger() {
 }
 
 void Logger::log(LogLevel level, std::string message) {
+    // Drop messages below the configured minimum level.
+    if (level < _level.load(std::memory_order_acquire))
+        return;
     if (_queue.try_push(LogEntry{level, std::move(message)})) {
         _wake_seq.fetch_add(1, std::memory_order_release);
         _wake_seq.notify_one();
