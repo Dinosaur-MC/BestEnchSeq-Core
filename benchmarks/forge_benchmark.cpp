@@ -18,10 +18,7 @@
 #include "registries/EquipmentRegistry.h"
 #include "types/ForgeConfig.h"
 
-#include <algorithm>
-#include <chrono>
 #include <cstdlib>
-#include <limits>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
@@ -43,42 +40,42 @@ struct TestCase {
 TestCase CASES[] = {
     // Swords
     {"sword_basic", "diamond_sword",
-     {"sharpness=5", "looting=3", "unbreaking=3"}, 0, 1000},
+     {"sharpness=5", "looting=3", "unbreaking=3"}, 14, 35},
     {"sword_combat_5", "diamond_sword",
-     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 0, 1000},
+     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 31, 52},
     {"sword_combat_7", "diamond_sword",
      {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1"}, 0, 1000},
+      "fire_aspect=2", "knockback=2", "mending=1"}, 40, 120},
     // Tools
     {"pickaxe_fortune", "diamond_pickaxe",
-     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 0, 1000},
+     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 15, 40},
     {"pickaxe_silk", "diamond_pickaxe",
-     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 0, 1000},
+     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 15, 40},
     // Ranged
     {"bow_power", "bow",
-     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 0, 1000},
+     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 15, 48},
     {"crossbow", "crossbow",
-     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 0, 1000},
+     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 12, 35},
     // Armor
     {"helmet", "diamond_helmet",
-     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 0, 1000},
+     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 20, 51},
     {"chestplate", "diamond_chestplate",
-     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 0, 1000},
+     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 20, 55},
     {"leggings", "diamond_leggings",
-     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 0, 1000},
+     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 20, 50},
     {"boots", "diamond_boots",
-     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 0, 1000},
+     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 25, 60},
     {"boots_full", "diamond_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
-      "thorns=3", "unbreaking=3", "mending=1"}, 0, 1000},
+      "thorns=3", "unbreaking=3", "mending=1"}, 55, 125},
     // Netherite
     {"netherite_sword", "netherite_sword",
      {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 0, 1000},
+      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 45, 160},
     {"netherite_boots", "netherite_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
       "thorns=3", "unbreaking=3", "mending=1",
-      "vanishing_curse=1", "binding_curse=1"}, 0, 1000},
+      "vanishing_curse=1", "binding_curse=1"}, 60, 200},
 };
 
 // ─── Groups ───
@@ -154,14 +151,15 @@ BenchConfig parse_cli(int argc, char* argv[]) {
 }
 
 // ─── Setup ───
-void load_builtin_data(const std::filesystem::path &builtin_data_dir) {
+void load_builtin_data() {
+    auto dir = std::filesystem::path("data") / "builtin";
     TagResolver tags;
     registries::categories().initialize();
     auto &cat_reg = registries::categories();
-    auto raw_ench = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tags);
+    auto raw_ench = EnchInfoParser::parse(dir / "vanilla.json", tags);
     auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
     registries::enchants().initialize(ench_infos);
-    auto raw_eq = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tags);
+    auto raw_eq = EquipmentParser::parse(dir / "vanilla.json", tags);
     auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
     registries::equipment().initialize(equipments);
 }
@@ -174,7 +172,6 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
     }
     const Equipment& eq = registries::equipment().get(eq_id);
 
-    // ── Build wanted set and graduated books (Issue 5) ──
     ::EnchSet wanted_set;
     ItemCollection books;
     for (const auto& spec : tc.wanted) {
@@ -184,13 +181,9 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         int32_t eid = registries::enchants().get_id(id);
         if (eid < 0) { std::cout << "  SKIP: unknown enchant '" << id << "'" << std::endl; return; }
         wanted_set.emplace(eid, lv);
-        // Create graduated books from level 1 up to max level,
-        // matching InputParser::generate_books() behavior.
-        for (int32_t lvl = 1; lvl <= lv; ++lvl)
-            books.emplace_back(::EnchSet{Ench(eid, lvl)});
+        books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
 
-    size_t total_books = books.size();
     compact::EnchReg ench_reg;
     ench_reg.init(registries::enchants(), eq);
 
@@ -207,108 +200,48 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
 
     algo_input.target.reserve(wanted_set.size());
     for (const auto& e : wanted_set) {
-        int16_t local = static_cast<int16_t>(algo_input.ench_reg.to_local_id(e.id));
-        if (local >= 0)
-            algo_input.target.push_back({local, static_cast<int16_t>(e.level)});
+        int16_t _lid = static_cast<int16_t>(algo_input.ench_reg.to_local_id(e.id));
+        if (_lid >= 0)
+            algo_input.target.push_back({_lid, static_cast<int16_t>(e.level)});
     }
-
-    // ── Warmup: one greedy run before measurements (Issue 3) ──
-    {
-        if (registries::algorithms().contains("greedy")) {
-            auto warmup_algo = registries::algorithms().create("greedy");
-            AlgorithmExecutor warmup_exec(std::move(warmup_algo));
-            AlgorithmInput warmup_input = algo_input;
-            warmup_exec.start(std::move(warmup_input));
-            warmup_exec.wait();
-            // Result discarded
-        }
-    }
-
-    constexpr int NUM_RUNS = 3;
 
     for (const auto& algo_name : enabled_algos) {
         if (!registries::algorithms().contains(algo_name)) {
             std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
             continue;
         }
-        if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && total_books > 8) {
+        if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && tc.wanted.size() > 8) {
             std::cout << "  " << algo_name << ": SKIP: too many enchants" << std::endl;
             continue;
         }
+        
+        auto algo = registries::algorithms().create(algo_name);
+        AlgorithmExecutor executor(std::move(algo));
 
-        // ── Aggregate results across 3 runs ──
-        int32_t cost_min = std::numeric_limits<int32_t>::max();
-        int32_t cost_max = std::numeric_limits<int32_t>::min();
-        double cost_sum = 0;
-        double self_min = std::numeric_limits<double>::max();
-        double self_max = std::numeric_limits<double>::min();
-        double self_sum = 0;
-        double wall_min = std::numeric_limits<double>::max();
-        double wall_max = std::numeric_limits<double>::min();
-        double wall_sum = 0;
-        int success_count = 0;
+        AlgorithmInput run_input = algo_input;
+        executor.start(std::move(run_input));
+        executor.wait();
 
-        for (int run = 0; run < NUM_RUNS; ++run) {
-            auto algo = registries::algorithms().create(algo_name);
-            AlgorithmExecutor executor(std::move(algo));
-
-            AlgorithmInput run_input = algo_input;
-
-            auto wall_start = std::chrono::high_resolution_clock::now();
-            executor.start(std::move(run_input));
-            executor.wait();
-            auto wall_end = std::chrono::high_resolution_clock::now();
-            double wall_ms = std::chrono::duration<double, std::milli>(wall_end - wall_start).count();
-
-            if (executor.state() != AlgorithmState::Completed) {
-                continue;
-            }
-            AlgorithmOutput out = executor.output();
-            if (out.steps.empty()) {
-                continue;
-            }
-
-            int32_t total = 0;
-            for (const auto& step_list : out.steps)
-                for (const auto& s : step_list)
-                    total += s.cost;
-
-            double self_ms = static_cast<double>(out.computation_time.count());
-
-            cost_min = std::min(cost_min, total);
-            cost_max = std::max(cost_max, total);
-            cost_sum += total;
-            self_min = std::min(self_min, self_ms);
-            self_max = std::max(self_max, self_ms);
-            self_sum += self_ms;
-            wall_min = std::min(wall_min, wall_ms);
-            wall_max = std::max(wall_max, wall_ms);
-            wall_sum += wall_ms;
-            ++success_count;
+        if (executor.state() != AlgorithmState::Completed) {
+            std::cout << "  " << algo_name << ": FAILED" << std::endl;
+            continue;
         }
-
-        if (success_count == 0) {
-            std::cout << "  " << algo_name << ": FAILED (" << NUM_RUNS << "/" << NUM_RUNS << " runs failed)" << std::endl;
+        AlgorithmOutput out = executor.output();
+        if (out.steps.empty()) {
+            std::cout << "  " << algo_name << ": no solution" << std::endl;
             continue;
         }
 
-        double cost_avg = cost_sum / success_count;
-        double self_avg = self_sum / success_count;
-        double wall_avg = wall_sum / success_count;
+        int32_t total = 0;
+        for (const auto& step_list : out.steps)
+            for (const auto& s : step_list)
+                total += s.cost;
 
-        // All successful runs must be within range
-        bool all_ok = cost_min >= tc.min_cost && cost_max <= tc.max_cost;
-
-        std::cout << "  " << algo_name << ": cost(avg=" << cost_avg
-                  << " min=" << cost_min << " max=" << cost_max << ")"
-                  << " self(avg=" << self_avg << "ms"
-                  << " min=" << self_min << "ms"
-                  << " max=" << self_max << "ms)"
-                  << " wall(avg=" << wall_avg << "ms)"
-                  << " [" << tc.min_cost << "-" << tc.max_cost << "L]"
-                  << (all_ok ? " ✅" : " ⚠️  out of range")
-                  << " runs=" << success_count
-                  << std::endl;
+        bool ok = total >= tc.min_cost && total <= tc.max_cost;
+        std::cout << "  " << algo_name << ": " << total << "L ["
+                  << tc.min_cost << "-" << tc.max_cost << "L]"
+                  << (ok ? " ✅" : " ⚠️  out of range")
+                  << " (" << out.computation_time.count() << "ms)" << std::endl;
     }
 }
 
@@ -337,13 +270,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Time: " << std::chrono::current_zone()->to_local(std::chrono::system_clock::now()) << std::endl;
     std::cout << "=== Dataset Benchmark ===" << std::endl;
-
-    // Resolve data path: prefer path relative to executable, fall back to CWD
-    auto builtin_data_dir = std::filesystem::absolute(argv[0]).parent_path() / "data" / "builtin";
-    if (!std::filesystem::exists(builtin_data_dir)) {
-        builtin_data_dir = std::filesystem::path("data") / "builtin";
-    }
-    load_builtin_data(builtin_data_dir);
+    load_builtin_data();
 
     registries::algorithms().register_algorithm("greedy",
         []{ return std::make_unique<GreedyAlgorithm>(); });
