@@ -1,5 +1,6 @@
 #include "CompactedRegistries.h"
 
+#include <iostream>
 #include <stdexcept>
 
 namespace compact {
@@ -27,7 +28,8 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
         // Saturating conversion: if values exceed int16_t range, clamp and warn
         if (info.multiplier > INT16_MAX) {
             _ench_infos[i].mul = INT16_MAX;
-            // TODO: replace with proper logging facility
+            std::cerr << "[ench_reg] multiplier " << info.multiplier
+                      << " at index " << i << " exceeds INT16_MAX, clamped\n";
         } else if (info.multiplier < 0) {
             _ench_infos[i].mul = 0;
         } else {
@@ -35,6 +37,8 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
         }
         if (info.max_level > INT16_MAX) {
             _ench_infos[i].max_lvl = INT16_MAX;
+            std::cerr << "[ench_reg] max_level " << info.max_level
+                      << " at index " << i << " exceeds INT16_MAX, clamped\n";
         } else if (info.max_level < 0) {
             _ench_infos[i].max_lvl = 0;
         } else {
@@ -49,9 +53,6 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
             }
         }
         _ench_infos[i].exc_mask.assign(_mask_size, 0);
-        // NOTE: self-bit deliberately NOT set in exc_mask — consistent with
-        // conflict_matrix diagonal (always 0). Use EnchReg::is_conflict()
-        // for conflict queries; EnchInfo::is_conflict() behaviour now matches.
         for (auto e : _registry.get_exclusive_set(i)) {
             if (e < 0)
                 throw std::out_of_range("Negative exclusive-set enchantment id in EnchReg::init()");

@@ -85,30 +85,39 @@ void process_inline_tags(const Json::Object &root_obj, TagResolver &tag_resolver
 
         for (const auto &[tag_name, tag_value_json] : tag_list_obj) {
             auto tag_val = tag_value_json.get_value();
-            if (!std::holds_alternative<Json::Object>(tag_val)) {
-                continue;
-            }
-            const auto &tag_obj = std::get<Json::Object>(tag_val);
 
-            auto values_it = tag_obj.find("values");
-            if (values_it == tag_obj.end()) {
-                continue;
+            // Support two formats:
+            //   1) "tag_name": ["value1", "value2"]        — flat array
+            //   2) "tag_name": {"values": ["value1", ...]}  — explicit object
+            // Extract tag values into a local vector, then move into raw_tags.
+            auto collect_strings = [](const Json::Array &arr) {
+                std::vector<std::string> out;
+                for (const auto &elem : arr) {
+                    auto val = elem.get_value();
+                    if (auto *s = std::get_if<Json::String>(&val))
+                        out.push_back(*s);
+                }
+                return out;
+            };
+
+            std::vector<std::string> raw_values;
+            if (auto *arr = std::get_if<Json::Array>(&tag_val)) {
+                raw_values = collect_strings(*arr);
+            } else if (auto *obj = std::get_if<Json::Object>(&tag_val)) {
+                auto it = obj->find("values");
+                if (it != obj->end()) {
+                    auto val = it->second.get_value();
+                    if (auto *arr = std::get_if<Json::Array>(&val))
+                        raw_values = collect_strings(*arr);
+                }
             }
 
-            auto values_val = values_it->second.get_value();
-            if (!std::holds_alternative<Json::Array>(values_val)) {
-                continue;
-            }
-            const auto &values_arr = std::get<Json::Array>(values_val);
+            if (raw_values.empty()) continue;
 
             // Use "minecraft" as the default namespace for inline tags
             std::string key = "minecraft:" + tag_name;
-            for (const auto &elem : values_arr) {
-                auto elem_val = elem.get_value();
-                if (std::holds_alternative<Json::String>(elem_val)) {
-                    raw_tags[key].push_back(std::get<Json::String>(elem_val));
-                }
-            }
+            for (auto &v : raw_values)
+                raw_tags[key].push_back(std::move(v));
         }
     }
 
