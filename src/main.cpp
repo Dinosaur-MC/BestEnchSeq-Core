@@ -175,9 +175,8 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // ── Logger ────────────────────────────────────────────────────────
-        Logger logger;
-        logger.info("Starting algorithm: " + config.algorithm);
+        // ── Logger (singleton, available system-wide) ──────────────────────
+        Logger::instance().info("Starting algorithm: " + config.algorithm);
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
@@ -187,7 +186,7 @@ int main(int argc, char *argv[]) {
         // ── Verbose diagnostics ────────────────────────────────────────────
         if (config.verbose || app_cfg.verbose) {
             auto diag = executor.get_diagnostics(0);
-            logger.printf(LogLevel::Info,
+            Logger::instance().printf(LogLevel::Info,
                 "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
                 diag.nodes_visited, diag.nodes_pruned, diag.steps_forged,
                 diag.progress * 100.0);

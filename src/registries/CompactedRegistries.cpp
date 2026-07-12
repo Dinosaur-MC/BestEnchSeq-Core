@@ -1,6 +1,6 @@
 #include "CompactedRegistries.h"
+#include "utils/Logger.hpp"
 
-#include <iostream>
 #include <stdexcept>
 
 namespace compact {
@@ -28,8 +28,9 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
         // Saturating conversion: if values exceed int16_t range, clamp and warn
         if (info.multiplier > INT16_MAX) {
             _ench_infos[i].mul = INT16_MAX;
-            std::cerr << "[ench_reg] multiplier " << info.multiplier
-                      << " at index " << i << " exceeds INT16_MAX, clamped\n";
+            Logger::instance().printf(LogLevel::Warn,
+                "ench_reg: multiplier %d at index %zu exceeds INT16_MAX, clamped",
+                info.multiplier, i);
         } else if (info.multiplier < 0) {
             _ench_infos[i].mul = 0;
         } else {
@@ -37,8 +38,9 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
         }
         if (info.max_level > INT16_MAX) {
             _ench_infos[i].max_lvl = INT16_MAX;
-            std::cerr << "[ench_reg] max_level " << info.max_level
-                      << " at index " << i << " exceeds INT16_MAX, clamped\n";
+            Logger::instance().printf(LogLevel::Warn,
+                "ench_reg: max_level %d at index %zu exceeds INT16_MAX, clamped",
+                info.max_level, i);
         } else if (info.max_level < 0) {
             _ench_infos[i].max_lvl = 0;
         } else {

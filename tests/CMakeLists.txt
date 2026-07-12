@@ -44,8 +44,11 @@ set(ALGO_ENGINE_SRCS
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
 )
 
-# Compact registries
-set(COMPACT_REG_SRCS ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp)
+# Compact registries (Logger linked here as CompactedRegistries depends on it)
+set(COMPACT_REG_SRCS
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
+    ${PROJECT_ROOT}/src/utils/Logger.cpp
+)
 
 # Equipment registry
 set(EQUIP_REG_SRCS ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp)

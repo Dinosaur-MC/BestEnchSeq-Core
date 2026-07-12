@@ -106,6 +106,13 @@ void Logger::_worker() {
     }
 }
 
+// ─── Singleton ────────────────────────────────────────────────────────
+
+Logger& Logger::instance() {
+    static Logger logger;
+    return logger;
+}
+
 // ─── Public API ──────────────────────────────────────────────────────
 
 Logger::Logger(std::string log_dir)

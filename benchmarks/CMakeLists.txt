@@ -16,6 +16,7 @@ add_executable(forge_benchmark
     forge_benchmark.cpp
     ${ALGO_SRC}
     ${REG_SRC}
+    ${PROJECT_ROOT}/src/utils/Logger.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp

@@ -21,9 +21,13 @@ struct LogEntry {
 /// Async logger: messages pushed to a lock-free MPMC queue from any thread.
 /// Dedicated worker writes to logs/<timestamp>.log + latest.log.
 /// Rotation keeps at most 5 historic runs.
+///
+/// Singleton (Meyer's): call Logger::instance() from anywhere.
+/// Constructed on first use; log dir defaults to "logs".
 class Logger {
 public:
-    explicit Logger(std::string log_dir = "logs");
+    static Logger& instance();
+
     ~Logger();
 
     Logger(const Logger&) = delete;
@@ -53,6 +57,8 @@ public:
     void flush();
 
 private:
+    explicit Logger(std::string log_dir = "logs");
+
     void _worker();
     void _rotate();
 
