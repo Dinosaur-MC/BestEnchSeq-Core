@@ -30,13 +30,18 @@ def parse_callgrind(file: Path):
             line = line.strip()
             if not line:
                 continue
+            
+            # 1. 提取命令信息
+            if line.startswith("cmd:"):
+                print(f"程序命令: {line[4:].strip()}")
+                continue
 
-            # 1. 提取总指令摘要
+            # 2. 提取总指令摘要
             if line.startswith("summary:"):
                 total_ir = int(line.split(":")[1].strip())
                 continue
 
-            # 2. 提取函数定义 (fn)
+            # 3. 提取函数定义 (fn)
             if line.startswith("fn=("):
                 # 修复：先找到左括号和右括号，再安全地提取中间的数字
                 start_paren = line.find("(")
@@ -56,7 +61,7 @@ def parse_callgrind(file: Path):
                         # 应对极少数格式极其特殊的行
                         continue
 
-            # 3. 提取被调用函数目标 (cfn)
+            # 4. 提取被调用函数目标 (cfn)
             if line.startswith("cfn=("):
                 start_paren = line.find("(")
                 end_paren = line.find(")")
@@ -72,7 +77,7 @@ def parse_callgrind(file: Path):
                     except ValueError:
                         continue
 
-            # 4. 提取调用次数与关系 (calls)
+            # 54. 提取调用次数与关系 (calls)
             if line.startswith("calls="):
                 parts = line.split()
                 if len(parts) >= 2 and current_fn_name and callee_name:
@@ -80,7 +85,7 @@ def parse_callgrind(file: Path):
                     call_counts[callee_name] += count
                 continue
 
-            # 5. 提取当前函数内执行的指令数 (cost)
+            # 6. 提取当前函数内执行的指令数 (cost)
             # 格式: 0x... 0 count 或者 +offset 0 count
             parts = line.split()
             if len(parts) == 3 and parts[1] == "0":

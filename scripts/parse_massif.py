@@ -76,8 +76,12 @@ def parse_massif(file_path: Path):
 
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
+        
+    # 1. 提取命令信息
+    command_line = next(line for line in content.split("\n", 8) if line.startswith("Command:"))
+    print(f"程序命令: {command_line[8:].strip()}")
 
-    # 1. 提取并打印 ASCII 图表
+    # 2. 提取并打印 ASCII 图表
     chart = extract_ascii_chart(content)
     if chart:
         print("\n" + "=" * 80)
@@ -87,7 +91,7 @@ def parse_massif(file_path: Path):
     else:
         print("\n[警告] 未找到 ASCII 图表部分。")
 
-    # 2. 提取快照表格
+    # 3. 提取快照表格
     snapshot_pattern = re.compile(
         r"^\s*(\d+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)$",
         re.MULTILINE,
@@ -124,7 +128,7 @@ def parse_massif(file_path: Path):
     print(f"  栈内存 (stacks)    : {peak_stacks:>15,} 字节")
     print("=" * 80)
 
-    # 3. 提取分配热点
+    # 4. 提取分配热点
     alloc_pattern = re.compile(r"^->([\d.]+)%\s+\(([^)]+)\)\s+(.*)$", re.MULTILINE)
     func_alloc = defaultdict(int)
 
@@ -146,7 +150,7 @@ def parse_massif(file_path: Path):
     for i, (name, bytes_alloc) in enumerate(sorted_funcs[:30]):
         print(f"{i+1:3}. {bytes_alloc:>18,}  {name}")
 
-    # 4. 可疑内存操作
+    # 5. 可疑内存操作
     print("\n>>> 可疑内存操作 (reserve / allocate / malloc / new)")
     sus_keywords = ["reserve", "allocate", "malloc", "new", "_M_allocate"]
     found = False
@@ -157,7 +161,7 @@ def parse_massif(file_path: Path):
     if not found:
         print("未在 Top 热点中检测到明显的大规模内存预留/分配函数。")
 
-    # 5. 峰值附近快照
+    # 6. 峰值附近快照
     print("\n>>> 峰值附近快照 (前后各 3 个)")
     peak_idx = next(i for i, (n, _, _, _, _, _) in enumerate(snapshots) if n == peak_n)
     start = max(0, peak_idx - 3)

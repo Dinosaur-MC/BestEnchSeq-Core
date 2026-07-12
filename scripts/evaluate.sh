@@ -15,6 +15,7 @@ output_dir="$project_root/logs/valgrind"
 leak_check=0
 callgrind_check=0
 massif_check=0
+cachegrind_check=0
 benchmark_check=0
 program_args=""
 
@@ -34,6 +35,7 @@ show_help() {
   -c, --check         开启泄漏检查
   --callgrind         开启 Callgrind 性能分析
   --massif            开启 Massif 堆内存分析
+  --cachegrind        开启 CacheGrind 缓存分析
   --benchmark         开启基准测试
 
 分隔符:
@@ -78,6 +80,10 @@ while [ $# -gt 0 ]; do
             massif_check=1
             shift
             ;;
+        --cachegrind)
+            cachegrind_check=1
+            shift
+            ;;
         --benchmark)
             benchmark_check=1
             shift
@@ -104,8 +110,8 @@ done
 program_args="$@"
 
 # build/check jobs
-if [ $build_project -eq 0 -a $leak_check -eq 0 -a $callgrind_check -eq 0 -a $massif_check -eq 0 -a $benchmark_check -eq 0 ]; then
-    echo "未选择分析工具。请使用 -a 或 -c/--check, --callgrind, --massif, --benchmark." >&2
+if [ $build_project -eq 0 -a $leak_check -eq 0 -a $callgrind_check -eq 0 -a $massif_check -eq 0 -a $cachegrind_check -eq 0 -a $benchmark_check -eq 0 ]; then
+    echo "未选择分析工具。请使用 -a 或 -c/--check, --callgrind, --massif, --cachegrind, --benchmark." >&2
     exit 1
 fi
 
@@ -125,7 +131,7 @@ if [ $build_project -eq 1 ]; then
 fi
 
 # ----------------------------------------------
-# 并行执行三个 Valgrind 任务（各自写入独立输出文件）
+# 并行执行四个 Valgrind 任务（各自写入独立输出文件）
 # ----------------------------------------------
 
 # 1. 内存泄漏检测 (leak check)
@@ -154,6 +160,15 @@ if [ $massif_check -eq 1 ]; then
         ms_print "$output_dir/massif.out" > "$output_dir/massif.out.ms_print"
         python3 scripts/parse_massif.py "$output_dir/massif.out.ms_print" > "$output_dir/massif.out.brief.log"
     ) 2>&1 > "$output_dir/massif_program_out.log" &
+fi
+
+# 4. CacheGrind 缓存分析 + 打印
+if [ $cachegrind_check -eq 1 ]; then
+    (
+        valgrind --tool=cachegrind --cache-sim=yes --cachegrind-out-file="$output_dir/cachegrind.out" \
+            "$build_dir/bin/forge_benchmark" -- $program_args
+        python3 scripts/parse_cachegrind.py "$output_dir/cachegrind.out" > "$output_dir/cachegrind.out.brief.log"
+    ) 2>&1 > "$output_dir/cachegrind_program_out.log" &
 fi
 
 # 等待所有后台任务完成
