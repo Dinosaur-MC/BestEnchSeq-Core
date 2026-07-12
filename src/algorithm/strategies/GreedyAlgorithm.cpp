@@ -68,15 +68,19 @@ void GreedyAlgorithm::execute(
             break;
     }
 
+    bool goal_achieved = _meets_target(mutable_items[0]);
     _diag.label = "greedy";
-    _diag.steps_forged = compact_steps.size();
-    _diag.status = compact_steps.empty() ? "GoalAlreadyMet" : "Complete";
+    _diag.steps_forged = goal_achieved ? compact_steps.size() : 0;
+    _diag.status = goal_achieved ? "Complete" : "CompleteNoSolution";
     _diag.write();
 
+    if (!goal_achieved) {
+        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        return;
+    }
+
     ctx.report_compact_solution(std::move(compact_steps));
-    ctx.report_progress(1.0, compact_steps.empty()
-        ? ProgressStatus::GoalAlreadyMet
-        : ProgressStatus::Complete);
+    ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 
 bool GreedyAlgorithm::_meets_target(const compact::Item& equipment) const {

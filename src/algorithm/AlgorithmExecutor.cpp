@@ -98,14 +98,18 @@ void AlgorithmExecutor::start(AlgorithmInput input, const std::vector<uint8_t>& 
 
 void AlgorithmExecutor::pause() {
     AlgorithmState expected = AlgorithmState::Running;
-    if (_state.compare_exchange_strong(expected, AlgorithmState::Paused))
+    if (_state.compare_exchange_strong(expected, AlgorithmState::Paused)) {
         _ctx->pause();
+        _ctx->report_state_change(AlgorithmState::Running, AlgorithmState::Paused);
+    }
 }
 
 void AlgorithmExecutor::resume() {
     AlgorithmState expected = AlgorithmState::Paused;
-    if (_state.compare_exchange_strong(expected, AlgorithmState::Running))
+    if (_state.compare_exchange_strong(expected, AlgorithmState::Running)) {
         _ctx->resume();
+        _ctx->report_state_change(AlgorithmState::Paused, AlgorithmState::Running);
+    }
 }
 
 void AlgorithmExecutor::cancel() {
@@ -118,6 +122,8 @@ void AlgorithmExecutor::cancel() {
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
         _ctx->cancel();
         _ctx->resume();
+        // Push state change before the worker thread notices and CAS-fails
+        _ctx->report_state_change(prev, AlgorithmState::Cancelled);
     }
     _state_cv.notify_all();
 }

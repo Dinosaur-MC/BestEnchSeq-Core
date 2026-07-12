@@ -31,6 +31,7 @@ inline int32_t compute(
 
     for (auto id : ids) {
         for (const auto& e : pool[id].enchs) {
+            if (e.id < 0) continue;  // safety: guard against corrupted IDs
             if (e.level > buf[e.id]) {
                 if (buf[e.id] == 0)
                     dirty.push_back(e.id);
@@ -40,13 +41,16 @@ inline int32_t compute(
     }
 
     for (const auto& t : target) {
+        if (t.id < 0) continue;
         int16_t have = buf[t.id];
         if (have < t.level)
             h += (t.level - have) * book_multiplier_fn(reg.get_multiplier(t.id));
     }
 
-    for (auto id : dirty)
+    for (auto id : dirty) {
+        if (id < 0) continue;
         buf[id] = 0;
+    }
 
     return h;
 }
@@ -70,6 +74,7 @@ inline int32_t compute(
 
     for (const auto& item : items) {
         for (const auto& e : item.enchs) {
+            if (e.id < 0) continue;  // safety: guard against corrupted IDs
             if (e.level > buf[e.id]) {
                 if (buf[e.id] == 0)
                     dirty.push_back(e.id);
@@ -79,13 +84,16 @@ inline int32_t compute(
     }
 
     for (const auto& t : target) {
+        if (t.id < 0) continue;
         int16_t have = buf[t.id];
         if (have < t.level)
             h += (t.level - have) * book_multiplier_fn(reg.get_multiplier(t.id));
     }
 
-    for (auto id : dirty)
+    for (auto id : dirty) {
+        if (id < 0) continue;
         buf[id] = 0;
+    }
 
     return h;
 }

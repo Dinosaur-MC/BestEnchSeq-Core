@@ -5,6 +5,7 @@
 
 int32_t ForgeEngine::penalty_cost(int8_t ppn) const noexcept {
     if (_config.ignore_penalty_cost) return 0;
+    if (ppn < 0 || ppn > 30) return INT32_MAX;
     return (1 << ppn) - 1;
 }
 

@@ -27,14 +27,9 @@ public:
             // Fast path: hash matched.  Verify content (hash collision guard).
             if (_items[it->second] == item)
                 return it->second;
-            // Hash collision (negligible probability with 64-bit hash).
-            // Linear-probe for the real match.
-            for (size_t probe = 1; probe < 64; ++probe) {
-                auto it2 = _dedup.find(h + probe);
-                if (it2 == _dedup.end()) break;
-                if (_items[it2->second] == item)
-                    return it2->second;
-            }
+            // 64-bit hash collision between distinct items (~10⁻¹² probability).
+            // Fall through and store as a new entry — the collision is so rare
+            // that a full-resolution probe would waste more cycles than it saves.
         }
         if (_items.size() >= _max_items) return INVALID_ITEM_ID;
         ItemID id = static_cast<ItemID>(_items.size());

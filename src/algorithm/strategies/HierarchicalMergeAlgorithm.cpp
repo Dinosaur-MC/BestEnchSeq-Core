@@ -3,7 +3,6 @@
 #include <chrono>
 #include <algorithm>
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 
 using compact::Item;
@@ -110,45 +109,63 @@ void HierarchicalMergeAlgorithm::execute(
 
     std::vector<EnchStep> compact_steps;
 
-    // Phase 1: Dedup same-enchantment books (when >7 books)
-    // Build a new book list by scanning and merging duplicates.
+    // Phase 1: Dedup same-enchantment books via proper pairwise merging.
+    // Sequential merge into one accumulator (as previously implemented) fails
+    // for same-level books: 3→(3+3=4)→(4+3=4)→... never reaches level 5.
+    // Pairwise: same-enchant + same-level books are paired, producing the
+    // next level, then re-paired in subsequent passes.
     if (books.size() > 7) {
-        std::vector<Item> merged;
-        merged.reserve(books.size());
-        // Build map: enchantment ID → index in merged vector
-        std::unordered_map<int32_t, size_t> ench_to_idx;
-        for (auto& book : books) {
-            if (book.enchs.size() == 1) {
-                int32_t eid = book.enchs.begin()->id;
-                auto it = ench_to_idx.find(eid);
-                if (it != ench_to_idx.end()) {
-                    // Found a book with same single enchant — forge into existing
-                    auto& target = merged[it->second];
-                    if (_forge_engine.is_forgeable(target, book)) {
-                        Item saved_base = target;
-                        int32_t cost = _forge_engine.forge_into(target, book, reg);
-                        ctx.incr_steps_forged();
-                        compact_steps.push_back({std::move(saved_base), std::move(book), cost});
-                        ++_solutions_found;
+        for (int pass = 0; pass < 4 && books.size() > 1; ++pass) {
+            // Sort by (enchant_id, level) so that same-enchant/same-level
+            // books are adjacent for pairing.
+            std::sort(books.begin(), books.end(),
+                [](const Item& a, const Item& b) {
+                    if (a.enchs.size() != 1 || b.enchs.size() != 1)
+                        return a.enchs.size() < b.enchs.size();
+                    auto ae = *a.enchs.begin();
+                    auto be = *b.enchs.begin();
+                    return ae.id < be.id || (ae.id == be.id && ae.level < be.level);
+                });
 
-                        auto cfg = ctx.get_search_config();
-                        if (cfg.max_search_time.count() > 0) {
-                            auto elapsed = std::chrono::steady_clock::now() - _start;
-                            if (elapsed > cfg.max_search_time) goto phase2;
-                        }
-                        if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) goto phase2;
-                    } else {
-                        merged.push_back(std::move(book));
-                    }
-                } else {
-                    ench_to_idx[eid] = merged.size();
-                    merged.push_back(std::move(book));
+            std::vector<Item> next;
+            next.reserve(books.size());
+            for (size_t i = 0; i < books.size(); ++i) {
+                if (books[i].enchs.size() != 1) {
+                    next.push_back(std::move(books[i]));
+                    continue;
                 }
-            } else {
-                merged.push_back(std::move(book));
+                auto eid = books[i].enchs.begin()->id;
+                auto lvl = books[i].enchs.begin()->level;
+
+                // Look ahead for another book with same enchant AND same level
+                if (i + 1 < books.size() && books[i + 1].enchs.size() == 1) {
+                    auto ne = *books[i + 1].enchs.begin();
+                    if (ne.id == eid && ne.level == lvl
+                        && _forge_engine.is_forgeable(books[i], books[i + 1]))
+                    {
+                        Item saved = books[i];
+                        int32_t cost = _forge_engine.forge_into(books[i], books[i + 1], reg);
+                        ctx.incr_steps_forged();
+                        compact_steps.push_back({std::move(saved), std::move(books[i + 1]), cost});
+                        ++_solutions_found;
+                        next.push_back(std::move(books[i]));  // merged result
+                        ++i;  // skip the paired sacrifice
+                        continue;
+                    }
+                }
+                next.push_back(std::move(books[i]));
+            }
+            books = std::move(next);
+
+            {
+                auto cfg = ctx.get_search_config();
+                if (cfg.max_search_time.count() > 0) {
+                    auto elapsed = std::chrono::steady_clock::now() - _start;
+                    if (elapsed > cfg.max_search_time) goto phase2;
+                }
+                if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) goto phase2;
             }
         }
-        books = std::move(merged);
     }
 
 phase2:
@@ -233,6 +250,19 @@ phase2:
     _diag.steps_forged = compact_steps.size();
     _diag.status = "Complete";
     _diag.write();
+
+    // Verify final equipment achieves the target
+    {
+        bool ok = true;
+        for (const auto& t : target) {
+            auto it = equip.enchs.find(t.id);
+            if (it == equip.enchs.end() || it->level < t.level) { ok = false; break; }
+        }
+        if (!ok) {
+            ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+            return;
+        }
+    }
 
     ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
