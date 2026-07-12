@@ -2,26 +2,23 @@
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include "utils/queue/SegmentedMPMCQueue.hpp"
 #include "utils/queue/IQueue.h"
-#include "utils/EventLoop.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <numeric>
-#include <string>
-#include <thread>
 #include <vector>
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Configuration
+//  Configuration  —  calibrate for ~5 s total on a modern CPU
 // ═══════════════════════════════════════════════════════════════════════════
 
-constexpr int64_t OPS       = 100'000;    // push-pop pairs per sequential test
-constexpr int64_t WARMUP    =  10'000;    // warm-up iterations
-constexpr int64_t N_LATENCY =   1'000;    // latency-measurement samples
+constexpr int64_t OPS_SEQ    = 30'000'000;   // push-pop pairs per queue type
+constexpr int64_t WARM_SEQ   =    500'000;   // warm-up pairs
+constexpr int64_t OPS_VIRT   = 10'000'000;   // pairs for virtual-dispatch test
+constexpr int     N_LATENCY  =     10'000;   // latency samples
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Timer
@@ -29,21 +26,24 @@ constexpr int64_t N_LATENCY =   1'000;    // latency-measurement samples
 
 using Clock = std::chrono::high_resolution_clock;
 
-struct Timestamp {
-    Clock::time_point t;
-    static Timestamp now() { return {Clock::now()}; }
-    double elapsed_us(const Timestamp& other) const {
-        return static_cast<double>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(other.t - t).count()) / 1000.0;
+struct Timer {
+    Clock::time_point start = Clock::now();
+
+    double elapsed_ms() const {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+                   Clock::now() - start).count() / 1000.0;
     }
-    double elapsed_ns(const Timestamp& other) const {
-        return static_cast<double>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(other.t - t).count());
+
+    double elapsed_s() const { return elapsed_ms() / 1000.0; }
+
+    static double since(const Timer& begin) {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+                   Clock::now() - begin.start).count() / 1000.0 / 1000.0;
     }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  API normalisation (mirrors EventLoop::consume)
+//  API normalisation
 // ═══════════════════════════════════════════════════════════════════════════
 
 template <typename Q, typename T>
@@ -65,170 +65,131 @@ static bool pop_item(Q& q, T& out) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Results
+//  Results  (threadsafe for single-threaded reporting)
 // ═══════════════════════════════════════════════════════════════════════════
 
-static std::vector<std::string> s_lines;
-
-static void record(const std::string& line) {
-    s_lines.push_back(line);
-    std::cout << line << std::endl;
+static void print_result(const char* label, double elapsed_s, int64_t items) {
+    double rate = static_cast<double>(items) / elapsed_s / 1'000'000.0;
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "  %-42s %8.2f M/s  (%5.2f s)",
+                  label, rate, elapsed_s);
+    std::cout << buf << std::endl;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Sequential push-pop pairs  (bounded queues never overfill because each
-//  push is immediately followed by a pop before the next push.)
+//  Sequential throughput  (push-pop pairs, bounded queues never overfill)
 // ═══════════════════════════════════════════════════════════════════════════
 
 template <typename Queue>
-static void bench_seq(Queue& q, int64_t n, const char* label) {
+static void bench_seq(Queue& q, int64_t n_pairs, int64_t warmup,
+                      const char* label)
+{
     int v;
-    for (int64_t i = 0; i < WARMUP; ++i) {
+    for (int64_t i = 0; i < warmup; ++i) {
         while (!push_item(q, static_cast<int>(i))) {}
         pop_item(q, v);
     }
 
-    auto t0 = Timestamp::now();
-    for (int64_t i = 0; i < n; ++i) {
+    auto t0 = Clock::now();
+    for (int64_t i = 0; i < n_pairs; ++i) {
         while (!push_item(q, static_cast<int>(i & 0x7FFFFFFF))) {}
         pop_item(q, v);
     }
-    auto t1 = Timestamp::now();
+    double sec = std::chrono::duration_cast<std::chrono::microseconds>(
+                     Clock::now() - t0).count() / 1'000'000.0;
 
-    double ops = static_cast<double>(n) / (t0.elapsed_us(t1) / 1'000'000.0);
-    char buf[80];
-    std::snprintf(buf, sizeof(buf), "  %-40s %8.2f M pairs/s", label, ops);
-    record(buf);
+    print_result(label, sec, n_pairs);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Round-trip latency (single push-pop pair)
+//  Round-trip latency
 // ═══════════════════════════════════════════════════════════════════════════
 
 template <typename Queue>
 static void bench_latency(Queue& q, int64_t n, const char* label) {
     int v;
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 2000; ++i) {
         while (!push_item(q, i)) {}
         pop_item(q, v);
     }
 
     std::vector<double> samples;
     samples.reserve(static_cast<size_t>(n));
-
     for (int64_t i = 0; i < n; ++i) {
-        auto t0 = Timestamp::now();
+        auto t0 = Clock::now();
         while (!push_item(q, 42)) {}
         pop_item(q, v);
-        auto t1 = Timestamp::now();
-        samples.push_back(t0.elapsed_ns(t1));
+        auto t1 = Clock::now();
+        samples.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                              t1 - t0).count());
     }
 
     std::sort(samples.begin(), samples.end());
-    double median = samples[samples.size() / 2];
-    double mean   = std::accumulate(samples.begin(), samples.end(), 0.0) / samples.size();
-    char buf[80];
-    std::snprintf(buf, sizeof(buf), "  %-40s %8.1f ns  (mean %.1f ns)",
+    double median = samples[static_cast<size_t>(n) / 2];
+    double mean   = std::accumulate(samples.begin(), samples.end(), 0.0) / static_cast<double>(n);
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "  %-42s %6.1f ns median  (mean %6.1f ns)",
                   label, median, mean);
-    record(buf);
+    std::cout << buf << std::endl;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  EventLoop throughput (single producer, retry on bounded full)
+//  Virtual-dispatch overhead  (IQueue vs direct)
 // ═══════════════════════════════════════════════════════════════════════════
 
-template <typename Queue>
-static void bench_event_loop(EventLoop<Queue>& loop,
-                              int64_t n, const char* label)
-{
-    std::atomic<int64_t> sum{0};
-    loop.start();
-
-    for (int64_t i = 0; i < WARMUP; ++i) {
-        while (!loop.post([&] { sum.fetch_add(1); })) {}
-    }
-    loop.post_and_wait([&] {});
-
-    sum.store(0);
-    auto t0 = Timestamp::now();
-    for (int64_t i = 0; i < n; ++i) {
-        while (!loop.post([&] { sum.fetch_add(1); })) {}
-    }
-    loop.post_and_wait([&] {});
-    auto t1 = Timestamp::now();
-
-    double ops = static_cast<double>(n) / (t0.elapsed_us(t1) / 1'000'000.0);
-    char buf[80];
-    std::snprintf(buf, sizeof(buf), "  %-40s %8.2f M tasks/s", label, ops);
-    record(buf);
-    loop.stop();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  IQueue virtual-dispatch overhead
-// ═══════════════════════════════════════════════════════════════════════════
-
-static void bench_virtual(int64_t n) {
+static void bench_virtual(int64_t n_pairs, int64_t warmup) {
     int v;
-    // Baseline: direct SPSCQueue
+
+    // 1. Direct SPSCQueue (baseline)
     {
         SPSCQueue<int, 4096> q;
-        for (int64_t i = 0; i < WARMUP; ++i) {
+        for (int64_t i = 0; i < warmup; ++i) {
             while (!q.push(static_cast<int>(i))) {}
             q.pop(v);
         }
-        auto t0 = Timestamp::now();
-        for (int64_t i = 0; i < n; ++i) {
+        auto t0 = Clock::now();
+        for (int64_t i = 0; i < n_pairs; ++i) {
             while (!q.push(i)) {}
             q.pop(v);
         }
-        auto t1 = Timestamp::now();
-        double ops = static_cast<double>(n) / (t0.elapsed_us(t1) / 1'000'000.0);
-        char buf[80];
-        std::snprintf(buf, sizeof(buf), "  %-40s %8.2f M pairs/s",
-                      "SPSCQueue direct (baseline)", ops);
-        record(buf);
+        double sec = std::chrono::duration_cast<std::chrono::microseconds>(
+                         Clock::now() - t0).count() / 1'000'000.0;
+        print_result("SPSCQueue direct (baseline)", sec, n_pairs);
     }
 
-    // QueueAdaptor::underlying() — same as direct
+    // 2. QueueAdaptor::underlying() — no virtual dispatch
     {
         QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
-        for (int64_t i = 0; i < WARMUP; ++i) {
+        for (int64_t i = 0; i < warmup; ++i) {
             while (!adapted.underlying().push(i)) {}
             adapted.underlying().pop(v);
         }
-        auto t0 = Timestamp::now();
-        for (int64_t i = 0; i < n; ++i) {
+        auto t0 = Clock::now();
+        for (int64_t i = 0; i < n_pairs; ++i) {
             while (!adapted.underlying().push(i)) {}
             adapted.underlying().pop(v);
         }
-        auto t1 = Timestamp::now();
-        double ops = static_cast<double>(n) / (t0.elapsed_us(t1) / 1'000'000.0);
-        char buf[80];
-        std::snprintf(buf, sizeof(buf), "  %-40s %8.2f M pairs/s",
-                      "QueueAdaptor::underlying()", ops);
-        record(buf);
+        double sec = std::chrono::duration_cast<std::chrono::microseconds>(
+                         Clock::now() - t0).count() / 1'000'000.0;
+        print_result("QueueAdaptor::underlying()", sec, n_pairs);
     }
 
-    // Virtual dispatch through IQueue<T>
+    // 3. Virtual dispatch through IQueue<T>
     {
         QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
         IQueue<int>& virt = adapted;
-        for (int64_t i = 0; i < WARMUP; ++i) {
+        for (int64_t i = 0; i < warmup; ++i) {
             while (!virt.try_push(static_cast<int>(i))) {}
             virt.try_pop(v);
         }
-        auto t0 = Timestamp::now();
-        for (int64_t i = 0; i < n; ++i) {
+        auto t0 = Clock::now();
+        for (int64_t i = 0; i < n_pairs; ++i) {
             while (!virt.try_push(static_cast<int>(i))) {}
             virt.try_pop(v);
         }
-        auto t1 = Timestamp::now();
-        double ops = static_cast<double>(n) / (t0.elapsed_us(t1) / 1'000'000.0);
-        char buf[80];
-        std::snprintf(buf, sizeof(buf), "  %-40s %8.2f M pairs/s",
-                      "IQueue virtual dispatch", ops);
-        record(buf);
+        double sec = std::chrono::duration_cast<std::chrono::microseconds>(
+                         Clock::now() - t0).count() / 1'000'000.0;
+        print_result("IQueue virtual dispatch", sec, n_pairs);
     }
 }
 
@@ -237,37 +198,46 @@ static void bench_virtual(int64_t n) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 int main() {
-    std::cout << "BestEnchSeq-Core Queue & EventLoop Benchmarks\n"
-              << "  " << OPS << " operations, " << WARMUP << " warm-up\n"
-              << "  Hardware concurrency: " << std::thread::hardware_concurrency() << "\n\n";
+    Timer total;
 
-    // ── Queue sequential push-pop pairs ──
-    std::cout << "── Sequential throughput ──\n";
-    { SPSCQueue<int, 4096> q; bench_seq(q, OPS, "SPSCQueue"); }
-    { BoundedMPMCQueue<int, 4096> q; bench_seq(q, OPS, "BoundedMPMCQueue"); }
-    { SegmentedMPMCQueue<int, 1024> q; bench_seq(q, OPS, "SegmentedMPMCQueue"); }
+    std::cout << "╔══════════════════════════════════════════════════════════╗\n"
+              << "║            Lock-Free Queue Benchmarks                    ║\n"
+              << "╚══════════════════════════════════════════════════════════╝\n"
+              << "  Pairs per test: " << OPS_SEQ / 1'000'000 << "M"
+              << "   warm-up: " << WARM_SEQ / 1000 << "k\n"
+              << "  Hardware concurrency: "
+              << std::thread::hardware_concurrency() << "\n\n";
 
-    // ── Queue round-trip latency ──
-    std::cout << "── Round-trip latency ──\n";
-    { SPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SPSCQueue"); }
-    { BoundedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "BoundedMPMCQueue"); }
-    { SegmentedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SegmentedMPMCQueue"); }
-
-    // ── EventLoop throughput ──
-    std::cout << "── EventLoop throughput ──\n";
+    // ── Sequential throughput ─────────────────────────────────────────
     {
-        EventLoop<SegmentedMPMCQueue<std::function<void()>, 1024>> loop;
-        bench_event_loop(loop, OPS, "MPMCEventLoop (SegmentedMPMC)");
-    }
-    {
-        EventLoop<SPSCQueue<std::function<void()>, 4096>> loop;
-        bench_event_loop(loop, OPS, "SPSCEventLoop (SPSCQueue)");
+        Timer sec;
+        std::cout << "── Sequential throughput ────────────────────────\n";
+        { SPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "SPSCQueue"); }
+        { BoundedMPMCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "BoundedMPMCQueue"); }
+        { SegmentedMPMCQueue<int, 1024> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "SegmentedMPMCQueue"); }
+        std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 
-    // ── Virtual dispatch overhead ──
-    std::cout << "── Virtual dispatch overhead ──\n";
-    bench_virtual(OPS / 2);
+    // ── Round-trip latency ───────────────────────────────────────────
+    {
+        Timer sec;
+        std::cout << "── Round-trip latency ───────────────────────────\n";
+        { SPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SPSCQueue"); }
+        { BoundedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "BoundedMPMCQueue"); }
+        { SegmentedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SegmentedMPMCQueue"); }
+        std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
+    }
 
-    std::cout << "\nDone.\n";
+    // ── Virtual dispatch overhead ────────────────────────────────────
+    {
+        Timer sec;
+        std::cout << "── Virtual dispatch overhead ────────────────────\n";
+        bench_virtual(OPS_VIRT, WARM_SEQ);
+        std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
+    }
+
+    std::cout << "════════════════════════════════════════════════════════\n"
+              << "  Total: " << total.elapsed_s() << " s\n"
+              << "════════════════════════════════════════════════════════\n";
     return 0;
 }

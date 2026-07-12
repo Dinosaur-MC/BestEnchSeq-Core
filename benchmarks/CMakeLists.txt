@@ -43,6 +43,12 @@ add_executable(queue_benchmark
 )
 target_include_directories(queue_benchmark PRIVATE ${BENCH_INCLUDE})
 
+# ─── eloop_benchmark (standalone, depends on EventLoop + queue headers) ───
+add_executable(eloop_benchmark
+    eloop_benchmark.cpp
+)
+target_include_directories(eloop_benchmark PRIVATE ${BENCH_INCLUDE})
+
 # Quick smoke test for ctest — runs one small case with greedy algo (< 5s)
 add_test(NAME benchmark_smoke
     COMMAND forge_benchmark --test crossbow --algo greedy
