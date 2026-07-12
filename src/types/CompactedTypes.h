@@ -15,7 +15,7 @@ struct EnchInfo {
     std::vector<MaskType> exc_mask; // 互斥附魔位掩码
     bool applicable;                // 是否适用目标装备类别
 
-    bool is_conflict(const EnchInfo &other) const noexcept;
+    [[nodiscard]] bool is_conflict(const EnchInfo &other) const noexcept;
 };
 
 struct Ench {
@@ -55,13 +55,13 @@ class EnchSet {
 
     // ── Capacity (inline) ──
     size_t size() const noexcept { return _enchs.size(); }
-    bool empty() const noexcept { return _enchs.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return _enchs.empty(); }
     void reserve(size_t n) { _enchs.reserve(n); }
 
     // ── Lookup ──
-    iterator find(int16_t id) noexcept;
-    const_iterator find(int16_t id) const noexcept;
-    bool contains(int16_t id) const noexcept;
+    [[nodiscard]] iterator find(int16_t id) noexcept;
+    [[nodiscard]] const_iterator find(int16_t id) const noexcept;
+    [[nodiscard]] bool contains(int16_t id) const noexcept;
 
     // ── Modifiers ──
     void insert(const Ench &ench);
@@ -72,7 +72,7 @@ class EnchSet {
     void sort();
 
     // ── Hash (inline, avoids std::hash<Ench> before its specialization) ──
-    size_t hash() const noexcept {
+    [[nodiscard]] size_t hash() const noexcept {
         size_t h = _enchs.size();
         for (const auto &e : _enchs) {
             const size_t ench_hash = static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);

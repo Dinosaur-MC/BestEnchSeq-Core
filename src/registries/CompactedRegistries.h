@@ -25,8 +25,8 @@ class EnchReg {
 
     void init(const EnchantmentRegistry &registry, const Equipment &target_equip);
 
-    size_t size() const noexcept { return _ench_infos.size(); }
-    size_t get_mask_size() const noexcept { return _mask_size; }
+    [[nodiscard]] size_t size() const noexcept { return _ench_infos.size(); }
+    [[nodiscard]] size_t get_mask_size() const noexcept { return _mask_size; }
 
     const Equipment &get_target_equip() const noexcept { return _target_equip; }
     const RichEnchInfo &get_rich(int16_t id) const { return _registry.get(id); }
@@ -42,7 +42,7 @@ class EnchReg {
 
     uint16_t get_multiplier(int16_t id) const noexcept { return (*this)[id].mul; }
     uint16_t get_max_level(int16_t id) const noexcept { return (*this)[id].max_lvl; }
-    bool is_conflict(int16_t id1, int16_t id2) const noexcept { return _conflict_matrix[id1 * _ench_infos.size() + id2]; }
+    [[nodiscard]] bool is_conflict(int16_t id1, int16_t id2) const noexcept { return _conflict_matrix[id1 * _ench_infos.size() + id2]; }
 
     int32_t to_local_id(int32_t global_id) const { return _registry.to_local_id(global_id); }
     const EnchantmentRegistry& get_registry() const { return _registry; }
