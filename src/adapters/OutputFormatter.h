@@ -26,6 +26,10 @@ class OutputFormatter {
         const std::string &mode_name
     );
 
+    /// Clear the internal JSON deserialization equipment cache.
+    /// Call between bulk parse_json calls to cap memory growth.
+    static void clear_cache();
+
     static std::string format_json(
         const std::vector<EnchSolution> &solutions,
         const EnchantmentRegistry &ench_reg,

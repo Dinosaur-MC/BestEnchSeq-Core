@@ -7,7 +7,8 @@
 namespace {
 
 // ---------------------------------------------------------------------------
-// Equipment cache for JSON deserialization (cleared on each parse_json call)
+// Equipment cache for JSON deserialization.
+// Grows monotonically per process — acceptable for CLI (see clear_cache).
 // ---------------------------------------------------------------------------
 std::vector<Equipment> _json_eq_cache;
 
@@ -397,6 +398,14 @@ std::string OutputFormatter::format_json(
     root["solutions"] = Json(sol_arr);
 
     return Json(root).to_string(Json::Pretty);
+}
+
+// ===========================================================================
+// Cache management
+// ===========================================================================
+void OutputFormatter::clear_cache() {
+    _json_eq_cache.clear();
+    _json_eq_cache.shrink_to_fit();
 }
 
 // ===========================================================================
