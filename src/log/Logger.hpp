@@ -40,11 +40,29 @@ public:
     /// Wakes the worker thread via atomic notify_one.
     void log(LogLevel level, std::string message);
 
-    /// Convenience helpers.
+    /// Convenience helpers (plain string).
     void info(std::string msg)  { log(LogLevel::Info,  std::move(msg)); }
     void warn(std::string msg)  { log(LogLevel::Warn,  std::move(msg)); }
     void error(std::string msg) { log(LogLevel::Error, std::move(msg)); }
     void debug(std::string msg) { log(LogLevel::Debug, std::move(msg)); }
+
+    /// printf-style format helpers (no level param — level is in the name).
+    template<typename... Args>
+    void info_fmt(const char* fmt, Args&&... args) {
+        printf(LogLevel::Info, fmt, std::forward<Args>(args)...);
+    }
+    template<typename... Args>
+    void warn_fmt(const char* fmt, Args&&... args) {
+        printf(LogLevel::Warn, fmt, std::forward<Args>(args)...);
+    }
+    template<typename... Args>
+    void error_fmt(const char* fmt, Args&&... args) {
+        printf(LogLevel::Error, fmt, std::forward<Args>(args)...);
+    }
+    template<typename... Args>
+    void debug_fmt(const char* fmt, Args&&... args) {
+        printf(LogLevel::Debug, fmt, std::forward<Args>(args)...);
+    }
 
     /// printf-style format and push.
     template<typename... Args>

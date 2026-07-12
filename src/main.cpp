@@ -175,7 +175,6 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // ── Logger (singleton, available system-wide) ──────────────────────
         besq::log::info("Starting algorithm: " + config.algorithm);
 
         // Execute (compact-only algorithm layer)
