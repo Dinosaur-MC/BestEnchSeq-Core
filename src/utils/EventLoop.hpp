@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <cstddef>
 #include <cstdint>
 #include <future>
 #include <stop_token>
@@ -29,10 +28,10 @@
 //
 //   The queue must have:
 //     - using value_type = Task    (callable type)
-//     - bool push(Task&&)          (or void — see kPushReturnsBool)
-//     - bool pop(Task&)            (or try_pop — detected at compile time)
+//     - bool try_push(Task&&)      (returns false if full for bounded queues)
+//     - bool try_pop(Task&)        (returns false if empty)
 //
-//   Use the convenience aliases at the bottom for common combinations.
+//   All project queue types satisfy these requirements.
 //
 // ── Usage ─────────────────────────────────────────────────────────────
 //     MPMCEventLoop<> loop;
@@ -57,25 +56,6 @@ public:
     using Task = typename Queue::value_type;
     static_assert(std::is_invocable_v<Task>,
                   "Queue::value_type must be callable with no arguments");
-
-private:
-    // ── API normalisation helpers ─────────────────────────────────────
-
-    // Detect whether Queue::push returns bool (bounded, may drop) or void
-    // (unbounded / overwrite — never fails).
-    static constexpr bool kPushReturnsBool =
-        std::is_same_v<decltype(std::declval<Queue>().push(std::declval<Task>())), bool>;
-
-    // Normalise pop → try_pop: SPSCQueue / BoundedMPMCQueue use pop(),
-    // while SegmentedMPMCQueue uses try_pop().  Both have the same
-    // signature bool(T&).
-    template <typename Q, typename T>
-    static bool consume(Q& q, T& out) noexcept {
-        if constexpr (requires { q.try_pop(out); })
-            return q.try_pop(out);
-        else
-            return q.pop(out);
-    }
 
 public:
     EventLoop() = default;
@@ -117,12 +97,8 @@ public:
     /// return true.
     template <typename F>
     bool post(F&& task) {
-        if constexpr (kPushReturnsBool) {
-            if (!_queue.push(std::forward<F>(task)))
-                return false;
-        } else {
-            _queue.push(std::forward<F>(task));
-        }
+        if (!_queue.try_push(std::forward<F>(task)))
+            return false;
         _signal();
         return true;
     }
@@ -134,15 +110,10 @@ public:
     size_t post_batch(Iter begin, Iter end) {
         size_t count = 0;
         for (; begin != end; ++begin) {
-            if constexpr (kPushReturnsBool) {
-                if (_queue.push(std::move(*begin)))
-                    ++count;
-                else
-                    break;              // bounded queue full
-            } else {
-                _queue.push(std::move(*begin));
+            if (_queue.try_push(std::move(*begin)))
                 ++count;
-            }
+            else
+                break;              // bounded queue full
         }
         if (count > 0) {
             _wake.fetch_add(static_cast<uint64_t>(count), std::memory_order_release);
@@ -167,8 +138,6 @@ public:
         auto prom = std::make_shared<std::promise<void>>();
         auto fut  = prom->get_future();
 
-        // Build once, retry if bounded queue is full (otherwise the
-        // promise is never set and fut.wait() hangs).
         auto done = [t = std::forward<F>(task), prom]() mutable {
             t();
             prom->set_value();
@@ -182,7 +151,7 @@ public:
 
     /// Non-blocking pop from the consumer side.  Useful for draining
     /// without starting the dedicated loop thread.
-    bool try_pop(Task& out) noexcept { return consume(_queue, out); }
+    bool try_pop(Task& out) noexcept { return _queue.try_pop(out); }
 
     // ─── Queries ───────────────────────────────────────────────────────
 
@@ -202,10 +171,8 @@ private:
     void _run(std::stop_token st) {
         while (!st.stop_requested()) {
             // ── Drain ALL available tasks before checking stop ──
-            // This honours the "drain before exit" contract.  stop()
-            // will notify_one() to wake us if we are blocked in wait().
             Task task;
-            while (consume(_queue, task)) {
+            while (_queue.try_pop(task)) {
                 task();
             }
 
@@ -214,23 +181,13 @@ private:
                 return;
 
             // ── Double-check: load _wake, then re-check the queue ──
-            // Without this double-check a producer could push + notify
-            // in the gap between our empty drain and _wake.wait(),
-            // causing a lost wakeup (the notification arrives before
-            // we enter the wait, so we block forever on the old value).
-            //
-            // By re-checking consume() after loading _wake we capture
-            // any task that arrived after the drain:
-            //   - consume() succeeds  → execute it, restart the loop.
-            //   - consume() fails     → nobody pushed → safe to wait().
             auto prev = _wake.load(std::memory_order_acquire);
-            if (consume(_queue, task)) {
+            if (_queue.try_pop(task)) {
                 task();
                 continue;
             }
 
             // ── Block until a producer increments _wake ──
-            // Zero CPU (futex on Linux, WaitOnAddress on Windows).
             _wake.wait(prev, std::memory_order_acquire);
         }
     }

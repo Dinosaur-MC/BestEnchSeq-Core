@@ -11,7 +11,7 @@
 void test_push_read() {
     SPMCQueue<int, 4> q;
     expect(q.count() == 0, "empty queue count = 0");
-    q.push(42);
+    q.try_push(42);
     expect(q.count() == 1, "after 1 push, count = 1");
 
     auto cursor = q.read_cursor();
@@ -24,11 +24,11 @@ void test_push_read() {
 
 void test_overflow_drops_oldest() {
     SPMCQueue<int, 4> q;
-    q.push(1); q.push(2); q.push(3); q.push(4);
+    q.try_push(1); q.try_push(2); q.try_push(3); q.try_push(4);
     expect(q.count() == 4, "4 pushes = 4 count");
 
     auto old_cursor = q.read_cursor();
-    q.push(5); q.push(6);  // overwrites slots 0, 1
+    q.try_push(5); q.try_push(6);  // overwrites slots 0, 1
 
     int val{};
     expect(!q.read(old_cursor, val), "old cursor should skip overwritten data");
@@ -38,7 +38,7 @@ void test_overflow_drops_oldest() {
 
 void test_read_all_caught_up() {
     SPMCQueue<int, 8> q;
-    q.push(10); q.push(20); q.push(30);
+    q.try_push(10); q.try_push(20); q.try_push(30);
     auto cursor = q.read_cursor();
     int val{};
     expect(q.read(cursor, val) && val == 10, "first item");
@@ -50,7 +50,7 @@ void test_read_all_caught_up() {
 
 void test_multiple_cursors() {
     SPMCQueue<int, 16> q;
-    for (int i = 0; i < 10; i++) q.push(i * 10);
+    for (int i = 0; i < 10; i++) q.try_push(i * 10);
 
     auto ca = q.read_cursor(), cb = q.read_cursor();
     std::vector<int> a, b;
@@ -70,7 +70,7 @@ void test_producer_then_consumer() {
 
     // Single-threaded: produce then consume
     for (int i = 0; i < N; i++)
-        q.push(i);
+        q.try_push(i);
 
     auto cursor = q.read_cursor();
     int last = -1, count = 0;
@@ -94,7 +94,7 @@ void test_spmc_two_consumers() {
 
     std::thread prod([&] {
         for (int i = 0; i < N; i++)
-            q.push(i);
+            q.try_push(i);
     });
 
     std::atomic<bool> done{false};
@@ -145,7 +145,7 @@ void test_overflow_with_producer_lead() {
 
     // Push well beyond capacity so the buffer wraps multiple times
     for (int i = 0; i < 100; i++)
-        q.push(i);
+        q.try_push(i);
 
     // Consumer starts late — should detect overwrites and get recent data
     auto cursor = q.read_cursor();
@@ -182,7 +182,7 @@ void test_concurrent_push_pop() {
 
     std::thread producer([&] {
         for (int i = 0; i < N; i++)
-            q.push(i);
+            q.try_push(i);
         done.store(true);
     });
 

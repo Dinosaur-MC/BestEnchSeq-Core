@@ -9,14 +9,14 @@ void test_push_pop() {
     expect(q.empty(), "empty initially");
     expect(q.size() == 0, "size 0 initially");
 
-    q.push(42);
+    q.try_push(42);
     expect(!q.empty(), "not empty after push");
 
     int val{};
-    expect(q.pop(val), "should pop pushed value");
+    expect(q.try_pop(val), "should pop pushed value");
     expect(val == 42, "value should be 42");
     expect(q.empty(), "empty after pop");
-    expect(!q.pop(val), "pop on empty returns false");
+    expect(!q.try_pop(val), "pop on empty returns false");
 
     std::cout << "PASS: test_push_pop" << std::endl;
 }
@@ -25,22 +25,22 @@ void test_drop_on_full() {
     SPSCQueue<int, 4> q;
 
     // Fill queue
-    expect(q.push(1), "push 1");
-    expect(q.push(2), "push 2");
-    expect(q.push(3), "push 3");
-    expect(q.push(4), "push 4");
+    expect(q.try_push(1), "push 1");
+    expect(q.try_push(2), "push 2");
+    expect(q.try_push(3), "push 3");
+    expect(q.try_push(4), "push 4");
 
     // Full — next pushes should return false (drop newest)
-    expect(!q.push(5), "push 5 should be dropped (full)");
-    expect(!q.push(6), "push 6 should be dropped (full)");
+    expect(!q.try_push(5), "push 5 should be dropped (full)");
+    expect(!q.try_push(6), "push 6 should be dropped (full)");
 
     // Read back only the first 4 values
     int val{};
-    expect(q.pop(val) && val == 1, "first should be 1");
-    expect(q.pop(val) && val == 2, "second should be 2");
-    expect(q.pop(val) && val == 3, "third should be 3");
-    expect(q.pop(val) && val == 4, "fourth should be 4");
-    expect(!q.pop(val), "queue should be empty");
+    expect(q.try_pop(val) && val == 1, "first should be 1");
+    expect(q.try_pop(val) && val == 2, "second should be 2");
+    expect(q.try_pop(val) && val == 3, "third should be 3");
+    expect(q.try_pop(val) && val == 4, "fourth should be 4");
+    expect(!q.try_pop(val), "queue should be empty");
 
     std::cout << "PASS: test_drop_on_full" << std::endl;
 }
@@ -50,10 +50,10 @@ void test_sequential_producer_consumer() {
     SPSCQueue<int, 64> q;
 
     for (int i = 0; i < N; i++)
-        q.push(i);
+        q.try_push(i);
 
     int last = -1, count = 0, val{};
-    while (q.pop(val)) {
+    while (q.try_pop(val)) {
         expect(val > last, "SPSC: values should be in order");
         last = val;
         count++;
@@ -69,12 +69,12 @@ void test_consumer_catch_up() {
 
     std::thread prod([&] {
         for (int i = 0; i < N; i++)
-            q.push(i);
+            q.try_push(i);
     });
     prod.join();
 
     int last = -1, count = 0, val{};
-    while (q.pop(val)) {
+    while (q.try_pop(val)) {
         expect(val > last, "SPSC: values in order after producer done");
         last = val;
         count++;
@@ -87,15 +87,15 @@ void test_peek() {
     SPSCQueue<int, 8> q;
 
     int val{};
-    expect(!q.peek(val), "peek on empty returns false");
+    expect(!q.front(val), "peek on empty returns false");
 
-    q.push(42);
-    expect(q.peek(val), "peek should succeed");
+    q.try_push(42);
+    expect(q.front(val), "peek should succeed");
     expect(val == 42, "peek value should be 42");
     expect(q.size() == 1, "size unchanged after peek");
 
-    q.pop(val);
-    expect(!q.peek(val), "peek after pop returns false");
+    q.try_pop(val);
+    expect(!q.front(val), "peek after pop returns false");
 
     std::cout << "PASS: test_peek" << std::endl;
 }
@@ -113,7 +113,7 @@ void test_concurrent_push_pop() {
 
     std::thread producer([&] {
         for (int i = 0; i < N; i++) {
-            while (!q.push(i)) {
+            while (!q.try_push(i)) {
                 // Queue full — yield and retry
                 std::this_thread::yield();
             }
@@ -126,7 +126,7 @@ void test_concurrent_push_pop() {
         auto deadline = Clock::now() + std::chrono::seconds(5);
         int val{};
         while (!done.load() || q.size() > 0) {
-            if (q.pop(val)) {
+            if (q.try_pop(val)) {
                 consumed.fetch_add(1);
                 if (val < last_val.load()) {
                     order_ok.store(false);

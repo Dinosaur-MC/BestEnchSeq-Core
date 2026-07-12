@@ -82,7 +82,7 @@ void Logger::_worker() {
     LogEntry entry;
     while (_running.load(std::memory_order_acquire)) {
         // Drain all available entries (burst handling).
-        while (_queue.pop(entry)) {
+        while (_queue.try_pop(entry)) {
             auto line = "[" + now_str() + "] [" + level_str(entry.level) + "] "
                       + entry.message + "\n";
             if (run_file.is_open()) {
@@ -105,7 +105,7 @@ void Logger::_worker() {
     }
 
     // Drain remaining
-    while (_queue.pop(entry)) {
+    while (_queue.try_pop(entry)) {
         auto line = "[" + now_str() + "] [" + level_str(entry.level) + "] "
                   + entry.message + "\n";
         if (run_file.is_open()) run_file << line;
@@ -139,7 +139,7 @@ Logger::~Logger() {
 }
 
 void Logger::log(LogLevel level, std::string message) {
-    if (_queue.push(LogEntry{level, std::move(message)})) {
+    if (_queue.try_push(LogEntry{level, std::move(message)})) {
         std::lock_guard<std::mutex> lock(_wake_mtx);
         _wake_cv.notify_one();
     }

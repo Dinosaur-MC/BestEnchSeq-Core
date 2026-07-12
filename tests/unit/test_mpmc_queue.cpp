@@ -14,12 +14,12 @@ void test_push_pop() {
     expect(q.size() == 0, "empty initially");
     expect(q.empty(), "empty() initially");
 
-    expect(q.push(42), "push should succeed");
+    expect(q.try_push(42), "push should succeed");
     expect(!q.empty(), "not empty after push");
     expect(q.size() == 1, "size == 1 after push");
 
     int val{};
-    expect(q.pop(val), "pop should succeed");
+    expect(q.try_pop(val), "pop should succeed");
     expect(val == 42, "value should be 42");
     expect(q.empty(), "empty after pop");
     expect(q.size() == 0, "size == 0 after pop");
@@ -30,19 +30,19 @@ void test_push_pop() {
 void test_drop_on_full() {
     BoundedMPMCQueue<int, 4> q;
 
-    expect(q.push(1), "push 1");
-    expect(q.push(2), "push 2");
-    expect(q.push(3), "push 3");
-    expect(q.push(4), "push 4");
-    expect(!q.push(5), "push 5 should be dropped (full)");
-    expect(!q.push(6), "push 6 should be dropped (full)");
+    expect(q.try_push(1), "push 1");
+    expect(q.try_push(2), "push 2");
+    expect(q.try_push(3), "push 3");
+    expect(q.try_push(4), "push 4");
+    expect(!q.try_push(5), "push 5 should be dropped (full)");
+    expect(!q.try_push(6), "push 6 should be dropped (full)");
 
     int val{};
-    expect(q.pop(val) && val == 1, "first should be 1");
-    expect(q.pop(val) && val == 2, "second should be 2");
-    expect(q.pop(val) && val == 3, "third should be 3");
-    expect(q.pop(val) && val == 4, "fourth should be 4");
-    expect(!q.pop(val), "queue should be empty");
+    expect(q.try_pop(val) && val == 1, "first should be 1");
+    expect(q.try_pop(val) && val == 2, "second should be 2");
+    expect(q.try_pop(val) && val == 3, "third should be 3");
+    expect(q.try_pop(val) && val == 4, "fourth should be 4");
+    expect(!q.try_pop(val), "queue should be empty");
 
     std::cout << "PASS: test_drop_on_full" << std::endl;
 }
@@ -50,16 +50,16 @@ void test_drop_on_full() {
 void test_empty_pop_returns_false() {
     BoundedMPMCQueue<int, 4> q;
     int val{};
-    expect(!q.pop(val), "pop on empty returns false");
+    expect(!q.try_pop(val), "pop on empty returns false");
     std::cout << "PASS: test_empty_pop_returns_false" << std::endl;
 }
 
 void test_interleaved_push_pop() {
     BoundedMPMCQueue<int, 8> q;
     for (int i = 0; i < 1000; ++i) {
-        expect(q.push(i), "push should succeed");
+        expect(q.try_push(i), "push should succeed");
         int val{};
-        expect(q.pop(val), "pop should succeed");
+        expect(q.try_pop(val), "pop should succeed");
         expect(val == i, "value should match");
     }
     expect(q.empty(), "queue should be empty after interleaved ops");
@@ -71,10 +71,10 @@ void test_fifo_order() {
     BoundedMPMCQueue<int, 1024> q;
 
     for (int i = 0; i < N; ++i)
-        q.push(i);
+        q.try_push(i);
 
     int expected = 0, val{};
-    while (q.pop(val)) {
+    while (q.try_pop(val)) {
         expect(val == expected, "FIFO order violation");
         ++expected;
     }
@@ -88,10 +88,10 @@ void test_wrap_around() {
 
     for (int cycle = 0; cycle < 1000; ++cycle) {
         for (int i = 0; i < 4; ++i)
-            expect(q.push(i + cycle * 10), "push during wrap test");
+            expect(q.try_push(i + cycle * 10), "push during wrap test");
         int val{};
         for (int i = 0; i < 4; ++i) {
-            expect(q.pop(val), "pop during wrap test");
+            expect(q.try_pop(val), "pop during wrap test");
             expect(val == i + cycle * 10, "value during wrap test");
         }
     }
@@ -113,7 +113,7 @@ void test_two_producers_one_consumer() {
     std::thread p1([&] {
         for (int i = 0; i < PRODUCE_PER; ++i) {
             uint64_t v = static_cast<uint64_t>(i) * 2;
-            while (!q.push(v)) {}  // spin until slot available
+            while (!q.try_push(v)) {}  // spin until slot available
             sum_in.fetch_add(v);
         }
     });
@@ -121,7 +121,7 @@ void test_two_producers_one_consumer() {
     std::thread p2([&] {
         for (int i = 0; i < PRODUCE_PER; ++i) {
             uint64_t v = static_cast<uint64_t>(i) * 2 + 1;
-            while (!q.push(v)) {}
+            while (!q.try_push(v)) {}
             sum_in.fetch_add(v);
         }
     });
@@ -133,7 +133,7 @@ void test_two_producers_one_consumer() {
         uint64_t val{};
         int empty_spins = 0;
         while (consumed.load() < TOTAL && Clock::now() < deadline) {
-            if (q.pop(val)) {
+            if (q.try_pop(val)) {
                 consumed.fetch_add(1);
                 sum_out.fetch_add(val);
                 empty_spins = 0;
@@ -166,7 +166,7 @@ void test_one_producer_two_consumers() {
 
     std::thread producer([&] {
         for (int i = 0; i < N; ++i) {
-            while (!q.push(i)) {}
+            while (!q.try_push(i)) {}
         }
         done.store(true);
     });
@@ -176,7 +176,7 @@ void test_one_producer_two_consumers() {
         auto deadline = Clock::now() + std::chrono::seconds(5);
         int val{};
         while (!done.load() || q.size() > 0) {
-            if (q.pop(val)) {
+            if (q.try_pop(val)) {
                 counter.fetch_add(1);
             } else {
                 if (Clock::now() >= deadline) break;
@@ -220,7 +220,7 @@ void test_multi_producer_multi_consumer_stress() {
         producers.emplace_back([&, t] {
             for (int i = 0; i < PER_PRODUCER; ++i) {
                 uint64_t v = static_cast<uint64_t>(t) * 1000000 + i;
-                while (!q.push(v)) {}
+                while (!q.try_push(v)) {}
                 sum_in.fetch_add(v);
             }
         });
@@ -235,7 +235,7 @@ void test_multi_producer_multi_consumer_stress() {
             uint64_t val{};
             int empty_spins = 0;
             while (consumed.load() < TOTAL && Clock::now() < deadline) {
-                if (q.pop(val)) {
+                if (q.try_pop(val)) {
                     consumed.fetch_add(1);
                     sum_out.fetch_add(val);
                     empty_spins = 0;
@@ -282,15 +282,15 @@ struct MoveOnly {
 
 void test_move_only_type() {
     BoundedMPMCQueue<MoveOnly, 8> q;
-    expect(q.push(MoveOnly(1, "alice")), "push move-only");
-    expect(q.push(MoveOnly(2, "bob")), "push move-only");
+    expect(q.try_push(MoveOnly(1, "alice")), "push move-only");
+    expect(q.try_push(MoveOnly(2, "bob")), "push move-only");
 
     MoveOnly val{0, ""};
-    expect(q.pop(val), "pop move-only");
+    expect(q.try_pop(val), "pop move-only");
     expect(val.id == 1 && val.name == "alice", "first value");
-    expect(q.pop(val), "pop move-only");
+    expect(q.try_pop(val), "pop move-only");
     expect(val.id == 2 && val.name == "bob", "second value");
-    expect(!q.pop(val), "queue empty");
+    expect(!q.try_pop(val), "queue empty");
 
     std::cout << "PASS: test_move_only_type" << std::endl;
 }

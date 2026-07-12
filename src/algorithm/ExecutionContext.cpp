@@ -26,14 +26,14 @@ void ExecutionContext::report_progress(double percent, ProgressStatus status) {
     e.type = ObserverEvent::Progress;
     e.progress_val = percent;
     e.status = status;
-    _events.push(std::move(e));
+    _events.try_push(std::move(e));
 }
 
 void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> solution) {
     ObserverEvent e;
     e.type = ObserverEvent::Solution;
     e.steps = std::move(solution);
-    _events.push(std::move(e));
+    _events.try_push(std::move(e));
 }
 
 void ExecutionContext::report_state_change(AlgorithmState prev, AlgorithmState curr) {
@@ -42,7 +42,7 @@ void ExecutionContext::report_state_change(AlgorithmState prev, AlgorithmState c
         e.type = ObserverEvent::StateChange;
         e.prev_state = prev;
         e.curr_state = curr;
-        _events.push(std::move(e));
+        _events.try_push(std::move(e));
     }
 }
 
@@ -54,7 +54,7 @@ void ExecutionContext::dispatch_events() {
     }
 
     ObserverEvent e;
-    while (_events.pop(e)) {
+    while (_events.try_pop(e)) {
         if (e.type == ObserverEvent::Solution)
             append_compact_steps(e.steps);
 

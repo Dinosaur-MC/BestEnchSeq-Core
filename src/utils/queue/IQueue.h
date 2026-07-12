@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <type_traits>
 
 // ─── IQueue<T> (virtual interface) ────────────────────────────────────────
 // Runtime-polymorphic wrapper for lock-free queues.
@@ -43,9 +44,12 @@ public:
     virtual size_t capacity() const = 0;
 
     /// Remove all elements.  Default implementation drains via try_pop().
+    /// For non-default-constructible T, concrete queue must override.
     virtual void clear() {
-        T item;
-        while (try_pop(item)) {}
+        if constexpr (std::is_default_constructible_v<T>) {
+            T item;
+            while (try_pop(item)) {}
+        }
     }
 };
 
@@ -90,19 +94,18 @@ public:
         : _queue(std::forward<Args>(args)...) {}
 
     bool try_push(const T& item) override {
-        return _queue.push(item);
+        if constexpr (std::is_copy_constructible_v<T>)
+            return _queue.try_push(item);
+        else
+            return false;
     }
 
     bool try_push(T&& item) override {
-        return _queue.push(std::move(item));
+        return _queue.try_push(std::move(item));
     }
 
     bool try_pop(T& item) override {
-        // Normalise pop → try_pop (see EventLoop::consume for rationale)
-        if constexpr (requires { _queue.try_pop(item); })
-            return _queue.try_pop(item);
-        else
-            return _queue.pop(item);
+        return _queue.try_pop(item);
     }
 
     size_t size() const override {

@@ -48,20 +48,12 @@ struct Timer {
 
 template <typename Q, typename T>
 static bool push_item(Q& q, T&& val) {
-    if constexpr (std::is_same_v<decltype(q.push(std::forward<T>(val))), bool>)
-        return q.push(std::forward<T>(val));
-    else {
-        q.push(std::forward<T>(val));
-        return true;
-    }
+    return q.try_push(std::forward<T>(val));
 }
 
 template <typename Q, typename T>
 static bool pop_item(Q& q, T& out) {
-    if constexpr (requires { q.try_pop(out); })
-        return q.try_pop(out);
-    else
-        return q.pop(out);
+    return q.try_pop(out);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -144,13 +136,13 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
     {
         SPSCQueue<int, 4096> q;
         for (int64_t i = 0; i < warmup; ++i) {
-            while (!q.push(static_cast<int>(i))) {}
-            q.pop(v);
+            while (!q.try_push(static_cast<int>(i))) {}
+            q.try_pop(v);
         }
         auto t0 = Clock::now();
         for (int64_t i = 0; i < n_pairs; ++i) {
-            while (!q.push(i)) {}
-            q.pop(v);
+            while (!q.try_push(i)) {}
+            q.try_pop(v);
         }
         double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                          Clock::now() - t0).count() / 1'000'000.0;
@@ -161,13 +153,13 @@ static void bench_virtual(int64_t n_pairs, int64_t warmup) {
     {
         QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
         for (int64_t i = 0; i < warmup; ++i) {
-            while (!adapted.underlying().push(i)) {}
-            adapted.underlying().pop(v);
+            while (!adapted.underlying().try_push(i)) {}
+            adapted.underlying().try_pop(v);
         }
         auto t0 = Clock::now();
         for (int64_t i = 0; i < n_pairs; ++i) {
-            while (!adapted.underlying().push(i)) {}
-            adapted.underlying().pop(v);
+            while (!adapted.underlying().try_push(i)) {}
+            adapted.underlying().try_pop(v);
         }
         double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                          Clock::now() - t0).count() / 1'000'000.0;

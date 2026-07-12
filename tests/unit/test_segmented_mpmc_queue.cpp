@@ -14,7 +14,7 @@ void test_push_pop() {
     SegmentedMPMCQueue<int, 64> q;
     expect(q.empty(), "empty initially");
 
-    q.push(42);
+    q.try_push(42);
     expect(!q.empty(), "not empty after push");
     expect(q.size() == 1, "size == 1 after push");
 
@@ -39,7 +39,7 @@ void test_fifo_order() {
     SegmentedMPMCQueue<int, 64> q;
 
     for (int i = 0; i < N; ++i)
-        q.push(i);
+        q.try_push(i);
 
     int expected = 0, val{};
     while (q.try_pop(val)) {
@@ -57,7 +57,7 @@ void test_large_push_pop() {
     SegmentedMPMCQueue<int, 256> q;
 
     for (int i = 0; i < N; ++i)
-        q.push(i);
+        q.try_push(i);
 
     int expected = 0, val{};
     while (q.try_pop(val)) {
@@ -72,7 +72,7 @@ void test_large_push_pop() {
 void test_interleaved_push_pop() {
     SegmentedMPMCQueue<int, 64> q;
     for (int i = 0; i < 5000; ++i) {
-        q.push(i);
+        q.try_push(i);
         int val{};
         expect(q.try_pop(val), "pop should succeed");
         expect(val == i, "value should match");
@@ -96,7 +96,7 @@ void test_two_producers_one_consumer() {
     std::thread p1([&] {
         for (int i = 0; i < PRODUCE_PER; ++i) {
             uint64_t v = static_cast<uint64_t>(i) * 2;
-            q.push(v);
+            q.try_push(v);
             sum_in.fetch_add(v);
         }
     });
@@ -104,7 +104,7 @@ void test_two_producers_one_consumer() {
     std::thread p2([&] {
         for (int i = 0; i < PRODUCE_PER; ++i) {
             uint64_t v = static_cast<uint64_t>(i) * 2 + 1;
-            q.push(v);
+            q.try_push(v);
             sum_in.fetch_add(v);
         }
     });
@@ -154,7 +154,7 @@ void test_one_producer_two_consumers() {
 
     std::thread producer([&] {
         for (int i = 0; i < N; ++i)
-            q.push(i);
+            q.try_push(i);
         done.store(true);
     });
 
@@ -216,7 +216,7 @@ void test_multi_producer_multi_consumer_stress() {
         producers.emplace_back([&, t] {
             for (int i = 0; i < PER_PRODUCER; ++i) {
                 uint64_t v = static_cast<uint64_t>(t) * 1000000 + i;
-                q.push(v);
+                q.try_push(v);
                 sum_in.fetch_add(v);
             }
         });
@@ -277,8 +277,8 @@ struct MoveOnlyStr {
 
 void test_move_only_type() {
     SegmentedMPMCQueue<MoveOnlyStr, 64> q;
-    q.push(MoveOnlyStr(1, "alice"));
-    q.push(MoveOnlyStr(2, "bob"));
+    q.try_push(MoveOnlyStr(1, "alice"));
+    q.try_push(MoveOnlyStr(2, "bob"));
 
     MoveOnlyStr val{0, ""};
     expect(q.try_pop(val), "pop move-only");

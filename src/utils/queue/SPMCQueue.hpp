@@ -1,5 +1,7 @@
 #pragma once
 
+#include "IQueue.h"
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -10,26 +12,27 @@
 //
 // Each consumer creates an independent Cursor via read_cursor(); the
 // producer overwrites the oldest unread elements when capacity is
-// exceeded.  This means a slow consumer may skip (lose) elements that
-// were overwritten before it read them.
+// exceeded.  A slow consumer may skip elements that were overwritten
+// before it read them.
+//
+// Inherits from IQueue<T> for runtime-polymorphic access.
 //
 // Thread safety:
-//   - One writer: push() / try_push()
-//   - Many readers: each reader thread owns a Cursor and calls read()
+//   - One writer: try_push()
+//   - Many readers: each reader owns a Cursor and calls read()
 //
 // Consumer API (different from other queue types):
-//   auto cursor = q.read_cursor();       // start reading from oldest slot
+//   auto cursor = q.read_cursor();
 //   T val;
-//   while (q.read(cursor, val)) { ... }  // non-blocking read
-//   size_t avail = q.available(cursor);  // items this cursor can read
-//
-// STL-style type aliases:
-//   value_type, reference, const_reference, size_type, difference_type
+//   while (q.read(cursor, val)) { ... }
+//   size_t avail = q.available(cursor);
 
 template <typename T, size_t Capacity>
-class SPMCQueue {
+class SPMCQueue final : public IQueue<T> {
     static_assert(Capacity > 0 && (Capacity & (Capacity - 1)) == 0,
                   "Capacity must be a power of two");
+
+    using Base = IQueue<T>;
 
     struct Slot {
         T value;
@@ -54,7 +57,7 @@ public:
             new (&_slots[i]) Slot();
     }
 
-    ~SPMCQueue() {
+    ~SPMCQueue() final {
         if constexpr (!std::is_trivially_destructible_v<T>)
             for (size_t i = 0; i < Capacity; ++i)
                 _slots[i].value.~T();
@@ -65,54 +68,32 @@ public:
 
     // ─── Producer API ─────────────────────────────────────────────────
 
-    /// Push a copy of `value`.  Overwrites the oldest unread element if
-    /// the queue is full.  Never blocks.
-    void push(const T& value) {
-        uint64_t write_seq = _write_idx.fetch_add(1, std::memory_order_relaxed);
-        size_t slot_idx = write_seq & (Capacity - 1);
-        Slot& s = _slots[slot_idx];
-
-        if constexpr (!std::is_trivially_destructible_v<T>)
-            s.value.~T();
-        new (&s.value) T(value);
-
-        s.generation.store((write_seq / Capacity) * 2 + 1,
-                           std::memory_order_release);
+    /// Push a copy.  Overwrites oldest element if full.  Never blocks.
+    bool try_push(const T& value) noexcept override {
+        if constexpr (std::is_copy_constructible_v<T>) {
+            write_slot(value);
+            return true;
+        } else {
+            return false;
+        }
     }
 
-    /// Push by move.  Overwrites the oldest unread element if full.
-    void push(T&& value) {
-        uint64_t write_seq = _write_idx.fetch_add(1, std::memory_order_relaxed);
-        size_t slot_idx = write_seq & (Capacity - 1);
-        Slot& s = _slots[slot_idx];
-
-        if constexpr (!std::is_trivially_destructible_v<T>)
-            s.value.~T();
-        new (&s.value) T(std::move(value));
-
-        s.generation.store((write_seq / Capacity) * 2 + 1,
-                           std::memory_order_release);
-    }
-
-    /// Non-blocking push.  Always returns true (overwrites when full).
-    template <typename U>
-    bool try_push(U&& value) noexcept {
-        push(std::forward<U>(value));
+    /// Push by move.  Overwrites oldest element if full.
+    bool try_push(T&& value) noexcept override {
+        write_slot(std::move(value));
         return true;
     }
 
     // ─── Consumer API (cursor-based) ─────────────────────────────────
 
-    /// Create a cursor positioned at the oldest sequence still likely
-    /// readable.  read() will detect overwrites and advance past them.
+    /// Cursor positioned at the oldest readable sequence.
     Cursor read_cursor() const noexcept {
         uint64_t write = _write_idx.load(std::memory_order_acquire);
         return {write >= Capacity ? write - Capacity : 0};
     }
 
-    /// Non-blocking read into `out` using `cursor`.  Returns false if
-    /// the slot at `cursor` has been overwritten or is not yet written.
-    /// Advances `cursor` on success.
+    /// Non-blocking read.  Returns false if slot was overwritten or
+    /// not yet written.  Advances cursor on success.
     bool read(Cursor& cursor, T& out) noexcept {
         uint64_t seq = cursor.next_seq;
         size_t slot_idx = seq & (Capacity - 1);
@@ -131,34 +112,39 @@ public:
         return true;
     }
 
-    /// Number of elements available for `cursor` to read (estimate).
+    /// Number of elements available for `cursor`.
     size_t available(const Cursor& cursor) const noexcept {
         uint64_t write = _write_idx.load(std::memory_order_acquire);
         return (write > cursor.next_seq)
                ? static_cast<size_t>(write - cursor.next_seq) : 0;
     }
 
-    // ─── Observers ───────────────────────────────────────────────────
-
     /// Total number of elements ever pushed (monotonic).
     uint64_t count() const noexcept {
         return _write_idx.load(std::memory_order_acquire);
     }
 
-    /// Capacity of the ring buffer.
-    static constexpr size_type capacity() noexcept { return Capacity; }
+    // ─── IQueue<T> overrides ─────────────────────────────────────────
+    //
+    //  try_pop is provided for IQueue conformance but is inefficient
+    //  for SPMCQueue (creates a fresh cursor each call).
+    //  Prefer the cursor-based read() API for bulk consumption.
 
-    /// Approximate number of elements (const-based, imprecise).
-    size_type size() const noexcept {
-        auto c = read_cursor();
+    bool try_pop(T& out) noexcept override {
+        Cursor c = read_cursor();
+        return read(c, out);
+    }
+
+    size_t size() const noexcept override {
+        Cursor c = read_cursor();
         return available(c);
     }
 
-    bool empty() const noexcept { return size() == 0; }
+    bool empty() const noexcept override { return size() == 0; }
 
-    /// Remove all elements.  NOT thread-safe — caller must ensure no
-    /// concurrent push or read.
-    void clear() noexcept {
+    size_t capacity() const noexcept override { return Capacity; }
+
+    void clear() noexcept override {
         if constexpr (!std::is_trivially_destructible_v<T>) {
             for (size_t i = 0; i < Capacity; ++i)
                 _slots[i].value.~T();
@@ -171,11 +157,24 @@ public:
     }
 
 private:
+    template <typename U>
+    void write_slot(U&& value) {
+        uint64_t write_seq = _write_idx.fetch_add(1, std::memory_order_relaxed);
+        size_t slot_idx = write_seq & (Capacity - 1);
+        Slot& s = _slots[slot_idx];
+
+        if constexpr (!std::is_trivially_destructible_v<T>)
+            s.value.~T();
+        new (&s.value) T(std::forward<U>(value));
+
+        s.generation.store((write_seq / Capacity) * 2 + 1,
+                           std::memory_order_release);
+    }
+
     bool _overwrite_check(Cursor& cursor, uint64_t seq) const noexcept {
         uint64_t write = _write_idx.load(std::memory_order_acquire);
-        if (write >= seq + Capacity) {
+        if (write >= seq + Capacity)
             cursor.next_seq = write >= Capacity ? write - Capacity : 0;
-        }
         return false;
     }
 
