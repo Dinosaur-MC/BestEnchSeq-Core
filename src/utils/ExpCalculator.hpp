@@ -1,5 +1,4 @@
 #pragma once
-#include "../types/EnchSolution.h"
 #include <cstdint>
 
 class ExpCalculator {
@@ -14,20 +13,20 @@ public:
             return (9 * level * level - 325 * level + 4440) / 2;
     }
 
-    // 峰值成本分析
-    static int32_t peak_level_cost(const EnchStepList& steps) noexcept {
-        if (steps.empty()) return 0;
+    // 峰值成本分析（通用迭代器接口，零域类型依赖）
+    template <typename StepIter>
+    static int32_t peak_level_cost(StepIter begin, StepIter end) noexcept {
         int32_t peak = 0;
-        for (auto& s : steps)
-            if (s.exp_level_cost > peak) peak = s.exp_level_cost;
+        for (; begin != end; ++begin)
+            if (begin->exp_level_cost > peak) peak = begin->exp_level_cost;
         return peak;
     }
 
-    static int32_t peak_exp_cost(const EnchStepList& steps) noexcept {
-        if (steps.empty()) return 0;
+    template <typename StepIter>
+    static int32_t peak_exp_cost(StepIter begin, StepIter end) noexcept {
         int32_t peak = 0;
-        for (auto& s : steps) {
-            int32_t exp = s.exp_cost;
+        for (; begin != end; ++begin) {
+            int32_t exp = begin->exp_cost;
             if (exp > peak) peak = exp;
         }
         return peak;

@@ -1,5 +1,7 @@
 #include "framework/test_utils.h"
+#include "types/EnchSolution.h"
 #include "utils/ExpCalculator.hpp"
+#include <vector>
 
 void test_level_to_exp() {
     // Level 0 → 0
@@ -16,9 +18,9 @@ void test_level_to_exp() {
 }
 
 void test_peak_analysis() {
-    EnchStepList steps;
+    std::vector<EnchSolution::EnchStep> steps;
     // Empty
-    expect(ExpCalculator::peak_level_cost(steps) == 0, "empty → peak 0");
+    expect(ExpCalculator::peak_level_cost(steps.begin(), steps.end()) == 0, "empty → peak 0");
 
     // Add some steps
     // exp_cost should match level_to_exp(exp_level_cost) for consistency
@@ -29,8 +31,8 @@ void test_peak_analysis() {
     steps.push_back(s2);
     steps.push_back(s3);
 
-    expect(ExpCalculator::peak_level_cost(steps) == 10, "peak level cost should be 10");
-    expect(ExpCalculator::peak_exp_cost(steps) == ExpCalculator::level_to_exp(10),
+    expect(ExpCalculator::peak_level_cost(steps.begin(), steps.end()) == 10, "peak level cost should be 10");
+    expect(ExpCalculator::peak_exp_cost(steps.begin(), steps.end()) == ExpCalculator::level_to_exp(10),
            "peak exp cost should match level_to_exp(10)");
     std::cout << "PASS: test_peak_analysis" << std::endl;
 }
