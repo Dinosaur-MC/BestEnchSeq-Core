@@ -16,8 +16,6 @@ add_executable(forge_benchmark
     forge_benchmark.cpp
     ${ALGO_SRC}
     ${REG_SRC}
-    ${PROJECT_ROOT}/src/algorithm/components/AStarDiagnostics.cpp
-    ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
@@ -35,3 +33,8 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/types/Equipment.cpp
 )
 target_include_directories(forge_benchmark PRIVATE ${BENCH_INCLUDE})
+
+# Quick smoke test for ctest — runs one small case with greedy algo (< 5s)
+add_test(NAME benchmark_smoke
+    COMMAND forge_benchmark --test crossbow --algo greedy
+    WORKING_DIRECTORY ${PROJECT_ROOT})

@@ -14,30 +14,16 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 
-# Metadata Options
-option(ENABLE_NETWORK "Enable network" ON)
-
-if(ENABLE_NETWORK)
-    set(ENABLED_NETWORK true)
-else()
-    set(ENABLED_NETWORK false)
-endif()
-
-option(ENABLE_API_SERVICE "Enable API service" OFF)
-
-if(ENABLE_NETWORK AND ENABLE_API_SERVICE)
-    set(ENABLED_API true)
-else()
-    set(ENABLED_API false)
-endif()
-
 # Executable Output Path
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
 file(GLOB_RECURSE MAIN_SRC_LIST CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 add_executable(${PROJECT_NAME} ${MAIN_SRC_LIST})
+
+# CLI output name: "besq" matches documentation; PROJECT_NAME for CMake-internal
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
