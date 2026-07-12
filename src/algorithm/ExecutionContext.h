@@ -1,6 +1,6 @@
 #pragma once
 #include "AlgorithmObserver.h"
-#include "utils/SPSCQueue.hpp"
+#include "utils/queue/SPSCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
