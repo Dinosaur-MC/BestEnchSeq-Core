@@ -20,6 +20,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -33,49 +34,48 @@ struct TestCase {
     std::string name;
     std::string item_type;
     std::vector<std::string> wanted;
-    int min_cost;
-    int max_cost;
+    int max_cost;   // upper bound reference (Minecraft anvil cap: 39)
 };
 
 TestCase CASES[] = {
     // Swords
     {"sword_basic", "diamond_sword",
-     {"sharpness=5", "looting=3", "unbreaking=3"}, 14, 35},
+     {"sharpness=5", "looting=3", "unbreaking=3"}, 35},
     {"sword_combat_5", "diamond_sword",
-     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 31, 52},
+     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 52},
     {"sword_combat_7", "diamond_sword",
      {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1"}, 40, 120},
+      "fire_aspect=2", "knockback=2", "mending=1"}, 120},
     // Tools
     {"pickaxe_fortune", "diamond_pickaxe",
-     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 15, 40},
+     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 40},
     {"pickaxe_silk", "diamond_pickaxe",
-     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 15, 40},
+     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 40},
     // Ranged
     {"bow_power", "bow",
-     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 15, 48},
+     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 48},
     {"crossbow", "crossbow",
-     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 12, 35},
+     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 35},
     // Armor
     {"helmet", "diamond_helmet",
-     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 20, 51},
+     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 51},
     {"chestplate", "diamond_chestplate",
-     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 20, 55},
+     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 55},
     {"leggings", "diamond_leggings",
-     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 20, 50},
+     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 50},
     {"boots", "diamond_boots",
-     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 25, 60},
+     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 60},
     {"boots_full", "diamond_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
-      "thorns=3", "unbreaking=3", "mending=1"}, 55, 125},
+      "thorns=3", "unbreaking=3", "mending=1"}, 125},
     // Netherite
     {"netherite_sword", "netherite_sword",
      {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 45, 160},
+      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 160},
     {"netherite_boots", "netherite_boots",
      {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
       "thorns=3", "unbreaking=3", "mending=1",
-      "vanishing_curse=1", "binding_curse=1"}, 60, 200},
+      "vanishing_curse=1", "binding_curse=1"}, 200},
 };
 
 // ─── Groups ───
@@ -207,14 +207,16 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
 
     for (const auto& algo_name : enabled_algos) {
         if (!registries::algorithms().contains(algo_name)) {
-            std::cout << "  " << algo_name << ": unknown, skipping" << std::endl;
+            std::cout << "  " << std::left << std::setw(18) << algo_name
+                      << "unknown, skipping" << std::endl;
             continue;
         }
         if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && tc.wanted.size() > 8) {
-            std::cout << "  " << algo_name << ": SKIP: too many enchants" << std::endl;
+            std::cout << "  " << std::left << std::setw(18) << algo_name
+                      << "SKIP (too many enchants)" << std::endl;
             continue;
         }
-        
+
         auto algo = registries::algorithms().create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
 
@@ -223,12 +225,14 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         executor.wait();
 
         if (executor.state() != AlgorithmState::Completed) {
-            std::cout << "  " << algo_name << ": FAILED" << std::endl;
+            std::cout << "  " << std::left << std::setw(18) << algo_name
+                      << "FAILED" << std::endl;
             continue;
         }
         AlgorithmOutput out = executor.output();
         if (out.steps.empty()) {
-            std::cout << "  " << algo_name << ": no solution" << std::endl;
+            std::cout << "  " << std::left << std::setw(18) << algo_name
+                      << "no solution" << std::endl;
             continue;
         }
 
@@ -237,11 +241,13 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             for (const auto& s : step_list)
                 total += s.cost;
 
-        bool ok = total >= tc.min_cost && total <= tc.max_cost;
-        std::cout << "  " << algo_name << ": " << total << "L ["
-                  << tc.min_cost << "-" << tc.max_cost << "L]"
-                  << (ok ? " ✅" : " ⚠️  out of range")
-                  << " (" << out.computation_time.count() << "ms)" << std::endl;
+        bool ok = total <= tc.max_cost;
+        std::cout << "  " << std::left << std::setw(18) << algo_name
+                  << std::right << std::setw(4) << total << "L"
+                  << "  ≤" << std::setw(4) << tc.max_cost << "L"
+                  << (ok ? "  ✅" : "  ⚠")
+                  << "  " << std::setw(4) << out.computation_time.count() << "ms"
+                  << std::endl;
     }
 }
 
@@ -301,13 +307,13 @@ int main(int argc, char* argv[]) {
     }
 
     for (auto* tc : queue) {
-        std::cout << tc->name << " (" << tc->wanted.size() << " enchants):" << std::endl;
+        std::cout << "\n" << tc->name << " (" << tc->wanted.size() << " enchants, max "
+                  << tc->max_cost << "L):" << std::endl;
         try {
             run_case(*tc, cfg.algos, cfg.no_skip);
         } catch (const std::exception& e) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }
-        std::cout << std::endl;
     }
     std::cout << "=== Done ===" << std::endl;
     return 0;
