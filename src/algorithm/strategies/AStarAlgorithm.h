@@ -4,6 +4,7 @@
 #include "algorithm/components/AStarMemoryBudget.h"
 #include "algorithm/components/AStarDiagnostics.h"
 #include "registries/CompactedRegistries.h"
+#include <chrono>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -35,20 +36,31 @@ private:
     // ─── Item pool (deduplicated) ─────────────────────────────────────────
     class ItemPool {
         std::vector<compact::Item> _items;
-        std::unordered_map<compact::Item, ItemID> _dedup;  // item → existing ItemID
+        // 64-bit hash → ItemID.  On the ~10^-12 chance of a hash collision,
+        // a full content comparison catches the false positive.
+        std::unordered_map<size_t, ItemID> _dedup;
         size_t _max_items{10'000'000};
     public:
         void set_max(size_t n) noexcept { _max_items = n; }
 
         ItemID add(compact::Item item) {
-            auto it = _dedup.find(item);
-            if (it != _dedup.end())
-                return it->second;
-
+            size_t h = std::hash<compact::Item>{}(item);
+            auto it = _dedup.find(h);
+            if (it != _dedup.end()) {
+                if (_items[it->second] == item)
+                    return it->second;
+                // Hash collision — probe forward (extremely rare).
+                for (size_t probe = 1; probe < 64; ++probe) {
+                    auto it2 = _dedup.find(h + probe);
+                    if (it2 == _dedup.end()) break;
+                    if (_items[it2->second] == item)
+                        return it2->second;
+                }
+            }
             if (_items.size() >= _max_items) return INVALID_ITEM_ID;
             ItemID id = static_cast<ItemID>(_items.size());
             _items.push_back(std::move(item));
-            _dedup[_items.back()] = id;
+            _dedup.emplace(h, id);
             return id;
         }
 
@@ -84,6 +96,10 @@ private:
         int32_t f;
         bool operator>(const PriorityEntry& o) const { return f > o.f; }
     };
+
+    // ─── Config cache (copied from ctx at execute start) ───────────────
+    int32_t _max_solutions{0};
+    std::chrono::milliseconds _max_search_time{0};
 
     // ─── Pool storage (all vector — contiguous) ───────────────────────────
     ItemPool _pool;

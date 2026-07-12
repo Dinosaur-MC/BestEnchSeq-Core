@@ -1,6 +1,5 @@
 #include "AStarAlgorithm.h"
 #include "../ExecutionContext.h"
-#include "algorithm/components/Heuristic.h"
 #include "utils/FlatHashMap.hpp"
 #include "utils/HashUtils.hpp"
 #include <algorithm>
@@ -35,15 +34,35 @@ size_t AStarAlgorithm::_hash_ids(const std::vector<ItemID>& ids) const {
 }
 
 int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID>& ids) const {
-    // Build temp Item vector from pool IDs, then delegate to shared Heuristic.
-    // The vector allocation is small (typically < 10 items) -- fine for this path.
-    std::vector<compact::Item> items;
-    items.reserve(ids.size());
-    for (auto id : ids)
-        items.push_back(_pool[id]);
-    return Heuristic::compute(items, *_ench_reg, _target,
-        [this](int32_t mult) { return _compact_forge.book_multiplier(mult); },
-        _h_buf, _h_dirty);
+    int32_t h = 0;
+    if (ids.empty()) return h;
+
+    if (_h_buf.size() < _ench_reg->size())
+        _h_buf.assign(_ench_reg->size(), 0);
+    _h_dirty.clear();
+
+    for (auto id : ids) {
+        for (const auto& e : _pool[id].enchs) {
+            if (e.level > _h_buf[e.id]) {
+                if (_h_buf[e.id] == 0)
+                    _h_dirty.push_back(e.id);
+                _h_buf[e.id] = e.level;
+            }
+        }
+    }
+
+    for (const auto& t : _target) {
+        int16_t have = _h_buf[t.id];
+        if (have < t.level) {
+            int32_t bm = _compact_forge.book_multiplier(_ench_reg->get_multiplier(t.id));
+            h += (t.level - have) * bm;
+        }
+    }
+
+    for (auto id : _h_dirty)
+        _h_buf[id] = 0;
+
+    return h;
 }
 
 bool AStarAlgorithm::_meets_target(ItemID equip_id) const {
@@ -107,6 +126,13 @@ void AStarAlgorithm::execute(
     _target = target;
     _best_solution_cost = INT32_MAX;
     _diag = AStarDiagnostics{};
+
+    // Cache config for hot-path access (avoids atomic shared_ptr load)
+    {
+        auto cfg = ctx.get_search_config();
+        _max_solutions = cfg.max_solutions;
+        _max_search_time = cfg.max_search_time;
+    }
 
     // Seed ItemPool with initial items
     std::vector<ItemID> initial_ids;
@@ -259,12 +285,11 @@ void AStarAlgorithm::execute(
         if (explored >= _budget.max_explored) break;
 
         if (explored % 1024 == 0) {
-            auto cfg = ctx.get_search_config();
-            if (cfg.max_search_time.count() > 0) {
+            if (_max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - t0;
-                if (elapsed > cfg.max_search_time) break;
+                if (elapsed > _max_search_time) break;
             }
-            if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) break;
+            if (_max_solutions > 0 && _solutions_found >= _max_solutions) break;
         }
 
         if (explored % 1000 == 0) {

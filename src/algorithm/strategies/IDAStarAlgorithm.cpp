@@ -29,10 +29,9 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
         if (ctx.is_cancelled()) return;
         ctx.wait_if_paused();
 
-        auto cfg = ctx.get_search_config();
-        if (cfg.max_search_time.count() > 0) {
+        if (_max_search_time.count() > 0) {
             auto elapsed = std::chrono::steady_clock::now() - _start_time;
-            if (elapsed > cfg.max_search_time) return;
+            if (elapsed > _max_search_time) return;
         }
     }
 
@@ -44,8 +43,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID> ids, int32_t g,
             _solution_path = _current_path;
         }
         {
-            auto cfg = ctx.get_search_config();
-            if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions)
+            if (_max_solutions > 0 && _solutions_found >= _max_solutions)
                 ctx.cancel();
         }
         return;
@@ -137,6 +135,13 @@ void IDAStarAlgorithm::execute(
     _nodes_visited = 0;
     _solutions_found = 0;
     _start_time = std::chrono::steady_clock::now();
+
+    // Cache config for hot-path access (avoids atomic shared_ptr load)
+    {
+        auto cfg = ctx.get_search_config();
+        _max_solutions = cfg.max_solutions;
+        _max_search_time = cfg.max_search_time;
+    }
 
     std::vector<ItemID> initial_ids;
     initial_ids.reserve(items.size());
