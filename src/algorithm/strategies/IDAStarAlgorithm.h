@@ -39,7 +39,7 @@ private:
     };
 
     /// Exhaustive DFS branch-and-bound with best_g pruning.
-    void _dfs(std::vector<ItemID> ids, int32_t g,
+    void _dfs(std::vector<ItemID>& ids, int32_t g,
               int32_t& best_cost, ExecutionContext& ctx);
 
     bool _meets_target(const std::vector<ItemID>& ids) const;
