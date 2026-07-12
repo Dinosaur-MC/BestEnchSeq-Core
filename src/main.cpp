@@ -10,7 +10,7 @@
 #include "types/AppConfig.h"
 #include "parsers/EnchInfoParser.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
-#include "utils/Logger.hpp"
+#include "log/log.hpp"
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]) {
         }
 
         // ── Logger (singleton, available system-wide) ──────────────────────
-        Logger::instance().info("Starting algorithm: " + config.algorithm);
+        besq::log::info("Starting algorithm: " + config.algorithm);
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
@@ -186,7 +186,7 @@ int main(int argc, char *argv[]) {
         // ── Verbose diagnostics ────────────────────────────────────────────
         if (config.verbose || app_cfg.verbose) {
             auto diag = executor.get_diagnostics(0);
-            Logger::instance().printf(LogLevel::Info,
+            besq::log::printf(LogLevel::Info,
                 "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
                 diag.nodes_visited, diag.nodes_pruned, diag.steps_forged,
                 diag.progress * 100.0);

@@ -1,4 +1,4 @@
-#include "Logger.hpp"
+#include "log/Logger.hpp"
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -94,16 +94,12 @@ void Logger::_worker() {
                 latest_file.flush();
             }
         }
-        // Check again before blocking (messages may have arrived during drain)
         if (!_running.load(std::memory_order_acquire))
             break;
 
-        // Block until next log message or shutdown (zero CPU while idle).
-        // C++20 atomic::wait is lock-free — no mutex, no condition variable.
+        // C++20 atomic::wait — zero CPU while idle, no mutex/CV.
         auto prev = _wake_seq.load(std::memory_order_acquire);
-        // Double-check: messages may have arrived between drain and load
         if (_queue.try_pop(entry)) {
-            // process inline then continue the drain loop
             auto line = "[" + now_str() + "] [" + level_str(entry.level) + "] "
                       + entry.message + "\n";
             if (run_file.is_open()) run_file << line;

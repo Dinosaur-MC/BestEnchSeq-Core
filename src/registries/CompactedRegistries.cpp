@@ -1,5 +1,5 @@
 #include "CompactedRegistries.h"
-#include "utils/Logger.hpp"
+#include "log/log.hpp"
 
 #include <stdexcept>
 
@@ -28,7 +28,7 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
         // Saturating conversion: if values exceed int16_t range, clamp and warn
         if (info.multiplier > INT16_MAX) {
             _ench_infos[i].mul = INT16_MAX;
-            Logger::instance().printf(LogLevel::Warn,
+            besq::log::printf(LogLevel::Warn,
                 "ench_reg: multiplier %d at index %zu exceeds INT16_MAX, clamped",
                 info.multiplier, i);
         } else if (info.multiplier < 0) {
@@ -38,7 +38,7 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
         }
         if (info.max_level > INT16_MAX) {
             _ench_infos[i].max_lvl = INT16_MAX;
-            Logger::instance().printf(LogLevel::Warn,
+            besq::log::printf(LogLevel::Warn,
                 "ench_reg: max_level %d at index %zu exceeds INT16_MAX, clamped",
                 info.max_level, i);
         } else if (info.max_level < 0) {

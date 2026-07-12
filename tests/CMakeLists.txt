@@ -47,7 +47,7 @@ set(ALGO_ENGINE_SRCS
 # Compact registries (Logger linked here as CompactedRegistries depends on it)
 set(COMPACT_REG_SRCS
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
-    ${PROJECT_ROOT}/src/utils/Logger.cpp
+    ${PROJECT_ROOT}/src/log/Logger.cpp
 )
 
 # Equipment registry
