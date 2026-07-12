@@ -85,12 +85,33 @@ void test_parse_target_no_brackets() {
 
 void test_help_flag() {
     const char *argv[] = {"besq", "--help"};
-    
+
     auto config = parse_cli(2, const_cast<char **>(argv));
 
-    expect(config.help == true, "help should be true");
+    expect(config.help == true, "--help should be true");
 
     std::cout << "  [OK] test_help_flag" << std::endl;
+}
+
+void test_help_short_flag() {
+    const char *argv[] = {"besq", "-h"};
+
+    auto config = parse_cli(2, const_cast<char **>(argv));
+
+    expect(config.help == true, "-h should be true");
+
+    std::cout << "  [OK] test_help_short_flag" << std::endl;
+}
+
+void test_verbose_short_flag() {
+    const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "-v"};
+
+    auto config = parse_cli(6, const_cast<char **>(argv));
+
+    expect(config.verbose == true, "-v should set verbose");
+    expect(config.target == "sword", "target still parsed");
+
+    std::cout << "  [OK] test_verbose_short_flag" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +419,8 @@ int main() {
         test_parse_target_no_brackets();
         test_target_multiple_inline();
         test_help_flag();
+        test_help_short_flag();
+        test_verbose_short_flag();
         test_default_values();
         test_unknown_flag_throws();
         test_enchantment_list();

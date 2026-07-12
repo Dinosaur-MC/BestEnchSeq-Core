@@ -424,6 +424,21 @@ set_tests_properties(test_compact_adapter PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/adapters/test_registry_resolver.cpp)
+    message(FATAL_ERROR "Required test source not found: adapters/test_registry_resolver.cpp")
+endif()
+
+add_executable(test_registry_resolver
+    adapters/test_registry_resolver.cpp
+    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${REGISTRY_CORE_SRCS}
+)
+target_include_directories(test_registry_resolver PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_registry_resolver COMMAND test_registry_resolver)
+set_tests_properties(test_registry_resolver PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_serializer.cpp)
     message(FATAL_ERROR "Required test source not found: utils/test_serializer.cpp")
 endif()
@@ -451,6 +466,19 @@ add_executable(test_env_util
 target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_env_util COMMAND test_env_util)
 set_tests_properties(test_env_util PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_app_config.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_app_config.cpp")
+endif()
+
+add_executable(test_app_config
+    utils/test_app_config.cpp
+)
+target_include_directories(test_app_config PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_app_config COMMAND test_app_config)
+set_tests_properties(test_app_config PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
