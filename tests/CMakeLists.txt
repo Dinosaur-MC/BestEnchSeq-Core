@@ -503,6 +503,19 @@ set_tests_properties(test_memory_pool PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/ObjectPoolTest.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/ObjectPoolTest.cpp")
+endif()
+
+add_executable(test_object_pool
+    utils/ObjectPoolTest.cpp
+)
+target_include_directories(test_object_pool PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_object_pool COMMAND test_object_pool)
+set_tests_properties(test_object_pool PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_app_config.cpp)
     message(FATAL_ERROR "Required test source not found: utils/test_app_config.cpp")
 endif()
