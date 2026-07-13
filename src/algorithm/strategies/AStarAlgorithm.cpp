@@ -181,6 +181,61 @@ int32_t AStarAlgorithm::_dfs_bound(
     return best_cost;
 }
 
+// ─── Delta heuristic helpers ───────────────────────────────────────────
+
+void AStarAlgorithm::_precompute_max(const std::vector<ItemID>& ids) {
+    if (_h_max.size() < _ench_reg->size())
+        _h_max.assign(_ench_reg->size(), 0);
+    _h_dirty.clear();
+
+    for (auto id : ids) {
+        for (const auto& e : _pool[id].enchs) {
+            if (e.id < 0) continue;
+            if (e.level > _h_max[e.id]) {
+                if (_h_max[e.id] == 0)
+                    _h_dirty.push_back(e.id);
+                _h_max[e.id] = e.level;
+            }
+        }
+    }
+}
+
+int32_t AStarAlgorithm::_compute_h() const {
+    int32_t h = 0;
+    for (const auto& t : _target) {
+        int16_t have = _h_max[t.id];
+        if (have < t.level)
+            h += (t.level - have) * (*_ench_reg)[t.id].mul_b;
+    }
+    return h;
+}
+
+int32_t AStarAlgorithm::_delta_h(int32_t parent_h,
+                                  const compact::Item& forged,
+                                  const compact::Item& sacrifice) const
+{
+    int32_t h = parent_h;
+
+    // Gains: target enchants that forged improved vs parent's global max
+    for (const auto& e : forged.enchs) {
+        if (e.id < 0) continue;
+        int16_t target_level = _target_level_map[e.id];
+        if (target_level == 0) continue;
+        int16_t old_max = _h_max[e.id];
+        if (e.level > old_max && old_max < target_level) {
+            int16_t gain = (std::min)(e.level, target_level) - old_max;
+            h -= static_cast<int32_t>(gain) * (*_ench_reg)[e.id].mul_b;
+        }
+    }
+
+    // Losses from conflicts (sacrifice enchants not transferred):
+    // Skipped — conflicts with target enchants are rare in practice.
+    // Omitting this is admissible-safe: h never overestimates remaining cost.
+    (void)sacrifice;
+
+    return h;
+}
+
 // ─── Execute ────────────────────────────────────────────────────────────
 
 void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
@@ -197,6 +252,9 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     _open_heap.clear();
     _ench_reg = &input.ench_reg;
     _target = target;
+    _target_level_map.assign(_ench_reg->size(), 0);
+    for (const auto& t : _target)
+        _target_level_map[t.id] = t.level;
     _best_solution_cost = INT32_MAX;
     _diag = AStarDiagnostics{};
 
@@ -270,7 +328,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     > open_set(std::greater<>{}, std::move(_open_heap));
 
     open_set.push(PriorityEntry{
-        SearchState{0, -1, std::move(initial_ids)}, h0
+        SearchState{0, h0, -1, std::move(initial_ids)}, h0
     });
 
     // best_g keyed by hash — open-addressing flat map (contiguous, cache-friendly).
@@ -364,6 +422,9 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             ctx.report_progress(progress, ProgressStatus::Exploring);
         }
 
+        // ─── Precompute max levels for delta heuristic ─────────────────────
+        _precompute_max(current.ids);
+
         // ─── Expand current state ────────────────────────────────────────
         const auto& cur_ids = current.ids;
         const size_t n = cur_ids.size();
@@ -418,22 +479,23 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 child_ids[base_in_child] = new_base_id;  // NOW we have real state
 
                 // ── Phase C: heuristic + best_g + enqueue (real post-forge) ─
-                int32_t child_f = child_g + _heuristic(child_ids);
-                if (_best_solution_cost != INT32_MAX && child_f > _best_solution_cost) {
+                int32_t child_h_val = _delta_h(current.h, forged, _pool[old_sac_id]);
+                int32_t child_fv = child_g + child_h_val;
+                if (_best_solution_cost != INT32_MAX && child_fv > _best_solution_cost) {
                     ++_diag.pruned_by_f;
                     ctx.incr_nodes_pruned();
                     continue;
                 }
 
-                size_t child_h = _hash_ids(child_ids);
-                if (int32_t* cg = best_g.find(child_h)) {
+                size_t child_hash = _hash_ids(child_ids);
+                if (int32_t* cg = best_g.find(child_hash)) {
                     if (*cg <= child_g) {
                         ++_diag.pruned_by_best_g;
                         ctx.incr_nodes_pruned();
                         continue;
                     }
                 }
-                best_g[child_h] = child_g;
+                best_g[child_hash] = child_g;
 
                 // Step node
                 _step_pool.push_back({
@@ -445,8 +507,8 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 int32_t step_idx = static_cast<int32_t>(_step_pool.size()) - 1;
 
                 open_set.push(PriorityEntry{
-                    SearchState{child_g, step_idx, std::move(child_ids)},
-                    child_f
+                    SearchState{child_g, child_h_val, step_idx, std::move(child_ids)},
+                    child_fv
                 });
             }
         }

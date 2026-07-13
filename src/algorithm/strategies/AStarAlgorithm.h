@@ -35,6 +35,7 @@ private:
     // ─── Search state (flat ID array) ─────────────────────────────────────
     struct SearchState {
         int32_t  g{0};
+        int32_t  h{0};          // cached heuristic (avoids recomputation at expand)
         int32_t  step_idx{-1};
         std::vector<ItemID> ids;
     };
@@ -64,6 +65,10 @@ private:
                            const compact::EnchReg& reg) const;
     int32_t _dfs_bound(std::vector<compact::Item> items, int32_t g,
                        int32_t best_cost, int64_t& node_limit) const;
+    void    _precompute_max(const std::vector<ItemID>& ids);
+    int32_t _compute_h() const;
+    int32_t _delta_h(int32_t parent_h, const compact::Item& forged,
+                     const compact::Item& sacrifice) const;
 
     // ─── Config ───────────────────────────────────────────────────────────
     ForgeEngine _forge_engine;
@@ -79,4 +84,6 @@ private:
     // ─── Heuristic scratch buffers (mutable, reused across calls) ─────────
     mutable std::vector<int16_t> _h_buf;        // max level per ench id
     mutable std::vector<int16_t> _h_dirty;      // ids touched in current call
+    std::vector<int16_t> _h_max;                // persistent per-enchant max (expand state)
+    std::vector<int16_t> _target_level_map;     // target level per ench, 0 = not target
 };
