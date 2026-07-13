@@ -98,7 +98,6 @@ AlgorithmInput CompactAdapter::apply(
 
     AlgorithmInput input;
     input.config = config;
-    input.equipment = *target_item.equipment;
     input.ench_reg = std::move(ench_reg);
 
     ItemStack start_equip(*target_item.equipment, original_ench, 0);
@@ -135,8 +134,7 @@ compact::Item CompactAdapter::from_domain(const ItemStack& item, const compact::
     return citem;
 }
 
-ItemStack CompactAdapter::to_domain(const compact::Item& item, const Equipment& eq,
-                                     const compact::EnchReg& reg) {
+ItemStack CompactAdapter::to_domain(const compact::Item& item, const compact::EnchReg& reg) {
     ::EnchSet ench_set;
     for (const auto& e : item.enchs) {
         int32_t global_id = reg.get_registry().to_global_id(e.id);
@@ -146,7 +144,7 @@ ItemStack CompactAdapter::to_domain(const compact::Item& item, const Equipment& 
     if (item.type == compact::ItemType::Book)
         return ItemStack(std::move(ench_set), item.ppn);
     else
-        return ItemStack(eq, std::move(ench_set), item.ppn, item.dur);
+        return ItemStack(reg.get_target_equip(), std::move(ench_set), item.ppn, item.dur);
 }
 
 std::vector<EnchSolution> CompactAdapter::recall(
@@ -164,8 +162,8 @@ std::vector<EnchSolution> CompactAdapter::recall(
         EnchStepList domain_steps;
         domain_steps.reserve(step_list.size());
         for (const auto& s : step_list) {
-            auto base = to_domain(s.base, input.equipment, input.ench_reg);
-            auto sac  = to_domain(s.sacrifice, input.equipment, input.ench_reg);
+            auto base = to_domain(s.base, input.ench_reg);
+            auto sac  = to_domain(s.sacrifice, input.ench_reg);
 
             domain_steps.push_back(EnchSolution::EnchStep{
                 std::move(base), std::move(sac), s.cost,

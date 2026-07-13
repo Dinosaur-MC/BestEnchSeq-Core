@@ -1,6 +1,5 @@
 #pragma once
 #include "types/CompactedTypes.h"
-#include "types/Equipment.h"
 #include "registries/CompactedRegistries.h"
 #include "types/ForgeConfig.h"
 #include <chrono>
@@ -13,7 +12,6 @@ struct AlgorithmInput {
     ForgeConfig config;              // forge configuration (platform, flags)
     compact::ItemCollection items;   // items[0] = equipment, rest = books
     compact::EnchCollection target;  // desired final enchantments
-    Equipment equipment;             // for output step conversion
     compact::EnchReg ench_reg;       // compact registry (must be initialized)
 };
 

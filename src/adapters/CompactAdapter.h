@@ -5,7 +5,6 @@
 #include "types/EnchSolution.h"
 #include "registries/EnchantmentRegistry.h"
 #include "algorithm/IAlgorithm.h"
-#include "algorithm/forge/IForgeEngine.h"
 #include <vector>
 
 class CompactAdapter {
@@ -27,6 +26,5 @@ public:
     );
 
     static compact::Item from_domain(const ItemStack& item, const compact::EnchReg& reg);
-    static ItemStack to_domain(const compact::Item& item, const Equipment& eq,
-                               const compact::EnchReg& reg);
+    static ItemStack to_domain(const compact::Item& item, const compact::EnchReg& reg);
 };

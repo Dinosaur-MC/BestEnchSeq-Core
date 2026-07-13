@@ -9,7 +9,6 @@
 #include "types/Equipment.h"
 #include "types/CompactedTypes.h"
 #include "algorithm/IAlgorithm.h"
-#include "algorithm/forge/IForgeEngine.h"
 #include <stdexcept>
 
 namespace {
@@ -51,7 +50,8 @@ void test_apply_valid_input() {
     expect(input.items.size() == 2, "items should have 2 entries (equipment + 1 book)");
     expect(input.target.empty(), "target should be empty");
     expect(input.config.platform == MCE::Java, "platform should be Java");
-    expect(input.equipment.name_id == "diamond_sword", "equipment name_id should be diamond_sword");
+    expect(input.ench_reg.get_target_equip().name_id == "diamond_sword",
+           "equipment name_id should be diamond_sword");
 
     std::cout << "PASS: test_apply_valid_input" << std::endl;
 }
@@ -213,7 +213,7 @@ void test_from_domain_roundtrip() {
     expect(compact_item.ppn == 3, "compact prior_penalty should be 3");
     expect(compact_item.dur == sword.max_durability, "compact durability should match max");
 
-    auto back_item = CompactAdapter::to_domain(compact_item, sword, reg);
+    auto back_item = CompactAdapter::to_domain(compact_item, reg);
 
     expect(back_item.equipment.has_value(), "back_item equipment should not be null");
     expect(back_item.equipment->name_id == "diamond_sword",

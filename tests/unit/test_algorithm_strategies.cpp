@@ -71,7 +71,6 @@ int32_t run_strategy(const std::string& name,
     input.ench_reg = ctx.ench_reg;
     input.items = ctx.items;
     input.target = ctx.target;
-    input.equipment = sword;
 
     executor.start(std::move(input));
     auto state = executor.wait();

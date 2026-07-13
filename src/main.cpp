@@ -187,6 +187,7 @@ int main(int argc, char *argv[]) {
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
+        executor.update_search_config({.max_solutions = config.solutions});
         executor.start(algo_input);
         executor.wait();
 

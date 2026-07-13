@@ -192,7 +192,6 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
 
     AlgorithmInput algo_input;
     algo_input.config.platform = MCE::Java;
-    algo_input.equipment = eq;
     algo_input.ench_reg = std::move(ench_reg);
 
     algo_input.items.push_back(CompactAdapter::from_domain(start_item, algo_input.ench_reg));
