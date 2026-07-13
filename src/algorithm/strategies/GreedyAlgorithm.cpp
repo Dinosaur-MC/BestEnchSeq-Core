@@ -1,6 +1,7 @@
 #include "GreedyAlgorithm.h"
 #include "../ExecutionContext.h"
 #include "../Utils.h"
+#include "../DiagnosticsWriter.h"
 #include <chrono>
 #include <algorithm>
 
@@ -71,7 +72,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     _diag.label = "greedy";
     _diag.steps_forged = goal_achieved ? compact_steps.size() : 0;
     _diag.status = goal_achieved ? "Complete" : "CompleteNoSolution";
-    _diag.write();
+    DiagnosticsWriter::write(_diag);
 
     if (!goal_achieved) {
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);

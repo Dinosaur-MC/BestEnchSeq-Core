@@ -1,5 +1,6 @@
 #include "HierarchicalMergeAlgorithm.h"
 #include "../ExecutionContext.h"
+#include "../DiagnosticsWriter.h"
 #include <chrono>
 #include <algorithm>
 #include <cstdint>
@@ -97,7 +98,7 @@ void HierarchicalMergeAlgorithm::execute(
     if (items.size() <= 1) {
         _diag.label = "hierarchical";
         _diag.status = "GoalAlreadyMet";
-        _diag.write();
+        DiagnosticsWriter::write(_diag);
         ctx.report_compact_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
@@ -205,7 +206,7 @@ phase2:
         _diag.label = "hierarchical";
         _diag.steps_forged = compact_steps.size();
         _diag.status = "Complete";
-        _diag.write();
+        DiagnosticsWriter::write(_diag);
 
         ctx.report_compact_solution(std::move(compact_steps));
         ctx.report_progress(1.0, ProgressStatus::Complete);
@@ -251,7 +252,7 @@ phase2:
     _diag.label = "hierarchical";
     _diag.steps_forged = compact_steps.size();
     _diag.status = "Complete";
-    _diag.write();
+    DiagnosticsWriter::write(_diag);
 
     // Verify final equipment achieves the target
     {

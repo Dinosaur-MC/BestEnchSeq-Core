@@ -41,6 +41,7 @@ set(COMPACT_TYPE_SRCS ${PROJECT_ROOT}/src/types/CompactedTypes.cpp)
 set(ALGO_ENGINE_SRCS
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${PROJECT_ROOT}/src/algorithm/DiagnosticsWriter.cpp
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
 )
 

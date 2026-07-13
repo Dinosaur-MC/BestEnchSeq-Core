@@ -1,5 +1,6 @@
 #include "DynamicPenaltyBalancingAlgorithm.h"
 #include "../ExecutionContext.h"
+#include "../DiagnosticsWriter.h"
 #include <chrono>
 #include <cstdint>
 #include <vector>
@@ -126,7 +127,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         if (!met) {
             _diag.label = "penalty_balance";
             _diag.status = "CompleteNoSolution";
-            _diag.write();
+            DiagnosticsWriter::write(_diag);
             ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
             return;
         }
@@ -135,7 +136,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     _diag.label = "penalty_balance";
     _diag.steps_forged = compact_steps.size();
     _diag.status = "Complete";
-    _diag.write();
+    DiagnosticsWriter::write(_diag);
 
     ctx.report_compact_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);

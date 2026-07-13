@@ -1,6 +1,7 @@
 #include "DFSAlgorithm.h"
 #include "../ExecutionContext.h"
 #include "../Utils.h"
+#include "../DiagnosticsWriter.h"
 #include "algorithm/components/HeuristicBasic.h"
 #include <algorithm>
 #include <cstdint>
@@ -113,7 +114,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _diag.label = "dfs";
     _diag.solution_cost = _best_cost < INT32_MAX ? _best_cost : -1;
     _diag.status = _best_cost < INT32_MAX ? "Complete" : "CompleteNoSolution";
-    _diag.write();
+    DiagnosticsWriter::write(_diag);
 
     ctx.report_progress(1.0, _best_cost < INT32_MAX
         ? ProgressStatus::Complete
