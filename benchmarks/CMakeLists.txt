@@ -25,6 +25,7 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
+    ${PROJECT_ROOT}/src/utils/MemoryPool.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp

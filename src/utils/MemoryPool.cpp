@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 MemoryPool::MemoryPool(size_t initial_chunk_size,
                        std::pmr::memory_resource* upstream) noexcept
