@@ -69,7 +69,9 @@ inline void printf(LogLevel level, const char* fmt, Args&&... args) {
 
 /// @brief  Log at Info level with source-location prefix.
 ///         Accepts printf-style format + args.
-#define LOG_INFO(fmt, ...)   ::besq::log::info_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...)   ::besq::log::warn_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
-#define LOG_ERROR(fmt, ...)  ::besq::log::error_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
-#define LOG_DEBUG(fmt, ...)  ::besq::log::debug_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
+// C++20 __VA_OPT__ removes the trailing comma when __VA_ARGS__ is empty,
+// replacing the GNU ##__VA_ARGS__ extension.
+#define LOG_INFO(fmt, ...)   ::besq::log::info_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)
+#define LOG_WARN(fmt, ...)   ::besq::log::warn_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)
+#define LOG_ERROR(fmt, ...)  ::besq::log::error_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)
+#define LOG_DEBUG(fmt, ...)  ::besq::log::debug_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)

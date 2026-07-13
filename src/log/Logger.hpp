@@ -67,10 +67,13 @@ public:
     /// printf-style format and push.
     template<typename... Args>
     void printf(LogLevel level, const char* fmt, Args&&... args) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-security"
         int sz = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
         if (sz < 0) return;
         std::string buf(static_cast<size_t>(sz) + 1, '\0');
         std::snprintf(buf.data(), buf.size(), fmt, std::forward<Args>(args)...);
+#pragma clang diagnostic pop
         buf.resize(static_cast<size_t>(sz));
         log(level, std::move(buf));
     }
