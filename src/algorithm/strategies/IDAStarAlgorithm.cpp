@@ -1,7 +1,6 @@
 #include "IDAStarAlgorithm.h"
 #include "../ExecutionContext.h"
 #include "../Utils.h"
-#include "algorithm/components/Heuristic.h"
 #include "algorithm/components/HeuristicBasic.h"
 #include "algorithm/components/StateHash.h"
 #include <algorithm>
@@ -50,9 +49,8 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
         return;
     }
 
-    // Heuristic pruning
-    int32_t h_val = Heuristic::compute(ids, _pool, *_ench_reg, _target,
-                                        _h_buf, _h_dirty);
+    // Heuristic pruning (_h_max was precomputed by caller or root)
+    int32_t h_val = _compute_h();
     if (g + h_val >= best_cost) {
         ctx.incr_nodes_pruned();
         return;
@@ -123,7 +121,19 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
         child_buf[base_in_child] = new_base_id;
 
         _current_path.push_back(IDALightStep{old_base_id, old_sac_id, real_cost});
-        _dfs(child_buf, child_g, best_cost, ctx);
+
+        // Delta heuristic: update _h_max for child, recurse, restore
+        {
+            auto saved_h_max = _h_max;
+            const auto& forged_enchs = _pool[new_base_id].enchs;
+            for (const auto& e : forged_enchs) {
+                if (e.level > _h_max[e.id])
+                    _h_max[e.id] = e.level;
+            }
+            _dfs(child_buf, child_g, best_cost, ctx);
+            _h_max = std::move(saved_h_max);
+        }
+
         _current_path.pop_back();
 
         if (ctx.is_cancelled()) return;
@@ -199,6 +209,35 @@ int32_t IDAStarAlgorithm::_dfs_bound(
     return best_cost;
 }
 
+// ─── Delta heuristic helpers ───────────────────────────────────────────
+
+void IDAStarAlgorithm::_precompute_max(const std::vector<ItemID>& ids) {
+    if (_h_max.size() < _ench_reg->size())
+        _h_max.assign(_ench_reg->size(), 0);
+    _h_dirty.clear();
+
+    for (auto id : ids) {
+        for (const auto& e : _pool[id].enchs) {
+            if (e.id < 0) continue;
+            if (e.level > _h_max[e.id]) {
+                if (_h_max[e.id] == 0)
+                    _h_dirty.push_back(e.id);
+                _h_max[e.id] = e.level;
+            }
+        }
+    }
+}
+
+int32_t IDAStarAlgorithm::_compute_h() const {
+    int32_t h = 0;
+    for (const auto& t : _target) {
+        int16_t have = _h_max[t.id];
+        if (have < t.level)
+            h += (t.level - have) * (*_ench_reg)[t.id].mul_b;
+    }
+    return h;
+}
+
 void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.config);
     const auto& items = input.items;
@@ -224,6 +263,9 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     _solution_path.clear();
     _ench_reg = &reg;
     _target = target;
+    _target_level_map.assign(_ench_reg->size(), 0);
+    for (const auto& t : _target)
+        _target_level_map[t.id] = t.level;
     _nodes_visited = 0;
     _solutions_found = 0;
     _start_time = std::chrono::steady_clock::now();
@@ -267,6 +309,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     }
 
     // Exhaustive DFS branch-and-bound
+    _precompute_max(initial_ids);
     _dfs(initial_ids, 0, best_cost, ctx);
 
     if (best_cost < INT32_MAX && !_solution_path.empty()) {

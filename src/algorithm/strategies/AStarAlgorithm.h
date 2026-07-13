@@ -36,6 +36,7 @@ private:
     struct SearchState {
         int32_t  g{0};
         int32_t  h{0};          // cached heuristic (avoids recomputation at expand)
+        size_t   hash{0};       // cached _hash_ids (avoids recomputation on pop)
         int32_t  step_idx{-1};
         std::vector<ItemID> ids;
     };

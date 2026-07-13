@@ -318,6 +318,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     }
 
     int32_t h0 = _heuristic(initial_ids);
+    size_t initial_hash = _hash_ids(initial_ids);
     size_t open_heap_cap = _open_heap.capacity();
 
     // Priority queue over backing heap
@@ -328,7 +329,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     > open_set(std::greater<>{}, std::move(_open_heap));
 
     open_set.push(PriorityEntry{
-        SearchState{0, h0, -1, std::move(initial_ids)}, h0
+        SearchState{0, h0, initial_hash, -1, std::move(initial_ids)}, h0
     });
 
     // best_g keyed by hash — open-addressing flat map (contiguous, cache-friendly).
@@ -359,7 +360,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         open_set.pop();
 
         // best_g check
-        size_t cur_h = _hash_ids(current.ids);
+        size_t cur_h = current.hash;
         if (int32_t* bg = best_g.find(cur_h)) {
             if (*bg < current.g)
                 continue;
@@ -507,7 +508,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 int32_t step_idx = static_cast<int32_t>(_step_pool.size()) - 1;
 
                 open_set.push(PriorityEntry{
-                    SearchState{child_g, child_h_val, step_idx, std::move(child_ids)},
+                    SearchState{child_g, child_h_val, child_hash, step_idx, std::move(child_ids)},
                     child_fv
                 });
             }

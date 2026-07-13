@@ -38,6 +38,8 @@ private:
     bool _meets_target(const std::vector<ItemID>& ids) const;
     int32_t _dfs_bound(std::vector<compact::Item> items, int32_t g,
                        int32_t best_cost, int64_t& node_limit) const;
+    void    _precompute_max(const std::vector<ItemID>& ids);
+    int32_t _compute_h() const;
 
     ItemPool _pool;
     ForgeEngine _forge_engine;
@@ -46,6 +48,8 @@ private:
 
     mutable std::vector<int16_t> _h_buf;
     mutable std::vector<int16_t> _h_dirty;
+    std::vector<int16_t> _h_max;
+    std::vector<int16_t> _target_level_map;
 
     TTTable _tt;
     std::vector<IDALightStep> _current_path;
