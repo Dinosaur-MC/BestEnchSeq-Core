@@ -56,10 +56,6 @@ private:
     std::vector<IDALightStep> _current_path;
     std::vector<IDALightStep> _solution_path;
 
-    static int32_t _book_mult(int32_t equip_mult) noexcept {
-        return std::max(1, equip_mult >> 1);
-    }
-
     int64_t _nodes_visited{0};
     int32_t _solutions_found{0};
     int32_t _max_solutions{0};

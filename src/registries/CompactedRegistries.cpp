@@ -36,6 +36,11 @@ void EnchReg::init(const EnchantmentRegistry &registry, const Equipment &target_
         } else {
             _ench_infos[i].mul = static_cast<int16_t>(info.multiplier);
         }
+        // Book multiplier: max(1, floor(multiplier / 2))
+        {
+            int32_t bm = std::max<int32_t>(1, info.multiplier >> 1);
+            _ench_infos[i].mul_b = bm > INT16_MAX ? INT16_MAX : static_cast<int16_t>(bm);
+        }
         if (info.max_level > INT16_MAX) {
             _ench_infos[i].max_lvl = INT16_MAX;
             besq::log::printf(LogLevel::Warn,

@@ -11,6 +11,7 @@ inline constexpr size_t MASK_ELEM_SIZE = 8ULL * sizeof(MaskType);
 
 struct EnchInfo {
     uint16_t mul;                   // 经验乘数
+    uint16_t mul_b;                 // 书本经验乘数
     uint16_t max_lvl;               // 最大等级
     std::vector<MaskType> exc_mask; // 互斥附魔位掩码
     bool applicable;                // 是否适用目标装备类别

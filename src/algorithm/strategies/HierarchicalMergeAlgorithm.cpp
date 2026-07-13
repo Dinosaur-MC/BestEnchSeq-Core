@@ -14,7 +14,7 @@ int32_t HierarchicalMergeAlgorithm::effective_multiplier(
 {
     int32_t max_mult = 1;
     for (const auto& e : item.enchs) {
-        int32_t m = _forge_engine.book_multiplier(reg.get_multiplier(e.id));
+        int32_t m = reg[e.id].mul_b;
         if (m > max_mult) max_mult = m;
     }
     return max_mult;

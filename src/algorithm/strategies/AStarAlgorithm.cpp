@@ -54,7 +54,7 @@ int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID>& ids) const {
     for (const auto& t : _target) {
         int16_t have = _h_buf[t.id];
         if (have < t.level) {
-            int32_t bm = _compact_forge.book_multiplier(_ench_reg->get_multiplier(t.id));
+            int32_t bm = (*_ench_reg)[t.id].mul_b;
             h += (t.level - have) * bm;
         }
     }

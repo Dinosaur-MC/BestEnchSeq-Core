@@ -85,7 +85,6 @@ bool DFSAlgorithm::_meets_target(const Item& equipment) const {
 
 int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
     return Heuristic::compute(items, *_ench_reg, _target,
-        [this](int32_t mult) { return _compact_forge.book_multiplier(mult); },
         _h_buf, _h_dirty);
 }
 

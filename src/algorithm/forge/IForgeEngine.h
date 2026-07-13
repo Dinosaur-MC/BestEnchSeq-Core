@@ -2,7 +2,6 @@
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
 #include "types/ForgeConfig.h"
-#include <algorithm>
 #include <cstdint>
 #include <utility>
 
@@ -31,9 +30,6 @@ public:
         if (ppn < 0 || ppn > 30) return INT32_MAX;
         return (1 << ppn) - 1;
     }
-    virtual int32_t book_multiplier(int32_t equip_mult) const noexcept {
-        return std::max(1, equip_mult >> 1);
-    }
     virtual int32_t apply_cap(int32_t raw_cost) const noexcept {
         return raw_cost > 39 ? 39 : raw_cost;
     }
@@ -47,9 +43,7 @@ public:
         int32_t cost = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
         bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
         for (const auto& e : sacrifice.enchs) {
-            int32_t mult = sac_is_book
-                ? book_multiplier(reg.get_multiplier(e.id))
-                : reg.get_multiplier(e.id);
+            int32_t mult = sac_is_book ? reg[e.id].mul_b : reg[e.id].mul;
             cost += e.level * mult;
         }
         return cost;

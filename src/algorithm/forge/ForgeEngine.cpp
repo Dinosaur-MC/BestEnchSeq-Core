@@ -11,8 +11,6 @@ int32_t ForgeEngine::penalty_cost(int8_t ppn) const noexcept {
     return (1 << ppn) - 1;
 }
 
-int32_t ForgeEngine::book_multiplier(int32_t equip_mult) const noexcept { return std::max(1, equip_mult >> 1); }
-
 int32_t ForgeEngine::apply_cap(int32_t raw_cost) const noexcept {
     if (_config.ignore_cost_cap)
         return raw_cost;
@@ -24,7 +22,7 @@ int32_t ForgeEngine::estimate_forge_cost(const compact::Item &target, const comp
     int32_t cost = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
     bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
     for (const auto &e : sacrifice.enchs) {
-        int32_t mult = sac_is_book ? book_multiplier(reg.get_multiplier(e.id)) : reg.get_multiplier(e.id);
+        int32_t mult = sac_is_book ? reg[e.id].mul_b : reg[e.id].mul;
         cost += e.level * mult;
     }
     return cost;
@@ -71,14 +69,14 @@ int32_t ForgeEngine::forge_into(compact::Item &target, const compact::Item &sacr
             continue;
         }
 
-        int32_t mult = sac_is_book ? book_multiplier(reg.get_multiplier(se.id)) : reg.get_multiplier(se.id);
+        int32_t mult = sac_is_book ? reg[se.id].mul_b : reg[se.id].mul;
 
         auto it = target.enchs.find(se.id);
         if (it != target.enchs.end()) {
             int16_t old_level = it->level;
             int16_t new_level;
             if (old_level == se.level)
-                new_level = static_cast<int16_t>(std::min<int32_t>(old_level + 1, reg.get_max_level(se.id)));
+                new_level = static_cast<int16_t>(std::min<int32_t>(old_level + 1, reg[se.id].max_lvl));
             else
                 new_level = static_cast<int16_t>(std::max<int32_t>(old_level, se.level));
 

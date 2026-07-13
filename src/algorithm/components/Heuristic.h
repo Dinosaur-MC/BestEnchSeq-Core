@@ -18,7 +18,6 @@ inline int32_t compute(
     const ItemPool& pool,
     const compact::EnchReg& reg,
     const std::vector<compact::Ench>& target,
-    int32_t (*book_multiplier_fn)(int32_t),
     std::vector<int16_t>& buf,     // reusable scratch; resized if needed
     std::vector<int16_t>& dirty)   // reusable dirty-id tracker
 {
@@ -44,7 +43,7 @@ inline int32_t compute(
         if (t.id < 0) continue;
         int16_t have = buf[t.id];
         if (have < t.level)
-            h += (t.level - have) * book_multiplier_fn(reg.get_multiplier(t.id));
+            h += (t.level - have) * reg[t.id].mul_b;
     }
 
     for (auto id : dirty) {
@@ -56,12 +55,10 @@ inline int32_t compute(
 }
 
 // Overload for direct Item vectors (used by DFS, AStar — no pool indirection)
-template <typename Fn>
 inline int32_t compute(
     const std::vector<compact::Item>& items,
     const compact::EnchReg& reg,
     const std::vector<compact::Ench>& target,
-    Fn&& book_multiplier_fn,
     std::vector<int16_t>& buf,
     std::vector<int16_t>& dirty)
 {
@@ -87,7 +84,7 @@ inline int32_t compute(
         if (t.id < 0) continue;
         int16_t have = buf[t.id];
         if (have < t.level)
-            h += (t.level - have) * book_multiplier_fn(reg.get_multiplier(t.id));
+            h += (t.level - have) * reg[t.id].mul_b;
     }
 
     for (auto id : dirty) {

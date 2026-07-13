@@ -159,18 +159,6 @@ void test_penalty_cost() {
     std::cout << "PASS: test_penalty_cost" << std::endl;
 }
 
-void test_book_multiplier() {
-    ForgeEngine engine;
-    // bm = max(1, equip_mult >> 1)
-    expect(engine.book_multiplier(1) == 1, "book_multiplier(1) should be 1");
-    expect(engine.book_multiplier(2) == 1, "book_multiplier(2) should be 1");
-    expect(engine.book_multiplier(3) == 1, "book_multiplier(3) should be 1");
-    expect(engine.book_multiplier(4) == 2, "book_multiplier(4) should be 2");
-    expect(engine.book_multiplier(5) == 2, "book_multiplier(5) should be 2");
-    expect(engine.book_multiplier(10) == 5, "book_multiplier(10) should be 5");
-    std::cout << "PASS: test_book_multiplier" << std::endl;
-}
-
 void test_apply_cap() {
     ForgeEngine engine;
     // raw < 39 → unchanged
@@ -466,7 +454,6 @@ int main() {
 
         // Sub-operations
         test_penalty_cost();
-        test_book_multiplier();
         test_apply_cap();
         test_estimate_forge_cost();
 

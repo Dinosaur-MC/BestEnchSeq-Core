@@ -28,24 +28,21 @@ class EnchReg {
     [[nodiscard]] size_t size() const noexcept { return _ench_infos.size(); }
     [[nodiscard]] size_t get_mask_size() const noexcept { return _mask_size; }
 
-    const Equipment &get_target_equip() const noexcept { return _target_equip; }
-    const RichEnchInfo &get_rich(int16_t id) const { return _registry.get(id); }
-    const EnchInfo &get(int16_t id) const { return _ench_infos.at(id); }
+    [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }
+    [[nodiscard]] const RichEnchInfo &get_rich(int16_t id) const { return _registry.get(id); }
+    [[nodiscard]] const EnchInfo &get(int16_t id) const { return _ench_infos.at(id); }
     /// Bounds-unchecked access — hot-path design.
     ///
     /// Intentionally uses `vector::operator[]` (no bounds check) unlike `get()`
-    /// which uses `.at()`.  All call paths in algorithm inner loops
-    /// (`get_multiplier`, `get_max_level`, `is_conflict`) receive IDs from
-    /// the pre-validated compact registry subset, so the check would be
-    /// redundant overhead.  Callers MUST ensure `0 <= id < size()`.
-    const EnchInfo &operator[](int16_t id) const noexcept { return _ench_infos[id]; }
-
-    uint16_t get_multiplier(int16_t id) const noexcept { return (*this)[id].mul; }
-    uint16_t get_max_level(int16_t id) const noexcept { return (*this)[id].max_lvl; }
+    /// which uses `.at()`.  All call paths in algorithm inner loops (`is_conflict`)
+    /// receive IDs from the pre-validated compact registry subset, so the check
+    /// would be redundant overhead.  Callers MUST ensure `0 <= id < size()`.
+    /// Use `reg[id].mul`, `.mul_b`, `.max_lvl` to access compact EnchInfo fields.
+    [[nodiscard]] const EnchInfo &operator[](int16_t id) const noexcept { return _ench_infos[id]; }
     [[nodiscard]] bool is_conflict(int16_t id1, int16_t id2) const noexcept { return _conflict_matrix[id1 * _ench_infos.size() + id2]; }
 
-    int32_t to_local_id(int32_t global_id) const { return _registry.to_local_id(global_id); }
-    const EnchantmentRegistry& get_registry() const { return _registry; }
+    [[nodiscard]] int32_t to_local_id(int32_t global_id) const { return _registry.to_local_id(global_id); }
+    [[nodiscard]] const EnchantmentRegistry& get_registry() const { return _registry; }
 };
 
 } // namespace compact

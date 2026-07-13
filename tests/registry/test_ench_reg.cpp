@@ -55,7 +55,7 @@ void test_safe_get_bounds() {
     // Out-of-range access via .at() should throw
     bool threw = false;
     try {
-        reg.get(static_cast<int16_t>(reg.size()));
+        (void)reg.get(static_cast<int16_t>(reg.size()));
     } catch (const std::out_of_range&) {
         threw = true;
     }
@@ -64,7 +64,7 @@ void test_safe_get_bounds() {
     // Negative id via .at() should throw
     threw = false;
     try {
-        reg.get(static_cast<int16_t>(-1));
+        (void)reg.get(static_cast<int16_t>(-1));
     } catch (const std::out_of_range&) {
         threw = true;
     }
@@ -106,12 +106,12 @@ void test_multiplier_and_max_level() {
     reg.init(registries::enchants(), sword);
 
     // sharpness: mult=1, max_lvl=5
-    expect(reg.get_multiplier(0) == 1, "multiplier: sharpness should be 1");
-    expect(reg.get_max_level(0) == 5, "max_level: sharpness should be 5");
+    expect(reg[0].mul == 1, "multiplier: sharpness should be 1");
+    expect(reg[0].max_lvl == 5, "max_level: sharpness should be 5");
 
     // knockback: mult=2, max_lvl=2
-    expect(reg.get_multiplier(1) == 2, "multiplier: knockback should be 2");
-    expect(reg.get_max_level(1) == 2, "max_level: knockback should be 2");
+    expect(reg[1].mul == 2, "multiplier: knockback should be 2");
+    expect(reg[1].max_lvl == 2, "max_level: knockback should be 2");
 
     std::cout << "PASS: test_multiplier_and_max_level" << std::endl;
 }

@@ -51,7 +51,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 
     // Heuristic pruning
     int32_t h_val = Heuristic::compute(ids, _pool, *_ench_reg, _target,
-                                        _book_mult, _h_buf, _h_dirty);
+                                        _h_buf, _h_dirty);
     if (g + h_val >= best_cost) {
         ctx.incr_nodes_pruned();
         return;
