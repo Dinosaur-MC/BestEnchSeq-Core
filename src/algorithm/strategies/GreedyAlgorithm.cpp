@@ -1,5 +1,6 @@
 #include "GreedyAlgorithm.h"
 #include "../ExecutionContext.h"
+#include "../Utils.h"
 #include <chrono>
 #include <algorithm>
 
@@ -34,7 +35,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
         ctx.wait_if_paused();
 
         // Target already met — stop early
-        if (_meets_target(mutable_items[0]))
+        if (meets_target(mutable_items[0], _target))
             break;
 
         auto& target_item = mutable_items[0];
@@ -62,11 +63,11 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
         step_index++;
 
         // Check again after forge
-        if (_meets_target(mutable_items[0]))
+        if (meets_target(mutable_items[0], _target))
             break;
     }
 
-    bool goal_achieved = _meets_target(mutable_items[0]);
+    bool goal_achieved = meets_target(mutable_items[0], _target);
     _diag.label = "greedy";
     _diag.steps_forged = goal_achieved ? compact_steps.size() : 0;
     _diag.status = goal_achieved ? "Complete" : "CompleteNoSolution";
@@ -118,11 +119,3 @@ bool GreedyAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
     return false;
 }
 
-bool GreedyAlgorithm::_meets_target(const compact::Item& equipment) const {
-    for (const auto& t : _target) {
-        auto it = equipment.enchs.find(t.id);
-        if (it == equipment.enchs.end() || it->level < t.level)
-            return false;
-    }
-    return true;
-}

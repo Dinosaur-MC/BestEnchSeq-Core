@@ -59,7 +59,6 @@ private:
     void _dfs_iterative(ExecutionContext& ctx);
     std::vector<ForgePair> _collect_pairs(const std::vector<compact::Item>& items) const;
 
-    bool _meets_target(const compact::Item& equipment) const;
     int32_t _heuristic(const std::vector<compact::Item>& items) const;
     int32_t _greedy_bound(const std::vector<compact::Item>& items,
                            const compact::EnchReg& reg) const;

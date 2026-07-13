@@ -1,5 +1,6 @@
 #include "DFSAlgorithm.h"
 #include "../ExecutionContext.h"
+#include "../Utils.h"
 #include "algorithm/components/Heuristic.h"
 #include <algorithm>
 #include <cstdint>
@@ -73,15 +74,6 @@ std::vector<DFSAlgorithm::ForgePair> DFSAlgorithm::_collect_pairs(
 }
 
 // ─── Hot-path helpers ──────────────────────────────────────────────────────
-
-bool DFSAlgorithm::_meets_target(const Item& equipment) const {
-    for (const auto& t : _target) {
-        auto it = equipment.enchs.find(t.id);
-        if (it == equipment.enchs.end() || it->level < t.level)
-            return false;
-    }
-    return true;
-}
 
 int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
     return Heuristic::compute(items, *_ench_reg, _target,
@@ -160,7 +152,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             _visited_best[_stack[frame_idx].items] = _stack[frame_idx].cost_so_far;
         }
 
-        if (_meets_target(_stack[frame_idx].items[0])) {
+        if (meets_target(_stack[frame_idx].items[0], _target)) {
             ++_solutions_found;
             ctx.report_compact_solution(std::move(_current_steps));
 
