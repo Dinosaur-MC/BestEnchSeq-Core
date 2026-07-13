@@ -1,36 +1,35 @@
 #pragma once
-#include "algorithm/components/ItemPool.h"
 #include "registries/CompactedRegistries.h"
+#include "types/CompactedTypes.h"
 #include <cstdint>
 #include <vector>
 
-/// Admissible heuristic for enchanting path search.
+/// Admissible heuristic for direct `vector<Item>` states (no ItemPool).
 ///
 /// Computes a lower bound on remaining cost: for each missing target
 /// enchantment level, adds (missing_level * book_multiplier). Ignores
 /// penalties, conflicts, and cost caps — always ≤ real cost.
 ///
 /// Caller provides scratch buffers to avoid per-call heap allocation.
-namespace Heuristic {
+namespace HeuristicBasic {
 
 inline int32_t compute(
-    const std::vector<ItemPool::ItemID>& ids,
-    const ItemPool& pool,
+    const std::vector<compact::Item>& items,
     const compact::EnchReg& reg,
     const std::vector<compact::Ench>& target,
-    std::vector<int16_t>& buf,     // reusable scratch; resized if needed
-    std::vector<int16_t>& dirty)   // reusable dirty-id tracker
+    std::vector<int16_t>& buf,
+    std::vector<int16_t>& dirty)
 {
     int32_t h = 0;
-    if (ids.empty()) return h;
+    if (items.empty()) return h;
 
     if (buf.size() < reg.size())
         buf.assign(reg.size(), 0);
     dirty.clear();
 
-    for (auto id : ids) {
-        for (const auto& e : pool[id].enchs) {
-            if (e.id < 0) continue;  // safety: guard against corrupted IDs
+    for (const auto& item : items) {
+        for (const auto& e : item.enchs) {
+            if (e.id < 0) continue;
             if (e.level > buf[e.id]) {
                 if (buf[e.id] == 0)
                     dirty.push_back(e.id);
@@ -54,4 +53,4 @@ inline int32_t compute(
     return h;
 }
 
-} // namespace Heuristic
+} // namespace HeuristicBasic

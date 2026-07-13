@@ -1,7 +1,7 @@
 #include "DFSAlgorithm.h"
 #include "../ExecutionContext.h"
 #include "../Utils.h"
-#include "algorithm/components/Heuristic.h"
+#include "algorithm/components/HeuristicBasic.h"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>
@@ -76,7 +76,7 @@ std::vector<DFSAlgorithm::ForgePair> DFSAlgorithm::_collect_pairs(
 // ─── Hot-path helpers ──────────────────────────────────────────────────────
 
 int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
-    return Heuristic::compute(items, *_ench_reg, _target,
+    return HeuristicBasic::compute(items, *_ench_reg, _target,
         _h_buf, _h_dirty);
 }
 
