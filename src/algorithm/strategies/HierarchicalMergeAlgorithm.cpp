@@ -114,7 +114,7 @@ void HierarchicalMergeAlgorithm::execute(
     // for same-level books: 3→(3+3=4)→(4+3=4)→... never reaches level 5.
     // Pairwise: same-enchant + same-level books are paired, producing the
     // next level, then re-paired in subsequent passes.
-    if (books.size() > 7) {
+    if (books.size() > kDedupThreshold) {
         for (int pass = 0; pass < 4 && books.size() > 1; ++pass) {
             // Sort by (enchant_id, level) so that same-enchant/same-level
             // books are adjacent for pairing.

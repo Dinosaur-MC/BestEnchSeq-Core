@@ -9,6 +9,10 @@
 
 class HierarchicalMergeAlgorithm : public IAlgorithm {
 public:
+    /// When book count exceeds this threshold, enable pairwise dedup pass.
+    /// Tuned empirically — too low triggers overhead for small inputs.
+    static constexpr size_t kDedupThreshold = 7;
+
     explicit HierarchicalMergeAlgorithm(ForgeConfig cfg = {}) noexcept
         : _forge_engine(std::move(cfg)) {}
 
