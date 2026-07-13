@@ -1,3 +1,4 @@
+#include "parsers/ParserUtilsDomain.hpp"
 #include "utils/ParserUtils.hpp"
 #include "io/CsvIO.h"
 #include "framework/test_utils.h"

@@ -3,7 +3,6 @@
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
-#include "utils/ParserUtils.hpp"
 #include "adapters/RegistryResolver.h"
 #include "registries/TagResolver.hpp"
 #include "registries/EnchantmentRegistry.h"
