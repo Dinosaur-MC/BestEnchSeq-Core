@@ -28,7 +28,12 @@ struct Ench {
 
 using EnchCollection = std::vector<Ench>;
 
-/// Compact set of Ench stored as sorted vector<Ench>.
+/// Compact set of Ench — sorted vector<Ench> by default.
+///
+/// When BESQ_USE_ENCHSET_BITMAP is defined, uses a uint64_t bitmask for
+/// O(1) contains() and a parallel sorted vector for iteration/lookup.
+/// The bitmask eliminates 12M+ small heap allocations in search hot paths
+/// (callgrind hotspot #10: vector<Ench>::_M_allocate).
 ///
 /// Invariant: elements are always sorted by id (ascending). This makes
 /// comparison, hashing, and binary-search lookup O(N) or O(log N) with
@@ -49,15 +54,15 @@ class EnchSet {
     // ── Iterators (inline) ──
     /// Mutable iterators — modifying element ids breaks the sorted invariant.
     /// Call sort() to restore after external mutation.
-    iterator begin() noexcept { return _enchs.begin(); }
-    iterator end() noexcept { return _enchs.end(); }
-    const_iterator begin() const noexcept { return _enchs.begin(); }
-    const_iterator end() const noexcept { return _enchs.end(); }
+    iterator begin() noexcept { return _levels.begin(); }
+    iterator end() noexcept { return _levels.end(); }
+    const_iterator begin() const noexcept { return _levels.begin(); }
+    const_iterator end() const noexcept { return _levels.end(); }
 
     // ── Capacity (inline) ──
-    size_t size() const noexcept { return _enchs.size(); }
-    [[nodiscard]] bool empty() const noexcept { return _enchs.empty(); }
-    void reserve(size_t n) { _enchs.reserve(n); }
+    size_t size() const noexcept { return _levels.size(); }
+    [[nodiscard]] bool empty() const noexcept { return _levels.empty(); }
+    void reserve(size_t n) { _levels.reserve(n); }
 
     // ── Lookup ──
     [[nodiscard]] iterator find(int16_t id) noexcept;
@@ -66,7 +71,12 @@ class EnchSet {
 
     // ── Modifiers ──
     void insert(const Ench &ench);
-    void clear() { _enchs.clear(); }
+    void clear() noexcept {
+        _levels.clear();
+#ifdef BESQ_USE_ENCHSET_BITMAP
+        _present.clear();
+#endif
+    }
 
     /// Re-sort to restore the sorted-by-id invariant after external mutation
     /// through mutable iterators.
@@ -74,8 +84,8 @@ class EnchSet {
 
     // ── Hash (inline, avoids std::hash<Ench> before its specialization) ──
     [[nodiscard]] size_t hash() const noexcept {
-        size_t h = _enchs.size();
-        for (const auto &e : _enchs) {
+        size_t h = _levels.size();
+        for (const auto &e : _levels) {
             const size_t ench_hash = static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);
             hash_combine(h, ench_hash);
         }
@@ -83,11 +93,25 @@ class EnchSet {
     }
 
     // ── Comparison (inline) ──
-    bool operator==(const EnchSet &o) const noexcept { return _enchs == o._enchs; }
-    bool operator!=(const EnchSet &o) const noexcept { return _enchs != o._enchs; }
+    bool operator==(const EnchSet &o) const noexcept {
+#ifdef BESQ_USE_ENCHSET_BITMAP
+        if (_present != o._present) return false;
+#endif
+        return _levels == o._levels;
+    }
+    bool operator!=(const EnchSet &o) const noexcept { return !(*this == o); }
 
   private:
-    std::vector<Ench> _enchs;
+    std::vector<Ench> _levels;
+#ifdef BESQ_USE_ENCHSET_BITMAP
+    std::vector<uint64_t> _present;
+
+    void _grow_for(int16_t id) {
+        auto needed = static_cast<size_t>(id) / 64 + 1;
+        if (needed > _present.size())
+            _present.resize(needed, 0);
+    }
+#endif
 };
 
 enum class ItemType : uint8_t {
