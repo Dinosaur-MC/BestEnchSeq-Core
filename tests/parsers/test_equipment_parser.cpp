@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "adapters/EnchSerializer.h"
 #include "parsers/EquipmentParser.h"
-#include "utils/TagResolver.hpp"
+#include "registries/TagResolver.hpp"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/RegistryAccess.h"
 #include <iostream>

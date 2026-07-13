@@ -15,7 +15,7 @@
 #include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
 #include "adapters/RegistryResolver.h"
-#include "utils/TagResolver.hpp"
+#include "registries/TagResolver.hpp"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
