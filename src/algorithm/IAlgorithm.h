@@ -1,19 +1,12 @@
 #pragma once
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
+#include "config/SearchConfig.h"
 #include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
-
-// ─── Search configuration ─────────────────────────────────────────
-struct SearchConfig {
-    int32_t max_solutions = 0;
-    int32_t max_depth = 0;
-    int32_t memory_mb = 0;
-    std::chrono::milliseconds max_search_time{0};
-};
 
 // ─── Algorithm input ───
 struct AlgorithmInput {

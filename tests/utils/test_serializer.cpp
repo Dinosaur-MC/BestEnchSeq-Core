@@ -4,7 +4,7 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 
 namespace {
 

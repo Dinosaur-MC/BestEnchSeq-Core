@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "registries/EnchantmentRegistry.h"
 #include "types/EnchInfo.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 
 #include <stdexcept>
 

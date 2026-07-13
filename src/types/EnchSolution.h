@@ -1,5 +1,5 @@
 #pragma once
-#include "ForgeConfig.h"
+#include "config/ForgeConfig.h"
 #include "ItemStack.h"
 
 struct EnchSolution {

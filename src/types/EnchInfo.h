@@ -3,7 +3,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 
 struct EnchInfo {
     std::string name_id;

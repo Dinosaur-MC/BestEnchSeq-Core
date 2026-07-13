@@ -1,7 +1,7 @@
 #pragma once
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 #include <cstdint>
 #include <utility>
 

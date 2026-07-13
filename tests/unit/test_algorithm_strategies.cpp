@@ -9,7 +9,7 @@
 #include "algorithm/strategies/AStarAlgorithm.h"
 #include "algorithm/strategies/DynamicPenaltyBalancingAlgorithm.h"
 #include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 #include <memory>
 #include <vector>
 

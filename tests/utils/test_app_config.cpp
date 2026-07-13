@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "types/AppConfig.h"
+#include "config/AppConfig.h"
 #include "utils/EnvUtil.hpp"
 
 #include <cstdlib>

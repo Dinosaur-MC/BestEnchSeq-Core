@@ -4,7 +4,7 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 #include "registries/CompactedRegistries.h"
 #include "types/Equipment.h"
 #include "types/CompactedTypes.h"

@@ -11,7 +11,7 @@
 
 #include "io/json.h"
 #include "log/log.hpp"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 
 namespace ParserUtils {
 

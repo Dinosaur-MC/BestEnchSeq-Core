@@ -10,7 +10,7 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 #include "framework/test_utils.h"
 
 static auto& test_ench_reg = registries::enchants();

@@ -7,7 +7,7 @@
 
 #include "adapters/CompactAdapter.h"
 #include "cli.h"
-#include "types/AppConfig.h"
+#include "config/AppConfig.h"
 #include "parsers/EnchInfoParser.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "log/log.hpp"

@@ -1,6 +1,7 @@
 #pragma once
 #include "../IAlgorithm.h"
 #include "../forge/ForgeEngine.h"
+#include "config/SearchConfig.h"
 #include "algorithm/components/AlgorithmDiagnostics.h"
 #include "registries/CompactedRegistries.h"
 #include <chrono>

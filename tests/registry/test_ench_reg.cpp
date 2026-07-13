@@ -3,7 +3,7 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
-#include "types/ForgeConfig.h"
+#include "config/ForgeConfig.h"
 #include <stdexcept>
 
 namespace {

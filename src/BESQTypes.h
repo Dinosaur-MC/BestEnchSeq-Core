@@ -6,5 +6,5 @@
 #include "types/EnchSolution.h"      // IWYU pragma: export
 #include "types/Equipment.h"         // IWYU pragma: export
 #include "types/EquipmentCategory.h" // IWYU pragma: export
-#include "types/ForgeConfig.h"       // IWYU pragma: export
+#include "config/ForgeConfig.h"       // IWYU pragma: export
 #include "types/ItemStack.h"         // IWYU pragma: export
