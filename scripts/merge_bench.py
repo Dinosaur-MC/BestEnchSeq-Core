@@ -6,12 +6,13 @@
 并在多次运行间取最优值（L 越小越好，L 相同时时间越短越好，
 无效值如 no solution / SKIP 不参与比较）。
 最终结果写入输出文件。若输出文件已存在且内容将发生变化，
-会先将旧文件备份为 <输出文件>.bak。
+会先将旧文件备份为 <输出文件>.bak，并在控制台打印差异。
 """
 
 import sys
 import os
 import re
+import difflib
 from collections import OrderedDict
 
 
@@ -256,7 +257,26 @@ def generate_output(header, latest_time, datasets, dataset_order, algo_orders):
 
 
 # ------------------------------------------------------------
-# 写入输出文件（带备份）
+# 打印 unified diff
+# ------------------------------------------------------------
+def print_diff(old_content, new_content, old_label="旧文件", new_label="新文件"):
+    """以 unified diff 格式打印新旧内容差异"""
+    old_lines = old_content.splitlines(keepends=True)
+    new_lines = new_content.splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        old_lines, new_lines, fromfile=old_label, tofile=new_label
+    )
+    diff_text = "".join(diff)
+    if diff_text:
+        print("--- 内容差异 ---")
+        print(diff_text)
+        print("----------------")
+    else:
+        print("内容完全相同（无差异）。")
+
+
+# ------------------------------------------------------------
+# 写入输出文件（带备份和 diff 打印）
 # ------------------------------------------------------------
 def write_output(path, content):
     if os.path.exists(path):
@@ -265,6 +285,9 @@ def write_output(path, content):
         if old_content == content:
             print("内容无变化，跳过写入。")
             return
+        # 打印差异
+        print_diff(old_content, content)
+        # 备份旧文件
         backup = path + ".bak"
         if os.path.exists(backup):
             os.remove(backup)
@@ -312,7 +335,7 @@ def main():
         HEADER, latest_time, merged_datasets, merged_order, merged_algo
     )
 
-    # 写入
+    # 写入（内部会自动对比并打印 diff）
     write_output(output_path, output_content)
 
 
