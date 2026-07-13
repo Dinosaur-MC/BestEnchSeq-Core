@@ -183,7 +183,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        besq::log::info("Starting algorithm: " + config.algorithm);
+        LOG_INFO("Starting algorithm: %s", config.algorithm.c_str());
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
         // ── Verbose diagnostics ────────────────────────────────────────────
         if (config.verbose || app_cfg.verbose) {
             auto diag = executor.get_diagnostics(0);
-            besq::log::printf(LogLevel::Info,
+            LOG_INFO(
                 "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
                 diag.nodes_visited, diag.nodes_pruned, diag.steps_forged,
                 diag.progress * 100.0);
