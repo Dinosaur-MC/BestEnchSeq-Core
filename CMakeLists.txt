@@ -17,6 +17,11 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
 
+# Shorten __FILE__ to project-relative paths (e.g. "src/parsers/InputParser.cpp")
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    add_compile_options(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
+endif()
+
 # Executable Output Path
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 

@@ -19,7 +19,7 @@ static std::string now_str() {
     localtime_r(&tt, &tm);
 #endif
     char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", &tm);
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
     return buf;
 }
 

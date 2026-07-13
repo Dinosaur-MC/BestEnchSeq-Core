@@ -58,7 +58,13 @@ inline void printf(LogLevel level, const char* fmt, Args&&... args) {
 // String-literal concatenation embeds the prefix at compile time:
 //   "[file:line] fmt" → one string, one snprintf call.
 
-#define BESQ_LOG_STR(x)  #x
+// Two-level stringify so __LINE__ expands before being stringified.
+// (A single-level #x would stringify the token "__LINE__" literally.)
+#define BESQ_LOG_STR2(x)  #x
+#define BESQ_LOG_STR(x)   BESQ_LOG_STR2(x)
+
+// With -fmacro-prefix-map=src/=, __FILE__ gives short paths like
+// "parsers/InputParser.cpp" instead of absolute paths.
 #define BESQ_LOG_LOC     "[" __FILE__ ":" BESQ_LOG_STR(__LINE__) "] "
 
 /// @brief  Log at Info level with source-location prefix.
