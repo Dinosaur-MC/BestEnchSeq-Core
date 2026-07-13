@@ -10,7 +10,7 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 - [ ] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
 - [x] Support third-party/custom enchantments by editing custom enchantment sheet
 - [x] Support third-party/custom equipments by editing custom equipment sheet
-- [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical
+- [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical, idastar
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Moddable forge engine via IForgeEngine virtual interface
 - [x] Input validation + EnchReg pruning via CompactAdapter::apply()
@@ -34,15 +34,6 @@ Alternatively, invoke directly from the build directory:
 ```bash
 ./build/bin/besq --target diamond_sword --wanted "sharpness=5,knockback=2"
 ```
-
-CMake options:
-
-```bash
-cmake -S . -B build -DENABLE_NETWORK=ON -DENABLE_API_SERVICE=OFF
-```
-
-- `ENABLE_NETWORK` defaults to `ON`.
-- `ENABLE_API_SERVICE` defaults to `OFF`.
 
 ### Running tests
 
@@ -82,48 +73,54 @@ src/
 │   ├── ForgeConfig.h            ← MCE enum class + ForgeConfig
 │   ├── CompactedTypes.h/.cpp    ← Compact types: Ench, EnchSet, Item, EnchStep (namespace compact)
 │   └── ...domain types          ← EnchInfo, Ench, EnchSet, ItemStack, EnchSolution (pure data)
+├── log/                         ← Global async Logger (singleton)
+│   ├── Logger.hpp/.cpp          ← Async logger (atomic::wait, zero-CPU idle)
+│   └── log.hpp                  ← Free-function wrappers + LOG_INFO / LOG_WARN macros
 ├── registries/
-│   ├── AlgorithmRegistry.h/.cpp ← Algorithm factory (singleton)
-│   ├── CompactedRegistries.h/.cpp ← EnchReg: compact registry with O(1) conflict matrix
-│   ├── EnchantmentRegistry.h/.cpp  ← Domain enchantment data with subset derivation
-│   └── EquipmentRegistry.h/.cpp
+│   ├── EnchantmentRegistry.h/.cpp  ← Full enchantment registry with subset derivation
+│   ├── EquipmentRegistry.h/.cpp
+│   ├── EquipmentCategoryRegistry.h/.cpp
+│   ├── AlgorithmRegistry.h/.cpp ← Algorithm factory
+│   ├── CompactedRegistries.h/.cpp ← EnchReg: compact subset with O(1) conflict matrix
+│   └── RegistryAccess.h         ← Meyer's singleton accessors
 ├── algorithm/                   ← Zero domain types
 │   ├── IAlgorithm.h             ← AlgorithmInput + AlgorithmOutput + IAlgorithm interface
-│   ├── AlgorithmExecutor.h/.cpp ← Async execution engine
-│   ├── ExecutionContext.h/.cpp  ← Cancel/pause/progress
+│   ├── AlgorithmExecutor.h/.cpp ← Async engine (thread lifecycle + observer dispatch)
+│   ├── ExecutionContext.h/.cpp  ← Cancel/pause/progress + accumulator
 │   ├── AlgorithmObserver.h      ← Streaming callbacks
+│   ├── components/              ← Algorithm building blocks
+│   │   ├── Heuristic.h          ← Admissible heuristic (scratch-buffer, no alloc)
+│   │   ├── StateHash.h          ← State hashing utilities
+│   │   ├── TTTable.h            ← Epoch-based IDA* transposition table
+│   │   ├── ItemPool.h           ← Hash-dedup item pool
+│   │   ├── AlgorithmDiagnostics.h/.cpp ← Per-algorithm exit diagnostics
+│   │   ├── AStarDiagnostics.h/.cpp     ← AStar-specific diagnostics
+│   │   └── AStarMemoryBudget.h/.cpp    ← AStar memory budget estimator
 │   ├── forge/
-│   │   ├── IForgeEngine.h       ← Virtual interface + ForgeConfig + default sub-ops
+│   │   ├── IForgeEngine.h       ← Virtual interface + default sub-ops
 │   │   └── ForgeEngine.h/.cpp   ← Vanilla implementation
 │   └── strategies/
 │       ├── GreedyAlgorithm.*    ← Fast approximate
 │       ├── DFSAlgorithm.*       ← Exact search (branch-and-bound)
 │       ├── AStarAlgorithm.*     ← Exact optimal (admissible heuristic)
-│       ├── DynamicPenaltyBalancing.* ← High-quality approx
-│       └── HierarchicalMergeStrategy.* ← Large-scale approx
-├── utils/
-│   ├── ExpCalculator.hpp        ← Level ↔ XP conversion (header-only)
-│   ├── SPSCQueue.hpp            ← Lock-free SPSC bounded queue
-│   ├── SPMCQueue.hpp            ← Lock-free SPMC bounded queue
-│   ├── BoundedMPMCQueue.hpp     ← Lock-free bounded MPMC queue (Vyukov algorithm)
-│   ├── SegmentedMPMCQueue.hpp   ← Lock-free unbounded MPMC queue (segmented blocks)
-│   └── Serializer.hpp           ← Binary serialization
-├── parser/                      ← CLI, JSON/CSV data parsing, output formatting
-├── io/                          ← JSON library, CSV primitives
-└── data/
-    ├── builtin/vanilla.json     ← Vanilla Minecraft enchantment data
-    └── examples/                ← Example inventory files
-```
-
-### Concurrency Primitives
-
-The project provides a family of lock-free queue implementations for high-performance concurrent data transfer between algorithm worker threads and I/O / observer threads:
-
-```
-src/utils/SPSCQueue.hpp          — SPSC lock-free bounded
-src/utils/SPMCQueue.hpp          — SPMC lock-free bounded
-src/utils/BoundedMPMCQueue.hpp   — MPMC lock-free bounded (Vyukov)
-src/utils/SegmentedMPMCQueue.hpp — MPMC lock-free unbounded (segmented blocks)
+│       ├── DynamicPenaltyBalancingAlgorithm.* ← High-quality approx
+│       ├── HierarchicalMergeAlgorithm.* ← Large-scale approx
+│       └── IDAStarAlgorithm.*   ← DFS + TTTable (memory-efficient exact)
+├── utils/                       ← Generic utilities, no domain/registry deps
+│   ├── ParserUtils.h/.cpp       ← String/JSON/file helpers
+│   ├── TagResolver.h/.cpp       ← Tag reference (#tag) resolution
+│   ├── EnvUtil.hpp              ← Env-var access (get_env<T>)
+│   ├── ExpCalculator.hpp        ← Level ↔ XP conversion
+│   ├── HashUtils.hpp            ← Hash utilities
+│   ├── FlatHashMap.hpp          ← Flat hash map for hot paths
+│   ├── Serializer.hpp           ← Binary serialization
+│   └── queue/                   ← Lock-free MPMC queue family
+│       ├── BoundedMPMCQueue.hpp  ← MPMC bounded (Vyukov)
+│       ├── SegmentedMPMCQueue.hpp ← MPMC unbounded
+│       ├── SPSCQueue.hpp        ← SPSC bounded
+│       └── SPMCQueue.hpp        ← SPMC bounded
+├── io/                          ← JSON library + CSV I/O
+└── data/builtin/vanilla.json    ← Vanilla Minecraft enchantment data
 ```
 
 See `docs/MPMCQueue.md` for the full design documentation.
