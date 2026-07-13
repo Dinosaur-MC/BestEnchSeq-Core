@@ -1,22 +1,9 @@
 #pragma once
+#include "types/LogTypes.h"
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
-#include <cstdint>
 #include <cstdio>
-#include <string>
 #include <thread>
-
-enum class LogLevel : uint8_t {
-    Debug,
-    Info,
-    Warn,
-    Error
-};
-
-struct LogEntry {
-    LogLevel level;
-    std::string message;
-};
 
 /// Async logger: messages pushed to a lock-free MPMC queue from any thread.
 /// Dedicated worker writes to logs/<timestamp>.log + latest.log.

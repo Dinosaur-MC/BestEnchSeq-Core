@@ -1,32 +1,8 @@
 #pragma once
-#include "types/CompactedTypes.h"
-#include "registries/CompactedRegistries.h"
-#include "config/ForgeConfig.h"
-#include "config/SearchConfig.h"
-#include <chrono>
+#include "types/AlgorithmTypes.h"
 #include <cstdint>
 #include <string>
 #include <vector>
-
-// ─── Algorithm input ───
-struct AlgorithmInput {
-    ForgeConfig config;              // forge configuration (platform, flags)
-    SearchConfig search;             // search configuration (solutions, depth, time)
-    compact::ItemCollection items;   // items[0] = equipment, rest = books
-    compact::EnchCollection target;  // desired final enchantments
-    compact::EnchReg ench_reg;       // compact registry (must be initialized)
-};
-
-// ─── Algorithm output (compact solutions) ───
-struct AlgorithmOutput {
-    std::string algorithm_name;
-    std::string algorithm_version;
-    std::chrono::system_clock::time_point created_at;
-    std::chrono::milliseconds computation_time{0};
-    std::vector<compact::EnchSolution> solutions;
-    compact::Item final_item;
-    bool is_valid = false;
-};
 
 class ExecutionContext;
 
