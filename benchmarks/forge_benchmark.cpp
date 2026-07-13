@@ -266,7 +266,6 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             std::cout << "no solution";
         } else {
             std::cout << std::right << std::setw(4) << r.cost << "L"
-                      << "  ≤" << std::setw(4) << tc.max_cost << "L"
                       << (r.ok ? "  ✅" : "  ⚠")
                       << "  " << std::setw(4) << r.ms << "ms";
         }
