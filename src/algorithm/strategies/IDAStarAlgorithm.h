@@ -36,6 +36,8 @@ private:
               int32_t& best_cost, ExecutionContext& ctx);
 
     bool _meets_target(const std::vector<ItemID>& ids) const;
+    int32_t _dfs_bound(std::vector<compact::Item> items, int32_t g,
+                       int32_t best_cost, int64_t& node_limit) const;
 
     ItemPool _pool;
     ForgeEngine _forge_engine;
