@@ -198,5 +198,5 @@ if [ $benchmark_check -eq 1 ]; then
     fi
     echo "Benchmark running in $build_type build with program args: $program_args" | tee "$benchmark_dir/benchmark.txt"
     "$build_dir/bin/forge_benchmark" $program_args 2>&1 | tee -a "$benchmark_dir/benchmark.txt"
-    python3 scripts/merge_bench.py "$benchmark_dir/benchmark.txt" "$benchmark_dir/best_benchmark.txt"
+    python3 scripts/merge_bench.py "$benchmark_dir/benchmark.txt" "$benchmark_dir/best_benchmark.txt" "$benchmark_dir/benchmark.txt.history.json"
 fi
