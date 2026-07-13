@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "utils/ObjectPool.h"
+#include "utils/ObjectPool.hpp"
 #include <string>
 #include <utility>
 #include <vector>

@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "utils/MemoryPool.h"
+#include "utils/MemoryPool.hpp"
 #include <cstdint>
 #include <set>
 #include <string>

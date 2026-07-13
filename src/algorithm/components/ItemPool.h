@@ -1,6 +1,6 @@
 #pragma once
 #include "types/CompactedTypes.h"
-#include "utils/MemoryPool.h"
+#include "utils/MemoryPool.hpp"
 #include <cstdint>
 #include <memory_resource>
 #include <unordered_map>

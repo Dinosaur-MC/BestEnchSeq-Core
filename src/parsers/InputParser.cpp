@@ -1,6 +1,6 @@
 #include "parsers/InputParser.h"
 #include "adapters/RegistryResolver.h"
-#include "utils/ParserUtils.h"
+#include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
 #include "io/json.h"
 #include "registries/EnchantmentRegistry.h"

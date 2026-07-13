@@ -1,16 +1,47 @@
-#include "utils/TagResolver.h"
-#include "utils/ParserUtils.h"
-#include "io/json.h"
+#pragma once
 
+#include <filesystem>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
+#include <vector>
 
-namespace {
+#include "io/json.h"
+#include "utils/ParserUtils.hpp"
+
+class TagResolver {
+  public:
+    // Load all tag files from a data pack directory.
+    // Scans data/<ns>/tags/enchantment/ and data/<ns>/tags/item/
+    void load_from(const std::filesystem::path &data_pack_dir);
+
+    // Resolve a reference to concrete IDs.
+    // If reference starts with '#', it is a tag that gets expanded.
+    // Otherwise, the reference is returned as-is (it is already a concrete ID).
+    std::unordered_set<std::string> resolve(const std::string &reference) const;
+    std::unordered_set<std::string> resolve(const std::vector<std::string> &references) const;
+
+    // Direct tag access. Returns nullptr if the tag does not exist.
+    const std::unordered_set<std::string> *get_tag(const std::string &ns, const std::string &name) const;
+
+    // Programmatically add a resolved tag (for inline JSON tags).
+    void add_tag(const std::string &key, const std::unordered_set<std::string> &values);
+
+    // Check if a reference looks like a tag (starts with '#').
+    static bool is_tag(const std::string &reference);
+
+  private:
+    std::unordered_map<std::string, std::unordered_set<std::string>> _tags;
+};
 
 // ---------------------------------------------------------------------------
 // Internal: recursively resolve a tag value, detecting cycles
 // ---------------------------------------------------------------------------
-std::unordered_set<std::string> resolve_raw_value(
+namespace {
+
+inline std::unordered_set<std::string> resolve_raw_value(
     const std::string &value,
     const std::unordered_map<std::string, std::vector<std::string>> &raw_tags,
     std::unordered_set<std::string> &visiting
@@ -55,7 +86,7 @@ std::unordered_set<std::string> resolve_raw_value(
 // ---------------------------------------------------------------------------
 // load_from
 // ---------------------------------------------------------------------------
-void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
+inline void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
     // NOTE: _tags is NOT cleared before loading. Tags from inline JSON and
     // from the filesystem are expected to merge. This allows multiple calls
     // to load_from to accumulate tags without invalidating previously loaded
@@ -181,7 +212,7 @@ void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
 // ---------------------------------------------------------------------------
 // resolve (single reference)
 // ---------------------------------------------------------------------------
-std::unordered_set<std::string> TagResolver::resolve(const std::string &reference) const {
+inline std::unordered_set<std::string> TagResolver::resolve(const std::string &reference) const {
     if (reference.empty()) {
         return {};
     }
@@ -201,7 +232,7 @@ std::unordered_set<std::string> TagResolver::resolve(const std::string &referenc
 // ---------------------------------------------------------------------------
 // resolve (multiple references) -- union of individual results
 // ---------------------------------------------------------------------------
-std::unordered_set<std::string> TagResolver::resolve(
+inline std::unordered_set<std::string> TagResolver::resolve(
     const std::vector<std::string> &references
 ) const {
     std::unordered_set<std::string> result;
@@ -215,7 +246,7 @@ std::unordered_set<std::string> TagResolver::resolve(
 // ---------------------------------------------------------------------------
 // get_tag
 // ---------------------------------------------------------------------------
-const std::unordered_set<std::string> *TagResolver::get_tag(
+inline const std::unordered_set<std::string> *TagResolver::get_tag(
     const std::string &ns, const std::string &name
 ) const {
     std::string key = ns + ":" + name;
@@ -229,13 +260,13 @@ const std::unordered_set<std::string> *TagResolver::get_tag(
 // ---------------------------------------------------------------------------
 // add_tag
 // ---------------------------------------------------------------------------
-void TagResolver::add_tag(const std::string &key, const std::unordered_set<std::string> &values) {
+inline void TagResolver::add_tag(const std::string &key, const std::unordered_set<std::string> &values) {
     _tags[key] = values;
 }
 
 // ---------------------------------------------------------------------------
 // is_tag (static)
 // ---------------------------------------------------------------------------
-bool TagResolver::is_tag(const std::string &reference) {
+inline bool TagResolver::is_tag(const std::string &reference) {
     return !reference.empty() && reference[0] == '#';
 }

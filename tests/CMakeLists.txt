@@ -28,9 +28,8 @@ set(REGISTRY_CORE_SRCS
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 
-# Parser utilities (ParserUtils + json + Logger for log/log.hpp dependency)
+# Parser utilities (json + Logger for log/log.hpp dependency)
 set(PARSER_UTIL_SRCS
-    ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
     ${PROJECT_ROOT}/src/log/Logger.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
 )
@@ -53,9 +52,6 @@ set(COMPACT_REG_SRCS
 
 # Equipment registry
 set(EQUIP_REG_SRCS ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp)
-
-# Memory pool (linked by any target that uses ItemPool)
-set(MEMORY_POOL_SRCS ${PROJECT_ROOT}/src/utils/MemoryPool.cpp)
 
 # ============================================================================
 # Existing tests
@@ -84,7 +80,6 @@ set_tests_properties(test_parser_utils PROPERTIES
 
 add_executable(test_tag_resolver
     utils/test_tag_resolver.cpp
-    ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
 )
 target_include_directories(test_tag_resolver PRIVATE ${TEST_INCLUDE})
@@ -97,7 +92,6 @@ add_executable(test_ench_info_parser
     parsers/test_ench_info_parser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
-    ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
@@ -176,9 +170,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
-    ${PROJECT_ROOT}/src/utils/TagResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
-    ${PROJECT_ROOT}/src/utils/ParserUtils.cpp
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
     # I/O layer
     ${PROJECT_ROOT}/src/io/json.cpp
@@ -197,7 +189,6 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
-    ${MEMORY_POOL_SRCS}
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -305,7 +296,6 @@ add_executable(test_algorithm_executor
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${MEMORY_POOL_SRCS}
 )
 target_include_directories(test_algorithm_executor PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_executor COMMAND test_algorithm_executor)
@@ -335,7 +325,6 @@ add_executable(test_algorithm_strategies
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${MEMORY_POOL_SRCS}
 )
 target_include_directories(test_algorithm_strategies PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_strategies COMMAND test_algorithm_strategies)
@@ -501,7 +490,6 @@ endif()
 
 add_executable(test_memory_pool
     utils/MemoryPoolTest.cpp
-    ${PROJECT_ROOT}/src/utils/MemoryPool.cpp
 )
 target_include_directories(test_memory_pool PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_memory_pool COMMAND test_memory_pool)

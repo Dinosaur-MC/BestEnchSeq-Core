@@ -1,17 +1,22 @@
-#include "utils/ParserUtils.h"
-#include "log/log.hpp"
-
+#pragma once
 #include <cctype>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "io/json.h"
+#include "log/log.hpp"
+#include "types/ForgeConfig.h"
 
 namespace ParserUtils {
 
-// ---------------------------------------------------------------------------
 // Platform string parsing
-// ---------------------------------------------------------------------------
-MCE parse_platform(const std::string &str) {
+inline MCE parse_platform(const std::string &str) {
     std::string lower;
     lower.reserve(str.size());
     for (char c : str) {
@@ -30,10 +35,8 @@ MCE parse_platform(const std::string &str) {
     return MCE::Java;
 }
 
-// ---------------------------------------------------------------------------
 // Platform enum to string
-// ---------------------------------------------------------------------------
-std::string platform_to_string(MCE p) {
+inline std::string platform_to_string(MCE p) {
     switch (p) {
     case MCE::Java:
         return "java";
@@ -47,11 +50,8 @@ std::string platform_to_string(MCE p) {
     return "java";
 }
 
-// ---------------------------------------------------------------------------
 // JSON field extraction helpers
-// ---------------------------------------------------------------------------
-
-std::string get_json_string(const Json::Object &obj, const std::string &key) {
+inline std::string get_json_string(const Json::Object &obj, const std::string &key) {
     auto it = obj.find(key);
     if (it == obj.end()) {
         return {};
@@ -63,7 +63,7 @@ std::string get_json_string(const Json::Object &obj, const std::string &key) {
     return {};
 }
 
-int32_t get_json_int(const Json::Object &obj, const std::string &key) {
+inline int32_t get_json_int(const Json::Object &obj, const std::string &key) {
     auto it = obj.find(key);
     if (it == obj.end()) {
         return 0;
@@ -90,7 +90,7 @@ int32_t get_json_int(const Json::Object &obj, const std::string &key) {
     return 0;
 }
 
-bool get_json_bool(const Json::Object &obj, const std::string &key) {
+inline bool get_json_bool(const Json::Object &obj, const std::string &key) {
     auto it = obj.find(key);
     if (it == obj.end()) {
         return false;
@@ -102,7 +102,7 @@ bool get_json_bool(const Json::Object &obj, const std::string &key) {
     return false;
 }
 
-std::vector<std::string> get_json_string_array(const Json::Object &obj, const std::string &key) {
+inline std::vector<std::string> get_json_string_array(const Json::Object &obj, const std::string &key) {
     std::vector<std::string> result;
     auto it = obj.find(key);
     if (it == obj.end()) {
@@ -123,10 +123,8 @@ std::vector<std::string> get_json_string_array(const Json::Object &obj, const st
     return result;
 }
 
-// ---------------------------------------------------------------------------
 // String splitting
-// ---------------------------------------------------------------------------
-std::vector<std::string> split_string(const std::string &str, char delimiter) {
+inline std::vector<std::string> split_string(const std::string &str, char delimiter) {
     std::vector<std::string> tokens;
     if (str.empty()) {
         return tokens;
@@ -148,50 +146,16 @@ std::vector<std::string> split_string(const std::string &str, char delimiter) {
     return tokens;
 }
 
-// ---------------------------------------------------------------------------
+enum class DataFormat {
+    Unknown,
+    NativeJSON,
+    NativeCSV,
+    MCOfficial,
+};
+
 // File format detection
-// ---------------------------------------------------------------------------
 
-DataFormat detect_format(const std::filesystem::path &path) {
-    if (path.empty()) {
-        return DataFormat::Unknown;
-    }
-
-    if (std::filesystem::is_directory(path)) {
-        if (is_mc_official_structure(path)) {
-            return DataFormat::MCOfficial;
-        }
-        return DataFormat::Unknown;
-    }
-
-    // Normalise extension to lowercase
-    std::string ext = path.extension().string();
-    for (auto &c : ext) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-
-    if (ext == ".json") {
-        return DataFormat::NativeJSON;
-    }
-    if (ext == ".csv") {
-        return DataFormat::NativeCSV;
-    }
-
-    return DataFormat::Unknown;
-}
-
-DataFormat detect_mc_official(const std::filesystem::path &directory) {
-    if (is_mc_official_structure(directory)) {
-        return DataFormat::MCOfficial;
-    }
-    return DataFormat::Unknown;
-}
-
-// ---------------------------------------------------------------------------
-// MC official structure detection
-// ---------------------------------------------------------------------------
-
-bool is_mc_official_structure(const std::filesystem::path &dir) {
+inline bool is_mc_official_structure(const std::filesystem::path &dir) {
     if (!std::filesystem::is_directory(dir)) {
         return false;
     }
@@ -221,11 +185,43 @@ bool is_mc_official_structure(const std::filesystem::path &dir) {
     return false;
 }
 
-// ---------------------------------------------------------------------------
-// File I/O
-// ---------------------------------------------------------------------------
+inline DataFormat detect_format(const std::filesystem::path &path) {
+    if (path.empty()) {
+        return DataFormat::Unknown;
+    }
 
-std::string read_file(const std::filesystem::path &path) {
+    if (std::filesystem::is_directory(path)) {
+        if (is_mc_official_structure(path)) {
+            return DataFormat::MCOfficial;
+        }
+        return DataFormat::Unknown;
+    }
+
+    // Normalise extension to lowercase
+    std::string ext = path.extension().string();
+    for (auto &c : ext) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    if (ext == ".json") {
+        return DataFormat::NativeJSON;
+    }
+    if (ext == ".csv") {
+        return DataFormat::NativeCSV;
+    }
+
+    return DataFormat::Unknown;
+}
+
+inline DataFormat detect_mc_official(const std::filesystem::path &directory) {
+    if (is_mc_official_structure(directory)) {
+        return DataFormat::MCOfficial;
+    }
+    return DataFormat::Unknown;
+}
+
+// File I/O
+inline std::string read_file(const std::filesystem::path &path) {
     if (!std::filesystem::exists(path)) {
         throw std::runtime_error("File not found: " + path.string());
     }
@@ -240,7 +236,7 @@ std::string read_file(const std::filesystem::path &path) {
     return buffer.str();
 }
 
-std::vector<std::filesystem::path> find_files(
+inline std::vector<std::filesystem::path> find_files(
     const std::filesystem::path &dir,
     const std::string &extension
 ) {
@@ -267,11 +263,8 @@ std::vector<std::filesystem::path> find_files(
     return result;
 }
 
-// ---------------------------------------------------------------------------
 // Namespace helpers
-// ---------------------------------------------------------------------------
-
-std::pair<std::string, std::string> split_namespace(const std::string &qualified_id) {
+inline std::pair<std::string, std::string> split_namespace(const std::string &qualified_id) {
     size_t colon_pos = qualified_id.find(':');
     if (colon_pos == std::string::npos) {
         return {std::string(), qualified_id};
@@ -282,7 +275,7 @@ std::pair<std::string, std::string> split_namespace(const std::string &qualified
     };
 }
 
-std::string qualify_id(const std::string &id, const std::string &default_ns) {
+inline std::string qualify_id(const std::string &id, const std::string &default_ns = "minecraft") {
     if (id.find(':') != std::string::npos) {
         return id;
     }
