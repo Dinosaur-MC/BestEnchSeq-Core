@@ -22,6 +22,15 @@ public:
 
     virtual bool is_forgeable(const compact::Item& a, const compact::Item& b) const noexcept = 0;
 
+    /// Pure forge: apply sacrifice into target without computing costs.
+    /// Modifies target state (enchants, ppn, durability) but skips all cost
+    /// arithmetic.  Default implementation calls forge_into() and discards
+    /// the cost; subclasses may override with a cost-free path for speed.
+    virtual void pure_forge_into(compact::Item& target, const compact::Item& sacrifice,
+                                  const compact::EnchReg& reg) const {
+        forge_into(target, sacrifice, reg);
+    }
+
     // ── Forge sub-operations (default vanilla implementations) ────────────
     virtual int32_t penalty_cost(int8_t ppn) const noexcept {
         // Cap at 30 to avoid UB from shifting into the sign bit (1<<31).

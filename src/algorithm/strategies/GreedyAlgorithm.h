@@ -16,6 +16,7 @@ public:
     void configure(const ForgeConfig &cfg) noexcept override { _forge_engine.set_config(cfg); }
 
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
+    bool simulate(const AlgorithmInput& input) const noexcept override;
 
 private:
     struct BookCost {

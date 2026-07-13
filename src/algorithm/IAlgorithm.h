@@ -47,6 +47,12 @@ class IAlgorithm {
 
     virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
 
+    /// Quick feasibility check: returns true if the target is reachable
+    /// from the given items without computing exact costs.
+    /// Default returns true (pessimistic).  Strategies that implement this
+    /// provide fast pre-filtering for inventory mode.
+    virtual bool simulate(const AlgorithmInput &input) const noexcept { (void)input; return true; }
+
     /// Apply forge configuration before execute().
     /// Called by AlgorithmExecutor::start() with AlgorithmInput::config.
     /// Default no-op; strategies override to forward to their ForgeEngine.

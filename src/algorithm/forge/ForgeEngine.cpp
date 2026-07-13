@@ -100,6 +100,44 @@ int32_t ForgeEngine::forge_into(compact::Item &target, const compact::Item &sacr
     return apply_cap(cost);
 }
 
+// ─── Pure forge (cost-free, for simulate()) ──────────────────────────────────
+
+void ForgeEngine::pure_forge_into(compact::Item &target, const compact::Item &sacrifice,
+                                   const compact::EnchReg &reg) const noexcept {
+    // Repair: equip + equip
+    if (target.type == compact::ItemType::Equip && sacrifice.type == compact::ItemType::Equip && !_config.ignore_repair_cost) {
+        auto max_dur = reg.get_target_equip().max_durability;
+        if (target.dur < max_dur) {
+            target.dur = std::min(target.dur + sacrifice.dur + max_dur * 12 / 100, max_dur);
+        }
+    }
+
+    // Enchantment merging (no cost arithmetic)
+    for (const auto &se : sacrifice.enchs) {
+        bool conflict = false;
+        for (const auto &te : target.enchs) {
+            if (reg.is_conflict(te.id, se.id)) {
+                conflict = true;
+                break;
+            }
+        }
+        if (conflict) continue;
+
+        auto it = target.enchs.find(se.id);
+        if (it != target.enchs.end()) {
+            if (it->level == se.level)
+                it->level = static_cast<int16_t>(std::min<int32_t>(it->level + 1, reg[se.id].max_lvl));
+            else
+                it->level = static_cast<int16_t>(std::max<int32_t>(it->level, se.level));
+        } else {
+            target.enchs.insert(se);
+        }
+    }
+
+    // PPN update
+    target.ppn = static_cast<uint8_t>(1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
+}
+
 // ─── Forge (non-mutating) ───────────────────────────────────────────────────
 
 std::pair<compact::Item, int32_t> ForgeEngine::forge(const compact::Item &target, const compact::Item &sacrifice,

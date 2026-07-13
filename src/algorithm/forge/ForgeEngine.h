@@ -47,6 +47,10 @@ public:
     /// Check whether (a → b) is a valid forge operation per §8.
     bool is_forgeable(const compact::Item& a, const compact::Item& b) const noexcept override;
 
+    /// Pure forge: cost-free state mutation for simulate().
+    void pure_forge_into(compact::Item& target, const compact::Item& sacrifice,
+                          const compact::EnchReg& reg) const noexcept override;
+
     // ── IForgeEngine sub-operations ───────────────────────────────────────────
 
     int32_t penalty_cost(int8_t ppn) const noexcept override;

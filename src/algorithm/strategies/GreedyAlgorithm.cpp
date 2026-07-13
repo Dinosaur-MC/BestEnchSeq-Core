@@ -80,6 +80,44 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 
+bool GreedyAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    const auto& target = input.target;
+    if (items.empty()) return false;
+
+    // Quick check: target already met?
+    {
+        bool met = true;
+        for (const auto& t : target) {
+            auto it = items[0].enchs.find(t.id);
+            if (it == items[0].enchs.end() || it->level < t.level) { met = false; break; }
+        }
+        if (met) return true;
+    }
+
+    // Greedy pure-forge: copy items and try each sacrifice sequentially
+    auto work = items;
+    ForgeEngine engine(_forge_engine.get_config());
+    engine.set_config(_forge_engine.get_config());
+
+    for (size_t i = 1; i < work.size(); ++i) {
+        if (!engine.is_forgeable(work[0], work[i]))
+            continue;
+
+        engine.pure_forge_into(work[0], work[i], reg);
+
+        bool met = true;
+        for (const auto& t : target) {
+            auto it = work[0].enchs.find(t.id);
+            if (it == work[0].enchs.end() || it->level < t.level) { met = false; break; }
+        }
+        if (met) return true;
+    }
+
+    return false;
+}
+
 bool GreedyAlgorithm::_meets_target(const compact::Item& equipment) const {
     for (const auto& t : _target) {
         auto it = equipment.enchs.find(t.id);
