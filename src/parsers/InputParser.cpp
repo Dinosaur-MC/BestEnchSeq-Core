@@ -1,20 +1,50 @@
 #include "parsers/InputParser.h"
-#include "adapters/RegistryResolver.h"
 #include "parsers/ParserUtilsDomain.hpp"
 #include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
 #include "io/json.h"
-#include "registries/EnchantmentRegistry.h"
 
 #include <algorithm>
 #include <stdexcept>
+
+namespace {
+
+/// Look up an enchantment name in the ID map, with "minecraft:" fallback.
+inline int32_t lookup_ench_id(
+    const std::string &name,
+    const std::unordered_map<std::string, int32_t> &ench_id_map,
+    bool ns_qualified = false
+) {
+    if (ns_qualified) {
+        // Spec came as (ns, id) — key is already "ns:id" or bare id
+        auto it = ench_id_map.find(name);
+        if (it != ench_id_map.end()) return it->second;
+        // Fallback: try bare id if namespaced key failed
+        auto pos = name.find(':');
+        if (pos != std::string::npos) {
+            std::string bare = name.substr(pos + 1);
+            it = ench_id_map.find(bare);
+            if (it != ench_id_map.end()) return it->second;
+        }
+        return -1; // not found
+    }
+
+    // Unqualified name: try as-is first, then prepend "minecraft:"
+    auto it = ench_id_map.find(name);
+    if (it != ench_id_map.end()) return it->second;
+    std::string prefixed = "minecraft:" + name;
+    it = ench_id_map.find(prefixed);
+    return (it != ench_id_map.end()) ? it->second : -1;
+}
+
+} // anonymous namespace
 
 // ===========================================================================
 //  parse_inventory
 // ===========================================================================
 ItemCollection InputParser::parse_inventory(
     const std::filesystem::path &path,
-    const EnchantmentRegistry &ench_reg,
+    const std::unordered_map<std::string, int32_t> &ench_id_map,
     const std::unordered_map<std::string, const Equipment*> &equipment_registry
 ) {
     std::string content = ParserUtils::read_file(path);
@@ -82,7 +112,7 @@ ItemCollection InputParser::parse_inventory(
                     int32_t ench_level = ParserUtils::get_json_int(ench_obj, "level");
                     if (ench_level < 1) ench_level = 1;
 
-                    int32_t ench_id = RegistryResolver::resolve_ench_id(ench_id_str, ench_reg);
+                    int32_t ench_id = lookup_ench_id(ench_id_str, ench_id_map);
                     if (ench_id >= 0) {
                         ench_set.emplace(ench_id, ench_level);
                     } else {
@@ -131,7 +161,7 @@ ItemCollection InputParser::parse_inventory(
 // ===========================================================================
 ItemStack InputParser::build_target(
     const TargetSpec &target_spec,
-    const EnchantmentRegistry &ench_reg,
+    const std::unordered_map<std::string, int32_t> &ench_id_map,
     const std::unordered_map<std::string, const Equipment*> &equipment_registry
 ) {
     // Look up equipment
@@ -143,8 +173,9 @@ ItemStack InputParser::build_target(
     // Build enchantment set from inline enchants
     EnchSet ench_set;
     for (const auto &spec : target_spec.inline_enchants) {
-        int32_t id = RegistryResolver::resolve_ench_id(spec.ns, spec.id, ench_reg);
-        ench_set.emplace(id, spec.level);
+        std::string key = spec.ns.empty() ? spec.id : spec.ns + ":" + spec.id;
+        int32_t id = lookup_ench_id(key, ench_id_map, true);
+        if (id >= 0) ench_set.emplace(id, spec.level);
     }
 
     return ItemStack(*equip_it->second, ench_set, 0);
@@ -155,12 +186,13 @@ ItemStack InputParser::build_target(
 // ===========================================================================
 EnchSet InputParser::build_wanted_enchset(
     const std::vector<EnchantmentSpec> &wanted,
-    const EnchantmentRegistry &ench_reg
+    const std::unordered_map<std::string, int32_t> &ench_id_map
 ) {
     EnchSet result;
     for (const auto &spec : wanted) {
-        int32_t id = RegistryResolver::resolve_ench_id(spec.ns, spec.id, ench_reg);
-        result.emplace(id, spec.level);
+        std::string key = spec.ns.empty() ? spec.id : spec.ns + ":" + spec.id;
+        int32_t id = lookup_ench_id(key, ench_id_map, true);
+        if (id >= 0) result.emplace(id, spec.level);
     }
     return result;
 }
@@ -200,7 +232,7 @@ ItemCollection InputParser::generate_books(
 // ===========================================================================
 ParsedInput InputParser::assemble_input(
     const CLIConfig &cli_config,
-    const EnchantmentRegistry &ench_reg,
+    const std::unordered_map<std::string, int32_t> &ench_id_map,
     const std::unordered_map<std::string, const Equipment*> &equipment_registry
 ) {
     // 1. Determine platform
@@ -214,12 +246,12 @@ ParsedInput InputParser::assemble_input(
     if (cli_config.mode == "direct") {
         // Parse target spec
         TargetSpec target_spec = parse_target(cli_config.target);
-        ItemStack target = build_target(target_spec, ench_reg, equipment_registry);
+        ItemStack target = build_target(target_spec, ench_id_map, equipment_registry);
 
         // Parse wanted enchantments
         std::vector<EnchantmentSpec> wanted_specs =
             parse_enchantment_list(cli_config.wanted);
-        EnchSet wanted = build_wanted_enchset(wanted_specs, ench_reg);
+        EnchSet wanted = build_wanted_enchset(wanted_specs, ench_id_map);
 
         // Existing enchants come from the target item
         EnchSet existing = target.enchantments;
@@ -242,14 +274,14 @@ ParsedInput InputParser::assemble_input(
 
     ItemCollection available_items = parse_inventory(
         std::filesystem::path(cli_config.input.value()),
-        ench_reg,
+        ench_id_map,
         equipment_registry
     );
 
     ItemStack target;
     if (!cli_config.target.empty()) {
         TargetSpec target_spec = parse_target(cli_config.target);
-        target = build_target(target_spec, ench_reg, equipment_registry);
+        target = build_target(target_spec, ench_id_map, equipment_registry);
     }
 
     // Sort available items by priority (lower = more preferred)

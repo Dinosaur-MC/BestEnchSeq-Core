@@ -85,7 +85,12 @@ void test_full_pipeline_direct() {
     std::unordered_map<std::string, const Equipment *> eq_map;
     for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
 
-    auto input = InputParser::assemble_input(config, test_ench_reg, eq_map);
+    // Build ench_id_map from the populated registry
+    std::unordered_map<std::string, int32_t> ench_id_map;
+    for (const auto& info : test_ench_reg.get_instances())
+        ench_id_map[info.name_id] = test_ench_reg.get_id(info.name_id);
+
+    auto input = InputParser::assemble_input(config, ench_id_map, eq_map);
 
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
     expect(input.available_items.size() == 7,
@@ -135,7 +140,10 @@ void test_full_pipeline_inventory() {
     
     auto config = parse_cli(9, const_cast<char **>(argv));
 
-    auto input = InputParser::assemble_input(config, test_ench_reg, eq_map);
+    std::unordered_map<std::string, int32_t> ench_id_map;
+    for (const auto& info : test_ench_reg.get_instances())
+        ench_id_map[info.name_id] = test_ench_reg.get_id(info.name_id);
+    auto input = InputParser::assemble_input(config, ench_id_map, eq_map);
 
     expect(input.available_items.size() >= 2,
            "full_pipeline_inventory: should have at least 2 items");
@@ -258,7 +266,10 @@ void test_full_pipeline_execute() {
            "execute: diamond_sword found in equipment map");
 
     auto wanted_specs = parse_enchantment_list(config.wanted);
-    EnchSet wanted = InputParser::build_wanted_enchset(wanted_specs, test_ench_reg);
+    std::unordered_map<std::string, int32_t> ench_id_map;
+    for (const auto& info : test_ench_reg.get_instances())
+        ench_id_map[info.name_id] = test_ench_reg.get_id(info.name_id);
+    EnchSet wanted = InputParser::build_wanted_enchset(wanted_specs, ench_id_map);
     EnchSet existing;    // equipment starts empty
     ItemCollection books = InputParser::generate_books(wanted, existing);
     expect(books.size() == 3,

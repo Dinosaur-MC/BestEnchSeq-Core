@@ -18,6 +18,7 @@
 #include <vector>
 
 static auto& test_ench_reg = registries::enchants();
+static std::unordered_map<std::string, int32_t> ench_id_map;
 
 namespace {
 
@@ -65,6 +66,9 @@ void setup_enchinfo() {
         {EquipmentCategory::ID_SWORD},
     });
     registries::enchants().initialize(infos);
+    ench_id_map.clear();
+    for (const auto& info : registries::enchants().get_instances())
+        ench_id_map[info.name_id] = registries::enchants().get_id(info.name_id);
 }
 
 // Helper to create a temporary JSON file
@@ -93,7 +97,7 @@ void test_parse_inventory_json() {
         ]
     })");
 
-    auto items = InputParser::parse_inventory(path, test_ench_reg, test_equipment_registry);
+    auto items = InputParser::parse_inventory(path, ench_id_map, test_equipment_registry);
 
     expect(items.size() == 3, "parse_inventory: expected 3 items");
 
@@ -132,7 +136,7 @@ void test_build_target() {
     spec.item_id = "diamond_sword";
 
     ItemStack target = InputParser::build_target(
-        spec, test_ench_reg, test_equipment_registry
+        spec, ench_id_map, test_equipment_registry
     );
 
     expect(target.is_equipment(),
@@ -155,7 +159,7 @@ void test_build_target_with_inline() {
     spec.inline_enchants.push_back({"minecraft", "sharpness", 3});
 
     ItemStack target = InputParser::build_target(
-        spec, test_ench_reg, test_equipment_registry
+        spec, ench_id_map, test_equipment_registry
     );
 
     expect(target.is_equipment(),
@@ -178,7 +182,7 @@ void test_build_wanted_enchset() {
     specs.push_back({"minecraft", "sharpness", 5});
     specs.push_back({"minecraft", "knockback", 2});
 
-    EnchSet wanted = InputParser::build_wanted_enchset(specs, test_ench_reg);
+    EnchSet wanted = InputParser::build_wanted_enchset(specs, ench_id_map);
 
     expect(wanted.size() == 2,
            "build_wanted_enchset: should have 2 enchantments");
@@ -269,7 +273,7 @@ void test_assemble_input_direct_mode() {
     config.platform = "auto";
 
     auto input = InputParser::assemble_input(
-        config, test_ench_reg, test_equipment_registry
+        config, ench_id_map, test_equipment_registry
     );
 
     expect(input.platform == MCE::All,
@@ -306,7 +310,7 @@ void test_inventory_missing_type_field() {
         ]
     })");
 
-    auto items = InputParser::parse_inventory(path, test_ench_reg, test_equipment_registry);
+    auto items = InputParser::parse_inventory(path, ench_id_map, test_equipment_registry);
 
     expect(items.size() == 1,
            "inventory_missing_type: only the explicit book should be parsed");
@@ -323,7 +327,7 @@ void test_empty_inventory() {
         "items": []
     })");
 
-    auto items = InputParser::parse_inventory(path, test_ench_reg, test_equipment_registry);
+    auto items = InputParser::parse_inventory(path, ench_id_map, test_equipment_registry);
 
     expect(items.empty(),
            "empty_inventory: should have no items");
@@ -348,7 +352,7 @@ void test_inventory_negative_ppn() {
 
     bool threw = false;
     try {
-        auto items = InputParser::parse_inventory(path, test_ench_reg, test_equipment_registry);
+        auto items = InputParser::parse_inventory(path, ench_id_map, test_equipment_registry);
     } catch (const std::invalid_argument&) {
         threw = true;
     }
@@ -368,7 +372,7 @@ void test_inventory_durability_exceeds_max() {
         ]
     })");
 
-    auto items = InputParser::parse_inventory(path, test_ench_reg, test_equipment_registry);
+    auto items = InputParser::parse_inventory(path, ench_id_map, test_equipment_registry);
 
     expect(items.size() == 1, "durability_exceeds: should parse 1 item");
     expect(items[0].durability == 9999,
@@ -388,7 +392,7 @@ void test_inventory_multi_ench_book() {
         ]
     })");
 
-    auto items = InputParser::parse_inventory(path, test_ench_reg, test_equipment_registry);
+    auto items = InputParser::parse_inventory(path, ench_id_map, test_equipment_registry);
 
     expect(items.size() == 1, "multi_ench_book: should parse 1 item");
     expect(items[0].is_book(), "multi_ench_book: should be a book");

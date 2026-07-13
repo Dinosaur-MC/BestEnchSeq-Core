@@ -148,13 +148,18 @@ int main(int argc, char *argv[]) {
                              cat_reg, ench_reg, eq_reg);
         }
 
-        // ── Build equipment map for InputParser ──────────────────────────
+        // ── Build resolution maps for InputParser ───────────────────────
+        std::unordered_map<std::string, int32_t> ench_id_map;
+        for (const auto &info : ench_reg.get_instances()) {
+            ench_id_map[info.name_id] = ench_reg.get_id(info.name_id);
+        }
+
         std::unordered_map<std::string, const Equipment *> equipment_map;
         for (const auto &eq : eq_reg.get_instances()) {
             equipment_map[eq.name_id] = &eq;
         }
 
-        auto parsed = InputParser::assemble_input(config, ench_reg, equipment_map);
+        auto parsed = InputParser::assemble_input(config, ench_id_map, equipment_map);
 
         // Register and create algorithm (local registry, no singleton)
         AlgorithmRegistry algo_reg;
