@@ -87,6 +87,7 @@ src/
 │   ├── Equipment.h/.cpp         ← Equipment definition
 │   ├── EnchSolution.h/.cpp      ← Solution type
 │   ├── Platform.h               ← MCE enum (Minecraft edition Java/Bedrock/All)
+│   ├── CLITypes.h               ← CLIConfig, EnchantmentSpec, TargetSpec
 │   ├── AlgorithmTypes.h         ← AlgorithmInput, AlgorithmOutput, ProgressStatus, AlgorithmState
 │   ├── LogTypes.h               ← LogLevel, LogEntry
 │   ├── RawTypes.h               ← String-based intermediates (RawEnchInfo, RawEquipment)
