@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <cstddef>
 
 /// Generic algorithm diagnostics snapshot for on-exit logging.
 ///

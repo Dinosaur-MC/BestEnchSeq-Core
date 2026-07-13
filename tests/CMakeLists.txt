@@ -59,7 +59,7 @@ set(EQUIP_REG_SRCS ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp)
 # ============================================================================
 
 add_executable(json_tests
-    utils/json_tests.cpp
+    io/json_tests.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
 )
 target_include_directories(json_tests PRIVATE ${TEST_INCLUDE})
@@ -201,12 +201,12 @@ set_tests_properties(test_integration PROPERTIES
 # New algorithm layer tests
 # ============================================================================
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_forge_engine.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_forge_engine.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_forge_engine.cpp)
+    message(FATAL_ERROR "Required test source not found: algorithm/test_forge_engine.cpp")
 endif()
 
 add_executable(test_forge_engine
-    unit/test_forge_engine.cpp
+    algorithm/test_forge_engine.cpp
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
@@ -221,12 +221,12 @@ set_tests_properties(test_forge_engine PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_exp_calculator.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_exp_calculator.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_exp_calculator.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_exp_calculator.cpp")
 endif()
 
 add_executable(test_exp_calculator
-    unit/test_exp_calculator.cpp
+    utils/test_exp_calculator.cpp
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${DOMAIN_TYPE_SRCS}
     ${REGISTRY_CORE_SRCS}
@@ -237,12 +237,12 @@ set_tests_properties(test_exp_calculator PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_domain_types.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_domain_types.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/types/test_domain_types.cpp)
+    message(FATAL_ERROR "Required test source not found: types/test_domain_types.cpp")
 endif()
 
 add_executable(test_domain_types
-    unit/test_domain_types.cpp
+    types/test_domain_types.cpp
     ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
 )
@@ -252,12 +252,12 @@ set_tests_properties(test_domain_types PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_execution_context.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_execution_context.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_execution_context.cpp)
+    message(FATAL_ERROR "Required test source not found: algorithm/test_execution_context.cpp")
 endif()
 
 add_executable(test_execution_context
-    unit/test_execution_context.cpp
+    algorithm/test_execution_context.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/log/Logger.cpp
@@ -304,12 +304,12 @@ set_tests_properties(test_algorithm_executor PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_algorithm_strategies.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_algorithm_strategies.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_algorithm_strategies.cpp)
+    message(FATAL_ERROR "Required test source not found: algorithm/test_algorithm_strategies.cpp")
 endif()
 
 add_executable(test_algorithm_strategies
-    unit/test_algorithm_strategies.cpp
+    algorithm/test_algorithm_strategies.cpp
     ${ALGO_ENGINE_SRCS}
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
@@ -333,12 +333,12 @@ set_tests_properties(test_algorithm_strategies PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spmc_queue.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_spmc_queue.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_spmc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_spmc_queue.cpp")
 endif()
 
 add_executable(test_spmc_queue
-    unit/test_spmc_queue.cpp
+    utils/test_spmc_queue.cpp
 )
 target_include_directories(test_spmc_queue PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_spmc_queue COMMAND test_spmc_queue)
@@ -346,12 +346,12 @@ set_tests_properties(test_spmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_spsc_queue.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_spsc_queue.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_spsc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_spsc_queue.cpp")
 endif()
 
 add_executable(test_spsc_queue
-    unit/test_spsc_queue.cpp
+    utils/test_spsc_queue.cpp
 )
 target_include_directories(test_spsc_queue PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_spsc_queue COMMAND test_spsc_queue)
@@ -359,12 +359,12 @@ set_tests_properties(test_spsc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_algorithm_utils.cpp)
-    message(FATAL_ERROR "Required test source not found: utils/test_algorithm_utils.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_algorithm_utils.cpp)
+    message(FATAL_ERROR "Required test source not found: algorithm/test_algorithm_utils.cpp")
 endif()
 
 add_executable(test_algorithm_utils
-    utils/test_algorithm_utils.cpp
+    algorithm/test_algorithm_utils.cpp
 )
 target_include_directories(test_algorithm_utils PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_utils COMMAND test_algorithm_utils)
@@ -405,12 +405,12 @@ set_tests_properties(test_equipment_category_registry PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_astar_memory_budget.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_astar_memory_budget.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_astar_memory_budget.cpp)
+    message(FATAL_ERROR "Required test source not found: algorithm/test_astar_memory_budget.cpp")
 endif()
 
 add_executable(test_astar_memory_budget
-    unit/test_astar_memory_budget.cpp
+    algorithm/test_astar_memory_budget.cpp
     ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
 )
 target_include_directories(test_astar_memory_budget PRIVATE ${TEST_INCLUDE})
@@ -511,12 +511,12 @@ set_tests_properties(test_object_pool PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_app_config.cpp)
-    message(FATAL_ERROR "Required test source not found: utils/test_app_config.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/config/test_app_config.cpp)
+    message(FATAL_ERROR "Required test source not found: config/test_app_config.cpp")
 endif()
 
 add_executable(test_app_config
-    utils/test_app_config.cpp
+    config/test_app_config.cpp
 )
 target_include_directories(test_app_config PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_app_config COMMAND test_app_config)
@@ -524,12 +524,12 @@ set_tests_properties(test_app_config PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_mpmc_queue.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_mpmc_queue.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_mpmc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_mpmc_queue.cpp")
 endif()
 
 add_executable(test_mpmc_queue
-    unit/test_mpmc_queue.cpp
+    utils/test_mpmc_queue.cpp
 )
 target_include_directories(test_mpmc_queue PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_mpmc_queue COMMAND test_mpmc_queue)
@@ -537,12 +537,12 @@ set_tests_properties(test_mpmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_segmented_mpmc_queue.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_segmented_mpmc_queue.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_segmented_mpmc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_segmented_mpmc_queue.cpp")
 endif()
 
 add_executable(test_segmented_mpmc_queue
-    unit/test_segmented_mpmc_queue.cpp
+    utils/test_segmented_mpmc_queue.cpp
 )
 target_include_directories(test_segmented_mpmc_queue PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_segmented_mpmc_queue COMMAND test_segmented_mpmc_queue)
@@ -550,12 +550,12 @@ set_tests_properties(test_segmented_mpmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unit/test_event_loop.cpp)
-    message(FATAL_ERROR "Required test source not found: unit/test_event_loop.cpp")
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_event_loop.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_event_loop.cpp")
 endif()
 
 add_executable(test_event_loop
-    unit/test_event_loop.cpp
+    utils/test_event_loop.cpp
 )
 target_include_directories(test_event_loop PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_event_loop COMMAND test_event_loop)

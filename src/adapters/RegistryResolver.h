@@ -1,6 +1,5 @@
 #pragma once
 
-#include "types/Ench.h"
 #include "types/EnchInfo.h"
 #include "types/Equipment.h"
 #include "types/RawTypes.h"
