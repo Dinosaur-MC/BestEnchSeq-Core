@@ -8,6 +8,7 @@ using compact::EnchStep;
 using compact::EnchReg;
 
 void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    _forge_engine.set_config(input.config);
     _target = input.target;
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
@@ -98,8 +99,7 @@ bool GreedyAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
 
     // Greedy pure-forge: copy items and try each sacrifice sequentially
     auto work = items;
-    ForgeEngine engine(_forge_engine.get_config());
-    engine.set_config(_forge_engine.get_config());
+    ForgeEngine engine(input.config);
 
     for (size_t i = 1; i < work.size(); ++i) {
         if (!engine.is_forgeable(work[0], work[i]))

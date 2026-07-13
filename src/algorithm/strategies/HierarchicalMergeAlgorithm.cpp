@@ -84,6 +84,7 @@ Item HierarchicalMergeAlgorithm::merge_group(
 void HierarchicalMergeAlgorithm::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
 {
+    _forge_engine.set_config(input.config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;

@@ -47,9 +47,8 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
-    // Propagate forge configuration from input to the strategy
-    _algorithm->configure(input.config);
-
+    // ForgeConfig is propagated via AlgorithmInput — strategies read
+    // input.config in execute() to configure their forge engine.
     _start_time = std::chrono::steady_clock::now();
     _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
 

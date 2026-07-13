@@ -91,6 +91,7 @@ int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    _compact_forge.set_config(input.config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;

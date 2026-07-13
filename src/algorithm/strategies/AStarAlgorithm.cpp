@@ -110,6 +110,7 @@ int32_t AStarAlgorithm::_greedy_bound(
 // ─── Execute ────────────────────────────────────────────────────────────
 
 void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    _compact_forge.set_config(input.config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;

@@ -18,8 +18,6 @@ public:
 
     std::string_view name() const noexcept override { return "hierarchical"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
-    void configure(const ForgeConfig &cfg) noexcept override { _forge_engine.set_config(cfg); }
-
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:

@@ -130,6 +130,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 }
 
 void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    _compact_forge.set_config(input.config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
