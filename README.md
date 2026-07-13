@@ -68,7 +68,7 @@ CLI → InputParser (domain)
 src/
 ├── main.cpp                     ← Entrypoint: init registries → parse → CompactAdapter → executor → output
 ├── config/                      ← Configuration layer (leaf, only STL + EnvUtil)
-│   ├── ForgeConfig.h            ← MCE enum class + ForgeConfig
+│   ├── ForgeConfig.h            ← Forge behavior config (uses MCE from types/Platform.h)
 │   ├── SearchConfig.h           ← Search limits (max_solutions, max_depth, memory_mb, time)
 │   └── AppConfig.h              ← Application-level config (env-var backed)
 ├── adapters/                    ← Domain ↔ compact / serialization boundary
@@ -86,9 +86,12 @@ src/
 │   ├── ItemStack.h/.cpp         ← Item with enchantments
 │   ├── Equipment.h/.cpp         ← Equipment definition
 │   ├── EnchSolution.h/.cpp      ← Solution type
+│   ├── Platform.h               ← MCE enum (Minecraft edition Java/Bedrock/All)
+│   ├── AlgorithmTypes.h         ← AlgorithmInput, AlgorithmOutput, ProgressStatus, AlgorithmState
+│   ├── LogTypes.h               ← LogLevel, LogEntry
 │   ├── RawTypes.h               ← String-based intermediates (RawEnchInfo, RawEquipment)
 │   └── EquipmentCategory.h      ← Equipment category constants
-├── log/                         ← Global async Logger (singleton)
+├── log/                         ← Global async Logger (singleton; uses LogLevel/types)
 │   ├── Logger.hpp/.cpp          ← Async logger (atomic::wait, zero-CPU idle)
 │   └── log.hpp                  ← Free-function wrappers + LOG_INFO / LOG_WARN macros
 ├── registries/                  ← Domain registries + tag resolution
