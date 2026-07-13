@@ -19,6 +19,7 @@ cachegrind_check=0
 benchmark_check=0
 program_args=""
 build_type=""
+benchmark_dir="$project_root/logs"
 
 # 显示帮助
 show_help() {
@@ -26,21 +27,21 @@ show_help() {
 用法: $0 [build_dir] <options> [-- <program_args>]
 
 位置参数:
-  build_dir          可选，构建目录
+  build_dir             可选，构建目录
 
 选项:
-  -h, --help          显示帮助
-  -B, --build TYPE    重新构建项目（Debug/Release）
-  -o, --output DIR    指定输出目录
-  -a, --all           开启所有分析工具（不包括benchmark）
-  -l, --leak_check    开启泄漏检查
-  -p, --callgrind     开启 Callgrind 性能分析
-  -m, --massif        开启 Massif 堆内存分析
-  -c, --cachegrind    开启 CacheGrind 缓存分析
-  -b, --benchmark     开启基准测试
+  -h, --help            显示帮助
+  -B, --build TYPE      重新构建项目（Debug/Release）
+  -o, --output DIR      指定输出目录（默认 $output_dir）
+  -a, --all             开启所有分析工具（不包括benchmark）
+  -l, --leak_check      开启泄漏检查
+  -p, --callgrind       开启 Callgrind 性能分析
+  -m, --massif          开启 Massif 堆内存分析
+  -c, --cachegrind      开启 CacheGrind 缓存分析
+  -b, --benchmark [DIR] 开启基准测试（并指定目录，默认 $benchmark_dir）
 
 分隔符:
-  --                  其后的所有参数将原样收集到 <program_args>
+  --                    其后的所有参数将原样收集到 <program_args>
 EOF
 }
 
@@ -96,7 +97,12 @@ while [ $# -gt 0 ]; do
             ;;
         -b|--benchmark)
             benchmark_check=1
-            shift
+            if [ "$2" != "" -a -d "$2" ]; then
+                benchmark_dir="$2"
+                shift 2
+            else
+                shift
+            fi
             ;;
         --)
             # 遇到 --，其后的所有参数都属于 program_args
@@ -187,9 +193,10 @@ wait
 
 # benchmark
 if [ $benchmark_check -eq 1 ]; then
-    if [ -f "$output_dir/benchmark.txt" ]; then
-        mv "$output_dir/benchmark.txt" "$output_dir/benchmark.txt.bak"
+    if [ -f "$benchmark_dir/benchmark.txt" ]; then
+        mv "$benchmark_dir/benchmark.txt" "$benchmark_dir/benchmark.txt.bak"
     fi
-    echo "Benchmark running in $build_type build with program args: $program_args" | tee "$output_dir/benchmark.txt"
-    "$build_dir/bin/forge_benchmark" $program_args 2>&1 | tee -a "$output_dir/benchmark.txt"
+    echo "Benchmark running in $build_type build with program args: $program_args" | tee "$benchmark_dir/benchmark.txt"
+    "$build_dir/bin/forge_benchmark" $program_args 2>&1 | tee -a "$benchmark_dir/benchmark.txt"
+    python3 scripts/merge_bench.py "$benchmark_dir/benchmark.txt" "$benchmark_dir/best_benchmark.txt"
 fi
