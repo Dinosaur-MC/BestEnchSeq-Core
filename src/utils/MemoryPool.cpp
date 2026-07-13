@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <new>
 #include <utility>
 
 MemoryPool::MemoryPool(size_t initial_chunk_size,
@@ -136,7 +137,7 @@ void* MemoryPool::do_allocate(size_t bytes, size_t alignment) {
     size_t align_space = data_size;
     if (!std::align(alignment, bytes, aligned, align_space)) {
         // Should never happen: chunk is at least bytes + alignment bytes
-        std::abort();
+        throw std::bad_alloc();
     }
     _cur_pos = static_cast<std::byte*>(aligned) + bytes;
     _end_pos = static_cast<std::byte*>(data_start) + data_size;
