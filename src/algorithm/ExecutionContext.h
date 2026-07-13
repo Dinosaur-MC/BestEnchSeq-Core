@@ -52,8 +52,8 @@ public:
     }
 
     void notify_completed(const AlgorithmOutput& output);
-    void append_compact_steps(const std::vector<compact::EnchStep>& steps);
-    std::vector<std::vector<compact::EnchStep>> get_accumulated_compact_steps() const;
+    void append_compact_solution(compact::EnchSolution solution);
+    std::vector<compact::EnchSolution> get_solutions() const;
 
     double progress() const noexcept {
         return _progress.load(std::memory_order_acquire);
@@ -100,7 +100,7 @@ private:
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
 
     mutable std::mutex _accum_mtx;
-    std::vector<std::pair<int32_t, std::vector<compact::EnchStep>>> _accumulated;
+    std::vector<compact::EnchSolution> _accumulated;
     std::atomic<double> _progress{0.0};
 
     std::atomic<uint32_t> _progress_downsample{0};

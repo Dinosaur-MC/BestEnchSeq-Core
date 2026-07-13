@@ -24,13 +24,14 @@ struct AlgorithmInput {
     compact::EnchReg ench_reg;       // compact registry (must be initialized)
 };
 
-// ─── Algorithm output (compact steps) ───
+// ─── Algorithm output (compact solutions) ───
 struct AlgorithmOutput {
     std::string algorithm_name;
     std::string algorithm_version;
     std::chrono::system_clock::time_point created_at;
     std::chrono::milliseconds computation_time{0};
-    std::vector<std::vector<compact::EnchStep>> steps;
+    std::vector<compact::EnchSolution> solutions;
+    compact::Item final_item;
     bool is_valid = false;
 };
 

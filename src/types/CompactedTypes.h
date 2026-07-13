@@ -113,6 +113,12 @@ struct EnchStep {
     int32_t cost;   // 经验等级消耗
 };
 
+/// A complete solution: ordered forge steps + total cost.
+struct EnchSolution {
+    std::vector<EnchStep> steps;
+    int32_t total_cost{0};
+};
+
 } // namespace compact
 
 template <> struct std::hash<compact::Ench> {

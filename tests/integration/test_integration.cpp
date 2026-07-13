@@ -296,8 +296,8 @@ void test_full_pipeline_execute() {
     auto output = executor.output();
     expect(output.is_valid,
            "execute: output should be valid");
-    expect(!output.steps.empty(),
-           "execute: should have at least one solution in steps");
+    expect(!output.solutions.empty(),
+           "execute: should have at least one solution");
 
     // 7. Convert back to domain solutions
     auto solutions = adapter.recall(output, algo_input,

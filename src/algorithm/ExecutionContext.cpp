@@ -56,7 +56,7 @@ void ExecutionContext::dispatch_events() {
     ObserverEvent e;
     while (_events.try_pop(e)) {
         if (e.type == ObserverEvent::Solution)
-            append_compact_steps(e.steps);
+            append_compact_solution({e.steps, 0});
 
         if (obs_snapshot.empty()) continue;
         for (auto& obs : obs_snapshot) {
@@ -113,25 +113,23 @@ void ExecutionContext::detach_observer(std::shared_ptr<AlgorithmObserver> observ
     _has_observers.store(!_observers.empty(), std::memory_order_release);
 }
 
-void ExecutionContext::append_compact_steps(const std::vector<compact::EnchStep>& steps) {
-    int32_t total = 0;
-    for (const auto& s : steps)
-        total += s.cost;
+void ExecutionContext::append_compact_solution(compact::EnchSolution solution) {
+    // Compute total cost if not already set
+    if (solution.total_cost == 0) {
+        for (const auto& s : solution.steps)
+            solution.total_cost += s.cost;
+    }
 
     std::lock_guard lock(_accum_mtx);
-    _accumulated.emplace_back(total, steps);
+    _accumulated.push_back(std::move(solution));
 
     std::sort(_accumulated.begin(), _accumulated.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+              [](const auto& a, const auto& b) { return a.total_cost < b.total_cost; });
     if (_accumulated.size() > BESQ_MAX_SOLUTIONS)
         _accumulated.resize(BESQ_MAX_SOLUTIONS);
 }
 
-std::vector<std::vector<compact::EnchStep>> ExecutionContext::get_accumulated_compact_steps() const {
+std::vector<compact::EnchSolution> ExecutionContext::get_solutions() const {
     std::lock_guard lock(_accum_mtx);
-    std::vector<std::vector<compact::EnchStep>> result;
-    result.reserve(_accumulated.size());
-    for (const auto& p : _accumulated)
-        result.push_back(p.second);
-    return result;
+    return _accumulated;
 }

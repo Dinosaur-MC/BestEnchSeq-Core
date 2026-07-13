@@ -236,15 +236,12 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             continue;
         }
         AlgorithmOutput out = executor.output();
-        if (out.steps.empty()) {
+        if (out.solutions.empty()) {
             results.push_back({algo_name, BenchResult::Fail});
             continue;
         }
 
-        int32_t total = 0;
-        for (const auto& step_list : out.steps)
-            for (const auto& s : step_list)
-                total += s.cost;
+        int32_t total = out.solutions[0].total_cost;
 
         results.push_back({algo_name, BenchResult::Data, total,
                            out.computation_time.count(),

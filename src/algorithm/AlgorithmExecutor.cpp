@@ -187,7 +187,7 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.algorithm_version = std::string(_algorithm->version());
     out.created_at = std::chrono::system_clock::now();
     out.computation_time = _computation_time;
-    out.steps = _ctx->get_accumulated_compact_steps();
+    out.solutions = _ctx->get_solutions();
     out.is_valid = true;
     return out;
 }

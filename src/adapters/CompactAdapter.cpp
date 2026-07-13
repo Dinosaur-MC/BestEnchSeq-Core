@@ -157,11 +157,11 @@ std::vector<EnchSolution> CompactAdapter::recall(
     std::vector<EnchSolution> solutions;
     if (!output.is_valid) return solutions;
 
-    solutions.reserve(output.steps.size());
-    for (const auto& step_list : output.steps) {
+    solutions.reserve(output.solutions.size());
+    for (const auto& csol : output.solutions) {
         EnchStepList domain_steps;
-        domain_steps.reserve(step_list.size());
-        for (const auto& s : step_list) {
+        domain_steps.reserve(csol.steps.size());
+        for (const auto& s : csol.steps) {
             auto base = to_domain(s.base, input.ench_reg);
             auto sac  = to_domain(s.sacrifice, input.ench_reg);
 

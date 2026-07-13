@@ -79,16 +79,13 @@ int32_t run_strategy(const std::string& name,
         return -1;  // no solution
 
     auto out = executor.output();
-    if (out.steps.empty())
+    if (out.solutions.empty())
         return -1;
     // Empty first solution is valid (0 cost, e.g. target already met)
-    if (out.steps[0].empty())
+    if (out.solutions[0].steps.empty())
         return 0;
 
-    int32_t total = 0;
-    for (const auto& step : out.steps[0])
-        total += step.cost;
-    return total;
+    return out.solutions[0].total_cost;
 }
 
 // ─── GreedyAlgorithm tests ───────────────────────────────────────────

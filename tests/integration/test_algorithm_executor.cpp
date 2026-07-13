@@ -238,10 +238,10 @@ void test_output_has_steps_after_completion() {
     expect(executor.state() == AlgorithmState::Completed, "should complete");
     auto out = executor.output();
     expect(out.is_valid, "output should be valid after completion");
-    expect(!out.steps.empty(), "output steps should be populated after completion");
-    expect(out.steps.size() == 1, "should have one solution");
-    expect(out.steps[0].size() == 1, "solution should have one step");
-    expect(out.steps[0][0].cost == 4, "step cost should match reported value");
+    expect(!out.solutions.empty(), "output solutions should be populated after completion");
+    expect(out.solutions.size() == 1, "should have one solution");
+    expect(out.solutions[0].steps.size() == 1, "solution should have one step");
+    expect(out.solutions[0].steps[0].cost == 4, "step cost should match reported value");
     std::cout << "PASS: test_output_has_steps_after_completion" << std::endl;
 }
 
