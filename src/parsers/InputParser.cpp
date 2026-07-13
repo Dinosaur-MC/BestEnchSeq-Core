@@ -1,5 +1,6 @@
 #include "parsers/InputParser.h"
 #include "adapters/RegistryResolver.h"
+#include "parsers/ParserUtilsDomain.hpp"
 #include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
 #include "io/json.h"

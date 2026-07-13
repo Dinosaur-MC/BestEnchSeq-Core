@@ -1,4 +1,5 @@
 #include "parsers/EquipmentParser.h"
+#include "parsers/ParserUtilsDomain.hpp"
 #include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
 #include "io/CsvIO.h"

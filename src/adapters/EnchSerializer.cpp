@@ -1,6 +1,6 @@
 #include "adapters/EnchSerializer.h"
 #include "parsers/EnchInfoParser.h"   // EnchantmentDataPack
-#include "utils/ParserUtils.hpp"
+#include "parsers/ParserUtilsDomain.hpp"
 #include "log/log.hpp"
 #include "io/CsvIO.h"
 #include "io/json.h"
