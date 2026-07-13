@@ -1,9 +1,5 @@
 #pragma once
-#include <algorithm>
 #include <cstdint>
-#include <cstring>
-#include <functional>
-#include <new>
 #include <vector>
 #include "utils/HashUtils.hpp"
 
@@ -40,65 +36,46 @@ using EnchCollection = std::vector<Ench>;
 /// Invariant: elements are always sorted by id (ascending).
 class EnchSet {
   public:
-    static constexpr size_t INLINE_N = 6;
+    static constexpr size_t INLINE_N = 16;
+    static constexpr size_t INLINE_BYTES = INLINE_N * sizeof(Ench);  // 64
 
     using value_type = Ench;
     using iterator = Ench*;
     using const_iterator = const Ench*;
 
-    // ── Constructors / destructor ──
+    EnchSet() noexcept : _size(0) {}
 
-    EnchSet() noexcept : _size(0), _mode(0) {}
-
-    EnchSet(const EnchSet &o) : _size(0), _mode(0) { _copy_from(o); }
+    EnchSet(const EnchSet &o) noexcept : _size(o._size) {
+        __builtin_memcpy(_buf, o._buf, INLINE_BYTES);
+    }
 
     EnchSet &operator=(const EnchSet &o) noexcept {
-        if (this != &o) { _clear_data(); _copy_from(o); }
+        if (this != &o) { _size = o._size; __builtin_memcpy(_buf, o._buf, INLINE_BYTES); }
         return *this;
     }
 
-    EnchSet(EnchSet &&o) noexcept : _size(o._size), _mode(o._mode) {
-        if (o._is_inline()) {
-            std::copy(o._buf, o._buf + o._size * sizeof(Ench), _buf);
-        } else {
-            new (&_vec) std::vector<Ench>(std::move(o._vec));
-        }
-        o._size = 0; o._mode = 0;
-        o._vec.~vector();
-        new (&o._vec) std::vector<Ench>();  // replaced
-        (void)o._vec;  // ensure vec is in valid empty state
+    EnchSet(EnchSet &&o) noexcept : _size(o._size) {
+        __builtin_memcpy(_buf, o._buf, INLINE_BYTES);
+        o._size = 0;
     }
 
     EnchSet &operator=(EnchSet &&o) noexcept {
-        if (this != &o) {
-            _clear_data();
-            _size = o._size; _mode = o._mode;
-            if (o._is_inline()) {
-                std::copy(o._buf, o._buf + o._size * sizeof(Ench), _buf);
-            } else {
-                new (&_vec) std::vector<Ench>(std::move(o._vec));
-            }
-            o._size = 0; o._mode = 0;
-            o._vec.~vector();
-            new (&o._vec) std::vector<Ench>();
-        }
+        if (this != &o) { _size = o._size; __builtin_memcpy(_buf, o._buf, INLINE_BYTES); o._size = 0; }
         return *this;
     }
 
-    ~EnchSet() noexcept { _clear_data(); }
+    ~EnchSet() noexcept = default;
 
     // ── Iterators ──
-    iterator begin() noexcept { return _data(); }
-    iterator end() noexcept { return _data() + _size; }
-    const_iterator begin() const noexcept { return _data(); }
-    const_iterator end() const noexcept { return _data() + _size; }
+    iterator begin() noexcept { return reinterpret_cast<Ench *>(_buf); }
+    iterator end() noexcept { return reinterpret_cast<Ench *>(_buf) + _size; }
+    const_iterator begin() const noexcept { return reinterpret_cast<const Ench *>(_buf); }
+    const_iterator end() const noexcept { return reinterpret_cast<const Ench *>(_buf) + _size; }
 
     // ── Capacity ──
     size_t size() const noexcept { return _size; }
     [[nodiscard]] bool empty() const noexcept { return _size == 0; }
-    void reserve(size_t n) {
-        if (n > INLINE_N && !_is_inline()) _vec.reserve(n);
-    }
+    void reserve(size_t) noexcept {}
 
     // ── Lookup ──
     [[nodiscard]] iterator find(int16_t id) noexcept;
@@ -107,68 +84,29 @@ class EnchSet {
 
     // ── Modifiers ──
     void insert(const Ench &ench);
-    void clear() noexcept { _clear_data(); _size = 0; _mode = 0; }
-
-    /// Re-sort to restore the sorted-by-id invariant after external mutation.
+    void clear() noexcept { _size = 0; }
     void sort();
 
     // ── Hash ──
     [[nodiscard]] size_t hash() const noexcept {
         size_t h = _size;
-        for (size_t i = 0; i < _size; ++i) {
-            auto &e = _data()[i];
-            hash_combine(h, static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16));
-        }
+        const Ench *d = reinterpret_cast<const Ench *>(_buf);
+        for (size_t i = 0; i < _size; ++i)
+            hash_combine(h, static_cast<size_t>(d[i].id) ^ (static_cast<size_t>(d[i].level) << 16));
         return h;
     }
 
     // ── Comparison ──
-    bool operator==(const EnchSet &o) const noexcept;
+    bool operator==(const EnchSet &o) const noexcept {
+        return _size == o._size &&
+               __builtin_memcmp(_buf, o._buf, _size * sizeof(Ench)) == 0;
+    }
     bool operator!=(const EnchSet &o) const noexcept { return !(*this == o); }
 
   private:
-    uint8_t _size : 7;       // element count (0-127)
-    uint8_t _mode : 1;       // 0=inline, 1=heap
-
-    // Inline storage (6 Ench × 4 bytes = 24 bytes)
+    uint8_t _size{0};
     alignas(Ench) uint8_t _buf[INLINE_N * sizeof(Ench)];
-
-    // Heap storage (used when mode=1)
-    std::vector<Ench> _vec;
-
-    bool _is_inline() const noexcept { return _mode == 0; }
-
-    Ench *_data() noexcept { return _is_inline() ? reinterpret_cast<Ench *>(_buf) : _vec.data(); }
-    const Ench *_data() const noexcept { return _is_inline() ? reinterpret_cast<const Ench *>(_buf) : _vec.data(); }
-
-    void _clear_data() noexcept {
-        if (!_is_inline()) _vec.~vector();
-    }
-
-    void _copy_from(const EnchSet &o) {
-        _size = o._size;
-        if (o._is_inline()) {
-            _mode = 0;
-            std::copy(o._buf, o._buf + _size * sizeof(Ench), _buf);
-        } else {
-            _mode = 1;
-            new (&_vec) std::vector<Ench>(o._vec);
-        }
-    }
-
-    /// Transition from inline to heap storage.
-    void _migrate_to_heap(size_t new_cap);
 };
-
-// ─── EnchSet inline helpers ─────────────────────────────────────────────
-
-inline bool EnchSet::operator==(const EnchSet &o) const noexcept {
-    if (_size != o._size) return false;
-    const Ench *a = _data(), *b = o._data();
-    for (size_t i = 0; i < _size; ++i)
-        if (a[i].id != b[i].id || a[i].level != b[i].level) return false;
-    return true;
-}
 
 enum class ItemType : uint8_t {
     Book,
