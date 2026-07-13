@@ -20,12 +20,7 @@ public:
     std::string_view version() const noexcept override { return "1.0.0"; }
     void configure(const ForgeConfig &cfg) noexcept override { _compact_forge.set_config(cfg); }
 
-    void execute(
-        const std::vector<compact::Item>& items,
-        const compact::EnchReg& reg,
-        const std::vector<compact::Ench>& target,
-        ExecutionContext& ctx
-    ) override;
+    void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
     struct ForgePair {
@@ -72,6 +67,7 @@ private:
 
     ForgeEngine _compact_forge;
     const compact::EnchReg* _ench_reg{nullptr};
+    SearchConfig _search_config{};
 
     // Heuristic scratch buffers (reused across calls, avoids per-call allocation)
     mutable std::vector<int16_t> _h_buf;

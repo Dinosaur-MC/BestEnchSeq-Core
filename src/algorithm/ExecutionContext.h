@@ -59,25 +59,6 @@ public:
         return _progress.load(std::memory_order_acquire);
     }
 
-    // ── Search config ──
-    struct SearchConfig {
-        int32_t max_solutions = 0;
-        int32_t max_depth = 0;
-        int32_t memory_mb = 0;
-        std::chrono::milliseconds max_search_time{0};
-    };
-
-    SearchConfig get_search_config() const {
-        auto ptr = _search_config.load(std::memory_order_acquire);
-        return ptr ? *ptr : SearchConfig{};
-    }
-
-    void set_search_config(SearchConfig cfg) {
-        _search_config.store(
-            std::make_shared<const SearchConfig>(std::move(cfg)),
-            std::memory_order_release);
-    }
-
     // ── Diagnostic counters (atomic, read from verbose monitor) ─────────
     struct DiagnosticSnapshot {
         int64_t nodes_visited = 0;
@@ -123,8 +104,6 @@ private:
     std::atomic<double> _progress{0.0};
 
     std::atomic<uint32_t> _progress_downsample{0};
-
-    std::atomic<std::shared_ptr<const SearchConfig>> _search_config{nullptr};
 
     // ── Atomic diagnostic counters ──
     std::atomic<int64_t> _diag_nodes_visited{0};

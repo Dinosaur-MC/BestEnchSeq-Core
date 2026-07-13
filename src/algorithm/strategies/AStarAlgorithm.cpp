@@ -109,12 +109,10 @@ int32_t AStarAlgorithm::_greedy_bound(
 
 // ─── Execute ────────────────────────────────────────────────────────────
 
-void AStarAlgorithm::execute(
-    const std::vector<Item>& items,
-    const EnchReg& reg,
-    const std::vector<compact::Ench>& target,
-    ExecutionContext& ctx)
-{
+void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    const auto& target = input.target;
     ctx.report_progress(0.0, ProgressStatus::Starting);
     auto t0 = std::chrono::steady_clock::now();
 
@@ -122,17 +120,17 @@ void AStarAlgorithm::execute(
     _pool.clear();
     _step_pool.clear();
     _open_heap.clear();
-    _ench_reg = &reg;
+    _ench_reg = &input.ench_reg;
     _target = target;
     _best_solution_cost = INT32_MAX;
     _diag = AStarDiagnostics{};
 
-    // Cache config for hot-path access (avoids atomic shared_ptr load)
-    {
-        auto cfg = ctx.get_search_config();
-        _max_solutions = cfg.max_solutions;
-        _max_search_time = cfg.max_search_time;
-    }
+    // Cache config from AlgorithmInput
+    _max_solutions = input.search.max_solutions;
+    _max_search_time = input.search.max_search_time;
+    _budget = AStarMemoryBudget::from_memory_mb(
+        input.search.memory_mb > 0 ? input.search.memory_mb : 2048,
+        input.search.max_search_time.count());
 
     // Seed ItemPool with initial items
     std::vector<ItemID> initial_ids;
@@ -163,18 +161,6 @@ void AStarAlgorithm::execute(
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         ctx.report_compact_solution({});
         return;
-    }
-
-    // Compute budget if not set (check SearchConfig for override first)
-    if (_budget.max_explored == 0) {
-        auto sc = ctx.get_search_config();
-        if (sc.memory_mb > 0) {
-            _budget = AStarMemoryBudget::from_memory_mb(sc.memory_mb,
-                         static_cast<int32_t>(items.size()));
-        } else {
-            _budget = AStarMemoryBudget::auto_detect(
-                static_cast<int32_t>(items.size()));
-        }
     }
 
     // Pre-allocate (task-size-aware — factorial estimate, capped at budget max)

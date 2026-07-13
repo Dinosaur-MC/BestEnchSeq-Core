@@ -25,7 +25,8 @@ Item HierarchicalMergeAlgorithm::merge_group(
     std::vector<EnchStep>& steps,
     const EnchReg& reg,
     ExecutionContext& ctx,
-    const std::chrono::steady_clock::time_point& _start)
+    const std::chrono::steady_clock::time_point& _start,
+    const SearchConfig& search)
 {
     if (group.empty()) return {};
     if (group.size() == 1) return group[0];
@@ -68,10 +69,9 @@ Item HierarchicalMergeAlgorithm::merge_group(
         steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
 
         {
-            auto cfg = ctx.get_search_config();
-            if (cfg.max_search_time.count() > 0) {
+            if (search.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - _start;
-                if (elapsed > cfg.max_search_time) break;
+                if (elapsed > search.max_search_time) break;
             }
         }
 
@@ -82,11 +82,12 @@ Item HierarchicalMergeAlgorithm::merge_group(
 }
 
 void HierarchicalMergeAlgorithm::execute(
-    const std::vector<Item>& items,
-    const EnchReg& reg,
-    const std::vector<compact::Ench>& target,
-    ExecutionContext& ctx)
+    const AlgorithmInput& input, ExecutionContext& ctx)
 {
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    const auto& target = input.target;
+    const auto& search = input.search;
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
     auto _start = std::chrono::steady_clock::now();
@@ -158,7 +159,7 @@ void HierarchicalMergeAlgorithm::execute(
             books = std::move(next);
 
             {
-                auto cfg = ctx.get_search_config();
+                auto cfg = search;
                 if (cfg.max_search_time.count() > 0) {
                     auto elapsed = std::chrono::steady_clock::now() - _start;
                     if (elapsed > cfg.max_search_time) goto phase2;
@@ -184,9 +185,9 @@ phase2:
 
     ctx.report_progress(0.3, ProgressStatus::MergingWithinGroups);
 
-    auto low_merged  = merge_group(low_group, compact_steps, reg, ctx, _start);
-    auto mid_merged  = merge_group(mid_group, compact_steps, reg, ctx, _start);
-    auto high_merged = merge_group(high_group, compact_steps, reg, ctx, _start);
+    auto low_merged  = merge_group(low_group, compact_steps, reg, ctx, _start, search);
+    auto mid_merged  = merge_group(mid_group, compact_steps, reg, ctx, _start, search);
+    auto high_merged = merge_group(high_group, compact_steps, reg, ctx, _start, search);
 
     struct GroupResult { Item book; int32_t mult; };
     std::vector<GroupResult> group_results;
@@ -228,7 +229,7 @@ phase2:
         ++_solutions_found;
 
         {
-            auto cfg = ctx.get_search_config();
+            auto cfg = search;
             if (cfg.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - _start;
                 if (elapsed > cfg.max_search_time) break;

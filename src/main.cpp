@@ -174,20 +174,15 @@ int main(int argc, char *argv[]) {
         AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.original_ench, parsed.available_items,
                                                   forge_config, ench_reg);
 
-        // ── Memory budget for AStar (CLI → AppConfig → default) ────────────
-        {
-            int64_t mb = config.memory_mb > 0 ? config.memory_mb : app_cfg.memory_mb;
-            auto* astar = dynamic_cast<AStarAlgorithm*>(algo.get());
-            if (astar) {
-                astar->set_budget(AStarMemoryBudget::from_memory_mb(mb > 0 ? mb : 2048, 0));
-            }
-        }
+        // ── Search config from CLI ────────────────────────────────────────
+        algo_input.search.max_solutions = config.solutions;
+        algo_input.search.memory_mb = static_cast<int32_t>(
+            config.memory_mb > 0 ? config.memory_mb : app_cfg.memory_mb);
 
         LOG_INFO("Starting algorithm: %s", config.algorithm.c_str());
 
         // Execute (compact-only algorithm layer)
         AlgorithmExecutor executor(std::move(algo));
-        executor.update_search_config({.max_solutions = config.solutions});
         executor.start(algo_input);
         executor.wait();
 

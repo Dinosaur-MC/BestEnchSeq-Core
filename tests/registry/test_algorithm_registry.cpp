@@ -7,12 +7,7 @@ public:
     std::string_view name() const noexcept override { return "test_algo"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
-    void execute(
-        const std::vector<compact::Item>&,
-        const compact::EnchReg&,
-        const std::vector<compact::Ench>&,
-        ExecutionContext&
-    ) override {}
+    void execute(const AlgorithmInput&, ExecutionContext&) override {}
 };
 
 void test_basic_register_create() {

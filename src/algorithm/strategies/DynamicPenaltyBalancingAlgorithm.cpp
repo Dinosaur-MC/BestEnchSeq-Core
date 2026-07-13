@@ -10,11 +10,11 @@ using compact::EnchStep;
 using compact::EnchReg;
 
 void DynamicPenaltyBalancingAlgorithm::execute(
-    const std::vector<Item>& items,
-    const EnchReg& reg,
-    const std::vector<compact::Ench>& target,
-    ExecutionContext& ctx)
+    const AlgorithmInput& input, ExecutionContext& ctx)
 {
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    const auto& target = input.target;
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
     auto _start = std::chrono::steady_clock::now();
@@ -98,12 +98,12 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         ++_solutions_found;
 
         {
-            auto cfg = ctx.get_search_config();
-            if (cfg.max_search_time.count() > 0) {
+            const auto& sc = input.search;
+            if (sc.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - _start;
-                if (elapsed > cfg.max_search_time) break;
+                if (elapsed > sc.max_search_time) break;
             }
-            if (cfg.max_solutions > 0 && _solutions_found >= cfg.max_solutions) break;
+            if (sc.max_solutions > 0 && _solutions_found >= sc.max_solutions) break;
         }
 
         mut_items.erase(mut_items.begin() + best_j);

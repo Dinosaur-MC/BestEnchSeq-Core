@@ -129,12 +129,10 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
     }
 }
 
-void IDAStarAlgorithm::execute(
-    const std::vector<Item>& items,
-    const EnchReg& reg,
-    const std::vector<compact::Ench>& target,
-    ExecutionContext& ctx)
-{
+void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    const auto& target = input.target;
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
     _pool.clear();
@@ -159,12 +157,9 @@ void IDAStarAlgorithm::execute(
     _solutions_found = 0;
     _start_time = std::chrono::steady_clock::now();
 
-    // Cache config for hot-path access (avoids atomic shared_ptr load)
-    {
-        auto cfg = ctx.get_search_config();
-        _max_solutions = cfg.max_solutions;
-        _max_search_time = cfg.max_search_time;
-    }
+    // Cache config from AlgorithmInput
+    _max_solutions = input.search.max_solutions;
+    _max_search_time = input.search.max_search_time;
 
     std::vector<ItemID> initial_ids;
     initial_ids.reserve(items.size());

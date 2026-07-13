@@ -20,12 +20,7 @@ public:
     std::string_view version() const noexcept override { return "1.0.0"; }
     void configure(const ForgeConfig &cfg) noexcept override { _forge_engine.set_config(cfg); }
 
-    void execute(
-        const std::vector<compact::Item>& items,
-        const compact::EnchReg& reg,
-        const std::vector<compact::Ench>& target,
-        ExecutionContext& ctx
-    ) override;
+    void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
     compact::Item merge_group(
@@ -33,7 +28,8 @@ private:
         std::vector<compact::EnchStep>& steps,
         const compact::EnchReg& reg,
         ExecutionContext& ctx,
-        const std::chrono::steady_clock::time_point& _start);
+        const std::chrono::steady_clock::time_point& _start,
+        const SearchConfig& search);
 
     int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg) const;
 

@@ -7,13 +7,10 @@ using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
 
-void GreedyAlgorithm::execute(
-    const std::vector<Item>& items,
-    const EnchReg& reg,
-    const std::vector<compact::Ench>& target,
-    ExecutionContext& ctx)
-{
-    _target = target;
+void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    _target = input.target;
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
     auto _start = std::chrono::steady_clock::now();
@@ -53,10 +50,10 @@ void GreedyAlgorithm::execute(
         compact_steps.push_back({std::move(before_target), std::move(before_sacrifice), cost});
 
         {
-            auto cfg = ctx.get_search_config();
-            if (cfg.max_search_time.count() > 0) {
+            const auto& sc = input.search;
+            if (sc.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - _start;
-                if (elapsed > cfg.max_search_time) break;
+                if (elapsed > sc.max_search_time) break;
             }
         }
 

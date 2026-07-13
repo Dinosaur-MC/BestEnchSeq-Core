@@ -73,7 +73,7 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
 
     _worker.emplace([this, input = std::move(input)]() mutable {
         try {
-            _algorithm->execute(input.items, input.ench_reg, input.target, *_ctx);
+            _algorithm->execute(input, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
@@ -208,6 +208,3 @@ bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
     return true;
 }
 
-void AlgorithmExecutor::update_search_config(ExecutionContext::SearchConfig cfg) {
-    if (_ctx) _ctx->set_search_config(std::move(cfg));
-}

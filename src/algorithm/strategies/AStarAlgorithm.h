@@ -22,15 +22,7 @@ public:
     std::string_view version() const noexcept override { return "2.0.0"; }
     void configure(const ForgeConfig &cfg) noexcept override { _compact_forge.set_config(cfg); }
 
-    void execute(
-        const std::vector<compact::Item>& items,
-        const compact::EnchReg& reg,
-        const std::vector<compact::Ench>& target,
-        ExecutionContext& ctx
-    ) override;
-
-    // Inject budget before execute().
-    void set_budget(AStarMemoryBudget budget) noexcept { _budget = budget; }
+    void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
 private:
 

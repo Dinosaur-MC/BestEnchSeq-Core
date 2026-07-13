@@ -7,9 +7,18 @@
 #include <string>
 #include <vector>
 
-// ─── Algorithm input (compact types + Equipment for step conversion) ───
+// ─── Search configuration ─────────────────────────────────────────
+struct SearchConfig {
+    int32_t max_solutions = 0;
+    int32_t max_depth = 0;
+    int32_t memory_mb = 0;
+    std::chrono::milliseconds max_search_time{0};
+};
+
+// ─── Algorithm input ───
 struct AlgorithmInput {
     ForgeConfig config;              // forge configuration (platform, flags)
+    SearchConfig search;             // search configuration (solutions, depth, time)
     compact::ItemCollection items;   // items[0] = equipment, rest = books
     compact::EnchCollection target;  // desired final enchantments
     compact::EnchReg ench_reg;       // compact registry (must be initialized)
@@ -35,8 +44,7 @@ class IAlgorithm {
     virtual std::string_view name() const noexcept = 0;
     virtual std::string_view version() const noexcept = 0;
 
-    virtual void execute(const std::vector<compact::Item> &items, const compact::EnchReg &reg,
-                         const std::vector<compact::Ench> &target, ExecutionContext &ctx) = 0;
+    virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
 
     /// Apply forge configuration before execute().
     /// Called by AlgorithmExecutor::start() with AlgorithmInput::config.

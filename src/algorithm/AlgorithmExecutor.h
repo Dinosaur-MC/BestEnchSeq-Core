@@ -50,8 +50,6 @@ public:
     // Result (returns compact AlgorithmOutput; caller converts to domain if needed)
     AlgorithmOutput output() const;
 
-    void update_search_config(ExecutionContext::SearchConfig cfg);
-
     ExecutionContext::DiagnosticSnapshot get_diagnostics(int64_t elapsed_ms = 0) const {
         return _ctx ? _ctx->get_diagnostics(elapsed_ms) : ExecutionContext::DiagnosticSnapshot{};
     }

@@ -90,16 +90,15 @@ int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
 
 // ─── execute ───────────────────────────────────────────────────────────────
 
-void DFSAlgorithm::execute(
-    const std::vector<Item>& items,
-    const EnchReg& reg,
-    const std::vector<compact::Ench>& target,
-    ExecutionContext& ctx)
-{
+void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    const auto& target = input.target;
     ctx.report_progress(0.0, ProgressStatus::Starting);
     _start_time = std::chrono::steady_clock::now();
 
-    _ench_reg = &reg;
+    _ench_reg = &input.ench_reg;
+    _search_config = input.search;
     _target = target;
 
     _best_cost = INT32_MAX;
@@ -181,7 +180,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         }
 
         {
-            auto cfg = ctx.get_search_config();
+            const auto& cfg = _search_config;
             if (cfg.max_depth > 0 &&
                 static_cast<int32_t>(_stack.size()) > cfg.max_depth) {
                 ctx.incr_nodes_pruned();

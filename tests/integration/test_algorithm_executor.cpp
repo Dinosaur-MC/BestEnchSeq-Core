@@ -18,12 +18,7 @@ public:
     std::string_view name() const noexcept override { return "test"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
-    void execute(
-        const std::vector<compact::Item>&,
-        const compact::EnchReg&,
-        const std::vector<compact::Ench>&,
-        ExecutionContext& ctx
-    ) override {
+    void execute(const AlgorithmInput&, ExecutionContext& ctx) override {
         for (int i = 0; i < 5; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
@@ -41,12 +36,7 @@ public:
     std::string_view name() const noexcept override { return "slow"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
-    void execute(
-        const std::vector<compact::Item>&,
-        const compact::EnchReg&,
-        const std::vector<compact::Ench>&,
-        ExecutionContext& ctx
-    ) override {
+    void execute(const AlgorithmInput&, ExecutionContext& ctx) override {
         for (int i = 0; i < 20; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
@@ -76,12 +66,7 @@ public:
     std::string_view name() const noexcept override { return "throwing"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
-    void execute(
-        const std::vector<compact::Item>&,
-        const compact::EnchReg&,
-        const std::vector<compact::Ench>&,
-        ExecutionContext&
-    ) override {
+    void execute(const AlgorithmInput&, ExecutionContext&) override {
         throw std::runtime_error("simulated failure");
     }
 };
