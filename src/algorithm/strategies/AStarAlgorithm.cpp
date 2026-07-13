@@ -89,14 +89,14 @@ int32_t AStarAlgorithm::_greedy_bound(
     int32_t total_cost = 0;
     std::vector<std::pair<size_t, int32_t>> ordered;
     for (size_t i = 0; i < books.size(); ++i)
-        ordered.emplace_back(i, _compact_forge.estimate_forge_cost(equip, books[i], reg));
+        ordered.emplace_back(i, _forge_engine.estimate_forge_cost(equip, books[i], reg));
     std::sort(ordered.begin(), ordered.end(),
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
     for (const auto& [idx, _] : ordered) {
-        if (!_compact_forge.is_forgeable(equip, books[idx]))
+        if (!_forge_engine.is_forgeable(equip, books[idx]))
             continue;
-        total_cost += _compact_forge.forge_into(equip, books[idx], reg);
+        total_cost += _forge_engine.forge_into(equip, books[idx], reg);
     }
 
     for (const auto& t : _target) {
@@ -110,7 +110,7 @@ int32_t AStarAlgorithm::_greedy_bound(
 // ─── Execute ────────────────────────────────────────────────────────────
 
 void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _compact_forge.set_config(input.config);
+    _forge_engine.set_config(input.config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
@@ -180,7 +180,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     }
 
     int32_t h0 = _heuristic(initial_ids);
-    size_t _open_heap_cap = _open_heap.capacity();
+    size_t open_heap_cap = _open_heap.capacity();
 
     // Priority queue over backing heap
     std::priority_queue<
@@ -261,7 +261,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             _diag.estimated_peak_bytes =
                 static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
               + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
-              + static_cast<int64_t>(_open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
+              + static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
             _diag.status = "Complete";
             _diag.write();
             return;
@@ -292,11 +292,11 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             for (size_t j = 0; j < n; ++j) {
                 if (i == j) continue;
 
-                if (!_compact_forge.is_forgeable(_pool[cur_ids[i]], _pool[cur_ids[j]]))
+                if (!_forge_engine.is_forgeable(_pool[cur_ids[i]], _pool[cur_ids[j]]))
                     continue;
 
                 // ── Phase A: Lightweight pre-pruning (zero Item copies) ──
-                int32_t est = _compact_forge.estimate_forge_cost(
+                int32_t est = _forge_engine.estimate_forge_cost(
                     _pool[cur_ids[i]], _pool[cur_ids[j]], reg);
                 int32_t child_est_g = current.g + est;
                 if (_best_solution_cost != INT32_MAX && child_est_g > _best_solution_cost) {
@@ -323,7 +323,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 ItemID old_base_id = cur_ids[i];
                 ItemID old_sac_id  = cur_ids[j];
                 Item forged = _pool[old_base_id];
-                int32_t real_cost = _compact_forge.forge_into(forged, _pool[old_sac_id], reg);
+                int32_t real_cost = _forge_engine.forge_into(forged, _pool[old_sac_id], reg);
                 int32_t child_g = current.g + real_cost;
                 ++_diag.steps_forged;
                 ctx.incr_steps_forged();
@@ -386,7 +386,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     _diag.estimated_peak_bytes =
         static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
       + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
-      + static_cast<int64_t>(_open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
+      + static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
     if (ctx.is_cancelled()) {
         ctx.report_progress(1.0, ProgressStatus::Cancelled);
         _diag.status = "Cancelled";

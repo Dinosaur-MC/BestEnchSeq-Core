@@ -1,7 +1,6 @@
 #include "parsers/CLIParser.h"
 
 #include <cstring>
-#include <iostream>
 #include <stdexcept>
 
 namespace {

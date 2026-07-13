@@ -17,7 +17,7 @@ public:
     using ItemID = ItemPool::ItemID;
 
     explicit IDAStarAlgorithm(ForgeConfig cfg = {}) noexcept
-        : _compact_forge(std::move(cfg)) {}
+        : _forge_engine(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "idastar"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
@@ -38,7 +38,7 @@ private:
     bool _meets_target(const std::vector<ItemID>& ids) const;
 
     ItemPool _pool;
-    ForgeEngine _compact_forge;
+    ForgeEngine _forge_engine;
     const compact::EnchReg* _ench_reg{nullptr};
     std::vector<compact::Ench> _target;
 

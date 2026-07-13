@@ -39,8 +39,3 @@ struct EnchSolution {
 };
 
 using EnchStepList = std::vector<EnchSolution::EnchStep>;
-
-struct EnhancedEnchStep : public EnchSolution::EnchStep {
-    std::vector<std::string> pre_operator;
-    std::vector<std::string> post_operator;
-};

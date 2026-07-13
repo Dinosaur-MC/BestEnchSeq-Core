@@ -76,9 +76,9 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
             if (i == j) continue;
-            if (!_compact_forge.is_forgeable(_pool[ids[i]], _pool[ids[j]]))
+            if (!_forge_engine.is_forgeable(_pool[ids[i]], _pool[ids[j]]))
                 continue;
-            int32_t est = _compact_forge.estimate_forge_cost(
+            int32_t est = _forge_engine.estimate_forge_cost(
                 _pool[ids[i]], _pool[ids[j]], *_ench_reg);
             if (g + est <= best_cost)
                 candidates.push_back({i, j, est});
@@ -102,7 +102,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
         ItemID old_base_id = ids[cand.i];
         ItemID old_sac_id  = ids[cand.j];
         Item forged = _pool[old_base_id];
-        int32_t real_cost = _compact_forge.forge_into(forged, _pool[old_sac_id], *_ench_reg);
+        int32_t real_cost = _forge_engine.forge_into(forged, _pool[old_sac_id], *_ench_reg);
         int32_t child_g = g + real_cost;
         ctx.incr_steps_forged();
 
@@ -130,7 +130,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 }
 
 void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _compact_forge.set_config(input.config);
+    _forge_engine.set_config(input.config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
@@ -183,8 +183,8 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         Item equip = items[0];
         int32_t greedy_cost = 0;
         for (size_t k = 1; k < items.size(); ++k) {
-            if (_compact_forge.is_forgeable(equip, items[k]))
-                greedy_cost += _compact_forge.forge_into(equip, items[k], reg);
+            if (_forge_engine.is_forgeable(equip, items[k]))
+                greedy_cost += _forge_engine.forge_into(equip, items[k], reg);
         }
         if (greedy_cost > 0) best_cost = greedy_cost;
     }

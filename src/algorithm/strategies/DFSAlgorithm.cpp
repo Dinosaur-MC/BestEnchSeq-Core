@@ -28,14 +28,14 @@ int32_t DFSAlgorithm::_greedy_bound(
 
     std::vector<std::pair<size_t, int32_t>> ordered;
     for (size_t i = 0; i < books.size(); ++i)
-        ordered.emplace_back(i, _compact_forge.estimate_forge_cost(equip, books[i], reg));
+        ordered.emplace_back(i, _forge_engine.estimate_forge_cost(equip, books[i], reg));
     std::sort(ordered.begin(), ordered.end(),
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
     for (const auto& [idx, _] : ordered) {
-        if (!_compact_forge.is_forgeable(equip, books[idx]))
+        if (!_forge_engine.is_forgeable(equip, books[idx]))
             continue;
-        int32_t cost = _compact_forge.forge_into(equip, books[idx], reg);
+        int32_t cost = _forge_engine.forge_into(equip, books[idx], reg);
         total_cost += cost;
     }
 
@@ -59,10 +59,10 @@ std::vector<DFSAlgorithm::ForgePair> DFSAlgorithm::_collect_pairs(
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) {
             if (i == j) continue;
-            if (!_compact_forge.is_forgeable(items[i], items[j]))
+            if (!_forge_engine.is_forgeable(items[i], items[j]))
                 continue;
 
-            int32_t est = _compact_forge.estimate_forge_cost(items[i], items[j], *_ench_reg);
+            int32_t est = _forge_engine.estimate_forge_cost(items[i], items[j], *_ench_reg);
             pairs.push_back({i, j, est});
         }
     }
@@ -91,7 +91,7 @@ int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _compact_forge.set_config(input.config);
+    _forge_engine.set_config(input.config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
@@ -137,35 +137,35 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         // Use index instead of reference — _stack.push_back() in the loop body
         // may reallocate the vector and invalidate all references/iterators.
-        size_t _frame_idx = _stack.size() - 1;
+        size_t frame_idx = _stack.size() - 1;
 
-        if (_stack[_frame_idx].has_backtrack) {
-            size_t adj_base = (_stack[_frame_idx].sac_idx < _stack[_frame_idx].base_idx)
-                ? _stack[_frame_idx].base_idx - 1 : _stack[_frame_idx].base_idx;
-            _stack[_frame_idx].items[adj_base] = std::move(_stack[_frame_idx].saved_base);
-            _stack[_frame_idx].items.insert(
-                _stack[_frame_idx].items.begin() + _stack[_frame_idx].sac_idx, std::move(_stack[_frame_idx].saved_sac));
-            _current_steps.resize(_stack[_frame_idx].saved_steps_size);
-            _stack[_frame_idx].has_backtrack = false;
+        if (_stack[frame_idx].has_backtrack) {
+            size_t adj_base = (_stack[frame_idx].sac_idx < _stack[frame_idx].base_idx)
+                ? _stack[frame_idx].base_idx - 1 : _stack[frame_idx].base_idx;
+            _stack[frame_idx].items[adj_base] = std::move(_stack[frame_idx].saved_base);
+            _stack[frame_idx].items.insert(
+                _stack[frame_idx].items.begin() + _stack[frame_idx].sac_idx, std::move(_stack[frame_idx].saved_sac));
+            _current_steps.resize(_stack[frame_idx].saved_steps_size);
+            _stack[frame_idx].has_backtrack = false;
         }
 
         {
-            auto it = _visited_best.find(_stack[_frame_idx].items);
-            if (it != _visited_best.end() && it->second <= _stack[_frame_idx].cost_so_far) {
+            auto it = _visited_best.find(_stack[frame_idx].items);
+            if (it != _visited_best.end() && it->second <= _stack[frame_idx].cost_so_far) {
                 ctx.incr_nodes_pruned();
                 _stack.pop_back();
                 _frame_pairs.pop_back();
                 continue;
             }
-            _visited_best[_stack[_frame_idx].items] = _stack[_frame_idx].cost_so_far;
+            _visited_best[_stack[frame_idx].items] = _stack[frame_idx].cost_so_far;
         }
 
-        if (_meets_target(_stack[_frame_idx].items[0])) {
+        if (_meets_target(_stack[frame_idx].items[0])) {
             ++_solutions_found;
             ctx.report_compact_solution(std::move(_current_steps));
 
-            if (_best_steps.empty() || _stack[_frame_idx].cost_so_far < _best_cost) {
-                _best_cost = _stack[_frame_idx].cost_so_far;
+            if (_best_steps.empty() || _stack[frame_idx].cost_so_far < _best_cost) {
+                _best_cost = _stack[frame_idx].cost_so_far;
                 _best_steps = _current_steps;
             }
             _stack.pop_back();
@@ -173,7 +173,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             continue;
         }
 
-        if (_stack[_frame_idx].cost_so_far + _heuristic(_stack[_frame_idx].items) >= _best_cost) {
+        if (_stack[frame_idx].cost_so_far + _heuristic(_stack[frame_idx].items) >= _best_cost) {
             ctx.incr_nodes_pruned();
             _stack.pop_back();
             _frame_pairs.pop_back();
@@ -199,39 +199,39 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         auto& pairs = _frame_pairs.back();
         if (pairs.empty())
-            pairs = _collect_pairs(_stack[_frame_idx].items);
+            pairs = _collect_pairs(_stack[frame_idx].items);
 
-        if (_stack[_frame_idx].pair_index >= pairs.size()) {
+        if (_stack[frame_idx].pair_index >= pairs.size()) {
             _stack.pop_back();
             _frame_pairs.pop_back();
             continue;
         }
 
-        const auto& p = pairs[_stack[_frame_idx].pair_index++];
+        const auto& p = pairs[_stack[frame_idx].pair_index++];
 
-        _stack[_frame_idx].saved_base = _stack[_frame_idx].items[p.i];
-        _stack[_frame_idx].saved_sac = _stack[_frame_idx].items[p.j];
-        _stack[_frame_idx].base_idx = p.i;
-        _stack[_frame_idx].sac_idx = p.j;
+        _stack[frame_idx].saved_base = _stack[frame_idx].items[p.i];
+        _stack[frame_idx].saved_sac = _stack[frame_idx].items[p.j];
+        _stack[frame_idx].base_idx = p.i;
+        _stack[frame_idx].sac_idx = p.j;
 
-        int32_t step_cost = _compact_forge.forge_into(
-            _stack[_frame_idx].items[p.i], _stack[_frame_idx].items[p.j], *_ench_reg);
+        int32_t step_cost = _forge_engine.forge_into(
+            _stack[frame_idx].items[p.i], _stack[frame_idx].items[p.j], *_ench_reg);
         ctx.incr_steps_forged();
 
         _current_steps.push_back({
-            _stack[_frame_idx].saved_base, _stack[_frame_idx].saved_sac, step_cost
+            _stack[frame_idx].saved_base, _stack[frame_idx].saved_sac, step_cost
         });
 
-        _stack[_frame_idx].items.erase(_stack[_frame_idx].items.begin() + p.j);
+        _stack[frame_idx].items.erase(_stack[frame_idx].items.begin() + p.j);
 
-        std::vector<compact::Item> child_items = _stack[_frame_idx].items;
+        std::vector<compact::Item> child_items = _stack[frame_idx].items;
 
         _stack.push_back({
-            std::move(child_items), _stack[_frame_idx].cost_so_far + step_cost,
+            std::move(child_items), _stack[frame_idx].cost_so_far + step_cost,
             0, _current_steps.size(), {}, {}, 0, 0, false
         });
         _frame_pairs.emplace_back();
 
-        _stack[_frame_idx].has_backtrack = true;
+        _stack[frame_idx].has_backtrack = true;
     }
 }

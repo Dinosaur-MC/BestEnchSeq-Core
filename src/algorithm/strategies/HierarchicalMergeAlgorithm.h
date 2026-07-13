@@ -26,7 +26,7 @@ private:
         std::vector<compact::EnchStep>& steps,
         const compact::EnchReg& reg,
         ExecutionContext& ctx,
-        const std::chrono::steady_clock::time_point& _start,
+        const std::chrono::steady_clock::time_point& start,
         const SearchConfig& search);
 
     int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg) const;

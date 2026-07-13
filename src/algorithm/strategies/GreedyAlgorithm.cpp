@@ -14,7 +14,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     const auto& reg = input.ench_reg;
     ctx.report_progress(0.0, ProgressStatus::Starting);
 
-    auto _start = std::chrono::steady_clock::now();
+    auto start = std::chrono::steady_clock::now();
 
     std::vector<BookCost> ordered;
     ordered.reserve(items.size() - 1);
@@ -53,7 +53,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
         {
             const auto& sc = input.search;
             if (sc.max_search_time.count() > 0) {
-                auto elapsed = std::chrono::steady_clock::now() - _start;
+                auto elapsed = std::chrono::steady_clock::now() - start;
                 if (elapsed > sc.max_search_time) break;
             }
         }

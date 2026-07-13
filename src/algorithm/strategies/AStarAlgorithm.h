@@ -16,7 +16,7 @@ public:
     static constexpr ItemID INVALID_ITEM_ID = ItemPool::INVALID_ITEM_ID;
 
     explicit AStarAlgorithm(ForgeConfig cfg = {}) noexcept
-        : _compact_forge(std::move(cfg)) {}
+        : _forge_engine(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "astar"; }
     std::string_view version() const noexcept override { return "2.0.0"; }
@@ -64,7 +64,7 @@ private:
                            const compact::EnchReg& reg) const;
 
     // ─── Config ───────────────────────────────────────────────────────────
-    ForgeEngine _compact_forge;
+    ForgeEngine _forge_engine;
     const compact::EnchReg* _ench_reg{nullptr};
     std::vector<compact::Ench> _target;
     int32_t _best_solution_cost{INT32_MAX};
