@@ -31,6 +31,9 @@
 
 namespace {
 
+// Built-in data subdirectory (resolved relative to exe or CWD)
+inline constexpr auto BUILTIN_DATA_DIR = "data/builtin";
+
 void load_builtin_data(
     const std::filesystem::path &builtin_data_dir,
     TagResolver &tag_resolver,
@@ -126,9 +129,9 @@ int main(int argc, char *argv[]) {
 
         // Resolve builtin data directory: prefer path relative to executable,
         // fall back to CWD-relative path for development builds.
-        auto builtin_data_dir = std::filesystem::absolute(argv[0]).parent_path() / "data" / "builtin";
+        auto builtin_data_dir = std::filesystem::absolute(argv[0]).parent_path() / BUILTIN_DATA_DIR;
         if (!std::filesystem::exists(builtin_data_dir)) {
-            builtin_data_dir = std::filesystem::path("data") / "builtin";
+            builtin_data_dir = std::filesystem::path(BUILTIN_DATA_DIR);
         }
 
         // Local registries (no globals)
@@ -179,25 +182,35 @@ int main(int argc, char *argv[]) {
         algo_input.search.memory_mb = static_cast<int32_t>(
             config.memory_mb > 0 ? config.memory_mb : app_cfg.memory_mb);
 
+        // ── Feasibility pre-check (inventory mode) ─────────────────────────
+        bool feasible = true;
+        if (config.mode == "inventory" && !algo->simulate(algo_input)) {
+            LOG_INFO("simulate: target not reachable from given items");
+            feasible = false;
+        }
+
         LOG_INFO("Starting algorithm: %s", config.algorithm.c_str());
 
         // Execute (compact-only algorithm layer)
-        AlgorithmExecutor executor(std::move(algo));
-        executor.start(algo_input);
-        executor.wait();
+        std::vector<EnchSolution> solutions;
+        if (feasible) {
+            AlgorithmExecutor executor(std::move(algo));
+            executor.start(algo_input);
+            executor.wait();
 
-        // ── Verbose diagnostics ────────────────────────────────────────────
-        if (config.verbose || app_cfg.verbose) {
-            auto diag = executor.get_diagnostics(0);
-            LOG_INFO(
-                "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
-                diag.nodes_visited, diag.nodes_pruned, diag.steps_forged,
-                diag.progress * 100.0);
+            // ── Verbose diagnostics ────────────────────────────────────────
+            if (config.verbose || app_cfg.verbose) {
+                auto diag = executor.get_diagnostics(0);
+                LOG_INFO(
+                    "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
+                    diag.nodes_visited, diag.nodes_pruned, diag.steps_forged,
+                    diag.progress * 100.0);
+            }
+
+            // ── Boundary: compact → domain ────────────────────────────────
+            solutions = adapter.recall(executor.output(), algo_input, parsed.original_ench,
+                                        parsed.target_item, parsed.available_items);
         }
-
-        // ── Boundary: compact → domain ────────────────────────────────────
-        auto solutions =
-            adapter.recall(executor.output(), algo_input, parsed.original_ench, parsed.target_item, parsed.available_items);
 
         // Format output
         std::string output_text;
