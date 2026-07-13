@@ -29,9 +29,9 @@ using EnchCollection = std::vector<Ench>;
 
 /// Compact set of Ench with small-object optimization.
 ///
-/// Stores up to 6 enchants inline (24 bytes, zero heap).  When the set
-/// grows beyond INLINE_N elements it transparently switches to heap
-/// storage.  This eliminates ~12M small allocations in search hot paths.
+/// Stores up to 16 enchants inline (64 bytes, zero heap).  Eliminates
+/// ~12M small allocations that the previous vector<Ench> approach incurred
+/// across search hot paths.
 ///
 /// Invariant: elements are always sorted by id (ascending).
 class EnchSet {

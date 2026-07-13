@@ -50,6 +50,10 @@ void EnchSet::insert(const Ench &ench) {
         return;
     }
 
+    // Guard against overflow — INLINE_N covers all MC use cases.
+    if (_size >= INLINE_N) [[unlikely]]
+        return;
+
     // Shift tail to make room, then insert.
     for (size_t i = _size; i > pos; --i)
         d[i] = d[i - 1];

@@ -44,12 +44,12 @@ struct AlgorithmInput {
 Domain 类型逐渐剥离计算职责，成为纯数据容器：
 
 - `::EnchSet` — 删除 `combine()`、`combine_s()`、`is_incompatible()`、`update_cache()`
-- `Ench` — 删除 `get_multiplier()`、`operator+`
+- `Ench` — 删除 `operator+`
 - `ItemStack` — 删除 `update_cache()`、`get_penalty_cost()`
 
 所有 forge 逻辑集中到 `IForgeEngine` 虚接口中，由 `ForgeEngine`（原版）或其子类（mod）实现。
 
-**优势**：forge 规则变化只需修改 ForgeEngine，不用动 domain 类型。算法层使用 `compact::EnchReg` 的 `get_multiplier()` / `is_conflict()`，不接触 domain 注册表。
+**优势**：forge 规则变化只需修改 ForgeEngine，不用动 domain 类型。算法层通过 `reg[id].mul` / `reg[id].mul_b` / `reg.is_conflict()` 访问 compact 注册表，不接触 domain 注册表。
 
 ### 4. 虚接口可扩展性
 
@@ -57,7 +57,8 @@ Domain 类型逐渐剥离计算职责，成为纯数据容器：
 
 ```
 Core:      forge_into() / forge() / is_forgeable()
-Sub-ops:   penalty_cost() / book_multiplier() / apply_cap() / estimate_forge_cost()
+Sub-ops:   penalty_cost() / apply_cap() / estimate_forge_cost()
+           // 书本乘数 mul_b 数据加载时预计算，不再需要 book_multiplier()
 ```
 
 所有 sub-op 提供默认原版实现。Mod 只要继承 `IForgeEngine`，覆盖需要的部分：
@@ -71,7 +72,7 @@ class ModForgeEngine : public IForgeEngine {
 };
 ```
 
-`estimate_forge_cost()` 默认实现调用了 `penalty_cost()` 和 `book_multiplier()`，所以覆盖这些 sub-op 会自动影响算法排序和启发式——无需改动算法代码。
+`estimate_forge_cost()` 默认实现调用了 `penalty_cost()` 并直接读取 `reg[id].mul`/`reg[id].mul_b`，所以覆盖这些 sub-op 会自动影响算法排序和启发式——无需改动算法代码。
 
 ### 5. 配置驱动行为
 
@@ -139,7 +140,7 @@ compact::EnchReg (flat conflict matrix)
        │
        │ owned by AlgorithmInput → executor → worker thread
        ▼
-算法搜索: is_conflict(), get_multiplier(), get_max_level()
+算法搜索: is_conflict(), reg[id].mul, reg[id].mul_b, reg[id].max_lvl
 ```
 
 `EnchantmentRegistry` 支持子集派生，新子集的 ID 重新映射为 `0..N-1` 的稠密序列，通过 `to_global_id()` / `to_local_id()` 双向映射。
@@ -185,7 +186,7 @@ Observer 事件通过 **SPSC（单生产者单消费者）无锁队列** 传递�
 - `forge_into()`：原地锻造（修改 target），返回成本
 - `forge()`：非修改锻造，返回 `{result, cost}`
 - `is_forgeable()`：物品可锻造性
-- Sub-ops：`penalty_cost`、`book_multiplier`、`apply_cap`、`estimate_forge_cost`
+- Sub-ops：`penalty_cost`、`apply_cap`、`estimate_forge_cost`（书本乘数由 `compact::EnchInfo::mul_b` 预计算）
 
 ### `src/types/CompactedTypes.h`
 算法层使用的紧凑数据类型：

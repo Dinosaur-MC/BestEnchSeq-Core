@@ -185,9 +185,9 @@ else
 // 不兼容惩罚
 cost += (plat == MCE::Java && conflict) ? 1 : 0;
 
-// 乘数查找：reg.get_multiplier(id) — compact::EnchReg O(1) 查找
-// 书本乘数在 forge_into 中通过 book_multiplier(reg.get_multiplier(e.id)) 计算
-// 简言之：sac_is_book ? book_multiplier(reg.get_multiplier(e.id)) : reg.get_multiplier(e.id)
+// 乘数查找：reg[id].mul — compact::EnchInfo 直接字段访问
+// 书本乘数：reg[id].mul_b (数据加载时预计算)
+// 简言之：sac_is_book ? reg[id].mul_b : reg[id].mul
 ```
 
 ---

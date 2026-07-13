@@ -306,7 +306,7 @@ AlgorithmExecutor (compact-only)
 
 1. **`forge_into()` 原地操作** — 搜索树每个节点调用数百万次，必须避免 EnchSet 拷贝
 2. **状态快照/回滚** — DFS 可使用 copy-on-write 或 undo 日志回溯，而非深拷贝
-3. **预计算乘数** — `get_multiplier()` 在 hot path 中应缓存
+3. **预计算乘数** — `reg[id].mul` / `reg[id].mul_b` 已预计算为 compact::EnchInfo 字段
 4. **附乘集合位编码** — 将附魔 ID 映射到 `std::bitset` 或 `uint64_t` 位掩码，用于 O(1) 子集判断
 
 ### 并行化
