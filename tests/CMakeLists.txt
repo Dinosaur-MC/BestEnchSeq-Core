@@ -54,6 +54,9 @@ set(COMPACT_REG_SRCS
 # Equipment registry
 set(EQUIP_REG_SRCS ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp)
 
+# Memory pool (linked by any target that uses ItemPool)
+set(MEMORY_POOL_SRCS ${PROJECT_ROOT}/src/utils/MemoryPool.cpp)
+
 # ============================================================================
 # Existing tests
 # ============================================================================
@@ -194,6 +197,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
+    ${MEMORY_POOL_SRCS}
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -301,6 +305,7 @@ add_executable(test_algorithm_executor
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${MEMORY_POOL_SRCS}
 )
 target_include_directories(test_algorithm_executor PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_executor COMMAND test_algorithm_executor)
@@ -330,6 +335,7 @@ add_executable(test_algorithm_strategies
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${MEMORY_POOL_SRCS}
 )
 target_include_directories(test_algorithm_strategies PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_strategies COMMAND test_algorithm_strategies)
