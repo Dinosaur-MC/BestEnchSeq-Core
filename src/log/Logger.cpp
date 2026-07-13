@@ -9,6 +9,7 @@
 
 namespace fs = std::filesystem;
 
+/// Readable timestamp for log lines: "2026-07-13 08:29:15"
 static std::string now_str() {
     auto now = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(now);
@@ -20,6 +21,21 @@ static std::string now_str() {
 #endif
     char buf[32];
     std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+    return buf;
+}
+
+/// Safe timestamp for filenames: "20260713_082915" (no spaces, no colons)
+static std::string file_ts() {
+    auto now = std::chrono::system_clock::now();
+    auto tt = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &tt);
+#else
+    localtime_r(&tt, &tm);
+#endif
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", &tm);
     return buf;
 }
 
@@ -78,7 +94,7 @@ void Logger::_worker() {
     }
 
     auto dir = fs::path(_log_dir);
-    auto run_path = dir / ("run_" + now_str() + ".log");
+    auto run_path = dir / ("run_" + file_ts() + ".log");
     auto latest_path = dir / "latest.log";
 
     std::ofstream run_file(run_path);
