@@ -18,99 +18,77 @@ bool EnchInfo::is_conflict(const EnchInfo &other) const noexcept {
 
 // ─── EnchSet ────────────────────────────────────────────────────────────────
 
-#ifdef BESQ_USE_ENCHSET_BITMAP
-
-// ── Bitmap implementation ──
+void EnchSet::_migrate_to_heap(size_t new_cap) {
+    std::vector<Ench> tmp;
+    tmp.reserve(new_cap);
+    Ench *src = reinterpret_cast<Ench *>(_buf);
+    for (size_t i = 0; i < _size; ++i)
+        tmp.push_back(src[i]);
+    _mode = 1;
+    new (&_vec) std::vector<Ench>(std::move(tmp));
+}
 
 EnchSet::iterator EnchSet::find(int16_t id) noexcept {
-    if (!contains(id)) return _levels.end();
-    auto it = std::lower_bound(_levels.begin(), _levels.end(), id,
+    Ench *d = _data();
+    auto it = std::lower_bound(d, d + _size, id,
         [](const Ench &e, int16_t id) { return e.id < id; });
-    return it;
+    return (it != d + _size && it->id == id) ? it : d + _size;
 }
 
 EnchSet::const_iterator EnchSet::find(int16_t id) const noexcept {
-    if (!contains(id)) return _levels.end();
-    auto it = std::lower_bound(_levels.begin(), _levels.end(), id,
+    const Ench *d = _data();
+    auto it = std::lower_bound(d, d + _size, id,
         [](const Ench &e, int16_t id) { return e.id < id; });
-    return it;
+    return (it != d + _size && it->id == id) ? it : d + _size;
 }
 
 bool EnchSet::contains(int16_t id) const noexcept {
-    if (id < 0) return false;
-    auto idx = static_cast<size_t>(id) / 64;
-    auto bit = static_cast<size_t>(id) % 64;
-    return idx < _present.size() && (_present[idx] & (1ULL << bit));
+    return find(id) != end();
 }
 
 void EnchSet::insert(const Ench &ench) {
-    if (ench.id < 0) return;
-    _grow_for(ench.id);
-    auto idx = static_cast<size_t>(ench.id) / 64;
-    auto bit = static_cast<size_t>(ench.id) % 64;
-    uint64_t old = _present[idx];
-    _present[idx] |= (1ULL << bit);
+    Ench *d = _data();
 
-    if (old & (1ULL << bit)) {
-        // Update existing level
-        auto it = std::lower_bound(_levels.begin(), _levels.end(), ench.id,
-            [](const Ench &e, int16_t id) { return e.id < id; });
-        if (it != _levels.end() && it->id == ench.id)
-            it->level = ench.level;
-    } else {
-        // Insert new
-        auto it = std::lower_bound(_levels.begin(), _levels.end(), ench.id,
-            [](const Ench &e, int16_t id) { return e.id < id; });
-        _levels.insert(it, ench);
+    // ── Insert or update ──
+    auto it = std::lower_bound(d, d + _size, ench.id,
+        [](const Ench &e, int16_t id) { return e.id < id; });
+
+    size_t pos = static_cast<size_t>(it - d);
+
+    if (it != d + _size && it->id == ench.id) {
+        // Update existing
+        d[pos].level = ench.level;
+        return;
     }
+
+    // Insert new — need space
+    if (pos >= _size) pos = _size;  // append
+
+    size_t needed = _size + 1;
+    if (_is_inline() && needed > INLINE_N) {
+        // Switch to heap: copy current data, insert new element
+        std::vector<Ench> tmp;
+        tmp.reserve(needed + 2);
+        for (size_t i = 0; i < _size; ++i)
+            tmp.push_back(d[i]);
+        tmp.insert(tmp.begin() + static_cast<ptrdiff_t>(pos), ench);
+        _mode = 1;
+        new (&_vec) std::vector<Ench>(std::move(tmp));
+    } else if (!_is_inline()) {
+        _vec.insert(_vec.begin() + static_cast<ptrdiff_t>(pos), ench);
+    } else {
+        // Inline insert — shift tail
+        for (size_t i = _size; i > pos; --i)
+            d[i] = d[i - 1];
+        d[pos] = ench;
+    }
+    ++_size;
 }
 
 void EnchSet::sort() {
-    std::sort(_levels.begin(), _levels.end(),
-              [](const Ench &a, const Ench &b) { return a.id < b.id; });
-    // Rebuild bitmask from sorted levels
-    _present.assign(_present.size(), 0);
-    for (const auto &e : _levels) {
-        _grow_for(e.id);
-        auto idx = static_cast<size_t>(e.id) / 64;
-        auto bit = static_cast<size_t>(e.id) % 64;
-        _present[idx] |= (1ULL << bit);
-    }
-}
-
-#else // !BESQ_USE_ENCHSET_BITMAP
-
-// ── Sorted-vector implementation (default) ──
-
-EnchSet::iterator EnchSet::find(int16_t id) noexcept {
-    auto it = std::lower_bound(_levels.begin(), _levels.end(), id,
-        [](const Ench &e, int16_t id) { return e.id < id; });
-    return (it != _levels.end() && it->id == id) ? it : _levels.end();
-}
-
-EnchSet::const_iterator EnchSet::find(int16_t id) const noexcept {
-    auto it = std::lower_bound(_levels.begin(), _levels.end(), id,
-        [](const Ench &e, int16_t id) { return e.id < id; });
-    return (it != _levels.end() && it->id == id) ? it : _levels.end();
-}
-
-bool EnchSet::contains(int16_t id) const noexcept { return find(id) != _levels.end(); }
-
-void EnchSet::insert(const Ench &ench) {
-    auto it = std::lower_bound(_levels.begin(), _levels.end(), ench.id,
-        [](const Ench &e, int16_t id) { return e.id < id; });
-    if (it != _levels.end() && it->id == ench.id) {
-        it->level = ench.level; // update existing
-    } else {
-        _levels.insert(it, ench); // insert at sorted position
-    }
-}
-
-void EnchSet::sort() {
-    std::sort(_levels.begin(), _levels.end(),
+    Ench *d = _data();
+    std::sort(d, d + _size,
               [](const Ench &a, const Ench &b) { return a.id < b.id; });
 }
-
-#endif // BESQ_USE_ENCHSET_BITMAP
 
 } // namespace compact
