@@ -19,7 +19,6 @@ namespace {
 
 constexpr int16_t ID_SHARPNESS = 0;
 constexpr int16_t ID_KNOCKBACK = 1;
-constexpr int16_t ID_BANE      = 2;
 
 void setup_registries() {
     registries::categories().initialize();

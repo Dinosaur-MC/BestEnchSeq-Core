@@ -105,7 +105,6 @@ void test_two_producers_one_consumer() {
     constexpr int TOTAL = PRODUCE_PER * 2;
     BoundedMPMCQueue<uint64_t, 1024> q;
 
-    std::atomic<bool> done{false};
     std::atomic<uint64_t> consumed{0};
     std::atomic<uint64_t> sum_in{0};
     std::atomic<uint64_t> sum_out{0};

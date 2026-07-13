@@ -308,7 +308,7 @@ void test_ppn_recalculation() {
     compact::Item equip{compact::ItemType::Equip, 1561, 3, {}};
     auto book_c = make_book(ids.sharpness, 1);
     book_c.ppn = 0;
-    int32_t cost2 = engine.forge_into(equip, book_c, reg);
+    (void)engine.forge_into(equip, book_c, reg);
     expect(equip.ppn == 4, "PPN after equip(3)+book(0) should be 4");
 
     std::cout << "PASS: test_ppn_recalculation (ppn1=" << static_cast<int>(result.ppn)

@@ -206,7 +206,6 @@ void test_multi_producer_multi_consumer_stress() {
 
     SegmentedMPMCQueue<uint64_t, 256> q;
 
-    std::atomic<bool> done{false};
     std::atomic<uint64_t> consumed{0};
     std::atomic<uint64_t> sum_in{0};
     std::atomic<uint64_t> sum_out{0};

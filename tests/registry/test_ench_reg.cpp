@@ -154,7 +154,7 @@ void test_enchset_sort_restores_invariant() {
     std::swap(*it, *(it + 1));  // swap elements: now [id=2, id=0] — unsorted
 
     // find() should fail on unsorted data
-    auto found = set.find(2);
+    (void)set.find(2);
     // With broken invariant, find may still work via binary search luck
     // but the real test is whether sort() fixes it
     set.sort();
