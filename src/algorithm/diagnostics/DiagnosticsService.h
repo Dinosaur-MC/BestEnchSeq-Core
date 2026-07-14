@@ -49,6 +49,7 @@ public:
 
 private:
     DiagnosticsService();
+    void _process_one(DiagnosticsEvent& event);
     void _worker();
 
     static constexpr size_t QUEUE_CAPACITY = 64;
