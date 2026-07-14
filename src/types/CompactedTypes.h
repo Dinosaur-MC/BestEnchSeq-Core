@@ -88,6 +88,14 @@ class EnchSet {
     void sort();
 
     // ── Hash (lazily cached) ──
+    //
+    // hash() caches the result on first call.  Insert / clear / sort
+    // invalidate the cache automatically.
+    //
+    // ⚠  Mutable iterators (begin/end) grant raw write access to the
+    //     inline buffer.  If you modify enchantments through them, you
+    //     MUST call rehash() afterwards, otherwise hash() returns a
+    //     stale value.  Prefer insert() / clear() / sort() when possible.
     [[nodiscard]] size_t hash() const noexcept {
         if (_hash_cache == 0 && _size > 0) {
             size_t h = _size;
@@ -97,6 +105,13 @@ class EnchSet {
             _hash_cache = h;
         }
         return _hash_cache;
+    }
+
+    /// Force-recompute the hash cache.  Use after raw buffer modifications
+    /// via mutable iterators when insert/clear/sort are not an option.
+    void rehash() const noexcept {
+        _hash_cache = 0;
+        (void)hash();
     }
 
     // ── Comparison ──
