@@ -1,6 +1,6 @@
-#include "DiffFirstAlgorithm.h"
-#include "../ExecutionContext.h"
-#include "../DiagnosticsWriter.h"
+#include "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
+#include "algorithm/ExecutionContext.h"
+#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cstdint>

@@ -1,6 +1,6 @@
 #pragma once
-#include "components/AlgorithmDiagnostics.h"
-#include "components/AStarDiagnostics.h"
+#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
+#include "algorithm/diagnostics/AStarDiagnostics.h"
 
 /// Free-function diagnostics writers, separated from the pure-data
 /// diagnostics structs.

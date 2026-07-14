@@ -1,6 +1,6 @@
-#include "HammingAlgorithm.h"
-#include "../ExecutionContext.h"
-#include "../DiagnosticsWriter.h"
+#include "algorithm/strategies/hamming/HammingAlgorithm.h"
+#include "algorithm/ExecutionContext.h"
+#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cstdint>

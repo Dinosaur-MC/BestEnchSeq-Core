@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "algorithm/AlgorithmObserver.h"
+#include "algorithm/diagnostics/AlgorithmObserver.h"
 #include "algorithm/ExecutionContext.h"
 #include "types/CompactedTypes.h"
 #include <chrono>

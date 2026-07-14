@@ -1,5 +1,5 @@
-#include "IDAStarAlgorithm.h"
-#include "../ExecutionContext.h"
+#include "algorithm/strategies/idastar/IDAStarAlgorithm.h"
+#include "algorithm/ExecutionContext.h"
 #include "algorithm/components/SearchUtils.h"
 #include "algorithm/components/StateHash.h"
 #include <algorithm>

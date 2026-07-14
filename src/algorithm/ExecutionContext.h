@@ -1,5 +1,5 @@
 #pragma once
-#include "AlgorithmObserver.h"
+#include "algorithm/diagnostics/AlgorithmObserver.h"
 #include "utils/queue/SPSCQueue.hpp"
 #include <atomic>
 #include <chrono>

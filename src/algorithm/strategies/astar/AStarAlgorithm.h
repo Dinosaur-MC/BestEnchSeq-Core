@@ -1,8 +1,8 @@
 #pragma once
-#include "../IAlgorithm.h"
-#include "../forge/ForgeEngine.h"
+#include "algorithm/IAlgorithm.h"
+#include "algorithm/forge/ForgeEngine.h"
 #include "algorithm/components/AStarMemoryBudget.h"
-#include "algorithm/components/AStarDiagnostics.h"
+#include "algorithm/diagnostics/AStarDiagnostics.h"
 #include "algorithm/components/ItemPool.h"
 #include "registries/CompactedRegistries.h"
 #include <chrono>

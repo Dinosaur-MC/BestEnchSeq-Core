@@ -17,7 +17,7 @@ static auto& test_cat_reg  = registries::categories();
 
 #include "adapters/CompactAdapter.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/GreedyAlgorithm.h"
+#include "algorithm/strategies/greedy/GreedyAlgorithm.h"
 #include "algorithm/IAlgorithm.h"
 #include "io/json.h"
 

@@ -1,0 +1,147 @@
+#include "algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
+#include "algorithm/ExecutionContext.h"
+#include "algorithm/diagnostics/DiagnosticsWriter.h"
+#include <chrono>
+#include <cstdint>
+#include <vector>
+
+using compact::Item;
+using compact::ItemType;
+using compact::EnchStep;
+using compact::EnchReg;
+
+void DynamicPenaltyBalancingAlgorithm::execute(
+    const AlgorithmInput& input, ExecutionContext& ctx)
+{
+    _forge_engine.set_config(input.config);
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    const auto& target = input.target;
+    ctx.report_progress(0.0, ProgressStatus::Starting);
+
+    auto start = std::chrono::steady_clock::now();
+    int32_t solutions_found = 0;
+
+    std::vector<Item> mut_items = items;
+
+    // Quick check: goal already met?
+    {
+        bool met = true;
+        for (const auto& t : target) {
+            auto it = mut_items[0].enchs.find(t.id);
+            if (it == mut_items[0].enchs.end() || it->level < t.level) {
+                met = false;
+                break;
+            }
+        }
+        if (met) {
+            ctx.report_compact_solution({});
+            ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
+            return;
+        }
+    }
+
+    std::vector<EnchStep> compact_steps;
+    const size_t initial_count = mut_items.size();
+
+    while (mut_items.size() > 1) {
+        if (ctx.is_cancelled()) return;
+        ctx.wait_if_paused();
+
+        size_t best_i = 0, best_j = 0;
+        int32_t best_pen_diff = INT32_MAX;
+        int32_t best_est_cost = INT32_MAX;
+        bool best_both_books = false;
+        bool found = false;
+
+        for (size_t i = 0; i < mut_items.size(); ++i) {
+            for (size_t j = 0; j < mut_items.size(); ++j) {
+                if (i == j) continue;
+                if (!_forge_engine.is_forgeable(mut_items[i], mut_items[j]))
+                    continue;
+
+                int32_t pen_diff = std::abs(static_cast<int32_t>(mut_items[i].ppn)
+                                          - static_cast<int32_t>(mut_items[j].ppn));
+                int32_t est = _forge_engine.estimate_forge_cost(mut_items[i], mut_items[j], reg);
+                bool both_books = (mut_items[i].type == ItemType::Book
+                                && mut_items[j].type == ItemType::Book);
+
+                if (!found || pen_diff < best_pen_diff) {
+                    best_pen_diff = pen_diff;
+                    best_est_cost = est;
+                    best_both_books = both_books;
+                    best_i = i; best_j = j;
+                    found = true;
+                } else if (pen_diff == best_pen_diff) {
+                    if (est < best_est_cost) {
+                        best_est_cost = est;
+                        best_both_books = both_books;
+                        best_i = i; best_j = j;
+                    } else if (est == best_est_cost && both_books && !best_both_books) {
+                        best_both_books = true;
+                        best_i = i; best_j = j;
+                    }
+                }
+            }
+        }
+
+        if (!found) break;
+
+        Item saved_i = mut_items[best_i];
+        Item saved_j = mut_items[best_j];
+
+        int32_t step_cost = _forge_engine.forge_into(mut_items[best_i], mut_items[best_j], reg);
+        ctx.incr_steps_forged();
+
+        compact_steps.push_back({
+            std::move(saved_i), std::move(saved_j), step_cost
+        });
+
+        ++solutions_found;
+
+        {
+            const auto& sc = input.search;
+            if (sc.max_search_time.count() > 0) {
+                auto elapsed = std::chrono::steady_clock::now() - start;
+                if (elapsed > sc.max_search_time) break;
+            }
+            if (sc.max_solutions > 0 && solutions_found >= sc.max_solutions) break;
+        }
+
+        mut_items.erase(mut_items.begin() + best_j);
+
+        double progress = 1.0 - static_cast<double>(mut_items.size()) / initial_count;
+        ctx.report_progress(progress, ProgressStatus::MergingGroups);
+    }
+
+    // Verify target achieved
+    {
+        bool met = true;
+        for (const auto& t : target) {
+            auto it = mut_items[0].enchs.find(t.id);
+            if (it == mut_items[0].enchs.end() || it->level < t.level) {
+                met = false;
+                break;
+            }
+        }
+        if (!met) {
+            _diag.label = "penalty_balance";
+            _diag.status = "CompleteNoSolution";
+            _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - start).count();
+            DiagnosticsWriter::write(_diag);
+            ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+            return;
+        }
+    }
+
+    _diag.label = "penalty_balance";
+    _diag.steps_forged = compact_steps.size();
+    _diag.status = "Complete";
+    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    DiagnosticsWriter::write(_diag);
+
+    ctx.report_compact_solution(std::move(compact_steps));
+    ctx.report_progress(1.0, ProgressStatus::Complete);
+}

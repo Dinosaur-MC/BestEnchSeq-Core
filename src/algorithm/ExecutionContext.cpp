@@ -1,5 +1,5 @@
 #include "ExecutionContext.h"
-#include "AlgorithmObserver.h"
+#include "algorithm/diagnostics/AlgorithmObserver.h"
 #include "log/log.hpp"
 #include <algorithm>
 

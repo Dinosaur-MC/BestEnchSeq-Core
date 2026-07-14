@@ -41,7 +41,7 @@ set(COMPACT_TYPE_SRCS ${PROJECT_ROOT}/src/types/CompactedTypes.cpp)
 set(ALGO_ENGINE_SRCS
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/DiagnosticsWriter.cpp
+    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsWriter.cpp
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
 )
 
@@ -188,8 +188,8 @@ add_executable(test_integration
     ${COMPACT_REG_SRCS}
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/greedy/GreedyAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -308,19 +308,14 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_algorithm_strategies.cp
     message(FATAL_ERROR "Required test source not found: algorithm/test_algorithm_strategies.cpp")
 endif()
 
+include(${PROJECT_ROOT}/src/algorithm/strategies/CMakeLists.txt)
+
 add_executable(test_algorithm_strategies
     algorithm/test_algorithm_strategies.cpp
     ${ALGO_ENGINE_SRCS}
-    ${PROJECT_ROOT}/src/algorithm/strategies/GreedyAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/DFSAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/AStarAlgorithm.cpp
+    ${ALGO_STRATEGY_SRGS}
+    ${ALGO_DIAG_SRCS}
     ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
-    ${PROJECT_ROOT}/src/algorithm/components/AStarDiagnostics.cpp
-    ${PROJECT_ROOT}/src/algorithm/components/AlgorithmDiagnostics.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancingAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/HammingAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/DiffFirstAlgorithm.cpp
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp

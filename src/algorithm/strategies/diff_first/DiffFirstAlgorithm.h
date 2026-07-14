@@ -1,7 +1,7 @@
 #pragma once
-#include "../IAlgorithm.h"
-#include "../forge/ForgeEngine.h"
-#include "algorithm/components/AlgorithmDiagnostics.h"
+#include "algorithm/IAlgorithm.h"
+#include "algorithm/forge/ForgeEngine.h"
+#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <vector>

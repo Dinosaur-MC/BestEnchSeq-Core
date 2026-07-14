@@ -1,6 +1,6 @@
 #pragma once
-#include "../IAlgorithm.h"
-#include "../forge/ForgeEngine.h"
+#include "algorithm/IAlgorithm.h"
+#include "algorithm/forge/ForgeEngine.h"
 #include "algorithm/components/ItemPool.h"
 #include "algorithm/components/TTTable.h"
 #include "registries/CompactedRegistries.h"
