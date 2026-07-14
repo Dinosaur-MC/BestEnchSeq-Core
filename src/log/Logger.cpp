@@ -52,14 +52,17 @@ static std::string level_str(LogLevel lv) {
 
 // ─── FileHandler ──────────────────────────────────────────────────────
 
-Logger::FileHandler::FileHandler(std::string log_dir)
-    : log_dir(std::move(log_dir))
+Logger::FileHandler::FileHandler(std::string log_dir, std::atomic<uint64_t>* pp, size_t* rp)
+    : log_dir(std::move(log_dir)), processed_ptr(pp), retention_ptr(rp)
 {
-    // Open files in constructor (called before worker thread starts).
-    rotate();
-    auto dir = fs::path(this->log_dir);
-    run_file.open(dir / ("run_" + file_ts() + ".log"));
-    latest_file.open(dir / "latest.log");
+    try {
+        rotate();
+        auto dir = fs::path(this->log_dir);
+        run_file.open(dir / ("run_" + file_ts() + ".log"));
+        latest_file.open(dir / "latest.log");
+    } catch (const std::exception& e) {
+        // Non-fatal: continue without file logging
+    }
 }
 
 void Logger::FileHandler::rotate() {
@@ -82,7 +85,7 @@ void Logger::FileHandler::rotate() {
                   return a.filename().string() > b.filename().string();
               });
 
-    while (runs.size() >= 5) {
+    while (runs.size() >= (retention_ptr ? *retention_ptr : 5)) {
         fs::remove(runs.back());
         runs.pop_back();
     }
@@ -101,6 +104,9 @@ void Logger::FileHandler::operator()(LogEntry entry) {
         latest_file << line;
         latest_file.flush();
     }
+
+    if (processed_ptr)
+        processed_ptr->fetch_add(1, std::memory_order_release);
 }
 
 // ─── Singleton ────────────────────────────────────────────────────────
@@ -113,7 +119,7 @@ Logger& Logger::instance() {
 // ─── Public API ───────────────────────────────────────────────────────
 
 Logger::Logger(std::string log_dir)
-    : _loop(FileHandler(std::move(log_dir)))
+    : _loop(FileHandler(std::move(log_dir), &_processed, &_max_retention))
 {
     _loop.start();
 }
@@ -125,10 +131,13 @@ Logger::~Logger() {
 void Logger::log(LogLevel level, std::string message) {
     if (level < _level.load(std::memory_order_acquire))
         return;
-    _loop.try_post(LogEntry{level, std::move(message)});
+    if (_loop.try_post(LogEntry{level, std::move(message)})) {
+        _enqueued.fetch_add(1, std::memory_order_release);
+    }
 }
 
 void Logger::flush() {
-    while (!_loop.empty())
+    auto target = _enqueued.load(std::memory_order_acquire);
+    while (_processed.load(std::memory_order_acquire) < target)
         std::this_thread::yield();
 }

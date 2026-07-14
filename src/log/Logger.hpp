@@ -83,18 +83,28 @@ private:
     // Files are opened in the constructor (before worker starts) and
     // written from the worker thread.
     struct FileHandler {
-        explicit FileHandler(std::string log_dir);
+        explicit FileHandler(std::string log_dir,
+                             std::atomic<uint64_t>* pp = nullptr,
+                             size_t* rp = nullptr);
         void operator()(LogEntry entry);
         void rotate();
 
         std::string log_dir;
         std::ofstream run_file;
         std::ofstream latest_file;
+        std::atomic<uint64_t>* processed_ptr{nullptr};
+        size_t* retention_ptr{nullptr};
     };
 
     explicit Logger(std::string log_dir = "logs");
 
+    // _max_retention and _processed MUST precede _loop because the
+    // FileHandler constructor receives pointers to them (via the
+    // _loop initializer list). C++ initializes members in declaration
+    // order, so these must come before _loop.
+    std::atomic<uint64_t> _enqueued{0};
+    std::atomic<uint64_t> _processed{0};
+    size_t _max_retention{5};
     EventLoop<LogEntry, BoundedMPMCQueue<LogEntry, 256>, FileHandler> _loop;
     std::atomic<LogLevel> _level{LogLevel::Debug};
-    size_t _max_retention{5};
 };
