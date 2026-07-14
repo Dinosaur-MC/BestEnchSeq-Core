@@ -8,6 +8,7 @@
 #include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "algorithm/strategies/HammingAlgorithm.h"
+#include "algorithm/strategies/DiffFirstAlgorithm.h"
 #include "adapters/CompactAdapter.h"
 #include "parsers/EnchInfoParser.h"
 #include "parsers/EquipmentParser.h"
@@ -100,7 +101,7 @@ struct BenchConfig {
 
 BenchConfig parse_cli(int argc, char* argv[]) {
     BenchConfig cfg;
-    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical", "idastar", "hamming"};
+    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical", "idastar", "hamming", "difficulty_first"};
     for (auto* a : all_algos) cfg.algos.insert(a);
 
     auto die = [](const std::string& msg) {
@@ -390,6 +391,8 @@ int main(int argc, char* argv[]) {
         []{ return std::make_unique<IDAStarAlgorithm>(); });
     registries::algorithms().register_algorithm("hamming",
         []{ return std::make_unique<HammingAlgorithm>(); });
+    registries::algorithms().register_algorithm("difficulty_first",
+        []{ return std::make_unique<DiffFirstAlgorithm>(); });
 
     // Filter tests
     std::vector<const TestCase*> queue;

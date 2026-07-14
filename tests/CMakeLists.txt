@@ -320,6 +320,7 @@ add_executable(test_algorithm_strategies
     ${PROJECT_ROOT}/src/algorithm/strategies/DynamicPenaltyBalancingAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/HierarchicalMergeAlgorithm.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/HammingAlgorithm.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/DiffFirstAlgorithm.cpp
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp

@@ -11,6 +11,7 @@
 #include "parsers/EnchInfoParser.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
 #include "algorithm/strategies/HammingAlgorithm.h"
+#include "algorithm/strategies/DiffFirstAlgorithm.h"
 #include "log/log.hpp"
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
@@ -104,6 +105,8 @@ void register_builtin_algorithms(AlgorithmRegistry &registry) {
                                 [] { return std::make_unique<IDAStarAlgorithm>(); });
     registry.register_algorithm("hamming",
                                 [] { return std::make_unique<HammingAlgorithm>(); });
+    registry.register_algorithm("difficulty_first",
+                                [] { return std::make_unique<DiffFirstAlgorithm>(); });
 }
 
 } // anonymous namespace
