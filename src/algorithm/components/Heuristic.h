@@ -33,12 +33,7 @@ inline int32_t compute(
         },
         reg, buf, dirty);
 
-    for (const auto& t : target) {
-        if (t.id < 0) continue;
-        int16_t have = buf[t.id];
-        if (have < t.level)
-            h += (t.level - have) * reg[t.id].mul_b;
-    }
+    h = search_utils::compute_h(target, reg, buf);
 
     for (auto id : dirty) {
         buf[id] = 0;

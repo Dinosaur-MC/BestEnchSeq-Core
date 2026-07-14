@@ -1,6 +1,7 @@
 #include "algorithm/strategies/astar/AStarAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
 #include "algorithm/components/SearchUtils.h"
+#include "algorithm/components/StateHash.h"
 #include "utils/FlatHashMap.hpp"
 #include "utils/HashUtils.hpp"
 #include <algorithm>
@@ -11,27 +12,10 @@ using compact::Item;
 using compact::EnchStep;
 using compact::EnchReg;
 
-// ─── Hash (local TU helper) ─────────────────────────────────────────────
-
-namespace {
-
-size_t hash_item_data(const Item& item) noexcept {
-    size_t h = static_cast<size_t>(item.type)
-             ^ (static_cast<size_t>(item.ppn) << 8)
-             ^ (static_cast<size_t>(item.dur) << 16);
-    hash_combine(h, item.enchs.hash());
-    return h;
-}
-
-} // anonymous namespace
-
 // ─── ItemPool helpers ───────────────────────────────────────────────────
 
 size_t AStarAlgorithm::_hash_ids(const std::vector<ItemID>& ids) const {
-    size_t h = ids.size();
-    for (auto id : ids)
-        hash_combine(h, hash_item_data(_pool[id]));
-    return h;
+    return StateHash::ids(ids, _pool);
 }
 
 int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID>& ids) const {
