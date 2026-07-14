@@ -1,17 +1,19 @@
 #pragma once
+#include "algorithm/diagnostics/AlgorithmObserver.h"
 #include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
 #include <chrono>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
 
-/// A single diagnostics event queued for asynchronous file persistence.
+/// A single diagnostics event queued for async persistence + observer dispatch.
 ///
 /// Created by any thread calling DiagnosticsService::push() and consumed
-/// by the dedicated worker thread.  The timestamp is captured at creation
-/// time so the worker can compute wall-clock duration when it writes.
+/// by the dedicated worker thread.
 struct DiagnosticsEvent {
     std::string algorithm_name;
     std::vector<DiagnosticsWriter::Entry> entries;
@@ -20,7 +22,8 @@ struct DiagnosticsEvent {
     std::chrono::system_clock::time_point timestamp;
 };
 
-/// Global singleton for async persistence of algorithm diagnostics.
+/// Global singleton for async persistence and observer dispatch of
+/// algorithm diagnostics.
 ///
 /// Thread-safe push() via lock-free MPMC queue.  The worker thread blocks
 /// on C++20 atomic::wait when idle — zero CPU, no mutex, no condition
@@ -37,9 +40,15 @@ public:
     DiagnosticsService(const DiagnosticsService&) = delete;
     DiagnosticsService& operator=(const DiagnosticsService&) = delete;
 
-    /// Enqueue a diagnostics event for async persistence (non-blocking).
+    /// Enqueue a diagnostics event for async processing (non-blocking).
     /// Silently drops when the queue is full (QUEUE_CAPACITY = 64).
     void push(DiagnosticsEvent event);
+
+    /// Attach a global observer (receives events for ALL algorithm runs).
+    void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
+
+    /// Detach a previously attached observer.
+    void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
 
     /// Busy-wait until all queued events have been written to disk.
     /// Intended for use at process exit (e.g. before main() returns).
@@ -59,5 +68,9 @@ private:
     std::atomic<bool>      _running{true};
     std::atomic<uint64_t>  _wake_seq{0};
     std::atomic<bool>      _persist{true};
-    std::thread            _worker_thread;
+
+    mutable std::mutex   _obs_mtx;
+    std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
+
+    std::thread _worker_thread;
 };

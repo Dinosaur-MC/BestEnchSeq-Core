@@ -1,7 +1,4 @@
 #pragma once
-#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
-#include "algorithm/strategies/astar/AStarDiagnostics.h"
-
 #include <span>
 #include <string>
 #include <string_view>
@@ -19,10 +16,6 @@ struct Entry {
 };
 
 #ifndef BESQ_DISABLE_DIAGNOSTICS
-[[deprecated("Use the generic write(algorithm_name, entries, wall_ms, status) instead")]]
-void write(const AlgorithmDiagnostics& diag);
-[[deprecated("Use the generic write(algorithm_name, entries, wall_ms, status) instead")]]
-void write(const AStarDiagnostics& diag);
 
 /// Generic key-value diagnostics writer.
 ///
@@ -38,8 +31,6 @@ void write(std::string_view algorithm_name,
            int64_t wall_ms,
            std::string_view status);
 #else
-inline void write(const AlgorithmDiagnostics&) {}
-inline void write(const AStarDiagnostics&) {}
 inline void write(std::string_view, std::span<const Entry>, int64_t, std::string_view) {}
 #endif
 

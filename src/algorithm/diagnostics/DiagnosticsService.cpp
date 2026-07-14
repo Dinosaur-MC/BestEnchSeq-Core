@@ -1,5 +1,6 @@
 #include "algorithm/diagnostics/DiagnosticsService.h"
 #include <chrono>
+#include <sstream>
 
 // ─── Singleton (Meyer's) ────────────────────────────────────────────────────
 
@@ -31,6 +32,18 @@ void DiagnosticsService::push(DiagnosticsEvent event) {
     }
 }
 
+void DiagnosticsService::attach_observer(std::shared_ptr<AlgorithmObserver> observer) {
+    std::lock_guard lock(_obs_mtx);
+    _observers.push_back(std::move(observer));
+}
+
+void DiagnosticsService::detach_observer(std::shared_ptr<AlgorithmObserver> observer) {
+    std::lock_guard lock(_obs_mtx);
+    auto it = std::find(_observers.begin(), _observers.end(), observer);
+    if (it != _observers.end())
+        _observers.erase(it);
+}
+
 void DiagnosticsService::flush() {
     // Busy-wait: keep waking the worker until the queue is fully drained.
     while (!_queue.empty()) {
@@ -43,13 +56,30 @@ void DiagnosticsService::flush() {
 // ─── Internal helpers ───────────────────────────────────────────────────────
 
 void DiagnosticsService::_process_one(const DiagnosticsEvent& event) {
-    if (!_persist.load(std::memory_order_acquire))
-        return;
-    DiagnosticsWriter::write(
-        event.algorithm_name,
-        event.entries,
-        event.wall_ms,
-        event.status);
+    // 1. Dispatch to global observers
+    {
+        std::lock_guard lock(_obs_mtx);
+        if (!_observers.empty()) {
+            // Serialise event to a diagnostic message for the observer callback
+            std::ostringstream oss;
+            oss << "algorithm=" << event.algorithm_name
+                << " status=" << event.status
+                << " wall_ms=" << event.wall_ms;
+            DiagnosticInfo info{oss.str()};
+
+            for (auto& obs : _observers)
+                obs->on_diagnostic(info);
+        }
+    }
+
+    // 2. Persist to file
+    if (_persist.load(std::memory_order_acquire)) {
+        DiagnosticsWriter::write(
+            event.algorithm_name,
+            event.entries,
+            event.wall_ms,
+            event.status);
+    }
 }
 
 // ─── Worker thread ──────────────────────────────────────────────────────────

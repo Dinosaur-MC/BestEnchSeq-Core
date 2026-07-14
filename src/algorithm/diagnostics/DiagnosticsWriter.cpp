@@ -71,42 +71,4 @@ void DiagnosticsWriter::write(std::string_view algorithm_name,
     }
 }
 
-// ─── AlgorithmDiagnostics writer (deprecated) ────────────────────────────────
-
-void DiagnosticsWriter::write(const AlgorithmDiagnostics& diag) {
-    // Convert to KV entries and delegate to the generic writer.
-    // Note: nodes_visited/pruned/steps_forged now come from ctx atomics
-    // via Executor::_finalize(), not from this struct.
-    std::vector<Entry> entries;
-    entries.reserve(1);
-    entries.push_back({"solution_cost", std::to_string(diag.solution_cost)});
-
-    write(diag.algorithm_name, entries, diag.wall_ms, diag.status);
-}
-
-// ─── AStarDiagnostics writer (deprecated) ────────────────────────────────────
-
-void DiagnosticsWriter::write(const AStarDiagnostics& diag) {
-    // Convert to KV entries and delegate to the generic writer.
-    // Note: steps_forged and wall_ms now come from ctx atomics via
-    // Executor::_finalize(), not from the diagnostics struct.
-    std::vector<Entry> entries;
-    entries.reserve(13);
-    entries.push_back({"solution_cost", std::to_string(diag.solution_cost)});
-    entries.push_back({"explored_count", std::to_string(diag.explored_count)});
-    entries.push_back({"best_g_entries", std::to_string(diag.best_g_entries)});
-    entries.push_back({"step_pool_used", std::to_string(diag.step_pool_used)});
-    entries.push_back({"step_pool_capacity", std::to_string(diag.step_pool_capacity)});
-    entries.push_back({"items_pool", std::to_string(diag.items_pool_used)});
-    entries.push_back({"items_pool_capacity", std::to_string(diag.items_pool_capacity)});
-    entries.push_back({"open_set_pending", std::to_string(diag.open_set_pending)});
-    entries.push_back({"pruned_by_cost", std::to_string(diag.pruned_by_cost)});
-    entries.push_back({"pruned_by_best_g", std::to_string(diag.pruned_by_best_g)});
-    entries.push_back({"pruned_by_f", std::to_string(diag.pruned_by_f)});
-    entries.push_back({"pruned_by_caps", std::to_string(diag.pruned_by_caps)});
-    entries.push_back({"estimated_peak_bytes", std::to_string(diag.estimated_peak_bytes)});
-
-    write("astar", entries, diag.wall_ms, diag.status);
-}
-
 #endif // BESQ_DISABLE_DIAGNOSTICS
