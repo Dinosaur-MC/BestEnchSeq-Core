@@ -1,4 +1,5 @@
 #include "algorithm/diagnostics/DiagnosticsService.h"
+#include "log/log.hpp"
 #include <chrono>
 #include <sstream>
 
@@ -29,6 +30,8 @@ void DiagnosticsService::push(DiagnosticsEvent event) {
     if (_queue.try_push(std::move(event))) {
         _wake_seq.fetch_add(1, std::memory_order_release);
         _wake_seq.notify_one();
+    } else {
+        LOG_WARN("diagnostics queue full, event dropped (algo=%s)", event.algorithm_name.c_str());
     }
 }
 
@@ -56,18 +59,21 @@ void DiagnosticsService::flush() {
 // ─── Internal helpers ───────────────────────────────────────────────────────
 
 void DiagnosticsService::_process_one(const DiagnosticsEvent& event) {
-    // 1. Dispatch to global observers
+    // 1. Dispatch to global observers (snapshot list, no lock during callback)
     {
-        std::lock_guard lock(_obs_mtx);
-        if (!_observers.empty()) {
-            // Serialise event to a diagnostic message for the observer callback
+        std::vector<std::shared_ptr<AlgorithmObserver>> local;
+        {
+            std::lock_guard lock(_obs_mtx);
+            local = _observers;
+        }
+        if (!local.empty()) {
             std::ostringstream oss;
             oss << "algorithm=" << event.algorithm_name
                 << " status=" << event.status
                 << " wall_ms=" << event.wall_ms;
             DiagnosticInfo info{oss.str()};
 
-            for (auto& obs : _observers)
+            for (auto& obs : local)
                 obs->on_diagnostic(info);
         }
     }

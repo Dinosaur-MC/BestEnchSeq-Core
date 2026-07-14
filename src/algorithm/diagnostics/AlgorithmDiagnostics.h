@@ -13,7 +13,6 @@ class ExecutionContext;
 struct AlgorithmDiagnostics {
     std::string algorithm_name;
     std::string status;            // "Complete", "Cancelled", etc.
-    int64_t     wall_ms{0};
     int32_t     solution_cost{-1};
 
     virtual ~AlgorithmDiagnostics() = default;

@@ -186,6 +186,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     // Warm-start bound (fallback: already checked above, but also covers items.size() <= 1)
     if (input.initial_bound < _best_solution_cost)
         _best_solution_cost = input.initial_bound;
+    _diag.initial_bound = _best_solution_cost;
 
     if (_meets_target(initial_ids[0])) {
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
@@ -280,6 +281,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
 
             _diag.explored_count = explored;
             _diag.best_g_entries = best_g.size();
+            _diag.final_bound = _best_solution_cost;
             _diag.step_pool_used = _step_pool.size();
             _diag.step_pool_capacity = _step_pool.capacity();
             _diag.items_pool_used = _pool.size();
@@ -412,6 +414,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     // ─── Exit diagnostics ────────────────────────────────────────────────
     _diag.explored_count = explored;
     _diag.best_g_entries = best_g.size();
+    _diag.final_bound = _best_solution_cost;
     _diag.step_pool_used = _step_pool.size();
     _diag.step_pool_capacity = _step_pool.capacity();
     _diag.items_pool_used = _pool.size();

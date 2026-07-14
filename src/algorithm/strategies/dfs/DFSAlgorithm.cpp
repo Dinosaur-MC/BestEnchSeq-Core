@@ -115,6 +115,8 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _dfs_iterative(ctx);
 
     _diag.solution_cost = _best_cost < INT32_MAX ? _best_cost : -1;
+    _diag.final_bound = _best_cost;
+    _diag.solutions_found = _solutions_found;
     _diag.status = _best_cost < INT32_MAX ? "Complete" : "CompleteNoSolution";
     _diag.flush(ctx);
 

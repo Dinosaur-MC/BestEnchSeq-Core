@@ -84,5 +84,5 @@ private:
     int32_t _solutions_found{0};
     std::chrono::steady_clock::time_point _start_time;
 
-    AlgorithmDiagnostics _diag;
+    SearchDiagnostics _diag;
 };

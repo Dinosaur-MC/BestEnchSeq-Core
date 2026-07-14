@@ -54,6 +54,7 @@ private:
     std::unique_ptr<ExecutionContext> _ctx;
     std::optional<std::thread> _worker;
     std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
+    bool _finalized{false};
     std::mutex _state_mtx;
     std::condition_variable _state_cv;
     std::chrono::steady_clock::time_point _start_time;

@@ -50,6 +50,9 @@ void AlgorithmExecutor::_run_warmup(AlgorithmInput& input, IAlgorithm& warmup_al
 }
 
 void AlgorithmExecutor::_finalize() {
+    if (_finalized) return;
+    _finalized = true;
+
     _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - _start_time);
 
@@ -61,11 +64,22 @@ void AlgorithmExecutor::_finalize() {
     kvs.emplace_back("nodes_pruned",  std::to_string(atoms.nodes_pruned));
     kvs.emplace_back("steps_forged",  std::to_string(atoms.steps_forged));
 
-    // Determine status from final state
+    // Status: algorithm's flushed status is authoritative.
+    // For Cancelled/Failed, inject override into KV entries.
     auto s = _state.load(std::memory_order_acquire);
-    const char* status = "Complete";
-    if (s == AlgorithmState::Cancelled)  status = "Cancelled";
-    if (s == AlgorithmState::Failed)     status = "Failed";
+    std::string status;
+    if (s == AlgorithmState::Cancelled) {
+        status = "Cancelled";
+        kvs.emplace_back("status", "Cancelled");
+    } else if (s == AlgorithmState::Failed) {
+        status = "Failed";
+        kvs.emplace_back("status", "Failed");
+    } else {
+        // Use algorithm's flushed status (e.g. "Complete", "CompleteNoSolution")
+        for (auto& [k, v] : kvs)
+            if (k == "status") { status = v; break; }
+        if (status.empty()) status = "Complete";
+    }
 
     // Convert KV pairs to Writer::Entry
     std::vector<DiagnosticsWriter::Entry> entries;
