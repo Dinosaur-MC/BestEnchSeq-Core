@@ -7,6 +7,7 @@
 #include <fstream>
 #include <random>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -44,59 +45,71 @@ void ensure_diag_dir() {
 
 } // anonymous namespace
 
-// ─── AlgorithmDiagnostics writer ─────────────────────────────────────────────
+// ─── Generic KV writer ──────────────────────────────────────────────────────
 
-void DiagnosticsWriter::write(const AlgorithmDiagnostics& diag) {
-    if (diag.wall_ms < 10) return;  // skip trivial runs
+void DiagnosticsWriter::write(std::string_view algorithm_name,
+                              std::span<const Entry> entries,
+                              int64_t wall_ms,
+                              std::string_view status) {
+    if (wall_ms < 10) return;  // skip trivial runs
 
     ensure_diag_dir();
     auto info = make_log_info();
 
     std::string path = std::string("logs/diag/")
-                     + (diag.label[0] ? diag.label : "algo") + "_"
+                     + std::string(algorithm_name) + "_"
                      + info.ts + "_" + info.rand_part + ".log";
     std::ofstream ofs(path);
     if (!ofs) return;
 
-    ofs << "# " << (diag.label[0] ? diag.label : "Algorithm") << " Diagnostics\n"
-        << "timestamp=" << info.ts << "_" << info.rand_part << "\n"
-        << "status=" << (diag.status ? diag.status : "") << "\n"
-        << "solution_cost=" << diag.solution_cost << "\n"
-        << "wall_ms=" << diag.wall_ms << "\n"
-        << "nodes_visited=" << diag.nodes_visited << "\n"
-        << "nodes_pruned=" << diag.nodes_pruned << "\n"
-        << "steps_forged=" << diag.steps_forged << "\n";
+    ofs << "# " << algorithm_name << " Exit Diagnostics\n"
+        << "algorithm=" << algorithm_name << "\n"
+        << "status=" << status << "\n"
+        << "wall_ms=" << wall_ms << "\n";
+    for (const auto& e : entries) {
+        ofs << e.key << "=" << e.value << "\n";
+    }
 }
 
-// ─── AStarDiagnostics writer ─────────────────────────────────────────────────
+// ─── AlgorithmDiagnostics writer (deprecated) ────────────────────────────────
+
+void DiagnosticsWriter::write(const AlgorithmDiagnostics& diag) {
+    // Convert to KV entries and delegate to the generic writer.
+    std::vector<Entry> entries;
+    entries.reserve(4);
+    entries.push_back({"solution_cost", std::to_string(diag.solution_cost)});
+    entries.push_back({"nodes_visited", std::to_string(diag.nodes_visited)});
+    entries.push_back({"nodes_pruned", std::to_string(diag.nodes_pruned)});
+    entries.push_back({"steps_forged", std::to_string(diag.steps_forged)});
+
+    std::string_view name = diag.label[0] ? std::string_view(diag.label) : "algo";
+    std::string_view st   = diag.status ? std::string_view(diag.status) : "";
+    write(name, entries, diag.wall_ms, st);
+}
+
+// ─── AStarDiagnostics writer (deprecated) ────────────────────────────────────
 
 void DiagnosticsWriter::write(const AStarDiagnostics& diag) {
-    ensure_diag_dir();
-    auto info = make_log_info();
+    // Convert to KV entries and delegate to the generic writer.
+    std::vector<Entry> entries;
+    entries.reserve(14);
+    entries.push_back({"solution_cost", std::to_string(diag.solution_cost)});
+    entries.push_back({"explored_count", std::to_string(diag.explored_count)});
+    entries.push_back({"best_g_entries", std::to_string(diag.best_g_size)});
+    entries.push_back({"step_pool_used", std::to_string(diag.step_pool_used)});
+    entries.push_back({"step_pool_capacity", std::to_string(diag.step_pool_capacity)});
+    entries.push_back({"items_pool", std::to_string(diag.items_pool_size)});
+    entries.push_back({"items_pool_capacity", std::to_string(diag.items_pool_capacity)});
+    entries.push_back({"open_set_pending", std::to_string(diag.open_set_pending)});
+    entries.push_back({"pruned_by_cost", std::to_string(diag.pruned_by_cost)});
+    entries.push_back({"pruned_by_best_g", std::to_string(diag.pruned_by_best_g)});
+    entries.push_back({"pruned_by_f", std::to_string(diag.pruned_by_f)});
+    entries.push_back({"pruned_by_caps", std::to_string(diag.pruned_by_caps)});
+    entries.push_back({"steps_forged", std::to_string(diag.steps_forged)});
+    entries.push_back({"estimated_peak_bytes", std::to_string(diag.estimated_peak_bytes)});
 
-    std::string path = std::string("logs/diag/astar_")
-                     + info.ts + "_" + info.rand_part + ".log";
-    std::ofstream ofs(path);
-    if (!ofs) return;
-
-    ofs << "# AStar Exit Diagnostics\n"
-        << "timestamp=" << info.ts << "_" << info.rand_part << "\n"
-        << "status=" << (diag.status ? diag.status : "") << "\n"
-        << "solution_cost=" << diag.solution_cost << "\n"
-        << "wall_ms=" << diag.wall_ms << "\n"
-        << "explored_count=" << diag.explored_count << "\n"
-        << "best_g_entries=" << diag.best_g_size << "\n"
-        << "step_pool_used=" << diag.step_pool_used << "\n"
-        << "step_pool_capacity=" << diag.step_pool_capacity << "\n"
-        << "items_pool=" << diag.items_pool_size << "\n"
-        << "items_pool_capacity=" << diag.items_pool_capacity << "\n"
-        << "open_set_pending=" << diag.open_set_pending << "\n"
-        << "pruned_by_cost=" << diag.pruned_by_cost << "\n"
-        << "pruned_by_best_g=" << diag.pruned_by_best_g << "\n"
-        << "pruned_by_f=" << diag.pruned_by_f << "\n"
-        << "pruned_by_caps=" << diag.pruned_by_caps << "\n"
-        << "steps_forged=" << diag.steps_forged << "\n"
-        << "estimated_peak_bytes=" << diag.estimated_peak_bytes << "\n";
+    std::string_view st = diag.status ? std::string_view(diag.status) : "";
+    write("astar", entries, diag.wall_ms, st);
 }
 
 #endif // BESQ_DISABLE_DIAGNOSTICS
