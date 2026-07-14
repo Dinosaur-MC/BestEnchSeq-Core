@@ -17,7 +17,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "Options:\n"
         "  -h, --help              Show this help message\n"
         "  --algorithm <name>      Search algorithm: greedy (default), dfs, astar,\n"
-        "                           penalty_balance, hierarchical, or idastar\n"
+        "                           penalty_balance, hierarchical, idastar, or hamming\n"
         "  --target <spec>         Target item (e.g., diamond_sword or diamond_sword[sharpness=3])\n"
         "  --wanted <list>         Wanted enchantments (e.g., sharpness=5,knockback=2)\n"
         "  --mode <mode>           Operation mode: direct (default) or inventory\n"

@@ -10,7 +10,7 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 - [ ] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
 - [x] Support third-party/custom enchantments by editing custom enchantment sheet
 - [x] Support third-party/custom equipments by editing custom equipment sheet
-- [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical, idastar
+- [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical, idastar, hamming
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Moddable forge engine via IForgeEngine virtual interface
 - [x] Input validation + EnchReg pruning via CompactAdapter::apply()
@@ -27,6 +27,7 @@ cmake --build build
 besq --target diamond_sword --wanted "sharpness=5,knockback=2"
 besq --algorithm astar --target diamond_sword --wanted "sharpness=5,looting=3,unbreaking=3"
 besq --algorithm penalty_balance --target diamond_chestplate --wanted "protection=4,thorns=3,unbreaking=3,mending=1"
+besq --algorithm hamming --target netherite_sword --wanted "sharpness=5,sweeping_edge=3,looting=3,unbreaking=3,fire_aspect=2,knockback=2,mending=1,vanishing_curse=1"
 ```
 
 Alternatively, invoke directly from the build directory:
@@ -130,6 +131,7 @@ src/
 │   │   └── ForgeEngine.h/.cpp   ← Vanilla implementation
 │   └── strategies/
 │       ├── GreedyAlgorithm.*    ← Fast approximate
+│       ├── HammingAlgorithm.*   ← Popcount-balanced merge tree (near-optimal, 0ms)
 │       ├── DFSAlgorithm.*       ← Exact search (branch-and-bound)
 │       ├── AStarAlgorithm.*     ← Exact optimal (admissible heuristic)
 │       ├── DynamicPenaltyBalancingAlgorithm.* ← High-quality approx
