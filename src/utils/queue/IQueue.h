@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -56,25 +57,18 @@ public:
 
 
 // ─── Queue concept (C++20, compile-time) ──────────────────────────────────
-// Documents the syntactic contract expected by generic algorithms.
-//
-// Checks are illustrative — the concept is intentionally permissive
-// (push may return void or bool, pop may be named try_pop or pop).
-// Use it as a documentation aid; real constraints depend on the algorithm.
-
-#ifdef __cpp_concepts
-
-#include <concepts>
+// Syntactic contract for all project queue types.
+// Every concrete queue (BoundedMPMCQueue, SegmentedMPMCQueue, SPSCQueue)
+// satisfies this concept.
 
 template <typename Q, typename T>
 concept QueueType = requires(Q& q, const T& cval, T& val) {
-    { q.push(cval) };
-    { q.try_pop(val) } -> std::convertible_to<bool>;
-    { q.size() }       -> std::convertible_to<size_t>;
-    { q.empty() }      -> std::convertible_to<bool>;
+    { q.try_push(cval) }             -> std::same_as<bool>;
+    { q.try_push(std::move(val)) }   -> std::same_as<bool>;
+    { q.try_pop(val) }               -> std::same_as<bool>;
+    { q.size() }                     -> std::convertible_to<size_t>;
+    { q.empty() }                    -> std::convertible_to<bool>;
 };
-
-#endif // __cpp_concepts
 
 
 // ─── QueueAdaptor<T, ConcreteQueue> ───────────────────────────────────────
@@ -87,7 +81,7 @@ concept QueueType = requires(Q& q, const T& cval, T& val) {
 //
 // The adaptor stores the concrete queue inline (no heap allocation).
 
-template <typename T, typename ConcreteQueue>
+template <typename T, QueueType<T> ConcreteQueue>
 class QueueAdaptor final : public IQueue<T> {
 public:
     template <typename... Args>
