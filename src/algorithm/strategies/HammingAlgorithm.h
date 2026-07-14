@@ -7,24 +7,26 @@
 
 /// Popcount-based balanced merge tree algorithm.
 ///
-/// Arranges items within each penalty tier using Hamming-weight (popcount)
-/// ordering to form a balanced binary merge tree. This minimises penalty
-/// growth (2^ppn - 1) — the dominant cost factor — by keeping each item's
-/// merge depth at ceil(log2(n)).
+/// Arranges items using Hamming-weight (popcount) ordering to form a
+/// balanced binary merge tree.  This minimises penalty growth (2^ppn - 1)
+/// — the dominant cost factor — by keeping each item's merge depth at
+/// ceil(log2(n)).
 ///
 /// Algorithm (port of classic Hamming merge from BestEnchSeq v2.x):
-///   1. Group forgeable items by their prior-penalty number (ppn).
-///   2. Within each ppn tier, sort by forge cost descending (expensive
+///   1. Place all items at tier 0 (their starting PPN tier).
+///   2. For the current tier: sort by forge cost descending (expensive
 ///      books merge earliest into the equipment, avoiding extra penalty).
-///   3. Arrange items by popcount index so that position k goes through
-///      popcount(k) merges — a balanced tournament bracket.
-///   4. Pairwise-forge items at the current tier; results bubble up to
-///      the next ppn tier.
-///   5. Repeat until a single (ideally fully-enchanted) item remains.
+///   3. Within the tier, arrange items by popcount index so that position
+///      k goes through roughly popcount(k) merges — a balanced tournament
+///      bracket.
+///   4. Pairwise-forge items at the current tier; send all results
+///      (including any odd left-over) to the *next* sequential tier
+///      (tier+1), guaranteeing everything converges.
+///   5. Repeat from step 2 until a single tier remains with one item.
 ///
-/// O(n log n) deterministic, no backtracking.  Produces an upper bound
-/// that often matches or beats penalty_balance, especially for ≥8
-/// enchantments where search-based algorithms begin to slow significantly.
+/// O(n log n) deterministic construction, no backtracking.  Produces an
+/// upper bound that often matches or beats penalty_balance, especially
+/// for ≥8 enchantments where search-based algorithms slow significantly.
 class HammingAlgorithm : public IAlgorithm {
 public:
     explicit HammingAlgorithm(ForgeConfig cfg = {}) noexcept

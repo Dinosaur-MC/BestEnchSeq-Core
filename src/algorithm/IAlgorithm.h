@@ -1,7 +1,6 @@
 #pragma once
 #include "types/AlgorithmTypes.h"
 #include <cstdint>
-#include <string>
 #include <vector>
 
 class ExecutionContext;

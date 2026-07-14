@@ -146,10 +146,14 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
             tiers[tier].erase(tiers[tier].begin());
 
             // ── Validate forge direction ───────────────────────────────
+            // If neither direction is forgeable, push both items to the
+            // next tier as-is so they survive to find valid partners later.
             if (!_forge_engine.is_forgeable(base, sac)) {
                 if (_forge_engine.is_forgeable(sac, base)) {
                     std::swap(base, sac);
                 } else {
+                    next_items.push_back(std::move(base));
+                    next_items.push_back(std::move(sac));
                     continue;
                 }
             }

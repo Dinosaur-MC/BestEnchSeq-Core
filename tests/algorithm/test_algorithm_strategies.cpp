@@ -9,6 +9,7 @@
 #include "algorithm/strategies/AStarAlgorithm.h"
 #include "algorithm/strategies/DynamicPenaltyBalancingAlgorithm.h"
 #include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
+#include "algorithm/strategies/HammingAlgorithm.h"
 #include "config/ForgeConfig.h"
 #include <memory>
 #include <vector>
@@ -266,6 +267,129 @@ void test_hms_mixed_tiers() {
     std::cout << "PASS: test_hms_mixed_tiers (cost=" << cost << ")" << std::endl;
 }
 
+// ─── HammingAlgorithm tests ──────────────────────────────────────────
+
+void test_hamming_simple() {
+    setup_registries();
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5)},
+        {{ID_SHARPNESS, 5}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: simple forge should produce positive cost");
+    std::cout << "PASS: test_hamming_simple (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_two_books() {
+    setup_registries();
+    // Two different enchants → merged into one book, then into equipment
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: two books should produce positive cost");
+    std::cout << "PASS: test_hamming_two_books (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_three_books() {
+    setup_registries();
+    // Odd count — tests the left-over carry path in the Hamming triangle
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5), book(ID_SHARPNESS, 3),
+         book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: three books (odd count) should produce positive cost");
+    std::cout << "PASS: test_hamming_three_books (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_target_already_met() {
+    setup_registries();
+    compact::Item equip{compact::ItemType::Equip, 1561, 0, {}};
+    equip.enchs.insert({ID_SHARPNESS, 5});
+
+    TestContext ctx({book(ID_SHARPNESS, 3)}, {{ID_SHARPNESS, 5}});
+    ctx.items[0] = equip;
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost >= 0, "hamming: target already met should produce result");
+    std::cout << "PASS: test_hamming_target_already_met (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_target_unreachable() {
+    setup_registries();
+    TestContext ctx(
+        {book(ID_SHARPNESS, 3)},
+        {{ID_SHARPNESS, 5}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost == -1, "hamming: unreachable target should return -1");
+    std::cout << "PASS: test_hamming_target_unreachable" << std::endl;
+}
+
+void test_hamming_five_books() {
+    setup_registries();
+    // 5 books — tests popcount arrangement for n > 4 where max-popcount
+    // of (n-1) was historically undercounted.
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5), book(ID_SHARPNESS, 4),
+         book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 2),
+         book(ID_SHARPNESS, 1)},
+        {{ID_SHARPNESS, 5}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: five books should produce positive cost");
+    std::cout << "PASS: test_hamming_five_books (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_mixed_penalties() {
+    setup_registries();
+    // Equipment with prior penalty + books — verifies PPN-seeding works.
+    // equip=sharp3(ppn2), books: sharp4(level-up to 4), knock2(new)
+    // target sharp4 is reachable (cannot reach sharp5 with only one book)
+    compact::Item equip{compact::ItemType::Equip, 1561, 2, {}};  // ppn=2
+    equip.enchs.insert({ID_SHARPNESS, 3});
+
+    TestContext ctx(
+        {book(ID_SHARPNESS, 4), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 4}, {ID_KNOCKBACK, 2}}
+    );
+    ctx.items[0] = equip;
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: mixed ppn should produce positive cost");
+    std::cout << "PASS: test_hamming_mixed_penalties (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_conflict_enchants() {
+    setup_registries();
+    // Two mutually exclusive enchantments (sharpness and bane_of_arthropods)
+    // → cost should be positive and no crash
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5), book(2, 3)},  // id 2 = bane_of_arthropods
+        {{ID_SHARPNESS, 5}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: conflict enchants should produce positive cost");
+    std::cout << "PASS: test_hamming_conflict_enchants (cost=" << cost << ")" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -291,6 +415,16 @@ int main() {
         test_hms_simple();
         test_hms_many_books();
         test_hms_mixed_tiers();
+
+        // HammingAlgorithm
+        test_hamming_simple();
+        test_hamming_two_books();
+        test_hamming_three_books();
+        test_hamming_target_already_met();
+        test_hamming_target_unreachable();
+        test_hamming_five_books();
+        test_hamming_mixed_penalties();
+        test_hamming_conflict_enchants();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
