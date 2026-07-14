@@ -84,7 +84,7 @@ def parse_file(filepath):
             continue
 
         # 有效行：  算法名   数值L  ✅  时间ms
-        m = re.match(r"^\s+(?P<algo>\w+)\s+(?P<L>\d+)L\s+✅\s+(?P<ms>\d+)ms", line)
+        m = re.match(r"^\s+(?P<algo>[\w+]+)\s+(?P<L>\d+)L\s+✅\s+(?P<ms>\d+)ms", line)
         if m:
             algo = m.group("algo")
             rec = {
@@ -98,7 +98,7 @@ def parse_file(filepath):
             continue
 
         # SKIP 行
-        m = re.match(r"^\s+(?P<algo>\w+)\s+(?P<status>SKIP.*)", line)
+        m = re.match(r"^\s+(?P<algo>[\w+]+)\s+(?P<status>SKIP.*)", line)
         if m:
             algo = m.group("algo")
             rec = {"status": m.group("status").strip()}
@@ -108,7 +108,7 @@ def parse_file(filepath):
             continue
 
         # no solution 行
-        m = re.match(r"^\s+(?P<algo>\w+)\s+no solution", line)
+        m = re.match(r"^\s+(?P<algo>[\w+]+)\s+no solution", line)
         if m:
             algo = m.group("algo")
             rec = {"status": "no solution"}
@@ -381,10 +381,11 @@ def plot_trends(history, hist_path):
 
         ax.set_xticks(run_numbers)
         ax.set_xticklabels(run_labels, fontsize=8)
-        ax.legend(fontsize=8, loc="best")
+        ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 1.0))
         ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
+    plt.subplots_adjust(right=0.85)
     # 历史文件后缀替换为 .trend.png
     chart_path = hist_path[: -len(HISTORY_FILE_SUFFIX)] + ".trend.png" if hist_path.endswith(HISTORY_FILE_SUFFIX) else hist_path + ".trend.png"
     plt.savefig(chart_path, dpi=150, bbox_inches="tight")
