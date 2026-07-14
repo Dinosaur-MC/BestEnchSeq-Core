@@ -26,14 +26,14 @@
 Minecraft anvil forging cost has a term that grows exponentially with
 the item's prior-penalty number (PPN):
 
-    penalty_cost(ppn) = 2^ppn - 1    (capped at 39)
+    penalty_cost(ppn) = 2^ppn - 1    (capped at 39 in survival; ±∞ in modded)
 
 Each forge operation increments the result's PPN by 1.  Over a sequence
 that merges `n` items into one, a poorly chosen merge order can push
 some items through O(n) forges, incurring exponential penalty cost on
 that branch.  The optimal merge tree (for penalty alone) is a **balanced
-binary tree** where each item participates in roughly `ceil(log2(n))`
-forges.
+binary tree** where each item participates in roughly ⌈log₂(n)⌉ forges
+(at most ⌊log₂(n-1)⌋ + 1 for the deepest leaf).
 
 The Hamming algorithm is a deterministic O(n log n) construction that
 produces this balanced tree without search.  It was the primary fast
@@ -83,7 +83,9 @@ PPN growth at `⌈log2(n)⌉` instead of `O(n)`.  For 8 items:
 | Balanced tree  | 3       |   7 |
 | **Hamming**    | **3**   | **7** |
 
-The difference grows rapidly: at 16 items, linear → 65535, balanced → 15.
+The difference grows rapidly: at 16 items, linear chain → max PPN = 15,
+penalty = 2¹⁵ − 1 = **32767**; balanced tree → max PPN = 4,
+penalty = 2⁴ − 1 = **15**.  Over 2000× cheaper.
 
 ---
 
@@ -149,75 +151,92 @@ If no Equipment meets target → "no solution"
 ## Worked example
 
 **netherite_sword (8 enchantments)** — 1 equipment + 8 books = 9 items.
+Each book is single-enchantment.  Local IDs and book-multipliers (`mul_b`)
+from the compact registry determine the cost-sort order.
 
-### Tier 0 — arrange by popcount (n=9)
+| ID | mul_b | Level | Product | Item |
+|:--:|:-----:|:-----:|:-------:|:-----|
+| 37 | 2 | 3 | 6 | sweeping_edge |
+| 18 | 2 | 3 | 6 | looting |
+| 33 | 1 | 5 | 5 | sharpness |
+| 10 | 2 | 2 | 4 | fire_aspect |
+| 17 | 2 | 2 | 4 | knockback |
+| 40 | 1 | 3 | 3 | unbreaking |
+| 23 | 2 | 1 | 2 | mending |
+| 41 | 1 | 1 | 1 | (other) |
+
+### Tier 0 — arrange and forge (n=9)
+
+Sorted by `estimate_forge_cost` descending (multiplier × level):
+```
+[equip, 37(6), 18(6), 33(5), 10(4), 17(4), 40(3), 23(2), 41(1)]
+```
+
+Popcount arrangement — fill positions by ascending popcount level `j`:
 
 ```
-Sorted by cost: [equip, sweepingⅢ, lootingⅢ, unbrⅢ, sharpⅤ,
-                 fireⅡ, knockⅡ, mendingⅠ, protⅠ]
-                  37      18       40      33     10     17      23     41
-
-Popcount arrangement of 9 items:
-
-pos │0    1    2    3    4    5    6    7    8
-────┼────────────────────────────────────────────
-pop │0    1    1    2    1    2    2    3    1
-item│eq  37   18   40   33   10   17   23   41
+pos:  0    1    2    3    4    5    6    7    8
+pop:  0    1    1    2    1    2    2    3    1
+─────────────────────────────────────────────────
+      eq   37   18   17   33   40   23   41   10
+           ← j=1 →    ← j=2 →        ←j=3 ←j=1
 ```
 
-Pairs forged at tier 0:
-
-| Pair | Base | Sac | Result (PPN=1) |
-|:-----|:-----|:----|:----------------|
-| (0,1) | equip | sweepingⅢ | equip + sweeping |
-| (2,3) | lootingⅢ | unbrⅢ | book(looting + unbr) |
-| (4,5) | sharpⅤ | fireⅡ | book(sharp + fire) |
-| (6,7) | knockⅡ | mendingⅠ | book(knock + mend) |
-| (8,-) | protⅠ | — | leftover, carried forward |
+| Pair | Forge | Result (PPN=1) |
+|:-----|:------|:----------------|
+| (0,1) | equip + 37 | equip + sweeping |
+| (2,3) | 18 + 17 | book(looting + knockback) |
+| (4,5) | 33 + 40 | book(sharpness + unbreaking) |
+| (6,7) | 23 + 41 | book(mending + other) |
+| (8,-) | 10 (fire_aspect) | leftover, carried |
 
 All 5 results → tier 1.
 
 ### Tier 1 — arrange (n=5)
 
 ```
-[equip+sweep, book(loot+unbr), book(sharp+fire), book(knock+mend), protⅠ]
+[equip+37, book(18+17), book(33+40), book(23+41), 10]
+               cost=9*      cost=8      cost=3    cost=4
 ```
 
-Pairs:
+Popcount arranges → `[eq, book(18+17), book(33+40), 10, book(23+41)]`
 
 | Pair | Result (PPN=2) |
 |:-----|:----------------|
-| (equip+sweep, book(loot+unbr)) | equip + sweep + loot + unbr |
-| (book(sharp+fire), book(knock+mend)) | book(sharp+fire+knock+mend) |
-| leftover protⅠ → carried |
+| equip + book(18+17) | equip(+sweeping+looting+knockback) |
+| book(33+40) + 10 | book(sharpness+unbreaking+fire) |
+| leftover book(23+41) | carried |
 
 All 3 results → tier 2.
 
 ### Tier 2 — arrange (n=3)
 
 ```
-[equip(sweep+loot+unbr), book(sharp+fire+knock+mend), protⅠ]
+[equip(3 ench), book(33+40+10), book(23+41)]
 ```
 
-Pairs:
+Popcount arranges → `[eq, book(33+40+10), book(23+41)]`
 
 | Pair | Result (PPN=3) |
 |:-----|:----------------|
-| (equip + book) | equip + all 7 enchants |
-| leftover protⅠ → carried |
+| equip + book(33+40+10) | equip + 6 enchants (all but 23+41) |
+| leftover book(23+41) | carried |
 
 2 results → tier 3.
 
 ### Tier 3
 
 ```
-[equip(all 7), protⅠ]
+[equip(6 of 8), book(23+41)]
 ```
 
-Forge → equip gains Protection I → **all 8 target enchants achieved**.
-PPN = 4.
+Forge → equip gains mending + (other) → **all 8 target enchants achieved**.
+PPN = 4.  8 steps, 9 items → minimum possible.
 
-Total steps: 8 (correct for 9 items → 8 forges).
+*\* Estimated cost of a multi-enchant book is the sum of its individual
+enchantment costs (`mul_b × level`), plus the doubled penalty term
+which is uniform for items at the same tier and thus doesn't affect
+ordering.*
 
 ---
 
@@ -262,8 +281,9 @@ milliseconds to seconds.
 | Metric | Greedy | penalty_bal | Hierarchical | **Hamming** | A* |
 |:-------|:------:|:-----------:|:------------:|:-----------:|:--:|
 | Optimal matches (of 14) | 2 | 0 | 0 | **11** | 14 |
-| Total sum of costs | 1031 | +12 % | +34 % | **‑1 %** | baseline |
-| Worst-case overhead | +122 % | +72 % | +78 % | **+4 %** | — |
+| Total sum of costs | 926 | 642 | 846 | **524** | 517 |
+| vs A* baseline | +79 % | +24 % | +64 % | **+1.4 %** | — |
+| Worst-case overhead | +122 % | +17 % | +52 % | **+3.3 %** | — |
 
 Hamming is within 2 levels of A* on all cases and delivers the same cost
 as A* on 11/14 cases, while being **3–4 orders of magnitude faster**.
