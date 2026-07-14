@@ -120,6 +120,10 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
         if (new_base_id == ItemPool::INVALID_ITEM_ID) continue;
         child_buf[base_in_child] = new_base_id;
 
+        // Symmetry breaking: canonicalize non-equipment ordering.
+        if (child_buf.size() > 2)
+            std::sort(child_buf.begin() + 1, child_buf.end());
+
         _current_path.push_back(IDALightStep{old_base_id, old_sac_id, real_cost});
 
         // Delta heuristic: update _h_max for child, recurse, restore
@@ -300,15 +304,20 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         }
         if (greedy_cost > 0) best_cost = greedy_cost;
 
-        int64_t node_limit = 50'000;
-        int32_t dfs_cost = _dfs_bound(
-            std::vector<compact::Item>(items.begin(), items.end()),
-            0, best_cost, node_limit);
-        if (dfs_cost < best_cost)
-            best_cost = dfs_cost;
+        // External warm-start bound skips internal dfs_bound (~25M Ir)
+        if (input.initial_bound < best_cost) {
+            best_cost = input.initial_bound;
+        } else {
+            int64_t node_limit = 50'000;
+            int32_t dfs_cost = _dfs_bound(
+                std::vector<compact::Item>(items.begin(), items.end()),
+                0, best_cost, node_limit);
+            if (dfs_cost < best_cost)
+                best_cost = dfs_cost;
+        }
     }
 
-    // Warm-start bound from executor chain (tighter than our own)
+    // Warm-start bound (fallback: already handled for items.size() > 1)
     if (input.initial_bound < best_cost)
         best_cost = input.initial_bound;
 

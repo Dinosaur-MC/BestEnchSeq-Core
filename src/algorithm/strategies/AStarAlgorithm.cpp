@@ -288,15 +288,22 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     // Upper bound: greedy + limited DFS
     if (items.size() > 1) {
         _best_solution_cost = _greedy_bound(items, reg);
-        int64_t node_limit = 50'000;
-        int32_t dfs_cost = _dfs_bound(
-            std::vector<compact::Item>(items.begin(), items.end()),
-            0, _best_solution_cost, node_limit);
-        if (dfs_cost < _best_solution_cost)
-            _best_solution_cost = dfs_cost;
+
+        // External warm-start bound (hamming, dfs chain) is typically already
+        // tighter than our internal dfs_bound — skip to save ~25M Ir.
+        if (input.initial_bound < _best_solution_cost) {
+            _best_solution_cost = input.initial_bound;
+        } else {
+            int64_t node_limit = 50'000;
+            int32_t dfs_cost = _dfs_bound(
+                std::vector<compact::Item>(items.begin(), items.end()),
+                0, _best_solution_cost, node_limit);
+            if (dfs_cost < _best_solution_cost)
+                _best_solution_cost = dfs_cost;
+        }
     }
 
-    // Warm-start bound from executor chain (tighter than our own)
+    // Warm-start bound (fallback: already checked above, but also covers items.size() <= 1)
     if (input.initial_bound < _best_solution_cost)
         _best_solution_cost = input.initial_bound;
 
@@ -482,6 +489,11 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 ItemID new_base_id = _pool.add(std::move(forged));
                 if (new_base_id == INVALID_ITEM_ID) continue;  // pool full
                 child_ids[base_in_child] = new_base_id;  // NOW we have real state
+
+                // Symmetry breaking: sort non-equipment items so (A,B) and (B,A)
+                // produce the same canonical state, reducing best_g duplicates.
+                if (child_ids.size() > 2)
+                    std::sort(child_ids.begin() + 1, child_ids.end());
 
                 // ── Phase C: heuristic + best_g + enqueue (real post-forge) ─
                 int32_t child_h_val = _delta_h(current.h, forged, _pool[old_sac_id]);
