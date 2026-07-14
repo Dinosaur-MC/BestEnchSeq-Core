@@ -127,6 +127,8 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         if (!met) {
             _diag.label = "penalty_balance";
             _diag.status = "CompleteNoSolution";
+            _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - start).count();
             DiagnosticsWriter::write(_diag);
             ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
             return;
@@ -136,6 +138,8 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     _diag.label = "penalty_balance";
     _diag.steps_forged = compact_steps.size();
     _diag.status = "Complete";
+    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
     DiagnosticsWriter::write(_diag);
 
     ctx.report_compact_solution(std::move(compact_steps));

@@ -1,4 +1,5 @@
 #pragma once
+#include "algorithm/components/SearchUtils.h"
 #include "registries/CompactedRegistries.h"
 #include "types/CompactedTypes.h"
 #include <cstdint>
@@ -23,20 +24,13 @@ inline int32_t compute(
     int32_t h = 0;
     if (items.empty()) return h;
 
-    if (buf.size() < reg.size())
-        buf.assign(reg.size(), 0);
-    dirty.clear();
-
-    for (const auto& item : items) {
-        for (const auto& e : item.enchs) {
-            if (e.id < 0) continue;
-            if (e.level > buf[e.id]) {
-                if (buf[e.id] == 0)
-                    dirty.push_back(e.id);
-                buf[e.id] = e.level;
-            }
-        }
-    }
+    search_utils::fill_max_levels(
+        [&](auto&& yield) {
+            for (const auto& item : items)
+                for (const auto& e : item.enchs)
+                    if (e.id >= 0) yield(e.id, e.level);
+        },
+        reg, buf, dirty);
 
     for (const auto& t : target) {
         if (t.id < 0) continue;
@@ -46,7 +40,6 @@ inline int32_t compute(
     }
 
     for (auto id : dirty) {
-        if (id < 0) continue;
         buf[id] = 0;
     }
 

@@ -72,6 +72,8 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     _diag.label = "greedy";
     _diag.steps_forged = goal_achieved ? compact_steps.size() : 0;
     _diag.status = goal_achieved ? "Complete" : "CompleteNoSolution";
+    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start).count();
     DiagnosticsWriter::write(_diag);
 
     if (!goal_achieved) {

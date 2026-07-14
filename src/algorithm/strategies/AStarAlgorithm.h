@@ -64,10 +64,6 @@ private:
     size_t  _hash_ids(const std::vector<ItemID>& ids) const;
     int32_t _greedy_bound(const std::vector<compact::Item>& items,
                            const compact::EnchReg& reg) const;
-    int32_t _dfs_bound(std::vector<compact::Item> items, int32_t g,
-                       int32_t best_cost, int64_t& node_limit) const;
-    void    _precompute_max(const std::vector<ItemID>& ids);
-    int32_t _compute_h() const;
     int32_t _delta_h(int32_t parent_h, const compact::Item& forged,
                      const compact::Item& sacrifice) const;
 

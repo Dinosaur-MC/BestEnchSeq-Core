@@ -1,5 +1,6 @@
 #pragma once
 #include "algorithm/components/ItemPool.h"
+#include "algorithm/components/SearchUtils.h"
 #include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <vector>
@@ -24,20 +25,13 @@ inline int32_t compute(
     int32_t h = 0;
     if (ids.empty()) return h;
 
-    if (buf.size() < reg.size())
-        buf.assign(reg.size(), 0);
-    dirty.clear();
-
-    for (auto id : ids) {
-        for (const auto& e : pool[id].enchs) {
-            if (e.id < 0) continue;  // safety: guard against corrupted IDs
-            if (e.level > buf[e.id]) {
-                if (buf[e.id] == 0)
-                    dirty.push_back(e.id);
-                buf[e.id] = e.level;
-            }
-        }
-    }
+    search_utils::fill_max_levels(
+        [&](auto&& yield) {
+            for (auto id : ids)
+                for (const auto& e : pool[id].enchs)
+                    if (e.id >= 0) yield(e.id, e.level);
+        },
+        reg, buf, dirty);
 
     for (const auto& t : target) {
         if (t.id < 0) continue;
@@ -47,7 +41,6 @@ inline int32_t compute(
     }
 
     for (auto id : dirty) {
-        if (id < 0) continue;
         buf[id] = 0;
     }
 

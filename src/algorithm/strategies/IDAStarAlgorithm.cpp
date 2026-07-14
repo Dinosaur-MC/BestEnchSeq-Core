@@ -1,7 +1,6 @@
 #include "IDAStarAlgorithm.h"
 #include "../ExecutionContext.h"
-#include "../Utils.h"
-#include "algorithm/components/HeuristicBasic.h"
+#include "algorithm/components/SearchUtils.h"
 #include "algorithm/components/StateHash.h"
 #include <algorithm>
 
@@ -144,102 +143,8 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
     }
 }
 
-// ─── Limited DFS bound ────────────────────────────────────────────────
-
-int32_t IDAStarAlgorithm::_dfs_bound(
-    std::vector<compact::Item> items,
-    int32_t g,
-    int32_t best_cost,
-    int64_t& node_limit) const
-{
-    if (node_limit <= 0)
-        return best_cost;
-    --node_limit;
-
-    if (meets_target(items[0], _target))
-        return (g < best_cost) ? g : best_cost;
-
-    int32_t h = HeuristicBasic::compute(items, *_ench_reg, _target,
-                                         _h_buf, _h_dirty);
-    if (g + h >= best_cost)
-        return best_cost;
-
-    const size_t n = items.size();
-    if (n < 2) return best_cost;
-
-    struct Candidate { size_t i, j; int32_t est; };
-    std::vector<Candidate> candidates;
-    candidates.reserve(n * (n - 1));
-
-    for (size_t i = 0; i < n; ++i) {
-        for (size_t j = 0; j < n; ++j) {
-            if (i == j) continue;
-            if (!_forge_engine.is_forgeable(items[i], items[j]))
-                continue;
-            int32_t est = _forge_engine.estimate_forge_cost(
-                items[i], items[j], *_ench_reg);
-            if (g + est < best_cost)
-                candidates.push_back({i, j, est});
-        }
-    }
-
-    std::sort(candidates.begin(), candidates.end(),
-              [](const Candidate& a, const Candidate& b) {
-                  // Equipment-base (i==0) first — builds complete solutions fast
-                  if ((a.i == 0) != (b.i == 0))
-                      return a.i == 0;
-                  return a.est < b.est;
-              });
-
-    for (const auto& cand : candidates) {
-        compact::Item forged = items[cand.i];
-        int32_t real_cost = _forge_engine.forge_into(
-            forged, items[cand.j], *_ench_reg);
-        int32_t child_g = g + real_cost;
-        if (child_g >= best_cost)
-            continue;
-
-        std::vector<compact::Item> child = items;
-        child.erase(child.begin() + static_cast<std::ptrdiff_t>(cand.j));
-        size_t base_in_child = (cand.i > cand.j) ? cand.i - 1 : cand.i;
-        child[base_in_child] = std::move(forged);
-
-        best_cost = _dfs_bound(std::move(child), child_g,
-                               best_cost, node_limit);
-        if (node_limit <= 0)
-            return best_cost;
-    }
-
-    return best_cost;
-}
-
-// ─── Delta heuristic helpers ───────────────────────────────────────────
-
-void IDAStarAlgorithm::_precompute_max(const std::vector<ItemID>& ids) {
-    if (_h_max.size() < _ench_reg->size())
-        _h_max.assign(_ench_reg->size(), 0);
-    _h_dirty.clear();
-
-    for (auto id : ids) {
-        for (const auto& e : _pool[id].enchs) {
-            if (e.id < 0) continue;
-            if (e.level > _h_max[e.id]) {
-                if (_h_max[e.id] == 0)
-                    _h_dirty.push_back(e.id);
-                _h_max[e.id] = e.level;
-            }
-        }
-    }
-}
-
 int32_t IDAStarAlgorithm::_compute_h() const {
-    int32_t h = 0;
-    for (const auto& t : _target) {
-        int16_t have = _h_max[t.id];
-        if (have < t.level)
-            h += (t.level - have) * (*_ench_reg)[t.id].mul_b;
-    }
-    return h;
+    return search_utils::compute_h(_target, *_ench_reg, _h_max);
 }
 
 void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
@@ -309,9 +214,11 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
             best_cost = input.initial_bound;
         } else {
             int64_t node_limit = 50'000;
-            int32_t dfs_cost = _dfs_bound(
+            int32_t dfs_cost = search_utils::dfs_bound(
                 std::vector<compact::Item>(items.begin(), items.end()),
-                0, best_cost, node_limit);
+                0, best_cost, node_limit,
+                _forge_engine, *_ench_reg, _target,
+                _h_buf, _h_dirty);
             if (dfs_cost < best_cost)
                 best_cost = dfs_cost;
         }
@@ -322,7 +229,8 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         best_cost = input.initial_bound;
 
     // Exhaustive DFS branch-and-bound
-    _precompute_max(initial_ids);
+    search_utils::precompute_max(initial_ids, _pool, *_ench_reg,
+                                  _h_max, _h_dirty);
     _dfs(initial_ids, 0, best_cost, ctx);
 
     if (best_cost < INT32_MAX && !_solution_path.empty()) {
