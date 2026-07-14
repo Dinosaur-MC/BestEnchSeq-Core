@@ -1,6 +1,5 @@
 #include "algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
-#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include <chrono>
 #include <algorithm>
 #include <cstdint>
@@ -96,11 +95,11 @@ void HierarchicalMergeAlgorithm::execute(
     int32_t solutions_found = 0;
 
     if (items.size() <= 1) {
-        _diag.label = "hierarchical";
+        _diag.algorithm_name = std::string(name());
         _diag.status = "GoalAlreadyMet";
         _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start).count();
-        DiagnosticsWriter::write(_diag);
+        _diag.flush(ctx);
         ctx.report_compact_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
@@ -205,12 +204,11 @@ phase2:
     ctx.report_progress(0.6, ProgressStatus::ApplyingToEquipment);
 
     if (group_results.empty()) {
-        _diag.label = "hierarchical";
-        _diag.steps_forged = compact_steps.size();
+        _diag.algorithm_name = std::string(name());
         _diag.status = "Complete";
         _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start).count();
-        DiagnosticsWriter::write(_diag);
+        _diag.flush(ctx);
 
         ctx.report_compact_solution(std::move(compact_steps));
         ctx.report_progress(1.0, ProgressStatus::Complete);
@@ -253,12 +251,11 @@ phase2:
         ++solutions_found;
     }
 
-    _diag.label = "hierarchical";
-    _diag.steps_forged = compact_steps.size();
+    _diag.algorithm_name = std::string(name());
     _diag.status = "Complete";
     _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start).count();
-    DiagnosticsWriter::write(_diag);
+    _diag.flush(ctx);
 
     // Verify final equipment achieves the target
     {

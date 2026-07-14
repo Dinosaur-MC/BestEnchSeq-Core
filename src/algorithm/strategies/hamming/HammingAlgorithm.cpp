@@ -1,6 +1,5 @@
 #include "algorithm/strategies/hamming/HammingAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
-#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cstdint>
@@ -208,11 +207,10 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
                         steps.begin(), steps.end(), int32_t{0},
                         [](int32_t s, const EnchStep& st) { return s + st.cost; });
 
-                    _diag.label = "hamming";
-                    _diag.steps_forged = static_cast<int64_t>(steps.size());
+                    _diag.algorithm_name = std::string(name());
                     _diag.solution_cost = total_cost;
                     _diag.status = "Complete";
-                    DiagnosticsWriter::write(_diag);
+                    _diag.flush(ctx);
 
                     ctx.report_compact_solution(std::move(steps));
                     ctx.report_progress(1.0, ProgressStatus::Complete);
@@ -224,10 +222,9 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
 
     // ── No solution ─────────────────────────────────────────────────────
 
-    _diag.label = "hamming";
-    _diag.steps_forged = static_cast<int64_t>(steps.size());
+    _diag.algorithm_name = std::string(name());
     _diag.status = cancelled ? "Cancelled" : "CompleteNoSolution";
-    DiagnosticsWriter::write(_diag);
+    _diag.flush(ctx);
 
     ctx.report_progress(1.0,
         cancelled ? ProgressStatus::Cancelled

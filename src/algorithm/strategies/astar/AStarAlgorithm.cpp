@@ -1,6 +1,5 @@
 #include "algorithm/strategies/astar/AStarAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
-#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "algorithm/components/SearchUtils.h"
 #include "utils/FlatHashMap.hpp"
 #include "utils/HashUtils.hpp"
@@ -295,22 +294,21 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             ctx.report_compact_solution(std::move(steps));
             ctx.report_progress(1.0, ProgressStatus::Complete);
 
+            _diag.algorithm_name = std::string(name());
             _diag.explored_count = explored;
-            _diag.best_g_size = best_g.size();
+            _diag.best_g_entries = best_g.size();
             _diag.step_pool_used = _step_pool.size();
             _diag.step_pool_capacity = _step_pool.capacity();
-            _diag.items_pool_size = _pool.size();
+            _diag.items_pool_used = _pool.size();
             _diag.items_pool_capacity = _pool.capacity();
             _diag.solution_cost = _best_solution_cost;
-            _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - t0).count();
             _diag.open_set_pending = open_set.size();
             _diag.estimated_peak_bytes =
                 static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
               + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
               + static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
             _diag.status = "Complete";
-            DiagnosticsWriter::write(_diag);
+            _diag.flush(ctx);
             return;
         }
 
@@ -376,7 +374,6 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 Item forged = _pool[old_base_id];
                 int32_t real_cost = _forge_engine.forge_into(forged, _pool[old_sac_id], reg);
                 int32_t child_g = current.g + real_cost;
-                ++_diag.steps_forged;
                 ctx.incr_steps_forged();
 
                 // Real cost may exceed estimate — recheck
@@ -430,16 +427,15 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     }
 
     // ─── Exit diagnostics ────────────────────────────────────────────────
+    _diag.algorithm_name = std::string(name());
     _diag.explored_count = explored;
-    _diag.best_g_size = best_g.size();
+    _diag.best_g_entries = best_g.size();
     _diag.step_pool_used = _step_pool.size();
     _diag.step_pool_capacity = _step_pool.capacity();
-    _diag.items_pool_size = _pool.size();
+    _diag.items_pool_used = _pool.size();
     _diag.items_pool_capacity = _pool.capacity();
     _diag.open_set_pending = open_set.size();
     _diag.solution_cost = _best_solution_cost;
-    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - t0).count();
     _diag.estimated_peak_bytes =
         static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item))
       + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
@@ -451,5 +447,5 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
         _diag.status = "CompleteNoSolution";
     }
-    DiagnosticsWriter::write(_diag);
+    _diag.flush(ctx);
 }

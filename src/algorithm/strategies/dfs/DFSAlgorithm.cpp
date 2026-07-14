@@ -1,6 +1,5 @@
 #include "algorithm/strategies/dfs/DFSAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
-#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "algorithm/components/SearchUtils.h"
 #include "algorithm/components/HeuristicBasic.h"
 #include <algorithm>
@@ -115,12 +114,12 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
 
     _dfs_iterative(ctx);
 
-    _diag.label = "dfs";
+    _diag.algorithm_name = std::string(name());
     _diag.solution_cost = _best_cost < INT32_MAX ? _best_cost : -1;
     _diag.status = _best_cost < INT32_MAX ? "Complete" : "CompleteNoSolution";
     _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - _start_time).count();
-    DiagnosticsWriter::write(_diag);
+    _diag.flush(ctx);
 
     ctx.report_progress(1.0, _best_cost < INT32_MAX
         ? ProgressStatus::Complete

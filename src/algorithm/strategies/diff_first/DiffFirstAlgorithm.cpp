@@ -1,6 +1,5 @@
 #include "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
-#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cstdint>
@@ -182,11 +181,10 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
                     steps.begin(), steps.end(), int32_t{0},
                     [](int32_t s, const EnchStep& st) { return s + st.cost; });
 
-                _diag.label = "difficulty_first";
-                _diag.steps_forged = static_cast<int64_t>(steps.size());
+                _diag.algorithm_name = std::string(name());
                 _diag.solution_cost = total;
                 _diag.status = "Complete";
-                DiagnosticsWriter::write(_diag);
+                _diag.flush(ctx);
 
                 ctx.report_compact_solution(std::move(steps));
                 ctx.report_progress(1.0, ProgressStatus::Complete);
@@ -195,10 +193,9 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
         }
     }
 
-    _diag.label = "difficulty_first";
-    _diag.steps_forged = static_cast<int64_t>(steps.size());
+    _diag.algorithm_name = std::string(name());
     _diag.status = cancelled ? "Cancelled" : "CompleteNoSolution";
-    DiagnosticsWriter::write(_diag);
+    _diag.flush(ctx);
     ctx.report_progress(1.0,
         cancelled ? ProgressStatus::Cancelled : ProgressStatus::CompleteNoSolution);
 }

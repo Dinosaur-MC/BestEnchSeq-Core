@@ -57,6 +57,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 
     // TT: global best_g
     size_t h = StateHash::ids(ids, _pool);
+    ++_diag.tt_lookups;
     if (const int32_t* tt_g = _tt.lookup(h)) {
         if (*tt_g <= g) {
             ctx.incr_nodes_pruned();
@@ -64,6 +65,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
         }
     }
     _tt.store(h, g);
+    ++_diag.tt_stores;
 
     // Collect forgeable pairs sorted by estimated cost
     struct Candidate { size_t i, j; int32_t est_cost; };
@@ -233,7 +235,19 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
                                   _h_max, _h_dirty);
     _dfs(initial_ids, 0, best_cost, ctx);
 
+    _diag.algorithm_name = std::string(name());
+    _diag.items_pool_used = _pool.size();
+    _diag.items_pool_capacity = _pool.capacity();
+    _diag.solutions_found = _solutions_found;
+    _diag.final_bound = best_cost;
+    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - _start_time).count();
+
     if (best_cost < INT32_MAX && !_solution_path.empty()) {
+        _diag.solution_path_len = _solution_path.size();
+        _diag.solution_cost = best_cost;
+        _diag.status = "Complete";
+
         std::vector<EnchStep> steps;
         steps.reserve(_solution_path.size());
         for (const auto& s : _solution_path)
@@ -242,9 +256,10 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         ctx.report_compact_solution(std::move(steps));
         ctx.report_progress(1.0, ProgressStatus::Complete);
     } else {
+        _diag.status = ctx.is_cancelled() ? "Cancelled" : "CompleteNoSolution";
         ctx.report_progress(1.0,
             ctx.is_cancelled() ? ProgressStatus::Cancelled
                                : ProgressStatus::CompleteNoSolution);
     }
-
+    _diag.flush(ctx);
 }

@@ -3,6 +3,7 @@
 #include "algorithm/forge/ForgeEngine.h"
 #include "algorithm/components/ItemPool.h"
 #include "algorithm/components/TTTable.h"
+#include "algorithm/strategies/idastar/IDAStarDiagnostics.h"
 #include "registries/CompactedRegistries.h"
 #include <chrono>
 #include <cstdint>
@@ -57,4 +58,6 @@ private:
     int32_t _max_solutions{0};
     std::chrono::milliseconds _max_search_time{0};
     std::chrono::steady_clock::time_point _start_time;
+
+    IDAStarDiagnostics _diag;
 };

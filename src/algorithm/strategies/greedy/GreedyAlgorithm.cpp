@@ -1,6 +1,5 @@
 #include "algorithm/strategies/greedy/GreedyAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
-#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include "algorithm/components/SearchUtils.h"
 #include <chrono>
 #include <algorithm>
@@ -69,12 +68,11 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     }
 
     bool goal_achieved = meets_target(mutable_items[0], _target);
-    _diag.label = "greedy";
-    _diag.steps_forged = goal_achieved ? compact_steps.size() : 0;
+    _diag.algorithm_name = std::string(name());
     _diag.status = goal_achieved ? "Complete" : "CompleteNoSolution";
     _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - start).count();
-    DiagnosticsWriter::write(_diag);
+    _diag.flush(ctx);
 
     if (!goal_achieved) {
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
