@@ -10,6 +10,7 @@
 #include "algorithm/strategies/DynamicPenaltyBalancingAlgorithm.h"
 #include "algorithm/strategies/HierarchicalMergeAlgorithm.h"
 #include "algorithm/strategies/HammingAlgorithm.h"
+#include "algorithm/strategies/DiffFirstAlgorithm.h"
 #include "config/ForgeConfig.h"
 #include <memory>
 #include <vector>
@@ -460,6 +461,81 @@ void test_hamming_durability_repair() {
     std::cout << "PASS: test_hamming_durability_repair (cost=" << cost << ")" << std::endl;
 }
 
+// ─── DiffFirstAlgorithm tests ───────────────────────────────────────
+
+void test_diff_first_simple() {
+    setup_registries();
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5)},
+        {{ID_SHARPNESS, 5}}
+    );
+
+    int32_t cost = run_strategy("difficulty_first",
+        std::make_unique<DiffFirstAlgorithm>(), ctx);
+    expect(cost > 0, "diff_first: simple forge should produce positive cost");
+    std::cout << "PASS: test_diff_first_simple (cost=" << cost << ")" << std::endl;
+}
+
+void test_diff_first_two_books() {
+    setup_registries();
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}}
+    );
+
+    int32_t cost = run_strategy("difficulty_first",
+        std::make_unique<DiffFirstAlgorithm>(), ctx);
+    expect(cost > 0, "diff_first: two books should produce positive cost");
+    std::cout << "PASS: test_diff_first_two_books (cost=" << cost << ")" << std::endl;
+}
+
+void test_diff_first_target_unreachable() {
+    setup_registries();
+    TestContext ctx(
+        {book(ID_SHARPNESS, 3)},
+        {{ID_SHARPNESS, 5}}
+    );
+
+    int32_t cost = run_strategy("difficulty_first",
+        std::make_unique<DiffFirstAlgorithm>(), ctx);
+    expect(cost == -1, "diff_first: unreachable target should return -1");
+    std::cout << "PASS: test_diff_first_target_unreachable" << std::endl;
+}
+
+void test_diff_first_mixed_penalties() {
+    setup_registries();
+    // Equipment with prior penalty — tests PPN seeding path
+    compact::Item equip{compact::ItemType::Equip, 1561, 1, {}};  // ppn=1
+    equip.enchs.insert({ID_SHARPNESS, 3});
+
+    TestContext ctx(
+        {book(ID_SHARPNESS, 4), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 4}, {ID_KNOCKBACK, 2}}
+    );
+    ctx.items[0] = equip;
+
+    int32_t cost = run_strategy("difficulty_first",
+        std::make_unique<DiffFirstAlgorithm>(), ctx);
+    expect(cost > 0, "diff_first: mixed ppn should produce positive cost");
+    std::cout << "PASS: test_diff_first_mixed_penalties (cost=" << cost << ")" << std::endl;
+}
+
+void test_diff_first_five_books() {
+    setup_registries();
+    // 5 books — tests odd-count PPN-tier processing with fallback to mode 1
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5), book(ID_SHARPNESS, 4),
+         book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 2),
+         book(ID_SHARPNESS, 1)},
+        {{ID_SHARPNESS, 5}}
+    );
+
+    int32_t cost = run_strategy("difficulty_first",
+        std::make_unique<DiffFirstAlgorithm>(), ctx);
+    expect(cost > 0, "diff_first: five books should produce positive cost");
+    std::cout << "PASS: test_diff_first_five_books (cost=" << cost << ")" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -499,6 +575,13 @@ int main() {
         test_hamming_seven_books();
         test_hamming_pre_enchanted_equip();
         test_hamming_durability_repair();
+
+        // DiffFirstAlgorithm
+        test_diff_first_simple();
+        test_diff_first_two_books();
+        test_diff_first_target_unreachable();
+        test_diff_first_mixed_penalties();
+        test_diff_first_five_books();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
