@@ -103,16 +103,24 @@ BenchConfig parse_cli(int argc, char* argv[]) {
     const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical", "idastar", "hamming"};
     for (auto* a : all_algos) cfg.algos.insert(a);
 
+    auto die = [](const std::string& msg) {
+        std::cerr << "Error: " << msg << "\n"
+                  << "Usage: forge_benchmark --alg <names> | --help\n";
+        std::exit(1);
+    };
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--list") {
             cfg.list_only = true;
-        } else if (arg == "--test" && i + 1 < argc) {
+        } else if (arg == "--test") {
+            if (i + 1 >= argc) die("--test requires a value");
             cfg.test_names.clear();
             std::istringstream ss(argv[++i]);
             for (std::string tok; std::getline(ss, tok, ','); )
-                cfg.test_names.insert(tok);
-        } else if (arg == "--group" && i + 1 < argc) {
+                if (!tok.empty()) cfg.test_names.insert(tok);
+        } else if (arg == "--group") {
+            if (i + 1 >= argc) die("--group requires a value");
             cfg.test_names.clear();
             std::istringstream ss(argv[++i]);
             for (std::string tok; std::getline(ss, tok, ','); ) {
@@ -125,13 +133,16 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                     }
                 }
                 if (!found)
-                    std::cerr << "Warning: unknown group '" << tok << "'\n";
+                    die("unknown group '" + tok + "'");
             }
-        } else if ((arg == "--algo" || arg == "--alg") && i + 1 < argc) {
+        } else if (arg == "--algo" || arg == "--alg") {
+            if (i + 1 >= argc) die("--alg requires a value");
             cfg.algos.clear();
             std::istringstream ss(argv[++i]);
-            for (std::string tok; std::getline(ss, tok, ','); )
-                cfg.algos.insert(tok);
+            for (std::string tok; std::getline(ss, tok, ','); ) {
+                if (!tok.empty())
+                    cfg.algos.insert(tok);
+            }
         } else if (arg == "--help") {
             std::cout << "Usage: forge_benchmark [options]\n"
                       << "  --list                List test cases & groups\n"
@@ -150,7 +161,25 @@ BenchConfig parse_cli(int argc, char* argv[]) {
         else if (arg == "--no-skip") {
             cfg.no_skip = true;
         } else if (arg.size() > 1 && arg[0] == '-') {
-            std::cerr << "Warning: unknown flag '" << arg << "'\n";
+            die("unknown flag '" + arg + "'");
+        }
+    }
+
+    // Validate: --alg values must be known (or chain with '+')
+    std::vector<const char*> all_valid;
+    for (auto* a : all_algos) all_valid.push_back(a);
+    for (const auto& a : cfg.algos) {
+        auto plus = a.find('+');
+        if (plus != std::string::npos) {
+            std::string w = a.substr(0, plus);
+            std::string m = a.substr(plus + 1);
+            bool ok_w = std::find(all_valid.begin(), all_valid.end(), w) != all_valid.end();
+            bool ok_m = std::find(all_valid.begin(), all_valid.end(), m) != all_valid.end();
+            if (!ok_w) die("unknown warmup algorithm '" + w + "' in chain '" + a + "'");
+            if (!ok_m) die("unknown main algorithm '" + m + "' in chain '" + a + "'");
+        } else {
+            if (std::find(all_valid.begin(), all_valid.end(), a) == all_valid.end())
+                die("unknown algorithm '" + a + "'");
         }
     }
     return cfg;
