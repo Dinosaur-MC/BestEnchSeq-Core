@@ -10,6 +10,7 @@
 #include "config/AppConfig.h"
 #include "parsers/EnchInfoParser.h"
 #include "algorithm/strategies/IDAStarAlgorithm.h"
+#include "algorithm/strategies/HammingAlgorithm.h"
 #include "log/log.hpp"
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
@@ -101,6 +102,8 @@ void register_builtin_algorithms(AlgorithmRegistry &registry) {
                                 [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
     registry.register_algorithm("idastar",
                                 [] { return std::make_unique<IDAStarAlgorithm>(); });
+    registry.register_algorithm("hamming",
+                                [] { return std::make_unique<HammingAlgorithm>(); });
 }
 
 } // anonymous namespace
