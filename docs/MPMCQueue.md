@@ -2,7 +2,7 @@
 
 > 目标平台：LLVM Clang++ 22 / C++20  
 > 设计约束：完全无锁（zero mutex）、零阻塞、百万并发友好  
-> 仓库位置：`src/utils/BoundedMPMCQueue.hpp` · `src/utils/SegmentedMPMCQueue.hpp`
+> 仓库位置：`src/utils/queue/BoundedMPMCQueue.hpp` · `src/utils/queue/SegmentedMPMCQueue.hpp`
 
 ---
 
@@ -11,13 +11,14 @@
 1. [架构概述](#1-架构概述)
 2. [Version A：BoundedMPMCQueue](#2-version-aboundedmpmcqueue)
 3. [Version B：SegmentedMPMCQueue](#3-version-bsegmentedmpmcqueue)
-4. [算法正确性证明](#4-算法正确性证明)
-5. [内存序精解](#5-内存序精解)
-6. [性能模型](#6-性能模型)
-7. [使用指南](#7-使用指南)
-8. [百万并发注意事项](#8-百万并发注意事项)
-9. [与现有队列对比](#9-与现有队列对比)
-10. [FAQ / 常见陷阱](#10-faq--常见陷阱)
+4. [统一接口层：IQueue 与 QueueType](#4-统一接口层iqueue-与-queuetype)
+5. [算法正确性证明](#5-算法正确性证明)
+6. [内存序精解](#6-内存序精解)
+7. [性能模型](#7-性能模型)
+8. [使用指南](#8-使用指南)
+9. [百万并发注意事项](#9-百万并发注意事项)
+10. [与现有队列对比](#10-与现有队列对比)
+11. [FAQ / 常见陷阱](#11-faq--常见陷阱)
 
 ---
 
@@ -39,7 +40,7 @@
 
 ### 核心设计原则
 
-1. **无锁路径全覆盖**：每个 push/pop 路径上零 mutex、零 spinlock、零阻塞系统调用
+1. **无锁路径全覆盖**：每个 `try_push`/`try_pop` 路径上零 mutex、零 spinlock、零阻塞系统调用
 2. **消除伪共享**：每个可能被不同核心同时访问的原子变量独占 64 字节 cache line
 3. **严格的内存序裁剪**：只在必要的位置使用 acquire/release，绝不滥用 seq_cst
 4. **序列号协议**：每个槽位的单一 `uint64_t` 编码"空闲/就绪/已消费"三重状态，天然防 ABA
@@ -48,8 +49,8 @@
 
 | 操作 | 安全并发度 |
 |------|-----------|
-| `push()` / `try_push()` | 任意数量的并发生产者 |
-| `pop()` / `try_pop()` | 任意数量的并发消费者 |
+| `try_push()` | 任意数量的并发生产者 |
+| `try_pop()` | 任意数量的并发消费者 |
 | 同一位置的 push + pop | 安全（序列号协议保证） |
 | 析构函数 | 仅当无其他线程访问时调用 |
 | `size()` / `empty()` | 返回近似值（存疑快照） |
@@ -243,7 +244,39 @@ if (pos < block->base_ticket) [[unlikely]] {
 
 ---
 
-## 4. 算法正确性证明
+## 4. 统一接口层：IQueue 与 QueueType
+
+所有队列类型继承自 `IQueue<T>` 虚接口（位于 `src/utils/queue/IQueue.h`），并提供统一的
+`try_push(const T&) -> bool`、`try_push(T&&) -> bool`、`try_pop(T&) -> bool` 签名。
+
+### QueueType 概念
+
+```cpp
+template <typename Q, typename T>
+concept QueueType = requires(Q& q, const T& cval, T& val) {
+    { q.try_push(cval) }             -> std::same_as<bool>;
+    { q.try_push(std::move(val)) }   -> std::same_as<bool>;
+    { q.try_pop(val) }               -> std::same_as<bool>;
+    { q.size() }                     -> std::convertible_to<size_t>;
+    { q.empty() }                    -> std::convertible_to<bool>;
+};
+```
+
+`EventLoop<T, Queue, Handler>` 使用此概念约束其队列参数。
+
+### QueueAdaptor
+
+`QueueAdaptor<T, ConcreteQueue>` 包装具体队列为 `IQueue<T>` 多态接口：
+
+```cpp
+QueueAdaptor<int, SPSCQueue<int, 256>> adapted;
+IQueue<int>& q = adapted;   // runtime-polymorphic access
+q.try_push(42);
+```
+
+---
+
+## 5. 算法正确性证明
 
 ### 4.1 不变式
 
@@ -288,7 +321,7 @@ Producer:                          Consumer:
 
 ---
 
-## 5. 内存序精解
+## 6. 内存序精解
 
 ### 5.1 BoundedMPMCQueue
 
@@ -351,7 +384,7 @@ Producer:                              Consumer:
 
 ---
 
-## 6. 性能模型
+## 7. 性能模型
 
 ### 6.1 原子操作开销（LLVM Clang++ 22 / x86-64）
 
@@ -396,42 +429,41 @@ SegmentedMPMCQueue 额外 + 约 BlockSize 分之一的开销用于块遍历。
 
 ---
 
-## 7. 使用指南
+## 8. 使用指南
 
-### 7.1 头文件包含
+### 8.1 头文件包含
 
 ```cpp
-#include "utils/BoundedMPMCQueue.hpp"
-#include "utils/SegmentedMPMCQueue.hpp"
+#include "utils/queue/BoundedMPMCQueue.hpp"
+#include "utils/queue/SegmentedMPMCQueue.hpp"
 ```
 
-### 7.2 BoundedMPMCQueue 基本用法
+### 8.2 BoundedMPMCQueue 基本用法
 
 ```cpp
-// 容量必须是 2 的幂
 BoundedMPMCQueue<int, 4096> queue;
 
 // 生产者
 int value = compute();
-if (!queue.push(value)) {
+if (!queue.try_push(value)) {
     // 队列满，数据被丢弃
     log_dropped();
 }
 
 // 消费者
 int result;
-if (queue.pop(result)) {
+if (queue.try_pop(result)) {
     process(result);
 }
 ```
 
-### 7.3 SegmentedMPMCQueue 基本用法
+### 8.3 SegmentedMPMCQueue 基本用法
 
 ```cpp
 SegmentedMPMCQueue<LogEntry, 1024> queue;
 
 // 生产者（永不丢数据）
-queue.push(LogEntry{"INFO", "user logged in"});
+queue.try_push(LogEntry{"INFO", "user logged in"});
 
 // 消费者
 LogEntry entry;
@@ -440,27 +472,25 @@ while (queue.try_pop(entry)) {
 }
 ```
 
-### 7.4 多线程流水线模式
+### 8.4 多线程流水线模式
 
 ```cpp
-// 阶段 1：4 个生产者
 std::vector<std::thread> producers;
 for (int t = 0; t < 4; ++t) {
     producers.emplace_back([&, t] {
         for (auto& item : my_work(t)) {
-            while (!queue.push(item)) {}    // 自旋等待（非阻塞）
+            while (!queue.try_push(item)) {}    // 自旋等待（非阻塞）
         }
     });
 }
 
-// 阶段 2：4 个消费者
 std::atomic<int> done_count{0};
 std::vector<std::thread> consumers;
 for (int t = 0; t < 4; ++t) {
     consumers.emplace_back([&] {
         int val;
         while (done_count.load() < TOTAL_WORK) {
-            if (queue.pop(val)) {
+            if (queue.try_pop(val)) {
                 process(val);
             } else {
                 std::this_thread::yield();
@@ -470,7 +500,7 @@ for (int t = 0; t < 4; ++t) {
 }
 ```
 
-### 7.5 选择合适的队列
+### 8.5 选择合适的队列
 
 | 场景 | 推荐 | 原因 |
 |------|------|------|
@@ -483,7 +513,7 @@ for (int t = 0; t < 4; ++t) {
 
 ---
 
-## 8. 百万并发注意事项
+## 9. 百万并发注意事项
 
 ### 8.1 CAS 竞争退火
 
@@ -545,47 +575,54 @@ numa_run_on_node(node_id);
 
 ---
 
-## 9. 与现有队列对比
+## 10. 与现有队列对比
 
-### 9.1 SPSCQueue
+所有队列实现共享 `IQueue<T>` 虚接口（`src/utils/queue/IQueue.h`），并通过
+`QueueType<T>` 概念约束泛型消费者。参见第 4 节。
+
+### 10.1 SPSCQueue
 
 ```
-src/utils/SPSCQueue.hpp — 单生产者单消费者
+src/utils/queue/SPSCQueue.hpp — 单生产者单消费者
 
 特点：无 CAS，纯 load/store，极致简单
 限制：仅 1P/1C
 适用：Observer 事件传递
 ```
 
-### 9.2 SPMCQueue
+### 10.2 SPMCQueue
 
 ```
-src/utils/SPMCQueue.hpp — 单生产者多消费者
+src/utils/queue/SPMCQueue.hpp — 单生产者多消费者
 
 特点：generational slot，消费者可以自由读取
 限制：仅 1P/N 消费者
 适用：日志后台写入（1 writer）、多 reader 观察
 ```
 
-### 9.3 家族速查
+### 10.3 家族速查
 
 ```
-                       ┌─────────┬─────────┬─────────┐
-                       │ SPSC    │ SPMC    │ MPMC    │
-├──────────────────────┼─────────┼─────────┼─────────┤
-│ 任意生产者            │    ❌   │    ❌   │    ✅   │
-│ 任意消费者            │    ❌   │    ✅   │    ✅   │
-│ 无 CAS              │    ✅   │    ❌   │    ❌   │
-│ 溢出丢弃             │    ✅   │    ✅   │    ✅   │
-│ 动态扩容             │    ❌   │    ❌   │    ✅*  │
-│ 近似最小延迟          │    1    │    2    │    2    │
-└──────────────────────┴─────────┴─────────┴─────────┘
+                       ┌─────────┬─────────┬─────────┬──────────┐
+                       │ SPSC    │ SPMC    │ MPMC    │ IQueue   │
+├──────────────────────┼─────────┼─────────┼─────────┼──────────┤
+│ 任意生产者            │    ❌   │    ❌   │    ✅   │   ✅     │
+│ 任意消费者            │    ❌   │    ✅   │    ✅   │   ✅     │
+│ 无 CAS              │    ✅   │    ❌   │    ❌   │   N/A    │
+│ 溢出丢弃             │    ✅   │    ✅   │    ✅   │   N/A    │
+│ 动态扩容             │    ❌   │    ❌   │    ✅*  │   N/A    │
+│ 统一虚接口            │    ✅   │    ✅   │    ✅   │   —      │
+│ 近似最小延迟          │    1    │    2    │    2    │   3      │
+└──────────────────────┴─────────┴─────────┴─────────┴──────────┘
   * SegmentedMPMCQueue only
+
+所有队列均通过 `QueueAdaptor<T, ConcreteQueue>` 适配为 `IQueue<T>` 多态接口，
+可在运行时选择后端队列类型。
 ```
 
 ---
 
-## 10. FAQ / 常见陷阱
+## 11. FAQ / 常见陷阱
 
 ### Q1: push 返回 false，数据丢了吗？
 
@@ -601,7 +638,7 @@ OOM 时抛 `std::bad_alloc`。
 或在临界区中调用，仍可能死锁。Segmented 的 `new Block` 和
 Bounded 已经确定不分配内存，相对安全。
 
-建议：在中断上下文中只使用 `BoundedMPMCQueue` 的 push，且确保
+建议：在中断上下文中只使用 `BoundedMPMCQueue` 的 `try_push`，且确保
 中断未被堆分配器锁阻塞。
 
 ### Q3: size() 返回的值可靠吗？
@@ -610,7 +647,7 @@ Bounded 已经确定不分配内存，相对安全。
 瞬间和返回值的瞬间之间，其他线程可能已改变了队列状态。
 
 用于判断"队列大概有多深"是可以的。用于条件判断时应使用
-`push()` / `pop()` 的返回值。
+`try_push()` / `try_pop()` 的返回值。
 
 ### Q4: 为什么要求 T 是 nothrow 的？
 
@@ -620,7 +657,7 @@ static_assert(std::is_nothrow_destructible_v<T>);
 static_assert(std::is_nothrow_move_assignable_v<T>);
 ```
 
-如果在 push/pop 中 T 的构造或移动抛异常，队列的状态会不一致
+如果在 `try_push`/`try_pop` 中 T 的构造或移动抛异常，队列的状态会不一致
 （槽位被标记为"已写入"但数据不完整，或数据被搬走但未析构）。
 
 如果 T 确实可能抛异常，用 `std::optional<T>` 或 `std::unique_ptr<T>` 包装。
@@ -628,9 +665,9 @@ static_assert(std::is_nothrow_move_assignable_v<T>);
 ### Q5: 可以拷贝队列吗？
 
 不可以。两个队列的拷贝构造函数和拷贝赋值均被 `= delete`。
-如果需要复制，显式 drain 一个队列再 push 到另一个。
+如果需要复制，显式 drain 一个队列再 `try_push` 到另一个。
 
-### Q6: 两个线程同时 push 同一个元素安全吗？
+### Q6: 两个线程同时 try_push 同一个元素安全吗？
 
 安全。队列对元素本身不做任何假设——它只移动值。但外部必须
 确保元素在 push 期间不被并发修改。
