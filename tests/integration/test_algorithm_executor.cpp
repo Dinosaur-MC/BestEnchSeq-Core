@@ -8,7 +8,6 @@
 #include <thread>
 
 // Empty AlgorithmInput for tests that don't need real data.
-// EnchReg is default-constructed (uninitialized — fine for TestAlgorithm).
 static AlgorithmInput g_test_input;
 
 // ─── Test IAlgorithm implementation (compact-only) ───
@@ -43,20 +42,6 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
-};
-
-// ─── Observers (compact step types) ───
-
-class TestSolutionObserver : public AlgorithmObserver {
-public:
-    int found_count = 0;
-    void on_solution_found(const std::vector<compact::EnchStep>&) override { ++found_count; }
-};
-
-class TestProgressObserver : public AlgorithmObserver {
-public:
-    double last_progress = 0.0;
-    void on_progress(double percent, ProgressStatus) override { last_progress = percent; }
 };
 
 // ─── Throwing algorithm for error-path test ───
@@ -174,44 +159,11 @@ void test_executor_progress() {
     auto algo = std::make_unique<TestAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
 
-    auto progress_obs = std::make_shared<TestProgressObserver>();
-    executor.attach_observer(progress_obs);
-
     executor.start(g_test_input);
     executor.wait();
 
-    expect(progress_obs->last_progress > 0, "progress should be reported");
     expect(executor.progress() > 0, "executor.progress() should return > 0 after execution");
     std::cout << "PASS: test_executor_progress" << std::endl;
-}
-
-void test_executor_observer() {
-    auto algo = std::make_unique<TestAlgorithm>();
-    AlgorithmExecutor executor(std::move(algo));
-
-    auto obs = std::make_shared<TestSolutionObserver>();
-    executor.attach_observer(obs);
-
-    executor.start(g_test_input);
-    executor.wait();
-
-    expect(obs->found_count >= 1, "observer should have been called for solution");
-    std::cout << "PASS: test_executor_observer" << std::endl;
-}
-
-void test_executor_detach_observer() {
-    auto algo = std::make_unique<TestAlgorithm>();
-    AlgorithmExecutor executor(std::move(algo));
-
-    auto obs = std::make_shared<TestSolutionObserver>();
-    executor.attach_observer(obs);
-    executor.detach_observer(obs);
-
-    executor.start(g_test_input);
-    executor.wait();
-
-    expect(obs->found_count == 0, "detached observer should not be called");
-    std::cout << "PASS: test_executor_detach_observer" << std::endl;
 }
 
 void test_output_not_valid_before_completion() {
@@ -280,8 +232,6 @@ int main() {
         test_executor_cancel();
         test_executor_pause_resume();
         test_executor_progress();
-        test_executor_observer();
-        test_executor_detach_observer();
         test_output_not_valid_before_completion();
         test_output_has_steps_after_completion();
         test_serialization_stubs();

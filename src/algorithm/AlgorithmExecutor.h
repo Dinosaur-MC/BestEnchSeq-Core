@@ -3,7 +3,6 @@
 #include "ExecutionContext.h"
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -11,12 +10,12 @@
 
 // ─── Observer dispatch period ───────────────────────────────────────────
 #ifndef BESQ_DISPATCH_MS
-#define BESQ_DISPATCH_MS 50  // dispatch observer events every 50 ms
+#define BESQ_DISPATCH_MS 50
 #endif
 
 namespace compact { class EnchReg; }
 
-// Forward declarations (full definitions in IAlgorithm.h)
+// Forward declarations
 struct AlgorithmOutput;
 class IAlgorithm;
 
@@ -29,13 +28,7 @@ public:
     AlgorithmExecutor(const AlgorithmExecutor&) = delete;
     AlgorithmExecutor& operator=(const AlgorithmExecutor&) = delete;
 
-    /// Start with compact AlgorithmInput.
-    /// \param warmup  Optional fast algorithm run synchronously before the main
-    ///                worker thread; its best-found cost is fed to the main
-    ///                algorithm as \c AlgorithmInput::initial_bound.
     void start(AlgorithmInput input, std::unique_ptr<IAlgorithm> warmup = nullptr);
-
-    /// Resume from a previously-serialized state.
     void start(AlgorithmInput input, const std::vector<uint8_t>& previous_state);
 
     void pause();
@@ -47,28 +40,24 @@ public:
     AlgorithmState state() const noexcept;
     double progress() const noexcept;
 
-    void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
-    void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
-
-    // Result (returns compact AlgorithmOutput; caller converts to domain if needed)
     AlgorithmOutput output() const;
 
     ExecutionContext::DiagnosticSnapshot get_diagnostics(int64_t elapsed_ms = 0) const {
         return _ctx ? _ctx->get_diagnostics(elapsed_ms) : ExecutionContext::DiagnosticSnapshot{};
     }
 
-    // Serialization
     std::vector<uint8_t> serialize_state() const;
     bool restore_state(const std::vector<uint8_t>& data);
 
 private:
     void _join_worker() noexcept;
     void _set_state(AlgorithmState new_state) noexcept;
+    void _run_warmup(AlgorithmInput& input, IAlgorithm& warmup_algo);
+    void _finalize();
 
     std::unique_ptr<IAlgorithm> _algorithm;
     std::unique_ptr<ExecutionContext> _ctx;
     std::optional<std::thread> _worker;
-    std::optional<std::thread> _dispatch;  // periodic observer dispatch
     std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
     std::mutex _state_mtx;
     std::condition_variable _state_cv;

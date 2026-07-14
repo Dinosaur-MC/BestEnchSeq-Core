@@ -1,4 +1,5 @@
 #include "AlgorithmExecutor.h"
+#include "algorithm/diagnostics/DiagnosticsService.h"
 #include <stdexcept>
 #include <utility>
 
@@ -20,12 +21,8 @@ AlgorithmExecutor::~AlgorithmExecutor() {
 // ─── Internal helpers ───
 
 void AlgorithmExecutor::_join_worker() noexcept {
-    // Worker first — stops producing events
     if (_worker && _worker->joinable())
         _worker->join();
-    // Dispatch thread second — drains remaining events
-    if (_dispatch && _dispatch->joinable())
-        _dispatch->join();
 }
 
 void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
@@ -33,11 +30,55 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
     while (prev != AlgorithmState::Cancelled && prev != AlgorithmState::Failed) {
         if (_state.compare_exchange_weak(prev, new_state,
                 std::memory_order_acq_rel, std::memory_order_acquire)) {
-            _ctx->report_state_change(prev, new_state);
             _state_cv.notify_all();
             return;
         }
     }
+}
+
+void AlgorithmExecutor::_run_warmup(AlgorithmInput& input, IAlgorithm& warmup_algo) {
+    ExecutionContext warmup_ctx;
+    warmup_algo.execute(input, warmup_ctx);
+    auto solutions = warmup_ctx.get_solutions();
+    if (!solutions.empty()) {
+        int32_t bound = solutions[0].total_cost;
+        for (const auto& sol : solutions)
+            if (sol.total_cost < bound) bound = sol.total_cost;
+        if (bound < input.initial_bound)
+            input.initial_bound = bound;
+    }
+}
+
+void AlgorithmExecutor::_finalize() {
+    _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - _start_time);
+
+    auto atoms = _ctx->get_diagnostics(_computation_time.count());
+    auto kvs = _ctx->consume_diagnostic_log();
+
+    // Inject atomic counters into the KV log
+    kvs.emplace_back("nodes_visited", std::to_string(atoms.nodes_visited));
+    kvs.emplace_back("nodes_pruned",  std::to_string(atoms.nodes_pruned));
+    kvs.emplace_back("steps_forged",  std::to_string(atoms.steps_forged));
+
+    // Determine status from final state
+    auto s = _state.load(std::memory_order_acquire);
+    const char* status = "Complete";
+    if (s == AlgorithmState::Cancelled)  status = "Cancelled";
+    if (s == AlgorithmState::Failed)     status = "Failed";
+
+    // Convert KV pairs to Writer::Entry
+    std::vector<DiagnosticsWriter::Entry> entries;
+    entries.reserve(kvs.size());
+    for (auto& [k, v] : kvs)
+        entries.push_back({std::move(k), std::move(v)});
+
+    DiagnosticsService::instance().push(DiagnosticsEvent{
+        .algorithm_name = std::string(_algorithm->name()),
+        .entries        = std::move(entries),
+        .status         = status,
+        .timestamp      = std::chrono::system_clock::now(),
+    });
 }
 
 // ─── Lifecycle ───
@@ -45,45 +86,14 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
 void AlgorithmExecutor::start(AlgorithmInput input,
                                std::unique_ptr<IAlgorithm> warmup) {
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
-    if (warmup) {
-        ExecutionContext warmup_ctx;
-        warmup->execute(input, warmup_ctx);
-        auto solutions = warmup_ctx.get_solutions();
-        if (!solutions.empty()) {
-            int32_t bound = solutions[0].total_cost;
-            for (const auto& sol : solutions)
-                if (sol.total_cost < bound) bound = sol.total_cost;
-            if (bound < input.initial_bound)
-                input.initial_bound = bound;
-        }
-    }
+    if (warmup)
+        _run_warmup(input, *warmup);
 
     AlgorithmState expected = AlgorithmState::Idle;
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
-    // ForgeConfig is propagated via AlgorithmInput — strategies read
-    // input.config in execute() to configure their forge engine.
     _start_time = std::chrono::steady_clock::now();
-    _ctx->report_state_change(AlgorithmState::Idle, AlgorithmState::Running);
-
-    // Periodic observer dispatch — only needed when observers are attached.
-    // Without observers, events are batch-drained at wait() time, avoiding
-    // the overhead of a dedicated dispatch thread (thread creation + join
-    // costs ~1-2ms per run, significant for sub-ms algorithms).
-    if (_ctx->has_observers()) {
-    _dispatch.emplace([this]() {
-        while (true) {
-            auto s = _state.load(std::memory_order_acquire);
-            if (s != AlgorithmState::Running && s != AlgorithmState::Paused)
-                break;
-            _ctx->dispatch_events();
-            std::this_thread::sleep_for(std::chrono::milliseconds(BESQ_DISPATCH_MS));
-        }
-        // Final drain after worker has signalled completion
-        _ctx->dispatch_events();
-    });
-    }  // if (has_observers)
 
     _worker.emplace([this, input = std::move(input)]() mutable {
         try {
@@ -112,17 +122,14 @@ void AlgorithmExecutor::start(AlgorithmInput input, const std::vector<uint8_t>& 
 
 void AlgorithmExecutor::pause() {
     AlgorithmState expected = AlgorithmState::Running;
-    if (_state.compare_exchange_strong(expected, AlgorithmState::Paused)) {
+    if (_state.compare_exchange_strong(expected, AlgorithmState::Paused))
         _ctx->pause();
-        _ctx->report_state_change(AlgorithmState::Running, AlgorithmState::Paused);
-    }
 }
 
 void AlgorithmExecutor::resume() {
     AlgorithmState expected = AlgorithmState::Paused;
     if (_state.compare_exchange_strong(expected, AlgorithmState::Running)) {
         _ctx->resume();
-        _ctx->report_state_change(AlgorithmState::Paused, AlgorithmState::Running);
     }
 }
 
@@ -136,19 +143,14 @@ void AlgorithmExecutor::cancel() {
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
         _ctx->cancel();
         _ctx->resume();
-        // Push state change before the worker thread notices and CAS-fails
-        _ctx->report_state_change(prev, AlgorithmState::Cancelled);
     }
     _state_cv.notify_all();
 }
 
 AlgorithmState AlgorithmExecutor::wait() {
     _join_worker();
-    _ctx->dispatch_events();
-    // Notify completion observers
+    _finalize();
     auto s = _state.load(std::memory_order_acquire);
-    if (s == AlgorithmState::Completed)
-        _ctx->notify_completed(output());
     return s;
 }
 
@@ -169,9 +171,7 @@ AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
         s == AlgorithmState::Failed ||
         s == AlgorithmState::Cancelled) {
         _join_worker();
-        _ctx->dispatch_events();
-        if (s == AlgorithmState::Completed)
-            _ctx->notify_completed(output());
+        _finalize();
     }
     return s;
 }
@@ -182,14 +182,6 @@ AlgorithmState AlgorithmExecutor::state() const noexcept {
 
 double AlgorithmExecutor::progress() const noexcept {
     return _ctx ? _ctx->progress() : 0.0;
-}
-
-void AlgorithmExecutor::attach_observer(std::shared_ptr<AlgorithmObserver> observer) {
-    if (_ctx) _ctx->attach_observer(std::move(observer));
-}
-
-void AlgorithmExecutor::detach_observer(std::shared_ptr<AlgorithmObserver> observer) {
-    if (_ctx) _ctx->detach_observer(std::move(observer));
 }
 
 AlgorithmOutput AlgorithmExecutor::output() const {
@@ -221,4 +213,3 @@ bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
     _algorithm->deserialize_state(data);
     return true;
 }
-

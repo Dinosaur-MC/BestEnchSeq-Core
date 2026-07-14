@@ -42,6 +42,7 @@ set(ALGO_ENGINE_SRCS
     ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsWriter.cpp
+    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsService.cpp
     ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
 )
 
