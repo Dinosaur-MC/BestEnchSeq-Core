@@ -127,7 +127,7 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                 if (!found)
                     std::cerr << "Warning: unknown group '" << tok << "'\n";
             }
-        } else if (arg == "--algo" && i + 1 < argc) {
+        } else if ((arg == "--algo" || arg == "--alg") && i + 1 < argc) {
             cfg.algos.clear();
             std::istringstream ss(argv[++i]);
             for (std::string tok; std::getline(ss, tok, ','); )
@@ -137,16 +137,20 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                       << "  --list                List test cases & groups\n"
                       << "  --test  <names>       Comma-separated test names\n"
                       << "  --group <names>       Comma-separated group names\n"
-                      << "  --algo  <names>       Comma-separated algorithm names\n"
+                      << "  --alg   <names>       Comma-separated algorithm names (--algo also accepted)\n"
                       << "  --help                This help\n"
+                      << "  --no-skip             Always run all algorithms (skip AStar/IDAStar for >8 enchants)\n"
                       << "\nExamples:\n"
                       << "  forge_benchmark --group netherite\n"
-                      << "  forge_benchmark --test netherite_sword,boots_full --algo greedy,dfs\n"
-                      << "  forge_benchmark --group armor --algo astar\n";
+                      << "  forge_benchmark --test netherite_sword,boots_full --alg greedy,dfs\n"
+                      << "  forge_benchmark --group armor --alg astar\n"
+                      << "  forge_benchmark --alg astar,hamming+astar --group netherite --no-skip\n";
             std::exit(0);
         }
         else if (arg == "--no-skip") {
             cfg.no_skip = true;
+        } else if (arg.size() > 1 && arg[0] == '-') {
+            std::cerr << "Warning: unknown flag '" << arg << "'\n";
         }
     }
     return cfg;
@@ -216,6 +220,42 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
     std::vector<BenchResult> results;
 
     for (const auto& algo_name : enabled_algos) {
+        // Chain: warmup+main (e.g. "hamming+astar")
+        auto plus = algo_name.find('+');
+        if (plus != std::string::npos) {
+            std::string warmup_name = algo_name.substr(0, plus);
+            std::string main_name = algo_name.substr(plus + 1);
+            if (!registries::algorithms().contains(warmup_name)
+             || !registries::algorithms().contains(main_name)) {
+                results.push_back({algo_name, BenchResult::Fail});
+                continue;
+            }
+            if (!no_skip && (main_name == "astar" || main_name == "idastar") && tc.wanted.size() > 8) {
+                results.push_back({algo_name, BenchResult::Skip});
+                continue;
+            }
+            auto main_algo = registries::algorithms().create(main_name);
+            AlgorithmExecutor executor(std::move(main_algo));
+            AlgorithmInput run_input = algo_input;
+            executor.start(std::move(run_input),
+                          registries::algorithms().create(warmup_name));
+            executor.wait();
+            if (executor.state() != AlgorithmState::Completed) {
+                results.push_back({algo_name, BenchResult::Fail});
+                continue;
+            }
+            AlgorithmOutput out = executor.output();
+            if (out.solutions.empty()) {
+                results.push_back({algo_name, BenchResult::Fail});
+                continue;
+            }
+            int32_t total = out.solutions[0].total_cost;
+            results.push_back({algo_name, BenchResult::Data, total,
+                               out.computation_time.count(),
+                               total <= tc.max_cost});
+            continue;
+        }
+
         if (!registries::algorithms().contains(algo_name)) {
             results.push_back({algo_name, BenchResult::Fail});
             continue;
