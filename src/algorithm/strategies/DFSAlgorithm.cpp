@@ -106,6 +106,10 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     if (items.size() > 1)
         _best_cost = _greedy_bound(items, reg);
 
+    // Warm-start bound from executor chain (tighter than our own)
+    if (input.initial_bound < _best_cost)
+        _best_cost = input.initial_bound;
+
     _stack.push_back({items, 0, 0, 0, {}, {}, 0, 0, false});
     _frame_pairs.emplace_back();
 

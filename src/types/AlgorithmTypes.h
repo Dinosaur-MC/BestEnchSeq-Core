@@ -16,6 +16,7 @@ struct AlgorithmInput {
     compact::ItemCollection items;   // items[0] = equipment, rest = books
     compact::EnchCollection target;  // desired final enchantments
     compact::EnchReg ench_reg;       // compact registry (must be initialized)
+    int32_t initial_bound = INT32_MAX;  // warm-start: skip own bound if tighter
 };
 
 // ─── Algorithm output (compact solutions) ───

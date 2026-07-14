@@ -42,7 +42,22 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
 
 // ─── Lifecycle ───
 
-void AlgorithmExecutor::start(AlgorithmInput input) {
+void AlgorithmExecutor::start(AlgorithmInput input,
+                               std::unique_ptr<IAlgorithm> warmup) {
+    // Warmup phase (synchronous): run a fast algorithm to tighten bound
+    if (warmup) {
+        ExecutionContext warmup_ctx;
+        warmup->execute(input, warmup_ctx);
+        auto solutions = warmup_ctx.get_solutions();
+        if (!solutions.empty()) {
+            int32_t bound = solutions[0].total_cost;
+            for (const auto& sol : solutions)
+                if (sol.total_cost < bound) bound = sol.total_cost;
+            if (bound < input.initial_bound)
+                input.initial_bound = bound;
+        }
+    }
+
     AlgorithmState expected = AlgorithmState::Idle;
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");

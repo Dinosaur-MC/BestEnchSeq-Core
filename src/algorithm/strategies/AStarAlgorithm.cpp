@@ -296,6 +296,10 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             _best_solution_cost = dfs_cost;
     }
 
+    // Warm-start bound from executor chain (tighter than our own)
+    if (input.initial_bound < _best_solution_cost)
+        _best_solution_cost = input.initial_bound;
+
     if (_meets_target(initial_ids[0])) {
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         ctx.report_compact_solution({});

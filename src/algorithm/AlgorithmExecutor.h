@@ -30,7 +30,10 @@ public:
     AlgorithmExecutor& operator=(const AlgorithmExecutor&) = delete;
 
     /// Start with compact AlgorithmInput.
-    void start(AlgorithmInput input);
+    /// \param warmup  Optional fast algorithm run synchronously before the main
+    ///                worker thread; its best-found cost is fed to the main
+    ///                algorithm as \c AlgorithmInput::initial_bound.
+    void start(AlgorithmInput input, std::unique_ptr<IAlgorithm> warmup = nullptr);
 
     /// Resume from a previously-serialized state.
     void start(AlgorithmInput input, const std::vector<uint8_t>& previous_state);

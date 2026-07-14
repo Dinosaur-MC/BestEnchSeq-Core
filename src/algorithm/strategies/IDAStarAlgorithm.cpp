@@ -308,6 +308,10 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
             best_cost = dfs_cost;
     }
 
+    // Warm-start bound from executor chain (tighter than our own)
+    if (input.initial_bound < best_cost)
+        best_cost = input.initial_bound;
+
     // Exhaustive DFS branch-and-bound
     _precompute_max(initial_ids);
     _dfs(initial_ids, 0, best_cost, ctx);
