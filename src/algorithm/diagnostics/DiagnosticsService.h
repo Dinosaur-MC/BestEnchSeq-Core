@@ -1,19 +1,16 @@
 #pragma once
 #include "algorithm/diagnostics/AlgorithmObserver.h"
 #include "algorithm/diagnostics/DiagnosticsWriter.h"
+#include "utils/EventLoop.hpp"
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 /// A single diagnostics event queued for async persistence + observer dispatch.
-///
-/// Created by any thread calling DiagnosticsService::push() and consumed
-/// by the dedicated worker thread.
 struct DiagnosticsEvent {
     std::string algorithm_name;
     std::vector<DiagnosticsWriter::Entry> entries;
@@ -22,16 +19,7 @@ struct DiagnosticsEvent {
     std::chrono::system_clock::time_point timestamp;
 };
 
-/// Global singleton for async persistence and observer dispatch of
-/// algorithm diagnostics.
-///
-/// Thread-safe push() via lock-free MPMC queue.  The worker thread blocks
-/// on C++20 atomic::wait when idle — zero CPU, no mutex, no condition
-/// variable.  Same pattern as Logger (see log/Logger.hpp).
-///
-/// Usage:
-///   DiagnosticsService::instance().push(DiagnosticsEvent{...});
-///   DiagnosticsService::instance().flush();  // drain before exit
+/// Global singleton for async persistence and observer dispatch.
 class DiagnosticsService {
 public:
     static DiagnosticsService& instance();
@@ -41,36 +29,41 @@ public:
     DiagnosticsService& operator=(const DiagnosticsService&) = delete;
 
     /// Enqueue a diagnostics event for async processing (non-blocking).
-    /// Silently drops when the queue is full (QUEUE_CAPACITY = 64).
     void push(DiagnosticsEvent event);
 
-    /// Attach a global observer (receives events for ALL algorithm runs).
     void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
-
-    /// Detach a previously attached observer.
     void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
 
-    /// Busy-wait until all queued events have been written to disk.
-    /// Intended for use at process exit (e.g. before main() returns).
+    /// Busy-wait until all queued events have been processed.
     void flush();
 
-    /// Enable/disable file persistence (default: enabled).
-    void set_persist(bool enabled) noexcept { _persist.store(enabled, std::memory_order_release); }
+    void set_persist(bool enabled) noexcept;
 
 private:
+    /// Consumes DiagnosticsEvent instances on the EventLoop worker thread.
+    /// Holds non-owning pointers to observer state in DiagnosticsService.
+    struct DiagnosticsHandler {
+        void operator()(DiagnosticsEvent event);
+
+        std::mutex* obs_mtx{nullptr};
+        std::vector<std::shared_ptr<AlgorithmObserver>>* observers{nullptr};
+        std::atomic<bool>* persist{nullptr};
+        std::atomic<uint64_t>* processed_ptr{nullptr};
+    };
+
     DiagnosticsService();
-    void _process_one(const DiagnosticsEvent& event);
-    void _worker();
 
     static constexpr size_t QUEUE_CAPACITY = 64;
 
-    BoundedMPMCQueue<DiagnosticsEvent, QUEUE_CAPACITY> _queue;
-    std::atomic<bool>      _running{true};
-    std::atomic<uint64_t>  _wake_seq{0};
-    std::atomic<bool>      _persist{true};
-
-    mutable std::mutex   _obs_mtx;
+    // ── Constructed first — pointed to by DiagnosticsHandler at _loop init ──
+    std::mutex _obs_mtx;
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
+    std::atomic<bool> _persist{true};
+    std::atomic<uint64_t> _enqueued{0};
+    std::atomic<uint64_t> _processed{0};
 
-    std::thread _worker_thread;
+    // EventLoop (stores DiagnosticsHandler internally via move).
+    EventLoop<DiagnosticsEvent,
+              BoundedMPMCQueue<DiagnosticsEvent, QUEUE_CAPACITY>,
+              DiagnosticsHandler> _loop;
 };
