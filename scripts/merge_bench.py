@@ -448,6 +448,11 @@ def main():
             if rec and rec.get("status") == "✅":
                 new_entry["datasets"][ds][algo] = {"L": rec["L"], "time_ms": rec["time_ms"]}
 
+    # 输入文件无有效数据则跳过历史记录
+    if not in_time or not any(new_entry["datasets"].values()):
+        print("输入文件无有效基准数据，跳过历史记录。")
+        return
+
     # 按 benchmark 时间戳去重：同 timestamp 替换（仅内容变化时），不同则追加
     timestamps = [e.get("timestamp") for e in history["entries"]]
     if in_time and in_time in timestamps:
