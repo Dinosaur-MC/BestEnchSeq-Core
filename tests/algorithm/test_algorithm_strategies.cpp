@@ -390,6 +390,76 @@ void test_hamming_conflict_enchants() {
     std::cout << "PASS: test_hamming_conflict_enchants (cost=" << cost << ")" << std::endl;
 }
 
+void test_hamming_level_up() {
+    setup_registries();
+    // Two books with the same enchantment at the same level should combine.
+    // sharpness 3 + sharpness 3 → sharpness 4 (level-up merge)
+    TestContext ctx(
+        {book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 3)},
+        {{ID_SHARPNESS, 4}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: same-level books should produce level-up");
+    std::cout << "PASS: test_hamming_level_up (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_seven_books() {
+    setup_registries();
+    // 7 books + equip = 8 items.  Tests n=8 popcount arrangement where
+    // everything divides perfectly into tiers (no leftover at the end).
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5), book(ID_SHARPNESS, 4),
+         book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 2),
+         book(ID_SHARPNESS, 1), book(ID_KNOCKBACK, 2),
+         book(2, 3)},  // bane_of_arthropods (conflicts with sharpness)
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}}
+    );
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: seven books should produce positive cost");
+    std::cout << "PASS: test_hamming_seven_books (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_pre_enchanted_equip() {
+    setup_registries();
+    // Equipment starts with knockback 2, we need to add sharpness 5.
+    // Tests the path where equip already has some target enchants.
+    compact::Item equip{compact::ItemType::Equip, 1561, 0, {}};
+    equip.enchs.insert({ID_KNOCKBACK, 2});
+
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}}
+    );
+    ctx.items[0] = equip;
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: pre-enchanted equip should produce positive cost");
+    std::cout << "PASS: test_hamming_pre_enchanted_equip (cost=" << cost << ")" << std::endl;
+}
+
+void test_hamming_durability_repair() {
+    setup_registries();
+    // Equipment with less-than-max durability to trigger repair cost check.
+    // forge_into should still succeed even if the durability mechanic fires.
+    compact::Item equip{compact::ItemType::Equip, 800, 0, {}};  // 800 < 1561
+
+    TestContext ctx(
+        {book(ID_SHARPNESS, 5)},
+        {{ID_SHARPNESS, 5}}
+    );
+    ctx.items[0] = equip;
+
+    int32_t cost = run_strategy("hamming",
+        std::make_unique<HammingAlgorithm>(), ctx);
+    expect(cost > 0, "hamming: damaged equip should produce positive cost");
+    std::cout << "PASS: test_hamming_durability_repair (cost=" << cost << ")" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -425,6 +495,10 @@ int main() {
         test_hamming_five_books();
         test_hamming_mixed_penalties();
         test_hamming_conflict_enchants();
+        test_hamming_level_up();
+        test_hamming_seven_books();
+        test_hamming_pre_enchanted_equip();
+        test_hamming_durability_repair();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
