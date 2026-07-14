@@ -167,10 +167,10 @@ public:
 
 private:
     /// Tag type used as handler storage when Handler is void.
-    struct _EmptyHandler {};
+    struct EmptyHandler {};
 
     /// Storage type: maps Handler=void to empty tag, otherwise keeps Handler.
-    using _HandlerStorage = std::conditional_t<std::is_void_v<Handler>, _EmptyHandler, Handler>;
+    using HandlerStorage = std::conditional_t<std::is_void_v<Handler>, EmptyHandler, Handler>;
 
     void _signal() noexcept {
         _wake.fetch_add(1, std::memory_order_release);
@@ -212,7 +212,7 @@ private:
     std::atomic<uint64_t>       _wake{0};
     std::atomic<bool>           _running{false};
     std::jthread                _worker;
-    [[no_unique_address]] _HandlerStorage _handler{};
+    [[no_unique_address]] HandlerStorage _handler{};
 };
 
 
