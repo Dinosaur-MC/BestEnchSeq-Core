@@ -1,5 +1,4 @@
 #include "framework/test_utils.h"
-#include "algorithm/diagnostics/AlgorithmObserver.h"
 #include "algorithm/ExecutionContext.h"
 #include "types/CompactedTypes.h"
 #include <chrono>
@@ -30,26 +29,31 @@ void test_progress() {
     std::cout << "PASS: test_progress" << std::endl;
 }
 
-struct TestSolutionObserver : AlgorithmObserver {
-    int found_count = 0;
-    void on_solution_found(const std::vector<compact::EnchStep>&) override { ++found_count; }
-};
-
-void test_observer_solution() {
+void test_diagnostic_log() {
     ExecutionContext ctx;
-    auto obs = std::make_shared<TestSolutionObserver>();
-    ctx.attach_observer(obs);
+
+    ctx.report_diagnostic("wall_ms", int64_t{583});
+    ctx.report_diagnostic("status", std::string("Complete"));
+    ctx.report_diagnostic("explored_count", int64_t{142378});
+
+    auto log = ctx.consume_diagnostic_log();
+    expect(log.size() == 3, "diagnostic log should have 3 entries");
+    expect(ctx.consume_diagnostic_log().empty(), "log should be empty after consume");
+    std::cout << "PASS: test_diagnostic_log" << std::endl;
+}
+
+void test_solution_accumulation() {
+    ExecutionContext ctx;
 
     std::vector<compact::EnchStep> steps;
-    steps.push_back(compact::EnchStep{{}, {}, 4});
+    steps.push_back(compact::EnchStep{{}, {}, 5});
+    steps.push_back(compact::EnchStep{{}, {}, 3});
     ctx.report_compact_solution(std::move(steps));
-    ctx.dispatch_events();
-    expect(obs->found_count == 1, "observer should be called once");
-    ctx.detach_observer(obs);
-    ctx.report_compact_solution(std::move(steps));
-    ctx.dispatch_events();
-    expect(obs->found_count == 1, "observer should not be called after detach");
-    std::cout << "PASS: test_observer_solution" << std::endl;
+
+    auto solutions = ctx.get_solutions();
+    expect(solutions.size() == 1, "should accumulate one solution");
+    expect(solutions[0].total_cost == 8, "total cost should be 8");
+    std::cout << "PASS: test_solution_accumulation" << std::endl;
 }
 
 void test_wait_if_paused_resume() {
@@ -77,7 +81,8 @@ int main() {
         test_cancel();
         test_pause_resume();
         test_progress();
-        test_observer_solution();
+        test_diagnostic_log();
+        test_solution_accumulation();
         test_wait_if_paused_resume();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

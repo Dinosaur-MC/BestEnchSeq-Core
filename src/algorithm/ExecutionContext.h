@@ -1,34 +1,25 @@
 #pragma once
-#include "algorithm/diagnostics/AlgorithmObserver.h"
-#include "utils/queue/SPSCQueue.hpp"
+#include "types/AlgorithmTypes.h"
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
-#include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifndef BESQ_MAX_SOLUTIONS
 #define BESQ_MAX_SOLUTIONS 128
 #endif
 
-struct ObserverEvent {
-    enum Type { Progress, Solution, StateChange, Diagnostic, Completed };
-    Type type;
-    double progress_val{0};
-    ProgressStatus status{ProgressStatus::Starting};
-    std::vector<compact::EnchStep> steps;
-    AlgorithmState prev_state{AlgorithmState::Idle};
-    AlgorithmState curr_state{AlgorithmState::Idle};
-    std::string diagnostic_msg;
-};
-
 class ExecutionContext {
 public:
     ExecutionContext() = default;
     ExecutionContext(const ExecutionContext&) = delete;
     ExecutionContext& operator=(const ExecutionContext&) = delete;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 🔴 核心热区 — 每次状态展开调用, 内联, 零堆分配
+    // ═══════════════════════════════════════════════════════════════════
 
     void cancel() noexcept { _cancelled.store(true, std::memory_order_release); }
     void pause() noexcept { _paused.store(true, std::memory_order_release); }
@@ -40,26 +31,33 @@ public:
     bool is_paused() const noexcept  { return _paused.load(std::memory_order_acquire); }
     void wait_if_paused();
 
+    void incr_nodes_visited() noexcept { _diag_nodes_visited.fetch_add(1, std::memory_order_relaxed); }
+    void incr_nodes_pruned()   noexcept { _diag_nodes_pruned.fetch_add(1, std::memory_order_relaxed); }
+    void incr_steps_forged()   noexcept { _diag_steps_forged.fetch_add(1, std::memory_order_relaxed); }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 🟡 辅助区 — 定期调用（非热路径）
+    // ═══════════════════════════════════════════════════════════════════
+
     void report_progress(double percent, ProgressStatus status);
     void report_compact_solution(std::vector<compact::EnchStep> solution);
-    void report_state_change(AlgorithmState prev, AlgorithmState curr);
-    void dispatch_events();
 
-    void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
-    void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
-    bool has_observers() const noexcept {
-        return _has_observers.load(std::memory_order_acquire);
-    }
+    // ═══════════════════════════════════════════════════════════════════
+    // 🟢 可选区 — 执行前后各调用一次
+    // ═══════════════════════════════════════════════════════════════════
 
-    void notify_completed(const AlgorithmOutput& output);
     void append_compact_solution(compact::EnchSolution solution);
     std::vector<compact::EnchSolution> get_solutions() const;
+    double progress() const noexcept { return _progress.load(std::memory_order_acquire); }
 
-    double progress() const noexcept {
-        return _progress.load(std::memory_order_acquire);
-    }
+    /// 通用诊断 KV 报告（退出点调用, 追加到内部日志）
+    void report_diagnostic(std::string_view key, int64_t value);
+    void report_diagnostic(std::string_view key, std::string value);
 
-    // ── Diagnostic counters (atomic, read from verbose monitor) ─────────
+    /// 返回并清空累积的诊断 KV 对（Executor 在 _finalize() 中调用）
+    std::vector<std::pair<std::string, std::string>> consume_diagnostic_log();
+
+    // ── Diagnostic snapshot (atomic counters, always available) ─────────────
     struct DiagnosticSnapshot {
         int64_t nodes_visited = 0;
         int64_t nodes_pruned = 0;
@@ -69,44 +67,35 @@ public:
         int64_t elapsed_ms   = 0;
     };
 
-    void incr_nodes_visited() noexcept { _diag_nodes_visited.fetch_add(1, std::memory_order_relaxed); }
-    void incr_nodes_pruned()   noexcept { _diag_nodes_pruned.fetch_add(1, std::memory_order_relaxed); }
-    void incr_steps_forged()   noexcept { _diag_steps_forged.fetch_add(1, std::memory_order_relaxed); }
-
     DiagnosticSnapshot get_diagnostics(int64_t elapsed_ms = 0) const noexcept {
         return {
             _diag_nodes_visited.load(std::memory_order_relaxed),
             _diag_nodes_pruned.load(std::memory_order_relaxed),
             _diag_steps_forged.load(std::memory_order_relaxed),
-            0,
+            _diag_pool_items.load(std::memory_order_relaxed),
             _progress.load(std::memory_order_acquire),
             elapsed_ms
         };
     }
 
 private:
-    std::atomic<bool> _cancelled{false};
-    std::atomic<bool> _paused{false};
-    mutable std::mutex _pause_mtx;
-    std::condition_variable _pause_cv;
+    // ── 🔴 热区数据（同一 cache line） ──────────────────────────────
+    alignas(64) std::atomic<bool> _cancelled{false};
+    std::atomic<bool>             _paused{false};
+    mutable std::mutex            _pause_mtx;
+    std::condition_variable       _pause_cv;
 
-    std::atomic<bool> _has_observers{false};
-    SPSCQueue<ObserverEvent, 256> _events; // 256-entry bound: intentional.
-    // Non-critical progress events are downsampled; solution events are rare
-    // enough that 256 slots are sufficient.  Drops on full are acceptable —
-    // observers tolerate occasional missed progress snapshots.
-
-    mutable std::mutex _obs_mtx;
-    std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
-
-    mutable std::mutex _accum_mtx;
-    std::vector<compact::EnchSolution> _accumulated;
-    std::atomic<double> _progress{0.0};
-
-    std::atomic<uint32_t> _progress_downsample{0};
-
-    // ── Atomic diagnostic counters ──
     std::atomic<int64_t> _diag_nodes_visited{0};
     std::atomic<int64_t> _diag_nodes_pruned{0};
     std::atomic<int64_t> _diag_steps_forged{0};
+
+    // ── 🟡 辅助区数据 ──────────────────────────────────────────────
+    std::atomic<double> _progress{0.0};
+    std::vector<std::pair<std::string, std::string>> _diagnostic_log;
+
+    // ── 🟢 可选区数据 ─────────────────────────────────────────────
+    std::atomic<int64_t> _diag_pool_items{0};
+
+    mutable std::mutex _accum_mtx;
+    std::vector<compact::EnchSolution> _accumulated;
 };
