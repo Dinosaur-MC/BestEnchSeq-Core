@@ -1,4 +1,5 @@
 #include "algorithm/AlgorithmExecutor.h"
+#include "algorithm/diagnostics/DiagnosticsService.h"
 #include "algorithm/strategies/Strategies.h"
 #include "adapters/CompactAdapter.h"
 #include "cli.h"
@@ -235,6 +236,7 @@ int main(int argc, char *argv[]) {
             std::cout << output_text;
         }
 
+        DiagnosticsService::instance().flush();
         return 0;
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
