@@ -218,7 +218,7 @@ def merge_results(
         for a in in_algos + out_algos:
             if a not in algo_list:
                 algo_list.append(a)
-        merged_algo_orders[ds] = algo_list
+        merged_algo_orders[ds] = sorted(algo_list, key=str.lower)
 
         for algo in algo_list:
             rec_in = in_datasets.get(ds, {}).get(algo)
@@ -347,6 +347,11 @@ def plot_trends(history, hist_path):
         print("历史数据不足（至少需要 2 条记录），跳过趋势图绘制。")
         return
 
+    # 限制绘图点数，裁剪最旧的数据
+    MAX_POINTS = 64
+    if len(entries) > MAX_POINTS:
+        entries = entries[-MAX_POINTS:]
+
     # 收集所有数据集和算法
     all_datasets = sorted({ds for e in entries for ds in e.get("datasets", {})})
     all_algos = sorted(
@@ -357,7 +362,7 @@ def plot_trends(history, hist_path):
         print("历史数据为空，跳过趋势图绘制。")
         return
 
-    run_labels = [f"#{i + 1}" for i in range(len(entries))]
+    run_labels = [f"#{i}" for i in range(len(entries))]
     run_numbers = list(range(len(entries)))
     n = len(all_datasets)
 
@@ -377,15 +382,41 @@ def plot_trends(history, hist_path):
             pts = [(r, v) for r, v in zip(run_numbers, vals) if v is not None]
             if pts:
                 xs, ys = zip(*pts)
-                ax.plot(xs, ys, marker="o", label=algo, linewidth=1.5)
+                ax.plot(xs, ys, marker="o", ms=3.5, label=algo, linewidth=1.5)
 
-        ax.set_xticks(run_numbers)
-        ax.set_xticklabels(run_labels, fontsize=8)
-        ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.02, 1.0))
+        # 第二纵轴：Level 曲线（半透明，仅示意趋势）
+        ax2 = ax.twinx()
+        for algo in all_algos:
+            vals = []
+            for e in entries:
+                rec = e.get("datasets", {}).get(ds, {}).get(algo)
+                vals.append(rec["L"] if rec else None)
+            pts = [(r, v) for r, v in zip(run_numbers, vals) if v is not None]
+            if pts:
+                xs, ys = zip(*pts)
+                ax2.plot(xs, ys, marker="s", ms=3.5, linewidth=1.0, alpha=0.3)
+        ax2.set_ylabel("Level")
+
+        # 自适应稀疏横坐标，避免重叠
+        n_runs = len(run_numbers)
+        if n_runs <= 20:
+            tick_step = 1
+        elif n_runs <= 50:
+            tick_step = 2
+        elif n_runs <= 100:
+            tick_step = 5
+        else:
+            tick_step = n_runs // 15
+        visible = list(range(0, n_runs, tick_step))
+        if visible[-1] != n_runs - 1:
+            visible.append(n_runs - 1)
+        ax.set_xticks(visible)
+        ax.set_xticklabels([run_labels[i] for i in visible], fontsize=7, rotation=45, ha="right")
+        ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.08, 1.0))
         ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.subplots_adjust(right=0.85)
+    plt.subplots_adjust(right=0.82)
     # 历史文件后缀替换为 .trend.png
     chart_path = hist_path[: -len(HISTORY_FILE_SUFFIX)] + ".trend.png" if hist_path.endswith(HISTORY_FILE_SUFFIX) else hist_path + ".trend.png"
     plt.savefig(chart_path, dpi=150, bbox_inches="tight")
@@ -439,11 +470,12 @@ def main():
     # ------------------------------------------------------------
     history = load_history(hist_path)
 
-    # 创建新历史条目：使用输入文件的原始数据，而非合并结果
+    # 创建新历史条目：使用输入文件的原始数据，按算法名排序
     new_entry = {"timestamp": in_time if in_time else "N/A", "datasets": {}}
     for ds in in_order:
         new_entry["datasets"][ds] = {}
-        for algo in in_algo.get(ds, []):
+        algos = sorted(in_algo.get(ds, []), key=str.lower)
+        for algo in algos:
             rec = in_datasets[ds].get(algo)
             if rec and rec.get("status") == "✅":
                 new_entry["datasets"][ds][algo] = {"L": rec["L"], "time_ms": rec["time_ms"]}
