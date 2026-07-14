@@ -1,7 +1,7 @@
 #include "DFSAlgorithm.h"
 #include "../ExecutionContext.h"
-#include "../Utils.h"
 #include "../DiagnosticsWriter.h"
+#include "algorithm/components/SearchUtils.h"
 #include "algorithm/components/HeuristicBasic.h"
 #include <algorithm>
 #include <cstdint>

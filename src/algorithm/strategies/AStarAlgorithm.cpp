@@ -69,13 +69,7 @@ int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID>& ids) const {
 }
 
 bool AStarAlgorithm::_meets_target(ItemID equip_id) const {
-    const auto& equip = _pool[equip_id];
-    for (const auto& t : _target) {
-        auto it = equip.enchs.find(t.id);
-        if (it == equip.enchs.end() || it->level < t.level)
-            return false;
-    }
-    return true;
+    return meets_target(equip_id, _pool, _target);
 }
 
 // ─── Greedy bound (unchanged — operates on raw Items at startup) ────────

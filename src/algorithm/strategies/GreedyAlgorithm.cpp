@@ -1,7 +1,7 @@
 #include "GreedyAlgorithm.h"
 #include "../ExecutionContext.h"
-#include "../Utils.h"
 #include "../DiagnosticsWriter.h"
+#include "algorithm/components/SearchUtils.h"
 #include <chrono>
 #include <algorithm>
 

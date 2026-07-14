@@ -1,12 +1,37 @@
 #pragma once
 #include "algorithm/forge/IForgeEngine.h"
 #include "algorithm/components/ItemPool.h"
-#include "algorithm/Utils.h"
 #include "registries/CompactedRegistries.h"
 #include "types/CompactedTypes.h"
 #include <algorithm>
 #include <cstdint>
 #include <vector>
+
+// ─── Shared helpers ───────────────────────────────────────────────────
+
+/// Check whether \p equipment satisfies all enchantments in \p target.
+/// Returns true when every target enchantment is present at or above
+/// the required level.
+inline bool meets_target(
+    const compact::Item& equipment,
+    const compact::EnchCollection& target
+) noexcept {
+    for (const auto& t : target) {
+        auto it = equipment.enchs.find(t.id);
+        if (it == equipment.enchs.end() || it->level < t.level)
+            return false;
+    }
+    return true;
+}
+
+/// Pool-based overload: resolves \p equip_id through \p pool.
+inline bool meets_target(
+    ItemPool::ItemID equip_id,
+    const ItemPool& pool,
+    const compact::EnchCollection& target
+) noexcept {
+    return meets_target(pool[equip_id], target);
+}
 
 /// Shared search utilities extracted from AStarAlgorithm / IDAStarAlgorithm.
 /// Keeps the duplicate-free implementations in one place.
