@@ -59,10 +59,10 @@ void AlgorithmExecutor::_finalize() {
     auto atoms = _ctx->get_diagnostics(_computation_time.count());
     auto kvs = _ctx->consume_diagnostic_log();
 
-    // Inject atomic counters into the KV log
-    kvs.emplace_back("nodes_visited", std::to_string(atoms.nodes_visited));
-    kvs.emplace_back("nodes_pruned",  std::to_string(atoms.nodes_pruned));
-    kvs.emplace_back("steps_forged",  std::to_string(atoms.steps_forged));
+    // Inject atomic counters into the KV log (as raw int64_t, no to_string yet)
+    kvs.emplace_back("nodes_visited", atoms.nodes_visited);
+    kvs.emplace_back("nodes_pruned",  atoms.nodes_pruned);
+    kvs.emplace_back("steps_forged",  atoms.steps_forged);
 
     // Status: algorithm's flushed status is authoritative.
     // For Cancelled/Failed, inject override into KV entries.
@@ -70,22 +70,28 @@ void AlgorithmExecutor::_finalize() {
     std::string status;
     if (s == AlgorithmState::Cancelled) {
         status = "Cancelled";
-        kvs.emplace_back("status", "Cancelled");
+        kvs.emplace_back("status", std::string("Cancelled"));
     } else if (s == AlgorithmState::Failed) {
         status = "Failed";
-        kvs.emplace_back("status", "Failed");
+        kvs.emplace_back("status", std::string("Failed"));
     } else {
         // Use algorithm's flushed status (e.g. "Complete", "CompleteNoSolution")
-        for (auto& [k, v] : kvs)
-            if (k == "status") { status = v; break; }
+        // Status is always stored as the string alternative.
+        for (const auto& [k, v] : kvs)
+            if (k == "status" && std::holds_alternative<std::string>(v))
+                { status = std::get<std::string>(v); break; }
         if (status.empty()) status = "Complete";
     }
 
-    // Convert KV pairs to Writer::Entry
+    // Convert KV pairs + variants to Writer::Entry strings
     std::vector<DiagnosticsWriter::Entry> entries;
     entries.reserve(kvs.size());
-    for (auto& [k, v] : kvs)
-        entries.push_back({std::move(k), std::move(v)});
+    for (auto& [k, v] : kvs) {
+        if (auto* i = std::get_if<int64_t>(&v))
+            entries.push_back({std::move(k), std::to_string(*i)});
+        else
+            entries.push_back({std::move(k), std::move(std::get<std::string>(v))});
+    }
 
     DiagnosticsService::instance().push(DiagnosticsEvent{
         .algorithm_name = std::string(_algorithm->name()),
@@ -100,16 +106,17 @@ void AlgorithmExecutor::_finalize() {
 
 void AlgorithmExecutor::start(AlgorithmInput input,
                                std::unique_ptr<IAlgorithm> warmup) {
-    // Warmup phase (synchronous): run a fast algorithm to tighten bound
-    if (warmup)
-        _run_warmup(input, *warmup);
-
     AlgorithmState expected = AlgorithmState::Idle;
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
     _start_time = std::chrono::steady_clock::now();
 
+    // Warmup phase (synchronous): run a fast algorithm to tighten bound
+    if (warmup)
+        _run_warmup(input, *warmup);
+    
+    // Main phase (asynchronous): run the actual algorithm
     _worker.emplace([this, input = std::move(input)]() mutable {
         try {
             _algorithm->execute(input, *_ctx);

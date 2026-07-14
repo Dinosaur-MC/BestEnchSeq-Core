@@ -22,14 +22,14 @@ void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> so
 }
 
 void ExecutionContext::report_diagnostic(std::string_view key, int64_t value) {
-    _diagnostic_log.emplace_back(key, std::to_string(value));
+    _diagnostic_log.emplace_back(key, value);   // store raw int64_t, defer to_string
 }
 
 void ExecutionContext::report_diagnostic(std::string_view key, std::string value) {
     _diagnostic_log.emplace_back(key, std::move(value));
 }
 
-std::vector<std::pair<std::string, std::string>> ExecutionContext::consume_diagnostic_log() {
+std::vector<std::pair<std::string, DiagnosticValue>> ExecutionContext::consume_diagnostic_log() {
     auto result = std::move(_diagnostic_log);
     _diagnostic_log.clear();
     return result;
@@ -42,12 +42,22 @@ void ExecutionContext::append_compact_solution(compact::EnchSolution solution) {
     }
 
     std::lock_guard lock(_accum_mtx);
-    _accumulated.push_back(std::move(solution));
 
-    std::sort(_accumulated.begin(), _accumulated.end(),
-              [](const auto& a, const auto& b) { return a.total_cost < b.total_cost; });
-    if (_accumulated.size() > BESQ_MAX_SOLUTIONS)
+    // _accumulated is always sorted — find the insertion point via binary
+    // search then insert directly, avoiding a full O(n log n) sort.
+    // O(n) total per call (O(log n) search + O(n) shift).
+    auto it = std::upper_bound(_accumulated.begin(), _accumulated.end(),
+                                solution.total_cost,
+                                [](int32_t cost, const auto& sol) { return cost < sol.total_cost; });
+
+    if (_accumulated.size() >= BESQ_MAX_SOLUTIONS) [[likely]] {
+        if (it == _accumulated.end())
+            return;                     // worse than all kept solutions — discard
+        _accumulated.emplace(it, std::move(solution));
         _accumulated.resize(BESQ_MAX_SOLUTIONS);
+    } else {
+        _accumulated.emplace(it, std::move(solution));
+    }
 }
 
 std::vector<compact::EnchSolution> ExecutionContext::get_solutions() const {

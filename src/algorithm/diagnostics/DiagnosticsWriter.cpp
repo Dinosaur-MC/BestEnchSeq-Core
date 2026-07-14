@@ -1,6 +1,7 @@
 #include "DiagnosticsWriter.h"
 #ifndef BESQ_DISABLE_DIAGNOSTICS
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -42,6 +43,39 @@ void ensure_diag_dir() {
     std::filesystem::create_directories("logs/diag");
 }
 
+/// Maximum number of diagnostic log files to retain.  Oldest files beyond
+/// this limit are pruned after each new write.
+inline constexpr size_t MAX_DIAG_FILES = 128;
+
+/// Remove the oldest diagnostic log files when the count exceeds MAX_DIAG_FILES.
+void trim_diag_dir() {
+    namespace fs = std::filesystem;
+
+    fs::path dir("logs/diag");
+    std::error_code ec;
+    auto it = fs::directory_iterator(dir, ec);
+    if (ec) return;  // directory doesn't exist yet — nothing to trim
+
+    // Collect all .log files with their last-write time.
+    struct Entry { fs::path path; fs::file_time_type mtime; };
+    std::vector<Entry> files;
+    for (const auto& entry : it) {
+        if (entry.is_regular_file() && entry.path().extension() == ".log")
+            files.push_back({entry.path(), entry.last_write_time(ec)});
+    }
+
+    // Evict oldest (last-write-time ascending → delete front).
+    if (files.size() <= MAX_DIAG_FILES) return;
+
+    std::partial_sort(files.begin(), files.begin() + (files.size() - MAX_DIAG_FILES),
+                      files.end(),
+                      [](const Entry& a, const Entry& b) { return a.mtime < b.mtime; });
+
+    size_t to_remove = files.size() - MAX_DIAG_FILES;
+    for (size_t i = 0; i < to_remove; ++i)
+        fs::remove(files[i].path, ec);
+}
+
 } // anonymous namespace
 
 // ─── Generic KV writer ──────────────────────────────────────────────────────
@@ -68,6 +102,9 @@ void DiagnosticsWriter::write(std::string_view algorithm_name,
     for (const auto& e : entries) {
         ofs << e.key << "=" << e.value << "\n";
     }
+
+    // Trim directory to MAX_DIAG_FILES so log files don't accumulate unboundedly.
+    trim_diag_dir();
 }
 
 #endif // BESQ_DISABLE_DIAGNOSTICS

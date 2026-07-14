@@ -5,11 +5,15 @@
 #include <mutex>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #ifndef BESQ_MAX_SOLUTIONS
 #define BESQ_MAX_SOLUTIONS 128
 #endif
+
+/// Diagnostic log value — stores int64_t directly without eager to_string.
+using DiagnosticValue = std::variant<int64_t, std::string>;
 
 class ExecutionContext {
 public:
@@ -34,8 +38,6 @@ public:
     void incr_nodes_visited() noexcept { _diag_nodes_visited.fetch_add(1, std::memory_order_relaxed); }
     void incr_nodes_pruned()   noexcept { _diag_nodes_pruned.fetch_add(1, std::memory_order_relaxed); }
     void incr_steps_forged()   noexcept { _diag_steps_forged.fetch_add(1, std::memory_order_relaxed); }
-    void incr_pool_items()     noexcept { _diag_pool_items.fetch_add(1, std::memory_order_relaxed); }
-
     // ═══════════════════════════════════════════════════════════════════
     // 🟡 辅助区 — 定期调用（非热路径）
     // ═══════════════════════════════════════════════════════════════════
@@ -56,26 +58,24 @@ public:
     void report_diagnostic(std::string_view key, std::string value);
 
     /// 返回并清空累积的诊断 KV 对（Executor 在 _finalize() 中调用）
-    std::vector<std::pair<std::string, std::string>> consume_diagnostic_log();
+    std::vector<std::pair<std::string, DiagnosticValue>> consume_diagnostic_log();
 
     // ── Diagnostic snapshot (atomic counters, always available) ─────────────
     struct DiagnosticSnapshot {
         int64_t nodes_visited = 0;
         int64_t nodes_pruned = 0;
         int64_t steps_forged = 0;
-        int64_t pool_items   = 0;
         double  progress     = 0.0;
         int64_t elapsed_ms   = 0;
     };
 
     DiagnosticSnapshot get_diagnostics(int64_t elapsed_ms = 0) const noexcept {
         return {
-            _diag_nodes_visited.load(std::memory_order_relaxed),
-            _diag_nodes_pruned.load(std::memory_order_relaxed),
-            _diag_steps_forged.load(std::memory_order_relaxed),
-            _diag_pool_items.load(std::memory_order_relaxed),
-            _progress.load(std::memory_order_acquire),
-            elapsed_ms
+            .nodes_visited = _diag_nodes_visited.load(std::memory_order_relaxed),
+            .nodes_pruned  = _diag_nodes_pruned.load(std::memory_order_relaxed),
+            .steps_forged  = _diag_steps_forged.load(std::memory_order_relaxed),
+            .progress      = _progress.load(std::memory_order_acquire),
+            .elapsed_ms    = elapsed_ms
         };
     }
 
@@ -92,10 +92,7 @@ private:
 
     // ── 🟡 辅助区数据 ──────────────────────────────────────────────
     std::atomic<double> _progress{0.0};
-    std::vector<std::pair<std::string, std::string>> _diagnostic_log;
-
-    // ── 🟢 可选区数据 ─────────────────────────────────────────────
-    std::atomic<int64_t> _diag_pool_items{0};
+    std::vector<std::pair<std::string, DiagnosticValue>> _diagnostic_log;
 
     mutable std::mutex _accum_mtx;
     std::vector<compact::EnchSolution> _accumulated;
