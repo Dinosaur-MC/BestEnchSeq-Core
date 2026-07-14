@@ -2,7 +2,6 @@
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/forge/ForgeEngine.h"
 #include "algorithm/diagnostics/AlgorithmDiagnostics.h"
-#include "registries/CompactedRegistries.h"
 #include <cstdint>
 #include <vector>
 

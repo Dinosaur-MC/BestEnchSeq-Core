@@ -4,13 +4,7 @@
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/greedy/GreedyAlgorithm.h"
-#include "algorithm/strategies/dfs/DFSAlgorithm.h"
-#include "algorithm/strategies/astar/AStarAlgorithm.h"
-#include "algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
-#include "algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.h"
-#include "algorithm/strategies/hamming/HammingAlgorithm.h"
-#include "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
+#include "algorithm/strategies/Strategies.h"
 #include "config/ForgeConfig.h"
 #include <memory>
 #include <vector>

@@ -2,8 +2,6 @@
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/forge/ForgeEngine.h"
 #include "algorithm/diagnostics/AlgorithmDiagnostics.h"
-#include "registries/CompactedRegistries.h"
-#include <vector>
 
 class DynamicPenaltyBalancingAlgorithm : public IAlgorithm {
 public:

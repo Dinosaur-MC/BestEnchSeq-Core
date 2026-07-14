@@ -2,9 +2,6 @@
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/forge/ForgeEngine.h"
 #include "algorithm/diagnostics/AlgorithmDiagnostics.h"
-#include "registries/CompactedRegistries.h"
-#include <cstdint>
-#include <vector>
 
 /// Penalty-tiered merge strategy (port of Alg_DifficultyFirst from v2.x).
 ///
