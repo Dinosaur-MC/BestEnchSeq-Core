@@ -1,0 +1,31 @@
+CompileFlags:
+  # Use CMake-generated compilation database.
+  CompilationDatabase: build
+
+  # Explicitly set C++20 standard (clangd infers this from compile_commands.json,
+  # but this ensures consistency when opening headers without a TU context).
+  # Suppress false-positive warnings from clangd's analysis:
+  #   -Wno-unknown-attributes: clangd may report [[no_unique_address]] (C++20)
+  #   as unknown on Windows targets; the real build (Clang 22) handles it fine.
+  Add:
+    - "-std=c++20"
+    - "-Wno-unknown-attributes"
+
+Index:
+  # Background indexing for fast navigation across the project.
+  Background: Build
+
+InlayHints:
+  # Show type hints for auto-deduced variables.
+  DeducedTypes: Yes
+
+  # Show parameter name hints in function calls.
+  ParameterNames: Yes
+
+Diagnostics:
+  # Treat all clangd diagnostics as warnings (don't suppress — just demote
+  # potentially noisy ones).  Real build errors still appear as errors from
+  # the compiler.
+  Suppress:
+    - unused-includes       # Clangd's IWYU analysis is noisy for a project
+                            # that uses transitive includes extensively.
