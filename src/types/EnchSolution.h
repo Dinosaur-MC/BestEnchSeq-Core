@@ -1,6 +1,7 @@
 #pragma once
-#include "config/ForgeConfig.h"
 #include "ItemStack.h"
+
+#include "types/Platform.h"
 
 struct EnchSolution {
     struct EnchStep {

@@ -1,7 +1,5 @@
 #pragma once
 #include "types/AlgorithmTypes.h"
-#include <cstdint>
-#include <string>
 #include <vector>
 
 // ─── Observer (streaming callbacks, compact-only) ───

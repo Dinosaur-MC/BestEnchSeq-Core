@@ -1,6 +1,5 @@
 #pragma once
 #include "types/Platform.h"
-#include <cstdint>
 
 // ─── Forge configuration ────────────────────────────────────────────────────
 struct ForgeConfig {

@@ -1,7 +1,6 @@
 #pragma once
 #include "algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include <cstddef>
-#include <cstdint>
 
 /// IDAStar-specific diagnostics, extending the pool-based search hierarchy.
 struct IDAStarDiagnostics : PoolSearchDiagnostics {

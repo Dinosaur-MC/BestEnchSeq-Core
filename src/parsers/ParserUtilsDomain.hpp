@@ -1,12 +1,10 @@
 #pragma once
 #include <cctype>
-#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <utility>
-#include <vector>
 
-#include "config/ForgeConfig.h"
+#include "types/Platform.h"
 
 namespace ParserUtils {
 

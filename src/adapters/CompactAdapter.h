@@ -4,7 +4,7 @@
 #include "types/ItemStack.h"
 #include "types/EnchSolution.h"
 #include "registries/EnchantmentRegistry.h"
-#include "algorithm/IAlgorithm.h"
+#include "types/AlgorithmTypes.h"
 #include <vector>
 
 class CompactAdapter {

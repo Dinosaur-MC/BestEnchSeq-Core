@@ -1,6 +1,5 @@
 #include "algorithm/diagnostics/DiagnosticsService.h"
 #include "log/log.hpp"
-#include <chrono>
 #include <sstream>
 
 // ─── Singleton (Meyer's) ────────────────────────────────────────────────────

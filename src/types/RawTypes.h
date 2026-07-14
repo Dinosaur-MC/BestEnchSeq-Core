@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BESQTypes.h"
+#include "types/Platform.h"
 #include <string>
 #include <unordered_set>
 
@@ -20,18 +20,18 @@ struct RawEnchInfo {
     std::string name_id;
     std::string name;
     MCE supported_platform;
-    int32_t max_level        = 0;
-    int32_t limited_level    = 0;
-    int32_t multiplier       = 0;
-    bool is_treasure         = false;
-    std::unordered_set<std::string> exclusive_set;          // strings (#tag refs resolved)
-    std::unordered_set<std::string> applicable_equipment;    // category name strings
+    int32_t max_level = 0;
+    int32_t limited_level = 0;
+    int32_t multiplier = 0;
+    bool is_treasure = false;
+    std::unordered_set<std::string> exclusive_set;        // strings (#tag refs resolved)
+    std::unordered_set<std::string> applicable_equipment; // category name strings
 };
 
 /// String-based intermediate representation of an equipment definition.
 struct RawEquipment {
     std::string name_id;
     std::string name;
-    std::string category;   // category name string, not yet resolved to int32_t
-    int32_t max_durability  = 0;
+    std::string category; // category name string, not yet resolved to int32_t
+    int32_t max_durability = 0;
 };

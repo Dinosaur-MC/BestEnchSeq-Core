@@ -1,7 +1,6 @@
 #include "io/CsvIO.h"
 
 #include <fstream>
-#include <sstream>
 #include <stdexcept>
 
 namespace csv {
