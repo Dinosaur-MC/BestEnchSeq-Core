@@ -19,6 +19,11 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 
 ### Quick Start
 
+**Requirements:** C++20 toolchain (Clang 15+), CMake 3.20+, Ninja.
+The project uses C++20 features unconditionally — concepts, `if constexpr`,
+`std::jthread`, atomic `wait`/`notify`, etc. No feature-test macros or
+fallbacks. C++17 or earlier is not supported.
+
 #### From source code
 
 ```bash
@@ -94,7 +99,8 @@ src/
 │   ├── RawTypes.h               ← String-based intermediates (RawEnchInfo, RawEquipment)
 │   └── EquipmentCategory.h      ← Equipment category constants
 ├── log/                         ← Global async Logger (singleton; uses LogLevel/types)
-│   ├── Logger.hpp/.cpp          ← Async logger (atomic::wait, zero-CPU idle)
+│   ├── Logger.hpp/.cpp          ← Global async Logger. Built on EventLoop data
+│   │                               mode (BoundedMPMCQueue + FileHandler).
 │   └── log.hpp                  ← Free-function wrappers + LOG_INFO / LOG_WARN macros
 ├── registries/                  ← Domain registries + tag resolution
 │   ├── EnchantmentRegistry.h/.cpp  ← Full enchantment registry with subset derivation
@@ -115,7 +121,9 @@ src/
 │   ├── AlgorithmExecutor.h/.cpp ← Async engine (thread lifecycle + observer dispatch)
 │   ├── ExecutionContext.h/.cpp  ← Cancel/pause/progress + accumulator
 │   ├── AlgorithmObserver.h      ← Streaming callbacks
-│   ├── DiagnosticsWriter.h/.cpp ← Diagnostics persist-to-disk (separated from data structs)
+│   ├── DiagnosticsService.h/.cpp← Async diagnostics dispatch + persistence.
+│   │                               Built on EventLoop data mode.
+│   ├── DiagnosticsWriter.h/.cpp ← Diagnostics persist-to-disk
 │   ├── Utils.h                  ← Shared helpers (meets_target())
 │   ├── components/              ← Algorithm building blocks
 │   │   ├── Heuristic.h          ← Pool-based admissible heuristic
@@ -145,7 +153,9 @@ src/
 │   ├── FlatHashMap.hpp          ← Open-addressing hash map
 │   ├── MemoryPool.hpp           ← PMR monotonic buffer memory resource
 │   ├── ObjectPool.hpp           ← Fixed-size freelist object pool
-│   ├── EventLoop.hpp            ← atomic::wait event loop
+│   ├── EventLoop.hpp            ← Zero-CPU-idle event loop (atomic::wait). 
+│   │                               Callable mode (default) + Data mode
+│   │                               (compile-time via Handler template param)
 │   └── queue/                   ← Lock-free MPMC queue family
 │       ├── IQueue.h             ← Virtual queue interface + QueueType concept
 │       ├── BoundedMPMCQueue.hpp ← MPMC bounded (Vyukov)
