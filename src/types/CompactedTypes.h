@@ -84,16 +84,19 @@ class EnchSet {
 
     // ── Modifiers ──
     void insert(const Ench &ench);
-    void clear() noexcept { _size = 0; }
+    void clear() noexcept { _size = 0; _hash_cache = 0; }
     void sort();
 
-    // ── Hash ──
+    // ── Hash (lazily cached) ──
     [[nodiscard]] size_t hash() const noexcept {
-        size_t h = _size;
-        const Ench *d = reinterpret_cast<const Ench *>(_buf);
-        for (size_t i = 0; i < _size; ++i)
-            hash_combine(h, static_cast<size_t>(d[i].id) ^ (static_cast<size_t>(d[i].level) << 16));
-        return h;
+        if (_hash_cache == 0 && _size > 0) {
+            size_t h = _size;
+            const Ench *d = reinterpret_cast<const Ench *>(_buf);
+            for (size_t i = 0; i < _size; ++i)
+                hash_combine(h, static_cast<size_t>(d[i].id) ^ (static_cast<size_t>(d[i].level) << 16));
+            _hash_cache = h;
+        }
+        return _hash_cache;
     }
 
     // ── Comparison ──
@@ -105,6 +108,7 @@ class EnchSet {
 
   private:
     uint8_t _size{0};
+    mutable size_t _hash_cache{0};
     alignas(Ench) uint8_t _buf[INLINE_N * sizeof(Ench)];
 };
 

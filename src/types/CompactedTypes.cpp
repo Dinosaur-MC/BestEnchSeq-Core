@@ -40,6 +40,7 @@ bool EnchSet::contains(int16_t id) const noexcept {
 }
 
 void EnchSet::insert(const Ench &ench) {
+    _hash_cache = 0;
     Ench *d = reinterpret_cast<Ench *>(_buf);
     auto it = std::lower_bound(d, d + _size, ench.id,
         [](const Ench &e, int16_t id) { return e.id < id; });
@@ -62,6 +63,7 @@ void EnchSet::insert(const Ench &ench) {
 }
 
 void EnchSet::sort() {
+    _hash_cache = 0;
     Ench *d = reinterpret_cast<Ench *>(_buf);
     std::sort(d, d + _size,
               [](const Ench &a, const Ench &b) { return a.id < b.id; });
