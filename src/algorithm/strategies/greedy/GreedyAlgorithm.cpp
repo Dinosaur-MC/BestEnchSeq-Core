@@ -68,10 +68,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     }
 
     bool goal_achieved = meets_target(mutable_items[0], _target);
-    _diag.algorithm_name = std::string(name());
     _diag.status = goal_achieved ? "Complete" : "CompleteNoSolution";
-    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start).count();
     _diag.flush(ctx);
 
     if (!goal_achieved) {

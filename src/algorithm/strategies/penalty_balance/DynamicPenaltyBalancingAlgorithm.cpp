@@ -124,20 +124,14 @@ void DynamicPenaltyBalancingAlgorithm::execute(
             }
         }
         if (!met) {
-            _diag.algorithm_name = std::string(name());
             _diag.status = "CompleteNoSolution";
-            _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - start).count();
             _diag.flush(ctx);
             ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
             return;
         }
     }
 
-    _diag.algorithm_name = std::string(name());
     _diag.status = "Complete";
-    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start).count();
     _diag.flush(ctx);
 
     ctx.report_compact_solution(std::move(compact_steps));

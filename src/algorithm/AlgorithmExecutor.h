@@ -8,11 +8,6 @@
 #include <optional>
 #include <thread>
 
-// ─── Observer dispatch period ───────────────────────────────────────────
-#ifndef BESQ_DISPATCH_MS
-#define BESQ_DISPATCH_MS 50
-#endif
-
 namespace compact { class EnchReg; }
 
 // Forward declarations

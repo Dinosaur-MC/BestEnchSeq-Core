@@ -235,13 +235,10 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
                                   _h_max, _h_dirty);
     _dfs(initial_ids, 0, best_cost, ctx);
 
-    _diag.algorithm_name = std::string(name());
     _diag.items_pool_used = _pool.size();
     _diag.items_pool_capacity = _pool.capacity();
     _diag.solutions_found = _solutions_found;
     _diag.final_bound = best_cost;
-    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - _start_time).count();
 
     if (best_cost < INT32_MAX && !_solution_path.empty()) {
         _diag.solution_path_len = _solution_path.size();

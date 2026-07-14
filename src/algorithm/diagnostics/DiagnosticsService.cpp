@@ -42,15 +42,13 @@ void DiagnosticsService::flush() {
 
 // ─── Internal helpers ───────────────────────────────────────────────────────
 
-void DiagnosticsService::_process_one(DiagnosticsEvent& event) {
+void DiagnosticsService::_process_one(const DiagnosticsEvent& event) {
     if (!_persist.load(std::memory_order_acquire))
         return;
-    auto wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now() - event.timestamp).count();
     DiagnosticsWriter::write(
         event.algorithm_name,
         event.entries,
-        wall_ms,
+        event.wall_ms,
         event.status);
 }
 

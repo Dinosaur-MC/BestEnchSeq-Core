@@ -8,6 +8,7 @@
 // NOT already covered by the generic write() signature.
 
 void AlgorithmDiagnostics::flush(ExecutionContext& ctx) const {
+    ctx.report_diagnostic("status",        status);
     ctx.report_diagnostic("solution_cost", static_cast<int64_t>(solution_cost));
 }
 

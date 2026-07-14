@@ -278,7 +278,6 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             ctx.report_compact_solution(std::move(steps));
             ctx.report_progress(1.0, ProgressStatus::Complete);
 
-            _diag.algorithm_name = std::string(name());
             _diag.explored_count = explored;
             _diag.best_g_entries = best_g.size();
             _diag.step_pool_used = _step_pool.size();
@@ -411,7 +410,6 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     }
 
     // ─── Exit diagnostics ────────────────────────────────────────────────
-    _diag.algorithm_name = std::string(name());
     _diag.explored_count = explored;
     _diag.best_g_entries = best_g.size();
     _diag.step_pool_used = _step_pool.size();

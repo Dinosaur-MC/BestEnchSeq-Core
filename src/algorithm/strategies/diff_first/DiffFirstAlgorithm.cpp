@@ -181,7 +181,6 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
                     steps.begin(), steps.end(), int32_t{0},
                     [](int32_t s, const EnchStep& st) { return s + st.cost; });
 
-                _diag.algorithm_name = std::string(name());
                 _diag.solution_cost = total;
                 _diag.status = "Complete";
                 _diag.flush(ctx);
@@ -193,7 +192,6 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
         }
     }
 
-    _diag.algorithm_name = std::string(name());
     _diag.status = cancelled ? "Cancelled" : "CompleteNoSolution";
     _diag.flush(ctx);
     ctx.report_progress(1.0,

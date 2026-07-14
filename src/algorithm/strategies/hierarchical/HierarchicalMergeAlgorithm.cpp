@@ -95,10 +95,7 @@ void HierarchicalMergeAlgorithm::execute(
     int32_t solutions_found = 0;
 
     if (items.size() <= 1) {
-        _diag.algorithm_name = std::string(name());
         _diag.status = "GoalAlreadyMet";
-        _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
         _diag.flush(ctx);
         ctx.report_compact_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
@@ -204,10 +201,7 @@ phase2:
     ctx.report_progress(0.6, ProgressStatus::ApplyingToEquipment);
 
     if (group_results.empty()) {
-        _diag.algorithm_name = std::string(name());
         _diag.status = "Complete";
-        _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
         _diag.flush(ctx);
 
         ctx.report_compact_solution(std::move(compact_steps));
@@ -251,10 +245,7 @@ phase2:
         ++solutions_found;
     }
 
-    _diag.algorithm_name = std::string(name());
     _diag.status = "Complete";
-    _diag.wall_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start).count();
     _diag.flush(ctx);
 
     // Verify final equipment achieves the target

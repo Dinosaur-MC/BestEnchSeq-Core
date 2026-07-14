@@ -207,7 +207,6 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
                         steps.begin(), steps.end(), int32_t{0},
                         [](int32_t s, const EnchStep& st) { return s + st.cost; });
 
-                    _diag.algorithm_name = std::string(name());
                     _diag.solution_cost = total_cost;
                     _diag.status = "Complete";
                     _diag.flush(ctx);
@@ -222,7 +221,6 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
 
     // ── No solution ─────────────────────────────────────────────────────
 
-    _diag.algorithm_name = std::string(name());
     _diag.status = cancelled ? "Cancelled" : "CompleteNoSolution";
     _diag.flush(ctx);
 

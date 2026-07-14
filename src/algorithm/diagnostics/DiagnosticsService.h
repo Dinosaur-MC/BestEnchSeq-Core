@@ -16,6 +16,7 @@ struct DiagnosticsEvent {
     std::string algorithm_name;
     std::vector<DiagnosticsWriter::Entry> entries;
     std::string status;
+    int64_t wall_ms{0};
     std::chrono::system_clock::time_point timestamp;
 };
 
@@ -49,7 +50,7 @@ public:
 
 private:
     DiagnosticsService();
-    void _process_one(DiagnosticsEvent& event);
+    void _process_one(const DiagnosticsEvent& event);
     void _worker();
 
     static constexpr size_t QUEUE_CAPACITY = 64;

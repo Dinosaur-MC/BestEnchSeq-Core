@@ -77,6 +77,7 @@ void AlgorithmExecutor::_finalize() {
         .algorithm_name = std::string(_algorithm->name()),
         .entries        = std::move(entries),
         .status         = status,
+        .wall_ms        = _computation_time.count(),
         .timestamp      = std::chrono::system_clock::now(),
     });
 }
