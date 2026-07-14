@@ -165,6 +165,16 @@ BenchConfig parse_cli(int argc, char* argv[]) {
         }
     }
 
+    // Validate: --test names must exist
+    if (!cfg.test_names.empty()) {
+        std::unordered_set<std::string> valid_tests;
+        for (const auto& tc : CASES)
+            valid_tests.insert(tc.name);
+        for (const auto& t : cfg.test_names)
+            if (!valid_tests.contains(t))
+                die("unknown test '" + t + "'");
+    }
+
     // Validate: --alg values must be known (or chain with '+')
     std::vector<const char*> all_valid;
     for (auto* a : all_algos) all_valid.push_back(a);
