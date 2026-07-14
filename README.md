@@ -132,7 +132,7 @@ src/
 │   └── strategies/
 │       ├── GreedyAlgorithm.*    ← Fast approximate
 │       ├── HammingAlgorithm.*   ← Popcount-balanced merge tree (near-optimal, 0ms)
-│       ├── DFSAlgorithm.*       ← Exact search (branch-and-bound)
+│       ├── DFSAlgorithm.*       ← Heuristic search (branch-and-bound, approx)
 │       ├── AStarAlgorithm.*     ← Exact optimal (admissible heuristic)
 │       ├── DynamicPenaltyBalancingAlgorithm.* ← High-quality approx
 │       ├── HierarchicalMergeAlgorithm.* ← Large-scale approx
