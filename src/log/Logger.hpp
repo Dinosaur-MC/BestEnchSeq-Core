@@ -1,15 +1,17 @@
 #pragma once
 #include "types/LogTypes.h"
+#include "utils/EventLoop.hpp"
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
 #include <cstdio>
-#include <thread>
+#include <fstream>
+#include <string>
 
 /// Async logger: messages pushed to a lock-free MPMC queue from any thread.
 /// Dedicated worker writes to logs/<timestamp>.log + latest.log.
 /// Rotation keeps at most 5 historic runs.
 ///
-/// Zero-CPU idle: when no messages are queued the worker thread blocks on
+/// Zero-CPU idle: when no messages are queued the worker thread blocks in
 /// std::atomic::wait (C++20) — no mutex, no condition variable, no polling.
 ///
 /// Singleton (Meyer's): call Logger::instance() from anywhere.
@@ -24,7 +26,6 @@ public:
     Logger& operator=(const Logger&) = delete;
 
     /// Push a log message (non-blocking). Silently drops when queue full.
-    /// Wakes the worker thread via atomic notify_one.
     void log(LogLevel level, std::string message);
 
     /// Convenience helpers (plain string).
@@ -33,7 +34,7 @@ public:
     void error(std::string msg) { log(LogLevel::Error, std::move(msg)); }
     void debug(std::string msg) { log(LogLevel::Debug, std::move(msg)); }
 
-    /// printf-style format helpers (no level param — level is in the name).
+    /// printf-style format helpers.
     template<typename... Args>
     void info_fmt(const char* fmt, Args&&... args) {
         printf(LogLevel::Info, fmt, std::forward<Args>(args)...);
@@ -70,34 +71,30 @@ public:
 
     /// ── Runtime configuration ────────────────────────────────────────────
 
-    /// Set minimum log level; messages below this level are dropped.
     void set_level(LogLevel lv) noexcept { _level.store(lv, std::memory_order_release); }
-    LogLevel get_level() const noexcept {
-        return _level.load(std::memory_order_acquire);
-    }
+    LogLevel get_level() const noexcept { return _level.load(std::memory_order_acquire); }
 
-    /// Set maximum number of historic log files to retain during rotation.
     void set_retention(size_t n) noexcept { _max_retention = n; }
     size_t get_retention() const noexcept { return _max_retention; }
 
 private:
+    // ── FileHandler ────────────────────────────────────────────────────
+    // Consumes LogEntry instances on the EventLoop worker thread.
+    // Files are opened in the constructor (before worker starts) and
+    // written from the worker thread.
+    struct FileHandler {
+        explicit FileHandler(std::string log_dir);
+        void operator()(LogEntry entry);
+        void rotate();
+
+        std::string log_dir;
+        std::ofstream run_file;
+        std::ofstream latest_file;
+    };
+
     explicit Logger(std::string log_dir = "logs");
 
-    void _worker();
-    void _rotate();
-
-    BoundedMPMCQueue<LogEntry, 256> _queue;
-    std::atomic<bool> _running{true};
-    /// Wake sequence counter: every push() increments this and notifies the
-    /// worker via C++20 atomic::notify_one.  The worker blocks on wait()
-    /// instead of polling — zero CPU when idle, no mutex or CV involved.
-    std::atomic<uint64_t> _wake_seq{0};
-
-    /// Minimum log level (atomic for lock-free read in log()).
+    EventLoop<LogEntry, BoundedMPMCQueue<LogEntry, 256>, FileHandler> _loop;
     std::atomic<LogLevel> _level{LogLevel::Debug};
-    /// Max historic log files kept during rotation.
     size_t _max_retention{5};
-
-    std::thread _worker_thread;
-    std::string _log_dir;
 };

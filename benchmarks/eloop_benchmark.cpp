@@ -42,29 +42,36 @@ static void print_result(const char* label, double elapsed_s, int64_t items) {
     std::cout << buf << std::endl;
 }
 
+/// Drain barrier: post a no-op task and wait for it to complete.
+/// This ensures all previously posted tasks have been consumed.
+static void drain(auto& loop) {
+    std::atomic<bool> done{false};
+    loop.post([&done] { done.store(true, std::memory_order_release); });
+    while (!done.load(std::memory_order_acquire))
+        std::this_thread::yield();
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  EventLoop single-producer throughput
 // ═══════════════════════════════════════════════════════════════════════════
 
-template <typename Queue>
-static void bench_throughput(EventLoop<Queue>& loop,
+template <typename Loop>
+static void bench_throughput(Loop& loop,
                              int64_t n, int64_t warmup,
                              const char* label)
 {
     std::atomic<int64_t> sum{0};
     loop.start();
 
-    for (int64_t i = 0; i < warmup; ++i) {
-        while (!loop.post([&] { sum.fetch_add(1); })) {}
-    }
-    loop.post_and_wait([&] {});
+    for (int64_t i = 0; i < warmup; ++i)
+        loop.post([&] { sum.fetch_add(1); });
+    drain(loop);
 
     sum.store(0);
     auto t0 = Clock::now();
-    for (int64_t i = 0; i < n; ++i) {
-        while (!loop.post([&] { sum.fetch_add(1); })) {}
-    }
-    loop.post_and_wait([&] {});
+    for (int64_t i = 0; i < n; ++i)
+        loop.post([&] { sum.fetch_add(1); });
+    drain(loop);
     double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                      Clock::now() - t0).count() / 1'000'000.0;
 
@@ -86,11 +93,11 @@ static void bench_multiproducer(int64_t n, int64_t warmup, int n_threads) {
     for (int t = 0; t < n_threads; ++t) {
         warmers.emplace_back([&] {
             for (int64_t i = 0; i < per; ++i)
-                while (!loop.post([&] { sum.fetch_add(1); })) {}
+                loop.post([&] { sum.fetch_add(1); });
         });
     }
     for (auto& t : warmers) t.join();
-    loop.post_and_wait([&] {});
+    drain(loop);
 
     sum.store(0);
     per = n / n_threads;
@@ -99,11 +106,11 @@ static void bench_multiproducer(int64_t n, int64_t warmup, int n_threads) {
     for (int t = 0; t < n_threads; ++t) {
         producers.emplace_back([&] {
             for (int64_t i = 0; i < per; ++i)
-                while (!loop.post([&] { sum.fetch_add(1); })) {}
+                loop.post([&] { sum.fetch_add(1); });
         });
     }
     for (auto& t : producers) t.join();
-    loop.post_and_wait([&] {});
+    drain(loop);
     double sec = std::chrono::duration_cast<std::chrono::microseconds>(
                      Clock::now() - t0).count() / 1'000'000.0;
 
@@ -123,13 +130,13 @@ static void bench_latency(int64_t n) {
 
     // Warm-up
     for (int64_t i = 0; i < 2000; ++i)
-        loop.post_and_wait([] {});
+        drain(loop);
 
     std::vector<double> samples;
     samples.reserve(static_cast<size_t>(n));
     for (int64_t i = 0; i < n; ++i) {
         auto t0 = Clock::now();
-        loop.post_and_wait([] {});
+        drain(loop);
         auto t1 = Clock::now();
         samples.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(
                               t1 - t0).count());
@@ -140,7 +147,7 @@ static void bench_latency(int64_t n) {
     double mean   = std::accumulate(samples.begin(), samples.end(), 0.0) / static_cast<double>(n);
     char buf[128];
     std::snprintf(buf, sizeof(buf), "  %-42s %6.1f ns median  (mean %6.1f ns)",
-                  "MPMCEventLoop post_and_wait", median, mean);
+                  "MPMCEventLoop drain latency", median, mean);
     std::cout << buf << std::endl;
     loop.stop();
 }
@@ -165,15 +172,15 @@ int main() {
         Timer sec;
         std::cout << "── Single-producer throughput ────────────────────\n";
         {
-            EventLoop<SegmentedMPMCQueue<std::function<void()>, 1024>> loop;
+            EventLoop<std::function<void()>, SegmentedMPMCQueue<std::function<void()>, 1024>> loop;
             bench_throughput(loop, OPS_EV, WARM_EV, "MPMCEventLoop (SegmentedMPMC)");
         }
         {
-            EventLoop<SPSCQueue<std::function<void()>, 4096>> loop;
+            EventLoop<std::function<void()>, SPSCQueue<std::function<void()>, 4096>> loop;
             bench_throughput(loop, OPS_EV, WARM_EV, "SPSCEventLoop (SPSCQueue)");
         }
         {
-            EventLoop<BoundedMPMCQueue<std::function<void()>, 4096>> loop;
+            EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
             bench_throughput(loop, OPS_EV, WARM_EV, "BoundedEventLoop (BoundedMPMC)");
         }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
@@ -189,10 +196,10 @@ int main() {
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 
-    // ── post_and_wait latency ─────────────────────────────────────────
+    // ── drain latency ─────────────────────────────────────────
     {
         Timer sec;
-        std::cout << "── post_and_wait latency ─────────────────────────\n";
+        std::cout << "── drain latency ─────────────────────────\n";
         bench_latency(N_LATENCY);
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }

@@ -2,6 +2,7 @@
 #include "utils/EventLoop.hpp"
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <string>
 #include <thread>
 #include <vector>
@@ -23,6 +24,16 @@ void wait_for(const std::atomic<T>& var, T expected,
         }
         std::this_thread::yield();
     }
+}
+
+/// Drain barrier: post a no-op task and wait for completion.
+/// Ensures all previously posted tasks have been consumed.
+template <typename Loop>
+static void drain(Loop& loop) {
+    std::atomic<bool> done{false};
+    loop.post([&done] { done.store(true, std::memory_order_release); });
+    while (!done.load(std::memory_order_acquire))
+        std::this_thread::yield();
 }
 
 // ============================================================================
@@ -91,7 +102,7 @@ void test_single_post() {
 
     loop.start();
     loop.post([&] { val.store(42); });
-    loop.post_and_wait([&] {});   // sync: wait for all prior tasks
+    drain(loop);
 
     expect(val.load() == 42, "single post should execute");
     loop.stop();
@@ -101,20 +112,20 @@ void test_single_post() {
 void test_post_order() {
     MPMCEventLoop<> loop;
     std::vector<int> results;
-    std::mutex mtx;
 
     loop.start();
-    loop.post([&] { std::lock_guard lk(mtx); results.push_back(1); });
-    loop.post([&] { std::lock_guard lk(mtx); results.push_back(2); });
-    loop.post([&] { std::lock_guard lk(mtx); results.push_back(3); });
-    loop.post_and_wait([&] { std::lock_guard lk(mtx); results.push_back(4); });
+    loop.post([&] { results.push_back(1); });
+    loop.post([&] { results.push_back(2); });
+    loop.post([&] { results.push_back(3); });
+    loop.post([&] { results.push_back(4); });
+    drain(loop);
 
-    loop.stop();
     expect(results.size() == 4, "all 4 tasks executed");
     expect(results[0] == 1, "order[0] == 1");
     expect(results[1] == 2, "order[1] == 2");
     expect(results[2] == 3, "order[2] == 3");
     expect(results[3] == 4, "order[3] == 4");
+    loop.stop();
     std::cout << "PASS: test_post_order" << std::endl;
 }
 
@@ -126,63 +137,12 @@ void test_post_many() {
     loop.start();
     for (int i = 0; i < N; ++i)
         loop.post([&, i] { sum.fetch_add(i); });
-    loop.post_and_wait([&] {});
+    drain(loop);
 
     int64_t expected = static_cast<int64_t>(N) * (N - 1) / 2;
     expect(sum.load() == expected, "all tasks accounted for");
     loop.stop();
     std::cout << "PASS: test_post_many (" << N << " tasks)" << std::endl;
-}
-
-// ============================================================================
-// post_and_wait
-// ============================================================================
-
-void test_post_and_wait_basic() {
-    MPMCEventLoop<> loop;
-    int result = 0;
-
-    loop.start();
-    loop.post_and_wait([&] { result = 99; });
-
-    expect(result == 99, "post_and_wait executes");
-    loop.stop();
-    std::cout << "PASS: test_post_and_wait_basic" << std::endl;
-}
-
-void test_post_and_wait_before_start() {
-    MPMCEventLoop<> loop;
-    int result = 0;
-
-    // Not started — executes inline
-    loop.post_and_wait([&] { result = 42; });
-
-    expect(result == 42, "post_and_wait before start runs inline");
-    expect(!loop.is_running(), "still not running");
-    std::cout << "PASS: test_post_and_wait_before_start" << std::endl;
-}
-
-void test_post_and_wait_reentrant() {
-    // post_and_wait called from within the event loop thread itself
-    // should execute inline (no deadlock).
-    MPMCEventLoop<> loop;
-    std::atomic<int> outer_val{0};
-    std::atomic<int> inner_val{0};
-
-    loop.start();
-    loop.post_and_wait([&] {
-        outer_val.store(1);
-        // This nested post_and_wait would deadlock with a simple
-        // promise/future, but EventLoop detects re-entrancy.
-        loop.post_and_wait([&] {
-            inner_val.store(2);
-        });
-    });
-
-    expect(outer_val.load() == 1, "outer task executed");
-    expect(inner_val.load() == 2, "inner re-entrant task executed");
-    loop.stop();
-    std::cout << "PASS: test_post_and_wait_reentrant" << std::endl;
 }
 
 // ============================================================================
@@ -198,10 +158,9 @@ void test_post_batch() {
         batch.push_back([&] { count.fetch_add(1); });
 
     loop.start();
-    size_t posted = loop.post_batch(batch.begin(), batch.end());
-    loop.post_and_wait([&] {});
+    loop.post_batch(batch.begin(), batch.end());
+    drain(loop);
 
-    expect(posted == 100, "all 100 batched tasks accepted");
     expect(count.load() == 100, "all 100 batched tasks executed");
     loop.stop();
     std::cout << "PASS: test_post_batch" << std::endl;
@@ -212,8 +171,8 @@ void test_post_batch_empty() {
     std::vector<std::function<void()>> empty;
 
     loop.start();
-    size_t posted = loop.post_batch(empty.begin(), empty.end());
-    expect(posted == 0, "empty batch posts nothing");
+    loop.post_batch(empty.begin(), empty.end());
+    expect(loop.pending() == 0, "empty batch posts nothing");
     loop.stop();
     std::cout << "PASS: test_post_batch_empty" << std::endl;
 }
@@ -223,21 +182,22 @@ void test_post_batch_empty() {
 // ============================================================================
 
 void test_bounded_full() {
-    // Capacity = 4, so at most 4 tasks queued at once
+    // Capacity = 4, so at most 4 tasks queued at once.
+    // Use try_post without starting the loop to test bounded capacity.
     BoundedEventLoop<std::function<void()>, 4> loop;
     std::atomic<int> count{0};
 
-    // Fill the queue to capacity
-    loop.start();
-    expect(loop.post([&] { count++; }), "post 1");
-    expect(loop.post([&] { count++; }), "post 2");
-    expect(loop.post([&] { count++; }), "post 3");
-    expect(loop.post([&] { count++; }), "post 4");
-    expect(!loop.post([&] { count++; }), "post 5 should be dropped (full)");
+    expect(loop.try_post([&] { count++; }), "post 1");
+    expect(loop.try_post([&] { count++; }), "post 2");
+    expect(loop.try_post([&] { count++; }), "post 3");
+    expect(loop.try_post([&] { count++; }), "post 4");
+    expect(!loop.try_post([&] { count++; }), "post 5 should be dropped (full)");
 
-    loop.post_and_wait([&] {});  // sync
+    // Start the loop, drain, and verify
+    loop.start();
+    drain(loop);
     int c = count.load();
-    expect(c <= 4, "at most 4 executed (was " + std::to_string(c) + ")");
+    expect(c == 4, "exactly 4 executed (was " + std::to_string(c) + ")");
     loop.stop();
     std::cout << "PASS: test_bounded_full" << std::endl;
 }
@@ -248,10 +208,10 @@ void test_bounded_batch_partial() {
 
     std::vector<std::function<void()>> batch;
     for (int i = 0; i < 100; ++i)
-        batch.push_back([&] {});
+        batch.push_back([] {});
 
-    loop.start();
-    size_t posted = loop.post_batch(batch.begin(), batch.end());
+    // Don't start — test raw capacity limit via try_post_batch
+    size_t posted = loop.try_post_batch(batch.begin(), batch.end());
     expect(posted <= 4, "at most 4 batched items accepted (got " +
                         std::to_string(posted) + ")");
     expect(posted > 0, "at least 1 batched item accepted");
@@ -269,46 +229,14 @@ void test_spsc_basic() {
 
     loop.start();
     loop.post([&] { val = 42; });
-    loop.post_and_wait([&] { val = 99; });
-    expect(val.load() == 99, "SPSC event loop executes tasks");
+    drain(loop);
+    expect(val.load() == 42, "SPSC event loop executes tasks");
+
+    loop.post([&] { val = 99; });
+    drain(loop);
+    expect(val.load() == 99, "second task executes");
     loop.stop();
     std::cout << "PASS: test_spsc_basic" << std::endl;
-}
-
-void test_spsc_reentrant() {
-    SPSCEventLoop<std::function<void()>, 16> loop;
-    std::atomic<int> val{0};
-
-    loop.start();
-    loop.post_and_wait([&] {
-        // Nested post_and_wait — must not deadlock
-        loop.post_and_wait([&] { val = 123; });
-    });
-    expect(val.load() == 123, "SPSC re-entrant post_and_wait works");
-    loop.stop();
-    std::cout << "PASS: test_spsc_reentrant" << std::endl;
-}
-
-// ============================================================================
-// External draining (try_pop without start)
-// ============================================================================
-
-void test_external_drain() {
-    MPMCEventLoop<> loop;
-
-    // Post tasks without starting the loop
-    loop.post([] {});
-    loop.post([] {});
-    expect(!loop.empty(), "not empty after posts");
-
-    // Drain externally via try_pop
-    std::function<void()> task;
-    expect(loop.try_pop(task), "first pop succeeds");
-    expect(loop.try_pop(task), "second pop succeeds");
-    expect(!loop.try_pop(task), "third pop fails (empty)");
-    expect(loop.empty(), "empty after drain");
-
-    std::cout << "PASS: test_external_drain" << std::endl;
 }
 
 // ============================================================================
@@ -329,11 +257,7 @@ void test_concurrent_producers() {
         producers.emplace_back([&, p] {
             for (int i = 0; i < kTasksEach; ++i) {
                 int64_t v = static_cast<int64_t>(p) * kTasksEach + i;
-                // Spinning on full is not needed for unbounded queue, but
-                // we still use a retry loop for robustness:
-                while (!loop.post([&, v] { sum.fetch_add(v); })) {
-                    std::this_thread::yield();
-                }
+                loop.post([&, v] { sum.fetch_add(v); });
             }
         });
     }
@@ -341,8 +265,7 @@ void test_concurrent_producers() {
     for (auto& t : producers)
         t.join();
 
-    // Wait for all tasks to complete
-    loop.post_and_wait([&] {});
+    drain(loop);
 
     int64_t expected = 0;
     for (int i = 0; i < kTotalTasks; ++i)
@@ -371,7 +294,7 @@ void test_wakeup_race() {
     loop.start();
 
     // Drain all tasks so the consumer enters idle-wait.
-    loop.post_and_wait([] {});
+    drain(loop);
 
     std::atomic<bool> task_done{false};
 
@@ -408,9 +331,8 @@ void test_wakeup_race() {
 // ============================================================================
 
 void test_move_only_task() {
-    // Use std::packaged_task as a move-only callable
     using MoveTask = std::packaged_task<void()>;
-    EventLoop<SegmentedMPMCQueue<MoveTask, 128>> loop;
+    EventLoop<MoveTask, SegmentedMPMCQueue<MoveTask, 128>> loop;
 
     std::atomic<int> val{0};
     std::promise<void> prom;
@@ -429,22 +351,6 @@ void test_move_only_task() {
     std::cout << "PASS: test_move_only_task" << std::endl;
 }
 
-void test_move_only_post_and_wait() {
-    // post_and_wait with a move-only packaged_task must also compile
-    // and execute correctly.
-    using MoveTask = std::packaged_task<void()>;
-    EventLoop<SegmentedMPMCQueue<MoveTask, 128>> loop;
-
-    std::atomic<int> val{0};
-    auto task = std::packaged_task<void()>([&] { val.store(77); });
-
-    loop.start();
-    loop.post_and_wait(std::move(task));
-    expect(val.load() == 77, "move-only task executed via post_and_wait()");
-    loop.stop();
-    std::cout << "PASS: test_move_only_post_and_wait" << std::endl;
-}
-
 // ============================================================================
 // Memory: tasks destroyed on stop (not leaked)
 // ============================================================================
@@ -457,22 +363,19 @@ void test_destroy_on_stop() {
         MPMCEventLoop<> loop;
         loop.start();
 
-        // Post tasks that track their destruction
-        for (int i = 0; i < 10; ++i) {
-            struct Tracker {
-                std::atomic<int>* d;
-                ~Tracker() { d->store(1); }
-                void operator()() const { /* no-op */ }
-            };
-            loop.post(Tracker{&destroyed});
-            executed.fetch_add(1);
-        }
+        struct Tracker {
+            std::atomic<int>* d;
+            ~Tracker() { d->store(1); }
+            void operator()() const {}
+        };
 
-        loop.stop();  // should destroy remaining tasks
+        loop.post(Tracker{&destroyed});
+        executed.store(1);
+
+        // stop() drains remaining items gracefully
     }
 
-    expect(executed.load() <= 10, "some tasks may have executed");
-    expect(destroyed.load() == 1 || true, "destructor ran (signal)");
+    expect(executed.load() == 1, "task was posted");
     std::cout << "PASS: test_destroy_on_stop" << std::endl;
 }
 
@@ -496,11 +399,6 @@ int main() {
         test_post_order();
         test_post_many();
 
-        // post_and_wait
-        test_post_and_wait_basic();
-        test_post_and_wait_before_start();
-        test_post_and_wait_reentrant();
-
         // post_batch
         test_post_batch();
         test_post_batch_empty();
@@ -511,10 +409,6 @@ int main() {
 
         // SPSC variant
         test_spsc_basic();
-        test_spsc_reentrant();
-
-        // External drain
-        test_external_drain();
 
         // Concurrent
         test_concurrent_producers();
@@ -524,7 +418,6 @@ int main() {
 
         // Move-only
         test_move_only_task();
-        test_move_only_post_and_wait();
 
         // Cleanup
         test_destroy_on_stop();

@@ -68,9 +68,10 @@ public:
     EventLoop() requires std::is_void_v<Handler> = default;
 
     /// Construct with a Handler instance (data mode only).
-    explicit EventLoop(Handler handler)
-        requires (!std::is_void_v<Handler>)
-        : _handler(std::move(handler)) {}
+    template <typename H>
+        requires (!std::is_void_v<Handler> && std::same_as<std::remove_cvref_t<H>, Handler>)
+    explicit EventLoop(H&& handler)
+        : _handler(std::forward<H>(handler)) {}
 
     ~EventLoop() noexcept { stop(); }
 
@@ -112,7 +113,9 @@ public:
     /// bounded queue that is full (item silently dropped).  Unbounded
     /// queues always return true.
     template <typename U>
-        requires std::same_as<std::remove_cvref_t<U>, T>
+        requires (std::is_void_v<Handler>
+                  ? std::convertible_to<U&&, T>
+                  : std::same_as<std::remove_cvref_t<U>, T>)
     bool try_post(U&& item) {
         if (!_queue.try_push(std::forward<U>(item)))
             return false;
@@ -123,7 +126,9 @@ public:
     /// Block until the item is enqueued.  For bounded queues this spins
     /// with yield(); unbounded queues succeed on the first attempt.
     template <typename U>
-        requires std::same_as<std::remove_cvref_t<U>, T>
+        requires (std::is_void_v<Handler>
+                  ? std::convertible_to<U&&, T>
+                  : std::same_as<std::remove_cvref_t<U>, T>)
     void post(U&& item) {
         while (!try_post(std::forward<U>(item)))
             std::this_thread::yield();
@@ -132,7 +137,9 @@ public:
     /// Best-effort batch enqueue.  Returns the number of items enqueued
     /// (may be less than the range size for a full bounded queue).
     template <std::input_iterator Iter>
-        requires std::same_as<typename std::iter_value_t<Iter>, T>
+        requires (std::is_void_v<Handler>
+                  ? std::convertible_to<typename std::iter_value_t<Iter>, T>
+                  : std::same_as<typename std::iter_value_t<Iter>, T>)
     size_t try_post_batch(Iter begin, Iter end) {
         size_t count = 0;
         for (; begin != end; ++begin) {
@@ -150,7 +157,9 @@ public:
 
     /// Block until all items in the range are enqueued.
     template <std::input_iterator Iter>
-        requires std::same_as<typename std::iter_value_t<Iter>, T>
+        requires (std::is_void_v<Handler>
+                  ? std::convertible_to<typename std::iter_value_t<Iter>, T>
+                  : std::same_as<typename std::iter_value_t<Iter>, T>)
     void post_batch(Iter begin, Iter end) {
         for (; begin != end; ++begin)
             post(std::move(*begin));
