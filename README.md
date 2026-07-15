@@ -169,6 +169,7 @@ src/
 │   ├── CsvIO.h/.cpp             ← CSV parse / format / write
 │   └── ByteStream.h             ← Binary byte I/O (u8/16/32/64, varint, string)
 ├── data/
+│   ├── CMakeLists.txt           ← Embeds vanilla.json into binary at compile time
 │   └── builtin/vanilla.json     ← Built-in Vanilla Minecraft enchantment data
 └── BESQTypes.h                  ← Umbrella include for domain types
 ```
