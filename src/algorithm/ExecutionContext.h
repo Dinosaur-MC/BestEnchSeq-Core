@@ -5,8 +5,10 @@
 #include <mutex>
 #include <string>
 #include <utility>
+#include <memory>
 #include <variant>
 #include <vector>
+#include "diagnostics/AlgorithmDiagnostics.h"
 
 #ifndef BESQ_MAX_SOLUTIONS
 #define BESQ_MAX_SOLUTIONS 128
@@ -44,6 +46,23 @@ public:
 
     void report_progress(double percent, ProgressStatus status);
     void report_compact_solution(std::vector<compact::EnchStep> solution);
+
+    struct AlgorithmSink {
+        void (*on_progress)(double percent, ProgressStatus status, void* ctx);
+        void (*on_solution)(std::shared_ptr<const compact::EnchSolution> solution,
+                            const char* algo_name, void* ctx);
+        void* context;
+    };
+
+    void set_sink(AlgorithmSink sink) noexcept { _sink = sink; }
+    void set_algorithm_name(const char* name) noexcept { _algo_name = name; }
+    void set_exit_diagnostics(std::unique_ptr<AlgorithmDiagnostics> d) {
+        _exit_diag = std::move(d);
+    }
+    std::unique_ptr<AlgorithmDiagnostics> consume_exit_diagnostics() {
+        return std::move(_exit_diag);
+    }
+    bool has_exit_diagnostics() const noexcept { return _exit_diag != nullptr; }
 
     // ═══════════════════════════════════════════════════════════════════
     // 🟢 可选区 — 执行前后各调用一次
@@ -96,4 +115,12 @@ private:
 
     mutable std::mutex _accum_mtx;
     std::vector<compact::EnchSolution> _accumulated;
+
+    // ── 🟡 辅助区（与 _progress / _diagnostic_log 一起） ──────────
+    AlgorithmSink _sink{};
+    const char* _algo_name{nullptr};
+    std::atomic<int> _progress_pct{-1};
+
+    // ── 🟢 退出区 ──────────────────────────────────────────────────
+    std::unique_ptr<AlgorithmDiagnostics> _exit_diag;
 };

@@ -13,12 +13,33 @@ void ExecutionContext::wait_if_paused() {
 }
 
 void ExecutionContext::report_progress(double percent, ProgressStatus status) {
-    (void)status;
+    int pct = static_cast<int>(percent * 100.0);
     _progress.store(percent, std::memory_order_release);
+
+    if (pct == 100 || pct == 0) {
+        _progress_pct.store(pct, std::memory_order_relaxed);
+        if (_sink.on_progress)
+            _sink.on_progress(percent, status, _sink.context);
+    } else {
+        int prev = _progress_pct.load(std::memory_order_relaxed);
+        if (pct - prev >= 5) {
+            if (_progress_pct.compare_exchange_weak(prev, pct,
+                    std::memory_order_relaxed, std::memory_order_relaxed)) {
+                if (_sink.on_progress)
+                    _sink.on_progress(percent, status, _sink.context);
+            }
+        }
+    }
 }
 
-void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> solution) {
-    append_compact_solution({std::move(solution), 0});
+void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> steps) {
+    auto sol = std::make_shared<const compact::EnchSolution>(
+        compact::EnchSolution{std::move(steps), 0});
+
+    append_compact_solution(*sol);
+
+    if (_sink.on_solution && _algo_name)
+        _sink.on_solution(sol, _algo_name, _sink.context);
 }
 
 void ExecutionContext::report_diagnostic(std::string_view key, int64_t value) {
