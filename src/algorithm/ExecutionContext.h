@@ -35,6 +35,7 @@ public:
     void incr_nodes_visited() noexcept { _diag_nodes_visited.fetch_add(1, std::memory_order_relaxed); }
     void incr_nodes_pruned()   noexcept { _diag_nodes_pruned.fetch_add(1, std::memory_order_relaxed); }
     void incr_steps_forged()   noexcept { _diag_steps_forged.fetch_add(1, std::memory_order_relaxed); }
+    
     // ═══════════════════════════════════════════════════════════════════
     // 🟡 辅助区 — 定期调用（非热路径）
     // ═══════════════════════════════════════════════════════════════════

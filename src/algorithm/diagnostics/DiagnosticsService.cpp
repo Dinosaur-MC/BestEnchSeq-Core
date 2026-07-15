@@ -47,7 +47,10 @@ void DiagnosticsService::set_persist(bool enabled) noexcept {
 }
 
 void DiagnosticsService::_on_push_failed(const char* algo_name) {
-    LOG_WARN("diagnostics queue full, event dropped (algo=%s)", algo_name);
+    if (algo_name)
+        LOG_WARN("diagnostics queue full, event dropped (algo=%s)", algo_name);
+    else
+        LOG_WARN("diagnostics queue full, event dropped");
 }
 
 std::vector<std::shared_ptr<AlgorithmObserver>> DiagnosticsService::snapshot_observers() {
@@ -77,6 +80,11 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
             // Add entries from diagnostics->flush() if available
             if (p.diagnostics) {
                 p.diagnostics->flush(all);
+                // Remove "status" entry — DiagnosticsWriter::write() already
+                // writes status= from its own parameter, avoiding duplicates.
+                all.erase(std::remove_if(all.begin(), all.end(),
+                    [](const auto& e) { return e.key == std::string_view("status"); }),
+                    all.end());
             }
 
             // Add atomic counter entries

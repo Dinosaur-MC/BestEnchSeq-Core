@@ -114,8 +114,7 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     _algo_name_cache = std::string(_algorithm->name());
 
     // Set up streaming notification sink
-    struct SinkContext { DiagnosticsService* ds; const char* algo_name; };
-    auto* sink_ctx = new SinkContext{&DiagnosticsService::instance(), _algo_name_cache.c_str()};
+    _sink_ctx = std::make_unique<SinkContext>(&DiagnosticsService::instance(), _algo_name_cache.c_str());
 
     _ctx->set_algorithm_name(_algo_name_cache.c_str());
     _ctx->set_sink(ExecutionContext::AlgorithmSink{
@@ -130,7 +129,7 @@ void AlgorithmExecutor::start(AlgorithmInput input,
             sc.ds->push(DiagEventKind::Solution, name,
                         DiagnosticsEvent::SolutionPayload{std::move(sol)});
         },
-        .context = sink_ctx,
+        .context = _sink_ctx.get(),
     });
 
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
@@ -145,10 +144,9 @@ void AlgorithmExecutor::start(AlgorithmInput input,
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
 
-            if (_ctx->is_cancelled())
-                _set_state(AlgorithmState::Cancelled);
-            else
-                _set_state(AlgorithmState::Completed);
+            // Always attempt Completed; if cancel() already exchanged to
+            // Cancelled, _set_state is a no-op — no TOCTOU race.
+            _set_state(AlgorithmState::Completed);
         } catch (...) {
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
@@ -178,9 +176,9 @@ void AlgorithmExecutor::resume() {
 
 void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
-    // Don't clobber Completed — results would be lost
-    if (prev == AlgorithmState::Completed) {
-        _state.store(AlgorithmState::Completed, std::memory_order_release);
+    // Don't clobber Completed or Failed — results/loss would be lost/mislabeled
+    if (prev == AlgorithmState::Completed || prev == AlgorithmState::Failed) {
+        _state.store(prev, std::memory_order_release);
         return;
     }
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {

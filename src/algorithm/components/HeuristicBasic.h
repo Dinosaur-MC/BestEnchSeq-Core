@@ -21,8 +21,7 @@ inline int32_t compute(
     std::vector<int16_t>& buf,
     std::vector<int16_t>& dirty)
 {
-    int32_t h = 0;
-    if (items.empty()) return h;
+    if (items.empty()) return 0;
 
     search_utils::fill_max_levels(
         [&](auto&& yield) {
@@ -32,12 +31,7 @@ inline int32_t compute(
         },
         reg, buf, dirty);
 
-    for (const auto& t : target) {
-        if (t.id < 0) continue;
-        int16_t have = buf[t.id];
-        if (have < t.level)
-            h += (t.level - have) * reg[t.id].mul_b;
-    }
+    int32_t h = search_utils::compute_h(target, reg, buf);
 
     for (auto id : dirty) {
         buf[id] = 0;

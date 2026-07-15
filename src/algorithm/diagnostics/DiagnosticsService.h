@@ -33,10 +33,13 @@ public:
         if (ok) [[likely]] {
             _enqueued.fetch_add(1, std::memory_order_release);
         } else {
-            // Only warn on single-argument (move) path; emplace path doesn't have the name yet.
+            // Single-arg move path: extract name from the event for the warning.
+            // Multi-arg emplace path: warn generically (name unavailable).
             if constexpr (sizeof...(Args) == 1 &&
                           (std::is_same_v<std::remove_cvref_t<Args>, DiagnosticsEvent> && ...)) {
                 [&](auto&& ev) { _on_push_failed(ev.algorithm_name.c_str()); }(std::forward<Args>(args)...);
+            } else {
+                _on_push_failed(nullptr);
             }
         }
     }

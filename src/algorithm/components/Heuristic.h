@@ -22,8 +22,7 @@ inline int32_t compute(
     std::vector<int16_t>& buf,     // reusable scratch; resized if needed
     std::vector<int16_t>& dirty)   // reusable dirty-id tracker
 {
-    int32_t h = 0;
-    if (ids.empty()) return h;
+    if (ids.empty()) return 0;
 
     search_utils::fill_max_levels(
         [&](auto&& yield) {
@@ -33,7 +32,7 @@ inline int32_t compute(
         },
         reg, buf, dirty);
 
-    h = search_utils::compute_h(target, reg, buf);
+    int32_t h = search_utils::compute_h(target, reg, buf);
 
     for (auto id : dirty) {
         buf[id] = 0;
