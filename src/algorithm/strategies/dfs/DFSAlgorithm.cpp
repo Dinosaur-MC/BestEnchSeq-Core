@@ -86,7 +86,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
     _start_time = std::chrono::steady_clock::now();
 
     _ench_reg = &input.ench_reg;
@@ -119,7 +119,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _diag.status = _best_cost < INT32_MAX ? "Complete" : "CompleteNoSolution";
     ctx.set_exit_diagnostics(_diag);
 
-    ctx.report_progress(1.0, _best_cost < INT32_MAX
+    ctx.report_progress(100, _best_cost < INT32_MAX
         ? ProgressStatus::Complete
         : ProgressStatus::CompleteNoSolution);
 }

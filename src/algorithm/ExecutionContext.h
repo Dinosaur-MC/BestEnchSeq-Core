@@ -44,7 +44,7 @@ public:
     // ═══════════════════════════════════════════════════════════════════
     // 🟡 流式通知 — 直接内部调 DiagnosticsService::push
     // ═══════════════════════════════════════════════════════════════════
-    void report_progress(double percent, ProgressStatus status);
+    void report_progress(uint8_t pct, ProgressStatus status);
     void report_solution(const std::vector<compact::EnchStep>& steps);   // lvalue → 1 copy
     void report_solution(std::vector<compact::EnchStep>&& steps);        // rvalue → move (0 copy)
 
@@ -65,7 +65,8 @@ public:
     }
 
     // ─── 输出 ─────────────────────────────────────────────────────────
-    double progress() const noexcept { return _progress.load(std::memory_order_acquire); }
+    /// Returns progress as 0.0–1.0 (converted from internal uint8_t 0–100).
+    double progress() const noexcept { return _progress.load(std::memory_order_acquire) / 100.0; }
     std::vector<compact::EnchSolution> get_solutions() const;
 
     struct Snapshot {
@@ -78,7 +79,7 @@ public:
             .nodes_visited = _nodes_visited.load(std::memory_order_relaxed),
             .nodes_pruned  = _nodes_pruned.load(std::memory_order_relaxed),
             .steps_forged  = _steps_forged.load(std::memory_order_relaxed),
-            .progress      = _progress.load(std::memory_order_acquire),
+            .progress      = static_cast<double>(_progress.load(std::memory_order_acquire)),
             .elapsed_ms    = elapsed_ms
         };
     }
@@ -102,8 +103,8 @@ private:
     std::atomic<int64_t> _steps_forged{0};
 
     // ── 进度 + 限频 ──────────────────────────────────────────────────
-    std::atomic<double> _progress{0.0};
-    std::atomic<int>    _progress_pct{-1};
+    std::atomic<uint8_t> _progress{0};
+    std::atomic<int8_t> _progress_pct{-1};
 
     // ── 解法累积 ─────────────────────────────────────────────────────
     mutable std::mutex _sol_mtx;

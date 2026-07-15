@@ -36,7 +36,7 @@ void test_pause_resume() {
 
 void test_progress() {
     ExecutionContext ctx(1, "test");
-    ctx.report_progress(0.5, ProgressStatus::Exploring);
+    ctx.report_progress(50, ProgressStatus::Exploring);
     expect(ctx.progress() == 0.5, "progress should be 0.5");
     std::cout << "PASS: test_progress" << std::endl;
 }

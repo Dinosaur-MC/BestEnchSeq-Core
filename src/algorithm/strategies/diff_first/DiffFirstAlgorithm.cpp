@@ -12,21 +12,21 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
     _forge_engine.set_config(input.config);
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
 
     // ── Quick exits ─────────────────────────────────────────────────────
 
     if (input.items.empty()) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
     if (meets_target(input.items[0], target)) {
         ctx.report_solution({});
-        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
+        ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
     }
     if (input.items.size() <= 1) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
@@ -165,8 +165,8 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
             }
         }
 
-        double p = 1.0 - static_cast<double>(items.size()) / input.items.size();
-        ctx.report_progress(std::min(p, 0.95), ProgressStatus::MergingGroups);
+        uint8_t p = 100 - static_cast<uint8_t>(items.size()) * 100 / static_cast<uint8_t>(input.items.size());
+        ctx.report_progress(p < 95 ? p : 95, ProgressStatus::MergingGroups);
     }
 
     // ── Check result ──────────────────────────────────────────────────
@@ -183,7 +183,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
                 ctx.set_exit_diagnostics(_diag);
 
                 ctx.report_solution(steps);
-                ctx.report_progress(1.0, ProgressStatus::Complete);
+                ctx.report_progress(100, ProgressStatus::Complete);
                 return;
             }
         }
@@ -191,7 +191,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
 
     _diag.status = cancelled ? "Cancelled" : "CompleteNoSolution";
     ctx.set_exit_diagnostics(_diag);
-    ctx.report_progress(1.0,
+    ctx.report_progress(100,
         cancelled ? ProgressStatus::Cancelled : ProgressStatus::CompleteNoSolution);
 }
 

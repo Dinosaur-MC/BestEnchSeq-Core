@@ -13,7 +13,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
 
     auto start = std::chrono::steady_clock::now();
     int32_t solutions_found = 0;
@@ -32,7 +32,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         }
         if (met) {
             ctx.report_solution({});
-            ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
+            ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
             return;
         }
     }
@@ -106,7 +106,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
 
         mut_items.erase(mut_items.begin() + best_j);
 
-        double progress = 1.0 - static_cast<double>(mut_items.size()) / initial_count;
+        uint8_t progress = 100 - static_cast<uint8_t>(mut_items.size()) * 100 / static_cast<uint8_t>(initial_count);
         ctx.report_progress(progress, ProgressStatus::MergingGroups);
     }
 
@@ -123,7 +123,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         if (!met) {
             _diag.status = "CompleteNoSolution";
             ctx.set_exit_diagnostics(_diag);
-            ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+            ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
             return;
         }
     }
@@ -132,5 +132,5 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     ctx.set_exit_diagnostics(_diag);
 
     ctx.report_solution(compact_steps);
-    ctx.report_progress(1.0, ProgressStatus::Complete);
+    ctx.report_progress(100, ProgressStatus::Complete);
 }

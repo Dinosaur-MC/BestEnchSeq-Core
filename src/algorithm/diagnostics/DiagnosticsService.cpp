@@ -118,7 +118,7 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
             auto& p = std::get<DiagnosticsEvent::ProgressPayload>(event.payload);
             for (auto& obs : local) {
                 if (!obs->accept_task_id(event.task_id)) continue;
-                obs->on_progress(event.task_id, p.percent, p.status);
+                obs->on_progress(event.task_id, p.pct, p.status);
             }
             break;
         }

@@ -31,7 +31,7 @@ struct ExitPayload {
 };
 
 struct ProgressPayload {
-    double percent{};
+    uint8_t pct{};          // 0–100
     ProgressStatus status{};
 };
 

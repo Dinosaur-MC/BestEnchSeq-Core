@@ -63,23 +63,23 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     _forge_engine.set_config(input.config);
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
 
     // ── Quick exit checks ──────────────────────────────────────────────
 
     if (input.items.empty()) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
     if (meets_target(input.items[0], target)) {
         ctx.report_solution({});
-        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
+        ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
     }
 
     if (input.items.size() <= 1) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
@@ -186,10 +186,10 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
             tiers[nt].push_back(std::move(item));
         }
 
-        // Progress (0.10 – 0.95 range)
-        double p = 0.10 + 0.85 * (static_cast<double>(tier)
-                                  / std::max(tiers.size() - 1, size_t{1}));
-        ctx.report_progress(std::min(p, 0.95), ProgressStatus::MergingGroups);
+        // Progress (10 – 95 range)
+        auto max_tier = std::max(tiers.size() - 1, size_t{1});
+        uint8_t p = 10 + static_cast<uint8_t>(85 * tier / max_tier);
+        ctx.report_progress(p < 95 ? p : 95, ProgressStatus::MergingGroups);
     }
 
     // ── Phase 3: Find final equipment and verify target ─────────────────
@@ -209,7 +209,7 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
                     ctx.set_exit_diagnostics(_diag);
 
                     ctx.report_solution(steps);
-                    ctx.report_progress(1.0, ProgressStatus::Complete);
+                    ctx.report_progress(100, ProgressStatus::Complete);
                     return;
                 }
             }
@@ -221,7 +221,7 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     _diag.status = cancelled ? "Cancelled" : "CompleteNoSolution";
     ctx.set_exit_diagnostics(_diag);
 
-    ctx.report_progress(1.0,
+    ctx.report_progress(100,
         cancelled ? ProgressStatus::Cancelled
                   : ProgressStatus::CompleteNoSolution);
 }

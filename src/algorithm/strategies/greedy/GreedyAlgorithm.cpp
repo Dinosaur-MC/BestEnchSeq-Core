@@ -11,7 +11,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     _target = input.target;
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
 
     auto start = std::chrono::steady_clock::now();
 
@@ -57,7 +57,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
             }
         }
 
-        ctx.report_progress((step_index + 1.0) / ordered.size(), ProgressStatus::ApplyingSacrifice);
+        ctx.report_progress(static_cast<uint8_t>((step_index + 1) * 100 / ordered.size()), ProgressStatus::ApplyingSacrifice);
         step_index++;
 
         // Check again after forge
@@ -70,12 +70,12 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
     ctx.set_exit_diagnostics(_diag);
 
     if (!goal_achieved) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
     ctx.report_solution(compact_steps);
-    ctx.report_progress(1.0, ProgressStatus::Complete);
+    ctx.report_progress(100, ProgressStatus::Complete);
 }
 
 bool GreedyAlgorithm::simulate(const AlgorithmInput& input) const noexcept {

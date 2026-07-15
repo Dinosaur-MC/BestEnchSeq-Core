@@ -87,7 +87,7 @@ void HierarchicalMergeAlgorithm::execute(
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
     const auto& search = input.search;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
 
     auto start = std::chrono::steady_clock::now();
     int32_t solutions_found = 0;
@@ -96,7 +96,7 @@ void HierarchicalMergeAlgorithm::execute(
         _diag.status = "GoalAlreadyMet";
         ctx.set_exit_diagnostics(_diag);
         ctx.report_solution({});
-        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
+        ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
     }
 
@@ -181,7 +181,7 @@ phase2:
             high_group.push_back(std::move(book));
     }
 
-    ctx.report_progress(0.3, ProgressStatus::MergingWithinGroups);
+    ctx.report_progress(30, ProgressStatus::MergingWithinGroups);
 
     auto low_merged  = merge_group(low_group, compact_steps, reg, ctx, start, search);
     auto mid_merged  = merge_group(mid_group, compact_steps, reg, ctx, start, search);
@@ -196,14 +196,14 @@ phase2:
     if (!high_merged.enchs.empty())
         group_results.push_back({std::move(high_merged), 3});
 
-    ctx.report_progress(0.6, ProgressStatus::ApplyingToEquipment);
+    ctx.report_progress(60, ProgressStatus::ApplyingToEquipment);
 
     if (group_results.empty()) {
         _diag.status = "Complete";
         ctx.set_exit_diagnostics(_diag);
 
         ctx.report_solution(compact_steps);
-        ctx.report_progress(1.0, ProgressStatus::Complete);
+        ctx.report_progress(100, ProgressStatus::Complete);
         return;
     }
 
@@ -258,11 +258,11 @@ phase2:
             if (it == equip.enchs.end() || it->level < t.level) { ok = false; break; }
         }
         if (!ok) {
-            ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+            ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
             return;
         }
     }
 
     ctx.report_solution(compact_steps);
-    ctx.report_progress(1.0, ProgressStatus::Complete);
+    ctx.report_progress(100, ProgressStatus::Complete);
 }

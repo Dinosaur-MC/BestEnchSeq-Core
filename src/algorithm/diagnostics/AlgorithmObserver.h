@@ -11,7 +11,7 @@ public:
     /// Default: accept all tasks.
     virtual bool accept_task_id(size_t) const { return true; }
 
-    virtual void on_progress(size_t task_id, double percent, ProgressStatus status) {}
+    virtual void on_progress(size_t task_id, uint8_t pct, ProgressStatus status) {}
     virtual void on_solution_found(size_t task_id, const std::vector<compact::EnchStep>& solution) {}
     virtual void on_state_changed(size_t task_id, AlgorithmState prev, AlgorithmState curr) {}
     virtual void on_diagnostic(size_t task_id, const DiagnosticInfo& info) {}

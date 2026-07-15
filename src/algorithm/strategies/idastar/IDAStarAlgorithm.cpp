@@ -153,7 +153,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
 
     _pool.clear();
     // Pre-allocate pool capacity based on problem size (factorial estimate).
@@ -190,11 +190,11 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         initial_ids.push_back(_pool.add(Item(item)));
 
     if (initial_ids.empty() || (initial_ids.size() == 1 && !_meets_target(initial_ids))) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
     if (_meets_target(initial_ids)) {
-        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
+        ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         ctx.report_solution({});
         return;
     }
@@ -250,10 +250,10 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
             steps.push_back({_pool[s.base_id], _pool[s.sac_id], s.cost});
 
         ctx.report_solution(steps);
-        ctx.report_progress(1.0, ProgressStatus::Complete);
+        ctx.report_progress(100, ProgressStatus::Complete);
     } else {
         _diag.status = ctx.is_cancelled() ? "Cancelled" : "CompleteNoSolution";
-        ctx.report_progress(1.0,
+        ctx.report_progress(100,
             ctx.is_cancelled() ? ProgressStatus::Cancelled
                                : ProgressStatus::CompleteNoSolution);
     }

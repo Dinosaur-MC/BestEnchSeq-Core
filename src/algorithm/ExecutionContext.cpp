@@ -17,24 +17,23 @@ void ExecutionContext::wait_if_paused() {
     });
 }
 
-void ExecutionContext::report_progress(double percent, ProgressStatus status) {
-    int pct = static_cast<int>(percent * 100.0);
-    _progress.store(percent, std::memory_order_release);
+void ExecutionContext::report_progress(uint8_t pct, ProgressStatus status) {
+    _progress.store(pct, std::memory_order_release);
 
     if (pct == 100 || pct == 0) {
         _progress_pct.store(pct, std::memory_order_relaxed);
     } else {
-        int prev = _progress_pct.load(std::memory_order_relaxed);
-        if (pct - prev < 5)
+        int8_t prev = _progress_pct.load(std::memory_order_relaxed);
+        if (static_cast<int>(pct) - static_cast<int>(prev) < 5)
             return;
-        if (!_progress_pct.compare_exchange_weak(prev, pct,
+        if (!_progress_pct.compare_exchange_weak(prev, static_cast<int8_t>(pct),
                 std::memory_order_relaxed, std::memory_order_relaxed))
             return;
     }
 
     DiagnosticsService::instance().push(
         DiagEventKind::Progress, std::string{algorithm_name()}, task_id(),
-        DiagnosticsEvent::ProgressPayload{percent, status});
+        DiagnosticsEvent::ProgressPayload{pct, status});
 }
 
 namespace {

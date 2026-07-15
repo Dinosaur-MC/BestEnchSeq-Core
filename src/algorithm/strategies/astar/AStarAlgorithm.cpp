@@ -118,7 +118,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
-    ctx.report_progress(0.0, ProgressStatus::Starting);
+    ctx.report_progress(0, ProgressStatus::Starting);
     auto t0 = std::chrono::steady_clock::now();
 
     // Reset state
@@ -150,13 +150,13 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
 
     // Guard: empty input produces no solution
     if (initial_ids.empty()) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
     // Guard: single-item non-target — no books to forge
     if (initial_ids.size() == 1 && !_meets_target(initial_ids[0])) {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
@@ -186,7 +186,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     _diag.initial_bound = _best_solution_cost;
 
     if (_meets_target(initial_ids[0])) {
-        ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
+        ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         ctx.report_solution({});
         return;
     }
@@ -274,7 +274,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                 }
             }
             ctx.report_solution(steps);
-            ctx.report_progress(1.0, ProgressStatus::Complete);
+            ctx.report_progress(100, ProgressStatus::Complete);
 
             _diag.explored_count = explored;
             _diag.best_g_entries = best_g.size();
@@ -307,7 +307,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         }
 
         if (explored % 1000 == 0) {
-            double progress = std::min(1.0 - 1.0 / (1.0 + explored * 0.0001), 0.99);
+            uint8_t progress = std::min<uint8_t>(100 - 100 / (1 + explored / 10000), 99);
             ctx.report_progress(progress, ProgressStatus::Exploring);
         }
 
@@ -423,10 +423,10 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
       + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
       + static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
     if (ctx.is_cancelled()) {
-        ctx.report_progress(1.0, ProgressStatus::Cancelled);
+        ctx.report_progress(100, ProgressStatus::Cancelled);
         _diag.status = "Cancelled";
     } else {
-        ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
+        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         _diag.status = "CompleteNoSolution";
     }
     ctx.set_exit_diagnostics(_diag);

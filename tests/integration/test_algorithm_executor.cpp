@@ -21,7 +21,7 @@ public:
         for (int i = 0; i < 5; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
-            ctx.report_progress((i + 1) * 20.0, ProgressStatus::Exploring);
+            ctx.report_progress(static_cast<uint8_t>((i + 1) * 20), ProgressStatus::Exploring);
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
         std::vector<compact::EnchStep> solution;
