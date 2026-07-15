@@ -20,7 +20,19 @@ public:
     DiagnosticsService& operator=(const DiagnosticsService&) = delete;
 
     /// Enqueue a diagnostics event for async processing (non-blocking).
-    void push(DiagnosticsEvent event);
+    /// Template auto-adapts between move and emplace based on argument count.
+    template <typename... Args>
+    void push(Args&&... args) {
+        bool ok;
+        if constexpr (sizeof...(Args) == 1 &&
+                      (std::is_same_v<std::remove_cvref_t<Args>, DiagnosticsEvent> && ...)) {
+            ok = _loop.try_post(std::forward<Args>(args)...);
+        } else {
+            ok = _loop.try_post_emplace(std::forward<Args>(args)...);
+        }
+        if (ok) [[likely]]
+            _enqueued.fetch_add(1, std::memory_order_release);
+    }
 
     void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
     void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
@@ -29,6 +41,9 @@ public:
     void flush();
 
     void set_persist(bool enabled) noexcept;
+
+    /// Snapshot the current observer list (thread-safe).
+    std::vector<std::shared_ptr<AlgorithmObserver>> snapshot_observers();
 
 private:
     /// Consumes DiagnosticsEvent instances on the EventLoop worker thread.
