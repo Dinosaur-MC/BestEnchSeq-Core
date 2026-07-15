@@ -3,9 +3,7 @@
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/strategies/Strategies.h"
 #include "adapters/CompactAdapter.h"
-#include "parsers/EnchInfoParser.h"
-#include "parsers/EquipmentParser.h"
-#include "adapters/RegistryResolver.h"
+#include "data/DataLoader.h"
 #include "registries/TagResolver.hpp"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
@@ -191,16 +189,10 @@ BenchConfig parse_cli(int argc, char* argv[]) {
 
 // ─── Setup ───
 void load_builtin_data() {
-    auto dir = std::filesystem::path("data") / "builtin";
     TagResolver tags;
     registries::categories().initialize();
-    auto &cat_reg = registries::categories();
-    auto raw_ench = EnchInfoParser::parse(dir / "vanilla.json", tags);
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-    registries::enchants().initialize(ench_infos);
-    auto raw_eq = EquipmentParser::parse(dir / "vanilla.json", tags);
-    auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-    registries::equipment().initialize(equipments);
+    besq::data::load_builtin_data(tags, registries::categories(),
+                                  registries::enchants(), registries::equipment());
 }
 
 void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos, bool no_skip = false) {

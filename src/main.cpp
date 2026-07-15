@@ -4,6 +4,7 @@
 #include "adapters/CompactAdapter.h"
 #include "cli/cli.h"
 #include "config/AppConfig.h"
+#include "data/DataLoader.h"
 #include "data/EmbeddedData.h"
 #include "parsers/EnchInfoParser.h"
 #include "log/log.hpp"
@@ -29,36 +30,6 @@ namespace {
 
 // Built-in data subdirectory (resolved relative to exe or CWD)
 inline constexpr auto BUILTIN_DATA_DIR = "data/builtin";
-
-void load_builtin_data(
-    const std::filesystem::path &builtin_data_dir,
-    TagResolver &tag_resolver,
-    const EquipmentCategoryRegistry &cat_reg,
-    EnchantmentRegistry &ench_reg,
-    EquipmentRegistry &eq_reg
-) {
-    auto vanilla_path = builtin_data_dir / "vanilla.json";
-
-    // Try filesystem first (allows user to replace builtin data), fall back to embedded.
-    if (std::filesystem::exists(vanilla_path)) {
-        auto raw_ench = EnchInfoParser::parse(vanilla_path, tag_resolver);
-        auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-        ench_reg.initialize(ench_infos);
-
-        auto raw_eq = EquipmentParser::parse(vanilla_path, tag_resolver);
-        auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-        eq_reg.initialize(equipments);
-    } else {
-        auto json = std::string{besq::data::vanilla_json()};
-        auto raw_ench = EnchInfoParser::parse_native_json_str(json, tag_resolver);
-        auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-        ench_reg.initialize(ench_infos);
-
-        auto raw_eq = EquipmentParser::parse_native_json_str(json, tag_resolver);
-        auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-        eq_reg.initialize(equipments);
-    }
-}
 
 void load_custom_data(
     const std::filesystem::path &data_pack_dir,
@@ -155,7 +126,8 @@ int main(int argc, char *argv[]) {
         EnchantmentRegistry ench_reg;
         EquipmentRegistry eq_reg;
 
-        load_builtin_data(builtin_data_dir, tag_resolver, cat_reg, ench_reg, eq_reg);
+        besq::data::load_builtin_data(
+            tag_resolver, cat_reg, ench_reg, eq_reg, builtin_data_dir);
 
         if (config.data_pack) {
             load_custom_data(std::filesystem::path(*config.data_pack), tag_resolver,

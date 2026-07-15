@@ -23,6 +23,8 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/data/DataLoader.cpp
+    "${PROJECT_BINARY_DIR}/generated/EmbeddedData.cpp"
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp
@@ -33,7 +35,7 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp
 )
-target_include_directories(forge_benchmark PRIVATE ${BENCH_INCLUDE})
+target_include_directories(forge_benchmark PRIVATE ${BENCH_INCLUDE} ${BESQ_GENERATED_DIR})
 
 # ─── queue_benchmark (standalone, no project deps beyond src/utils) ───
 add_executable(queue_benchmark
