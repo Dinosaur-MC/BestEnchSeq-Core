@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include <thread>
 #include <type_traits>
 
 // ─── BoundedMPMCQueue ───
@@ -121,6 +122,24 @@ public:
         ::new (slot.ptr()) T(std::move(value));
         slot.sequence.store(pos + 1, std::memory_order_release);
         return true;
+    }
+
+    // ─── Emplace (placement-new variants) ──────────────────────────────
+
+    template <typename... Args>
+    bool try_emplace(Args&&... args) noexcept {
+        size_t pos;
+        if (!claim_write_slot(pos)) return false;
+        auto& slot = _slots[pos & _mask];
+        ::new (slot.ptr()) T(std::forward<Args>(args)...);
+        slot.sequence.store(pos + 1, std::memory_order_release);
+        return true;
+    }
+
+    template <typename... Args>
+    void emplace(Args&&... args) noexcept {
+        while (!try_emplace(std::forward<Args>(args)...))
+            std::this_thread::yield();
     }
 
     // ─── Consumer ─────────────────────────────────────────────────────
