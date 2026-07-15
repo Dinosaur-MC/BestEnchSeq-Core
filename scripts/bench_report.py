@@ -388,7 +388,7 @@ def group_dataset(dataset_name, groups):
     return -1
 
 
-def plot_trends(history, output_dir, group_config=None):
+def plot_trends(history: dict[str, list[dict]], output_dir, group_config=None):
     """根据历史记录绘制趋势折线图（可选按 enchs 数分组输出多张图）"""
     try:
         import matplotlib
@@ -431,7 +431,12 @@ def plot_trends(history, output_dir, group_config=None):
         n = len(datasets)
         if n == 0:
             return
-        fig, axes = plt.subplots(n, 1, figsize=(10, 3.5 * n), squeeze=False)
+
+        fig, axes = plt.subplots(
+            n, 1, figsize=(10, 3.5 * n), squeeze=False, constrained_layout=True
+        )
+        if fig_title:
+            fig.suptitle(fig_title, fontsize=14, fontweight="bold")
 
         for idx, ds in enumerate(datasets):
             ax = axes[idx][0]
@@ -476,7 +481,9 @@ def plot_trends(history, output_dir, group_config=None):
             if visible[-1] != n_runs - 1:
                 visible.append(n_runs - 1)
             ax.set_xticks(visible)
-            ax.set_xticklabels([run_labels[i] for i in visible], fontsize=7, rotation=45, ha="right")
+            ax.set_xticklabels(
+                [run_labels[i] for i in visible], fontsize=7, rotation=45, ha="right"
+            )
             ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.08, 1.0))
             if offset == 0:
                 ax.set_xlim(left=-0.3)
@@ -484,10 +491,37 @@ def plot_trends(history, output_dir, group_config=None):
                 ax.set_xlim(left=run_numbers[0])
             ax.grid(True, alpha=0.3)
 
+        plt.tight_layout(rect=[0, 0, 1, 1])  # 暂时让子图占满整个 figure
+        fig.canvas.draw()  # 必须 draw 后才能拿到坐标
         if fig_title:
-            fig.suptitle(fig_title, fontsize=14, fontweight="bold")
-        plt.tight_layout()
-        plt.subplots_adjust(right=0.82)
+            # suptitle 是一个 Text 对象，可以通过 fig._suptitle 获取
+            suptitle = fig._suptitle
+            # 获取 suptitle 在 figure 坐标系中的边界框 (x0, y0, x1, y1)
+            bbox = suptitle.get_window_extent(renderer=fig.canvas.get_renderer())
+            # 转换成 figure 坐标系（0-1）
+            bbox_fig = bbox.transformed(fig.transFigure.inverted())
+            # 计算 suptitle 底部到 figure 顶部的距离（比例）
+            title_bottom = bbox_fig.y0  # 标题下沿的 y 坐标
+        else:
+            title_bottom = 1.0
+
+        desired_pad_pt = 16  # 标题与子图之间的固定距离（磅）
+        # figure 的高度（单位：英寸）
+        fig_height_inches = fig.get_size_inches()[1]
+        # figure 的 DPI
+        dpi = fig.dpi
+        # 将点数转换为英寸
+        pad_inches = desired_pad_pt / 72.0  # 1 pt = 1/72 英寸
+        # 转换为 figure 坐标系的相对高度
+        pad_fig = pad_inches / fig_height_inches
+
+        # 子图区域的上边界：应紧贴在 suptitle 下方，并留出 pad_fig 的间距
+        new_top = title_bottom - pad_fig
+        # 限制一下，避免负值
+        new_top = max(new_top, 0.05)
+
+        fig.subplots_adjust(top=new_top, right=0.82)
+        
         chart_path = os.path.join(output_dir, "benchmark" + chart_suffix)
         plt.savefig(chart_path, dpi=150, bbox_inches="tight")
         plt.close()
@@ -512,13 +546,17 @@ def plot_trends(history, output_dir, group_config=None):
 
         for g_idx in sorted(groups):
             label, _ = group_config[g_idx]
-            build_one_chart(groups[g_idx],
-                            fig_title=f"enchs = {label}",
-                            chart_suffix=f".trend.{label}.png")
+            build_one_chart(
+                groups[g_idx],
+                fig_title=f"enchs = {label}",
+                chart_suffix=f".trend.{label}.png",
+            )
     else:
-        build_one_chart(sorted(all_datasets, key=lambda ds: extract_enchs_count(ds) or 0),
-                        fig_title=None,
-                        chart_suffix=".trend.png")
+        build_one_chart(
+            sorted(all_datasets, key=lambda ds: extract_enchs_count(ds) or 0),
+            fig_title=None,
+            chart_suffix=".trend.png",
+        )
 
 
 # ------------------------------------------------------------
@@ -527,16 +565,21 @@ def plot_trends(history, output_dir, group_config=None):
 def main():
     parser = argparse.ArgumentParser(
         usage="%(prog)s [options] [input_file] <output_dir>",
-        description="合并基准测试输出并生成趋势图"
+        description="合并基准测试输出并生成趋势图",
     )
-    parser.add_argument("positionals", nargs="*",
-                        metavar="[input_file] <output_dir>",
-                        help="设置输入文件和输出目录（省略输入时扫描输出目录中的 .txt）")
-    parser.add_argument("-i", "--img", action="store_true",
-                        help="渲染趋势图")
-    parser.add_argument("-g", "--group", default="1..6;7..9;10..",
-                        help='enchs 数分组，如 "1,2;3..4;5..;..6;3,7"'
-                             '（默认 "1..6;7..9;10.."）')
+    parser.add_argument(
+        "positionals",
+        nargs="*",
+        metavar="[input_file] <output_dir>",
+        help="设置输入文件和输出目录（省略输入时扫描输出目录中的 .txt）",
+    )
+    parser.add_argument("-i", "--img", action="store_true", help="渲染趋势图")
+    parser.add_argument(
+        "-g",
+        "--group",
+        default="1..6;7..9;10..",
+        help='enchs 数分组，如 "1,2;3..4;5..;..6;3,7"' '（默认 "1..6;7..9;10.."）',
+    )
     args = parser.parse_args()
 
     # 解析位置参数
@@ -558,9 +601,11 @@ def main():
         input_files = [input_file]
     else:
         import glob
+
         all_txt = sorted(glob.glob(os.path.join(output_dir, "*.txt")))
-        input_files = [f for f in all_txt
-                       if os.path.basename(f) != "best_benchmark.txt"]
+        input_files = [
+            f for f in all_txt if os.path.basename(f) != "best_benchmark.txt"
+        ]
     if input_files:
         print(f"从目录加载 {len(input_files)} 个基准文件…")
 
@@ -573,12 +618,23 @@ def main():
             in_header, in_time, in_datasets, in_order, in_algo = parse_file(input_path)
             # 解析输出文件（若存在）
             out_header, out_time, out_datasets, out_order, out_algo = parse_file(
-                os.path.join(output_dir, "best_benchmark.txt"))
+                os.path.join(output_dir, "best_benchmark.txt")
+            )
 
             # 合并
-            header, latest_time, merged_datasets, merged_order, merged_algo = merge_results(
-                in_header, in_time, in_datasets, in_order, in_algo,
-                out_header, out_time, out_datasets, out_order, out_algo,
+            header, latest_time, merged_datasets, merged_order, merged_algo = (
+                merge_results(
+                    in_header,
+                    in_time,
+                    in_datasets,
+                    in_order,
+                    in_algo,
+                    out_header,
+                    out_time,
+                    out_datasets,
+                    out_order,
+                    out_algo,
+                )
             )
 
             # 生成最终文本
@@ -601,7 +657,10 @@ def main():
                 for algo in algos:
                     rec = in_datasets[ds].get(algo)
                     if rec and rec.get("status") == "✅":
-                        new_entry["datasets"][ds][algo] = {"L": rec["L"], "time_ms": rec["time_ms"]}
+                        new_entry["datasets"][ds][algo] = {
+                            "L": rec["L"],
+                            "time_ms": rec["time_ms"],
+                        }
 
             # 输入文件无有效数据则跳过历史记录
             if not in_time or not any(new_entry["datasets"].values()):
@@ -619,7 +678,9 @@ def main():
                     save_history(hist_path, history)
                 else:
                     print("输入数据与上次历史记录相同，跳过记录。")
-            elif not history["entries"] or history["entries"][-1].get("datasets") != new_entry.get("datasets"):
+            elif not history["entries"] or history["entries"][-1].get(
+                "datasets"
+            ) != new_entry.get("datasets"):
                 history["entries"].append(new_entry)
                 history["entries"].sort(key=lambda e: e.get("timestamp", ""))
                 save_history(hist_path, history)
