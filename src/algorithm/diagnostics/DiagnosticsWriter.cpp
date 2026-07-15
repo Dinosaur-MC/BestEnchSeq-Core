@@ -100,7 +100,12 @@ void DiagnosticsWriter::write(std::string_view algorithm_name,
         << "status=" << status << "\n"
         << "wall_ms=" << wall_ms << "\n";
     for (const auto& e : entries) {
-        ofs << e.key << "=" << e.value << "\n";
+        ofs << e.key << "=";
+        if (auto* i = std::get_if<int64_t>(&e.value))
+            ofs << *i;
+        else
+            ofs << std::get<std::string>(e.value);
+        ofs << "\n";
     }
 
     // Trim directory to MAX_DIAG_FILES so log files don't accumulate unboundedly.

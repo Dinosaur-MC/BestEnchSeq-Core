@@ -59,47 +59,45 @@ void AlgorithmExecutor::_finalize() {
     auto atoms = _ctx->get_diagnostics(_computation_time.count());
     auto kvs = _ctx->consume_diagnostic_log();
 
-    // Inject atomic counters into the KV log (as raw int64_t, no to_string yet)
-    kvs.emplace_back("nodes_visited", atoms.nodes_visited);
-    kvs.emplace_back("nodes_pruned",  atoms.nodes_pruned);
-    kvs.emplace_back("steps_forged",  atoms.steps_forged);
-
     // Status: algorithm's flushed status is authoritative.
-    // For Cancelled/Failed, inject override into KV entries.
+    // For Cancelled/Failed, use the executor's state.
     auto s = _state.load(std::memory_order_acquire);
     std::string status;
     if (s == AlgorithmState::Cancelled) {
         status = "Cancelled";
-        kvs.emplace_back("status", std::string("Cancelled"));
     } else if (s == AlgorithmState::Failed) {
         status = "Failed";
-        kvs.emplace_back("status", std::string("Failed"));
     } else {
         // Use algorithm's flushed status (e.g. "Complete", "CompleteNoSolution")
-        // Status is always stored as the string alternative.
         for (const auto& [k, v] : kvs)
-            if (k == "status" && std::holds_alternative<std::string>(v))
+            if (std::string_view(k) == "status" && std::holds_alternative<std::string>(v))
                 { status = std::get<std::string>(v); break; }
         if (status.empty()) status = "Complete";
     }
 
-    // Convert KV pairs + variants to Writer::Entry strings
-    std::vector<DiagnosticsWriter::Entry> entries;
-    entries.reserve(kvs.size());
+    // Convert flush KV pairs to Entry objects (keys are static string literals)
+    std::vector<DiagnosticsWriter::Entry> flush_entries;
+    flush_entries.reserve(kvs.size());
     for (auto& [k, v] : kvs) {
         if (auto* i = std::get_if<int64_t>(&v))
-            entries.push_back({std::move(k), std::to_string(*i)});
+            flush_entries.emplace_back(k, *i);
         else
-            entries.push_back({std::move(k), std::move(std::get<std::string>(v))});
+            flush_entries.emplace_back(k, std::move(std::get<std::string>(v)));
     }
 
-    DiagnosticsService::instance().push(DiagnosticsEvent{
-        .algorithm_name = std::string(_algorithm->name()),
-        .entries        = std::move(entries),
-        .status         = status,
-        .wall_ms        = _computation_time.count(),
-        .timestamp      = std::chrono::system_clock::now(),
-    });
+    DiagnosticsService::instance().push(
+        DiagnosticsEvent(DiagEventKind::Exit, _algorithm->name().data(),
+            DiagnosticsEvent::ExitPayload{
+                nullptr,                                               // diagnostics (not yet extracted)
+                output(),                                              // algorithm output
+                std::move(status),                                     // status
+                _computation_time.count(),                              // wall_ms
+                DiagnosticsWriter::Entry("nodes_visited", atoms.nodes_visited),
+                DiagnosticsWriter::Entry("nodes_pruned",  atoms.nodes_pruned),
+                DiagnosticsWriter::Entry("steps_forged",  atoms.steps_forged),
+                std::move(flush_entries)                                // extra flush entries
+            })
+    );
 }
 
 // ─── Lifecycle ───

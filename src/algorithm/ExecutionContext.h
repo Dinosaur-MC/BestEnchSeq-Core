@@ -58,7 +58,7 @@ public:
     void report_diagnostic(std::string_view key, std::string value);
 
     /// 返回并清空累积的诊断 KV 对（Executor 在 _finalize() 中调用）
-    std::vector<std::pair<std::string, DiagnosticValue>> consume_diagnostic_log();
+    std::vector<std::pair<const char*, DiagnosticValue>> consume_diagnostic_log();
 
     // ── Diagnostic snapshot (atomic counters, always available) ─────────────
     struct DiagnosticSnapshot {
@@ -92,7 +92,7 @@ private:
 
     // ── 🟡 辅助区数据 ──────────────────────────────────────────────
     std::atomic<double> _progress{0.0};
-    std::vector<std::pair<std::string, DiagnosticValue>> _diagnostic_log;
+    std::vector<std::pair<const char*, DiagnosticValue>> _diagnostic_log;
 
     mutable std::mutex _accum_mtx;
     std::vector<compact::EnchSolution> _accumulated;

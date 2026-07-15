@@ -22,14 +22,14 @@ void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> so
 }
 
 void ExecutionContext::report_diagnostic(std::string_view key, int64_t value) {
-    _diagnostic_log.emplace_back(key, value);   // store raw int64_t, defer to_string
+    _diagnostic_log.emplace_back(key.data(), value);   // store raw int64_t + const char* key
 }
 
 void ExecutionContext::report_diagnostic(std::string_view key, std::string value) {
-    _diagnostic_log.emplace_back(key, std::move(value));
+    _diagnostic_log.emplace_back(key.data(), std::move(value));
 }
 
-std::vector<std::pair<std::string, DiagnosticValue>> ExecutionContext::consume_diagnostic_log() {
+std::vector<std::pair<const char*, DiagnosticValue>> ExecutionContext::consume_diagnostic_log() {
     auto result = std::move(_diagnostic_log);
     _diagnostic_log.clear();
     return result;

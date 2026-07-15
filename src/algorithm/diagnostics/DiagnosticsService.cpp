@@ -29,7 +29,7 @@ void DiagnosticsService::push(DiagnosticsEvent event) {
         _enqueued.fetch_add(1, std::memory_order_release);
     } else {
         LOG_WARN("diagnostics queue full, event dropped (algo=%s)",
-                 event.algorithm_name.c_str());
+                 event.algorithm_name);
     }
 }
 
@@ -65,27 +65,51 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
         local = *observers;
     }
 
-    if (!local.empty()) {
-        std::ostringstream oss;
-        oss << "algorithm=" << event.algorithm_name
-            << " status=" << event.status
-            << " wall_ms=" << event.wall_ms;
-        DiagnosticInfo info{oss.str()};
+    // 2. Handle based on event kind
+    switch (event.kind) {
+        case DiagEventKind::Exit: {
+            auto& payload = std::get<DiagnosticsEvent::ExitPayload>(event.payload);
 
-        for (auto& obs : local)
-            obs->on_diagnostic(info);
+            // Dispatch to observers
+            if (!local.empty()) {
+                std::ostringstream oss;
+                oss << "algorithm=" << event.algorithm_name
+                    << " status=" << payload.status
+                    << " wall_ms=" << payload.wall_ms;
+                DiagnosticInfo info{oss.str()};
+
+                for (auto& obs : local)
+                    obs->on_diagnostic(info);
+            }
+
+            // 3. Persist to file
+            if (persist && persist->load(std::memory_order_acquire)) {
+                // Build full entries list from all sources
+                std::vector<DiagnosticsWriter::Entry> all_entries;
+                all_entries.reserve(3 + payload.flush_entries.size());
+                all_entries.push_back(std::move(payload.nodes_visited));
+                all_entries.push_back(std::move(payload.nodes_pruned));
+                all_entries.push_back(std::move(payload.steps_forged));
+                for (auto& e : payload.flush_entries)
+                    all_entries.push_back(std::move(e));
+
+                DiagnosticsWriter::write(
+                    event.algorithm_name,
+                    all_entries,
+                    payload.wall_ms,
+                    payload.status);
+            }
+            break;
+        }
+        case DiagEventKind::Progress:
+        case DiagEventKind::Solution:
+        case DiagEventKind::StateChange:
+            // Non-exit events forwarded to observers only (no persistence).
+            // Observer dispatch for these kinds is handled in future tasks.
+            break;
     }
 
-    // 2. Persist to file
-    if (persist && persist->load(std::memory_order_acquire)) {
-        DiagnosticsWriter::write(
-            event.algorithm_name,
-            event.entries,
-            event.wall_ms,
-            event.status);
-    }
-
-    // 3. Signal completion for flush()
+    // 4. Signal completion for flush()
     if (processed_ptr)
         processed_ptr->fetch_add(1, std::memory_order_release);
 }

@@ -1,6 +1,6 @@
 #pragma once
 #include "algorithm/diagnostics/AlgorithmObserver.h"
-#include "algorithm/diagnostics/DiagnosticsWriter.h"
+#include "algorithm/diagnostics/DiagnosticsEvent.h"
 #include "utils/EventLoop.hpp"
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
@@ -9,15 +9,6 @@
 #include <mutex>
 #include <string>
 #include <vector>
-
-/// A single diagnostics event queued for async persistence + observer dispatch.
-struct DiagnosticsEvent {
-    std::string algorithm_name;
-    std::vector<DiagnosticsWriter::Entry> entries;
-    std::string status;
-    int64_t wall_ms{0};
-    std::chrono::system_clock::time_point timestamp;
-};
 
 /// Global singleton for async persistence and observer dispatch.
 class DiagnosticsService {
