@@ -46,9 +46,40 @@ install(DIRECTORY data/
     DESTINATION ${CMAKE_INSTALL_DATADIR}/BestEnchSeq-Core/data
 )
 
+# ============================================================================
+# Compile-time configuration
+# ============================================================================
+
+# ── Options ──
+option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
+set(BESQ_MAX_SOLUTIONS 128 CACHE STRING "Maximum solutions stored per algorithm execution")
+
+# ── Generated config header (version info) ──
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/config/BuildConfig.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.h"
+)
+set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
+
+# ── Compile definitions (availability: every translation unit) ──
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
+    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+)
+
+# ── Build type default ──
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# ============================================================================
 # Tests
+# ============================================================================
 enable_testing()
 add_subdirectory(tests)
 
+# ============================================================================
 # Benchmarks (optional, not part of test suite)
+# ============================================================================
 add_subdirectory(benchmarks)

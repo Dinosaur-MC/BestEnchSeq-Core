@@ -5,10 +5,19 @@
 set(PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Shared include path for all test targets
-set(TEST_INCLUDE ${PROJECT_ROOT}/src)
+set(TEST_INCLUDE
+    ${PROJECT_ROOT}/src
+    ${BESQ_GENERATED_DIR}
+)
 
 # Include tests/ so #include "framework/test_utils.h" resolves
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+# Match main target compile definitions (available via header fallbacks when absent)
+add_compile_definitions(BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS})
+if(BESQ_DISABLE_DIAGNOSTICS)
+    add_compile_definitions(BESQ_DISABLE_DIAGNOSTICS)
+endif()
 
 # ============================================================================
 # Shared dependency groups (reused across test targets)
