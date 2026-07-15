@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <mutex>
 
+ExecutionContext::ExecutionContext(size_t task_id, const char* algorithm_name) noexcept
+    : _task_id(task_id), _algo_name(algorithm_name) {}
+
 void ExecutionContext::wait_if_paused() {
     if (!_paused.load(std::memory_order_acquire))
         return;

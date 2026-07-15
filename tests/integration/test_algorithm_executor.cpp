@@ -26,7 +26,7 @@ public:
         }
         std::vector<compact::EnchStep> solution;
         solution.push_back(compact::EnchStep{{}, {}, 4});
-        ctx.report_compact_solution(std::move(solution));
+        ctx.report_solution(std::move(solution));
     }
 };
 

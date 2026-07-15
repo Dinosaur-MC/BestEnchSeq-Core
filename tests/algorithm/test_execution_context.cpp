@@ -3,9 +3,10 @@
 #include "types/CompactedTypes.h"
 #include <chrono>
 #include <thread>
+#include <atomic>
 
 void test_cancel() {
-    ExecutionContext ctx;
+    ExecutionContext ctx(1, "test");
     expect(!ctx.is_cancelled(), "initially not cancelled");
     ctx.cancel();
     expect(ctx.is_cancelled(), "cancelled after cancel()");
@@ -13,50 +14,60 @@ void test_cancel() {
 }
 
 void test_pause_resume() {
-    ExecutionContext ctx;
-    expect(!ctx.is_paused(), "initially not paused");
-    ctx.pause();
-    expect(ctx.is_paused(), "paused after pause()");
+    ExecutionContext ctx(1, "test");
+    std::atomic<bool> paused{false};
+    bool resumed = false;
+    std::thread t([&] {
+        ctx.pause();
+        paused.store(true, std::memory_order_release);
+        ctx.wait_if_paused();
+        resumed = true;
+    });
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!paused.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    expect(!resumed, "should be blocked on pause");
     ctx.resume();
-    expect(!ctx.is_paused(), "not paused after resume()");
+    t.join();
+    expect(resumed, "should have resumed");
     std::cout << "PASS: test_pause_resume" << std::endl;
 }
 
 void test_progress() {
-    ExecutionContext ctx;
+    ExecutionContext ctx(1, "test");
     ctx.report_progress(0.5, ProgressStatus::Exploring);
     expect(ctx.progress() == 0.5, "progress should be 0.5");
     std::cout << "PASS: test_progress" << std::endl;
 }
 
 void test_diagnostic_log() {
-    ExecutionContext ctx;
+    ExecutionContext ctx(1, "test");
 
     auto diag = std::make_unique<SearchDiagnostics>();
     diag->algorithm_name = "AStar";
     diag->status = "Complete";
     diag->solution_cost = 42;
 
-    expect(!ctx.has_exit_diagnostics(), "no diagnostics initially");
+    expect(ctx.consume_exit_diagnostics() == nullptr, "no diagnostics initially");
     ctx.set_exit_diagnostics(std::move(diag));
-    expect(ctx.has_exit_diagnostics(), "diagnostics present after set");
 
     auto retrieved = ctx.consume_exit_diagnostics();
     expect(retrieved != nullptr, "should retrieve diagnostics");
     expect(retrieved->algorithm_name == "AStar", "algorithm_name should be AStar");
     expect(retrieved->status == "Complete", "status should be Complete");
     expect(retrieved->solution_cost == 42, "solution_cost should be 42");
-    expect(!ctx.has_exit_diagnostics(), "no diagnostics after consume");
+    expect(ctx.consume_exit_diagnostics() == nullptr, "no diagnostics after consume");
     std::cout << "PASS: test_diagnostic_log" << std::endl;
 }
 
 void test_solution_accumulation() {
-    ExecutionContext ctx;
+    ExecutionContext ctx(1, "test");
 
     std::vector<compact::EnchStep> steps;
     steps.push_back(compact::EnchStep{{}, {}, 5});
     steps.push_back(compact::EnchStep{{}, {}, 3});
-    ctx.report_compact_solution(std::move(steps));
+    ctx.report_solution(std::move(steps));
 
     auto solutions = ctx.get_solutions();
     expect(solutions.size() == 1, "should accumulate one solution");
@@ -65,17 +76,19 @@ void test_solution_accumulation() {
 }
 
 void test_wait_if_paused_resume() {
-    ExecutionContext ctx;
+    ExecutionContext ctx(1, "test");
+    std::atomic<bool> paused{false};
     bool resumed = false;
     std::thread algo_thread([&] {
         ctx.pause();
+        paused.store(true, std::memory_order_release);
         ctx.wait_if_paused();
         resumed = true;
     });
 
-    // Poll until the context confirms pause, with timeout
+    // Poll until the thread confirms pause, with timeout
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (!ctx.is_paused() && std::chrono::steady_clock::now() < deadline)
+    while (!paused.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     expect(!resumed, "algo should be blocked on pause");
     ctx.resume();

@@ -260,6 +260,8 @@ endif()
 add_executable(test_execution_context
     algorithm/test_execution_context.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
+    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsService.cpp
+    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsWriter.cpp
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/log/Logger.cpp
     ${PROJECT_ROOT}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
