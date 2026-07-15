@@ -1,13 +1,13 @@
 #pragma once
+#include "algorithm/diagnostics/DiagnosticsWriter.h"
 #include <cstdint>
 #include <string>
-
-class ExecutionContext;
+#include <vector>
 
 /// ─── Base class for all algorithm diagnostics ──────────────────────────
 ///
 /// Each algorithm keeps a private instance and calls flush() on exit.
-/// flush() converts all fields to KV pairs via ctx.report_diagnostic().
+/// flush() converts all fields to KV pairs and pushes them into out.
 /// Executor::_finalize() collects the KV pairs and pushes them to the
 /// global DiagnosticsService for async file persistence.
 struct AlgorithmDiagnostics {
@@ -17,9 +17,9 @@ struct AlgorithmDiagnostics {
 
     virtual ~AlgorithmDiagnostics() = default;
 
-    /// Flatten all fields to KV pairs and report via ctx.
+    /// Flatten all fields to KV pairs and push into out.
     /// Derived classes must call the parent's flush() first.
-    virtual void flush(ExecutionContext& ctx) const;
+    virtual void flush(std::vector<DiagnosticsWriter::Entry>& out) const;
 };
 
 /// ─── Search algorithms (expand state nodes) ────────────────────────────
@@ -32,7 +32,7 @@ struct SearchDiagnostics : AlgorithmDiagnostics {
     int32_t solutions_found{0};
     int32_t max_depth_reached{0};
 
-    void flush(ExecutionContext& ctx) const override;
+    void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };
 
 /// ─── Pool-based search (ItemPool) ──────────────────────────────────────
@@ -44,5 +44,5 @@ struct PoolSearchDiagnostics : SearchDiagnostics {
     size_t step_pool_used{0};
     size_t step_pool_capacity{0};
 
-    void flush(ExecutionContext& ctx) const override;
+    void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };

@@ -8,5 +8,5 @@ struct IDAStarDiagnostics : PoolSearchDiagnostics {
     size_t tt_stores{0};
     size_t solution_path_len{0};
 
-    void flush(ExecutionContext& ctx) const override;
+    void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };

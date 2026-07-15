@@ -69,7 +69,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
 
     bool goal_achieved = meets_target(mutable_items[0], _target);
     _diag.status = goal_achieved ? "Complete" : "CompleteNoSolution";
-    _diag.flush(ctx);
+    ctx.report_diagnostics_entries(_diag);
 
     if (!goal_achieved) {
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);

@@ -14,5 +14,5 @@ struct AStarDiagnostics : PoolSearchDiagnostics {
     int64_t  pruned_by_caps       = 0;
     int64_t  estimated_peak_bytes = 0;
 
-    void flush(ExecutionContext& ctx) const override;
+    void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };

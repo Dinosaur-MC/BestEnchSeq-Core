@@ -50,6 +50,17 @@ void ExecutionContext::report_diagnostic(std::string_view key, std::string value
     _diagnostic_log.emplace_back(key.data(), std::move(value));
 }
 
+void ExecutionContext::report_diagnostics_entries(const AlgorithmDiagnostics& diag) {
+    std::vector<DiagnosticsWriter::Entry> entries;
+    diag.flush(entries);
+    for (auto& e : entries) {
+        if (auto* val = std::get_if<int64_t>(&e.value))
+            report_diagnostic(e.key, *val);
+        else
+            report_diagnostic(e.key, std::move(std::get<std::string>(e.value)));
+    }
+}
+
 std::vector<std::pair<const char*, DiagnosticValue>> ExecutionContext::consume_diagnostic_log() {
     auto result = std::move(_diagnostic_log);
     _diagnostic_log.clear();

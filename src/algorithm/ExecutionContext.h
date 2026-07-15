@@ -76,6 +76,11 @@ public:
     void report_diagnostic(std::string_view key, int64_t value);
     void report_diagnostic(std::string_view key, std::string value);
 
+    /// Flush diagnostics into a vector and report all entries back to the context.
+    /// Bridges the new flush(entries) signature to the old report_diagnostic path.
+    /// TODO: remove when all callers migrate to DiagnosticsService.
+    void report_diagnostics_entries(const struct AlgorithmDiagnostics& diag);
+
     /// 返回并清空累积的诊断 KV 对（Executor 在 _finalize() 中调用）
     std::vector<std::pair<const char*, DiagnosticValue>> consume_diagnostic_log();
 
