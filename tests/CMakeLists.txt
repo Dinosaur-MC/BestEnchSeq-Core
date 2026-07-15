@@ -320,7 +320,7 @@ add_executable(test_algorithm_strategies
     ${ALGO_ENGINE_SRCS}
     ${ALGO_STRATEGY_SRGS}
     ${ALGO_DIAG_SRCS}
-    ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/astar/AStarMemoryBudget.cpp
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/types/Equipment.cpp
@@ -413,7 +413,7 @@ endif()
 
 add_executable(test_astar_memory_budget
     algorithm/test_astar_memory_budget.cpp
-    ${PROJECT_ROOT}/src/algorithm/components/AStarMemoryBudget.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/astar/AStarMemoryBudget.cpp
 )
 target_include_directories(test_astar_memory_budget PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_astar_memory_budget COMMAND test_astar_memory_budget)
