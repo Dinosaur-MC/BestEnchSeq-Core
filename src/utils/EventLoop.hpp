@@ -134,6 +134,28 @@ public:
             std::this_thread::yield();
     }
 
+    /// Attempt to emplace a T in-place from the given arguments.  Returns
+    /// false only when using a bounded queue that is full (item silently
+    /// dropped).  Unbounded queues always return true.
+    template <typename... Args>
+        requires std::constructible_from<T, Args...>
+    bool try_post_emplace(Args&&... args) {
+        if (!_queue.try_emplace(std::forward<Args>(args)...))
+            return false;
+        _signal();
+        return true;
+    }
+
+    /// Block until the T is emplaced in-place from the given arguments.
+    /// For bounded queues this spins with yield(); unbounded queues
+    /// succeed on the first attempt.
+    template <typename... Args>
+        requires std::constructible_from<T, Args...>
+    void post_emplace(Args&&... args) {
+        while (!try_post_emplace(std::forward<Args>(args)...))
+            std::this_thread::yield();
+    }
+
     /// Best-effort batch enqueue.  Returns the number of items enqueued
     /// (may be less than the range size for a full bounded queue).
     template <std::input_iterator Iter>
