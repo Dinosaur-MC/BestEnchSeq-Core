@@ -298,6 +298,7 @@ add_executable(test_algorithm_executor
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
     ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
+    ${PROJECT_ROOT}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
 )
 target_include_directories(test_algorithm_executor PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_executor COMMAND test_algorithm_executor)

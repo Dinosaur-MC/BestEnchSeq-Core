@@ -31,6 +31,14 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
         if (_state.compare_exchange_weak(prev, new_state,
                 std::memory_order_acq_rel, std::memory_order_acquire)) {
             _state_cv.notify_all();
+
+            // Notify observer (async, non-blocking)
+            if (!_algo_name_cache.empty()) {
+                DiagnosticsService::instance().push(
+                    DiagEventKind::StateChange,
+                    _algo_name_cache.c_str(),
+                    DiagnosticsEvent::StatePayload{prev, new_state});
+            }
             return;
         }
     }
@@ -57,47 +65,42 @@ void AlgorithmExecutor::_finalize() {
         std::chrono::steady_clock::now() - _start_time);
 
     auto atoms = _ctx->get_diagnostics(_computation_time.count());
-    auto kvs = _ctx->consume_diagnostic_log();
+    auto diag = _ctx->consume_exit_diagnostics();
 
-    // Status: algorithm's flushed status is authoritative.
-    // For Cancelled/Failed, use the executor's state.
+    // Default if algorithm didn't set diagnostics
+    if (!diag) {
+        diag = std::make_unique<AlgorithmDiagnostics>();
+        diag->algorithm_name = _algo_name_cache;
+    }
+
+    // Determine final status. Executor state overrides algorithm's status
+    // for Cancelled/Failed.
     auto s = _state.load(std::memory_order_acquire);
     std::string status;
     if (s == AlgorithmState::Cancelled) {
         status = "Cancelled";
+        diag->status = "Cancelled";
     } else if (s == AlgorithmState::Failed) {
         status = "Failed";
+        diag->status = "Failed";
     } else {
-        // Use algorithm's flushed status (e.g. "Complete", "CompleteNoSolution")
-        for (const auto& [k, v] : kvs)
-            if (std::string_view(k) == "status" && std::holds_alternative<std::string>(v))
-                { status = std::get<std::string>(v); break; }
+        status = diag->status;
         if (status.empty()) status = "Complete";
     }
 
-    // Convert flush KV pairs to Entry objects (keys are static string literals)
-    std::vector<DiagnosticsWriter::Entry> flush_entries;
-    flush_entries.reserve(kvs.size());
-    for (auto& [k, v] : kvs) {
-        if (auto* i = std::get_if<int64_t>(&v))
-            flush_entries.emplace_back(k, *i);
-        else
-            flush_entries.emplace_back(k, std::move(std::get<std::string>(v)));
-    }
-
     DiagnosticsService::instance().push(
-        DiagnosticsEvent(DiagEventKind::Exit, _algorithm->name().data(),
-            DiagnosticsEvent::ExitPayload{
-                nullptr,                                               // diagnostics (not yet extracted)
-                output(),                                              // algorithm output
-                std::move(status),                                     // status
-                _computation_time.count(),                              // wall_ms
-                DiagnosticsWriter::Entry("nodes_visited", atoms.nodes_visited),
-                DiagnosticsWriter::Entry("nodes_pruned",  atoms.nodes_pruned),
-                DiagnosticsWriter::Entry("steps_forged",  atoms.steps_forged),
-                std::move(flush_entries)                                // extra flush entries
-            })
-    );
+        DiagEventKind::Exit,
+        _algo_name_cache.c_str(),
+        DiagnosticsEvent::ExitPayload{
+            std::move(diag),
+            output(),
+            status,
+            _computation_time.count(),
+            DiagnosticsWriter::Entry("nodes_visited", atoms.nodes_visited),
+            DiagnosticsWriter::Entry("nodes_pruned",  atoms.nodes_pruned),
+            DiagnosticsWriter::Entry("steps_forged",  atoms.steps_forged),
+            {}  // flush_entries — empty since diagnostics->flush() in handler handles this
+        });
 }
 
 // ─── Lifecycle ───
@@ -109,6 +112,27 @@ void AlgorithmExecutor::start(AlgorithmInput input,
         throw std::logic_error("executor already running");
 
     _start_time = std::chrono::steady_clock::now();
+    _algo_name_cache = std::string(_algorithm->name());
+
+    // Set up streaming notification sink
+    struct SinkContext { DiagnosticsService* ds; const char* algo_name; };
+    auto* sink_ctx = new SinkContext{&DiagnosticsService::instance(), _algorithm->name().data()};
+
+    _ctx->set_algorithm_name(_algorithm->name().data());
+    _ctx->set_sink(ExecutionContext::AlgorithmSink{
+        .on_progress = [](double percent, ProgressStatus status, void* ctx) {
+            auto& sc = *static_cast<SinkContext*>(ctx);
+            sc.ds->push(DiagEventKind::Progress, sc.algo_name,
+                        DiagnosticsEvent::ProgressPayload{percent, status});
+        },
+        .on_solution = [](std::shared_ptr<const compact::EnchSolution> sol,
+                          const char* name, void* ctx) {
+            auto& sc = *static_cast<SinkContext*>(ctx);
+            sc.ds->push(DiagEventKind::Solution, name,
+                        DiagnosticsEvent::SolutionPayload{std::move(sol)});
+        },
+        .context = sink_ctx,
+    });
 
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
     if (warmup)
