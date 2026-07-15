@@ -7,7 +7,6 @@
 
 AlgorithmExecutor::AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm)
     : _algorithm(std::move(algorithm))
-    , _ctx(std::make_unique<ExecutionContext>())
 {
     if (!_algorithm)
         throw std::invalid_argument("algorithm cannot be null");
@@ -45,7 +44,8 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
 }
 
 void AlgorithmExecutor::_run_warmup(AlgorithmInput& input, IAlgorithm& warmup_algo) {
-    ExecutionContext warmup_ctx;
+    std::string warmup_name(warmup_algo.name());
+    ExecutionContext warmup_ctx(0, warmup_name.c_str());
     warmup_algo.execute(input, warmup_ctx);
     auto solutions = warmup_ctx.get_solutions();
     if (!solutions.empty()) {
@@ -110,27 +110,10 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
         throw std::logic_error("executor already running");
 
-    _start_time = std::chrono::steady_clock::now();
+    _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
     _algo_name_cache = std::string(_algorithm->name());
-
-    // Set up streaming notification sink
-    _sink_ctx = std::make_unique<SinkContext>(&DiagnosticsService::instance(), _algo_name_cache.c_str());
-
-    _ctx->set_algorithm_name(_algo_name_cache.c_str());
-    _ctx->set_sink(ExecutionContext::AlgorithmSink{
-        .on_progress = [](double percent, ProgressStatus status, void* ctx) {
-            auto& sc = *static_cast<SinkContext*>(ctx);
-            sc.ds->push(DiagEventKind::Progress, sc.algo_name,
-                        DiagnosticsEvent::ProgressPayload{percent, status});
-        },
-        .on_solution = [](std::shared_ptr<const compact::EnchSolution> sol,
-                          const char* name, void* ctx) {
-            auto& sc = *static_cast<SinkContext*>(ctx);
-            sc.ds->push(DiagEventKind::Solution, name,
-                        DiagnosticsEvent::SolutionPayload{std::move(sol)});
-        },
-        .context = _sink_ctx.get(),
-    });
+    _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
+    _start_time = std::chrono::steady_clock::now();
 
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
     if (warmup)
@@ -182,8 +165,10 @@ void AlgorithmExecutor::cancel() {
         return;
     }
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
-        _ctx->cancel();
-        _ctx->resume();
+        if (_ctx) {
+            _ctx->cancel();
+            _ctx->resume();
+        }
     }
     _state_cv.notify_all();
 
@@ -236,6 +221,7 @@ AlgorithmOutput AlgorithmExecutor::output() const {
         return AlgorithmOutput{}; // is_valid defaults to false
 
     AlgorithmOutput out;
+    out.task_id = _task_id;
     out.algorithm_name = std::string(_algorithm->name());
     out.algorithm_version = std::string(_algorithm->version());
     out.created_at = std::chrono::system_clock::now();

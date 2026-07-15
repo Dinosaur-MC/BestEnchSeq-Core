@@ -26,6 +26,7 @@ struct AlgorithmOutput {
     std::chrono::system_clock::time_point created_at;
     std::chrono::milliseconds computation_time{0};
     std::vector<compact::EnchSolution> solutions;
+    size_t task_id{0};
     compact::Item final_item;
     bool is_valid = false;
 };

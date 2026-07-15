@@ -38,8 +38,8 @@ public:
 
     AlgorithmOutput output() const;
 
-    ExecutionContext::DiagnosticSnapshot get_diagnostics(int64_t elapsed_ms = 0) const {
-        return _ctx ? _ctx->get_diagnostics(elapsed_ms) : ExecutionContext::DiagnosticSnapshot{};
+    ExecutionContext::Snapshot get_diagnostics(int64_t elapsed_ms = 0) const {
+        return _ctx ? _ctx->get_diagnostics(elapsed_ms) : ExecutionContext::Snapshot{};
     }
 
     std::vector<uint8_t> serialize_state() const;
@@ -60,7 +60,7 @@ private:
     std::condition_variable _state_cv;
     std::chrono::steady_clock::time_point _start_time;
     std::chrono::milliseconds _computation_time{0};
+    static inline std::atomic<size_t> _next_task_id{1};  // 0 = invalid
+    size_t _task_id{0};
     std::string _algo_name_cache;
-    struct SinkContext { DiagnosticsService* ds; const char* algo_name; };
-    std::unique_ptr<SinkContext> _sink_ctx;
 };
