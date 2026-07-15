@@ -30,7 +30,7 @@ void ExecutionContext::report_progress(double percent, ProgressStatus status) {
     }
 
     DiagnosticsService::instance().push(
-        DiagEventKind::Progress, std::string{algorithm_name()},
+        DiagEventKind::Progress, std::string{algorithm_name()}, task_id(),
         DiagnosticsEvent::ProgressPayload{percent, status});
 }
 
@@ -41,7 +41,7 @@ void ExecutionContext::report_solution(std::vector<compact::EnchStep> steps) {
     append_solution(*sol);
 
     DiagnosticsService::instance().push(
-        DiagEventKind::Solution, std::string{algorithm_name()},
+        DiagEventKind::Solution, std::string{algorithm_name()}, task_id(),
         DiagnosticsEvent::SolutionPayload{std::move(sol)});
 }
 

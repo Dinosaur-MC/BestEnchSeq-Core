@@ -64,14 +64,16 @@ struct DiagnosticsEvent {
 
     DiagEventKind kind{};
     std::string algorithm_name{};               // owns its name string
+    size_t task_id{0};
     std::chrono::system_clock::time_point timestamp{};
 
     DiagnosticsEvent() = default;
 
-    /// Constructor for emplace support (takes kind + name + any payload type).
+    /// Constructor for emplace support (takes kind + name + task_id + any payload type).
     /// Use abbreviated function template (C++20) to enable forwarding.
-    DiagnosticsEvent(DiagEventKind k, std::string name, auto&& p)
+    DiagnosticsEvent(DiagEventKind k, std::string name, size_t tid, auto&& p)
         : kind(k), algorithm_name(std::move(name)),
+          task_id(tid),
           timestamp(std::chrono::system_clock::now()),
           payload(std::forward<decltype(p)>(p)) {}
 

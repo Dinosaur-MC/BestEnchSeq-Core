@@ -7,9 +7,13 @@ class AlgorithmObserver {
 public:
     virtual ~AlgorithmObserver() = default;
 
-    virtual void on_progress(double percent, ProgressStatus status) {}
-    virtual void on_solution_found(const std::vector<compact::EnchStep>& solution) {}
-    virtual void on_state_changed(AlgorithmState prev, AlgorithmState curr) {}
-    virtual void on_diagnostic(const DiagnosticInfo& info) {}
-    virtual void on_completed(const AlgorithmOutput& output) {}
+    /// Return false to suppress all callbacks for the given task_id.
+    /// Default: accept all tasks.
+    virtual bool accept_task_id(size_t) const { return true; }
+
+    virtual void on_progress(size_t task_id, double percent, ProgressStatus status) {}
+    virtual void on_solution_found(size_t task_id, const std::vector<compact::EnchStep>& solution) {}
+    virtual void on_state_changed(size_t task_id, AlgorithmState prev, AlgorithmState curr) {}
+    virtual void on_diagnostic(size_t task_id, const DiagnosticInfo& info) {}
+    virtual void on_completed(size_t task_id, const AlgorithmOutput& output) {}
 };

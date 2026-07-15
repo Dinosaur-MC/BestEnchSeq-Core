@@ -36,6 +36,7 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
                 DiagnosticsService::instance().push(
                     DiagEventKind::StateChange,
                     _algo_name_cache,
+                    _task_id,
                     DiagnosticsEvent::StatePayload{prev, new_state});
             }
             return;
@@ -91,6 +92,7 @@ void AlgorithmExecutor::_finalize() {
     DiagnosticsService::instance().push(
         DiagEventKind::Exit,
         _algo_name_cache,
+        _task_id,
         DiagnosticsEvent::ExitPayload{
             std::move(diag),
             output(),
@@ -175,7 +177,7 @@ void AlgorithmExecutor::cancel() {
     // Notify observer of the Running/Paused → Cancelled transition
     if (!_algo_name_cache.empty())
         DiagnosticsService::instance().push(
-            DiagEventKind::StateChange, _algo_name_cache,
+            DiagEventKind::StateChange, _algo_name_cache, _task_id,
             DiagnosticsEvent::StatePayload{prev, AlgorithmState::Cancelled});
 }
 

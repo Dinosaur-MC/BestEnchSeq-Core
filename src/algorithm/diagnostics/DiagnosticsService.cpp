@@ -97,7 +97,7 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
                 DiagnosticsWriter::write(event.algorithm_name, all,
                                          p.wall_ms, p.status);
 
-            // Notify observers (diagnostic + completed)
+            // Notify observers (diagnostic + completed), filtered by task_id
             if (!local.empty()) {
                 std::ostringstream oss;
                 oss << "algorithm=" << event.algorithm_name
@@ -106,8 +106,9 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
                 DiagnosticInfo info{oss.str()};
 
                 for (auto& obs : local) {
-                    obs->on_diagnostic(info);
-                    obs->on_completed(p.output);
+                    if (!obs->accept_task_id(event.task_id)) continue;
+                    obs->on_diagnostic(event.task_id, info);
+                    obs->on_completed(event.task_id, p.output);
                 }
             }
             break;
@@ -115,23 +116,29 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
         case DiagEventKind::Progress: {
             if (local.empty()) break;
             auto& p = std::get<DiagnosticsEvent::ProgressPayload>(event.payload);
-            for (auto& obs : local)
-                obs->on_progress(p.percent, p.status);
+            for (auto& obs : local) {
+                if (!obs->accept_task_id(event.task_id)) continue;
+                obs->on_progress(event.task_id, p.percent, p.status);
+            }
             break;
         }
         case DiagEventKind::Solution: {
             if (local.empty()) break;
             auto& p = std::get<DiagnosticsEvent::SolutionPayload>(event.payload);
             if (p.solution)
-                for (auto& obs : local)
-                    obs->on_solution_found(p.solution->steps);
+                for (auto& obs : local) {
+                    if (!obs->accept_task_id(event.task_id)) continue;
+                    obs->on_solution_found(event.task_id, p.solution->steps);
+                }
             break;
         }
         case DiagEventKind::StateChange: {
             if (local.empty()) break;
             auto& p = std::get<DiagnosticsEvent::StatePayload>(event.payload);
-            for (auto& obs : local)
-                obs->on_state_changed(p.prev, p.curr);
+            for (auto& obs : local) {
+                if (!obs->accept_task_id(event.task_id)) continue;
+                obs->on_state_changed(event.task_id, p.prev, p.curr);
+            }
             break;
         }
     }
