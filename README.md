@@ -77,6 +77,7 @@ src/
 │   ├── ForgeConfig.h            ← Forge behavior config (uses MCE from types/Platform.h)
 │   ├── SearchConfig.h           ← Search limits (max_solutions, max_depth, memory_mb, time)
 │   ├── AppConfig.h              ← Application-level config (env-var backed)
+│   ├── CLITypes.h               ← CLIConfig, EnchantmentSpec, TargetSpec
 │   └── BuildConfig.h.in         ← CMake-generated compile-time config (version, feature toggles)
 ├── adapters/                    ← Domain ↔ compact / serialization boundary
 │   ├── CompactAdapter.h/.cpp    ← apply / recall (domain ↔ compact)
@@ -94,7 +95,6 @@ src/
 │   ├── Equipment.h/.cpp         ← Equipment definition
 │   ├── EnchSolution.h/.cpp      ← Solution type
 │   ├── Platform.h               ← MCE enum (Minecraft edition Java/Bedrock/All)
-│   ├── CLITypes.h               ← CLIConfig, EnchantmentSpec, TargetSpec
 │   ├── AlgorithmTypes.h         ← AlgorithmInput, AlgorithmOutput, ProgressStatus, AlgorithmState
 │   ├── LogTypes.h               ← LogLevel, LogEntry
 │   ├── RawTypes.h               ← String-based intermediates (RawEnchInfo, RawEquipment)
