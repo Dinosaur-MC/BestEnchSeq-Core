@@ -6,10 +6,7 @@
 #include <numeric>
 #include <vector>
 
-using compact::Item;
-using compact::ItemType;
-using compact::EnchStep;
-using compact::EnchReg;
+using namespace compact;
 
 void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.config);
@@ -24,7 +21,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
         return;
     }
     if (meets_target(input.items[0], target)) {
-        ctx.report_compact_solution({});
+        ctx.report_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
     }
@@ -185,7 +182,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
                 _diag.status = "Complete";
                 ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
 
-                ctx.report_compact_solution(std::move(steps));
+                ctx.report_solution(std::move(steps));
                 ctx.report_progress(1.0, ProgressStatus::Complete);
                 return;
             }

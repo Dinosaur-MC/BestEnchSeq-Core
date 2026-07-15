@@ -8,8 +8,7 @@
 
 #include <vector>
 
-using compact::Item;
-using compact::EnchReg;
+using namespace compact;
 
 // ─── Compact-only greedy bound ─────────────────────────────────────────────
 
@@ -159,7 +158,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         if (meets_target(_stack[frame_idx].items[0], _target)) {
             ++_solutions_found;
-            ctx.report_compact_solution(std::move(_current_steps));
+            ctx.report_solution(std::move(_current_steps));
 
             if (_best_steps.empty() || _stack[frame_idx].cost_so_far < _best_cost) {
                 _best_cost = _stack[frame_idx].cost_so_far;
@@ -221,12 +220,12 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         _stack[frame_idx].items.erase(_stack[frame_idx].items.begin() + p.j);
 
-        std::vector<compact::Item> child_items = _stack[frame_idx].items;
+        std::vector<Item> child_items = _stack[frame_idx].items;
 
         // Symmetry breaking: canonicalise non-equipment ordering.
         if (child_items.size() > 2)
             std::sort(child_items.begin() + 1, child_items.end(),
-                [](const compact::Item& a, const compact::Item& b) {
+                [](const Item& a, const Item& b) {
                     if (a.ppn != b.ppn) return a.ppn < b.ppn;
                     return a.enchs.hash() < b.enchs.hash();
                 });

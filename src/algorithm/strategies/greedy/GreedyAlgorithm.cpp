@@ -4,9 +4,7 @@
 #include <chrono>
 #include <algorithm>
 
-using compact::Item;
-using compact::EnchStep;
-using compact::EnchReg;
+using namespace compact;
 
 void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.config);
@@ -76,7 +74,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
         return;
     }
 
-    ctx.report_compact_solution(std::move(compact_steps));
+    ctx.report_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }
 

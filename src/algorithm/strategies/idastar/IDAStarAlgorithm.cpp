@@ -4,8 +4,7 @@
 #include "algorithm/components/StateHash.h"
 #include <algorithm>
 
-using compact::Item;
-using compact::EnchStep;
+using namespace compact;
 
 bool IDAStarAlgorithm::_meets_target(const std::vector<ItemID>& ids) const {
     if (ids.empty()) return false;
@@ -196,7 +195,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     }
     if (_meets_target(initial_ids)) {
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
-        ctx.report_compact_solution({});
+        ctx.report_solution({});
         return;
     }
 
@@ -217,7 +216,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         } else {
             int64_t node_limit = 50'000;
             int32_t dfs_cost = search_utils::dfs_bound(
-                std::vector<compact::Item>(items.begin(), items.end()),
+                std::vector<Item>(items.begin(), items.end()),
                 0, best_cost, node_limit,
                 _forge_engine, *_ench_reg, _target,
                 _h_buf, _h_dirty);
@@ -250,7 +249,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         for (const auto& s : _solution_path)
             steps.push_back({_pool[s.base_id], _pool[s.sac_id], s.cost});
 
-        ctx.report_compact_solution(std::move(steps));
+        ctx.report_solution(std::move(steps));
         ctx.report_progress(1.0, ProgressStatus::Complete);
     } else {
         _diag.status = ctx.is_cancelled() ? "Cancelled" : "CompleteNoSolution";

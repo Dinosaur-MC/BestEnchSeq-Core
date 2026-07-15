@@ -7,9 +7,7 @@
 #include <chrono>
 #include <queue>
 
-using compact::Item;
-using compact::EnchStep;
-using compact::EnchReg;
+using namespace compact;
 
 // ─── ItemPool helpers ───────────────────────────────────────────────────
 
@@ -88,8 +86,8 @@ int32_t AStarAlgorithm::_greedy_bound(
 // ─── Delta heuristic helper ───────────────────────────────────────────
 
 int32_t AStarAlgorithm::_delta_h(int32_t parent_h,
-                                  const compact::Item& forged,
-                                  const compact::Item& sacrifice) const
+                                  const Item& forged,
+                                  const Item& sacrifice) const
 {
     int32_t h = parent_h;
 
@@ -173,7 +171,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         } else {
             int64_t node_limit = 50'000;
             int32_t dfs_cost = search_utils::dfs_bound(
-                std::vector<compact::Item>(items.begin(), items.end()),
+                std::vector<Item>(items.begin(), items.end()),
                 0, _best_solution_cost, node_limit,
                 _forge_engine, *_ench_reg, _target,
                 _h_buf, _h_dirty);
@@ -189,7 +187,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
 
     if (_meets_target(initial_ids[0])) {
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
-        ctx.report_compact_solution({});
+        ctx.report_solution({});
         return;
     }
 
@@ -275,7 +273,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                     steps.push_back({_pool[sn.base_id], _pool[sn.sac_id], sn.cost});
                 }
             }
-            ctx.report_compact_solution(std::move(steps));
+            ctx.report_solution(std::move(steps));
             ctx.report_progress(1.0, ProgressStatus::Complete);
 
             _diag.explored_count = explored;

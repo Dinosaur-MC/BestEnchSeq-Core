@@ -5,9 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-using compact::Item;
-using compact::EnchStep;
-using compact::EnchReg;
+using namespace compact;
 
 int32_t HierarchicalMergeAlgorithm::effective_multiplier(
     const Item& item, const EnchReg& reg) const
@@ -97,7 +95,7 @@ void HierarchicalMergeAlgorithm::execute(
     if (items.size() <= 1) {
         _diag.status = "GoalAlreadyMet";
         ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
-        ctx.report_compact_solution({});
+        ctx.report_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
     }
@@ -204,7 +202,7 @@ phase2:
         _diag.status = "Complete";
         ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
 
-        ctx.report_compact_solution(std::move(compact_steps));
+        ctx.report_solution(std::move(compact_steps));
         ctx.report_progress(1.0, ProgressStatus::Complete);
         return;
     }
@@ -265,6 +263,6 @@ phase2:
         }
     }
 
-    ctx.report_compact_solution(std::move(compact_steps));
+    ctx.report_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }

@@ -4,10 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-using compact::Item;
-using compact::ItemType;
-using compact::EnchStep;
-using compact::EnchReg;
+using namespace compact;
 
 void DynamicPenaltyBalancingAlgorithm::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
@@ -34,7 +31,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
             }
         }
         if (met) {
-            ctx.report_compact_solution({});
+            ctx.report_solution({});
             ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
             return;
         }
@@ -134,6 +131,6 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     _diag.status = "Complete";
     ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
 
-    ctx.report_compact_solution(std::move(compact_steps));
+    ctx.report_solution(std::move(compact_steps));
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }
