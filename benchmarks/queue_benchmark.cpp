@@ -20,9 +20,9 @@
 // SegmentedMPMCQueue has its own lower count: being unbounded it never
 // frees blocks until destruction (~12 KB per 1024 items × OPS).
 #ifdef NDEBUG
-constexpr int64_t OPS_SEQ    = 200'000'000;  // push-pop pairs (bounded queues)
-constexpr int64_t OPS_SEG    =  20'000'000;  // SegmentedMPMCQueue (unbounded)
-constexpr int64_t OPS_VIRT   =  50'000'000;  // pairs for virtual-dispatch test
+constexpr int64_t OPS_SEQ    = 600'000'000;  // push-pop pairs (bounded queues)
+constexpr int64_t OPS_SEG    =  60'000'000;  // SegmentedMPMCQueue (unbounded)
+constexpr int64_t OPS_VIRT   = 150'000'000;  // pairs for virtual-dispatch test
 #else
 constexpr int64_t OPS_SEQ    =  30'000'000;
 constexpr int64_t OPS_SEG    =   5'000'000;

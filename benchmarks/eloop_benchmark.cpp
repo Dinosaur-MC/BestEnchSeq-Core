@@ -11,12 +11,12 @@
 #include <vector>
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Configuration  —  calibrate for ~5 s total on a modern CPU
+//  Configuration  —  calibrate for ~8-10 s total on a modern CPU
 // ═══════════════════════════════════════════════════════════════════════════
 
-constexpr int64_t OPS_EV     =  5'000'000;   // tasks posted per EventLoop test
-constexpr int64_t WARM_EV    =    200'000;   // warm-up tasks
-constexpr int64_t OPS_MP     =  5'000'000;   // tasks for multi-producer test
+constexpr int64_t OPS_EV     = 15'000'000;   // tasks posted per EventLoop test
+constexpr int64_t WARM_EV    =    500'000;   // warm-up tasks
+constexpr int64_t OPS_MP     = 15'000'000;   // tasks for multi-producer test
 constexpr int64_t N_LATENCY  =     10'000;   // latency samples
 
 // ═══════════════════════════════════════════════════════════════════════════
