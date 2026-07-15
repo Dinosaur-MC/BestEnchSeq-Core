@@ -258,5 +258,5 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
             ctx.is_cancelled() ? ProgressStatus::Cancelled
                                : ProgressStatus::CompleteNoSolution);
     }
-    ctx.report_diagnostics_entries(_diag);
+    ctx.set_exit_diagnostics(std::make_unique<IDAStarDiagnostics>(std::move(_diag)));
 }

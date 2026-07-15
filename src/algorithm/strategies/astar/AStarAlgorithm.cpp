@@ -292,7 +292,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
               + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
               + static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
             _diag.status = "Complete";
-            ctx.report_diagnostics_entries(_diag);
+            ctx.set_exit_diagnostics(std::make_unique<AStarDiagnostics>(std::move(_diag)));
             return;
         }
 
@@ -431,5 +431,5 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
         _diag.status = "CompleteNoSolution";
     }
-    ctx.report_diagnostics_entries(_diag);
+    ctx.set_exit_diagnostics(std::make_unique<AStarDiagnostics>(std::move(_diag)));
 }

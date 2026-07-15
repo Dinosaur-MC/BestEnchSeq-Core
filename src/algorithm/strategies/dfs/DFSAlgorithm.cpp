@@ -118,7 +118,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _diag.final_bound = _best_cost;
     _diag.solutions_found = _solutions_found;
     _diag.status = _best_cost < INT32_MAX ? "Complete" : "CompleteNoSolution";
-    ctx.report_diagnostics_entries(_diag);
+    ctx.set_exit_diagnostics(std::make_unique<SearchDiagnostics>(std::move(_diag)));
 
     ctx.report_progress(1.0, _best_cost < INT32_MAX
         ? ProgressStatus::Complete
