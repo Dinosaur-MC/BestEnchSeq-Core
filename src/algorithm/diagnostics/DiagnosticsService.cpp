@@ -1,4 +1,5 @@
 #include "algorithm/diagnostics/DiagnosticsService.h"
+#include "log/log.hpp"
 #include <algorithm>
 #include <sstream>
 
@@ -45,6 +46,10 @@ void DiagnosticsService::set_persist(bool enabled) noexcept {
     _persist.store(enabled, std::memory_order_release);
 }
 
+void DiagnosticsService::_on_push_failed(const char* algo_name) {
+    LOG_WARN("diagnostics queue full, event dropped (algo=%s)", algo_name);
+}
+
 std::vector<std::shared_ptr<AlgorithmObserver>> DiagnosticsService::snapshot_observers() {
     std::lock_guard lock(_obs_mtx);
     return _observers;
@@ -67,16 +72,12 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
 
             // Build all entries from all sources
             std::vector<DiagnosticsWriter::Entry> all;
-            all.reserve(3 + p.flush_entries.size() + 10);
+            all.reserve(3 + 20);
 
             // Add entries from diagnostics->flush() if available
             if (p.diagnostics) {
                 p.diagnostics->flush(all);
             }
-
-            // Add flush_entries (backward compat path from AlgorithmExecutor)
-            for (auto& e : p.flush_entries)
-                all.push_back(std::move(e));
 
             // Add atomic counter entries
             all.push_back(std::move(p.nodes_visited));

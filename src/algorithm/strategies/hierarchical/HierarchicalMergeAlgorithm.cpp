@@ -212,7 +212,11 @@ phase2:
     // Phase 3: Merge groups together, then apply to equipment
     Item combined = group_results[0].book;
     for (size_t g = 1; g < group_results.size(); ++g) {
-        if (ctx.is_cancelled()) return;
+        if (ctx.is_cancelled()) {
+            _diag.status = "Cancelled";
+            ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+            return;
+        }
         ctx.wait_if_paused();
 
         auto& next_book = group_results[g].book;

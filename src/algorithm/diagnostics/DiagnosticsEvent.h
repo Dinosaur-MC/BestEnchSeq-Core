@@ -4,6 +4,7 @@
 #include "types/AlgorithmTypes.h"
 #include <chrono>
 #include <memory>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -27,7 +28,6 @@ struct ExitPayload {
     DiagnosticsWriter::Entry nodes_visited{};
     DiagnosticsWriter::Entry nodes_pruned{};
     DiagnosticsWriter::Entry steps_forged{};
-    std::vector<DiagnosticsWriter::Entry> flush_entries{};
 };
 
 struct ProgressPayload {
@@ -63,15 +63,15 @@ struct DiagnosticsEvent {
     using PayloadVariant   = detail::PayloadVariant;
 
     DiagEventKind kind{};
-    const char* algorithm_name{nullptr};        // points to static string literal
+    std::string algorithm_name{};               // owns its name string
     std::chrono::system_clock::time_point timestamp{};
 
     DiagnosticsEvent() = default;
 
     /// Constructor for emplace support (takes kind + name + any payload type).
     /// Use abbreviated function template (C++20) to enable forwarding.
-    DiagnosticsEvent(DiagEventKind k, const char* name, auto&& p)
-        : kind(k), algorithm_name(name),
+    DiagnosticsEvent(DiagEventKind k, std::string name, auto&& p)
+        : kind(k), algorithm_name(std::move(name)),
           timestamp(std::chrono::system_clock::now()),
           payload(std::forward<decltype(p)>(p)) {}
 

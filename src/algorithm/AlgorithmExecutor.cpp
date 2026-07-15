@@ -36,7 +36,7 @@ void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
             if (!_algo_name_cache.empty()) {
                 DiagnosticsService::instance().push(
                     DiagEventKind::StateChange,
-                    _algo_name_cache.c_str(),
+                    _algo_name_cache,
                     DiagnosticsEvent::StatePayload{prev, new_state});
             }
             return;
@@ -90,7 +90,7 @@ void AlgorithmExecutor::_finalize() {
 
     DiagnosticsService::instance().push(
         DiagEventKind::Exit,
-        _algo_name_cache.c_str(),
+        _algo_name_cache,
         DiagnosticsEvent::ExitPayload{
             std::move(diag),
             output(),
@@ -98,8 +98,7 @@ void AlgorithmExecutor::_finalize() {
             _computation_time.count(),
             DiagnosticsWriter::Entry("nodes_visited", atoms.nodes_visited),
             DiagnosticsWriter::Entry("nodes_pruned",  atoms.nodes_pruned),
-            DiagnosticsWriter::Entry("steps_forged",  atoms.steps_forged),
-            {}  // flush_entries — empty since diagnostics->flush() in handler handles this
+            DiagnosticsWriter::Entry("steps_forged",  atoms.steps_forged)
         });
 }
 
@@ -116,9 +115,9 @@ void AlgorithmExecutor::start(AlgorithmInput input,
 
     // Set up streaming notification sink
     struct SinkContext { DiagnosticsService* ds; const char* algo_name; };
-    auto* sink_ctx = new SinkContext{&DiagnosticsService::instance(), _algorithm->name().data()};
+    auto* sink_ctx = new SinkContext{&DiagnosticsService::instance(), _algo_name_cache.c_str()};
 
-    _ctx->set_algorithm_name(_algorithm->name().data());
+    _ctx->set_algorithm_name(_algo_name_cache.c_str());
     _ctx->set_sink(ExecutionContext::AlgorithmSink{
         .on_progress = [](double percent, ProgressStatus status, void* ctx) {
             auto& sc = *static_cast<SinkContext*>(ctx);
@@ -193,7 +192,7 @@ void AlgorithmExecutor::cancel() {
     // Notify observer of the Running/Paused → Cancelled transition
     if (!_algo_name_cache.empty())
         DiagnosticsService::instance().push(
-            DiagEventKind::StateChange, _algo_name_cache.c_str(),
+            DiagEventKind::StateChange, _algo_name_cache,
             DiagnosticsEvent::StatePayload{prev, AlgorithmState::Cancelled});
 }
 

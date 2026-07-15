@@ -30,8 +30,15 @@ public:
         } else {
             ok = _loop.try_post_emplace(std::forward<Args>(args)...);
         }
-        if (ok) [[likely]]
+        if (ok) [[likely]] {
             _enqueued.fetch_add(1, std::memory_order_release);
+        } else {
+            // Only warn on single-argument (move) path; emplace path doesn't have the name yet.
+            if constexpr (sizeof...(Args) == 1 &&
+                          (std::is_same_v<std::remove_cvref_t<Args>, DiagnosticsEvent> && ...)) {
+                [&](auto&& ev) { _on_push_failed(ev.algorithm_name.c_str()); }(std::forward<Args>(args)...);
+            }
+        }
     }
 
     void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
@@ -42,10 +49,14 @@ public:
 
     void set_persist(bool enabled) noexcept;
 
-    /// Snapshot the current observer list (thread-safe).
-    std::vector<std::shared_ptr<AlgorithmObserver>> snapshot_observers();
-
 private:
+    /// Snapshot the current observer list (thread-safe).
+    /// Only called internally by the diagnostics handler.
+    std::vector<std::shared_ptr<AlgorithmObserver>> snapshot_observers();
+    /// Called from push() when the queue is full (non-blocking path).
+    /// Implemented in .cpp to keep log include out of the header.
+    void _on_push_failed(const char* algo_name);
+
     /// Consumes DiagnosticsEvent instances on the EventLoop worker thread.
     /// Holds non-owning pointers to observer state in DiagnosticsService.
     struct DiagnosticsHandler {
