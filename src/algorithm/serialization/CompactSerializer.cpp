@@ -19,16 +19,16 @@ bool check_section_header(ByteStreamReader& r, SectionId expected_id) {
         tag[i] = static_cast<char>(r.u8());
     if (!r.ok()) return false;
 
-    uint32_t version = r.u32();
-    (void)version;          // unused; reserved for future format evolution
+    uint32_t ver = r.u32();
     uint32_t sid = r.u32();
-    uint32_t payload_len = r.u32();
-    (void)payload_len;      // caller reads payload and must know its own layout
+    uint32_t len = r.u32();
     if (!r.ok()) return false;
 
-    // Validate tag and section id
+    // Validate tag, version, and section id
     if (std::memcmp(tag, "BESQ_AS1", HEADER_TAG_SIZE) != 0 ||
+        ver != CURRENT_VERSION ||
         sid != static_cast<uint32_t>(expected_id)) {
+        r.skip(len);    // skip payload to maintain sync
         return false;
     }
 
@@ -62,6 +62,7 @@ compact::EnchSet read_ench_set(ByteStreamReader& r) {
     uint32_t count = r.u32();
     for (uint32_t i = 0; i < count; ++i) {
         result.insert(read_ench(r));
+        if (!r.ok()) break;
     }
     return result;
 }
@@ -113,8 +114,10 @@ compact::EnchSolution read_ench_solution(ByteStreamReader& r) {
     compact::EnchSolution sol;
     uint32_t num_steps = r.u32();
     sol.steps.reserve(num_steps);
-    for (uint32_t i = 0; i < num_steps; ++i)
+    for (uint32_t i = 0; i < num_steps; ++i) {
         sol.steps.push_back(read_ench_step(r));
+        if (!r.ok()) break;
+    }
     sol.total_cost = r.i32();
     return sol;
 }
