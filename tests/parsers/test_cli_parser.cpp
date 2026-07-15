@@ -1,4 +1,4 @@
-#include "cli.h"
+#include "cli/cli.h"
 #include "framework/test_utils.h"
 
 #include <iostream>

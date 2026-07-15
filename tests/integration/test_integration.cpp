@@ -1,4 +1,4 @@
-#include "cli.h"
+#include "cli/cli.h"
 #include "parsers/EnchInfoParser.h"
 #include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"

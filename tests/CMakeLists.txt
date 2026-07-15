@@ -118,7 +118,7 @@ set_tests_properties(test_equipment_parser PROPERTIES
 
 add_executable(test_cli_parser
     parsers/test_cli_parser.cpp
-    ${PROJECT_ROOT}/src/cli.cpp
+    ${PROJECT_ROOT}/src/cli/cli.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PARSER_UTIL_SRCS}
 )
@@ -130,7 +130,7 @@ set_tests_properties(test_cli_parser PROPERTIES
 
 add_executable(test_input_parser
     parsers/test_input_parser.cpp
-    ${PROJECT_ROOT}/src/cli.cpp
+    ${PROJECT_ROOT}/src/cli/cli.cpp
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
@@ -161,7 +161,7 @@ set_tests_properties(test_output_formatter PROPERTIES
 add_executable(test_integration
     integration/test_integration.cpp
     # Parser layer
-    ${PROJECT_ROOT}/src/cli.cpp
+    ${PROJECT_ROOT}/src/cli/cli.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp

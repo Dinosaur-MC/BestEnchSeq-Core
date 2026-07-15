@@ -77,15 +77,15 @@ src/
 │   ├── ForgeConfig.h            ← Forge behavior config (uses MCE from types/Platform.h)
 │   ├── SearchConfig.h           ← Search limits (max_solutions, max_depth, memory_mb, time)
 │   ├── AppConfig.h              ← Application-level config (env-var backed)
-│   ├── CLITypes.h               ← CLIConfig, EnchantmentSpec, TargetSpec
 │   └── BuildConfig.h.in         ← CMake-generated compile-time config (version, feature toggles)
+├── cli/                         ← CLI config + parsing (CLIConfig, EnchantmentSpec, TargetSpec)
+│   └── cli.h/.cpp               ← parse_cli(), parse_enchantment(), parse_target()
 ├── adapters/                    ← Domain ↔ compact / serialization boundary
 │   ├── CompactAdapter.h/.cpp    ← apply / recall (domain ↔ compact)
 │   ├── RegistryResolver.h/.cpp  ← String → ID resolution
 │   ├── OutputFormatter.h/.cpp   ← EnchSolution → text/compact/json
 │   ├── EnchSerializer.h/.cpp    ← EnchInfo/Equipment ↔ JSON/CSV/MC official
 │   └── Serializer.hpp           ← Binary serialization (uses io/ByteStream)
-├── cli.h/.cpp                   ← CLIConfig + EnchantmentSpec + CLI parsers
 ├── types/                       ← Domain data types (pure data, no computation)
 │   ├── CompactedTypes.h/.cpp    ← Compact types (namespace compact): Ench, EnchSet, Item, EnchStep
 │   ├── EnchInfo.h/.cpp          ← Full enchantment definition

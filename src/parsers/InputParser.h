@@ -1,6 +1,6 @@
 #pragma once
 #include "BESQTypes.h"
-#include "cli.h"
+#include "cli/cli.h"
 #include <filesystem>
 #include <string>
 #include <unordered_map>

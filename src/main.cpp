@@ -2,7 +2,7 @@
 #include "algorithm/diagnostics/DiagnosticsService.h"
 #include "algorithm/strategies/Strategies.h"
 #include "adapters/CompactAdapter.h"
-#include "cli.h"
+#include "cli/cli.h"
 #include "config/AppConfig.h"
 #include "parsers/EnchInfoParser.h"
 #include "log/log.hpp"
