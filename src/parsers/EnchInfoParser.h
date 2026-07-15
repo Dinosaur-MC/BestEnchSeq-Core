@@ -24,7 +24,8 @@ struct EnchInfoParser {
 
     /// Parse native JSON from an in-memory string (e.g. embedded data).
     /// Same as parse_native_json(path, ...) but skips file I/O.
-    static std::vector<RawEnchInfo> parse_native_json(
+    /// Named differently to avoid ambiguity with the path overload.
+    static std::vector<RawEnchInfo> parse_native_json_str(
         const std::string &content,
         TagResolver &tag_resolver,
         EnchantmentDataPack *metadata = nullptr

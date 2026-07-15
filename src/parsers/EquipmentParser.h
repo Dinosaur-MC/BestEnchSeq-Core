@@ -13,7 +13,8 @@ struct EquipmentParser {
     );
 
     /// Parse native JSON from an in-memory string (e.g. embedded data).
-    static std::vector<RawEquipment> parse_native_json(
+    /// Named differently to avoid ambiguity with the path overload.
+    static std::vector<RawEquipment> parse_native_json_str(
         const std::string &content,
         TagResolver &tag_resolver
     );

@@ -20,10 +20,10 @@ std::vector<RawEquipment> EquipmentParser::parse_native_json(
         LOG_WARN("Warning: Could not read %s: %s", path.c_str(), e.what());
         return {};
     }
-    return parse_native_json(content, tag_resolver);
+    return parse_native_json_str(content, tag_resolver);
 }
 
-std::vector<RawEquipment> EquipmentParser::parse_native_json(
+std::vector<RawEquipment> EquipmentParser::parse_native_json_str(
     const std::string &content,
     TagResolver &tag_resolver
 ) {

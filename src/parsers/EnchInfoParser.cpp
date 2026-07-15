@@ -158,10 +158,10 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
     TagResolver &tag_resolver,
     EnchantmentDataPack *metadata
 ) {
-    return parse_native_json(ParserUtils::read_file(path), tag_resolver, metadata);
+    return parse_native_json_str(ParserUtils::read_file(path), tag_resolver, metadata);
 }
 
-std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
+std::vector<RawEnchInfo> EnchInfoParser::parse_native_json_str(
     const std::string &content,
     TagResolver &tag_resolver,
     EnchantmentDataPack *metadata

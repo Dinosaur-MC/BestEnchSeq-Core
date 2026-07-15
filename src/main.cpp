@@ -50,11 +50,11 @@ void load_builtin_data(
         eq_reg.initialize(equipments);
     } else {
         auto json = std::string{besq::data::vanilla_json()};
-        auto raw_ench = EnchInfoParser::parse_native_json(json, tag_resolver);
+        auto raw_ench = EnchInfoParser::parse_native_json_str(json, tag_resolver);
         auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
         ench_reg.initialize(ench_infos);
 
-        auto raw_eq = EquipmentParser::parse_native_json(json, tag_resolver);
+        auto raw_eq = EquipmentParser::parse_native_json_str(json, tag_resolver);
         auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
         eq_reg.initialize(equipments);
     }

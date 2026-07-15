@@ -4,8 +4,9 @@
 namespace besq::data {
 
 // The vanilla.json content is embedded as a raw string literal.
-// The @"... "@ markers are CMake configure_file syntax — replaced at configure time.
-static constexpr char kVanillaJson[] = R"(@BESQ_VANILLA_JSON@)";
+// @"... "@ markers are CMake configure_file syntax — replaced at configure time.
+// delimiter "json" avoids premature termination on )" sequences in the data.
+static constexpr char kVanillaJson[] = R"json(@BESQ_VANILLA_JSON@)json";
 
 std::string_view vanilla_json() noexcept {
     return std::string_view{kVanillaJson, sizeof(kVanillaJson) - 1};
