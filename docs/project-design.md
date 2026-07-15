@@ -161,15 +161,19 @@ compact::EnchReg (flat conflict matrix)
 
 `AlgorithmExecutor` 管理工作线程生命周期（`Idle → Running → Paused → Completed | Failed | Cancelled`）。工作线程持有 `ExecutionContext`，算法通过它报告进度、投递解方案、响应暂停/取消。
 
-Observer 事件通过 **SPSC（单生产者单消费者）无锁队列** 传递：
+诊断事件通过 **`DiagnosticsService` 全局单例** 的异步管道传递：
 
 ```
-算法线程 → SPSCQueue<ObserverEvent, 256> → dispatch_events() → AlgorithmObserver
+算法线程 → ExecutionContext::report_progress() / report_solution()
+        → DiagnosticsService::push()
+        → try_post_emplace (placement new 到 BoundedMPMCQueue<DiagnosticsEvent, 64>)
+        → EventLoop 线程 (atomic::wait 零 CPU 空闲)
+        → DiagnosticsHandler
+        → DiagnosticsWriter::write() (文件持久化，to_string 在此发生)
+        → AlgorithmObserver::on_*() (异步回调)
 ```
 
-`SPSCQueue` 是 `src/utils/SPSCQueue.hpp` 中定义的定长无锁队列（容量 256），属于本项目 MPMC 无锁队列家族的特化变体。容器、内存序、正确性证明等详细设计见 [`docs/MPMCQueue.md`](MPMCQueue.md)。
-
-工作线程调用 `ExecutionContext::report_progress()` / `report_compact_solution()` 等方法将事件推入队列；消费者线程（通常是主线程）通过 `dispatch_events()` 批量出队并分发给所有已注册的 `AlgorithmObserver` 回调。
+`DiagnosticsEvent` 是 4-kind tagged variant（Exit / Progress / Solution / StateChange），每个事件携带 `task_id`，Observer 可通过 `accept_task_id()` 按任务过滤。所有字符串格式化（`to_string`）只在 EventLoop 线程的文件写入路径中发生，算法线程零开销。
 
 ---
 

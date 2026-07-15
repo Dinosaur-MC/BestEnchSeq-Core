@@ -296,7 +296,7 @@ AlgorithmExecutor (compact-only)
        ├─ 搜索循环（同步，纯 compact::Item / compact::EnchStep）
        ├─ 调用 ForgeEngine::forge_into() / penalty_cost()
        ├─ 调用 ExecutionContext::report_progress()
-       ├─ 调用 ExecutionContext::report_compact_solution()
+       ├─ 调用 ExecutionContext::report_solution()
        └─ 定期检查 ExecutionContext::is_cancelled() / wait_if_paused()
 ```
 
@@ -361,7 +361,7 @@ private:
             // (see CompactDFSAlgorithm.cpp for full details)
 
             // Report solutions in compact form (no domain conversion)
-            ctx.report_compact_solution(_current_steps);
+            ctx.report_solution(_current_steps);
         }
     }
 
