@@ -44,6 +44,9 @@ set(PARSER_UTIL_SRCS
 # Algorithm layer sources (from src/algorithm/CMakeLists.txt)
 include(${PROJECT_ROOT}/src/algorithm/CMakeLists.txt)
 
+# Algorithm serialization sources (from src/algorithm/serialization/CMakeLists.txt)
+include(${PROJECT_ROOT}/src/algorithm/serialization/CMakeLists.txt)
+
 # Compact registries (Logger linked here as CompactedRegistries depends on it)
 set(COMPACT_REG_SRCS
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
@@ -570,5 +573,24 @@ add_executable(test_equipment_registry
 target_include_directories(test_equipment_registry PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_equipment_registry COMMAND test_equipment_registry)
 set_tests_properties(test_equipment_registry PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+# ============================================================================
+# Algorithm serialization tests
+# ============================================================================
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_compact_serializer.cpp)
+    message(FATAL_ERROR "Required test source not found: algorithm/test_compact_serializer.cpp")
+endif()
+
+add_executable(test_compact_serializer
+    algorithm/test_compact_serializer.cpp
+    ${ALGO_SERIAL_SRCS}
+    ${COMPACT_TYPE_SRCS}
+)
+target_include_directories(test_compact_serializer PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_compact_serializer COMMAND test_compact_serializer)
+set_tests_properties(test_compact_serializer PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
