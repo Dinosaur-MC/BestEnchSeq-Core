@@ -33,6 +33,11 @@ add_executable(${PROJECT_NAME} ${MAIN_SRC_LIST})
 # CLI output name: "besq" matches documentation; PROJECT_NAME for CMake-internal
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
 
+# Generated sources (outside GLOB_RECURSE range)
+target_sources(${PROJECT_NAME} PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/EmbeddedData.cpp"
+)
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
@@ -59,6 +64,15 @@ configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/config/BuildConfig.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.h"
 )
+
+# ── Embedded data (vanilla.json compiled into the binary) ──
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/vanilla.json" BESQ_VANILLA_JSON)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/data/EmbeddedData.cpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/EmbeddedData.cpp"
+    @ONLY
+)
+
 set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
 

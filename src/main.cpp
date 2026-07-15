@@ -4,6 +4,7 @@
 #include "adapters/CompactAdapter.h"
 #include "cli/cli.h"
 #include "config/AppConfig.h"
+#include "data/EmbeddedData.h"
 #include "parsers/EnchInfoParser.h"
 #include "log/log.hpp"
 #include "parsers/EquipmentParser.h"
@@ -36,13 +37,27 @@ void load_builtin_data(
     EnchantmentRegistry &ench_reg,
     EquipmentRegistry &eq_reg
 ) {
-    auto raw_ench = EnchInfoParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-    ench_reg.initialize(ench_infos);
+    auto vanilla_path = builtin_data_dir / "vanilla.json";
 
-    auto raw_eq = EquipmentParser::parse(builtin_data_dir / "vanilla.json", tag_resolver);
-    auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-    eq_reg.initialize(equipments);
+    // Try filesystem first (allows user to replace builtin data), fall back to embedded.
+    if (std::filesystem::exists(vanilla_path)) {
+        auto raw_ench = EnchInfoParser::parse(vanilla_path, tag_resolver);
+        auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
+        ench_reg.initialize(ench_infos);
+
+        auto raw_eq = EquipmentParser::parse(vanilla_path, tag_resolver);
+        auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
+        eq_reg.initialize(equipments);
+    } else {
+        auto json = std::string{besq::data::vanilla_json()};
+        auto raw_ench = EnchInfoParser::parse_native_json(json, tag_resolver);
+        auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
+        ench_reg.initialize(ench_infos);
+
+        auto raw_eq = EquipmentParser::parse_native_json(json, tag_resolver);
+        auto equipments = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
+        eq_reg.initialize(equipments);
+    }
 }
 
 void load_custom_data(

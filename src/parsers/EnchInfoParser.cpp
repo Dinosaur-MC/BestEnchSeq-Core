@@ -158,9 +158,15 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
     TagResolver &tag_resolver,
     EnchantmentDataPack *metadata
 ) {
-    // Read and parse the JSON file
-    std::string content = ParserUtils::read_file(path);
-    Json root           = Json::parse(content);
+    return parse_native_json(ParserUtils::read_file(path), tag_resolver, metadata);
+}
+
+std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
+    const std::string &content,
+    TagResolver &tag_resolver,
+    EnchantmentDataPack *metadata
+) {
+    Json root = Json::parse(content);
 
     auto root_var = root.get_value();
     if (!std::holds_alternative<Json::Object>(root_var)) {

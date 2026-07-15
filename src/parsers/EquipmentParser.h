@@ -12,6 +12,12 @@ struct EquipmentParser {
         TagResolver &tag_resolver
     );
 
+    /// Parse native JSON from an in-memory string (e.g. embedded data).
+    static std::vector<RawEquipment> parse_native_json(
+        const std::string &content,
+        TagResolver &tag_resolver
+    );
+
     /// Parse native CSV format (equipments.csv).
     static std::vector<RawEquipment> parse_native_csv(
         const std::filesystem::path &path

@@ -13,9 +13,6 @@ std::vector<RawEquipment> EquipmentParser::parse_native_json(
     const std::filesystem::path &path,
     TagResolver &tag_resolver
 ) {
-    (void)tag_resolver; // Equipment parsing may use tag resolver for categories in future
-
-    // Read and parse the JSON file
     std::string content;
     try {
         content = ParserUtils::read_file(path);
@@ -23,12 +20,19 @@ std::vector<RawEquipment> EquipmentParser::parse_native_json(
         LOG_WARN("Warning: Could not read %s: %s", path.c_str(), e.what());
         return {};
     }
+    return parse_native_json(content, tag_resolver);
+}
+
+std::vector<RawEquipment> EquipmentParser::parse_native_json(
+    const std::string &content,
+    TagResolver &tag_resolver
+) {
+    (void)tag_resolver;
 
     Json root;
     try {
         root = Json::parse(content);
     } catch (const std::exception &) {
-        LOG_WARN("Warning: Could not parse %s", path.c_str());
         return {};
     }
 
