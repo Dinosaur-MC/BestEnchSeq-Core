@@ -349,7 +349,10 @@ def plot_trends(history, hist_path):
 
     # 限制绘图点数，裁剪最旧的数据
     MAX_POINTS = 64
-    if len(entries) > MAX_POINTS:
+    total_before = len(entries)
+    offset = 0
+    if total_before > MAX_POINTS:
+        offset = total_before - MAX_POINTS
         entries = entries[-MAX_POINTS:]
 
     # 收集所有数据集和算法
@@ -362,7 +365,7 @@ def plot_trends(history, hist_path):
         print("历史数据为空，跳过趋势图绘制。")
         return
 
-    run_labels = [f"#{i}" for i in range(len(entries))]
+    run_labels = [f"#{offset + i}" for i in range(len(entries))]
     run_numbers = list(range(len(entries)))
     n = len(all_datasets)
 
@@ -413,6 +416,10 @@ def plot_trends(history, hist_path):
         ax.set_xticks(visible)
         ax.set_xticklabels([run_labels[i] for i in visible], fontsize=7, rotation=45, ha="right")
         ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.08, 1.0))
+        if offset == 0:
+            ax.set_xlim(left=-0.3)  # #0 在轴上会遮挡，留点边距
+        else:
+            ax.set_xlim(left=run_numbers[0])
         ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
