@@ -4,10 +4,16 @@
 #include "algorithm/strategies/astar/AStarMemoryBudget.h"
 #include "algorithm/strategies/astar/AStarDiagnostics.h"
 #include "algorithm/components/ItemPool.h"
+#include "algorithm/serialization/IAlgorithmSerializer.h"
+#include "io/ByteStream.h"
+#include "utils/FlatHashMap.hpp"
 #include "registries/CompactedRegistries.h"
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <vector>
+
+class AStarStateSerializer;
 
 /// A* using Item pool + flat ID-indexed states.
 class AStarAlgorithm : public IAlgorithm {
@@ -15,12 +21,18 @@ public:
     using ItemID = ItemPool::ItemID;
     static constexpr ItemID INVALID_ITEM_ID = ItemPool::INVALID_ITEM_ID;
 
-    explicit AStarAlgorithm(ForgeConfig cfg = {}) noexcept
-        : _forge_engine(std::move(cfg)) {}
+    explicit AStarAlgorithm(ForgeConfig cfg = {});
 
     std::string_view name() const noexcept override { return "astar"; }
     std::string_view version() const noexcept override { return "2.0.0"; }
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
+
+    // ── Serialization support ────────────────────────────────────────────
+    bool is_serializable() const noexcept override { return true; }
+    std::vector<uint8_t> serialize_state() const override;
+    void deserialize_state(const std::vector<uint8_t>& data) override;
+
+    friend class AStarStateSerializer;
 
 private:
 
@@ -83,4 +95,18 @@ private:
     mutable std::vector<int16_t> _h_dirty;      // ids touched in current call
     std::vector<int16_t> _h_max;                // persistent per-enchant max (expand state)
     std::vector<int16_t> _target_level_map;     // target level per ench, 0 = not target
+
+    // ─── 序列化 ───
+    std::unique_ptr<IAlgorithmSerializer> _serializer;
+    bool _state_restored{false};
+    int64_t _explored{0};
+    FlatHashMap<size_t, int32_t> _best_g;
+
+    void _restore_and_execute(const AlgorithmInput& input, ExecutionContext& ctx);
+
+    // ── 序列化访问器 (供 AStarStateSerializer 使用) ────────────────────────
+    void _x_export_best_g(ByteStreamWriter& w) const;
+    void _x_import_best_g(ByteStreamReader& r);
+    int64_t _x_explored() const noexcept { return _explored; }
+    void _x_set_explored(int64_t v) { _explored = v; }
 };

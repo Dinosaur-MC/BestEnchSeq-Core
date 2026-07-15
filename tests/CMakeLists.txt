@@ -315,6 +315,7 @@ add_executable(test_algorithm_strategies
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${ALGO_SERIAL_SRCS}
 )
 target_include_directories(test_algorithm_strategies PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_strategies COMMAND test_algorithm_strategies)
@@ -601,9 +602,11 @@ endif()
 
 add_executable(test_astar_state_serializer
     algorithm/test_astar_state_serializer.cpp
-    ${PROJECT_ROOT}/src/algorithm/strategies/astar/AStarStateSerializer.cpp
-    ${PROJECT_ROOT}/src/algorithm/serialization/CompactSerializer.cpp
+    ${ALGO_ALL_SRCS}
+    ${ALGO_SERIAL_SRCS}
     ${COMPACT_TYPE_SRCS}
+    ${COMPACT_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
 )
 target_include_directories(test_astar_state_serializer PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_astar_state_serializer COMMAND test_astar_state_serializer)

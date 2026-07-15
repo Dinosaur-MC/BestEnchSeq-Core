@@ -71,6 +71,13 @@ public:
     size_t size()  const noexcept { return _size; }
     bool   empty() const noexcept { return _size == 0; }
 
+    /// Bucket iteration for serialization.
+    size_t bucket_count() const noexcept { return _occupied.size(); }
+    bool occupied_at(size_t i) const noexcept { return i < _occupied.size() && _occupied[i]; }
+    Key key_at(size_t i) const noexcept { return _keys[i]; }
+    Val& val_at(size_t i) noexcept { return _vals[i]; }
+    const Val& val_at(size_t i) const noexcept { return _vals[i]; }
+
     void clear() {
         if (!_occupied.empty())
             _occupied.assign(_occupied.size(), false);
