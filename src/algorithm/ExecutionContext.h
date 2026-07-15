@@ -45,7 +45,8 @@ public:
     // 🟡 流式通知 — 直接内部调 DiagnosticsService::push
     // ═══════════════════════════════════════════════════════════════════
     void report_progress(double percent, ProgressStatus status);
-    void report_solution(const std::vector<compact::EnchStep>& steps);
+    void report_solution(const std::vector<compact::EnchStep>& steps);   // lvalue → 1 copy
+    void report_solution(std::vector<compact::EnchStep>&& steps);        // rvalue → move (0 copy)
 
     // ═══════════════════════════════════════════════════════════════════
     // 🟢 退出诊断 — 执行前后各调用一次

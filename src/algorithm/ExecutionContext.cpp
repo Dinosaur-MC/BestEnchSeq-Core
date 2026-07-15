@@ -37,20 +37,30 @@ void ExecutionContext::report_progress(double percent, ProgressStatus status) {
         DiagnosticsEvent::ProgressPayload{percent, status});
 }
 
+namespace {
+int32_t sum_step_costs(const std::vector<compact::EnchStep>& steps) noexcept {
+    int32_t total = 0;
+    for (const auto& s : steps) total += s.cost;
+    return total;
+}
+} // anonymous namespace
+
 void ExecutionContext::report_solution(const std::vector<compact::EnchStep>& steps) {
-    // Compute cost
-    int32_t total_cost = 0;
-    for (const auto& s : steps)
-        total_cost += s.cost;
-
-    // Copy steps into shared_ptr — the single owner (one copy, unavoidable).
     auto sol = std::make_shared<const compact::EnchSolution>(
-        compact::EnchSolution{steps, total_cost});
+        compact::EnchSolution{steps, sum_step_costs(steps)});
 
-    // Store in _solutions (shared_ptr RC+1, no data copy)
     append_solution(sol);
+    DiagnosticsService::instance().push(
+        DiagEventKind::Solution, std::string{algorithm_name()}, task_id(),
+        DiagnosticsEvent::SolutionPayload{std::move(sol)});
+}
 
-    // Push to observer (shared_ptr RC+1, no data copy)
+void ExecutionContext::report_solution(std::vector<compact::EnchStep>&& steps) {
+    int32_t total_cost = sum_step_costs(steps);
+    auto sol = std::make_shared<const compact::EnchSolution>(
+        compact::EnchSolution{std::move(steps), total_cost});  // zero copy
+
+    append_solution(sol);
     DiagnosticsService::instance().push(
         DiagEventKind::Solution, std::string{algorithm_name()}, task_id(),
         DiagnosticsEvent::SolutionPayload{std::move(sol)});
