@@ -1,4 +1,6 @@
 #include "ExecutionContext.h"
+#include "algorithm/diagnostics/DiagnosticsService.h"
+#include "algorithm/diagnostics/DiagnosticsEvent.h"
 #include <algorithm>
 #include <mutex>
 
@@ -18,56 +20,57 @@ void ExecutionContext::report_progress(double percent, ProgressStatus status) {
 
     if (pct == 100 || pct == 0) {
         _progress_pct.store(pct, std::memory_order_relaxed);
-        if (_sink.on_progress)
-            _sink.on_progress(percent, status, _sink.context);
     } else {
         int prev = _progress_pct.load(std::memory_order_relaxed);
-        if (pct - prev >= 5) {
-            if (_progress_pct.compare_exchange_weak(prev, pct,
-                    std::memory_order_relaxed, std::memory_order_relaxed)) {
-                if (_sink.on_progress)
-                    _sink.on_progress(percent, status, _sink.context);
-            }
-        }
+        if (pct - prev < 5)
+            return;
+        if (!_progress_pct.compare_exchange_weak(prev, pct,
+                std::memory_order_relaxed, std::memory_order_relaxed))
+            return;
     }
+
+    DiagnosticsService::instance().push(
+        DiagEventKind::Progress, std::string{algorithm_name()},
+        DiagnosticsEvent::ProgressPayload{percent, status});
 }
 
-void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> steps) {
+void ExecutionContext::report_solution(std::vector<compact::EnchStep> steps) {
     auto sol = std::make_shared<const compact::EnchSolution>(
         compact::EnchSolution{std::move(steps), 0});
 
-    append_compact_solution(*sol);
+    append_solution(*sol);
 
-    if (_sink.on_solution && _algo_name)
-        _sink.on_solution(sol, _algo_name, _sink.context);
+    DiagnosticsService::instance().push(
+        DiagEventKind::Solution, std::string{algorithm_name()},
+        DiagnosticsEvent::SolutionPayload{std::move(sol)});
 }
 
-void ExecutionContext::append_compact_solution(compact::EnchSolution solution) {
+void ExecutionContext::append_solution(compact::EnchSolution solution) {
     if (solution.total_cost == 0) {
         for (const auto& s : solution.steps)
             solution.total_cost += s.cost;
     }
 
-    std::lock_guard lock(_accum_mtx);
+    std::lock_guard lock(_sol_mtx);
 
-    // _accumulated is always sorted — find the insertion point via binary
+    // _solutions is always sorted — find the insertion point via binary
     // search then insert directly, avoiding a full O(n log n) sort.
     // O(n) total per call (O(log n) search + O(n) shift).
-    auto it = std::upper_bound(_accumulated.begin(), _accumulated.end(),
+    auto it = std::upper_bound(_solutions.begin(), _solutions.end(),
                                 solution.total_cost,
                                 [](int32_t cost, const auto& sol) { return cost < sol.total_cost; });
 
-    if (_accumulated.size() >= BESQ_MAX_SOLUTIONS) [[likely]] {
-        if (it == _accumulated.end())
+    if (_solutions.size() >= BESQ_MAX_SOLUTIONS) [[likely]] {
+        if (it == _solutions.end())
             return;                     // worse than all kept solutions — discard
-        _accumulated.emplace(it, std::move(solution));
-        _accumulated.resize(BESQ_MAX_SOLUTIONS);
+        _solutions.emplace(it, std::move(solution));
+        _solutions.resize(BESQ_MAX_SOLUTIONS);
     } else {
-        _accumulated.emplace(it, std::move(solution));
+        _solutions.emplace(it, std::move(solution));
     }
 }
 
 std::vector<compact::EnchSolution> ExecutionContext::get_solutions() const {
-    std::lock_guard lock(_accum_mtx);
-    return _accumulated;
+    std::lock_guard lock(_sol_mtx);
+    return _solutions;
 }
