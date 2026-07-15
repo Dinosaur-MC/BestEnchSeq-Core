@@ -594,3 +594,19 @@ add_test(NAME test_compact_serializer COMMAND test_compact_serializer)
 set_tests_properties(test_compact_serializer PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_astar_state_serializer.cpp)
+    message(FATAL_ERROR "Required test source not found: algorithm/test_astar_state_serializer.cpp")
+endif()
+
+add_executable(test_astar_state_serializer
+    algorithm/test_astar_state_serializer.cpp
+    ${PROJECT_ROOT}/src/algorithm/strategies/astar/AStarStateSerializer.cpp
+    ${PROJECT_ROOT}/src/algorithm/serialization/CompactSerializer.cpp
+    ${COMPACT_TYPE_SRCS}
+)
+target_include_directories(test_astar_state_serializer PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_astar_state_serializer COMMAND test_astar_state_serializer)
+set_tests_properties(test_astar_state_serializer PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
