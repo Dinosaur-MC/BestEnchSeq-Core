@@ -76,7 +76,8 @@ src/
 ├── config/                      ← Configuration layer (leaf, only STL + EnvUtil)
 │   ├── ForgeConfig.h            ← Forge behavior config (uses MCE from types/Platform.h)
 │   ├── SearchConfig.h           ← Search limits (max_solutions, max_depth, memory_mb, time)
-│   └── AppConfig.h              ← Application-level config (env-var backed)
+│   ├── AppConfig.h              ← Application-level config (env-var backed)
+│   └── BuildConfig.h.in         ← CMake-generated compile-time config (version, feature toggles)
 ├── adapters/                    ← Domain ↔ compact / serialization boundary
 │   ├── CompactAdapter.h/.cpp    ← apply / recall (domain ↔ compact)
 │   ├── RegistryResolver.h/.cpp  ← String → ID resolution
@@ -121,30 +122,31 @@ src/
 │   ├── AlgorithmExecutor.h/.cpp ← Async engine (thread lifecycle + observer dispatch)
 │   ├── ExecutionContext.h/.cpp  ← Cancel/pause/progress + accumulator
 │   ├── AlgorithmObserver.h      ← Streaming callbacks
-│   ├── DiagnosticsService.h/.cpp← Async diagnostics dispatch + persistence.
-│   │                               Built on EventLoop data mode.
-│   ├── DiagnosticsWriter.h/.cpp ← Diagnostics persist-to-disk
-│   ├── Utils.h                  ← Shared helpers (meets_target())
+│   ├── diagnostics/             ← Async diagnostics pipeline (event-driven)
+│   │   ├── DiagnosticsService.h/.cpp ← Event dispatch + observer notification
+│   │   ├── DiagnosticsWriter.h/.cpp  ← Persist-to-disk
+│   │   └── AlgorithmDiagnostics.h/.cpp ← Exit diagnostics struct hierarchy
 │   ├── components/              ← Algorithm building blocks
 │   │   ├── Heuristic.h          ← Pool-based admissible heuristic
 │   │   ├── HeuristicBasic.h     ← Direct Item-vector heuristic (no ItemPool dep)
+│   │   ├── SearchUtils.h        ← fill_max_levels / compute_h helpers
 │   │   ├── StateHash.h          ← State hashing utilities
 │   │   ├── TTTable.h            ← Epoch-based IDA* transposition table
-│   │   ├── ItemPool.h           ← Hash-dedup item pool (backed by MemoryPool)
-│   │   ├── AlgorithmDiagnostics.h  ← Pure-data diagnostics struct
-│   │   ├── AStarDiagnostics.h   ← Pure-data AStar diagnostics struct
-│   │   └── AStarMemoryBudget.h/.cpp ← AStar memory budget estimator
+│   │   └── ItemPool.h           ← Hash-dedup item pool (backed by MemoryPool)
 │   ├── forge/
 │   │   ├── IForgeEngine.h       ← Virtual interface + default sub-ops
 │   │   └── ForgeEngine.h/.cpp   ← Vanilla implementation
-│   └── strategies/
-│       ├── GreedyAlgorithm.*    ← Fast approximate
-│       ├── HammingAlgorithm.*   ← Popcount-balanced merge tree (near-optimal, 0ms)
-│       ├── DFSAlgorithm.*       ← Heuristic search (branch-and-bound, approx)
-│       ├── AStarAlgorithm.*     ← Exact optimal (admissible heuristic)
-│       ├── DynamicPenaltyBalancingAlgorithm.* ← High-quality approx
-│       ├── HierarchicalMergeAlgorithm.* ← Large-scale approx
-│       └── IDAStarAlgorithm.*   ← DFS + TTTable (memory-efficient exact)
+│   └── strategies/              ← Algorithm strategy implementations
+│       ├── greedy/              GreedyAlgorithm (fast approximate)
+│       ├── diff_first/          DiffFirstAlgorithm (PPN-layer merge)
+│       ├── hamming/             HammingAlgorithm (popcount-balanced tree)
+│       ├── hierarchical/        HierarchicalMergeAlgorithm (large-scale approx)
+│       ├── penalty_balance/     DynamicPenaltyBalancingAlgorithm
+│       ├── dfs/                 DFSAlgorithm (branch-and-bound + heuristic)
+│       ├── astar/               AStarAlgorithm (exact optimal + ItemPool)
+│       │   ├── AStarAlgorithm.* / AStarDiagnostics.* / AStarMemoryBudget.*
+│       └── idastar/             IDAStarAlgorithm (TTTable, memory-efficient)
+│           ├── IDAStarAlgorithm.* / IDAStarDiagnostics.*
 ├── utils/                       ← Generic utilities, zero project dependencies
 │   ├── ParserUtils.hpp          ← String/JSON/file helpers (general)
 │   ├── EnvUtil.hpp              ← Env-var access (get_env<T>)
@@ -171,7 +173,10 @@ src/
 └── BESQTypes.h                  ← Umbrella include for domain types
 ```
 
-See `docs/MPMCQueue.md` for the full design documentation.
+See `docs/MPMCQueue.md` for the full queue design documentation.
+Per-layer READMEs (architecture, API reference, development guide):
+`src/types/`, `src/utils/`, `src/parsers/`, `src/adapters/`,
+`src/registries/`, `src/io/`, `src/log/`, and `src/algorithm/` (with sub-directories).
 
 ### Key Design Decisions
 
