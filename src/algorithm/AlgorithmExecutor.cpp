@@ -189,6 +189,12 @@ void AlgorithmExecutor::cancel() {
         _ctx->resume();
     }
     _state_cv.notify_all();
+
+    // Notify observer of the Running/Paused → Cancelled transition
+    if (!_algo_name_cache.empty())
+        DiagnosticsService::instance().push(
+            DiagEventKind::StateChange, _algo_name_cache.c_str(),
+            DiagnosticsEvent::StatePayload{prev, AlgorithmState::Cancelled});
 }
 
 AlgorithmState AlgorithmExecutor::wait() {
