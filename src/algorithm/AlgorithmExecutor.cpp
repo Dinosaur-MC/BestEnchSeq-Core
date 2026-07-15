@@ -235,16 +235,23 @@ AlgorithmOutput AlgorithmExecutor::output() const {
 
 std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
     auto s = _state.load(std::memory_order_acquire);
-    if (s == AlgorithmState::Idle || !_algorithm->is_resumable())
+    if (s != AlgorithmState::Paused)
+        return {};
+    if (!_algorithm->is_serializable())
         return {};
     return _algorithm->serialize_state();
 }
 
 bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
-    if (_state.load(std::memory_order_acquire) != AlgorithmState::Idle)
+    auto s = _state.load(std::memory_order_acquire);
+    if (s != AlgorithmState::Idle)
         return false;
-    if (!_algorithm->is_resumable() || data.empty())
+    if (!_algorithm->is_serializable() || data.empty())
         return false;
     _algorithm->deserialize_state(data);
     return true;
+}
+
+bool AlgorithmExecutor::is_serializable() const noexcept {
+    return _algorithm && _algorithm->is_serializable();
 }

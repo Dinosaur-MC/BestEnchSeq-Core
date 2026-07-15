@@ -44,6 +44,7 @@ public:
 
     std::vector<uint8_t> serialize_state() const;
     bool restore_state(const std::vector<uint8_t>& data);
+    bool is_serializable() const noexcept;
 
 private:
     void _join_worker() noexcept;

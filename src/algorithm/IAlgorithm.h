@@ -22,6 +22,7 @@ class IAlgorithm {
     virtual bool simulate(const AlgorithmInput &input) const noexcept { (void)input; return true; }
 
     virtual bool is_resumable() const noexcept { return false; }
+    virtual bool is_serializable() const noexcept { return false; }
     virtual std::vector<uint8_t> serialize_state() const { return {}; }
     virtual void deserialize_state(const std::vector<uint8_t> &) {}
 };
