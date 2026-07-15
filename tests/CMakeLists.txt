@@ -14,13 +14,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # Shared dependency groups (reused across test targets)
 # ============================================================================
 
-# Core domain types
-set(DOMAIN_TYPE_SRCS
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchSet.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-)
+# Type layer sources (from src/types/CMakeLists.txt)
+include(${PROJECT_ROOT}/src/types/CMakeLists.txt)
 
 # Core registries
 set(REGISTRY_CORE_SRCS
@@ -28,28 +23,22 @@ set(REGISTRY_CORE_SRCS
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
 )
 
-# Parser utilities (json + Logger for log/log.hpp dependency)
+# Global dependencies
+set(GLOBAL_LOGGER_SRCS ${PROJECT_ROOT}/src/log/Logger.cpp)
+
+# Parser utilities
 set(PARSER_UTIL_SRCS
-    ${PROJECT_ROOT}/src/log/Logger.cpp
+    ${GLOBAL_LOGGER_SRCS}
     ${PROJECT_ROOT}/src/io/json.cpp
 )
 
-# Compact types
-set(COMPACT_TYPE_SRCS ${PROJECT_ROOT}/src/types/CompactedTypes.cpp)
-
-# Algorithm engine core (AlgorithmExecutor + ExecutionContext + ForgeEngine)
-set(ALGO_ENGINE_SRCS
-    ${PROJECT_ROOT}/src/algorithm/AlgorithmExecutor.cpp
-    ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsWriter.cpp
-    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsService.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
-)
+# Algorithm layer sources (from src/algorithm/CMakeLists.txt)
+include(${PROJECT_ROOT}/src/algorithm/CMakeLists.txt)
 
 # Compact registries (Logger linked here as CompactedRegistries depends on it)
 set(COMPACT_REG_SRCS
     ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
-    ${PROJECT_ROOT}/src/log/Logger.cpp
+    ${GLOBAL_LOGGER_SRCS}
 )
 
 # Equipment registry
@@ -139,7 +128,6 @@ add_executable(test_input_parser
     ${PARSER_UTIL_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
 )
 target_include_directories(test_input_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_input_parser COMMAND test_input_parser)
@@ -152,9 +140,7 @@ add_executable(test_output_formatter
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${REGISTRY_CORE_SRCS}
-    ${DOMAIN_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/EnchSolution.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${TYPE_ALL_SRCS}
     ${EQUIP_REG_SRCS}
 )
 target_include_directories(test_output_formatter PRIVATE ${TEST_INCLUDE})
@@ -181,16 +167,14 @@ add_executable(test_integration
     ${REGISTRY_CORE_SRCS}
     ${EQUIP_REG_SRCS}
     # Domain types
-    ${DOMAIN_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/EnchSolution.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
+    ${TYPE_ALL_SRCS}
     # Algorithm layer (integration tests)
     ${ALGO_ENGINE_SRCS}
+    ${ALGO_FORGE_SRCS}
+    ${ALGO_DIAG_CORE_SRCS}
     ${COMPACT_REG_SRCS}
-    ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/greedy/GreedyAlgorithm.cpp
-    ${PROJECT_ROOT}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
 )
 target_include_directories(test_integration PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_integration COMMAND test_integration)
@@ -208,13 +192,10 @@ endif()
 
 add_executable(test_forge_engine
     algorithm/test_forge_engine.cpp
-    ${PROJECT_ROOT}/src/algorithm/forge/ForgeEngine.cpp
+    ${ALGO_FORGE_SRCS}
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${COMPACT_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${TYPE_ALL_SRCS}
 )
 target_include_directories(test_forge_engine PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_forge_engine COMMAND test_forge_engine)
@@ -228,7 +209,6 @@ endif()
 
 add_executable(test_exp_calculator
     utils/test_exp_calculator.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${DOMAIN_TYPE_SRCS}
     ${REGISTRY_CORE_SRCS}
 )
@@ -245,7 +225,6 @@ endif()
 add_executable(test_domain_types
     types/test_domain_types.cpp
     ${DOMAIN_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
 )
 target_include_directories(test_domain_types PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_domain_types COMMAND test_domain_types)
@@ -260,11 +239,9 @@ endif()
 add_executable(test_execution_context
     algorithm/test_execution_context.cpp
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
-    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsService.cpp
-    ${PROJECT_ROOT}/src/algorithm/diagnostics/DiagnosticsWriter.cpp
+    ${ALGO_DIAG_CORE_SRCS}
     ${COMPACT_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/log/Logger.cpp
-    ${PROJECT_ROOT}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
+    ${GLOBAL_LOGGER_SRCS}
 )
 target_include_directories(test_execution_context PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_execution_context COMMAND test_execution_context)
@@ -281,7 +258,6 @@ add_executable(test_algorithm_registry
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
 )
 target_include_directories(test_algorithm_registry PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_registry COMMAND test_algorithm_registry)
@@ -296,12 +272,12 @@ endif()
 add_executable(test_algorithm_executor
     integration/test_algorithm_executor.cpp
     ${ALGO_ENGINE_SRCS}
+    ${ALGO_FORGE_SRCS}
+    ${ALGO_DIAG_CORE_SRCS}
     ${COMPACT_REG_SRCS}
-    ${COMPACT_TYPE_SRCS}
+    ${TYPE_ALL_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
     ${PROJECT_ROOT}/src/registries/EnchantmentRegistry.cpp
-    ${PROJECT_ROOT}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
 )
 target_include_directories(test_algorithm_executor PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_algorithm_executor COMMAND test_algorithm_executor)
@@ -313,18 +289,17 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/algorithm/test_algorithm_strategies.cp
     message(FATAL_ERROR "Required test source not found: algorithm/test_algorithm_strategies.cpp")
 endif()
 
-include(${PROJECT_ROOT}/src/algorithm/strategies/CMakeLists.txt)
+# ALGO_STRATEGY_SRGS and other ALGO_* variables already loaded
+# from src/algorithm/CMakeLists.txt above.
 
 add_executable(test_algorithm_strategies
     algorithm/test_algorithm_strategies.cpp
     ${ALGO_ENGINE_SRCS}
+    ${ALGO_FORGE_SRCS}
+    ${ALGO_DIAG_CORE_SRCS}
     ${ALGO_STRATEGY_SRGS}
-    ${ALGO_DIAG_SRCS}
     ${PROJECT_ROOT}/src/algorithm/strategies/astar/AStarMemoryBudget.cpp
-    ${COMPACT_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
+    ${TYPE_ALL_SRCS}
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
@@ -382,10 +357,7 @@ add_executable(test_ench_reg
     registry/test_ench_reg.cpp
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
-    ${PROJECT_ROOT}/src/types/EnchInfo.cpp
-    ${PROJECT_ROOT}/src/types/Ench.cpp
-    ${COMPACT_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/Equipment.cpp
+    ${TYPE_ALL_SRCS}
 )
 target_include_directories(test_ench_reg PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_ench_reg COMMAND test_ench_reg)
@@ -431,10 +403,7 @@ add_executable(test_compact_adapter
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${EQUIP_REG_SRCS}
-    ${DOMAIN_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/EnchSolution.cpp
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
-    ${COMPACT_TYPE_SRCS}
+    ${TYPE_ALL_SRCS}
 )
 target_include_directories(test_compact_adapter PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_compact_adapter COMMAND test_compact_adapter)
@@ -465,7 +434,6 @@ add_executable(test_serializer
     utils/test_serializer.cpp
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
-    ${PROJECT_ROOT}/src/types/ItemStack.cpp
     ${EQUIP_REG_SRCS}
 )
 target_include_directories(test_serializer PRIVATE ${TEST_INCLUDE})
