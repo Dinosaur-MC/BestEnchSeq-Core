@@ -27,6 +27,9 @@ set(ALGO_DIAG_CORE_SRCS
 # ── Strategy implementations (incl. per-algo diagnostics in strategy dirs) ──
 include("${CMAKE_CURRENT_LIST_DIR}/strategies/CMakeLists.txt")
 
+# ── Serialization ──
+include("${CMAKE_CURRENT_LIST_DIR}/serialization/CMakeLists.txt")
+
 # ── Compact types (tightly coupled with algorithm layer) ──
 set(ALGO_COMPACT_TYPE_SRCS
     "${CMAKE_CURRENT_LIST_DIR}/../types/CompactedTypes.cpp"
@@ -37,5 +40,6 @@ set(ALGO_ALL_SRCS
     ${ALGO_ENGINE_SRCS}
     ${ALGO_FORGE_SRCS}
     ${ALGO_DIAG_CORE_SRCS}
+    ${ALGO_SERIAL_SRCS}
     ${ALGO_STRATEGY_SRGS}
 )

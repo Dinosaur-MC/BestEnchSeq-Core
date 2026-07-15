@@ -8,11 +8,20 @@
 #include <cstdint>
 #include <vector>
 
+#ifdef __GNUC__
+#define BESQ_DEPRECATED_SERIALIZER __attribute__((deprecated("Use algorithm/serialization/CompactSerializer instead")))
+#elif defined(_MSC_VER)
+#define BESQ_DEPRECATED_SERIALIZER __declspec(deprecated("Use algorithm/serialization/CompactSerializer instead"))
+#else
+#define BESQ_DEPRECATED_SERIALIZER
+#endif
+
 /// Binary Serializer: BESQ domain types ↔ byte stream.
 /// Header constants (magic "BESQ" + version) are defined for external
 /// consumers to write/verify as needed.  This class writes plain data
 /// without a header — callers prepend header bytes if required.
 /// Uses ByteStream for all low-level byte I/O.
+BESQ_DEPRECATED_SERIALIZER
 class Serializer {
 public:
     static constexpr uint32_t MAGIC  = 0x51534542;  // "BESQ" little-endian
