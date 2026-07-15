@@ -122,15 +122,15 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         }
         if (!met) {
             _diag.status = "CompleteNoSolution";
-            ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+            ctx.set_exit_diagnostics(_diag);
             ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
             return;
         }
     }
 
     _diag.status = "Complete";
-    ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+    ctx.set_exit_diagnostics(_diag);
 
-    ctx.report_solution(std::move(compact_steps));
+    ctx.report_solution(compact_steps);
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }

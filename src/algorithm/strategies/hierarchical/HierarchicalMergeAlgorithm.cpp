@@ -94,7 +94,7 @@ void HierarchicalMergeAlgorithm::execute(
 
     if (items.size() <= 1) {
         _diag.status = "GoalAlreadyMet";
-        ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+        ctx.set_exit_diagnostics(_diag);
         ctx.report_solution({});
         ctx.report_progress(1.0, ProgressStatus::GoalAlreadyMet);
         return;
@@ -200,9 +200,9 @@ phase2:
 
     if (group_results.empty()) {
         _diag.status = "Complete";
-        ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+        ctx.set_exit_diagnostics(_diag);
 
-        ctx.report_solution(std::move(compact_steps));
+        ctx.report_solution(compact_steps);
         ctx.report_progress(1.0, ProgressStatus::Complete);
         return;
     }
@@ -212,7 +212,7 @@ phase2:
     for (size_t g = 1; g < group_results.size(); ++g) {
         if (ctx.is_cancelled()) {
             _diag.status = "Cancelled";
-            ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+            ctx.set_exit_diagnostics(_diag);
             return;
         }
         ctx.wait_if_paused();
@@ -248,7 +248,7 @@ phase2:
     }
 
     _diag.status = "Complete";
-    ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+    ctx.set_exit_diagnostics(_diag);
 
     // Verify final equipment achieves the target
     {
@@ -263,6 +263,6 @@ phase2:
         }
     }
 
-    ctx.report_solution(std::move(compact_steps));
+    ctx.report_solution(compact_steps);
     ctx.report_progress(1.0, ProgressStatus::Complete);
 }

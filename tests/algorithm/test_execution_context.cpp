@@ -67,7 +67,7 @@ void test_solution_accumulation() {
     std::vector<compact::EnchStep> steps;
     steps.push_back(compact::EnchStep{{}, {}, 5});
     steps.push_back(compact::EnchStep{{}, {}, 3});
-    ctx.report_solution(std::move(steps));
+    ctx.report_solution(steps);
 
     auto solutions = ctx.get_solutions();
     expect(solutions.size() == 1, "should accumulate one solution");

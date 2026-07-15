@@ -117,7 +117,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _diag.final_bound = _best_cost;
     _diag.solutions_found = _solutions_found;
     _diag.status = _best_cost < INT32_MAX ? "Complete" : "CompleteNoSolution";
-    ctx.set_exit_diagnostics(std::make_unique<SearchDiagnostics>(std::move(_diag)));
+    ctx.set_exit_diagnostics(_diag);
 
     ctx.report_progress(1.0, _best_cost < INT32_MAX
         ? ProgressStatus::Complete
@@ -158,7 +158,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
 
         if (meets_target(_stack[frame_idx].items[0], _target)) {
             ++_solutions_found;
-            ctx.report_solution(std::move(_current_steps));
+            ctx.report_solution(_current_steps);
 
             if (_best_steps.empty() || _stack[frame_idx].cost_so_far < _best_cost) {
                 _best_cost = _stack[frame_idx].cost_so_far;

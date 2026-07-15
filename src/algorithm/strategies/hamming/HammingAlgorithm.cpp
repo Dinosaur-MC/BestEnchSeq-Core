@@ -206,9 +206,9 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
 
                     _diag.solution_cost = total_cost;
                     _diag.status = "Complete";
-                    ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+                    ctx.set_exit_diagnostics(_diag);
 
-                    ctx.report_solution(std::move(steps));
+                    ctx.report_solution(steps);
                     ctx.report_progress(1.0, ProgressStatus::Complete);
                     return;
                 }
@@ -219,7 +219,7 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     // ── No solution ─────────────────────────────────────────────────────
 
     _diag.status = cancelled ? "Cancelled" : "CompleteNoSolution";
-    ctx.set_exit_diagnostics(std::make_unique<AlgorithmDiagnostics>(std::move(_diag)));
+    ctx.set_exit_diagnostics(_diag);
 
     ctx.report_progress(1.0,
         cancelled ? ProgressStatus::Cancelled

@@ -37,35 +37,36 @@ void ExecutionContext::report_progress(double percent, ProgressStatus status) {
         DiagnosticsEvent::ProgressPayload{percent, status});
 }
 
-void ExecutionContext::report_solution(std::vector<compact::EnchStep> steps) {
+void ExecutionContext::report_solution(const std::vector<compact::EnchStep>& steps) {
+    // Compute cost
+    int32_t total_cost = 0;
+    for (const auto& s : steps)
+        total_cost += s.cost;
+
+    // Copy steps into shared_ptr — the single owner (one copy, unavoidable).
     auto sol = std::make_shared<const compact::EnchSolution>(
-        compact::EnchSolution{std::move(steps), 0});
+        compact::EnchSolution{steps, total_cost});
 
-    append_solution(*sol);
+    // Store in _solutions (shared_ptr RC+1, no data copy)
+    append_solution(sol);
 
+    // Push to observer (shared_ptr RC+1, no data copy)
     DiagnosticsService::instance().push(
         DiagEventKind::Solution, std::string{algorithm_name()}, task_id(),
         DiagnosticsEvent::SolutionPayload{std::move(sol)});
 }
 
-void ExecutionContext::append_solution(compact::EnchSolution solution) {
-    if (solution.total_cost == 0) {
-        for (const auto& s : solution.steps)
-            solution.total_cost += s.cost;
-    }
-
+void ExecutionContext::append_solution(std::shared_ptr<const compact::EnchSolution> solution) {
+    auto cost = solution->total_cost;
     std::lock_guard lock(_sol_mtx);
 
-    // _solutions is always sorted — find the insertion point via binary
-    // search then insert directly, avoiding a full O(n log n) sort.
-    // O(n) total per call (O(log n) search + O(n) shift).
     auto it = std::upper_bound(_solutions.begin(), _solutions.end(),
-                                solution.total_cost,
-                                [](int32_t cost, const auto& sol) { return cost < sol.total_cost; });
+                                cost,
+                                [](int32_t c, const auto& sol) { return c < sol->total_cost; });
 
     if (_solutions.size() >= BESQ_MAX_SOLUTIONS) [[likely]] {
         if (it == _solutions.end())
-            return;                     // worse than all kept solutions — discard
+            return;
         _solutions.emplace(it, std::move(solution));
         _solutions.resize(BESQ_MAX_SOLUTIONS);
     } else {
@@ -75,5 +76,9 @@ void ExecutionContext::append_solution(compact::EnchSolution solution) {
 
 std::vector<compact::EnchSolution> ExecutionContext::get_solutions() const {
     std::lock_guard lock(_sol_mtx);
-    return _solutions;
+    std::vector<compact::EnchSolution> result;
+    result.reserve(_solutions.size());
+    for (const auto& sol : _solutions)
+        result.push_back(*sol);  // single copy when output is actually requested
+    return result;
 }

@@ -249,7 +249,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         for (const auto& s : _solution_path)
             steps.push_back({_pool[s.base_id], _pool[s.sac_id], s.cost});
 
-        ctx.report_solution(std::move(steps));
+        ctx.report_solution(steps);
         ctx.report_progress(1.0, ProgressStatus::Complete);
     } else {
         _diag.status = ctx.is_cancelled() ? "Cancelled" : "CompleteNoSolution";
@@ -257,5 +257,5 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
             ctx.is_cancelled() ? ProgressStatus::Cancelled
                                : ProgressStatus::CompleteNoSolution);
     }
-    ctx.set_exit_diagnostics(std::make_unique<IDAStarDiagnostics>(std::move(_diag)));
+    ctx.set_exit_diagnostics(_diag);
 }

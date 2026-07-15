@@ -273,7 +273,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                     steps.push_back({_pool[sn.base_id], _pool[sn.sac_id], sn.cost});
                 }
             }
-            ctx.report_solution(std::move(steps));
+            ctx.report_solution(steps);
             ctx.report_progress(1.0, ProgressStatus::Complete);
 
             _diag.explored_count = explored;
@@ -290,7 +290,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
               + static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode))
               + static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
             _diag.status = "Complete";
-            ctx.set_exit_diagnostics(std::make_unique<AStarDiagnostics>(std::move(_diag)));
+            ctx.set_exit_diagnostics(_diag);
             return;
         }
 
@@ -429,5 +429,5 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
         ctx.report_progress(1.0, ProgressStatus::CompleteNoSolution);
         _diag.status = "CompleteNoSolution";
     }
-    ctx.set_exit_diagnostics(std::make_unique<AStarDiagnostics>(std::move(_diag)));
+    ctx.set_exit_diagnostics(_diag);
 }

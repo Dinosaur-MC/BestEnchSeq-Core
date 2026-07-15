@@ -45,13 +45,19 @@ public:
     // 🟡 流式通知 — 直接内部调 DiagnosticsService::push
     // ═══════════════════════════════════════════════════════════════════
     void report_progress(double percent, ProgressStatus status);
-    void report_solution(std::vector<compact::EnchStep> steps);
+    void report_solution(const std::vector<compact::EnchStep>& steps);
 
     // ═══════════════════════════════════════════════════════════════════
     // 🟢 退出诊断 — 执行前后各调用一次
     // ═══════════════════════════════════════════════════════════════════
     void set_exit_diagnostics(std::unique_ptr<AlgorithmDiagnostics> d) {
         _exit_diag = std::move(d);
+    }
+    // Convenience: deduces concrete type from _diag member, algorithm just writes
+    //   ctx.set_exit_diagnostics(_diag);
+    template <typename T>
+    void set_exit_diagnostics(T& diag) {
+        set_exit_diagnostics(std::make_unique<T>(std::move(diag)));
     }
     std::unique_ptr<AlgorithmDiagnostics> consume_exit_diagnostics() {
         return std::move(_exit_diag);
@@ -77,7 +83,7 @@ public:
     }
 
 private:
-    void append_solution(compact::EnchSolution solution);
+    void append_solution(std::shared_ptr<const compact::EnchSolution> solution);
 
     // ── 预缓存常量 ────────────────────────────────────────────────────
     size_t _task_id;
@@ -100,7 +106,7 @@ private:
 
     // ── 解法累积 ─────────────────────────────────────────────────────
     mutable std::mutex _sol_mtx;
-    std::vector<compact::EnchSolution> _solutions;
+    std::vector<std::shared_ptr<const compact::EnchSolution>> _solutions;
 
     // ── 退出诊断 ──────────────────────────────────────────────────────
     std::unique_ptr<AlgorithmDiagnostics> _exit_diag;
