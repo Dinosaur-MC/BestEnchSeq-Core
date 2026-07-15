@@ -262,6 +262,7 @@ add_executable(test_execution_context
     ${PROJECT_ROOT}/src/algorithm/ExecutionContext.cpp
     ${COMPACT_TYPE_SRCS}
     ${PROJECT_ROOT}/src/log/Logger.cpp
+    ${PROJECT_ROOT}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
 )
 target_include_directories(test_execution_context PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_execution_context COMMAND test_execution_context)

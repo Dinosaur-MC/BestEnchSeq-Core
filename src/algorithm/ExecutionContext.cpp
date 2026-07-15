@@ -42,31 +42,6 @@ void ExecutionContext::report_compact_solution(std::vector<compact::EnchStep> st
         _sink.on_solution(sol, _algo_name, _sink.context);
 }
 
-void ExecutionContext::report_diagnostic(std::string_view key, int64_t value) {
-    _diagnostic_log.emplace_back(key.data(), value);   // store raw int64_t + const char* key
-}
-
-void ExecutionContext::report_diagnostic(std::string_view key, std::string value) {
-    _diagnostic_log.emplace_back(key.data(), std::move(value));
-}
-
-void ExecutionContext::report_diagnostics_entries(const AlgorithmDiagnostics& diag) {
-    std::vector<DiagnosticsWriter::Entry> entries;
-    diag.flush(entries);
-    for (auto& e : entries) {
-        if (auto* val = std::get_if<int64_t>(&e.value))
-            report_diagnostic(e.key, *val);
-        else
-            report_diagnostic(e.key, std::move(std::get<std::string>(e.value)));
-    }
-}
-
-std::vector<std::pair<const char*, DiagnosticValue>> ExecutionContext::consume_diagnostic_log() {
-    auto result = std::move(_diagnostic_log);
-    _diagnostic_log.clear();
-    return result;
-}
-
 void ExecutionContext::append_compact_solution(compact::EnchSolution solution) {
     if (solution.total_cost == 0) {
         for (const auto& s : solution.steps)

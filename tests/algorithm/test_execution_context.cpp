@@ -32,13 +32,21 @@ void test_progress() {
 void test_diagnostic_log() {
     ExecutionContext ctx;
 
-    ctx.report_diagnostic("wall_ms", int64_t{583});
-    ctx.report_diagnostic("status", std::string("Complete"));
-    ctx.report_diagnostic("explored_count", int64_t{142378});
+    auto diag = std::make_unique<SearchDiagnostics>();
+    diag->algorithm_name = "AStar";
+    diag->status = "Complete";
+    diag->solution_cost = 42;
 
-    auto log = ctx.consume_diagnostic_log();
-    expect(log.size() == 3, "diagnostic log should have 3 entries");
-    expect(ctx.consume_diagnostic_log().empty(), "log should be empty after consume");
+    expect(!ctx.has_exit_diagnostics(), "no diagnostics initially");
+    ctx.set_exit_diagnostics(std::move(diag));
+    expect(ctx.has_exit_diagnostics(), "diagnostics present after set");
+
+    auto retrieved = ctx.consume_exit_diagnostics();
+    expect(retrieved != nullptr, "should retrieve diagnostics");
+    expect(retrieved->algorithm_name == "AStar", "algorithm_name should be AStar");
+    expect(retrieved->status == "Complete", "status should be Complete");
+    expect(retrieved->solution_cost == 42, "solution_cost should be 42");
+    expect(!ctx.has_exit_diagnostics(), "no diagnostics after consume");
     std::cout << "PASS: test_diagnostic_log" << std::endl;
 }
 

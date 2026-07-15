@@ -6,16 +6,12 @@
 #include <string>
 #include <utility>
 #include <memory>
-#include <variant>
 #include <vector>
 #include "diagnostics/AlgorithmDiagnostics.h"
 
 #ifndef BESQ_MAX_SOLUTIONS
 #define BESQ_MAX_SOLUTIONS 128
 #endif
-
-/// Diagnostic log value — stores int64_t directly without eager to_string.
-using DiagnosticValue = std::variant<int64_t, std::string>;
 
 class ExecutionContext {
 public:
@@ -72,18 +68,6 @@ public:
     std::vector<compact::EnchSolution> get_solutions() const;
     double progress() const noexcept { return _progress.load(std::memory_order_acquire); }
 
-    /// 通用诊断 KV 报告（退出点调用, 追加到内部日志）
-    void report_diagnostic(std::string_view key, int64_t value);
-    void report_diagnostic(std::string_view key, std::string value);
-
-    /// Flush diagnostics into a vector and report all entries back to the context.
-    /// Bridges the new flush(entries) signature to the old report_diagnostic path.
-    /// TODO: remove when all callers migrate to DiagnosticsService.
-    void report_diagnostics_entries(const struct AlgorithmDiagnostics& diag);
-
-    /// 返回并清空累积的诊断 KV 对（Executor 在 _finalize() 中调用）
-    std::vector<std::pair<const char*, DiagnosticValue>> consume_diagnostic_log();
-
     // ── Diagnostic snapshot (atomic counters, always available) ─────────────
     struct DiagnosticSnapshot {
         int64_t nodes_visited = 0;
@@ -116,12 +100,11 @@ private:
 
     // ── 🟡 辅助区数据 ──────────────────────────────────────────────
     std::atomic<double> _progress{0.0};
-    std::vector<std::pair<const char*, DiagnosticValue>> _diagnostic_log;
 
     mutable std::mutex _accum_mtx;
     std::vector<compact::EnchSolution> _accumulated;
 
-    // ── 🟡 辅助区（与 _progress / _diagnostic_log 一起） ──────────
+    // ── 🟡 辅助区 ──────────────────────────────────────────────
     AlgorithmSink _sink{};
     const char* _algo_name{nullptr};
     std::atomic<int> _progress_pct{-1};
