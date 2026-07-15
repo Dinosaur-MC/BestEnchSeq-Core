@@ -66,7 +66,29 @@ configure_file(
 )
 
 # ── Embedded data (vanilla.json compiled into the binary) ──
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/vanilla.json" BESQ_VANILLA_JSON)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/vanilla.json" _vanilla_hex HEX)
+string(LENGTH "${_vanilla_hex}" _hex_len)
+math(EXPR BESQ_EMBED_LEN "${_hex_len} / 2")
+
+# Build byte-array initializer (16 bytes per line)
+string(ASCII 10 _NL)
+set(_bytes "")
+set(_i 0)
+set(_per_line 16)
+while(_i LESS _hex_len)
+    set(_line "")
+    set(_sep "")
+    set(_j 0)
+    while(_j LESS _per_line AND _i LESS _hex_len)
+        string(SUBSTRING "${_vanilla_hex}" ${_i} 2 _byte)
+        string(APPEND _line "${_sep}0x${_byte}")
+        set(_sep ", ")
+        math(EXPR _i "${_i} + 2")
+        math(EXPR _j "${_j} + 1")
+    endwhile()
+    set(_bytes "${_bytes}    ${_line},${_NL}")
+endwhile()
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/data/EmbeddedData.cpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/EmbeddedData.cpp"
