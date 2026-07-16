@@ -2,6 +2,8 @@
 #include "algorithm/strategies/astar/AStarAlgorithm.h"
 #include "algorithm/serialization/CompactSerializer.h"
 #include "io/ByteStream.h"
+#include <chrono>
+#include <vector>
 
 // ─── Public interface ────────────────────────────────────────────────────────
 
@@ -9,32 +11,36 @@ std::vector<uint8_t> AStarStateSerializer::serialize(const IAlgorithm& algo) con
     const auto& astar = static_cast<const AStarAlgorithm&>(algo);
     ByteStreamWriter w;
 
-    // Write sections into w first; total_bytes will be prepended at the end.
+    // File-level header
+    compact_serial::FileHeader fhdr;
+    fhdr.magic        = compact_serial::FILE_MAGIC;
+    fhdr.version      = compact_serial::FILE_VERSION;
+    fhdr.flags        = 0;
+    fhdr.num_sections = 5;
+    fhdr.timestamp    = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch()).count();
+    fhdr.algorithm_tag = std::string(tag());
+    compact_serial::write_file_header(w, fhdr);
+
+    // Sections (payload only; total_bytes not used — file header takes over)
     _serialize_item_pool(w, astar);
     _serialize_step_pool(w, astar);
     _serialize_open_heap(w, astar);
     _serialize_best_g(w, astar);
     _serialize_scalars(w, astar);
 
-    // Prepend total_bytes (includes the 4-byte field itself).
-    std::vector<uint8_t> result = std::move(w).take();
-    uint32_t total = static_cast<uint32_t>(result.size()) + 4;
-    result.insert(result.begin(), {
-        static_cast<uint8_t>(total),
-        static_cast<uint8_t>(total >> 8),
-        static_cast<uint8_t>(total >> 16),
-        static_cast<uint8_t>(total >> 24)
-    });
-    return result;
+    return std::move(w).take();
 }
 
 void AStarStateSerializer::deserialize(IAlgorithm& algo, std::span<const uint8_t> data) const {
     auto& astar = static_cast<AStarAlgorithm&>(algo);
     ByteStreamReader r(data.data(), data.size());
 
-    // Read total_bytes
-    uint32_t total_bytes = r.u32();
-    (void)total_bytes;
+    // File-level header
+    auto hdr = compact_serial::read_file_header(r);
+    if (hdr.magic != compact_serial::FILE_MAGIC)
+        return;
+    // tag is informational; we trust the caller routed correctly
 
     _deserialize_item_pool(r, astar);
     _deserialize_step_pool(r, astar);

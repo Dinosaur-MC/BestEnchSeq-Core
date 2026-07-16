@@ -1,7 +1,50 @@
 #include "algorithm/serialization/CompactSerializer.h"
 #include <cstring>
+#include <chrono>
+#include <optional>
 
 namespace compact_serial {
+
+// ── File-level header ───────────────────────────────────────────────────
+
+void write_file_header(ByteStreamWriter& w, const FileHeader& hdr) {
+    w.u32(hdr.magic);
+    w.u16(hdr.version);
+    w.u16(hdr.flags);
+    w.u32(hdr.num_sections);
+    w.i64(hdr.timestamp);
+    w.u16(static_cast<uint16_t>(hdr.algorithm_tag.size()));
+    w.bytes(hdr.algorithm_tag.data(), hdr.algorithm_tag.size());
+}
+
+FileHeader read_file_header(ByteStreamReader& r) {
+    FileHeader hdr{};
+    hdr.magic       = r.u32();
+    hdr.version     = r.u16();
+    hdr.flags       = r.u16();
+    hdr.num_sections = r.u32();
+    hdr.timestamp   = r.i64();
+
+    uint16_t tag_len = r.u16();
+    if (!r.ok() || tag_len > 256) {  // sanity cap
+        hdr.magic = 0;  // signal invalid
+        return hdr;
+    }
+    hdr.algorithm_tag.resize(tag_len);
+    for (uint16_t i = 0; i < tag_len; ++i)
+        hdr.algorithm_tag[i] = static_cast<char>(r.u8());
+
+    // Validate magic + version
+    if (hdr.magic != FILE_MAGIC || hdr.version != FILE_VERSION) {
+        hdr.magic = 0;   // signal invalid
+    }
+    return hdr;
+}
+
+FileHeader peek_file_header(const uint8_t* data, size_t size) {
+    ByteStreamReader r(data, size);
+    return read_file_header(r);
+}
 
 // ── Section header ──────────────────────────────────────────────────────
 

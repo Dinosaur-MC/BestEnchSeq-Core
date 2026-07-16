@@ -15,6 +15,42 @@
 
 namespace compact_serial {
 
+// ── File-level header ───────────────────────────────────────────────────
+//
+// Every checkpoint file starts with this header, enabling file-type
+// identification, version checking, and algorithm routing without
+// parsing the full contents.
+//
+// Layout:
+//   magic(4) + version(2) + flags(2) + num_sections(4)
+//   + timestamp(8) + tag_len(2) + tag(tag_len)
+
+inline constexpr uint32_t FILE_MAGIC    = 0x51534542;  // "BESQ" LE
+inline constexpr uint16_t FILE_VERSION  = 1;
+
+/// File-level header stored at offset 0 of every checkpoint file.
+/// Followed by per-sections with their own section_header().
+struct FileHeader {
+    uint32_t magic;              // FILE_MAGIC
+    uint16_t version;            // FILE_VERSION
+    uint16_t flags;              // reserved, 0
+    uint32_t num_sections;       // section count
+    int64_t  timestamp;          // unix milliseconds
+    std::string algorithm_tag;   // e.g. "astar_v1"
+};
+
+/// Write a file-level header.  (u32) + (u16) + (u16) + (u32) + (i64) + (u16) + [tag_len bytes]
+void write_file_header(ByteStreamWriter& w, const FileHeader& hdr);
+
+/// Read and validate a file-level header.  Returns nullopt on magic/version
+/// mismatch, or if the reader runs out of data before the full header.
+/// The reader is positioned past the header on success.
+FileHeader read_file_header(ByteStreamReader& r);
+
+/// Convenience: parse FileHeader from raw bytes without a reader instance.
+/// Returns nullopt on any parse failure.
+FileHeader peek_file_header(const uint8_t* data, size_t size);
+
 // ── Section header constants ────────────────────────────────────────────
 
 inline constexpr size_t HEADER_TAG_SIZE = 8;
