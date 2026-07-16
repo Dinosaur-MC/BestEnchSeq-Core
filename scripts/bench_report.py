@@ -686,8 +686,8 @@ def main():
                 save_history(hist_path, history)
             else:
                 print("输入数据与上次历史记录相同，跳过记录。")
-        else:
-            print("输入目录中未找到有效基准文件，跳过合并。")
+    else:
+        print("输入目录中未找到有效基准文件，跳过合并。")
 
     # 趋势图
     if args.img:
