@@ -141,7 +141,7 @@ void AlgorithmExecutor::start(AlgorithmInput input,
 }
 
 void AlgorithmExecutor::start(AlgorithmInput input, const std::vector<uint8_t>& previous_state) {
-    if (!previous_state.empty())
+    if (!previous_state.empty() && _algorithm->is_serializable())
         _algorithm->deserialize_state(previous_state);
     start(std::move(input));
 }

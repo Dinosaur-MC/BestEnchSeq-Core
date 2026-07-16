@@ -57,4 +57,29 @@ compact::EnchStep read_ench_step(ByteStreamReader& r);
 void write(ByteStreamWriter& w, const compact::EnchSolution& sol);
 compact::EnchSolution read_ench_solution(ByteStreamReader& r);
 
+// ── Container helpers ────────────────────────────────────────────────
+
+/// Write a vector of elements that have a compact_serial::write() overload.
+/// Layout: u32(count) + [T]×count
+template <typename T>
+void write_vector(ByteStreamWriter& w, const std::vector<T>& vec) {
+    w.u32(static_cast<uint32_t>(vec.size()));
+    for (const auto& v : vec)
+        write(w, v);
+}
+
+/// Read a vector of elements that have a compact_serial::read_*(r) function.
+/// The caller provides a callable to read each element.
+template <typename T, typename Reader>
+std::vector<T> read_vector(ByteStreamReader& r, Reader&& read_one) {
+    uint32_t n = r.u32();
+    std::vector<T> vec;
+    vec.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        vec.push_back(read_one(r));
+        if (!r.ok()) break;
+    }
+    return vec;
+}
+
 } // namespace compact_serial
