@@ -1,5 +1,6 @@
 #include "AlgorithmExecutor.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
+#include "algorithm/serialization/IAlgorithmSerializer.h"
 #include <stdexcept>
 #include <utility>
 
@@ -141,8 +142,11 @@ void AlgorithmExecutor::start(AlgorithmInput input,
 }
 
 void AlgorithmExecutor::start(AlgorithmInput input, const std::vector<uint8_t>& previous_state) {
-    if (!previous_state.empty() && _algorithm->is_serializable())
-        _algorithm->deserialize_state(previous_state);
+    if (!previous_state.empty()) {
+        auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
+        if (ser)
+            ser->deserialize(*_algorithm, previous_state);
+    }
     start(std::move(input));
 }
 
@@ -237,21 +241,26 @@ std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
     auto s = _state.load(std::memory_order_acquire);
     if (s != AlgorithmState::Paused)
         return {};
-    if (!_algorithm->is_serializable())
+    auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
+    if (!ser)
         return {};
-    return _algorithm->serialize_state();
+    return ser->serialize(*_algorithm);
 }
 
 bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
     auto s = _state.load(std::memory_order_acquire);
     if (s != AlgorithmState::Idle)
         return false;
-    if (!_algorithm->is_serializable() || data.empty())
+    if (data.empty())
         return false;
-    _algorithm->deserialize_state(data);
+    auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
+    if (!ser)
+        return false;
+    ser->deserialize(*_algorithm, data);
     return true;
 }
 
 bool AlgorithmExecutor::is_serializable() const noexcept {
-    return _algorithm && _algorithm->is_serializable();
+    auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
+    return ser != nullptr;
 }

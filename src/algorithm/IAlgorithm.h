@@ -4,6 +4,7 @@
 #include <vector>
 
 class ExecutionContext;
+class IAlgorithmSerializer;
 
 // ─── IAlgorithm (pure interface, compact-only) ───
 class IAlgorithm {
@@ -22,7 +23,9 @@ class IAlgorithm {
     virtual bool simulate(const AlgorithmInput &input) const noexcept { (void)input; return true; }
 
     virtual bool is_resumable() const noexcept { return false; }
-    virtual bool is_serializable() const noexcept { return false; }
-    virtual std::vector<uint8_t> serialize_state() const { return {}; }
-    virtual void deserialize_state(const std::vector<uint8_t> &) {}
+
+    /// Returns the associated serializer for this algorithm's state.
+    /// Returns nullptr if the algorithm does not support serialization.
+    virtual IAlgorithmSerializer* get_serializer() noexcept { return nullptr; }
+    virtual const IAlgorithmSerializer* get_serializer() const noexcept { return nullptr; }
 };

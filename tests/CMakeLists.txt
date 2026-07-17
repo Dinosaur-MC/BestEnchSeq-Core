@@ -184,6 +184,7 @@ add_executable(test_integration
     ${ALGO_ENGINE_SRCS}
     ${ALGO_FORGE_SRCS}
     ${ALGO_DIAG_CORE_SRCS}
+    ${ALGO_SERIAL_SRCS}
     ${COMPACT_REG_SRCS}
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/algorithm/strategies/greedy/GreedyAlgorithm.cpp
@@ -286,6 +287,7 @@ add_executable(test_algorithm_executor
     ${ALGO_ENGINE_SRCS}
     ${ALGO_FORGE_SRCS}
     ${ALGO_DIAG_CORE_SRCS}
+    ${ALGO_SERIAL_SRCS}
     ${COMPACT_REG_SRCS}
     ${TYPE_ALL_SRCS}
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp

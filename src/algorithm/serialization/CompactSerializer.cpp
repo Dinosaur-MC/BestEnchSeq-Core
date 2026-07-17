@@ -1,9 +1,23 @@
 #include "algorithm/serialization/CompactSerializer.h"
 #include <cstring>
 #include <chrono>
-#include <optional>
 
 namespace compact_serial {
+
+// ── CRC-56 helper ───────────────────────────────────────────────────────
+//
+// Simple 56-bit checksum: for each byte, XOR into one accumulator and
+// ADD into another, rotating across 7 lanes.  Adequate for accidental
+// corruption detection within checkpoint files.
+
+void compute_crc56(const uint8_t* data, size_t len, uint8_t crc[7]) {
+    std::memset(crc, 0, 7);
+    for (size_t i = 0; i < len; ++i) {
+        size_t lane = i % 7;
+        crc[lane]       = static_cast<uint8_t>(crc[lane] ^ data[i]);
+        crc[(lane+1)%7] = static_cast<uint8_t>(crc[(lane+1)%7] + data[i]);
+    }
+}
 
 // ── File-level header ───────────────────────────────────────────────────
 
@@ -13,31 +27,35 @@ void write_file_header(ByteStreamWriter& w, const FileHeader& hdr) {
     w.u16(hdr.flags);
     w.u32(hdr.num_sections);
     w.i64(hdr.timestamp);
-    w.u16(static_cast<uint16_t>(hdr.algorithm_tag.size()));
-    w.bytes(hdr.algorithm_tag.data(), hdr.algorithm_tag.size());
+    w.bytes(hdr.crc_code, 7);
+    w.u16(hdr.algo_version);
+
+    auto tag_len = static_cast<uint8_t>(hdr.algorithm_tag.size());
+    w.u8(tag_len);
+    w.bytes(hdr.algorithm_tag.data(), tag_len);
 }
 
 FileHeader read_file_header(ByteStreamReader& r) {
     FileHeader hdr{};
-    hdr.magic       = r.u32();
-    hdr.version     = r.u16();
-    hdr.flags       = r.u16();
-    hdr.num_sections = r.u32();
-    hdr.timestamp   = r.i64();
 
-    uint16_t tag_len = r.u16();
-    if (!r.ok() || tag_len > 256) {  // sanity cap
-        hdr.magic = 0;  // signal invalid
-        return hdr;
-    }
+    hdr.magic        = r.u32();
+    hdr.version      = r.u16();
+    hdr.flags        = r.u16();
+    hdr.num_sections = r.u32();
+    hdr.timestamp    = r.i64();
+    for (int i = 0; i < 7; ++i)
+        hdr.crc_code[i] = r.u8();
+    hdr.algo_version = r.u16();
+
+    uint8_t tag_len = r.u8();
+    if (!r.ok()) { hdr.magic = 0; return hdr; }
     hdr.algorithm_tag.resize(tag_len);
-    for (uint16_t i = 0; i < tag_len; ++i)
+    for (uint8_t i = 0; i < tag_len; ++i)
         hdr.algorithm_tag[i] = static_cast<char>(r.u8());
 
-    // Validate magic + version
-    if (hdr.magic != FILE_MAGIC || hdr.version != FILE_VERSION) {
-        hdr.magic = 0;   // signal invalid
-    }
+    if (!r.ok() || hdr.magic != FILE_MAGIC || hdr.version != FILE_VERSION)
+        hdr.magic = 0;
+
     return hdr;
 }
 
@@ -48,34 +66,23 @@ FileHeader peek_file_header(const uint8_t* data, size_t size) {
 
 // ── Section header ──────────────────────────────────────────────────────
 
-void write_section_header(ByteStreamWriter& w, SectionId id, uint32_t payload_len) {
-    w.bytes("BESQ_AS1", HEADER_TAG_SIZE);
-    w.u32(CURRENT_VERSION);
-    w.u32(static_cast<uint32_t>(id));
-    w.u32(payload_len);
+void write_section_header(ByteStreamWriter& w, uint32_t type, uint32_t section_id, uint64_t payload_len) {
+    w.u32(type);
+    w.u32(0);          // flags (reserved)
+    w.u32(section_id);
+    w.u64(payload_len);
 }
 
-bool check_section_header(ByteStreamReader& r, SectionId expected_id) {
-    // Read tag (8 bytes)
-    char tag[HEADER_TAG_SIZE];
-    for (size_t i = 0; i < HEADER_TAG_SIZE; ++i)
-        tag[i] = static_cast<char>(r.u8());
-    if (!r.ok()) return false;
-
-    uint32_t ver = r.u32();
-    uint32_t sid = r.u32();
-    uint32_t len = r.u32();
-    if (!r.ok()) return false;
-
-    // Validate tag, version, and section id
-    if (std::memcmp(tag, "BESQ_AS1", HEADER_TAG_SIZE) != 0 ||
-        ver != CURRENT_VERSION ||
-        sid != static_cast<uint32_t>(expected_id)) {
-        r.skip(len);    // skip payload to maintain sync
-        return false;
+SectionInfo read_section_header(ByteStreamReader& r) {
+    SectionInfo si{};
+    si.type       = r.u32();
+    /*flags*/ r.u32();
+    si.section_id = r.u32();
+    si.len        = r.u64();
+    if (!r.ok()) {
+        si.type = 0; si.section_id = 0; si.len = 0;
     }
-
-    return true;
+    return si;
 }
 
 // ── Ench (4 bytes: i16 id + i16 level) ──────────────────────────────────

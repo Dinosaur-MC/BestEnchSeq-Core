@@ -448,19 +448,6 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     ctx.set_exit_diagnostics(_diag);
 }
 
-// ─── serialize_state ────────────────────────────────────────────────────
-
-std::vector<uint8_t> AStarAlgorithm::serialize_state() const {
-    return _serializer->serialize(*this);
-}
-
-// ─── deserialize_state ──────────────────────────────────────────────────
-
-void AStarAlgorithm::deserialize_state(const std::vector<uint8_t>& data) {
-    _serializer->deserialize(*this, data);
-    _state_restored = true;
-}
-
 // ─── _restore_and_execute ───────────────────────────────────────────────
 
 void AStarAlgorithm::_restore_and_execute(const AlgorithmInput& input, ExecutionContext& ctx) {

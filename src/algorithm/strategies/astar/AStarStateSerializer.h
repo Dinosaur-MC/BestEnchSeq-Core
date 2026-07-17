@@ -1,6 +1,5 @@
 #pragma once
 #include "algorithm/serialization/IAlgorithmSerializer.h"
-#include "io/ByteStream.h"
 #include <cstdint>
 #include <vector>
 
@@ -8,21 +7,28 @@ class AStarAlgorithm;
 
 class AStarStateSerializer : public IAlgorithmSerializer {
 public:
-    std::string_view tag() const noexcept override { return "astar_v1"; }
+    std::string_view algorithm_name() const noexcept override { return "astar"; }
+    std::string_view algorithm_version() const noexcept override { return "2.0.0"; }
 
-    std::vector<uint8_t> serialize(const IAlgorithm& algo) const override;
-    void deserialize(IAlgorithm& algo, std::span<const uint8_t> data) const override;
+protected:
+    void _write_algo_sections(ByteStreamWriter& w,
+                              const IAlgorithm& algo,
+                              uint32_t& next_section_id) const override;
+
+    void _read_algo_sections(ByteStreamReader& r,
+                             IAlgorithm& algo) const override;
 
 private:
-    void _serialize_item_pool(ByteStreamWriter& w, const AStarAlgorithm& astar) const;
-    void _serialize_step_pool(ByteStreamWriter& w, const AStarAlgorithm& astar) const;
-    void _serialize_open_heap(ByteStreamWriter& w, const AStarAlgorithm& astar) const;
-    void _serialize_best_g(ByteStreamWriter& w, const AStarAlgorithm& astar) const;
-    void _serialize_scalars(ByteStreamWriter& w, const AStarAlgorithm& astar) const;
+    // Per-section serializers
+    void _write_item_pool(ByteStreamWriter& w, const AStarAlgorithm& astar, uint32_t& sid) const;
+    void _write_step_pool(ByteStreamWriter& w, const AStarAlgorithm& astar, uint32_t& sid) const;
+    void _write_open_heap(ByteStreamWriter& w, const AStarAlgorithm& astar, uint32_t& sid) const;
+    void _write_best_g(ByteStreamWriter& w, const AStarAlgorithm& astar, uint32_t& sid) const;
+    void _write_scalars(ByteStreamWriter& w, const AStarAlgorithm& astar, uint32_t& sid) const;
 
-    void _deserialize_item_pool(ByteStreamReader& r, AStarAlgorithm& astar) const;
-    void _deserialize_step_pool(ByteStreamReader& r, AStarAlgorithm& astar) const;
-    void _deserialize_open_heap(ByteStreamReader& r, AStarAlgorithm& astar) const;
-    void _deserialize_best_g(ByteStreamReader& r, AStarAlgorithm& astar) const;
-    void _deserialize_scalars(ByteStreamReader& r, AStarAlgorithm& astar) const;
+    void _read_item_pool(ByteStreamReader& r, AStarAlgorithm& astar) const;
+    void _read_step_pool(ByteStreamReader& r, AStarAlgorithm& astar) const;
+    void _read_open_heap(ByteStreamReader& r, AStarAlgorithm& astar) const;
+    void _read_best_g(ByteStreamReader& r, AStarAlgorithm& astar) const;
+    void _read_scalars(ByteStreamReader& r, AStarAlgorithm& astar) const;
 };

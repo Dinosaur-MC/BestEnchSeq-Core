@@ -28,10 +28,10 @@ public:
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
 
     // ── Serialization support ────────────────────────────────────────────
-    bool is_serializable() const noexcept override { return true; }
-    std::vector<uint8_t> serialize_state() const override;
-    void deserialize_state(const std::vector<uint8_t>& data) override;
+    IAlgorithmSerializer* get_serializer() noexcept override { return _serializer.get(); }
+    const IAlgorithmSerializer* get_serializer() const noexcept override { return _serializer.get(); }
 
+    // friend declaration optional — algorithm impls may use _x_ accessors instead
     friend class AStarStateSerializer;
 
 private:

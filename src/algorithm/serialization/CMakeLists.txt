@@ -8,4 +8,5 @@
 
 set(ALGO_SERIAL_SRCS
     "${CMAKE_CURRENT_LIST_DIR}/CompactSerializer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/IAlgorithmSerializer.cpp"
 )
