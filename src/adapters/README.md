@@ -164,10 +164,6 @@ class EnchSerializer {
 
 ---
 
-## Serializer.hpp
-
-轻量序列化工具，内部使用，被 EnchSerializer 调用。
-
 ## 性能说明
 
 | 操作 | 开销 | 说明 |

@@ -85,7 +85,7 @@ src/
 │   ├── RegistryResolver.h/.cpp  ← String → ID resolution
 │   ├── OutputFormatter.h/.cpp   ← EnchSolution → text/compact/json
 │   ├── EnchSerializer.h/.cpp    ← EnchInfo/Equipment ↔ JSON/CSV/MC official
-│   └── Serializer.hpp           ← Binary serialization (uses io/ByteStream)
+│   └── Serializer.hpp           ← [REMOVED] Replaced by algorithm/serialization/CompactSerializer
 ├── types/                       ← Domain data types (pure data, no computation)
 │   ├── CompactedTypes.h/.cpp    ← Compact types (namespace compact): Ench, EnchSet, Item, EnchStep
 │   ├── EnchInfo.h/.cpp          ← Full enchantment definition
@@ -133,6 +133,10 @@ src/
 │   │   ├── StateHash.h          ← State hashing utilities
 │   │   ├── TTTable.h            ← Epoch-based IDA* transposition table
 │   │   └── ItemPool.h           ← Hash-dedup item pool (backed by MemoryPool)
+│   ├── serialization/           ← Checkpoint: binary serialization for algorithm state
+│   │   ├── IAlgorithmSerializer.h/.cpp ← Base class: file header + common sections + CRC
+│   │   ├── CompactSerializer.h/.cpp    ← Compact type read/write primitives (Ench, Item, …)
+│   │   └── CMakeLists.txt
 │   ├── forge/
 │   │   ├── IForgeEngine.h       ← Virtual interface + default sub-ops
 │   │   └── ForgeEngine.h/.cpp   ← Vanilla implementation
