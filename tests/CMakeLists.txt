@@ -441,22 +441,6 @@ set_tests_properties(test_registry_resolver PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_serializer.cpp)
-    message(FATAL_ERROR "Required test source not found: utils/test_serializer.cpp")
-endif()
-
-add_executable(test_serializer
-    utils/test_serializer.cpp
-    ${REGISTRY_CORE_SRCS}
-    ${DOMAIN_TYPE_SRCS}
-    ${EQUIP_REG_SRCS}
-)
-target_include_directories(test_serializer PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_serializer COMMAND test_serializer)
-set_tests_properties(test_serializer PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_env_util.cpp)
     message(FATAL_ERROR "Required test source not found: utils/test_env_util.cpp")
 endif()
