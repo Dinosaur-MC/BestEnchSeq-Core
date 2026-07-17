@@ -10,6 +10,18 @@
 #include <type_traits>
 #include <utility>
 
+// ─── Portable [[no_unique_address]] ──────────────────────────────────────
+// Clang in MSVC-compatibility mode (Windows) warns on the C++20 standard
+// [[no_unique_address]] but supports [[msvc::no_unique_address]] silently.
+// Other compilers (GCC, Clang on Linux/macOS) use the standard spelling.
+#if defined(__clang__) && defined(_MSC_VER)
+#  define BESQ_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#elif __has_cpp_attribute(no_unique_address) >= 201803L
+#  define BESQ_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#else
+#  define BESQ_NO_UNIQUE_ADDRESS
+#endif
+
 #include "queue/BoundedMPMCQueue.hpp"
 #include "queue/SegmentedMPMCQueue.hpp"
 #include "queue/SPSCQueue.hpp"
@@ -243,7 +255,7 @@ private:
     std::atomic<uint64_t>       _wake{0};
     std::atomic<bool>           _running{false};
     std::jthread                _worker;
-    [[no_unique_address]] HandlerStorage _handler{};
+    BESQ_NO_UNIQUE_ADDRESS HandlerStorage _handler{};
 };
 
 
