@@ -180,7 +180,7 @@ src/
 
 See `docs/MPMCQueue.md` for the full queue design documentation.
 Per-layer READMEs (architecture, API reference, development guide):
-`src/types/`, `src/utils/`, `src/parsers/`, `src/adapters/`,
+`src/types/`, `src/utils/`, `src/parsers/`, `src/adapters/`, `src/algorithm/serialization/`,
 `src/registries/`, `src/io/`, `src/log/`, and `src/algorithm/` (with sub-directories).
 
 ### Key Design Decisions
