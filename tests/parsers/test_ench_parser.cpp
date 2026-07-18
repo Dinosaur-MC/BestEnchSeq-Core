@@ -94,6 +94,17 @@ void test_ench_parser_empty_token_warns() {
     TEST_PASS("test_ench_parser_empty_token_warns");
 }
 
+void test_ench_parser_level_too_high_rejected() {
+    bool threw = false;
+    try {
+        EnchParser::parse("sharpness=256");
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "level > 255 should throw");
+    TEST_PASS("test_ench_parser_level_too_high_rejected");
+}
+
 // ============================================================================
 // main
 // ============================================================================
@@ -106,6 +117,7 @@ int main() {
         test_ench_parser_negative_level_rejected();
         test_ench_parser_empty_id_rejected();
         test_ench_parser_empty_token_warns();
+        test_ench_parser_level_too_high_rejected();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

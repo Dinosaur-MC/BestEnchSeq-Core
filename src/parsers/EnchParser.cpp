@@ -7,10 +7,16 @@
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-static bool is_all_digits(const std::string& s) {
+/// Check if string is a valid integer (optional leading +/- then digits).
+static bool is_integer(const std::string& s) {
     if (s.empty()) return false;
-    for (char c : s) {
-        if (!std::isdigit(static_cast<unsigned char>(c))) return false;
+    size_t start = 0;
+    if (s[0] == '+' || s[0] == '-') {
+        if (s.size() == 1) return false;  // just a sign
+        start = 1;
+    }
+    for (size_t i = start; i < s.size(); ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(s[i]))) return false;
     }
     return true;
 }
@@ -21,6 +27,18 @@ static bool is_all_digits(const std::string& s) {
 
 std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
     std::vector<EnchantmentSpec> result;
+
+    // Check for empty tokens (e.g. "a=1,,b=2") before splitting
+    for (size_t i = 0; i + 1 < input.size(); ++i) {
+        if (input[i] == ',' && input[i + 1] == ',') {
+            LOG_WARN("Warning: empty enchantment spec in list, skipping");
+            break;
+        }
+    }
+    if (!input.empty() && input.back() == ',') {
+        LOG_WARN("Warning: trailing comma in enchantment list, skipping");
+    }
+
     auto tokens = ParserUtils::split_string(input, ',');
 
     for (const auto& token : tokens) {
@@ -61,7 +79,7 @@ std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
             auto colon_pos = token.find(':');
             if (colon_pos != std::string::npos) {
                 std::string after = token.substr(colon_pos + 1);
-                if (is_all_digits(after)) {
+                if (is_integer(after)) {
                     // Colon shorthand: id:level
                     spec.ns = "minecraft";
                     spec.id = token.substr(0, colon_pos);

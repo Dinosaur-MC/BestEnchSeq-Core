@@ -43,69 +43,11 @@ std::string get_cli_help_text(const std::string &program_name) {
 // Enchantment spec parsing
 // ============================================================================
 
-static bool is_all_digits(const std::string &s) {
-    if (s.empty()) return false;
-    for (char c : s) {
-        if (!std::isdigit(static_cast<unsigned char>(c))) return false;
-    }
-    return true;
-}
-
 EnchantmentSpec parse_enchantment(const std::string &spec) {
-    EnchantmentSpec result;
-
-    // Look for '=' separator (level)
-    auto eq_pos = spec.find('=');
-    if (eq_pos != std::string::npos) {
-        // Level is everything after '='
-        std::string level_str = spec.substr(eq_pos + 1);
-        try {
-            result.level = std::stoi(level_str);
-        } catch (const std::exception &) {
-            throw std::runtime_error("Invalid enchantment level: '" + level_str + "' in '" + spec + "'");
-        }
-
-        // Spec part is everything before '='
-        std::string spec_part = spec.substr(0, eq_pos);
-
-        // Check for namespace separator in spec part
-        auto colon_pos = spec_part.find(':');
-        if (colon_pos != std::string::npos) {
-            result.ns = spec_part.substr(0, colon_pos);
-            result.id = spec_part.substr(colon_pos + 1);
-        } else {
-            result.ns = "minecraft";
-            result.id = spec_part;
-        }
-    } else {
-        // No '=' separator — check for colons
-        auto colon_pos = spec.find(':');
-        if (colon_pos != std::string::npos) {
-            std::string after = spec.substr(colon_pos + 1);
-            if (is_all_digits(after)) {
-                // Colon shorthand: id:level
-                result.ns = "minecraft";
-                result.id = spec.substr(0, colon_pos);
-                try {
-                    result.level = std::stoi(after);
-                } catch (const std::exception &) {
-                    throw std::runtime_error("Invalid enchantment level: '" + after + "' in '" + spec + "'");
-                }
-            } else {
-                // Namespace prefix: ns:id
-                result.ns = spec.substr(0, colon_pos);
-                result.id = after;
-                result.level = 1;
-            }
-        } else {
-            // Plain id, no namespace, no level
-            result.ns = "minecraft";
-            result.id = spec;
-            result.level = 1;
-        }
-    }
-
-    return result;
+    auto results = EnchParser::parse(spec);
+    if (results.empty())
+        throw std::runtime_error("Empty enchantment spec");
+    return results[0];
 }
 
 // ============================================================================
