@@ -1,6 +1,7 @@
 #include "cli.h"
 #include "parsers/CLIParser.h"
 #include "parsers/EnchParser.h"
+#include "parsers/ItemParser.h"
 #include "utils/ParserUtils.hpp"
 
 #include <cctype>
@@ -61,23 +62,7 @@ std::vector<EnchantmentSpec> parse_enchantment_list(const std::string &list) {
 // ============================================================================
 
 TargetSpec parse_target(const std::string &target) {
-    TargetSpec result;
-
-    auto bracket_pos = target.find('[');
-    if (bracket_pos != std::string::npos) {
-        auto close_pos = target.find(']', bracket_pos);
-        if (close_pos == std::string::npos) {
-            throw std::runtime_error("Malformed target spec: missing closing bracket in '" + target + "'");
-        }
-
-        result.item_id = target.substr(0, bracket_pos);
-        std::string inline_str = target.substr(bracket_pos + 1, close_pos - bracket_pos - 1);
-        result.inline_enchants = parse_enchantment_list(inline_str);
-    } else {
-        result.item_id = target;
-    }
-
-    return result;
+    return ItemParser::parse(target);
 }
 
 // ============================================================================

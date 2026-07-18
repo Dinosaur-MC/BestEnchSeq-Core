@@ -143,9 +143,22 @@ set_tests_properties(test_ench_parser PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+add_executable(test_item_parser
+    parsers/test_item_parser.cpp
+    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
+    ${PARSER_UTIL_SRCS}
+)
+target_include_directories(test_item_parser PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_item_parser COMMAND test_item_parser)
+set_tests_properties(test_item_parser PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 add_executable(test_cli_parser
     parsers/test_cli_parser.cpp
     ${PROJECT_ROOT}/src/cli/cli.cpp
+    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PARSER_UTIL_SRCS}
@@ -159,6 +172,7 @@ set_tests_properties(test_cli_parser PROPERTIES
 add_executable(test_input_parser
     parsers/test_input_parser.cpp
     ${PROJECT_ROOT}/src/cli/cli.cpp
+    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
@@ -194,6 +208,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
+    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
