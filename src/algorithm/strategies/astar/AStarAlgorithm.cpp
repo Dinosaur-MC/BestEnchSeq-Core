@@ -215,16 +215,16 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     // Pre-allocate (task-size-aware — factorial estimate, capped at budget max)
     _pool.set_max(_budget.max_items_pool);
     {
-        size_t est = 64;
+        _state_est = 64;
         if (items.size() > 1) {
             size_t f = 1;
             for (size_t k = 2; k <= items.size() && f <= (1u << 20); ++k) f *= k;
-            est = std::max<size_t>(64, f);
+            _state_est = std::max<size_t>(64, f);
         }
-        _pool.reserve(std::min(est, static_cast<size_t>(_budget.max_items_pool)));
-        _step_pool.reserve(std::min(est, _budget.max_step_pool));
+        _pool.reserve(std::min(_state_est, static_cast<size_t>(_budget.max_items_pool)));
+        _step_pool.reserve(std::min(_state_est, _budget.max_step_pool));
         // Open set is typically smaller than explored set
-        _open_heap.reserve(std::min(est / 2 + 64, _budget.max_open_set));
+        _open_heap.reserve(std::min(_state_est / 2 + 64, _budget.max_open_set));
     }
 
     int32_t h0 = _heuristic(initial_ids);
@@ -327,8 +327,16 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             if (_max_solutions > 0 && _solutions_found >= _max_solutions) break;
         }
 
-        if (_explored % 1000 == 0) {
-            uint8_t progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
+        if ((_explored & 0xFF) == 0) {
+            // Precise progress for small searches, asymptotic for large
+            uint8_t progress;
+            if (_state_est <= 100000) {
+                progress = std::min<uint8_t>(
+                    static_cast<uint8_t>(_best_g.size() * 100 / std::max(_state_est, size_t(1))),
+                    static_cast<uint8_t>(99));
+            } else {
+                progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
+            }
             ctx.report_progress(progress, ProgressStatus::Exploring);
         }
 
@@ -473,6 +481,16 @@ void AStarAlgorithm::_restore_and_execute(const AlgorithmInput& input, Execution
 
     _pool.set_max(_budget.max_items_pool);
 
+    // Recompute state estimate for progress reporting
+    {
+        _state_est = 64;
+        if (input.items.size() > 1) {
+            size_t f = 1;
+            for (size_t k = 2; k <= input.items.size() && f <= (1u << 20); ++k) f *= k;
+            _state_est = std::max<size_t>(64, f);
+        }
+    }
+
     // Reset diagnostics
     _diag = AStarDiagnostics{};
     _diag.initial_bound = _best_solution_cost;
@@ -559,8 +577,16 @@ void AStarAlgorithm::_restore_and_execute(const AlgorithmInput& input, Execution
             if (_max_solutions > 0 && _solutions_found >= _max_solutions) break;
         }
 
-        if (_explored % 1000 == 0) {
-            uint8_t progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
+        if ((_explored & 0xFF) == 0) {
+            // Precise progress for small searches, asymptotic for large
+            uint8_t progress;
+            if (_state_est <= 100000) {
+                progress = std::min<uint8_t>(
+                    static_cast<uint8_t>(_best_g.size() * 100 / std::max(_state_est, size_t(1))),
+                    static_cast<uint8_t>(99));
+            } else {
+                progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
+            }
             ctx.report_progress(progress, ProgressStatus::Exploring);
         }
 

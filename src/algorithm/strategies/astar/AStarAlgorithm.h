@@ -107,6 +107,7 @@ private:
     bool _deserialize_ok{false};
     AlgorithmInput _restored_input;
     int64_t _explored{0};
+    size_t _state_est{0};           // estimated upper bound on search states
     FlatHashMap<size_t, int32_t> _best_g;
 
     void _restore_and_execute(const AlgorithmInput& input, ExecutionContext& ctx);
