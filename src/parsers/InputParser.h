@@ -10,8 +10,9 @@
 /// CompactAdapter to build compact AlgorithmInput).
 struct ParsedInput {
     MCE platform;
-    EnchSet original_ench;
-    ItemStack target_item;
+    EnchSet source_ench;           // source enchantments (existing on target)
+    EnchSet target_ench;           // target enchantments to achieve
+    ItemStack target_item;         // target equipment
     ItemCollection available_items;
 };
 

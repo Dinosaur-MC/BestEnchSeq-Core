@@ -12,6 +12,7 @@ public:
     AlgorithmInput apply(
         const ItemStack& target_item,
         const EnchSet& original_ench,
+        const EnchSet& target_ench,
         const ItemCollection& available_items,
         const ForgeConfig& config,
         const EnchantmentRegistry& global_registry

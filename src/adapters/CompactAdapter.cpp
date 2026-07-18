@@ -10,6 +10,7 @@ namespace {
 void validate_input(
     const ItemStack& target_item,
     const EnchSet& original_ench,
+    const EnchSet& target_ench,
     const ItemCollection& available_items,
     const EnchantmentRegistry& global_registry)
 {
@@ -57,7 +58,7 @@ void validate_input(
     };
 
     check_ench_set(original_ench, "original_ench");
-    check_ench_set(target_item.enchantments, "target_item.enchantments");
+    check_ench_set(target_ench, "target_ench");
     for (size_t i = 0; i < available_items.size(); ++i)
         check_ench_set(available_items[i].enchantments, "available_items[" + std::to_string(i) + "]");
 
@@ -75,11 +76,12 @@ void validate_input(
 AlgorithmInput CompactAdapter::apply(
     const ItemStack& target_item,
     const EnchSet& original_ench,
+    const EnchSet& target_ench,
     const ItemCollection& available_items,
     const ForgeConfig& config,
     const EnchantmentRegistry& global_registry)
 {
-    validate_input(target_item, original_ench, available_items, global_registry);
+    validate_input(target_item, original_ench, target_ench, available_items, global_registry);
 
     // EnchReg pruning: only keep enchantments applicable to target equipment
     std::vector<int32_t> applicable_ids;
@@ -106,8 +108,8 @@ AlgorithmInput CompactAdapter::apply(
     for (const auto& book : available_items)
         input.items.push_back(from_domain(book, input.ench_reg));
 
-    input.target.reserve(target_item.enchantments.size());
-    for (const auto& e : target_item.enchantments) {
+    input.target.reserve(target_ench.size());
+    for (const auto& e : target_ench) {
         int16_t local_id = static_cast<int16_t>(input.ench_reg.to_local_id(e.id));
         assert(local_id >= 0);
         if (local_id < 0) continue;

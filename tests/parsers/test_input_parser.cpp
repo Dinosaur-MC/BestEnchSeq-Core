@@ -285,8 +285,8 @@ void test_assemble_input_direct_mode() {
            "assemble_input: target id should be diamond_sword");
     expect(input.target_item.enchantments.empty(),
            "assemble_input: target should have no inline enchantments");
-    expect(input.original_ench.empty(),
-           "assemble_input: original_ench should be same as target enchants");
+    expect(input.source_ench.empty(),
+           "assemble_input: source_ench should be same as target enchants");
 
     // Two wanted enchants: sharpness=5 -> 5 graduated books, knockback=2 -> 2 graduated books
     expect(input.available_items.size() == 7,

@@ -157,8 +157,8 @@ int main(int argc, char *argv[]) {
         CompactAdapter adapter;
         ForgeConfig forge_config;
         forge_config.platform = parsed.platform;
-        AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.original_ench, parsed.available_items,
-                                                  forge_config, ench_reg);
+        AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.source_ench, parsed.target_ench,
+                                                  parsed.available_items, forge_config, ench_reg);
 
         // ── Search config from CLI ────────────────────────────────────────
         algo_input.search.max_solutions = config.solutions;
@@ -191,7 +191,7 @@ int main(int argc, char *argv[]) {
             }
 
             // ── Boundary: compact → domain ────────────────────────────────
-            solutions = adapter.recall(executor.output(), algo_input, parsed.original_ench,
+            solutions = adapter.recall(executor.output(), algo_input, parsed.source_ench,
                                         parsed.target_item, parsed.available_items);
         }
 

@@ -264,7 +264,7 @@ ParsedInput InputParser::assemble_input(
                 return a.priority < b.priority;
             });
 
-        return ParsedInput{platform, target.enchantments, target, books};
+        return ParsedInput{platform, target.enchantments, wanted, target, books};
     }
 
     // ---- inventory mode ---------------------------------------------------
@@ -290,5 +290,5 @@ ParsedInput InputParser::assemble_input(
             return a.priority < b.priority;
         });
 
-    return ParsedInput{platform, target.enchantments, target, available_items};
+    return ParsedInput{platform, target.enchantments, target.enchantments, target, available_items};
 }

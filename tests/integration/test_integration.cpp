@@ -276,14 +276,15 @@ void test_full_pipeline_execute() {
            "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
 
     // 3. Build AlgorithmInput via CompactAdapter
-    ItemStack target_item(*equip_it->second, wanted, 0);
+    ItemStack target_item(*equip_it->second, EnchSet{}, 0);
+    EnchSet target_ench = wanted;
 
     ForgeConfig forge_config;
     forge_config.platform = MCE::Java;
 
     CompactAdapter adapter;
     AlgorithmInput algo_input = adapter.apply(
-        target_item, existing, books, forge_config, registries::enchants());
+        target_item, existing, target_ench, books, forge_config, registries::enchants());
 
     expect(algo_input.target.size() == 1,
            "execute: target should have 1 enchantment (sharpness 3)");
