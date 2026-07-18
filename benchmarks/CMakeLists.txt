@@ -22,6 +22,7 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     ${PROJECT_ROOT}/src/data/DataLoader.cpp
     "${PROJECT_BINARY_DIR}/generated/EmbeddedData.cpp"
     ${PROJECT_ROOT}/src/io/json.cpp

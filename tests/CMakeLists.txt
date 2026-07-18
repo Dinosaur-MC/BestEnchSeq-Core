@@ -460,6 +460,7 @@ endif()
 add_executable(test_raw_type_adapter
     adapters/test_raw_type_adapter.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
+    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${REGISTRY_CORE_SRCS}
     ${EQUIP_REG_SRCS}
     ${GLOBAL_LOGGER_SRCS}
@@ -665,6 +666,7 @@ add_executable(test_checkpoint_roundtrip
     ${PROJECT_ROOT}/src/data/DataLoader.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
