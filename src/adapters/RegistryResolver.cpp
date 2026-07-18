@@ -118,39 +118,3 @@ int32_t RegistryResolver::resolve_ench_id(
     throw std::runtime_error("Unknown enchantment: " + namespaced);
 }
 
-// ============================================================================
-// Raw data merging
-// ============================================================================
-
-void RegistryResolver::merge_raw_ench_info(
-    std::vector<RawEnchantment> &base,
-    const std::vector<RawEnchantment> &extra
-) {
-    // Build set of existing ids for O(1) dedup
-    std::unordered_set<std::string> existing;
-    existing.reserve(base.size());
-    for (const auto &r : base)
-        existing.insert(r.id.str());
-
-    for (const auto &r : extra) {
-        auto key = r.id.str();
-        if (existing.insert(key).second)
-            base.push_back(r);
-    }
-}
-
-void RegistryResolver::merge_raw_equipment(
-    std::vector<RawEquipment> &base,
-    const std::vector<RawEquipment> &extra
-) {
-    std::unordered_set<std::string> existing;
-    existing.reserve(base.size());
-    for (const auto &r : base)
-        existing.insert(r.id.str());
-
-    for (const auto &r : extra) {
-        auto key = r.id.str();
-        if (existing.insert(key).second)
-            base.push_back(r);
-    }
-}
