@@ -628,7 +628,17 @@ add_executable(test_checkpoint_roundtrip
     ${COMPACT_TYPE_SRCS}
     ${COMPACT_REG_SRCS}
     ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/log/Logger.cpp
+    ${PROJECT_ROOT}/src/data/DataLoader.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
+    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
+    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PROJECT_ROOT}/src/io/CsvIO.cpp
+    "${BESQ_GENERATED_DIR}/EmbeddedData.cpp"
 )
 target_include_directories(test_checkpoint_roundtrip PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_checkpoint_roundtrip COMMAND test_checkpoint_roundtrip)
