@@ -6,6 +6,7 @@
 #include "io/json.h"
 
 #include <cctype>
+#include <cmath>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
@@ -374,6 +375,84 @@ std::string derive_display_name(const std::string &item_id) {
         }
     }
     return key;
+}
+
+// ---------------------------------------------------------------------------
+// Compute limited_level from min_cost formula and item enchantability
+// ---------------------------------------------------------------------------
+int32_t compute_limited_level(
+    int32_t max_level,
+    int32_t min_cost_base,
+    int32_t min_cost_per_level,
+    const std::unordered_set<std::string>& applicable_items)
+{
+    static const std::unordered_map<std::string, int32_t> ENCHANTABILITY = {
+        // Tools
+        {"wooden_sword", 15}, {"wooden_pickaxe", 15}, {"wooden_axe", 15},
+        {"wooden_shovel", 15}, {"wooden_hoe", 15},
+        {"stone_sword", 5}, {"stone_pickaxe", 5}, {"stone_axe", 5},
+        {"stone_shovel", 5}, {"stone_hoe", 5},
+        {"iron_sword", 14}, {"iron_pickaxe", 14}, {"iron_axe", 14},
+        {"iron_shovel", 14}, {"iron_hoe", 14},
+        {"golden_sword", 22}, {"golden_pickaxe", 22}, {"golden_axe", 22},
+        {"golden_shovel", 22}, {"golden_hoe", 22},
+        {"diamond_sword", 10}, {"diamond_pickaxe", 10}, {"diamond_axe", 10},
+        {"diamond_shovel", 10}, {"diamond_hoe", 10},
+        {"netherite_sword", 15}, {"netherite_pickaxe", 15}, {"netherite_axe", 15},
+        {"netherite_shovel", 15}, {"netherite_hoe", 15},
+        // Armor
+        {"leather_helmet", 15}, {"leather_chestplate", 15},
+        {"leather_leggings", 15}, {"leather_boots", 15},
+        {"chainmail_helmet", 12}, {"chainmail_chestplate", 12},
+        {"chainmail_leggings", 12}, {"chainmail_boots", 12},
+        {"iron_helmet", 9}, {"iron_chestplate", 9},
+        {"iron_leggings", 9}, {"iron_boots", 9},
+        {"golden_helmet", 25}, {"golden_chestplate", 25},
+        {"golden_leggings", 25}, {"golden_boots", 25},
+        {"diamond_helmet", 10}, {"diamond_chestplate", 10},
+        {"diamond_leggings", 10}, {"diamond_boots", 10},
+        {"netherite_helmet", 15}, {"netherite_chestplate", 15},
+        {"netherite_leggings", 15}, {"netherite_boots", 15},
+        {"turtle_helmet", 9},
+        // Special
+        {"bow", 1}, {"crossbow", 1}, {"trident", 1},
+        {"fishing_rod", 1}, {"book", 1}, {"mace", 15},
+        // Wolf armor
+        {"wolf_armor", 0},  // not enchantable via table
+    };
+
+    auto max_power = [](int32_t enchantability) -> int32_t {
+        if (enchantability <= 0) return 0;
+        double base = 30.0;
+        double added = 1.0 + 2.0 * (static_cast<double>(enchantability) / 4.0);
+        return static_cast<int32_t>(std::round((base + added) * 1.15));
+    };
+
+    auto min_cost_at = [&](int32_t level) -> int32_t {
+        return min_cost_base + min_cost_per_level * (level - 1);
+    };
+
+    int32_t best = 0;
+    for (const auto& item : applicable_items) {
+        // Strip namespace prefix to look up bare name
+        std::string bare = item;
+        auto colon = bare.find(':');
+        if (colon != std::string::npos)
+            bare = bare.substr(colon + 1);
+
+        auto it = ENCHANTABILITY.find(bare);
+        if (it == ENCHANTABILITY.end() || it->second <= 0)
+            continue;
+
+        int32_t power = max_power(it->second);
+        for (int32_t lvl = max_level; lvl >= 1; --lvl) {
+            if (min_cost_at(lvl) <= power) {
+                if (lvl > best) best = lvl;
+                break;
+            }
+        }
+    }
+    return std::max<int32_t>(1, best);
 }
 
 // ---------------------------------------------------------------------------
@@ -766,9 +845,6 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
                 continue;
             }
 
-            // Limited level defaults to max_level (no field in MC format)
-            int32_t limited_level = max_level;
-
             // Derive display name from filename
             std::string display_name = derive_display_name(filename);
 
@@ -779,6 +855,21 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
             // Supported items — resolve #tag refs
             auto supp_items    = ParserUtils::get_json_string_array(obj, "supported_items");
             auto applicable_items = resolve_references(supp_items, tag_resolver);
+
+            // Compute limited_level from cost formula (not a direct field in MC official format)
+            int32_t limited_level = max_level;
+            auto min_cost_it = obj.find("min_cost");
+            if (min_cost_it != obj.end()) {
+                auto mc = min_cost_it->second.get_value();
+                if (auto* mc_obj = std::get_if<Json::Object>(&mc)) {
+                    int32_t min_base = ParserUtils::get_json_int(*mc_obj, "base");
+                    int32_t min_per_level = ParserUtils::get_json_int(*mc_obj, "per_level_above_first");
+                    if (min_base > 0 && min_per_level >= 0) {
+                        limited_level = compute_limited_level(
+                            max_level, min_base, min_per_level, applicable_items);
+                    }
+                }
+            }
 
             RawEnchantment ench;
             ench.id               = make_id(filename, ns);
