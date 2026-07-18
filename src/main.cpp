@@ -137,48 +137,7 @@ int main(int argc, char *argv[]) {
             equipment_map[eq.name_id] = &eq;
         }
 
-        auto parsed = [&]() -> ParsedInput {
-            MCE platform;
-            if (config.platform == "auto") {
-                platform = MCE::All;
-            } else if (config.platform == "java") {
-                platform = MCE::Java;
-            } else {
-                platform = MCE::Bedrock;
-            }
-
-            if (config.mode == "inventory") {
-                return InputParser::assemble_input(config, ench_id_map, equipment_map);
-            }
-
-            // Direct mode
-            auto target_spec = parse_target(config.target);
-            auto target_item = InputParser::build_target(target_spec, ench_id_map, equipment_map);
-
-            EnchSet source_ench;
-            if (!config.source.empty()) {
-                auto specs = parse_enchantment_list(config.source);
-                source_ench = InputParser::build_wanted_enchset(specs, ench_id_map);
-            }
-
-            auto wanted_ench = InputParser::build_wanted_enchset(
-                target_spec.inline_enchants, ench_id_map);
-
-            // Combine inline enchants (from target spec) and source enchants (from --source)
-            // as the existing set for book generation
-            EnchSet existing = target_item.enchantments;
-            for (const auto &e : source_ench) {
-                existing.insert(Ench{e.id, e.level});
-            }
-
-            auto books = InputParser::generate_books(wanted_ench, existing);
-            std::stable_sort(books.begin(), books.end(),
-                [](const ItemStack &a, const ItemStack &b) {
-                    return a.priority < b.priority;
-                });
-
-            return ParsedInput{platform, source_ench, wanted_ench, target_item, books};
-        }();
+        auto parsed = InputParser::assemble_input(config, ench_id_map, equipment_map);
 
         // Register and create algorithm (local registry, no singleton)
         AlgorithmRegistry algo_reg;

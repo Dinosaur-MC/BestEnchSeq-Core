@@ -30,7 +30,14 @@ const Equipment& EquipmentRegistry::get(const std::string& name_id) const {
 
 int32_t EquipmentRegistry::get_id(const std::string& name_id) const {
     auto it = name_to_id_.find(name_id);
-    return it != name_to_id_.end() ? it->second : -1;
+    if (it != name_to_id_.end()) return it->second;
+    // Fallback: bare name → try "minecraft:" prefix
+    // (entries are stored as "minecraft:diamond_boots", lookups use "diamond_boots")
+    if (name_id.find(':') == std::string::npos) {
+        auto ns_it = name_to_id_.find("minecraft:" + name_id);
+        if (ns_it != name_to_id_.end()) return ns_it->second;
+    }
+    return -1;
 }
 
 std::vector<const Equipment*> EquipmentRegistry::get_by_category(int32_t category_id) const {

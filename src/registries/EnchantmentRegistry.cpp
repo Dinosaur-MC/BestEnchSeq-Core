@@ -123,7 +123,14 @@ const EnchInfo& EnchantmentRegistry::get(const std::string& name_id) const {
 
 int32_t EnchantmentRegistry::get_id(const std::string& name_id) const {
     auto it = name_to_index_.find(name_id);
-    return it != name_to_index_.end() ? it->second : -1;
+    if (it != name_to_index_.end()) return it->second;
+    // Fallback: bare name → try "minecraft:" prefix
+    // (entries stored as "minecraft:sharpness", lookups use "sharpness")
+    if (name_id.find(':') == std::string::npos) {
+        auto ns_it = name_to_index_.find("minecraft:" + name_id);
+        if (ns_it != name_to_index_.end()) return ns_it->second;
+    }
+    return -1;
 }
 
 const std::unordered_set<int32_t>& EnchantmentRegistry::get_exclusive_set(int32_t e) const {

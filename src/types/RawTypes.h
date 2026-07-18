@@ -39,6 +39,7 @@ struct RawEnchantment {
 
     std::unordered_set<std::string> exclusive_set;       // enchantment ID strings (awaiting resolution)
     std::unordered_set<std::string> applicable_items;    // item/category name strings (awaiting resolution)
+
 };
 
 /// String-based intermediate representation of an equipment definition.

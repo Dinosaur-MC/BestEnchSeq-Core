@@ -33,6 +33,17 @@ std::vector<EnchInfo> RegistryResolver::resolve_ench_info(
         // platform and is_treasure are dropped from RawEnchantment:
         //   - platform defaults to All (cross-platform)
         //   - is_treasure is derived from limited_level == 0
+        // Namespace-qualify exclusive_set entries (bare "breach" → "minecraft:breach")
+        // to match namespaced name_id convention.
+        std::unordered_set<std::string> ns_exclusive;
+        ns_exclusive.reserve(r.exclusive_set.size());
+        for (const auto& excl : r.exclusive_set) {
+            if (excl.find(':') == std::string::npos)
+                ns_exclusive.insert("minecraft:" + excl);
+            else
+                ns_exclusive.insert(excl);
+        }
+
         result.emplace_back(
             r.id.str(),
             r.display_name,
@@ -41,7 +52,7 @@ std::vector<EnchInfo> RegistryResolver::resolve_ench_info(
             r.limited_level,
             r.multiplier,
             r.limited_level == 0,
-            r.exclusive_set,       // already resolved strings
+            std::move(ns_exclusive),
             std::move(category_ids)
         );
     }
