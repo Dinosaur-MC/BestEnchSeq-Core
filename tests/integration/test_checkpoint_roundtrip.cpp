@@ -18,13 +18,14 @@
 #include "data/DataLoader.h"
 #include "io/json.h"
 
+#include "algorithm/diagnostics/AlgorithmObserver.h"
+#include "algorithm/diagnostics/DiagnosticsService.h"
 #include <atomic>
 #include <chrono>
 #include <cstring>
 #include <iostream>
 #include <memory>
 #include <span>
-#include <thread>
 #include <vector>
 
 // ─── Registry initialization ─────────────────────────────────────────────
@@ -209,29 +210,53 @@ void test_checkpoint_integrity_checks() {
 }
 
 void test_astar_pause_resume() {
-    // Full checkpoint round-trip with A*: start → pause → serialize → resume → complete
-    // Tests that the algorithm state (ItemPool, StepPool, OpenHeap, BestG) is
-    // correctly preserved across serialization boundaries.
+    // Full checkpoint round-trip with A*: start → pause → serialize → resume → complete.
+    // Uses AlgorithmObserver::on_state_changed to detect when A* transitions
+    // from Running to Paused, ensuring precise synchronization without fixed delays.
+
+    struct StateObserver : AlgorithmObserver {
+        std::atomic<bool> paused{false};
+        void on_state_changed(size_t, AlgorithmState, AlgorithmState curr) override {
+            if (curr == AlgorithmState::Paused)
+                paused.store(true, std::memory_order_release);
+        }
+    };
 
     auto input = create_boots_full_input();
     input.search.max_solutions = 1;
     input.search.memory_mb = 512;
+
+    // Attach observer to detect pause completion
+    DiagnosticsService::instance().set_persist(false);
+    auto observer = std::make_shared<StateObserver>();
+    DiagnosticsService::instance().attach_observer(observer);
 
     auto algo = std::make_unique<AStarAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
 
     // Start A* in background thread
     executor.start(std::move(input));
-    std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
-    // Pause and capture state
+    // Allow A* to start exploring
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Request pause
     executor.pause();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    DiagnosticsService::instance().flush();
 
+    // Wait for state transition to Paused (observer confirms via on_state_changed)
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!observer->paused.load(std::memory_order_acquire)) {
+        DiagnosticsService::instance().flush();
+        if (std::chrono::steady_clock::now() >= deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    DiagnosticsService::instance().detach_observer(observer);
+
+    // If pause was confirmed, capture checkpoint
     auto checkpoint = executor.serialize_state();
-    bool paused_cleanly = !checkpoint.empty();
 
-    if (paused_cleanly) {
+    if (!checkpoint.empty()) {
         // Create fresh executor and restore from checkpoint
         auto resume_algo = std::make_unique<AStarAlgorithm>();
         AlgorithmExecutor resume_exec(std::move(resume_algo));
@@ -247,8 +272,7 @@ void test_astar_pause_resume() {
                    "resumed solution cost should be positive");
         }
     } else {
-        // A* finished before we could pause — still verify direct execution
-        executor.resume();
+        // A* finished before pause completed — still verify direct execution
         auto state = executor.wait();
         expect(state == AlgorithmState::Completed, "direct A* should complete");
         auto output = executor.output();
