@@ -1,5 +1,6 @@
 #include "cli.h"
 #include "parsers/CLIParser.h"
+#include "parsers/EnchParser.h"
 #include "utils/ParserUtils.hpp"
 
 #include <cctype>
@@ -110,12 +111,7 @@ EnchantmentSpec parse_enchantment(const std::string &spec) {
 // ============================================================================
 
 std::vector<EnchantmentSpec> parse_enchantment_list(const std::string &list) {
-    std::vector<EnchantmentSpec> result;
-    auto tokens = ParserUtils::split_string(list, ',');
-    for (const auto &token : tokens) {
-        result.push_back(parse_enchantment(token));
-    }
-    return result;
+    return EnchParser::parse(list);
 }
 
 // ============================================================================
