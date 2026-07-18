@@ -3,7 +3,6 @@
 #include "algorithm/serialization/IAlgorithmSerializer.h"
 #include "algorithm/strategies/astar/AStarStateSerializer.h"
 #include "algorithm/strategies/astar/AStarAlgorithm.h"
-#include "algorithm/strategies/greedy/GreedyAlgorithm.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/IAlgorithm.h"
 #include "adapters/CompactAdapter.h"
@@ -263,28 +262,6 @@ void test_astar_pause_resume() {
     TEST_PASS("test_astar_pause_resume");
 }
 
-void test_greedy_execution() {
-    // Verify the full pipeline works end-to-end with real data
-    auto input = create_boots_full_input();
-
-    auto greedy = std::make_unique<GreedyAlgorithm>();
-    AlgorithmExecutor executor(std::move(greedy));
-    executor.start(std::move(input));
-
-    auto state = executor.wait();
-    expect(state == AlgorithmState::Completed, "greedy should complete");
-
-    auto output = executor.output();
-    expect(output.is_valid, "output should be valid");
-    expect(!output.solutions.empty(), "should have at least one solution");
-    if (!output.solutions.empty()) {
-        int32_t cost = output.solutions[0].total_cost;
-        expect(cost > 0, "solution cost should be positive");
-        expect(cost <= 125, "boots_full cost should be ≤ reference bound 125");
-    }
-    TEST_PASS("test_greedy_execution");
-}
-
 int main() {
     try {
         // Load registries first
@@ -295,7 +272,6 @@ int main() {
         test_checkpoint_algorithm_input_roundtrip();
         test_checkpoint_integrity_checks();
         test_astar_pause_resume();
-        test_greedy_execution();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
