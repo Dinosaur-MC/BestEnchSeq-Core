@@ -26,20 +26,6 @@ class IAlgorithm {
     /// Default returns false.  Resumable algorithms must override to return true.
     virtual bool is_resumable() const noexcept { return false; }
 
-    /// Access the full AlgorithmInput.  Used by serializer base class to
-    /// read/write checkpoint data without knowing the concrete algorithm type.
-    /// Default returns a static empty reference.
-    virtual const AlgorithmInput& algorithm_input_ref() const noexcept {
-        static const AlgorithmInput empty{};
-        return empty;
-    }
-
-    /// Replace the stored AlgorithmInput (e.g. after deserializing a checkpoint).
-    /// Default does nothing.  Resumable algorithms must override to store.
-    virtual void set_algorithm_input(AlgorithmInput input) noexcept {
-        (void)input;
-    }
-
     /// Returns the associated serializer for this algorithm's state.
     /// Returns nullptr if the algorithm does not support serialization.
     virtual IAlgorithmSerializer* get_serializer() noexcept { return nullptr; }

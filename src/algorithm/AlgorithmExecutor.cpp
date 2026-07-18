@@ -123,11 +123,13 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
     if (warmup)
         _run_warmup(input, *warmup);
-    
+
+    _algorithm_input = std::move(input);
+
     // Main phase (asynchronous): run the actual algorithm
-    _worker.emplace([this, input = std::move(input)]() mutable {
+    _worker.emplace([this]() mutable {
         try {
-            _algorithm->execute(input, *_ctx);
+            _algorithm->execute(_algorithm_input, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
@@ -151,9 +153,12 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
     if (!ser)
         throw std::logic_error("algorithm does not support serialization");
 
-    bool ok = ser->deserialize(*_algorithm, checkpoint);
+    AlgorithmInput restored_input;
+    bool ok = ser->deserialize(*_algorithm, restored_input, checkpoint);
     if (!ok)
         throw std::runtime_error("checkpoint deserialization failed");
+
+    _algorithm_input = std::move(restored_input);
 
     if (!_set_state(AlgorithmState::Running))
         throw std::logic_error("executor already running or in terminal state");
@@ -165,9 +170,7 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 
     _worker.emplace([this]() mutable {
         try {
-            // Dummy input — algorithm uses _restored_input when _state_restored
-            AlgorithmInput dummy_input;
-            _algorithm->execute(dummy_input, *_ctx);
+            _algorithm->execute(_algorithm_input, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
@@ -271,7 +274,7 @@ std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
     auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
     if (!ser)
         return {};
-    return ser->serialize(*_algorithm);
+    return ser->serialize(*_algorithm, _algorithm_input);
 }
 
 bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
@@ -283,7 +286,11 @@ bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
     auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
     if (!ser)
         return false;
-    return ser->deserialize(*_algorithm, data);
+    AlgorithmInput input;
+    if (!ser->deserialize(*_algorithm, input, data))
+        return false;
+    _algorithm_input = std::move(input);
+    return true;
 }
 
 bool AlgorithmExecutor::is_serializable() const noexcept {

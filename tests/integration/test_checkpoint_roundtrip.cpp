@@ -128,19 +128,18 @@ void test_checkpoint_algorithm_input_roundtrip() {
 
     AStarStateSerializer ser;
     AStarAlgorithm algo;
-    algo.set_algorithm_input(std::move(input));
 
-    auto checkpoint = ser.serialize(algo);
+    auto checkpoint = ser.serialize(algo, input);
     expect(!checkpoint.empty(), "checkpoint should be non-empty");
 
     AStarAlgorithm algo2;
-    bool ok = ser.deserialize(algo2, checkpoint);
+    AlgorithmInput restored_input;
+    bool ok = ser.deserialize(algo2, restored_input, checkpoint);
     expect(ok, "deserialize should return true");
 
-    const auto& restored = algo2.algorithm_input_ref();
-    expect(restored.config.platform == MCE::Java, "restored platform");
-    expect(!restored.items.empty(), "restored items non-empty");
-    expect(!restored.target.empty(), "restored target non-empty");
+    expect(restored_input.config.platform == MCE::Java, "restored platform");
+    expect(!restored_input.items.empty(), "restored items non-empty");
+    expect(!restored_input.target.empty(), "restored target non-empty");
 
     TEST_PASS("test_checkpoint_algorithm_input_roundtrip");
 }
@@ -148,15 +147,18 @@ void test_checkpoint_algorithm_input_roundtrip() {
 void test_checkpoint_integrity_checks() {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
+    AlgorithmInput dummy_input;  // default (empty) input for serialize calls
 
     {
-        bool ok = ser.deserialize(algo, std::span<const uint8_t>());
+        AlgorithmInput out;
+        bool ok = ser.deserialize(algo, out, std::span<const uint8_t>());
         expect(!ok, "empty checkpoint rejected");
     }
 
     {
         uint8_t trash[10] = {};
-        bool ok = ser.deserialize(algo, trash);
+        AlgorithmInput out;
+        bool ok = ser.deserialize(algo, out, trash);
         expect(!ok, "bad magic rejected");
     }
 
@@ -174,26 +176,29 @@ void test_checkpoint_integrity_checks() {
         w.u8(static_cast<uint8_t>(std::strlen(bad)));
         w.bytes(bad, std::strlen(bad));
         auto buf = std::move(w).take();
-        bool ok = ser.deserialize(algo, std::span<const uint8_t>(buf.data(), buf.size()));
+        AlgorithmInput out;
+        bool ok = ser.deserialize(algo, out, std::span<const uint8_t>(buf.data(), buf.size()));
         expect(!ok, "wrong algorithm tag rejected");
     }
 
     {
-        auto checkpoint = ser.serialize(algo);
+        auto checkpoint = ser.serialize(algo, dummy_input);
         std::vector<uint8_t> corrupted(checkpoint.begin(), checkpoint.end());
         corrupted.push_back(0xFF);
         AStarAlgorithm algo2;
-        bool ok = ser.deserialize(algo2, corrupted);
+        AlgorithmInput out;
+        bool ok = ser.deserialize(algo2, out, corrupted);
         expect(!ok, "trailing garbage rejected");
     }
 
     // CRC corruption — flip a byte in the section data
     {
-        auto checkpoint = ser.serialize(algo);
+        auto checkpoint = ser.serialize(algo, dummy_input);
         if (checkpoint.size() > 50) {
             checkpoint[45] ^= 0xFF;  // corrupt a byte in section data
             AStarAlgorithm algo2;
-            bool ok = ser.deserialize(algo2, checkpoint);
+            AlgorithmInput out;
+            bool ok = ser.deserialize(algo2, out, checkpoint);
             expect(!ok, "CRC corruption rejected");
         }
     }

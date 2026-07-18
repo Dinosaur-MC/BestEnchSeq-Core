@@ -135,7 +135,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
             return;
         }
-        _restore_and_execute(_restored_input, ctx);
+        _restore_and_execute(input, ctx);
         return;
     }
 

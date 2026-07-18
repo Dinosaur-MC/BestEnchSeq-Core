@@ -25,7 +25,8 @@ void test_serializer_interface() {
 void test_astar_state_empty_rejected() {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
-    bool ok = ser.deserialize(algo, std::span<const uint8_t>());
+    AlgorithmInput out;
+    bool ok = ser.deserialize(algo, out, std::span<const uint8_t>());
     expect(!ok, "empty checkpoint should return false");
     TEST_PASS("test_astar_state_empty_rejected");
 }
@@ -34,7 +35,8 @@ void test_astar_state_bad_magic_rejected() {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
     uint8_t bad_data[8] = {0, 0, 0, 0, 1, 0, 0, 0};
-    bool ok = ser.deserialize(algo, bad_data);
+    AlgorithmInput out;
+    bool ok = ser.deserialize(algo, out, bad_data);
     expect(!ok, "bad magic should return false");
     TEST_PASS("test_astar_state_bad_magic_rejected");
 }
@@ -55,7 +57,8 @@ void test_astar_state_bad_tag() {
     w.u8(static_cast<uint8_t>(std::strlen(bad_tag)));
     w.bytes(bad_tag, std::strlen(bad_tag));
     auto buf = std::move(w).take();
-    bool ok = ser.deserialize(algo, std::span<const uint8_t>(buf.data(), buf.size()));
+    AlgorithmInput out;
+    bool ok = ser.deserialize(algo, out, std::span<const uint8_t>(buf.data(), buf.size()));
     expect(!ok, "wrong algorithm tag should return false");
     TEST_PASS("test_astar_state_bad_tag");
 }

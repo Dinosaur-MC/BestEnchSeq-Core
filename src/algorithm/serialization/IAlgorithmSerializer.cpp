@@ -6,7 +6,8 @@ using namespace compact_serial;
 
 // ─── serialize: base orchestrates ────────────────────────────────────────
 
-std::vector<uint8_t> IAlgorithmSerializer::serialize(const IAlgorithm& algo) const {
+std::vector<uint8_t> IAlgorithmSerializer::serialize(const IAlgorithm& algo,
+                                                      const AlgorithmInput& input) const {
     ByteStreamWriter w;
     uint32_t next_id = 1;  // file-global section ID counter
 
@@ -24,9 +25,8 @@ std::vector<uint8_t> IAlgorithmSerializer::serialize(const IAlgorithm& algo) con
         w.bytes(p.data(), p.size());
     }
 
-    // 2. Input section (AlgorithmInput from IAlgorithm interface)
+    // 2. Input section (AlgorithmInput provided explicitly — not from IAlgorithm)
     {
-        const auto& input = algo.algorithm_input_ref();
         ByteStreamWriter payload;
         write(payload, input);
         auto p = std::move(payload).take();
@@ -65,7 +65,8 @@ std::vector<uint8_t> IAlgorithmSerializer::serialize(const IAlgorithm& algo) con
 
 // ─── deserialize: base orchestrates ──────────────────────────────────────
 
-bool IAlgorithmSerializer::deserialize(IAlgorithm& algo, std::span<const uint8_t> data) const {
+bool IAlgorithmSerializer::deserialize(IAlgorithm& algo, AlgorithmInput& out_input,
+                                        std::span<const uint8_t> data) const {
     ByteStreamReader r(data.data(), data.size());
 
     // 1. File header
@@ -117,11 +118,10 @@ bool IAlgorithmSerializer::deserialize(IAlgorithm& algo, std::span<const uint8_t
         }
 
         if (si.type == SECTION_TYPE_INPUT) {
-            // Deserialize AlgorithmInput
+            // Deserialize AlgorithmInput into the provided out parameter
             ByteStreamReader pr(payload);
-            auto input = read_algorithm_input(pr);
+            out_input = read_algorithm_input(pr);
             if (!pr.ok()) return false;
-            algo.set_algorithm_input(std::move(input));
             continue;
         }
 

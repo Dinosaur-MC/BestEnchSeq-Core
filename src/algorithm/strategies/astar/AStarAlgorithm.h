@@ -32,10 +32,6 @@ public:
     const IAlgorithmSerializer* get_serializer() const noexcept override { return _serializer.get(); }
     bool is_resumable() const noexcept override { return true; }
 
-    // ── IAlgorithm input accessor overrides ─────────────────────────────
-    const AlgorithmInput& algorithm_input_ref() const noexcept override { return _restored_input; }
-    void set_algorithm_input(AlgorithmInput input) noexcept override { _restored_input = std::move(input); }
-
     // friend declaration — serializer accesses private _x_ helpers + state
     friend class AStarStateSerializer;
 
@@ -105,7 +101,6 @@ private:
     std::unique_ptr<IAlgorithmSerializer> _serializer;
     bool _state_restored{false};
     bool _deserialize_ok{false};
-    AlgorithmInput _restored_input;
     int64_t _explored{0};
     size_t _state_est{0};           // estimated upper bound on search states
     FlatHashMap<size_t, int32_t> _best_g;

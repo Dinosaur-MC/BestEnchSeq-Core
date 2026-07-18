@@ -16,8 +16,13 @@ public:
 
     // ── Full file serialization (non-virtual, base orchestrates) ─────
 
-    std::vector<uint8_t> serialize(const IAlgorithm& algo) const;
-    bool deserialize(IAlgorithm& algo, std::span<const uint8_t> data) const;
+    /// Serialize algorithm state together with AlgorithmInput into a checkpoint.
+    /// The input is written as a dedicated INPUT section owned by the base.
+    std::vector<uint8_t> serialize(const IAlgorithm& algo, const AlgorithmInput& input) const;
+
+    /// Deserialize a checkpoint and reconstruct AlgorithmInput + algorithm state.
+    /// AlgorithmInput is written to out_input (owned by caller, typically Executor).
+    bool deserialize(IAlgorithm& algo, AlgorithmInput& out_input, std::span<const uint8_t> data) const;
 
 protected:
     // ── Algorithm state (subclass implements -- pure data, no headers) ──

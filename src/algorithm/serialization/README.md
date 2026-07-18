@@ -41,9 +41,11 @@ class IAlgorithm {
 AlgorithmExecutor 调用路径：
 
 ```
-serialize_state()  → get_serializer() → ser->serialize(*algo) → vector<uint8_t>
-restore_state()    → get_serializer() → ser->deserialize(*algo, data)
+serialize_state()  → get_serializer() → ser->serialize(*algo, _algorithm_input) → vector<uint8_t>
+restore_state()    → get_serializer() → ser->deserialize(*algo, _algorithm_input, data)
 ```
+
+AlgorithmInput 由 Executor 持有，序列化/反序列化时作为显式参数传递，不经过 IAlgorithm 接口。
 
 约束：
 - `serialize_state()` 仅当 executor 处于 **Paused** 状态时可用
