@@ -44,9 +44,11 @@ inline bool is_mc_official_structure(const std::filesystem::path &dir) {
     if (!std::filesystem::is_directory(dir)) return false;
     auto data_dir = dir / "data";
     if (!std::filesystem::is_directory(data_dir)) return false;
-    for (const auto &ns_entry : std::filesystem::directory_iterator(data_dir)) {
+    for (const auto &ns_entry : std::filesystem::directory_iterator(
+             data_dir, std::filesystem::directory_options::skip_permission_denied)) {
         if (!ns_entry.is_directory()) continue;
-        for (const auto &sub_entry : std::filesystem::directory_iterator(ns_entry.path())) {
+        for (const auto &sub_entry : std::filesystem::directory_iterator(
+                 ns_entry.path(), std::filesystem::directory_options::skip_permission_denied)) {
             if (!sub_entry.is_directory()) continue;
             std::string dirname = sub_entry.path().filename().string();
             if (dirname == "enchantment" || dirname == "tags") return true;

@@ -384,7 +384,8 @@ std::vector<RawEquipment> derive_equipment_from_tags(const std::filesystem::path
     std::unordered_set<std::string> seen_ids;
 
     // Scan data/<ns>/tags/item/ for all item tag files
-    for (const auto &ns_entry : std::filesystem::directory_iterator(data_dir)) {
+    for (const auto &ns_entry : std::filesystem::directory_iterator(
+             data_dir, std::filesystem::directory_options::skip_permission_denied)) {
         if (!ns_entry.is_directory()) continue;
 
         std::filesystem::path tags_item_dir = ns_entry.path() / "tags" / "item";
@@ -393,7 +394,9 @@ std::vector<RawEquipment> derive_equipment_from_tags(const std::filesystem::path
         // Recursively scan all .json tag files under tags/item/
         try {
             for (const auto &file_entry :
-                 std::filesystem::recursive_directory_iterator(tags_item_dir)) {
+                 std::filesystem::recursive_directory_iterator(
+                     tags_item_dir,
+                     std::filesystem::directory_options::skip_permission_denied)) {
                 if (!file_entry.is_regular_file()) continue;
                 if (file_entry.path().extension() != ".json") continue;
 
@@ -423,7 +426,7 @@ std::vector<RawEquipment> derive_equipment_from_tags(const std::filesystem::path
                             }
                         }
                     }
-                } catch (...) {
+                } catch (const std::exception &) {
                     continue;
                 }
             }
@@ -612,7 +615,7 @@ EnchInfoParser::parse_native_csv(const std::filesystem::path &path) {
         int32_t max_level = 0;
         try {
             max_level = std::stoi(get_field(fields, "max_level"));
-        } catch (...) {
+        } catch (const std::exception &) {
         }
         if (max_level <= 0) {
             LOG_WARN("Warning: Skipping CSV row %d with invalid max_level.", r + 1);
@@ -622,7 +625,7 @@ EnchInfoParser::parse_native_csv(const std::filesystem::path &path) {
         int32_t multiplier = 0;
         try {
             multiplier = std::stoi(get_field(fields, "multiplier"));
-        } catch (...) {
+        } catch (const std::exception &) {
         }
         if (multiplier <= 0) {
             LOG_WARN("Warning: Skipping CSV row %d with invalid multiplier.", r + 1);
@@ -641,7 +644,7 @@ EnchInfoParser::parse_native_csv(const std::filesystem::path &path) {
             if (!limited_str.empty()) {
                 try {
                     limited_level = std::stoi(limited_str);
-                } catch (...) {}
+                } catch (const std::exception &) {}
             }
         }
         if (limited_level <= 0) {
@@ -700,7 +703,8 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
         return {};
     }
 
-    for (const auto &ns_entry : std::filesystem::directory_iterator(data_dir)) {
+    for (const auto &ns_entry : std::filesystem::directory_iterator(
+             data_dir, std::filesystem::directory_options::skip_permission_denied)) {
         if (!ns_entry.is_directory()) {
             continue;
         }
@@ -712,7 +716,8 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
             continue;
         }
 
-        for (const auto &ench_file : std::filesystem::directory_iterator(ench_dir)) {
+        for (const auto &ench_file : std::filesystem::directory_iterator(
+                 ench_dir, std::filesystem::directory_options::skip_permission_denied)) {
             if (!ench_file.is_regular_file()) {
                 continue;
             }

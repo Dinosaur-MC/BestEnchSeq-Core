@@ -44,8 +44,12 @@ namespace {
 inline std::unordered_set<std::string> resolve_raw_value(
     const std::string &value,
     const std::unordered_map<std::string, std::vector<std::string>> &raw_tags,
-    std::unordered_set<std::string> &visiting
+    std::unordered_set<std::string> &visiting,
+    int depth = 0
 ) {
+    if (depth > 64) {
+        return {};
+    }
     if (value.empty()) {
         return {};
     }
@@ -73,7 +77,7 @@ inline std::unordered_set<std::string> resolve_raw_value(
 
     std::unordered_set<std::string> result;
     for (const auto &v : it->second) {
-        auto expanded = resolve_raw_value(v, raw_tags, visiting);
+        auto expanded = resolve_raw_value(v, raw_tags, visiting, depth + 1);
         result.insert(expanded.begin(), expanded.end());
     }
 
@@ -100,7 +104,8 @@ inline void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
     // First pass: collect all raw tag values (including '#tag' references)
     std::unordered_map<std::string, std::vector<std::string>> raw_tags;
 
-    for (const auto &ns_entry : std::filesystem::directory_iterator(data_dir)) {
+    for (const auto &ns_entry : std::filesystem::directory_iterator(
+             data_dir, std::filesystem::directory_options::skip_permission_denied)) {
         if (!ns_entry.is_directory()) {
             continue;
         }
@@ -112,7 +117,8 @@ inline void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
             continue;
         }
 
-        for (const auto &category_entry : std::filesystem::directory_iterator(tags_dir)) {
+        for (const auto &category_entry : std::filesystem::directory_iterator(
+                 tags_dir, std::filesystem::directory_options::skip_permission_denied)) {
             if (!category_entry.is_directory()) {
                 continue;
             }
@@ -121,7 +127,9 @@ inline void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
             // Recursively find all .json tag files under this category
             try {
                 for (const auto &file_entry :
-                     std::filesystem::recursive_directory_iterator(category_entry.path())) {
+                     std::filesystem::recursive_directory_iterator(
+                         category_entry.path(),
+                         std::filesystem::directory_options::skip_permission_denied)) {
                     if (!file_entry.is_regular_file()) {
                         continue;
                     }
