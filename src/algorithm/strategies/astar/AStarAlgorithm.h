@@ -32,9 +32,9 @@ public:
     const IAlgorithmSerializer* get_serializer() const noexcept override { return _serializer.get(); }
     bool is_resumable() const noexcept override { return true; }
 
-    // ── Restored input accessors (for serializer) ────────────────────────
-    void _x_import_input(const AlgorithmInput& input) { _restored_input = input; }
-    const AlgorithmInput& _x_export_input() const { return _restored_input; }
+    // ── IAlgorithm input accessor overrides ─────────────────────────────
+    const AlgorithmInput& algorithm_input_ref() const noexcept override { return _restored_input; }
+    void set_algorithm_input(AlgorithmInput input) noexcept override { _restored_input = std::move(input); }
 
     // friend declaration — serializer accesses private _x_ helpers + state
     friend class AStarStateSerializer;

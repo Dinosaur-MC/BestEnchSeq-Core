@@ -493,14 +493,18 @@ compact::EnchReg read_ench_reg(ByteStreamReader& r) {
     {
         uint32_t n = r.u32();
         size_t dim = reg._ench_infos.size();
-        // expected = dim * dim, with overflow guard
-        if (dim > SIZE_MAX / dim) { r.set_fail(); return reg; }
-        size_t expected = dim * dim;
-        if (static_cast<size_t>(n) != expected) { r.set_fail(); return reg; }
-        reg._conflict_matrix.resize(n);
-        for (uint32_t i = 0; i < n; ++i) {
-            reg._conflict_matrix[i] = static_cast<char>(r.u8());
-            if (!r.ok()) break;
+        if (dim == 0) {
+            // No enchantments — conflict matrix must also be empty
+            if (n != 0) { r.set_fail(); return reg; }
+        } else {
+            if (dim > SIZE_MAX / dim) { r.set_fail(); return reg; }
+            size_t expected = dim * dim;
+            if (static_cast<size_t>(n) != expected) { r.set_fail(); return reg; }
+            reg._conflict_matrix.resize(n);
+            for (uint32_t i = 0; i < n; ++i) {
+                reg._conflict_matrix[i] = static_cast<char>(r.u8());
+                if (!r.ok()) break;
+            }
         }
     }
 

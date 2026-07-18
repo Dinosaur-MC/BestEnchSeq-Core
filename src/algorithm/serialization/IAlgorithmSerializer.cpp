@@ -37,7 +37,9 @@ std::vector<uint8_t> IAlgorithmSerializer::serialize(const IAlgorithm& algo) con
     // 3. Algorithm state sections (subclass provides opaque payloads)
     auto algo_sections = _serialize_state(algo);
     for (const auto& sect : algo_sections) {
-        write_section_header(w, SECTION_TYPE_ALGO, next_id++, sect.payload.size());
+        // Encode logical section_tag in lower bits of section type
+        uint32_t section_type = SECTION_TYPE_ALGO | sect.section_tag;
+        write_section_header(w, section_type, next_id++, sect.payload.size());
         w.bytes(sect.payload.data(), sect.payload.size());
     }
 
@@ -109,8 +111,15 @@ bool IAlgorithmSerializer::deserialize(IAlgorithm& algo, std::span<const uint8_t
             continue;
         }
 
-        // Algorithm-specific section -- collect for subclass
-        algo_sections.push_back({si.section_id, std::move(payload)});
+        // Algorithm-specific section -- extract logical tag from type
+        if (si.type & SECTION_TYPE_ALGO) {
+            uint32_t logical_tag = si.type & ~SECTION_TYPE_ALGO;
+            algo_sections.push_back({logical_tag, std::move(payload)});
+            continue;
+        }
+
+        // Unknown section type -- skip
+        continue;
     }
 
     if (!r.ok()) return false;
