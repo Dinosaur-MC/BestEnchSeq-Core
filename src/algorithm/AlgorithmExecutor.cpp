@@ -116,6 +116,9 @@ void AlgorithmExecutor::start(AlgorithmInput input,
 
     _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
     _algo_name_cache = std::string(_algorithm->name());
+    DiagnosticsService::instance().push(
+        DiagEventKind::StateChange, _algo_name_cache, _task_id,
+        DiagnosticsEvent::StatePayload{AlgorithmState::Idle, AlgorithmState::Running});
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
 
@@ -160,6 +163,9 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 
     _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
     _algo_name_cache = std::string(_algorithm->name());
+    DiagnosticsService::instance().push(
+        DiagEventKind::StateChange, _algo_name_cache, _task_id,
+        DiagnosticsEvent::StatePayload{AlgorithmState::Idle, AlgorithmState::Running});
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
 
