@@ -268,8 +268,7 @@ void test_generate_books_auto_complete() {
 void test_assemble_input_direct_mode() {
     CLIConfig config;
     config.mode = "direct";
-    config.target = "diamond_sword";
-    config.wanted = "sharpness=5,knockback=2";
+    config.target = "diamond_sword[sharpness=5,knockback=2]";
     config.platform = "auto";
 
     auto input = InputParser::assemble_input(
@@ -283,18 +282,16 @@ void test_assemble_input_direct_mode() {
            "assemble_input: target should be equipment");
     expect(input.target_item.equipment->name_id == "diamond_sword",
            "assemble_input: target id should be diamond_sword");
-    expect(input.target_item.enchantments.empty(),
-           "assemble_input: target should have no inline enchantments");
-    expect(input.source_ench.empty(),
-           "assemble_input: source_ench should be same as target enchants");
 
-    // Two wanted enchants: sharpness=5 -> 5 graduated books, knockback=2 -> 2 graduated books
-    expect(input.available_items.size() == 7,
-           "assemble_input: should have 7 graduated books for 2 new enchants");
-    for (const auto &item : input.available_items) {
-        expect(item.is_book(),
-               "assemble_input: available item should be a book");
-    }
+    // Inline enchants in target spec become both starting enchants and target enchants
+    expect(input.target_item.enchantments.size() == 2,
+           "assemble_input: target should have 2 inline enchantments");
+    expect(input.source_ench.empty(),
+           "assemble_input: source_ench should be empty when --source is not set");
+
+    // No books needed because target already has the desired enchantments
+    expect(input.available_items.empty(),
+           "assemble_input: no books needed when target already has target enchants");
 
     std::cout << "  PASS: test_assemble_input_direct_mode" << std::endl;
 }
