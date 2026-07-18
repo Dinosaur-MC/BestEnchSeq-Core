@@ -14,38 +14,33 @@ struct EnchantmentDataPack {
 };
 
 struct EnchInfoParser {
-    /// Parse native JSON format — single file with enchantments array.
-    /// Returns string-based intermediate data (RawEnchInfo).
-    static std::vector<RawEnchInfo> parse_native_json(
-        const std::filesystem::path &path,
-        TagResolver &tag_resolver,
-        EnchantmentDataPack *metadata = nullptr
-    );
+    /// Parse native all-in-one JSON format (current vanilla.json).
+    /// Returns a pair of (enchantments, equipment).
+    /// Output RawEnchantment have pre-resolved exclusive_set/applicable_items
+    /// (no `#` references).
+    static std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+    parse_native_json(const std::filesystem::path &path,
+                      EnchantmentDataPack *metadata = nullptr);
 
     /// Parse native JSON from an in-memory string (e.g. embedded data).
-    /// Same as parse_native_json(path, ...) but skips file I/O.
-    /// Named differently to avoid ambiguity with the path overload.
-    static std::vector<RawEnchInfo> parse_native_json_str(
-        const std::string &content,
-        TagResolver &tag_resolver,
-        EnchantmentDataPack *metadata = nullptr
-    );
+    /// Same as parse_native_json(path) but skips file I/O.
+    static std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+    parse_native_json_str(const std::string &content,
+                          EnchantmentDataPack *metadata = nullptr);
 
     /// Parse native CSV format (enchantments.csv).
-    static std::vector<RawEnchInfo> parse_native_csv(
-        const std::filesystem::path &path,
-        TagResolver &tag_resolver
-    );
+    /// Equipment cannot be represented in CSV format — returns empty equipment
+    /// vector.
+    static std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+    parse_native_csv(const std::filesystem::path &path);
 
     /// Parse MC official data-driven format (data/<ns>/enchantment/<id>.json).
-    static std::vector<RawEnchInfo> parse_mc_official(
-        const std::filesystem::path &data_pack_dir,
-        TagResolver &tag_resolver
-    );
+    /// Equipment is derived from item tag files.
+    static std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+    parse_mc_official(const std::filesystem::path &dir);
 
-    /// Auto-detect format and parse.
-    static std::vector<RawEnchInfo> parse(
-        const std::filesystem::path &path,
-        TagResolver &tag_resolver
-    );
+    /// Auto-detect format and dispatch.
+    static std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+    parse(const std::filesystem::path &path,
+          EnchantmentDataPack *metadata = nullptr);
 };

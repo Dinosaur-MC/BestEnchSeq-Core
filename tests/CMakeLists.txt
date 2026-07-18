@@ -118,20 +118,6 @@ set_tests_properties(test_ench_info_parser PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-add_executable(test_equipment_parser
-    parsers/test_equipment_parser.cpp
-    ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
-    ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
-    ${PARSER_UTIL_SRCS}
-    ${PROJECT_ROOT}/src/io/CsvIO.cpp
-    ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
-)
-target_include_directories(test_equipment_parser PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_equipment_parser COMMAND test_equipment_parser)
-set_tests_properties(test_equipment_parser PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-
 add_executable(test_ench_parser
     parsers/test_ench_parser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
@@ -210,7 +196,6 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
     ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
@@ -662,7 +647,6 @@ add_executable(test_checkpoint_roundtrip
     ${PROJECT_ROOT}/src/log/Logger.cpp
     ${PROJECT_ROOT}/src/data/DataLoader.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/parsers/EquipmentParser.cpp
     ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp

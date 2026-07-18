@@ -4,7 +4,6 @@
 #include "algorithm/strategies/Strategies.h"
 #include "adapters/CompactAdapter.h"
 #include "data/DataLoader.h"
-#include "registries/TagResolver.hpp"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -189,9 +188,8 @@ BenchConfig parse_cli(int argc, char* argv[]) {
 
 // ─── Setup ───
 void load_builtin_data() {
-    TagResolver tags;
     registries::categories().initialize();
-    besq::data::load_builtin_data(tags, registries::categories(),
+    besq::data::load_builtin_data(registries::categories(),
                                   registries::enchants(), registries::equipment());
 }
 

@@ -8,11 +8,9 @@
 #include "data/EmbeddedData.h"
 #include "parsers/EnchInfoParser.h"
 #include "log/log.hpp"
-#include "parsers/EquipmentParser.h"
 #include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
 #include "adapters/RegistryResolver.h"
-#include "registries/TagResolver.hpp"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -33,7 +31,6 @@ inline constexpr auto BUILTIN_DATA_DIR = "data/builtin";
 
 void load_custom_data(
     const std::filesystem::path &data_pack_dir,
-    TagResolver &tag_resolver,
     const EquipmentCategoryRegistry &cat_reg,
     EnchantmentRegistry &ench_reg,
     EquipmentRegistry &eq_reg
@@ -41,11 +38,8 @@ void load_custom_data(
     if (!std::filesystem::exists(data_pack_dir))
         throw std::runtime_error("Data pack directory not found: " + data_pack_dir.string());
 
-    tag_resolver.load_from(data_pack_dir);
-
     // Parse new data as raw
-    auto raw_ench = EnchInfoParser::parse(data_pack_dir, tag_resolver);
-    auto raw_eq   = EquipmentParser::parse(data_pack_dir, tag_resolver);
+    auto [raw_ench, raw_eq] = EnchInfoParser::parse(data_pack_dir);
 
     // Merge with already-loaded data and re-initialize
     {
@@ -108,8 +102,6 @@ int main(int argc, char *argv[]) {
             return 0;
         }
 
-        TagResolver tag_resolver;
-
         // ── Load data ────────────────────────────────────────────────────────
 
         // Resolve builtin data directory: prefer path relative to executable,
@@ -127,10 +119,10 @@ int main(int argc, char *argv[]) {
         EquipmentRegistry eq_reg;
 
         besq::data::load_builtin_data(
-            tag_resolver, cat_reg, ench_reg, eq_reg, builtin_data_dir);
+            cat_reg, ench_reg, eq_reg, builtin_data_dir);
 
         if (config.data_pack) {
-            load_custom_data(std::filesystem::path(*config.data_pack), tag_resolver,
+            load_custom_data(std::filesystem::path(*config.data_pack),
                              cat_reg, ench_reg, eq_reg);
         }
 

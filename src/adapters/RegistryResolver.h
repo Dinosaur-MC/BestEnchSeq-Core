@@ -9,7 +9,7 @@
 class EnchantmentRegistry;
 class EquipmentCategoryRegistry;
 
-/// Converts string-based intermediate data (RawEnchInfo / RawEquipment) into
+/// Converts string-based intermediate data (RawEnchantment / RawEquipment) into
 /// resolved domain types (EnchInfo / Equipment) by looking up category names
 /// against the EquipmentCategoryRegistry.
 ///
@@ -25,7 +25,7 @@ struct RegistryResolver {
     /// Resolve a vector of raw enchantment info into domain EnchInfo objects.
     /// Category name strings are converted to int32_t IDs via cat_reg.
     static std::vector<EnchInfo> resolve_ench_info(
-        const std::vector<RawEnchInfo> &raw,
+        const std::vector<RawEnchantment> &raw,
         const EquipmentCategoryRegistry &cat_reg
     );
 
@@ -60,12 +60,11 @@ struct RegistryResolver {
     // ── Raw data merging (multi-source data pack support) ──────────────
 
     /// Merge new raw enchantments into an existing vector.
-    /// Entries from \p extra whose name_id does not already appear in
-    /// \p base are appended.  This avoids duplicate resolution work when
-    /// loading multiple data packs.
+    /// Entries from \p extra whose id does not already appear in \p base
+    /// are appended.
     static void merge_raw_ench_info(
-        std::vector<RawEnchInfo> &base,
-        const std::vector<RawEnchInfo> &extra
+        std::vector<RawEnchantment> &base,
+        const std::vector<RawEnchantment> &extra
     );
 
     /// Merge new raw equipment into an existing vector (same dedup logic).

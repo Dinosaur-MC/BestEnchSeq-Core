@@ -13,7 +13,7 @@
 namespace {
 
 // ---------------------------------------------------------------------------
-// Inline tag processing
+// Inline tag processing (private helpers)
 // ---------------------------------------------------------------------------
 
 // Recursively resolve a single tag value against the raw inline tag map.
@@ -90,7 +90,6 @@ void process_inline_tags(const Json::Object &root_obj, TagResolver &tag_resolver
             // Support two formats:
             //   1) "tag_name": ["value1", "value2"]        — flat array
             //   2) "tag_name": {"values": ["value1", ...]}  — explicit object
-            // Extract tag values into a local vector, then move into raw_tags.
             auto collect_strings = [](const Json::Array &arr) {
                 std::vector<std::string> out;
                 for (const auto &elem : arr) {
@@ -149,23 +148,338 @@ std::unordered_set<std::string> resolve_references(
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// Build a qualified Id from a bare or namespaced string
+// ---------------------------------------------------------------------------
+Id make_id(const std::string &id_str, const std::string &default_ns = "minecraft") {
+    Id id;
+    if (id_str.find(':') != std::string::npos) {
+        auto [ns, path] = ParserUtils::split_namespace(id_str);
+        id.ns = ns;
+        id.path = path;
+    } else {
+        id.ns = default_ns;
+        id.path = id_str;
+    }
+    return id;
+}
+
+// ---------------------------------------------------------------------------
+// Parse a single enchantment entry from a JSON object (native format)
+// ---------------------------------------------------------------------------
+RawEnchantment parse_ench_entry(const Json::Object &elem_obj, TagResolver &tag_resolver) {
+    // Required fields
+    std::string id_str      = ParserUtils::get_json_string(elem_obj, "id");
+    int32_t max_level       = ParserUtils::get_json_int(elem_obj, "max_level");
+    int32_t multiplier      = ParserUtils::get_json_int(elem_obj, "multiplier");
+
+    // Optional fields
+    std::string display_name = ParserUtils::get_json_string(elem_obj, "name");
+    if (display_name.empty()) {
+        display_name = id_str;
+    }
+
+    int32_t limited_level = ParserUtils::get_json_int(elem_obj, "limited_level");
+    if (limited_level <= 0) {
+        limited_level = 0; // 0 = treasure
+    }
+
+    // Exclusive set — resolve #tag references
+    auto exclusive_set_items = ParserUtils::get_json_string_array(elem_obj, "exclusive_set");
+    auto exclusive_set       = resolve_references(exclusive_set_items, tag_resolver);
+
+    // Applicable items — resolve #tag references
+    auto app_items       = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
+    auto applicable_items = resolve_references(app_items, tag_resolver);
+
+    RawEnchantment ench;
+    ench.id               = make_id(id_str);
+    ench.display_name     = std::move(display_name);
+    ench.multiplier       = multiplier;
+    ench.max_level        = max_level;
+    ench.limited_level    = limited_level;
+    ench.exclusive_set    = std::move(exclusive_set);
+    ench.applicable_items = std::move(applicable_items);
+    return ench;
+}
+
+// ---------------------------------------------------------------------------
+// Parse equipment array from a native JSON root object
+// ---------------------------------------------------------------------------
+std::vector<RawEquipment> parse_equipments_json(const Json::Object &root_obj) {
+    auto eq_it = root_obj.find("equipments");
+    if (eq_it == root_obj.end()) {
+        return {};
+    }
+
+    auto eq_val = eq_it->second.get_value();
+    if (!std::holds_alternative<Json::Array>(eq_val)) {
+        return {};
+    }
+    const auto &eq_arr = std::get<Json::Array>(eq_val);
+
+    std::vector<RawEquipment> result;
+    for (const auto &eq_json : eq_arr) {
+        auto elem_val = eq_json.get_value();
+        if (!std::holds_alternative<Json::Object>(elem_val)) {
+            continue;
+        }
+        const auto &elem_obj = std::get<Json::Object>(elem_val);
+
+        std::string id_str   = ParserUtils::get_json_string(elem_obj, "id");
+        std::string category = ParserUtils::get_json_string(elem_obj, "category");
+
+        if (id_str.empty() || category.empty()) {
+            LOG_WARN("Warning: Skipping equipment entry with missing id or category.");
+            continue;
+        }
+
+        std::string name = ParserUtils::get_json_string(elem_obj, "name");
+        if (name.empty()) {
+            name = id_str;
+        }
+
+        int32_t max_durability = ParserUtils::get_json_int(elem_obj, "max_durability");
+        if (max_durability <= 0) {
+            max_durability = 0;
+        }
+
+        RawEquipment eq;
+        eq.id             = make_id(id_str);
+        eq.display_name   = std::move(name);
+        eq.category       = std::move(category);
+        eq.max_durability = max_durability;
+        result.push_back(std::move(eq));
+    }
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// Known builtin item → durability table for MC official format
+// ---------------------------------------------------------------------------
+int32_t get_builtin_durability(const std::string &item_id) {
+    // Strip namespace for lookup
+    std::string key = item_id;
+    auto colon = key.find(':');
+    if (colon != std::string::npos) {
+        key = key.substr(colon + 1);
+    }
+
+    static const std::unordered_map<std::string, int32_t> durability_map = {
+        // Swords
+        {"wooden_sword", 59},     {"stone_sword", 131},
+        {"iron_sword", 250},      {"golden_sword", 32},
+        {"diamond_sword", 1561},  {"netherite_sword", 2031},
+        // Pickaxes
+        {"wooden_pickaxe", 59},   {"stone_pickaxe", 131},
+        {"iron_pickaxe", 250},    {"golden_pickaxe", 32},
+        {"diamond_pickaxe", 1561},{"netherite_pickaxe", 2031},
+        // Axes
+        {"wooden_axe", 59},       {"stone_axe", 131},
+        {"iron_axe", 250},        {"golden_axe", 32},
+        {"diamond_axe", 1561},    {"netherite_axe", 2031},
+        // Shovels
+        {"wooden_shovel", 59},    {"stone_shovel", 131},
+        {"iron_shovel", 250},     {"golden_shovel", 32},
+        {"diamond_shovel", 1561}, {"netherite_shovel", 2031},
+        // Hoes
+        {"wooden_hoe", 59},       {"stone_hoe", 131},
+        {"iron_hoe", 250},        {"golden_hoe", 32},
+        {"diamond_hoe", 1561},    {"netherite_hoe", 2031},
+        // Helmets
+        {"leather_helmet", 55},   {"chainmail_helmet", 165},
+        {"iron_helmet", 165},     {"golden_helmet", 77},
+        {"diamond_helmet", 363},  {"netherite_helmet", 407},
+        // Chestplates
+        {"leather_chestplate", 80},   {"chainmail_chestplate", 240},
+        {"iron_chestplate", 240},     {"golden_chestplate", 112},
+        {"diamond_chestplate", 528},  {"netherite_chestplate", 592},
+        // Leggings
+        {"leather_leggings", 75},     {"chainmail_leggings", 225},
+        {"iron_leggings", 225},       {"golden_leggings", 105},
+        {"diamond_leggings", 495},    {"netherite_leggings", 555},
+        // Boots
+        {"leather_boots", 65},        {"chainmail_boots", 195},
+        {"iron_boots", 195},          {"golden_boots", 91},
+        {"diamond_boots", 429},       {"netherite_boots", 481},
+        // Other tools
+        {"bow", 384},                 {"crossbow", 465},
+        {"trident", 250},             {"shield", 336},
+        {"fishing_rod", 64},          {"elytra", 432},
+        {"shears", 238},              {"brush", 64},
+        // Turtle shell
+        {"turtle_helmet", 275},
+        // Mace
+        {"mace", 250},
+    };
+
+    auto it = durability_map.find(key);
+    if (it != durability_map.end()) {
+        return it->second;
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Derive category from item ID suffix
+// ---------------------------------------------------------------------------
+std::string derive_category(const std::string &item_id) {
+    std::string key = item_id;
+    auto colon = key.find(':');
+    if (colon != std::string::npos) {
+        key = key.substr(colon + 1);
+    }
+
+    static const std::unordered_map<std::string, std::string> suffix_to_category = {
+        {"_sword", "sword"},     {"_pickaxe", "pickaxe"},
+        {"_axe", "axe"},         {"_shovel", "shovel"},
+        {"_hoe", "hoe"},         {"_helmet", "helmet"},
+        {"_chestplate", "chestplate"}, {"_leggings", "leggings"},
+        {"_boots", "boots"},     {"_horse_armor", "horse_armor"},
+        {"bow", "bow"},          {"crossbow", "crossbow"},
+        {"trident", "trident"},  {"shield", "shield"},
+        {"fishing_rod", "fishing_rod"}, {"elytra", "elytra"},
+        {"_skull", "skull"},     {"_head", "head"},
+        {"mace", "mace"},        {"brush", "brush"},
+    };
+
+    for (const auto &[suffix, cat] : suffix_to_category) {
+        if (key == suffix ||
+            (key.size() > suffix.size() &&
+             key.substr(key.size() - suffix.size()) == suffix)) {
+            return cat;
+        }
+    }
+
+    return key;
+}
+
+// ---------------------------------------------------------------------------
+// Derive display name from an item ID string
+// ---------------------------------------------------------------------------
+std::string derive_display_name(const std::string &item_id) {
+    std::string key = item_id;
+    auto colon = key.find(':');
+    if (colon != std::string::npos) {
+        key = key.substr(colon + 1);
+    }
+
+    if (!key.empty()) {
+        key[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(key[0])));
+    }
+    for (auto &c : key) {
+        if (c == '_') {
+            c = ' ';
+        }
+    }
+    return key;
+}
+
+// ---------------------------------------------------------------------------
+// Scan MC official data pack for item tags and derive equipment
+// ---------------------------------------------------------------------------
+std::vector<RawEquipment> derive_equipment_from_tags(const std::filesystem::path &data_dir) {
+    std::unordered_set<std::string> item_ids;
+    std::unordered_set<std::string> seen_ids;
+
+    // Scan data/<ns>/tags/item/ for all item tag files
+    for (const auto &ns_entry : std::filesystem::directory_iterator(data_dir)) {
+        if (!ns_entry.is_directory()) continue;
+
+        std::filesystem::path tags_item_dir = ns_entry.path() / "tags" / "item";
+        if (!std::filesystem::is_directory(tags_item_dir)) continue;
+
+        // Recursively scan all .json tag files under tags/item/
+        try {
+            for (const auto &file_entry :
+                 std::filesystem::recursive_directory_iterator(tags_item_dir)) {
+                if (!file_entry.is_regular_file()) continue;
+                if (file_entry.path().extension() != ".json") continue;
+
+                // Parse and extract values
+                try {
+                    std::string content = ParserUtils::read_file(file_entry.path());
+                    Json json = Json::parse(content);
+                    auto root_var = json.get_value();
+                    if (!std::holds_alternative<Json::Object>(root_var)) continue;
+                    const auto &root_obj = std::get<Json::Object>(root_var);
+
+                    auto values_it = root_obj.find("values");
+                    if (values_it == root_obj.end()) continue;
+                    auto values_var = values_it->second.get_value();
+                    if (!std::holds_alternative<Json::Array>(values_var)) continue;
+                    const auto &values_arr = std::get<Json::Array>(values_var);
+
+                    for (const auto &elem : values_arr) {
+                        auto elem_var = elem.get_value();
+                        if (std::holds_alternative<Json::String>(elem_var)) {
+                            std::string val = std::get<Json::String>(elem_var);
+                            // Only collect concrete IDs (not #tag refs)
+                            if (!val.empty() && val[0] != '#') {
+                                if (seen_ids.insert(val).second) {
+                                    item_ids.insert(val);
+                                }
+                            }
+                        }
+                    }
+                } catch (...) {
+                    continue;
+                }
+            }
+        } catch (const std::filesystem::filesystem_error &) {
+            continue;
+        }
+    }
+
+    // Build RawEquipment from collected items
+    std::vector<RawEquipment> result;
+    for (const auto &item_id : item_ids) {
+        int32_t durability = get_builtin_durability(item_id);
+        std::string category = derive_category(item_id);
+        // Skip items that don't look like equipment (no durability + generic category)
+        if (durability <= 0 && category == item_id) {
+            // Keep items with a namespace — they might be custom items
+            if (item_id.find(':') != std::string::npos) {
+                auto [ns, path] = ParserUtils::split_namespace(item_id);
+                // Skip if it doesn't match any known pattern
+                (void)ns;
+            } else {
+                continue;
+            }
+        }
+
+        RawEquipment eq;
+        eq.id = make_id(item_id);
+        eq.display_name = derive_display_name(item_id);
+        eq.category = category;
+        eq.max_durability = durability;
+        result.push_back(std::move(eq));
+    }
+
+    return result;
+}
+
 } // anonymous namespace
 
 // ============================================================================
 
-std::vector<RawEnchInfo> EnchInfoParser::parse_native_json(
+std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+EnchInfoParser::parse_native_json(
     const std::filesystem::path &path,
-    TagResolver &tag_resolver,
     EnchantmentDataPack *metadata
 ) {
-    return parse_native_json_str(ParserUtils::read_file(path), tag_resolver, metadata);
+    return parse_native_json_str(ParserUtils::read_file(path), metadata);
 }
 
-std::vector<RawEnchInfo> EnchInfoParser::parse_native_json_str(
+// ============================================================================
+
+std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+EnchInfoParser::parse_native_json_str(
     const std::string &content,
-    TagResolver &tag_resolver,
     EnchantmentDataPack *metadata
 ) {
+    TagResolver tag_resolver;
     Json root = Json::parse(content);
 
     auto root_var = root.get_value();
@@ -187,91 +501,57 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_json_str(
 
     // --- Extract enchantments array ----------------------------------------
     auto ench_it = root_obj.find("enchantments");
-    if (ench_it == root_obj.end()) {
-        return {};
+    std::vector<RawEnchantment> enchantments;
+    if (ench_it != root_obj.end()) {
+        auto ench_val = ench_it->second.get_value();
+        if (std::holds_alternative<Json::Array>(ench_val)) {
+            const auto &ench_arr = std::get<Json::Array>(ench_val);
+
+            for (const auto &ench_json : ench_arr) {
+                auto elem_val = ench_json.get_value();
+                if (!std::holds_alternative<Json::Object>(elem_val)) {
+                    continue;
+                }
+                const auto &elem_obj = std::get<Json::Object>(elem_val);
+
+                // Required fields
+                std::string id     = ParserUtils::get_json_string(elem_obj, "id");
+                int32_t max_level  = ParserUtils::get_json_int(elem_obj, "max_level");
+                int32_t multiplier = ParserUtils::get_json_int(elem_obj, "multiplier");
+
+                if (id.empty() || max_level <= 0 || multiplier <= 0) {
+                    LOG_WARN("Warning: Skipping enchantment entry with missing or invalid required fields (id='%s', max_level=%d, multiplier=%d)",
+                             id.c_str(), max_level, multiplier);
+                    continue;
+                }
+
+                enchantments.push_back(parse_ench_entry(elem_obj, tag_resolver));
+            }
+        }
     }
 
-    auto ench_val = ench_it->second.get_value();
-    if (!std::holds_alternative<Json::Array>(ench_val)) {
-        return {};
-    }
-    const auto &ench_arr = std::get<Json::Array>(ench_val);
+    // --- Extract equipment array -------------------------------------------
+    auto equipment = parse_equipments_json(root_obj);
 
-    // --- Parse each enchantment entry --------------------------------------
-    std::vector<RawEnchInfo> result;
-    for (const auto &ench_json : ench_arr) {
-        auto elem_val = ench_json.get_value();
-        if (!std::holds_alternative<Json::Object>(elem_val)) {
-            continue;
-        }
-        const auto &elem_obj = std::get<Json::Object>(elem_val);
-
-        // Required fields
-        std::string id        = ParserUtils::get_json_string(elem_obj, "id");
-        int32_t max_level     = ParserUtils::get_json_int(elem_obj, "max_level");
-        int32_t multiplier    = ParserUtils::get_json_int(elem_obj, "multiplier");
-
-        if (id.empty() || max_level <= 0 || multiplier <= 0) {
-            LOG_WARN("Warning: Skipping enchantment entry with missing or invalid required fields (id='%s', max_level=%d, multiplier=%d)", id.c_str(), max_level, multiplier);
-            continue;
-        }
-
-        // Optional fields with defaults
-        std::string name = ParserUtils::get_json_string(elem_obj, "name");
-        if (name.empty()) {
-            name = id; // fallback to id
-        }
-
-        std::string platform_str = ParserUtils::get_json_string(elem_obj, "platform");
-        MCE platform =
-            platform_str.empty() ? MCE::Java : ParserUtils::parse_platform(platform_str);
-
-        int32_t limited_level = ParserUtils::get_json_int(elem_obj, "limited_level");
-        if (limited_level <= 0) {
-            limited_level = max_level;
-        }
-
-        // Treasure enchantment flag (optional, defaults to false)
-        bool is_treasure = ParserUtils::get_json_bool(elem_obj, "is_treasure");
-
-        // Exclusive set — resolve #tag references
-        auto exclusive_set_items = ParserUtils::get_json_string_array(elem_obj, "exclusive_set");
-        auto exclusive_set       = resolve_references(exclusive_set_items, tag_resolver);
-
-        // Applicable equipment — resolve #tag references, keep as strings
-        auto equipment_items = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
-        auto applicable_equipment = resolve_references(equipment_items, tag_resolver);
-
-        result.emplace_back(RawEnchInfo{
-            std::move(id),
-            std::move(name),
-            platform,
-            max_level,
-            limited_level,
-            multiplier,
-            is_treasure,
-            std::move(exclusive_set),
-            std::move(applicable_equipment)
-        });
-    }
-
-    return result;
+    return {std::move(enchantments), std::move(equipment)};
 }
 
 // ============================================================================
 
-std::vector<RawEnchInfo> EnchInfoParser::parse(
-    const std::filesystem::path &path, TagResolver &tag_resolver
+std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+EnchInfoParser::parse(
+    const std::filesystem::path &path,
+    EnchantmentDataPack *metadata
 ) {
     // Auto-detect format
     auto format = ParserUtils::detect_format(path);
     switch (format) {
     case ParserUtils::DataFormat::NativeJSON:
-        return parse_native_json(path, tag_resolver);
+        return parse_native_json(path, metadata);
     case ParserUtils::DataFormat::NativeCSV:
-        return parse_native_csv(path, tag_resolver);
+        return parse_native_csv(path);
     case ParserUtils::DataFormat::MCOfficial:
-        return parse_mc_official(path, tag_resolver);
+        return parse_mc_official(path);
     default:
         throw std::runtime_error("Unknown format: " + path.string());
     }
@@ -279,9 +559,9 @@ std::vector<RawEnchInfo> EnchInfoParser::parse(
 
 // ============================================================================
 
-std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
-    const std::filesystem::path &path, TagResolver &tag_resolver
-) {
+std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+EnchInfoParser::parse_native_csv(const std::filesystem::path &path) {
+    TagResolver tag_resolver;
     auto rows = csv::parse(path);
     if (rows.empty()) {
         return {};
@@ -315,7 +595,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
         return fields[it->second];
     };
 
-    std::vector<RawEnchInfo> result;
+    std::vector<RawEnchantment> enchantments;
     for (size_t r = 1; r < rows.size(); ++r) {
         const auto &fields = rows[r];
         if (fields.empty()) {
@@ -355,10 +635,6 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
             name = id;
         }
 
-        std::string platform_str = get_field(fields, "platform");
-        MCE platform =
-            platform_str.empty() ? MCE::Java : ParserUtils::parse_platform(platform_str);
-
         int32_t limited_level = max_level;
         {
             auto limited_str = get_field(fields, "limited_level");
@@ -369,7 +645,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
             }
         }
         if (limited_level <= 0) {
-            limited_level = max_level;
+            limited_level = 0; // 0 = treasure
         }
 
         // Exclusive set — semi-colon separated tokens, resolve #tag refs
@@ -383,56 +659,46 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_native_csv(
             }
         }
 
-        // Applicable equipment — semi-colon separated tokens, keep as strings
-        std::unordered_set<std::string> applicable_equipment;
+        // Applicable items — semi-colon separated tokens
+        std::unordered_set<std::string> applicable_items;
         {
             std::string eq_str = get_field(fields, "applicable_equipment");
             if (!eq_str.empty()) {
                 auto items    = ParserUtils::split_string(eq_str, ';');
                 auto resolved = resolve_references(items, tag_resolver);
-                applicable_equipment = std::move(resolved);
+                applicable_items = std::move(resolved);
             }
         }
 
-        result.emplace_back(RawEnchInfo{
-            std::move(id),
-            std::move(name),
-            platform,
-            max_level,
-            limited_level,
-            multiplier,
-            false, // is_treasure (not present in CSV format)
-            std::move(exclusive_set),
-            std::move(applicable_equipment)
-        });
+        RawEnchantment ench;
+        ench.id               = make_id(id);
+        ench.display_name     = std::move(name);
+        ench.multiplier       = multiplier;
+        ench.max_level        = max_level;
+        ench.limited_level    = limited_level;
+        ench.exclusive_set    = std::move(exclusive_set);
+        ench.applicable_items = std::move(applicable_items);
+        enchantments.push_back(std::move(ench));
     }
 
-    return result;
+    // CSV has no equipment data
+    return {std::move(enchantments), std::vector<RawEquipment>{}};
 }
 
 // ============================================================================
 
-std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
-    const std::filesystem::path &data_pack_dir, TagResolver &tag_resolver
-) {
-    // Load tags from the data pack directory
-    tag_resolver.load_from(data_pack_dir);
+std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
+EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
+    // Create a local TagResolver and load tags from the data pack
+    TagResolver tag_resolver;
+    tag_resolver.load_from(dir);
 
-    std::vector<RawEnchInfo> result;
+    std::vector<RawEnchantment> enchantments;
 
-    std::filesystem::path data_dir = data_pack_dir / "data";
+    std::filesystem::path data_dir = dir / "data";
     if (!std::filesystem::is_directory(data_dir)) {
-        return result;
+        return {};
     }
-
-    // Known equipment category IDs (without namespace prefix)
-    // Used only for heuristics in MC official format parsing
-    std::unordered_set<std::string> known_equipment_ids = {
-        "sword",      "helmet",    "chestplate", "leggings",
-        "boots",      "bow",       "axe",        "pickaxe",
-        "shovel",     "hoe",       "trident",    "shield",
-        "crossbow",   "fishing_rod"
-    };
 
     for (const auto &ns_entry : std::filesystem::directory_iterator(data_dir)) {
         if (!ns_entry.is_directory()) {
@@ -485,7 +751,7 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
             }
             const auto &obj = std::get<Json::Object>(root_var);
 
-            // Map MC official fields to EnchInfo
+            // Map MC official fields
             int32_t multiplier = ParserUtils::get_json_int(obj, "anvil_cost");
             int32_t max_level  = ParserUtils::get_json_int(obj, "max_level");
 
@@ -498,64 +764,31 @@ std::vector<RawEnchInfo> EnchInfoParser::parse_mc_official(
             // Limited level defaults to max_level (no field in MC format)
             int32_t limited_level = max_level;
 
-            // Platform defaults to All (MC official is cross-platform)
-            MCE platform = MCE::All;
-
             // Derive display name from filename
-            std::string name = filename;
-            if (!name.empty()) {
-                name[0] = static_cast<char>(
-                    std::toupper(static_cast<unsigned char>(name[0]))
-                );
-            }
-            for (auto &c : name) {
-                if (c == '_') {
-                    c = ' ';
-                }
-            }
-
-            // Namespaced id
-            std::string name_id = ns + ":" + filename;
+            std::string display_name = derive_display_name(filename);
 
             // Exclusive set — resolve #tag refs
             auto excl_items    = ParserUtils::get_json_string_array(obj, "exclusive_set");
             auto exclusive_set = resolve_references(excl_items, tag_resolver);
 
-            // Supported items → applicable equipment (keep as strings)
-            auto supp_items      = ParserUtils::get_json_string_array(obj, "supported_items");
-            auto resolved_supp   = resolve_references(supp_items, tag_resolver);
+            // Supported items — resolve #tag refs
+            auto supp_items    = ParserUtils::get_json_string_array(obj, "supported_items");
+            auto applicable_items = resolve_references(supp_items, tag_resolver);
 
-            std::unordered_set<std::string> applicable_equipment;
-            for (const auto &item_id : resolved_supp) {
-                // Strip namespace prefix to check against known equipment categories
-                std::string stripped = item_id;
-                size_t colon_pos     = stripped.find(':');
-                if (colon_pos != std::string::npos) {
-                    stripped = stripped.substr(colon_pos + 1);
-                }
-
-                // Keep the item_id as-is for RegistryResolver to resolve later.
-                // Use stripped form if it's a known builtin category name.
-                if (known_equipment_ids.count(stripped)) {
-                    applicable_equipment.insert(stripped);
-                } else {
-                    applicable_equipment.insert(item_id);
-                }
-            }
-
-            result.emplace_back(RawEnchInfo{
-                std::move(name_id),
-                std::move(name),
-                platform,
-                max_level,
-                limited_level,
-                multiplier,
-                false, // is_treasure (not in MC official format)
-                std::move(exclusive_set),
-                std::move(applicable_equipment)
-            });
+            RawEnchantment ench;
+            ench.id               = make_id(filename, ns);
+            ench.display_name     = std::move(display_name);
+            ench.multiplier       = multiplier;
+            ench.max_level        = max_level;
+            ench.limited_level    = limited_level;
+            ench.exclusive_set    = std::move(exclusive_set);
+            ench.applicable_items = std::move(applicable_items);
+            enchantments.push_back(std::move(ench));
         }
     }
 
-    return result;
+    // Derive equipment from item tag files
+    auto equipment = derive_equipment_from_tags(data_dir);
+
+    return {std::move(enchantments), std::move(equipment)};
 }

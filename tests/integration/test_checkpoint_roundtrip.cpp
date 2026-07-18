@@ -16,7 +16,6 @@
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "registries/TagResolver.hpp"
 #include "data/DataLoader.h"
 #include "io/json.h"
 
@@ -34,10 +33,8 @@
 static void ensure_registries_loaded() {
     static bool loaded = false;
     if (!loaded) {
-        TagResolver tags;
         registries::categories().initialize();
         besq::data::load_builtin_data(
-            tags,
             registries::categories(),
             registries::enchants(),
             registries::equipment()
