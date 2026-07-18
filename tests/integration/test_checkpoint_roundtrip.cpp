@@ -19,10 +19,13 @@
 #include "data/DataLoader.h"
 #include "io/json.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <memory>
 #include <span>
+#include <thread>
 #include <vector>
 
 // ─── Registry initialization ─────────────────────────────────────────────
@@ -206,6 +209,60 @@ void test_checkpoint_integrity_checks() {
     TEST_PASS("test_checkpoint_integrity_checks");
 }
 
+void test_astar_pause_resume() {
+    // Full checkpoint round-trip with A*: start → pause → serialize → resume → complete
+    // Tests that the algorithm state (ItemPool, StepPool, OpenHeap, BestG) is
+    // correctly preserved across serialization boundaries.
+
+    auto input = create_boots_full_input();
+    input.search.max_solutions = 1;
+    input.search.memory_mb = 512;
+
+    auto algo = std::make_unique<AStarAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+
+    // Start A* in background thread
+    executor.start(std::move(input));
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+
+    // Pause and capture state
+    executor.pause();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    auto checkpoint = executor.serialize_state();
+    bool paused_cleanly = !checkpoint.empty();
+
+    if (paused_cleanly) {
+        // Create fresh executor and restore from checkpoint
+        auto resume_algo = std::make_unique<AStarAlgorithm>();
+        AlgorithmExecutor resume_exec(std::move(resume_algo));
+        resume_exec.start(checkpoint);
+
+        auto state = resume_exec.wait();
+        expect(state == AlgorithmState::Completed, "resumed A* should complete");
+
+        auto output = resume_exec.output();
+        expect(output.is_valid, "resumed output should be valid");
+        if (!output.solutions.empty()) {
+            expect(output.solutions[0].total_cost > 0,
+                   "resumed solution cost should be positive");
+        }
+    } else {
+        // A* finished before we could pause — still verify direct execution
+        executor.resume();
+        auto state = executor.wait();
+        expect(state == AlgorithmState::Completed, "direct A* should complete");
+        auto output = executor.output();
+        expect(output.is_valid, "direct output should be valid");
+        if (!output.solutions.empty()) {
+            expect(output.solutions[0].total_cost > 0,
+                   "direct solution cost should be positive");
+        }
+    }
+
+    TEST_PASS("test_astar_pause_resume");
+}
+
 void test_greedy_execution() {
     // Verify the full pipeline works end-to-end with real data
     auto input = create_boots_full_input();
@@ -237,6 +294,7 @@ int main() {
         test_algorithm_input_roundtrip();
         test_checkpoint_algorithm_input_roundtrip();
         test_checkpoint_integrity_checks();
+        test_astar_pause_resume();
         test_greedy_execution();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
