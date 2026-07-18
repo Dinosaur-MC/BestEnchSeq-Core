@@ -1,5 +1,4 @@
 #include "AlgorithmExecutor.h"
-#include "algorithm/diagnostics/DiagnosticsEvent.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
 #include "algorithm/serialization/IAlgorithmSerializer.h"
 #include <stdexcept>
@@ -26,23 +25,26 @@ void AlgorithmExecutor::_join_worker() noexcept {
         _worker->join();
 }
 
-void AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
-    auto prev = _state.load(std::memory_order_acquire);
-    while (prev != AlgorithmState::Cancelled && prev != AlgorithmState::Failed) {
+bool AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
+    while (true) {
+        auto prev = _state.load(std::memory_order_acquire);
+        // Don't transition FROM terminal states
+        if (prev == AlgorithmState::Cancelled || prev == AlgorithmState::Failed)
+            return false;
+        // Don't transition TO the same state (noop)
+        if (prev == new_state)
+            return false;
         if (_state.compare_exchange_weak(prev, new_state,
                 std::memory_order_acq_rel, std::memory_order_acquire)) {
             _state_cv.notify_all();
-
-            // Notify observer (async, non-blocking)
             if (!_algo_name_cache.empty()) {
                 DiagnosticsService::instance().push(
-                    DiagEventKind::StateChange,
-                    _algo_name_cache,
-                    _task_id,
+                    DiagEventKind::StateChange, _algo_name_cache, _task_id,
                     DiagnosticsEvent::StatePayload{prev, new_state});
             }
-            return;
+            return true;
         }
+        // CAS failed — retry with updated prev
     }
 }
 
@@ -110,15 +112,11 @@ void AlgorithmExecutor::_finalize() {
 
 void AlgorithmExecutor::start(AlgorithmInput input,
                                std::unique_ptr<IAlgorithm> warmup) {
-    AlgorithmState expected = AlgorithmState::Idle;
-    if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
-        throw std::logic_error("executor already running");
+    if (!_set_state(AlgorithmState::Running))
+        throw std::logic_error("executor already running or in terminal state");
 
     _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
     _algo_name_cache = std::string(_algorithm->name());
-    DiagnosticsService::instance().push(
-        DiagEventKind::StateChange, _algo_name_cache, _task_id,
-        DiagnosticsEvent::StatePayload{AlgorithmState::Idle, AlgorithmState::Running});
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
 
@@ -157,15 +155,11 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
     if (!ok)
         throw std::runtime_error("checkpoint deserialization failed");
 
-    AlgorithmState expected = AlgorithmState::Idle;
-    if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
-        throw std::logic_error("executor already running");
+    if (!_set_state(AlgorithmState::Running))
+        throw std::logic_error("executor already running or in terminal state");
 
     _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
     _algo_name_cache = std::string(_algorithm->name());
-    DiagnosticsService::instance().push(
-        DiagEventKind::StateChange, _algo_name_cache, _task_id,
-        DiagnosticsEvent::StatePayload{AlgorithmState::Idle, AlgorithmState::Running});
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
 
@@ -187,27 +181,13 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 }
 
 void AlgorithmExecutor::pause() {
-    AlgorithmState expected = AlgorithmState::Running;
-    if (_state.compare_exchange_strong(expected, AlgorithmState::Paused)) {
+    if (_set_state(AlgorithmState::Paused))
         _ctx->pause();
-        if (!_algo_name_cache.empty()) {
-            DiagnosticsService::instance().push(
-                DiagEventKind::StateChange, _algo_name_cache, _task_id,
-                DiagnosticsEvent::StatePayload{expected, AlgorithmState::Paused});
-        }
-    }
 }
 
 void AlgorithmExecutor::resume() {
-    AlgorithmState expected = AlgorithmState::Paused;
-    if (_state.compare_exchange_strong(expected, AlgorithmState::Running)) {
-        if (!_algo_name_cache.empty()) {
-            DiagnosticsService::instance().push(
-                DiagEventKind::StateChange, _algo_name_cache, _task_id,
-                DiagnosticsEvent::StatePayload{AlgorithmState::Paused, AlgorithmState::Running});
-        }
+    if (_set_state(AlgorithmState::Running))
         _ctx->resume();
-    }
 }
 
 void AlgorithmExecutor::cancel() {

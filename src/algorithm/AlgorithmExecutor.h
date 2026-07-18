@@ -54,7 +54,9 @@ public:
 
 private:
     void _join_worker() noexcept;
-    void _set_state(AlgorithmState new_state) noexcept;
+    /// Atomically transition to new_state. Returns true if state changed.
+    /// Skips if already at new_state (noop) or if FROM a terminal state.
+    bool _set_state(AlgorithmState new_state) noexcept;
     void _run_warmup(AlgorithmInput& input, IAlgorithm& warmup_algo);
     void _finalize();
 
