@@ -11,13 +11,13 @@ namespace {
 // ---------------------------------------------------------------------------
 
 void test_basic_args() {
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5"};
-    
+    const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=5"};
+
     auto config = parse_cli(5, const_cast<char **>(argv));
 
     expect(config.mode == "direct", "mode should default to direct");
     expect(config.target == "diamond_sword", "target should be diamond_sword");
-    expect(config.wanted == "sharpness=5", "wanted should be sharpness=5");
+    expect(config.source == "sharpness=5", "source should be sharpness=5");
 
     std::cout << "  PASS: test_basic_args" << std::endl;
 }
@@ -104,7 +104,7 @@ void test_help_short_flag() {
 }
 
 void test_verbose_short_flag() {
-    const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "-v"};
+    const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "-v"};
 
     auto config = parse_cli(6, const_cast<char **>(argv));
 
@@ -119,8 +119,8 @@ void test_verbose_short_flag() {
 // ---------------------------------------------------------------------------
 
 void test_default_values() {
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5"};
-    
+    const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=5"};
+
     auto config = parse_cli(5, const_cast<char **>(argv));
 
     expect(config.mode == "direct", "default mode should be direct");
@@ -171,12 +171,12 @@ void test_enchantment_list() {
 // ---------------------------------------------------------------------------
 
 void test_key_value_equals_form() {
-    const char *argv[] = {"besq", "--target=diamond_sword", "--wanted=sharpness=5"};
-    
+    const char *argv[] = {"besq", "--target=diamond_sword", "--source=sharpness=5"};
+
     auto config = parse_cli(3, const_cast<char **>(argv));
 
     expect(config.target == "diamond_sword", "target via --key=value form");
-    expect(config.wanted == "sharpness=5", "wanted via --key=value form");
+    expect(config.source == "sharpness=5", "source via --key=value form");
 
     std::cout << "  PASS: test_key_value_equals_form" << std::endl;
 }
@@ -231,12 +231,12 @@ void test_target_with_ns_inline() {
 
 void test_solutions_flag() {
     {
-        const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "0"};
+        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "0"};
         auto config = parse_cli(7, const_cast<char **>(argv));
         expect(config.solutions == 0, "--solutions 0");
     }
     {
-        const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions=10"};
+        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions=10"};
         auto config = parse_cli(6, const_cast<char **>(argv));
         expect(config.solutions == 10, "--solutions=10");
     }
@@ -249,8 +249,8 @@ void test_solutions_flag() {
 // ---------------------------------------------------------------------------
 
 void test_missing_target_throws() {
-    const char *argv[] = {"besq", "--wanted", "sharpness=5"};
-    
+    const char *argv[] = {"besq", "--source", "sharpness=5"};
+
     bool threw = false;
 
     try {
@@ -268,20 +268,15 @@ void test_missing_target_throws() {
 // Missing wanted throws
 // ---------------------------------------------------------------------------
 
-void test_missing_wanted_throws() {
+void test_source_not_required() {
     const char *argv[] = {"besq", "--target", "diamond_sword"};
-    
-    bool threw = false;
 
-    try {
-        parse_cli(3, const_cast<char **>(argv));
-    } catch (const std::runtime_error &) {
-        threw = true;
-    }
+    // --source is optional, so this should succeed
+    auto config = parse_cli(3, const_cast<char **>(argv));
 
-    expect(threw, "missing --wanted should throw");
+    expect(config.source.empty(), "--source should be empty when not provided");
 
-    std::cout << "  PASS: test_missing_wanted_throws" << std::endl;
+    std::cout << "  PASS: test_source_not_required" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -334,7 +329,7 @@ void test_ench_invalid_level_throws() {
 
 void test_solutions_invalid_throws() {
     {
-        const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "abc"};
+        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "abc"};
         bool threw = false;
         try {
             parse_cli(7, const_cast<char **>(argv));
@@ -344,7 +339,7 @@ void test_solutions_invalid_throws() {
         expect(threw, "invalid --solutions 'abc' should throw");
     }
     {
-        const char *argv[] = {"besq", "--target", "sword", "--wanted", "sharp=5", "--solutions", "-1"};
+        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "-1"};
         bool threw = false;
         try {
             parse_cli(7, const_cast<char **>(argv));
@@ -362,13 +357,13 @@ void test_solutions_invalid_throws() {
 // ---------------------------------------------------------------------------
 
 void test_double_dash_stops_parsing() {
-    const char *argv[] = {"besq", "--target", "sword", "--", "--wanted", "sharpness=5"};
-    
+    const char *argv[] = {"besq", "--target", "sword", "--", "--source", "sharpness=5"};
+
     auto config = parse_cli(6, const_cast<char **>(argv));
 
     expect(config.target == "sword", "target parsed before --");
-    // -- stops parsing, so --wanted is not consumed as an option
-    expect(config.wanted.empty(), "wanted should be empty because -- stops parsing");
+    // -- stops parsing, so --source is not consumed as an option
+    expect(config.source.empty(), "source should be empty because -- stops parsing");
 
     std::cout << "  PASS: test_double_dash_stops_parsing" << std::endl;
 }
@@ -379,16 +374,16 @@ void test_double_dash_stops_parsing() {
 
 void test_all_options() {
     const char *argv[] = {
-        "besq", "--target", "sword", "--wanted", "sharp=5",
+        "besq", "--target", "sword", "--source", "sharp=5",
         "--mode", "inventory", "--platform", "bedrock",
         "--format", "json", "--solutions", "3",
         "--input", "in.json", "--output", "out.json",
-        "--data-pack", "mypack"
+        "--data-pack", "mypack", "--registry-dir", "myreg", "--registries", "custom:v1"
     };
-    auto config = parse_cli(19, const_cast<char **>(argv));
+    auto config = parse_cli(23, const_cast<char **>(argv));
 
     expect(config.target == "sword", "target");
-    expect(config.wanted == "sharp=5", "wanted");
+    expect(config.source == "sharp=5", "source");
     expect(config.mode == "inventory", "mode");
     expect(config.platform == "bedrock", "platform");
     expect(config.format == "json", "format");
@@ -396,8 +391,41 @@ void test_all_options() {
     expect(config.input.has_value() && config.input.value() == "in.json", "input");
     expect(config.output.has_value() && config.output.value() == "out.json", "output");
     expect(config.data_pack.has_value() && config.data_pack.value() == "mypack", "data-pack");
+    expect(config.registry_dir.has_value() && config.registry_dir.value() == "myreg", "registry-dir");
+    expect(config.registries == "custom:v1", "registries");
 
     std::cout << "  PASS: test_all_options" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// --source flag
+// ---------------------------------------------------------------------------
+
+void test_source_flag() {
+    const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "efficiency=4,unbreaking=3"};
+
+    auto config = parse_cli(5, const_cast<char **>(argv));
+
+    expect(config.target == "diamond_sword", "target should be diamond_sword");
+    expect(config.source == "efficiency=4,unbreaking=3", "source should be efficiency=4,unbreaking=3");
+
+    std::cout << "  PASS: test_source_flag" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// Deprecated --wanted still works
+// ---------------------------------------------------------------------------
+
+void test_deprecated_wanted_still_works() {
+    const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5"};
+
+    auto config = parse_cli(5, const_cast<char **>(argv));
+
+    expect(config.target == "diamond_sword", "target should be diamond_sword");
+    // --wanted is deprecated but should still set source
+    expect(config.source == "sharpness=5", "--wanted should set source field");
+
+    std::cout << "  PASS: test_deprecated_wanted_still_works" << std::endl;
 }
 
 } // namespace
@@ -428,8 +456,10 @@ int main() {
         test_key_value_equals_form();
         test_solutions_flag();
         test_missing_target_throws();
-        test_missing_wanted_throws();
+        test_source_not_required();
         test_double_dash_stops_parsing();
+        test_source_flag();
+        test_deprecated_wanted_still_works();
         test_all_options();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

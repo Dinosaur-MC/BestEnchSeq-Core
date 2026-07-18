@@ -3,6 +3,7 @@
 #include "parsers/EnchParser.h"
 #include "parsers/ItemParser.h"
 #include "utils/ParserUtils.hpp"
+#include "log/log.hpp"
 
 #include <cctype>
 #include <iostream>
@@ -13,7 +14,7 @@
 // ============================================================================
 std::string get_cli_help_text(const std::string &program_name) {
     return
-        "Usage: " + program_name + " [options] --target <item> --wanted <enchants>\n"
+        "Usage: " + program_name + " [options] --target <item> [--source <enchants>]\n"
         "   or: " + program_name + " (no args: show this help)\n"
         "\n"
         "Options:\n"
@@ -22,7 +23,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "                           penalty_balance, hierarchical, idastar,\n"
         "                           hamming, or difficulty_first\n"
         "  --target <spec>         Target item (e.g., diamond_sword or diamond_sword[sharpness=3])\n"
-        "  --wanted <list>         Wanted enchantments (e.g., sharpness=5,knockback=2)\n"
+        "  --source <list>         Source enchantments already on the target (e.g., efficiency=4,unbreaking=3)\n"
         "  --mode <mode>           Operation mode: direct (default) or inventory\n"
         "  --platform <platform>   Platform: java, bedrock, or auto (default)\n"
         "  --format <format>       Output format: text (default), compact, or json\n"
@@ -30,6 +31,8 @@ std::string get_cli_help_text(const std::string &program_name) {
         "  --input <file>          Input file path (inventory mode)\n"
         "  --output <file>         Output file path (default: stdout)\n"
         "  --data-pack <dir>       Custom data pack directory\n"
+        "  --registry-dir <dir>    Custom registry directory\n"
+        "  --registries <name>     Registry name/version (default: minecraft:latest)\n"
         "  --ignore-cost-cap       Bypass the survival-mode 39-level cap (for modded play)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
         "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
@@ -108,7 +111,14 @@ CLIConfig parse_cli(int argc, char *argv[]) {
         } else if (key == "target") {
             config.target = value;
         } else if (key == "wanted") {
-            config.wanted = value;
+            LOG_WARN("Warning: --wanted is deprecated, use --source instead");
+            config.source = value;
+        } else if (key == "source") {
+            config.source = value;
+        } else if (key == "registry-dir") {
+            config.registry_dir = value;
+        } else if (key == "registries") {
+            config.registries = value;
         } else if (key == "input") {
             config.input = value;
         } else if (key == "output") {
@@ -162,8 +172,6 @@ CLIConfig parse_cli(int argc, char *argv[]) {
     if (!config.help) {
         if (config.target.empty())
             throw std::runtime_error("Missing required argument: --target\n");
-        if (config.wanted.empty())
-            throw std::runtime_error("Missing required argument: --wanted\n");
     }
 
     return config;

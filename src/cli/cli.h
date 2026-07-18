@@ -9,9 +9,11 @@ struct CLIConfig {
     std::string algorithm = "greedy";
     std::string mode = "direct";
     std::string target;
-    std::string wanted;
+    std::string source;
     std::optional<std::string> input;
     std::optional<std::string> data_pack;
+    std::optional<std::string> registry_dir;
+    std::string registries = "minecraft:latest";
     std::string platform = "auto";
     std::optional<std::string> output;
     std::string format = "text";

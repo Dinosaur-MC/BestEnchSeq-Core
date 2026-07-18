@@ -248,23 +248,35 @@ ParsedInput InputParser::assemble_input(
         TargetSpec target_spec = parse_target(cli_config.target);
         ItemStack target = build_target(target_spec, ench_id_map, equipment_registry);
 
-        // Parse wanted enchantments
-        std::vector<EnchantmentSpec> wanted_specs =
-            parse_enchantment_list(cli_config.wanted);
-        EnchSet wanted = build_wanted_enchset(wanted_specs, ench_id_map);
+        // Parse source enchantments (existing on target from --source flag)
+        EnchSet source_ench;
+        if (!cli_config.source.empty()) {
+            auto source_specs = parse_enchantment_list(cli_config.source);
+            source_ench = build_wanted_enchset(source_specs, ench_id_map);
+        }
 
-        // Existing enchants come from the target item
+        // Wanted enchantments come from target inline specs
+        EnchSet target_ench;
+        if (!target_spec.inline_enchants.empty()) {
+            target_ench = build_wanted_enchset(target_spec.inline_enchants, ench_id_map);
+        }
+
+        // Combine inline enchants (from target spec) and source enchants (from --source)
+        // as the existing set for book generation
         EnchSet existing = target.enchantments;
+        for (const auto &e : source_ench) {
+            existing.insert(Ench{e.id, e.level});
+        }
 
         // Auto-generate books for missing / upgrade enchantments
-        ItemCollection books = generate_books(wanted, existing);
+        ItemCollection books = generate_books(target_ench, existing);
         // Stable sort by priority (lower = more preferred)
         std::stable_sort(books.begin(), books.end(),
             [](const ItemStack &a, const ItemStack &b) {
                 return a.priority < b.priority;
             });
 
-        return ParsedInput{platform, target.enchantments, wanted, target, books};
+        return ParsedInput{platform, source_ench, target_ench, target, books};
     }
 
     // ---- inventory mode ---------------------------------------------------
