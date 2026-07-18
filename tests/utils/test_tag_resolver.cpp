@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "registries/TagResolver.hpp"
+#include "parsers/TagResolver.hpp"
 #include "io/json.h"
 
 #include <iostream>
