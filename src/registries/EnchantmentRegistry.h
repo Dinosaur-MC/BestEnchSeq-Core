@@ -7,6 +7,16 @@
 #include <unordered_set>
 #include <vector>
 
+// ─── Forward declarations for serialization friends ───────────────────────
+class ByteStreamWriter;
+class ByteStreamReader;
+class EnchantmentRegistry;
+
+namespace compact_serial {
+    void write(ByteStreamWriter& w, const EnchantmentRegistry& reg);
+    EnchantmentRegistry read_enchantment_registry(ByteStreamReader& r);
+}
+
 class EnchantmentRegistry {
   public:
     EnchantmentRegistry() = default;
@@ -43,6 +53,9 @@ class EnchantmentRegistry {
     static bool check_validation(const std::vector<EnchInfo> &infos);
 
   private:
+    friend void compact_serial::write(ByteStreamWriter& w, const EnchantmentRegistry& reg);
+    friend EnchantmentRegistry compact_serial::read_enchantment_registry(ByteStreamReader& r);
+
     std::vector<EnchInfo> instances_;
     std::unordered_map<std::string, int32_t> name_to_index_;
     std::unordered_map<int32_t, std::unordered_set<int32_t>> incompatible_table_;

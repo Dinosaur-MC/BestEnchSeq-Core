@@ -141,13 +141,42 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     });
 }
 
-void AlgorithmExecutor::start(AlgorithmInput input, const std::vector<uint8_t>& previous_state) {
-    if (!previous_state.empty()) {
-        auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
-        if (ser)
-            ser->deserialize(*_algorithm, previous_state);
-    }
-    start(std::move(input));
+void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
+    if (checkpoint.empty())
+        throw std::invalid_argument("empty checkpoint");
+
+    auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
+    if (!ser)
+        throw std::logic_error("algorithm does not support serialization");
+
+    bool ok = ser->deserialize(*_algorithm, checkpoint);
+    if (!ok)
+        throw std::runtime_error("checkpoint deserialization failed");
+
+    AlgorithmState expected = AlgorithmState::Idle;
+    if (!_state.compare_exchange_strong(expected, AlgorithmState::Running))
+        throw std::logic_error("executor already running");
+
+    _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
+    _algo_name_cache = std::string(_algorithm->name());
+    _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
+    _start_time = std::chrono::steady_clock::now();
+
+    _worker.emplace([this]() mutable {
+        try {
+            // Dummy input — algorithm uses _restored_input when _state_restored
+            AlgorithmInput dummy_input;
+            _algorithm->execute(dummy_input, *_ctx);
+
+            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - _start_time);
+            _set_state(AlgorithmState::Completed);
+        } catch (...) {
+            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - _start_time);
+            _set_state(AlgorithmState::Failed);
+        }
+    });
 }
 
 void AlgorithmExecutor::pause() {
@@ -256,8 +285,7 @@ bool AlgorithmExecutor::restore_state(const std::vector<uint8_t>& data) {
     auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
     if (!ser)
         return false;
-    ser->deserialize(*_algorithm, data);
-    return true;
+    return ser->deserialize(*_algorithm, data);
 }
 
 bool AlgorithmExecutor::is_serializable() const noexcept {

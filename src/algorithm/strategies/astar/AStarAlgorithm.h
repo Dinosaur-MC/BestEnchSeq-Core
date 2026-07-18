@@ -30,8 +30,13 @@ public:
     // ── Serialization support ────────────────────────────────────────────
     IAlgorithmSerializer* get_serializer() noexcept override { return _serializer.get(); }
     const IAlgorithmSerializer* get_serializer() const noexcept override { return _serializer.get(); }
+    bool is_resumable() const noexcept override { return true; }
 
-    // friend declaration optional — algorithm impls may use _x_ accessors instead
+    // ── Restored input accessors (for serializer) ────────────────────────
+    void _x_import_input(const AlgorithmInput& input) { _restored_input = input; }
+    const AlgorithmInput& _x_export_input() const { return _restored_input; }
+
+    // friend declaration — serializer accesses private _x_ helpers + state
     friend class AStarStateSerializer;
 
 private:
@@ -99,6 +104,8 @@ private:
     // ─── 序列化 ───
     std::unique_ptr<IAlgorithmSerializer> _serializer;
     bool _state_restored{false};
+    bool _deserialize_ok{false};
+    AlgorithmInput _restored_input;
     int64_t _explored{0};
     FlatHashMap<size_t, int32_t> _best_g;
 

@@ -130,7 +130,12 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
     // ─── Restore dispatch ───────────────────────────────────────────────
     if (_state_restored) {
         _state_restored = false;
-        _restore_and_execute(input, ctx);
+        if (!_deserialize_ok) {
+            // Deserialization was incomplete — don't run
+            ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
+            return;
+        }
+        _restore_and_execute(_restored_input, ctx);
         return;
     }
 
@@ -690,9 +695,11 @@ void AStarAlgorithm::_x_export_best_g(ByteStreamWriter& w) const {
 void AStarAlgorithm::_x_import_best_g(ByteStreamReader& r) {
     _best_g.clear();
     uint32_t count = r.u32();
+    if (count > compact_serial::MAX_SERIAL_BEST_G) { r.set_fail(); return; }
     for (uint32_t i = 0; i < count; ++i) {
         size_t key = static_cast<size_t>(r.u64());
         int32_t val = r.i32();
+        if (!r.ok()) break;
         _best_g[key] = val;
     }
 }

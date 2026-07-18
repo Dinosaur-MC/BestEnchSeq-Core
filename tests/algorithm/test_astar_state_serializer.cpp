@@ -1,6 +1,10 @@
 #include "framework/test_utils.h"
 #include "algorithm/strategies/astar/AStarStateSerializer.h"
+#include "algorithm/strategies/astar/AStarAlgorithm.h"
+#include "algorithm/serialization/CompactSerializer.h"
+#include <cstring>
 #include <memory>
+#include <span>
 
 void test_serializer_name() {
     AStarStateSerializer ser;
@@ -18,10 +22,51 @@ void test_serializer_interface() {
     TEST_PASS("test_serializer_interface");
 }
 
+void test_astar_state_empty_rejected() {
+    AStarStateSerializer ser;
+    AStarAlgorithm algo;
+    bool ok = ser.deserialize(algo, std::span<const uint8_t>());
+    expect(!ok, "empty checkpoint should return false");
+    TEST_PASS("test_astar_state_empty_rejected");
+}
+
+void test_astar_state_bad_magic_rejected() {
+    AStarStateSerializer ser;
+    AStarAlgorithm algo;
+    uint8_t bad_data[8] = {0, 0, 0, 0, 1, 0, 0, 0};
+    bool ok = ser.deserialize(algo, bad_data);
+    expect(!ok, "bad magic should return false");
+    TEST_PASS("test_astar_state_bad_magic_rejected");
+}
+
+void test_astar_state_bad_tag() {
+    AStarStateSerializer ser;
+    AStarAlgorithm algo;
+    ByteStreamWriter w;
+    w.u32(compact_serial::FILE_MAGIC);
+    w.u16(compact_serial::FILE_VERSION);
+    w.u16(0);
+    w.u32(0);
+    w.i64(0);
+    uint8_t zero_crc[7] = {};
+    w.bytes(zero_crc, 7);
+    w.u16(1);
+    const char* bad_tag = "WRONG_ALGO";
+    w.u8(static_cast<uint8_t>(std::strlen(bad_tag)));
+    w.bytes(bad_tag, std::strlen(bad_tag));
+    auto buf = std::move(w).take();
+    bool ok = ser.deserialize(algo, std::span<const uint8_t>(buf.data(), buf.size()));
+    expect(!ok, "wrong algorithm tag should return false");
+    TEST_PASS("test_astar_state_bad_tag");
+}
+
 int main() {
     try {
         test_serializer_name();
         test_serializer_interface();
+        test_astar_state_empty_rejected();
+        test_astar_state_bad_magic_rejected();
+        test_astar_state_bad_tag();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

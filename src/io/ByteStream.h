@@ -60,6 +60,8 @@ public:
         : _pos(data), _end(data + size), _ok(true) {}
 
     bool ok()      const { return _ok; }
+    bool fail()     const noexcept { return !_ok; }
+    void set_fail()       noexcept { _ok = false; }
     bool has_more() const { return _ok && _pos < _end; }
     const uint8_t* pos() const { return _pos; }
     size_t remaining() const { return _ok && _pos <= _end
@@ -107,6 +109,14 @@ public:
     void skip(size_t n) {
         if (!_ok || _pos + n > _end) { _ok = false; return; }
         _pos += n;
+    }
+
+    /// Read n bytes as a new vector.  Returns empty on failure (sets _ok=false).
+    std::vector<uint8_t> read_bytes(size_t n) {
+        if (!_ok || _pos + n > _end) { _ok = false; return {}; }
+        std::vector<uint8_t> result(_pos, _pos + n);
+        _pos += n;
+        return result;
     }
 
 private:

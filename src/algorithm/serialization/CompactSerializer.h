@@ -2,8 +2,17 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include "io/ByteStream.h"
 #include "types/CompactedTypes.h"
+#include "config/ForgeConfig.h"
+#include "config/SearchConfig.h"
+#include "types/Equipment.h"
+#include "types/EnchInfo.h"
+#include "registries/EnchantmentRegistry.h"
+#include "registries/CompactedRegistries.h"
+#include "types/AlgorithmTypes.h"
 
 // ─── Non-intrusive serialization primitives for compact types ───────────
 //
@@ -44,6 +53,28 @@ static_assert(sizeof(FileHeader::algorithm_tag) == sizeof(std::string),
 
 inline constexpr uint32_t SECTION_TYPE_COMMON = 0x00000000u;  // MSB=0: shared across algorithms
 inline constexpr uint32_t SECTION_TYPE_ALGO   = 0x80000000u;  // MSB=1: algorithm-specific
+inline constexpr uint32_t SECTION_TYPE_INPUT  = 0x00000001u;  // algorithm input section
+
+// Hard upper bounds for deserialized counts (OOM/DoS protection)
+inline constexpr uint32_t MAX_SERIAL_ITEMS    = 1'000'000;   // ItemPool, ItemCollection
+inline constexpr uint32_t MAX_SERIAL_ENCHES   = 100'000;     // EnchSet, EnchCollection
+inline constexpr uint32_t MAX_SERIAL_STEPS    = 10'000'000;  // StepPool
+inline constexpr uint32_t MAX_SERIAL_HEAP     = 10'000'000;  // OpenHeap entries
+inline constexpr uint32_t MAX_SERIAL_BEST_G   = 10'000'000;  // FlatHashMap entries
+inline constexpr uint32_t MAX_NAME_LEN        = 256;         // algorithm name/version strings
+
+inline constexpr uint16_t FILE_ALGO_VERSION_MAX = 255;
+
+// ── Section data model (opaque payloads for algorithm state) ──────────
+
+/// Opaque algorithm-specific section payload.
+/// section_tag: logical identifier meaningful only to the algorithm
+///              (e.g. 1=ItemPool, 2=StepPool)
+/// payload: raw bytes, no section header wrapping
+struct AlgoSectionData {
+    uint32_t section_tag;
+    std::vector<uint8_t> payload;
+};
 
 // ── File header I/O ─────────────────────────────────────────────────────
 
@@ -83,6 +114,38 @@ compact::EnchStep read_ench_step(ByteStreamReader& r);
 
 void write(ByteStreamWriter& w, const compact::EnchSolution& sol);
 compact::EnchSolution read_ench_solution(ByteStreamReader& r);
+
+// ── Configuration types ───────────────────────────────────────────────────
+
+void write(ByteStreamWriter& w, const ForgeConfig& c);
+ForgeConfig read_forge_config(ByteStreamReader& r);
+
+void write(ByteStreamWriter& w, const SearchConfig& c);
+SearchConfig read_search_config(ByteStreamReader& r);
+
+// ── Domain types ──────────────────────────────────────────────────────────
+
+void write(ByteStreamWriter& w, const Equipment& eq);
+Equipment read_equipment(ByteStreamReader& r);
+
+void write(ByteStreamWriter& w, const EnchInfo& info);
+EnchInfo read_ench_info(ByteStreamReader& r);
+
+void write(ByteStreamWriter& w, const EnchantmentRegistry& reg);
+EnchantmentRegistry read_enchantment_registry(ByteStreamReader& r);
+
+// ── Compact types (non-primitive) ─────────────────────────────────────────
+
+void write(ByteStreamWriter& w, const compact::EnchInfo& info);
+compact::EnchInfo read_compact_ench_info(ByteStreamReader& r);
+
+void write(ByteStreamWriter& w, const compact::EnchReg& reg);
+compact::EnchReg read_ench_reg(ByteStreamReader& r);
+
+// ── Algorithm I/O ─────────────────────────────────────────────────────────
+
+void write(ByteStreamWriter& w, const AlgorithmInput& input);
+AlgorithmInput read_algorithm_input(ByteStreamReader& r);
 
 // ── Container helpers ────────────────────────────────────────────────
 

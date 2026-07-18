@@ -31,14 +31,19 @@ void AStarStateSerializer::_read_algo_sections(
         if (si.type == 0 && si.section_id == 0)
             break;
 
-        if ((si.type & 0x80000000u) == 0) {
+        if (si.type == SECTION_TYPE_COMMON) {
             // Common section — skip payload
             r.skip(static_cast<size_t>(si.len));
             continue;
         }
 
-        // Algorithm-specific section — route by order of appearance
-        // (section_id not used for routing; sections are in write order)
+        if (si.type == SECTION_TYPE_INPUT) {
+            // Input section — delegate to base handler
+            _read_input_section(r, algo);
+            continue;
+        }
+
+        // Algorithm-specific section (MSB set) — route by section_id
         switch (si.section_id) {
             case 2: _read_item_pool(r, astar); break;
             case 3: _read_step_pool(r, astar); break;
@@ -50,6 +55,10 @@ void AStarStateSerializer::_read_algo_sections(
                 break;
         }
     }
+
+    // After all sections read successfully, mark deserialize as OK
+    if (r.ok())
+        astar._deserialize_ok = true;
 
     astar._state_restored = true;
 }
@@ -145,8 +154,11 @@ void AStarStateSerializer::_read_item_pool(
 {
     astar._pool.clear();
     uint32_t count = r.u32();
-    for (uint32_t i = 0; i < count; ++i)
+    if (count > MAX_SERIAL_ITEMS) { r.set_fail(); return; }
+    for (uint32_t i = 0; i < count; ++i) {
         astar._pool.add(read_item(r));
+        if (!r.ok()) break;
+    }
 }
 
 void AStarStateSerializer::_read_step_pool(
@@ -154,6 +166,7 @@ void AStarStateSerializer::_read_step_pool(
 {
     astar._step_pool.clear();
     uint32_t count = r.u32();
+    if (count > MAX_SERIAL_STEPS) { r.set_fail(); return; }
     astar._step_pool.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         AStarAlgorithm::StepNode sn;
@@ -162,6 +175,7 @@ void AStarStateSerializer::_read_step_pool(
         sn.sac_id  = r.i32();
         sn.cost    = r.i32();
         astar._step_pool.push_back(std::move(sn));
+        if (!r.ok()) break;
     }
 }
 
@@ -170,6 +184,7 @@ void AStarStateSerializer::_read_open_heap(
 {
     astar._open_heap.clear();
     uint32_t count = r.u32();
+    if (count > MAX_SERIAL_HEAP) { r.set_fail(); return; }
     astar._open_heap.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         AStarAlgorithm::PriorityEntry entry;
@@ -179,12 +194,16 @@ void AStarStateSerializer::_read_open_heap(
         entry.state.step_idx = r.i32();
 
         uint32_t ids_n = r.u32();
+        if (ids_n > MAX_SERIAL_ITEMS) { r.set_fail(); break; }
         entry.state.ids.reserve(ids_n);
-        for (uint32_t j = 0; j < ids_n; ++j)
+        for (uint32_t j = 0; j < ids_n; ++j) {
             entry.state.ids.push_back(r.i32());
+            if (!r.ok()) break;
+        }
 
         entry.f = r.i32();
         astar._open_heap.push_back(std::move(entry));
+        if (!r.ok()) break;
     }
 }
 

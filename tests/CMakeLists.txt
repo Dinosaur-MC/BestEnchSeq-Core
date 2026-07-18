@@ -70,6 +70,19 @@ set_tests_properties(json_tests PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/io/test_byte_stream_reader.cpp)
+    message(FATAL_ERROR "Required test source not found: io/test_byte_stream_reader.cpp")
+endif()
+
+add_executable(test_byte_stream_reader
+    io/test_byte_stream_reader.cpp
+)
+target_include_directories(test_byte_stream_reader PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_byte_stream_reader COMMAND test_byte_stream_reader)
+set_tests_properties(test_byte_stream_reader PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 add_executable(test_parser_utils
     utils/test_parser_utils.cpp
     ${PARSER_UTIL_SRCS}
@@ -597,5 +610,28 @@ add_executable(test_astar_state_serializer
 target_include_directories(test_astar_state_serializer PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_astar_state_serializer COMMAND test_astar_state_serializer)
 set_tests_properties(test_astar_state_serializer PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+# ============================================================================
+# Integration: checkpoint round-trip
+# ============================================================================
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/integration/test_checkpoint_roundtrip.cpp)
+    message(FATAL_ERROR "Required test source not found: integration/test_checkpoint_roundtrip.cpp")
+endif()
+
+add_executable(test_checkpoint_roundtrip
+    integration/test_checkpoint_roundtrip.cpp
+    ${ALGO_ALL_SRCS}
+    ${ALGO_SERIAL_SRCS}
+    ${COMPACT_TYPE_SRCS}
+    ${COMPACT_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
+    ${PROJECT_ROOT}/src/log/Logger.cpp
+)
+target_include_directories(test_checkpoint_roundtrip PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_checkpoint_roundtrip COMMAND test_checkpoint_roundtrip)
+set_tests_properties(test_checkpoint_roundtrip PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )

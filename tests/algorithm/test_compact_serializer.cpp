@@ -1,5 +1,6 @@
 #include "framework/test_utils.h"
 #include "algorithm/serialization/CompactSerializer.h"
+#include <climits>
 #include <cstring>
 
 namespace {
@@ -165,6 +166,58 @@ void test_solution_roundtrip() {
     TEST_PASS("test_solution_roundtrip");
 }
 
+// ─── Security boundary: set_fail rejection ─────────────────────────────
+
+void test_set_fail_rejection() {
+    uint8_t data[4] = {1, 2, 3, 4};
+    ByteStreamReader r(data, 4);
+    expect(r.ok(), "fresh reader ok");
+    r.set_fail();
+    expect(!r.ok(), "reader fails after set_fail");
+    expect(r.fail(), "reader.fail() returns true");
+    (void)r.u8();
+    expect(!r.ok(), "reader stays failed after read");
+    TEST_PASS("test_set_fail_rejection");
+}
+
+// ─── Security boundary: overflow count in EnchSet ─────────────────────
+
+void test_overflow_count_ench_set() {
+    ByteStreamWriter w;
+    w.u32(UINT32_MAX);
+    compact_serial::write(w, compact::Ench{1, 3});
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_ench_set(r);
+    expect(r.fail(), "read_ench_set with huge count sets fail");
+    expect(result.empty(), "result should be empty after overflow");
+    TEST_PASS("test_overflow_count_ench_set");
+}
+
+// ─── Security boundary: overflow count in EnchSolution ────────────────
+
+void test_overflow_count_solution() {
+    ByteStreamWriter w;
+    w.u32(UINT32_MAX);
+    w.i32(42);
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_ench_solution(r);
+    expect(r.fail(), "read_ench_solution with huge count sets fail");
+    TEST_PASS("test_overflow_count_solution");
+}
+
+// ─── Security boundary: incomplete data rejected ──────────────────────
+
+void test_incomplete_data_rejected() {
+    ByteStreamWriter w;
+    w.u32(5);
+    compact_serial::write(w, compact::Ench{1, 3});
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_ench_set(r);
+    (void)result;
+    expect(r.fail(), "truncated EnchSet should set reader fail");
+    TEST_PASS("test_incomplete_data_rejected");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -174,6 +227,10 @@ int main() {
         test_item_roundtrip();
         test_step_roundtrip();
         test_solution_roundtrip();
+        test_set_fail_rejection();
+        test_overflow_count_ench_set();
+        test_overflow_count_solution();
+        test_incomplete_data_rejected();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

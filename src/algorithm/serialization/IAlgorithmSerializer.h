@@ -17,32 +17,19 @@ public:
     // ── Full file serialization (non-virtual, base orchestrates) ─────
 
     std::vector<uint8_t> serialize(const IAlgorithm& algo) const;
-    void deserialize(IAlgorithm& algo, std::span<const uint8_t> data) const;
+    bool deserialize(IAlgorithm& algo, std::span<const uint8_t> data) const;
 
 protected:
-    // ── Common sections (base implementation) ────────────────────────
+    // ── Algorithm state (subclass implements -- pure data, no headers) ──
 
-    /// info.len indicates payload size.  The reader is positioned at
-    /// the start of payload.  Override to handle additional common
-    /// section types.
-    virtual void _read_common_sections(ByteStreamReader& r,
-                                       const compact_serial::SectionInfo& info,
-                                       IAlgorithm& algo) const;
+    /// Serialize algorithm internal state into opaque sections.
+    /// Each section will be wrapped with SECTION_TYPE_ALGO header by the base.
+    /// The section_tag is a logical identifier meaningful only to the algorithm.
+    /// Returns empty vector if no state to persist.
+    virtual std::vector<compact_serial::AlgoSectionData> _serialize_state(const IAlgorithm& algo) const = 0;
 
-    virtual void _write_common_sections(ByteStreamWriter& w,
-                                        const IAlgorithm& algo,
-                                        uint32_t& next_section_id) const;
-
-    // ── Algorithm-specific sections (pure virtual) ───────────────────
-
-    /// Reads all algorithm-specific sections from the stream.
-    /// The reader is positioned after the file header and any common
-    /// sections have already been consumed.  Only algorithm sections
-    /// (type MSB=1) remain in the stream.
-    virtual void _read_algo_sections(ByteStreamReader& r,
-                                     IAlgorithm& algo) const = 0;
-
-    virtual void _write_algo_sections(ByteStreamWriter& w,
-                                      const IAlgorithm& algo,
-                                      uint32_t& next_section_id) const = 0;
+    /// Deserialize algorithm internal state from pre-parsed sections.
+    /// Only algorithm-specific sections are passed.
+    /// Returns true on complete success, false on any failure.
+    virtual bool _deserialize_state(IAlgorithm& algo, std::span<const compact_serial::AlgoSectionData> sections) const = 0;
 };

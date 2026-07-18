@@ -25,7 +25,13 @@ public:
     AlgorithmExecutor& operator=(const AlgorithmExecutor&) = delete;
 
     void start(AlgorithmInput input, std::unique_ptr<IAlgorithm> warmup = nullptr);
-    void start(AlgorithmInput input, const std::vector<uint8_t>& previous_state);
+
+    /// Start execution from a self-contained checkpoint.
+    /// The checkpoint must contain all AlgorithmInput data and algorithm state.
+    /// Throws std::invalid_argument on empty checkpoint.
+    /// Throws std::logic_error if algorithm doesn't support serialization.
+    /// Throws std::runtime_error if checkpoint deserialization fails.
+    void start(const std::vector<uint8_t>& checkpoint);
 
     void pause();
     void resume();

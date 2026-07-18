@@ -4,6 +4,17 @@
 #include "types/Equipment.h"
 #include <vector>
 
+// ─── Forward declarations for serialization friends ───────────────────────
+class ByteStreamWriter;
+class ByteStreamReader;
+
+namespace compact { class EnchReg; }
+
+namespace compact_serial {
+    void write(ByteStreamWriter& w, const compact::EnchReg& reg);
+    compact::EnchReg read_ench_reg(ByteStreamReader& r);
+}
+
 namespace compact {
 
 using RichEnchInfo = ::EnchInfo;
@@ -11,6 +22,9 @@ using RichEnchInfo = ::EnchInfo;
 /// Compacted registry — precomputes EnchInfo for all enchantments against
 /// a specific target equipment. Provides O(1) lookup and conflict checking.
 class EnchReg {
+    friend void compact_serial::write(ByteStreamWriter& w, const EnchReg& reg);
+    friend EnchReg compact_serial::read_ench_reg(ByteStreamReader& r);
+
   private:
     EnchantmentRegistry _registry;     // sub-registry (copied for lifetime safety)
     std::vector<EnchInfo> _ench_infos; // compacted info, indexed by ench id
