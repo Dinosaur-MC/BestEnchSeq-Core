@@ -1,4 +1,5 @@
 #include "AlgorithmExecutor.h"
+#include "algorithm/diagnostics/DiagnosticsEvent.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
 #include "algorithm/serialization/IAlgorithmSerializer.h"
 #include <stdexcept>
@@ -181,13 +182,24 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 
 void AlgorithmExecutor::pause() {
     AlgorithmState expected = AlgorithmState::Running;
-    if (_state.compare_exchange_strong(expected, AlgorithmState::Paused))
+    if (_state.compare_exchange_strong(expected, AlgorithmState::Paused)) {
         _ctx->pause();
+        if (!_algo_name_cache.empty()) {
+            DiagnosticsService::instance().push(
+                DiagEventKind::StateChange, _algo_name_cache, _task_id,
+                DiagnosticsEvent::StatePayload{expected, AlgorithmState::Paused});
+        }
+    }
 }
 
 void AlgorithmExecutor::resume() {
     AlgorithmState expected = AlgorithmState::Paused;
     if (_state.compare_exchange_strong(expected, AlgorithmState::Running)) {
+        if (!_algo_name_cache.empty()) {
+            DiagnosticsService::instance().push(
+                DiagEventKind::StateChange, _algo_name_cache, _task_id,
+                DiagnosticsEvent::StatePayload{AlgorithmState::Paused, AlgorithmState::Running});
+        }
         _ctx->resume();
     }
 }

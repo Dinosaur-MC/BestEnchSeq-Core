@@ -327,8 +327,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
             if (_max_solutions > 0 && _solutions_found >= _max_solutions) break;
         }
 
-        if ((_explored & 0xFF) == 0) {
-            // Precise progress for small searches, asymptotic for large
+        if ((_explored & 0x3F) == 0) {  // every 64 states
             uint8_t progress;
             if (_state_est <= 100000) {
                 progress = std::min<uint8_t>(
@@ -512,6 +511,14 @@ void AStarAlgorithm::_restore_and_execute(const AlgorithmInput& input, Execution
 
     // _best_g and _explored are already populated by deserialize
 
+    // Report restored progress immediately so observers see the current state
+    if (_state_est <= 100000) {
+        uint8_t restored_progress = static_cast<uint8_t>(
+            _best_g.size() * 100 / std::max(_state_est, size_t(1)));
+        if (restored_progress > 0 && restored_progress < 100)
+            ctx.report_progress(restored_progress, ProgressStatus::Exploring);
+    }
+
     auto t0 = std::chrono::steady_clock::now();
 
     // ─── Main loop (copied from execute()) ──────────────────────────────
@@ -577,8 +584,7 @@ void AStarAlgorithm::_restore_and_execute(const AlgorithmInput& input, Execution
             if (_max_solutions > 0 && _solutions_found >= _max_solutions) break;
         }
 
-        if ((_explored & 0xFF) == 0) {
-            // Precise progress for small searches, asymptotic for large
+        if ((_explored & 0x3F) == 0) {  // every 64 states
             uint8_t progress;
             if (_state_est <= 100000) {
                 progress = std::min<uint8_t>(

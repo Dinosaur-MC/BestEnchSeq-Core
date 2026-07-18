@@ -199,8 +199,12 @@ void test_astar_pause_resume() {
     struct ProgressObserver : AlgorithmObserver {
         std::atomic<bool> started{false};
         void on_progress(size_t, uint8_t pct, ProgressStatus) override {
+            std::cout << "on_progress: " << static_cast<int>(pct) << "%" << std::endl;
             if (pct > 0 && pct < 100)
                 started.store(true, std::memory_order_release);
+        }
+        void on_state_changed(size_t, AlgorithmState, AlgorithmState curr) override {
+            std::cout << "on_state_changed: " << static_cast<int>(curr) << std::endl;
         }
     };
 
@@ -226,7 +230,6 @@ void test_astar_pause_resume() {
         if (std::chrono::steady_clock::now() >= deadline) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    DiagnosticsService::instance().detach_observer(observer);
 
     bool observed_progress = observer->started.load();
 
@@ -275,6 +278,7 @@ void test_astar_pause_resume() {
         }
     }
 
+    DiagnosticsService::instance().detach_observer(observer);
     TEST_PASS("test_astar_pause_resume");
 }
 
