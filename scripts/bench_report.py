@@ -595,6 +595,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     hist_path = os.path.join(output_dir, "benchmark_history.json")
     group_config = parse_group_config(args.group) if args.img else None
+    history = {}
 
     # 收集输入文件列表
     if input_file:
@@ -690,7 +691,7 @@ def main():
         print("输入目录中未找到有效基准文件，跳过合并。")
 
     # 趋势图
-    if args.img:
+    if args.img and history:
         print("\n--- 生成趋势图 ---")
         plot_trends(history, output_dir, group_config=group_config)
 
