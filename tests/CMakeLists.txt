@@ -453,6 +453,23 @@ set_tests_properties(test_compact_adapter PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/adapters/test_raw_type_adapter.cpp)
+    message(FATAL_ERROR "Required test source not found: adapters/test_raw_type_adapter.cpp")
+endif()
+
+add_executable(test_raw_type_adapter
+    adapters/test_raw_type_adapter.cpp
+    ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${GLOBAL_LOGGER_SRCS}
+)
+target_include_directories(test_raw_type_adapter PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_raw_type_adapter COMMAND test_raw_type_adapter)
+set_tests_properties(test_raw_type_adapter PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/adapters/test_registry_resolver.cpp)
     message(FATAL_ERROR "Required test source not found: adapters/test_registry_resolver.cpp")
 endif()
