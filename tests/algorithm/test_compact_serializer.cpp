@@ -1,5 +1,9 @@
 #include "framework/test_utils.h"
 #include "algorithm/serialization/CompactSerializer.h"
+#include "config/ForgeConfig.h"
+#include "config/SearchConfig.h"
+#include "types/Equipment.h"
+#include "types/EnchInfo.h"
 #include <climits>
 #include <cstring>
 
@@ -218,6 +222,118 @@ void test_incomplete_data_rejected() {
     TEST_PASS("test_incomplete_data_rejected");
 }
 
+void test_forge_config_roundtrip() {
+    ForgeConfig original;
+    original.ignore_penalty_cost = true;
+    original.ignore_repair_cost = false;
+    original.ignore_cost_cap = true;
+    original.platform = MCE::Bedrock;
+
+    ByteStreamWriter w;
+    compact_serial::write(w, original);
+
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_forge_config(r);
+
+    expect(r.ok(), "read_forge_config should succeed");
+    expect_eq(result.ignore_penalty_cost, true, "ignore_penalty_cost");
+    expect_eq(result.ignore_repair_cost, false, "ignore_repair_cost");
+    expect_eq(result.ignore_cost_cap, true, "ignore_cost_cap");
+    expect_eq(result.platform, MCE::Bedrock, "platform");
+    TEST_PASS("test_forge_config_roundtrip");
+}
+
+void test_search_config_roundtrip() {
+    SearchConfig original;
+    original.max_solutions = 10;
+    original.max_depth = 20;
+    original.memory_mb = 512;
+    original.max_search_time = std::chrono::milliseconds(5000);
+
+    ByteStreamWriter w;
+    compact_serial::write(w, original);
+
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_search_config(r);
+
+    expect(r.ok(), "read_search_config should succeed");
+    expect_eq(result.max_solutions, 10, "max_solutions");
+    expect_eq(result.max_depth, 20, "max_depth");
+    expect_eq(result.memory_mb, 512, "memory_mb");
+    expect_eq(result.max_search_time.count(), 5000LL, "max_search_time");
+    TEST_PASS("test_search_config_roundtrip");
+}
+
+void test_equipment_roundtrip() {
+    Equipment original;
+    original.name_id = "minecraft:diamond_sword";
+    original.name = "Diamond Sword";
+    original.category_id = 1;
+    original.max_durability = 1561;
+
+    ByteStreamWriter w;
+    compact_serial::write(w, original);
+
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_equipment(r);
+
+    expect(r.ok(), "read_equipment should succeed");
+    expect_eq(result.name_id, original.name_id, "name_id");
+    expect_eq(result.name, original.name, "name");
+    expect_eq(result.category_id, original.category_id, "category_id");
+    expect_eq(result.max_durability, original.max_durability, "max_durability");
+    TEST_PASS("test_equipment_roundtrip");
+}
+
+void test_ench_info_roundtrip() {
+    EnchInfo original;
+    original.name_id = "minecraft:sharpness";
+    original.name = "Sharpness";
+    original.supported_platform = MCE::All;
+    original.max_level = 5;
+    original.limited_level = 5;
+    original.multiplier = 1;
+    original.is_treasure = false;
+    original.exclusive_set = {"minecraft:bane_of_arthropods", "minecraft:smite"};
+    original.applicable_category_ids = {1, 2, 3};
+
+    ByteStreamWriter w;
+    compact_serial::write(w, original);
+
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_ench_info(r);
+
+    expect(r.ok(), "read_ench_info should succeed");
+    expect_eq(result.name_id, original.name_id, "name_id");
+    expect_eq(result.name, original.name, "name");
+    expect_eq(result.max_level, original.max_level, "max_level");
+    expect_eq(result.is_treasure, original.is_treasure, "is_treasure");
+    expect(result.exclusive_set == original.exclusive_set, "exclusive_set should match");
+    TEST_PASS("test_ench_info_roundtrip");
+}
+
+void test_compact_ench_info_roundtrip() {
+    compact::EnchInfo original;
+    original.mul = 1;
+    original.mul_b = 1;
+    original.max_lvl = 5;
+    original.exc_mask = {1, 2, 3};
+    original.applicable = true;
+
+    ByteStreamWriter w;
+    compact_serial::write(w, original);
+
+    ByteStreamReader r(w.data());
+    auto result = compact_serial::read_compact_ench_info(r);
+
+    expect(r.ok(), "read_compact_ench_info should succeed");
+    expect_eq(result.mul, original.mul, "mul");
+    expect_eq(result.mul_b, original.mul_b, "mul_b");
+    expect_eq(result.max_lvl, original.max_lvl, "max_lvl");
+    expect_eq(result.applicable, original.applicable, "applicable");
+    TEST_PASS("test_compact_ench_info_roundtrip");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -231,6 +347,11 @@ int main() {
         test_overflow_count_ench_set();
         test_overflow_count_solution();
         test_incomplete_data_rejected();
+        test_forge_config_roundtrip();
+        test_search_config_roundtrip();
+        test_equipment_roundtrip();
+        test_ench_info_roundtrip();
+        test_compact_ench_info_roundtrip();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

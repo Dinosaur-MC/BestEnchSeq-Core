@@ -401,7 +401,7 @@ void AStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx)
                     std::sort(child_ids.begin() + 1, child_ids.end());
 
                 // ── Phase C: heuristic + best_g + enqueue (real post-forge) ─
-                int32_t child_h_val = _delta_h(current.h, forged, _pool[old_sac_id]);
+                int32_t child_h_val = _delta_h(current.h, _pool[new_base_id], _pool[old_sac_id]);
                 int32_t child_fv = child_g + child_h_val;
                 if (_best_solution_cost != INT32_MAX && child_fv > _best_solution_cost) {
                     ++_diag.pruned_by_f;
@@ -512,12 +512,15 @@ void AStarAlgorithm::_restore_and_execute(const AlgorithmInput& input, Execution
     // _best_g and _explored are already populated by deserialize
 
     // Report restored progress immediately so observers see the current state
+    uint8_t restored_progress;
     if (_state_est <= 100000) {
-        uint8_t restored_progress = static_cast<uint8_t>(
+        restored_progress = static_cast<uint8_t>(
             _best_g.size() * 100 / std::max(_state_est, size_t(1)));
-        if (restored_progress > 0 && restored_progress < 100)
-            ctx.report_progress(restored_progress, ProgressStatus::Exploring);
+    } else {
+        restored_progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
     }
+    if (restored_progress > 0 && restored_progress < 100)
+        ctx.report_progress(restored_progress, ProgressStatus::Exploring);
 
     auto t0 = std::chrono::steady_clock::now();
 
@@ -652,7 +655,7 @@ void AStarAlgorithm::_restore_and_execute(const AlgorithmInput& input, Execution
                     std::sort(child_ids.begin() + 1, child_ids.end());
 
                 // Phase C: heuristic + best_g + enqueue
-                int32_t child_h_val = _delta_h(current.h, forged, _pool[old_sac_id]);
+                int32_t child_h_val = _delta_h(current.h, _pool[new_base_id], _pool[old_sac_id]);
                 int32_t child_fv = child_g + child_h_val;
                 if (_best_solution_cost != INT32_MAX && child_fv > _best_solution_cost) {
                     ++_diag.pruned_by_f;

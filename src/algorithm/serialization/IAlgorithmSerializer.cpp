@@ -98,7 +98,21 @@ bool IAlgorithmSerializer::deserialize(IAlgorithm& algo, std::span<const uint8_t
         if (!r.ok()) return false;
 
         if (si.type == SECTION_TYPE_COMMON) {
-            // Common metadata -- skip (already validated via file header)
+            // Verify common metadata matches algorithm identity
+            ByteStreamReader pr(payload);
+            uint16_t name_len = pr.u16();
+            if (!pr.ok()) return false;
+            std::string common_name(name_len, '\0');
+            for (uint16_t i = 0; i < name_len; ++i)
+                common_name[i] = static_cast<char>(pr.u8());
+            uint16_t ver_len = pr.u16();
+            if (!pr.ok()) return false;
+            std::string common_ver(ver_len, '\0');
+            for (uint16_t i = 0; i < ver_len; ++i)
+                common_ver[i] = static_cast<char>(pr.u8());
+            // Cross-check against current algorithm identity
+            if (common_name != algo.name() || common_ver != algo.version())
+                return false;
             continue;
         }
 

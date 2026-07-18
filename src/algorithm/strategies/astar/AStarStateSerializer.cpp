@@ -155,8 +155,8 @@ void AStarStateSerializer::_read_open_heap(ByteStreamReader& r, AStarAlgorithm& 
             if (!r.ok()) break;
         }
         entry.f = r.i32();
-        astar._open_heap.push_back(std::move(entry));
         if (!r.ok()) break;
+        astar._open_heap.push_back(std::move(entry));
     }
 }
 

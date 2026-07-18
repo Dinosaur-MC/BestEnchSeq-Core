@@ -187,6 +187,17 @@ void test_checkpoint_integrity_checks() {
         expect(!ok, "trailing garbage rejected");
     }
 
+    // CRC corruption — flip a byte in the section data
+    {
+        auto checkpoint = ser.serialize(algo);
+        if (checkpoint.size() > 50) {
+            checkpoint[45] ^= 0xFF;  // corrupt a byte in section data
+            AStarAlgorithm algo2;
+            bool ok = ser.deserialize(algo2, checkpoint);
+            expect(!ok, "CRC corruption rejected");
+        }
+    }
+
     TEST_PASS("test_checkpoint_integrity_checks");
 }
 

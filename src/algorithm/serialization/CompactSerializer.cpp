@@ -48,7 +48,7 @@ FileHeader read_file_header(ByteStreamReader& r) {
     hdr.algo_version = r.u16();
 
     uint8_t tag_len = r.u8();
-    if (!r.ok()) { hdr.magic = 0; return hdr; }
+    if (!r.ok() || tag_len > r.remaining()) { hdr.magic = 0; return hdr; }
     hdr.algorithm_tag.resize(tag_len);
     for (uint8_t i = 0; i < tag_len; ++i)
         hdr.algorithm_tag[i] = static_cast<char>(r.u8());

@@ -46,8 +46,7 @@ struct FileHeader {
     std::string algorithm_tag;   // algorithm name, e.g. "astar", len ≤ 255
 };
 
-static_assert(sizeof(FileHeader::algorithm_tag) == sizeof(std::string),
-              "FileHeader uses std::string, cannot static_assert total size");
+// FileHeader layout is dynamic (std::string member), cannot static_assert.
 
 // ── Section type flags ──────────────────────────────────────────────────
 
@@ -157,8 +156,10 @@ void write_vector(ByteStreamWriter& w, const std::vector<T>& vec) {
 }
 
 template <typename T, typename Reader>
-std::vector<T> read_vector(ByteStreamReader& r, Reader&& read_one) {
+std::vector<T> read_vector(ByteStreamReader& r, Reader&& read_one,
+                            uint32_t max_count = MAX_SERIAL_ITEMS) {
     uint32_t n = r.u32();
+    if (n > max_count) { r.set_fail(); return {}; }
     std::vector<T> vec;
     vec.reserve(n);
     for (uint32_t i = 0; i < n; ++i) {
