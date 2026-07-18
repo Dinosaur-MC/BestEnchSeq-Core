@@ -1,5 +1,6 @@
 #include "cli/cli.h"
 #include "parsers/EnchInfoParser.h"
+#include "parsers/EnchParser.h"
 #include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
 #include "adapters/RegistryResolver.h"
@@ -251,7 +252,7 @@ void test_full_pipeline_execute() {
     expect(equip_it != eq_map.end(),
            "execute: diamond_sword found in equipment map");
 
-    auto wanted_specs = parse_enchantment_list(config.source);
+    auto wanted_specs = EnchParser::parse(config.source);
     std::unordered_map<std::string, int32_t> ench_id_map;
     for (const auto& info : test_ench_reg.get_instances())
         ench_id_map[info.name_id] = test_ench_reg.get_id(info.name_id);

@@ -1,4 +1,6 @@
 #include "cli/cli.h"
+#include "parsers/EnchParser.h"
+#include "parsers/ItemParser.h"
 #include "framework/test_utils.h"
 
 #include <iostream>
@@ -27,7 +29,8 @@ void test_basic_args() {
 // ---------------------------------------------------------------------------
 
 void test_ench_with_ns() {
-    auto ench = parse_enchantment("minecraft:sharpness=5");
+    auto ench_vec = EnchParser::parse("minecraft:sharpness=5");
+    auto& ench = ench_vec[0];
 
     expect(ench.ns == "minecraft", "namespace should be minecraft");
     expect(ench.id == "sharpness", "id should be sharpness");
@@ -37,7 +40,8 @@ void test_ench_with_ns() {
 }
 
 void test_ench_without_ns() {
-    auto ench = parse_enchantment("sharpness=5");
+    auto ench_vec = EnchParser::parse("sharpness=5");
+    auto& ench = ench_vec[0];
 
     expect(ench.ns == "minecraft", "default ns should be minecraft");
     expect(ench.id == "sharpness", "id should be sharpness");
@@ -47,7 +51,8 @@ void test_ench_without_ns() {
 }
 
 void test_colon_shorthand() {
-    auto ench = parse_enchantment("sharpness:5");
+    auto ench_vec = EnchParser::parse("sharpness:5");
+    auto& ench = ench_vec[0];
 
     expect(ench.id == "sharpness", "id should be sharpness");
     expect(ench.level == 5, "level should be 5");
@@ -60,7 +65,7 @@ void test_colon_shorthand() {
 // ---------------------------------------------------------------------------
 
 void test_target_with_inline() {
-    auto target = parse_target("diamond_sword[sharpness=3]");
+    auto target = ItemParser::parse("diamond_sword[sharpness=3]");
 
     expect(target.item_id == "diamond_sword", "item_id should be diamond_sword");
     expect(target.inline_enchants.size() == 1, "should have one inline enchant");
@@ -71,7 +76,7 @@ void test_target_with_inline() {
 }
 
 void test_parse_target_no_brackets() {
-    auto target = parse_target("diamond_sword");
+    auto target = ItemParser::parse("diamond_sword");
 
     expect(target.item_id == "diamond_sword", "item_id should be diamond_sword without brackets");
     expect(target.inline_enchants.empty(), "no inline enchants when no brackets");
@@ -155,7 +160,7 @@ void test_unknown_flag_throws() {
 // ---------------------------------------------------------------------------
 
 void test_enchantment_list() {
-    auto list = parse_enchantment_list("sharpness=5,knockback=2");
+    auto list = EnchParser::parse("sharpness=5,knockback=2");
 
     expect(list.size() == 2, "should parse two enchantments");
     expect(list[0].id == "sharpness", "first enchantment id should be sharpness");
@@ -186,7 +191,7 @@ void test_key_value_equals_form() {
 // ---------------------------------------------------------------------------
 
 void test_empty_enchantment_list() {
-    auto list = parse_enchantment_list("");
+    auto list = EnchParser::parse("");
     expect(list.empty(), "empty string should return empty list");
 
     std::cout << "  PASS: test_empty_enchantment_list" << std::endl;
@@ -197,7 +202,7 @@ void test_empty_enchantment_list() {
 // ---------------------------------------------------------------------------
 
 void test_target_multiple_inline() {
-    auto target = parse_target("diamond_sword[sharpness=5,knockback=2]");
+    auto target = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]");
 
     expect(target.item_id == "diamond_sword", "item_id");
     expect(target.inline_enchants.size() == 2, "two inline enchants");
@@ -214,7 +219,7 @@ void test_target_multiple_inline() {
 // ---------------------------------------------------------------------------
 
 void test_target_with_ns_inline() {
-    auto target = parse_target("diamond_sword[minecraft:sharpness=3]");
+    auto target = ItemParser::parse("diamond_sword[minecraft:sharpness=3]");
 
     expect(target.item_id == "diamond_sword", "item_id");
     expect(target.inline_enchants.size() == 1, "one inline enchant");
@@ -284,7 +289,8 @@ void test_source_not_required() {
 // ---------------------------------------------------------------------------
 
 void test_ench_ns_only() {
-    auto ench = parse_enchantment("minecraft:sharpness");
+    auto ench_vec = EnchParser::parse("minecraft:sharpness");
+    auto& ench = ench_vec[0];
 
     expect(ench.ns == "minecraft", "ns");
     expect(ench.id == "sharpness", "id");
@@ -298,7 +304,8 @@ void test_ench_ns_only() {
 // ---------------------------------------------------------------------------
 
 void test_ench_custom_ns_with_level() {
-    auto ench = parse_enchantment("thermalfoundation:excavate=3");
+    auto ench_vec = EnchParser::parse("thermalfoundation:excavate=3");
+    auto& ench = ench_vec[0];
 
     expect(ench.ns == "thermalfoundation", "custom ns");
     expect(ench.id == "excavate", "id");
@@ -314,7 +321,7 @@ void test_ench_custom_ns_with_level() {
 void test_ench_invalid_level_throws() {
     bool threw = false;
     try {
-        parse_enchantment("sharpness=abc");
+        EnchParser::parse("sharpness=abc");
     } catch (const std::runtime_error &) {
         threw = true;
     }

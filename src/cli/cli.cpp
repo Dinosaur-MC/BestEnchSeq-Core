@@ -1,11 +1,6 @@
 #include "cli.h"
 #include "parsers/CLIParser.h"
-#include "parsers/EnchParser.h"
-#include "parsers/ItemParser.h"
-#include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
-
-#include <cctype>
 #include <iostream>
 #include <stdexcept>
 
@@ -41,31 +36,6 @@ std::string get_cli_help_text(const std::string &program_name) {
         "  id=level                e.g., sharpness=5\n"
         "  ns:id=level             e.g., minecraft:sharpness=5\n"
         "  id:level                e.g., sharpness:5 (colon shorthand)\n";
-}
-
-// ============================================================================
-// Enchantment spec parsing
-// ============================================================================
-
-EnchantmentSpec parse_enchantment(const std::string &spec) {
-    auto results = EnchParser::parse(spec);
-    if (results.empty())
-        throw std::runtime_error("Empty enchantment spec");
-    return results[0];
-}
-
-// ============================================================================
-
-std::vector<EnchantmentSpec> parse_enchantment_list(const std::string &list) {
-    return EnchParser::parse(list);
-}
-
-// ============================================================================
-// Target spec parsing
-// ============================================================================
-
-TargetSpec parse_target(const std::string &target) {
-    return ItemParser::parse(target);
 }
 
 // ============================================================================

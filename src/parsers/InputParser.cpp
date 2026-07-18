@@ -1,4 +1,6 @@
 #include "parsers/InputParser.h"
+#include "parsers/EnchParser.h"
+#include "parsers/ItemParser.h"
 #include "parsers/ParserUtilsDomain.hpp"
 #include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
@@ -245,13 +247,13 @@ ParsedInput InputParser::assemble_input(
 
     if (cli_config.mode == "direct") {
         // Parse target spec
-        TargetSpec target_spec = parse_target(cli_config.target);
+        TargetSpec target_spec = ItemParser::parse(cli_config.target);
         ItemStack target = build_target(target_spec, ench_id_map, equipment_registry);
 
         // Parse source enchantments (existing on target from --source flag)
         EnchSet source_ench;
         if (!cli_config.source.empty()) {
-            auto source_specs = parse_enchantment_list(cli_config.source);
+            auto source_specs = EnchParser::parse(cli_config.source);
             source_ench = build_wanted_enchset(source_specs, ench_id_map);
         }
 
@@ -291,9 +293,20 @@ ParsedInput InputParser::assemble_input(
     );
 
     ItemStack target;
+    EnchSet source_ench;
+    EnchSet target_ench;
     if (!cli_config.target.empty()) {
-        TargetSpec target_spec = parse_target(cli_config.target);
+        TargetSpec target_spec = ItemParser::parse(cli_config.target);
         target = build_target(target_spec, ench_id_map, equipment_registry);
+
+        // Parse source enchants from --source flag (enchantments already present)
+        if (!cli_config.source.empty()) {
+            auto source_specs = EnchParser::parse(cli_config.source);
+            source_ench = build_wanted_enchset(source_specs, ench_id_map);
+        }
+
+        // Target enchants come from inline specs in --target
+        target_ench = build_wanted_enchset(target_spec.inline_enchants, ench_id_map);
     }
 
     // Sort available items by priority (lower = more preferred)
@@ -302,5 +315,5 @@ ParsedInput InputParser::assemble_input(
             return a.priority < b.priority;
         });
 
-    return ParsedInput{platform, target.enchantments, target.enchantments, target, available_items};
+    return ParsedInput{platform, source_ench, target_ench, target, available_items};
 }

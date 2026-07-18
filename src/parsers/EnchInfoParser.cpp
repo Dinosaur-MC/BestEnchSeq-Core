@@ -428,10 +428,6 @@ int32_t compute_limited_level(
         return static_cast<int32_t>(std::round((base + added) * 1.15));
     };
 
-    auto min_cost_at = [&](int32_t level) -> int32_t {
-        return min_cost_base + min_cost_per_level * (level - 1);
-    };
-
     int32_t best = 0;
     for (const auto& item : applicable_items) {
         // Strip namespace prefix to look up bare name
@@ -445,11 +441,13 @@ int32_t compute_limited_level(
             continue;
 
         int32_t power = max_power(it->second);
-        for (int32_t lvl = max_level; lvl >= 1; --lvl) {
-            if (min_cost_at(lvl) <= power) {
-                if (lvl > best) best = lvl;
-                break;
-            }
+        // Closed-form O(1): find highest level where min_cost(lvl) <= power
+        // min_cost(lvl) = min_cost_base + min_cost_per_level * (lvl - 1)
+        // => lvl <= (power - min_cost_base) / min_cost_per_level + 1
+        if (power >= min_cost_base) {
+            int32_t max_lvl = (power - min_cost_base) / min_cost_per_level + 1;
+            if (max_lvl > max_level) max_lvl = max_level;
+            if (max_lvl > best) best = max_lvl;
         }
     }
     return std::max<int32_t>(1, best);

@@ -40,12 +40,12 @@ void RawTypeAdapter::resolve(
     // ── Step 2: Build EquipmentRegistry ─────────────────────────────────
     {
         auto eq_list = RegistryResolver::resolve_equipment(equipments, cat_reg);
-        eq_reg.initialize(eq_list);
+        eq_reg.initialize(std::move(eq_list));
     }
 
     // ── Step 3: Build EnchantmentRegistry ────────────────────────────────
     {
         auto ench_infos = RegistryResolver::resolve_ench_info(enchants, cat_reg);
-        ench_reg.initialize(ench_infos);
+        ench_reg.initialize(std::move(ench_infos));
     }
 }
