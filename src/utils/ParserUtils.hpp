@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <ios>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -78,15 +79,25 @@ inline std::vector<std::string> split_string(const std::string &str, char delimi
 }
 
 // ─── File I/O ───────────────────────────────────────────────────────────────
+
+inline constexpr size_t MAX_FILE_SIZE = 64 * 1024 * 1024;  // 64 MiB
+
 inline std::string read_file(const std::filesystem::path &path) {
     if (!std::filesystem::exists(path))
         throw std::runtime_error("File not found: " + path.string());
-    std::ifstream file(path);
-    if (!file.is_open())
-        throw std::runtime_error("Could not open file: " + path.string());
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
+    if (!std::filesystem::is_regular_file(path))
+        throw std::runtime_error("Not a regular file: " + path.string());
+
+    auto file_size = std::filesystem::file_size(path);
+    if (file_size > MAX_FILE_SIZE)
+        throw std::runtime_error("File too large (" + std::to_string(file_size) + " bytes, max " + std::to_string(MAX_FILE_SIZE) + "): " + path.string());
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f)
+        throw std::runtime_error("Cannot open file: " + path.string());
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
 }
 
 inline std::vector<std::filesystem::path> find_files(

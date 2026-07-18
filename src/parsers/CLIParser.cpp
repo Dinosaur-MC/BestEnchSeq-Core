@@ -1,4 +1,5 @@
 #include "parsers/CLIParser.h"
+#include "log/log.hpp"
 
 #include <cstring>
 #include <stdexcept>
@@ -38,6 +39,10 @@ std::vector<ParsedArg> CLIParser::parse(int argc, char *argv[]) {
 
         // -- signals end of options
         if (arg == "--") {
+            // Warn about any remaining arguments after --
+            for (int j = i + 1; j < argc; ++j) {
+                LOG_WARN("Warning: argument '%s' after -- ignored", argv[j]);
+            }
             break;
         }
 

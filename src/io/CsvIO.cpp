@@ -5,6 +5,13 @@
 
 namespace csv {
 
+static std::string trim(std::string_view s) {
+    auto start = s.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) return "";
+    auto end = s.find_last_not_of(" \t\r\n");
+    return std::string(s.substr(start, end - start + 1));
+}
+
 // ---------------------------------------------------------------------------
 // Split a single CSV line into fields
 // ---------------------------------------------------------------------------
@@ -47,6 +54,11 @@ CsvRow split_line(const std::string &line) {
 
     // Last field (including trailing empty)
     fields.push_back(field);
+
+    // Trim all fields after splitting
+    for (auto &f : fields) {
+        f = trim(f);
+    }
 
     return fields;
 }

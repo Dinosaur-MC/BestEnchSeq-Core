@@ -131,6 +131,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             try {
                 int n = std::stoi(value);
                 if (n < 0) throw std::runtime_error("must be >= 0");
+                if (n > 100000) throw std::runtime_error("--solutions must be <= 100000\n");
                 config.solutions = n;
             } catch (const std::runtime_error &) {
                 throw;
@@ -144,6 +145,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
                 try {
                     int n = std::stoi(value);
                     if (n <= 0) throw std::runtime_error("must be positive");
+                    if (n > 1048576) throw std::runtime_error("--memory must be <= 1048576\n");
                     config.memory_mb = n;
                 } catch (const std::runtime_error &) {
                     throw;
