@@ -8,7 +8,8 @@
 #include <stdexcept>
 
 void RegistryManager::add_builtin() {
-    if (!sources_.empty()) return;  // already registered
+    if (builtin_registered_) return;
+    builtin_registered_ = true;
     sources_.push_back({"Vanilla", std::nullopt});
 }
 

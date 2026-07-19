@@ -50,4 +50,5 @@ private:
         std::optional<std::filesystem::path> path;  // nullopt = builtin
     };
     std::vector<Source> sources_;
+    bool builtin_registered_ = false;
 };
