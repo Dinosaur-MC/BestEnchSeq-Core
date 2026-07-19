@@ -19,6 +19,7 @@
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
+#include "registries/RegistryManager.h"
 #include "io/json.h"
 #include "utils/ParserUtils.hpp"
 #include "types/AlgorithmTypes.h"
@@ -33,52 +34,6 @@
 
 namespace {
 
-/// Load all builtin + custom data as raw, then initialize registries once.
-/// This avoids calling RegistryResolver directly — all raw→domain
-/// conversion goes through RawTypeAdapter.
-void load_all_data(
-    const CLIConfig& config,
-    EquipmentCategoryRegistry& cat_reg,
-    EnchantmentRegistry& ench_reg,
-    EquipmentRegistry& eq_reg
-) {
-    // Load builtin data as raw (from embedded JSON — always available)
-    std::vector<RawEnchantment> all_ench;
-    std::vector<RawEquipment> all_eq;
-
-    // Load builtin (from embedded string — always available)
-    {
-        auto json = std::string{besq::data::vanilla_json()};
-        auto [ench, eq] = EnchInfoParser::parse_native_json_str(json);
-        all_ench = std::move(ench);
-        all_eq = std::move(eq);
-    }
-
-    // Step 2: If custom data pack, merge raw data
-    if (config.data_pack) {
-        auto dp = std::filesystem::path(*config.data_pack);
-        if (!std::filesystem::exists(dp))
-            throw std::runtime_error("Data pack directory not found: " + dp.string());
-
-        auto [custom_ench, custom_eq] = EnchInfoParser::parse(dp);
-        all_ench.insert(all_ench.end(), custom_ench.begin(), custom_ench.end());
-        all_eq.insert(all_eq.end(), custom_eq.begin(), custom_eq.end());
-    }
-
-    // Step 3: If custom registry directory, merge raw data
-    if (config.registry_dir) {
-        auto rd = std::filesystem::path(*config.registry_dir);
-        if (!std::filesystem::exists(rd))
-            throw std::runtime_error("Registry directory not found: " + rd.string());
-
-        auto [custom_ench, custom_eq] = EnchInfoParser::parse(rd);
-        all_ench.insert(all_ench.end(), custom_ench.begin(), custom_ench.end());
-        all_eq.insert(all_eq.end(), custom_eq.begin(), custom_eq.end());
-    }
-
-    // Step 4: Initialize ALL registries from merged raw data
-    RawTypeAdapter::resolve(all_ench, all_eq, cat_reg, eq_reg, ench_reg);
-}
 
 void register_builtin_algorithms(AlgorithmRegistry &registry) {
     registry.register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
@@ -116,16 +71,18 @@ int main(int argc, char *argv[]) {
             return 0;
         }
 
-        // ── Warn about unimplemented features ─────────────────────────────────
-        if (config.registries != "minecraft:latest")
-            LOG_WARN("--registries '%s' is stored but multi-registry is not yet implemented; using builtin data",
-                     config.registries.c_str());
 
         // ── Load data ────────────────────────────────────────────────────────
         EquipmentCategoryRegistry cat_reg;
         EnchantmentRegistry ench_reg;
         EquipmentRegistry eq_reg;
-        load_all_data(config, cat_reg, ench_reg, eq_reg);
+        {
+            RegistryManager mgr;
+            mgr.add_builtin();
+            if (config.registry_dir)
+                mgr.scan_registry_dir(*config.registry_dir);
+            mgr.load_and_resolve(config.registries, cat_reg, eq_reg, ench_reg);
+        }
 
         // ── Resolve CLI specs → domain items ─────────────────────────────
         auto target_spec = ItemParser::parse(config.target);
