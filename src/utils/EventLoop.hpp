@@ -277,9 +277,11 @@ private:
 
 // ─── Convenience aliases (callable mode only) ─────────────────────────────
 
-/// Default — unbounded MPMC event loop.
+/// Default — unbounded event loop backed by SegmentedMPSCQueue.
+/// MPSC outperforms MPMC in the single-consumer EventLoop pattern:
+/// lower producer contention (fetch_add vs CAS) and zero-CAS consumer.
 template <typename Task = std::function<void()>>
-using MPMCEventLoop = EventLoop<Task, SegmentedMPMCQueue<Task, 1024>>;
+using MPMCEventLoop = EventLoop<Task, SegmentedMPSCQueue<Task>>;
 
 /// Bounded MPMC event loop with explicit capacity.
 template <typename Task = std::function<void()>, size_t N = 256>
