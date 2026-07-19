@@ -34,12 +34,11 @@ class BoundedMPMCQueue final : public IQueue<T> {
         std::atomic<size_t> value{0};
     };
 
-    struct Slot {
+    struct alignas(CL) Slot {
         std::atomic<uint64_t> sequence;
+        alignas(T) unsigned char _storage[sizeof(T)];
         T* ptr() noexcept { return std::launder(reinterpret_cast<T*>(_storage)); }
         const T* ptr() const noexcept { return std::launder(reinterpret_cast<const T*>(_storage)); }
-    private:
-        alignas(T) unsigned char _storage[sizeof(T)];
     };
 
     // CAS-based slot claiming — does NOT touch T at all, so it compiles
