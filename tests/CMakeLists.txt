@@ -160,7 +160,7 @@ add_executable(test_input_parser
     ${PROJECT_ROOT}/src/cli/cli.cpp
     ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/InputParser.cpp
-    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PARSER_UTIL_SRCS}
@@ -197,7 +197,7 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
-    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
     # I/O layer
     ${PROJECT_ROOT}/src/io/json.cpp
@@ -460,7 +460,7 @@ endif()
 add_executable(test_raw_type_adapter
     adapters/test_raw_type_adapter.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
-    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${REGISTRY_CORE_SRCS}
     ${EQUIP_REG_SRCS}
     ${GLOBAL_LOGGER_SRCS}
@@ -477,7 +477,7 @@ endif()
 
 add_executable(test_registry_resolver
     adapters/test_registry_resolver.cpp
-    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${REGISTRY_CORE_SRCS}
 )
 target_include_directories(test_registry_resolver PRIVATE ${TEST_INCLUDE})
@@ -665,7 +665,7 @@ add_executable(test_checkpoint_roundtrip
     ${PROJECT_ROOT}/src/log/Logger.cpp
     ${PROJECT_ROOT}/src/data/DataLoader.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/adapters/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp

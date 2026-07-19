@@ -1,5 +1,5 @@
 #include "adapters/RawTypeAdapter.h"
-#include "adapters/RegistryResolver.h"
+#include "resolvers/RegistryResolver.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"

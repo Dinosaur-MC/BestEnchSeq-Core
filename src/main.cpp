@@ -10,7 +10,7 @@
 #include "log/log.hpp"
 #include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
-#include "adapters/RegistryResolver.h"
+#include "resolvers/RegistryResolver.h"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"

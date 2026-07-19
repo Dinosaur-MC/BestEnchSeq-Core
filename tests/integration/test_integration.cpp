@@ -3,7 +3,7 @@
 #include "parsers/EnchParser.h"
 #include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
-#include "adapters/RegistryResolver.h"
+#include "resolvers/RegistryResolver.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
