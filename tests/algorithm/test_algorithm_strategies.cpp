@@ -530,6 +530,35 @@ void test_diff_first_five_books() {
     std::cout << "PASS: test_diff_first_five_books (cost=" << cost << ")" << std::endl;
 }
 
+// ─── supported_mode() checks ──────────────────────────────────────────
+
+void test_supported_mode() {
+    // Greedy supports both modes
+    GreedyAlgorithm greedy;
+    expect(bool(greedy.supported_mode() & AlgorithmMode::direct),
+           "greedy supports direct");
+    expect(bool(greedy.supported_mode() & AlgorithmMode::inventory),
+           "greedy supports inventory");
+
+    // Others support direct only
+    auto check_direct_only = [](const IAlgorithm& algo, const char* name) {
+        expect(bool(algo.supported_mode() & AlgorithmMode::direct),
+               std::string(name) + " supports direct");
+        expect(!bool(algo.supported_mode() & AlgorithmMode::inventory),
+               std::string(name) + " does not support inventory");
+    };
+
+    check_direct_only(DFSAlgorithm(), "dfs");
+    check_direct_only(AStarAlgorithm(), "astar");
+    check_direct_only(IDAStarAlgorithm(), "idastar");
+    check_direct_only(DynamicPenaltyBalancingAlgorithm(), "penalty_balance");
+    check_direct_only(HierarchicalMergeAlgorithm(), "hierarchical");
+    check_direct_only(HammingAlgorithm(), "hamming");
+    check_direct_only(DiffFirstAlgorithm(), "diff_first");
+
+    std::cout << "PASS: test_supported_mode" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -576,6 +605,9 @@ int main() {
         test_diff_first_target_unreachable();
         test_diff_first_mixed_penalties();
         test_diff_first_five_books();
+
+        // supported_mode
+        test_supported_mode();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

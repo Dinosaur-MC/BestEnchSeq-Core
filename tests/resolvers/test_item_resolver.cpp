@@ -137,6 +137,57 @@ void test_build_enchset_unknown_throws() {
     std::cout << "  PASS: test_build_enchset_unknown_throws" << std::endl;
 }
 
+// ---------------------------------------------------------------------------
+// build_enchset success case
+// ---------------------------------------------------------------------------
+void test_build_enchset_success() {
+    TestRegistries regs;
+    auto specs = EnchParser::parse("sharpness=5");
+    auto result = build_enchset(specs, regs.ench_reg);
+
+    expect(result.size() == 1, "one enchantment resolved");
+    if (result.size() == 1) {
+        auto& ench = *result.begin();
+        expect(ench.level == 5, "level should be 5");
+    }
+    std::cout << "  PASS: test_build_enchset_success" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// build_target success case
+// ---------------------------------------------------------------------------
+void test_build_target_success() {
+    TestRegistries regs;
+    TargetSpec spec;
+    spec.item_id = "diamond_sword";
+    spec.inline_enchants.push_back({"minecraft", "sharpness", 5});
+
+    auto result = build_target(spec, regs.ench_reg, regs.eq_reg);
+    expect(result.equipment.has_value(), "equipment should be set");
+    expect(result.equipment->name_id == "minecraft:diamond_sword",
+           "equipment should be diamond_sword");
+    expect(result.enchantments.size() == 1, "one enchantment");
+    std::cout << "  PASS: test_build_target_success" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// build_target throws on unknown equipment
+// ---------------------------------------------------------------------------
+void test_build_target_unknown_equip_throws() {
+    TestRegistries regs;
+    TargetSpec spec;
+    spec.item_id = "nonexistent_sword";
+
+    bool threw = false;
+    try {
+        build_target(spec, regs.ench_reg, regs.eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "build_target should throw on unknown equipment");
+    std::cout << "  PASS: test_build_target_unknown_equip_throws" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -148,6 +199,9 @@ int main() {
         test_resolve_diff_and_books();
         test_resolve_source_already_has_target();
         test_build_enchset_unknown_throws();
+        test_build_enchset_success();
+        test_build_target_success();
+        test_build_target_unknown_equip_throws();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
