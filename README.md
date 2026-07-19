@@ -29,16 +29,16 @@ fallbacks. C++17 or earlier is not supported.
 ```bash
 cmake -S . -B build
 cmake --build build
-besq --target diamond_sword --wanted "sharpness=5,knockback=2"
-besq --algorithm astar --target diamond_sword --wanted "sharpness=5,looting=3,unbreaking=3"
-besq --algorithm penalty_balance --target diamond_chestplate --wanted "protection=4,thorns=3,unbreaking=3,mending=1"
-besq --algorithm hamming --target netherite_sword --wanted "sharpness=5,sweeping_edge=3,looting=3,unbreaking=3,fire_aspect=2,knockback=2,mending=1,vanishing_curse=1"
+besq --target diamond_sword --source "sharpness=5"
+besq --algorithm astar --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]"
+besq --algorithm penalty_balance --target "diamond_chestplate[protection=4,thorns=3,unbreaking=3,mending=1]"
+besq --algorithm hamming --target "netherite_sword[sharpness=5,sweeping_edge=3,looting=3,unbreaking=3,fire_aspect=2,knockback=2,mending=1,vanishing_curse=1]"
 ```
 
 Alternatively, invoke directly from the build directory:
 
 ```bash
-./build/bin/besq --target diamond_sword --wanted "sharpness=5,knockback=2"
+./build/bin/besq --target diamond_sword --source "sharpness=5"
 ```
 
 ### Running tests
@@ -110,6 +110,7 @@ src/
 │   ├── AlgorithmRegistry.h/.cpp ← Algorithm factory
 │   ├── CompactedRegistries.h/.cpp ← EnchReg: compact subset with O(1) conflict matrix
 │   ├── RegistryAccess.h         ← Meyer's singleton accessors
+│   ├── RegistryManager.h/.cpp   ← Registry data source management (discovery, loading, filtering)
 │   └── TagResolver.hpp          ← Tag reference (#tag) resolution (from utils/)
 ├── parsers/                     ← Input parsing (zero registry dependencies)
 │   ├── CLIParser.h/.cpp         ← Generic key-value CLI parser
