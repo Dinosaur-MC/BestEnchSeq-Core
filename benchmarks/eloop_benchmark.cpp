@@ -189,7 +189,7 @@ int main() {
         }
         {
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "BoundedEventLoop");
+            bench_throughput(loop, OPS_EV, WARM_EV, "BoundedMPMCEventLoop");
         }
         {
             EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>> loop;
@@ -206,7 +206,7 @@ int main() {
         bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop");
         bench_multiproducer_tmpl<
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 2, "BoundedEventLoop");
+        >(OPS_MP, WARM_EV, 2, "BoundedMPMCEventLoop");
         bench_multiproducer_tmpl<
             EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
         >(OPS_MP, WARM_EV, 2, "BoundedMPSCEventLoop");
@@ -215,7 +215,7 @@ int main() {
         bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop");
         bench_multiproducer_tmpl<
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 4, "BoundedEventLoop");
+        >(OPS_MP, WARM_EV, 4, "BoundedMPMCEventLoop");
         bench_multiproducer_tmpl<
             EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
         >(OPS_MP, WARM_EV, 4, "BoundedMPSCEventLoop");
@@ -224,7 +224,7 @@ int main() {
         bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop");
         bench_multiproducer_tmpl<
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 8, "BoundedEventLoop");
+        >(OPS_MP, WARM_EV, 8, "BoundedMPMCEventLoop");
         bench_multiproducer_tmpl<
             EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
         >(OPS_MP, WARM_EV, 8, "BoundedMPSCEventLoop");
