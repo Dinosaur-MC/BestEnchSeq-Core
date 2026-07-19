@@ -128,10 +128,6 @@ static void bench_multiproducer_tmpl(int64_t n, int64_t warmup, int n_threads,
     loop.stop();
 }
 
-static void bench_multiproducer(int64_t n, int64_t warmup, int n_threads) {
-    bench_multiproducer_tmpl<MPMCEventLoop<>>(n, warmup, n_threads, "MPMCEventLoop");
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 //  post_and_wait latency
 // ═══════════════════════════════════════════════════════════════════════════
@@ -185,23 +181,11 @@ int main() {
         std::cout << "── Single-producer throughput ────────────────────\n";
         {
             EventLoop<std::function<void()>, SegmentedMPMCQueue<std::function<void()>, 1024>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "MPMCEventLoop (SegmentedMPMC)");
-        }
-        {
-            EventLoop<std::function<void()>, SPSCQueue<std::function<void()>, 4096>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "SPSCEventLoop (SPSCQueue)");
+            bench_throughput(loop, OPS_EV, WARM_EV, "MPMCEventLoop");
         }
         {
             EventLoop<std::function<void()>, SegmentedMPSCQueue<std::function<void()>>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "MPSCEventLoop (SegmentedMPSC)");
-        }
-        {
-            EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "BoundedEventLoop (BoundedMPMC)");
-        }
-        {
-            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "BoundedMPSCEventLoop (BoundedMPSC)");
+            bench_throughput(loop, OPS_EV, WARM_EV, "MPSCEventLoop");
         }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
@@ -210,23 +194,14 @@ int main() {
     {
         Timer sec;
         std::cout << "── Multi-producer throughput ─────────────────────\n";
-        bench_multiproducer(OPS_MP, WARM_EV, 2);
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 2, "BoundedMPSCEventLoop (BoundedMPSC)");
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop (unbounded)");
+        bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPMCEventLoop");
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop");
         std::cout << "  ──\n";
-        bench_multiproducer(OPS_MP, WARM_EV, 4);
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 4, "BoundedMPSCEventLoop (BoundedMPSC)");
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop (unbounded)");
+        bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPMCEventLoop");
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop");
         std::cout << "  ──\n";
-        bench_multiproducer(OPS_MP, WARM_EV, 8);
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 8, "BoundedMPSCEventLoop (BoundedMPSC)");
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop (unbounded)");
+        bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPMCEventLoop");
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop");
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 
