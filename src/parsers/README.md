@@ -74,60 +74,20 @@ class EquipmentParser {
 
 ---
 
-## ItemResolver（resolvers/ 层）
 
-领域层输入预处理器。接收已解析的 CLI 规格 + 注册表，进行基础验证后装配算法输入。
-
-```cpp
-struct ResolvedInput {
-    ItemStack target_item;       // 已验证的装备
-    EnchSet source_ench;         // 已有附魔（--source）
-    EnchSet target_ench;         // 目标附魔（已验证适用性 + 无冲突）
-    ItemCollection books;        // 生成的毕业附魔书
-};
-
-struct ItemResolver {
-    static ResolvedInput resolve(
-        const ItemStack& target_item,
-        const EnchSet& source_ench,
-        const EnchSet& target_ench,
-        const EnchantmentRegistry& ench_reg
-    );
-};
-```
-
-职责：
-1. 校验目标附魔对装备的适用性
-2. 校验附魔间 exclusive_set 无冲突
-3. 计算 diff = target_ench − source_ench
-4. 为 diff 生成毕业附魔书
-
----
-
-## 数据流总览
+## 数据流
 
 ```
-                      ┌─ EnchInfoParser ─→ TagResolver
-                      │     │
-                      │     ▼
-                      │  RawTypeAdapter
-                      │     │
-                      │     ▼
-                      │  Domain registries (EnchantmentRegistry, etc.)
-                      │
-CLI ─→ CLIParser ─→ parse_cli() ─→ CLIConfig
-  │
-  ├─ EnchParser::parse(source)  → EnchantmentSpec[]
-  ├─ ItemParser::parse(target)  → TargetSpec
-  ├─ build_target / build_enchset (cli helpers, 注册表查询)
-  │
-  └─ ItemResolver::resolve() → ResolvedInput
-       │
-       ▼
-  CompactAdapter::apply() → AlgorithmInput (compact)
-       │
-       ▼
-  AlgorithmExecutor → IAlgorithm::execute(input)
+数据文件 (JSON/CSV)
+  → EnchInfoParser::parse()     → RawEnchantment[] (string-based)
+  → EquipmentParser::parse()     → RawEquipment[]   (string-based)
+                                  → 下游: RegistryResolver / RawTypeAdapter
+
+CLI args
+  → CLIParser::parse()           → ParsedArg[]
+  → parse_cli()                  → CLIConfig
+  → EnchParser / ItemParser      → EnchantmentSpec[] / TargetSpec
+                                  → 下游: build_target / build_enchset / ItemResolver
 ```
 
 ## 开发说明
