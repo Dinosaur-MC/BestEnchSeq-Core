@@ -44,12 +44,15 @@ class SegmentedMPSCQueue final : public IQueue<T> {
                   "T must be nothrow destructible");
     static_assert(std::is_nothrow_move_assignable_v<T>,
                   "T must be nothrow move assignable");
+    static_assert(std::is_nothrow_move_constructible_v<T>,
+                  "T must be nothrow move constructible");
 
     static constexpr size_t CL = 64;
 
     struct Block {
         alignas(CL) std::atomic<uint64_t> sequences[BlockSize];
-        alignas(CL) unsigned char data[BlockSize * sizeof(T)];
+        alignas(std::max(static_cast<size_t>(CL), alignof(T)))
+            unsigned char data[BlockSize * sizeof(T)];
         std::atomic<Block*> next{nullptr};
         uint64_t const base_ticket;
 
@@ -100,7 +103,7 @@ class SegmentedMPSCQueue final : public IQueue<T> {
         }
 
         if (pos < block->base_ticket) [[unlikely]] {
-            block = root_block_;
+            block = head_block_.load(std::memory_order_acquire);
             while (pos >= block->base_ticket + BlockSize)
                 block = block->next.load(std::memory_order_acquire);
         }
@@ -158,6 +161,17 @@ public:
         return true;
     }
 
+    template <typename... Args>
+        requires std::constructible_from<T, Args...>
+    bool try_emplace(Args&&... args) noexcept {
+        Block* block; size_t idx;
+        claim_enqueue_slot(block, idx);
+        ::new (block->slot_at(idx)) T(std::forward<Args>(args)...);
+        block->sequences[idx].store(idx + block->base_ticket + BlockSize,
+                                    std::memory_order_release);
+        return true;
+    }
+
     // ─── Consumer API ─────────────────────────────────────────────────
 
     bool try_pop(T& out) noexcept override final {
@@ -173,13 +187,12 @@ public:
         while (pos >= block->base_ticket + BlockSize) {
             Block* n = block->next.load(std::memory_order_acquire);
             if (!n) { std::this_thread::yield(); continue; }
-            head_block_.compare_exchange_weak(block, n,
-                std::memory_order_release, std::memory_order_relaxed);
+            head_block_.store(n, std::memory_order_release);
             block = n;
         }
 
         if (pos < block->base_ticket) [[unlikely]] {
-            block = root_block_;
+            block = head_block_.load(std::memory_order_acquire);
             while (pos >= block->base_ticket + BlockSize)
                 block = block->next.load(std::memory_order_acquire);
         }
@@ -191,15 +204,13 @@ public:
         T* slot = block->slot_at(idx);
         out = std::move(*slot);
         slot->~T();
-        block->sequences[idx].store(pos + 2 * BlockSize, std::memory_order_relaxed);
+        block->sequences[idx].store(pos + 2 * BlockSize, std::memory_order_release);
 
         // Advance block cursor if we consumed the last slot in the block.
         if (idx == BlockSize - 1) {
             Block* n = block->next.load(std::memory_order_acquire);
-            if (n) {
-                Block* e = block;
-                head_block_.compare_exchange_strong(e, n, std::memory_order_release);
-            }
+            if (n)
+                head_block_.store(n, std::memory_order_release);
         }
         return true;
     }
@@ -241,11 +252,11 @@ public:
                 std::this_thread::yield();
             }
 
-            uint64_t seq = block->sequences[idx].load(std::memory_order_relaxed);
+            uint64_t seq = block->sequences[idx].load(std::memory_order_acquire);
             if (seq == r + BlockSize) {
                 block->slot_at(idx)->~T();
                 block->sequences[idx].store(r + 2 * BlockSize,
-                                            std::memory_order_relaxed);
+                                            std::memory_order_release);
             }
             ++r;
         }

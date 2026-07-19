@@ -37,6 +37,8 @@ class BoundedMPSCQueue final : public IQueue<T> {
                   "T must be nothrow destructible");
     static_assert(std::is_nothrow_move_assignable_v<T>,
                   "T must be nothrow move assignable");
+    static_assert(std::is_nothrow_move_constructible_v<T>,
+                  "T must be nothrow move constructible");
 
     static constexpr size_t CL = 64;
 
@@ -98,7 +100,15 @@ public:
     ~BoundedMPSCQueue() noexcept final {
         size_t r = _read.value.load(std::memory_order_relaxed);
         size_t w = _write.value.load(std::memory_order_relaxed);
-        while (r != w) { _slots[r & _mask].ptr()->~T(); ++r; }
+        while (r != w) {
+            size_t idx = r & _mask;
+            // Only destruct if the slot was fully written (defensive check
+            // against a producer that fetch_add'ed _write but hasn't finished
+            // placement new yet — extremely rare but possible).
+            if (_slots[idx].sequence.load(std::memory_order_relaxed) == r + 1)
+                _slots[idx].ptr()->~T();
+            ++r;
+        }
     }
 
     BoundedMPSCQueue(const BoundedMPSCQueue&) = delete;
@@ -163,7 +173,21 @@ public:
     void clear() noexcept override final {
         size_t r = _read.value.load(std::memory_order_relaxed);
         size_t w = _write.value.load(std::memory_order_relaxed);
-        while (r != w) { _slots[r & _mask].ptr()->~T(); ++r; }
+        while (r != w) {
+            size_t idx = r & _mask;
+            auto& slot = _slots[idx];
+            // Wait for the producer to finish writing if it hasn't yet.
+            uint64_t seq = slot.sequence.load(std::memory_order_acquire);
+            if (seq == r + 1) {
+                slot.ptr()->~T();
+                // Advance sequence to the reclaim phase so producers can
+                // reuse this slot.  Without this the sequence stays at
+                // r+1 and subsequent producers compute diff<0 and
+                // permanently think the queue is full.
+                slot.sequence.store(r + Capacity, std::memory_order_release);
+            }
+            ++r;
+        }
         _read.value.store(w, std::memory_order_release);
     }
 
