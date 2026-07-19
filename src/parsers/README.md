@@ -74,81 +74,60 @@ class EquipmentParser {
 
 ---
 
-## InputParser
+## ItemResolver（resolvers/ 层）
 
-用户输入解析器，组装完整的算法输入。
+领域层输入预处理器。接收已解析的 CLI 规格 + 注册表，进行基础验证后装配算法输入。
 
 ```cpp
-struct ParsedInput {
-    MCE platform;                   // Java / Bedrock
-    EnchSet original_ench;          // 装备已有附魔
-    ItemStack target_item;          // 目标装备
-    ItemCollection available_items; // 可用物品（书 + 材料）
+struct ResolvedInput {
+    ItemStack target_item;       // 已验证的装备
+    EnchSet source_ench;         // 已有附魔（--source）
+    EnchSet target_ench;         // 目标附魔（已验证适用性 + 无冲突）
+    ItemCollection books;        // 生成的毕业附魔书
 };
 
-class InputParser {  // 全静态
-    // 从文件解析物品栏
-    static ItemCollection parse_inventory(
-        const std::string& path,
-        const EnchantmentRegistry& ench_reg,
-        const EquipmentRegistry& equip_reg);
-
-    // 从 CLI spec 构造目标物品
-    static ItemStack build_target(
-        const std::string& target_spec,
-        const EnchantmentRegistry& ench_reg,
-        const EquipmentRegistry& equip_reg);
-
-    // 转换附魔规格字符串为 EnchSet
-    static EnchSet build_wanted_enchset(
-        const std::string& wanted,
-        const EnchantmentRegistry& ench_reg);
-
-    // 完整管线：CLI config → ParsedInput
-    static ParsedInput assemble_input(
-        const CLIConfig& cli_config,
-        const EnchantmentRegistry& ench_reg,
-        const EquipmentRegistry& equip_reg);
-
-    // 为每个目标附魔等级生成对应的书
-    static ItemCollection generate_books(
-        const EnchSet& wanted,
-        const EnchSet& existing);
+struct ItemResolver {
+    static ResolvedInput resolve(
+        const ItemStack& target_item,
+        const EnchSet& source_ench,
+        const EnchSet& target_ench,
+        const EnchantmentRegistry& ench_reg
+    );
 };
 ```
 
-与前面三个不同，`InputParser` 调用注册表（因为需要将用户输入字符串解析为具体的 ID）。
-它是解析器层和适配器层之间的桥梁。
+职责：
+1. 校验目标附魔对装备的适用性
+2. 校验附魔间 exclusive_set 无冲突
+3. 计算 diff = target_ench − source_ench
+4. 为 diff 生成毕业附魔书
 
 ---
 
 ## 数据流总览
 
 ```
-CLI 参数 ──→ CLIParser ──→ ParsedArg[]
-                               │
-     附魔 JSON ──→ EnchInfoParser ──→ RawEnchInfo[]
-     装备 JSON ──→ EquipmentParser ──→ RawEquipment[]
-                               │
-                               ▼
-                         RegistryResolver
-                               │
-                               ▼
-                         EnchantmentRegistry
-                         EquipmentRegistry
-                               │
-    ParsedArg[] ──────────────►│
-                               ▼
-                         InputParser::assemble_input()
-                               │
-                               ▼
-                         ParsedInput
-                               │
-                               ▼
-                         CompactAdapter::apply()
-                               │
-                               ▼
-                         AlgorithmInput (compact)
+                      ┌─ EnchInfoParser ─→ TagResolver
+                      │     │
+                      │     ▼
+                      │  RawTypeAdapter
+                      │     │
+                      │     ▼
+                      │  Domain registries (EnchantmentRegistry, etc.)
+                      │
+CLI ─→ CLIParser ─→ parse_cli() ─→ CLIConfig
+  │
+  ├─ EnchParser::parse(source)  → EnchantmentSpec[]
+  ├─ ItemParser::parse(target)  → TargetSpec
+  ├─ build_target / build_enchset (cli helpers, 注册表查询)
+  │
+  └─ ItemResolver::resolve() → ResolvedInput
+       │
+       ▼
+  CompactAdapter::apply() → AlgorithmInput (compact)
+       │
+       ▼
+  AlgorithmExecutor → IAlgorithm::execute(input)
 ```
 
 ## 开发说明

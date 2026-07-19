@@ -32,7 +32,7 @@ public:
     // Query by category
     std::vector<const Equipment*> get_by_category(int32_t category_id) const;
 
-    // Name -> pointer map (for InputParser)
+    // Name -> pointer map
     std::unordered_map<std::string, const Equipment*> get_name_map() const;
 
     // All instances (for iteration)

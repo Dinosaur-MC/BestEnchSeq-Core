@@ -274,8 +274,8 @@ int main(int argc, char *argv[]) {
 
         AlgorithmInput algo_input;
         // Keep these alive for the recall call later
-        EnchSet recall_source_ench = source_ench;
-        ItemStack recall_target_item = target_item;
+        EnchSet recall_source_ench;
+        ItemStack recall_target_item;
         ItemCollection recall_available_items;
 
         if (config.mode == "direct") {

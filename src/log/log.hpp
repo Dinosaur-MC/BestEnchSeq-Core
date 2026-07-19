@@ -64,7 +64,7 @@ inline void printf(LogLevel level, const char* fmt, Args&&... args) {
 #define BESQ_LOG_STR(x)   BESQ_LOG_STR2(x)
 
 // With -fmacro-prefix-map=src/=, __FILE__ gives short paths like
-// "parsers/InputParser.cpp" instead of absolute paths.
+// "parsers/EnchParser.cpp" instead of absolute paths.
 #define BESQ_LOG_LOC     "[" __FILE__ ":" BESQ_LOG_STR(__LINE__) "] "
 
 /// @brief  Log at Info level with source-location prefix.

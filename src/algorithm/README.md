@@ -35,7 +35,8 @@
 ## 数据管道
 
 ```
-CLI → InputParser → ParsedInput (domain)
+CLI → EnchParser/ItemParser → build_target/build_enchset (cli helpers)
+  → ItemResolver::resolve() → ResolvedInput (domain)
   → CompactAdapter::apply()
   → AlgorithmInput (compact)                     ← 分界线
       │
