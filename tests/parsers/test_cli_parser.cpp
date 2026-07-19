@@ -269,9 +269,6 @@ void test_missing_target_throws() {
     std::cout << "  PASS: test_missing_target_throws" << std::endl;
 }
 
-// ---------------------------------------------------------------------------
-// Missing wanted throws
-// ---------------------------------------------------------------------------
 
 void test_source_not_required() {
     const char *argv[] = {"besq", "--target", "diamond_sword"};
@@ -419,22 +416,6 @@ void test_source_flag() {
     std::cout << "  PASS: test_source_flag" << std::endl;
 }
 
-// ---------------------------------------------------------------------------
-// Deprecated --wanted still works
-// ---------------------------------------------------------------------------
-
-void test_deprecated_wanted_still_works() {
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5"};
-
-    auto config = parse_cli(5, const_cast<char **>(argv));
-
-    expect(config.target == "diamond_sword", "target should be diamond_sword");
-    // --wanted is deprecated but should still set source
-    expect(config.source == "sharpness=5", "--wanted should set source field");
-
-    std::cout << "  PASS: test_deprecated_wanted_still_works" << std::endl;
-}
-
 } // namespace
 
 int main() {
@@ -466,7 +447,6 @@ int main() {
         test_source_not_required();
         test_double_dash_stops_parsing();
         test_source_flag();
-        test_deprecated_wanted_still_works();
         test_all_options();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

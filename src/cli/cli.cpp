@@ -95,9 +95,6 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.mode = value;
         } else if (key == "target") {
             config.target = value;
-        } else if (key == "wanted") {
-            LOG_WARN("Warning: --wanted is deprecated, use --source instead");
-            config.source = value;
         } else if (key == "source") {
             config.source = value;
         } else if (key == "registry-dir") {
