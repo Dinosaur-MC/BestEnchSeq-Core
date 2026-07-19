@@ -2,6 +2,7 @@
 #include "algorithm/diagnostics/DiagnosticsService.h"
 #include "algorithm/strategies/Strategies.h"
 #include "adapters/CompactAdapter.h"
+#include "adapters/RawTypeAdapter.h"
 #include "cli/cli.h"
 #include "config/AppConfig.h"
 #include "data/DataLoader.h"
@@ -13,7 +14,6 @@
 #include "parsers/ItemParser.h"
 #include "parsers/ParserUtilsDomain.hpp"
 #include "resolvers/ItemResolver.h"
-#include "resolvers/RegistryResolver.h"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -32,44 +32,40 @@
 
 namespace {
 
-// Built-in data subdirectory (resolved relative to exe or CWD)
-inline constexpr auto BUILTIN_DATA_DIR = "data/builtin";
-
-void load_custom_data(
-    const std::filesystem::path &data_pack_dir,
-    const EquipmentCategoryRegistry &cat_reg,
-    EnchantmentRegistry &ench_reg,
-    EquipmentRegistry &eq_reg
+/// Load all builtin + custom data as raw, then initialize registries once.
+/// This avoids calling RegistryResolver directly — all raw→domain
+/// conversion goes through RawTypeAdapter.
+void load_all_data(
+    const CLIConfig& config,
+    EquipmentCategoryRegistry& cat_reg,
+    EnchantmentRegistry& ench_reg,
+    EquipmentRegistry& eq_reg
 ) {
-    if (!std::filesystem::exists(data_pack_dir))
-        throw std::runtime_error("Data pack directory not found: " + data_pack_dir.string());
+    // Load builtin data as raw (from embedded JSON — always available)
+    std::vector<RawEnchantment> all_ench;
+    std::vector<RawEquipment> all_eq;
 
-    // Parse new data as raw
-    auto [raw_ench, raw_eq] = EnchInfoParser::parse(data_pack_dir);
+    // Load builtin (from embedded string — always available)
+    {
+        auto json = std::string{besq::data::vanilla_json()};
+        auto [ench, eq] = EnchInfoParser::parse_native_json_str(json);
+        all_ench = std::move(ench);
+        all_eq = std::move(eq);
+    }
 
-    // Merge with already-loaded data and re-initialize
-    {
-        auto existing = ench_reg.get_instances();
-        std::vector<EnchInfo> combined;
-        combined.reserve(existing.size() + raw_ench.size());
-        for (const auto &info : existing)
-            combined.push_back(info);
-        auto new_infos = RegistryResolver::resolve_ench_info(raw_ench, cat_reg);
-        for (const auto &info : new_infos)
-            combined.push_back(info);
-        ench_reg.initialize(combined);
+    // Step 2: If custom data pack, merge raw data
+    if (config.data_pack) {
+        auto dp = std::filesystem::path(*config.data_pack);
+        if (!std::filesystem::exists(dp))
+            throw std::runtime_error("Data pack directory not found: " + dp.string());
+
+        auto [custom_ench, custom_eq] = EnchInfoParser::parse(dp);
+        all_ench.insert(all_ench.end(), custom_ench.begin(), custom_ench.end());
+        all_eq.insert(all_eq.end(), custom_eq.begin(), custom_eq.end());
     }
-    {
-        auto &existing = eq_reg.get_instances();
-        std::vector<Equipment> combined;
-        combined.reserve(existing.size() + raw_eq.size());
-        for (const auto &eq : existing)
-            combined.push_back(eq);
-        auto new_eq = RegistryResolver::resolve_equipment(raw_eq, cat_reg);
-        for (const auto &eq : new_eq)
-            combined.push_back(eq);
-        eq_reg.initialize(combined);
-    }
+
+    // Step 3: Initialize ALL registries from merged raw data
+    RawTypeAdapter::resolve(all_ench, all_eq, cat_reg, eq_reg, ench_reg);
 }
 
 void register_builtin_algorithms(AlgorithmRegistry &registry) {
@@ -202,28 +198,10 @@ int main(int argc, char *argv[]) {
         }
 
         // ── Load data ────────────────────────────────────────────────────────
-
-        // Resolve builtin data directory: prefer path relative to executable,
-        // fall back to CWD-relative path for development builds.
-        auto builtin_data_dir = std::filesystem::absolute(argv[0]).parent_path() / BUILTIN_DATA_DIR;
-        if (!std::filesystem::exists(builtin_data_dir)) {
-            builtin_data_dir = std::filesystem::path(BUILTIN_DATA_DIR);
-        }
-
-        // Local registries (no globals)
         EquipmentCategoryRegistry cat_reg;
-        cat_reg.initialize();
-
         EnchantmentRegistry ench_reg;
         EquipmentRegistry eq_reg;
-
-        besq::data::load_builtin_data(
-            cat_reg, ench_reg, eq_reg, builtin_data_dir);
-
-        if (config.data_pack) {
-            load_custom_data(std::filesystem::path(*config.data_pack),
-                             cat_reg, ench_reg, eq_reg);
-        }
+        load_all_data(config, cat_reg, ench_reg, eq_reg);
 
         // ── Resolve CLI specs → domain items ─────────────────────────────
         auto target_spec = ItemParser::parse(config.target);
