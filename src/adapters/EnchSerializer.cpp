@@ -253,11 +253,24 @@ bool EnchSerializer::export_json(
     Json::Object obj;
     obj["name"] = Json(Json::String("BestEnchSeq Registry Export"));
 
-    auto ench_parsed = Json::parse(ench_json);
-    if (ench_parsed.is_valid()) obj["enchantments"] = ench_parsed;
+    // Extract inner arrays from the serialized JSON objects
+    auto ench_root = Json::parse(ench_json);
+    if (ench_root.is_valid()) {
+        Json::Value root_val = ench_root.get_value();
+        auto& root = std::get<Json::Object>(root_val);
+        auto it = root.find("enchantments");
+        if (it != root.end())
+            obj["enchantments"] = it->second;
+    }
 
-    auto eq_parsed = Json::parse(eq_json);
-    if (eq_parsed.is_valid()) obj["equipments"] = eq_parsed;
+    auto eq_root = Json::parse(eq_json);
+    if (eq_root.is_valid()) {
+        Json::Value root_val = eq_root.get_value();
+        auto& root = std::get<Json::Object>(root_val);
+        auto it = root.find("equipments");
+        if (it != root.end())
+            obj["equipments"] = it->second;
+    }
 
     std::ofstream f(path);
     if (!f) return false;
@@ -284,18 +297,17 @@ bool EnchSerializer::export_csv(
         if (!eq.name_id.empty()) valid_eq.push_back(eq);
     }
 
-    // Write enchantments CSV
-    std::filesystem::path p(path);
-    auto ench_path = p.parent_path() / "enchantments.csv";
+    // Write enchantments CSV to the given path
     {
         std::string ench_csv = to_csv(valid_ench, cat_reg);
-        std::ofstream f_ench(ench_path);
-        if (!f_ench) return false;
-        f_ench << ench_csv;
+        std::ofstream f(path);
+        if (!f) return false;
+        f << ench_csv;
     }
 
-    // Write equipment CSV
-    auto eq_path = p.parent_path() / "equipments.csv";
+    // Write equipment CSV to a sibling file
+    std::filesystem::path p(path);
+    auto eq_path = p.parent_path() / ("equipments_" + p.filename().string());
     {
         std::string eq_csv = to_csv(valid_eq, cat_reg);
         std::ofstream f_eq(eq_path);

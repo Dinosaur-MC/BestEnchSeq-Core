@@ -31,6 +31,8 @@ void apply_registry_edits(
         std::string target = header.substr(0, colon);
         std::string action = header.substr(colon + 1);
         std::string id = parts[1];
+        if (id.empty())
+            throw std::runtime_error("Empty id in registry edit operation: '" + op + "'");
 
         if (action == "rm") {
             if (target == "ench") { ench_reg.remove(id); continue; }
@@ -50,17 +52,19 @@ void apply_registry_edits(
 
             if (target == "ench") {
                 int32_t multiplier = 1, max_level = 1, limited_level = 0;
+                bool is_treasure = false;
                 for (size_t i = 2; i < parts.size(); ++i) {
                     auto eq_pos = parts[i].find('=');
                     if (eq_pos == std::string::npos) continue;
                     auto k = parts[i].substr(0, eq_pos);
                     auto v = parts[i].substr(eq_pos + 1);
-                    if (k == "multiplier")    multiplier = std::stoi(v);
-                    if (k == "max_level")      max_level = std::stoi(v);
-                    if (k == "limited_level") limited_level = std::stoi(v);
+                    if (k == "multiplier")     multiplier = std::stoi(v);
+                    if (k == "max_level")       max_level = std::stoi(v);
+                    if (k == "limited_level")  limited_level = std::stoi(v);
+                    if (k == "is_treasure")    is_treasure = (v == "true");
                 }
                 EnchInfo info{id, id, MCE::All, max_level, limited_level,
-                              multiplier, limited_level == 0, {}, {}};
+                              multiplier, is_treasure, {}, {}};
                 ench_reg.add(info);
                 continue;
             }
