@@ -1,4 +1,5 @@
 #pragma once
+#include "types/ItemStack.h"
 #include <optional>
 #include <string>
 #include <vector>
@@ -37,6 +38,10 @@ struct TargetSpec {
     std::vector<EnchantmentSpec> inline_enchants;
 };
 
+// ─── Forward declarations (registries included only in .cpp) ─────
+class EnchantmentRegistry;
+class EquipmentRegistry;
+
 // ─── Business CLI parsing ────────────────────────────────────────────────
 
 /// Parse CLI arguments into a CLIConfig. Internally uses CLIParser::parse()
@@ -45,3 +50,19 @@ CLIConfig parse_cli(int argc, char *argv[]);
 
 /// Business help text describing all options and their semantics.
 std::string get_cli_help_text(const std::string &program_name = "besq");
+
+/// Build an ItemStack from a TargetSpec by resolving equipment name
+/// and inline enchantments against the given registries.
+/// Throws std::runtime_error if equipment is unknown.
+ItemStack build_target(
+    const TargetSpec& spec,
+    const EnchantmentRegistry& ench_reg,
+    const EquipmentRegistry& eq_reg
+);
+
+/// Build an EnchSet from parsed EnchantmentSpec[] by resolving
+/// enchantment names via the registry (with "minecraft:" fallback).
+EnchSet build_enchset(
+    const std::vector<EnchantmentSpec>& specs,
+    const EnchantmentRegistry& ench_reg
+);

@@ -1,5 +1,8 @@
 #include "cli.h"
 #include "parsers/CLIParser.h"
+#include "registries/EnchantmentRegistry.h"
+#include "registries/EquipmentRegistry.h"
+#include "types/Equipment.h"
 #include "BuildConfig.h"
 #include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
@@ -169,4 +172,53 @@ CLIConfig parse_cli(int argc, char *argv[]) {
     }
 
     return config;
+}
+
+// ============================================================================
+// Registry-aware helpers (replace InputParser lookup functions)
+// ============================================================================
+
+ItemStack build_target(
+    const TargetSpec& spec,
+    const EnchantmentRegistry& ench_reg,
+    const EquipmentRegistry& eq_reg)
+{
+    // Look up equipment (try bare name first, then "minecraft:" prefix)
+    int32_t eq_id = eq_reg.get_id(spec.item_id);
+    if (eq_id < 0 && spec.item_id.find(':') == std::string::npos)
+        eq_id = eq_reg.get_id("minecraft:" + spec.item_id);
+    if (eq_id < 0)
+        throw std::runtime_error("Unknown equipment: '" + spec.item_id + "'");
+    const Equipment& equip = eq_reg.get(eq_id);
+
+    // Build enchantment set from inline specs
+    EnchSet ench_set;
+    for (const auto& s : spec.inline_enchants) {
+        std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
+        int32_t id = ench_reg.get_id(key);
+        if (id < 0) {
+            id = ench_reg.get_id(s.id);  // bare fallback
+        }
+        if (id >= 0)
+            ench_set.emplace(id, s.level);
+    }
+
+    return ItemStack(equip, ench_set, 0);
+}
+
+EnchSet build_enchset(
+    const std::vector<EnchantmentSpec>& specs,
+    const EnchantmentRegistry& ench_reg)
+{
+    EnchSet result;
+    for (const auto& s : specs) {
+        std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
+        int32_t id = ench_reg.get_id(key);
+        if (id < 0) {
+            id = ench_reg.get_id(s.id);  // bare fallback
+        }
+        if (id >= 0)
+            result.emplace(id, s.level);
+    }
+    return result;
 }
