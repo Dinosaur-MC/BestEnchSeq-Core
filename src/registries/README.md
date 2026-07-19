@@ -128,6 +128,50 @@ class EnchReg {
 
 ---
 
+## RegistryManager
+
+数据源管理，负责 registry 的发现、筛选、加载和解析。替换了原先的 `load_all_data()` 函数。
+
+```cpp
+class RegistryManager {
+    // 注册内建数据（嵌入式 vanilla.json，name="Vanilla"）
+    void add_builtin();
+
+    // 扫描目录下的所有合法 registry 文件/子目录
+    void scan_registry_dir(const std::filesystem::path& dir);
+
+    // 加载已发现/筛选的 registry 并解析到 domain registries
+    // filter: nullopt → 加载全部（失败 WARN+SKIP）
+    //         非空   → 逗号分隔的名称或路径（全部必须成功）
+    void load_and_resolve(
+        std::optional<std::string> filter,
+        EquipmentCategoryRegistry& cat_reg,
+        EquipmentRegistry& eq_reg,
+        EnchantmentRegistry& ench_reg
+    );
+};
+```
+
+### 在 main.cpp 中的用法
+
+```cpp
+RegistryManager mgr;
+mgr.add_builtin();
+if (config.registry_dir)
+    mgr.scan_registry_dir(*config.registry_dir);
+mgr.load_and_resolve(config.registries, cat_reg, eq_reg, ench_reg);
+```
+
+### 筛选模式
+
+- **无筛选**（`--registries` 未设置）：加载所有已发现的 registry，加载失败时仅 WARN 并跳过
+- **有筛选**（`--registries` 已设置）：只加载匹配的 registry，全部必须成功，否则报错
+
+`--registries` 的每个值可以是 registry 名称（匹配 metadata.name）或文件/目录路径（直接加载）。
+路径优先识别：如果值在磁盘上存在文件/目录，则按路径加载。
+
+---
+
 ## AlgorithmRegistry
 
 算法工厂。策略模式 — 通过名称查找并实例化算法。
