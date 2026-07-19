@@ -471,6 +471,24 @@ set_tests_properties(test_raw_type_adapter PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/test_item_resolver.cpp)
+    message(FATAL_ERROR "Required test source not found: resolvers/test_item_resolver.cpp")
+endif()
+
+add_executable(test_item_resolver
+    resolvers/test_item_resolver.cpp
+    ${PROJECT_ROOT}/src/resolvers/ItemResolver.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${DOMAIN_TYPE_SRCS}
+    ${GLOBAL_LOGGER_SRCS}
+)
+target_include_directories(test_item_resolver PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_item_resolver COMMAND test_item_resolver)
+set_tests_properties(test_item_resolver PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/adapters/test_registry_resolver.cpp)
     message(FATAL_ERROR "Required test source not found: adapters/test_registry_resolver.cpp")
 endif()
