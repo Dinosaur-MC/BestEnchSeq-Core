@@ -5,7 +5,6 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "config/ForgeConfig.h"
 #include "registries/CompactedRegistries.h"
 #include "types/Equipment.h"
 #include "types/CompactedTypes.h"
@@ -38,7 +37,6 @@ Equipment chestplate{"diamond_chestplate", "Diamond Chestplate",
 void test_apply_valid_input() {
     setup();
     CompactAdapter adapter;
-    ForgeConfig config;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -61,7 +59,6 @@ void test_apply_valid_input() {
 void test_apply_with_target() {
     setup();
     CompactAdapter adapter;
-    ForgeConfig config;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -82,7 +79,6 @@ void test_apply_with_target() {
 void test_apply_invalid_enchant_id() {
     setup();
     CompactAdapter adapter;
-    ForgeConfig config;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -110,7 +106,6 @@ void test_apply_invalid_enchant_id() {
 void test_apply_invalid_level() {
     setup();
     CompactAdapter adapter;
-    ForgeConfig config;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -133,7 +128,6 @@ void test_apply_invalid_level() {
 void test_apply_inapplicable_enchant() {
     setup();
     CompactAdapter adapter;
-    ForgeConfig config;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -157,7 +151,6 @@ void test_apply_inapplicable_enchant() {
 void test_apply_penalty_overflow() {
     setup();
     CompactAdapter adapter;
-    ForgeConfig config;
 
     ItemStack target_item(sword, EnchSet{}, 32, sword.max_durability);
     EnchSet original_ench;
@@ -179,7 +172,6 @@ void test_apply_penalty_overflow() {
 void test_pruning_only_applicable() {
     setup();
     CompactAdapter adapter;
-    ForgeConfig config;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
