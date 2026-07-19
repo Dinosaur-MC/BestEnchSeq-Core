@@ -9,14 +9,27 @@
 #include <thread>
 #include <type_traits>
 
+// Portably expose _mm_pause() on x86.
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_AMD64) || defined(_M_IX86)
+#include <immintrin.h>
+#define BESQ_PAUSE() _mm_pause()
+#else
+#define BESQ_PAUSE() ((void)0)
+#endif
+
 // ─── BoundedMPSCQueue ───
 // Multi-Producer, Single-Consumer lock-free BOUNDED queue.
 // Ring-buffer (Dmitry Vyukov sequence-number algorithm) optimized for a
-// single consumer: try_pop uses a plain atomic store (no CAS).
+// single consumer and single-consumer-friendly producers.
 //
-// Producers compete via CAS on _write.value (identical to BoundedMPMCQueue).
-// The consumer reads _read.value with a relaxed load and checks the slot's
-// sequence — no CAS, no retry loop.
+// Producers use fetch_add (not CAS) to claim slots — since there is
+// exactly one consumer the slot sequence advances monotonically per
+// cycle, making CAS unnecessary.  This eliminates CAS retry storms
+// under high producer contention.  A capacity pre-check via the
+// consumer's _read cursor keeps try_push accurate.
+//
+// The consumer reads _read.value with a relaxed load and checks the
+// slot's sequence — no CAS, no retry loop.
 //
 // Inherits from IQueue<T> for runtime-polymorphic access.
 //
@@ -59,23 +72,23 @@ class BoundedMPSCQueue final : public IQueue<T> {
         const T* ptr() const noexcept { return std::launder(reinterpret_cast<const T*>(_storage)); }
     };
 
-    // ── Producer slot claim (CAS loop, multi-threaded) ──────────────
+    // ── Producer slot claim (fetch_add, multi-threaded) ─────────────
+    // Unlike MPMC (which requires CAS to arbitrate among producers),
+    // MPSC can use a simpler fetch_add: with one consumer the slot
+    // sequence advances monotonically per cycle.  fetch_add eliminates
+    // the CAS retry storm under high producer contention.
+    //
+    // A capacity pre-check avoids oversubscription in the common case;
+    // if a race still pushes past Capacity the producer spins briefly
+    // on the slot sequence waiting for the consumer to free it.
     bool claim_write_slot(size_t& pos) noexcept {
-        pos = _write.value.load(std::memory_order_relaxed);
-        for (;;) {
-            Slot& slot = _slots[pos & _mask];
-            uint64_t seq = slot.sequence.load(std::memory_order_acquire);
-            int64_t diff = static_cast<int64_t>(seq) - static_cast<int64_t>(pos);
-            if (diff == 0) {
-                if (_write.value.compare_exchange_weak(pos, pos + 1,
-                        std::memory_order_relaxed))
-                    return true;
-            } else if (diff < 0) {
-                return false;       // queue full
-            } else {
-                pos = _write.value.load(std::memory_order_relaxed);
-            }
-        }
+        size_t r = _read.value.load(std::memory_order_acquire);
+        size_t w = _write.value.load(std::memory_order_relaxed);
+        if (w - r >= Capacity) [[unlikely]]
+            return false;
+
+        pos = _write.value.fetch_add(1, std::memory_order_relaxed);
+        return true;
     }
 
     // ── Consumer slot claim (single-threaded, no CAS) ───────────────
@@ -126,6 +139,8 @@ public:
             size_t pos;
             if (!claim_write_slot(pos)) return false;
             auto& slot = _slots[pos & _mask];
+            while (slot.sequence.load(std::memory_order_acquire) != pos)
+                BESQ_PAUSE();
             ::new (slot.ptr()) T(value);
             slot.sequence.store(pos + 1, std::memory_order_release);
             return true;
@@ -137,6 +152,8 @@ public:
         size_t pos;
         if (!claim_write_slot(pos)) return false;
         auto& slot = _slots[pos & _mask];
+        while (slot.sequence.load(std::memory_order_acquire) != pos)
+            std::this_thread::yield();
         ::new (slot.ptr()) T(std::move(value));
         slot.sequence.store(pos + 1, std::memory_order_release);
         return true;
@@ -147,6 +164,8 @@ public:
         size_t pos;
         if (!claim_write_slot(pos)) return false;
         auto& slot = _slots[pos & _mask];
+        while (slot.sequence.load(std::memory_order_acquire) != pos)
+            std::this_thread::yield();
         ::new (slot.ptr()) T(std::forward<Args>(args)...);
         slot.sequence.store(pos + 1, std::memory_order_release);
         return true;
