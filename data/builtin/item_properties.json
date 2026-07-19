@@ -1,26 +1,6 @@
 {
   "schema_version": "1.0.0",
   "items": {
-    "armadillo_boots": {
-      "durability": 0,
-      "enchantability": 10,
-      "category": "boots"
-    },
-    "armadillo_chestplate": {
-      "durability": 0,
-      "enchantability": 10,
-      "category": "chestplate"
-    },
-    "armadillo_helmet": {
-      "durability": 0,
-      "enchantability": 10,
-      "category": "helmet"
-    },
-    "armadillo_leggings": {
-      "durability": 0,
-      "enchantability": 10,
-      "category": "leggings"
-    },
     "book": {
       "durability": 0,
       "enchantability": 1,
@@ -285,6 +265,11 @@
       "durability": 250,
       "enchantability": 15,
       "category": "mace"
+    },
+    "misc": {
+      "durability": 25,
+      "enchantability": -1,
+      "category": "misc"
     },
     "netherite_axe": {
       "durability": 2031,

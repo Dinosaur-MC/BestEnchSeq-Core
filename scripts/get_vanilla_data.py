@@ -683,8 +683,7 @@ def load_enchantability_from_source(res_dir: Path) -> dict[str, int]:
     # ── 2. Armour materials ────────────────────────────────────────────
     am_class = extract_dir / "net" / "minecraft" / "world" / "item" / "equipment" / "ArmorMaterials.class"
     armor_fallback = {"leather": 15, "copper": 8, "chainmail": 12, "iron": 9,
-                      "golden": 25, "diamond": 10, "netherite": 15,
-                      "armadillo": 10}  # wolf_armor
+                      "golden": 25, "diamond": 10, "netherite": 15}
     turtle_val = 9
     if am_class.exists():
         raw = _parse_armor_materials_javap(_javap_c(am_class))

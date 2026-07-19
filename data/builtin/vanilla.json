@@ -18,6 +18,7 @@
     "hoe",
     "leggings",
     "mace",
+    "misc",
     "pickaxe",
     "pumpkin",
     "rod",
@@ -1088,6 +1089,12 @@
       "name": "Mace",
       "category": "mace",
       "max_durability": 250
+    },
+    {
+      "id": "misc",
+      "name": "Misc",
+      "category": "misc",
+      "max_durability": 25
     },
     {
       "id": "netherite_axe",
