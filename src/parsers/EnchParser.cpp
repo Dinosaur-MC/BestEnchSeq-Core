@@ -1,6 +1,5 @@
 #include "parsers/EnchParser.h"
 #include "utils/ParserUtils.hpp"
-#include "log/log.hpp"
 
 #include <cctype>
 #include <stdexcept>
@@ -31,12 +30,11 @@ std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
     // Check for empty tokens (e.g. "a=1,,b=2") before splitting
     for (size_t i = 0; i + 1 < input.size(); ++i) {
         if (input[i] == ',' && input[i + 1] == ',') {
-            LOG_WARN("Warning: empty enchantment spec in list, skipping");
-            break;
+            throw std::runtime_error("Empty enchantment spec in list (double comma near position " + std::to_string(i) + ")");
         }
     }
     if (!input.empty() && input.back() == ',') {
-        LOG_WARN("Warning: trailing comma in enchantment list, skipping");
+        throw std::runtime_error("Trailing comma in enchantment list");
     }
 
     auto tokens = ParserUtils::split_string(input, ',');

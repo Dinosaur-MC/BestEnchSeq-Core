@@ -9,6 +9,10 @@
 #include <iostream>
 #include <stdexcept>
 
+// Stringify helper so BESQ_MAX_SOLUTIONS appears literally in the help text
+#define BESQ_STR2(x) #x
+#define BESQ_STR(x)  BESQ_STR2(x)
+
 // ============================================================================
 // Help text
 // ============================================================================
@@ -27,14 +31,17 @@ std::string get_cli_help_text(const std::string &program_name) {
         "                           (e.g., diamond_sword[sharpness=3])\n"
         "  --mode <mode>           Operation mode: direct (default) or inventory\n"
         "  --platform <platform>   Platform: java, bedrock, or auto (default)\n"
-        "  --solutions <n>         Maximum solutions (0 = unlimited, default: 1, max: 128)\n"
+        "  --solutions <n>         Maximum solutions (0 = unlimited, default: 1, max: " BESQ_STR(BESQ_MAX_SOLUTIONS) ")\n"
         "  --format <format>       Output format: text (default), compact, or json\n"
         "  --input <file>          Input file path (inventory mode)\n"
         "  --output <file>         Output file path (default: stdout)\n"
         "  --data-pack <dir>       Custom data pack directory\n"
-        "  --registry-dir <dir>    Custom registry directory path\n"
-        "  --registries <list>     Active registries (default: minecraft:latest)\n"
-        "  --config <pairs>        Custom config pairs (e.g., ignore-cost-cap=true)\n"
+        "  --registry-dir <dir>    Custom registry data directory (additional data source)\n"
+        "  --registries <list>     Active registries (default: minecraft:latest;\n"
+        "                           multi-registry is not yet implemented)\n"
+        "  --config <pairs>        Config key=value pairs (comma-separated).\n"
+        "                           Keys: ignore-cost-cap, ignore-penalty-cost,\n"
+        "                                 ignore-repair-cost (all: true|false)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
         "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
         "\n"
@@ -43,9 +50,10 @@ std::string get_cli_help_text(const std::string &program_name) {
         "  ns:id=level             e.g., minecraft:sharpness=5\n"
         "  id:level                e.g., sharpness:5 (colon shorthand)\n"
         "\n"
-        "Registry formats:\n"
-        "  id:version              e.g., minecraft:latest\n"
-        "  author/name:tag         e.g., rlcraft/rlcraft:1.12.2-R2.9.3\n";
+        "Registry data (loaded in order, later overrides earlier):\n"
+        "  1. Builtin (embedded vanilla.json)\n"
+        "  2. --data-pack <dir>    Custom data pack (auto-detected format)\n"
+        "  3. --registry-dir <dir> Additional registry data directory\n";
 }
 
 // ============================================================================
@@ -81,11 +89,6 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.verbose = true;
             continue;
         }
-        if (key == "ignore-cost-cap") {
-            config.ignore_cost_cap = true;
-            continue;
-        }
-
         const auto &value = arg.value;
 
         if (key == "mode") {
@@ -103,15 +106,26 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.registries = value;
         } else if (key == "config") {
             config.config_pairs = value;
-            // Apply known config pairs immediately
+            // Validate syntax and recognize keys; actual application
+            // to ForgeConfig happens later via apply_config_pairs().
+            if (value.empty())
+                throw std::runtime_error("Empty --config value.\n");
             auto pairs = ParserUtils::split_string(value, ',');
             for (const auto& pair : pairs) {
                 auto eq = pair.find('=');
-                if (eq == std::string::npos || eq == 0) continue;
+                if (eq == std::string::npos)
+                    throw std::runtime_error("Invalid config pair: '" + pair + "'. Expected key=value format.\n");
+                if (eq == 0)
+                    throw std::runtime_error("Invalid config pair: '" + pair + "'. Empty key.\n");
                 auto k = pair.substr(0, eq);
                 auto v = pair.substr(eq + 1);
-                if (k == "ignore-cost-cap" && v == "true")
-                    config.ignore_cost_cap = true;
+                if (v.empty())
+                    throw std::runtime_error("Invalid config pair: '" + pair + "'. Empty value.\n");
+                if (k != "ignore-cost-cap" && k != "ignore-penalty-cost" && k != "ignore-repair-cost")
+                    throw std::runtime_error("Unknown config key: '" + k + "'. "
+                        "Valid keys: ignore-cost-cap, ignore-penalty-cost, ignore-repair-cost.\n");
+                if (v != "true" && v != "false")
+                    throw std::runtime_error("Invalid config value for '" + k + "': '" + v + "'. Expected 'true' or 'false'.\n");
             }
         } else if (key == "input") {
             config.input = value;
@@ -135,7 +149,8 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             try {
                 int n = std::stoi(value);
                 if (n < 0) throw std::runtime_error("must be >= 0");
-                if (n > 100000) throw std::runtime_error("--solutions must be <= 100000\n");
+                if (n > static_cast<int>(BESQ_MAX_SOLUTIONS))
+                    throw std::runtime_error("--solutions must be <= " BESQ_STR(BESQ_MAX_SOLUTIONS) "\n");
                 config.solutions = n;
             } catch (const std::runtime_error &) {
                 throw;
@@ -218,4 +233,28 @@ EnchSet build_enchset(
         result.emplace(id, s.level);
     }
     return result;
+}
+
+// ============================================================================
+// apply_config_pairs — parse --config value and apply to ForgeConfig
+// ============================================================================
+
+void apply_config_pairs(const std::string& config_pairs, ForgeConfig& cfg) {
+    if (config_pairs.empty()) return;
+    auto pairs = ParserUtils::split_string(config_pairs, ',');
+    for (const auto& pair : pairs) {
+        auto eq = pair.find('=');
+        if (eq == std::string::npos)
+            throw std::runtime_error("Invalid config pair: '" + pair + "'. Expected key=value format.\n");
+        std::string k = pair.substr(0, eq);
+        std::string v = pair.substr(eq + 1);
+        bool val = (v == "true");
+        if (k == "ignore-cost-cap")
+            cfg.ignore_cost_cap = val;
+        else if (k == "ignore-penalty-cost")
+            cfg.ignore_penalty_cost = val;
+        else if (k == "ignore-repair-cost")
+            cfg.ignore_repair_cost = val;
+        // Unknown keys are already rejected in parse_cli()
+    }
 }

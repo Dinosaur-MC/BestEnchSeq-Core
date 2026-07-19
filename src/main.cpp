@@ -65,7 +65,18 @@ void load_all_data(
         all_eq.insert(all_eq.end(), custom_eq.begin(), custom_eq.end());
     }
 
-    // Step 3: Initialize ALL registries from merged raw data
+    // Step 3: If custom registry directory, merge raw data
+    if (config.registry_dir) {
+        auto rd = std::filesystem::path(*config.registry_dir);
+        if (!std::filesystem::exists(rd))
+            throw std::runtime_error("Registry directory not found: " + rd.string());
+
+        auto [custom_ench, custom_eq] = EnchInfoParser::parse(rd);
+        all_ench.insert(all_ench.end(), custom_ench.begin(), custom_ench.end());
+        all_eq.insert(all_eq.end(), custom_eq.begin(), custom_eq.end());
+    }
+
+    // Step 4: Initialize ALL registries from merged raw data
     RawTypeAdapter::resolve(all_ench, all_eq, cat_reg, eq_reg, ench_reg);
 }
 
@@ -104,6 +115,11 @@ int main(int argc, char *argv[]) {
         if (config.help || config.version) {
             return 0;
         }
+
+        // ── Warn about unimplemented features ─────────────────────────────────
+        if (config.registries != "minecraft:latest")
+            LOG_WARN("--registries '%s' is stored but multi-registry is not yet implemented; using builtin data",
+                     config.registries.c_str());
 
         // ── Load data ────────────────────────────────────────────────────────
         EquipmentCategoryRegistry cat_reg;
@@ -157,6 +173,9 @@ int main(int argc, char *argv[]) {
         } else {
             forge_config.platform = ParserUtils::parse_platform(config.platform);
         }
+        // Apply --config pairs on top of ForgeConfig (may override platform
+        // if a platform key is added later, or set forge boolean flags).
+        apply_config_pairs(config.config_pairs, forge_config);
 
         AlgorithmInput algo_input;
         // Keep these alive for the recall call later
@@ -190,7 +209,7 @@ int main(int argc, char *argv[]) {
             algo_input = CompactAdapter::apply(resolved, ench_reg);
         }
 
-        algo_input.config.platform = forge_config.platform;
+        algo_input.config = forge_config;
         algo_input.mode = algo_mode;
 
         // ── Search config from CLI ────────────────────────────────────────

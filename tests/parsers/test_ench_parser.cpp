@@ -86,12 +86,17 @@ void test_ench_parser_empty_id_rejected() {
 }
 
 // ============================================================================
-// Empty token between commas is skipped
+// Empty token between commas is rejected
 // ============================================================================
-void test_ench_parser_empty_token_warns() {
-    auto result = EnchParser::parse("a=1,,b=2");
-    expect(result.size() == 2, "empty token should be skipped");
-    TEST_PASS("test_ench_parser_empty_token_warns");
+void test_ench_parser_empty_token_rejected() {
+    bool threw = false;
+    try {
+        EnchParser::parse("a=1,,b=2");
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "empty token (double comma) should throw");
+    TEST_PASS("test_ench_parser_empty_token_rejected");
 }
 
 void test_ench_parser_level_too_high_rejected() {
@@ -116,7 +121,7 @@ int main() {
         test_ench_parser_no_level();
         test_ench_parser_negative_level_rejected();
         test_ench_parser_empty_id_rejected();
-        test_ench_parser_empty_token_warns();
+        test_ench_parser_empty_token_rejected();
         test_ench_parser_level_too_high_rejected();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

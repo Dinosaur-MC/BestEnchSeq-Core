@@ -1,4 +1,5 @@
 #pragma once
+#include "config/ForgeConfig.h"
 #include "types/ItemStack.h"
 #include <optional>
 #include <string>
@@ -22,7 +23,6 @@ struct CLIConfig {
     int solutions = 1;
     int memory_mb = 0;
     bool verbose = false;
-    bool ignore_cost_cap = false;
     bool help = false;
     bool version = false;                          // --version / -V
 };
@@ -66,3 +66,10 @@ EnchSet build_enchset(
     const std::vector<EnchantmentSpec>& specs,
     const EnchantmentRegistry& ench_reg
 );
+
+/// Parse a --config value and apply recognized key=value pairs to a ForgeConfig.
+///
+/// Recognized keys: ignore-cost-cap, ignore-penalty-cost, ignore-repair-cost.
+/// Each value must be "true" or "false".
+/// Throws std::runtime_error on unrecognized keys, malformed syntax, or invalid values.
+void apply_config_pairs(const std::string& config_pairs, ForgeConfig& cfg);

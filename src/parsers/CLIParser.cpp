@@ -12,6 +12,7 @@ const char *lookup_short(const char *short_name) {
     static const struct { const char *short_name; const char *long_name; } map[] = {
         {"h", "help"},
         {"v", "verbose"},
+        {"V", "version"},
     };
     for (const auto &entry : map) {
         if (std::strcmp(short_name, entry.short_name) == 0)
