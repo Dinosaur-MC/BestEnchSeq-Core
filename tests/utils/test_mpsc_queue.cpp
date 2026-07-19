@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "utils/queue/MPSCQueue.hpp"
+#include "utils/queue/SegmentedMPSCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -13,7 +13,7 @@
 // ─── Single-threaded basics ───
 
 void test_push_pop() {
-    MPSCQueue<int> q;
+    SegmentedMPSCQueue<int> q;
     expect(q.size() == 0, "empty initially");
     expect(q.empty(), "empty() initially");
 
@@ -31,7 +31,7 @@ void test_push_pop() {
 }
 
 void test_empty_pop_returns_false() {
-    MPSCQueue<int> q;
+    SegmentedMPSCQueue<int> q;
     int val{};
     expect(!q.try_pop(val), "pop on empty returns false");
     std::cout << "PASS: test_empty_pop_returns_false" << std::endl;
@@ -39,7 +39,7 @@ void test_empty_pop_returns_false() {
 
 void test_fifo_order() {
     constexpr int N = 10000;
-    MPSCQueue<int> q;
+    SegmentedMPSCQueue<int> q;
 
     for (int i = 0; i < N; ++i)
         q.try_push(i);
@@ -54,7 +54,7 @@ void test_fifo_order() {
 }
 
 void test_interleaved_push_pop() {
-    MPSCQueue<int> q;
+    SegmentedMPSCQueue<int> q;
     for (int i = 0; i < 1000; ++i) {
         expect(q.try_push(i), "push should succeed");
         int val{};
@@ -66,7 +66,7 @@ void test_interleaved_push_pop() {
 }
 
 void test_clear() {
-    MPSCQueue<int> q;
+    SegmentedMPSCQueue<int> q;
     for (int i = 0; i < 100; ++i)
         q.try_push(i);
 
@@ -87,7 +87,7 @@ void test_clear() {
 }
 
 void test_capacity_is_zero() {
-    MPSCQueue<int> q;
+    SegmentedMPSCQueue<int> q;
     expect(q.capacity() == 0, "unbounded queue reports capacity == 0");
     std::cout << "PASS: test_capacity_is_zero" << std::endl;
 }
@@ -106,7 +106,7 @@ struct MoveOnlyPayload {
 };
 
 void test_move_only_type() {
-    MPSCQueue<MoveOnlyPayload> q;
+    SegmentedMPSCQueue<MoveOnlyPayload> q;
     expect(q.try_push(MoveOnlyPayload(1, "alice")), "push move-only");
     expect(q.try_push(MoveOnlyPayload(2, "bob")), "push move-only");
 
@@ -130,7 +130,7 @@ struct NonDefaultConstructible {
 };
 
 void test_non_default_constructible() {
-    MPSCQueue<NonDefaultConstructible> q;
+    SegmentedMPSCQueue<NonDefaultConstructible> q;
     expect(q.try_push(NonDefaultConstructible(42)), "push nDefaultConstructible");
     expect(q.try_push(NonDefaultConstructible(99)), "push nDefaultConstructible");
 
@@ -145,7 +145,7 @@ void test_non_default_constructible() {
 }
 
 void test_clear_non_default_constructible() {
-    MPSCQueue<NonDefaultConstructible> q;
+    SegmentedMPSCQueue<NonDefaultConstructible> q;
     q.try_push(NonDefaultConstructible(1));
     q.try_push(NonDefaultConstructible(2));
     q.try_push(NonDefaultConstructible(3));
@@ -167,7 +167,7 @@ void test_clear_non_default_constructible() {
 void test_two_producers_one_consumer() {
     constexpr int PRODUCE_PER = 100000;
     constexpr int TOTAL = PRODUCE_PER * 2;
-    MPSCQueue<uint64_t> q;
+    SegmentedMPSCQueue<uint64_t> q;
 
     std::atomic<uint64_t> consumed{0};
     std::atomic<uint64_t> sum_in{0};
@@ -230,7 +230,7 @@ void test_multi_producer_stress() {
     constexpr int PER_PRODUCER = 50000;
     constexpr int TOTAL = PRODUCERS * PER_PRODUCER;
 
-    MPSCQueue<uint64_t> q;
+    SegmentedMPSCQueue<uint64_t> q;
 
     std::atomic<uint64_t> consumed{0};
     std::atomic<uint64_t> sum_in{0};
@@ -291,7 +291,7 @@ void test_sequence_uniqueness() {
     constexpr int PER_PRODUCER = 25000;
     constexpr int TOTAL = PRODUCERS * PER_PRODUCER;
 
-    MPSCQueue<uint64_t> q;
+    SegmentedMPSCQueue<uint64_t> q;
     std::atomic<uint64_t> consumed{0};
     std::atomic<bool> producers_done{false};
 
@@ -357,14 +357,14 @@ void test_sequence_uniqueness() {
 // ─── QueueType concept check ───
 
 void test_queue_type_concept() {
-    static_assert(QueueType<MPSCQueue<int>, int>,
-                  "MPSCQueue<int> must satisfy QueueType<int>");
-    static_assert(QueueType<MPSCQueue<std::string>, std::string>,
-                  "MPSCQueue<string> must satisfy QueueType<string>");
+    static_assert(QueueType<SegmentedMPSCQueue<int>, int>,
+                  "SegmentedMPSCQueue<int> must satisfy QueueType<int>");
+    static_assert(QueueType<SegmentedMPSCQueue<std::string>, std::string>,
+                  "SegmentedMPSCQueue<string> must satisfy QueueType<string>");
 
     // Move-only type
-    static_assert(QueueType<MPSCQueue<std::unique_ptr<int>>, std::unique_ptr<int>>,
-                  "MPSCQueue<unique_ptr> must satisfy QueueType");
+    static_assert(QueueType<SegmentedMPSCQueue<std::unique_ptr<int>>, std::unique_ptr<int>>,
+                  "SegmentedMPSCQueue<unique_ptr> must satisfy QueueType");
 
     std::cout << "PASS: test_queue_type_concept" << std::endl;
 }
@@ -372,7 +372,7 @@ void test_queue_type_concept() {
 // ─── QueueAdaptor integration ───
 
 void test_queue_adaptor_integration() {
-    QueueAdaptor<int, MPSCQueue<int>> adaptor;
+    QueueAdaptor<int, SegmentedMPSCQueue<int>> adaptor;
     IQueue<int>& iq = adaptor;
 
     expect(iq.capacity() == 0, "capacity via IQueue");
@@ -395,7 +395,7 @@ void test_queue_adaptor_integration() {
 }
 
 int main() {
-    std::cout << "=== MPSCQueue Tests ===" << std::endl;
+    std::cout << "=== SegmentedMPSCQueue Tests ===" << std::endl;
     try {
         std::cout << "--- Single-threaded ---" << std::endl;
         test_push_pop();

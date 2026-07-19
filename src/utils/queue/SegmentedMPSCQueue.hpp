@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <utility>
 
-// ─── MPSCQueue ───
+// ─── SegmentedMPSCQueue ───
 // Multi-Producer, Single-Consumer lock-free UNBOUNDED queue.
 //
 // Uses a ticket-based segmented-block algorithm (Dmitry Vyukov sequence
@@ -36,7 +36,7 @@
 //   BlockSize power of two ≥ 64.
 
 template <typename T, size_t BlockSize = 1024>
-class MPSCQueue final : public IQueue<T> {
+class SegmentedMPSCQueue final : public IQueue<T> {
     static_assert(BlockSize >= 64, "BlockSize must be at least 64");
     static_assert((BlockSize & (BlockSize - 1)) == 0,
                   "BlockSize must be a power of two");
@@ -120,20 +120,20 @@ public:
     using size_type         = size_t;
     using difference_type   = ptrdiff_t;
 
-    MPSCQueue()
+    SegmentedMPSCQueue()
         : root_block_(new Block(0))
     {
         head_block_.store(root_block_, std::memory_order_relaxed);
         tail_block_.store(root_block_, std::memory_order_relaxed);
     }
 
-    ~MPSCQueue() noexcept final {
+    ~SegmentedMPSCQueue() noexcept final {
         Block* b = root_block_;
         while (b) { Block* n = b->next.load(std::memory_order_relaxed); delete b; b = n; }
     }
 
-    MPSCQueue(const MPSCQueue&) = delete;
-    MPSCQueue& operator=(const MPSCQueue&) = delete;
+    SegmentedMPSCQueue(const SegmentedMPSCQueue&) = delete;
+    SegmentedMPSCQueue& operator=(const SegmentedMPSCQueue&) = delete;
 
     // ─── Producer API ─────────────────────────────────────────────────
 

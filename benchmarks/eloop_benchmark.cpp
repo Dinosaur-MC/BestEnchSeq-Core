@@ -192,8 +192,8 @@ int main() {
             bench_throughput(loop, OPS_EV, WARM_EV, "SPSCEventLoop (SPSCQueue)");
         }
         {
-            EventLoop<std::function<void()>, MPSCQueue<std::function<void()>>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "MPSCEventLoop (MPSCQueue)");
+            EventLoop<std::function<void()>, SegmentedMPSCQueue<std::function<void()>>> loop;
+            bench_throughput(loop, OPS_EV, WARM_EV, "MPSCEventLoop (SegmentedMPSC)");
         }
         {
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
