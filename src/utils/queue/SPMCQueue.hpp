@@ -79,6 +79,18 @@ public:
         return true;
     }
 
+    template <typename... Args>
+        requires std::constructible_from<T, Args...>
+    bool try_emplace(Args&&... args) noexcept {
+        uint64_t ws = _write_idx.fetch_add(1, std::memory_order_relaxed);
+        size_t i = ws & (Capacity - 1);
+        if constexpr (!std::is_trivially_destructible_v<T>)
+            _slots[i].value.~T();
+        new (&_slots[i].value) T(std::forward<Args>(args)...);
+        _slots[i].generation.store((ws / Capacity) * 2 + 1, std::memory_order_release);
+        return true;
+    }
+
     // ─── Consumer (cursor-based) ─────────────────────────────────────
 
     Cursor read_cursor() const noexcept {

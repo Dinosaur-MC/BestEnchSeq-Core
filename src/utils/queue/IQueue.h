@@ -53,6 +53,17 @@ public:
             while (try_pop(item)) {}
         }
     }
+
+    /// Emplace a T in-place from constructor arguments.
+    /// Non-virtual template: dispatches to try_push by default.
+    /// Concrete queues may provide a more efficient implementation
+    /// (e.g. BoundedMPMCQueue, BoundedMPSCQueue) that constructs
+    /// directly into the slot.
+    template <typename... Args>
+        requires std::constructible_from<T, Args...>
+    bool try_emplace(Args&&... args) {
+        return try_push(T(std::forward<Args>(args)...));
+    }
 };
 
 

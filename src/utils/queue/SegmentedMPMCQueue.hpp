@@ -141,6 +141,17 @@ public:
         return true;
     }
 
+    template <typename... Args>
+        requires std::constructible_from<T, Args...>
+    bool try_emplace(Args&&... args) noexcept {
+        Block* block; size_t idx;
+        claim_enqueue_slot(block, idx);
+        ::new (block->slot_at(idx)) T(std::forward<Args>(args)...);
+        block->sequences[idx].store(idx + block->base_ticket + BlockSize,
+                                    std::memory_order_release);
+        return true;
+    }
+
     // ─── Consumer ─────────────────────────────────────────────────────
 
     bool try_pop(T& out) noexcept override final {

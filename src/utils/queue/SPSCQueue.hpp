@@ -84,6 +84,18 @@ public:
         return true;
     }
 
+    /// Emplace a T in-place from constructor arguments.
+    template <typename... Args>
+        requires std::constructible_from<T, Args...>
+    bool try_emplace(Args&&... args) noexcept {
+        size_t w = _write.value.load(std::memory_order_relaxed);
+        size_t r = _read.value.load(std::memory_order_acquire);
+        if (w - r >= Capacity) return false;
+        ::new (ptr(w)) T(std::forward<Args>(args)...);
+        _write.value.store(w + 1, std::memory_order_release);
+        return true;
+    }
+
     // ─── Consumer API ─────────────────────────────────────────────────
 
     bool try_pop(T& out) noexcept override final {
