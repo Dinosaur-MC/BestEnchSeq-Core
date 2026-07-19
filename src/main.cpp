@@ -13,6 +13,7 @@
 #include "parsers/EnchParser.h"
 #include "parsers/ItemParser.h"
 #include "parsers/ParserUtilsDomain.hpp"
+#include "resolvers/InventoryResolver.h"
 #include "resolvers/ItemResolver.h"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
@@ -82,99 +83,6 @@ void register_builtin_algorithms(AlgorithmRegistry &registry) {
                                 [] { return std::make_unique<HammingAlgorithm>(); });
     registry.register_algorithm("difficulty_first",
                                 [] { return std::make_unique<DiffFirstAlgorithm>(); });
-}
-
-// Helper: parse an inventory JSON file into an ItemCollection.
-// Uses registries directly for name→ID resolution (with "minecraft:" fallback).
-ItemCollection parse_inventory(
-    const std::filesystem::path& path,
-    const EnchantmentRegistry& ench_reg,
-    const EquipmentRegistry& eq_reg
-) {
-    std::string content = ParserUtils::read_file(path);
-    Json root = Json::parse(content);
-    if (root.type() != JsonType::Object) return {};
-
-    Json::Value root_val = root.get_value();
-    if (!std::holds_alternative<Json::Object>(root_val)) return {};
-    Json::Object root_obj = std::get<Json::Object>(root_val);
-
-    auto items_it = root_obj.find("items");
-    if (items_it == root_obj.end()) return {};
-
-    Json::Value items_val = items_it->second.get_value();
-    if (!std::holds_alternative<Json::Array>(items_val)) return {};
-    Json::Array items_arr = std::get<Json::Array>(items_val);
-
-    ItemCollection result;
-    for (const Json& item_json : items_arr) {
-        if (item_json.type() != JsonType::Object) continue;
-        Json::Value item_val = item_json.get_value();
-        if (!std::holds_alternative<Json::Object>(item_val)) continue;
-        Json::Object item_obj = std::get<Json::Object>(item_val);
-
-        std::string type = ParserUtils::get_json_string(item_obj, "type");
-        if (type.empty()) {
-            LOG_WARN("Warning: item missing 'type' field, skipping");
-            continue;
-        }
-
-        // Parse enchantments
-        EnchSet ench_set;
-        auto ench_it = item_obj.find("enchants");
-        if (ench_it != item_obj.end()) {
-            Json::Value enchants_val = ench_it->second.get_value();
-            if (std::holds_alternative<Json::Array>(enchants_val)) {
-                Json::Array ench_arr = std::get<Json::Array>(enchants_val);
-                for (const Json& ench_json : ench_arr) {
-                    if (ench_json.type() != JsonType::Object) continue;
-                    Json::Value ench_val = ench_json.get_value();
-                    if (!std::holds_alternative<Json::Object>(ench_val)) continue;
-                    Json::Object ench_obj = std::get<Json::Object>(ench_val);
-
-                    std::string ench_id_str = ParserUtils::get_json_string(ench_obj, "id");
-                    int32_t ench_level = ParserUtils::get_json_int(ench_obj, "level");
-                    if (ench_level < 1) ench_level = 1;
-
-                    int32_t ench_id = ench_reg.get_id(ench_id_str);
-                    if (ench_id >= 0) {
-                        ench_set.emplace(ench_id, ench_level);
-                    } else {
-                        LOG_WARN("Warning: unknown enchantment '%s' in item, skipping", ench_id_str.c_str());
-                    }
-                }
-            }
-        }
-
-        int32_t prior_penalty = ParserUtils::get_json_int(item_obj, "prior_penalty");
-        int32_t priority = ParserUtils::get_json_int(item_obj, "priority");
-        if (priority <= 0) priority = 99;
-
-        if (type == "book") {
-            auto& item = result.emplace_back(ench_set, prior_penalty);
-            item.priority = priority;
-        } else if (type == "equipment") {
-            std::string equip_id = ParserUtils::get_json_string(item_obj, "id");
-            int32_t eq_id = eq_reg.get_id(equip_id);
-
-            if (eq_id >= 0) {
-                const Equipment& equip = eq_reg.get(eq_id);
-                int32_t durability = ParserUtils::get_json_int(item_obj, "durability");
-                if (durability <= 0) {
-                    durability = equip.max_durability;
-                }
-                auto& item = result.emplace_back(equip, ench_set, prior_penalty, durability);
-                item.priority = priority;
-            } else {
-                LOG_WARN("Warning: equipment '%s' not found in registry, treating as book", equip_id.c_str());
-                result.emplace_back(ench_set, prior_penalty);
-            }
-        } else {
-            LOG_WARN("Warning: unknown item type '%s', skipping", type.c_str());
-        }
-    }
-
-    return result;
 }
 
 } // anonymous namespace
@@ -268,17 +176,14 @@ int main(int argc, char *argv[]) {
             if (!config.input.has_value())
                 throw std::runtime_error("Input file required for inventory mode");
 
-            ItemCollection available_items = parse_inventory(
+            auto inv = InventoryResolver::resolve(
                 std::filesystem::path(*config.input), ench_reg, eq_reg);
 
-            // Stable sort by priority (lower = more preferred)
-            std::stable_sort(available_items.begin(), available_items.end(),
-                [](const ItemStack& a, const ItemStack& b) {
-                    return a.priority < b.priority;
-                });
+            for (const auto& w : inv.warnings)
+                LOG_WARN("Inventory: %s", w.c_str());
 
             ResolvedInput resolved{
-                target_item, source_ench, target_ench, std::move(available_items)};
+                target_item, source_ench, target_ench, std::move(inv.items)};
             recall_source_ench = resolved.source_ench;
             recall_target_item = resolved.target_item;
             recall_available_items = resolved.available_items;
