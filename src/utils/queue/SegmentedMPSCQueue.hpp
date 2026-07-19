@@ -31,8 +31,14 @@
 //   - One reader:        try_pop() / clear()
 //   - No CAS loops on the consumer path
 //
+// clear() and the destructor must be called only when no producers are
+// concurrently enqueuing.  In practice this means the consumer thread
+// calls clear() during a quiet period, or the owning thread drains the
+// queue after joining all producers.
+//
 // Requirements:
-//   T nothrow-destructible and nothrow-move-assignable,
+//   T nothrow-destructible, nothrow-move-assignable and
+//   nothrow-move-constructible.
 //   BlockSize power of two ≥ 64.
 
 template <typename T, size_t BlockSize = 1024>

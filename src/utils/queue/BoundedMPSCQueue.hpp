@@ -24,8 +24,14 @@
 //   - Multiple writers:  try_push() / try_emplace()
 //   - One reader:        try_pop() / clear()
 //
+// clear() and the destructor must be called only when no producers are
+// concurrently enqueuing.  In practice this means the consumer thread
+// calls clear() during a quiet period, or the owning thread drains the
+// queue after joining all producers.
+//
 // Requirements:
-//   T nothrow-destructible and nothrow-move-assignable,
+//   T nothrow-destructible, nothrow-move-assignable and
+//   nothrow-move-constructible.
 //   Capacity power of two ≥ 2.
 
 template <typename T, size_t Capacity>
