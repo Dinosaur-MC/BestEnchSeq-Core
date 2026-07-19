@@ -73,7 +73,8 @@
 //   tasks/handlers are noexcept or catch internally.
 
 template <typename T, typename Queue, typename Handler = void>
-    requires ((std::is_void_v<Handler> && std::invocable<T>) ||
+    requires QueueType<Queue, T> &&
+             ((std::is_void_v<Handler> && std::invocable<T>) ||
               (!std::is_void_v<Handler> && std::invocable<Handler, T>))
 class EventLoop {
 public:
@@ -104,14 +105,15 @@ public:
     /// @param force  If true, discard remaining queued items after the
     ///               worker exits (force shutdown).  If false (default),
     ///               the worker drains the queue before exiting (graceful).
-    /// Idempotent.
+    /// Idempotent.  After stop() returns the caller must not post() any
+    /// more items — behaviour is undefined otherwise.
     void stop(bool force = false) noexcept {
         if (!_running.exchange(false, std::memory_order_acq_rel))
             return;
 
         _worker.request_stop();
-        _wake.fetch_add(1, std::memory_order_release);
-        _wake.notify_one();
+        _wake.fetch_add(1, std::memory_order_relaxed);
+        _wake.notify_all();
 
         if (_worker.joinable())
             _worker.join();
@@ -130,7 +132,7 @@ public:
     template <typename U>
         requires (std::is_void_v<Handler>
                   ? std::convertible_to<U&&, T>
-                  : std::same_as<std::remove_cvref_t<U>, T>)
+                  : std::constructible_from<T, U&&>)
     bool try_post(U&& item) {
         if (!_queue.try_push(std::forward<U>(item)))
             return false;
@@ -143,7 +145,7 @@ public:
     template <typename U>
         requires (std::is_void_v<Handler>
                   ? std::convertible_to<U&&, T>
-                  : std::same_as<std::remove_cvref_t<U>, T>)
+                  : std::constructible_from<T, U&&>)
     void post(U&& item) {
         while (!try_post(std::forward<U>(item)))
             std::this_thread::yield();
@@ -176,7 +178,7 @@ public:
     template <std::input_iterator Iter>
         requires (std::is_void_v<Handler>
                   ? std::convertible_to<typename std::iter_value_t<Iter>, T>
-                  : std::same_as<typename std::iter_value_t<Iter>, T>)
+                  : std::constructible_from<T, typename std::iter_value_t<Iter>&&>)
     size_t try_post_batch(Iter begin, Iter end) {
         size_t count = 0;
         for (; begin != end; ++begin) {
@@ -186,7 +188,7 @@ public:
                 break;
         }
         if (count > 0) {
-            _wake.fetch_add(static_cast<uint64_t>(count), std::memory_order_release);
+            _wake.fetch_add(static_cast<uint64_t>(count), std::memory_order_relaxed);
             _wake.notify_one();
         }
         return count;
@@ -196,7 +198,7 @@ public:
     template <std::input_iterator Iter>
         requires (std::is_void_v<Handler>
                   ? std::convertible_to<typename std::iter_value_t<Iter>, T>
-                  : std::same_as<typename std::iter_value_t<Iter>, T>)
+                  : std::constructible_from<T, typename std::iter_value_t<Iter>&&>)
     void post_batch(Iter begin, Iter end) {
         for (; begin != end; ++begin)
             post(std::move(*begin));
@@ -219,7 +221,7 @@ private:
     using HandlerStorage = std::conditional_t<std::is_void_v<Handler>, EmptyHandler, Handler>;
 
     void _signal() noexcept {
-        _wake.fetch_add(1, std::memory_order_release);
+        _wake.fetch_add(1, std::memory_order_relaxed);
         _wake.notify_one();
     }
 
@@ -231,19 +233,29 @@ private:
                 _dispatch(item);
             }
 
-            // ── Queue empty — safe to check for stop ──
-            if (st.stop_requested())
+            // ── Queue empty — check for stop ──
+            // Drain one more item to handle the race where a producer
+            // posts after the drain loop but before stop_requested().
+            if (st.stop_requested()) {
+                if (_queue.try_pop(item)) {
+                    _dispatch(item);
+                    continue;
+                }
                 return;
+            }
 
             // ── Double-check: load _wake, then re-check the queue ──
-            auto prev = _wake.load(std::memory_order_acquire);
+            auto prev = _wake.load(std::memory_order_relaxed);
             if (_queue.try_pop(item)) {
                 _dispatch(item);
                 continue;
             }
 
             // ── Block until a producer increments _wake ──
-            _wake.wait(prev, std::memory_order_acquire);
+            // _wake carries no data-ordering obligation (the queue's
+            // internal sequence numbers provide that), so relaxed is
+            // sufficient.
+            _wake.wait(prev, std::memory_order_relaxed);
         }
     }
 
@@ -254,10 +266,10 @@ private:
             std::invoke(_handler, std::move(item));
     }
 
-    Queue                       _queue;
-    std::atomic<uint64_t>       _wake{0};
-    std::atomic<bool>           _running{false};
-    std::jthread                _worker;
+    Queue                                   _queue;
+    alignas(64) std::atomic<uint64_t>       _wake{0};
+    std::atomic<bool>                       _running{false};
+    std::jthread                            _worker;
     BESQ_NO_UNIQUE_ADDRESS HandlerStorage _handler{};
 };
 
