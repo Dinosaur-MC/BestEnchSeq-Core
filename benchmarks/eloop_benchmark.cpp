@@ -10,6 +10,25 @@
 #include <thread>
 #include <vector>
 
+#ifndef _WIN32
+#include <sys/wait.h>
+#include <unistd.h>
+
+/// Run a test in a forked child process for heap/cache isolation.
+static void fork_isolated(auto fn) {
+    std::cout.flush();  // flush before fork so buffered banner isn't duplicated
+    pid_t pid = fork();
+    if (pid == 0) { fn(); _exit(0); }
+    int status;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        std::cerr << "WARN: child exit status " << WEXITSTATUS(status) << '\n';
+}
+#else
+/// Windows fallback — no isolation.
+static void fork_isolated(auto fn) { fn(); }
+#endif
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  Configuration  —  calibrate for ~8-10 s total on a modern CPU
 // ═══════════════════════════════════════════════════════════════════════════
@@ -201,7 +220,7 @@ int main() {
               << std::thread::hardware_concurrency() << "\n\n";
 
     // ── Single-producer throughput ────────────────────────────────────
-    {
+    fork_isolated([] {
         Timer sec;
         std::cout << "── Single-producer throughput ────────────────────\n";
         {
@@ -221,38 +240,42 @@ int main() {
             bench_pipeline(loop, OPS_EV, WARM_EV, "BoundedMPSCEventLoop");
         }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    }
+    });
 
     // ── Multi-producer throughput ─────────────────────────────────────
     {
         Timer sec;
         std::cout << "── Multi-producer throughput ─────────────────────\n";
-        bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPMCEventLoop");
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop");
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 2, "BoundedMPMCEventLoop");
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 2, "BoundedMPSCEventLoop");
-        std::cout << "  ──\n";
-        bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPMCEventLoop");
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop");
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 4, "BoundedMPMCEventLoop");
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 4, "BoundedMPSCEventLoop");
-        std::cout << "  ──\n";
-        bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPMCEventLoop");
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop");
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 8, "BoundedMPMCEventLoop");
-        bench_multiproducer_tmpl<
-            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
-        >(OPS_MP, WARM_EV, 8, "BoundedMPSCEventLoop");
+        fork_isolated([] {
+            bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPMCEventLoop");
+            bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop");
+            bench_multiproducer_tmpl<
+                EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
+            >(OPS_MP, WARM_EV, 2, "BoundedMPMCEventLoop");
+            bench_multiproducer_tmpl<
+                EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
+            >(OPS_MP, WARM_EV, 2, "BoundedMPSCEventLoop");
+        });
+        fork_isolated([] {
+            bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPMCEventLoop");
+            bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop");
+            bench_multiproducer_tmpl<
+                EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
+            >(OPS_MP, WARM_EV, 4, "BoundedMPMCEventLoop");
+            bench_multiproducer_tmpl<
+                EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
+            >(OPS_MP, WARM_EV, 4, "BoundedMPSCEventLoop");
+        });
+        fork_isolated([] {
+            bench_multiproducer_tmpl<MPMCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPMCEventLoop");
+            bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop");
+            bench_multiproducer_tmpl<
+                EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
+            >(OPS_MP, WARM_EV, 8, "BoundedMPMCEventLoop");
+            bench_multiproducer_tmpl<
+                EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
+            >(OPS_MP, WARM_EV, 8, "BoundedMPSCEventLoop");
+        });
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 

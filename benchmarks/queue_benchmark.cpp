@@ -14,6 +14,22 @@
 #include <thread>
 #include <vector>
 
+#ifndef _WIN32
+#include <sys/wait.h>
+#include <unistd.h>
+static void fork_isolated(auto fn) {
+    std::cout.flush();  // flush before fork so buffered banner isn't duplicated
+    pid_t pid = fork();
+    if (pid == 0) { fn(); _exit(0); }
+    int status;
+    waitpid(pid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        std::cerr << "WARN: child exit status " << WEXITSTATUS(status) << '\n';
+}
+#else
+static void fork_isolated(auto fn) { fn(); }
+#endif
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  Configuration
 // ═══════════════════════════════════════════════════════════════════════════
@@ -300,7 +316,7 @@ int main() {
               << std::thread::hardware_concurrency() << "\n\n";
 
     // ── Sequential throughput ─────────────────────────────────────────
-    {
+    fork_isolated([] {
         Timer sec;
         std::cout << "── Sequential throughput ────────────────────────\n";
         { SPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "SPSCQueue"); }
@@ -309,10 +325,10 @@ int main() {
         { BoundedMPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "BoundedMPSCQueue"); }
         { SegmentedMPSCQueue<int> q; bench_seq(q, OPS_SEG, WARM_SEQ, "SegmentedMPSCQueue"); }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    }
+    });
 
     // ── Round-trip latency ───────────────────────────────────────────
-    {
+    fork_isolated([] {
         Timer sec;
         std::cout << "── Round-trip latency ───────────────────────────\n";
         { SPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SPSCQueue"); }
@@ -321,10 +337,10 @@ int main() {
         { BoundedMPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "BoundedMPSCQueue"); }
         { SegmentedMPSCQueue<int> q; bench_latency(q, N_LATENCY, "SegmentedMPSCQueue"); }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    }
+    });
 
     // ── Multi-producer throughput ──────────────────────────────────────
-    {
+    fork_isolated([] {
         Timer sec;
         std::cout << "── Multi-producer throughput ─────────────────────\n";
         bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 2,   "BoundedMPMCQueue");
@@ -337,15 +353,15 @@ int main() {
         bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 4,   "BoundedMPSCQueue");
         bench_concurrent_mp<SegmentedMPSCQueue<int>>(OPS_MP, OPS_MP / 10, 4,               "SegmentedMPSCQueue");
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    }
+    });
 
     // ── Virtual dispatch overhead ────────────────────────────────────
-    {
+    fork_isolated([] {
         Timer sec;
         std::cout << "── Virtual dispatch overhead ────────────────────\n";
         bench_virtual(OPS_VIRT, WARM_SEQ);
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    }
+    });
 
     std::cout << "════════════════════════════════════════════════════════\n"
               << "  Total: " << total.elapsed_s() << " s\n"
