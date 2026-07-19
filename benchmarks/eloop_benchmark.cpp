@@ -58,28 +58,53 @@ static void drain(auto& loop) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  EventLoop single-producer throughput
+//  Pipeline throughput  (producer thread + EventLoop consumer)
 // ═══════════════════════════════════════════════════════════════════════════
+//
+// Unlike the raw queue benchmark (push-one/pop-one, single thread), the
+// EventLoop benchmark must be a true pipeline: a producer thread posts
+// tasks while the EventLoop worker consumes them concurrently.  This
+// design is fair to both bounded and unbounded queues:
+//
+//   - Bounded:  producer naturally paces at consumer speed (back-pressure).
+//               The capacity-*N* drain pattern is realistic — real code
+//               never posts 15M items into a 4K buffer in one burst.
+//   - Unbounded: producer runs freely, consumer drains in batches.
+//               True producer-consumer parallelism is measured.
+//
+// The old "post all N then drain" pattern artificially penalised bounded
+// queues: after the initial fill the producer spins on every single post,
+// degrading to serialised stall measurement.
 
 template <typename Loop>
-static void bench_throughput(Loop& loop,
-                             int64_t n, int64_t warmup,
-                             const char* label)
+static void bench_pipeline(Loop& loop,
+                           int64_t n, int64_t warmup,
+                           const char* label)
 {
-    std::atomic<int64_t> sum{0};
+    std::atomic<int64_t> consumed{0};
     loop.start();
 
+    // Warm-up: producer posts, consumer drains
     for (int64_t i = 0; i < warmup; ++i)
-        loop.post([&] { sum.fetch_add(1); });
+        loop.try_post([&] { consumed.fetch_add(1); });
     drain(loop);
 
-    sum.store(0);
+    consumed.store(0);
     auto t0 = Clock::now();
-    for (int64_t i = 0; i < n; ++i)
-        loop.post([&] { sum.fetch_add(1); });
-    drain(loop);
+
+    std::thread producer([&] {
+        for (int64_t i = 0; i < n; ++i)
+            loop.post([&] { consumed.fetch_add(1); });
+    });
+
+    // Main thread waits for all tasks to be consumed
+    while (consumed.load(std::memory_order_acquire) < n)
+        std::this_thread::yield();
+    auto t1 = Clock::now();
+    producer.join();
+
     double sec = std::chrono::duration_cast<std::chrono::microseconds>(
-                     Clock::now() - t0).count() / 1'000'000.0;
+                     t1 - t0).count() / 1'000'000.0;
 
     print_result(label, sec, n);
     loop.stop();
@@ -181,19 +206,19 @@ int main() {
         std::cout << "── Single-producer throughput ────────────────────\n";
         {
             EventLoop<std::function<void()>, SegmentedMPMCQueue<std::function<void()>, 1024>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "MPMCEventLoop");
+            bench_pipeline(loop, OPS_EV, WARM_EV, "MPMCEventLoop");
         }
         {
             EventLoop<std::function<void()>, SegmentedMPSCQueue<std::function<void()>>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "MPSCEventLoop");
+            bench_pipeline(loop, OPS_EV, WARM_EV, "MPSCEventLoop");
         }
         {
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "BoundedMPMCEventLoop");
+            bench_pipeline(loop, OPS_EV, WARM_EV, "BoundedMPMCEventLoop");
         }
         {
             EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>> loop;
-            bench_throughput(loop, OPS_EV, WARM_EV, "BoundedMPSCEventLoop");
+            bench_pipeline(loop, OPS_EV, WARM_EV, "BoundedMPSCEventLoop");
         }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
