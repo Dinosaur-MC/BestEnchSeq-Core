@@ -24,7 +24,9 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     ${PROJECT_ROOT}/src/data/DataLoader.cpp
-    "${PROJECT_BINARY_DIR}/generated/EmbeddedData.cpp"
+    "${PROJECT_BINARY_DIR}/generated/EmbeddedData_vanilla.cpp"
+    "${PROJECT_BINARY_DIR}/generated/EmbeddedData_item_props.cpp"
+    ${PROJECT_ROOT}/src/data/ItemProperties.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/types/CompactedTypes.cpp

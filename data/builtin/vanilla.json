@@ -1087,7 +1087,7 @@
       "id": "mace",
       "name": "Mace",
       "category": "mace",
-      "max_durability": 500
+      "max_durability": 250
     },
     {
       "id": "netherite_axe",

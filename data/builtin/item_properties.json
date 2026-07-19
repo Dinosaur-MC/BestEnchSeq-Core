@@ -1,6 +1,11 @@
 {
   "schema_version": "1.0.0",
   "items": {
+    "book": {
+      "durability": 0,
+      "enchantability": 1,
+      "category": "book"
+    },
     "bow": {
       "durability": 384,
       "enchantability": 1,
@@ -10,6 +15,11 @@
       "durability": 64,
       "enchantability": -1,
       "category": "brush"
+    },
+    "carrot_on_a_stick": {
+      "durability": 25,
+      "enchantability": -1,
+      "category": "stick"
     },
     "chainmail_boots": {
       "durability": 195,
@@ -30,6 +40,51 @@
       "durability": 225,
       "enchantability": 12,
       "category": "leggings"
+    },
+    "copper_axe": {
+      "durability": 190,
+      "enchantability": 13,
+      "category": "axe"
+    },
+    "copper_boots": {
+      "durability": 143,
+      "enchantability": 8,
+      "category": "boots"
+    },
+    "copper_chestplate": {
+      "durability": 176,
+      "enchantability": 8,
+      "category": "chestplate"
+    },
+    "copper_helmet": {
+      "durability": 121,
+      "enchantability": 8,
+      "category": "helmet"
+    },
+    "copper_hoe": {
+      "durability": 190,
+      "enchantability": 13,
+      "category": "hoe"
+    },
+    "copper_leggings": {
+      "durability": 165,
+      "enchantability": 8,
+      "category": "leggings"
+    },
+    "copper_pickaxe": {
+      "durability": 190,
+      "enchantability": 13,
+      "category": "pickaxe"
+    },
+    "copper_shovel": {
+      "durability": 190,
+      "enchantability": 13,
+      "category": "shovel"
+    },
+    "copper_sword": {
+      "durability": 190,
+      "enchantability": 13,
+      "category": "sword"
     },
     "crossbow": {
       "durability": 465,
@@ -89,7 +144,12 @@
     "fishing_rod": {
       "durability": 64,
       "enchantability": 1,
-      "category": "fishing_rod"
+      "category": "rod"
+    },
+    "flint_and_steel": {
+      "durability": 64,
+      "enchantability": -1,
+      "category": "steel"
     },
     "golden_axe": {
       "durability": 32,
@@ -295,6 +355,16 @@
       "durability": 275,
       "enchantability": 9,
       "category": "helmet"
+    },
+    "turtle_shell": {
+      "durability": 275,
+      "enchantability": -1,
+      "category": "shell"
+    },
+    "warped_fungus_on_a_stick": {
+      "durability": 100,
+      "enchantability": -1,
+      "category": "stick"
     },
     "wooden_axe": {
       "durability": 59,

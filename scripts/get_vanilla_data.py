@@ -642,64 +642,77 @@ def load_enchantability_from_source(res_dir: Path) -> dict[str, int]:
 
     # ── 1. Tool materials ──────────────────────────────────────────────
     tm_class = extract_dir / "net" / "minecraft" / "world" / "item" / "ToolMaterial.class"
+    tool_fallback = {"wooden": 15, "stone": 5, "copper": 13, "iron": 14,
+                     "diamond": 10, "golden": 22, "netherite": 15}
     if tm_class.exists():
         raw = _parse_tool_materials_javap(_javap_c(tm_class))
-        for field_name, value in raw.items():
-            pfx = _TOOL_PREFIX.get(field_name)
-            if pfx:
+        if raw:
+            for field_name, value in raw.items():
+                pfx = _TOOL_PREFIX.get(field_name)
+                if pfx:
+                    for suf in _TOOL_SUFFIXES:
+                        ench[f"{pfx}_{suf}"] = value
+            print(f"  Tool enchantability: {len(raw)} materials from {tm_class.name}")
+        else:
+            # javap found nothing — bytecode format may have changed; use fallback
+            for pfx, val in tool_fallback.items():
                 for suf in _TOOL_SUFFIXES:
-                    ench[f"{pfx}_{suf}"] = value
-        print(f"  Tool enchantability: {len(raw)} materials from {tm_class.name}")
+                    ench[f"{pfx}_{suf}"] = val
+            print(f"  Tool enchantability: javap returned 0, using fallback ({len(tool_fallback)} materials)")
     else:
-        # Fallback hardcoded
-        fallback = {"wooden": 15, "stone": 5, "copper": 13, "iron": 14,
-                    "diamond": 10, "golden": 22, "netherite": 15}
-        for pfx, val in fallback.items():
+        for pfx, val in tool_fallback.items():
             for suf in _TOOL_SUFFIXES:
                 ench[f"{pfx}_{suf}"] = val
-        print(f"  Tool enchantability: fallback ({len(fallback)} materials)")
+        print(f"  Tool enchantability: fallback ({len(tool_fallback)} materials)")
 
     # ── 2. Armour materials ────────────────────────────────────────────
     am_class = extract_dir / "net" / "minecraft" / "world" / "item" / "equipment" / "ArmorMaterials.class"
+    armor_fallback = {"leather": 15, "copper": 8, "chainmail": 12, "iron": 9,
+                      "golden": 25, "diamond": 10, "netherite": 15}
+    turtle_val = 9
     if am_class.exists():
         raw = _parse_armor_materials_javap(_javap_c(am_class))
-        # turtle / armadillo are special (not humanoid)
-        turtle_val = 9  # TURTLE_SCUTE.enchantmentValue if present
-        for field_name, value in raw.items():
-            pfx = _ARMOR_PREFIX.get(field_name)
-            if pfx:
+        if raw:
+            for field_name, value in raw.items():
+                pfx = _ARMOR_PREFIX.get(field_name)
+                if pfx:
+                    for slot in _ARMOR_SLOTS:
+                        ench[f"{pfx}_{slot}"] = value
+                elif field_name == "TURTLE_SCUTE":
+                    turtle_val = value
+                    ench["turtle_helmet"] = value
+            print(f"  Armor enchantability: {len(raw)} materials from {am_class.name}")
+        else:
+            for pfx, val in armor_fallback.items():
                 for slot in _ARMOR_SLOTS:
-                    ench[f"{pfx}_{slot}"] = value
-            elif field_name == "TURTLE_SCUTE":
-                turtle_val = value
-                ench["turtle_helmet"] = value
-        # Ensure turtle is always present (armor material may not be humanoid)
-        if "turtle_helmet" not in ench:
+                    ench[f"{pfx}_{slot}"] = val
             ench["turtle_helmet"] = turtle_val
-        print(f"  Armor enchantability: {len(raw)} materials from {am_class.name}")
+            print(f"  Armor enchantability: javap returned 0, using fallback ({len(armor_fallback)} materials)")
     else:
-        fallback = {"leather": 15, "copper": 8, "chainmail": 12, "iron": 9,
-                    "golden": 25, "diamond": 10, "netherite": 15}
-        for pfx, val in fallback.items():
+        for pfx, val in armor_fallback.items():
             for slot in _ARMOR_SLOTS:
                 ench[f"{pfx}_{slot}"] = val
-        ench["turtle_helmet"] = 9
-        print(f"  Armor enchantability: fallback ({len(fallback)} materials)")
+        ench["turtle_helmet"] = turtle_val
+        print(f"  Armor enchantability: fallback ({len(armor_fallback)} materials)")
 
     # ── 3. Special items (Items.class .enchantable calls) ───────────────
     items_class = extract_dir / "net" / "minecraft" / "world" / "item" / "Items.class"
+    special_fallback = {"bow": 1, "crossbow": 1, "trident": 1,
+                        "fishing_rod": 1, "book": 1, "mace": 15}
     if items_class.exists():
         raw = _parse_items_enchantability_javap(_javap_c(items_class))
-        for item_name, value in raw.items():
-            if item_name in _SPECIAL_ENCH_ITEMS:
-                ench[item_name] = value
-        covered = [k for k in raw if k in _SPECIAL_ENCH_ITEMS]
-        print(f"  Special enchantability: {len(covered)} items from {items_class.name}")
+        if raw:
+            for item_name, value in raw.items():
+                if item_name in _SPECIAL_ENCH_ITEMS:
+                    ench[item_name] = value
+            covered = [k for k in raw if k in _SPECIAL_ENCH_ITEMS]
+            print(f"  Special enchantability: {len(covered)} items from {items_class.name}")
+        else:
+            ench.update(special_fallback)
+            print(f"  Special enchantability: javap returned 0, using fallback ({len(special_fallback)} items)")
     else:
-        fallback = {"bow": 1, "crossbow": 1, "trident": 1,
-                    "fishing_rod": 1, "book": 1, "mace": 15}
-        ench.update(fallback)
-        print(f"  Special enchantability: fallback ({len(fallback)} items)")
+        ench.update(special_fallback)
+        print(f"  Special enchantability: fallback ({len(special_fallback)} items)")
 
     print(f"  Total: {len(ench)} enchantability values")
     return ench
@@ -740,10 +753,22 @@ def load_durability_from_source(res_dir: Path) -> dict[str, int]:
     extract = res_dir / "vanilla"
     dur: dict[str, int] = {}
 
-    # ── Items.class ──
+    # ── Items.class (special items like bow, elytra, shield) ──
     ic = extract / "net" / "minecraft" / "world" / "item" / "Items.class"
+    special_item_fallback = {
+        "bow": 384, "crossbow": 465, "trident": 250, "shield": 336,
+        "fishing_rod": 64, "carrot_on_a_stick": 25,
+        "warped_fungus_on_a_stick": 100, "elytra": 432,
+        "shears": 238, "brush": 64, "flint_and_steel": 64, "mace": 250,
+    }
     if ic.exists():
         _parse_items_class(_javap_c(ic), dur)
+        # Apply fallback for any special item javap missed
+        for item, d in special_item_fallback.items():
+            if item not in dur:
+                dur[item] = d
+    else:
+        dur.update(special_item_fallback)
 
     # ── ToolMaterial constants ──
     for pfx in ("wooden", "stone", "copper", "iron", "diamond", "golden", "netherite"):
@@ -921,13 +946,22 @@ def write_output(version: str, ench: list[dict], eq: list[dict],
     print(f"  vanilla.json written ({OUT.stat().st_size / 1024:.1f} KB)")
 
     # ── 2. item_properties.json ──────────────────────────────────────
-    items: dict[str, dict] = {}
+    # Build from equipment list + enchantability map (covers items not
+    # in enchantable/* tags, e.g. bow, crossbow)
+    all_ids: set[str] = set()
+    eq_by_id: dict[str, dict] = {}
     for equip in eq:
-        short = equip["id"]
+        all_ids.add(equip["id"])
+        eq_by_id[equip["id"]] = equip
+    all_ids.update(enchantability_map.keys())
+
+    items: dict[str, dict] = {}
+    for short in sorted(all_ids):
+        equip = eq_by_id.get(short)
         items[short] = {
             "durability": durability_map.get(short, 0),
             "enchantability": enchantability_map.get(short, -1),
-            "category": equip["category"],
+            "category": equip["category"] if equip else short.split("_")[-1],
         }
     prop_out = Path("data/builtin/item_properties.json")
     prop_doc = {

@@ -56,6 +56,12 @@ set(COMPACT_REG_SRCS
 # Equipment registry
 set(EQUIP_REG_SRCS ${PROJECT_ROOT}/src/registries/EquipmentRegistry.cpp)
 
+# Item properties data
+set(ITEM_PROP_SRCS
+    ${PROJECT_ROOT}/src/data/ItemProperties.cpp
+    ${PROJECT_BINARY_DIR}/generated/EmbeddedData_item_props.cpp
+)
+
 # ============================================================================
 # Existing tests
 # ============================================================================
@@ -111,6 +117,7 @@ add_executable(test_ench_info_parser
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
     ${PROJECT_ROOT}/src/registries/EquipmentCategoryRegistry.cpp
+    ${ITEM_PROP_SRCS}
 )
 target_include_directories(test_ench_info_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_ench_info_parser COMMAND test_ench_info_parser)
@@ -192,6 +199,7 @@ add_executable(test_integration
     ${EQUIP_REG_SRCS}
     # Domain types
     ${TYPE_ALL_SRCS}
+    ${ITEM_PROP_SRCS}
     # Algorithm layer (integration tests)
     ${ALGO_ENGINE_SRCS}
     ${ALGO_FORGE_SRCS}
@@ -677,7 +685,8 @@ add_executable(test_checkpoint_roundtrip
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
-    "${BESQ_GENERATED_DIR}/EmbeddedData.cpp"
+    ${ITEM_PROP_SRCS}
+    "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
 )
 target_include_directories(test_checkpoint_roundtrip PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_checkpoint_roundtrip COMMAND test_checkpoint_roundtrip)
