@@ -35,10 +35,11 @@ std::string get_cli_help_text(const std::string &program_name) {
         "  --format <format>       Output format: text (default), compact, or json\n"
         "  --input <file>          Input file path (inventory mode)\n"
         "  --output <file>         Output file path (default: stdout)\n"
-        "  --data-pack <dir>       Custom data pack directory\n"
-        "  --registry-dir <dir>    Custom registry data directory (additional data source)\n"
-        "  --registries <list>     Active registries (default: minecraft:latest;\n"
-        "                           multi-registry is not yet implemented)\n"
+        "  --registry-dir <dir>   Scan directory for registry data files/subdirs\n"
+        "                           (auto-detects JSON, CSV, MC Official format)\n"
+        "  --registries <list>     Registry names or paths to activate\n"
+        "                           (default: all discovered registries;\n"
+        "                           e.g., --registries Vanilla,./custom.json)\n"
         "  --config <pairs>        Config key=value pairs (comma-separated).\n"
         "                           Keys: ignore-cost-cap, ignore-penalty-cost,\n"
         "                                 ignore-repair-cost (all: true|false)\n"
@@ -48,12 +49,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "Enchantment formats:\n"
         "  id=level                e.g., sharpness=5\n"
         "  ns:id=level             e.g., minecraft:sharpness=5\n"
-        "  id:level                e.g., sharpness:5 (colon shorthand)\n"
-        "\n"
-        "Registry data (loaded in order, later overrides earlier):\n"
-        "  1. Builtin (embedded vanilla.json)\n"
-        "  2. --data-pack <dir>    Custom data pack (auto-detected format)\n"
-        "  3. --registry-dir <dir> Additional registry data directory\n";
+        "  id:level                e.g., sharpness:5 (colon shorthand)\n";
 }
 
 // ============================================================================
@@ -131,8 +127,6 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.input = value;
         } else if (key == "output") {
             config.output = value;
-        } else if (key == "data-pack") {
-            config.data_pack = value;
         } else if (key == "platform") {
             if (value != "java" && value != "bedrock" && value != "auto") {
                 throw std::runtime_error("Invalid platform: '" + value + "'. Expected 'java', 'bedrock', or 'auto'.\n");

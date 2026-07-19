@@ -14,9 +14,8 @@ struct CLIConfig {
     std::string source;
     std::string config_pairs;                      // raw --config value
     std::optional<std::string> input;
-    std::optional<std::string> data_pack;
     std::optional<std::string> registry_dir;
-    std::string registries = "minecraft:latest";
+    std::optional<std::string> registries;
     std::string platform = "auto";
     std::optional<std::string> output;
     std::string format = "text";
