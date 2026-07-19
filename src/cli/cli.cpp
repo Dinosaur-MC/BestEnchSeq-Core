@@ -1,5 +1,7 @@
 #include "cli.h"
 #include "parsers/CLIParser.h"
+#include "BuildConfig.h"
+#include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -9,33 +11,38 @@
 // ============================================================================
 std::string get_cli_help_text(const std::string &program_name) {
     return
-        "Usage: " + program_name + " [options] --target <item> [--source <enchants>]\n"
+        "Usage: " + program_name + " [options] --target <item>\n"
         "   or: " + program_name + " (no args: show this help)\n"
         "\n"
         "Options:\n"
         "  -h, --help              Show this help message\n"
+        "  -V, --version           Show version info\n"
         "  --algorithm <name>      Search algorithm: greedy (default), dfs, astar,\n"
-        "                           penalty_balance, hierarchical, idastar,\n"
-        "                           hamming, or difficulty_first\n"
-        "  --target <spec>         Target item (e.g., diamond_sword or diamond_sword[sharpness=3])\n"
-        "  --source <list>         Source enchantments already on the target (e.g., efficiency=4,unbreaking=3)\n"
+        "                           penalty_balance, hierarchical, or idastar\n"
+        "  --source <list>         Source enchantments (e.g., sharpness=5,knockback=2)\n"
+        "  --target <spec>         Target item with wanted enchantments\n"
+        "                           (e.g., diamond_sword[sharpness=3])\n"
         "  --mode <mode>           Operation mode: direct (default) or inventory\n"
         "  --platform <platform>   Platform: java, bedrock, or auto (default)\n"
+        "  --solutions <n>         Maximum solutions (0 = unlimited, default: 1, max: 128)\n"
         "  --format <format>       Output format: text (default), compact, or json\n"
-        "  --solutions <n>         Maximum solutions (0 = unlimited, default: 1)\n"
         "  --input <file>          Input file path (inventory mode)\n"
         "  --output <file>         Output file path (default: stdout)\n"
         "  --data-pack <dir>       Custom data pack directory\n"
-        "  --registry-dir <dir>    Custom registry directory\n"
-        "  --registries <name>     Registry name/version (default: minecraft:latest)\n"
-        "  --ignore-cost-cap       Bypass the survival-mode 39-level cap (for modded play)\n"
+        "  --registry-dir <dir>    Custom registry directory path\n"
+        "  --registries <list>     Active registries (default: minecraft:latest)\n"
+        "  --config <pairs>        Custom config pairs (e.g., ignore-cost-cap=true)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
         "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
         "\n"
         "Enchantment formats:\n"
         "  id=level                e.g., sharpness=5\n"
         "  ns:id=level             e.g., minecraft:sharpness=5\n"
-        "  id:level                e.g., sharpness:5 (colon shorthand)\n";
+        "  id:level                e.g., sharpness:5 (colon shorthand)\n"
+        "\n"
+        "Registry formats:\n"
+        "  id:version              e.g., minecraft:latest\n"
+        "  author/name:tag         e.g., rlcraft/rlcraft:1.12.2-R2.9.3\n";
 }
 
 // ============================================================================
@@ -60,6 +67,11 @@ CLIConfig parse_cli(int argc, char *argv[]) {
         if (key == "help") {
             config.help = true;
             std::cout << get_cli_help_text(prog) << std::endl;
+            continue;
+        }
+        if (key == "version" || key == "V") {
+            config.version = true;
+            std::cout << prog << " version " << BESQ_VERSION << std::endl;
             continue;
         }
         if (key == "verbose") {
@@ -89,6 +101,18 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.registry_dir = value;
         } else if (key == "registries") {
             config.registries = value;
+        } else if (key == "config") {
+            config.config_pairs = value;
+            // Apply known config pairs immediately
+            auto pairs = ParserUtils::split_string(value, ',');
+            for (const auto& pair : pairs) {
+                auto eq = pair.find('=');
+                if (eq == std::string::npos || eq == 0) continue;
+                auto k = pair.substr(0, eq);
+                auto v = pair.substr(eq + 1);
+                if (k == "ignore-cost-cap" && v == "true")
+                    config.ignore_cost_cap = true;
+            }
         } else if (key == "input") {
             config.input = value;
         } else if (key == "output") {
@@ -139,7 +163,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
     }
 
     // Validate required arguments
-    if (!config.help) {
+    if (!config.help && !config.version) {
         if (config.target.empty())
             throw std::runtime_error("Missing required argument: --target\n");
     }

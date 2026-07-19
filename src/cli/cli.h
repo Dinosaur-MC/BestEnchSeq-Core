@@ -10,6 +10,7 @@ struct CLIConfig {
     std::string mode = "direct";
     std::string target;
     std::string source;
+    std::string config_pairs;                      // raw --config value
     std::optional<std::string> input;
     std::optional<std::string> data_pack;
     std::optional<std::string> registry_dir;
@@ -22,6 +23,7 @@ struct CLIConfig {
     bool verbose = false;
     bool ignore_cost_cap = false;
     bool help = false;
+    bool version = false;                          // --version / -V
 };
 
 struct EnchantmentSpec {

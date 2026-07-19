@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
           :                          LogLevel::Debug);
         Logger::instance().set_retention(app_cfg.log_retention);
 
-        if (config.help) {
+        if (config.help || config.version) {
             return 0;
         }
 
