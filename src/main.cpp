@@ -21,6 +21,8 @@
 #include "io/json.h"
 #include "utils/ParserUtils.hpp"
 #include "types/AlgorithmTypes.h"
+#include "cli/RegistryEditor.h"
+#include "adapters/EnchSerializer.h"
 
 
 #include <filesystem>
@@ -81,6 +83,10 @@ int main(int argc, char *argv[]) {
                 mgr.scan_registry_dir(*config.registry_dir);
             mgr.load_and_resolve(config.registries, cat_reg, eq_reg, ench_reg);
         }
+
+        // ── Apply runtime registry edits ──────────────────────────────────
+        if (config.registry_edit)
+            apply_registry_edits(*config.registry_edit, ench_reg, eq_reg, cat_reg);
 
         // ── Resolve CLI specs → domain items ─────────────────────────────
         auto target_spec = ItemParser::parse(config.target);
@@ -224,6 +230,19 @@ int main(int argc, char *argv[]) {
         }
 
         DiagnosticsService::instance().flush();
+
+        // ── Export registry if requested ──────────────────────────────────
+        if (config.export_registry) {
+            auto ext = std::filesystem::path(*config.export_registry).extension().string();
+            bool ok = false;
+            if (ext == ".csv" || ext == ".CSV")
+                ok = EnchSerializer::export_csv(*config.export_registry, ench_reg, eq_reg, cat_reg);
+            else
+                ok = EnchSerializer::export_json(*config.export_registry, ench_reg, eq_reg, cat_reg);
+            if (!ok)
+                throw std::runtime_error("Failed to export registry to: " + *config.export_registry);
+        }
+
         return 0;
     } catch (const std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
