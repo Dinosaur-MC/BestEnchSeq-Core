@@ -642,6 +642,30 @@ set_tests_properties(test_equipment_registry PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registries/test_registry_manager.cpp)
+    message(FATAL_ERROR "Required test source not found: registries/test_registry_manager.cpp")
+endif()
+
+add_executable(test_registry_manager
+    registries/test_registry_manager.cpp
+    ${PROJECT_ROOT}/src/registries/RegistryManager.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${DOMAIN_TYPE_SRCS}
+    ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
+    ${PARSER_UTIL_SRCS}
+    ${PROJECT_ROOT}/src/io/CsvIO.cpp
+    ${ITEM_PROP_SRCS}
+    "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
+)
+target_include_directories(test_registry_manager PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_registry_manager COMMAND test_registry_manager)
+set_tests_properties(test_registry_manager PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 # ============================================================================
 # Algorithm serialization tests
 # ============================================================================
