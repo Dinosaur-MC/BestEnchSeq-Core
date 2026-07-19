@@ -14,6 +14,9 @@ public:
     std::string_view version() const noexcept override { return "1.0.0"; }
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
     bool simulate(const AlgorithmInput& input) const noexcept override;
+    AlgorithmMode supported_mode() const noexcept override {
+        return AlgorithmMode::direct | AlgorithmMode::inventory;
+    }
 
 private:
     struct BookCost {

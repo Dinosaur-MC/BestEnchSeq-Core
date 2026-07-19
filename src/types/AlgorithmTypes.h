@@ -9,10 +9,27 @@
 #include <string_view>
 #include <vector>
 
+/// Operation mode: direct (given source enchants + target) or inventory
+/// (using items parsed from an inventory file).  Bitmask — an algorithm
+/// may support one or both modes.
+enum class AlgorithmMode : uint8_t {
+    direct    = 1 << 0,
+    inventory = 1 << 1,
+};
+
+constexpr AlgorithmMode operator|(AlgorithmMode a, AlgorithmMode b) noexcept {
+    return static_cast<AlgorithmMode>(
+        static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+constexpr bool operator&(AlgorithmMode a, AlgorithmMode b) noexcept {
+    return static_cast<uint8_t>(a) & static_cast<uint8_t>(b);
+}
+
 // ─── Algorithm input ───
 struct AlgorithmInput {
     ForgeConfig config;              // forge configuration (platform, flags)
     SearchConfig search;             // search configuration (solutions, depth, time)
+    AlgorithmMode mode = AlgorithmMode::direct;  // operation mode
     compact::ItemCollection items;   // items[0] = equipment, rest = books
     compact::EnchCollection target;  // desired final enchantments
     compact::EnchReg ench_reg;       // compact registry (must be initialized)

@@ -23,6 +23,9 @@ public:
     std::string_view name() const noexcept override { return "idastar"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
+    AlgorithmMode supported_mode() const noexcept override {
+        return AlgorithmMode::direct;
+    }
 
 private:
     /// Lightweight step stored on the DFS path (IDs, not full Items).

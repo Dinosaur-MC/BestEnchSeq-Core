@@ -16,6 +16,14 @@ class IAlgorithm {
 
     virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
 
+    /// Returns the set of operation modes this algorithm supports.
+    /// Default: direct mode only.
+    /// Override e.g.:
+    ///   `return AlgorithmMode::direct | AlgorithmMode::inventory;`
+    virtual AlgorithmMode supported_mode() const noexcept {
+        return AlgorithmMode::direct;
+    }
+
     /// Quick feasibility check: returns true if the target is reachable
     /// from the given items without computing exact costs.
     /// Default returns true (pessimistic).  Strategies that implement this

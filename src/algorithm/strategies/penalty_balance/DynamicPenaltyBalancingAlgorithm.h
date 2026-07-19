@@ -11,6 +11,9 @@ public:
     std::string_view name() const noexcept override { return "penalty_balance"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
+    AlgorithmMode supported_mode() const noexcept override {
+        return AlgorithmMode::direct;
+    }
 
 private:
     ForgeEngine _forge_engine;
