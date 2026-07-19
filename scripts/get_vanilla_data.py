@@ -12,6 +12,7 @@ Outputs:
 import json
 import re
 import shutil
+import subprocess
 import time
 from collections import Counter
 from pathlib import Path, PurePosixPath
@@ -391,13 +392,27 @@ def load_equipments(base: Path, lang: dict[str, str],
 
 
 def _javap_c(rel_class: Path) -> str:
-    """Run javap -c -p on a class file, return stdout."""
-    import subprocess
-    r = subprocess.run(
-        ["javap", "-c", "-p", str(rel_class)],
-        capture_output=True, timeout=30, encoding="utf-8", errors="replace"
-    )
-    return r.stdout
+    """Run javap -c -p on a class file, return stdout.
+
+    Returns empty string on failure (incompatible JDK, missing class, etc.).
+    Callers should check for empty output and fall back accordingly.
+    """
+    try:
+        r = subprocess.run(
+            ["javap", "-c", "-p", str(rel_class)],
+            capture_output=True, timeout=30, encoding="utf-8", errors="replace"
+        )
+        if r.returncode != 0:
+            # javap failed — likely JDK version mismatch
+            return ""
+        return r.stdout
+    except FileNotFoundError:
+        # javap not installed
+        return ""
+    except subprocess.CalledProcessError:
+        return ""
+    except OSError:
+        return ""
 
 
 # ── javap line helpers ──────────────────────────────────────────────────
@@ -668,7 +683,8 @@ def load_enchantability_from_source(res_dir: Path) -> dict[str, int]:
     # ── 2. Armour materials ────────────────────────────────────────────
     am_class = extract_dir / "net" / "minecraft" / "world" / "item" / "equipment" / "ArmorMaterials.class"
     armor_fallback = {"leather": 15, "copper": 8, "chainmail": 12, "iron": 9,
-                      "golden": 25, "diamond": 10, "netherite": 15}
+                      "golden": 25, "diamond": 10, "netherite": 15,
+                      "armadillo": 10}  # wolf_armor
     turtle_val = 9
     if am_class.exists():
         raw = _parse_armor_materials_javap(_javap_c(am_class))
@@ -974,6 +990,46 @@ def write_output(version: str, ench: list[dict], eq: list[dict],
 
 # ── main ─────────────────────────────────────────────────────────────────
 
+def check_javap() -> None:
+    """Verify javap is available and can read the extracted class files."""
+    import shutil
+    javap_path = shutil.which("javap")
+    if not javap_path:
+        print("  [INFO] javap not found - will use builtin fallback data")
+        return
+
+    # Check javap version vs class file version
+    try:
+        r = subprocess.run([javap_path, "-version"],
+                           capture_output=True, timeout=10,
+                           encoding="utf-8", errors="replace")
+        javap_ver = r.stdout.strip() or r.stderr.strip()
+    except Exception:
+        javap_ver = "unknown"
+
+    # Try to parse a test class to detect version mismatch
+    test_class = EXTRACT / "net" / "minecraft" / "world" / "item" / "ToolMaterial.class"
+    if test_class.exists():
+        try:
+            r = subprocess.run([javap_path, "-c", "-p", str(test_class)],
+                               capture_output=True, timeout=30)
+            if r.returncode != 0 or not r.stdout:
+                # Get stderr safely (may contain non-encodable chars on Windows)
+                err_text = ""
+                try:
+                    err_text = r.stderr.decode("utf-8", errors="replace").strip()
+                except Exception:
+                    err_text = "(cannot decode stderr)"
+                print(f"  [WARN] javap incompatible - {err_text or 'unknown error'}")
+                print(f"  [WARN] Will use builtin fallback data instead.")
+                print(f"  [WARN] javap version: {javap_ver[:60]}")
+                return
+        except Exception:
+            print(f"  [WARN] javap test failed - will use builtin fallback data")
+            return
+    print(f"  javap OK ({javap_ver[:60].strip()})")
+
+
 def main() -> None:
     RES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1014,6 +1070,8 @@ def main() -> None:
     print("Extracting…")
     extract()
     base = EXTRACT
+
+    check_javap()
 
     print("Loading localization…")
     lang = load_lang(base)
