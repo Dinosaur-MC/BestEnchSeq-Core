@@ -1,20 +1,18 @@
 #pragma once
 #include "types/CompactedTypes.h"
 #include "registries/CompactedRegistries.h"
-#include "types/ItemStack.h"
 #include "types/EnchSolution.h"
 #include "registries/EnchantmentRegistry.h"
 #include "types/AlgorithmTypes.h"
+#include "resolvers/ItemResolver.h"
 #include <vector>
 
 class CompactAdapter {
 public:
+    /// Convert domain-level resolved input to compact AlgorithmInput.
+    /// Config is NOT handled here -- flows directly from CLI.
     AlgorithmInput apply(
-        const ItemStack& target_item,
-        const EnchSet& original_ench,
-        const EnchSet& target_ench,
-        const ItemCollection& available_items,
-        const ForgeConfig& config,
+        const ResolvedInput& resolved,
         const EnchantmentRegistry& global_registry
     );
 

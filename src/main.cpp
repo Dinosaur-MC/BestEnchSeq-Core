@@ -155,10 +155,10 @@ int main(int argc, char *argv[]) {
 
         // ── Boundary: domain → compact ─────────────────────────────────────
         CompactAdapter adapter;
-        ForgeConfig forge_config;
-        forge_config.platform = parsed.platform;
-        AlgorithmInput algo_input = adapter.apply(parsed.target_item, parsed.source_ench, parsed.target_ench,
-                                                  parsed.available_items, forge_config, ench_reg);
+        ResolvedInput resolved{parsed.target_item, parsed.source_ench,
+                               parsed.target_ench, parsed.available_items};
+        AlgorithmInput algo_input = adapter.apply(resolved, ench_reg);
+        algo_input.config.platform = parsed.platform;
 
         // ── Search config from CLI ────────────────────────────────────────
         algo_input.search.max_solutions = config.solutions;

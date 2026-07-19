@@ -5,85 +5,41 @@
 #include <string>
 #include <vector>
 
-namespace {
-
-void validate_input(
-    const ItemStack& target_item,
-    const EnchSet& original_ench,
-    const EnchSet& target_ench,
-    const ItemCollection& available_items,
+AlgorithmInput CompactAdapter::apply(
+    const ResolvedInput& resolved,
     const EnchantmentRegistry& global_registry)
 {
-    std::vector<std::string> errors;
+    const auto& target_item = resolved.target_item;
+    const auto& original_ench = resolved.source_ench;
+    const auto& target_ench = resolved.target_ench;
+    const auto& available_items = resolved.books;
 
-    // Check 1: target_item.equipment must be present
+    // ── Strict validation (compact-level) ──────────────────────────
     if (!target_item.equipment)
-        errors.push_back("target_item.equipment is null");
-
-    // Check 4: target_item.prior_penalty >= 0 && target_item.prior_penalty <= 31
+        throw std::invalid_argument("target_item.equipment is null");
     if (target_item.prior_penalty < 0 || target_item.prior_penalty > 31)
-        errors.push_back("target_item.prior_penalty out of range [0, 31]: " + std::to_string(target_item.prior_penalty));
-
-    // Check 5: target_item.durability >= 1 && target_item.durability <= target_item.equipment->max_durability
+        throw std::invalid_argument("target_item.prior_penalty out of range");
     if (target_item.equipment) {
-        if (target_item.durability < 1 || target_item.durability > target_item.equipment->max_durability)
-            errors.push_back("target_item.durability out of range [1, " + std::to_string(target_item.equipment->max_durability) + "]: " + std::to_string(target_item.durability));
+        if (target_item.durability < 1 ||
+            target_item.durability > target_item.equipment->max_durability)
+            throw std::invalid_argument("target_item.durability out of range");
     }
 
-    auto check_ench_set = [&](const ::EnchSet& ench_set, const std::string& context) {
+    // Validate compact-level ID ranges for all items
+    auto check_compact_ids = [&](const ::EnchSet& ench_set, const std::string& context) {
         for (const auto& ench : ench_set) {
-            // Check 2: valid ID range
             if (ench.id < 0 || ench.id >= static_cast<int32_t>(global_registry.size()))
-                errors.push_back(context + ": enchantment id " + std::to_string(ench.id) + " out of range [0, " + std::to_string(global_registry.size()) + ")");
-
-            // Check 3: valid level
-            if (ench.id >= 0 && ench.id < static_cast<int32_t>(global_registry.size())) {
-                if (ench.level < 1 || ench.level > global_registry.get(ench.id).max_level)
-                    errors.push_back(context + ": enchantment level " + std::to_string(ench.level) + " out of range [1, " + std::to_string(global_registry.get(ench.id).max_level) + "] for id " + std::to_string(ench.id));
-
-                // Check 6: equipment applicability
-                if (target_item.equipment) {
-                    bool applicable = false;
-                    for (auto cat_id : global_registry.get(ench.id).applicable_category_ids) {
-                        if (cat_id == target_item.equipment->category_id) {
-                            applicable = true;
-                            break;
-                        }
-                    }
-                    if (!applicable)
-                        errors.push_back(context + ": enchantment " + std::to_string(ench.id) + " is not applicable to equipment category " + std::to_string(target_item.equipment->category_id));
-                }
-            }
+                throw std::invalid_argument(context + ": id " + std::to_string(ench.id) + " out of range");
+            if (ench.level < 1 || ench.level > global_registry.get(ench.id).max_level)
+                throw std::invalid_argument(context + ": level " + std::to_string(ench.level) + " out of range");
         }
     };
-
-    check_ench_set(original_ench, "original_ench");
-    check_ench_set(target_ench, "target_ench");
+    check_compact_ids(original_ench, "source_ench");
+    check_compact_ids(target_ench, "target_ench");
     for (size_t i = 0; i < available_items.size(); ++i)
-        check_ench_set(available_items[i].enchantments, "available_items[" + std::to_string(i) + "]");
+        check_compact_ids(available_items[i].enchantments, "books[" + std::to_string(i) + "]");
 
-    if (!errors.empty()) {
-        std::string msg;
-        for (const auto& err : errors)
-            msg += err + "; ";
-        if (msg.size() >= 2) msg.resize(msg.size() - 2);
-        throw std::invalid_argument(std::move(msg));
-    }
-}
-
-} // anonymous namespace
-
-AlgorithmInput CompactAdapter::apply(
-    const ItemStack& target_item,
-    const EnchSet& original_ench,
-    const EnchSet& target_ench,
-    const ItemCollection& available_items,
-    const ForgeConfig& config,
-    const EnchantmentRegistry& global_registry)
-{
-    validate_input(target_item, original_ench, target_ench, available_items, global_registry);
-
-    // EnchReg pruning: only keep enchantments applicable to target equipment
+    // ── EnchReg pruning ────────────────────────────────────────────
     std::vector<int32_t> applicable_ids;
     for (const auto& info : global_registry.get_instances()) {
         for (auto cat_id : info.applicable_category_ids) {
@@ -98,9 +54,9 @@ AlgorithmInput CompactAdapter::apply(
     compact::EnchReg ench_reg;
     ench_reg.init(subset, *target_item.equipment);
 
+    // ── Domain to compact conversion ────────────────────────────────
     AlgorithmInput input;
-    input.config = config;
-    input.ench_reg = std::move(ench_reg);
+    input.ench_reg = std::move(ench_reg);  // must be set before from_domain calls
 
     ItemStack start_equip(*target_item.equipment, original_ench, 0);
     input.items.reserve(1 + available_items.size());
@@ -111,7 +67,6 @@ AlgorithmInput CompactAdapter::apply(
     input.target.reserve(target_ench.size());
     for (const auto& e : target_ench) {
         int16_t local_id = static_cast<int16_t>(input.ench_reg.to_local_id(e.id));
-        assert(local_id >= 0);
         if (local_id < 0) continue;
         input.target.push_back({local_id, static_cast<int16_t>(e.level)});
     }
