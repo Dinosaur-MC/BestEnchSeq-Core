@@ -1,6 +1,6 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：1.0 · 最后更新：2026-07-10
+> 版本：1.1 · 最后更新：2026-07-20
 
 ---
 
@@ -125,6 +125,34 @@ struct ForgeConfig {
                                             └───────────────────────┘
 ```
 
+### 数据加载管线
+
+数据加载由 `RegistryManager` 统一管理，替换了原先的 `load_all_data()`：
+
+```
+内建数据 (embedded vanilla.json, name="Vanilla")
+     │
+     ├── --registry-dir <dir> 扫描目录下的合法 registry 文件
+     │       (auto-detects JSON / CSV / MC Official format)
+     │
+     ├── --registries 筛选
+     │     ├── 未设置 → 加载全部，失败 WARN+SKIP
+     │     └── 已设置 → 只加载匹配 registry，全部必须成功
+     │
+     ▼
+RawEnchantment[] + RawEquipment[] 合并流
+     │
+     ▼
+RawTypeAdapter::resolve()
+     │
+     ├── EquipmentCategoryRegistry
+     ├── EquipmentRegistry
+     └── EnchantmentRegistry
+```
+
+`--data-pack` 已删除，功能合并到 `--registry-dir`（`EnchInfoParser::parse()` 自动识别格式）。
+`--registries` 支持名称匹配和文件/目录路径两种指定方式。
+
 ### 注册表体系
 
 ```
@@ -204,6 +232,13 @@ compact::EnchReg (flat conflict matrix)
 **compact::EnchReg**：预计算针对特定装备的紧凑注册表：
 - N×N 扁平冲突矩阵（`vector<char>`）
 - 预计算 `EnchInfo[]`（multiplier、max_level、applicable、exc_mask）
+
+### `src/registries/RegistryManager.h/.cpp`
+**RegistryManager**：注册表数据源管理，处理多 registry 的发现、筛选、加载和解析。
+- `add_builtin()` — 注册内建 Vanilla 数据
+- `scan_registry_dir()` — 扫描目录发现所有合法 registry
+- `load_and_resolve()` — 根据筛选条件加载并解析到 domain registries
+- 无筛选时加载全部（WARN+SKIP），有筛选时严格模式（全部必须成功）
 
 ---
 
