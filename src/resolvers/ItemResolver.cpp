@@ -92,8 +92,14 @@ ResolvedInput ItemResolver::resolve(
         throw std::invalid_argument("ItemResolver: " + msg);
     }
 
-    // Step 2: Validate conflicts
-    auto conf_errors = check_conflicts(target_ench, ench_reg);
+    // Step 2: Validate conflicts (target_ench and source_ench combined)
+    EnchSet combined = target_ench;
+    for (const auto& e : source_ench) {
+        auto it = target_ench.find_by_id(e.id);
+        if (it == target_ench.end())  // only add if not already in target
+            combined.emplace(e.id, e.level);
+    }
+    auto conf_errors = check_conflicts(combined, ench_reg);
     if (!conf_errors.empty()) {
         std::string msg;
         for (const auto& err : conf_errors)

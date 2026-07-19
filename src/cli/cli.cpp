@@ -183,10 +183,8 @@ ItemStack build_target(
     const EnchantmentRegistry& ench_reg,
     const EquipmentRegistry& eq_reg)
 {
-    // Look up equipment (try bare name first, then "minecraft:" prefix)
+    // Look up equipment (registry has built-in "minecraft:" fallback)
     int32_t eq_id = eq_reg.get_id(spec.item_id);
-    if (eq_id < 0 && spec.item_id.find(':') == std::string::npos)
-        eq_id = eq_reg.get_id("minecraft:" + spec.item_id);
     if (eq_id < 0)
         throw std::runtime_error("Unknown equipment: '" + spec.item_id + "'");
     const Equipment& equip = eq_reg.get(eq_id);
@@ -199,8 +197,9 @@ ItemStack build_target(
         if (id < 0) {
             id = ench_reg.get_id(s.id);  // bare fallback
         }
-        if (id >= 0)
-            ench_set.emplace(id, s.level);
+        if (id < 0)
+            throw std::runtime_error("Unknown enchantment: '" + key + "'");
+        ench_set.emplace(id, s.level);
     }
 
     return ItemStack(equip, ench_set, 0);
@@ -217,8 +216,9 @@ EnchSet build_enchset(
         if (id < 0) {
             id = ench_reg.get_id(s.id);  // bare fallback
         }
-        if (id >= 0)
-            result.emplace(id, s.level);
+        if (id < 0)
+            throw std::runtime_error("Unknown enchantment: '" + key + "'");
+        result.emplace(id, s.level);
     }
     return result;
 }

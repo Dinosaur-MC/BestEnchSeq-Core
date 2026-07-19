@@ -463,6 +463,10 @@ endif()
 add_executable(test_item_resolver
     resolvers/test_item_resolver.cpp
     ${PROJECT_ROOT}/src/resolvers/ItemResolver.cpp
+    ${PROJECT_ROOT}/src/cli/cli.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
+    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
+    ${PARSER_UTIL_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${EQUIP_REG_SRCS}
     ${DOMAIN_TYPE_SRCS}

@@ -4,6 +4,9 @@
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
 
+#include "cli/cli.h"
+#include "parsers/EnchParser.h"
+
 #include <iostream>
 #include <stdexcept>
 
@@ -121,6 +124,19 @@ void test_resolve_source_already_has_target() {
     std::cout << "  PASS: test_resolve_source_already_has_target" << std::endl;
 }
 
+void test_build_enchset_unknown_throws() {
+    TestRegistries regs;
+    auto specs = EnchParser::parse("sharpness=5,unknown_ench=1");
+    bool threw = false;
+    try {
+        build_enchset(specs, regs.ench_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "build_enchset should throw on unknown enchantment");
+    std::cout << "  PASS: test_build_enchset_unknown_throws" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -131,6 +147,7 @@ int main() {
         test_resolve_conflict_throws();
         test_resolve_diff_and_books();
         test_resolve_source_already_has_target();
+        test_build_enchset_unknown_throws();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

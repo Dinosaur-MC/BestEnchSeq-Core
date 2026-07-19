@@ -308,6 +308,7 @@ int main(int argc, char *argv[]) {
         }
 
         algo_input.config.platform = forge_config.platform;
+        algo_input.mode = algo_mode;
 
         // ── Search config from CLI ────────────────────────────────────────
         algo_input.search.max_solutions = config.solutions;

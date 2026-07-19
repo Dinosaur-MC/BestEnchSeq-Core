@@ -18,11 +18,14 @@ AlgorithmInput CompactAdapter::apply(
     if (!target_item.equipment)
         throw std::invalid_argument("target_item.equipment is null");
     if (target_item.prior_penalty < 0 || target_item.prior_penalty > 31)
-        throw std::invalid_argument("target_item.prior_penalty out of range");
+        throw std::invalid_argument("target_item.prior_penalty out of range [0, 31]: " +
+            std::to_string(target_item.prior_penalty));
     if (target_item.equipment) {
         if (target_item.durability < 1 ||
             target_item.durability > target_item.equipment->max_durability)
-            throw std::invalid_argument("target_item.durability out of range");
+            throw std::invalid_argument("target_item.durability out of range [1, " +
+                std::to_string(target_item.equipment->max_durability) + "]: " +
+                std::to_string(target_item.durability));
     }
 
     // Validate compact-level ID ranges for all items
