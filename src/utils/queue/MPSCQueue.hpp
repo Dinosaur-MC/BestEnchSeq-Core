@@ -115,7 +115,11 @@ public:
 
     ~MPSCQueue() noexcept final {
         clear();
-        // dummy_ is embedded — its storage is never constructed, so no ~T()
+        // Reclaim all free-list nodes allocated via new during the queue's
+        // lifetime.  After clear() every queue node is in the free list or
+        // already freed.
+        while (Node* node = free_list_.pop())
+            delete node;
     }
 
     MPSCQueue(const MPSCQueue&)            = delete;
@@ -186,6 +190,8 @@ public:
 
     /// Remove all elements.  Does not require T to be default-constructible.
     void clear() noexcept override final {
+        // Traverse the chain starting from tail_->next, destructing every
+        // element and recycling every node back to the free list.
         for (;;) {
             Node* next = tail_->next.load(std::memory_order_acquire);
             if (next == nullptr)
@@ -201,6 +207,18 @@ public:
 
             size_.fetch_sub(1, std::memory_order_relaxed);
         }
+
+        // The loop exits when tail_->next == nullptr.  The node that tail_
+        // points to is the last real node (or dummy_ if the queue was
+        // already empty).  If it is a real node its data was already
+        // destructed when it was the `next` of its predecessor, but its
+        // memory must still be recycled.
+        if (tail_ != &dummy_) {
+            free_list_.push(tail_);
+            tail_ = &dummy_;
+        }
+
+        size_.store(0, std::memory_order_relaxed);
     }
 
 private:

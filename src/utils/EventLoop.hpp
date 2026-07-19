@@ -23,6 +23,7 @@
 #endif
 
 #include "queue/BoundedMPMCQueue.hpp"
+#include "queue/BoundedMPSCQueue.hpp"
 #include "queue/MPSCQueue.hpp"
 #include "queue/SegmentedMPMCQueue.hpp"
 #include "queue/SPSCQueue.hpp"
@@ -278,3 +279,7 @@ using SPSCEventLoop = EventLoop<Task, SPSCQueue<Task, N>>;
 /// Multi-producer, single-consumer event loop (unbounded, zero-allocation hot path).
 template <typename Task = std::function<void()>>
 using MPSCEventLoop = EventLoop<Task, MPSCQueue<Task>>;
+
+/// Bounded multi-producer, single-consumer event loop (ring-buffer, fast).
+template <typename Task = std::function<void()>, size_t N = 256>
+using BoundedMPSCEventLoop = EventLoop<Task, BoundedMPSCQueue<Task, N>>;

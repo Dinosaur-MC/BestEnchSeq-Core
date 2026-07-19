@@ -2,6 +2,7 @@
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include "utils/queue/SegmentedMPMCQueue.hpp"
 #include "utils/queue/MPSCQueue.hpp"
+#include "utils/queue/BoundedMPSCQueue.hpp"
 #include "utils/queue/IQueue.h"
 
 #include <algorithm>
@@ -305,6 +306,7 @@ int main() {
         { SPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "SPSCQueue"); }
         { BoundedMPMCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "BoundedMPMCQueue"); }
         { SegmentedMPMCQueue<int, 1024> q; bench_seq(q, OPS_SEG, WARM_SEQ, "SegmentedMPMCQueue"); }
+        { BoundedMPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "BoundedMPSCQueue"); }
         { MPSCQueue<int> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "MPSCQueue (unbounded)"); }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
@@ -316,6 +318,7 @@ int main() {
         { SPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SPSCQueue"); }
         { BoundedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "BoundedMPMCQueue"); }
         { SegmentedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SegmentedMPMCQueue"); }
+        { BoundedMPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "BoundedMPSCQueue"); }
         { MPSCQueue<int> q; bench_latency(q, N_LATENCY, "MPSCQueue (unbounded)"); }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
@@ -324,13 +327,15 @@ int main() {
     {
         Timer sec;
         std::cout << "── Multi-producer throughput ─────────────────────\n";
-        bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 2,  "BoundedMPMCQueue");
+        bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 2,   "BoundedMPMCQueue");
         bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, OPS_MP / 10, 2, "SegmentedMPMCQueue");
-        bench_concurrent_mp<MPSCQueue<int>>(OPS_MP, OPS_MP / 10, 2,              "MPSCQueue");
+        bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 2,   "BoundedMPSCQueue");
+        bench_concurrent_mp<MPSCQueue<int>>(OPS_MP, OPS_MP / 10, 2,               "MPSCQueue (unbounded)");
         std::cout << "  ──\n";
-        bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 4,  "BoundedMPMCQueue");
+        bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 4,   "BoundedMPMCQueue");
         bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, OPS_MP / 10, 4, "SegmentedMPMCQueue");
-        bench_concurrent_mp<MPSCQueue<int>>(OPS_MP, OPS_MP / 10, 4,              "MPSCQueue");
+        bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 4,   "BoundedMPSCQueue");
+        bench_concurrent_mp<MPSCQueue<int>>(OPS_MP, OPS_MP / 10, 4,               "MPSCQueue (unbounded)");
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 
