@@ -262,8 +262,7 @@ void test_full_pipeline_execute() {
            "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
 
     // 3. Build AlgorithmInput via CompactAdapter (new API)
-    CompactAdapter adapter;
-    AlgorithmInput algo_input = adapter.apply(resolved, registries::enchants());
+    AlgorithmInput algo_input = CompactAdapter::apply(resolved, registries::enchants());
     algo_input.config.platform = MCE::Java;
 
     expect(algo_input.target.size() == 1,
@@ -291,7 +290,7 @@ void test_full_pipeline_execute() {
            "execute: should have at least one solution");
 
     // 7. Convert back to domain solutions
-    auto solutions = adapter.recall(output, algo_input,
+    auto solutions = CompactAdapter::recall(output, algo_input,
                                      resolved.source_ench, resolved.target_item, resolved.available_items);
     expect(!solutions.empty(),
            "execute: should have at least one domain solution");

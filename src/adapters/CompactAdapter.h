@@ -7,16 +7,15 @@
 #include "resolvers/ItemResolver.h"
 #include <vector>
 
-class CompactAdapter {
-public:
+struct CompactAdapter {
     /// Convert domain-level resolved input to compact AlgorithmInput.
     /// Config is NOT handled here -- flows directly from CLI.
-    AlgorithmInput apply(
+    static AlgorithmInput apply(
         const ResolvedInput& resolved,
         const EnchantmentRegistry& global_registry
     );
 
-    std::vector<EnchSolution> recall(
+    static std::vector<EnchSolution> recall(
         const AlgorithmOutput& output,
         const AlgorithmInput& input,
         const EnchSet& original_ench,

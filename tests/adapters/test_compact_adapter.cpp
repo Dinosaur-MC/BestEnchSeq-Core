@@ -36,14 +36,13 @@ Equipment chestplate{"diamond_chestplate", "Diamond Chestplate",
 // ─── Test 1: minimal valid input produces correct AlgorithmInput ───
 void test_apply_valid_input() {
     setup();
-    CompactAdapter adapter;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
     books.push_back(ItemStack(EnchSet{Ench(0, 5)}, 0));
 
-    auto input = adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
+    auto input = CompactAdapter::apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                                registries::enchants());
 
     expect(input.items.size() == 2, "items should have 2 entries (equipment + 1 book)");
@@ -58,14 +57,13 @@ void test_apply_valid_input() {
 // ─── Test 2: target enchantments are forwarded ───
 void test_apply_with_target() {
     setup();
-    CompactAdapter adapter;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     EnchSet target{Ench(0, 5)};
     ItemCollection books;
 
-    auto input = adapter.apply(ResolvedInput{target_item, original_ench, target, books},
+    auto input = CompactAdapter::apply(ResolvedInput{target_item, original_ench, target, books},
                                registries::enchants());
 
     expect(input.target.size() == 1, "target should have 1 enchantment");
@@ -78,7 +76,6 @@ void test_apply_with_target() {
 // ─── Test 3: invalid enchantment ID is rejected ───
 void test_apply_invalid_enchant_id() {
     setup();
-    CompactAdapter adapter;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -92,7 +89,7 @@ void test_apply_invalid_enchant_id() {
 
     bool threw = false;
     try {
-        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
+        CompactAdapter::apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -105,7 +102,6 @@ void test_apply_invalid_enchant_id() {
 // ─── Test 4: level exceeding max_level is rejected ───
 void test_apply_invalid_level() {
     setup();
-    CompactAdapter adapter;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -114,7 +110,7 @@ void test_apply_invalid_level() {
 
     bool threw = false;
     try {
-        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
+        CompactAdapter::apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -127,7 +123,6 @@ void test_apply_invalid_level() {
 // ─── Test 5: enchant inapplicable to equipment category is rejected ───
 void test_apply_inapplicable_enchant() {
     setup();
-    CompactAdapter adapter;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
@@ -137,7 +132,7 @@ void test_apply_inapplicable_enchant() {
 
     bool threw = false;
     try {
-        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
+        CompactAdapter::apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -150,7 +145,6 @@ void test_apply_inapplicable_enchant() {
 // ─── Test 6: prior_penalty > 31 is rejected ───
 void test_apply_penalty_overflow() {
     setup();
-    CompactAdapter adapter;
 
     ItemStack target_item(sword, EnchSet{}, 32, sword.max_durability);
     EnchSet original_ench;
@@ -158,7 +152,7 @@ void test_apply_penalty_overflow() {
 
     bool threw = false;
     try {
-        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
+        CompactAdapter::apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -171,13 +165,12 @@ void test_apply_penalty_overflow() {
 // ─── Test 7: ench_reg is pruned to only applicable enchantments ───
 void test_pruning_only_applicable() {
     setup();
-    CompactAdapter adapter;
 
     ItemStack target_item(sword, EnchSet{}, 0, sword.max_durability);
     EnchSet original_ench;
     ItemCollection books;
 
-    auto input = adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
+    auto input = CompactAdapter::apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                                registries::enchants());
 
     // Global registry has 3 enchants; only 2 (sharpness, knockback) are sword-applicable
@@ -229,7 +222,6 @@ void test_from_domain_roundtrip() {
 // ─── Test 9: recall returns empty for invalid output ───
 void test_recall_empty_output() {
     setup();
-    CompactAdapter adapter;
 
     AlgorithmOutput output;
     output.is_valid = false;
@@ -240,7 +232,7 @@ void test_recall_empty_output() {
     EnchSet original_ench;
     ItemCollection available_items;
 
-    auto solutions = adapter.recall(output, input, original_ench, target_item, available_items);
+    auto solutions = CompactAdapter::recall(output, input, original_ench, target_item, available_items);
     expect(solutions.empty(), "recall() should return empty vector for is_valid=false");
 
     std::cout << "PASS: test_recall_empty_output" << std::endl;

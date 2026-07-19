@@ -264,7 +264,7 @@ int main(int argc, char *argv[]) {
         }
 
         // ── Boundary: domain → compact ────────────────────────────────────
-        CompactAdapter adapter;
+        // CompactAdapter is fully static — no instance needed
         ForgeConfig forge_config;
         if (config.platform == "auto") {
             forge_config.platform = MCE::All;
@@ -284,7 +284,7 @@ int main(int argc, char *argv[]) {
             recall_source_ench = resolved.source_ench;
             recall_target_item = resolved.target_item;
             recall_available_items = resolved.available_items;
-            algo_input = adapter.apply(resolved, ench_reg);
+            algo_input = CompactAdapter::apply(resolved, ench_reg);
         } else {
             // inventory mode
             if (!config.input.has_value())
@@ -304,7 +304,7 @@ int main(int argc, char *argv[]) {
             recall_source_ench = resolved.source_ench;
             recall_target_item = resolved.target_item;
             recall_available_items = resolved.available_items;
-            algo_input = adapter.apply(resolved, ench_reg);
+            algo_input = CompactAdapter::apply(resolved, ench_reg);
         }
 
         algo_input.config.platform = forge_config.platform;
@@ -341,7 +341,7 @@ int main(int argc, char *argv[]) {
             }
 
             // ── Boundary: compact → domain ────────────────────────────────
-            solutions = adapter.recall(executor.output(), algo_input,
+            solutions = CompactAdapter::recall(executor.output(), algo_input,
                                         recall_source_ench, recall_target_item,
                                         recall_available_items);
         }
