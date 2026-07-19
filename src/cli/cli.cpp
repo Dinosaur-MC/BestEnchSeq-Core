@@ -40,6 +40,12 @@ std::string get_cli_help_text(const std::string &program_name) {
         "  --registries <list>     Registry names or paths to activate\n"
         "                           (default: all discovered registries;\n"
         "                           e.g., --registries Vanilla,./custom.json)\n"
+        "  --registry-edit <ops> Runtime registry edits before execution\n"
+        "                           Format: <target>:<action>,<id>[,<field>=<val>...]\n"
+        "                           Targets: ench | eq | cat  Actions: add | mod | rm\n"
+        "                           e.g., --registry-edit \"ench:mod,sharpness,max_level=10\"\n"
+        "  --export-registry <path>\n"
+        "                           Export current registry to file (.json / .csv)\n"
         "  --config <pairs>        Config key=value pairs (comma-separated).\n"
         "                           Keys: ignore-cost-cap, ignore-penalty-cost,\n"
         "                                 ignore-repair-cost (all: true|false)\n"
@@ -100,6 +106,21 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.registry_dir = value;
         } else if (key == "registries") {
             config.registries = value;
+        } else if (key == "registry-edit") {
+            if (value.empty())
+                throw std::runtime_error("Empty --registry-edit value.\n");
+            // Basic format validation: must contain at least one ':'
+            auto ops = ParserUtils::split_string(value, ';');
+            for (const auto& op : ops) {
+                if (op.find(':') == std::string::npos)
+                    throw std::runtime_error("Invalid --registry-edit operation: '" +
+                        op + "'. Expected format <target>:<action>,<id>[,<field>=<val>...]\n");
+            }
+            config.registry_edit = value;
+        } else if (key == "export-registry") {
+            if (value.empty())
+                throw std::runtime_error("Empty --export-registry value.\n");
+            config.export_registry = value;
         } else if (key == "config") {
             config.config_pairs = value;
             // Validate syntax and recognize keys; actual application
