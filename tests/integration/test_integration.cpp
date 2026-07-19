@@ -91,7 +91,7 @@ void test_full_pipeline_direct() {
     auto resolved = ItemResolver::resolve(target_item, source_ench, target_ench, test_ench_reg);
 
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
-    expect(resolved.books.size() == 7,
+    expect(resolved.available_items.size() == 7,
            "full_pipeline_direct: auto-complete should generate 7 graduated books");
     expect(resolved.target_item.equipment.has_value(),
            "full_pipeline_direct: target should have equipment");
@@ -258,7 +258,7 @@ void test_full_pipeline_execute() {
 
     // Use ItemResolver to validate and generate graduated books
     auto resolved = ItemResolver::resolve(target_item, existing, target_ench, test_ench_reg);
-    expect(resolved.books.size() == 3,
+    expect(resolved.available_items.size() == 3,
            "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
 
     // 3. Build AlgorithmInput via CompactAdapter (new API)
@@ -268,7 +268,7 @@ void test_full_pipeline_execute() {
 
     expect(algo_input.target.size() == 1,
            "execute: target should have 1 enchantment (sharpness 3)");
-    expect(algo_input.items.size() == 1 + resolved.books.size(),
+    expect(algo_input.items.size() == 1 + resolved.available_items.size(),
            "execute: items = 1 equipment + N books");
 
     // 4. Create algorithm (Greedy for speed) and executor
@@ -292,7 +292,7 @@ void test_full_pipeline_execute() {
 
     // 7. Convert back to domain solutions
     auto solutions = adapter.recall(output, algo_input,
-                                     resolved.source_ench, resolved.target_item, resolved.books);
+                                     resolved.source_ench, resolved.target_item, resolved.available_items);
     expect(!solutions.empty(),
            "execute: should have at least one domain solution");
     expect(solutions[0].is_success,

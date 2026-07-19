@@ -283,7 +283,7 @@ int main(int argc, char *argv[]) {
                 target_item, source_ench, target_ench, ench_reg);
             recall_source_ench = resolved.source_ench;
             recall_target_item = resolved.target_item;
-            recall_available_items = resolved.books;
+            recall_available_items = resolved.available_items;
             algo_input = adapter.apply(resolved, ench_reg);
         } else {
             // inventory mode
@@ -303,7 +303,7 @@ int main(int argc, char *argv[]) {
                 target_item, source_ench, target_ench, std::move(available_items)};
             recall_source_ench = resolved.source_ench;
             recall_target_item = resolved.target_item;
-            recall_available_items = resolved.books;
+            recall_available_items = resolved.available_items;
             algo_input = adapter.apply(resolved, ench_reg);
         }
 

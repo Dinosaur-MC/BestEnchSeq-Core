@@ -12,7 +12,7 @@ AlgorithmInput CompactAdapter::apply(
     const auto& target_item = resolved.target_item;
     const auto& original_ench = resolved.source_ench;
     const auto& target_ench = resolved.target_ench;
-    const auto& available_items = resolved.books;
+    const auto& available_items = resolved.available_items;
 
     // ── Strict validation (compact-level) ──────────────────────────
     if (!target_item.equipment)

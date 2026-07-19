@@ -53,7 +53,7 @@ void test_resolve_basic() {
 
     auto result = ItemResolver::resolve(sword, source, target, regs.ench_reg);
     expect(result.target_item.equipment.has_value(), "equipment preserved");
-    expect(result.books.size() == 5,
+    expect(result.available_items.size() == 5,
            "sharpness 5 \xE2\x86\x92 5 graduated books");
 
     std::cout << "  PASS: test_resolve_basic" << std::endl;
@@ -104,7 +104,7 @@ void test_resolve_diff_and_books() {
     target.emplace(regs.ench_reg.get_id("knockback"), 2);
 
     auto result = ItemResolver::resolve(sword, source, target, regs.ench_reg);
-    expect(result.books.size() == 4,
+    expect(result.available_items.size() == 4,
            "expected 4 books (sharp 4,5 + knock 1,2)");
 
     std::cout << "  PASS: test_resolve_diff_and_books" << std::endl;
@@ -119,7 +119,7 @@ void test_resolve_source_already_has_target() {
     target.emplace(regs.ench_reg.get_id("sharpness"), 5);
 
     auto result = ItemResolver::resolve(sword, source, target, regs.ench_reg);
-    expect(result.books.empty(), "no books needed when source already meets target");
+    expect(result.available_items.empty(), "no books needed when source already meets target");
 
     std::cout << "  PASS: test_resolve_source_already_has_target" << std::endl;
 }
