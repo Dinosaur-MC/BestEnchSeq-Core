@@ -382,9 +382,9 @@ void test_all_options() {
         "--mode", "inventory", "--platform", "bedrock",
         "--format", "json", "--solutions", "3",
         "--input", "in.json", "--output", "out.json",
-        "--data-pack", "mypack", "--registry-dir", "myreg", "--registries", "custom:v1"
+        "--registry-dir", "myreg", "--registries", "custom:v1"
     };
-    auto config = parse_cli(23, const_cast<char **>(argv));
+    auto config = parse_cli(21, const_cast<char **>(argv));
 
     expect(config.target == "sword", "target");
     expect(config.source == "sharp=5", "source");
@@ -394,9 +394,8 @@ void test_all_options() {
     expect(config.solutions == 3, "solutions");
     expect(config.input.has_value() && config.input.value() == "in.json", "input");
     expect(config.output.has_value() && config.output.value() == "out.json", "output");
-    expect(config.data_pack.has_value() && config.data_pack.value() == "mypack", "data-pack");
     expect(config.registry_dir.has_value() && config.registry_dir.value() == "myreg", "registry-dir");
-    expect(config.registries == "custom:v1", "registries");
+    expect(config.registries.has_value() && config.registries.value() == "custom:v1", "registries");
 
     std::cout << "  PASS: test_all_options" << std::endl;
 }
@@ -414,6 +413,18 @@ void test_source_flag() {
     expect(config.source == "efficiency=4,unbreaking=3", "source should be efficiency=4,unbreaking=3");
 
     std::cout << "  PASS: test_source_flag" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// --registries default (nullopt when not specified)
+// ---------------------------------------------------------------------------
+
+void test_registries_default_nullopt() {
+    const char *argv[] = {"besq", "--target", "sword"};
+    auto config = parse_cli(3, const_cast<char **>(argv));
+    expect(!config.registries.has_value(),
+           "--registries should be nullopt when not specified");
+    std::cout << "  PASS: test_registries_default_nullopt" << std::endl;
 }
 
 } // namespace
@@ -447,6 +458,7 @@ int main() {
         test_source_not_required();
         test_double_dash_stops_parsing();
         test_source_flag();
+        test_registries_default_nullopt();
         test_all_options();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
