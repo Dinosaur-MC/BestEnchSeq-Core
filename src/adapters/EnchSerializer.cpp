@@ -223,3 +223,85 @@ std::string EnchSerializer::to_csv(
 
     return csv::format(table);
 }
+
+// ============================================================================
+// Full-registry export
+// ============================================================================
+
+bool EnchSerializer::export_json(
+    const std::string& path,
+    const EnchantmentRegistry& ench_reg,
+    const EquipmentRegistry& eq_reg,
+    const EquipmentCategoryRegistry& cat_reg)
+{
+    // Filter out invalid (removed) entries
+    const auto& all_ench = ench_reg.get_instances();
+    std::vector<EnchInfo> valid_ench;
+    for (const auto& info : all_ench) {
+        if (!info.name_id.empty()) valid_ench.push_back(info);
+    }
+
+    const auto& all_eq = eq_reg.get_instances();
+    std::vector<Equipment> valid_eq;
+    for (const auto& eq : all_eq) {
+        if (!eq.name_id.empty()) valid_eq.push_back(eq);
+    }
+
+    std::string ench_json = to_json(valid_ench, cat_reg);
+    std::string eq_json = to_json(valid_eq, cat_reg);
+
+    Json::Object obj;
+    obj["name"] = Json(Json::String("BestEnchSeq Registry Export"));
+
+    auto ench_parsed = Json::parse(ench_json);
+    if (ench_parsed.is_valid()) obj["enchantments"] = ench_parsed;
+
+    auto eq_parsed = Json::parse(eq_json);
+    if (eq_parsed.is_valid()) obj["equipments"] = eq_parsed;
+
+    std::ofstream f(path);
+    if (!f) return false;
+    f << Json(obj).to_string(Json::Pretty);
+    return true;
+}
+
+bool EnchSerializer::export_csv(
+    const std::string& path,
+    const EnchantmentRegistry& ench_reg,
+    const EquipmentRegistry& eq_reg,
+    const EquipmentCategoryRegistry& cat_reg)
+{
+    // Filter out invalid entries
+    const auto& all_ench = ench_reg.get_instances();
+    std::vector<EnchInfo> valid_ench;
+    for (const auto& info : all_ench) {
+        if (!info.name_id.empty()) valid_ench.push_back(info);
+    }
+
+    const auto& all_eq = eq_reg.get_instances();
+    std::vector<Equipment> valid_eq;
+    for (const auto& eq : all_eq) {
+        if (!eq.name_id.empty()) valid_eq.push_back(eq);
+    }
+
+    // Write enchantments CSV
+    std::filesystem::path p(path);
+    auto ench_path = p.parent_path() / "enchantments.csv";
+    {
+        std::string ench_csv = to_csv(valid_ench, cat_reg);
+        std::ofstream f_ench(ench_path);
+        if (!f_ench) return false;
+        f_ench << ench_csv;
+    }
+
+    // Write equipment CSV
+    auto eq_path = p.parent_path() / "equipments.csv";
+    {
+        std::string eq_csv = to_csv(valid_eq, cat_reg);
+        std::ofstream f_eq(eq_path);
+        if (!f_eq) return false;
+        f_eq << eq_csv;
+    }
+
+    return true;
+}

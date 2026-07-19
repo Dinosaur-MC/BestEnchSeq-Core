@@ -1,5 +1,7 @@
 #pragma once
 
+#include "registries/EnchantmentRegistry.h"
+#include "registries/EquipmentRegistry.h"
 #include "types/EnchInfo.h"
 #include "types/Equipment.h"
 #include <filesystem>
@@ -47,4 +49,18 @@ struct EnchSerializer {
         const std::vector<Equipment> &equipments,
         const EquipmentCategoryRegistry &cat_reg
     );
+
+    // ── Full-registry export ────────────────────────────────────────────
+
+    /// Export current registry state to a JSON file.
+    static bool export_json(const std::string& path,
+                            const EnchantmentRegistry& ench_reg,
+                            const EquipmentRegistry& eq_reg,
+                            const EquipmentCategoryRegistry& cat_reg);
+
+    /// Export current registry state to CSV files (enchantments.csv + equipments.csv in same dir).
+    static bool export_csv(const std::string& path,
+                           const EnchantmentRegistry& ench_reg,
+                           const EquipmentRegistry& eq_reg,
+                           const EquipmentCategoryRegistry& cat_reg);
 };
