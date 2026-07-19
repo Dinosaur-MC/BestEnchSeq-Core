@@ -1,0 +1,325 @@
+{
+  "schema_version": "1.0.0",
+  "items": {
+    "bow": {
+      "durability": 384,
+      "enchantability": 1,
+      "category": "bow"
+    },
+    "brush": {
+      "durability": 64,
+      "enchantability": -1,
+      "category": "brush"
+    },
+    "chainmail_boots": {
+      "durability": 195,
+      "enchantability": 12,
+      "category": "boots"
+    },
+    "chainmail_chestplate": {
+      "durability": 240,
+      "enchantability": 12,
+      "category": "chestplate"
+    },
+    "chainmail_helmet": {
+      "durability": 165,
+      "enchantability": 12,
+      "category": "helmet"
+    },
+    "chainmail_leggings": {
+      "durability": 225,
+      "enchantability": 12,
+      "category": "leggings"
+    },
+    "crossbow": {
+      "durability": 465,
+      "enchantability": 1,
+      "category": "crossbow"
+    },
+    "diamond_axe": {
+      "durability": 1561,
+      "enchantability": 10,
+      "category": "axe"
+    },
+    "diamond_boots": {
+      "durability": 429,
+      "enchantability": 10,
+      "category": "boots"
+    },
+    "diamond_chestplate": {
+      "durability": 528,
+      "enchantability": 10,
+      "category": "chestplate"
+    },
+    "diamond_helmet": {
+      "durability": 363,
+      "enchantability": 10,
+      "category": "helmet"
+    },
+    "diamond_hoe": {
+      "durability": 1561,
+      "enchantability": 10,
+      "category": "hoe"
+    },
+    "diamond_leggings": {
+      "durability": 495,
+      "enchantability": 10,
+      "category": "leggings"
+    },
+    "diamond_pickaxe": {
+      "durability": 1561,
+      "enchantability": 10,
+      "category": "pickaxe"
+    },
+    "diamond_shovel": {
+      "durability": 1561,
+      "enchantability": 10,
+      "category": "shovel"
+    },
+    "diamond_sword": {
+      "durability": 1561,
+      "enchantability": 10,
+      "category": "sword"
+    },
+    "elytra": {
+      "durability": 432,
+      "enchantability": -1,
+      "category": "elytra"
+    },
+    "fishing_rod": {
+      "durability": 64,
+      "enchantability": 1,
+      "category": "fishing_rod"
+    },
+    "golden_axe": {
+      "durability": 32,
+      "enchantability": 22,
+      "category": "axe"
+    },
+    "golden_boots": {
+      "durability": 91,
+      "enchantability": 25,
+      "category": "boots"
+    },
+    "golden_chestplate": {
+      "durability": 112,
+      "enchantability": 25,
+      "category": "chestplate"
+    },
+    "golden_helmet": {
+      "durability": 77,
+      "enchantability": 25,
+      "category": "helmet"
+    },
+    "golden_hoe": {
+      "durability": 32,
+      "enchantability": 22,
+      "category": "hoe"
+    },
+    "golden_leggings": {
+      "durability": 105,
+      "enchantability": 25,
+      "category": "leggings"
+    },
+    "golden_pickaxe": {
+      "durability": 32,
+      "enchantability": 22,
+      "category": "pickaxe"
+    },
+    "golden_shovel": {
+      "durability": 32,
+      "enchantability": 22,
+      "category": "shovel"
+    },
+    "golden_sword": {
+      "durability": 32,
+      "enchantability": 22,
+      "category": "sword"
+    },
+    "iron_axe": {
+      "durability": 250,
+      "enchantability": 14,
+      "category": "axe"
+    },
+    "iron_boots": {
+      "durability": 195,
+      "enchantability": 9,
+      "category": "boots"
+    },
+    "iron_chestplate": {
+      "durability": 240,
+      "enchantability": 9,
+      "category": "chestplate"
+    },
+    "iron_helmet": {
+      "durability": 165,
+      "enchantability": 9,
+      "category": "helmet"
+    },
+    "iron_hoe": {
+      "durability": 250,
+      "enchantability": 14,
+      "category": "hoe"
+    },
+    "iron_leggings": {
+      "durability": 225,
+      "enchantability": 9,
+      "category": "leggings"
+    },
+    "iron_pickaxe": {
+      "durability": 250,
+      "enchantability": 14,
+      "category": "pickaxe"
+    },
+    "iron_shovel": {
+      "durability": 250,
+      "enchantability": 14,
+      "category": "shovel"
+    },
+    "iron_sword": {
+      "durability": 250,
+      "enchantability": 14,
+      "category": "sword"
+    },
+    "leather_boots": {
+      "durability": 65,
+      "enchantability": 15,
+      "category": "boots"
+    },
+    "leather_chestplate": {
+      "durability": 80,
+      "enchantability": 15,
+      "category": "chestplate"
+    },
+    "leather_helmet": {
+      "durability": 55,
+      "enchantability": 15,
+      "category": "helmet"
+    },
+    "leather_leggings": {
+      "durability": 75,
+      "enchantability": 15,
+      "category": "leggings"
+    },
+    "mace": {
+      "durability": 250,
+      "enchantability": 15,
+      "category": "mace"
+    },
+    "netherite_axe": {
+      "durability": 2031,
+      "enchantability": 15,
+      "category": "axe"
+    },
+    "netherite_boots": {
+      "durability": 481,
+      "enchantability": 15,
+      "category": "boots"
+    },
+    "netherite_chestplate": {
+      "durability": 592,
+      "enchantability": 15,
+      "category": "chestplate"
+    },
+    "netherite_helmet": {
+      "durability": 407,
+      "enchantability": 15,
+      "category": "helmet"
+    },
+    "netherite_hoe": {
+      "durability": 2031,
+      "enchantability": 15,
+      "category": "hoe"
+    },
+    "netherite_leggings": {
+      "durability": 555,
+      "enchantability": 15,
+      "category": "leggings"
+    },
+    "netherite_pickaxe": {
+      "durability": 2031,
+      "enchantability": 15,
+      "category": "pickaxe"
+    },
+    "netherite_shovel": {
+      "durability": 2031,
+      "enchantability": 15,
+      "category": "shovel"
+    },
+    "netherite_sword": {
+      "durability": 2031,
+      "enchantability": 15,
+      "category": "sword"
+    },
+    "shears": {
+      "durability": 238,
+      "enchantability": -1,
+      "category": "shears"
+    },
+    "shield": {
+      "durability": 336,
+      "enchantability": -1,
+      "category": "shield"
+    },
+    "stone_axe": {
+      "durability": 131,
+      "enchantability": 5,
+      "category": "axe"
+    },
+    "stone_hoe": {
+      "durability": 131,
+      "enchantability": 5,
+      "category": "hoe"
+    },
+    "stone_pickaxe": {
+      "durability": 131,
+      "enchantability": 5,
+      "category": "pickaxe"
+    },
+    "stone_shovel": {
+      "durability": 131,
+      "enchantability": 5,
+      "category": "shovel"
+    },
+    "stone_sword": {
+      "durability": 131,
+      "enchantability": 5,
+      "category": "sword"
+    },
+    "trident": {
+      "durability": 250,
+      "enchantability": 1,
+      "category": "trident"
+    },
+    "turtle_helmet": {
+      "durability": 275,
+      "enchantability": 9,
+      "category": "helmet"
+    },
+    "wooden_axe": {
+      "durability": 59,
+      "enchantability": 15,
+      "category": "axe"
+    },
+    "wooden_hoe": {
+      "durability": 59,
+      "enchantability": 15,
+      "category": "hoe"
+    },
+    "wooden_pickaxe": {
+      "durability": 59,
+      "enchantability": 15,
+      "category": "pickaxe"
+    },
+    "wooden_shovel": {
+      "durability": 59,
+      "enchantability": 15,
+      "category": "shovel"
+    },
+    "wooden_sword": {
+      "durability": 59,
+      "enchantability": 15,
+      "category": "sword"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 #include "parsers/EnchInfoParser.h"
 #include "parsers/ParserUtilsDomain.hpp"
+#include "data/ItemProperties.h"
 #include "utils/ParserUtils.hpp"
 #include "log/log.hpp"
 #include "io/CsvIO.h"
@@ -257,80 +258,26 @@ std::vector<RawEquipment> parse_equipments_json(const Json::Object &root_obj) {
 }
 
 // ---------------------------------------------------------------------------
-// Known builtin item → durability table for MC official format
+// Look up builtin item property from data-driven item_properties.json
 // ---------------------------------------------------------------------------
-int32_t get_builtin_durability(const std::string &item_id) {
-    // Strip namespace for lookup
+namespace {
+
+int32_t get_durability(const std::string &item_id,
+    const std::unordered_map<std::string, ItemProperty> &props)
+{
     std::string key = item_id;
     auto colon = key.find(':');
-    if (colon != std::string::npos) {
+    if (colon != std::string::npos)
         key = key.substr(colon + 1);
-    }
-
-    static const std::unordered_map<std::string, int32_t> durability_map = {
-        // Swords
-        {"wooden_sword", 59},     {"stone_sword", 131},
-        {"iron_sword", 250},      {"golden_sword", 32},
-        {"diamond_sword", 1561},  {"netherite_sword", 2031},
-        // Pickaxes
-        {"wooden_pickaxe", 59},   {"stone_pickaxe", 131},
-        {"iron_pickaxe", 250},    {"golden_pickaxe", 32},
-        {"diamond_pickaxe", 1561},{"netherite_pickaxe", 2031},
-        // Axes
-        {"wooden_axe", 59},       {"stone_axe", 131},
-        {"iron_axe", 250},        {"golden_axe", 32},
-        {"diamond_axe", 1561},    {"netherite_axe", 2031},
-        // Shovels
-        {"wooden_shovel", 59},    {"stone_shovel", 131},
-        {"iron_shovel", 250},     {"golden_shovel", 32},
-        {"diamond_shovel", 1561}, {"netherite_shovel", 2031},
-        // Hoes
-        {"wooden_hoe", 59},       {"stone_hoe", 131},
-        {"iron_hoe", 250},        {"golden_hoe", 32},
-        {"diamond_hoe", 1561},    {"netherite_hoe", 2031},
-        // Helmets
-        {"leather_helmet", 55},   {"chainmail_helmet", 165},
-        {"iron_helmet", 165},     {"golden_helmet", 77},
-        {"diamond_helmet", 363},  {"netherite_helmet", 407},
-        // Chestplates
-        {"leather_chestplate", 80},   {"chainmail_chestplate", 240},
-        {"iron_chestplate", 240},     {"golden_chestplate", 112},
-        {"diamond_chestplate", 528},  {"netherite_chestplate", 592},
-        // Leggings
-        {"leather_leggings", 75},     {"chainmail_leggings", 225},
-        {"iron_leggings", 225},       {"golden_leggings", 105},
-        {"diamond_leggings", 495},    {"netherite_leggings", 555},
-        // Boots
-        {"leather_boots", 65},        {"chainmail_boots", 195},
-        {"iron_boots", 195},          {"golden_boots", 91},
-        {"diamond_boots", 429},       {"netherite_boots", 481},
-        // Other tools
-        {"bow", 384},                 {"crossbow", 465},
-        {"trident", 250},             {"shield", 336},
-        {"fishing_rod", 64},          {"elytra", 432},
-        {"shears", 238},              {"brush", 64},
-        // Turtle shell
-        {"turtle_helmet", 275},
-        // Mace
-        {"mace", 250},
-    };
-
-    auto it = durability_map.find(key);
-    if (it != durability_map.end()) {
-        return it->second;
-    }
-    return 0;
+    auto it = props.find(key);
+    return (it != props.end()) ? it->second.durability : 0;
 }
 
-// ---------------------------------------------------------------------------
-// Derive category from item ID suffix
-// ---------------------------------------------------------------------------
-std::string derive_category(const std::string &item_id) {
+std::string get_category_suffix(const std::string &item_id) {
     std::string key = item_id;
     auto colon = key.find(':');
-    if (colon != std::string::npos) {
+    if (colon != std::string::npos)
         key = key.substr(colon + 1);
-    }
 
     static const std::unordered_map<std::string, std::string> suffix_to_category = {
         {"_sword", "sword"},     {"_pickaxe", "pickaxe"},
@@ -352,9 +299,24 @@ std::string derive_category(const std::string &item_id) {
             return cat;
         }
     }
-
-    return key;
+    return key;  // fallback: use the bare id itself as category
 }
+
+std::string derive_category(const std::string &item_id,
+    const std::unordered_map<std::string, ItemProperty> &props)
+{
+    std::string key = item_id;
+    auto colon = key.find(':');
+    if (colon != std::string::npos)
+        key = key.substr(colon + 1);
+    auto it = props.find(key);
+    if (it != props.end() && !it->second.category.empty())
+        return it->second.category;
+    // Fallback: suffix matching for items not in the table
+    return get_category_suffix(item_id);
+}
+
+} // anonymous namespace
 
 // ---------------------------------------------------------------------------
 // Derive display name from an item ID string
@@ -384,43 +346,9 @@ int32_t compute_limited_level(
     int32_t max_level,
     int32_t min_cost_base,
     int32_t min_cost_per_level,
-    const std::unordered_set<std::string>& applicable_items)
+    const std::unordered_set<std::string>& applicable_items,
+    const std::unordered_map<std::string, ItemProperty>& item_props)
 {
-    static const std::unordered_map<std::string, int32_t> ENCHANTABILITY = {
-        // Tools
-        {"wooden_sword", 15}, {"wooden_pickaxe", 15}, {"wooden_axe", 15},
-        {"wooden_shovel", 15}, {"wooden_hoe", 15},
-        {"stone_sword", 5}, {"stone_pickaxe", 5}, {"stone_axe", 5},
-        {"stone_shovel", 5}, {"stone_hoe", 5},
-        {"iron_sword", 14}, {"iron_pickaxe", 14}, {"iron_axe", 14},
-        {"iron_shovel", 14}, {"iron_hoe", 14},
-        {"golden_sword", 22}, {"golden_pickaxe", 22}, {"golden_axe", 22},
-        {"golden_shovel", 22}, {"golden_hoe", 22},
-        {"diamond_sword", 10}, {"diamond_pickaxe", 10}, {"diamond_axe", 10},
-        {"diamond_shovel", 10}, {"diamond_hoe", 10},
-        {"netherite_sword", 15}, {"netherite_pickaxe", 15}, {"netherite_axe", 15},
-        {"netherite_shovel", 15}, {"netherite_hoe", 15},
-        // Armor
-        {"leather_helmet", 15}, {"leather_chestplate", 15},
-        {"leather_leggings", 15}, {"leather_boots", 15},
-        {"chainmail_helmet", 12}, {"chainmail_chestplate", 12},
-        {"chainmail_leggings", 12}, {"chainmail_boots", 12},
-        {"iron_helmet", 9}, {"iron_chestplate", 9},
-        {"iron_leggings", 9}, {"iron_boots", 9},
-        {"golden_helmet", 25}, {"golden_chestplate", 25},
-        {"golden_leggings", 25}, {"golden_boots", 25},
-        {"diamond_helmet", 10}, {"diamond_chestplate", 10},
-        {"diamond_leggings", 10}, {"diamond_boots", 10},
-        {"netherite_helmet", 15}, {"netherite_chestplate", 15},
-        {"netherite_leggings", 15}, {"netherite_boots", 15},
-        {"turtle_helmet", 9},
-        // Special
-        {"bow", 1}, {"crossbow", 1}, {"trident", 1},
-        {"fishing_rod", 1}, {"book", 1}, {"mace", 15},
-        // Wolf armor
-        {"wolf_armor", 0},  // not enchantable via table
-    };
-
     auto max_power = [](int32_t enchantability) -> int32_t {
         if (enchantability <= 0) return 0;
         double base = 30.0;
@@ -430,20 +358,16 @@ int32_t compute_limited_level(
 
     int32_t best = 0;
     for (const auto& item : applicable_items) {
-        // Strip namespace prefix to look up bare name
         std::string bare = item;
         auto colon = bare.find(':');
         if (colon != std::string::npos)
             bare = bare.substr(colon + 1);
 
-        auto it = ENCHANTABILITY.find(bare);
-        if (it == ENCHANTABILITY.end() || it->second <= 0)
+        auto it = item_props.find(bare);
+        if (it == item_props.end() || it->second.enchantability <= 0)
             continue;
 
-        int32_t power = max_power(it->second);
-        // Closed-form O(1): find highest level where min_cost(lvl) <= power
-        // min_cost(lvl) = min_cost_base + min_cost_per_level * (lvl - 1)
-        // => lvl <= (power - min_cost_base) / min_cost_per_level + 1
+        int32_t power = max_power(it->second.enchantability);
         if (power >= min_cost_base) {
             int32_t max_lvl = (power - min_cost_base) / min_cost_per_level + 1;
             if (max_lvl > max_level) max_lvl = max_level;
@@ -456,7 +380,10 @@ int32_t compute_limited_level(
 // ---------------------------------------------------------------------------
 // Scan MC official data pack for item tags and derive equipment
 // ---------------------------------------------------------------------------
-std::vector<RawEquipment> derive_equipment_from_tags(const std::filesystem::path &data_dir) {
+std::vector<RawEquipment> derive_equipment_from_tags(
+    const std::filesystem::path &data_dir,
+    const std::unordered_map<std::string, ItemProperty> &item_props)
+{
     std::unordered_set<std::string> item_ids;
     std::unordered_set<std::string> seen_ids;
 
@@ -515,8 +442,8 @@ std::vector<RawEquipment> derive_equipment_from_tags(const std::filesystem::path
     // Build RawEquipment from collected items
     std::vector<RawEquipment> result;
     for (const auto &item_id : item_ids) {
-        int32_t durability = get_builtin_durability(item_id);
-        std::string category = derive_category(item_id);
+        int32_t durability = get_durability(item_id, item_props);
+        std::string category = derive_category(item_id, item_props);
         // Skip items that don't look like equipment (no durability + generic category)
         if (durability <= 0 && category == item_id) {
             // Keep items with a namespace — they might be custom items
@@ -773,6 +700,9 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
     TagResolver tag_resolver;
     tag_resolver.load_from(dir);
 
+    // Load item properties (data-driven, from embedded JSON)
+    auto item_props = load_item_properties();
+
     std::vector<RawEnchantment> enchantments;
 
     std::filesystem::path data_dir = dir / "data";
@@ -864,7 +794,7 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
                     int32_t min_per_level = ParserUtils::get_json_int(*mc_obj, "per_level_above_first");
                     if (min_base > 0 && min_per_level >= 0) {
                         limited_level = compute_limited_level(
-                            max_level, min_base, min_per_level, applicable_items);
+                            max_level, min_base, min_per_level, applicable_items, item_props);
                     }
                 }
             }
@@ -882,7 +812,7 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
     }
 
     // Derive equipment from item tag files
-    auto equipment = derive_equipment_from_tags(data_dir);
+    auto equipment = derive_equipment_from_tags(data_dir, item_props);
 
     return {std::move(enchantments), std::move(equipment)};
 }
