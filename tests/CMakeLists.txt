@@ -592,6 +592,19 @@ set_tests_properties(test_segmented_mpmc_queue PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_mpsc_queue.cpp)
+    message(FATAL_ERROR "Required test source not found: utils/test_mpsc_queue.cpp")
+endif()
+
+add_executable(test_mpsc_queue
+    utils/test_mpsc_queue.cpp
+)
+target_include_directories(test_mpsc_queue PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_mpsc_queue COMMAND test_mpsc_queue)
+set_tests_properties(test_mpsc_queue PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/utils/test_event_loop.cpp)
     message(FATAL_ERROR "Required test source not found: utils/test_event_loop.cpp")
 endif()

@@ -14,9 +14,15 @@
 //  Configuration  —  calibrate for ~8-10 s total on a modern CPU
 // ═══════════════════════════════════════════════════════════════════════════
 
+#ifdef NDEBUG
 constexpr int64_t OPS_EV     = 15'000'000;   // tasks posted per EventLoop test
 constexpr int64_t WARM_EV    =    500'000;   // warm-up tasks
 constexpr int64_t OPS_MP     = 15'000'000;   // tasks for multi-producer test
+#else
+constexpr int64_t OPS_EV     =  3'000'000;
+constexpr int64_t WARM_EV    =    100'000;
+constexpr int64_t OPS_MP     =  1'000'000;
+#endif
 constexpr int64_t N_LATENCY  =     10'000;   // latency samples
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -83,16 +89,18 @@ static void bench_throughput(Loop& loop,
 //  Multi-producer throughput  (N threads posting to the same loop)
 // ═══════════════════════════════════════════════════════════════════════════
 
-static void bench_multiproducer(int64_t n, int64_t warmup, int n_threads) {
-    MPMCEventLoop<> loop;
+template <typename Loop>
+static void bench_multiproducer_tmpl(int64_t n, int64_t warmup, int n_threads,
+                                     const char* label) {
+    Loop loop;
     std::atomic<int64_t> sum{0};
     loop.start();
 
-    int64_t per = warmup / n_threads;
+    int64_t per_warm = warmup / n_threads;
     std::vector<std::thread> warmers;
     for (int t = 0; t < n_threads; ++t) {
         warmers.emplace_back([&] {
-            for (int64_t i = 0; i < per; ++i)
+            for (int64_t i = 0; i < per_warm; ++i)
                 loop.post([&] { sum.fetch_add(1); });
         });
     }
@@ -100,7 +108,7 @@ static void bench_multiproducer(int64_t n, int64_t warmup, int n_threads) {
     drain(loop);
 
     sum.store(0);
-    per = n / n_threads;
+    int64_t per = n / n_threads;
     auto t0 = Clock::now();
     std::vector<std::thread> producers;
     for (int t = 0; t < n_threads; ++t) {
@@ -115,9 +123,13 @@ static void bench_multiproducer(int64_t n, int64_t warmup, int n_threads) {
                      Clock::now() - t0).count() / 1'000'000.0;
 
     char buf[80];
-    std::snprintf(buf, sizeof(buf), "MPMCEventLoop %dP post + exec", n_threads);
+    std::snprintf(buf, sizeof(buf), "%s %dP post + exec", label, n_threads);
     print_result(buf, sec, n);
     loop.stop();
+}
+
+static void bench_multiproducer(int64_t n, int64_t warmup, int n_threads) {
+    bench_multiproducer_tmpl<MPMCEventLoop<>>(n, warmup, n_threads, "MPMCEventLoop");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -180,6 +192,10 @@ int main() {
             bench_throughput(loop, OPS_EV, WARM_EV, "SPSCEventLoop (SPSCQueue)");
         }
         {
+            EventLoop<std::function<void()>, MPSCQueue<std::function<void()>>> loop;
+            bench_throughput(loop, OPS_EV, WARM_EV, "MPSCEventLoop (MPSCQueue)");
+        }
+        {
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
             bench_throughput(loop, OPS_EV, WARM_EV, "BoundedEventLoop (BoundedMPMC)");
         }
@@ -191,8 +207,13 @@ int main() {
         Timer sec;
         std::cout << "── Multi-producer throughput ─────────────────────\n";
         bench_multiproducer(OPS_MP, WARM_EV, 2);
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop");
+        std::cout << "  ──\n";
         bench_multiproducer(OPS_MP, WARM_EV, 4);
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop");
+        std::cout << "  ──\n";
         bench_multiproducer(OPS_MP, WARM_EV, 8);
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop");
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 

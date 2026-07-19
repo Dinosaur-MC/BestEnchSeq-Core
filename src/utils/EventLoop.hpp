@@ -23,6 +23,7 @@
 #endif
 
 #include "queue/BoundedMPMCQueue.hpp"
+#include "queue/MPSCQueue.hpp"
 #include "queue/SegmentedMPMCQueue.hpp"
 #include "queue/SPSCQueue.hpp"
 
@@ -42,6 +43,7 @@
 //                 SegmentedMPMCQueue<T, BlockSize>  (unbounded MPMC, default)
 //                 BoundedMPMCQueue<T, Size>         (bounded MPMC)
 //                 SPSCQueue<T, Size>                (bounded, 1P1C)
+//                 MPSCQueue<T>                      (unbounded MPSC)
 //   Handler   — void (default) = callable mode; the consumer thread invokes
 //               each T directly.
 //               Otherwise = data mode; must be invocable as void(T).
@@ -272,3 +274,7 @@ using BoundedEventLoop = EventLoop<Task, BoundedMPMCQueue<Task, N>>;
 /// Single-producer, single-consumer event loop (fastest for 1P1C).
 template <typename Task = std::function<void()>, size_t N = 64>
 using SPSCEventLoop = EventLoop<Task, SPSCQueue<Task, N>>;
+
+/// Multi-producer, single-consumer event loop (unbounded, zero-allocation hot path).
+template <typename Task = std::function<void()>>
+using MPSCEventLoop = EventLoop<Task, MPSCQueue<Task>>;
