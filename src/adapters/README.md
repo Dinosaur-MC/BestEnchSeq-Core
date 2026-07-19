@@ -7,28 +7,25 @@
 ```
 Domain (边界 I/O)          Adapter                Compact (算法层)
 ─────────────────       ──────────              ─────────────────
-ParsedInput              CompactAdapter          AlgorithmInput
-EnchSolution             → apply()               compact::EnchSolution
-ItemStack                → recall()              compact::Item
-RawEnchInfo / RawEquipment  → from_domain()
-                         RegistryResolver        compact::EnchReg
-                         → resolve_*()
+ResolvedInput            CompactAdapter          AlgorithmInput
+EnchSolution             → recall()              compact::EnchSolution
+ItemStack                → from_domain()         compact::Item
+                         → to_domain()
+                         RawTypeAdapter          Domain Registries
+                         → resolve()             (EnchantmentRegistry, etc.)
 ```
 
 ---
 
 ## CompactAdapter
 
-核心边界适配器，负责 domain ↔ compact 的双向转换。
+核心边界适配器，负责 domain ↔ compact 的双向转换。全部为静态方法。
 
 ```cpp
-class CompactAdapter {
+struct CompactAdapter {
     // domain → compact（验证 + 剪枝 + 转换）
     static AlgorithmInput apply(
-        const ItemStack& target_item,
-        const EnchSet& original_ench,
-        const ItemCollection& available_items,
-        const ForgeConfig& config,
+        const ResolvedInput& resolved,
         const EnchantmentRegistry& global_registry);
 
     // compact → domain（恢复全局 ID + 构建 EnchSolutions）
@@ -41,15 +38,15 @@ class CompactAdapter {
 
     // 单物品转换
     static compact::Item from_domain(const ItemStack& item,
-                                     const EnchantmentRegistry& reg);
+                                     const compact::EnchReg& reg);
     static ItemStack to_domain(const compact::Item& item,
-                               const EquipmentRegistry& eq_reg);
+                               const compact::EnchReg& reg);
 };
 ```
 
 ### apply() 流程
 
-1. **验证**：检查输入合法性（目标装备存在、可用物品不为空等）
+1. **验证**：检查 compact 级约束（prior_penalty [0,31]、durability [1, max]、ID 范围、等级范围）
 2. **剪枝**：通过 `EnchantmentRegistry::create_subset()` 从全局注册表派生出只包含适用附魔的 compact 子集
 3. **转换**：所有 `ItemStack` → `compact::Item`（ID 重映射到 dense 索引）
 
@@ -61,38 +58,24 @@ class CompactAdapter {
 
 ---
 
-## RegistryResolver
+## RawTypeAdapter
 
-字符串引用 → int32_t ID 的解析器。
+数据文件 → 领域注册表的一次性初始化桥梁。
 
 ```cpp
-struct RegistryResolver {  // 全静态
-    // Raw → domain
-    static std::vector<EnchInfo> resolve_ench_info(
-        const std::vector<RawEnchInfo>& raw,
-        const EquipmentCategoryRegistry& cat_reg);
-    static std::vector<Equipment> resolve_equipment(
-        const std::vector<RawEquipment>& raw,
-        const EquipmentCategoryRegistry& cat_reg);
-
-    // 名称 → ID
-    static int32_t resolve_ench_id(std::string_view name,
-                                   const EnchantmentRegistry& ench_reg);
-    static int32_t resolve_ench_id(std::string_view ns,
-                                   std::string_view id,
-                                   const EnchantmentRegistry& ench_reg);
-
-    // 数据合并
-    static void merge_raw_ench_info(
-        std::vector<RawEnchInfo>& base,
-        const std::vector<RawEnchInfo>& extra);
-    static void merge_raw_equipment(
-        std::vector<RawEquipment>& base,
-        const std::vector<RawEquipment>& extra);
+struct RawTypeAdapter {
+    static void resolve(
+        const std::vector<RawEnchantment>& enchants,
+        const std::vector<RawEquipment>& equipments,
+        EquipmentCategoryRegistry& cat_reg,
+        EquipmentRegistry& eq_reg,
+        EnchantmentRegistry& ench_reg);
 };
 ```
 
-resolve_ench_id 的查找顺序：先试裸名称，再试 `"minecraft:"` 前缀。未找到时返回 -1（非 throwing 变体）。
+流程：收集类别 → `cat_reg.initialize()` → `RegistryResolver::resolve_equipment()` → `eq_reg.initialize()` → `RegistryResolver::resolve_ench_info()` → `ench_reg.initialize()`
+
+> RegistryResolver 已移至 `resolvers/` 层，负责 string → int32_t ID 转换。
 
 ---
 

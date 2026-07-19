@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
 Extract vanilla Minecraft enchantment/equipment data from the official
-client jar.  Derives everything from jar JSON files — no hardcoded
-category patterns, or durability tables.
+client jar.  Derives everything from jar JSON files and javap-backed
+class file analysis — no hardcoded game constants (fallback only).
 
-Output: data/builtin/vanilla.json  (integrated native JSON format)
+Outputs:
+  - data/builtin/vanilla.json         (integrated native JSON format)
+  - data/builtin/item_properties.json (durability + enchantability + category)
 """
 
 import json
@@ -319,7 +321,8 @@ def items_to_categories(item_ids: set[str],
 
 def load_equipments(base: Path, lang: dict[str, str],
                     tags: dict[str, list[str]],
-                    prefixes: list[str]) -> list[dict]:
+                    prefixes: list[str],
+                    durability_override: dict[str, int]) -> list[dict]:
     """
     Derive equipment entries from enchantable tag memberships.
 
@@ -337,7 +340,6 @@ def load_equipments(base: Path, lang: dict[str, str],
         item_ids.update(resolved)
 
     # Also include any item with known durability that might be missed
-    durability_override = load_durability_from_source(RES_DIR)
     for short_id in durability_override:
         item_ids.add(f"minecraft:{short_id}")
 
@@ -354,7 +356,6 @@ def load_equipments(base: Path, lang: dict[str, str],
     group2cat = _build_group2cat(base, tags, prefixes)
 
     # 3) Build items — populate durability from source code
-    durability_override = load_durability_from_source(RES_DIR)
 
     equip = []
     seen: set[str] = set()
@@ -774,59 +775,7 @@ def load_durability_from_source(res_dir: Path) -> dict[str, int]:
     return dur
 
 
-# ── step 4b: enchantability ─────────────────────────────────────────────
-
-def load_enchantability_from_source(res_dir: Path) -> dict[str, int]:
-    """
-    Return item enchantability values, extracted from the Java source.
-
-    Sources (1.21.2+ / 26w+):
-      - ToolMaterial.java lines 23-29
-      - ArmorMaterials.java lines 12-38
-      - Items.java explicit .enchantable() calls
-
-    Items NOT in this map have enchantability 0 and cannot receive
-    enchantments from the enchanting table.
-    """
-    ench: dict[str, int] = {}
-
-    # Tool materials (each applies to: sword, pickaxe, axe, shovel, hoe)
-    tool_materials = {
-        "wooden": 15, "stone": 5, "copper": 13, "iron": 14,
-        "diamond": 10, "golden": 22, "netherite": 15,
-    }
-    for pfx, val in tool_materials.items():
-        for suf in ("sword", "pickaxe", "axe", "shovel", "hoe"):
-            ench[f"{pfx}_{suf}"] = val
-
-    # Armor materials (each applies to: helmet, chestplate, leggings, boots)
-    armor_materials = {
-        "leather": 15, "copper": 8, "chainmail": 12, "iron": 9,
-        "golden": 25, "diamond": 10, "netherite": 15,
-    }
-    # turtle uses ArmorMaterials.TURTLE_SCUTE → enchantmentValue = 9
-    # It is registered as a humanoid armor so the value is 9
-    for pfx, val in armor_materials.items():
-        for slot in ("helmet", "chestplate", "leggings", "boots"):
-            ench[f"{pfx}_{slot}"] = val
-    ench["turtle_helmet"] = 9
-
-    # Special items with explicit .enchantable(N) calls in Items.java
-    specials: dict[str, int] = {
-        "bow": 1,
-        "crossbow": 1,
-        "trident": 1,
-        "fishing_rod": 1,
-        "book": 1,
-        "mace": 15,
-    }
-    ench.update(specials)
-
-    print(f"  Loaded {len(ench)} enchantability values from source")
-    return ench
-
-
-# ── step 4c: limited-level calculation ───────────────────────────────────
+# ── step 4b: limited-level calculation ───────────────────────────────────
 
 def _min_cost(cost_obj: dict, level: int) -> int:
     """Compute the minimum enchanting-table cost for a given level.
@@ -946,8 +895,12 @@ def collect_categories(ench: list[dict], eq: list[dict]) -> list[dict]:
 
 def write_output(version: str, ench: list[dict], eq: list[dict],
                  cats: list[dict],
-                 tags: dict[str, list[str]]) -> None:
-    # Keep enchantment/ tags and exclusive_set tags
+                 tags: dict[str, list[str]],
+                 durability_map: dict[str, int],
+                 enchantability_map: dict[str, int]) -> None:
+    Path("data/builtin").mkdir(parents=True, exist_ok=True)
+
+    # ── 1. vanilla.json ──────────────────────────────────────────────
     kept: dict[str, list[str]] = {}
     for k, v in tags.items():
         if "/enchantment/" in k.replace(":", "/") or \
@@ -964,9 +917,25 @@ def write_output(version: str, ench: list[dict], eq: list[dict],
         "equipments": eq,
         "tags": kept,
     }
-    Path("data/builtin").mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"  Written ({OUT.stat().st_size / 1024:.1f} KB)")
+    print(f"  vanilla.json written ({OUT.stat().st_size / 1024:.1f} KB)")
+
+    # ── 2. item_properties.json ──────────────────────────────────────
+    items: dict[str, dict] = {}
+    for equip in eq:
+        short = equip["id"]
+        items[short] = {
+            "durability": durability_map.get(short, 0),
+            "enchantability": enchantability_map.get(short, -1),
+            "category": equip["category"],
+        }
+    prop_out = Path("data/builtin/item_properties.json")
+    prop_doc = {
+        "schema_version": "1.0.0",
+        "items": items,
+    }
+    prop_out.write_text(json.dumps(prop_doc, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  item_properties.json written ({prop_out.stat().st_size / 1024:.1f} KB)")
 
 
 # ── main ─────────────────────────────────────────────────────────────────
@@ -995,6 +964,7 @@ def main() -> None:
         print("Vanilla jar exists, skipping download")
         release = _get_release()
     else:
+        print("Downloading…")
         for attempt in range(5):
             try:
                 release = download()
@@ -1020,6 +990,7 @@ def main() -> None:
 
     print("Loading enchantability…")
     ench_map = load_enchantability_from_source(RES_DIR)
+    dur_map = load_durability_from_source(RES_DIR)
 
     print("Loading enchantments…")
     ench = load_enchantments(base, lang, tags, pfx, ench_map)
@@ -1029,7 +1000,7 @@ def main() -> None:
     post_process_enchantments(ench, tags, pfx)
 
     print("Building equipment list…")
-    eq = load_equipments(base, lang, tags, pfx)
+    eq = load_equipments(base, lang, tags, pfx, dur_map)
     eq.sort(key=lambda e: e["id"])
 
     print(f"\n  Enchantments: {len(ench)}  Equipments: {len(eq)}")
@@ -1045,7 +1016,7 @@ def main() -> None:
     print(f"  Enchantments with empty exclusive_set: {len(no_excl)}")
 
     print("\nGenerating output…")
-    write_output(release, ench, eq, cats, tags)
+    write_output(release, ench, eq, cats, tags, dur_map, ench_map)
     print("Done!")
 
 
