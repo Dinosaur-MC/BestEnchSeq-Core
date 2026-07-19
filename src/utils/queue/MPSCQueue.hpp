@@ -4,7 +4,7 @@
 
 #include <atomic>
 #include <cstddef>
-#include <mutex>
+#include <cstdint>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -12,16 +12,14 @@
 // ─── MPSCQueue ───
 // Multi-Producer, Single-Consumer lock-free UNBOUNDED queue.
 //
-// Uses a singly-linked list with a mutex-protected free list for node reuse.
-// Producers compete via atomic exchange on the head pointer; the single
-// consumer reads from the tail with zero contention.  After steady state
-// the free list avoids all dynamic memory allocations.
+// Uses a singly-linked list with a tagged-pointer Treiber-stack free list
+// for node reuse.  Producers compete via atomic exchange on the head
+// pointer; the single consumer reads from the tail with zero contention.
+// After steady state the free list avoids all dynamic memory allocations.
 //
-// The queue itself is fully lock-free (exchange + release-store on the
-// linked list).  The free list uses a lightweight mutex because a
-// lock-free Treiber stack is susceptible to ABA under multi-producer pop
-// and single-consumer push — the mutex eliminates that issue with
-// negligible contention (critical section is a pointer swap).
+// The free-list ABA counter (upper 16 bits of the uintptr_t head) prevents
+// the classic ABA problem that can occur with multi-producer pop +
+// single-consumer push on a standard Treiber stack.
 //
 // try_push() always returns true (unbounded capacity).
 //
@@ -30,7 +28,7 @@
 // Thread safety:
 //   - Multiple writers:  try_push() / try_emplace()
 //   - One reader:        try_pop() / clear()
-//   - No CAS loops on the consumer path
+//   - No mutexes, no CAS loops on the consumer path
 //
 // Requirements:
 //   T must be nothrow-destructible (for safe drain on clear/destroy).
@@ -54,28 +52,50 @@ class MPSCQueue final : public IQueue<T> {
         }
     };
 
-    // ── Mutex-protected free list ────────────────────────────────────
+    // ── Tagged-pointer Treiber stack (lock-free free list) ───────────
     // Consumer returns exhausted nodes here; producers re-acquire them.
-    // A mutex is used instead of a lock-free Treiber stack to avoid the
-    // ABA problem under multi-producer pop + single-consumer push.
-    // Contention is negligible — the critical section is ~3 pointer swaps.
+    //
+    // The ABA counter (upper 16 bits of the packed uintptr_t head)
+    // prevents the classic ABA problem: every push/pop increments the
+    // counter, so a CAS cannot succeed on a stale (pointer, counter)
+    // pair even if the pointer alone matches.
+    //
+    // On x86-64 Linux user-space pointers use at most 48 bits (canonical
+    // form with bit 47 as user/kernel boundary).  We store the ABA counter
+    // in bits 48-63.
     struct alignas(CL) FreeList {
-        std::mutex mtx;
-        Node* head{nullptr};
+        static constexpr uintptr_t kPtrMask = (1ULL << 48) - 1;
+        static constexpr uintptr_t kTagInc  = 1ULL << 48;
+
+        std::atomic<uintptr_t> head_{0};
 
         void push(Node* node) noexcept {
-            std::lock_guard<std::mutex> lock(mtx);
-            node->next.store(head, std::memory_order_relaxed);
-            head = node;
+            uintptr_t old = head_.load(std::memory_order_relaxed);
+            uintptr_t desired;
+            do {
+                Node* old_ptr = reinterpret_cast<Node*>(old & kPtrMask);
+                node->next.store(old_ptr, std::memory_order_relaxed);
+                desired = (reinterpret_cast<uintptr_t>(node) & kPtrMask)
+                        | ((old + kTagInc) & ~kPtrMask);
+            } while (!head_.compare_exchange_weak(old, desired,
+                                                   std::memory_order_release,
+                                                   std::memory_order_relaxed));
         }
 
         Node* pop() noexcept {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (!head) return nullptr;
-            Node* node = head;
-            head = node->next.load(std::memory_order_relaxed);
-            node->next.store(nullptr, std::memory_order_relaxed);
-            return node;
+            uintptr_t old = head_.load(std::memory_order_acquire);
+            uintptr_t desired;
+            while (true) {
+                Node* node = reinterpret_cast<Node*>(old & kPtrMask);
+                if (!node) return nullptr;
+                Node* next = node->next.load(std::memory_order_relaxed);
+                desired = (reinterpret_cast<uintptr_t>(next) & kPtrMask)
+                        | ((old + kTagInc) & ~kPtrMask);
+                if (head_.compare_exchange_weak(old, desired,
+                                                 std::memory_order_acquire,
+                                                 std::memory_order_relaxed))
+                    return node;
+            }
         }
     };
 
