@@ -175,7 +175,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
 }
 
 // ============================================================================
-// Registry-aware helpers (replace InputParser lookup functions)
+// Registry-aware helpers (replace old unordered_map-based lookup functions)
 // ============================================================================
 
 ItemStack build_target(

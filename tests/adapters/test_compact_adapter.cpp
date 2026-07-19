@@ -1,5 +1,6 @@
 #include "framework/test_utils.h"
 #include "adapters/CompactAdapter.h"
+#include "resolvers/ItemResolver.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/RegistryAccess.h"
 #include "registries/EnchantmentRegistry.h"
@@ -44,7 +45,7 @@ void test_apply_valid_input() {
     ItemCollection books;
     books.push_back(ItemStack(EnchSet{Ench(0, 5)}, 0));
 
-    auto input = adapter.apply(target_item, original_ench, EnchSet{}, books, config,
+    auto input = adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                                registries::enchants());
 
     expect(input.items.size() == 2, "items should have 2 entries (equipment + 1 book)");
@@ -67,7 +68,7 @@ void test_apply_with_target() {
     EnchSet target{Ench(0, 5)};
     ItemCollection books;
 
-    auto input = adapter.apply(target_item, original_ench, target, books, config,
+    auto input = adapter.apply(ResolvedInput{target_item, original_ench, target, books},
                                registries::enchants());
 
     expect(input.target.size() == 1, "target should have 1 enchantment");
@@ -95,7 +96,7 @@ void test_apply_invalid_enchant_id() {
 
     bool threw = false;
     try {
-        adapter.apply(target_item, original_ench, EnchSet{}, books, config,
+        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -118,7 +119,7 @@ void test_apply_invalid_level() {
 
     bool threw = false;
     try {
-        adapter.apply(target_item, original_ench, EnchSet{}, books, config,
+        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -142,7 +143,7 @@ void test_apply_inapplicable_enchant() {
 
     bool threw = false;
     try {
-        adapter.apply(target_item, original_ench, EnchSet{}, books, config,
+        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -164,7 +165,7 @@ void test_apply_penalty_overflow() {
 
     bool threw = false;
     try {
-        adapter.apply(target_item, original_ench, EnchSet{}, books, config,
+        adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                       registries::enchants());
     } catch (const std::invalid_argument&) {
         threw = true;
@@ -184,7 +185,7 @@ void test_pruning_only_applicable() {
     EnchSet original_ench;
     ItemCollection books;
 
-    auto input = adapter.apply(target_item, original_ench, EnchSet{}, books, config,
+    auto input = adapter.apply(ResolvedInput{target_item, original_ench, EnchSet{}, books},
                                registries::enchants());
 
     // Global registry has 3 enchants; only 2 (sharpness, knockback) are sword-applicable

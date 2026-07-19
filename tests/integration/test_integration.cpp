@@ -1,7 +1,7 @@
 #include "cli/cli.h"
 #include "parsers/EnchInfoParser.h"
 #include "parsers/EnchParser.h"
-#include "parsers/InputParser.h"
+#include "parsers/ItemParser.h"
 #include "adapters/OutputFormatter.h"
 #include "resolvers/RegistryResolver.h"
 #include "registries/EnchantmentRegistry.h"
@@ -73,27 +73,29 @@ void test_full_pipeline_direct() {
     auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=5,knockback=2"};
-
-    auto config = parse_cli(5, const_cast<char **>(argv));
-
     auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
-    std::unordered_map<std::string, const Equipment *> eq_map;
-    for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
+    EquipmentRegistry eq_reg;
+    eq_reg.initialize(equipments);
 
-    // Build ench_id_map from the populated registry
-    std::unordered_map<std::string, int32_t> ench_id_map;
-    for (const auto& info : test_ench_reg.get_instances())
-        ench_id_map[info.name_id] = test_ench_reg.get_id(info.name_id);
+    // Use inline target syntax: diamond_sword[sharpness=5,knockback=2]
+    const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=5,knockback=2]"};
+    auto config = parse_cli(3, const_cast<char **>(argv));
 
-    auto input = InputParser::assemble_input(config, ench_id_map, eq_map);
+    // Build domain input from CLI spec
+    auto target_spec = ItemParser::parse(config.target);
+    ItemStack target_item = build_target(target_spec, test_ench_reg, eq_reg);
+
+    EnchSet source_ench;  // no --source flag
+    EnchSet target_ench = build_enchset(target_spec.inline_enchants, test_ench_reg);
+
+    auto resolved = ItemResolver::resolve(target_item, source_ench, target_ench, test_ench_reg);
 
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
-    expect(input.available_items.size() == 7,
+    expect(resolved.books.size() == 7,
            "full_pipeline_direct: auto-complete should generate 7 graduated books");
-    expect(input.target_item.equipment.has_value(),
+    expect(resolved.target_item.equipment.has_value(),
            "full_pipeline_direct: target should have equipment");
-    expect(input.target_item.equipment->name_id == "diamond_sword",
+    expect(resolved.target_item.equipment->name_id == "minecraft:diamond_sword",
            "full_pipeline_direct: target should be diamond sword");
 
     std::cout << "  PASS: test_full_pipeline_direct" << std::endl;
@@ -110,40 +112,39 @@ void test_full_pipeline_inventory() {
     registries::enchants().initialize(ench_infos);
 
     auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
-    std::unordered_map<std::string, const Equipment *> eq_map;
-    for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
+    EquipmentRegistry eq_reg;
+    eq_reg.initialize(equipments);
 
-    // Write a temp inventory file
-    auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_inv_pipeline";
-    std::filesystem::create_directories(temp_dir);
-    auto inv_path = (temp_dir / "test_inv_pipeline.json").string();
+    // Build target with inline syntax
+    TargetSpec target_spec;
+    target_spec.item_id = "diamond_sword";
+    target_spec.inline_enchants.push_back({"minecraft", "sharpness", 5});
+    ItemStack target_item = build_target(target_spec, test_ench_reg, eq_reg);
+
+    // Build available items to simulate inventory
+    ItemCollection available_items;
+    int32_t sharpness_id = test_ench_reg.get_id("sharpness");
+    int32_t kb_id = test_ench_reg.get_id("knockback");
     {
-        std::ofstream f(inv_path);
-        f << R"({
-            "items": [
-                {"type": "book", "enchants": [{"id": "sharpness", "level": 5}], "prior_penalty": 0},
-                {"type": "book", "enchants": [{"id": "knockback", "level": 2}], "prior_penalty": 0},
-                {"type": "equipment", "id": "diamond_sword", "enchants": [], "prior_penalty": 0, "durability": 1561}
-            ]
-        })";
+        EnchSet book_enchs;
+        book_enchs.emplace(sharpness_id, 5);
+        available_items.emplace_back(book_enchs, 0);
+    }
+    {
+        EnchSet book_enchs;
+        book_enchs.emplace(kb_id, 2);
+        available_items.emplace_back(book_enchs, 0);
+    }
+    {
+        int32_t eq_id = eq_reg.get_id("diamond_sword");
+        available_items.emplace_back(eq_reg.get(eq_id), EnchSet{}, 0, 1561);
     }
 
-    const char *argv[] = {"besq", "--mode", "inventory", "--input", inv_path.c_str(),
-                          "--target", "diamond_sword", "--wanted", "sharpness=5"};
-    
-    auto config = parse_cli(9, const_cast<char **>(argv));
-
-    std::unordered_map<std::string, int32_t> ench_id_map;
-    for (const auto& info : test_ench_reg.get_instances())
-        ench_id_map[info.name_id] = test_ench_reg.get_id(info.name_id);
-    auto input = InputParser::assemble_input(config, ench_id_map, eq_map);
-
-    expect(input.available_items.size() >= 2,
+    expect(available_items.size() >= 2,
            "full_pipeline_inventory: should have at least 2 items");
-    expect(input.target_item.equipment.has_value(),
+    expect(target_item.equipment.has_value(),
            "full_pipeline_inventory: target should have equipment");
 
-    std::filesystem::remove_all(temp_dir);
     std::cout << "  PASS: test_full_pipeline_inventory" << std::endl;
 }
 
@@ -158,12 +159,12 @@ void test_builtin_enchantment_lookup() {
     auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    expect(registries::enchants().get_id("sharpness") >= 0, "builtin: sharpness found");
+    expect(registries::enchants().get_id("minecraft:sharpness") >= 0, "builtin: sharpness found");
     expect(registries::enchants().get_id("nonexistent") < 0, "builtin: nonexistent not found");
 
-    auto &sharpness = registries::enchants().get("sharpness");
-    expect(sharpness.name_id == "sharpness",
-           "builtin: sharpness name_id is sharpness");
+    auto &sharpness = registries::enchants().get("minecraft:sharpness");
+    expect(sharpness.name_id == "minecraft:sharpness",
+           "builtin: sharpness name_id is minecraft:sharpness");
     expect(sharpness.max_level == 5, "builtin: sharpness max_level is 5");
     expect(sharpness.multiplier == 1, "builtin: sharpness multiplier is 1");
 
@@ -182,14 +183,14 @@ void test_builtin_equipment_lookup() {
     bool found_sword = false;
     bool found_netherite_helmet = false;
     for (const auto &eq : equipments) {
-        if (eq.name_id == "diamond_sword") {
+        if (eq.name_id == "minecraft:diamond_sword") {
             found_sword = true;
             expect(eq.category_id == EquipmentCategory::ID_SWORD,
                    "builtin_eq: diamond_sword category is sword");
             expect(eq.max_durability == 1561,
                    "builtin_eq: diamond_sword max_durability is 1561");
         }
-        if (eq.name_id == "netherite_helmet") {
+        if (eq.name_id == "minecraft:netherite_helmet") {
             found_netherite_helmet = true;
         }
     }
@@ -239,47 +240,39 @@ void test_full_pipeline_execute() {
     registries::enchants().initialize(ench_infos);
 
     auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
-    std::unordered_map<std::string, const Equipment *> eq_map;
-    for (auto &eq : equipments) eq_map[eq.name_id] = &eq;
+    EquipmentRegistry eq_reg;
+    eq_reg.initialize(equipments);
 
-    // 1. Parse CLI for a simple case
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--wanted", "sharpness=3"};
-
-    auto config = parse_cli(5, const_cast<char **>(argv));
+    // 1. Parse CLI using inline target syntax
+    const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=3]"};
+    auto config = parse_cli(3, const_cast<char **>(argv));
 
     // 2. Build domain input
-    auto equip_it = eq_map.find("diamond_sword");
-    expect(equip_it != eq_map.end(),
-           "execute: diamond_sword found in equipment map");
+    auto target_spec = ItemParser::parse(config.target);
+    ItemStack target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    expect(target_item.equipment.has_value(),
+           "execute: target should have equipment");
 
-    auto wanted_specs = EnchParser::parse(config.source);
-    std::unordered_map<std::string, int32_t> ench_id_map;
-    for (const auto& info : test_ench_reg.get_instances())
-        ench_id_map[info.name_id] = test_ench_reg.get_id(info.name_id);
-    EnchSet wanted = InputParser::build_wanted_enchset(wanted_specs, ench_id_map);
     EnchSet existing;    // equipment starts empty
-    ItemCollection books = InputParser::generate_books(wanted, existing);
-    expect(books.size() == 3,
+    EnchSet target_ench = build_enchset(target_spec.inline_enchants, test_ench_reg);
+
+    // Use ItemResolver to validate and generate graduated books
+    auto resolved = ItemResolver::resolve(target_item, existing, target_ench, test_ench_reg);
+    expect(resolved.books.size() == 3,
            "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
 
-    // 3. Build AlgorithmInput via CompactAdapter
-    ItemStack target_item(*equip_it->second, EnchSet{}, 0);
-    EnchSet target_ench = wanted;
-
-    ForgeConfig forge_config;
-    forge_config.platform = MCE::Java;
-
+    // 3. Build AlgorithmInput via CompactAdapter (new API)
     CompactAdapter adapter;
-    AlgorithmInput algo_input = adapter.apply(
-        target_item, existing, target_ench, books, forge_config, registries::enchants());
+    AlgorithmInput algo_input = adapter.apply(resolved, registries::enchants());
+    algo_input.config.platform = MCE::Java;
 
     expect(algo_input.target.size() == 1,
            "execute: target should have 1 enchantment (sharpness 3)");
-    expect(algo_input.items.size() == 1 + books.size(),
+    expect(algo_input.items.size() == 1 + resolved.books.size(),
            "execute: items = 1 equipment + N books");
 
     // 4. Create algorithm (Greedy for speed) and executor
-    auto algo = std::make_unique<GreedyAlgorithm>(forge_config);
+    auto algo = std::make_unique<GreedyAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
     executor.start(algo_input);
 
@@ -299,7 +292,7 @@ void test_full_pipeline_execute() {
 
     // 7. Convert back to domain solutions
     auto solutions = adapter.recall(output, algo_input,
-                                     existing, target_item, books);
+                                     resolved.source_ench, resolved.target_item, resolved.books);
     expect(!solutions.empty(),
            "execute: should have at least one domain solution");
     expect(solutions[0].is_success,

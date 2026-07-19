@@ -148,28 +148,13 @@ add_executable(test_cli_parser
     ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PARSER_UTIL_SRCS}
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${DOMAIN_TYPE_SRCS}
 )
 target_include_directories(test_cli_parser PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_cli_parser COMMAND test_cli_parser)
 set_tests_properties(test_cli_parser PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
-
-add_executable(test_input_parser
-    parsers/test_input_parser.cpp
-    ${PROJECT_ROOT}/src/cli/cli.cpp
-    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
-    ${PROJECT_ROOT}/src/parsers/InputParser.cpp
-    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
-    ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
-    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
-    ${PARSER_UTIL_SRCS}
-    ${REGISTRY_CORE_SRCS}
-    ${DOMAIN_TYPE_SRCS}
-)
-target_include_directories(test_input_parser PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_input_parser COMMAND test_input_parser)
-set_tests_properties(test_input_parser PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
@@ -193,11 +178,11 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/cli/cli.cpp
     ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
-    ${PROJECT_ROOT}/src/parsers/InputParser.cpp
     ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
     ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
+    ${PROJECT_ROOT}/src/resolvers/ItemResolver.cpp
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
     # I/O layer
     ${PROJECT_ROOT}/src/io/json.cpp

@@ -8,13 +8,19 @@
 #include "data/EmbeddedData.h"
 #include "parsers/EnchInfoParser.h"
 #include "log/log.hpp"
-#include "parsers/InputParser.h"
 #include "adapters/OutputFormatter.h"
+#include "parsers/EnchParser.h"
+#include "parsers/ItemParser.h"
+#include "parsers/ParserUtilsDomain.hpp"
+#include "resolvers/ItemResolver.h"
 #include "resolvers/RegistryResolver.h"
 #include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
+#include "io/json.h"
+#include "utils/ParserUtils.hpp"
+#include "types/AlgorithmTypes.h"
 
 
 #include <filesystem>
@@ -82,6 +88,99 @@ void register_builtin_algorithms(AlgorithmRegistry &registry) {
                                 [] { return std::make_unique<DiffFirstAlgorithm>(); });
 }
 
+// Helper: parse an inventory JSON file into an ItemCollection.
+// Uses registries directly for name→ID resolution (with "minecraft:" fallback).
+ItemCollection parse_inventory(
+    const std::filesystem::path& path,
+    const EnchantmentRegistry& ench_reg,
+    const EquipmentRegistry& eq_reg
+) {
+    std::string content = ParserUtils::read_file(path);
+    Json root = Json::parse(content);
+    if (root.type() != JsonType::Object) return {};
+
+    Json::Value root_val = root.get_value();
+    if (!std::holds_alternative<Json::Object>(root_val)) return {};
+    Json::Object root_obj = std::get<Json::Object>(root_val);
+
+    auto items_it = root_obj.find("items");
+    if (items_it == root_obj.end()) return {};
+
+    Json::Value items_val = items_it->second.get_value();
+    if (!std::holds_alternative<Json::Array>(items_val)) return {};
+    Json::Array items_arr = std::get<Json::Array>(items_val);
+
+    ItemCollection result;
+    for (const Json& item_json : items_arr) {
+        if (item_json.type() != JsonType::Object) continue;
+        Json::Value item_val = item_json.get_value();
+        if (!std::holds_alternative<Json::Object>(item_val)) continue;
+        Json::Object item_obj = std::get<Json::Object>(item_val);
+
+        std::string type = ParserUtils::get_json_string(item_obj, "type");
+        if (type.empty()) {
+            LOG_WARN("Warning: item missing 'type' field, skipping");
+            continue;
+        }
+
+        // Parse enchantments
+        EnchSet ench_set;
+        auto ench_it = item_obj.find("enchants");
+        if (ench_it != item_obj.end()) {
+            Json::Value enchants_val = ench_it->second.get_value();
+            if (std::holds_alternative<Json::Array>(enchants_val)) {
+                Json::Array ench_arr = std::get<Json::Array>(enchants_val);
+                for (const Json& ench_json : ench_arr) {
+                    if (ench_json.type() != JsonType::Object) continue;
+                    Json::Value ench_val = ench_json.get_value();
+                    if (!std::holds_alternative<Json::Object>(ench_val)) continue;
+                    Json::Object ench_obj = std::get<Json::Object>(ench_val);
+
+                    std::string ench_id_str = ParserUtils::get_json_string(ench_obj, "id");
+                    int32_t ench_level = ParserUtils::get_json_int(ench_obj, "level");
+                    if (ench_level < 1) ench_level = 1;
+
+                    int32_t ench_id = ench_reg.get_id(ench_id_str);
+                    if (ench_id >= 0) {
+                        ench_set.emplace(ench_id, ench_level);
+                    } else {
+                        LOG_WARN("Warning: unknown enchantment '%s' in item, skipping", ench_id_str.c_str());
+                    }
+                }
+            }
+        }
+
+        int32_t prior_penalty = ParserUtils::get_json_int(item_obj, "prior_penalty");
+        int32_t priority = ParserUtils::get_json_int(item_obj, "priority");
+        if (priority <= 0) priority = 99;
+
+        if (type == "book") {
+            auto& item = result.emplace_back(ench_set, prior_penalty);
+            item.priority = priority;
+        } else if (type == "equipment") {
+            std::string equip_id = ParserUtils::get_json_string(item_obj, "id");
+            int32_t eq_id = eq_reg.get_id(equip_id);
+
+            if (eq_id >= 0) {
+                const Equipment& equip = eq_reg.get(eq_id);
+                int32_t durability = ParserUtils::get_json_int(item_obj, "durability");
+                if (durability <= 0) {
+                    durability = equip.max_durability;
+                }
+                auto& item = result.emplace_back(equip, ench_set, prior_penalty, durability);
+                item.priority = priority;
+            } else {
+                LOG_WARN("Warning: equipment '%s' not found in registry, treating as book", equip_id.c_str());
+                result.emplace_back(ench_set, prior_penalty);
+            }
+        } else {
+            LOG_WARN("Warning: unknown item type '%s', skipping", type.c_str());
+        }
+    }
+
+    return result;
+}
+
 } // anonymous namespace
 
 int main(int argc, char *argv[]) {
@@ -126,20 +225,22 @@ int main(int argc, char *argv[]) {
                              cat_reg, ench_reg, eq_reg);
         }
 
-        // ── Build resolution maps for InputParser ───────────────────────
-        std::unordered_map<std::string, int32_t> ench_id_map;
-        for (const auto &info : ench_reg.get_instances()) {
-            ench_id_map[info.name_id] = ench_reg.get_id(info.name_id);
+        // ── Resolve CLI specs → domain items ─────────────────────────────
+        auto target_spec = ItemParser::parse(config.target);
+        auto target_item = build_target(target_spec, ench_reg, eq_reg);
+
+        EnchSet source_ench;
+        if (!config.source.empty()) {
+            auto source_specs = EnchParser::parse(config.source);
+            source_ench = build_enchset(source_specs, ench_reg);
         }
 
-        std::unordered_map<std::string, const Equipment *> equipment_map;
-        for (const auto &eq : eq_reg.get_instances()) {
-            equipment_map[eq.name_id] = &eq;
+        EnchSet target_ench;
+        if (!target_spec.inline_enchants.empty()) {
+            target_ench = build_enchset(target_spec.inline_enchants, ench_reg);
         }
 
-        auto parsed = InputParser::assemble_input(config, ench_id_map, equipment_map);
-
-        // Register and create algorithm (local registry, no singleton)
+        // ── Register and create algorithm (local registry, no singleton) ──
         AlgorithmRegistry algo_reg;
         register_builtin_algorithms(algo_reg);
         auto algo = algo_reg.create(config.algorithm);
@@ -153,12 +254,60 @@ int main(int argc, char *argv[]) {
             throw std::runtime_error(msg);
         }
 
-        // ── Boundary: domain → compact ─────────────────────────────────────
+        // Check algorithm mode support
+        AlgorithmMode algo_mode = (config.mode == "inventory")
+            ? AlgorithmMode::inventory
+            : AlgorithmMode::direct;
+        if (!(algo->supported_mode() & algo_mode)) {
+            throw std::runtime_error("Algorithm '" + config.algorithm +
+                "' does not support '" + config.mode + "' mode");
+        }
+
+        // ── Boundary: domain → compact ────────────────────────────────────
         CompactAdapter adapter;
-        ResolvedInput resolved{parsed.target_item, parsed.source_ench,
-                               parsed.target_ench, parsed.available_items};
-        AlgorithmInput algo_input = adapter.apply(resolved, ench_reg);
-        algo_input.config.platform = parsed.platform;
+        ForgeConfig forge_config;
+        if (config.platform == "auto") {
+            forge_config.platform = MCE::All;
+        } else {
+            forge_config.platform = ParserUtils::parse_platform(config.platform);
+        }
+
+        AlgorithmInput algo_input;
+        // Keep these alive for the recall call later
+        EnchSet recall_source_ench = source_ench;
+        ItemStack recall_target_item = target_item;
+        ItemCollection recall_available_items;
+
+        if (config.mode == "direct") {
+            auto resolved = ItemResolver::resolve(
+                target_item, source_ench, target_ench, ench_reg);
+            recall_source_ench = resolved.source_ench;
+            recall_target_item = resolved.target_item;
+            recall_available_items = resolved.books;
+            algo_input = adapter.apply(resolved, ench_reg);
+        } else {
+            // inventory mode
+            if (!config.input.has_value())
+                throw std::runtime_error("Input file required for inventory mode");
+
+            ItemCollection available_items = parse_inventory(
+                std::filesystem::path(*config.input), ench_reg, eq_reg);
+
+            // Stable sort by priority (lower = more preferred)
+            std::stable_sort(available_items.begin(), available_items.end(),
+                [](const ItemStack& a, const ItemStack& b) {
+                    return a.priority < b.priority;
+                });
+
+            ResolvedInput resolved{
+                target_item, source_ench, target_ench, std::move(available_items)};
+            recall_source_ench = resolved.source_ench;
+            recall_target_item = resolved.target_item;
+            recall_available_items = resolved.books;
+            algo_input = adapter.apply(resolved, ench_reg);
+        }
+
+        algo_input.config.platform = forge_config.platform;
 
         // ── Search config from CLI ────────────────────────────────────────
         algo_input.search.max_solutions = config.solutions;
@@ -191,8 +340,9 @@ int main(int argc, char *argv[]) {
             }
 
             // ── Boundary: compact → domain ────────────────────────────────
-            solutions = adapter.recall(executor.output(), algo_input, parsed.source_ench,
-                                        parsed.target_item, parsed.available_items);
+            solutions = adapter.recall(executor.output(), algo_input,
+                                        recall_source_ench, recall_target_item,
+                                        recall_available_items);
         }
 
         // Format output
