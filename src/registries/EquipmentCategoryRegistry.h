@@ -27,6 +27,9 @@ public:
     const EquipmentCategory& get(const std::string& name_id) const;
     int32_t get_id(const std::string& name_id) const;  // -1 if not found
 
+    /// Add a custom category name. Idempotent — returns ID if already exists.
+    int32_t add(const std::string& name);
+
     const std::vector<EquipmentCategory>& get_instances() const { return instances_; }
     size_t size() const { return instances_.size(); }
 

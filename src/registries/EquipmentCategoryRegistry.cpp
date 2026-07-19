@@ -57,3 +57,12 @@ int32_t EquipmentCategoryRegistry::get_id(const std::string& name_id) const {
     auto it = name_to_id_.find(name_id);
     return it != name_to_id_.end() ? it->second : -1;
 }
+
+int32_t EquipmentCategoryRegistry::add(const std::string& name) {
+    int32_t existing = get_id(name);
+    if (existing >= 0) return existing;
+    int32_t id = static_cast<int32_t>(instances_.size());
+    instances_.push_back({id, name});
+    name_to_id_[name] = id;
+    return id;
+}

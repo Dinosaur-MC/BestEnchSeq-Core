@@ -58,3 +58,20 @@ std::unordered_map<std::string, const Equipment*> EquipmentRegistry::get_name_ma
     }
     return result;
 }
+
+bool EquipmentRegistry::add(const Equipment& eq) {
+    if (name_to_id_.count(eq.name_id)) return false;
+    int32_t idx = static_cast<int32_t>(instances_.size());
+    instances_.push_back(eq);
+    name_to_id_[eq.name_id] = idx;
+    return true;
+}
+
+bool EquipmentRegistry::remove(const std::string& name_id) {
+    auto it = name_to_id_.find(name_id);
+    if (it == name_to_id_.end()) return false;
+    name_to_id_.erase(it);
+    // Keep index stability for existing references; mark as invalid
+    instances_[it->second] = Equipment{};
+    return true;
+}

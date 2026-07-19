@@ -35,6 +35,12 @@ public:
     // Name -> pointer map
     std::unordered_map<std::string, const Equipment*> get_name_map() const;
 
+    /// Add a single Equipment. Returns false if name_id already exists.
+    bool add(const Equipment& eq);
+
+    /// Remove by name_id. Returns false if not found.
+    bool remove(const std::string& name_id);
+
     // All instances (for iteration)
     const std::vector<Equipment>& get_instances() const { return instances_; }
     size_t size() const { return instances_.size(); }
