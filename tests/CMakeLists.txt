@@ -649,6 +649,41 @@ set_tests_properties(test_equipment_registry PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
+# ============================================================================
+# Registry mutable API tests
+# ============================================================================
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registries/test_enchantment_registry_mutable.cpp)
+    message(FATAL_ERROR "Required test source not found: registries/test_enchantment_registry_mutable.cpp")
+endif()
+
+add_executable(test_enchantment_registry_mutable
+    registries/test_enchantment_registry_mutable.cpp
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
+)
+target_include_directories(test_enchantment_registry_mutable PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_enchantment_registry_mutable COMMAND test_enchantment_registry_mutable)
+set_tests_properties(test_enchantment_registry_mutable PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registries/test_equipment_registry_mutable.cpp)
+    message(FATAL_ERROR "Required test source not found: registries/test_equipment_registry_mutable.cpp")
+endif()
+
+add_executable(test_equipment_registry_mutable
+    registries/test_equipment_registry_mutable.cpp
+    ${EQUIP_REG_SRCS}
+    ${REGISTRY_CORE_SRCS}
+    ${DOMAIN_TYPE_SRCS}
+)
+target_include_directories(test_equipment_registry_mutable PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_equipment_registry_mutable COMMAND test_equipment_registry_mutable)
+set_tests_properties(test_equipment_registry_mutable PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/registries/test_registry_manager.cpp)
     message(FATAL_ERROR "Required test source not found: registries/test_registry_manager.cpp")
 endif()

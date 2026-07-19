@@ -8,11 +8,11 @@
 struct EnchInfo {
     std::string name_id;
     std::string name;
-    MCE supported_platform;
-    int32_t max_level;
-    int32_t limited_level;
-    int32_t multiplier;
-    bool is_treasure         = false;
+    MCE supported_platform     = MCE::None;
+    int32_t max_level           = 0;
+    int32_t limited_level       = 0;
+    int32_t multiplier          = 0;
+    bool is_treasure            = false;
     std::unordered_set<std::string> exclusive_set;
     std::unordered_set<int32_t> applicable_category_ids;
 
