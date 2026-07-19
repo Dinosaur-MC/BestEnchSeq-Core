@@ -199,6 +199,10 @@ int main() {
             EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
             bench_throughput(loop, OPS_EV, WARM_EV, "BoundedEventLoop (BoundedMPMC)");
         }
+        {
+            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>> loop;
+            bench_throughput(loop, OPS_EV, WARM_EV, "BoundedMPSCEventLoop (BoundedMPSC)");
+        }
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 
@@ -207,13 +211,22 @@ int main() {
         Timer sec;
         std::cout << "── Multi-producer throughput ─────────────────────\n";
         bench_multiproducer(OPS_MP, WARM_EV, 2);
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop");
+        bench_multiproducer_tmpl<
+            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
+        >(OPS_MP, WARM_EV, 2, "BoundedMPSCEventLoop (BoundedMPSC)");
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 2, "MPSCEventLoop (unbounded)");
         std::cout << "  ──\n";
         bench_multiproducer(OPS_MP, WARM_EV, 4);
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop");
+        bench_multiproducer_tmpl<
+            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
+        >(OPS_MP, WARM_EV, 4, "BoundedMPSCEventLoop (BoundedMPSC)");
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 4, "MPSCEventLoop (unbounded)");
         std::cout << "  ──\n";
         bench_multiproducer(OPS_MP, WARM_EV, 8);
-        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop");
+        bench_multiproducer_tmpl<
+            EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
+        >(OPS_MP, WARM_EV, 8, "BoundedMPSCEventLoop (BoundedMPSC)");
+        bench_multiproducer_tmpl<MPSCEventLoop<>>(OPS_MP, WARM_EV, 8, "MPSCEventLoop (unbounded)");
         std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
     }
 
