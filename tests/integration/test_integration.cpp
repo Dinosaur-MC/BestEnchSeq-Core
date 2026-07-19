@@ -3,7 +3,7 @@
 #include "parsers/EnchParser.h"
 #include "parsers/ItemParser.h"
 #include "adapters/OutputFormatter.h"
-#include "resolvers/RegistryResolver.h"
+#include "adapters/RawTypeAdapter.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -70,10 +70,10 @@ void test_full_pipeline_direct() {
 
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
+    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
+    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
     eq_reg.initialize(equipments);
 
@@ -108,10 +108,10 @@ void test_full_pipeline_inventory() {
     registries::categories().initialize();
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
+    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
+    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
     eq_reg.initialize(equipments);
 
@@ -156,7 +156,7 @@ void test_builtin_enchantment_lookup() {
     registries::categories().initialize();
     auto [raw_ench, _] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
+    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     expect(registries::enchants().get_id("minecraft:sharpness") >= 0, "builtin: sharpness found");
@@ -178,7 +178,7 @@ void test_builtin_equipment_lookup() {
     registries::categories().initialize();
     auto [_, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
+    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
 
     bool found_sword = false;
     bool found_netherite_helmet = false;
@@ -208,7 +208,7 @@ void test_output_formatting_empty() {
     registries::categories().initialize();
     auto [raw_ench, _] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
+    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
     std::vector<EnchSolution> empty_solutions;
@@ -236,10 +236,10 @@ void test_full_pipeline_execute() {
     registries::categories().initialize();
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RegistryResolver::resolve_ench_info(raw_ench, test_cat_reg);
+    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    auto equipments = RegistryResolver::resolve_equipment(raw_eq, test_cat_reg);
+    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
     eq_reg.initialize(equipments);
 

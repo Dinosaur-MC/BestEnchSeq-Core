@@ -2,18 +2,20 @@
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
+#include "types/EnchInfo.h"
+#include "types/Equipment.h"
 #include "types/RawTypes.h"
 #include <vector>
 
-/// Converts pre-resolved RawEnchantment[] + RawEquipment[] into domain
-/// registries.  This is the bridge between parser string-based output and
-/// the domain type system (int32_t IDs).
+/// Converts raw (string-based) intermediate types to/from domain registries.
 ///
-/// Unlike calling RegistryResolver methods directly, RawTypeAdapter owns the
-/// full resolution pipeline: it builds and initializes all three registries
-/// (EquipmentCategoryRegistry, EquipmentRegistry, EnchantmentRegistry) in one
-/// call, handling category deduplication and cross-referencing internally.
+/// This is the bridge between parser string-based output and the domain type
+/// system (int32_t IDs), handling category deduplication and cross-referencing
+/// internally.  Also provides the reverse direction (domain -> raw) for
+/// serialization or round-trip scenarios.
 struct RawTypeAdapter {
+
+    // ── Raw → domain ────────────────────────────────────────────────────────
 
     /// Convert RawEnchantment[] + RawEquipment[] into domain registries.
     ///
@@ -34,4 +36,29 @@ struct RawTypeAdapter {
         EquipmentCategoryRegistry& cat_reg,
         EquipmentRegistry& eq_reg,
         EnchantmentRegistry& ench_reg);
+
+    /// Resolve a vector of raw enchantment info into domain EnchInfo objects.
+    /// Category name strings are converted to int32_t IDs via cat_reg.
+    static std::vector<EnchInfo> resolve_ench_info(
+        const std::vector<RawEnchantment>& raw,
+        const EquipmentCategoryRegistry& cat_reg);
+
+    /// Resolve a vector of raw equipment info into domain Equipment objects.
+    /// Category name strings are converted to int32_t IDs via cat_reg.
+    /// Unknown category names map to EquipmentCategory::ID_ANY.
+    static std::vector<Equipment> resolve_equipment(
+        const std::vector<RawEquipment>& raw,
+        const EquipmentCategoryRegistry& cat_reg);
+
+    // ── Domain → raw ────────────────────────────────────────────────────────
+
+    /// Convert registry contents back to raw intermediate types.
+    /// Requires the EquipmentCategoryRegistry for category ID -> name
+    /// resolution.
+    static void revert(
+        const EnchantmentRegistry& ench_reg,
+        const EquipmentRegistry& eq_reg,
+        const EquipmentCategoryRegistry& cat_reg,
+        std::vector<RawEnchantment>& out_enchants,
+        std::vector<RawEquipment>& out_equipments);
 };

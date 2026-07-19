@@ -188,9 +188,9 @@ add_executable(test_integration
     ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
     ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
-    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/resolvers/ItemResolver.cpp
     ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
+    ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     # I/O layer
     ${PROJECT_ROOT}/src/io/json.cpp
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
@@ -453,7 +453,6 @@ endif()
 add_executable(test_raw_type_adapter
     adapters/test_raw_type_adapter.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
-    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${REGISTRY_CORE_SRCS}
     ${EQUIP_REG_SRCS}
     ${GLOBAL_LOGGER_SRCS}
@@ -505,18 +504,13 @@ set_tests_properties(test_inventory_resolver PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/adapters/test_registry_resolver.cpp)
-    message(FATAL_ERROR "Required test source not found: adapters/test_registry_resolver.cpp")
-endif()
-
-add_executable(test_registry_resolver
-    adapters/test_registry_resolver.cpp
-    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
+add_executable(test_enchantment_registry_lookup
+    adapters/test_enchantment_registry_lookup.cpp
     ${REGISTRY_CORE_SRCS}
 )
-target_include_directories(test_registry_resolver PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_registry_resolver COMMAND test_registry_resolver)
-set_tests_properties(test_registry_resolver PROPERTIES
+target_include_directories(test_enchantment_registry_lookup PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_enchantment_registry_lookup COMMAND test_enchantment_registry_lookup)
+set_tests_properties(test_enchantment_registry_lookup PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
 
@@ -653,7 +647,6 @@ add_executable(test_registry_manager
     ${EQUIP_REG_SRCS}
     ${DOMAIN_TYPE_SRCS}
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     ${PARSER_UTIL_SRCS}
     ${PROJECT_ROOT}/src/io/CsvIO.cpp
@@ -723,7 +716,6 @@ add_executable(test_checkpoint_roundtrip
     ${PROJECT_ROOT}/src/log/Logger.cpp
     ${PROJECT_ROOT}/src/data/DataLoader.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/io/json.cpp

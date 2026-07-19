@@ -1,5 +1,4 @@
 #include "framework/test_utils.h"
-#include "resolvers/RegistryResolver.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/RegistryAccess.h"
 
@@ -30,7 +29,7 @@ void test_registry_get_id_namespaced() {
                      {EquipmentCategory::ID_SWORD}});
     reg.initialize(infos);
 
-    // Bare lookup — registry falls back to "minecraft:" prefix
+    // Bare lookup -- registry falls back to "minecraft:" prefix
     int32_t id = reg.get_id("sharpness");
     expect(id >= 0, "bare name should resolve to namespaced entry");
 
@@ -48,7 +47,7 @@ void test_registry_get_id_namespaced() {
 } // anonymous namespace
 
 int main() {
-    std::cout << "=== RegistryResolver Tests ===" << std::endl;
+    std::cout << "=== EnchantmentRegistry Lookup Tests ===" << std::endl;
 
     try {
         test_registry_get_id_bare();

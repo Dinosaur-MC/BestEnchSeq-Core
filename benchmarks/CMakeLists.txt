@@ -21,7 +21,6 @@ add_executable(forge_benchmark
     ${PROJECT_ROOT}/src/log/Logger.cpp
     ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
     ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
-    ${PROJECT_ROOT}/src/resolvers/RegistryResolver.cpp
     ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
     ${PROJECT_ROOT}/src/data/DataLoader.cpp
     "${PROJECT_BINARY_DIR}/generated/EmbeddedData_vanilla.cpp"

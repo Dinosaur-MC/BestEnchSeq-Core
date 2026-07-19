@@ -7,7 +7,7 @@
 // ─── Raw (pre-resolution) intermediate types ──────────────────────────────
 //
 // These types are produced by parser layer functions and consumed by
-// RegistryResolver to convert string-based references into resolved int32_t
+// RawTypeAdapter to convert string-based references into resolved int32_t
 // IDs.  They decouple parsing from registry availability: parsers never
 // call into the registry layer.
 
@@ -29,7 +29,7 @@ struct Id {
 /// produced by parsers before registry resolution.
 ///
 /// All category references are still strings — resolution to integer IDs
-/// happens in a separate RegistryResolver step.
+/// happens in a separate RawTypeAdapter step.
 struct RawEnchantment {
     Id id;
     std::string display_name;
