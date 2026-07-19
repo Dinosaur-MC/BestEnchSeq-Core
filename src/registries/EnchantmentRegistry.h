@@ -49,6 +49,16 @@ class EnchantmentRegistry {
     const std::unordered_set<int32_t> &get_exclusive_set(int32_t e) const;
     bool is_incompatible(int32_t e1, int32_t e2) const;
 
+    /// Add a single EnchInfo. Returns false if name_id already exists.
+    bool add(const EnchInfo& info);
+
+    /// Remove by name_id. Returns false if not found.
+    bool remove(const std::string& name_id);
+
+    /// Update specific fields of existing entry identified by name_id.
+    /// Supported: max_level, limited_level, multiplier, name, exclusive_set (replaces).
+    bool modify(const std::string& name_id, const EnchInfo& patch);
+
     // Validation (moved from EnchInfo statics)
     static bool check_validation(const std::vector<EnchInfo> &infos);
 

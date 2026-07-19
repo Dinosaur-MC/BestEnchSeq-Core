@@ -149,3 +149,56 @@ bool EnchantmentRegistry::is_incompatible(int32_t e1, int32_t e2) const {
         return false;
     return it->second.find(e2) != it->second.end();
 }
+
+bool EnchantmentRegistry::add(const EnchInfo& info) {
+    if (name_to_index_.count(info.name_id)) return false;
+    int32_t idx = static_cast<int32_t>(instances_.size());
+    instances_.push_back(info);
+    name_to_index_[info.name_id] = idx;
+    // Build incompatibility entries
+    incompatible_table_[idx] = {};
+    for (const auto& excl_id : info.exclusive_set) {
+        auto it = name_to_index_.find(excl_id);
+        if (it != name_to_index_.end()) {
+            incompatible_table_[idx].insert(it->second);
+            incompatible_table_[it->second].insert(idx);
+        }
+    }
+    return true;
+}
+
+bool EnchantmentRegistry::remove(const std::string& name_id) {
+    auto it = name_to_index_.find(name_id);
+    if (it == name_to_index_.end()) return false;
+    int32_t idx = it->second;
+    name_to_index_.erase(it);
+    // Remove from incompatibility table
+    incompatible_table_.erase(idx);
+    for (auto& [k, v] : incompatible_table_)
+        v.erase(idx);
+    // Mark as invalid (keep index stability)
+    instances_[idx] = EnchInfo{};
+    return true;
+}
+
+bool EnchantmentRegistry::modify(const std::string& name_id, const EnchInfo& patch) {
+    auto it = name_to_index_.find(name_id);
+    if (it == name_to_index_.end()) return false;
+    auto& target = instances_[it->second];
+    if (patch.max_level > 0) target.max_level = patch.max_level;
+    if (patch.limited_level >= 0) target.limited_level = patch.limited_level;
+    if (patch.multiplier > 0) target.multiplier = patch.multiplier;
+    if (!patch.name.empty()) target.name = patch.name;
+    if (!patch.exclusive_set.empty()) {
+        incompatible_table_[it->second].clear();
+        for (const auto& excl_id : patch.exclusive_set) {
+            auto eit = name_to_index_.find(excl_id);
+            if (eit != name_to_index_.end()) {
+                incompatible_table_[it->second].insert(eit->second);
+                incompatible_table_[eit->second].insert(it->second);
+            }
+        }
+        target.exclusive_set = patch.exclusive_set;
+    }
+    return true;
+}
