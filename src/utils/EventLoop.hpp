@@ -43,8 +43,9 @@
 //   Queue     — a lock-free queue satisfying QueueType<T>:
 //                 SegmentedMPMCQueue<T, BlockSize>  (unbounded MPMC, default)
 //                 BoundedMPMCQueue<T, Size>         (bounded MPMC)
-//                 SPSCQueue<T, Size>                (bounded, 1P1C)
 //                 SegmentedMPSCQueue<T>             (unbounded MPSC)
+//                 BoundedMPSCQueue<T, Size>         (bounded MPSC, fetch_add producer)
+//                 SPSCQueue<T, Size>                (bounded, 1P1C)
 //   Handler   — void (default) = callable mode; the consumer thread invokes
 //               each T directly.
 //               Otherwise = data mode; must be invocable as void(T).

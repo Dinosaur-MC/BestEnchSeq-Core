@@ -12,6 +12,11 @@
 // backend choice).  For performance-critical paths prefer the concrete
 // queue type directly — the vtable dispatch adds ~2-4 ns per call.
 //
+// try_emplace is available as a non-virtual template on the interface
+// (default: constructs T and forwards to try_push).  Concrete queues
+// may override with a direct-into-slot implementation for higher
+// efficiency.
+//
 // All implementations must be thread-safe as documented by the concrete type.
 
 template <typename T>
