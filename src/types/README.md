@@ -6,7 +6,7 @@
 
 ```
 RawTypes (string-based, 解析阶段)
-    │  RegistryResolver 将 string ID → int32_t ID
+    │  RawTypeAdapter::resolve() 将 string ID → int32_t ID
     ▼
 Domain types (纯数据容器, 边界 I/O)
     │  CompactAdapter::apply() 转换 domain → compact
@@ -20,7 +20,7 @@ Compact types (namespace compact, 算法层专用)
 
 ## RawTypes（`RawTypes.h`）
 
-解析阶段的字符串中间类型，在 RegistryResolver 处理前使用。
+解析阶段的字符串中间类型，在 RawTypeAdapter::resolve() 处理前使用。
 
 ```cpp
 struct RawEnchInfo {
@@ -40,7 +40,7 @@ struct RawEquipment {
 };
 ```
 
-设计目的：**解析器不依赖注册表**。解析器只生成字符串引用，所有 ID 解析在后续的 RegistryResolver 中统一完成。
+设计目的：**解析器不依赖注册表**。解析器只生成字符串引用，所有 ID 解析在后续的 RawTypeAdapter::resolve() 中统一完成。
 
 ---
 
@@ -143,9 +143,9 @@ struct AlgorithmOutput {
 };
 ```
 
-### `CLITypes.h` / `Platform.h` / `LogTypes.h`
+### 其它类型
 
-- `CLITypes.h` — CLI 配置和 ParsedInput，解析器输出
+- CLI 配置和解析结果类型（`CLIConfig`、`EnchantmentSpec`、`TargetSpec`）在 `src/cli/cli.h` 中定义
 - `Platform.h` — `MCE` 枚举（Java / Bedrock / Both）
 - `LogTypes.h` — 日志格式相关类型
 

@@ -2,13 +2,12 @@
 
 ## 设计原则
 
-解析器**不依赖任何注册表**。解析只生成字符串引用（`RawEnchInfo` / `RawEquipment`），所有 string→ID 解析在后续的 `RegistryResolver` 中统一完成。
+解析器**不依赖任何注册表**。解析只生成字符串引用（`RawEnchantment` / `RawEquipment`），所有 string→ID 解析在后续的 `RawTypeAdapter::resolve()` 中统一完成。
 
 ```
-数据文件 (JSON/CSV)
-  → EnchInfoParser::parse()     → RawEnchInfo (string-based)
-  → EquipmentParser::parse()    → RawEquipment (string-based)
-  → RegistryResolver::resolve() → domain types (int32_t IDs)
+数据文件 (JSON/CSV/MC Official)
+  → EnchInfoParser::parse()     → RawEnchantment[] + RawEquipment[] (string-based)
+  → RawTypeAdapter::resolve()   → domain types (int32_t IDs)
 ```
 
 ---
@@ -58,19 +57,7 @@ class EnchInfoParser {
 
 ---
 
-## EquipmentParser
-
-装备数据文件解析器。
-
-```cpp
-class EquipmentParser {
-    static std::vector<RawEquipment> parse(const json::Json& data);
-};
-```
-
-- 输入：JSON 格式的装备数据文件
-- 输出：`RawEquipment` 向量，`category` 字段仍为字符串
-- 未知分类名保持原样传递给 RegistryResolver 处理
+装备数据由 `EnchInfoParser::parse()` 一并处理（输入文件可同时包含 enchantments 和 equipments 数组），不再有独立的 EquipmentParser。
 
 ---
 
@@ -78,10 +65,9 @@ class EquipmentParser {
 ## 数据流
 
 ```
-数据文件 (JSON/CSV)
-  → EnchInfoParser::parse()     → RawEnchantment[] (string-based)
-  → EquipmentParser::parse()     → RawEquipment[]   (string-based)
-                                  → 下游: RegistryResolver / RawTypeAdapter
+数据文件 (JSON/CSV/MC Official)
+  → EnchInfoParser::parse()     → RawEnchantment[] + RawEquipment[] (string-based)
+                                  → 下游: RawTypeAdapter::resolve()
 
 CLI args
   → CLIParser::parse()           → ParsedArg[]

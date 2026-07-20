@@ -497,7 +497,7 @@ C++ 代码通过两个解析入口读取 `vanilla.json`：
 2. 遍历每个装备条目
 3. 字段映射：
 
-| JSON 字段 | EquipmentType 字段 |
+| JSON 字段 | Equipment 字段 |
 |-----------|-------------------|
 | `id` | `id` |
 | `name` | `name` |

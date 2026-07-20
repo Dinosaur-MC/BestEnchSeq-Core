@@ -43,9 +43,12 @@ ItemStack                → from_domain()         compact::Item
 
 数据文件 → 领域注册表的一次性初始化桥梁。
 
-流程：收集类别 → `cat_reg.initialize()` → `RegistryResolver::resolve_equipment()` → `eq_reg.initialize()` → `RegistryResolver::resolve_ench_info()` → `ench_reg.initialize()`
+流程（resolve 三阶段）：
+1. 从 `RawEquipment[]` 收集唯一种类名 → `cat_reg.initialize()`
+2. 种类字符串解析为 int32_t ID → `eq_reg.initialize()`
+3. 适用装备字符串解析为 int32_t ID、互斥列表补齐命名空间 → `ench_reg.initialize()`
 
-> RegistryResolver 已移至 `resolvers/` 层，负责 string → int32_t ID 转换。
+> revert() 是逆操作：domain registries → `RawEnchantment[]` + `RawEquipment[]`。
 
 ---
 

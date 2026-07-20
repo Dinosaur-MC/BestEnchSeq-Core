@@ -52,6 +52,9 @@ public:
     bool restore_state(const std::vector<uint8_t>& data);
     bool is_serializable() const noexcept;
 
+    /// Returns the error message from a failed execution, if any.
+    const std::string& error_message() const noexcept { return _error_message; }
+
 private:
     void _join_worker() noexcept;
     /// Atomically transition to new_state. Returns true if state changed.
@@ -73,4 +76,5 @@ private:
     static inline std::atomic<size_t> _next_task_id{1};  // 0 = invalid
     size_t _task_id{0};
     std::string _algo_name_cache;
+    std::string _error_message;         // captured from worker thread exception
 };

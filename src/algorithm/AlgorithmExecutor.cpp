@@ -88,6 +88,8 @@ void AlgorithmExecutor::_finalize() {
     } else if (s == AlgorithmState::Failed) {
         status = "Failed";
         diag->status = "Failed";
+        if (!_error_message.empty())
+            diag->status += ": " + _error_message;
     } else {
         status = diag->status;
         if (status.empty()) status = "Complete";
@@ -137,7 +139,13 @@ void AlgorithmExecutor::start(AlgorithmInput input,
             // Always attempt Completed; if cancel() already exchanged to
             // Cancelled, _set_state is a no-op — no TOCTOU race.
             _set_state(AlgorithmState::Completed);
+        } catch (const std::exception& e) {
+            _error_message = e.what();
+            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - _start_time);
+            _set_state(AlgorithmState::Failed);
         } catch (...) {
+            _error_message = "Unknown (non-std) exception";
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
             _set_state(AlgorithmState::Failed);
@@ -175,7 +183,13 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
             _set_state(AlgorithmState::Completed);
+        } catch (const std::exception& e) {
+            _error_message = e.what();
+            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - _start_time);
+            _set_state(AlgorithmState::Failed);
         } catch (...) {
+            _error_message = "Unknown (non-std) exception";
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now() - _start_time);
             _set_state(AlgorithmState::Failed);

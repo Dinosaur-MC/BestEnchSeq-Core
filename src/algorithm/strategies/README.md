@@ -131,4 +131,4 @@ IAlgorithm::execute(input, ctx)
 - [ ] 实现 `execute()`，按规范使用 ExecutionContext API
 - [ ] 在 `tests/algorithm/test_algorithm_strategies.cpp` 中添加测试
 - [ ] 如果使用 ItemPool，添加 `simulate()` 快速可行性检查
-- [ ] 运行 `ctest` 确认 35/35 全通过
+- [ ] 运行 `ctest` 确认全部测试通过

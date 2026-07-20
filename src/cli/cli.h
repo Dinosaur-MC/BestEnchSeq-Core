@@ -23,6 +23,7 @@ struct CLIConfig {
     std::string format = "text";
     int solutions = 1;
     int memory_mb = 0;
+    int max_time = 0;                // --max-time <seconds> (0 = unlimited)
     bool verbose = false;
     bool help = false;
     bool version = false;                          // --version / -V

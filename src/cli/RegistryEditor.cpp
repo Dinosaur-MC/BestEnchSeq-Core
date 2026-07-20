@@ -58,9 +58,13 @@ void apply_registry_edits(
                     if (eq_pos == std::string::npos) continue;
                     auto k = parts[i].substr(0, eq_pos);
                     auto v = parts[i].substr(eq_pos + 1);
-                    if (k == "multiplier")     multiplier = std::stoi(v);
-                    if (k == "max_level")       max_level = std::stoi(v);
-                    if (k == "limited_level")  limited_level = std::stoi(v);
+                    try {
+                        if (k == "multiplier")     multiplier = std::stoi(v);
+                        if (k == "max_level")       max_level = std::stoi(v);
+                        if (k == "limited_level")  limited_level = std::stoi(v);
+                    } catch (const std::exception&) {
+                        throw std::runtime_error("Invalid numeric value for '" + k + "': '" + v + "' in operation: " + op);
+                    }
                     if (k == "is_treasure")    is_treasure = (v == "true");
                 }
                 EnchInfo info{id, id, MCE::All, max_level, limited_level,
@@ -84,9 +88,13 @@ void apply_registry_edits(
                     if (eq_pos == std::string::npos) continue;
                     auto k = parts[i].substr(0, eq_pos);
                     auto v = parts[i].substr(eq_pos + 1);
-                    if (k == "multiplier")    patch.multiplier = std::stoi(v);
-                    if (k == "max_level")      patch.max_level = std::stoi(v);
-                    if (k == "limited_level") patch.limited_level = std::stoi(v);
+                    try {
+                        if (k == "multiplier")    patch.multiplier = std::stoi(v);
+                        if (k == "max_level")      patch.max_level = std::stoi(v);
+                        if (k == "limited_level") patch.limited_level = std::stoi(v);
+                    } catch (const std::exception&) {
+                        throw std::runtime_error("Invalid numeric value for '" + k + "': '" + v + "' in operation: " + op);
+                    }
                 }
                 ench_reg.modify(id, patch);
                 continue;

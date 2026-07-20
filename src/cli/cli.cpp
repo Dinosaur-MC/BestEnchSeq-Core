@@ -19,13 +19,15 @@
 std::string get_cli_help_text(const std::string &program_name) {
     return
         "Usage: " + program_name + " [options] --target <item>\n"
+        "   or: " + program_name + " --export-registry <path> [options]\n"
         "   or: " + program_name + " (no args: show this help)\n"
         "\n"
         "Options:\n"
         "  -h, --help              Show this help message\n"
         "  -V, --version           Show version info\n"
         "  --algorithm <name>      Search algorithm: greedy (default), dfs, astar,\n"
-        "                           penalty_balance, hierarchical, or idastar\n"
+        "                           penalty_balance, hierarchical, idastar,\n"
+        "                           hamming, or diff_first\n"
         "  --source <list>         Source enchantments (e.g., sharpness=5,knockback=2)\n"
         "  --target <spec>         Target item with wanted enchantments\n"
         "                           (e.g., diamond_sword[sharpness=3])\n"
@@ -50,6 +52,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "                           Keys: ignore-cost-cap, ignore-penalty-cost,\n"
         "                                 ignore-repair-cost (all: true|false)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
+        "  --max-time <seconds>    Max search time in seconds (0 = unlimited, default: 0)\n"
         "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
         "\n"
         "Enchantment formats:\n"
@@ -187,15 +190,27 @@ CLIConfig parse_cli(int argc, char *argv[]) {
                     throw std::runtime_error("Invalid --memory value: '" + value + "'. Expected a positive integer or 'auto'.\n");
                 }
             }
+        } else if (key == "max-time") {
+            try {
+                int n = std::stoi(value);
+                if (n < 0) throw std::runtime_error("must be >= 0");
+                config.max_time = n;
+            } catch (const std::runtime_error &) {
+                throw;
+            } catch (const std::exception &) {
+                throw std::runtime_error("Invalid --max-time value: '" + value + "'. Expected a non-negative integer.\n");
+            }
         } else {
             throw std::runtime_error("Unknown option: --" + key + "\n");
         }
     }
 
     // Validate required arguments
+    // --target or --export-registry (or both) is required
     if (!config.help && !config.version) {
-        if (config.target.empty())
-            throw std::runtime_error("Missing required argument: --target\n");
+        if (config.target.empty() && !config.export_registry.has_value())
+            throw std::runtime_error(
+                "Missing required argument: --target (or --export-registry to export registry only)\n");
     }
 
     return config;

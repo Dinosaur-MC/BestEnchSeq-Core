@@ -68,7 +68,7 @@ Logger::info_fmt()          ← printf 格式化
 Logger::log(Info, msg)      ← push 到无界队列（非阻塞）
   │
   ▼
-SegmentedMPMCQueue           ← 生产者：任意线程
+SegmentedMPSCQueue           ← 生产者：任意线程
   │
   ▼
 后台消费线程                  ← atomic::wait（零 CPU 空闲）
@@ -78,7 +78,7 @@ SegmentedMPMCQueue           ← 生产者：任意线程
 ```
 
 特点：
-- 日志队列使用 `SegmentedMPMCQueue`，无界、优雅处理尖峰
+- 日志队列使用 `SegmentedMPSCQueue`，无界、优雅处理尖峰
 - 消费线程在队列空时通过 `std::atomic::wait` 挂起，不消耗 CPU
 - `flush()` 同步等待消费线程处理完所有待办日志
 - 运行时可通过 `set_level()` 控制日志级别，`Debug` 级别日志在生成侧过滤

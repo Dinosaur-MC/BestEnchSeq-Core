@@ -18,7 +18,7 @@ $$S = (\text{type},\ d,\ E,\ N,\ P)$$
 
 | 分量 | 含义 | 类型 |
 |------|------|------|
-| $\text{type}$ | 物品类型与材料（如钻石剑、附魔书） | `const EquipmentType*` |
+| $\text{type}$ | 物品类型与材料（如钻石剑、附魔书） | `const Equipment*` |
 | $d$ | 耐久度，$0\le d\le D_{\max}$ | `int32_t` |
 | $E$ | 附魔集合，形如 $\{(e_i,\ell_i)\}$ | `EnchSet` |
 | $N$ | 物品名称 | `std::string` |

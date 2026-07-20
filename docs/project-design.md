@@ -96,10 +96,11 @@ struct ForgeConfig {
 ### 管线流程图
 
 ```
-┌──────────┐    ┌──────────────┐    ┌───────────────┐    ┌────────────┐
-│  CLI/JSON │───→│  InputParser │───→│ CompactAdapter│───→│ Algorithm  │
-│  输入解析  │    │  (domain)   │    │ ::apply()     │    │  Executor  │
-└──────────┘    └──────────────┘    └───────┬───────┘    └─────┬──────┘
+┌──────────────┐    ┌──────────────────────┐    ┌───────────────┐    ┌────────────┐
+│  CLI / JSON  │───→│  CLIParser +         │───→│ CompactAdapter│───→│ Algorithm  │
+│   输入解析    │    │  ItemResolver /      │    │ ::apply()     │    │  Executor  │
+│              │    │  InventoryResolver   │    │               │    │            │
+└──────────────┘    └──────────────────────┘    └───────┬───────┘    └─────┬──────┘
                                             │                  │
                                      ┌──────▼───────┐    ┌─────▼──────┐
                                      │ AlgorithmInput│    │ IAlgorithm │
@@ -180,8 +181,11 @@ compact::EnchReg (flat conflict matrix)
 | Greedy | 近似 | 否 | 任意 | 成本排序贪心 |
 | Penalty Balance | 近似 | 否 | 任意 | 惩罚值最接近对合并 |
 | Hierarchical | 近似 | 否 | 大量 | 分层分组 → 组内合并 |
+| DiffFirst (difficulty_first) | 近似 | 否 | 任意 | PPN 分层，每层选最便宜对 |
+| Hamming | 近似 | 否 | 大量 | Popcount 平衡二叉合并树 |
 | DFS | 精确 | 是 | ≤ 8 | 迭代 B&B + 哈希记忆化 |
 | A* | 精确 | 是 | ≤ 9 | 可采启发 + 优先队列 |
+| IDA* | 精确 | 是 | ≤ 10 | 迭代加深 + TT 剪枝 |
 
 所有算法共用 `IForgeEngine` 接口和 compact 类型系统。新算法只需实现 `IAlgorithm::execute()`，自动获得线程管理、暂停/取消、进度报告能力。
 
@@ -258,7 +262,7 @@ compact::EnchReg (flat conflict matrix)
 - `src/types/CompactedTypes.h/.cpp` — 紧凑类型
 - `src/registries/CompactedRegistries.h/.cpp` — 紧凑注册表
 - `src/algorithm/AlgorithmExecutor.h/.cpp` — 执行引擎
-- `src/algorithm/strategies/` — 5 种算法策略
+- `src/algorithm/strategies/` — 8 种算法策略
 - `docs/algorithm-design-discussion.md` — 算法设计详细探讨
 - `docs/anvil-mechanics-reference.md` — 铁砧机制参考
 - `docs/MPMCQueue.md` — MPMC/SPSC 无锁队列设计、正确性证明与性能模型

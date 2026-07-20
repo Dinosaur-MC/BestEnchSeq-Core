@@ -223,19 +223,11 @@ namespace registries {
 
 ---
 
-## TagResolver（`TagResolver.hpp`）
+## TagResolver
 
-`#tag` 引用解析工具。
+`#tag` 引用解析工具，位于 `src/resolvers/TagResolver.hpp`（非 registries 层组件）。
 
-```cpp
-class TagResolver {
-    static std::unordered_set<std::string> resolve(
-        const std::string& tag,
-        const json::Json& data);
-};
-```
-
-将 JSON 数据中的 `#minecraft:swords` 等标签引用展开为实际的物品/附魔列表。
+将 JSON 数据中的 `#minecraft:swords` 等标签引用展开为实际的物品/附魔列表，使用 BFS 单遍展开 + visited 防循环。
 
 ---
 
