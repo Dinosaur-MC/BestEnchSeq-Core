@@ -105,6 +105,6 @@ private:
     std::atomic<uint64_t> _enqueued{0};
     std::atomic<uint64_t> _processed{0};
     size_t _max_retention{5};
-    EventLoop<LogEntry, BoundedMPMCQueue<LogEntry, 256>, FileHandler> _loop;
+    EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, FileHandler> _loop;
     std::atomic<LogLevel> _level{LogLevel::Debug};
 };

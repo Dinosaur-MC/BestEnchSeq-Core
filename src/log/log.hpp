@@ -14,7 +14,7 @@
 /// Generic (must specify level):
 ///   besq::log::printf(LogLevel::Warn, "x = %d", x);
 
-#include "log/Logger.hpp"
+#include "log/Logger.h"
 
 namespace besq {
 namespace log {

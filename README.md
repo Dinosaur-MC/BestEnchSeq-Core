@@ -100,8 +100,8 @@ src/
 │   ├── RawTypes.h               ← String-based intermediates (RawEnchInfo, RawEquipment)
 │   └── EquipmentCategory.h      ← Equipment category constants
 ├── log/                         ← Global async Logger (singleton; uses LogLevel/types)
-│   ├── Logger.hpp/.cpp          ← Global async Logger. Built on EventLoop data
-│   │                               mode (BoundedMPMCQueue + FileHandler).
+│   ├── Logger.h/.cpp            ← Global async Logger. Built on EventLoop data
+│   │                               mode (SegmentedMPSCQueue + FileHandler).
 │   └── log.hpp                  ← Free-function wrappers + LOG_INFO / LOG_WARN macros
 ├── registries/                  ← Domain registries + tag resolution
 │   ├── EnchantmentRegistry.h/.cpp  ← Full enchantment registry with subset derivation
