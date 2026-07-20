@@ -2,7 +2,6 @@
 #include "algorithm/diagnostics/AlgorithmObserver.h"
 #include "algorithm/diagnostics/DiagnosticsEvent.h"
 #include "utils/EventLoop.hpp"
-#include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -73,8 +72,6 @@ private:
 
     DiagnosticsService();
 
-    static constexpr size_t QUEUE_CAPACITY = 64;
-
     // ── Constructed first — pointed to by DiagnosticsHandler at _loop init ──
     std::mutex _obs_mtx;
     std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
@@ -84,6 +81,6 @@ private:
 
     // EventLoop (stores DiagnosticsHandler internally via move).
     EventLoop<DiagnosticsEvent,
-              BoundedMPMCQueue<DiagnosticsEvent, QUEUE_CAPACITY>,
+              SegmentedMPSCQueue<DiagnosticsEvent>,
               DiagnosticsHandler> _loop;
 };
