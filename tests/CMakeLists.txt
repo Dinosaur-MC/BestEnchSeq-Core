@@ -776,3 +776,68 @@ add_test(NAME test_checkpoint_roundtrip COMMAND test_checkpoint_roundtrip)
 set_tests_properties(test_checkpoint_roundtrip PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
 )
+
+# ============================================================================
+# Acceptance tests
+# ============================================================================
+
+add_executable(test_cli_acceptance
+    cli/test_cli_acceptance.cpp
+    ${PROJECT_ROOT}/src/cli/cli.cpp
+    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
+    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
+    ${PARSER_UTIL_SRCS}
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${DOMAIN_TYPE_SRCS}
+)
+target_include_directories(test_cli_acceptance PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_cli_acceptance COMMAND test_cli_acceptance)
+set_tests_properties(test_cli_acceptance PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
+
+add_executable(test_algorithm_acceptance
+    integration/test_algorithm_acceptance.cpp
+    # CLI layer
+    ${PROJECT_ROOT}/src/cli/cli.cpp
+    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
+    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
+    # Resolver layer
+    ${PROJECT_ROOT}/src/resolvers/ItemResolver.cpp
+    # Adapter layer
+    ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
+    ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
+    ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
+    # I/O
+    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PROJECT_ROOT}/src/io/CsvIO.cpp
+    # Registry layer
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
+    # Domain types
+    ${TYPE_ALL_SRCS}
+    ${ITEM_PROP_SRCS}
+    # Algorithm layer
+    ${ALGO_ENGINE_SRCS}
+    ${ALGO_FORGE_SRCS}
+    ${ALGO_DIAG_CORE_SRCS}
+    ${ALGO_SERIAL_SRCS}
+    ${ALGO_STRATEGY_SRGS}
+    ${PROJECT_ROOT}/src/algorithm/strategies/astar/AStarMemoryBudget.cpp
+    ${COMPACT_REG_SRCS}
+    # Data
+    "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
+)
+target_include_directories(test_algorithm_acceptance PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_algorithm_acceptance COMMAND test_algorithm_acceptance)
+set_tests_properties(test_algorithm_acceptance PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+    TIMEOUT 120
+)

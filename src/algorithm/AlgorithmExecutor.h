@@ -62,6 +62,8 @@ private:
     bool _set_state(AlgorithmState new_state) noexcept;
     void _run_warmup(AlgorithmInput& input, IAlgorithm& warmup_algo);
     void _finalize();
+    void _start_timeout_watcher(std::chrono::milliseconds max_time);
+    void _stop_timeout_watcher() noexcept;
 
     std::unique_ptr<IAlgorithm> _algorithm;
     std::unique_ptr<ExecutionContext> _ctx;
@@ -77,4 +79,8 @@ private:
     size_t _task_id{0};
     std::string _algo_name_cache;
     std::string _error_message;         // captured from worker thread exception
+
+    // Timeout watcher: background thread that cancels context when time is up
+    std::shared_ptr<std::atomic<bool>> _timeout_alive;
+    std::optional<std::thread> _timeout_watcher;
 };

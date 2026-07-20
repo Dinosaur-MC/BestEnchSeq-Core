@@ -20,6 +20,28 @@ AlgorithmExecutor::~AlgorithmExecutor() {
 
 // ─── Internal helpers ───
 
+void AlgorithmExecutor::_start_timeout_watcher(std::chrono::milliseconds max_time) {
+    if (max_time.count() <= 0) return;
+
+    _timeout_alive = std::make_shared<std::atomic<bool>>(true);
+    auto alive = _timeout_alive;
+    _timeout_watcher.emplace([this, max_time, alive] {
+        std::this_thread::sleep_for(max_time);
+        if (alive->load(std::memory_order_acquire)) {
+            if (_ctx) _ctx->cancel();
+        }
+    });
+}
+
+void AlgorithmExecutor::_stop_timeout_watcher() noexcept {
+    if (_timeout_alive) {
+        _timeout_alive->store(false, std::memory_order_release);
+    }
+    if (_timeout_watcher && _timeout_watcher->joinable()) {
+        _timeout_watcher->join();
+    }
+}
+
 void AlgorithmExecutor::_join_worker() noexcept {
     if (_worker && _worker->joinable())
         _worker->join();
@@ -65,6 +87,8 @@ void AlgorithmExecutor::_run_warmup(AlgorithmInput& input, IAlgorithm& warmup_al
 void AlgorithmExecutor::_finalize() {
     if (_finalized) return;
     _finalized = true;
+    // Stop timeout watcher so it doesn't access _ctx after finalization
+    _stop_timeout_watcher();
 
     _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - _start_time);
@@ -122,6 +146,9 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
 
+    // Start timeout watcher if max_search_time > 0
+    _start_timeout_watcher(input.search.max_search_time);
+
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
     if (warmup)
         _run_warmup(input, *warmup);
@@ -175,6 +202,7 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
     _algo_name_cache = std::string(_algorithm->name());
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
+    _start_timeout_watcher(_algorithm_input.search.max_search_time);
 
     _worker.emplace([this]() mutable {
         try {
