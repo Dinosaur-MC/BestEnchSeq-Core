@@ -67,11 +67,6 @@ public:
     void unload(const std::string& name);
     void unload_all();
 
-    // ── Utility ───────────────────────────────────────────────────────
-
-    /// Resolve <exe_dir>/algorithms/.
-    static std::string default_algorithms_dir();
-
 private:
     struct LoadedPlugin {
         void*         handle{nullptr};

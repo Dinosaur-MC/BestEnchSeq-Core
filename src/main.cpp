@@ -1,7 +1,6 @@
 #include "api/SolvePipeline.h"
 #include "besq/besq.h"
 #include "cli/cli.h"
-#include "loader/AlgorithmLoader.h"
 #include "cli/RegistryEditor.h"
 #include "config/AppConfig.h"
 #include "log/log.hpp"
@@ -137,10 +136,10 @@ int main(int argc, char* argv[]) try {
     BesqContext ctx;
     ctx.load_builtin();
 
-    // Load external algorithm plugins (relative to binary)
+    // Load external algorithm plugins
+    // Priority: CLI --algo-dir > env BESQ_ALGO_DIR
     {
-        auto algo_path = config.algo_dir.value_or(
-            AlgorithmLoader::default_algorithms_dir());
+        auto algo_path = config.algo_dir.value_or(app_cfg.algo_dir);
         if (std::filesystem::is_directory(algo_path))
             ctx.load_algorithms(algo_path);
     }
