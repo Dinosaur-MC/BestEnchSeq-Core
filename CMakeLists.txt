@@ -104,13 +104,9 @@ set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm e
 set(CMAKE_DEFAULT_BUILD_TARGET besq)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Shared include directories
-# ═══════════════════════════════════════════════════════════════════════════════
-set(BESQ_PUBLIC_INCLUDES
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
+# Include directories are set per-target via $<BUILD_INTERFACE:...> generator
+# expressions so exported CMake configs don't hardcode absolute paths.
+# See the besq-core target_include_directories below.
 # ═══════════════════════════════════════════════════════════════════════════════
 # Generated config header (BuildConfig.h)
 # ═══════════════════════════════════════════════════════════════════════════════
