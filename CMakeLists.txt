@@ -129,7 +129,7 @@ set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # ═══════════════════════════════════════════════════════════════════════════════
 include("${CMAKE_SOURCE_DIR}/src/types/CMakeLists.txt")
 include("${CMAKE_SOURCE_DIR}/src/algorithm/CMakeLists.txt")
-include("${CMAKE_SOURCE_DIR}/src/plugin/CMakeLists.txt")
+include("${CMAKE_SOURCE_DIR}/src/loader/CMakeLists.txt")
 
 # ── I/O ──
 set(BESQ_IO_SRCS
@@ -199,10 +199,6 @@ set(BESQ_API_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/ProfileSet.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/CAbiBindings.cpp
 )
-set(BESQ_ALGO_REG_SRC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/AlgorithmRegistration.cpp
-)
-
 # ── All strategies combined (convenience for core targets) ──
 set(BESQ_BUILTIN_STRATEGY_SRCS
     ${BESQ_STRATEGY_GREEDY_SRCS}
@@ -250,10 +246,10 @@ add_library(besq-minimal STATIC
     ${BESQ_REG_SRCS}
     ${BESQ_COMPACT_REG_SRCS}
     ${BESQ_ALGO_REG_SRCS}
+    ${BESQ_LOADER_SRCS}
     ${BESQ_ALGO_CORE_SRCS}
     ${BESQ_ALGO_FORGE_SRCS}
     ${BESQ_STRATEGY_HAMMING_SRCS}
-    ${BESQ_ALGO_REG_SRC}
 )
 target_include_directories(besq-minimal PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -278,10 +274,10 @@ add_library(besq-core STATIC
     ${BESQ_REG_SRCS}
     ${BESQ_COMPACT_REG_SRCS}
     ${BESQ_ALGO_REG_SRCS}
+    ${BESQ_LOADER_SRCS}
     ${BESQ_ALGO_CORE_SRCS}
     ${BESQ_ALGO_FORGE_SRCS}
     ${BESQ_ALGO_DIAG_SRCS}
-    ${BESQ_PLUGIN_SRCS}
     ${BESQ_ALGO_SERIAL_SRCS}
     ${BESQ_BUILTIN_STRATEGY_SRCS}
     ${BESQ_PARSER_SRCS}
@@ -289,7 +285,6 @@ add_library(besq-core STATIC
     ${BESQ_ADAPTER_SRCS}
     ${BESQ_DATA_SRCS}
     ${BESQ_API_SRCS}
-    ${BESQ_ALGO_REG_SRC}
 )
 target_include_directories(besq-core PUBLIC
     ${BESQ_PUBLIC_INCLUDES}
@@ -298,9 +293,14 @@ target_include_directories(besq-core PUBLIC
 target_compile_definitions(besq-core PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+    BESQ_HAVE_GREEDY
     BESQ_HAVE_DFS
     BESQ_HAVE_ASTAR
+    BESQ_HAVE_IDASTAR
     BESQ_HAVE_HAMMING
+    BESQ_HAVE_HIERARCHICAL
+    BESQ_HAVE_PENALTY_BALANCE
+    BESQ_HAVE_DIFF_FIRST
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -365,57 +365,3 @@ if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Plugin shared libraries (optional — built with -DBESQ_BUILD_PLUGINS=ON)
-# ═══════════════════════════════════════════════════════════════════════════════
-option(BESQ_BUILD_PLUGINS "Build algorithm plugins as shared libraries" OFF)
-
-if(BESQ_BUILD_PLUGINS)
-    # Helper: create a plugin shared library for a single algorithm strategy
-    function(add_algorithm_plugin NAME CLASS HEADER)
-        add_library(besq_plugin_${NAME} SHARED
-            "${CMAKE_SOURCE_DIR}/src/plugin/PluginEntry.cpp"
-            ${ARGN} # additional strategy source files
-        )
-        target_include_directories(besq_plugin_${NAME} PRIVATE
-            ${CMAKE_SOURCE_DIR}/src
-            ${CMAKE_SOURCE_DIR}/include
-        )
-        target_compile_definitions(besq_plugin_${NAME} PRIVATE
-            BESQ_BUILD_PLUGIN
-            BESQ_PLUGIN_HEADER="${HEADER}"
-            BESQ_PLUGIN_CLASS=${CLASS}
-            BESQ_PLUGIN_NAME=${NAME}
-        )
-
-        if(UNIX)
-            target_compile_options(besq_plugin_${NAME} PRIVATE -fPIC)
-        endif()
-
-        set_target_properties(besq_plugin_${NAME} PROPERTIES
-            PREFIX "besq_"
-            LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/plugins"
-        )
-    endfunction()
-
-    if(UNIX)
-        add_algorithm_plugin(hamming HammingAlgorithm "algorithm/strategies/hamming/HammingAlgorithm.h"
-            ${BESQ_STRATEGY_HAMMING_SRCS})
-        add_algorithm_plugin(greedy GreedyAlgorithm "algorithm/strategies/greedy/GreedyAlgorithm.h"
-            ${BESQ_STRATEGY_GREEDY_SRCS})
-        add_algorithm_plugin(dfs DFSAlgorithm "algorithm/strategies/dfs/DFSAlgorithm.h"
-            ${BESQ_STRATEGY_DFS_SRCS})
-        add_algorithm_plugin(astar AStarAlgorithm "algorithm/strategies/astar/AStarAlgorithm.h"
-            ${BESQ_STRATEGY_ASTAR_SRCS})
-        add_algorithm_plugin(idastar IDAStarAlgorithm "algorithm/strategies/idastar/IDAStarAlgorithm.h"
-            ${BESQ_STRATEGY_IDASTAR_SRCS})
-        add_algorithm_plugin(hierarchical HierarchicalMergeAlgorithm
-            "algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.h"
-            ${BESQ_STRATEGY_HIERARCHICAL_SRCS})
-        add_algorithm_plugin(penalty_balance DynamicPenaltyBalancingAlgorithm
-            "algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
-            ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS})
-        add_algorithm_plugin(diff_first DiffFirstAlgorithm "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
-            ${BESQ_STRATEGY_DIFF_FIRST_SRCS})
-    endif()
-endif()
