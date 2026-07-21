@@ -25,7 +25,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "Options:\n"
         "  -h, --help              Show this help message\n"
         "  -V, --version           Show version info\n"
-        "  --algorithm <name>      Search algorithm: greedy (default), dfs, astar,\n"
+        "  --algorithm <name>      Search algorithm: hamming (default), dfs, astar,\n"
         "                           penalty_balance, hierarchical, idastar,\n"
         "                           hamming, or diff_first\n"
         "  --source <list>         Source enchantments (e.g., sharpness=5,knockback=2)\n"

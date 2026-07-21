@@ -106,7 +106,7 @@ void test_besq_solve() {
 
     SolveInput input;
     input.target_item = target_item;
-    input.algorithm = "greedy";
+    input.algorithm = "hamming";
     input.forge_config.platform = MCE::Java;
     input.search_config.max_solutions = 1;
 
@@ -249,7 +249,7 @@ void test_c_abi() {
     // Solve via C ABI
     const char* json_input =
         "{\"target\":{\"equipment\":\"diamond_sword\",\"enchantments\":[{\"id\":\"sharpness\",\"level\":3}]},"
-        "\"algorithm\":\"greedy\",\"platform\":\"java\",\"max_solutions\":1}";
+        "\"algorithm\":\"hamming\",\"platform\":\"java\",\"max_solutions\":1}";
     const char* json_result = besq_solve(ctx, json_input);
     if (json_result) {
         std::string result(json_result);

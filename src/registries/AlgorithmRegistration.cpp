@@ -14,26 +14,11 @@
 #include "algorithm/strategies/hamming/HammingAlgorithm.h"
 #include "log/log.hpp"
 
-#ifdef BESQ_HAVE_GREEDY
-#  include "algorithm/strategies/greedy/GreedyAlgorithm.h"
-#endif
 #ifdef BESQ_HAVE_DFS
 #  include "algorithm/strategies/dfs/DFSAlgorithm.h"
 #endif
 #ifdef BESQ_HAVE_ASTAR
 #  include "algorithm/strategies/astar/AStarAlgorithm.h"
-#endif
-#ifdef BESQ_HAVE_IDASTAR
-#  include "algorithm/strategies/idastar/IDAStarAlgorithm.h"
-#endif
-#ifdef BESQ_HAVE_HIERARCHICAL
-#  include "algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.h"
-#endif
-#ifdef BESQ_HAVE_PENALTY_BALANCE
-#  include "algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
-#endif
-#ifdef BESQ_HAVE_DIFF_FIRST
-#  include "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
 #endif
 
 #include <memory>
@@ -47,38 +32,23 @@
 // ====================================================================
 
 void register_builtin_algorithms(AlgorithmRegistry& registry) {
+    // hamming — near-optimal quality, instant speed, minimal code.
+    // Default everyday algorithm.
     registry.register_algorithm("hamming",
         [] { return std::make_unique<HammingAlgorithm>(); });
 
-#ifdef BESQ_HAVE_GREEDY
-    registry.register_algorithm("greedy",
-        [] { return std::make_unique<GreedyAlgorithm>(); });
-#endif
 #ifdef BESQ_HAVE_DFS
+    // dfs — simplest possible search, zero runtime overhead.
+    // Lightweight fallback for resource-constrained environments.
     registry.register_algorithm("dfs",
         [] { return std::make_unique<DFSAlgorithm>(); });
 #endif
+
 #ifdef BESQ_HAVE_ASTAR
+    // astar — optimal solver with search budget control.
+    // Required when solution quality matters above all else.
     registry.register_algorithm("astar",
         [] { return std::make_unique<AStarAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_IDASTAR
-    registry.register_algorithm("idastar",
-        [] { return std::make_unique<IDAStarAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_HIERARCHICAL
-    registry.register_algorithm("hierarchical",
-        [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_PENALTY_BALANCE
-    registry.register_algorithm("penalty_balance",
-        [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_DIFF_FIRST
-    registry.register_algorithm("difficulty_first",
-        [] { return std::make_unique<DiffFirstAlgorithm>(); });
-    registry.register_algorithm("diff_first",
-        [] { return std::make_unique<DiffFirstAlgorithm>(); });
 #endif
 }
 
