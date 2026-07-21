@@ -43,7 +43,14 @@ endfunction()
 
 # Default: link besq-core for all project-dependent tests.
 function(besq_test NAME SOURCE)
-    add_executable(${NAME} ${SOURCE})
+    add_executable(${NAME}
+        ${SOURCE}
+        ${BESQ_STRATEGY_GREEDY_SRCS}
+        ${BESQ_STRATEGY_IDASTAR_SRCS}
+        ${BESQ_STRATEGY_HIERARCHICAL_SRCS}
+        ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS}
+        ${BESQ_STRATEGY_DIFF_FIRST_SRCS}
+    )
     target_include_directories(${NAME} PRIVATE
         ${TEST_INCLUDE}
         ${PROJECT_ROOT}/include
@@ -60,6 +67,11 @@ function(besq_test_with_cli NAME SOURCE)
         ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
         ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
         ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
+        ${BESQ_STRATEGY_GREEDY_SRCS}
+        ${BESQ_STRATEGY_IDASTAR_SRCS}
+        ${BESQ_STRATEGY_HIERARCHICAL_SRCS}
+        ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS}
+        ${BESQ_STRATEGY_DIFF_FIRST_SRCS}
     )
     target_include_directories(${NAME} PRIVATE
         ${TEST_INCLUDE}

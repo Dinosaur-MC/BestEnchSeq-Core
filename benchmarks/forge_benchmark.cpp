@@ -1,4 +1,4 @@
-#include "loader/TestLoader.h"
+#include "loader/AlgorithmLoader.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "adapters/CompactAdapter.h"
 #include "data/DataLoader.h"
@@ -360,8 +360,9 @@ int main(int argc, char* argv[]) {
     std::cout << "=== Dataset Benchmark ===" << std::endl;
     load_builtin_data();
 
-    // Use test_loader() for unified algorithm discovery (all strategies)
-    auto& loader = test_loader();
+    // Register all built-in strategies
+    AlgorithmLoader loader;
+    loader.load_builtin();
 
     // Filter tests
     std::vector<const TestCase*> queue;

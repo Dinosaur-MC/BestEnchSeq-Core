@@ -27,7 +27,7 @@ if(BESQ_BUILD_PLUGINS)
         get_filename_component(NAME ${DIR} NAME)
         add_library(algo_${NAME} SHARED "${CMAKE_SOURCE_DIR}/${PLUGIN_SRC}")
         target_include_directories(algo_${NAME} PRIVATE ${BESQ_PUBLIC_INCLUDES})
-        target_link_libraries(algo_${NAME} PRIVATE besq-core)
+        target_link_libraries(algo_${NAME} PRIVATE besq-minimal)
         set_target_properties(algo_${NAME} PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/algorithms"
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/algorithms"

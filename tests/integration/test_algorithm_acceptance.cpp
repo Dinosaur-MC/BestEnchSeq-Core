@@ -17,7 +17,7 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "loader/TestLoader.h"
+#include "loader/AlgorithmLoader.h"
 #include "adapters/EnchSerializer.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
@@ -34,6 +34,13 @@
 
 static auto& test_ench_reg = registries::enchants();
 static auto& test_cat_reg  = registries::categories();
+
+static AlgorithmLoader& algo_loader() {
+    static AlgorithmLoader loader;
+    static std::once_flag flag;
+    std::call_once(flag, [&] { loader.load_builtin(); });
+    return loader;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,10 +137,7 @@ void test_all_algorithms_all_formats() {
 
     auto resolved = ItemResolver::resolve(target_item, EnchSet{}, target_ench, test_ench_reg);
 
-    auto algorithms = test_loader().list();
-    // "difficulty_first" is an alias for "diff_first"
-    if (test_loader().contains("diff_first"))
-        algorithms.push_back("difficulty_first");
+    auto algorithms = algo_loader().list();
     const std::vector<std::string> formats = {"text", "compact", "json"};
 
     for (const auto& algo_name : algorithms) {
@@ -144,7 +148,7 @@ void test_all_algorithms_all_formats() {
                 algo_input.config.platform = MCE::Java;
 
                 // Create algorithm via AlgorithmLoader (production code path)
-                auto algo = test_loader().create(algo_name);
+                auto algo = algo_loader().create(algo_name);
                 expect(algo != nullptr,
                        algo_name + ": algorithm should be creatable");
 
@@ -226,7 +230,7 @@ void test_all_algorithms_all_formats() {
 
 void test_diff_first_alias() {
     // Only run if diff_first and difficulty_first are both registered
-    if (!test_loader().contains("diff_first") || !test_loader().contains("difficulty_first"))
+    if (!algo_loader().contains("diff_first") || !algo_loader().contains("difficulty_first"))
         return;
 
     EquipmentRegistry eq_reg;
@@ -244,7 +248,7 @@ void test_diff_first_alias() {
     std::vector<compact::EnchSolution> solutions_a, solutions_b;
 
     for (const auto& name : {"diff_first", "difficulty_first"}) {
-        auto algo = test_loader().create(name);
+        auto algo = algo_loader().create(name);
         expect(algo != nullptr, std::string(name) + ": should resolve");
 
         AlgorithmInput input = CompactAdapter::apply(resolved, test_ench_reg);

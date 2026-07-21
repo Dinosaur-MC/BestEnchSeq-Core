@@ -199,17 +199,6 @@ set(BESQ_API_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/ProfileSet.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api/CAbiBindings.cpp
 )
-# ── All strategies combined (convenience for core targets) ──
-set(BESQ_BUILTIN_STRATEGY_SRCS
-    ${BESQ_STRATEGY_HAMMING_SRCS}
-    ${BESQ_STRATEGY_GREEDY_SRCS}
-    ${BESQ_STRATEGY_DFS_SRCS}
-    ${BESQ_STRATEGY_ASTAR_SRCS}
-    ${BESQ_STRATEGY_IDASTAR_SRCS}
-    ${BESQ_STRATEGY_HIERARCHICAL_SRCS}
-    ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS}
-    ${BESQ_STRATEGY_DIFF_FIRST_SRCS}
-)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Embedded data (OBJECT library — reusable across targets)
@@ -246,10 +235,10 @@ add_library(besq-minimal STATIC
     ${BESQ_REG_SRCS}
     ${BESQ_COMPACT_REG_SRCS}
     ${BESQ_ALGO_REG_SRCS}
+    ${BESQ_ALGO_REG_SRC}
     ${BESQ_LOADER_SRCS}
     ${BESQ_ALGO_CORE_SRCS}
     ${BESQ_ALGO_FORGE_SRCS}
-    ${BESQ_STRATEGY_HAMMING_SRCS}
 )
 target_include_directories(besq-minimal PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -259,7 +248,6 @@ target_compile_definitions(besq-minimal PUBLIC
     BESQ_DISABLE_LOGGER
     BESQ_DISABLE_DIAGNOSTICS
     BESQ_MAX_SOLUTIONS=32
-    BESQ_HAVE_HAMMING
 )
 
 # ── besq-core ─────────────────────────────────────────────────────────────────
@@ -268,14 +256,13 @@ target_compile_definitions(besq-minimal PUBLIC
 #
 # When BESQ_BUILD_PLUGINS=ON the library is SHARED so that the host and
 # plugins share the same CRT heap and vtables (required on Windows).
-set(_besq_core_type STATIC)
-if(BESQ_BUILD_PLUGINS)
-    set(_besq_core_type SHARED)
-    # Export all symbols from besq-core.dll so that loaded plugins can
-    # resolve IAlgorithm / ForgeEngine vtables and RTTI.
+# SHARED ensures all symbols are visible to test binaries and plugins.
+# On Windows, CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS auto-exports everything
+# so loaded plugins can resolve IAlgorithm / ForgeEngine vtables.
+if(WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
-add_library(besq-core ${_besq_core_type}
+add_library(besq-core SHARED
     ${BESQ_EMBEDDED_SRCS}
     ${BESQ_TYPE_SRCS}
     ${BESQ_COMPACT_TYPE_SRCS}
@@ -284,6 +271,7 @@ add_library(besq-core ${_besq_core_type}
     ${BESQ_REG_SRCS}
     ${BESQ_COMPACT_REG_SRCS}
     ${BESQ_ALGO_REG_SRCS}
+    ${BESQ_ALGO_REG_SRC}
     ${BESQ_LOADER_SRCS}
     ${BESQ_ALGO_CORE_SRCS}
     ${BESQ_ALGO_FORGE_SRCS}
@@ -303,9 +291,7 @@ target_include_directories(besq-core PUBLIC
 target_compile_definitions(besq-core PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
-    BESQ_HAVE_DFS
-    BESQ_HAVE_ASTAR
-    BESQ_HAVE_HAMMING
+    ${BESQ_STRATEGY_DEFINITIONS}
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -366,7 +352,7 @@ endif()
 # ═══════════════════════════════════════════════════════════════════════════════
 # Benchmarks (optional, not part of test suite)
 # ═══════════════════════════════════════════════════════════════════════════════
-option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
+option(BUILD_BENCHMARKS "Build benchmark targets" ON)
 
 if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
