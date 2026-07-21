@@ -22,7 +22,7 @@ endif()
 # Locate pre-built besq-core (exported via build/besq-coreConfig.cmake)
 find_package(besq-core REQUIRED
     HINTS
-        "${CMAKE_CURRENT_LIST_DIR}/../build"
+        "${CMAKE_BINARY_DIR}/.."
         "${BESQ_CORE_DIR}"
     NO_DEFAULT_PATH
 )
@@ -46,7 +46,7 @@ set(PLUGIN_SYSTEM_INCLUDES
     "${PROJECT_ROOT}/src"
 )
 # Try to locate the host build's generated directory for BuildConfig.h
-foreach(_hint ${besq-core_DIR} ${CMAKE_CURRENT_LIST_DIR}/../build)
+foreach(_hint ${besq-core_DIR} "${CMAKE_BINARY_DIR}/..")
     if(EXISTS "${_hint}/generated/BuildConfig.h")
         list(APPEND PLUGIN_SYSTEM_INCLUDES "${_hint}/generated")
         break()
