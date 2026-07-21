@@ -116,10 +116,16 @@ inline void printf(LogLevel level, const char* fmt, Args&&... args) {
 
 /// @brief  Log at Info level with source-location prefix.
 ///         Accepts printf-style format + args.
-/// NOTE: Uses ##__VA_ARGS__ (GCC/Clang/MSVC extension) rather than C++20
-/// __VA_OPT__ because MSVC's traditional preprocessor does not support the
-/// latter without /Zc:preprocessor.
-#define LOG_INFO(fmt, ...)   ::besq::log::info_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...)   ::besq::log::warn_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
-#define LOG_ERROR(fmt, ...)  ::besq::log::error_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
-#define LOG_DEBUG(fmt, ...)  ::besq::log::debug_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
+/// MSVC's traditional preprocessor does not support __VA_OPT__ (C++20),
+/// so we fall back to the ##__VA_ARGS__ GNU extension for MSVC.
+#if defined(_MSC_VER) && !defined(__clang__)
+#  define LOG_INFO(fmt, ...)   ::besq::log::info_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
+#  define LOG_WARN(fmt, ...)   ::besq::log::warn_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
+#  define LOG_ERROR(fmt, ...)  ::besq::log::error_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
+#  define LOG_DEBUG(fmt, ...)  ::besq::log::debug_fmt(BESQ_LOG_LOC fmt, ##__VA_ARGS__)
+#else
+#  define LOG_INFO(fmt, ...)   ::besq::log::info_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)
+#  define LOG_WARN(fmt, ...)   ::besq::log::warn_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)
+#  define LOG_ERROR(fmt, ...)  ::besq::log::error_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)
+#  define LOG_DEBUG(fmt, ...)  ::besq::log::debug_fmt(BESQ_LOG_LOC fmt __VA_OPT__(,) __VA_ARGS__)
+#endif
