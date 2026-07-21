@@ -20,11 +20,12 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # --- Helpers ---
 
-# PATH extension for MinGW runtime DLLs on Windows
+# PATH extension for MinGW runtime DLLs and besq-core.dll on Windows
+set(BESQ_TEST_ENV "PATH=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 if(BESQ_RUNTIME_DLL_DIR AND EXISTS "${BESQ_RUNTIME_DLL_DIR}/libwinpthread-1.dll")
-    set(BESQ_TEST_ENV "PATH=${BESQ_RUNTIME_DLL_DIR}\\;$ENV{PATH}")
+    set(BESQ_TEST_ENV "${BESQ_TEST_ENV}\\;${BESQ_RUNTIME_DLL_DIR}\\;$ENV{PATH}")
 else()
-    set(BESQ_TEST_ENV "")
+    set(BESQ_TEST_ENV "${BESQ_TEST_ENV}\\;$ENV{PATH}")
 endif()
 
 function(besq_test_common_props NAME)
@@ -43,14 +44,7 @@ endfunction()
 
 # Default: link besq-core for all project-dependent tests.
 function(besq_test NAME SOURCE)
-    add_executable(${NAME}
-        ${SOURCE}
-        ${BESQ_STRATEGY_GREEDY_SRCS}
-        ${BESQ_STRATEGY_IDASTAR_SRCS}
-        ${BESQ_STRATEGY_HIERARCHICAL_SRCS}
-        ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS}
-        ${BESQ_STRATEGY_DIFF_FIRST_SRCS}
-    )
+    add_executable(${NAME} ${SOURCE})
     target_include_directories(${NAME} PRIVATE
         ${TEST_INCLUDE}
         ${PROJECT_ROOT}/include
@@ -67,11 +61,6 @@ function(besq_test_with_cli NAME SOURCE)
         ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
         ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
         ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
-        ${BESQ_STRATEGY_GREEDY_SRCS}
-        ${BESQ_STRATEGY_IDASTAR_SRCS}
-        ${BESQ_STRATEGY_HIERARCHICAL_SRCS}
-        ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS}
-        ${BESQ_STRATEGY_DIFF_FIRST_SRCS}
     )
     target_include_directories(${NAME} PRIVATE
         ${TEST_INCLUDE}

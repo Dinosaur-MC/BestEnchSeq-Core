@@ -16,7 +16,7 @@ static auto& test_cat_reg  = registries::categories();
 
 #include "adapters/CompactAdapter.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/greedy/GreedyAlgorithm.h"
+#include "algorithm/strategies/hamming/HammingAlgorithm.h"
 #include "algorithm/IAlgorithm.h"
 #include "io/json.h"
 
@@ -270,8 +270,8 @@ void test_full_pipeline_execute() {
     expect(algo_input.items.size() == 1 + resolved.available_items.size(),
            "execute: items = 1 equipment + N books");
 
-    // 4. Create algorithm (Greedy for speed) and executor
-    auto algo = std::make_unique<GreedyAlgorithm>();
+    // 4. Create algorithm (Hamming for speed) and executor
+    auto algo = std::make_unique<HammingAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
     executor.start(algo_input);
 
