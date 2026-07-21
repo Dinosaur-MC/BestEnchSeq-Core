@@ -1,4 +1,4 @@
-#include "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
+#include "diff_first/DiffFirstAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
 #include "algorithm/components/SearchUtils.h"
 #include <algorithm>

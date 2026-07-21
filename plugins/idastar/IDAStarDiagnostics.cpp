@@ -1,4 +1,4 @@
-#include "algorithm/strategies/idastar/IDAStarDiagnostics.h"
+#include "idastar/IDAStarDiagnostics.h"
 
 void IDAStarDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const {
     PoolSearchDiagnostics::flush(out);
