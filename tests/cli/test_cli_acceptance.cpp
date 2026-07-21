@@ -281,7 +281,7 @@ int main() {
         test_algorithm_name();
         test_memory_parsing();
         test_apply_config_pairs();
-    } catch (const test_error& e) {
+    } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
     }

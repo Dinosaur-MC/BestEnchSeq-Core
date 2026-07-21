@@ -21,6 +21,7 @@
 #include "adapters/EnchSerializer.h"
 #include "config/ForgeConfig.h"
 #include "algorithm/AlgorithmExecutor.h"
+#include "algorithm/diagnostics/DiagnosticsService.h"
 #include "algorithm/strategies/Strategies.h"
 #include "io/json.h"
 #include "framework/test_utils.h"
@@ -414,21 +415,14 @@ void test_export_content() {
 // ---------------------------------------------------------------------------
 
 void test_full_export_pipeline() {
-    // Run besq with --export-registry (no --target) and verify file
-    auto temp_path = std::filesystem::temp_directory_path() / "besq_cli_export.json";
-    auto path_str = temp_path.string();
+    // Use a local filename to avoid filesystem permission issues
+    const std::string test_path = "besq_cli_export.json";
 
-    // Simulate CLI: "besq --export-registry <path>"
-    const char* argv[] = {"besq", "--export-registry", path_str.c_str()};
-    // We can't easily call main() here, but we can verify the EnchSerializer
-    // export chain works end-to-end through the registries. The actual main()
-    // side is tested by export_content above. Just validate parse_cli accepts it.
+    const char* argv[] = {"besq", "--export-registry", test_path.c_str()};
     auto config = parse_cli(3, const_cast<char**>(argv));
     expect(config.export_registry.has_value(), "--export-registry path should be set");
-    expect(*config.export_registry == path_str, "path should match input");
+    expect(*config.export_registry == test_path, "path should match input");
 
-    // Clean up
-    std::filesystem::remove(temp_path);
     TEST_PASS("full export pipeline path resolution");
 }
 
@@ -443,10 +437,14 @@ int main() {
         test_cli_export_only_valid();
         test_export_content();
         test_full_export_pipeline();
-    } catch (const test_error& e) {
+    } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
     }
+
+    // Flush diagnostics before static destruction to avoid
+    // EventLoop thread accessing destroyed singletons
+    DiagnosticsService::instance().flush();
 
     return print_summary();
 }
