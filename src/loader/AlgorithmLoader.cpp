@@ -1,4 +1,5 @@
 #include "algorithm/IAlgorithm.h"
+#include "algorithm/strategies/Registration.h"
 #include "loader/AlgorithmLoader.h"
 #include "log/log.hpp"
 
@@ -71,14 +72,14 @@ std::string dl_error() {
 
 AlgorithmLoader::~AlgorithmLoader() { unload_all(); }
 
-#include "algorithm/strategies/Registration.h"
-
 void AlgorithmLoader::load_builtin() {
     if (_builtin_loaded)
         return;
     _builtin_loaded = true;
 
     besq_register_builtin_strategies(_registry);
+
+    LOG_INFO("Registered %zu built-in algorithm strategy/ies", _registry.size());
 }
 
 // ====================================================================
