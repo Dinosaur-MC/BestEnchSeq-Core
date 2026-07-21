@@ -1,4 +1,4 @@
-#include "idastar/IDAStarAlgorithm.h"
+#include "IDAStarAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
 #include "algorithm/components/SearchUtils.h"
 #include "algorithm/components/StateHash.h"

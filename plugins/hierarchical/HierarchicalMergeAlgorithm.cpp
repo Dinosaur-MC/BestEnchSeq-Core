@@ -1,4 +1,4 @@
-#include "hierarchical/HierarchicalMergeAlgorithm.h"
+#include "HierarchicalMergeAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
 #include <chrono>
 #include <algorithm>

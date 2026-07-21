@@ -1,3 +1,3 @@
 #include "loader/PluginEntry.h"
-#include "hierarchical/HierarchicalMergeAlgorithm.h"
+#include "HierarchicalMergeAlgorithm.h"
 BESQ_PLUGIN_ENTRY(HierarchicalMergeAlgorithm)

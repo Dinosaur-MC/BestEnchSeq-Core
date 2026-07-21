@@ -1,3 +1,3 @@
 #include "loader/PluginEntry.h"
-#include "idastar/IDAStarAlgorithm.h"
+#include "IDAStarAlgorithm.h"
 BESQ_PLUGIN_ENTRY(IDAStarAlgorithm)

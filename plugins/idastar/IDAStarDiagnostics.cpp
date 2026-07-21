@@ -1,4 +1,4 @@
-#include "idastar/IDAStarDiagnostics.h"
+#include "IDAStarDiagnostics.h"
 
 void IDAStarDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const {
     PoolSearchDiagnostics::flush(out);

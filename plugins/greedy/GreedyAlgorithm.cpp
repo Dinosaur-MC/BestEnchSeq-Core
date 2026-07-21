@@ -1,4 +1,4 @@
-#include "greedy/GreedyAlgorithm.h"
+#include "GreedyAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
 #include "algorithm/components/SearchUtils.h"
 #include <chrono>

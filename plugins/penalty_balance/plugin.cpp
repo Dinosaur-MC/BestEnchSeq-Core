@@ -1,3 +1,3 @@
 #include "loader/PluginEntry.h"
-#include "penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
+#include "DynamicPenaltyBalancingAlgorithm.h"
 BESQ_PLUGIN_ENTRY(DynamicPenaltyBalancingAlgorithm)

@@ -1,4 +1,4 @@
-#include "penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
+#include "DynamicPenaltyBalancingAlgorithm.h"
 #include "algorithm/ExecutionContext.h"
 #include <chrono>
 #include <cstdint>
