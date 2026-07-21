@@ -27,6 +27,32 @@ find_package(besq-core REQUIRED
     NO_DEFAULT_PATH
 )
 
+# Strip include dirs from the imported target — they contain host-platform
+# absolute paths (e.g. Windows F:/... when building from WSL) that would
+# cause "non-existent path" errors.  Plugins add their own include dirs
+# directly below via PLUGIN_SYSTEM_INCLUDES.
+set_target_properties(besq-core::besq-core PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES ""
+)
+
+# Compute source tree root (parent of plugins/)
+get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+
+# Solve-prefix include paths: add src/ and host build/generated/ so plugin code
+# can #include "algorithm/IAlgorithm.h" etc. regardless of the host platform.
+# Derived relative to the source tree rather than relying on the exported
+# target's INTERFACE_INCLUDE_DIRECTORIES, which may contain host-only paths.
+set(PLUGIN_SYSTEM_INCLUDES
+    "${PROJECT_ROOT}/src"
+)
+# Try to locate the host build's generated directory for BuildConfig.h
+foreach(_hint ${besq-core_DIR} ${CMAKE_CURRENT_LIST_DIR}/../build)
+    if(EXISTS "${_hint}/generated/BuildConfig.h")
+        list(APPEND PLUGIN_SYSTEM_INCLUDES "${_hint}/generated")
+        break()
+    endif()
+endforeach()
+
 # Auto-discover all plugin subdirectories
 file(GLOB PLUGIN_DIRS RELATIVE "${CMAKE_CURRENT_LIST_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/*/")
@@ -40,6 +66,9 @@ foreach(PLUGIN_DIR ${PLUGIN_DIRS})
     get_filename_component(PLUGIN_NAME ${PLUGIN_DIR} NAME)
     add_library(algo_${PLUGIN_NAME} SHARED ${PLUGIN_SRCS})
 
+    target_include_directories(algo_${PLUGIN_NAME} SYSTEM PRIVATE
+        ${PLUGIN_SYSTEM_INCLUDES}
+    )
     target_include_directories(algo_${PLUGIN_NAME} PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}"              # for #include "<name>/<file>.h"
     )

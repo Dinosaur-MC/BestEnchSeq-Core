@@ -283,8 +283,9 @@ add_library(besq-core SHARED
     ${BESQ_API_SRCS}
 )
 target_include_directories(besq-core PUBLIC
-    ${BESQ_PUBLIC_INCLUDES}
-    ${BESQ_GENERATED_DIR}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${BESQ_GENERATED_DIR}>
 )
 target_compile_definitions(besq-core PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
