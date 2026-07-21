@@ -1,11 +1,10 @@
 #include "api/SolvePipeline.h"
+#include "registries/AlgorithmRegistration.h"
 #include "adapters/CompactAdapter.h"
 #include "adapters/OutputFormatter.h"
 #include "io/json.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
-#include "algorithm/strategies/Strategies.h"
-#include "registries/AlgorithmRegistry.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
@@ -17,49 +16,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-// ====================================================================
-// Anonymous helpers
-// ====================================================================
-namespace {
-
-void register_builtin_algorithms(AlgorithmRegistry& registry) {
-    registry.register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
-    registry.register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
-    registry.register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
-    registry.register_algorithm("penalty_balance",
-                                [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-    registry.register_algorithm("hierarchical",
-                                [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
-    registry.register_algorithm("idastar",
-                                [] { return std::make_unique<IDAStarAlgorithm>(); });
-    registry.register_algorithm("hamming",
-                                [] { return std::make_unique<HammingAlgorithm>(); });
-    registry.register_algorithm("difficulty_first",
-                                [] { return std::make_unique<DiffFirstAlgorithm>(); });
-    registry.register_algorithm("diff_first",
-                                [] { return std::make_unique<DiffFirstAlgorithm>(); });
-}
-
-/// Create the requested algorithm via the builtin registry.
-/// Throws std::runtime_error if the name is unknown.
-std::unique_ptr<IAlgorithm> create_algorithm(const std::string& name) {
-    AlgorithmRegistry reg;
-    register_builtin_algorithms(reg);
-    auto algo = reg.create(name);
-    if (!algo) {
-        auto available = reg.list();
-        std::string msg = "Unknown algorithm: '" + name + "'. Available: ";
-        for (size_t i = 0; i < available.size(); ++i) {
-            if (i > 0) msg += ", ";
-            msg += available[i];
-        }
-        throw std::runtime_error(msg);
-    }
-    return algo;
-}
-
-} // anonymous namespace
 
 // ====================================================================
 // SolveResult formatting
@@ -139,7 +95,7 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     AlgorithmInput& algo_input,
     const std::string& algorithm)
 {
-    auto algo = create_algorithm(algorithm);
+    auto algo = create_builtin_algorithm(algorithm);
 
     // Check mode support
     if (!(algo->supported_mode() & algo_input.mode)) {

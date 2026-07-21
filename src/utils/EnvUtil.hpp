@@ -3,6 +3,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <charconv>
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 #include <system_error>

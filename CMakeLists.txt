@@ -6,12 +6,18 @@ project(BestEnchSeq-Core
     LANGUAGES CXX
 )
 
+# ═══════════════════════════════════════════════════════════════════════════════
 # C++ Standard
+# ═══════════════════════════════════════════════════════════════════════════════
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Export Compile Commands
+# ═══════════════════════════════════════════════════════════════════════════════
+# Compiler flags
+# ═══════════════════════════════════════════════════════════════════════════════
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_C_COMPILER clang)
 
 if(MSVC)
     add_compile_options(/FS)
@@ -20,89 +26,357 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
 
-# Shorten __FILE__ to project-relative paths (e.g. "src/parsers/InputParser.cpp")
+# Shorten __FILE__ to project-relative paths
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     add_compile_options(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
 endif()
 
-# Executable Output Path
+# On Windows with MinGW ABI (Clang or GCC), the runtime DLLs
+# (libwinpthread-1.dll, libstdc++-6.dll, libgcc_s_seh-1.dll) may
+# not be on the system PATH, causing STATUS_ENTRYPOINT_NOT_FOUND at
+# application startup.  We detect the compiler's runtime directory
+# and store it in the test property ENVIRONMENT so ctest can find them.
+if(WIN32 AND NOT MSVC)
+    # Resolve the compiler location to a real path before taking its dirname
+    get_filename_component(BESQ_COMPILER_REAL "${CMAKE_CXX_COMPILER}" REALPATH)
+    get_filename_component(BESQ_COMPILER_DIR "${BESQ_COMPILER_REAL}" DIRECTORY)
+    set(BESQ_RUNTIME_DLL_DIR "${BESQ_COMPILER_DIR}" CACHE PATH "Directory with MinGW runtime DLLs")
+    # For LLVM/Clang: clang.exe is in LLVM/bin but DLLs may be in ../mingw64/bin
+    if(NOT EXISTS "${BESQ_RUNTIME_DLL_DIR}/libwinpthread-1.dll")
+        get_filename_component(BESQ_PREFIX "${BESQ_COMPILER_DIR}" DIRECTORY)
+        set(BESQ_MINGW "${BESQ_PREFIX}/mingw64/bin")
+        if(EXISTS "${BESQ_MINGW}/libwinpthread-1.dll")
+            set(BESQ_RUNTIME_DLL_DIR "${BESQ_MINGW}" CACHE PATH "MinGW runtime DLL directory" FORCE)
+        endif()
+    endif()
+    # Also check Strawberry Perl layout
+    if(NOT EXISTS "${BESQ_RUNTIME_DLL_DIR}/libwinpthread-1.dll")
+        set(BESQ_STRAWBERRY "D:/Local/Strawberry/c/bin")
+        if(EXISTS "${BESQ_STRAWBERRY}/libwinpthread-1.dll")
+            set(BESQ_RUNTIME_DLL_DIR "${BESQ_STRAWBERRY}" CACHE PATH "MinGW runtime DLL directory" FORCE)
+        endif()
+    endif()
+    message(STATUS "MinGW runtime DLL directory: ${BESQ_RUNTIME_DLL_DIR}")
+endif()
+
+# Executable output path
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-# ── Collect library sources (all src/*.cpp except main.cpp) ──
-file(GLOB_RECURSE ALL_SRC_LIST CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-)
-list(FILTER ALL_SRC_LIST EXCLUDE REGEX ".*/main\\.cpp$")
+# ═══════════════════════════════════════════════════════════════════════════════
+# Build type default
+# ═══════════════════════════════════════════════════════════════════════════════
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 
-# ── Shared include directories ──
+# ═══════════════════════════════════════════════════════════════════════════════
+# Options
+# ═══════════════════════════════════════════════════════════════════════════════
+option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
+set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Shared include directories
+# ═══════════════════════════════════════════════════════════════════════════════
 set(BESQ_PUBLIC_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# ── Static library (linkable by test targets and external consumers) ──
-add_library(besq STATIC ${ALL_SRC_LIST})
-target_include_directories(besq PUBLIC ${BESQ_PUBLIC_INCLUDES})
-target_include_directories(besq PRIVATE ${BESQ_GENERATED_DIR})
-target_compile_definitions(besq PUBLIC BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS})
+# ═══════════════════════════════════════════════════════════════════════════════
+# Generated config header (BuildConfig.h)
+# ═══════════════════════════════════════════════════════════════════════════════
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/config/BuildConfig.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.h"
+)
+set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
-# ── CLI executable (thin wrapper linking the library) ──
-add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE besq)
-# CLI output name: "besq" matches documentation; PROJECT_NAME for CMake-internal
+# ═══════════════════════════════════════════════════════════════════════════════
+# Source file groups — each functional area is a CMake variable so library
+# presets can pick exactly what they need.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Types ──
+set(BESQ_TYPE_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/Ench.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/EnchSet.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/EnchInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/Equipment.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/ItemStack.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/EnchSolution.cpp
+)
+set(BESQ_COMPACT_TYPE_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/CompactedTypes.cpp
+)
+
+# ── I/O ──
+set(BESQ_IO_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/io/json.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/io/CsvIO.cpp
+)
+
+# ── Logger ──
+set(BESQ_LOG_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/log/Logger.cpp
+)
+
+# ── Domain registries ──
+set(BESQ_REG_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/EnchantmentRegistry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/EquipmentCategoryRegistry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/EquipmentRegistry.cpp
+)
+set(BESQ_COMPACT_REG_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/CompactedRegistries.cpp
+)
+set(BESQ_ALGO_REG_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/AlgorithmRegistry.cpp
+)
+set(BESQ_REG_MGR_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/RegistryManager.cpp
+)
+
+# ── Algorithm core ──
+set(BESQ_ALGO_CORE_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/AlgorithmExecutor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/ExecutionContext.cpp
+)
+set(BESQ_ALGO_FORGE_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/forge/ForgeEngine.cpp
+)
+set(BESQ_ALGO_DIAG_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/diagnostics/DiagnosticsService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/diagnostics/DiagnosticsWriter.cpp
+)
+set(BESQ_ALGO_SERIAL_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/serialization/CompactSerializer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/serialization/IAlgorithmSerializer.cpp
+)
+
+# ── Algorithm strategies (individually selectable) ──
+set(BESQ_STRATEGY_GREEDY_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/greedy/GreedyAlgorithm.cpp
+)
+set(BESQ_STRATEGY_DFS_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/dfs/DFSAlgorithm.cpp
+)
+set(BESQ_STRATEGY_ASTAR_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarAlgorithm.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarDiagnostics.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarMemoryBudget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarStateSerializer.cpp
+)
+set(BESQ_STRATEGY_IDASTAR_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/idastar/IDAStarAlgorithm.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/idastar/IDAStarDiagnostics.cpp
+)
+set(BESQ_STRATEGY_HAMMING_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/hamming/HammingAlgorithm.cpp
+)
+set(BESQ_STRATEGY_HIERARCHICAL_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.cpp
+)
+set(BESQ_STRATEGY_PENALTY_BALANCE_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.cpp
+)
+set(BESQ_STRATEGY_DIFF_FIRST_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/diff_first/DiffFirstAlgorithm.cpp
+)
+
+# ── Parsers ──
+set(BESQ_PARSER_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/parsers/EnchParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/parsers/ItemParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/parsers/EnchInfoParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/parsers/CLIParser.cpp
+)
+
+# ── Resolvers ──
+set(BESQ_RESOLVER_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/resolvers/ItemResolver.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/resolvers/InventoryResolver.cpp
+)
+
+# ── Adapters ──
+set(BESQ_ADAPTER_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/CompactAdapter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/RawTypeAdapter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/OutputFormatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/adapters/EnchSerializer.cpp
+)
+
+# ── Data ──
+set(BESQ_DATA_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/data/DataLoader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/data/ItemProperties.cpp
+)
+
+# ── CLI (executable only) ──
+set(BESQ_CLI_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cli/cli.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cli/RegistryEditor.cpp
+)
+
+# ── API (library public face) ──
+set(BESQ_API_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/BesqContext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/SolvePipeline.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/ProfileSet.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/api/CAbiBindings.cpp
+)
+set(BESQ_ALGO_REG_SRC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/AlgorithmRegistration.cpp
+)
+
+# ── All strategies combined (convenience for core targets) ──
+set(BESQ_ALL_STRATEGY_SRCS
+    ${BESQ_STRATEGY_GREEDY_SRCS}
+    ${BESQ_STRATEGY_DFS_SRCS}
+    ${BESQ_STRATEGY_ASTAR_SRCS}
+    ${BESQ_STRATEGY_IDASTAR_SRCS}
+    ${BESQ_STRATEGY_HAMMING_SRCS}
+    ${BESQ_STRATEGY_HIERARCHICAL_SRCS}
+    ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS}
+    ${BESQ_STRATEGY_DIFF_FIRST_SRCS}
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Embedded data (OBJECT library — reusable across targets)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+include(${CMAKE_SOURCE_DIR}/cmake/EmbedResource.cmake)
+
+embed_resource(
+    INPUT  "${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/vanilla.json"
+    SYMBOL vanilla_json
+    OUTPUT "${PROJECT_BINARY_DIR}/generated/EmbeddedData_vanilla.cpp"
+)
+embed_resource(
+    INPUT  "${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/item_properties.json"
+    SYMBOL item_properties
+    OUTPUT "${PROJECT_BINARY_DIR}/generated/EmbeddedData_item_props.cpp"
+)
+
+set(BESQ_EMBEDDED_SRCS
+    "${PROJECT_BINARY_DIR}/generated/EmbeddedData_vanilla.cpp"
+    "${PROJECT_BINARY_DIR}/generated/EmbeddedData_item_props.cpp"
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Library targets
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── besq-minimal ──────────────────────────────────────────────────────────────
+#  Algorithm-only static library.  Compact types, registries, algorithm core
+#  (forge + components), and the Hamming strategy.  No logger, no diagnostics,
+#  no parsers, no I/O.  Consumer provides AlgorithmInput programmatically.
+add_library(besq-minimal STATIC
+    ${BESQ_TYPE_SRCS}
+    ${BESQ_COMPACT_TYPE_SRCS}
+    ${BESQ_REG_SRCS}
+    ${BESQ_COMPACT_REG_SRCS}
+    ${BESQ_ALGO_REG_SRCS}
+    ${BESQ_ALGO_CORE_SRCS}
+    ${BESQ_ALGO_FORGE_SRCS}
+    ${BESQ_STRATEGY_HAMMING_SRCS}
+    ${BESQ_ALGO_REG_SRC}
+)
+target_include_directories(besq-minimal PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${BESQ_GENERATED_DIR}
+)
+target_compile_definitions(besq-minimal PUBLIC
+    BESQ_DISABLE_LOGGER
+    BESQ_DISABLE_DIAGNOSTICS
+    BESQ_MAX_SOLUTIONS=32
+    BESQ_HAVE_HAMMING
+)
+
+# ── besq-core ─────────────────────────────────────────────────────────────────
+#  Full library suitable for embedding.  All strategies, API layer, I/O,
+#  resolvers, adapters, logging, diagnostics.  No CLI, no serialization.
+add_library(besq-core STATIC
+    ${BESQ_EMBEDDED_SRCS}
+    ${BESQ_TYPE_SRCS}
+    ${BESQ_COMPACT_TYPE_SRCS}
+    ${BESQ_IO_SRCS}
+    ${BESQ_LOG_SRCS}
+    ${BESQ_REG_SRCS}
+    ${BESQ_COMPACT_REG_SRCS}
+    ${BESQ_ALGO_REG_SRCS}
+    ${BESQ_ALGO_CORE_SRCS}
+    ${BESQ_ALGO_FORGE_SRCS}
+    ${BESQ_ALGO_DIAG_SRCS}
+    ${BESQ_ALGO_SERIAL_SRCS}
+    ${BESQ_ALL_STRATEGY_SRCS}
+    ${BESQ_PARSER_SRCS}
+    ${BESQ_RESOLVER_SRCS}
+    ${BESQ_ADAPTER_SRCS}
+    ${BESQ_DATA_SRCS}
+    ${BESQ_API_SRCS}
+    ${BESQ_ALGO_REG_SRC}
+)
+target_include_directories(besq-core PUBLIC
+    ${BESQ_PUBLIC_INCLUDES}
+    ${BESQ_GENERATED_DIR}
+)
+target_compile_definitions(besq-core PUBLIC
+    BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
+    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+    BESQ_HAVE_GREEDY
+    BESQ_HAVE_DFS
+    BESQ_HAVE_ASTAR
+    BESQ_HAVE_IDASTAR
+    BESQ_HAVE_HAMMING
+    BESQ_HAVE_HIERARCHICAL
+    BESQ_HAVE_PENALTY_BALANCE
+    BESQ_HAVE_DIFF_FIRST
+)
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLI executable
+# ═══════════════════════════════════════════════════════════════════════════════
+
+add_executable(${PROJECT_NAME}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+    ${BESQ_CLI_SRCS}
+)
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
+target_link_libraries(${PROJECT_NAME} PRIVATE besq-core)
 target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
 )
 
-# Data embedding (vanilla.json compiled into the binary)
-add_subdirectory(data)
-
+# ═══════════════════════════════════════════════════════════════════════════════
 # Install rules
+# ═══════════════════════════════════════════════════════════════════════════════
+
 include(GNUInstallDirs)
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} besq-core
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 install(DIRECTORY data/
     DESTINATION ${CMAKE_INSTALL_DATADIR}/BestEnchSeq-Core/data
 )
 
-# ============================================================================
-# Compile-time configuration
-# ============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tests (optional, enabled by default)
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# ── Options ──
-option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
-set(BESQ_MAX_SOLUTIONS 128 CACHE STRING "Maximum solutions stored per algorithm execution")
-
-# ── Generated config header (version info) ──
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/config/BuildConfig.h.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.h"
-)
-
-set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_include_directories(besq PRIVATE ${BESQ_GENERATED_DIR})
-
-# ── Compile definitions (propagate to library + executable + tests) ──
-target_compile_definitions(besq PUBLIC
-    BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
-    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
-)
-
-# ── Build type default ──
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+option(BUILD_TESTING "Build test targets" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
 
-# ============================================================================
-# Tests
-# ============================================================================
-enable_testing()
-add_subdirectory(tests)
-
-# ============================================================================
+# ═══════════════════════════════════════════════════════════════════════════════
 # Benchmarks (optional, not part of test suite)
-# ============================================================================
-add_subdirectory(benchmarks)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
+if(BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()

@@ -3,6 +3,10 @@
 /// @file log/log.hpp
 /// Convenience wrappers and source-location macros for the global Logger.
 ///
+/// When BESQ_DISABLE_LOGGER is defined, all besq::log:: functions become
+/// no-op stubs — no Logger singleton, no thread, no file I/O.  This lets
+/// minimal builds use code that would otherwise pull in the Logger.
+///
 /// Plain string:
 ///   besq::log::info("hello");
 ///   LOG_INFO("hello");                     // adds [file:line] prefix
@@ -14,19 +18,56 @@
 /// Generic (must specify level):
 ///   besq::log::printf(LogLevel::Warn, "x = %d", x);
 
+#include "types/LogTypes.h"
+#include <string>
+#include <utility>
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  When logging is disabled all besq::log:: functions are empty stubs
+// ─────────────────────────────────────────────────────────────────────────────
+
+#ifdef BESQ_DISABLE_LOGGER
+
+namespace besq {
+namespace log {
+
+// ─── Plain-string stubs ─────────────────────────────────────────────────
+inline void info(std::string)  {}
+inline void warn(std::string)  {}
+inline void error(std::string) {}
+inline void debug(std::string) {}
+
+// ─── printf-style stubs ─────────────────────────────────────────────────
+template <typename... Args>
+inline void info_fmt(const char*, Args&&...) {}
+template <typename... Args>
+inline void warn_fmt(const char*, Args&&...) {}
+template <typename... Args>
+inline void error_fmt(const char*, Args&&...) {}
+template <typename... Args>
+inline void debug_fmt(const char*, Args&&...) {}
+
+template <typename... Args>
+inline void printf(LogLevel, const char*, Args&&...) {}
+
+} // namespace log
+} // namespace besq
+
+#else // !BESQ_DISABLE_LOGGER
+
 #include "log/Logger.h"
 
 namespace besq {
 namespace log {
 
-// ─── Plain-string helpers ───────────────────────────────────────────
+// ─── Plain-string helpers ───────────────────────────────────────────────
 
 inline void info(std::string msg)  { Logger::instance().info(std::move(msg)); }
 inline void warn(std::string msg)  { Logger::instance().warn(std::move(msg)); }
 inline void error(std::string msg) { Logger::instance().error(std::move(msg)); }
 inline void debug(std::string msg) { Logger::instance().debug(std::move(msg)); }
 
-// ─── printf-style helpers (no file:line capture) ────────────────────
+// ─── printf-style helpers (no file:line capture) ────────────────────────
 
 template <typename... Args>
 inline void info_fmt(const char* fmt, Args&&... args) {
@@ -54,7 +95,13 @@ inline void printf(LogLevel level, const char* fmt, Args&&... args) {
 } // namespace log
 } // namespace besq
 
-// ─── Macros (capture __FILE__ / __LINE__ automatically) ──────────────
+#endif // BESQ_DISABLE_LOGGER
+
+// ─── Macros (capture __FILE__ / __LINE__ automatically) ─────────────────
+// These work identically regardless of the BESQ_DISABLE_LOGGER setting;
+// when logging is disabled the template helpers are no-ops, so the
+// argument expressions are still type-checked but produce no code.
+//
 // String-literal concatenation embeds the prefix at compile time:
 //   "[file:line] fmt" → one string, one snprintf call.
 
