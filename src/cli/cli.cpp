@@ -37,12 +37,12 @@ std::string get_cli_help_text(const std::string &program_name) {
         "  --format <format>       Output format: text (default), compact, or json\n"
         "  --input <file>          Input file path (inventory mode)\n"
         "  --output <file>         Output file path (default: stdout)\n"
-        "  --registry-dir <dir>   Scan directory for registry data files/subdirs\n"
+        "  --registry-dir <dir>    Scan directory for registry data files/subdirs\n"
         "                           (auto-detects JSON, CSV, MC Official format)\n"
         "  --registries <list>     Registry names or paths to activate\n"
         "                           (default: all discovered registries;\n"
         "                           e.g., --registries Vanilla,./custom.json)\n"
-        "  --registry-edit <ops> Runtime registry edits before execution\n"
+        "  --registry-edit <ops>   Runtime registry edits before execution\n"
         "                           Format: <target>:<action>,<id>[,<field>=<val>...]\n"
         "                           Targets: ench | eq | cat  Actions: add | mod | rm\n"
         "                           e.g., --registry-edit \"ench:mod,sharpness,max_level=10\"\n"
@@ -52,7 +52,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "                           Keys: ignore-cost-cap, ignore-penalty-cost,\n"
         "                                 ignore-repair-cost (all: true|false)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
-        "  --plugin-dir <dir>      Load algorithm .so/.dll plugins from a directory\n"
+        "  --algo-dir <dir>        Directory with external .so/.dll algorithm strategies\n"
         "  --max-time <seconds>    Max search time in seconds (0 = unlimited, default: 0)\n"
         "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
         "\n"
@@ -121,10 +121,10 @@ CLIConfig parse_cli(int argc, char *argv[]) {
                         op + "'. Expected format <target>:<action>,<id>[,<field>=<val>...]\n");
             }
             config.registry_edit = value;
-        } else if (key == "plugin-dir") {
+        } else if (key == "algo-dir") {
             if (value.empty())
-                throw std::runtime_error("Empty --plugin-dir value.\n");
-            config.plugin_dir = value;
+                throw std::runtime_error("Empty --algo-dir value.\n");
+            config.algo_dir = value;
         } else if (key == "export-registry") {
             if (value.empty())
                 throw std::runtime_error("Empty --export-registry value.\n");

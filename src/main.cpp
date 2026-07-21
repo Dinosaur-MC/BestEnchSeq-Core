@@ -155,11 +155,15 @@ int main(int argc, char* argv[]) try {
             const_cast<EquipmentRegistry&>(ctx.equipment()),
             const_cast<EquipmentCategoryRegistry&>(ctx.categories()));
 
-    // ── Load algorithm plugins ───────────────────────────────────────
-    if (config.plugin_dir) {
-        size_t n = ctx.load_plugins(*config.plugin_dir);
-        LOG_INFO("Loaded %zu algorithm plugin(s) from %s",
-                 n, config.plugin_dir->c_str());
+    // ── Load external algorithm strategies ────────────────────────────
+    // Default search path: ./algorithms/ (silently skipped if absent)
+    {
+        auto algo_path = config.algo_dir.value_or("algorithms");
+        if (std::filesystem::is_directory(algo_path)) {
+            size_t n = ctx.load_plugins(algo_path);
+            LOG_INFO("Loaded %zu external algorithm(s) from %s",
+                     n, algo_path.c_str());
+        }
     }
 
     // ── Registry export (works without --target) ─────────────────────

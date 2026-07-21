@@ -18,7 +18,7 @@ struct CLIConfig {
     std::optional<std::string> registries;
     std::optional<std::string> registry_edit;    // --registry-edit
     std::optional<std::string> export_registry;  // --export-registry
-    std::optional<std::string> plugin_dir;      // --plugin-dir
+    std::optional<std::string> algo_dir;      // --algo-dir
     std::string platform = "auto";
     std::optional<std::string> output;
     std::string format = "text";
