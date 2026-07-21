@@ -1,6 +1,7 @@
 #include "api/SolvePipeline.h"
 #include "adapters/CompactAdapter.h"
 #include "adapters/OutputFormatter.h"
+#include "io/json.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
 #include "algorithm/strategies/Strategies.h"
@@ -76,6 +77,25 @@ std::string SolveResult::to_text(
     const EquipmentCategoryRegistry& cat_reg) const
 {
     return OutputFormatter::format_verbose(solutions, ench_reg, cat_reg, "direct");
+}
+
+std::string SolveResult::to_json_raw() const {
+    Json::Object root;
+    root["success"] = Json(Json::Bool(success));
+    root["algorithm"] = Json(Json::String(algorithm_used));
+    root["computation_time_ms"] = Json(Json::Number(static_cast<int64_t>(computation_time_ms)));
+
+    Json::Array sol_arr;
+    for (const auto& sol : solutions) {
+        Json::Object s;
+        s["total_exp_level_cost"] = Json(Json::Number(sol.total_exp_level_cost));
+        s["total_exp_cost"] = Json(Json::Number(sol.total_exp_cost));
+        s["is_success"] = Json(Json::Bool(sol.is_success));
+        s["step_count"] = Json(Json::Number(static_cast<int32_t>(sol.steps.size())));
+        sol_arr.push_back(Json(s));
+    }
+    root["solutions"] = Json(sol_arr);
+    return Json(root).to_string(Json::Pretty);
 }
 
 // ====================================================================

@@ -28,17 +28,32 @@ endif()
 # Executable Output Path
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
-file(GLOB_RECURSE MAIN_SRC_LIST CONFIGURE_DEPENDS
+# ── Collect library sources (all src/*.cpp except main.cpp) ──
+file(GLOB_RECURSE ALL_SRC_LIST CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
-add_executable(${PROJECT_NAME} ${MAIN_SRC_LIST})
+list(FILTER ALL_SRC_LIST EXCLUDE REGEX ".*/main\\.cpp$")
 
+# ── Shared include directories ──
+set(BESQ_PUBLIC_INCLUDES
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+# ── Static library (linkable by test targets and external consumers) ──
+add_library(besq STATIC ${ALL_SRC_LIST})
+target_include_directories(besq PUBLIC ${BESQ_PUBLIC_INCLUDES})
+target_include_directories(besq PRIVATE ${BESQ_GENERATED_DIR})
+target_compile_definitions(besq PUBLIC BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS})
+
+# ── CLI executable (thin wrapper linking the library) ──
+add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE besq)
 # CLI output name: "besq" matches documentation; PROJECT_NAME for CMake-internal
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
-
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
 )
 
 # Data embedding (vanilla.json compiled into the binary)
@@ -68,10 +83,10 @@ configure_file(
 )
 
 set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
+target_include_directories(besq PRIVATE ${BESQ_GENERATED_DIR})
 
-# ── Compile definitions (availability: every translation unit) ──
-target_compile_definitions(${PROJECT_NAME} PRIVATE
+# ── Compile definitions (propagate to library + executable + tests) ──
+target_compile_definitions(besq PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
 )

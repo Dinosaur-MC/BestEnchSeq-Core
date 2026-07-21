@@ -1,4 +1,4 @@
-#include "api/BesqContext.h"
+#include "besq/besq.h"
 #include "api/ProfileSet.h"
 #include "api/SolvePipeline.h"
 #include "parsers/EnchInfoParser.h"
@@ -59,6 +59,15 @@ void BesqContext::load_file(const std::string& path) {
         if (profile.eq_reg.get_id(eq.name_id) < 0) {
             profile.eq_reg.add(eq);
         }
+    }
+}
+
+void BesqContext::load_data(const std::vector<std::string>& filters) {
+    for (const auto& filter : filters) {
+        if (std::filesystem::exists(filter)) {
+            load_file(filter);
+        }
+        // Non-existent entries are silently skipped (future: profile-based lookup)
     }
 }
 
@@ -163,32 +172,3 @@ SolveResult BesqContext::solve(const SolveInput& input) {
                                        profile.eq_reg, profile.cat_reg);
 }
 
-// ====================================================================
-// BesqContextInternal — layered API
-// ====================================================================
-
-ResolvedInput BesqContextInternal::resolve(const SolveInput& input) const {
-    const auto& profile = p_impl()->profiles.active();
-    return detail::SolvePipeline::resolve(input, profile.ench_reg,
-                                           profile.eq_reg);
-}
-
-AlgorithmInput BesqContextInternal::apply(const ResolvedInput& resolved) const {
-    const auto& profile = p_impl()->profiles.active();
-    return detail::SolvePipeline::apply(resolved, profile.ench_reg);
-}
-
-detail::ExecuteResult BesqContextInternal::execute(
-    AlgorithmInput& algo_input,
-    const std::string& algorithm)
-{
-    return detail::SolvePipeline::execute(algo_input, algorithm);
-}
-
-SolveResult BesqContextInternal::recall(
-    const AlgorithmOutput& output,
-    const AlgorithmInput& algo_input,
-    const ResolvedInput& resolved) const
-{
-    return detail::SolvePipeline::recall(output, algo_input, resolved);
-}

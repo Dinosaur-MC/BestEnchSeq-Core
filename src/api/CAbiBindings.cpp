@@ -210,6 +210,14 @@ int besq_load_file(BesqContext* ctx, const char* path) {
     BESQ_CAPI_TRY(c, c->impl.load_file(path));
 }
 
+int besq_load_data(BesqContext* ctx, const char* path) {
+    auto* c = reinterpret_cast<BesqContextC*>(ctx);
+    BESQ_CAPI_TRY(c,
+        std::vector<std::string> filters = {path};
+        c->impl.load_data(filters);
+    );
+}
+
 // ── Profile management ──────────────────────────────────────────────────────
 
 const char* besq_active_profile(BesqContext* ctx) {

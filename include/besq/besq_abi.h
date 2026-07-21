@@ -18,6 +18,7 @@ void besq_destroy(BesqContext* ctx);
 // ── Data loading ────────────────────────────────────────────────────────────
 int besq_load_builtin(BesqContext* ctx);
 int besq_load_file(BesqContext* ctx, const char* path);
+int besq_load_data(BesqContext* ctx, const char* path);
 
 // ── Profile management ──────────────────────────────────────────────────────
 const char* besq_active_profile(BesqContext* ctx);

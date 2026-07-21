@@ -5,15 +5,7 @@
 #include <string>
 #include <vector>
 
-// ─── Forward declarations ───────────────────────────────────────────
-struct EnchInfo;
-struct Equipment;
-class EnchantmentRegistry;
-class EquipmentRegistry;
-class EquipmentCategoryRegistry;
-
-struct SolveInput;
-struct SolveResult;
+#include "api/SolvePipeline.h"
 
 // ─── BesqContext (pImpl) ────────────────────────────────────────────
 
@@ -24,7 +16,7 @@ struct SolveResult;
 class BesqContext {
 public:
     BesqContext();
-    virtual ~BesqContext();
+    ~BesqContext();
 
     BesqContext(const BesqContext&) = delete;
     BesqContext& operator=(const BesqContext&) = delete;
@@ -37,6 +29,10 @@ public:
 
     /// Load data from a file or directory into the active profile.
     void load_file(const std::string& path);
+
+    /// Load data from multiple paths/filters into the active profile.
+    /// Each entry is tried as a file path; non-existent entries are skipped.
+    void load_data(const std::vector<std::string>& filters);
 
     // ── Profile management ──
     const std::string& active_profile() const noexcept;
@@ -65,12 +61,7 @@ public:
     // ── Solve ──
     SolveResult solve(const SolveInput& input);
 
-protected:
-    // Internal: access the pImpl from derived classes (e.g. BesqContextInternal).
-    struct Impl;
-    Impl* p_impl() noexcept { return _impl.get(); }
-    const Impl* p_impl() const noexcept { return _impl.get(); }
-
 private:
+    struct Impl;
     std::unique_ptr<Impl> _impl;
 };

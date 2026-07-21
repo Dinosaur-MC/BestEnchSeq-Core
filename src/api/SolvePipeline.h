@@ -42,6 +42,9 @@ struct SolveResult {
                         const EquipmentCategoryRegistry& cat_reg) const;
     std::string to_text(const EnchantmentRegistry& ench_reg,
                         const EquipmentCategoryRegistry& cat_reg) const;
+
+    /// Raw JSON output — no registry dependencies, uses raw IDs and cost info only.
+    std::string to_json_raw() const;
 };
 
 namespace detail {
