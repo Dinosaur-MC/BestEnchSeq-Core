@@ -299,6 +299,13 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Export besq-core for plugin build system
+# ═══════════════════════════════════════════════════════════════════════════════
+export(TARGETS besq-core
+    FILE "${CMAKE_BINARY_DIR}/besq-coreConfig.cmake"
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI executable  (guarded by BESQ_BUILD_CLI)
 # ═══════════════════════════════════════════════════════════════════════════════
 if(BESQ_BUILD_CLI)
