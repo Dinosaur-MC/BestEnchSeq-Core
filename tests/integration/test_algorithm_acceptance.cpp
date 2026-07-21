@@ -99,6 +99,23 @@ static void check_json_solutions(const std::string& json_str, size_t min_solutio
                    "solution must have 'total_exp_level_cost'");
             expect(first_obj->count("is_success") > 0,
                    "solution must have 'is_success'");
+
+            // Verify peak cost fields (using corrected spelling)
+            auto peak_lvl_it = first_obj->find("peak_level_cost");
+            expect(peak_lvl_it != first_obj->end(),
+                   "solution must have 'peak_level_cost' (not peek_)");
+            auto peak_exp_it = first_obj->find("peak_exp_cost");
+            expect(peak_exp_it != first_obj->end(),
+                   "solution must have 'peak_exp_cost' (not peek_)");
+
+            // Verify alphabetical field ordering (std::map consistency)
+            // The first field alphabetically should be "available_items" after "is_success"
+            auto first_field = first_obj->begin();
+            if (first_field != first_obj->end()) {
+                expect(first_field->first == "available_items",
+                       "first solution field should be 'available_items', got '" +
+                       first_field->first + "' (std::map ordering)");
+            }
         }
     }
 }

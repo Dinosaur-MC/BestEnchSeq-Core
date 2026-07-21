@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <istream>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <variant>
 #include <vector>
 
@@ -53,7 +53,7 @@ class Json {
     using Number = std::variant<int32_t, int64_t, float, double>;
     using String = std::string;
     using Array  = std::vector<Json>;
-    using Object = std::unordered_map<std::string, Json>;
+    using Object = std::map<std::string, Json>;
     using Value  = std::variant<Null, Bool, Number, String, Array, Object>;
 
   private:

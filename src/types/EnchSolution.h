@@ -29,8 +29,8 @@ struct EnchSolution {
     bool is_success;
 
     bool is_feasible() const;
-    int32_t get_peek_level_cost() const;
-    int32_t get_peek_exp_cost() const;
+    int32_t get_peak_level_cost() const;
+    int32_t get_peak_exp_cost() const;
 
     static EnchSolution make(
         MCE platform, const EnchSet &original_ench, const ItemStack &target_item,

@@ -259,8 +259,8 @@ std::string OutputFormatter::format_verbose(
         // Peak step
         if (sol.is_feasible()) {
             out += "峰值单步: Step " + std::to_string(sol.max_cost_step_index + 1) + " - " +
-                   std::to_string(sol.get_peek_level_cost()) + " 等级 (" +
-                   std::to_string(sol.get_peek_exp_cost()) + " 经验值)\n";
+                   std::to_string(sol.get_peak_level_cost()) + " 等级 (" +
+                   std::to_string(sol.get_peak_exp_cost()) + " 经验值)\n";
         }
 
         out += "\n输入:\n";
@@ -380,8 +380,8 @@ std::string OutputFormatter::format_json(
         // Summary
         s["total_exp_level_cost"] = Json(Json::Number(sol.total_exp_level_cost));
         s["total_exp_cost"]       = Json(Json::Number(sol.total_exp_cost));
-        s["peek_level_cost"]      = Json(Json::Number(sol.get_peek_level_cost()));
-        s["peek_exp_cost"]        = Json(Json::Number(sol.get_peek_exp_cost()));
+        s["peak_level_cost"]      = Json(Json::Number(sol.get_peak_level_cost()));
+        s["peak_exp_cost"]        = Json(Json::Number(sol.get_peak_exp_cost()));
         s["max_cost_step_index"]  = Json(Json::Number(static_cast<int64_t>(sol.max_cost_step_index)));
         s["is_success"]           = Json(Json::Bool(sol.is_success));
 

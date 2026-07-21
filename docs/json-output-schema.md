@@ -1,0 +1,184 @@
+# JSON Output Schema
+
+> **Version:** 1.0  
+> **Status:** Stable  
+> **Last updated:** 2026-07-20
+
+This document describes the JSON output format produced by `besq --format json`. It is intended for frontend/CLI consumers who parse the output programmatically.
+
+---
+
+## Overview
+
+The JSON output is a single root object containing metadata and an array of solutions. All object keys are sorted alphabetically (`std::map`) for stable, predictable output ordering.
+
+```json
+{
+    "mode": "direct",
+    "schema_version": "1.0",
+    "solutions": [ ... ]
+}
+```
+
+---
+
+## Top-Level Fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `schema_version` | `string` | always | Schema version string (`"1.0"`). Incremented on breaking changes. |
+| `mode` | `string` | always | Operating mode: `"direct"` or `"inventory"`. |
+| `solutions` | `array<Solution>` | always | Array of zero or more forge solutions, sorted by cost ascending. |
+
+---
+
+## Solution Object
+
+Each solution represents one complete forge sequence.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `available_items` | `array<ItemStack>` | always | Items available for forging (books + equipment). |
+| `is_success` | `bool` | always | Whether the forge sequence is feasible. |
+| `max_cost_step_index` | `int64` | always | Index into `steps[]` of the step with highest level cost (0-based). Value is -1 for empty step lists or infeasible solutions. |
+| `metadata` | `Metadata` | always | Execution metadata. |
+| `original_ench` | `array<Enchantment>` | always | Source enchantments already present on target. |
+| `peak_exp_cost` | `int32` | always | Experience POINT cost of the peak (most expensive) step. |
+| `peak_level_cost` | `int32` | always | Experience LEVEL cost of the peak step. |
+| `platform` | `string` | always | Target platform: `"Java"`, `"Bedrock"`, `"All"`, or `"None"`. |
+| `rank` | `int32` | always | Solution rank (1-based, 1 = lowest cost). |
+| `steps` | `array<Step>` | always | Forge steps to execute in order. |
+| `target_item` | `ItemStack` | always | The target item after all forge operations. |
+| `total_exp_cost` | `int32` | always | Total experience POINTS consumed. |
+| `total_exp_level_cost` | `int32` | always | Total experience LEVELS consumed. |
+
+### Metadata Object
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `algorithm_name` | `string` | always | Name of the algorithm that produced this solution. |
+| `computation_time` | `int64` | always | Wall-clock time in milliseconds spent searching. |
+| `created_at` | `int64` | always | Unix timestamp (seconds since epoch) when the solution was generated. |
+| `version` | `string` | always | Algorithm version string. |
+
+---
+
+## Step Object
+
+Each step defines one forge operation.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `exp_cost` | `int32` | always | Experience POINTS consumed by this step. |
+| `exp_level_cost` | `int32` | always | Experience LEVELS consumed by this step. |
+| `item_a` | `ItemStack` | always | Base item (placed in left anvil slot). |
+| `item_b` | `ItemStack` | always | Sacrifice item (placed in right anvil slot). |
+
+The forge operation is: `item_a + item_b → item_a (modified)`.
+
+---
+
+## ItemStack Object
+
+Represents an item with its enchantments.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `durability` | `int32` | always | Current durability. 0 for books, -1 if unknown. |
+| `enchantments` | `array<Enchantment>` | always | Enchantments on this item. |
+| `equipment` | `Equipment \| null` | always | Equipment definition; `null` for books. |
+| `is_book` | `bool` | always | `true` if this is an enchanted book, `false` if equipment. |
+| `prior_penalty` | `int32` | always | Prior Work Penalty count (0-31). |
+
+### Equipment Object (when `equipment` is not null)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `category` | `string` | always | Equipment category name (e.g., `"sword"`, `"chestplate"`). |
+| `id` | `string` | always | Namespaced equipment ID (e.g., `"minecraft:diamond_sword"`). |
+| `max_durability` | `int32` | always | Maximum durability of this equipment type. |
+| `name` | `string` | always | Human-readable name (e.g., `"Diamond Sword"`). |
+
+### Enchantment Object
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | `string` | always | Namespaced enchantment ID (e.g., `"minecraft:sharpness"`). |
+| `level` | `int32` | always | Enchantment level (1 to `max_level`). |
+
+---
+
+## Field Ordering
+
+All object keys are sorted **alphabetically** (via `std::map<std::string, Json>`). This ensures:
+
+- **Deterministic output** — identical inputs always produce identical JSON text
+- **Easy diffing** — reordering code does not change field order
+- **Predictable parsing** — consumers can rely on stable key positions
+
+---
+
+## Error States
+
+### No solutions found
+When no feasible forge sequence exists, `solutions` is an empty array:
+```json
+{
+    "mode": "direct",
+    "schema_version": "1.0",
+    "solutions": []
+}
+```
+
+### Infeasible solution
+A solution may have `is_success: false` if the target cannot be reached:
+```json
+{
+    "rank": 1,
+    "is_success": false,
+    "steps": [],
+    "total_exp_level_cost": 0,
+    "total_exp_cost": 0,
+    "peak_level_cost": 0,
+    "peak_exp_cost": 0,
+    "max_cost_step_index": 0,
+    ...
+}
+```
+
+### No --target (export only)
+When `--export-registry` is used without `--target`, no JSON output is produced. Instead, the registry file is written.
+
+---
+
+## Parsing Guide
+
+### Key rules for consumers
+
+1. **Use `schema_version` for format detection** — always check this field before parsing
+2. **Never assume field order matters** — although keys are alphabetically sorted, always use key-based lookup
+3. **Handle empty `solutions` arrays** — valid when no forge sequence is possible
+4. **Check `is_success`** before using step data
+5. **Enchantment IDs are fully namespaced** — `"minecraft:sharpness"`, not `"sharpness"`; bare IDs without `:` are in the `minecraft` namespace
+6. **`equipment` can be `null`** — this indicates the item is an enchanted book
+
+### Round-trip compatibility
+
+JSON output can be deserialized back into `EnchSolution` objects via `OutputFormatter::parse_json()`. The round-trip preserves:
+
+- All enchantments with levels
+- All equipment with categories
+- Forge step sequence
+- Metadata (algorithm, timing)
+
+Limitations:
+- Enchantment IDs must exist in the registry; unknown enchantments are silently skipped during deserialization
+- Equipment category must exist in the category registry; unknown categories fall back to `ID_ANY`
+
+---
+
+## Changelog
+
+| Schema Version | Changes |
+|---|---|
+| 1.0 | Initial stable schema |

@@ -3,12 +3,12 @@
 #include "../utils/ExpCalculator.hpp"
 
 bool EnchSolution::is_feasible() const { return is_success && steps.size() > 0; }
-int32_t EnchSolution::get_peek_level_cost() const {
+int32_t EnchSolution::get_peak_level_cost() const {
     if (!is_feasible() || max_cost_step_index >= steps.size() || max_cost_step_index < 0)
         return 0;
     return steps[max_cost_step_index].exp_level_cost;
 }
-int32_t EnchSolution::get_peek_exp_cost() const {
+int32_t EnchSolution::get_peak_exp_cost() const {
     if (!is_feasible() || max_cost_step_index >= steps.size() || max_cost_step_index < 0)
         return 0;
     return steps[max_cost_step_index].exp_cost;
