@@ -42,6 +42,9 @@ public:
     /// Safe to call multiple times — subsequent calls are no-ops.
     void load_builtin();
 
+    /// Register a single algorithm factory by name (e.g. for tests).
+    void register_algorithm(std::string_view name, AlgorithmFactory factory);
+
     /// Scan a directory for plugin shared libraries (.so/.dll).
     /// Returns the number of plugins successfully loaded.
     size_t scan_and_load(const std::string& dir_path);

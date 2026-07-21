@@ -140,6 +140,10 @@ void AlgorithmLoader::load_builtin() {
     LOG_INFO("Registered %zu built-in algorithm strategy/ies", _registry.size());
 }
 
+void AlgorithmLoader::register_algorithm(std::string_view name, AlgorithmFactory factory) {
+    _registry.register_algorithm(name, std::move(factory));
+}
+
 // ====================================================================
 // Plugin loading
 // ====================================================================

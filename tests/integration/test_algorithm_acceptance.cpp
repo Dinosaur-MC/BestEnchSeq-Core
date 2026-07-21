@@ -17,7 +17,7 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "loader/AlgorithmLoader.h"
+#include "loader/TestLoader.h"
 #include "adapters/EnchSerializer.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
@@ -49,12 +49,6 @@ static void load_builtin_data(EquipmentRegistry& eq_reg) {
     eq_reg.initialize(equipments);
 }
 
-static AlgorithmLoader& test_loader() {
-    static AlgorithmLoader loader;
-    static std::once_flag flag;
-    std::call_once(flag, [&] { loader.load_builtin(); });
-    return loader;
-}
 
 // Validate JSON output structure
 static void check_json_solutions(const std::string& json_str, size_t min_solutions) {
