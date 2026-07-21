@@ -81,9 +81,6 @@ AlgorithmLoader::~AlgorithmLoader() {
 // Built-in registration
 // ====================================================================
 
-// Each strategy is guarded by a compile-time define so that minimal
-// builds register only what they link.
-
 #ifdef BESQ_HAVE_HAMMING
 #  include "algorithm/strategies/hamming/HammingAlgorithm.h"
 #endif
@@ -118,37 +115,30 @@ void AlgorithmLoader::load_builtin() {
         [] { return std::make_unique<HammingAlgorithm>(); });
 #endif
 #ifdef BESQ_HAVE_GREEDY
-    // greedy — simple greedy search, near-optimal for most cases
     _registry.register_algorithm("greedy",
         [] { return std::make_unique<GreedyAlgorithm>(); });
 #endif
 #ifdef BESQ_HAVE_DFS
-    // dfs — brute-force depth-first search, simplest possible
     _registry.register_algorithm("dfs",
         [] { return std::make_unique<DFSAlgorithm>(); });
 #endif
 #ifdef BESQ_HAVE_ASTAR
-    // astar — optimal A* with search budget control
     _registry.register_algorithm("astar",
         [] { return std::make_unique<AStarAlgorithm>(); });
 #endif
 #ifdef BESQ_HAVE_IDASTAR
-    // idastar — iterative-deepening A*, memory-efficient optimal search
     _registry.register_algorithm("idastar",
         [] { return std::make_unique<IDAStarAlgorithm>(); });
 #endif
 #ifdef BESQ_HAVE_HIERARCHICAL
-    // hierarchical — merges intermediate results via hierarchical planning
     _registry.register_algorithm("hierarchical",
         [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
 #endif
 #ifdef BESQ_HAVE_PENALTY_BALANCE
-    // penalty_balance — dynamic penalty-balancing search
     _registry.register_algorithm("penalty_balance",
         [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
 #endif
 #ifdef BESQ_HAVE_DIFF_FIRST
-    // diff_first — difference-first heuristic search
     _registry.register_algorithm("diff_first",
         [] { return std::make_unique<DiffFirstAlgorithm>(); });
 #endif
@@ -157,7 +147,7 @@ void AlgorithmLoader::load_builtin() {
 }
 
 // ====================================================================
-// Plugin loading — shared library discovery
+// Plugin loading
 // ====================================================================
 
 constexpr const char* SO_EXT =
@@ -192,7 +182,8 @@ size_t AlgorithmLoader::scan_and_load(const std::string& dir_path) {
 bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     // Avoid double-load on exact path
     for (const auto& p : _plugins) {
-        if (p->path == so_path) {
+        if (p->name.empty()) continue;
+        if (p->name == so_path) {
             LOG_WARN("Algorithm plugin already loaded: %s", so_path.c_str());
             return true;
         }
@@ -205,22 +196,29 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
         return false;
     }
 
-    auto desc = resolve_symbols(handle, so_path);
-    if (!desc.name || !desc.create) {
-        LOG_WARN("File '%s' is not a valid algorithm plugin (missing symbols), skipping",
-                 so_path.c_str());
+    std::string algo_name;
+    BesqCreateFn create_fn = nullptr;
+    if (!resolve_plugin(handle, so_path, algo_name, create_fn)) {
         dl_close(handle);
         return false;
     }
 
-    // If a built-in or previously-loaded plugin has the same name, the
-    // plugin takes precedence (replaces).
-    _registry.unregister_algorithm(desc.name);
+    // Instantiate once to get the algorithm name via its virtual method.
+    // This also validates that the plugin works with our besq-core.
+    std::unique_ptr<IAlgorithm> probe(static_cast<IAlgorithm*>(create_fn()));
+    if (!probe) {
+        LOG_WARN("Plugin '%s' returned null from create", so_path.c_str());
+        dl_close(handle);
+        return false;
+    }
+    algo_name = std::string(probe->name());
+    probe.reset();
 
-    // Wrap the C ABI factory into an AlgorithmRegistry-compatible functor.
-    // The ABI guarantees the same heap is used, so plain delete is safe.
-    auto create_fn = desc.create;
-    _registry.register_algorithm(desc.name,
+    // If a previously-loaded plugin has the same name, replace it.
+    _registry.unregister_algorithm(algo_name);
+
+    // Register factory (capture handle indirectly via create_fn)
+    _registry.register_algorithm(algo_name,
         [create_fn]() -> std::unique_ptr<IAlgorithm> {
             void* raw = create_fn();
             if (!raw) return nullptr;
@@ -228,61 +226,33 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
                 static_cast<IAlgorithm*>(raw));
         });
 
-    // Track the loaded plugin for unload.
     auto plugin = std::make_unique<LoadedPlugin>();
-    plugin->handle  = handle;
-    plugin->name    = desc.name;
-    plugin->path    = so_path;
-    plugin->create  = desc.create;
-    plugin->destroy = desc.destroy;
+    plugin->handle = handle;
+    plugin->name   = algo_name;
+    plugin->create = create_fn;
     _plugins.push_back(std::move(plugin));
 
-    LOG_INFO("Loaded algorithm plugin: %s v%s (from %s)",
-             desc.name, desc.version ? desc.version : "?",
-             so_path.c_str());
+    LOG_INFO("Loaded algorithm plugin: %s (from %s)", algo_name.c_str(), so_path.c_str());
     return true;
 }
 
 // ====================================================================
-// Symbol resolution
+// Symbol resolution — looks for one symbol: besq_create_algorithm
 // ====================================================================
 
-BesqPluginDescriptor AlgorithmLoader::resolve_symbols(
-    void* handle, const std::string& path)
-{
-    BesqPluginDescriptor desc;
-    desc.handle = handle;
-
-    // Name (required)
-    auto name_fn = reinterpret_cast<BesqAlgorithmNameFn>(
-        dl_sym(handle, "besq_algorithm_name"));
-    if (!name_fn) {
-        LOG_WARN("Plugin '%s' missing 'besq_algorithm_name': %s",
-                 path.c_str(), dl_error().c_str());
-        return {};
-    }
-    desc.name = name_fn();
-
-    // Version (optional)
-    auto ver_fn = reinterpret_cast<BesqAlgorithmVersionFn>(
-        dl_sym(handle, "besq_algorithm_version"));
-    desc.version = ver_fn ? ver_fn() : "0.0.0";
-
-    // Create (required)
-    auto create_fn = reinterpret_cast<BesqAlgorithmCreateFn>(
-        dl_sym(handle, "besq_algorithm_create"));
+bool AlgorithmLoader::resolve_plugin(void* handle, const std::string& path,
+                                     std::string& out_name,
+                                     BesqCreateFn& out_create) {
+    auto create_fn = reinterpret_cast<BesqCreateFn>(
+        dl_sym(handle, BESQ_PLUGIN_CREATE_SYM));
     if (!create_fn) {
-        LOG_WARN("Plugin '%s' missing 'besq_algorithm_create': %s",
-                 path.c_str(), dl_error().c_str());
-        return {};
+        LOG_WARN("Plugin '%s' missing '%s': %s",
+                 path.c_str(), BESQ_PLUGIN_CREATE_SYM, dl_error().c_str());
+        return false;
     }
-    desc.create = create_fn;
 
-    // Destroy (optional — the host uses delete on the same heap)
-    desc.destroy = reinterpret_cast<BesqAlgorithmDestroyFn>(
-        dl_sym(handle, "besq_algorithm_destroy"));
-
-    return desc;
+    out_create = create_fn;
+    return true;
 }
 
 // ====================================================================
@@ -315,7 +285,6 @@ void AlgorithmLoader::unload(const std::string& name) {
     if (it == _plugins.end()) return;
 
     _registry.unregister_algorithm(name);
-
     if ((*it)->handle) dl_close((*it)->handle);
     _plugins.erase(it);
 
@@ -331,7 +300,7 @@ void AlgorithmLoader::unload_all() {
 }
 
 // ====================================================================
-// Utility: default algorithms directory
+// Utility
 // ====================================================================
 
 std::string AlgorithmLoader::default_algorithms_dir() {
@@ -341,7 +310,6 @@ std::string AlgorithmLoader::default_algorithms_dir() {
     if (len == 0 || len >= sizeof(buf)) return "algorithms";
     std::string exe_path(buf, len);
 #else
-    // Linux: /proc/self/exe
     char buf[4096];
     ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
     if (len <= 0) return "algorithms";

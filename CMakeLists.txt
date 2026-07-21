@@ -265,7 +265,17 @@ target_compile_definitions(besq-minimal PUBLIC
 # ── besq-core ─────────────────────────────────────────────────────────────────
 # Full library suitable for embedding.  All strategies, API layer, I/O,
 # resolvers, adapters, logging, diagnostics.  No CLI, no serialization.
-add_library(besq-core STATIC
+#
+# When BESQ_BUILD_PLUGINS=ON the library is SHARED so that the host and
+# plugins share the same CRT heap and vtables (required on Windows).
+set(_besq_core_type STATIC)
+if(BESQ_BUILD_PLUGINS)
+    set(_besq_core_type SHARED)
+    # Export all symbols from besq-core.dll so that loaded plugins can
+    # resolve IAlgorithm / ForgeEngine vtables and RTTI.
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+add_library(besq-core ${_besq_core_type}
     ${BESQ_EMBEDDED_SRCS}
     ${BESQ_TYPE_SRCS}
     ${BESQ_COMPACT_TYPE_SRCS}
