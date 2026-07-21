@@ -14,6 +14,7 @@
 class EnchantmentRegistry;
 class EquipmentRegistry;
 class EquipmentCategoryRegistry;
+class AlgorithmLoader;
 struct ResolvedInput;
 
 /// Input to the solve pipeline.
@@ -26,7 +27,7 @@ struct SolveInput {
     EnchSet source_enchantments;            ///< Enchantments already on the equipment
     ForgeConfig forge_config;               ///< Forge behaviour flags
     SearchConfig search_config;             ///< Search limits (solutions, memory, time)
-    std::string algorithm = "greedy";       ///< Algorithm strategy name
+    std::string algorithm = "hamming";      ///< Algorithm strategy name
     std::vector<ItemStack> extra_items;     ///< Additional items (inventory mode)
     bool is_inventory_mode = false;         ///< Whether extra_items replaces book generation
 };
@@ -56,13 +57,14 @@ struct ExecuteResult {
     std::string algorithm_name;
 };
 
-/// Internal solve pipeline — breaks the main.cpp algorithm into
+/// Internal solve pipeline — breaks the algorithm into
 /// reusable stages for testability and library usage.
 class SolvePipeline {
 public:
     /// Run the full pipeline: resolve → apply → execute → recall.
     static SolveResult run(
         const SolveInput& input,
+        const AlgorithmLoader& loader,
         const EnchantmentRegistry& ench_reg,
         const EquipmentRegistry& eq_reg,
         const EquipmentCategoryRegistry& cat_reg);
@@ -80,7 +82,8 @@ public:
     /// Stage 3: Compact algorithm execution.
     /// Creates the requested strategy, checks mode support, runs the executor.
     static ExecuteResult execute(AlgorithmInput& algo_input,
-                                 const std::string& algorithm);
+                                 const std::string& algorithm,
+                                 const AlgorithmLoader& loader);
 
     /// Stage 4: Compact → domain conversion (via CompactAdapter::recall)
     /// wrapped in a SolveResult.

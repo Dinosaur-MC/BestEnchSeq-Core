@@ -132,15 +132,15 @@ int main(int argc, char* argv[]) try {
     if (config.help || config.version)
         return 0;
 
-    // ── Create BesqContext and initialise registries + plugins ───────
+    // ── Create BesqContext and initialise registries ──
     BesqContext ctx;
     ctx.load_builtin();
 
-    // Load external algorithm strategies (default: ./algorithms/)
+    // Load external algorithm plugins (default: ./algorithms/)
     {
         auto algo_path = config.algo_dir.value_or("algorithms");
         if (std::filesystem::is_directory(algo_path))
-            ctx.load_plugins(algo_path);
+            ctx.load_algorithms(algo_path);
     }
 
     // ── --list-algorithms (early exit) ───────────────────────────────

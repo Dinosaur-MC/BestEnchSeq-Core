@@ -27,9 +27,10 @@ public:
     /// Load built-in vanilla data into the "default" profile.
     void load_builtin();
 
-    /// Load algorithm plugin .so/.dll files from a directory.
+    /// Load algorithm plugins from a directory (.so/.dll).
+    /// Built-in strategies are registered automatically at context creation.
     /// Returns the number of plugins successfully loaded.
-    size_t load_plugins(const std::string& dir_path);
+    size_t load_algorithms(const std::string& dir_path);
 
     /// Load data from a file or directory into the active profile.
     void load_file(const std::string& path);

@@ -1,5 +1,5 @@
 #include "api/SolvePipeline.h"
-#include "registries/AlgorithmRegistration.h"
+#include "loader/AlgorithmLoader.h"
 #include "registries/AlgorithmRegistry.h"
 #include "adapters/CompactAdapter.h"
 #include "adapters/OutputFormatter.h"
@@ -75,7 +75,6 @@ ResolvedInput detail::SolvePipeline::resolve(
     }
 
     // Inventory mode: extra_items have already been resolved externally
-    // (e.g. by InventoryResolver).  Use them directly as available items.
     ResolvedInput resolved{
         input.target_item,
         input.source_enchantments,
@@ -94,12 +93,18 @@ AlgorithmInput detail::SolvePipeline::apply(
 
 detail::ExecuteResult detail::SolvePipeline::execute(
     AlgorithmInput& algo_input,
-    const std::string& algorithm)
+    const std::string& algorithm,
+    const AlgorithmLoader& loader)
 {
-    auto algo = global_algorithm_registry().create(algorithm);
+    auto algo = loader.create(algorithm);
     if (!algo) {
-        throw std::runtime_error("Unknown algorithm: '" + algorithm +
-            "'. (Plugins may need to be loaded via BESQ_PLUGIN_DIR)");
+        auto available = loader.list();
+        std::string msg = "Unknown algorithm: '" + algorithm + "'. Available: ";
+        for (size_t i = 0; i < available.size(); ++i) {
+            if (i > 0) msg += ", ";
+            msg += available[i];
+        }
+        throw std::runtime_error(msg);
     }
 
     // Check mode support
@@ -116,7 +121,7 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     // Feasibility pre-check (meaningful for inventory mode)
     if (algo_input.mode == AlgorithmMode::inventory && !algo->simulate(algo_input)) {
         LOG_INFO("simulate: target not reachable from given items");
-        return exec_result;  // exec_result.algo_output.is_valid defaults to false
+        return exec_result;
     }
 
     auto start_time = std::chrono::steady_clock::now();
@@ -155,6 +160,7 @@ SolveResult detail::SolvePipeline::recall(
 
 SolveResult detail::SolvePipeline::run(
     const SolveInput& input,
+    const AlgorithmLoader& loader,
     const EnchantmentRegistry& ench_reg,
     const EquipmentRegistry& eq_reg,
     const EquipmentCategoryRegistry& /*cat_reg*/)
@@ -173,7 +179,7 @@ SolveResult detail::SolvePipeline::run(
         : AlgorithmMode::direct;
 
     // Stage 3: Execute compact algorithm
-    auto exec_result = execute(algo_input, input.algorithm);
+    auto exec_result = execute(algo_input, input.algorithm, loader);
 
     // Stage 4: Recall (compact -> domain conversion)
     SolveResult result;

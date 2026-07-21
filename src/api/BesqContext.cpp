@@ -5,8 +5,7 @@
 #include "adapters/EnchSerializer.h"
 #include "adapters/RawTypeAdapter.h"
 #include "resolvers/ItemResolver.h"
-#include "plugin/PluginLoader.h"
-#include "registries/AlgorithmRegistration.h"
+#include "loader/AlgorithmLoader.h"
 
 #include <filesystem>
 #include <string>
@@ -17,6 +16,7 @@
 // ====================================================================
 struct BesqContext::Impl {
     ProfileSet profiles;
+    AlgorithmLoader algo_loader;
 };
 
 // ====================================================================
@@ -26,6 +26,9 @@ struct BesqContext::Impl {
 BesqContext::BesqContext()
     : _impl(std::make_unique<Impl>())
 {
+    // Register all compiled-in strategies so they are immediately
+    // available via solve() / list_algorithms().
+    _impl->algo_loader.load_builtin();
 }
 
 BesqContext::~BesqContext() = default;
@@ -69,7 +72,6 @@ void BesqContext::load_data(const std::vector<std::string>& filters) {
         if (std::filesystem::exists(filter)) {
             load_file(filter);
         }
-        // Non-existent entries are silently skipped (future: profile-based lookup)
     }
 }
 
@@ -165,20 +167,21 @@ bool BesqContext::export_registry(const std::string& path) const {
 }
 
 // ====================================================================
-// Solve
+// Algorithm loading & solving
 // ====================================================================
 
-size_t BesqContext::load_plugins(const std::string& dir_path) {
-    return PluginLoader::instance().load_directory(dir_path);
+size_t BesqContext::load_algorithms(const std::string& dir_path) {
+    return _impl->algo_loader.scan_and_load(dir_path);
 }
 
 std::vector<std::string> BesqContext::list_algorithms() const {
-    return global_algorithm_registry().list();
+    return _impl->algo_loader.list();
 }
 
 SolveResult BesqContext::solve(const SolveInput& input) {
     auto& profile = _impl->profiles.active();
-    return detail::SolvePipeline::run(input, profile.ench_reg,
-                                       profile.eq_reg, profile.cat_reg);
+    return detail::SolvePipeline::run(input, _impl->algo_loader,
+                                       profile.ench_reg,
+                                       profile.eq_reg,
+                                       profile.cat_reg);
 }
-
