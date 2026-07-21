@@ -114,34 +114,34 @@ void AlgorithmLoader::load_builtin() {
     _registry.register_algorithm("hamming",
         [] { return std::make_unique<HammingAlgorithm>(); });
 #endif
-#ifdef BESQ_HAVE_GREEDY
-    _registry.register_algorithm("greedy",
-        [] { return std::make_unique<GreedyAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_DFS
-    _registry.register_algorithm("dfs",
-        [] { return std::make_unique<DFSAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_ASTAR
-    _registry.register_algorithm("astar",
-        [] { return std::make_unique<AStarAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_IDASTAR
-    _registry.register_algorithm("idastar",
-        [] { return std::make_unique<IDAStarAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_HIERARCHICAL
-    _registry.register_algorithm("hierarchical",
-        [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_PENALTY_BALANCE
-    _registry.register_algorithm("penalty_balance",
-        [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-#endif
-#ifdef BESQ_HAVE_DIFF_FIRST
-    _registry.register_algorithm("diff_first",
-        [] { return std::make_unique<DiffFirstAlgorithm>(); });
-#endif
+// #ifdef BESQ_HAVE_GREEDY
+//     _registry.register_algorithm("greedy",
+//         [] { return std::make_unique<GreedyAlgorithm>(); });
+// #endif
+// #ifdef BESQ_HAVE_DFS
+//     _registry.register_algorithm("dfs",
+//         [] { return std::make_unique<DFSAlgorithm>(); });
+// #endif
+// #ifdef BESQ_HAVE_ASTAR
+//     _registry.register_algorithm("astar",
+//         [] { return std::make_unique<AStarAlgorithm>(); });
+// #endif
+// #ifdef BESQ_HAVE_IDASTAR
+//     _registry.register_algorithm("idastar",
+//         [] { return std::make_unique<IDAStarAlgorithm>(); });
+// #endif
+// #ifdef BESQ_HAVE_HIERARCHICAL
+//     _registry.register_algorithm("hierarchical",
+//         [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
+// #endif
+// #ifdef BESQ_HAVE_PENALTY_BALANCE
+//     _registry.register_algorithm("penalty_balance",
+//         [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
+// #endif
+// #ifdef BESQ_HAVE_DIFF_FIRST
+//     _registry.register_algorithm("diff_first",
+//         [] { return std::make_unique<DiffFirstAlgorithm>(); });
+// #endif
 
     LOG_INFO("Registered %zu built-in algorithm strategy/ies", _registry.size());
 }
