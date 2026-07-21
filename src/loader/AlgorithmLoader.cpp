@@ -178,8 +178,9 @@ size_t AlgorithmLoader::scan_and_load(const std::string &dir_path) {
 
 bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     // Avoid double-load on exact path
+    auto resolved = std::filesystem::weakly_canonical(so_path).string();
     for (const auto &p : _plugins) {
-        if (p.name == so_path) {
+        if (p.path == resolved) {
             LOG_WARN("Algorithm plugin already loaded: %s", so_path.c_str());
             return true;
         }
@@ -221,6 +222,7 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     LoadedPlugin plugin;
     plugin.handle = handle;
     plugin.name   = algo_name;
+    plugin.path   = std::move(resolved);
     _plugins.push_back(std::move(plugin));
 
     LOG_INFO("Loaded algorithm plugin: %s (from %s)", algo_name.c_str(), so_path.c_str());

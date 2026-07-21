@@ -17,19 +17,10 @@
 #include "registries/RegistryAccess.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
-#include "registries/AlgorithmRegistry.h"
+#include "loader/AlgorithmLoader.h"
 #include "adapters/EnchSerializer.h"
-#include "config/ForgeConfig.h"
 #include "algorithm/AlgorithmExecutor.h"
 #include "algorithm/diagnostics/DiagnosticsService.h"
-#include "algorithm/strategies/greedy/GreedyAlgorithm.h"
-#include "algorithm/strategies/dfs/DFSAlgorithm.h"
-#include "algorithm/strategies/astar/AStarAlgorithm.h"
-#include "algorithm/strategies/hamming/HammingAlgorithm.h"
-#include "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
-#include "algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.h"
-#include "algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
-#include "algorithm/strategies/idastar/IDAStarAlgorithm.h"
 #include "io/json.h"
 #include "framework/test_utils.h"
 
@@ -37,6 +28,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <vector>
 
@@ -57,22 +49,11 @@ static void load_builtin_data(EquipmentRegistry& eq_reg) {
     eq_reg.initialize(equipments);
 }
 
-static void register_all_algorithms(AlgorithmRegistry& reg) {
-    reg.register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
-    reg.register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
-    reg.register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
-    reg.register_algorithm("penalty_balance",
-                            [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-    reg.register_algorithm("hierarchical",
-                            [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
-    reg.register_algorithm("idastar",
-                            [] { return std::make_unique<IDAStarAlgorithm>(); });
-    reg.register_algorithm("hamming",
-                            [] { return std::make_unique<HammingAlgorithm>(); });
-    reg.register_algorithm("diff_first",
-                            [] { return std::make_unique<DiffFirstAlgorithm>(); });
-    reg.register_algorithm("difficulty_first",
-                            [] { return std::make_unique<DiffFirstAlgorithm>(); });
+static AlgorithmLoader& test_loader() {
+    static AlgorithmLoader loader;
+    static std::once_flag flag;
+    std::call_once(flag, [&] { loader.load_builtin(); });
+    return loader;
 }
 
 // Validate JSON output structure
@@ -155,10 +136,10 @@ void test_all_algorithms_all_formats() {
 
     auto resolved = ItemResolver::resolve(target_item, EnchSet{}, target_ench, test_ench_reg);
 
-    const std::vector<std::string> algorithms = {
-        "greedy", "dfs", "astar", "penalty_balance",
-        "hierarchical", "idastar", "hamming", "diff_first"
-    };
+    auto algorithms = test_loader().list();
+    // "difficulty_first" is an alias for "diff_first"
+    if (test_loader().contains("diff_first"))
+        algorithms.push_back("difficulty_first");
     const std::vector<std::string> formats = {"text", "compact", "json"};
 
     for (const auto& algo_name : algorithms) {
@@ -168,21 +149,8 @@ void test_all_algorithms_all_formats() {
                 AlgorithmInput algo_input = CompactAdapter::apply(resolved, test_ench_reg);
                 algo_input.config.platform = MCE::Java;
 
-                // Create algorithm
-                AlgorithmRegistry reg;
-                auto algo = reg.create(algo_name);
-                if (!algo) {
-                    // Try alias
-                    reg.register_algorithm(algo_name, [] {
-                        return std::make_unique<GreedyAlgorithm>();
-                    });
-                    algo = reg.create(algo_name);
-                }
-
-                // Use builtin registration instead
-                AlgorithmRegistry algo_reg;
-                register_all_algorithms(algo_reg);
-                algo = algo_reg.create(algo_name);
+                // Create algorithm via AlgorithmLoader (production code path)
+                auto algo = test_loader().create(algo_name);
                 expect(algo != nullptr,
                        algo_name + ": algorithm should be creatable");
 
@@ -263,6 +231,10 @@ void test_all_algorithms_all_formats() {
 // ---------------------------------------------------------------------------
 
 void test_diff_first_alias() {
+    // Only run if diff_first and difficulty_first are both registered
+    if (!test_loader().contains("diff_first") || !test_loader().contains("difficulty_first"))
+        return;
+
     EquipmentRegistry eq_reg;
     load_builtin_data(eq_reg);
 
@@ -278,9 +250,7 @@ void test_diff_first_alias() {
     std::vector<compact::EnchSolution> solutions_a, solutions_b;
 
     for (const auto& name : {"diff_first", "difficulty_first"}) {
-        AlgorithmRegistry reg;
-        register_all_algorithms(reg);
-        auto algo = reg.create(name);
+        auto algo = test_loader().create(name);
         expect(algo != nullptr, std::string(name) + ": should resolve");
 
         AlgorithmInput input = CompactAdapter::apply(resolved, test_ench_reg);

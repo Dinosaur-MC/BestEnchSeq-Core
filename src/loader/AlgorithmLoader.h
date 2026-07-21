@@ -71,6 +71,7 @@ private:
     struct LoadedPlugin {
         void*       handle{nullptr};
         std::string name;
+        std::string path;   // canonicalized so_path for dedup
     };
 
     bool resolve_plugin(void* handle, const std::string& path, BesqCreateFn& out_create);
