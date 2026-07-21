@@ -1,13 +1,12 @@
-#include "registries/AlgorithmRegistry.h"
-#include "registries/RegistryAccess.h"
+#include "loader/AlgorithmLoader.h"
 #include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/Strategies.h"
 #include "adapters/CompactAdapter.h"
 #include "data/DataLoader.h"
 #include "registries/CompactedRegistries.h"
 #include "registries/EnchantmentRegistry.h"
 #include "registries/EquipmentCategoryRegistry.h"
 #include "registries/EquipmentRegistry.h"
+#include "registries/RegistryAccess.h"
 #include "config/ForgeConfig.h"
 
 #include <algorithm>
@@ -91,7 +90,7 @@ struct BenchConfig {
 
 BenchConfig parse_cli(int argc, char* argv[]) {
     BenchConfig cfg;
-    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical", "idastar", "hamming", "difficulty_first"};
+    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical", "idastar", "hamming", "diff_first"};
     for (auto* a : all_algos) cfg.algos.insert(a);
 
     auto die = [](const std::string& msg) {
@@ -166,7 +165,7 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                 die("unknown test '" + t + "'");
     }
 
-    // Validate: --alg values must be known (or chain with '+')
+    // Validate: --alg values must be known
     std::vector<const char*> all_valid;
     for (auto* a : all_algos) all_valid.push_back(a);
     for (const auto& a : cfg.algos) {
@@ -193,7 +192,8 @@ void load_builtin_data() {
                                   registries::enchants(), registries::equipment());
 }
 
-void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos, bool no_skip = false) {
+void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos,
+              const AlgorithmLoader& loader, bool no_skip = false) {
     int32_t eq_id = registries::equipment().get_id(tc.item_type);
     if (eq_id < 0) {
         std::cout << "  SKIP: unknown equipment '" << tc.item_type << "'" << std::endl;
@@ -248,8 +248,8 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         if (plus != std::string::npos) {
             std::string warmup_name = algo_name.substr(0, plus);
             std::string main_name = algo_name.substr(plus + 1);
-            if (!registries::algorithms().contains(warmup_name)
-             || !registries::algorithms().contains(main_name)) {
+            if (!loader.contains(warmup_name)
+             || !loader.contains(main_name)) {
                 results.push_back({algo_name, BenchResult::Fail});
                 continue;
             }
@@ -257,11 +257,11 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
                 results.push_back({algo_name, BenchResult::Skip});
                 continue;
             }
-            auto main_algo = registries::algorithms().create(main_name);
+            auto main_algo = loader.create(main_name);
             AlgorithmExecutor executor(std::move(main_algo));
             AlgorithmInput run_input = algo_input;
             executor.start(std::move(run_input),
-                          registries::algorithms().create(warmup_name));
+                          loader.create(warmup_name));
             executor.wait();
             if (executor.state() != AlgorithmState::Completed) {
                 results.push_back({algo_name, BenchResult::Fail});
@@ -279,7 +279,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             continue;
         }
 
-        if (!registries::algorithms().contains(algo_name)) {
+        if (!loader.contains(algo_name)) {
             results.push_back({algo_name, BenchResult::Fail});
             continue;
         }
@@ -288,7 +288,7 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             continue;
         }
 
-        auto algo = registries::algorithms().create(algo_name);
+        auto algo = loader.create(algo_name);
         AlgorithmExecutor executor(std::move(algo));
 
         AlgorithmInput run_input = algo_input;
@@ -360,22 +360,9 @@ int main(int argc, char* argv[]) {
     std::cout << "=== Dataset Benchmark ===" << std::endl;
     load_builtin_data();
 
-    registries::algorithms().register_algorithm("greedy",
-        []{ return std::make_unique<GreedyAlgorithm>(); });
-    registries::algorithms().register_algorithm("dfs",
-        []{ return std::make_unique<DFSAlgorithm>(); });
-    registries::algorithms().register_algorithm("astar",
-        []{ return std::make_unique<AStarAlgorithm>(); });
-    registries::algorithms().register_algorithm("penalty_balance",
-        []{ return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-    registries::algorithms().register_algorithm("hierarchical",
-        []{ return std::make_unique<HierarchicalMergeAlgorithm>(); });
-    registries::algorithms().register_algorithm("idastar",
-        []{ return std::make_unique<IDAStarAlgorithm>(); });
-    registries::algorithms().register_algorithm("hamming",
-        []{ return std::make_unique<HammingAlgorithm>(); });
-    registries::algorithms().register_algorithm("difficulty_first",
-        []{ return std::make_unique<DiffFirstAlgorithm>(); });
+    // Use AlgorithmLoader for unified algorithm discovery (built-in + plugins)
+    AlgorithmLoader loader;
+    loader.load_builtin();
 
     // Filter tests
     std::vector<const TestCase*> queue;
@@ -396,7 +383,7 @@ int main(int argc, char* argv[]) {
         std::cout << "\n" << tc->name << " (" << tc->wanted.size() << " enchants, max "
                   << tc->max_cost << "L):" << std::endl;
         try {
-            run_case(*tc, cfg.algos, cfg.no_skip);
+            run_case(*tc, cfg.algos, loader, cfg.no_skip);
         } catch (const std::exception& e) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }
