@@ -34,3 +34,4 @@ endforeach()
 
 set(REG_CONTENT "${REG_CONTENT}}\n")
 file(WRITE "${REG_SRC}" "${REG_CONTENT}")
+list(APPEND BESQ_BUILTIN_STRATEGY_SRCS "${REG_SRC}")
