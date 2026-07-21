@@ -842,3 +842,53 @@ set_tests_properties(test_algorithm_acceptance PROPERTIES
     WORKING_DIRECTORY ${PROJECT_ROOT}
     TIMEOUT 120
 )
+
+add_executable(test_besq_context
+    api/test_besq_context.cpp
+    # API layer
+    ${PROJECT_ROOT}/src/api/SolvePipeline.cpp
+    ${PROJECT_ROOT}/src/api/ProfileSet.cpp
+    ${PROJECT_ROOT}/src/api/BesqContext.cpp
+    ${PROJECT_ROOT}/src/api/CAbiBindings.cpp
+    # CLI layer (needed for parser helpers)
+    ${PROJECT_ROOT}/src/cli/cli.cpp
+    ${PROJECT_ROOT}/src/parsers/CLIParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchParser.cpp
+    ${PROJECT_ROOT}/src/parsers/ItemParser.cpp
+    ${PROJECT_ROOT}/src/parsers/EnchInfoParser.cpp
+    ${PROJECT_ROOT}/src/adapters/EnchSerializer.cpp
+    # Resolver layer
+    ${PROJECT_ROOT}/src/resolvers/ItemResolver.cpp
+    # Adapter layer
+    ${PROJECT_ROOT}/src/adapters/CompactAdapter.cpp
+    ${PROJECT_ROOT}/src/adapters/OutputFormatter.cpp
+    ${PROJECT_ROOT}/src/adapters/RawTypeAdapter.cpp
+    # I/O
+    ${PROJECT_ROOT}/src/io/json.cpp
+    ${PROJECT_ROOT}/src/io/CsvIO.cpp
+    # Registry layer
+    ${REGISTRY_CORE_SRCS}
+    ${EQUIP_REG_SRCS}
+    ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${PROJECT_ROOT}/src/registries/CompactedRegistries.cpp
+    # Domain types
+    ${TYPE_ALL_SRCS}
+    ${ITEM_PROP_SRCS}
+    # Algorithm layer
+    ${ALGO_ENGINE_SRCS}
+    ${ALGO_FORGE_SRCS}
+    ${ALGO_DIAG_CORE_SRCS}
+    ${ALGO_SERIAL_SRCS}
+    ${ALGO_STRATEGY_SRGS}
+    ${PROJECT_ROOT}/src/algorithm/strategies/astar/AStarMemoryBudget.cpp
+    ${COMPACT_REG_SRCS}
+    # Data
+    ${PROJECT_ROOT}/src/data/DataLoader.cpp
+    "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
+)
+target_include_directories(test_besq_context PRIVATE ${TEST_INCLUDE}
+    ${PROJECT_ROOT}/include)
+add_test(NAME test_besq_context COMMAND test_besq_context)
+set_tests_properties(test_besq_context PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_ROOT}
+)
