@@ -235,7 +235,6 @@ add_library(besq-minimal STATIC
     ${BESQ_REG_SRCS}
     ${BESQ_COMPACT_REG_SRCS}
     ${BESQ_ALGO_REG_SRCS}
-    ${BESQ_ALGO_REG_SRC}
     ${BESQ_LOADER_SRCS}
     ${BESQ_ALGO_CORE_SRCS}
     ${BESQ_ALGO_FORGE_SRCS}
@@ -271,7 +270,6 @@ add_library(besq-core SHARED
     ${BESQ_REG_SRCS}
     ${BESQ_COMPACT_REG_SRCS}
     ${BESQ_ALGO_REG_SRCS}
-    ${BESQ_ALGO_REG_SRC}
     ${BESQ_LOADER_SRCS}
     ${BESQ_ALGO_CORE_SRCS}
     ${BESQ_ALGO_FORGE_SRCS}
@@ -291,7 +289,6 @@ target_include_directories(besq-core PUBLIC
 target_compile_definitions(besq-core PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
-    ${BESQ_STRATEGY_DEFINITIONS}
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
