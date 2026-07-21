@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cstring>
 #include <vector>
 #include "utils/HashUtils.hpp"
 
@@ -46,21 +47,21 @@ class EnchSet {
     EnchSet() noexcept : _size(0) {}
 
     EnchSet(const EnchSet &o) noexcept : _size(o._size) {
-        __builtin_memcpy(_buf, o._buf, INLINE_BYTES);
+        std::memcpy(_buf, o._buf, INLINE_BYTES);
     }
 
     EnchSet &operator=(const EnchSet &o) noexcept {
-        if (this != &o) { _size = o._size; __builtin_memcpy(_buf, o._buf, INLINE_BYTES); }
+        if (this != &o) { _size = o._size; std::memcpy(_buf, o._buf, INLINE_BYTES); }
         return *this;
     }
 
     EnchSet(EnchSet &&o) noexcept : _size(o._size) {
-        __builtin_memcpy(_buf, o._buf, INLINE_BYTES);
+        std::memcpy(_buf, o._buf, INLINE_BYTES);
         o._size = 0;
     }
 
     EnchSet &operator=(EnchSet &&o) noexcept {
-        if (this != &o) { _size = o._size; __builtin_memcpy(_buf, o._buf, INLINE_BYTES); o._size = 0; }
+        if (this != &o) { _size = o._size; std::memcpy(_buf, o._buf, INLINE_BYTES); o._size = 0; }
         return *this;
     }
 
@@ -117,7 +118,7 @@ class EnchSet {
     // ── Comparison ──
     bool operator==(const EnchSet &o) const noexcept {
         return _size == o._size &&
-               __builtin_memcmp(_buf, o._buf, _size * sizeof(Ench)) == 0;
+               std::memcmp(_buf, o._buf, _size * sizeof(Ench)) == 0;
     }
     bool operator!=(const EnchSet &o) const noexcept { return !(*this == o); }
 

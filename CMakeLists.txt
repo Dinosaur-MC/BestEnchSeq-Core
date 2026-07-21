@@ -35,6 +35,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(MSVC)
     add_compile_options(/FS)
     add_compile_options(/W4)
+    # Force UTF-8 source and execution character sets (source files contain
+    # CJK / Unicode characters in comments; MSVC defaults to the system
+    # locale code page, e.g. 936=GBK, which causes C4819 errors).
+    add_compile_options("/utf-8")
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
