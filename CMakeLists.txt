@@ -128,6 +128,7 @@ set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 include("${CMAKE_SOURCE_DIR}/src/types/CMakeLists.txt")
 include("${CMAKE_SOURCE_DIR}/src/algorithm/CMakeLists.txt")
+include("${CMAKE_SOURCE_DIR}/src/plugin/CMakeLists.txt")
 
 # ── I/O ──
 set(BESQ_IO_SRCS
@@ -280,6 +281,7 @@ add_library(besq-core STATIC
     ${BESQ_ALGO_CORE_SRCS}
     ${BESQ_ALGO_FORGE_SRCS}
     ${BESQ_ALGO_DIAG_SRCS}
+    ${BESQ_PLUGIN_SRCS}
     ${BESQ_ALGO_SERIAL_SRCS}
     ${BESQ_ALL_STRATEGY_SRCS}
     ${BESQ_PARSER_SRCS}
@@ -306,6 +308,11 @@ target_compile_definitions(besq-core PUBLIC
     BESQ_HAVE_DIFF_FIRST
 )
 # ═══════════════════════════════════════════════════════════════════════════════
+# Link dl library for plugin loading (Linux / WSL)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(besq-core PUBLIC ${CMAKE_DL_LIBS})
+endif()
+
 # CLI executable  (guarded by BESQ_BUILD_CLI)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -317,6 +324,12 @@ if(BESQ_BUILD_CLI)
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
     target_link_libraries(${PROJECT_NAME} PRIVATE besq-core)
     target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
+
+# Export symbols so loaded plugins can resolve IAlgorithm/ForgeEngine etc.
+if(UNIX)
+    target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
+endif()
+
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
     )
@@ -353,4 +366,54 @@ endif()
 option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
 if(BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
+endif()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Plugin shared libraries (optional — built with -DBESQ_BUILD_PLUGINS=ON)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+option(BESQ_BUILD_PLUGINS "Build algorithm plugins as shared libraries" OFF)
+
+if(BESQ_BUILD_PLUGINS)
+    # Helper: create a plugin shared library for a single algorithm strategy
+    function(add_algorithm_plugin NAME CLASS HEADER)
+        add_library(besq_plugin_${NAME} SHARED
+            "${CMAKE_SOURCE_DIR}/src/algorithm/PluginEntry.cpp"
+            ${ARGN}  # additional strategy source files
+        )
+        target_include_directories(besq_plugin_${NAME} PRIVATE
+            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_SOURCE_DIR}/include
+        )
+        target_compile_definitions(besq_plugin_${NAME} PRIVATE
+            BESQ_BUILD_PLUGIN
+            BESQ_PLUGIN_HEADER="${HEADER}"
+            BESQ_PLUGIN_CLASS=${CLASS}
+            BESQ_PLUGIN_NAME=${NAME}
+        )
+        target_compile_options(besq_plugin_${NAME} PRIVATE -fPIC)
+        set_target_properties(besq_plugin_${NAME} PROPERTIES
+            PREFIX "besq_"
+            LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/plugins"
+        )
+    endfunction()
+
+    add_algorithm_plugin(hamming    HammingAlgorithm    "algorithm/strategies/hamming/HammingAlgorithm.h"
+        ${BESQ_STRATEGY_HAMMING_SRCS})
+    add_algorithm_plugin(greedy     GreedyAlgorithm     "algorithm/strategies/greedy/GreedyAlgorithm.h"
+        ${BESQ_STRATEGY_GREEDY_SRCS})
+    add_algorithm_plugin(dfs        DFSAlgorithm         "algorithm/strategies/dfs/DFSAlgorithm.h"
+        ${BESQ_STRATEGY_DFS_SRCS})
+    add_algorithm_plugin(astar      AStarAlgorithm       "algorithm/strategies/astar/AStarAlgorithm.h"
+        ${BESQ_STRATEGY_ASTAR_SRCS})
+    add_algorithm_plugin(idastar    IDAStarAlgorithm     "algorithm/strategies/idastar/IDAStarAlgorithm.h"
+        ${BESQ_STRATEGY_IDASTAR_SRCS})
+    add_algorithm_plugin(hierarchical  HierarchicalMergeAlgorithm
+        "algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.h"
+        ${BESQ_STRATEGY_HIERARCHICAL_SRCS})
+    add_algorithm_plugin(penalty_balance DynamicPenaltyBalancingAlgorithm
+        "algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
+        ${BESQ_STRATEGY_PENALTY_BALANCE_SRCS})
+    add_algorithm_plugin(diff_first DiffFirstAlgorithm  "algorithm/strategies/diff_first/DiffFirstAlgorithm.h"
+        ${BESQ_STRATEGY_DIFF_FIRST_SRCS})
 endif()

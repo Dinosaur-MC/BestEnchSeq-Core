@@ -52,6 +52,7 @@ std::string get_cli_help_text(const std::string &program_name) {
         "                           Keys: ignore-cost-cap, ignore-penalty-cost,\n"
         "                                 ignore-repair-cost (all: true|false)\n"
         "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
+        "  --plugin-dir <dir>      Load algorithm .so/.dll plugins from a directory\n"
         "  --max-time <seconds>    Max search time in seconds (0 = unlimited, default: 0)\n"
         "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
         "\n"
@@ -120,6 +121,10 @@ CLIConfig parse_cli(int argc, char *argv[]) {
                         op + "'. Expected format <target>:<action>,<id>[,<field>=<val>...]\n");
             }
             config.registry_edit = value;
+        } else if (key == "plugin-dir") {
+            if (value.empty())
+                throw std::runtime_error("Empty --plugin-dir value.\n");
+            config.plugin_dir = value;
         } else if (key == "export-registry") {
             if (value.empty())
                 throw std::runtime_error("Empty --export-registry value.\n");

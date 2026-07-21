@@ -1,5 +1,6 @@
 #include "api/SolvePipeline.h"
 #include "registries/AlgorithmRegistration.h"
+#include "registries/AlgorithmRegistry.h"
 #include "adapters/CompactAdapter.h"
 #include "adapters/OutputFormatter.h"
 #include "io/json.h"
@@ -95,7 +96,11 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     AlgorithmInput& algo_input,
     const std::string& algorithm)
 {
-    auto algo = create_builtin_algorithm(algorithm);
+    auto algo = global_algorithm_registry().create(algorithm);
+    if (!algo) {
+        throw std::runtime_error("Unknown algorithm: '" + algorithm +
+            "'. (Plugins may need to be loaded via BESQ_PLUGIN_DIR)");
+    }
 
     // Check mode support
     if (!(algo->supported_mode() & algo_input.mode)) {

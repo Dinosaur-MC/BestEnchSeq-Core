@@ -5,6 +5,8 @@
 #include "adapters/EnchSerializer.h"
 #include "adapters/RawTypeAdapter.h"
 #include "resolvers/ItemResolver.h"
+#include "plugin/PluginLoader.h"
+#include "registries/AlgorithmRegistration.h"
 
 #include <filesystem>
 #include <string>
@@ -165,6 +167,10 @@ bool BesqContext::export_registry(const std::string& path) const {
 // ====================================================================
 // Solve
 // ====================================================================
+
+size_t BesqContext::load_plugins(const std::string& dir_path) {
+    return PluginLoader::instance().load_directory(dir_path);
+}
 
 SolveResult BesqContext::solve(const SolveInput& input) {
     auto& profile = _impl->profiles.active();

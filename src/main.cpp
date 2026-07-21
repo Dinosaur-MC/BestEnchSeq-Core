@@ -155,6 +155,13 @@ int main(int argc, char* argv[]) try {
             const_cast<EquipmentRegistry&>(ctx.equipment()),
             const_cast<EquipmentCategoryRegistry&>(ctx.categories()));
 
+    // ── Load algorithm plugins ───────────────────────────────────────
+    if (config.plugin_dir) {
+        size_t n = ctx.load_plugins(*config.plugin_dir);
+        LOG_INFO("Loaded %zu algorithm plugin(s) from %s",
+                 n, config.plugin_dir->c_str());
+    }
+
     // ── Registry export (works without --target) ─────────────────────
     if (config.export_registry) {
         if (!ctx.export_registry(*config.export_registry))
