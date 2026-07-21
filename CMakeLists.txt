@@ -16,8 +16,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Compiler flags
 # ═══════════════════════════════════════════════════════════════════════════════
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_COMPILER clang++)
-set(CMAKE_C_COMPILER clang)
 
 if(MSVC)
     add_compile_options(/FS)
@@ -31,30 +29,32 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     add_compile_options(-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=)
 endif()
 
-# On Windows with MinGW ABI (Clang or GCC), the runtime DLLs
-# (libwinpthread-1.dll, libstdc++-6.dll, libgcc_s_seh-1.dll) may
-# not be on the system PATH, causing STATUS_ENTRYPOINT_NOT_FOUND at
-# application startup.  We detect the compiler's runtime directory
-# and store it in the test property ENVIRONMENT so ctest can find them.
-if(WIN32 AND NOT MSVC)
-    # Resolve the compiler location to a real path before taking its dirname
+# ── Runtime linking mode for MinGW / Clang-GNU on Windows ──
+# Clang with GNU command-line on Windows uses MinGW runtime DLLs
+# (libwinpthread-1.dll, libstdc++-6.dll).  These may not be on the
+# system PATH.  BESQ_STATIC_RUNTIME=ON statically links them into
+# the executable; OFF (default) relies on PATH at runtime.
+option(BESQ_STATIC_RUNTIME "Statically link MinGW runtime DLLs (Windows)" OFF)
+
+if(WIN32 AND NOT MSVC AND BESQ_STATIC_RUNTIME)
+    # Clang in GNU mode needs -fuse-ld=ld to use the GNU linker for -static flags
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic")
+endif()
+
+# When using dynamic runtime DLLs, detect the compiler's runtime directory
+# so ctest can find the DLLs via the ENVIRONMENT test property.
+if(WIN32 AND NOT MSVC AND NOT BESQ_STATIC_RUNTIME)
     get_filename_component(BESQ_COMPILER_REAL "${CMAKE_CXX_COMPILER}" REALPATH)
     get_filename_component(BESQ_COMPILER_DIR "${BESQ_COMPILER_REAL}" DIRECTORY)
     set(BESQ_RUNTIME_DLL_DIR "${BESQ_COMPILER_DIR}" CACHE PATH "Directory with MinGW runtime DLLs")
-    # For LLVM/Clang: clang.exe is in LLVM/bin but DLLs may be in ../mingw64/bin
     if(NOT EXISTS "${BESQ_RUNTIME_DLL_DIR}/libwinpthread-1.dll")
         get_filename_component(BESQ_PREFIX "${BESQ_COMPILER_DIR}" DIRECTORY)
-        set(BESQ_MINGW "${BESQ_PREFIX}/mingw64/bin")
-        if(EXISTS "${BESQ_MINGW}/libwinpthread-1.dll")
-            set(BESQ_RUNTIME_DLL_DIR "${BESQ_MINGW}" CACHE PATH "MinGW runtime DLL directory" FORCE)
-        endif()
-    endif()
-    # Also check Strawberry Perl layout
-    if(NOT EXISTS "${BESQ_RUNTIME_DLL_DIR}/libwinpthread-1.dll")
-        set(BESQ_STRAWBERRY "D:/Local/Strawberry/c/bin")
-        if(EXISTS "${BESQ_STRAWBERRY}/libwinpthread-1.dll")
-            set(BESQ_RUNTIME_DLL_DIR "${BESQ_STRAWBERRY}" CACHE PATH "MinGW runtime DLL directory" FORCE)
-        endif()
+        foreach(_try "${BESQ_PREFIX}/mingw64/bin" "D:/Local/Strawberry/c/bin")
+            if(EXISTS "${_try}/libwinpthread-1.dll")
+                set(BESQ_RUNTIME_DLL_DIR "${_try}" CACHE PATH "MinGW runtime DLL directory" FORCE)
+                break()
+            endif()
+        endforeach()
     endif()
     message(STATUS "MinGW runtime DLL directory: ${BESQ_RUNTIME_DLL_DIR}")
 endif()
@@ -72,8 +72,15 @@ endif()
 # ═══════════════════════════════════════════════════════════════════════════════
 # Options
 # ═══════════════════════════════════════════════════════════════════════════════
-option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
-set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution")
+
+option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time"               OFF)
+option(BESQ_BUILD_CLI           "Build the besq CLI executable"                           ON)
+option(BUILD_TESTING            "Build test targets"                                      ON)
+option(BUILD_BENCHMARKS         "Build benchmark targets"                                 OFF)
+set  (BESQ_MAX_SOLUTIONS 32     CACHE STRING "Maximum solutions stored per algorithm execution")
+
+# Default target for bare `cmake --build build` — builds only the CLI (fast).
+set(CMAKE_DEFAULT_BUILD_TARGET besq)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Shared include directories
@@ -95,20 +102,13 @@ set(BESQ_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # ═══════════════════════════════════════════════════════════════════════════════
 # Source file groups — each functional area is a CMake variable so library
 # presets can pick exactly what they need.
+#
+# Types and algorithm-layer source lists live in their own sub-CMakeLists:
+#   src/types/CMakeLists.txt, src/algorithm/CMakeLists.txt
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ── Types ──
-set(BESQ_TYPE_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/Ench.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/EnchSet.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/EnchInfo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/Equipment.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/ItemStack.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/EnchSolution.cpp
-)
-set(BESQ_COMPACT_TYPE_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/types/CompactedTypes.cpp
-)
+include("${CMAKE_SOURCE_DIR}/src/types/CMakeLists.txt")
+include("${CMAKE_SOURCE_DIR}/src/algorithm/CMakeLists.txt")
 
 # ── I/O ──
 set(BESQ_IO_SRCS
@@ -135,54 +135,6 @@ set(BESQ_ALGO_REG_SRCS
 )
 set(BESQ_REG_MGR_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/registries/RegistryManager.cpp
-)
-
-# ── Algorithm core ──
-set(BESQ_ALGO_CORE_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/AlgorithmExecutor.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/ExecutionContext.cpp
-)
-set(BESQ_ALGO_FORGE_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/forge/ForgeEngine.cpp
-)
-set(BESQ_ALGO_DIAG_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/diagnostics/AlgorithmDiagnostics.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/diagnostics/DiagnosticsService.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/diagnostics/DiagnosticsWriter.cpp
-)
-set(BESQ_ALGO_SERIAL_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/serialization/CompactSerializer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/serialization/IAlgorithmSerializer.cpp
-)
-
-# ── Algorithm strategies (individually selectable) ──
-set(BESQ_STRATEGY_GREEDY_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/greedy/GreedyAlgorithm.cpp
-)
-set(BESQ_STRATEGY_DFS_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/dfs/DFSAlgorithm.cpp
-)
-set(BESQ_STRATEGY_ASTAR_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarAlgorithm.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarDiagnostics.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarMemoryBudget.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/astar/AStarStateSerializer.cpp
-)
-set(BESQ_STRATEGY_IDASTAR_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/idastar/IDAStarAlgorithm.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/idastar/IDAStarDiagnostics.cpp
-)
-set(BESQ_STRATEGY_HAMMING_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/hamming/HammingAlgorithm.cpp
-)
-set(BESQ_STRATEGY_HIERARCHICAL_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/hierarchical/HierarchicalMergeAlgorithm.cpp
-)
-set(BESQ_STRATEGY_PENALTY_BALANCE_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/penalty_balance/DynamicPenaltyBalancingAlgorithm.cpp
-)
-set(BESQ_STRATEGY_DIFF_FIRST_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/algorithm/strategies/diff_first/DiffFirstAlgorithm.cpp
 )
 
 # ── Parsers ──
@@ -335,29 +287,32 @@ target_compile_definitions(besq-core PUBLIC
     BESQ_HAVE_DIFF_FIRST
 )
 # ═══════════════════════════════════════════════════════════════════════════════
-# CLI executable
+# CLI executable  (guarded by BESQ_BUILD_CLI)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-add_executable(${PROJECT_NAME}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-    ${BESQ_CLI_SRCS}
-)
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
-target_link_libraries(${PROJECT_NAME} PRIVATE besq-core)
-target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
-)
+if(BESQ_BUILD_CLI)
+    add_executable(${PROJECT_NAME}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+        ${BESQ_CLI_SRCS}
+    )
+    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
+    target_link_libraries(${PROJECT_NAME} PRIVATE besq-core)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE
+        $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+    )
+endif()
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # Install rules
-# ═══════════════════════════════════════════════════════════════════════════════
-
 include(GNUInstallDirs)
-install(TARGETS ${PROJECT_NAME} besq-core
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+install(TARGETS besq-core
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+if(BESQ_BUILD_CLI)
+    install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 install(DIRECTORY data/
     DESTINATION ${CMAKE_INSTALL_DATADIR}/BestEnchSeq-Core/data
 )

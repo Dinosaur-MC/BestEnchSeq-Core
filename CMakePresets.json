@@ -2,24 +2,16 @@
     "version": 6,
     "configurePresets": [
         {
-            "name": "full",
-            "displayName": "Full (all targets)",
-            "description": "Build all libraries, executable, tests, and benchmarks",
-            "binaryDir": "${sourceDir}/build",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BUILD_TESTING": "ON",
-                "BUILD_BENCHMARKS": "ON",
-                "BESQ_MAX_SOLUTIONS": "32"
-            }
-        },
-        {
             "name": "cli",
-            "displayName": "CLI (executable only)",
-            "description": "Build only the besq CLI executable (with besq-core dependency); no tests or benchmarks",
+            "displayName": "CLI (default)",
+            "description": "Build besq CLI executable (and besq-core library). No tests or benchmarks.",
             "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "ON",
                 "BUILD_TESTING": "OFF",
                 "BUILD_BENCHMARKS": "OFF",
                 "BESQ_MAX_SOLUTIONS": "32"
@@ -27,82 +19,116 @@
         },
         {
             "name": "core",
-            "displayName": "Core (library + executable)",
-            "description": "Build besq-core library and besq CLI executable; no tests or benchmarks",
+            "displayName": "Core library",
+            "description": "Build besq-core static library only (no CLI, no tests).",
             "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "OFF",
                 "BUILD_TESTING": "OFF",
                 "BUILD_BENCHMARKS": "OFF",
                 "BESQ_MAX_SOLUTIONS": "32"
             }
         },
         {
-            "name": "minimal",
-            "displayName": "Minimal (algorithm only)",
-            "description": "Build besq-minimal — compact algorithm core with Hamming strategy only. No logging, diagnostics, parsers, or CLI. Ideal for embedded/library consumers that drive AlgorithmInput programmatically.",
+            "name": "full",
+            "displayName": "Full (all targets)",
+            "description": "Build everything: libraries, executable, tests, and benchmarks",
             "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BUILD_TESTING": "OFF",
-                "BUILD_BENCHMARKS": "OFF",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "ON",
+                "BUILD_TESTING": "ON",
+                "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "32"
             }
         },
         {
             "name": "debug",
             "displayName": "Debug (all targets)",
-            "description": "Build all targets with debug symbols",
+            "description": "Build all targets with debug symbols and tests enabled",
             "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "128"
+            }
+        },
+        {
+            "name": "minimal",
+            "displayName": "Minimal (algorithm only)",
+            "description": "Build besq-minimal — compact algorithm core with Hamming strategy only. No logging, diagnostics, parsers, or CLI. Intended for embedders that drive AlgorithmInput programmatically.",
+            "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "OFF",
+                "BUILD_TESTING": "OFF",
+                "BUILD_BENCHMARKS": "OFF",
+                "BESQ_MAX_SOLUTIONS": "32"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "full",
-            "configurePreset": "full",
-            "displayName": "Build all targets",
-            "description": "Build everything (library + executable + tests + benchmarks)"
-        },
-        {
             "name": "cli",
             "configurePreset": "cli",
-            "displayName": "Build executable only",
+            "displayName": "CLI executable",
             "description": "Build besq executable (and besq-core transitively)",
             "targets": ["besq"]
         },
         {
             "name": "core",
             "configurePreset": "core",
-            "displayName": "Build core + executable",
-            "description": "Build besq-core and besq executable",
-            "targets": ["besq-core", "besq"]
+            "displayName": "Core library",
+            "description": "Build besq-core static library only",
+            "targets": ["besq-core"]
         },
         {
-            "name": "minimal",
-            "configurePreset": "minimal",
-            "displayName": "Build minimal library",
-            "description": "Build besq-minimal static library",
-            "targets": ["besq-minimal"]
+            "name": "full",
+            "configurePreset": "full",
+            "displayName": "Build all targets",
+            "description": "Build everything (libraries + executable + tests + benchmarks)"
         },
         {
             "name": "debug",
             "configurePreset": "debug",
             "displayName": "Debug (all targets)",
             "description": "Build all targets with debug symbols"
+        },
+        {
+            "name": "minimal",
+            "configurePreset": "minimal",
+            "displayName": "Minimal library",
+            "description": "Build besq-minimal static library",
+            "targets": ["besq-minimal"]
         }
     ],
     "testPresets": [
         {
+            "name": "full",
+            "configurePreset": "full",
+            "displayName": "Run all tests",
+            "description": "Run the complete test suite"
+        },
+        {
             "name": "debug",
             "configurePreset": "debug",
             "displayName": "Run all tests (debug)",
-            "description": "Run the complete test suite"
+            "description": "Run the complete test suite (debug build)"
         }
     ]
 }
