@@ -26,8 +26,9 @@ struct CLIConfig {
     int memory_mb      = 0;
     int max_time       = 0; // --max-time <seconds> (0 = unlimited)
     bool verbose       = false;
-    bool help          = false;
-    bool version       = false; // --version / -V
+    bool help             = false;
+    bool list_algorithms  = false;  // --list-algorithms
+    bool version          = false;  // --version / -V
 };
 
 struct EnchantmentSpec {

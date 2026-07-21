@@ -172,6 +172,10 @@ size_t BesqContext::load_plugins(const std::string& dir_path) {
     return PluginLoader::instance().load_directory(dir_path);
 }
 
+std::vector<std::string> BesqContext::list_algorithms() const {
+    return global_algorithm_registry().list();
+}
+
 SolveResult BesqContext::solve(const SolveInput& input) {
     auto& profile = _impl->profiles.active();
     return detail::SolvePipeline::run(input, profile.ench_reg,

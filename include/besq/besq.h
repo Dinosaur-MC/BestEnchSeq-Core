@@ -63,7 +63,11 @@ public:
     bool export_registry(const std::string& path) const;
 
     // ── Solve ──
+    /// Run the solve pipeline with the given input.
     SolveResult solve(const SolveInput& input);
+
+    /// List all registered algorithm strategy names (built-in + plugins).
+    std::vector<std::string> list_algorithms() const;
 
 private:
     struct Impl;

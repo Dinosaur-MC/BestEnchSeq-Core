@@ -25,9 +25,9 @@ std::string get_cli_help_text(const std::string &program_name) {
         "Options:\n"
         "  -h, --help              Show this help message\n"
         "  -V, --version           Show version info\n"
-        "  --algorithm <name>      Search algorithm: hamming (default), dfs, astar,\n"
-        "                           penalty_balance, hierarchical, idastar,\n"
-        "                           hamming, or diff_first\n"
+        "  --algorithm <name>      Search algorithm: hamming (default), dfs, astar\n"
+        "                           (use --list-algorithms to see all available,\n"
+        "                           including externally loaded plugins)\n"
         "  --source <list>         Source enchantments (e.g., sharpness=5,knockback=2)\n"
         "  --target <spec>         Target item with wanted enchantments\n"
         "                           (e.g., diamond_sword[sharpness=3])\n"
@@ -121,6 +121,8 @@ CLIConfig parse_cli(int argc, char *argv[]) {
                         op + "'. Expected format <target>:<action>,<id>[,<field>=<val>...]\n");
             }
             config.registry_edit = value;
+        } else if (key == "list-algorithms") {
+            config.list_algorithms = true;
         } else if (key == "algo-dir") {
             if (value.empty())
                 throw std::runtime_error("Empty --algo-dir value.\n");
@@ -211,9 +213,9 @@ CLIConfig parse_cli(int argc, char *argv[]) {
     }
 
     // Validate required arguments
-    // --target or --export-registry (or both) is required
+    // --target or --export-registry or --list-algorithms is required
     if (!config.help && !config.version) {
-        if (config.target.empty() && !config.export_registry.has_value())
+        if (config.target.empty() && !config.export_registry.has_value() && !config.list_algorithms)
             throw std::runtime_error(
                 "Missing required argument: --target (or --export-registry to export registry only)\n");
     }

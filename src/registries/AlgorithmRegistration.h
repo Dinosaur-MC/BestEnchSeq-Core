@@ -7,6 +7,7 @@
 /// with all compiled-in strategies.  Plugin-loaded algorithms are appended
 /// at runtime via PluginLoader.
 
+#include "registries/AlgorithmRegistry.h"
 #include <memory>
 #include <string>
 

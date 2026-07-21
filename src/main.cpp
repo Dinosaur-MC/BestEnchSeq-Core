@@ -132,9 +132,25 @@ int main(int argc, char* argv[]) try {
     if (config.help || config.version)
         return 0;
 
-    // ── Create BesqContext and load data ─────────────────────────────
+    // ── Create BesqContext and initialise registries + plugins ───────
     BesqContext ctx;
     ctx.load_builtin();
+
+    // Load external algorithm strategies (default: ./algorithms/)
+    {
+        auto algo_path = config.algo_dir.value_or("algorithms");
+        if (std::filesystem::is_directory(algo_path))
+            ctx.load_plugins(algo_path);
+    }
+
+    // ── --list-algorithms (early exit) ───────────────────────────────
+    if (config.list_algorithms) {
+        auto algos = ctx.list_algorithms();
+        std::cout << "Available algorithm strategies (" << algos.size() << "):\n";
+        for (const auto& name : algos)
+            std::cout << "  " << name << "\n";
+        return 0;
+    }
 
     if (config.registry_dir)
         load_registry_dir(ctx, *config.registry_dir);
@@ -154,17 +170,6 @@ int main(int argc, char* argv[]) try {
             const_cast<EnchantmentRegistry&>(ctx.enchantments()),
             const_cast<EquipmentRegistry&>(ctx.equipment()),
             const_cast<EquipmentCategoryRegistry&>(ctx.categories()));
-
-    // ── Load external algorithm strategies ────────────────────────────
-    // Default search path: ./algorithms/ (silently skipped if absent)
-    {
-        auto algo_path = config.algo_dir.value_or("algorithms");
-        if (std::filesystem::is_directory(algo_path)) {
-            size_t n = ctx.load_plugins(algo_path);
-            LOG_INFO("Loaded %zu external algorithm(s) from %s",
-                     n, algo_path.c_str());
-        }
-    }
 
     // ── Registry export (works without --target) ─────────────────────
     if (config.export_registry) {
