@@ -13,6 +13,21 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Compiler — project requires LLVM/Clang (or MSVC as fallback on Windows)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
+    message(FATAL_ERROR
+        "BestEnchSeq-Core requires LLVM/Clang (or MSVC on Windows).\n"
+        "  Detected: ${CMAKE_CXX_COMPILER_ID} (${CMAKE_CXX_COMPILER})\n"
+        "  Use CMake presets to select the correct toolchain:\n"
+        "    cmake --preset cli          # default (Release)\n"
+        "    cmake --preset debug        # debug + tests\n"
+        "  Or specify the compiler explicitly:\n"
+        "    cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=clang++")
+endif()
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Compiler flags
 # ═══════════════════════════════════════════════════════════════════════════════
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
