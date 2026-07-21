@@ -16,7 +16,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     ctx.report_progress(0, ProgressStatus::Starting);
 
     auto start = std::chrono::steady_clock::now();
-    int32_t solutions_found = 0;
+    int32_t steps_performed = 0;
 
     std::vector<Item> mut_items = items;
 
@@ -93,7 +93,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
             std::move(saved_i), std::move(saved_j), step_cost
         });
 
-        ++solutions_found;
+        ++steps_performed;
 
         {
             const auto& sc = input.search;
@@ -101,7 +101,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
                 auto elapsed = std::chrono::steady_clock::now() - start;
                 if (elapsed > sc.max_search_time) break;
             }
-            if (sc.max_solutions > 0 && solutions_found >= sc.max_solutions) break;
+            if (sc.max_solutions > 0 && steps_performed >= sc.max_solutions) break;
         }
 
         mut_items.erase(mut_items.begin() + best_j);

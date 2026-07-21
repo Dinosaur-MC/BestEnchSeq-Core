@@ -90,7 +90,7 @@ void HierarchicalMergeAlgorithm::execute(
     ctx.report_progress(0, ProgressStatus::Starting);
 
     auto start = std::chrono::steady_clock::now();
-    int32_t solutions_found = 0;
+    int32_t steps_performed = 0;
 
     if (items.size() <= 1) {
         _diag.status = "GoalAlreadyMet";
@@ -146,7 +146,7 @@ void HierarchicalMergeAlgorithm::execute(
                         int32_t cost = _forge_engine.forge_into(books[i], books[i + 1], reg);
                         ctx.incr_steps_forged();
                         compact_steps.push_back({std::move(saved), std::move(books[i + 1]), cost});
-                        ++solutions_found;
+                        ++steps_performed;
                         next.push_back(std::move(books[i]));  // merged result
                         ++i;  // skip the paired sacrifice
                         continue;
@@ -162,7 +162,7 @@ void HierarchicalMergeAlgorithm::execute(
                     auto elapsed = std::chrono::steady_clock::now() - start;
                     if (elapsed > cfg.max_search_time) goto phase2;
                 }
-                if (cfg.max_solutions > 0 && solutions_found >= cfg.max_solutions) goto phase2;
+                if (cfg.max_solutions > 0 && steps_performed >= cfg.max_solutions) goto phase2;
             }
         }
     }
@@ -226,7 +226,7 @@ phase2:
         ctx.incr_steps_forged();
         compact_steps.push_back({std::move(saved_base), std::move(next_book), cost});
 
-        ++solutions_found;
+        ++steps_performed;
 
         {
             auto cfg = search;
@@ -234,7 +234,7 @@ phase2:
                 auto elapsed = std::chrono::steady_clock::now() - start;
                 if (elapsed > cfg.max_search_time) break;
             }
-            if (cfg.max_solutions > 0 && solutions_found >= cfg.max_solutions) break;
+            if (cfg.max_solutions > 0 && steps_performed >= cfg.max_solutions) break;
         }
     }
 
@@ -244,13 +244,10 @@ phase2:
         ctx.incr_steps_forged();
         compact_steps.push_back({std::move(saved_equip), std::move(combined), cost});
 
-        ++solutions_found;
+        ++steps_performed;
     }
 
-    _diag.status = "Complete";
-    ctx.set_exit_diagnostics(_diag);
-
-    // Verify final equipment achieves the target
+    // Verify final equipment achieves the target BEFORE setting diagnostics
     {
         bool ok = true;
         for (const auto& t : target) {
@@ -258,10 +255,15 @@ phase2:
             if (it == equip.enchs.end() || it->level < t.level) { ok = false; break; }
         }
         if (!ok) {
+            _diag.status = "CompleteNoSolution";
+            ctx.set_exit_diagnostics(_diag);
             ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
             return;
         }
     }
+
+    _diag.status = "Complete";
+    ctx.set_exit_diagnostics(_diag);
 
     ctx.report_solution(compact_steps);
     ctx.report_progress(100, ProgressStatus::Complete);

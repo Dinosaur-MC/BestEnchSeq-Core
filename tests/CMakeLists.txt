@@ -289,6 +289,7 @@ endif()
 add_executable(test_algorithm_registry
     registry/test_algorithm_registry.cpp
     ${PROJECT_ROOT}/src/registries/AlgorithmRegistry.cpp
+    ${COMPACT_TYPE_SRCS}
     ${REGISTRY_CORE_SRCS}
     ${DOMAIN_TYPE_SRCS}
 )

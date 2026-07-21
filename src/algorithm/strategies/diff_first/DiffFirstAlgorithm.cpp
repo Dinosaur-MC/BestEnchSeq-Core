@@ -75,6 +75,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
     };
 
     bool cancelled = false;
+    auto diff_start = std::chrono::steady_clock::now();
     uint8_t cur_ppn = min_ppn(items);
     bool mode1 = false;  // false = PPN-tier mode; true = linear merge
 
@@ -83,6 +84,10 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
     while (items.size() > 1 && !cancelled) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) { cancelled = true; break; }
+        if (input.search.max_search_time.count() > 0) {
+            auto elapsed = std::chrono::steady_clock::now() - diff_start;
+            if (elapsed > input.search.max_search_time) { cancelled = true; break; }
+        }
 
         sort_items(items);
 
