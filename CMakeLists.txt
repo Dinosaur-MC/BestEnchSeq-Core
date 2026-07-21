@@ -302,6 +302,7 @@ endif()
 # Export besq-core for plugin build system
 # ═══════════════════════════════════════════════════════════════════════════════
 export(TARGETS besq-core
+    NAMESPACE besq-core::
     FILE "${CMAKE_BINARY_DIR}/besq-coreConfig.cmake"
 )
 

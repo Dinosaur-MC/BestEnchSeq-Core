@@ -2,8 +2,8 @@
 #include "algorithm/IAlgorithm.h"
 #include "algorithm/forge/ForgeEngine.h"
 #include "algorithm/components/ItemPool.h"
-#include "algorithm/strategies/idastar/TTTable.h"
-#include "algorithm/strategies/idastar/IDAStarDiagnostics.h"
+#include "idastar/TTTable.h"
+#include "idastar/IDAStarDiagnostics.h"
 #include "registries/CompactedRegistries.h"
 #include <chrono>
 #include <cstdint>
