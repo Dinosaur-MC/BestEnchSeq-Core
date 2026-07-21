@@ -80,22 +80,41 @@ const GroupMap GROUPS[] = {
     {"netherite", {"netherite_sword", "netherite_boots"}},
 };
 
+// ─── Helper: comma-separated list → unordered_set ───
+static std::unordered_set<std::string> split_csv(const std::string& s) {
+    std::unordered_set<std::string> out;
+    std::istringstream ss(s);
+    for (std::string tok; std::getline(ss, tok, ',');)
+        if (!tok.empty()) out.insert(tok);
+    return out;
+}
+
 // ─── CLI flag parsing ───
+//
+// Algorithm validation is deferred: --alg values are stored raw and later
+// intersected with what the AlgorithmLoader actually has (after --algo-dir
+// plugins are loaded and built-in strategies are registered).
 struct BenchConfig {
     std::unordered_set<std::string> test_names; // empty = all
-    std::unordered_set<std::string> algos;      // empty = all
+    std::unordered_set<std::string> raw_algos;  // from --alg; empty = all loaded
+    std::string algo_dir;                       // plugin dir, empty = none
     bool list_only = false;
     bool no_skip = false;
 };
 
 BenchConfig parse_cli(int argc, char* argv[]) {
     BenchConfig cfg;
-    const char* all_algos[] = {"greedy", "dfs", "astar", "penalty_balance", "hierarchical", "idastar", "hamming", "diff_first"};
-    for (auto* a : all_algos) cfg.algos.insert(a);
 
     auto die = [](const std::string& msg) {
         std::cerr << "Error: " << msg << "\n"
-                  << "Usage: forge_benchmark --alg <names> | --help\n";
+                  << "Usage: forge_benchmark [options]\n"
+                  << "  --list                List test cases & groups\n"
+                  << "  --test  <names>       Comma-separated test names\n"
+                  << "  --group <names>       Comma-separated group names\n"
+                  << "  --alg   <names>       Comma-separated algorithm names (--algo also accepted)\n"
+                  << "  --algo-dir <dir>      Load algorithm plugins from directory\n"
+                  << "  --no-skip             Run all algorithms (by default astar/idastar are skipped for >8 enchants)\n"
+                  << "  --help                This help\n";
         std::exit(1);
     };
 
@@ -106,18 +125,16 @@ BenchConfig parse_cli(int argc, char* argv[]) {
         } else if (arg == "--test") {
             if (i + 1 >= argc) die("--test requires a value");
             cfg.test_names.clear();
-            std::istringstream ss(argv[++i]);
-            for (std::string tok; std::getline(ss, tok, ','); )
-                if (!tok.empty()) cfg.test_names.insert(tok);
+            cfg.test_names = split_csv(argv[++i]);
         } else if (arg == "--group") {
             if (i + 1 >= argc) die("--group requires a value");
             cfg.test_names.clear();
-            std::istringstream ss(argv[++i]);
-            for (std::string tok; std::getline(ss, tok, ','); ) {
+            for (const auto& tok : split_csv(argv[++i])) {
                 bool found = false;
                 for (const auto& g : GROUPS) {
                     if (tok == g.name) {
-                        for (auto* m : g.members) cfg.test_names.insert(m);
+                        for (auto* m : g.members)
+                            cfg.test_names.insert(m);
                         found = true;
                         break;
                     }
@@ -127,29 +144,27 @@ BenchConfig parse_cli(int argc, char* argv[]) {
             }
         } else if (arg == "--algo" || arg == "--alg") {
             if (i + 1 >= argc) die("--alg requires a value");
-            cfg.algos.clear();
-            std::istringstream ss(argv[++i]);
-            for (std::string tok; std::getline(ss, tok, ','); ) {
-                if (!tok.empty())
-                    cfg.algos.insert(tok);
-            }
+            cfg.raw_algos = split_csv(argv[++i]);
+        } else if (arg == "--algo-dir") {
+            if (i + 1 >= argc) die("--algo-dir requires a value");
+            cfg.algo_dir = argv[++i];
+        } else if (arg == "--no-skip") {
+            cfg.no_skip = true;
         } else if (arg == "--help") {
             std::cout << "Usage: forge_benchmark [options]\n"
                       << "  --list                List test cases & groups\n"
                       << "  --test  <names>       Comma-separated test names\n"
                       << "  --group <names>       Comma-separated group names\n"
                       << "  --alg   <names>       Comma-separated algorithm names (--algo also accepted)\n"
+                      << "  --algo-dir <dir>      Load algorithm plugins from directory\n"
+                      << "  --no-skip             Run all algorithms (by default astar/idastar are skipped for >8 enchants)\n"
                       << "  --help                This help\n"
-                      << "  --no-skip             Always run all algorithms (skip AStar/IDAStar for >8 enchants)\n"
                       << "\nExamples:\n"
                       << "  forge_benchmark --group netherite\n"
                       << "  forge_benchmark --test netherite_sword,boots_full --alg greedy,dfs\n"
                       << "  forge_benchmark --group armor --alg astar\n"
-                      << "  forge_benchmark --alg astar,hamming+astar --group netherite --no-skip\n";
+                      << "  forge_benchmark --algo-dir build/plugins --group sword\n";
             std::exit(0);
-        }
-        else if (arg == "--no-skip") {
-            cfg.no_skip = true;
         } else if (arg.size() > 1 && arg[0] == '-') {
             die("unknown flag '" + arg + "'");
         }
@@ -165,24 +180,48 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                 die("unknown test '" + t + "'");
     }
 
-    // Validate: --alg values must be known
-    std::vector<const char*> all_valid;
-    for (auto* a : all_algos) all_valid.push_back(a);
-    for (const auto& a : cfg.algos) {
-        auto plus = a.find('+');
+    return cfg;
+}
+
+// ─── Resolve algorithm list after loader is ready ───
+//
+// Returns sorted unique names (including chain "warmup+main" entries).
+// When --alg was given, warns about any requested algorithm that isn't loaded
+// and silently excludes it.
+static std::vector<std::string>
+resolve_algos(const BenchConfig& cfg, const AlgorithmLoader& loader) {
+    std::vector<std::string> all = loader.list();
+    std::sort(all.begin(), all.end());
+
+    if (cfg.raw_algos.empty())
+        return all;  // every loaded algorithm
+
+    // Filter to only those the user asked for
+    std::vector<std::string> filtered;
+    for (const auto& name : cfg.raw_algos) {
+        auto plus = name.find('+');
         if (plus != std::string::npos) {
-            std::string w = a.substr(0, plus);
-            std::string m = a.substr(plus + 1);
-            bool ok_w = std::find(all_valid.begin(), all_valid.end(), w) != all_valid.end();
-            bool ok_m = std::find(all_valid.begin(), all_valid.end(), m) != all_valid.end();
-            if (!ok_w) die("unknown warmup algorithm '" + w + "' in chain '" + a + "'");
-            if (!ok_m) die("unknown main algorithm '" + m + "' in chain '" + a + "'");
+            // Chain syntax: warmup+main
+            std::string w = name.substr(0, plus);
+            std::string m = name.substr(plus + 1);
+            if (!loader.contains(w) || !loader.contains(m)) {
+                std::cerr << "  WARN: chain '" << name << "' requires '"
+                          << w << "' and '" << m
+                          << "', but not all are loaded — skipping\n";
+                continue;
+            }
+            filtered.push_back(name);
         } else {
-            if (std::find(all_valid.begin(), all_valid.end(), a) == all_valid.end())
-                die("unknown algorithm '" + a + "'");
+            if (loader.contains(name)) {
+                filtered.push_back(name);
+            } else {
+                std::cerr << "  WARN: algorithm '" << name
+                          << "' is not loaded — skipping\n";
+            }
         }
     }
-    return cfg;
+    std::sort(filtered.begin(), filtered.end());
+    return filtered;
 }
 
 // ─── Setup ───
@@ -192,11 +231,12 @@ void load_builtin_data() {
                                   registries::enchants(), registries::equipment());
 }
 
-void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled_algos,
-              const AlgorithmLoader& loader, bool no_skip = false) {
+// ─── Run a single test case against every <algos> entry ───
+void run_case(const TestCase& tc, const std::vector<std::string>& algos,
+              const AlgorithmLoader& loader, bool no_skip) {
     int32_t eq_id = registries::equipment().get_id(tc.item_type);
     if (eq_id < 0) {
-        std::cout << "  SKIP: unknown equipment '" << tc.item_type << "'" << std::endl;
+        std::cout << "  [SKIP] unknown equipment '" << tc.item_type << "'\n";
         return;
     }
     const Equipment& eq = registries::equipment().get(eq_id);
@@ -208,7 +248,10 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
         std::string id = spec.substr(0, p);
         int32_t lv = std::stoi(spec.substr(p + 1));
         int32_t eid = registries::enchants().get_id(id);
-        if (eid < 0) { std::cout << "  SKIP: unknown enchant '" << id << "'" << std::endl; return; }
+        if (eid < 0) {
+            std::cout << "  [SKIP] unknown enchant '" << id << "'\n";
+            return;
+        }
         wanted_set.emplace(eid, lv);
         books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
@@ -233,108 +276,84 @@ void run_case(const TestCase& tc, const std::unordered_set<std::string>& enabled
             algo_input.target.push_back({_lid, static_cast<int16_t>(e.level)});
     }
 
-    struct BenchResult {
-        std::string algo;
-        enum Kind { Data, Skip, Fail } kind;
-        int32_t cost{0};
-        int64_t ms{0};
-        bool ok{false};
-    };
-    std::vector<BenchResult> results;
+    // ══════════════════════════════════════════════════════════════════════
+    // Iterate algos in sorted order
+    // ══════════════════════════════════════════════════════════════════════
+    for (const auto& algo_name : algos) {
+        std::cout << "  " << std::left << std::setw(18) << algo_name;
 
-    for (const auto& algo_name : enabled_algos) {
-        // Chain: warmup+main (e.g. "hamming+astar")
+        // ── Chain: warmup+main ──────────────────────────────────────────
         auto plus = algo_name.find('+');
         if (plus != std::string::npos) {
             std::string warmup_name = algo_name.substr(0, plus);
-            std::string main_name = algo_name.substr(plus + 1);
-            if (!loader.contains(warmup_name)
-             || !loader.contains(main_name)) {
-                results.push_back({algo_name, BenchResult::Fail});
+            std::string main_name   = algo_name.substr(plus + 1);
+
+            if (!no_skip && (main_name == "astar" || main_name == "idastar")
+                && tc.wanted.size() > 8) {
+                std::cout << "SKIP (too many enchants)\n";
                 continue;
             }
-            if (!no_skip && (main_name == "astar" || main_name == "idastar") && tc.wanted.size() > 8) {
-                results.push_back({algo_name, BenchResult::Skip});
-                continue;
+            try {
+                auto main_algo = loader.create(main_name);
+                AlgorithmExecutor executor(std::move(main_algo));
+                AlgorithmInput run_input = algo_input;
+                executor.start(std::move(run_input),
+                               loader.create(warmup_name));
+                executor.wait();
+                if (executor.state() != AlgorithmState::Completed) {
+                    std::cout << "no solution\n"; continue;
+                }
+                AlgorithmOutput out = executor.output();
+                if (out.solutions.empty()) {
+                    std::cout << "no solution\n"; continue;
+                }
+                int32_t total = out.solutions[0].total_cost;
+                bool ok = total <= tc.max_cost;
+                std::cout << std::right << std::setw(4) << total << "L"
+                          << (ok ? "  ✅" : "  ⚠")
+                          << "  " << std::setw(4) << out.computation_time.count()
+                          << "ms\n";
+            } catch (const std::exception& e) {
+                std::cout << "ERROR: " << e.what() << '\n';
             }
-            auto main_algo = loader.create(main_name);
-            AlgorithmExecutor executor(std::move(main_algo));
+            continue;
+        }
+
+        // ── Single algorithm ────────────────────────────────────────────
+        if (!no_skip && (algo_name == "astar" || algo_name == "idastar")
+            && tc.wanted.size() > 8) {
+            std::cout << "SKIP (too many enchants)\n";
+            continue;
+        }
+
+        try {
+            auto algo = loader.create(algo_name);
+            AlgorithmExecutor executor(std::move(algo));
             AlgorithmInput run_input = algo_input;
-            executor.start(std::move(run_input),
-                          loader.create(warmup_name));
+            executor.start(std::move(run_input));
             executor.wait();
+
             if (executor.state() != AlgorithmState::Completed) {
-                results.push_back({algo_name, BenchResult::Fail});
-                continue;
+                std::cout << "no solution\n"; continue;
             }
             AlgorithmOutput out = executor.output();
             if (out.solutions.empty()) {
-                results.push_back({algo_name, BenchResult::Fail});
-                continue;
+                std::cout << "no solution\n"; continue;
             }
             int32_t total = out.solutions[0].total_cost;
-            results.push_back({algo_name, BenchResult::Data, total,
-                               out.computation_time.count(),
-                               total <= tc.max_cost});
-            continue;
+            bool ok = total <= tc.max_cost;
+            std::cout << std::right << std::setw(4) << total << "L"
+                      << (ok ? "  ✅" : "  ⚠")
+                      << "  " << std::setw(4) << out.computation_time.count()
+                      << "ms\n";
+        } catch (const std::exception& e) {
+            std::cout << "ERROR: " << e.what() << '\n';
         }
-
-        if (!loader.contains(algo_name)) {
-            results.push_back({algo_name, BenchResult::Fail});
-            continue;
-        }
-        if (!no_skip && (algo_name == "astar" || algo_name == "idastar") && tc.wanted.size() > 8) {
-            results.push_back({algo_name, BenchResult::Skip});
-            continue;
-        }
-
-        auto algo = loader.create(algo_name);
-        AlgorithmExecutor executor(std::move(algo));
-
-        AlgorithmInput run_input = algo_input;
-        executor.start(std::move(run_input));
-        executor.wait();
-
-        if (executor.state() != AlgorithmState::Completed) {
-            results.push_back({algo_name, BenchResult::Fail});
-            continue;
-        }
-        AlgorithmOutput out = executor.output();
-        if (out.solutions.empty()) {
-            results.push_back({algo_name, BenchResult::Fail});
-            continue;
-        }
-
-        int32_t total = out.solutions[0].total_cost;
-
-        results.push_back({algo_name, BenchResult::Data, total,
-                           out.computation_time.count(),
-                           total <= tc.max_cost});
-    }
-
-    // Sort by algorithm name (SKIP/FAIL interleaved correctly)
-    std::sort(results.begin(), results.end(),
-              [](const BenchResult& a, const BenchResult& b) {
-                  return a.algo < b.algo;
-              });
-
-    for (const auto& r : results) {
-        std::cout << "  " << std::left << std::setw(18) << r.algo;
-        if (r.kind == BenchResult::Skip) {
-            std::cout << "SKIP (too many enchants)";
-        } else if (r.kind == BenchResult::Fail) {
-            std::cout << "no solution";
-        } else {
-            std::cout << std::right << std::setw(4) << r.cost << "L"
-                      << (r.ok ? "  ✅" : "  ⚠")
-                      << "  " << std::setw(4) << r.ms << "ms";
-        }
-        std::cout << std::endl;
     }
 }
 
 void list_cases() {
-    std::cout << "Test cases (" << (sizeof(CASES)/sizeof(CASES[0])) << " total):\n";
+    std::cout << "Test cases (" << (sizeof(CASES) / sizeof(CASES[0])) << " total):\n";
     for (const auto& tc : CASES)
         std::cout << "  " << tc.name << "  (" << tc.item_type << ", "
                   << tc.wanted.size() << " enchants)\n";
@@ -356,15 +375,48 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    std::cout << "Time: " << std::chrono::current_zone()->to_local(std::chrono::system_clock::now()) << std::endl;
+    std::cout << "Time: "
+              << std::chrono::current_zone()->to_local(
+                     std::chrono::system_clock::now())
+              << std::endl;
     std::cout << "=== Dataset Benchmark ===" << std::endl;
+
     load_builtin_data();
 
-    // Register all built-in strategies
+    // ═════════════════════════════════════════════════════════════════════
+    // Load algorithms: built-in + optional plugins
+    // ═════════════════════════════════════════════════════════════════════
     AlgorithmLoader loader;
     loader.load_builtin();
 
-    // Filter tests
+    if (!cfg.algo_dir.empty()) {
+        std::filesystem::path dir(cfg.algo_dir);
+        if (std::filesystem::is_directory(dir)) {
+            size_t n = loader.scan_and_load(cfg.algo_dir);
+            std::cout << "Loaded " << n << " plugin(s) from "
+                      << cfg.algo_dir << std::endl;
+        } else {
+            std::cerr << "Warning: --algo-dir '" << cfg.algo_dir
+                      << "' not found, skipping plugins" << std::endl;
+        }
+    }
+
+    // Resolve effective algorithm list
+    std::vector<std::string> algos = resolve_algos(cfg, loader);
+    if (algos.empty()) {
+        std::cerr << "No algorithms available after filtering. "
+                  << "Loaded " << loader.size() << " total." << std::endl;
+        return 1;
+    }
+
+    // Show context
+    std::cout << "Using " << algos.size() << " algorithm(s)"
+              << " (" << loader.size() << " loaded)"
+              << (cfg.algo_dir.empty() ? ". Use --algo-dir to load plugins."
+                                       : ".")
+              << std::endl;
+
+    // Build test queue
     std::vector<const TestCase*> queue;
     if (cfg.test_names.empty()) {
         for (const auto& tc : CASES) queue.push_back(&tc);
@@ -375,19 +427,22 @@ int main(int argc, char* argv[]) {
     }
 
     if (queue.empty()) {
-        std::cerr << "No matching test cases. Use --list to see available tests." << std::endl;
+        std::cerr << "No matching test cases. Use --list to see available tests."
+                  << std::endl;
         return 1;
     }
 
+    // Run each test case
     for (auto* tc : queue) {
-        std::cout << "\n" << tc->name << " (" << tc->wanted.size() << " enchants, max "
-                  << tc->max_cost << "L):" << std::endl;
+        std::cout << "\n" << tc->name << " (" << tc->wanted.size()
+                  << " enchants, max " << tc->max_cost << "L):" << std::endl;
         try {
-            run_case(*tc, cfg.algos, loader, cfg.no_skip);
+            run_case(*tc, algos, loader, cfg.no_skip);
         } catch (const std::exception& e) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }
     }
-    std::cout << "=== Done ===" << std::endl;
+
+    std::cout << "\n=== Done ===" << std::endl;
     return 0;
 }

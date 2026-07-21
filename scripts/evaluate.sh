@@ -139,12 +139,14 @@ fi
 
 # configure project
 if [ ! -d "$build_dir" -o "$build_type" != "" ]; then
-    cmake -S . -B "$build_dir" -G Ninja -DCMAKE_BUILD_TYPE="$build_type" -DCMAKE_CXX_COMPILER=clang++
+    cmake -S . -B "$build_dir" -G Ninja -DCMAKE_BUILD_TYPE="$build_type" -DCMAKE_CXX_COMPILER=clang++ -DBUILD_BENCHMARKS=ON
+    cmake -S plugins -B build-wsl/plugins -G Ninja -DCMAKE_BUILD_TYPE="$build_type" -DCMAKE_CXX_COMPILER=clang++
 fi
 
 # build project
 if [ $build_project -eq 1 ]; then
     cmake --build "$build_dir" --config "$build_type" --target forge_benchmark
+    cmake --build build-wsl/plugins --config "$build_type" --target all
 fi
 
 # ----------------------------------------------
@@ -155,7 +157,7 @@ fi
 if [ $leak_check -eq 1 ]; then
     valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose \
     --log-file="$output_dir/valgrind.log" \
-    -- "$build_dir/bin/forge_benchmark" $program_args \
+    -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args \
     2>&1 > "$output_dir/valgrind_program_out.txt" &
 fi
 
@@ -164,7 +166,7 @@ if [ $callgrind_check -eq 1 ]; then
     (
         valgrind --tool=callgrind --dump-instr=yes \
             --callgrind-out-file="$output_dir/callgrind.out" \
-            -- "$build_dir/bin/forge_benchmark" $program_args
+            -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args
         python3 scripts/parse_callgrind.py "$output_dir/callgrind.out" > "$output_dir/callgrind.out.brief.log"
     ) 2>&1 > "$output_dir/callgrind_program_out.txt" &
 fi
@@ -173,7 +175,7 @@ fi
 if [ $massif_check -eq 1 ]; then
     (
         valgrind --tool=massif --massif-out-file="$output_dir/massif.out" \
-            -- "$build_dir/bin/forge_benchmark" $program_args
+            -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args
         ms_print "$output_dir/massif.out" > "$output_dir/massif.out.ms_print"
         python3 scripts/parse_massif.py "$output_dir/massif.out.ms_print" > "$output_dir/massif.out.brief.log"
     ) 2>&1 > "$output_dir/massif_program_out.txt" &
@@ -183,7 +185,7 @@ fi
 if [ $cachegrind_check -eq 1 ]; then
     (
         valgrind --tool=cachegrind --cache-sim=yes --cachegrind-out-file="$output_dir/cachegrind.out" \
-            -- "$build_dir/bin/forge_benchmark" $program_args
+            -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args
         python3 scripts/parse_cachegrind.py "$output_dir/cachegrind.out" > "$output_dir/cachegrind.out.brief.log"
     ) 2>&1 > "$output_dir/cachegrind_program_out.txt" &
 fi
@@ -197,6 +199,6 @@ if [ $benchmark_check -eq 1 ]; then
         mv "$benchmark_dir/benchmark.txt" "$benchmark_dir/benchmark.txt.bak"
     fi
     echo "Benchmark running in $build_type build with program args: $program_args" | tee "$benchmark_dir/benchmark.txt"
-    "$build_dir/bin/forge_benchmark" $program_args 2>&1 | tee -a "$benchmark_dir/benchmark.txt"
+    "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args 2>&1 | tee -a "$benchmark_dir/benchmark.txt"
     python3 scripts/bench_report.py "$benchmark_dir" --img
 fi
