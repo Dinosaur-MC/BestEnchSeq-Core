@@ -38,6 +38,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # Data embedding (vanilla.json compiled into the binary)

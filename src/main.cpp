@@ -1,251 +1,197 @@
-#include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/diagnostics/DiagnosticsService.h"
-#include "algorithm/strategies/Strategies.h"
-#include "adapters/CompactAdapter.h"
-#include "adapters/RawTypeAdapter.h"
+#include "api/SolvePipeline.h"
+#include "besq/besq.h"
 #include "cli/cli.h"
+#include "cli/RegistryEditor.h"
 #include "config/AppConfig.h"
-#include "data/EmbeddedData.h"
 #include "log/log.hpp"
 #include "adapters/OutputFormatter.h"
 #include "parsers/EnchParser.h"
 #include "parsers/ItemParser.h"
 #include "parsers/ParserUtilsDomain.hpp"
 #include "resolvers/InventoryResolver.h"
-#include "resolvers/ItemResolver.h"
-#include "registries/AlgorithmRegistry.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "registries/RegistryManager.h"
-#include "io/json.h"
 #include "utils/ParserUtils.hpp"
-#include "types/AlgorithmTypes.h"
-#include "cli/RegistryEditor.h"
-#include "adapters/EnchSerializer.h"
 
-
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include <stdexcept>
-#include <unordered_map>
 
 namespace {
 
+// ====================================================================
+// build_solve_input — Convert CLIConfig + BesqContext into SolveInput
+// ====================================================================
+static SolveInput build_solve_input(
+    const CLIConfig& config,
+    const BesqContext& ctx,
+    int64_t default_memory_mb)
+{
+    SolveInput input;
 
-void register_builtin_algorithms(AlgorithmRegistry &registry) {
-    registry.register_algorithm("greedy", [] { return std::make_unique<GreedyAlgorithm>(); });
-    registry.register_algorithm("dfs", [] { return std::make_unique<DFSAlgorithm>(); });
-    registry.register_algorithm("astar", [] { return std::make_unique<AStarAlgorithm>(); });
-    registry.register_algorithm("penalty_balance",
-                                [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-    registry.register_algorithm("hierarchical",
-                                [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
-    registry.register_algorithm("idastar",
-                                [] { return std::make_unique<IDAStarAlgorithm>(); });
-    registry.register_algorithm("hamming",
-                                [] { return std::make_unique<HammingAlgorithm>(); });
-    registry.register_algorithm("difficulty_first",
-                                [] { return std::make_unique<DiffFirstAlgorithm>(); });
-    registry.register_algorithm("diff_first",
-                                [] { return std::make_unique<DiffFirstAlgorithm>(); });
+    // ── Target item (equipment + inline desired enchantments) ─────────
+    auto target_spec = ItemParser::parse(config.target);
+    input.target_item = build_target(target_spec, ctx.enchantments(), ctx.equipment());
+
+    // ── Source enchantments (what the item already has) ───────────────
+    if (!config.source.empty()) {
+        auto source_specs = EnchParser::parse(config.source);
+        input.source_enchantments = build_enchset(source_specs, ctx.enchantments());
+    }
+
+    // ── Forge configuration ──────────────────────────────────────────
+    if (config.platform == "auto")
+        input.forge_config.platform = MCE::All;
+    else
+        input.forge_config.platform = ParserUtils::parse_platform(config.platform);
+    apply_config_pairs(config.config_pairs, input.forge_config);
+
+    // ── Search configuration ─────────────────────────────────────────
+    input.search_config.max_solutions = config.solutions;
+    {
+        int64_t effective_mb = config.memory_mb > 0
+            ? static_cast<int64_t>(config.memory_mb)
+            : default_memory_mb;
+        input.search_config.memory_mb = static_cast<int32_t>(effective_mb);
+    }
+    if (config.max_time > 0)
+        input.search_config.max_search_time = std::chrono::seconds(config.max_time);
+
+    // ── Algorithm & mode ─────────────────────────────────────────────
+    input.algorithm = config.algorithm;
+    input.is_inventory_mode = (config.mode == "inventory");
+
+    // ── Inventory mode: resolve inventory file ────────────────────────
+    if (input.is_inventory_mode) {
+        if (!config.input)
+            throw std::runtime_error("Input file required for inventory mode");
+
+        auto inv = InventoryResolver::resolve(
+            std::filesystem::path(*config.input),
+            ctx.enchantments(),
+            ctx.equipment());
+
+        for (const auto& w : inv.warnings)
+            LOG_WARN("Inventory: %s", w.c_str());
+
+        input.extra_items = std::move(inv.items);
+    }
+
+    return input;
+}
+
+// ====================================================================
+// load_registry_dir — Load all registry files from a directory
+// ====================================================================
+static void load_registry_dir(BesqContext& ctx, const std::string& dir_path) {
+    namespace fs = std::filesystem;
+    fs::path dir(dir_path);
+
+    if (!fs::exists(dir))
+        throw std::runtime_error("Registry directory not found: " + dir_path);
+    if (!fs::is_directory(dir))
+        throw std::runtime_error("Not a directory: " + dir_path);
+
+    // MC Official structure (data/<ns>/enchantment/…): handle as one unit
+    if (fs::is_directory(dir / "data")) {
+        ctx.load_file(dir_path);
+        return;
+    }
+
+    // Flat directory of individual .json / .csv files: load each one
+    for (const auto& entry : fs::directory_iterator(dir)) {
+        if (!entry.is_regular_file()) continue;
+        try {
+            ctx.load_file(entry.path().string());
+        } catch (const std::exception& e) {
+            LOG_DEBUG("Skipping non-registry entry '%s': %s",
+                      entry.path().string().c_str(), e.what());
+        }
+    }
 }
 
 } // anonymous namespace
 
-int main(int argc, char *argv[]) {
-    try {
-        // Load environment-backed config (CLI overrides take precedence later)
-        auto app_cfg = AppConfig::load();
-        auto config = parse_cli(argc, argv);
+// ====================================================================
+// main — thin CLI wrapper around BesqContext
+// ====================================================================
+int main(int argc, char* argv[]) try {
+    // ── Configuration & CLI parsing ──────────────────────────────────
+    auto app_cfg = AppConfig::load();
+    auto config = parse_cli(argc, argv);
 
-        // ── Configure global Logger ─────────────────────────────────────────
-        Logger::instance().set_level(
-            app_cfg.log_level >= 3 ? LogLevel::Error
-          : app_cfg.log_level >= 2 ? LogLevel::Warn
-          : app_cfg.log_level >= 1 ? LogLevel::Info
-          :                          LogLevel::Debug);
-        Logger::instance().set_retention(app_cfg.log_retention);
+    // ── Logger setup ─────────────────────────────────────────────────
+    Logger::instance().set_level(
+        app_cfg.log_level >= 3 ? LogLevel::Error
+      : app_cfg.log_level >= 2 ? LogLevel::Warn
+      : app_cfg.log_level >= 1 ? LogLevel::Info
+      :                          LogLevel::Debug);
+    Logger::instance().set_retention(app_cfg.log_retention);
 
-        if (config.help || config.version) {
-            return 0;
-        }
-
-
-        // ── Load data ────────────────────────────────────────────────────────
-        EquipmentCategoryRegistry cat_reg;
-        EnchantmentRegistry ench_reg;
-        EquipmentRegistry eq_reg;
-        {
-            RegistryManager mgr;
-            mgr.add_builtin();
-            if (config.registry_dir)
-                mgr.scan_registry_dir(*config.registry_dir);
-            mgr.load_and_resolve(config.registries, cat_reg, eq_reg, ench_reg);
-        }
-
-        // ── Apply runtime registry edits ──────────────────────────────────
-        if (config.registry_edit)
-            apply_registry_edits(*config.registry_edit, ench_reg, eq_reg, cat_reg);
-
-        // ── Compute optimal enchant sequence (skip if --export-registry only) ─
-        if (!config.target.empty()) {
-            auto target_spec = ItemParser::parse(config.target);
-            auto target_item = build_target(target_spec, ench_reg, eq_reg);
-
-            EnchSet source_ench;
-            if (!config.source.empty()) {
-                auto source_specs = EnchParser::parse(config.source);
-                source_ench = build_enchset(source_specs, ench_reg);
-            }
-
-            EnchSet target_ench;
-            if (!target_spec.inline_enchants.empty()) {
-                target_ench = build_enchset(target_spec.inline_enchants, ench_reg);
-            }
-
-            // ── Register and create algorithm ────────────────────────────
-            AlgorithmRegistry algo_reg;
-            register_builtin_algorithms(algo_reg);
-            auto algo = algo_reg.create(config.algorithm);
-            if (!algo) {
-                auto available = algo_reg.list();
-                std::string msg = "Unknown algorithm: '" + config.algorithm + "'. Available: ";
-                for (size_t i = 0; i < available.size(); ++i) {
-                    if (i > 0) msg += ", ";
-                    msg += available[i];
-                }
-                throw std::runtime_error(msg);
-            }
-
-            // Check algorithm mode support
-            AlgorithmMode algo_mode = (config.mode == "inventory")
-                ? AlgorithmMode::inventory
-                : AlgorithmMode::direct;
-            if (!(algo->supported_mode() & algo_mode)) {
-                throw std::runtime_error("Algorithm '" + config.algorithm +
-                    "' does not support '" + config.mode + "' mode");
-            }
-
-            // ── Boundary: domain → compact ──────────────────────────────
-            ForgeConfig forge_config;
-            if (config.platform == "auto") {
-                forge_config.platform = MCE::All;
-            } else {
-                forge_config.platform = ParserUtils::parse_platform(config.platform);
-            }
-            apply_config_pairs(config.config_pairs, forge_config);
-
-            AlgorithmInput algo_input;
-            EnchSet recall_source_ench;
-            ItemStack recall_target_item;
-            ItemCollection recall_available_items;
-
-            if (config.mode == "direct") {
-                auto resolved = ItemResolver::resolve(
-                    target_item, source_ench, target_ench, ench_reg);
-                recall_source_ench = resolved.source_ench;
-                recall_target_item = resolved.target_item;
-                recall_available_items = resolved.available_items;
-                algo_input = CompactAdapter::apply(resolved, ench_reg);
-            } else {
-                if (!config.input.has_value())
-                    throw std::runtime_error("Input file required for inventory mode");
-
-                auto inv = InventoryResolver::resolve(
-                    std::filesystem::path(*config.input), ench_reg, eq_reg);
-
-                for (const auto& w : inv.warnings)
-                    LOG_WARN("Inventory: %s", w.c_str());
-
-                ResolvedInput resolved{
-                    target_item, source_ench, target_ench, std::move(inv.items)};
-                recall_source_ench = resolved.source_ench;
-                recall_target_item = resolved.target_item;
-                recall_available_items = resolved.available_items;
-                algo_input = CompactAdapter::apply(resolved, ench_reg);
-            }
-
-            algo_input.config = forge_config;
-            algo_input.mode = algo_mode;
-
-            // Search config from CLI
-            algo_input.search.max_solutions = config.solutions;
-            algo_input.search.memory_mb = static_cast<int32_t>(
-                config.memory_mb > 0 ? config.memory_mb : app_cfg.memory_mb);
-            if (config.max_time > 0)
-                algo_input.search.max_search_time = std::chrono::seconds(config.max_time);
-
-            // Feasibility pre-check (inventory mode)
-            bool feasible = true;
-            if (config.mode == "inventory" && !algo->simulate(algo_input)) {
-                LOG_INFO("simulate: target not reachable from given items");
-                feasible = false;
-            }
-
-            LOG_INFO("Starting algorithm: %s", config.algorithm.c_str());
-
-            // Execute (compact-only algorithm layer)
-            std::vector<EnchSolution> solutions;
-            if (feasible) {
-                AlgorithmExecutor executor(std::move(algo));
-                executor.start(algo_input);
-                executor.wait();
-
-                if (config.verbose || app_cfg.verbose) {
-                    auto diag = executor.get_diagnostics(0);
-                    LOG_INFO(
-                        "nodes_visited=%lld  nodes_pruned=%lld  steps_forged=%lld  progress=%.1f%%",
-                        diag.nodes_visited, diag.nodes_pruned, diag.steps_forged,
-                        diag.progress * 100.0);
-                }
-
-                // Boundary: compact → domain
-                solutions = CompactAdapter::recall(executor.output(), algo_input,
-                                            recall_source_ench, recall_target_item,
-                                            recall_available_items);
-            }
-
-            // Format output
-            std::string output_text;
-            if (config.format == "json") {
-                output_text = OutputFormatter::format_json(solutions, ench_reg, cat_reg, config.mode);
-            } else if (config.format == "compact") {
-                output_text = OutputFormatter::format_compact(solutions, ench_reg, cat_reg, config.mode);
-            } else {
-                output_text = OutputFormatter::format_verbose(solutions, ench_reg, cat_reg, config.mode);
-            }
-
-            if (config.output) {
-                std::ofstream out(*config.output);
-                if (!out.is_open()) {
-                    throw std::runtime_error("Failed to open output file: " + *config.output);
-                }
-                out << output_text;
-            } else {
-                std::cout << output_text;
-            }
-
-            DiagnosticsService::instance().flush();
-        }
-
-        // ── Export registry if requested ──────────────────────────────────
-        if (config.export_registry) {
-            auto ext = std::filesystem::path(*config.export_registry).extension().string();
-            bool ok = false;
-            if (ext == ".csv" || ext == ".CSV")
-                ok = EnchSerializer::export_csv(*config.export_registry, ench_reg, eq_reg, cat_reg);
-            else
-                ok = EnchSerializer::export_json(*config.export_registry, ench_reg, eq_reg, cat_reg);
-            if (!ok)
-                throw std::runtime_error("Failed to export registry to: " + *config.export_registry);
-        }
-
+    // ── Early exit for --help / --version ────────────────────────────
+    if (config.help || config.version)
         return 0;
-    } catch (const std::exception &e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
+
+    // ── Create BesqContext and load data ─────────────────────────────
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    if (config.registry_dir)
+        load_registry_dir(ctx, *config.registry_dir);
+
+    if (config.registries) {
+        for (const auto& reg : ParserUtils::split_string(*config.registries, ',')) {
+            if (reg.empty()) continue;
+            if (std::filesystem::exists(reg)) {
+                ctx.load_file(reg);
+            }
+        }
     }
+
+    // ── Runtime registry edits ───────────────────────────────────────
+    if (config.registry_edit)
+        apply_registry_edits(*config.registry_edit,
+            const_cast<EnchantmentRegistry&>(ctx.enchantments()),
+            const_cast<EquipmentRegistry&>(ctx.equipment()),
+            const_cast<EquipmentCategoryRegistry&>(ctx.categories()));
+
+    // ── Registry export (works without --target) ─────────────────────
+    if (config.export_registry) {
+        if (!ctx.export_registry(*config.export_registry))
+            throw std::runtime_error("Failed to export registry to: " + *config.export_registry);
+    }
+
+    // ── Solve ────────────────────────────────────────────────────────
+    if (!config.target.empty()) {
+        auto input = build_solve_input(config, ctx, app_cfg.memory_mb);
+        auto result = ctx.solve(input);
+
+        // Format output (pass config.mode to match current behaviour for
+        // both "direct" and "inventory" display).
+        std::string output;
+        if (config.format == "json")
+            output = OutputFormatter::format_json(
+                result.solutions, ctx.enchantments(), ctx.categories(), config.mode);
+        else if (config.format == "compact")
+            output = OutputFormatter::format_compact(
+                result.solutions, ctx.enchantments(), ctx.categories(), config.mode);
+        else
+            output = OutputFormatter::format_verbose(
+                result.solutions, ctx.enchantments(), ctx.categories(), config.mode);
+
+        if (config.output) {
+            std::ofstream out(*config.output);
+            if (!out)
+                throw std::runtime_error("Failed to open output file: " + *config.output);
+            out << output;
+        } else {
+            std::cout << output;
+        }
+    }
+
+    return 0;
+
+} catch (const std::exception& e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+    return 1;
 }
