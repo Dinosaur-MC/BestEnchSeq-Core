@@ -69,17 +69,13 @@ public:
 
 private:
     struct LoadedPlugin {
-        void*         handle{nullptr};
-        std::string   name;
-        BesqCreateFn  create{nullptr};
+        void*       handle{nullptr};
+        std::string name;
     };
 
-    // Resolve the C ABI symbols from a dlopen'd handle.
-    // On failure returns false.
-    bool resolve_plugin(void* handle, const std::string& path,
-                        std::string& out_name, BesqCreateFn& out_create);
+    bool resolve_plugin(void* handle, const std::string& path, BesqCreateFn& out_create);
 
     AlgorithmRegistry _registry;
-    std::vector<std::unique_ptr<LoadedPlugin>> _plugins;
+    std::vector<LoadedPlugin> _plugins;
     bool _builtin_loaded{false};
 };

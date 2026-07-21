@@ -63,12 +63,6 @@ std::string dl_error() {
 #endif
 }
 
-bool has_suffix(const std::string &str, const std::string &suffix) {
-    if (suffix.size() > str.size())
-        return false;
-    return str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
 } // anonymous namespace
 
 // ====================================================================
@@ -114,10 +108,10 @@ void AlgorithmLoader::load_builtin() {
 #ifdef BESQ_HAVE_HAMMING
     _registry.register_algorithm("hamming", [] { return std::make_unique<HammingAlgorithm>(); });
 #endif
-    // #ifdef BESQ_HAVE_GREEDY
-    //     _registry.register_algorithm("greedy",
-    //         [] { return std::make_unique<GreedyAlgorithm>(); });
-    // #endif
+    #ifdef BESQ_HAVE_GREEDY
+        _registry.register_algorithm("greedy",
+            [] { return std::make_unique<GreedyAlgorithm>(); });
+    #endif
     #ifdef BESQ_HAVE_DFS
         _registry.register_algorithm("dfs",
             [] { return std::make_unique<DFSAlgorithm>(); });
@@ -126,22 +120,22 @@ void AlgorithmLoader::load_builtin() {
         _registry.register_algorithm("astar",
             [] { return std::make_unique<AStarAlgorithm>(); });
     #endif
-    // #ifdef BESQ_HAVE_IDASTAR
-    //     _registry.register_algorithm("idastar",
-    //         [] { return std::make_unique<IDAStarAlgorithm>(); });
-    // #endif
-    // #ifdef BESQ_HAVE_HIERARCHICAL
-    //     _registry.register_algorithm("hierarchical",
-    //         [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
-    // #endif
-    // #ifdef BESQ_HAVE_PENALTY_BALANCE
-    //     _registry.register_algorithm("penalty_balance",
-    //         [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
-    // #endif
-    // #ifdef BESQ_HAVE_DIFF_FIRST
-    //     _registry.register_algorithm("diff_first",
-    //         [] { return std::make_unique<DiffFirstAlgorithm>(); });
-    // #endif
+    #ifdef BESQ_HAVE_IDASTAR
+        _registry.register_algorithm("idastar",
+            [] { return std::make_unique<IDAStarAlgorithm>(); });
+    #endif
+    #ifdef BESQ_HAVE_HIERARCHICAL
+        _registry.register_algorithm("hierarchical",
+            [] { return std::make_unique<HierarchicalMergeAlgorithm>(); });
+    #endif
+    #ifdef BESQ_HAVE_PENALTY_BALANCE
+        _registry.register_algorithm("penalty_balance",
+            [] { return std::make_unique<DynamicPenaltyBalancingAlgorithm>(); });
+    #endif
+    #ifdef BESQ_HAVE_DIFF_FIRST
+        _registry.register_algorithm("diff_first",
+            [] { return std::make_unique<DiffFirstAlgorithm>(); });
+    #endif
 
     LOG_INFO("Registered %zu built-in algorithm strategy/ies", _registry.size());
 }
@@ -172,7 +166,7 @@ size_t AlgorithmLoader::scan_and_load(const std::string &dir_path) {
         if (!entry.is_regular_file())
             continue;
         const auto &path = entry.path().string();
-        if (!has_suffix(path, SO_EXT))
+        if (!path.ends_with(SO_EXT))
             continue;
         if (load_plugin(path))
             ++count;
@@ -185,9 +179,7 @@ size_t AlgorithmLoader::scan_and_load(const std::string &dir_path) {
 bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     // Avoid double-load on exact path
     for (const auto &p : _plugins) {
-        if (p->name.empty())
-            continue;
-        if (p->name == so_path) {
+        if (p.name == so_path) {
             LOG_WARN("Algorithm plugin already loaded: %s", so_path.c_str());
             return true;
         }
@@ -199,9 +191,8 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
         return false;
     }
 
-    std::string algo_name;
     BesqCreateFn create_fn = nullptr;
-    if (!resolve_plugin(handle, so_path, algo_name, create_fn)) {
+    if (!resolve_plugin(handle, so_path, create_fn)) {
         dl_close(handle);
         return false;
     }
@@ -214,13 +205,12 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
         dl_close(handle);
         return false;
     }
-    algo_name = std::string(probe->name());
-    probe.reset();
+    std::string algo_name(probe->name());
 
     // If a previously-loaded plugin has the same name, replace it.
     _registry.unregister_algorithm(algo_name);
 
-    // Register factory (capture handle indirectly via create_fn)
+    // Register factory
     _registry.register_algorithm(algo_name, [create_fn]() -> std::unique_ptr<IAlgorithm> {
         void *raw = create_fn();
         if (!raw)
@@ -228,10 +218,9 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
         return std::unique_ptr<IAlgorithm>(static_cast<IAlgorithm *>(raw));
     });
 
-    auto plugin    = std::make_unique<LoadedPlugin>();
-    plugin->handle = handle;
-    plugin->name   = algo_name;
-    plugin->create = create_fn;
+    LoadedPlugin plugin;
+    plugin.handle = handle;
+    plugin.name   = algo_name;
     _plugins.push_back(std::move(plugin));
 
     LOG_INFO("Loaded algorithm plugin: %s (from %s)", algo_name.c_str(), so_path.c_str());
@@ -242,9 +231,7 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
 // Symbol resolution — looks for one symbol: besq_create_algorithm
 // ====================================================================
 
-bool AlgorithmLoader::resolve_plugin(
-    void *handle, const std::string &path, std::string &out_name, BesqCreateFn &out_create
-) {
+bool AlgorithmLoader::resolve_plugin(void *handle, const std::string &path, BesqCreateFn &out_create) {
     auto create_fn = reinterpret_cast<BesqCreateFn>(dl_sym(handle, BESQ_PLUGIN_CREATE_SYM));
     if (!create_fn) {
         LOG_WARN("Plugin '%s' missing '%s': %s", path.c_str(), BESQ_PLUGIN_CREATE_SYM, dl_error().c_str());
@@ -274,13 +261,13 @@ std::unique_ptr<IAlgorithm> AlgorithmLoader::create(std::string_view name) const
 // ====================================================================
 
 void AlgorithmLoader::unload(const std::string &name) {
-    auto it = std::find_if(_plugins.begin(), _plugins.end(), [&](const auto &p) { return p->name == name; });
+    auto it = std::find_if(_plugins.begin(), _plugins.end(), [&](const auto &p) { return p.name == name; });
     if (it == _plugins.end())
         return;
 
     _registry.unregister_algorithm(name);
-    if ((*it)->handle)
-        dl_close((*it)->handle);
+    if (it->handle)
+        dl_close(it->handle);
     _plugins.erase(it);
 
     LOG_INFO("Unloaded algorithm plugin: %s", name.c_str());
@@ -288,9 +275,9 @@ void AlgorithmLoader::unload(const std::string &name) {
 
 void AlgorithmLoader::unload_all() {
     for (auto &p : _plugins) {
-        _registry.unregister_algorithm(p->name);
-        if (p->handle)
-            dl_close(p->handle);
+        _registry.unregister_algorithm(p.name);
+        if (p.handle)
+            dl_close(p.handle);
     }
     _plugins.clear();
 }

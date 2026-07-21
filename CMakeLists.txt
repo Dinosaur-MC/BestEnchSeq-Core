@@ -303,22 +303,19 @@ target_include_directories(besq-core PUBLIC
 target_compile_definitions(besq-core PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
-    BESQ_HAVE_GREEDY
     BESQ_HAVE_DFS
     BESQ_HAVE_ASTAR
-    BESQ_HAVE_IDASTAR
     BESQ_HAVE_HAMMING
-    BESQ_HAVE_HIERARCHICAL
-    BESQ_HAVE_PENALTY_BALANCE
-    BESQ_HAVE_DIFF_FIRST
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Link dl library for plugin loading (Linux / WSL)
+# ═══════════════════════════════════════════════════════════════════════════════
 if(UNIX AND NOT APPLE)
     target_link_libraries(besq-core PUBLIC ${CMAKE_DL_LIBS})
 endif()
 
+# ═══════════════════════════════════════════════════════════════════════════════
 # CLI executable  (guarded by BESQ_BUILD_CLI)
 # ═══════════════════════════════════════════════════════════════════════════════
 if(BESQ_BUILD_CLI)
