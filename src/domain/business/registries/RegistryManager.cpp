@@ -1,6 +1,6 @@
 #include "RegistryManager.h"
 #include "builtin/EmbeddedData.h"
-#include "interface-domain/parsers/EnchInfoParser.h"
+#include "domain/interface/parsers/EnchInfoParser.h"
 #include "orchestration/components/RawTypeAdapter.h"
 #include "common/utils/ParserUtils.hpp"
 #include "common/log/log.hpp"

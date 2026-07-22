@@ -1,8 +1,10 @@
 #pragma once
-#include "types/ItemStack.h"
+#include "../types/Item.h"
 #include <filesystem>
 #include <string>
 #include <vector>
+
+namespace algorithm {
 
 class EnchantmentRegistry;
 class EquipmentRegistry;
@@ -25,3 +27,5 @@ struct InventoryResolver {
         const EquipmentRegistry& eq_reg
     );
 };
+
+} // namespace algorithm

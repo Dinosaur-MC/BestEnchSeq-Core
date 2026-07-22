@@ -1,5 +1,5 @@
 #pragma once
-#include "algorithm-domain/types/Platform.h"
+#include "domain/algorithm/types/Platform.h"
 #include <chrono>
 #include <cstdint>
 

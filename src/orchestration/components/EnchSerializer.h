@@ -1,9 +1,9 @@
 #pragma once
 
-#include "business-domain/registries/EnchantmentRegistry.h"
-#include "business-domain/registries/EquipmentRegistry.h"
-#include "business-domain/types/Enchantment.h"
-#include "business-domain/types/Equipment.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/types/Enchantment.h"
+#include "domain/business/types/Equipment.h"
 #include <filesystem>
 #include <string>
 #include <vector>

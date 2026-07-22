@@ -1,13 +1,13 @@
 #pragma once
-#include "business-domain/types/Item.h"
-#include "business-domain/types/Enchantment.h"
-#include "business-domain/types/Solution.h"
-#include "algorithm-domain/types/ConfigTypes.h"
+#include "domain/business/types/Item.h"
+#include "domain/business/types/Enchantment.h"
+#include "domain/business/types/Solution.h"
+#include "domain/algorithm/types/ConfigTypes.h"
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include "algorithm-domain/types/AlgorithmTypes.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
 
 // Forward declarations
 class EnchantmentRegistry;

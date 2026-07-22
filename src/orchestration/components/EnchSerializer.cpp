@@ -1,10 +1,10 @@
 #include "EnchSerializer.h"
-#include "interface-domain/parsers/EnchInfoParser.h"   // EnchantmentDataPack
-#include "interface-domain/parsers/ParserUtilsDomain.hpp"
+#include "domain/interface/parsers/EnchInfoParser.h"   // EnchantmentDataPack
+#include "domain/interface/parsers/ParserUtilsDomain.hpp"
 #include "common/log/log.hpp"
 #include "common/io/CsvIO.h"
 #include "common/io/json.h"
-#include "business-domain/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
 
 #include <cstdint>
 #include <filesystem>

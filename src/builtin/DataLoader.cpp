@@ -1,6 +1,6 @@
 #include "DataLoader.h"
 #include "EmbeddedData.h"
-#include "interface-domain/parsers/EnchInfoParser.h"
+#include "domain/interface/parsers/EnchInfoParser.h"
 #include "orchestration/components/RawTypeAdapter.h"
 #include <filesystem>
 #include <stdexcept>

@@ -1,12 +1,12 @@
 #pragma once
-#include "algorithm-domain/types/Item.h"
-#include "algorithm-domain/types/Solution.h"
-#include "algorithm-domain/types/AlgorithmTypes.h"
-#include "business-domain/registries/EnchantmentRegistry.h"
-#include "business-domain/registries/EnchantmentRegistry.h"
-#include "business-domain/types/Item.h"
-#include "business-domain/types/Solution.h"
-#include "algorithm-domain/components/ItemResolver.h"
+#include "domain/algorithm/types/Item.h"
+#include "domain/algorithm/types/Solution.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/types/Item.h"
+#include "domain/business/types/Solution.h"
+#include "domain/algorithm/resolvers/ItemResolver.h"
 #include <vector>
 
 struct CompactAdapter {

@@ -1,7 +1,7 @@
 #pragma once
-#include "business-domain/registries/EnchantmentRegistry.h"
-#include "business-domain/registries/EquipmentCategoryRegistry.h"
-#include "business-domain/registries/EquipmentRegistry.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
 #include <filesystem>
 
 namespace besq::data {

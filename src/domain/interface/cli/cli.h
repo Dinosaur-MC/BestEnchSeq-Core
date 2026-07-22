@@ -1,6 +1,6 @@
 #pragma once
-#include "algorithm-domain/types/ConfigTypes.h"
-#include "business-domain/types/Item.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/business/types/Item.h"
 #include <optional>
 #include <string>
 #include <vector>

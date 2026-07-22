@@ -1,6 +1,6 @@
 #pragma once
-#include "business-domain/types/Solution.h"
-#include "business-domain/types/Item.h"
+#include "domain/business/types/Solution.h"
+#include "domain/business/types/Item.h"
 
 #include "common/io/json.h"
 
