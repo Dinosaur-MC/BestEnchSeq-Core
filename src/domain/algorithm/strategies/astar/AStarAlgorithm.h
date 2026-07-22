@@ -13,6 +13,7 @@
 #include <memory>
 #include <vector>
 
+namespace algorithm {
 class AStarStateSerializer;
 
 /// A* using Item pool + flat ID-indexed states.
@@ -111,3 +112,4 @@ class AStarAlgorithm : public IAlgorithm {
     int64_t _x_explored() const noexcept { return _explored; }
     void _x_set_explored(int64_t v) { _explored = v; }
 };
+} // namespace algorithm

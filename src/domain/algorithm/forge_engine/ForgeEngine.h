@@ -16,6 +16,7 @@
 ///
 /// All sub-operations override IForgeEngine defaults with config checks.
 /// Subclass to customize specific behaviors for modded rules.
+namespace algorithm {
 class ForgeEngine : public IForgeEngine {
 public:
     explicit ForgeEngine(ForgeConfig cfg = {}) noexcept
@@ -63,3 +64,4 @@ public:
 private:
     ForgeConfig _config;
 };
+} // namespace algorithm

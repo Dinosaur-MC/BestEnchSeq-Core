@@ -2,6 +2,7 @@
 #include "diagnostics/DiagnosticsService.h"
 #include "serialization/IAlgorithmSerializer.h"
 #include <stdexcept>
+namespace algorithm {
 #include <utility>
 
 // ─── Construction / Destruction ───
@@ -339,3 +340,5 @@ bool AlgorithmExecutor::is_serializable() const noexcept {
     auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
     return ser != nullptr;
 }
+
+} // namespace algorithm

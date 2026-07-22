@@ -12,6 +12,7 @@
 
 #include "../../diagnostics/AlgorithmDiagnostics.h"
 
+namespace algorithm {
 class DFSAlgorithm : public IAlgorithm {
   public:
     explicit DFSAlgorithm(ForgeConfig cfg = {}) noexcept : _forge_engine(std::move(cfg)) {}
@@ -84,3 +85,4 @@ class DFSAlgorithm : public IAlgorithm {
 
     SearchDiagnostics _diag;
 };
+} // namespace algorithm

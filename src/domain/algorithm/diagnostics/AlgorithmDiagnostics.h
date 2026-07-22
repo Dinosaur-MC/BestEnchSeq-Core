@@ -10,6 +10,7 @@
 /// flush() converts all fields to KV pairs and pushes them into out.
 /// Executor::_finalize() collects the KV pairs and pushes them to the
 /// global DiagnosticsService for async file persistence.
+namespace algorithm {
 struct AlgorithmDiagnostics {
     std::string algorithm_name;
     std::string status;            // "Complete", "Cancelled", etc.
@@ -46,3 +47,4 @@ struct PoolSearchDiagnostics : SearchDiagnostics {
 
     void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };
+} // namespace algorithm

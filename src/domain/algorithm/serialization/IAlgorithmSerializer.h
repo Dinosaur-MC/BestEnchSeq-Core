@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 
+namespace algorithm {
 class IAlgorithm;
 
 class IAlgorithmSerializer {
@@ -38,3 +39,4 @@ protected:
     /// Returns true on complete success, false on any failure.
     virtual bool _deserialize_state(IAlgorithm& algo, std::span<const compact_serial::AlgoSectionData> sections) const = 0;
 };
+} // namespace algorithm

@@ -27,6 +27,9 @@
 
 namespace compact_serial {
 
+// All compact types live in namespace algorithm.
+using namespace algorithm;
+
 // ── File-level header ───────────────────────────────────────────────────
 
 inline constexpr uint32_t FILE_MAGIC   = 0x51534542; // "BESQ" LE

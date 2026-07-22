@@ -1,4 +1,5 @@
 #include "AlgorithmDiagnostics.h"
+namespace algorithm {
 
 // ─── AlgorithmDiagnostics ─────────────────────────────────────────────
 //
@@ -30,3 +31,5 @@ void PoolSearchDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) co
     out.push_back({"step_pool_used",       static_cast<int64_t>(step_pool_used)});
     out.push_back({"step_pool_capacity",   static_cast<int64_t>(step_pool_capacity)});
 }
+
+} // namespace algorithm

@@ -227,7 +227,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
 // Registry-aware helpers (replace old unordered_map-based lookup functions)
 // ============================================================================
 
-ItemStack build_target(
+Item build_target(
     const TargetSpec& spec,
     const EnchantmentRegistry& ench_reg,
     const EquipmentRegistry& eq_reg)
@@ -251,7 +251,7 @@ ItemStack build_target(
         ench_set.emplace(id, s.level);
     }
 
-    return ItemStack(equip, ench_set, 0);
+    return Item(equip, ench_set, 0);
 }
 
 EnchSet build_enchset(
@@ -276,7 +276,7 @@ EnchSet build_enchset(
 // apply_config_pairs — parse --config value and apply to ForgeConfig
 // ============================================================================
 
-void apply_config_pairs(const std::string& config_pairs, ForgeConfig& cfg) {
+void apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg) {
     if (config_pairs.empty()) return;
     auto pairs = ParserUtils::split_string(config_pairs, ',');
     for (const auto& pair : pairs) {

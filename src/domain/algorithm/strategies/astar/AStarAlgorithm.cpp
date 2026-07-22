@@ -8,6 +8,7 @@
 #include <chrono>
 #include <memory>
 #include <queue>
+namespace algorithm {
 
 using namespace algorithm;
 
@@ -732,3 +733,5 @@ void AStarAlgorithm::_x_import_best_g(ByteStreamReader &r) {
         _best_g[key] = val;
     }
 }
+
+} // namespace algorithm

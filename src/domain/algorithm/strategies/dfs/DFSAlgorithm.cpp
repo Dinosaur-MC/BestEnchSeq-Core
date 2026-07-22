@@ -1,14 +1,14 @@
-#include "algorithm/strategies/dfs/DFSAlgorithm.h"
-#include "algorithm/ExecutionContext.h"
-#include "algorithm/components/SearchUtils.h"
-#include "algorithm/components/HeuristicBasic.h"
+#include "DFSAlgorithm.h"
+#include "../../ExecutionContext.h"
+#include "../../components/SearchUtils.h"
+#include "../../components/Heuristic.h"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>
 
 #include <vector>
 
-using namespace compact;
+namespace algorithm {
 
 // ─── Compact-only greedy bound ─────────────────────────────────────────────
 
@@ -239,3 +239,5 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         _stack[frame_idx].has_backtrack = true;
     }
 }
+
+} // namespace algorithm

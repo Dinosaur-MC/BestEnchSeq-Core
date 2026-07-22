@@ -27,6 +27,7 @@
 /// O(n log n) deterministic construction, no backtracking.  Produces an
 /// upper bound that often matches or beats penalty_balance, especially
 /// for ≥8 enchantments where search-based algorithms slow significantly.
+namespace algorithm {
 class HammingAlgorithm : public IAlgorithm {
 public:
     explicit HammingAlgorithm(ForgeConfig cfg = {}) noexcept
@@ -70,3 +71,4 @@ private:
     ForgeEngine _forge_engine;
     AlgorithmDiagnostics _diag;
 };
+} // namespace algorithm

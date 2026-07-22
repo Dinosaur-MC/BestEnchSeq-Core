@@ -6,17 +6,16 @@
 
 #include "besq/besq_abi.h"
 #include "besq/besq.h"
-#include "api/SolvePipeline.h"
-#include "io/json.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "types/EnchInfo.h"
-#include "types/EnchSet.h"
-#include "types/Equipment.h"
-#include "types/ItemStack.h"
-#include "types/Platform.h"
-#include "utils/ParserUtils.hpp"
+#include "SolvePipeline.h"
+#include "common/io/json.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/types/Enchantment.h"
+#include "domain/business/types/Equipment.h"
+#include "domain/business/types/Item.h"
+#include "domain/algorithm/types/Platform.h"
+#include "common/utils/ParserUtils.hpp"
 
 #include <cstdlib>
 #include <cstring>
@@ -383,7 +382,7 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
                 int32_t eq_idx = eq_reg.get_id(eq_id);
                 if (eq_idx >= 0) {
                     input.target_item =
-                        ItemStack(eq_reg.get(eq_idx), EnchSet{}, 0);
+                        Item(eq_reg.get(eq_idx), EnchSet{}, 0);
                 }
             }
 
@@ -413,11 +412,11 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         // ── Platform ──────────────────────────────────────────────────────
         std::string plat = ParserUtils::get_json_string(root, "platform");
         if (plat == "java")
-            input.forge_config.platform = MCE::Java;
+            input.forge_config.platform = algorithm::MCE::Java;
         else if (plat == "bedrock")
-            input.forge_config.platform = MCE::Bedrock;
+            input.forge_config.platform = algorithm::MCE::Bedrock;
         else
-            input.forge_config.platform = MCE::Java;
+            input.forge_config.platform = algorithm::MCE::Java;
 
         // ── Mode ──────────────────────────────────────────────────────────
         std::string mode = ParserUtils::get_json_string(root, "mode");

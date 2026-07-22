@@ -2,10 +2,10 @@
 #include "ProfileSet.h"
 #include "SolvePipeline.h"
 #include "parsers/EnchInfoParser.h"
-#include "adapters/EnchSerializer.h"
-#include "adapters/RawTypeAdapter.h"
-#include "resolvers/ItemResolver.h"
-#include "loader/AlgorithmLoader.h"
+#include "orchestration/components/EnchSerializer.h"
+#include "orchestration/components/RawTypeAdapter.h"
+#include "domain/algorithm/resolvers/ItemResolver.h"
+#include "domain/algorithm/plugin/AlgorithmLoader.h"
 
 #include <filesystem>
 #include <string>

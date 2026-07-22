@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+namespace algorithm {
 class AStarAlgorithm;
 
 class AStarStateSerializer : public IAlgorithmSerializer {
@@ -28,3 +29,4 @@ private:
     void _read_best_g(ByteStreamReader& r, AStarAlgorithm& astar) const;
     void _read_scalars(ByteStreamReader& r, AStarAlgorithm& astar) const;
 };
+} // namespace algorithm

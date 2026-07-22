@@ -1,5 +1,6 @@
 #include "ForgeEngine.h"
 #include <algorithm>
+namespace algorithm {
 
 // ─── IForgeEngine sub-operations ──────────────────────────────────────────────
 
@@ -17,10 +18,10 @@ int32_t ForgeEngine::apply_cap(int32_t raw_cost) const noexcept {
     return raw_cost > 39 ? 39 : raw_cost;
 }
 
-int32_t ForgeEngine::estimate_forge_cost(const compact::Item &target, const compact::Item &sacrifice,
-                                         const compact::EnchReg &reg) const noexcept {
+int32_t ForgeEngine::estimate_forge_cost(const Item &target, const Item &sacrifice,
+                                         const EnchReg &reg) const noexcept {
     int32_t cost = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
-    bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
+    bool sac_is_book = (sacrifice.type == ItemType::Book);
     for (const auto &e : sacrifice.enchs) {
         int32_t mult = sac_is_book ? reg[e.id].mul_b : reg[e.id].mul;
         cost += e.level * mult;
@@ -30,20 +31,20 @@ int32_t ForgeEngine::estimate_forge_cost(const compact::Item &target, const comp
 
 // ─── Forgeability check ─────────────────────────────────────────────────────
 
-bool ForgeEngine::is_forgeable(const compact::Item &a, const compact::Item &b) const noexcept {
-    return a.type == compact::ItemType::Equip || (a.type == compact::ItemType::Book && b.type == compact::ItemType::Book);
+bool ForgeEngine::is_forgeable(const Item &a, const Item &b) const noexcept {
+    return a.type == ItemType::Equip || (a.type == ItemType::Book && b.type == ItemType::Book);
 }
 
 // ─── Forge (mutating) ───────────────────────────────────────────────────────
 
-int32_t ForgeEngine::forge_into(compact::Item &target, const compact::Item &sacrifice, const compact::EnchReg &reg) const {
+int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchReg &reg) const {
     int32_t cost = 0;
 
     if (!_config.ignore_penalty_cost)
         cost += penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
 
     // Repair cost: equip + equip → +2 if target not at full durability.
-    if (target.type == compact::ItemType::Equip && sacrifice.type == compact::ItemType::Equip && !_config.ignore_repair_cost) {
+    if (target.type == ItemType::Equip && sacrifice.type == ItemType::Equip && !_config.ignore_repair_cost) {
         auto max_dur = reg.get_target_equip().max_durability;
         if (target.dur < max_dur) {
             target.dur = std::min(target.dur + sacrifice.dur + max_dur * 12 / 100, max_dur);
@@ -52,7 +53,7 @@ int32_t ForgeEngine::forge_into(compact::Item &target, const compact::Item &sacr
     }
 
     auto plat = _config.platform;
-    bool sac_is_book = (sacrifice.type == compact::ItemType::Book);
+    bool sac_is_book = (sacrifice.type == ItemType::Book);
 
     for (const auto &se : sacrifice.enchs) {
         bool conflict = false;
@@ -102,10 +103,10 @@ int32_t ForgeEngine::forge_into(compact::Item &target, const compact::Item &sacr
 
 // ─── Pure forge (cost-free, for simulate()) ──────────────────────────────────
 
-void ForgeEngine::pure_forge_into(compact::Item &target, const compact::Item &sacrifice,
-                                   const compact::EnchReg &reg) const noexcept {
+void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice,
+                                   const EnchReg &reg) const noexcept {
     // Repair: equip + equip
-    if (target.type == compact::ItemType::Equip && sacrifice.type == compact::ItemType::Equip && !_config.ignore_repair_cost) {
+    if (target.type == ItemType::Equip && sacrifice.type == ItemType::Equip && !_config.ignore_repair_cost) {
         auto max_dur = reg.get_target_equip().max_durability;
         if (target.dur < max_dur) {
             target.dur = std::min(target.dur + sacrifice.dur + max_dur * 12 / 100, max_dur);
@@ -140,9 +141,11 @@ void ForgeEngine::pure_forge_into(compact::Item &target, const compact::Item &sa
 
 // ─── Forge (non-mutating) ───────────────────────────────────────────────────
 
-std::pair<compact::Item, int32_t> ForgeEngine::forge(const compact::Item &target, const compact::Item &sacrifice,
-                                                     const compact::EnchReg &reg) const {
-    compact::Item result = target;
+std::pair<Item, int32_t> ForgeEngine::forge(const Item &target, const Item &sacrifice,
+                                                     const EnchReg &reg) const {
+    Item result = target;
     int32_t cost = forge_into(result, sacrifice, reg);
     return {std::move(result), cost};
 }
+
+} // namespace algorithm

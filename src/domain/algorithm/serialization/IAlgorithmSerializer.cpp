@@ -1,6 +1,7 @@
-#include "algorithm/serialization/IAlgorithmSerializer.h"
-#include "algorithm/IAlgorithm.h"
+#include "IAlgorithmSerializer.h"
+#include "../IAlgorithm.h"
 #include <chrono>
+namespace algorithm {
 
 using namespace compact_serial;
 
@@ -145,3 +146,5 @@ bool IAlgorithmSerializer::deserialize(IAlgorithm& algo, AlgorithmInput& out_inp
     if (r.has_more()) return false;
     return true;
 }
+
+} // namespace algorithm

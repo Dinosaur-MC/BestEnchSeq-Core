@@ -1,8 +1,10 @@
 #include "ExecutionContext.h"
-#include "algorithm/diagnostics/DiagnosticsService.h"
-#include "algorithm/diagnostics/DiagnosticsEvent.h"
+#include "diagnostics/DiagnosticsService.h"
+#include "diagnostics/DiagnosticsEvent.h"
 #include <algorithm>
 #include <mutex>
+
+namespace algorithm {
 
 ExecutionContext::ExecutionContext(size_t task_id, const char* algorithm_name) noexcept
     : _task_id(task_id), _algo_name(algorithm_name) {}
@@ -37,16 +39,16 @@ void ExecutionContext::report_progress(uint8_t pct, ProgressStatus status) {
 }
 
 namespace {
-int32_t sum_step_costs(const std::vector<compact::EnchStep>& steps) noexcept {
+int32_t sum_step_costs(const std::vector<EnchStep>& steps) noexcept {
     int32_t total = 0;
     for (const auto& s : steps) total += s.cost;
     return total;
 }
 } // anonymous namespace
 
-void ExecutionContext::report_solution(const std::vector<compact::EnchStep>& steps) {
-    auto sol = std::make_shared<const compact::EnchSolution>(
-        compact::EnchSolution{steps, sum_step_costs(steps)});
+void ExecutionContext::report_solution(const std::vector<EnchStep>& steps) {
+    auto sol = std::make_shared<const EnchSolution>(
+        EnchSolution{steps, sum_step_costs(steps)});
 
     append_solution(sol);
     DiagnosticsService::instance().push(
@@ -54,10 +56,10 @@ void ExecutionContext::report_solution(const std::vector<compact::EnchStep>& ste
         DiagnosticsEvent::SolutionPayload{std::move(sol)});
 }
 
-void ExecutionContext::report_solution(std::vector<compact::EnchStep>&& steps) {
+void ExecutionContext::report_solution(std::vector<EnchStep>&& steps) {
     int32_t total_cost = sum_step_costs(steps);
-    auto sol = std::make_shared<const compact::EnchSolution>(
-        compact::EnchSolution{std::move(steps), total_cost});  // zero copy
+    auto sol = std::make_shared<const EnchSolution>(
+        EnchSolution{std::move(steps), total_cost});  // zero copy
 
     append_solution(sol);
     DiagnosticsService::instance().push(
@@ -65,7 +67,7 @@ void ExecutionContext::report_solution(std::vector<compact::EnchStep>&& steps) {
         DiagnosticsEvent::SolutionPayload{std::move(sol)});
 }
 
-void ExecutionContext::append_solution(std::shared_ptr<const compact::EnchSolution> solution) {
+void ExecutionContext::append_solution(std::shared_ptr<const EnchSolution> solution) {
     auto cost = solution->total_cost;
     std::lock_guard lock(_sol_mtx);
 
@@ -83,11 +85,13 @@ void ExecutionContext::append_solution(std::shared_ptr<const compact::EnchSoluti
     }
 }
 
-std::vector<compact::EnchSolution> ExecutionContext::get_solutions() const {
+std::vector<EnchSolution> ExecutionContext::get_solutions() const {
     std::lock_guard lock(_sol_mtx);
-    std::vector<compact::EnchSolution> result;
+    std::vector<EnchSolution> result;
     result.reserve(_solutions.size());
     for (const auto& sol : _solutions)
         result.push_back(*sol);  // single copy when output is actually requested
     return result;
 }
+
+} // namespace algorithm

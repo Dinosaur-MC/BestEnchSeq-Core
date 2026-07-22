@@ -2,6 +2,7 @@
 #include "common/log/log.hpp"
 #include <algorithm>
 #include <sstream>
+namespace algorithm {
 
 // ─── Singleton (Meyer's) ────────────────────────────────────────────────────
 
@@ -147,3 +148,5 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
     if (processed_ptr)
         processed_ptr->fetch_add(1, std::memory_order_release);
 }
+
+} // namespace algorithm

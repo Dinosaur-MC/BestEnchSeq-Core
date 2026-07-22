@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <numeric>
 #include <vector>
+namespace algorithm {
 
 using namespace algorithm;
 
@@ -233,3 +234,5 @@ bool HammingAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
     if (meets_target(input.items[0], input.target)) return true;
     return input.items.size() > 1;
 }
+
+} // namespace algorithm

@@ -1,4 +1,5 @@
-#include "algorithm/strategies/astar/AStarDiagnostics.h"
+#include "AStarDiagnostics.h"
+namespace algorithm {
 
 void AStarDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const {
     PoolSearchDiagnostics::flush(out);
@@ -11,3 +12,5 @@ void AStarDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const {
     out.push_back({"pruned_by_caps",       pruned_by_caps});
     out.push_back({"estimated_peak_bytes", estimated_peak_bytes});
 }
+
+} // namespace algorithm

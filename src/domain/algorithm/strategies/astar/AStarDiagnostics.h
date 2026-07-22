@@ -4,6 +4,7 @@
 #include <cstddef>
 
 /// AStar-specific diagnostics, extending the pool-based search hierarchy.
+namespace algorithm {
 struct AStarDiagnostics : PoolSearchDiagnostics {
     int64_t  explored_count       = 0;
     size_t   best_g_entries       = 0;
@@ -16,3 +17,4 @@ struct AStarDiagnostics : PoolSearchDiagnostics {
 
     void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };
+} // namespace algorithm

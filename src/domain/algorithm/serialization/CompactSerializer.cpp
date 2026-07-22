@@ -1,8 +1,8 @@
 #include "CompactSerializer.h"
 #include <cstring>
 #include <chrono>
-
 namespace compact_serial {
+
 
 // ── CRC-56 helper ───────────────────────────────────────────────────────
 //

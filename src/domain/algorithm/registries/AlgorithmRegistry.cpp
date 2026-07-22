@@ -1,6 +1,8 @@
 #include "AlgorithmRegistry.h"
 #include <mutex>
 
+namespace algorithm {
+
 void AlgorithmRegistry::register_algorithm(std::string_view name, AlgorithmFactory factory) {
     std::unique_lock lock(_mutex);
     _registry[std::string(name)] = std::move(factory);
@@ -45,3 +47,5 @@ std::unique_ptr<IAlgorithm> AlgorithmRegistry::create(std::string_view name) con
     return it->second();
 }
 
+
+} // namespace algorithm

@@ -1,5 +1,6 @@
 #include "AStarMemoryBudget.h"
 #include <algorithm>
+namespace algorithm {
 
 // Per-entry byte costs (adjusted for real platform)
 namespace {
@@ -51,3 +52,5 @@ AStarMemoryBudget AStarMemoryBudget::auto_detect(int32_t num_items, int64_t defa
     if (mb <= 0) mb = 2048;
     return from_memory_mb(mb, num_items);
 }
+
+} // namespace algorithm

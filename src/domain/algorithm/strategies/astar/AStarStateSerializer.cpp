@@ -1,6 +1,7 @@
 #include "AStarStateSerializer.h"
 #include "AStarAlgorithm.h"
 #include "../../serialization/CompactSerializer.h"
+namespace algorithm {
 
 using namespace compact_serial;
 
@@ -169,3 +170,5 @@ void AStarStateSerializer::_read_scalars(ByteStreamReader& r, AStarAlgorithm& as
     astar._solutions_found    = r.i32();
     astar._x_set_explored(r.i64());
 }
+
+} // namespace algorithm
