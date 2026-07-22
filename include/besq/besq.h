@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "api/SolvePipeline.h"
+#include "interface-domain/api/SolvePipeline.h"
 
 // ─── BesqContext (pImpl) ────────────────────────────────────────────
 

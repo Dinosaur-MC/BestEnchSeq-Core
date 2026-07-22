@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 
+namespace algorithm {
 class ExecutionContext;
 class IAlgorithmSerializer;
 
@@ -45,3 +46,5 @@ class IAlgorithm {
     virtual IAlgorithmSerializer *get_serializer() noexcept { return nullptr; }
     virtual const IAlgorithmSerializer *get_serializer() const noexcept { return nullptr; }
 };
+
+} // namespace algorithm

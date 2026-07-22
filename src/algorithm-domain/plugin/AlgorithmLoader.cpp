@@ -66,6 +66,8 @@ std::string dl_error() {
 
 } // anonymous namespace
 
+namespace algorithm {
+
 // ====================================================================
 // Lifecycle
 // ====================================================================
@@ -225,3 +227,4 @@ void AlgorithmLoader::unload_all() {
     }
     _plugins.clear();
 }
+} // namespace algorithm

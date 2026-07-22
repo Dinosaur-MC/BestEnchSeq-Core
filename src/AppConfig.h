@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/EnvUtil.hpp"
+#include "common/utils/EnvUtil.hpp"
 #include <cstdint>
 #include <string>
 

@@ -1,7 +1,7 @@
-#include "data/ItemProperties.h"
-#include "data/EmbeddedData.h"
-#include "io/json.h"
-#include "utils/ParserUtils.hpp"
+#include "ItemProperties.h"
+#include "EmbeddedData.h"
+#include "common/io/json.h"
+#include "common/utils/ParserUtils.hpp"
 
 #include <filesystem>
 #include <string>
