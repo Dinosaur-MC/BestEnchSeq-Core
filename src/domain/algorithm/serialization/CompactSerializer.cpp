@@ -439,74 +439,67 @@ EnchInfo read_compact_ench_info(ByteStreamReader& r) {
 
 // ── EnchReg ─────────────────────────────────────────────────────
 
-// void write(ByteStreamWriter& w, const EnchReg& reg) {
-//     // _registry
-//     write(w, reg._registry);
+void write(ByteStreamWriter& w, const EnchReg& reg) {
+    // _ench_infos (EnchInfo)
+    w.u32(static_cast<uint32_t>(reg._ench_infos.size()));
+    for (const auto& ci : reg._ench_infos)
+        write(w, ci);
 
-//     // _ench_infos (EnchInfo)
-//     w.u32(static_cast<uint32_t>(reg._ench_infos.size()));
-//     for (const auto& ci : reg._ench_infos)
-//         write(w, ci);
+    // _target_equip
+    write(w, reg._target_equip);
 
-//     // _target_equip
-//     write(w, reg._target_equip);
+    // _mask_size
+    w.u64(static_cast<uint64_t>(reg._mask_size));
 
-//     // _mask_size
-//     w.u64(static_cast<uint64_t>(reg._mask_size));
+    // _conflict_matrix
+    w.u32(static_cast<uint32_t>(reg._conflict_matrix.size()));
+    w.bytes(reg._conflict_matrix.data(), reg._conflict_matrix.size());
+}
 
-//     // _conflict_matrix
-//     w.u32(static_cast<uint32_t>(reg._conflict_matrix.size()));
-//     w.bytes(reg._conflict_matrix.data(), reg._conflict_matrix.size());
-// }
+EnchReg read_ench_reg(ByteStreamReader& r) {
+    EnchReg reg;
 
-// EnchReg read_ench_reg(ByteStreamReader& r) {
-//     EnchReg reg;
+     // _ench_infos
+     {
+         uint32_t n = r.u32();
+         if (n > MAX_SERIAL_ENCHES) { r.set_fail(); return reg; }
+         reg._ench_infos.resize(n);
+         for (uint32_t i = 0; i < n; ++i) {
+             reg._ench_infos[i] = read_compact_ench_info(r);
+             if (!r.ok()) break;
+         }
+     }
+     if (!r.ok()) return reg;
 
-//     // _registry
-//     reg._registry = read_enchantment_registry(r);
-//     if (!r.ok()) return reg;
+     // _target_equip
+     reg._target_equip = read_equipment(r);
+     if (!r.ok()) return reg;
 
-//     // _ench_infos
-//     {
-//         uint32_t n = r.u32();
-//         if (n > MAX_SERIAL_ENCHES) { r.set_fail(); return reg; }
-//         reg._ench_infos.resize(n);
-//         for (uint32_t i = 0; i < n; ++i) {
-//             reg._ench_infos[i] = read_compact_ench_info(r);
-//             if (!r.ok()) break;
-//         }
-//     }
-//     if (!r.ok()) return reg;
+     // _mask_size
+     reg._mask_size = static_cast<size_t>(r.u64());
+     if (!r.ok()) return reg;
 
-//     // _target_equip
-//     reg._target_equip = read_equipment(r);
-//     if (!r.ok()) return reg;
+     // _conflict_matrix — verify N×N shape vs _ench_infos
+     {
+         uint32_t n = r.u32();
+         size_t dim = reg._ench_infos.size();
+         if (dim == 0) {
+             // No enchantments — conflict matrix must also be empty
+             if (n != 0) { r.set_fail(); return reg; }
+         } else {
+             if (dim > SIZE_MAX / dim) { r.set_fail(); return reg; }
+             size_t expected = dim * dim;
+             if (static_cast<size_t>(n) != expected) { r.set_fail(); return reg; }
+             reg._conflict_matrix.resize(n);
+             for (uint32_t i = 0; i < n; ++i) {
+                 reg._conflict_matrix[i] = static_cast<char>(r.u8());
+                 if (!r.ok()) break;
+             }
+         }
+     }
 
-//     // _mask_size
-//     reg._mask_size = static_cast<size_t>(r.u64());
-//     if (!r.ok()) return reg;
-
-//     // _conflict_matrix — verify N×N shape vs _ench_infos
-//     {
-//         uint32_t n = r.u32();
-//         size_t dim = reg._ench_infos.size();
-//         if (dim == 0) {
-//             // No enchantments — conflict matrix must also be empty
-//             if (n != 0) { r.set_fail(); return reg; }
-//         } else {
-//             if (dim > SIZE_MAX / dim) { r.set_fail(); return reg; }
-//             size_t expected = dim * dim;
-//             if (static_cast<size_t>(n) != expected) { r.set_fail(); return reg; }
-//             reg._conflict_matrix.resize(n);
-//             for (uint32_t i = 0; i < n; ++i) {
-//                 reg._conflict_matrix[i] = static_cast<char>(r.u8());
-//                 if (!r.ok()) break;
-//             }
-//         }
-//     }
-
-//     return reg;
-// }
+     return reg;
+ }
 
 // ── AlgorithmInput ────────────────────────────────────────────────────────
 
