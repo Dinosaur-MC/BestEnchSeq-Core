@@ -18,7 +18,7 @@
 /// Generic (must specify level):
 ///   besq::log::printf(LogLevel::Warn, "x = %d", x);
 
-#include "types/LogTypes.h"
+#include "LogTypes.h"
 #include <string>
 #include <utility>
 
@@ -55,7 +55,7 @@ inline void printf(LogLevel, const char*, Args&&...) {}
 
 #else // !BESQ_DISABLE_LOGGER
 
-#include "log/Logger.h"
+#include "Logger.h"
 
 namespace besq {
 namespace log {

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "io/json.h"
+#include "common/io/json.h"
 
 namespace ParserUtils {
 
