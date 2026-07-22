@@ -15,9 +15,9 @@ set(BESQ_ALGORITHM_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/registries/EnchReg.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/plugin/AlgorithmLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/types/Enchantment.cpp
-    # ── Resolvers (pending API redesign — still uses old business types) ──
-    # ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/ItemResolver.cpp
-    # ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/InventoryResolver.cpp
+    # ── Resolvers ──
+    ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/ItemResolver.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/InventoryResolver.cpp
 )
 
 # ── Strategy auto-discovery ────────────────────────────────────────────────

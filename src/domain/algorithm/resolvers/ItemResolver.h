@@ -1,6 +1,5 @@
 #pragma once
 #include "../types/Item.h"
-#include "../registries/EnchReg.h"
 #include <vector>
 
 namespace algorithm {
@@ -27,8 +26,7 @@ struct ItemResolver {
     static ResolvedInput resolve(
         const Item& target_item,
         const EnchSet& source_ench,
-        const EnchSet& target_ench,
-        const EnchReg& ench_reg
+        const EnchSet& target_ench
     );
 };
 

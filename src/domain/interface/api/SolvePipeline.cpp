@@ -59,7 +59,7 @@ std::string SolveResult::to_json_raw() const {
 // SolvePipeline stage methods
 // ====================================================================
 
-ResolvedInput detail::SolvePipeline::resolve(
+algorithm::ResolvedInput detail::SolvePipeline::resolve(
     const SolveInput& input,
     const EnchantmentRegistry& ench_reg,
     const EquipmentRegistry& /*eq_reg*/)
@@ -69,13 +69,12 @@ ResolvedInput detail::SolvePipeline::resolve(
         return ItemResolver::resolve(
             input.target_item,
             input.source_enchantments,
-            input.target_item.enchantments,
-            ench_reg
+            input.target_item.enchantments
         );
     }
 
     // Inventory mode: extra_items have already been resolved externally
-    ResolvedInput resolved{
+    algorithm::ResolvedInput resolved{
         input.target_item,
         input.source_enchantments,
         input.target_item.enchantments,
@@ -84,17 +83,17 @@ ResolvedInput detail::SolvePipeline::resolve(
     return resolved;
 }
 
-AlgorithmInput detail::SolvePipeline::apply(
-    const ResolvedInput& resolved,
+algorithm::AlgorithmInput detail::SolvePipeline::apply(
+    const algorithm::ResolvedInput& resolved,
     const EnchantmentRegistry& ench_reg)
 {
     return CompactAdapter::apply(resolved, ench_reg);
 }
 
 detail::ExecuteResult detail::SolvePipeline::execute(
-    AlgorithmInput& algo_input,
+    algorithm::AlgorithmInput& algo_input,
     const std::string& algorithm,
-    const AlgorithmLoader& loader)
+    const algorithm::AlgorithmLoader& loader)
 {
     auto algo = loader.create(algorithm);
     if (!algo) {
@@ -110,7 +109,7 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     // Check mode support
     if (!(algo->supported_mode() & algo_input.mode)) {
         std::string mode_str =
-            (algo_input.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
+            (algo_input.mode == algorithm::AlgorithmMode::inventory) ? "inventory" : "direct";
         throw std::runtime_error("Algorithm '" + algorithm +
             "' does not support '" + mode_str + "' mode");
     }
@@ -119,14 +118,14 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     exec_result.algorithm_name = algorithm;
 
     // Feasibility pre-check (meaningful for inventory mode)
-    if (algo_input.mode == AlgorithmMode::inventory && !algo->simulate(algo_input)) {
+    if (algo_input.mode == algorithm::AlgorithmMode::inventory && !algo->simulate(algo_input)) {
         LOG_INFO("simulate: target not reachable from given items");
         return exec_result;
     }
 
     auto start_time = std::chrono::steady_clock::now();
 
-    AlgorithmExecutor executor(std::move(algo));
+    algorithm::AlgorithmExecutor executor(std::move(algo));
     executor.start(algo_input);
     executor.wait();
 
@@ -139,9 +138,9 @@ detail::ExecuteResult detail::SolvePipeline::execute(
 }
 
 SolveResult detail::SolvePipeline::recall(
-    const AlgorithmOutput& output,
-    const AlgorithmInput& algo_input,
-    const ResolvedInput& resolved)
+    const algorithm::AlgorithmOutput& output,
+    const algorithm::AlgorithmInput& algo_input,
+    const algorithm::ResolvedInput& resolved)
 {
     SolveResult result;
     result.algorithm_used = output.algorithm_name;
@@ -160,7 +159,7 @@ SolveResult detail::SolvePipeline::recall(
 
 SolveResult detail::SolvePipeline::run(
     const SolveInput& input,
-    const AlgorithmLoader& loader,
+    const algorithm::AlgorithmLoader& loader,
     const EnchantmentRegistry& ench_reg,
     const EquipmentRegistry& eq_reg,
     const EquipmentCategoryRegistry& /*cat_reg*/)
@@ -175,8 +174,8 @@ SolveResult detail::SolvePipeline::run(
     algo_input.config = input.forge_config;
     algo_input.search = input.search_config;
     algo_input.mode = input.is_inventory_mode
-        ? AlgorithmMode::inventory
-        : AlgorithmMode::direct;
+        ? algorithm::AlgorithmMode::inventory
+        : algorithm::AlgorithmMode::direct;
 
     // Stage 3: Execute compact algorithm
     auto exec_result = execute(algo_input, input.algorithm, loader);
@@ -193,7 +192,7 @@ SolveResult detail::SolvePipeline::run(
     }
 
     // Flush diagnostics
-    DiagnosticsService::instance().flush();
+    algorithm::DiagnosticsService::instance().flush();
 
     return result;
 }

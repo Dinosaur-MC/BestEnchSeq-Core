@@ -7,7 +7,7 @@
 
 algorithm::AlgorithmInput CompactAdapter::apply(
     const algorithm::ResolvedInput& resolved,
-    const algorithm::EnchReg& global_registry)
+    const EnchantmentRegistry& global_registry)
 {
     return {};
 }

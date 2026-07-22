@@ -3,7 +3,6 @@
 #include "domain/algorithm/types/Solution.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
 #include "domain/algorithm/resolvers/ItemResolver.h"
@@ -14,7 +13,7 @@ struct CompactAdapter {
     /// Config is NOT handled here -- flows directly from CLI.
     static algorithm::AlgorithmInput apply(
         const algorithm::ResolvedInput& resolved,
-        const algorithm::EnchReg& global_registry
+        const EnchantmentRegistry& global_registry
     );
 
     static std::vector<Solution> recall(

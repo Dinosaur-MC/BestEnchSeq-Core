@@ -1,30 +1,36 @@
 #pragma once
 #include "../types/Item.h"
-#include <filesystem>
-#include <string>
+#include "../types/Solution.h"
+#include "../forge_engine/IForgeEngine.h"
 #include <vector>
 
 namespace algorithm {
 
-class EnchantmentRegistry;
-class EquipmentRegistry;
-
-/// Result of inventory parsing -- resolved items ready for use.
+/// Input to inventory-mode resolution: desired target and available items.
 struct InventoryInput {
-    ItemCollection items;               // sorted by priority
-    std::vector<std::string> warnings;  // unknown enchantments/equipment
+    Item target;                    ///< Desired final item (equipment + enchantments)
+    ItemCollection available_items; ///< Books and equipment to work with
+    std::vector<int32_t> priorities;///< Priority per available item (lower = preferred)
 };
 
-/// Parse an inventory JSON file and resolve all string IDs
-/// to registry int32_t IDs.
+/// Result of inventory resolution.
+struct InventoryResult {
+    bool reachable = false;     ///< Whether target is reachable from available items
+    ItemCollection used_items;  ///< Recommended subset to use (priority-sorted)
+};
+
+/// Inventory-mode feasibility analyzer.
 ///
-/// Handles both book and equipment items, validates existence
-/// against registries, and sorts by priority.
+/// Given a target item and a pool of available items with priorities,
+/// determines whether the target is reachable via forge operations and
+/// returns the recommended subset of items to use.  Operates purely on
+/// algorithm domain types — all ID resolution and JSON parsing must happen
+/// before calling this.
 struct InventoryResolver {
-    static InventoryInput resolve(
-        const std::filesystem::path& path,
-        const EnchantmentRegistry& ench_reg,
-        const EquipmentRegistry& eq_reg
+    static InventoryResult resolve(
+        const Item& target,
+        const ItemCollection& available_items,
+        const std::vector<int32_t>& priorities
     );
 };
 
