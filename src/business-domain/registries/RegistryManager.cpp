@@ -1,9 +1,9 @@
-#include "registries/RegistryManager.h"
-#include "data/EmbeddedData.h"
-#include "parsers/EnchInfoParser.h"
-#include "adapters/RawTypeAdapter.h"
-#include "utils/ParserUtils.hpp"
-#include "log/log.hpp"
+#include "RegistryManager.h"
+#include "builtin/EmbeddedData.h"
+#include "interface-domain/parsers/EnchInfoParser.h"
+#include "orchestration/components/RawTypeAdapter.h"
+#include "common/utils/ParserUtils.hpp"
+#include "common/log/log.hpp"
 #include <filesystem>
 #include <stdexcept>
 

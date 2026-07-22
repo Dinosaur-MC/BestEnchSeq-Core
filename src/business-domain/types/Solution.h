@@ -1,12 +1,11 @@
 #pragma once
-#include "ItemStack.h"
+#include "Item.h"
+#include "common/CommonTypes.h"
 
-#include "types/Platform.h"
-
-struct EnchSolution {
+struct Solution {
     struct EnchStep {
-        ItemStack item_a;
-        ItemStack item_b;
+        Item item_a;
+        Item item_b;
         int32_t exp_level_cost;
         int32_t exp_cost;
     };
@@ -20,7 +19,7 @@ struct EnchSolution {
 
     MCE platform;
     EnchSet original_ench;
-    ItemStack target_item;
+    Item target_item;
     ItemCollection available_items;
     int32_t total_exp_level_cost;
     int32_t total_exp_cost;
@@ -32,11 +31,11 @@ struct EnchSolution {
     int32_t get_peak_level_cost() const;
     int32_t get_peak_exp_cost() const;
 
-    static EnchSolution make(
-        MCE platform, const EnchSet &original_ench, const ItemStack &target_item,
+    static Solution make(
+        MCE platform, const EnchSet &original_ench, const Item &target_item,
         const ItemCollection &available_items, const std::vector<EnchStep> &steps, bool is_valid = true,
         MetaData meta_data = MetaData()
     );
 };
 
-using EnchStepList = std::vector<EnchSolution::EnchStep>;
+using EnchStepList = std::vector<Solution::EnchStep>;

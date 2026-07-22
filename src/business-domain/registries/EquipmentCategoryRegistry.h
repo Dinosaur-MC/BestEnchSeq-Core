@@ -1,5 +1,5 @@
 #pragma once
-#include "types/EquipmentCategory.h"
+#include "../types/Equipment.h"
 
 #include <string>
 #include <unordered_map>

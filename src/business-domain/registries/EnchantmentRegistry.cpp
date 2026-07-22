@@ -1,4 +1,4 @@
-#include "registries/EnchantmentRegistry.h"
+#include "EnchantmentRegistry.h"
 
 #include <stdexcept>
 

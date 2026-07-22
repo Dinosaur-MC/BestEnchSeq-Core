@@ -1,21 +1,21 @@
-#include "EnchSolution.h"
+#include "Solution.h"
 
-#include "../utils/ExpCalculator.hpp"
+#include "common/utils/ExpCalculator.hpp"
 
-bool EnchSolution::is_feasible() const { return is_success && steps.size() > 0; }
-int32_t EnchSolution::get_peak_level_cost() const {
+bool Solution::is_feasible() const { return is_success && steps.size() > 0; }
+int32_t Solution::get_peak_level_cost() const {
     if (!is_feasible() || max_cost_step_index >= steps.size() || max_cost_step_index < 0)
         return 0;
     return steps[max_cost_step_index].exp_level_cost;
 }
-int32_t EnchSolution::get_peak_exp_cost() const {
+int32_t Solution::get_peak_exp_cost() const {
     if (!is_feasible() || max_cost_step_index >= steps.size() || max_cost_step_index < 0)
         return 0;
     return steps[max_cost_step_index].exp_cost;
 }
 
-EnchSolution EnchSolution::make(
-    MCE platform, const EnchSet &original_ench, const ItemStack &target_item,
+Solution Solution::make(
+    MCE platform, const EnchSet &original_ench, const Item &target_item,
     const ItemCollection &available_items, const EnchStepList &steps, bool is_valid, MetaData meta_data
 ) {
     int32_t total_exp_level_cost = 0;
@@ -27,7 +27,7 @@ EnchSolution EnchSolution::make(
         if (steps[i].exp_level_cost > steps[max_cost_step_index].exp_level_cost)
             max_cost_step_index = i;
     }
-    return EnchSolution({
+    return Solution({
         meta_data,
         platform,
         original_ench,

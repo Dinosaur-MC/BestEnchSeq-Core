@@ -9,6 +9,8 @@
 #include <string_view>
 #include <vector>
 
+namespace algorithm {
+
 /// Operation mode: direct (given source enchants + target) or inventory
 /// (using items parsed from an inventory file).  Bitmask — an algorithm
 /// may support one or both modes.
@@ -101,3 +103,5 @@ enum class AlgorithmState {
     Failed,
     Cancelled,
 };
+
+}; // namespace algorithm

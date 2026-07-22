@@ -3,7 +3,7 @@
 #include <chrono>
 #include <cstdint>
 
-using namespace algorithm;
+namespace algorithm {
 
 // ─── Search configuration ─────────────────────────────────────────
 struct SearchConfig {
@@ -21,3 +21,5 @@ struct ForgeConfig {
     bool ignore_cost_cap     = false;
     MCE platform             = MCE::Java;
 };
+
+}; // namespace algorithm

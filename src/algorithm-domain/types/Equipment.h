@@ -3,6 +3,8 @@
 #include <string>
 #include <unordered_set>
 
+namespace algorithm {
+
 struct Equipment {
     int32_t id;
     int32_t category_id;
@@ -14,3 +16,5 @@ struct Equipment {
 
     bool operator==(const Equipment &other) const;
 };
+
+} // namespace algorithm

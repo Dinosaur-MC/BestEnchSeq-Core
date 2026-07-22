@@ -1,5 +1,5 @@
 #pragma once
-#include "types/EnchInfo.h"
+#include "../types/Enchantment.h"
 
 #include <cstdint>
 #include <string>

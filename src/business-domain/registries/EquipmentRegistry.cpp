@@ -1,4 +1,4 @@
-#include "registries/EquipmentRegistry.h"
+#include "EquipmentRegistry.h"
 #include <stdexcept>
 
 void EquipmentRegistry::reset_for_testing() {

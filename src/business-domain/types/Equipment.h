@@ -11,8 +11,8 @@ struct EquipmentCategory {
     int32_t id;
     std::string name_id;
 
-    bool operator==(const EquipmentCategory& other) const { return id == other.id; }
-    bool operator!=(const EquipmentCategory& other) const { return id != other.id; }
+    bool operator==(const EquipmentCategory &other) const { return id == other.id; }
+    bool operator!=(const EquipmentCategory &other) const { return id != other.id; }
 
     // ── Builtin category IDs (stable across versions) ──
     static constexpr int32_t ID_ANY         = 0;
@@ -49,10 +49,24 @@ struct EquipmentCategory {
     static constexpr std::string_view NAME_FISHING_ROD = "fishing_rod";
 };
 
-namespace std {
-template <> struct hash<EquipmentCategory> {
-    size_t operator()(const EquipmentCategory& cat) const noexcept {
-        return std::hash<int32_t>()(cat.id);
-    }
+template <> struct std::hash<EquipmentCategory> {
+    size_t operator()(const EquipmentCategory &cat) const noexcept { return std::hash<int32_t>()(cat.id); }
 };
-}
+
+// ─── Equipment ───
+//
+// Represents a specific piece of equipment (e.g. "minecraft:diamond_sword").
+// Each equipment has a category_id referencing EquipmentCategoryRegistry.
+// Equipment instances are managed by EquipmentRegistry (vector index = id).
+struct Equipment {
+    std::string name_id;
+    std::string name;
+    int32_t category_id;
+    int32_t max_durability;
+
+    bool operator==(const Equipment &other) const;
+};
+
+template <> struct std::hash<Equipment> {
+    size_t operator()(const Equipment &eq) const noexcept { return std::hash<std::string>()(eq.name_id); }
+};

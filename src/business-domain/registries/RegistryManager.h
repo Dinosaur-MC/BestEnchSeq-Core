@@ -1,7 +1,7 @@
 #pragma once
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "registries/EquipmentRegistry.h"
+#include "../registries/EnchantmentRegistry.h"
+#include "../registries/EquipmentCategoryRegistry.h"
+#include "../registries/EquipmentRegistry.h"
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -17,7 +17,7 @@
 ///   if (config.registry_dir) mgr.scan_registry_dir(*config.registry_dir);
 ///   mgr.load_and_resolve(config.registries, cat_reg, eq_reg, ench_reg);
 class RegistryManager {
-public:
+  public:
     /// Register the built-in data (embedded vanilla.json, name="Vanilla").
     void add_builtin();
 
@@ -26,7 +26,7 @@ public:
     /// (auto-detects Native JSON / Native CSV / MC Official format).
     /// Non-loadable entries are silently skipped (logged at DEBUG level).
     /// Throws std::runtime_error if <dir> does not exist or is not a directory.
-    void scan_registry_dir(const std::filesystem::path& dir);
+    void scan_registry_dir(const std::filesystem::path &dir);
 
     /// Load selected/discovered registries and resolve into domain registries.
     ///
@@ -38,16 +38,14 @@ public:
     /// loaded directly as a new source (name from filename stem or dir name).
     /// Otherwise the value is matched by name against already-discovered sources.
     void load_and_resolve(
-        std::optional<std::string> filter,
-        EquipmentCategoryRegistry& cat_reg,
-        EquipmentRegistry& eq_reg,
-        EnchantmentRegistry& ench_reg
+        std::optional<std::string> filter, EquipmentCategoryRegistry &cat_reg, EquipmentRegistry &eq_reg,
+        EnchantmentRegistry &ench_reg
     );
 
-private:
+  private:
     struct Source {
         std::string name;
-        std::optional<std::filesystem::path> path;  // nullopt = builtin
+        std::optional<std::filesystem::path> path; // nullopt = builtin
     };
     std::vector<Source> sources_;
     bool builtin_registered_ = false;

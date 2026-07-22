@@ -1,13 +1,14 @@
 #pragma once
-#include "types/ItemStack.h"
+#include "../types/Item.h"
+#include "../registries/EnchReg.h"
 #include <vector>
 
-class EnchantmentRegistry;
+namespace algorithm {
 
 /// Domain-level resolved input — output of ItemResolver,
 /// consumed by CompactAdapter.
 struct ResolvedInput {
-    ItemStack target_item;
+    Item target_item;
     EnchSet source_ench;
     EnchSet target_ench;
     ItemCollection available_items;
@@ -24,9 +25,11 @@ struct ResolvedInput {
 /// handled later by CompactAdapter.
 struct ItemResolver {
     static ResolvedInput resolve(
-        const ItemStack& target_item,
+        const Item& target_item,
         const EnchSet& source_ench,
         const EnchSet& target_ench,
-        const EnchantmentRegistry& ench_reg
+        const EnchReg& ench_reg
     );
 };
+
+}; // namespace algorithm

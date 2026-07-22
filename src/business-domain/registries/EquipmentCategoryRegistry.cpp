@@ -1,4 +1,4 @@
-#include "registries/EquipmentCategoryRegistry.h"
+#include "EquipmentCategoryRegistry.h"
 #include <stdexcept>
 
 void EquipmentCategoryRegistry::reset() {
