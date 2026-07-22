@@ -1,6 +1,6 @@
 #include "besq/besq.h"
-#include "api/ProfileSet.h"
-#include "api/SolvePipeline.h"
+#include "ProfileSet.h"
+#include "SolvePipeline.h"
 #include "parsers/EnchInfoParser.h"
 #include "adapters/EnchSerializer.h"
 #include "adapters/RawTypeAdapter.h"

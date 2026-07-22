@@ -1,10 +1,10 @@
-#include "parsers/EnchInfoParser.h"
-#include "parsers/ParserUtilsDomain.hpp"
-#include "data/ItemProperties.h"
-#include "utils/ParserUtils.hpp"
-#include "log/log.hpp"
-#include "io/CsvIO.h"
-#include "io/json.h"
+#include "EnchInfoParser.h"
+#include "ParserUtilsDomain.hpp"
+#include "builtin/ItemProperties.h"
+#include "common/utils/ParserUtils.hpp"
+#include "common/log/log.hpp"
+#include "common/io/CsvIO.h"
+#include "common/io/json.h"
 
 #include <cctype>
 #include <cmath>

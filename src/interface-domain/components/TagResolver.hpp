@@ -8,8 +8,8 @@
 #include <variant>
 #include <vector>
 
-#include "io/json.h"
-#include "utils/ParserUtils.hpp"
+#include "common/io/json.h"
+#include "common/utils/ParserUtils.hpp"
 
 // ---------------------------------------------------------------------------
 // Value types for raw (unexpanded) tag entries

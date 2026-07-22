@@ -1,11 +1,11 @@
 #include "cli.h"
-#include "parsers/CLIParser.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "types/Equipment.h"
+#include "../parsers/CLIParser.h"
+#include "business-domain/registries/EnchantmentRegistry.h"
+#include "business-domain/registries/EquipmentRegistry.h"
+#include "business-domain/types/Equipment.h"
 #include "BuildConfig.h"
-#include "utils/ParserUtils.hpp"
-#include "log/log.hpp"
+#include "common/utils/ParserUtils.hpp"
+#include "common/log/log.hpp"
 #include <iostream>
 #include <stdexcept>
 

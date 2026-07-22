@@ -1,5 +1,5 @@
-#include "parsers/CLIParser.h"
-#include "log/log.hpp"
+#include "CLIParser.h"
+#include "common/log/log.hpp"
 
 #include <cstring>
 #include <stdexcept>

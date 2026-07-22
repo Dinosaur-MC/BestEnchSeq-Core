@@ -1,10 +1,10 @@
 #pragma once
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "types/EnchInfo.h"
-#include "types/Equipment.h"
-#include "types/RawTypes.h"
+#include "business-domain/registries/EnchantmentRegistry.h"
+#include "business-domain/registries/EquipmentRegistry.h"
+#include "business-domain/registries/EquipmentCategoryRegistry.h"
+#include "business-domain/types/Enchantment.h"
+#include "business-domain/types/Equipment.h"
+#include "interface-domain/types/RawTypes.h"
 #include <vector>
 
 /// Converts raw (string-based) intermediate types to/from domain registries.

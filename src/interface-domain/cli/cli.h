@@ -1,6 +1,6 @@
 #pragma once
-#include "config/ForgeConfig.h"
-#include "types/ItemStack.h"
+#include "algorithm-domain/types/ConfigTypes.h"
+#include "business-domain/types/Item.h"
 #include <optional>
 #include <string>
 #include <vector>
@@ -21,14 +21,14 @@ struct CLIConfig {
     std::optional<std::string> algo_dir;        // --algo-dir
     std::string platform = "auto";
     std::optional<std::string> output;
-    std::string format = "text";
-    int solutions      = 1;
-    int memory_mb      = 0;
-    int max_time       = 0; // --max-time <seconds> (0 = unlimited)
-    bool verbose       = false;
-    bool help             = false;
-    bool list_algorithms  = false;  // --list-algorithms
-    bool version          = false;  // --version / -V
+    std::string format   = "text";
+    int solutions        = 1;
+    int memory_mb        = 0;
+    int max_time         = 0; // --max-time <seconds> (0 = unlimited)
+    bool verbose         = false;
+    bool help            = false;
+    bool list_algorithms = false; // --list-algorithms
+    bool version         = false; // --version / -V
 };
 
 struct EnchantmentSpec {
@@ -58,8 +58,9 @@ std::string get_cli_help_text(const std::string &program_name = "besq");
 /// Build an ItemStack from a TargetSpec by resolving equipment name
 /// and inline enchantments against the given registries.
 /// Throws std::runtime_error if equipment is unknown.
-ItemStack
-build_target(const TargetSpec &spec, const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg);
+Item build_target(
+    const TargetSpec &spec, const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg
+);
 
 /// Build an EnchSet from parsed EnchantmentSpec[] by resolving
 /// enchantment names via the registry (with "minecraft:" fallback).
@@ -70,4 +71,4 @@ EnchSet build_enchset(const std::vector<EnchantmentSpec> &specs, const Enchantme
 /// Recognized keys: ignore-cost-cap, ignore-penalty-cost, ignore-repair-cost.
 /// Each value must be "true" or "false".
 /// Throws std::runtime_error on unrecognized keys, malformed syntax, or invalid values.
-void apply_config_pairs(const std::string &config_pairs, ForgeConfig &cfg);
+void apply_config_pairs(const std::string &config_pairs, algorithm::ForgeConfig &cfg);

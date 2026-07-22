@@ -1,5 +1,5 @@
-#include "parsers/EnchParser.h"
-#include "utils/ParserUtils.hpp"
+#include "EnchParser.h"
+#include "common/utils/ParserUtils.hpp"
 
 #include <cctype>
 #include <stdexcept>

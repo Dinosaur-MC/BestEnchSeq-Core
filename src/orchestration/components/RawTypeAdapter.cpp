@@ -1,5 +1,5 @@
-#include "adapters/RawTypeAdapter.h"
-#include "types/EquipmentCategory.h"
+#include "RawTypeAdapter.h"
+#include "business-domain/types/Equipment.h"
 
 #include <algorithm>
 #include <cstdint>

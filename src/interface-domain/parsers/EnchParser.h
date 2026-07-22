@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "cli/cli.h"
+#include "../cli/cli.h"
 
 /// Parse enchantment spec strings from CLI input.
 ///
@@ -18,5 +18,5 @@
 ///   - Level < 1 or > 255
 ///   - Empty enchantment id
 struct EnchParser {
-    static std::vector<EnchantmentSpec> parse(const std::string& input);
+    static std::vector<EnchantmentSpec> parse(const std::string &input);
 };

@@ -1,8 +1,7 @@
-#include "adapters/OutputFormatter.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "types/EnchInfo.h"
-#include "types/EnchSet.h"
+#include "OutputFormatter.h"
+#include "business-domain/registries/EnchantmentRegistry.h"
+#include "business-domain/registries/EquipmentCategoryRegistry.h"
+#include "business-domain/types/Enchantment.h"
 
 namespace {
 
@@ -109,7 +108,7 @@ EnchSet enchset_from_json_array(const Json::Array &arr, const EnchantmentRegistr
 // describe_item_verbose
 // ---------------------------------------------------------------------------
 std::string OutputFormatter::describe_item_verbose(
-    const ItemStack &item, const EnchantmentRegistry &ench_reg
+    const Item &item, const EnchantmentRegistry &ench_reg
 ) {
     std::string result;
 
@@ -151,7 +150,7 @@ std::string OutputFormatter::describe_item_verbose(
 // describe_item_compact
 // ---------------------------------------------------------------------------
 std::string OutputFormatter::describe_item_compact(
-    const ItemStack &item, const EnchantmentRegistry &ench_reg
+    const Item &item, const EnchantmentRegistry &ench_reg
 ) {
     if (item.is_book() || !item.equipment) {
         std::string result = "B;";
@@ -213,7 +212,7 @@ std::string OutputFormatter::platform_to_display(MCE p) {
 // Format verbose
 // ===========================================================================
 std::string OutputFormatter::format_verbose(
-    const std::vector<EnchSolution> &solutions,
+    const std::vector<Solution> &solutions,
     const EnchantmentRegistry &ench_reg,
     const EquipmentCategoryRegistry &cat_reg,
     const std::string &mode_name
@@ -290,7 +289,7 @@ std::string OutputFormatter::format_verbose(
 // Format compact
 // ===========================================================================
 std::string OutputFormatter::format_compact(
-    const std::vector<EnchSolution> &solutions,
+    const std::vector<Solution> &solutions,
     const EnchantmentRegistry &ench_reg,
     const EquipmentCategoryRegistry &cat_reg,
     const std::string &mode_name
@@ -327,7 +326,7 @@ std::string OutputFormatter::format_compact(
 // Format JSON
 // ===========================================================================
 std::string OutputFormatter::format_json(
-    const std::vector<EnchSolution> &solutions,
+    const std::vector<Solution> &solutions,
     const EnchantmentRegistry &ench_reg,
     const EquipmentCategoryRegistry &cat_reg,
     const std::string &mode_name
@@ -361,12 +360,12 @@ std::string OutputFormatter::format_json(
         s["original_ench"] = Json(orig_arr);
 
         // Target item
-        s["target_item"] = itemstack_to_json(sol.target_item, ench_reg, cat_reg);
+        s["target_item"] = item_to_json(sol.target_item, ench_reg, cat_reg);
 
         // Available items
         Json::Array avail_arr;
         for (const auto &item : sol.available_items) {
-            avail_arr.push_back(itemstack_to_json(item, ench_reg, cat_reg));
+            avail_arr.push_back(item_to_json(item, ench_reg, cat_reg));
         }
         s["available_items"] = Json(avail_arr);
 
@@ -411,13 +410,13 @@ void OutputFormatter::clear_cache() {
 // ===========================================================================
 // Parse JSON
 // ===========================================================================
-std::vector<EnchSolution> OutputFormatter::parse_json(
+std::vector<Solution> OutputFormatter::parse_json(
     const std::string &input,
     const EnchantmentRegistry &ench_reg,
     const EquipmentCategoryRegistry &cat_reg
 ) {
     // NOTE: _json_eq_cache is intentionally NOT cleared here.
-    // itemstack_from_json and step_from_json store Equipment objects in this
+    // Item_from_json and step_from_json store Equipment objects in this
     // cache and return const Equipment* pointers into it. Clearing would
     // invalidate those pointers. The cache grows monotonically per process,
     // which is acceptable for a CLI tool.
@@ -434,7 +433,7 @@ std::vector<EnchSolution> OutputFormatter::parse_json(
     Json::Value sol_arr_val = sol_it->second.get_value();
     const Json::Array &sol_arr = std::get<Json::Array>(sol_arr_val);
 
-    std::vector<EnchSolution> results;
+    std::vector<Solution> results;
     results.reserve(sol_arr.size());
 
     for (const auto &sol_json : sol_arr) {
@@ -455,7 +454,7 @@ std::vector<EnchSolution> OutputFormatter::parse_json(
         );
 
         // Target item
-        ItemStack target_item = itemstack_from_json(obj.at("target_item"), _json_eq_cache, ench_reg, cat_reg);
+        Item target_item = item_from_json(obj.at("target_item"), _json_eq_cache, ench_reg, cat_reg);
 
         // Available items
         ItemCollection avail_items;
@@ -464,7 +463,7 @@ std::vector<EnchSolution> OutputFormatter::parse_json(
             Json::Value avail_arr_val = avail_it->second.get_value();
             const Json::Array &avail_arr = std::get<Json::Array>(avail_arr_val);
             for (const auto &avail_j : avail_arr) {
-                avail_items.push_back(itemstack_from_json(avail_j, _json_eq_cache, ench_reg, cat_reg));
+                avail_items.push_back(item_from_json(avail_j, _json_eq_cache, ench_reg, cat_reg));
             }
         }
 
@@ -480,7 +479,7 @@ std::vector<EnchSolution> OutputFormatter::parse_json(
         }
 
         // Metadata
-        EnchSolution::MetaData meta;
+        Solution::MetaData meta;
         auto meta_it = obj.find("metadata");
         if (meta_it != obj.end()) {
             Json::Value meta_obj_val = meta_it->second.get_value();
@@ -504,7 +503,7 @@ std::vector<EnchSolution> OutputFormatter::parse_json(
         }
 
         // Build solution via make() so costs are recomputed consistently
-        results.push_back(EnchSolution::make(plat, orig_ench, target_item, avail_items, steps, is_success, meta));
+        results.push_back(Solution::make(plat, orig_ench, target_item, avail_items, steps, is_success, meta));
     }
 
     return results;
@@ -515,10 +514,10 @@ std::vector<EnchSolution> OutputFormatter::parse_json(
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// itemstack_to_json
+// Item_to_json
 // ---------------------------------------------------------------------------
-Json OutputFormatter::itemstack_to_json(
-    const ItemStack &item,
+Json OutputFormatter::item_to_json(
+    const Item &item,
     const EnchantmentRegistry &ench_reg,
     const EquipmentCategoryRegistry &cat_reg
 ) {
@@ -559,9 +558,9 @@ Json OutputFormatter::itemstack_to_json(
 }
 
 // ---------------------------------------------------------------------------
-// itemstack_from_json
+// Item_from_json
 // ---------------------------------------------------------------------------
-ItemStack OutputFormatter::itemstack_from_json(
+Item OutputFormatter::item_from_json(
     const Json &j,
     std::vector<Equipment> &equipment_cache,
     const EnchantmentRegistry &ench_reg,
@@ -622,21 +621,21 @@ ItemStack OutputFormatter::itemstack_from_json(
     }
 
     if (eq_ptr)
-        return ItemStack(*eq_ptr, ench_set, prior_penalty, durability);
-    return ItemStack(ench_set, prior_penalty);
+        return Item(*eq_ptr, ench_set, prior_penalty, durability);
+    return Item(ench_set, prior_penalty);
 }
 
 // ---------------------------------------------------------------------------
 // step_to_json
 // ---------------------------------------------------------------------------
 Json OutputFormatter::step_to_json(
-    const EnchSolution::EnchStep &step,
+    const Solution::EnchStep &step,
     const EnchantmentRegistry &ench_reg,
     const EquipmentCategoryRegistry &cat_reg
 ) {
     Json::Object obj;
-    obj["item_a"]         = itemstack_to_json(step.item_a, ench_reg, cat_reg);
-    obj["item_b"]         = itemstack_to_json(step.item_b, ench_reg, cat_reg);
+    obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg);
+    obj["item_b"]         = item_to_json(step.item_b, ench_reg, cat_reg);
     obj["exp_level_cost"] = Json(Json::Number(step.exp_level_cost));
     obj["exp_cost"]       = Json(Json::Number(step.exp_cost));
     return Json(obj);
@@ -645,7 +644,7 @@ Json OutputFormatter::step_to_json(
 // ---------------------------------------------------------------------------
 // step_from_json
 // ---------------------------------------------------------------------------
-EnchSolution::EnchStep OutputFormatter::step_from_json(
+Solution::EnchStep OutputFormatter::step_from_json(
     const Json &j,
     std::vector<Equipment> &equipment_cache,
     const EnchantmentRegistry &ench_reg,
@@ -653,9 +652,9 @@ EnchSolution::EnchStep OutputFormatter::step_from_json(
 ) {
     Json::Value j_val = j.get_value();
     const Json::Object &obj = std::get<Json::Object>(j_val);
-    EnchSolution::EnchStep step;
-    step.item_a         = itemstack_from_json(obj.at("item_a"), equipment_cache, ench_reg, cat_reg);
-    step.item_b         = itemstack_from_json(obj.at("item_b"), equipment_cache, ench_reg, cat_reg);
+    Solution::EnchStep step;
+    step.item_a         = item_from_json(obj.at("item_a"), equipment_cache, ench_reg, cat_reg);
+    step.item_b         = item_from_json(obj.at("item_b"), equipment_cache, ench_reg, cat_reg);
     step.exp_level_cost = json_int(obj.at("exp_level_cost"));
     step.exp_cost       = json_int(obj.at("exp_cost"));
     return step;

@@ -4,7 +4,7 @@
 #include <string>
 #include <utility>
 
-#include "types/Platform.h"
+#include "common/CommonTypes.h"
 
 namespace ParserUtils {
 
