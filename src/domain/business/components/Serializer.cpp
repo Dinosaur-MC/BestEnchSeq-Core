@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 
 // ══════════════════════════════════════════════════════════════════════════
 // Internal helpers — Json value extraction
@@ -98,7 +99,8 @@ MCE Serializer::string_to_mce(std::string_view str) noexcept {
 
 Json& operator<<(Json& json, const Ench& ench) {
     Json::Object obj;
-    obj["id"]    = Json(Json::Number(ench.id));
+    obj["id"]    = Json(Json::String(ench.id.str()));
+    obj["name"]  = Json(Json::String(ench.name));
     obj["level"] = Json(Json::Number(ench.level));
     json = Json(obj);
     return json;
@@ -106,7 +108,8 @@ Json& operator<<(Json& json, const Ench& ench) {
 
 const Json& operator>>(const Json& json, Ench& ench) {
     auto obj = json_obj(json);
-    ench.id    = json_int32(json_get(obj, "id"));
+    ench.id    = NSID(json_str(json_get(obj, "id")));
+    ench.name  = json_str(json_get(obj, "name"));
     ench.level = json_int32(json_get(obj, "level"), 1);
     return json;
 }
@@ -117,7 +120,7 @@ const Json& operator>>(const Json& json, Ench& ench) {
 
 Json& operator<<(Json& json, const EnchInfo& info) {
     Json::Object obj;
-    obj["name_id"]             = Json(Json::String(info.name_id));
+    obj["id"]                  = Json(Json::String(info.id.str()));
     obj["name"]                = Json(Json::String(info.name));
     obj["supported_platform"]  = Json(Json::String(std::string(
                                      Serializer::mce_to_string(info.supported_platform))));
@@ -126,22 +129,22 @@ Json& operator<<(Json& json, const EnchInfo& info) {
     obj["multiplier"]          = Json(Json::Number(info.multiplier));
     obj["is_treasure"]         = Json(Json::Bool(info.is_treasure));
 
-    // exclusive_set → array of strings
+    // exclusive_set → array of NSID strings
     {
         Json::Array arr;
         arr.reserve(info.exclusive_set.size());
         for (const auto& excl : info.exclusive_set)
-            arr.push_back(Json(Json::String(excl)));
+            arr.push_back(Json(Json::String(excl.str())));
         obj["exclusive_set"] = Json(std::move(arr));
     }
 
-    // applicable_category_ids → array of ints
+    // applicable_equipments → array of NSID strings (was applicable_category_ids as ints)
     {
         Json::Array arr;
-        arr.reserve(info.applicable_category_ids.size());
-        for (int32_t cid : info.applicable_category_ids)
-            arr.push_back(Json(Json::Number(cid)));
-        obj["applicable_category_ids"] = Json(std::move(arr));
+        arr.reserve(info.applicable_equipments.size());
+        for (const auto& eq : info.applicable_equipments)
+            arr.push_back(Json(Json::String(eq.str())));
+        obj["applicable_equipments"] = Json(std::move(arr));
     }
 
     json = Json(obj);
@@ -150,7 +153,7 @@ Json& operator<<(Json& json, const EnchInfo& info) {
 
 const Json& operator>>(const Json& json, EnchInfo& info) {
     auto obj = json_obj(json);
-    info.name_id            = json_str(json_get(obj, "name_id"));
+    info.id                 = NSID(json_str(json_get(obj, "id")));
     info.name               = json_str(json_get(obj, "name"));
     info.supported_platform = Serializer::string_to_mce(json_str(json_get(obj, "supported_platform")));
     info.max_level          = json_int32(json_get(obj, "max_level"));
@@ -163,15 +166,17 @@ const Json& operator>>(const Json& json, EnchInfo& info) {
         auto arr = json_arr(json_get(obj, "exclusive_set"));
         for (const auto& elem : arr) {
             auto s = json_str(elem);
-            if (!s.empty()) info.exclusive_set.insert(std::move(s));
+            if (!s.empty()) info.exclusive_set.insert(NSID(std::move(s)));
         }
     }
 
-    // applicable_category_ids
+    // applicable_equipments (was applicable_category_ids)
     {
-        auto arr = json_arr(json_get(obj, "applicable_category_ids"));
-        for (const auto& elem : arr)
-            info.applicable_category_ids.insert(json_int32(elem));
+        auto arr = json_arr(json_get(obj, "applicable_equipments"));
+        for (const auto& elem : arr) {
+            auto s = json_str(elem);
+            if (!s.empty()) info.applicable_equipments.insert(NSID(std::move(s)));
+        }
     }
 
     return json;
@@ -229,9 +234,9 @@ const Json& operator>>(const Json& json, EquipmentCategory& cat) {
 
 Json& operator<<(Json& json, const Equipment& eq) {
     Json::Object obj;
-    obj["name_id"]        = Json(Json::String(eq.name_id));
+    obj["id"]             = Json(Json::String(eq.id.str()));
     obj["name"]           = Json(Json::String(eq.name));
-    obj["category_id"]    = Json(Json::Number(eq.category_id));
+    obj["category"]       = Json(Json::String(eq.category.str()));
     obj["max_durability"] = Json(Json::Number(eq.max_durability));
     json = Json(obj);
     return json;
@@ -239,9 +244,9 @@ Json& operator<<(Json& json, const Equipment& eq) {
 
 const Json& operator>>(const Json& json, Equipment& eq) {
     auto obj = json_obj(json);
-    eq.name_id        = json_str(json_get(obj, "name_id"));
+    eq.id             = NSID(json_str(json_get(obj, "id")));
     eq.name           = json_str(json_get(obj, "name"));
-    eq.category_id    = json_int32(json_get(obj, "category_id"));
+    eq.category       = NSID(json_str(json_get(obj, "category")));
     eq.max_durability = json_int32(json_get(obj, "max_durability"));
     return json;
 }
@@ -253,13 +258,7 @@ const Json& operator>>(const Json& json, Equipment& eq) {
 Json& operator<<(Json& json, const Item& item) {
     Json::Object obj;
 
-    if (item.equipment.has_value()) {
-        Json eq_j;
-        eq_j << *item.equipment;
-        obj["equipment"] = std::move(eq_j);
-    } else {
-        obj["equipment"] = Json::null();
-    }
+    obj["id"] = Json(Json::String(item.id.str()));
 
     {
         Json es_j;
@@ -277,14 +276,7 @@ Json& operator<<(Json& json, const Item& item) {
 const Json& operator>>(const Json& json, Item& item) {
     auto obj = json_obj(json);
 
-    auto eq_j = json_get(obj, "equipment");
-    if (eq_j.type() == JsonType::Object) {
-        Equipment eq;
-        eq_j >> eq;
-        item.equipment = std::move(eq);
-    } else {
-        item.equipment = std::nullopt;
-    }
+    item.id = NSID(json_str(json_get(obj, "id")));
 
     json_get(obj, "enchantments") >> item.enchantments;
     item.prior_penalty = json_int32(json_get(obj, "prior_penalty"));
@@ -329,19 +321,27 @@ const Json& operator>>(const Json& json, Solution::EnchStep& step) {
 Json& operator<<(Json& json, const Solution::MetaData& meta) {
     Json::Object obj;
     obj["algorithm_name"]    = Json(Json::String(meta.algorithm_name));
-    obj["version"]           = Json(Json::String(meta.version));
-    obj["created_at"]        = Json(Json::Number(static_cast<int64_t>(meta.created_at)));
-    obj["computation_time"]  = Json(Json::Number(static_cast<int64_t>(meta.computation_time)));
+    obj["algorithm_version"] = Json(Json::String(meta.algorithm_version));
+    obj["created_at"]        = Json(Json::Number(static_cast<int64_t>(
+                                std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    meta.created_at.time_since_epoch()).count())));
+    obj["computation_time"]  = Json(Json::Number(static_cast<int64_t>(meta.computation_time.count())));
+    obj["mode"]              = Json(Json::Number(static_cast<int8_t>(meta.mode)));
+    obj["task_id"]           = Json(Json::Number(static_cast<int64_t>(meta.task_id)));
     json = Json(obj);
     return json;
 }
 
 const Json& operator>>(const Json& json, Solution::MetaData& meta) {
     auto obj = json_obj(json);
-    meta.algorithm_name   = json_str(json_get(obj, "algorithm_name"));
-    meta.version          = json_str(json_get(obj, "version"));
-    meta.created_at       = static_cast<size_t>(json_int64(json_get(obj, "created_at")));
-    meta.computation_time = static_cast<size_t>(json_int64(json_get(obj, "computation_time")));
+    meta.algorithm_name    = json_str(json_get(obj, "algorithm_name"));
+    meta.algorithm_version = json_str(json_get(obj, "algorithm_version"));
+    auto created_at_ms     = json_int64(json_get(obj, "created_at"));
+    meta.created_at        = std::chrono::system_clock::time_point(
+                                std::chrono::milliseconds(created_at_ms));
+    meta.computation_time  = std::chrono::milliseconds(json_int64(json_get(obj, "computation_time")));
+    meta.mode              = static_cast<AlgorithmMode>(json_int32(json_get(obj, "mode")));
+    meta.task_id           = static_cast<size_t>(json_int64(json_get(obj, "task_id")));
     return json;
 }
 

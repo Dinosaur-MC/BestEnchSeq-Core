@@ -7,7 +7,10 @@
 // item stacks, solutions, and their registries.
 
 // ── Types ──
-#include "domain/business/types/Enchantment.h"    // IWYU pragma: export
+#include "domain/business/types/Ench.h"           // IWYU pragma: export
+#include "domain/business/types/EnchInfo.h"       // IWYU pragma: export
+#include "domain/business/types/EnchSet.h"        // IWYU pragma: export
+#include "domain/business/types/EquipmentTag.h"   // IWYU pragma: export
 #include "domain/business/types/Equipment.h"      // IWYU pragma: export
 #include "domain/business/types/Item.h"           // IWYU pragma: export
 #include "domain/business/types/Solution.h"       // IWYU pragma: export

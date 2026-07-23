@@ -1,5 +1,8 @@
 #pragma once
-#include "domain/business/types/Enchantment.h"
+#include "domain/business/types/Ench.h"
+#include "domain/business/types/EnchInfo.h"
+#include "domain/business/types/EnchSet.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
