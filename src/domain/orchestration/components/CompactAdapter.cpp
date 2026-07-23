@@ -10,7 +10,10 @@
 // ============================================================================
 
 algorithm::AlgorithmInput CompactAdapter::apply(
-    const algorithm::ResolvedInput& resolved,
+    const algorithm::Item& target_item,
+    const algorithm::EnchSet& /*source_ench*/,
+    const algorithm::EnchSet& target_ench,
+    const algorithm::ResolverOutput& books,
     const ::Equipment& target_eq,
     const EnchantmentRegistry& global_registry)
 {
@@ -76,9 +79,9 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     ench_reg.init(std::move(algo_infos), std::move(applicable_global_ids), algo_equip);
 
     // ── 4. Convert items: algorithm domain ────────────────────────────
-    // The resolved input already contains algorithm-domain items
-    // (ItemResolver produces algorithm::Item).  Copy them and remap
-    // enchantment IDs from business (int32_t) to compact (int16_t local).
+    // The input items are algorithm-domain items (from ItemResolver).
+    // Copy them and remap enchantment IDs from business (int32_t) to
+    // compact (int16_t local).
     auto remap_ench_set = [&](const algorithm::EnchSet& src) -> algorithm::EnchSet {
         algorithm::EnchSet dst;
         for (const auto& e : src) {
@@ -93,21 +96,21 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     input.ench_reg = std::move(ench_reg);
 
     // Target equipment (item[0])
-    input.items.reserve(1 + resolved.available_items.size());
-    algorithm::Item start_item = resolved.target_item;
-    start_item.enchs = remap_ench_set(resolved.target_item.enchs);
+    input.items.reserve(1 + books.size());
+    algorithm::Item start_item = target_item;
+    start_item.enchs = remap_ench_set(target_item.enchs);
     input.items.push_back(std::move(start_item));
 
     // Books (items[1..])
-    for (const auto& book : resolved.available_items) {
+    for (const auto& book : books) {
         algorithm::Item algo_book = book;
         algo_book.enchs = remap_ench_set(book.enchs);
         input.items.push_back(std::move(algo_book));
     }
 
     // Target enchantments
-    input.target.reserve(resolved.target_ench.size());
-    for (const auto& e : resolved.target_ench) {
+    input.target.reserve(target_ench.size());
+    for (const auto& e : target_ench) {
         auto it = global_to_local.find(e.id);
         if (it != global_to_local.end())
             input.target.push_back({it->second, e.level});

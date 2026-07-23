@@ -76,27 +76,34 @@ static algorithm::Item to_algo_item(const Item &src) {
     return dst;
 }
 
-algorithm::ResolvedInput detail::SolvePipeline::resolve(
-    const SolveInput &input, const EnchantmentRegistry & /*ench_reg*/, const EquipmentRegistry & /*eq_reg*/
-) {
+detail::ResolveResult detail::SolvePipeline::resolve(const SolveInput &input) {
     // Convert business types to algorithm types (IDs remain as-is, will be
     // remapped by CompactAdapter::apply() later).
     auto algo_target  = to_algo_item(input.target_item);
     auto algo_source  = to_algo_enchset(input.source_enchantments);
     auto algo_desired = to_algo_enchset(input.target_item.enchantments);
 
+    detail::ResolveResult rr;
+    rr.target_item   = algo_target;
+    rr.target_item.enchs = algo_source; // equipment holds source enchants
+    rr.source_ench   = algo_source;
+    rr.target_ench   = algo_desired;
+
     if (!input.is_inventory_mode) {
         // Direct mode: let ItemResolver compute diff and generate books.
-        return algorithm::ItemResolver::resolve(algo_target, algo_source, algo_desired);
+        rr.books = algorithm::ItemResolver::resolve(algo_target, algo_source);
+    } else {
+        // Inventory mode: use pre-resolved extra items directly.
+        algorithm::ItemCollection algo_items;
+        algo_items.reserve(input.extra_items.size());
+        for (const auto &item : input.extra_items)
+            algo_items.push_back(to_algo_item(item));
+
+        rr.books = algorithm::InventoryResolver::resolve(
+            algo_target, algo_items, input.extra_item_priorities);
     }
 
-    // Inventory mode: use pre-resolved extra items directly.
-    algorithm::ItemCollection algo_items;
-    algo_items.reserve(input.extra_items.size());
-    for (const auto &item : input.extra_items)
-        algo_items.push_back(to_algo_item(item));
-
-    return algorithm::ResolvedInput{algo_target, algo_source, algo_desired, std::move(algo_items)};
+    return rr;
 }
 
 // ====================================================================
@@ -104,10 +111,13 @@ algorithm::ResolvedInput detail::SolvePipeline::resolve(
 // ====================================================================
 
 algorithm::AlgorithmInput detail::SolvePipeline::apply(
-    const algorithm::ResolvedInput &resolved, const ::Equipment &target_equipment,
+    const detail::ResolveResult &resolved, const ::Equipment &target_equipment,
     const EnchantmentRegistry &ench_reg
 ) {
-    return CompactAdapter::apply(resolved, target_equipment, ench_reg);
+    return CompactAdapter::apply(
+        resolved.target_item, resolved.source_ench, resolved.target_ench, resolved.books,
+        target_equipment, ench_reg
+    );
 }
 
 // ====================================================================
@@ -166,42 +176,27 @@ detail::ExecuteResult detail::SolvePipeline::execute(
 
 SolveResult detail::SolvePipeline::recall(
     const algorithm::AlgorithmOutput &output, const algorithm::AlgorithmInput &algo_input,
-    const algorithm::ResolvedInput &resolved
+    const algorithm::EnchSet &original_source_ench, const Item &original_target_item
 ) {
     SolveResult result;
     result.algorithm_used      = output.algorithm_name;
     result.computation_time_ms = output.computation_time.count();
 
-    // Build a business EnchSet for original_ench from resolved source
+    // Build a business EnchSet for original_ench from the algorithm EnchSet
     EnchSet original_ench;
-    for (const auto &e : resolved.source_ench)
+    for (const auto &e : original_source_ench)
         original_ench.emplace(e.id, e.level);
 
-    // Build business Item for target_item
-    Item target_item;
-    if (resolved.target_item.type == algorithm::ItemType::Book) {
-        target_item = Item(to_biz_enchset(resolved.target_item.enchs), resolved.target_item.ppn);
-    } else {
-        target_item = Item(
-            ::Equipment{"", "", 0, resolved.target_item.dur > 0 ? resolved.target_item.dur : -1},
-            to_biz_enchset(resolved.target_item.enchs), resolved.target_item.ppn, resolved.target_item.dur
-        );
-    }
-
-    // Build business ItemCollection from resolved available items
+    // Reconstruct business ItemCollection from algo_input items[1..]
+    // (items[0] is the equipment, rest are books in compact form)
     ItemCollection biz_items;
-    biz_items.reserve(resolved.available_items.size());
-    for (const auto &item : resolved.available_items) {
-        if (item.type == algorithm::ItemType::Book)
-            biz_items.emplace_back(to_biz_enchset(item.enchs), item.ppn);
-        else
-            biz_items.emplace_back(
-                ::Equipment{"", "", 0, item.dur > 0 ? item.dur : -1}, to_biz_enchset(item.enchs), item.ppn,
-                item.dur
-            );
-    }
+    biz_items.reserve(algo_input.items.size() > 0 ? algo_input.items.size() - 1 : 0);
+    for (size_t i = 1; i < algo_input.items.size(); ++i)
+        biz_items.push_back(CompactAdapter::to_domain(algo_input.items[i], algo_input.ench_reg));
 
-    result.solutions = CompactAdapter::recall(output, algo_input, original_ench, target_item, biz_items);
+    result.solutions = CompactAdapter::recall(
+        output, algo_input, original_ench, original_target_item, biz_items
+    );
     result.success   = !result.solutions.empty();
     return result;
 }
@@ -212,10 +207,10 @@ SolveResult detail::SolvePipeline::recall(
 
 SolveResult detail::SolvePipeline::
     run(const SolveInput &input, const algorithm::AlgorithmLoader &loader,
-        const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg,
+        const EnchantmentRegistry &ench_reg, const EquipmentRegistry & /*eq_reg*/,
         const EquipmentCategoryRegistry & /*cat_reg*/) {
     // Stage 1: Resolve (convert types + compute diff + books)
-    auto resolved = resolve(input, ench_reg, eq_reg);
+    auto resolved = resolve(input);
 
     // Stage 2: Apply (domain → compact)
     // Use the target item's equipment descriptor for EnchReg construction.
@@ -239,7 +234,19 @@ SolveResult detail::SolvePipeline::
     result.computation_time_ms = exec_result.computation_time_ms;
 
     if (exec_result.algo_output.is_valid) {
-        result                     = recall(exec_result.algo_output, algo_input, resolved);
+        // Convert algorithm::Item to business Item for recall()
+        Item biz_target_item;
+        if (resolved.target_item.type == algorithm::ItemType::Book) {
+            biz_target_item = Item(to_biz_enchset(resolved.target_item.enchs), resolved.target_item.ppn);
+        } else {
+            biz_target_item = Item(
+                ::Equipment{"", "", 0, resolved.target_item.dur > 0 ? resolved.target_item.dur : -1},
+                to_biz_enchset(resolved.target_item.enchs), resolved.target_item.ppn, resolved.target_item.dur
+            );
+        }
+
+        result = recall(exec_result.algo_output, algo_input,
+                        resolved.source_ench, biz_target_item);
         result.algorithm_used      = exec_result.algorithm_name;
         result.computation_time_ms = exec_result.computation_time_ms;
     }
