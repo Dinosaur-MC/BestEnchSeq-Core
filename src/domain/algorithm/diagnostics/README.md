@@ -35,7 +35,7 @@ ctx.report_solution(steps)
 ## Observer 接口
 
 ```cpp
-class AlgorithmObserver {
+class IAlgorithmObserver {
 public:
     // 按 task_id 过滤（默认接受全部）
     virtual bool accept_task_id(size_t) const { return true; }
@@ -48,7 +48,7 @@ public:
 };
 ```
 
-注册：`DiagnosticsService::instance().attach_observer(shared_ptr<AlgorithmObserver>)`
+注册：`DiagnosticsService::instance().attach_observer(shared_ptr<IAlgorithmObserver>)`
 
 ## 诊断文件
 

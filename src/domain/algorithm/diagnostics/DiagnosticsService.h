@@ -1,6 +1,6 @@
 #pragma once
-#include "AlgorithmObserver.h"
 #include "DiagnosticsEvent.h"
+#include <memory>
 #include "common/utils/EventLoop.hpp"
 #include <atomic>
 #include <memory>
@@ -8,6 +8,8 @@
 #include <vector>
 
 namespace algorithm {
+
+class IAlgorithmObserver;
 
 /// Global singleton for async persistence and observer dispatch.
 class DiagnosticsService {
@@ -44,8 +46,8 @@ class DiagnosticsService {
         }
     }
 
-    void attach_observer(std::shared_ptr<AlgorithmObserver> observer);
-    void detach_observer(std::shared_ptr<AlgorithmObserver> observer);
+    void attach_observer(std::shared_ptr<IAlgorithmObserver> observer);
+    void detach_observer(std::shared_ptr<IAlgorithmObserver> observer);
 
     /// Busy-wait until all queued events have been processed.
     void flush();
@@ -55,7 +57,7 @@ class DiagnosticsService {
   private:
     /// Snapshot the current observer list (thread-safe).
     /// Only called internally by the diagnostics handler.
-    std::vector<std::shared_ptr<AlgorithmObserver>> snapshot_observers();
+    std::vector<std::shared_ptr<IAlgorithmObserver>> snapshot_observers();
     /// Called from push() when the queue is full (non-blocking path).
     /// Implemented in .cpp to keep log include out of the header.
     void _on_push_failed(const char *algo_name);
@@ -66,7 +68,7 @@ class DiagnosticsService {
         void operator()(DiagnosticsEvent event);
 
         std::mutex *obs_mtx{nullptr};
-        std::vector<std::shared_ptr<AlgorithmObserver>> *observers{nullptr};
+        std::vector<std::shared_ptr<IAlgorithmObserver>> *observers{nullptr};
         std::atomic<bool> *persist{nullptr};
         std::atomic<uint64_t> *processed_ptr{nullptr};
     };
@@ -75,7 +77,7 @@ class DiagnosticsService {
 
     // ── Constructed first — pointed to by DiagnosticsHandler at _loop init ──
     std::mutex _obs_mtx;
-    std::vector<std::shared_ptr<AlgorithmObserver>> _observers;
+    std::vector<std::shared_ptr<IAlgorithmObserver>> _observers;
     std::atomic<bool> _persist{true};
     std::atomic<uint64_t> _enqueued{0};
     std::atomic<uint64_t> _processed{0};

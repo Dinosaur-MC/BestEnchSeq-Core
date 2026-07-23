@@ -6,7 +6,7 @@
 #include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/IAlgorithm.h"
-#include "domain/algorithm/diagnostics/AlgorithmObserver.h"
+#include "domain/algorithm/diagnostics/IAlgorithmObserver.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "domain/orchestration/components/CompactAdapter.h"
 #include "domain/algorithm/types/ConfigTypes.h"
@@ -197,11 +197,10 @@ void test_checkpoint_integrity_checks() {
 
 void test_astar_pause_resume() {
     // Full checkpoint round-trip with A*: start → pause → serialize → resume → complete.
-    // Uses AlgorithmObserver::on_progress to detect when A* starts exploring
-    // (fires every 256 states with improved _best_g.size()/_state_est ratio),
+    // Uses IAlgorithmObserver::on_progress to detect when A* starts exploring
     // then pauses at a meaningful state — no fixed delays.
 
-    struct ProgressObserver : AlgorithmObserver {
+    struct ProgressObserver : IAlgorithmObserver {
         std::atomic<bool> started{false};
         void on_progress(size_t, uint8_t pct, ProgressStatus) override {
             std::cout << "on_progress: " << static_cast<int>(pct) << "%" << std::endl;

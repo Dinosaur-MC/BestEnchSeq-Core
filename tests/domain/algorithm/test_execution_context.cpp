@@ -103,9 +103,10 @@ void test_wait_if_paused_resume() {
 
 // ─── Mock observer + observer dispatch tests ─────────────────────────────────
 
+#include "domain/algorithm/diagnostics/IAlgorithmObserver.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
 
-struct MockObserver : AlgorithmObserver {
+struct MockObserver : IAlgorithmObserver {
     size_t seen_task{0};
     int progress_cnt{0};
     int solution_cnt{0};

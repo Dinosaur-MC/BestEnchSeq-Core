@@ -1,3 +1,4 @@
+#include "IAlgorithmObserver.h"
 #include "DiagnosticsService.h"
 #include "common/log/log.hpp"
 #include <algorithm>
@@ -25,16 +26,19 @@ DiagnosticsService::~DiagnosticsService() {
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
-void DiagnosticsService::attach_observer(std::shared_ptr<AlgorithmObserver> observer) {
+void DiagnosticsService::attach_observer(std::shared_ptr<IAlgorithmObserver> observer) {
     std::lock_guard lock(_obs_mtx);
+    observer->_attached = true;
     _observers.push_back(std::move(observer));
 }
 
-void DiagnosticsService::detach_observer(std::shared_ptr<AlgorithmObserver> observer) {
+void DiagnosticsService::detach_observer(std::shared_ptr<IAlgorithmObserver> observer) {
     std::lock_guard lock(_obs_mtx);
     auto it = std::find(_observers.begin(), _observers.end(), observer);
-    if (it != _observers.end())
+    if (it != _observers.end()) {
+        (*it)->_attached = false;
         _observers.erase(it);
+    }
 }
 
 void DiagnosticsService::flush() {
@@ -54,7 +58,7 @@ void DiagnosticsService::_on_push_failed(const char* algo_name) {
         LOG_WARN("diagnostics queue full, event dropped");
 }
 
-std::vector<std::shared_ptr<AlgorithmObserver>> DiagnosticsService::snapshot_observers() {
+std::vector<std::shared_ptr<IAlgorithmObserver>> DiagnosticsService::snapshot_observers() {
     std::lock_guard lock(_obs_mtx);
     return _observers;
 }
@@ -63,7 +67,7 @@ std::vector<std::shared_ptr<AlgorithmObserver>> DiagnosticsService::snapshot_obs
 
 void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) {
     // 1. Snapshot observer list under lock, then dispatch outside lock
-    std::vector<std::shared_ptr<AlgorithmObserver>> local;
+    std::vector<std::shared_ptr<IAlgorithmObserver>> local;
     if (obs_mtx && observers) {
         std::lock_guard lock(*obs_mtx);
         local = *observers;
