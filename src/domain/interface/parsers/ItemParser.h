@@ -1,5 +1,5 @@
 #pragma once
-#include "../cli/cli.h"
+#include "domain/interface/cli/cli.h"
 #include <string>
 
 struct ItemParser {

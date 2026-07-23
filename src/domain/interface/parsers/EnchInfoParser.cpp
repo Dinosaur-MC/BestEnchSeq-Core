@@ -1,10 +1,11 @@
 #include "EnchInfoParser.h"
 #include "ParserUtilsDomain.hpp"
 #include "builtin/ItemProperties.h"
-#include "common/utils/ParserUtils.hpp"
-#include "common/log/log.hpp"
 #include "common/io/CsvIO.h"
 #include "common/io/json.h"
+#include "common/log/log.hpp"
+#include "common/utils/ParserUtils.hpp"
+#include "domain/interface/components/TagResolver.hpp"
 
 #include <cctype>
 #include <cmath>
@@ -20,10 +21,8 @@ namespace {
 
 // Recursively resolve a single tag value against the raw inline tag map.
 void resolve_inline_value(
-    const std::string &val,
-    const std::unordered_map<std::string, std::vector<std::string>> &raw_tags,
-    const TagResolver &tag_resolver,
-    std::unordered_set<std::string> &result,
+    const std::string &val, const std::unordered_map<std::string, std::vector<std::string>> &raw_tags,
+    const TagResolver &tag_resolver, std::unordered_set<std::string> &result,
     std::unordered_set<std::string> &visiting
 ) {
     if (val.empty()) {
@@ -114,7 +113,8 @@ void process_inline_tags(const Json::Object &root_obj, TagResolver &tag_resolver
                 }
             }
 
-            if (raw_values.empty()) continue;
+            if (raw_values.empty())
+                continue;
 
             // Use "minecraft" as the default namespace for inline tags
             std::string key = "minecraft:" + tag_name;
@@ -139,9 +139,8 @@ void process_inline_tags(const Json::Object &root_obj, TagResolver &tag_resolver
 // ---------------------------------------------------------------------------
 // Reference resolution helper (mix of concrete IDs and #tag refs)
 // ---------------------------------------------------------------------------
-std::unordered_set<std::string> resolve_references(
-    const std::vector<std::string> &items, TagResolver &tag_resolver
-) {
+std::unordered_set<std::string>
+resolve_references(const std::vector<std::string> &items, TagResolver &tag_resolver) {
     std::unordered_set<std::string> result;
     for (const auto &item : items) {
         auto expanded = tag_resolver.resolve(item);
@@ -157,10 +156,10 @@ Id make_id(const std::string &id_str, const std::string &default_ns = "minecraft
     Id id;
     if (id_str.find(':') != std::string::npos) {
         auto [ns, path] = ParserUtils::split_namespace(id_str);
-        id.ns = ns;
-        id.path = path;
+        id.ns           = ns;
+        id.path         = path;
     } else {
-        id.ns = default_ns;
+        id.ns   = default_ns;
         id.path = id_str;
     }
     return id;
@@ -171,9 +170,9 @@ Id make_id(const std::string &id_str, const std::string &default_ns = "minecraft
 // ---------------------------------------------------------------------------
 RawEnchantment parse_ench_entry(const Json::Object &elem_obj, TagResolver &tag_resolver) {
     // Required fields
-    std::string id_str      = ParserUtils::get_json_string(elem_obj, "id");
-    int32_t max_level       = ParserUtils::get_json_int(elem_obj, "max_level");
-    int32_t multiplier      = ParserUtils::get_json_int(elem_obj, "multiplier");
+    std::string id_str = ParserUtils::get_json_string(elem_obj, "id");
+    int32_t max_level  = ParserUtils::get_json_int(elem_obj, "max_level");
+    int32_t multiplier = ParserUtils::get_json_int(elem_obj, "multiplier");
 
     // Optional fields
     std::string display_name = ParserUtils::get_json_string(elem_obj, "name");
@@ -191,7 +190,7 @@ RawEnchantment parse_ench_entry(const Json::Object &elem_obj, TagResolver &tag_r
     auto exclusive_set       = resolve_references(exclusive_set_items, tag_resolver);
 
     // Applicable items — resolve #tag references
-    auto app_items       = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
+    auto app_items        = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
     auto applicable_items = resolve_references(app_items, tag_resolver);
 
     RawEnchantment ench;
@@ -262,11 +261,10 @@ std::vector<RawEquipment> parse_equipments_json(const Json::Object &root_obj) {
 // ---------------------------------------------------------------------------
 namespace {
 
-int32_t get_durability(const std::string &item_id,
-    const std::unordered_map<std::string, ItemProperty> &props)
-{
+int32_t
+get_durability(const std::string &item_id, const std::unordered_map<std::string, ItemProperty> &props) {
     std::string key = item_id;
-    auto colon = key.find(':');
+    auto colon      = key.find(':');
     if (colon != std::string::npos)
         key = key.substr(colon + 1);
     auto it = props.find(key);
@@ -275,38 +273,46 @@ int32_t get_durability(const std::string &item_id,
 
 std::string get_category_suffix(const std::string &item_id) {
     std::string key = item_id;
-    auto colon = key.find(':');
+    auto colon      = key.find(':');
     if (colon != std::string::npos)
         key = key.substr(colon + 1);
 
     static const std::unordered_map<std::string, std::string> suffix_to_category = {
-        {"_sword", "sword"},     {"_pickaxe", "pickaxe"},
-        {"_axe", "axe"},         {"_shovel", "shovel"},
-        {"_hoe", "hoe"},         {"_helmet", "helmet"},
-        {"_chestplate", "chestplate"}, {"_leggings", "leggings"},
-        {"_boots", "boots"},     {"_horse_armor", "horse_armor"},
-        {"bow", "bow"},          {"crossbow", "crossbow"},
-        {"trident", "trident"},  {"shield", "shield"},
-        {"fishing_rod", "fishing_rod"}, {"elytra", "elytra"},
-        {"_skull", "skull"},     {"_head", "head"},
-        {"mace", "mace"},        {"brush", "brush"},
+        {"_sword", "sword"},
+        {"_pickaxe", "pickaxe"},
+        {"_axe", "axe"},
+        {"_shovel", "shovel"},
+        {"_hoe", "hoe"},
+        {"_helmet", "helmet"},
+        {"_chestplate", "chestplate"},
+        {"_leggings", "leggings"},
+        {"_boots", "boots"},
+        {"_horse_armor", "horse_armor"},
+        {"bow", "bow"},
+        {"crossbow", "crossbow"},
+        {"trident", "trident"},
+        {"shield", "shield"},
+        {"fishing_rod", "fishing_rod"},
+        {"elytra", "elytra"},
+        {"_skull", "skull"},
+        {"_head", "head"},
+        {"mace", "mace"},
+        {"brush", "brush"},
     };
 
     for (const auto &[suffix, cat] : suffix_to_category) {
         if (key == suffix ||
-            (key.size() > suffix.size() &&
-             key.substr(key.size() - suffix.size()) == suffix)) {
+            (key.size() > suffix.size() && key.substr(key.size() - suffix.size()) == suffix)) {
             return cat;
         }
     }
-    return key;  // fallback: use the bare id itself as category
+    return key; // fallback: use the bare id itself as category
 }
 
-std::string derive_category(const std::string &item_id,
-    const std::unordered_map<std::string, ItemProperty> &props)
-{
+std::string
+derive_category(const std::string &item_id, const std::unordered_map<std::string, ItemProperty> &props) {
     std::string key = item_id;
-    auto colon = key.find(':');
+    auto colon      = key.find(':');
     if (colon != std::string::npos)
         key = key.substr(colon + 1);
     auto it = props.find(key);
@@ -323,7 +329,7 @@ std::string derive_category(const std::string &item_id,
 // ---------------------------------------------------------------------------
 std::string derive_display_name(const std::string &item_id) {
     std::string key = item_id;
-    auto colon = key.find(':');
+    auto colon      = key.find(':');
     if (colon != std::string::npos) {
         key = key.substr(colon + 1);
     }
@@ -343,23 +349,22 @@ std::string derive_display_name(const std::string &item_id) {
 // Compute limited_level from min_cost formula and item enchantability
 // ---------------------------------------------------------------------------
 int32_t compute_limited_level(
-    int32_t max_level,
-    int32_t min_cost_base,
-    int32_t min_cost_per_level,
-    const std::unordered_set<std::string>& applicable_items,
-    const std::unordered_map<std::string, ItemProperty>& item_props)
-{
+    int32_t max_level, int32_t min_cost_base, int32_t min_cost_per_level,
+    const std::unordered_set<std::string> &applicable_items,
+    const std::unordered_map<std::string, ItemProperty> &item_props
+) {
     auto max_power = [](int32_t enchantability) -> int32_t {
-        if (enchantability <= 0) return 0;
-        double base = 30.0;
+        if (enchantability <= 0)
+            return 0;
+        double base  = 30.0;
         double added = 1.0 + 2.0 * (static_cast<double>(enchantability) / 4.0);
         return static_cast<int32_t>(std::round((base + added) * 1.15));
     };
 
     int32_t best = 0;
-    for (const auto& item : applicable_items) {
+    for (const auto &item : applicable_items) {
         std::string bare = item;
-        auto colon = bare.find(':');
+        auto colon       = bare.find(':');
         if (colon != std::string::npos)
             bare = bare.substr(colon + 1);
 
@@ -370,8 +375,10 @@ int32_t compute_limited_level(
         int32_t power = max_power(it->second.enchantability);
         if (power >= min_cost_base) {
             int32_t max_lvl = (power - min_cost_base) / min_cost_per_level + 1;
-            if (max_lvl > max_level) max_lvl = max_level;
-            if (max_lvl > best) best = max_lvl;
+            if (max_lvl > max_level)
+                max_lvl = max_level;
+            if (max_lvl > best)
+                best = max_lvl;
         }
     }
     return std::max<int32_t>(1, best);
@@ -381,41 +388,47 @@ int32_t compute_limited_level(
 // Scan MC official data pack for item tags and derive equipment
 // ---------------------------------------------------------------------------
 std::vector<RawEquipment> derive_equipment_from_tags(
-    const std::filesystem::path &data_dir,
-    const std::unordered_map<std::string, ItemProperty> &item_props)
-{
+    const std::filesystem::path &data_dir, const std::unordered_map<std::string, ItemProperty> &item_props
+) {
     std::unordered_set<std::string> item_ids;
     std::unordered_set<std::string> seen_ids;
 
     // Scan data/<ns>/tags/item/ for all item tag files
     for (const auto &ns_entry : std::filesystem::directory_iterator(
-             data_dir, std::filesystem::directory_options::skip_permission_denied)) {
-        if (!ns_entry.is_directory()) continue;
+             data_dir, std::filesystem::directory_options::skip_permission_denied
+         )) {
+        if (!ns_entry.is_directory())
+            continue;
 
         std::filesystem::path tags_item_dir = ns_entry.path() / "tags" / "item";
-        if (!std::filesystem::is_directory(tags_item_dir)) continue;
+        if (!std::filesystem::is_directory(tags_item_dir))
+            continue;
 
         // Recursively scan all .json tag files under tags/item/
         try {
-            for (const auto &file_entry :
-                 std::filesystem::recursive_directory_iterator(
-                     tags_item_dir,
-                     std::filesystem::directory_options::skip_permission_denied)) {
-                if (!file_entry.is_regular_file()) continue;
-                if (file_entry.path().extension() != ".json") continue;
+            for (const auto &file_entry : std::filesystem::recursive_directory_iterator(
+                     tags_item_dir, std::filesystem::directory_options::skip_permission_denied
+                 )) {
+                if (!file_entry.is_regular_file())
+                    continue;
+                if (file_entry.path().extension() != ".json")
+                    continue;
 
                 // Parse and extract values
                 try {
                     std::string content = ParserUtils::read_file(file_entry.path());
-                    Json json = Json::parse(content);
-                    auto root_var = json.get_value();
-                    if (!std::holds_alternative<Json::Object>(root_var)) continue;
+                    Json json           = Json::parse(content);
+                    auto root_var       = json.get_value();
+                    if (!std::holds_alternative<Json::Object>(root_var))
+                        continue;
                     const auto &root_obj = std::get<Json::Object>(root_var);
 
                     auto values_it = root_obj.find("values");
-                    if (values_it == root_obj.end()) continue;
+                    if (values_it == root_obj.end())
+                        continue;
                     auto values_var = values_it->second.get_value();
-                    if (!std::holds_alternative<Json::Array>(values_var)) continue;
+                    if (!std::holds_alternative<Json::Array>(values_var))
+                        continue;
                     const auto &values_arr = std::get<Json::Array>(values_var);
 
                     for (const auto &elem : values_arr) {
@@ -442,7 +455,7 @@ std::vector<RawEquipment> derive_equipment_from_tags(
     // Build RawEquipment from collected items
     std::vector<RawEquipment> result;
     for (const auto &item_id : item_ids) {
-        int32_t durability = get_durability(item_id, item_props);
+        int32_t durability   = get_durability(item_id, item_props);
         std::string category = derive_category(item_id, item_props);
         // Skip items that don't look like equipment (no durability + generic category)
         if (durability <= 0 && category == item_id) {
@@ -457,9 +470,9 @@ std::vector<RawEquipment> derive_equipment_from_tags(
         }
 
         RawEquipment eq;
-        eq.id = make_id(item_id);
-        eq.display_name = derive_display_name(item_id);
-        eq.category = category;
+        eq.id             = make_id(item_id);
+        eq.display_name   = derive_display_name(item_id);
+        eq.category       = category;
         eq.max_durability = durability;
         result.push_back(std::move(eq));
     }
@@ -472,20 +485,14 @@ std::vector<RawEquipment> derive_equipment_from_tags(
 // ============================================================================
 
 std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
-EnchInfoParser::parse_native_json(
-    const std::filesystem::path &path,
-    EnchantmentDataPack *metadata
-) {
+EnchInfoParser::parse_native_json(const std::filesystem::path &path, EnchantmentDataPack *metadata) {
     return parse_native_json_str(ParserUtils::read_file(path), metadata);
 }
 
 // ============================================================================
 
 std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
-EnchInfoParser::parse_native_json_str(
-    const std::string &content,
-    EnchantmentDataPack *metadata
-) {
+EnchInfoParser::parse_native_json_str(const std::string &content, EnchantmentDataPack *metadata) {
     TagResolver tag_resolver;
     Json root = Json::parse(content);
 
@@ -527,8 +534,11 @@ EnchInfoParser::parse_native_json_str(
                 int32_t multiplier = ParserUtils::get_json_int(elem_obj, "multiplier");
 
                 if (id.empty() || max_level <= 0 || multiplier <= 0) {
-                    LOG_WARN("Warning: Skipping enchantment entry with missing or invalid required fields (id='%s', max_level=%d, multiplier=%d)",
-                             id.c_str(), max_level, multiplier);
+                    LOG_WARN(
+                        "Warning: Skipping enchantment entry with missing or invalid required fields "
+                        "(id='%s', max_level=%d, multiplier=%d)",
+                        id.c_str(), max_level, multiplier
+                    );
                     continue;
                 }
 
@@ -546,10 +556,7 @@ EnchInfoParser::parse_native_json_str(
 // ============================================================================
 
 std::pair<std::vector<RawEnchantment>, std::vector<RawEquipment>>
-EnchInfoParser::parse(
-    const std::filesystem::path &path,
-    EnchantmentDataPack *metadata
-) {
+EnchInfoParser::parse(const std::filesystem::path &path, EnchantmentDataPack *metadata) {
     // Auto-detect format
     auto format = ParserUtils::detect_format(path);
     switch (format) {
@@ -582,11 +589,10 @@ EnchInfoParser::parse_native_csv(const std::filesystem::path &path) {
     }
 
     // Verify required columns exist
-    auto req_id     = col_index.find("id");
-    auto req_max    = col_index.find("max_level");
-    auto req_mult   = col_index.find("multiplier");
-    if (req_id == col_index.end() || req_max == col_index.end() ||
-        req_mult == col_index.end()) {
+    auto req_id   = col_index.find("id");
+    auto req_max  = col_index.find("max_level");
+    auto req_mult = col_index.find("multiplier");
+    if (req_id == col_index.end() || req_max == col_index.end() || req_mult == col_index.end()) {
         LOG_WARN("Warning: CSV file missing required columns (id, max_level, multiplier).");
         return {};
     }
@@ -648,7 +654,8 @@ EnchInfoParser::parse_native_csv(const std::filesystem::path &path) {
             if (!limited_str.empty()) {
                 try {
                     limited_level = std::stoi(limited_str);
-                } catch (const std::exception &) {}
+                } catch (const std::exception &) {
+                }
             }
         }
         if (limited_level <= 0) {
@@ -671,8 +678,8 @@ EnchInfoParser::parse_native_csv(const std::filesystem::path &path) {
         {
             std::string eq_str = get_field(fields, "applicable_equipment");
             if (!eq_str.empty()) {
-                auto items    = ParserUtils::split_string(eq_str, ';');
-                auto resolved = resolve_references(items, tag_resolver);
+                auto items       = ParserUtils::split_string(eq_str, ';');
+                auto resolved    = resolve_references(items, tag_resolver);
                 applicable_items = std::move(resolved);
             }
         }
@@ -711,7 +718,8 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
     }
 
     for (const auto &ns_entry : std::filesystem::directory_iterator(
-             data_dir, std::filesystem::directory_options::skip_permission_denied)) {
+             data_dir, std::filesystem::directory_options::skip_permission_denied
+         )) {
         if (!ns_entry.is_directory()) {
             continue;
         }
@@ -724,7 +732,8 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
         }
 
         for (const auto &ench_file : std::filesystem::directory_iterator(
-                 ench_dir, std::filesystem::directory_options::skip_permission_denied)) {
+                 ench_dir, std::filesystem::directory_options::skip_permission_denied
+             )) {
             if (!ench_file.is_regular_file()) {
                 continue;
             }
@@ -768,8 +777,10 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
             int32_t max_level  = ParserUtils::get_json_int(obj, "max_level");
 
             if (max_level <= 0 || multiplier <= 0) {
-                LOG_WARN("Warning: Skipping %s:%s — invalid max_level or anvil_cost (max_level=%d, anvil_cost=%d)",
-                         ns.c_str(), filename.c_str(), max_level, multiplier);
+                LOG_WARN(
+                    "Warning: Skipping %s:%s — invalid max_level or anvil_cost (max_level=%d, anvil_cost=%d)",
+                    ns.c_str(), filename.c_str(), max_level, multiplier
+                );
                 continue;
             }
 
@@ -781,20 +792,21 @@ EnchInfoParser::parse_mc_official(const std::filesystem::path &dir) {
             auto exclusive_set = resolve_references(excl_items, tag_resolver);
 
             // Supported items — resolve #tag refs
-            auto supp_items    = ParserUtils::get_json_string_array(obj, "supported_items");
+            auto supp_items       = ParserUtils::get_json_string_array(obj, "supported_items");
             auto applicable_items = resolve_references(supp_items, tag_resolver);
 
             // Compute limited_level from cost formula (not a direct field in MC official format)
             int32_t limited_level = max_level;
-            auto min_cost_it = obj.find("min_cost");
+            auto min_cost_it      = obj.find("min_cost");
             if (min_cost_it != obj.end()) {
                 auto mc = min_cost_it->second.get_value();
-                if (auto* mc_obj = std::get_if<Json::Object>(&mc)) {
-                    int32_t min_base = ParserUtils::get_json_int(*mc_obj, "base");
+                if (auto *mc_obj = std::get_if<Json::Object>(&mc)) {
+                    int32_t min_base      = ParserUtils::get_json_int(*mc_obj, "base");
                     int32_t min_per_level = ParserUtils::get_json_int(*mc_obj, "per_level_above_first");
                     if (min_base > 0 && min_per_level >= 0) {
                         limited_level = compute_limited_level(
-                            max_level, min_base, min_per_level, applicable_items, item_props);
+                            max_level, min_base, min_per_level, applicable_items, item_props
+                        );
                     }
                 }
             }

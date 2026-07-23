@@ -1,7 +1,7 @@
 #pragma once
-#include "../forge_engine/IForgeEngine.h"
-#include "../types/Enchantment.h"
-#include "../types/Item.h"
+#include "domain/algorithm/forge_engine/IForgeEngine.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Item.h"
 #include "ItemPool.h"
 #include <algorithm>
 #include <cstdint>

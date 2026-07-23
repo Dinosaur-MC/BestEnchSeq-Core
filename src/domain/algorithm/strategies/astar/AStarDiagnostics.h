@@ -1,5 +1,5 @@
 #pragma once
-#include "../../diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include <cstdint>
 #include <cstddef>
 

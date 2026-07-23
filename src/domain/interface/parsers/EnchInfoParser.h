@@ -1,6 +1,5 @@
 #pragma once
-#include "../types/RawTypes.h"
-#include "../components/TagResolver.hpp"
+#include "domain/interface/types/RawTypes.h"
 #include <filesystem>
 #include <string>
 #include <vector>

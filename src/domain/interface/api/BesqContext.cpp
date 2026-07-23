@@ -1,10 +1,9 @@
 #include "besq/besq.h"
 #include "ProfileSet.h"
 #include "SolvePipeline.h"
-#include "parsers/EnchInfoParser.h"
+#include "domain/interface/parsers/EnchInfoParser.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/orchestration/components/RawTypeAdapter.h"
-#include "domain/algorithm/resolvers/ItemResolver.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 
 #include <filesystem>

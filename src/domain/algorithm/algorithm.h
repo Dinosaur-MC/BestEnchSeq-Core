@@ -7,45 +7,39 @@
 // Zero dependencies on business/interface domains.
 
 // ── Core Types ──
-#include "types/Enchantment.h"       // Ench, EnchSet (compact)
-#include "types/Equipment.h"         // Equipment
-#include "types/Item.h"              // Item, ItemType, ItemCollection
-#include "types/Solution.h"          // Solution, Step, AlgorithmOutput
-#include "types/AlgorithmTypes.h"    // AlgorithmInput, AlgorithmMode, ResolvedInput
-#include "types/ConfigTypes.h"       // ForgeConfig, SearchConfig
-#include "types/Platform.h"          // Platform (MCE wrapper)
+#include "domain/algorithm/types/AlgorithmTypes.h" // IWYU pragma: export
+#include "domain/algorithm/types/ConfigTypes.h"    // IWYU pragma: export
+#include "domain/algorithm/types/Enchantment.h"    // IWYU pragma: export
+#include "domain/algorithm/types/Equipment.h"      // IWYU pragma: export
+#include "domain/algorithm/types/Item.h"           // IWYU pragma: export
+#include "domain/algorithm/types/Platform.h"       // IWYU pragma: export
+#include "domain/algorithm/types/Solution.h"       // IWYU pragma: export
 
 // ── Core Interfaces ──
-#include "IAlgorithm.h"              // IAlgorithm interface
-#include "AlgorithmExecutor.h"       // Async executor
-#include "ExecutionContext.h"        // Cancel/pause/progress
+#include "domain/algorithm/AlgorithmExecutor.h" // IWYU pragma: export
+#include "domain/algorithm/ExecutionContext.h"  // IWYU pragma: export
+#include "domain/algorithm/IAlgorithm.h"        // IWYU pragma: export
 
 // ── Registries ──
-#include "registries/EnchReg.h"      // Compact registry with O(1) conflict matrix
-#include "registries/AlgorithmRegistry.h"  // String-keyed algorithm factory
+#include "domain/algorithm/registries/AlgorithmRegistry.h" // IWYU pragma: export
+#include "domain/algorithm/registries/EnchReg.h"           // IWYU pragma: export
 
 // ── Resolvers ──
-#include "resolvers/ItemResolver.h"      // Direct mode (diff + graduated books)
-#include "resolvers/InventoryResolver.h" // Inventory mode (feasibility + sort)
+#include "domain/algorithm/resolvers/InventoryResolver.h" // IWYU pragma: export
+#include "domain/algorithm/resolvers/ItemResolver.h"      // IWYU pragma: export
 
 // ── Plugin System ──
-#include "plugin/AlgorithmLoader.h"  // Dynamic shared-library loading
-#include "plugin/PluginAPI.h"        // Plugin interface types
-#include "plugin/PluginEntry.h"      // BESQ_PLUGIN_ENTRY macro
+#include "domain/algorithm/plugin/AlgorithmLoader.h" // IWYU pragma: export
+#include "domain/algorithm/plugin/PluginAPI.h"       // IWYU pragma: export
+#include "domain/algorithm/plugin/PluginEntry.h"     // IWYU pragma: export
 
 // ── Forge Engine ──
-#include "forge_engine/IForgeEngine.h"   // Virtual forge sub-operation interface
-#include "forge_engine/ForgeEngine.h"    // Vanilla implementation
+#include "domain/algorithm/forge_engine/ForgeEngine.h"  // IWYU pragma: export
+#include "domain/algorithm/forge_engine/IForgeEngine.h" // IWYU pragma: export
 
 // ── Diagnostics ──
-#include "diagnostics/DiagnosticsService.h"  // Event-driven diagnostics pipeline
+#include "domain/algorithm/diagnostics/DiagnosticsService.h" // IWYU pragma: export
 
 // ── Serialization ──
-#include "serialization/IAlgorithmSerializer.h"  // Serialization interface
-#include "serialization/CompactSerializer.h"     // Binary checkpoint format
-
-// ── Algorithm Components ──
-#include "components/Heuristic.h"    // Search heuristic interface
-#include "components/ItemPool.h"     // Pool for algorithm items
-#include "components/StateHash.h"    // State hashing utilities
-#include "components/SearchUtils.h"  // Search utility functions
+#include "domain/algorithm/serialization/CompactSerializer.h"    // IWYU pragma: export
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h" // IWYU pragma: export

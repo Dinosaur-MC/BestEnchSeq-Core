@@ -1,5 +1,5 @@
 #pragma once
-#include "common/CommonTypes.h"
+#include "common/CommonTypes.h" // IWYU pragma: export
 
 // ─── Minecraft platform edition ─────────────────────────────────────────────
 // MCE is defined in CommonTypes.h as:

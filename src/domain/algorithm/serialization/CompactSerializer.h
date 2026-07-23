@@ -1,16 +1,14 @@
 #pragma once
-#include "../registries/EnchReg.h"
-#include "../types/AlgorithmTypes.h"
-#include "../types/ConfigTypes.h"
-#include "../types/Equipment.h"
-#include "../types/Item.h"
-#include "../types/Solution.h"
+#include "domain/algorithm/registries/EnchReg.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/types/Equipment.h"
+#include "domain/algorithm/types/Item.h"
+#include "domain/algorithm/types/Solution.h"
 #include "common/io/ByteStream.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
 // ─── Non-intrusive serialization primitives for compact types ───────────
 //

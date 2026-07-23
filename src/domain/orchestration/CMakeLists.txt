@@ -16,6 +16,5 @@ target_link_libraries(besq-orchestration PUBLIC
 )
 
 target_include_directories(besq-orchestration PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "components/CompactAdapter.h"
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/algorithm/types/Item.h"
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/orchestration/components/CompactAdapter.h"
 )

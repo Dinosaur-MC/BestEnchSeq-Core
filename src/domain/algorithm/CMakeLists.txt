@@ -31,12 +31,12 @@ file(GLOB STRATEGY_HEADERS CONFIGURE_DEPENDS
 
 set(REG_SRC "${CMAKE_CURRENT_BINARY_DIR}/generated/_algorithm_strategy_registration.cpp")
 set(REG_CONTENT "// GENERATED — do not edit\n")
-set(REG_CONTENT "${REG_CONTENT}#include \"strategies/Registration.h\"\n")
+set(REG_CONTENT "${REG_CONTENT}#include \"domain/algorithm/strategies/Registration.h\"\n")
 
 foreach(HDR ${STRATEGY_HEADERS})
     file(RELATIVE_PATH INC_PATH "${CMAKE_CURRENT_SOURCE_DIR}" "${HDR}")
     string(REPLACE "\\" "/" INC_PATH "${INC_PATH}")
-    set(REG_CONTENT "${REG_CONTENT}#include \"${INC_PATH}\"\n")
+    set(REG_CONTENT "${REG_CONTENT}#include \"domain/algorithm/${INC_PATH}\"\n")
 endforeach()
 
 set(REG_CONTENT "${REG_CONTENT}\nvoid besq_register_builtin_strategies(algorithm::AlgorithmRegistry &reg) {\n")
@@ -62,6 +62,5 @@ add_library(besq-domain-algorithm STATIC
 target_link_libraries(besq-domain-algorithm PUBLIC besq-common)
 
 target_include_directories(besq-domain-algorithm PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "types/Enchantment.h"
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "common/io/json.h"
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/algorithm/types/Enchantment.h"
 )

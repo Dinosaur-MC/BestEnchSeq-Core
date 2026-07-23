@@ -10,7 +10,6 @@
 #include "common/io/json.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Item.h"
@@ -412,11 +411,11 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         // ── Platform ──────────────────────────────────────────────────────
         std::string plat = ParserUtils::get_json_string(root, "platform");
         if (plat == "java")
-            input.forge_config.platform = algorithm::MCE::Java;
+            input.forge_config.platform = MCE::Java;
         else if (plat == "bedrock")
-            input.forge_config.platform = algorithm::MCE::Bedrock;
+            input.forge_config.platform = MCE::Bedrock;
         else
-            input.forge_config.platform = algorithm::MCE::Java;
+            input.forge_config.platform = MCE::Java;
 
         // ── Mode ──────────────────────────────────────────────────────────
         std::string mode = ParserUtils::get_json_string(root, "mode");

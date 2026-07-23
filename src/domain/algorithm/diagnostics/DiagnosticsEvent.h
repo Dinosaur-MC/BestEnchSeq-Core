@@ -1,12 +1,11 @@
 #pragma once
-#include "../types/AlgorithmTypes.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
 #include "AlgorithmDiagnostics.h"
 #include "DiagnosticsWriter.h"
 #include <chrono>
 #include <memory>
 #include <string>
 #include <variant>
-#include <vector>
 
 namespace algorithm {
 

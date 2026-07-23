@@ -1,5 +1,5 @@
 #pragma once
-#include "../registries/EnchReg.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include "ItemPool.h"
 #include "SearchUtils.h"
 #include <cstdint>

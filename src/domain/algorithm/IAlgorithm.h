@@ -1,8 +1,6 @@
 #pragma once
-#include "./components/SearchUtils.h"
-#include "types/AlgorithmTypes.h"
-#include <cstdint>
-#include <vector>
+#include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
 
 namespace algorithm {
 class ExecutionContext;

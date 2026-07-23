@@ -1,6 +1,6 @@
 #include "HammingAlgorithm.h"
-#include "../../ExecutionContext.h"
-#include "../../components/SearchUtils.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cstdint>
 #include <numeric>

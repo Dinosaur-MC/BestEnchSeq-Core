@@ -1,6 +1,5 @@
 #pragma once
-#include "../../serialization/IAlgorithmSerializer.h"
-#include <cstdint>
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include <vector>
 
 namespace algorithm {

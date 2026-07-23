@@ -1,6 +1,6 @@
 #pragma once
-#include "ExecutionContext.h"
-#include "IAlgorithm.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/IAlgorithm.h"
 #include <atomic>
 #include <chrono>
 #include <memory>

@@ -1,5 +1,5 @@
 #include "IAlgorithmSerializer.h"
-#include "../IAlgorithm.h"
+#include "domain/algorithm/IAlgorithm.h"
 #include <chrono>
 namespace algorithm {
 

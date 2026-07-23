@@ -1,8 +1,6 @@
 #include "ItemResolver.h"
 
-#include <algorithm>
 #include <cstdint>
-#include <vector>
 
 namespace algorithm {
 

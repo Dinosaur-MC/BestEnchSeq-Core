@@ -7,22 +7,22 @@
 // consumers (end users, tests, higher-level tools).
 
 // ── Public API ──
-#include "api/SolvePipeline.h"   // SolvePipeline, SolveInput, SolveResult
-#include "api/ProfileSet.h"      // Profile / ProfileSet management
+#include "domain/interface/api/SolvePipeline.h"   // IWYU pragma: export
+#include "domain/interface/api/ProfileSet.h"      // IWYU pragma: export
 
 // ── CLI Layer ──
-#include "cli/cli.h"             // CLIConfig, parse_cli(), build_target(), build_enchset()
-#include "cli/RegistryEditor.h"  // apply_registry_edits()
+#include "domain/interface/cli/cli.h"             // IWYU pragma: export
+#include "domain/interface/cli/RegistryEditor.h"  // IWYU pragma: export
 
 // ── Parsers ──
-#include "parsers/CLIParser.h"           // Generic --key=value argument parser
-#include "parsers/EnchInfoParser.h"      // Enchantment/equipment data file parser
-#include "parsers/EnchParser.h"          // Enchantment spec string parser
-#include "parsers/ItemParser.h"          // Item spec string parser
-#include "parsers/ParserUtilsDomain.hpp" // Parser utility templates
+#include "domain/interface/parsers/CLIParser.h"           // IWYU pragma: export
+#include "domain/interface/parsers/EnchInfoParser.h"      // IWYU pragma: export
+#include "domain/interface/parsers/EnchParser.h"          // IWYU pragma: export
+#include "domain/interface/parsers/ItemParser.h"          // IWYU pragma: export
+#include "domain/interface/parsers/ParserUtilsDomain.hpp" // IWYU pragma: export
 
 // ── Raw (Pre-Resolution) Types ──
-#include "types/RawTypes.h"      // RawEnchantment, RawEquipment, Id
+#include "domain/interface/types/RawTypes.h"      // IWYU pragma: export
 
 // ── Interface Components ──
-#include "components/TagResolver.hpp"    // MC tag file loader and resolver
+#include "domain/interface/components/TagResolver.hpp"    // IWYU pragma: export

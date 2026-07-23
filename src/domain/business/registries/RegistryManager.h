@@ -1,7 +1,7 @@
 #pragma once
-#include "../registries/EnchantmentRegistry.h"
-#include "../registries/EquipmentCategoryRegistry.h"
-#include "../registries/EquipmentRegistry.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
 #include <filesystem>
 #include <optional>
 #include <string>

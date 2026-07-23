@@ -18,6 +18,5 @@ add_library(besq-domain-business STATIC ${BESQ_BUSINESS_SRCS})
 target_link_libraries(besq-domain-business PUBLIC besq-common)
 
 target_include_directories(besq-domain-business PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "types/Enchantment.h"
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "common/io/json.h"
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/business/types/Enchantment.h"
 )

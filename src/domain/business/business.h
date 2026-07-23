@@ -7,13 +7,13 @@
 // item stacks, solutions, and their registries.
 
 // ── Types ──
-#include "types/Enchantment.h"    // Ench, EnchInfo, EnchSet
-#include "types/Equipment.h"      // Equipment
-#include "types/Item.h"           // Item, ItemCollection
-#include "types/Solution.h"       // Solution, EnchStep, MetaData
+#include "domain/business/types/Enchantment.h"    // IWYU pragma: export
+#include "domain/business/types/Equipment.h"      // IWYU pragma: export
+#include "domain/business/types/Item.h"           // IWYU pragma: export
+#include "domain/business/types/Solution.h"       // IWYU pragma: export
 
 // ── Registries ──
-#include "registries/EnchantmentRegistry.h"        // Full enchantment registry
-#include "registries/EquipmentRegistry.h"          // Equipment definitions
-#include "registries/EquipmentCategoryRegistry.h"  // Category ID mapping
-#include "registries/RegistryManager.h"            // Multi-registry CRUD
+#include "domain/business/registries/EnchantmentRegistry.h"        // IWYU pragma: export
+#include "domain/business/registries/EquipmentRegistry.h"          // IWYU pragma: export
+#include "domain/business/registries/EquipmentCategoryRegistry.h"  // IWYU pragma: export
+#include "domain/business/registries/RegistryManager.h"            // IWYU pragma: export

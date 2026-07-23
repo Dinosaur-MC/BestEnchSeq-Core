@@ -1,5 +1,5 @@
 #pragma once
-#include "../IAlgorithm.h"
+#include "domain/algorithm/IAlgorithm.h"
 #include <functional>
 #include <memory>
 #include <shared_mutex>

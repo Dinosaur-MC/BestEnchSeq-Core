@@ -28,8 +28,7 @@ target_link_libraries(besq-domain-interface PUBLIC
 )
 
 target_include_directories(besq-domain-interface PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "api/SolvePipeline.h"
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "common/io/json.h"
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/interface/api/SolvePipeline.h"
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>        # → #include "besq/besq.h"
     ${BESQ_GENERATED_DIR}                                  # → #include "BuildConfig.h"
 )

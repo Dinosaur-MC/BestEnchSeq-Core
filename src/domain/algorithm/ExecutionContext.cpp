@@ -1,6 +1,6 @@
-#include "ExecutionContext.h"
-#include "diagnostics/DiagnosticsService.h"
-#include "diagnostics/DiagnosticsEvent.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/algorithm/diagnostics/DiagnosticsEvent.h"
 #include <algorithm>
 #include <mutex>
 

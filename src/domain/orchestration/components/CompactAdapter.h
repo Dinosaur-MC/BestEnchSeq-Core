@@ -1,6 +1,5 @@
 #pragma once
 #include "domain/algorithm/types/Item.h"
-#include "domain/algorithm/types/Solution.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/resolvers/ItemResolver.h"
 #include "domain/business/registries/EnchantmentRegistry.h"

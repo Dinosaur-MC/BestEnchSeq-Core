@@ -21,11 +21,3 @@ InlayHints:
 
   # Show parameter name hints in function calls.
   ParameterNames: Yes
-
-Diagnostics:
-  # Treat all clangd diagnostics as warnings (don't suppress — just demote
-  # potentially noisy ones).  Real build errors still appear as errors from
-  # the compiler.
-  Suppress:
-    - unused-includes       # Clangd's IWYU analysis is noisy for a project
-                            # that uses transitive includes extensively.

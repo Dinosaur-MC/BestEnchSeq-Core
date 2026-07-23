@@ -1,5 +1,5 @@
 #pragma once
-#include "../registries/AlgorithmRegistry.h"
+#include "domain/algorithm/registries/AlgorithmRegistry.h"
 
 /// Register all built-in algorithm strategies into the registry.
 /// Implemented by CMake-generated code in _strategy_registration.cpp.

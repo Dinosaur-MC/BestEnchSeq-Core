@@ -1,9 +1,10 @@
 #include "EnchSerializer.h"
-#include "domain/interface/interface.h"
-#include "domain/business/business.h"
-#include "common/log/log.hpp"
 #include "common/io/CsvIO.h"
 #include "common/io/json.h"
+#include "common/log/log.hpp"
+#include "domain/business/business.h"
+#include "domain/interface/parsers/EnchInfoParser.h"
+#include "domain/interface/parsers/ParserUtilsDomain.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -16,8 +17,7 @@
 // ============================================================================
 
 std::string EnchSerializer::to_json(
-    const std::vector<EnchInfo> &infos,
-    const EquipmentCategoryRegistry &cat_reg,
+    const std::vector<EnchInfo> &infos, const EquipmentCategoryRegistry &cat_reg,
     const EnchantmentDataPack *metadata
 ) {
     Json::Object root;
@@ -34,13 +34,13 @@ std::string EnchSerializer::to_json(
     Json::Array enchants;
     for (const auto &info : infos) {
         Json::Object obj;
-        obj["id"]       = Json(Json::String(info.name_id));
-        obj["name"]     = Json(Json::String(info.name));
-        obj["platform"] = Json(Json::String(ParserUtils::platform_to_string(info.supported_platform)));
-        obj["max_level"] = Json(Json::Number(static_cast<int32_t>(info.max_level)));
+        obj["id"]            = Json(Json::String(info.name_id));
+        obj["name"]          = Json(Json::String(info.name));
+        obj["platform"]      = Json(Json::String(ParserUtils::platform_to_string(info.supported_platform)));
+        obj["max_level"]     = Json(Json::Number(static_cast<int32_t>(info.max_level)));
         obj["limited_level"] = Json(Json::Number(static_cast<int32_t>(info.limited_level)));
-        obj["multiplier"] = Json(Json::Number(static_cast<int32_t>(info.multiplier)));
-        obj["is_treasure"] = Json(Json::Bool(info.is_treasure));
+        obj["multiplier"]    = Json(Json::Number(static_cast<int32_t>(info.multiplier)));
+        obj["is_treasure"]   = Json(Json::Bool(info.is_treasure));
 
         // exclusive_set array
         Json::Array excl;
@@ -68,22 +68,23 @@ std::string EnchSerializer::to_json(
 
 // ============================================================================
 
-std::string EnchSerializer::to_csv(
-    const std::vector<EnchInfo> &infos,
-    const EquipmentCategoryRegistry &cat_reg
-) {
+std::string
+EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const EquipmentCategoryRegistry &cat_reg) {
     csv::CsvTable table;
 
     // Header row
-    table.push_back({"id", "name", "platform", "max_level", "limited_level",
-                     "multiplier", "is_treasure", "exclusive_set", "applicable_equipment"});
+    table.push_back(
+        {"id", "name", "platform", "max_level", "limited_level", "multiplier", "is_treasure", "exclusive_set",
+         "applicable_equipment"}
+    );
 
     for (const auto &info : infos) {
         // exclusive_set: join with ;
         std::string excl_set;
         bool first = true;
         for (const auto &e : info.exclusive_set) {
-            if (!first) excl_set += ";";
+            if (!first)
+                excl_set += ";";
             first = false;
             excl_set += e;
         }
@@ -92,8 +93,9 @@ std::string EnchSerializer::to_csv(
         std::string app_eq;
         first = true;
         for (const auto &cat_id : info.applicable_category_ids) {
-            if (!first) app_eq += ";";
-            first = false;
+            if (!first)
+                app_eq += ";";
+            first                = false;
             std::string cat_name = "unknown";
             if (cat_id >= 0 && static_cast<size_t>(cat_id) < cat_reg.size())
                 cat_name = cat_reg.get(cat_id).name_id;
@@ -119,8 +121,7 @@ std::string EnchSerializer::to_csv(
 // ============================================================================
 
 void EnchSerializer::export_to_mc_official(
-    const std::vector<EnchInfo> &infos,
-    const EquipmentCategoryRegistry &cat_reg,
+    const std::vector<EnchInfo> &infos, const EquipmentCategoryRegistry &cat_reg,
     const std::filesystem::path &output_dir
 ) {
     for (const auto &info : infos) {
@@ -159,7 +160,7 @@ void EnchSerializer::export_to_mc_official(
         obj["supported_items"] = Json(supp);
 
         // Write the file
-        std::string json_str = Json(obj).to_string(Json::Pretty);
+        std::string json_str            = Json(obj).to_string(Json::Pretty);
         std::filesystem::path file_path = ench_dir / (id + ".json");
         std::ofstream f(file_path);
         if (f.is_open()) {
@@ -177,10 +178,8 @@ void EnchSerializer::export_to_mc_official(
 // Equipment serialization
 // ============================================================================
 
-std::string EnchSerializer::to_json(
-    const std::vector<Equipment> &equipments,
-    const EquipmentCategoryRegistry &cat_reg
-) {
+std::string
+EnchSerializer::to_json(const std::vector<Equipment> &equipments, const EquipmentCategoryRegistry &cat_reg) {
     Json::Array eq_arr;
     for (const auto &eq : equipments) {
         std::string cat_name = "unknown";
@@ -201,10 +200,8 @@ std::string EnchSerializer::to_json(
 
 // ============================================================================
 
-std::string EnchSerializer::to_csv(
-    const std::vector<Equipment> &equipments,
-    const EquipmentCategoryRegistry &cat_reg
-) {
+std::string
+EnchSerializer::to_csv(const std::vector<Equipment> &equipments, const EquipmentCategoryRegistry &cat_reg) {
     csv::CsvTable table;
     table.push_back({"id", "name", "category", "max_durability"});
 
@@ -228,26 +225,26 @@ std::string EnchSerializer::to_csv(
 // ============================================================================
 
 bool EnchSerializer::export_json(
-    const std::string& path,
-    const EnchantmentRegistry& ench_reg,
-    const EquipmentRegistry& eq_reg,
-    const EquipmentCategoryRegistry& cat_reg)
-{
+    const std::string &path, const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg,
+    const EquipmentCategoryRegistry &cat_reg
+) {
     // Filter out invalid (removed) entries
-    const auto& all_ench = ench_reg.get_instances();
+    const auto &all_ench = ench_reg.get_instances();
     std::vector<EnchInfo> valid_ench;
-    for (const auto& info : all_ench) {
-        if (!info.name_id.empty()) valid_ench.push_back(info);
+    for (const auto &info : all_ench) {
+        if (!info.name_id.empty())
+            valid_ench.push_back(info);
     }
 
-    const auto& all_eq = eq_reg.get_instances();
+    const auto &all_eq = eq_reg.get_instances();
     std::vector<Equipment> valid_eq;
-    for (const auto& eq : all_eq) {
-        if (!eq.name_id.empty()) valid_eq.push_back(eq);
+    for (const auto &eq : all_eq) {
+        if (!eq.name_id.empty())
+            valid_eq.push_back(eq);
     }
 
     std::string ench_json = to_json(valid_ench, cat_reg);
-    std::string eq_json = to_json(valid_eq, cat_reg);
+    std::string eq_json   = to_json(valid_eq, cat_reg);
 
     Json::Object obj;
     obj["name"] = Json(Json::String("BestEnchSeq Registry Export"));
@@ -256,8 +253,8 @@ bool EnchSerializer::export_json(
     auto ench_root = Json::parse(ench_json);
     if (ench_root.is_valid()) {
         Json::Value root_val = ench_root.get_value();
-        auto& root = std::get<Json::Object>(root_val);
-        auto it = root.find("enchantments");
+        auto &root           = std::get<Json::Object>(root_val);
+        auto it              = root.find("enchantments");
         if (it != root.end())
             obj["enchantments"] = it->second;
     }
@@ -265,42 +262,44 @@ bool EnchSerializer::export_json(
     auto eq_root = Json::parse(eq_json);
     if (eq_root.is_valid()) {
         Json::Value root_val = eq_root.get_value();
-        auto& root = std::get<Json::Object>(root_val);
-        auto it = root.find("equipments");
+        auto &root           = std::get<Json::Object>(root_val);
+        auto it              = root.find("equipments");
         if (it != root.end())
             obj["equipments"] = it->second;
     }
 
     std::ofstream f(path);
-    if (!f) return false;
+    if (!f)
+        return false;
     f << Json(obj).to_string(Json::Pretty);
     return true;
 }
 
 bool EnchSerializer::export_csv(
-    const std::string& path,
-    const EnchantmentRegistry& ench_reg,
-    const EquipmentRegistry& eq_reg,
-    const EquipmentCategoryRegistry& cat_reg)
-{
+    const std::string &path, const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg,
+    const EquipmentCategoryRegistry &cat_reg
+) {
     // Filter out invalid entries
-    const auto& all_ench = ench_reg.get_instances();
+    const auto &all_ench = ench_reg.get_instances();
     std::vector<EnchInfo> valid_ench;
-    for (const auto& info : all_ench) {
-        if (!info.name_id.empty()) valid_ench.push_back(info);
+    for (const auto &info : all_ench) {
+        if (!info.name_id.empty())
+            valid_ench.push_back(info);
     }
 
-    const auto& all_eq = eq_reg.get_instances();
+    const auto &all_eq = eq_reg.get_instances();
     std::vector<Equipment> valid_eq;
-    for (const auto& eq : all_eq) {
-        if (!eq.name_id.empty()) valid_eq.push_back(eq);
+    for (const auto &eq : all_eq) {
+        if (!eq.name_id.empty())
+            valid_eq.push_back(eq);
     }
 
     // Write enchantments CSV to the given path
     {
         std::string ench_csv = to_csv(valid_ench, cat_reg);
         std::ofstream f(path);
-        if (!f) return false;
+        if (!f)
+            return false;
         f << ench_csv;
     }
 
@@ -310,7 +309,8 @@ bool EnchSerializer::export_csv(
     {
         std::string eq_csv = to_csv(valid_eq, cat_reg);
         std::ofstream f_eq(eq_path);
-        if (!f_eq) return false;
+        if (!f_eq)
+            return false;
         f_eq << eq_csv;
     }
 

@@ -1,5 +1,5 @@
 #pragma once
-#include "../types/Enchantment.h"
+#include "domain/business/types/Enchantment.h"
 
 #include <cstdint>
 #include <string>

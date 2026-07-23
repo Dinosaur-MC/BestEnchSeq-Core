@@ -1,8 +1,8 @@
 #pragma once
-#include "../../IAlgorithm.h"
-#include "../../forge_engine/ForgeEngine.h"
-#include "../../diagnostics/AlgorithmDiagnostics.h"
-#include "../../registries/EnchReg.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include <vector>
 
 /// Popcount-based balanced merge tree algorithm.

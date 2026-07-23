@@ -1,5 +1,5 @@
 #pragma once
-#include "../types/AlgorithmTypes.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
 #include <vector>
 
 namespace algorithm {

@@ -1,7 +1,6 @@
 #include "RawTypeAdapter.h"
 #include "domain/business/types/Equipment.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>

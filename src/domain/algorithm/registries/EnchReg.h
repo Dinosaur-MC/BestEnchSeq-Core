@@ -1,6 +1,6 @@
 #pragma once
-#include "../types/Enchantment.h"
-#include "../types/Equipment.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Equipment.h"
 #include <vector>
 
 // ─── Forward declarations for serialization friends ───────────────────────

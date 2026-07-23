@@ -1,7 +1,5 @@
 #pragma once
-#include "../types/Item.h"
-#include "../types/Solution.h"
-#include "../forge_engine/IForgeEngine.h"
+#include "domain/algorithm/types/Item.h"
 #include <vector>
 
 namespace algorithm {

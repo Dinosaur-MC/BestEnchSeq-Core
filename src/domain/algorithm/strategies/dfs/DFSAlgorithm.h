@@ -1,8 +1,8 @@
 #pragma once
-#include "../../IAlgorithm.h"
-#include "../../forge_engine/ForgeEngine.h"
-#include "../../registries/EnchReg.h"
-#include "../../types/ConfigTypes.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "domain/algorithm/registries/EnchReg.h"
+#include "domain/algorithm/types/ConfigTypes.h"
 #include "common/utils/HashUtils.hpp"
 #include <chrono>
 #include <cstdint>
@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../../diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 
 namespace algorithm {
 class DFSAlgorithm : public IAlgorithm {

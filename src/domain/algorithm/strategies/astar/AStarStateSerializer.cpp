@@ -1,6 +1,6 @@
 #include "AStarStateSerializer.h"
 #include "AStarAlgorithm.h"
-#include "../../serialization/CompactSerializer.h"
+#include "domain/algorithm/serialization/CompactSerializer.h"
 namespace algorithm {
 
 using namespace compact_serial;

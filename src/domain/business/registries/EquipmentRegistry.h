@@ -1,5 +1,5 @@
 #pragma once
-#include "../types/Equipment.h"
+#include "domain/business/types/Equipment.h"
 
 #include <string>
 #include <unordered_map>

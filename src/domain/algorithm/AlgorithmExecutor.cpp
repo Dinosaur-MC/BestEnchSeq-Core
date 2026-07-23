@@ -1,6 +1,6 @@
-#include "AlgorithmExecutor.h"
-#include "diagnostics/DiagnosticsService.h"
-#include "serialization/IAlgorithmSerializer.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include <stdexcept>
 namespace algorithm {
 #include <utility>

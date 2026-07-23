@@ -1,7 +1,7 @@
 #pragma once
 #include "LogTypes.h"
-#include "../utils/EventLoop.hpp"
-#include "../utils/queue/BoundedMPMCQueue.hpp"
+#include "utils/EventLoop.hpp"
+#include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
 #include <cstdio>
 #include <fstream>

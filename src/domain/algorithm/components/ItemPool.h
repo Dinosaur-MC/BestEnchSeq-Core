@@ -1,5 +1,5 @@
 #pragma once
-#include "../types/Item.h"
+#include "domain/algorithm/types/Item.h"
 #include "common/utils/MemoryPool.hpp"
 #include <cstdint>
 #include <memory_resource>

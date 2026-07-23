@@ -2,7 +2,6 @@
 #include "common/utils/ExpCalculator.hpp"
 
 #include <cassert>
-#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 

@@ -1,8 +1,8 @@
 #pragma once
-#include "../registries/EnchReg.h"
-#include "../types/ConfigTypes.h"
-#include "../types/Enchantment.h"
-#include "../types/Item.h"
+#include "domain/algorithm/registries/EnchReg.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Item.h"
 #include <cstdint>
 #include <utility>
 

@@ -1,9 +1,8 @@
 #include "cli.h"
-#include "../parsers/CLIParser.h"
+#include "domain/interface/parsers/CLIParser.h"
 #include "domain/business/business.h"
 #include "BuildConfig.h"
 #include "common/utils/ParserUtils.hpp"
-#include "common/log/log.hpp"
 #include <iostream>
 #include <stdexcept>
 

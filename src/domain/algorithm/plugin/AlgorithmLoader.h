@@ -21,7 +21,7 @@
 ///   Mutation (load, unload) intended for startup / shutdown only.
 ///   create() and list() are safe for concurrent read access.
 
-#include "../registries/AlgorithmRegistry.h"
+#include "domain/algorithm/registries/AlgorithmRegistry.h"
 #include "PluginAPI.h"
 
 #include <memory>

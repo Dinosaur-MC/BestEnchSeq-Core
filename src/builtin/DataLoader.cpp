@@ -3,7 +3,6 @@
 #include "domain/interface/parsers/EnchInfoParser.h"
 #include "domain/orchestration/components/RawTypeAdapter.h"
 #include <filesystem>
-#include <stdexcept>
 
 namespace besq::data {
 
