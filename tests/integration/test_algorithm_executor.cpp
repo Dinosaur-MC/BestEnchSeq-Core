@@ -1,8 +1,9 @@
 #include "framework/test_utils.h"
-#include "algorithm/IAlgorithm.h"
-#include "algorithm/AlgorithmExecutor.h"
-#include "types/CompactedTypes.h"
-#include "registries/CompactedRegistries.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Item.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include <chrono>
 #include <stdexcept>
 #include <thread>
@@ -17,15 +18,15 @@ public:
     std::string_view name() const noexcept override { return "test"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
-    void execute(const AlgorithmInput&, ExecutionContext& ctx) override {
+    void execute(const AlgorithmInput&, algorithm::ExecutionContext& ctx) override {
         for (int i = 0; i < 5; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
             ctx.report_progress(static_cast<uint8_t>((i + 1) * 20), ProgressStatus::Exploring);
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
-        std::vector<compact::EnchStep> solution;
-        solution.push_back(compact::EnchStep{{}, {}, 4});
+        std::vector<algorithm::EnchStep> solution;
+        solution.push_back(algorithm::EnchStep{{}, {}, 4});
         ctx.report_solution(solution);
     }
 };
@@ -35,7 +36,7 @@ public:
     std::string_view name() const noexcept override { return "slow"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
-    void execute(const AlgorithmInput&, ExecutionContext& ctx) override {
+    void execute(const AlgorithmInput&, algorithm::ExecutionContext& ctx) override {
         for (int i = 0; i < 20; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
@@ -51,7 +52,7 @@ public:
     std::string_view name() const noexcept override { return "throwing"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
 
-    void execute(const AlgorithmInput&, ExecutionContext&) override {
+    void execute(const AlgorithmInput&, algorithm::ExecutionContext&) override {
         throw std::runtime_error("simulated failure");
     }
 };

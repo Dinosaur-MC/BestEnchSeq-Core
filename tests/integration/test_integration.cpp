@@ -1,23 +1,23 @@
-#include "cli/cli.h"
-#include "parsers/EnchInfoParser.h"
-#include "parsers/EnchParser.h"
-#include "parsers/ItemParser.h"
-#include "adapters/OutputFormatter.h"
-#include "adapters/RawTypeAdapter.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/RegistryAccess.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "config/ForgeConfig.h"
+#include "domain/interface/cli/cli.h"
+#include "domain/interface/parsers/EnchInfoParser.h"
+#include "domain/interface/parsers/EnchParser.h"
+#include "domain/interface/parsers/ItemParser.h"
+#include "domain/orchestration/components/OutputFormatter.h"
+#include "domain/orchestration/components/RawTypeAdapter.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+// REMOVED: RegistryAccess.h — create local registries instead
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/algorithm/types/ConfigTypes.h"
 #include "framework/test_utils.h"
 
 static auto& test_ench_reg = registries::enchants();
 static auto& test_cat_reg  = registries::categories();
 
-#include "adapters/CompactAdapter.h"
-#include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/strategies/hamming/HammingAlgorithm.h"
-#include "algorithm/IAlgorithm.h"
+#include "domain/orchestration/components/CompactAdapter.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
+#include "domain/algorithm/IAlgorithm.h"
 #include "io/json.h"
 
 #include <filesystem>
@@ -83,7 +83,7 @@ void test_full_pipeline_direct() {
 
     // Build domain input from CLI spec
     auto target_spec = ItemParser::parse(config.target);
-    ItemStack target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
 
     EnchSet source_ench;  // no --source flag
     EnchSet target_ench = build_enchset(target_spec.inline_enchants, test_ench_reg);
@@ -119,7 +119,7 @@ void test_full_pipeline_inventory() {
     TargetSpec target_spec;
     target_spec.item_id = "diamond_sword";
     target_spec.inline_enchants.push_back({"minecraft", "sharpness", 5});
-    ItemStack target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
 
     // Build available items to simulate inventory
     ItemCollection available_items;
@@ -211,7 +211,7 @@ void test_output_formatting_empty() {
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
     registries::enchants().initialize(ench_infos);
 
-    std::vector<EnchSolution> empty_solutions;
+    std::vector<Solution> empty_solutions;
 
     auto verbose = OutputFormatter::format_verbose(empty_solutions, test_ench_reg, test_cat_reg, "direct");
     expect(verbose.empty(), "format_verbose: empty solutions produce empty output");
@@ -249,7 +249,7 @@ void test_full_pipeline_execute() {
 
     // 2. Build domain input
     auto target_spec = ItemParser::parse(config.target);
-    ItemStack target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
     expect(target_item.equipment.has_value(),
            "execute: target should have equipment");
 

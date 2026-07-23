@@ -13,10 +13,10 @@ set(BESQ_INTERFACE_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/RegistryEditor.cpp
     # ── Core solve pipeline ──
     ${CMAKE_CURRENT_SOURCE_DIR}/api/SolvePipeline.cpp
-    # ── Pending API migration ──
-    # ${CMAKE_CURRENT_SOURCE_DIR}/api/BesqContext.cpp
-    # ${CMAKE_CURRENT_SOURCE_DIR}/api/CAbiBindings.cpp
-    # ${CMAKE_CURRENT_SOURCE_DIR}/api/ProfileSet.cpp
+    # ── API layer (uncommented for tests) ──
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/BesqContext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/CAbiBindings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/ProfileSet.cpp
 )
 
 add_library(besq-domain-interface STATIC ${BESQ_INTERFACE_SRCS})

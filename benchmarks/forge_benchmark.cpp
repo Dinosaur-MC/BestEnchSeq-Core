@@ -1,13 +1,13 @@
-#include "loader/AlgorithmLoader.h"
-#include "algorithm/AlgorithmExecutor.h"
-#include "adapters/CompactAdapter.h"
-#include "data/DataLoader.h"
-#include "registries/CompactedRegistries.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "registries/RegistryAccess.h"
-#include "config/ForgeConfig.h"
+#include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/orchestration/components/CompactAdapter.h"
+#include "builtin/DataLoader.h"
+#include "domain/algorithm/registries/EnchReg.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+// REMOVED: RegistryAccess.h — create local registries instead
+#include "domain/algorithm/types/ConfigTypes.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -256,7 +256,7 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
         books.emplace_back(::EnchSet{Ench(eid, lv)});
     }
 
-    compact::EnchReg ench_reg;
+    algorithm::EnchReg ench_reg;
     ench_reg.init(registries::enchants(), eq);
 
     ItemStack start_item(eq, ::EnchSet{}, 0, eq.max_durability);

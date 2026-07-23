@@ -6,21 +6,21 @@
 // non-empty output in all three output formats.
 // =============================================================================
 
-#include "cli/cli.h"
-#include "parsers/EnchInfoParser.h"
-#include "parsers/EnchParser.h"
-#include "parsers/ItemParser.h"
-#include "adapters/OutputFormatter.h"
-#include "adapters/RawTypeAdapter.h"
-#include "adapters/CompactAdapter.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/RegistryAccess.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "loader/AlgorithmLoader.h"
-#include "adapters/EnchSerializer.h"
-#include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/interface/cli/cli.h"
+#include "domain/interface/parsers/EnchInfoParser.h"
+#include "domain/interface/parsers/EnchParser.h"
+#include "domain/interface/parsers/ItemParser.h"
+#include "domain/orchestration/components/OutputFormatter.h"
+#include "domain/orchestration/components/RawTypeAdapter.h"
+#include "domain/orchestration/components/CompactAdapter.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+// REMOVED: RegistryAccess.h — create local registries instead
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/orchestration/components/EnchSerializer.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "io/json.h"
 #include "framework/test_utils.h"
 
@@ -132,7 +132,7 @@ void test_all_algorithms_all_formats() {
     auto config = parse_cli(3, const_cast<char**>(argv));
 
     auto target_spec = ItemParser::parse(config.target);
-    ItemStack target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
     EnchSet target_ench = build_enchset(target_spec.inline_enchants, test_ench_reg);
 
     auto resolved = ItemResolver::resolve(target_item, EnchSet{}, target_ench, test_ench_reg);
@@ -245,7 +245,7 @@ void test_diff_first_alias() {
     auto resolved = ItemResolver::resolve(target_item, EnchSet{}, target_ench, test_ench_reg);
 
     // Test both names produce identical results
-    std::vector<compact::EnchSolution> solutions_a, solutions_b;
+    std::vector<algorithm::EnchSolution> solutions_a, solutions_b;
 
     for (const auto& name : {"diff_first", "difficulty_first"}) {
         auto algo = algo_loader().create(name);

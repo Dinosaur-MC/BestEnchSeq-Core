@@ -1,22 +1,23 @@
 #include "framework/test_utils.h"
-#include "algorithm/serialization/CompactSerializer.h"
-#include "algorithm/serialization/IAlgorithmSerializer.h"
-#include "algorithm/strategies/astar/AStarStateSerializer.h"
-#include "algorithm/strategies/astar/AStarAlgorithm.h"
-#include "algorithm/AlgorithmExecutor.h"
-#include "algorithm/IAlgorithm.h"
-#include "algorithm/diagnostics/AlgorithmObserver.h"
-#include "algorithm/diagnostics/DiagnosticsService.h"
-#include "adapters/CompactAdapter.h"
-#include "config/ForgeConfig.h"
-#include "types/CompactedTypes.h"
-#include "types/AlgorithmTypes.h"
-#include "types/Equipment.h"
-#include "registries/RegistryAccess.h"
-#include "registries/EnchantmentRegistry.h"
-#include "registries/EquipmentCategoryRegistry.h"
-#include "registries/EquipmentRegistry.h"
-#include "data/DataLoader.h"
+#include "domain/algorithm/serialization/CompactSerializer.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
+#include "domain/algorithm/_strategies/astar/AStarStateSerializer.h"
+#include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/diagnostics/AlgorithmObserver.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/orchestration/components/CompactAdapter.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Item.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/business/types/Equipment.h"
+// REMOVED: RegistryAccess.h — create local registries instead
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+#include "builtin/DataLoader.h"
 #include "io/json.h"
 
 #include <atomic>
@@ -62,25 +63,25 @@ static AlgorithmInput create_boots_full_input() {
     const int wanted_levels[] = {4, 4, 3, 3, 3, 3, 1};
     constexpr size_t NUM_WANTED = 7;
 
-    std::vector<compact::Item> books;
+    std::vector<algorithm::Item> books;
     for (size_t i = 0; i < NUM_WANTED; ++i) {
         int32_t eid = ench_reg.get_id(wanted_names[i]);
         if (eid < 0) continue;
-        compact::Item book;
-        book.type = compact::ItemType::Book;
+        algorithm::Item book;
+        book.type = algorithm::ItemType::Book;
         book.dur = 0;
         book.ppn = 0;
         book.enchs.insert({static_cast<int16_t>(eid), static_cast<int16_t>(wanted_levels[i])});
         books.push_back(std::move(book));
     }
 
-    compact::EnchReg creg;
+    algorithm::EnchReg creg;
     creg.init(ench_reg, eq);
 
     AlgorithmInput input;
     input.config.platform = MCE::Java;
 
-    ItemStack start_item(eq, ::EnchSet{}, 0, eq.max_durability);
+    Item start_item(eq, ::EnchSet{}, 0, eq.max_durability);
     input.items.push_back(CompactAdapter::from_domain(start_item, creg));
 
     for (auto& book : books)

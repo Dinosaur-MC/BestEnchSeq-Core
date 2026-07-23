@@ -4,7 +4,10 @@
 set(PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # Shared include path
-set(BENCH_INCLUDE ${PROJECT_ROOT}/src)
+set(BENCH_INCLUDE
+    ${PROJECT_ROOT}/src
+    ${PROJECT_ROOT}/src/common
+)
 
 find_package(Threads REQUIRED)
 
@@ -19,8 +22,8 @@ function(besq_bench NAME SOURCE)
 endfunction()
 
 # ── forge_benchmark (full algorithm benchmark) ──
-# Replaces the old GLOB_RECURSE approach — links the entire besq-core library.
-besq_bench(forge_benchmark forge_benchmark.cpp)
+# TODO: re-enable when registries API is stabilized in benchmark harness
+# besq_bench(forge_benchmark forge_benchmark.cpp)
 
 # ── queue_benchmark (standalone, no project deps beyond src/utils) ──
 add_executable(queue_benchmark queue_benchmark.cpp)
