@@ -11,12 +11,12 @@ target_include_directories(json_tests PRIVATE ${TEST_INCLUDE})
 add_test(NAME json_tests COMMAND json_tests)
 set_tests_properties(json_tests PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
-add_executable(test_byte_stream_reader
-    io/test_byte_stream_reader.cpp
+add_executable(test_byte_stream
+    io/test_byte_stream.cpp
 )
-target_include_directories(test_byte_stream_reader PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_byte_stream_reader COMMAND test_byte_stream_reader)
-set_tests_properties(test_byte_stream_reader PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+target_include_directories(test_byte_stream PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_byte_stream COMMAND test_byte_stream)
+set_tests_properties(test_byte_stream PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
 # --- Utility tests (standalone -- no project source dependencies) ---
 
