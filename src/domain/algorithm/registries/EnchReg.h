@@ -1,11 +1,8 @@
 #pragma once
+#include "common/io/ISerializable.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
 #include <vector>
-
-// ─── Forward declarations for serialization friends ───────────────────────
-class ByteStreamWriter;
-class ByteStreamReader;
 
 namespace algorithm {
 class EnchReg;
@@ -20,7 +17,7 @@ namespace algorithm {
 
 /// Compacted registry — precomputes EnchInfo for all enchantments against
 /// a specific target equipment. Provides O(1) lookup and conflict checking.
-class EnchReg {
+class EnchReg : public ISerializable {
     friend void compact_serial::write(ByteStreamWriter &w, const EnchReg &reg);
     friend EnchReg compact_serial::read_ench_reg(ByteStreamReader &r);
 
@@ -57,6 +54,15 @@ class EnchReg {
     [[nodiscard]] int32_t to_global_id(int16_t local_id) const { return _global_ids.at(local_id); }
     [[nodiscard]] int16_t to_local_id(int32_t global_id) const; // -1 if not found
 
+    // ── Serialization ──
+    void serialize(ByteStreamWriter &w) const noexcept override {
+        w << _ench_infos << _global_ids << _target_equip;
+    }
+    void deserialize(ByteStreamReader &r) noexcept override {
+        r >> _ench_infos >> _global_ids >> _target_equip;
+        _mask_size = _ench_infos.size() / MASK_ELEM_SIZE + 1;
+        _build_conflict_matrix();
+    }
 };
 
 } // namespace algorithm

@@ -1,4 +1,5 @@
 #pragma once
+#include "common/io/ISerializable.h"
 #include "common/utils/HashUtils.hpp"
 #include <cstdint>
 #include <cstring>
@@ -9,7 +10,7 @@ namespace algorithm {
 using MaskType                         = uint64_t;
 inline constexpr size_t MASK_ELEM_SIZE = 8ULL * sizeof(MaskType);
 
-struct EnchInfo {
+struct EnchInfo : ISerializable {
     uint16_t mul;                   // 经验乘数
     uint16_t mul_b;                 // 书本经验乘数
     uint16_t max_lvl;               // 最大等级
@@ -17,13 +18,33 @@ struct EnchInfo {
     bool applicable;                // 是否适用目标装备类别
 
     [[nodiscard]] bool is_conflict(const EnchInfo &other) const noexcept;
+
+    void serialize(ByteStreamWriter &w) const noexcept override {
+        w << mul << mul_b << max_lvl << exc_mask
+          << static_cast<uint8_t>(applicable);
+    }
+    void deserialize(ByteStreamReader &r) noexcept override {
+        uint8_t app;
+        r >> mul >> mul_b >> max_lvl >> exc_mask >> app;
+        applicable = app != 0;
+    }
 };
 
-struct Ench {
+struct Ench : ISerializable {
     int16_t id;
     int16_t level;
 
+    Ench() = default;
+    Ench(int16_t id_, int16_t level_) noexcept : id(id_), level(level_) {}
+
     bool operator==(const Ench &o) const noexcept { return id == o.id && level == o.level; }
+
+    void serialize(ByteStreamWriter &w) const noexcept override {
+        w << id << level;
+    }
+    void deserialize(ByteStreamReader &r) noexcept override {
+        r >> id >> level;
+    }
 };
 
 using EnchCollection = std::vector<Ench>;
@@ -35,7 +56,7 @@ using EnchCollection = std::vector<Ench>;
 /// across search hot paths.
 ///
 /// Invariant: elements are always sorted by id (ascending).
-class EnchSet {
+class EnchSet : public ISerializable {
   public:
     static constexpr size_t INLINE_N     = 16;
     static constexpr size_t INLINE_BYTES = INLINE_N * sizeof(Ench); // 64
@@ -128,6 +149,25 @@ class EnchSet {
         return _size == o._size && std::memcmp(_buf, o._buf, _size * sizeof(Ench)) == 0;
     }
     bool operator!=(const EnchSet &o) const noexcept { return !(*this == o); }
+
+    // ── Serialization ──
+    void serialize(ByteStreamWriter &w) const noexcept override {
+        w << static_cast<uint64_t>(_size);
+        const Ench *d = reinterpret_cast<const Ench *>(_buf);
+        for (size_t i = 0; i < _size; ++i)
+            w << d[i];
+    }
+    void deserialize(ByteStreamReader &r) noexcept override {
+        clear();
+        uint64_t n;
+        r >> n;
+        Ench *d = reinterpret_cast<Ench *>(_buf);
+        for (uint64_t i = 0; i < n; ++i) {
+            r >> d[i];
+            if (!r.ok()) break;
+        }
+        _size = static_cast<uint8_t>(n);
+    }
 
   private:
     uint8_t _size{0};

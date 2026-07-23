@@ -1,4 +1,5 @@
 #pragma once
+#include "common/io/ISerializable.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Item.h"
@@ -27,7 +28,7 @@ constexpr bool operator&(AlgorithmMode a, AlgorithmMode b) noexcept {
 }
 
 // ─── Algorithm input ───
-struct AlgorithmInput {
+struct AlgorithmInput : ISerializable {
     ForgeConfig config;                         // forge configuration (platform, flags)
     SearchConfig search;                        // search configuration (solutions, depth, time)
     AlgorithmMode mode = AlgorithmMode::direct; // operation mode
@@ -35,6 +36,16 @@ struct AlgorithmInput {
     EnchCollection target;                      // desired final enchantments
     EnchReg ench_reg;                           // compact registry (must be initialized)
     int32_t initial_bound = INT32_MAX;          // warm-start: skip own bound if tighter
+
+    void serialize(ByteStreamWriter &w) const noexcept override {
+        w << config << search << items << target << ench_reg
+          << static_cast<uint8_t>(mode) << initial_bound;
+    }
+    void deserialize(ByteStreamReader &r) noexcept override {
+        uint8_t m;
+        r >> config >> search >> items >> target >> ench_reg >> m >> initial_bound;
+        mode = static_cast<AlgorithmMode>(m);
+    }
 };
 
 // ─── Algorithm output (compact solutions) ───
