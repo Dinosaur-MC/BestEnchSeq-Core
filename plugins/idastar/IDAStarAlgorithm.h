@@ -1,10 +1,10 @@
 #pragma once
-#include "algorithm/IAlgorithm.h"
-#include "algorithm/forge/ForgeEngine.h"
-#include "algorithm/components/ItemPool.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "domain/algorithm/components/ItemPool.h"
 #include "TTTable.h"
 #include "IDAStarDiagnostics.h"
-#include "registries/CompactedRegistries.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include <chrono>
 #include <cstdint>
 #include <vector>
@@ -13,6 +13,8 @@
 ///
 /// Exhaustive search with best_g pruning (TT tracks min g per state).
 /// Combines DFS memory footprint with optimality guarantees.
+namespace algorithm {
+
 class IDAStarAlgorithm : public IAlgorithm {
 public:
     using ItemID = ItemPool::ItemID;
@@ -44,8 +46,8 @@ private:
 
     ItemPool _pool;
     ForgeEngine _forge_engine;
-    const compact::EnchReg* _ench_reg{nullptr};
-    std::vector<compact::Ench> _target;
+    const EnchReg* _ench_reg{nullptr};
+    std::vector<Ench> _target;
 
     mutable std::vector<int16_t> _h_buf;
     mutable std::vector<int16_t> _h_dirty;
@@ -64,3 +66,5 @@ private:
 
     IDAStarDiagnostics _diag;
 };
+
+} // namespace algorithm

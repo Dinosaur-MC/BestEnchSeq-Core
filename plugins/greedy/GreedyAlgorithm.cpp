@@ -1,14 +1,16 @@
 #include "GreedyAlgorithm.h"
-#include "algorithm/ExecutionContext.h"
-#include "algorithm/components/SearchUtils.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/components/SearchUtils.h"
 #include <chrono>
 #include <algorithm>
 
-using namespace compact;
+namespace algorithm {
 
 void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.config);
-    _target = input.target;
+    _forge_engine.set_config(input.f_config);
+    _target.clear();
+    for (const auto& e : input.target.enchs)
+        _target.push_back(e);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     ctx.report_progress(0, ProgressStatus::Starting);
@@ -50,7 +52,7 @@ void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx
         compact_steps.push_back({std::move(before_target), std::move(before_sacrifice), cost});
 
         {
-            const auto& sc = input.search;
+            const auto& sc = input.s_config;
             if (sc.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - start;
                 if (elapsed > sc.max_search_time) break;
@@ -85,18 +87,12 @@ bool GreedyAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
     if (items.empty()) return false;
 
     // Quick check: target already met?
-    {
-        bool met = true;
-        for (const auto& t : target) {
-            auto it = items[0].enchs.find(t.id);
-            if (it == items[0].enchs.end() || it->level < t.level) { met = false; break; }
-        }
-        if (met) return true;
-    }
+    if (meets_target(items[0], target.enchs))
+        return true;
 
     // Greedy pure-forge: copy items and try each sacrifice sequentially
     auto work = items;
-    ForgeEngine engine(input.config);
+    ForgeEngine engine(input.f_config);
 
     for (size_t i = 1; i < work.size(); ++i) {
         if (!engine.is_forgeable(work[0], work[i]))
@@ -104,14 +100,11 @@ bool GreedyAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
 
         engine.pure_forge_into(work[0], work[i], reg);
 
-        bool met = true;
-        for (const auto& t : target) {
-            auto it = work[0].enchs.find(t.id);
-            if (it == work[0].enchs.end() || it->level < t.level) { met = false; break; }
-        }
-        if (met) return true;
+        if (meets_target(work[0], target.enchs))
+            return true;
     }
 
     return false;
 }
 
+} // namespace algorithm

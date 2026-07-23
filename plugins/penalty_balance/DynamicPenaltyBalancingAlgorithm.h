@@ -1,7 +1,9 @@
 #pragma once
-#include "algorithm/IAlgorithm.h"
-#include "algorithm/forge/ForgeEngine.h"
-#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
+
+namespace algorithm {
 
 class DynamicPenaltyBalancingAlgorithm : public IAlgorithm {
 public:
@@ -19,3 +21,5 @@ private:
     ForgeEngine _forge_engine;
     AlgorithmDiagnostics _diag;
 };
+
+} // namespace algorithm

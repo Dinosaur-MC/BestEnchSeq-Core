@@ -1,8 +1,10 @@
 #pragma once
-#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include <cstddef>
 
 /// IDAStar-specific diagnostics, extending the pool-based search hierarchy.
+namespace algorithm {
+
 struct IDAStarDiagnostics : PoolSearchDiagnostics {
     size_t tt_lookups{0};
     size_t tt_stores{0};
@@ -10,3 +12,5 @@ struct IDAStarDiagnostics : PoolSearchDiagnostics {
 
     void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };
+
+} // namespace algorithm

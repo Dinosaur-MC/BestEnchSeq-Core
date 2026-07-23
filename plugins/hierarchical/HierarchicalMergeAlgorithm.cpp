@@ -1,11 +1,11 @@
 #include "HierarchicalMergeAlgorithm.h"
-#include "algorithm/ExecutionContext.h"
+#include "domain/algorithm/ExecutionContext.h"
 #include <chrono>
 #include <algorithm>
 #include <cstdint>
 #include <vector>
 
-using namespace compact;
+namespace algorithm {
 
 int32_t HierarchicalMergeAlgorithm::effective_multiplier(
     const Item& item, const EnchReg& reg) const
@@ -82,11 +82,11 @@ Item HierarchicalMergeAlgorithm::merge_group(
 void HierarchicalMergeAlgorithm::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
 {
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
-    const auto& search = input.search;
+    const auto& search = input.s_config;
     ctx.report_progress(0, ProgressStatus::Starting);
 
     auto start = std::chrono::steady_clock::now();
@@ -250,7 +250,7 @@ phase2:
     // Verify final equipment achieves the target BEFORE setting diagnostics
     {
         bool ok = true;
-        for (const auto& t : target) {
+        for (const auto& t : target.enchs) {
             auto it = equip.enchs.find(t.id);
             if (it == equip.enchs.end() || it->level < t.level) { ok = false; break; }
         }
@@ -268,3 +268,5 @@ phase2:
     ctx.report_solution(compact_steps);
     ctx.report_progress(100, ProgressStatus::Complete);
 }
+
+} // namespace algorithm

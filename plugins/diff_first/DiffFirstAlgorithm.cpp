@@ -1,15 +1,15 @@
 #include "DiffFirstAlgorithm.h"
-#include "algorithm/ExecutionContext.h"
-#include "algorithm/components/SearchUtils.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cstdint>
 #include <numeric>
 #include <vector>
 
-using namespace compact;
+namespace algorithm {
 
 void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
     ctx.report_progress(0, ProgressStatus::Starting);
@@ -20,7 +20,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
-    if (meets_target(input.items[0], target)) {
+    if (meets_target(input.items[0], target.enchs)) {
         ctx.report_solution({});
         ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
@@ -84,9 +84,9 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
     while (items.size() > 1 && !cancelled) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) { cancelled = true; break; }
-        if (input.search.max_search_time.count() > 0) {
+        if (input.s_config.max_search_time.count() > 0) {
             auto elapsed = std::chrono::steady_clock::now() - diff_start;
-            if (elapsed > input.search.max_search_time) { cancelled = true; break; }
+            if (elapsed > input.s_config.max_search_time) { cancelled = true; break; }
         }
 
         sort_items(items);
@@ -178,7 +178,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
 
     if (!cancelled) {
         for (auto& item : items) {
-            if (item.type == ItemType::Equip && meets_target(item, target)) {
+            if (item.type == ItemType::Equip && meets_target(item, target.enchs)) {
                 int32_t total = std::accumulate(
                     steps.begin(), steps.end(), int32_t{0},
                     [](int32_t s, const EnchStep& st) { return s + st.cost; });
@@ -202,6 +202,8 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& 
 
 bool DiffFirstAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
     if (input.items.empty()) return false;
-    if (meets_target(input.items[0], input.target)) return true;
+    if (meets_target(input.items[0], input.target.enchs)) return true;
     return input.items.size() > 1;
 }
+
+} // namespace algorithm

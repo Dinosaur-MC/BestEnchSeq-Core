@@ -1,7 +1,7 @@
 #pragma once
-#include "algorithm/IAlgorithm.h"
-#include "algorithm/forge/ForgeEngine.h"
-#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 
 /// Penalty-tiered merge strategy (port of Alg_DifficultyFirst from v2.x).
 ///
@@ -15,6 +15,8 @@
 /// complementary — merge topologies.
 ///
 /// O(n²) worst-case due to the scan inside the main loop.
+namespace algorithm {
+
 class DiffFirstAlgorithm : public IAlgorithm {
 public:
     explicit DiffFirstAlgorithm(ForgeConfig cfg = {}) noexcept
@@ -32,3 +34,5 @@ private:
     ForgeEngine _forge_engine;
     AlgorithmDiagnostics _diag;
 };
+
+} // namespace algorithm

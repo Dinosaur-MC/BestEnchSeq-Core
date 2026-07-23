@@ -1,9 +1,11 @@
 #pragma once
-#include "algorithm/IAlgorithm.h"
-#include "algorithm/forge/ForgeEngine.h"
-#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include <cstdint>
 #include <vector>
+
+namespace algorithm {
 
 class GreedyAlgorithm : public IAlgorithm {
 public:
@@ -25,6 +27,8 @@ private:
     };
 
     ForgeEngine _forge_engine;
-    std::vector<compact::Ench> _target;
+    std::vector<Ench> _target;
     AlgorithmDiagnostics _diag;
 };
+
+} // namespace algorithm

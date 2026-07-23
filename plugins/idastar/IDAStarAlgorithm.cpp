@@ -1,10 +1,10 @@
 #include "IDAStarAlgorithm.h"
-#include "algorithm/ExecutionContext.h"
-#include "algorithm/components/SearchUtils.h"
-#include "algorithm/components/StateHash.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/components/StateHash.h"
 #include <algorithm>
 
-using namespace compact;
+namespace algorithm {
 
 bool IDAStarAlgorithm::_meets_target(const std::vector<ItemID>& ids) const {
     if (ids.empty()) return false;
@@ -149,7 +149,7 @@ int32_t IDAStarAlgorithm::_compute_h() const {
 }
 
 void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
@@ -172,7 +172,9 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     _current_path.clear();
     _solution_path.clear();
     _ench_reg = &reg;
-    _target = target;
+    _target.clear();
+    for (const auto& e : target.enchs)
+        _target.push_back(e);
     _target_level_map.assign(_ench_reg->size(), 0);
     for (const auto& t : _target)
         _target_level_map[t.id] = t.level;
@@ -181,8 +183,8 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     _start_time = std::chrono::steady_clock::now();
 
     // Cache config from AlgorithmInput
-    _max_solutions = input.search.max_solutions;
-    _max_search_time = input.search.max_search_time;
+    _max_solutions = input.s_config.max_solutions;
+    _max_search_time = input.s_config.max_search_time;
 
     std::vector<ItemID> initial_ids;
     initial_ids.reserve(items.size());
@@ -259,3 +261,5 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
     }
     ctx.set_exit_diagnostics(_diag);
 }
+
+} // namespace algorithm

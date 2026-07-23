@@ -1,12 +1,14 @@
 #pragma once
-#include "algorithm/IAlgorithm.h"
-#include "algorithm/forge/ForgeEngine.h"
-#include "config/SearchConfig.h"
-#include "algorithm/diagnostics/AlgorithmDiagnostics.h"
-#include "registries/CompactedRegistries.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include <chrono>
 #include <cstdint>
 #include <vector>
+
+namespace algorithm {
 
 class HierarchicalMergeAlgorithm : public IAlgorithm {
 public:
@@ -25,16 +27,18 @@ public:
     }
 
 private:
-    compact::Item merge_group(
-        std::vector<compact::Item>& group,
-        std::vector<compact::EnchStep>& steps,
-        const compact::EnchReg& reg,
+    Item merge_group(
+        std::vector<Item>& group,
+        std::vector<EnchStep>& steps,
+        const EnchReg& reg,
         ExecutionContext& ctx,
         const std::chrono::steady_clock::time_point& start,
         const SearchConfig& search);
 
-    int32_t effective_multiplier(const compact::Item& item, const compact::EnchReg& reg) const;
+    int32_t effective_multiplier(const Item& item, const EnchReg& reg) const;
 
     ForgeEngine _forge_engine;
     AlgorithmDiagnostics _diag;
 };
+
+} // namespace algorithm

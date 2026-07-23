@@ -1,15 +1,15 @@
 #include "DynamicPenaltyBalancingAlgorithm.h"
-#include "algorithm/ExecutionContext.h"
+#include "domain/algorithm/ExecutionContext.h"
 #include <chrono>
 #include <cstdint>
 #include <vector>
 
-using namespace compact;
+namespace algorithm {
 
 void DynamicPenaltyBalancingAlgorithm::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
 {
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
@@ -23,7 +23,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     // Quick check: goal already met?
     {
         bool met = true;
-        for (const auto& t : target) {
+        for (const auto& t : target.enchs) {
             auto it = mut_items[0].enchs.find(t.id);
             if (it == mut_items[0].enchs.end() || it->level < t.level) {
                 met = false;
@@ -96,7 +96,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
         ++steps_performed;
 
         {
-            const auto& sc = input.search;
+            const auto& sc = input.s_config;
             if (sc.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - start;
                 if (elapsed > sc.max_search_time) break;
@@ -113,7 +113,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     // Verify target achieved
     {
         bool met = true;
-        for (const auto& t : target) {
+        for (const auto& t : target.enchs) {
             auto it = mut_items[0].enchs.find(t.id);
             if (it == mut_items[0].enchs.end() || it->level < t.level) {
                 met = false;
@@ -134,3 +134,5 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     ctx.report_solution(compact_steps);
     ctx.report_progress(100, ProgressStatus::Complete);
 }
+
+} // namespace algorithm

@@ -1,3 +1,3 @@
-#include "loader/PluginEntry.h"
+#include "domain/algorithm/plugin/PluginEntry.h"
 #include "HierarchicalMergeAlgorithm.h"
-BESQ_PLUGIN_ENTRY(HierarchicalMergeAlgorithm)
+BESQ_PLUGIN_ENTRY(algorithm::HierarchicalMergeAlgorithm)
