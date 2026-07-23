@@ -16,6 +16,7 @@ std::vector<uint8_t> IAlgorithmSerializer::serialize(
     for (auto& sec : state_sections) {
         sec.header.type |= checkpoint::SECTION_TYPE_ALGO;
         cp.sections.push_back(std::move(sec));
+        cp.meta.num_sections = static_cast<uint32_t>(cp.sections.size());
     }
 
     ByteStreamWriter w;

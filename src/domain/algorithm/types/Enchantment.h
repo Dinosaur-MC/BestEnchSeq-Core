@@ -30,7 +30,7 @@ struct EnchInfo : ISerializable {
     }
 };
 
-struct Ench : ISerializable {
+struct Ench {
     int16_t id;
     int16_t level;
 
@@ -39,15 +39,26 @@ struct Ench : ISerializable {
 
     bool operator==(const Ench &o) const noexcept { return id == o.id && level == o.level; }
 
-    void serialize(ByteStreamWriter &w) const noexcept override {
+    void serialize(ByteStreamWriter &w) const noexcept {
         w << id << level;
     }
-    void deserialize(ByteStreamReader &r) noexcept override {
+    void deserialize(ByteStreamReader &r) noexcept {
         r >> id >> level;
     }
 };
 
 using EnchCollection = std::vector<Ench>;
+
+// ── Free-function streaming for Ench (non-virtual, small value type) ──
+
+inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const Ench& e) {
+    e.serialize(w);
+    return w;
+}
+inline ByteStreamReader& operator>>(ByteStreamReader& r, Ench& e) {
+    e.deserialize(r);
+    return r;
+}
 
 /// Compact set of Ench with small-object optimization.
 ///
@@ -56,7 +67,7 @@ using EnchCollection = std::vector<Ench>;
 /// across search hot paths.
 ///
 /// Invariant: elements are always sorted by id (ascending).
-class EnchSet : public ISerializable {
+class EnchSet {
   public:
     static constexpr size_t INLINE_N     = 16;
     static constexpr size_t INLINE_BYTES = INLINE_N * sizeof(Ench); // 64
@@ -150,21 +161,22 @@ class EnchSet : public ISerializable {
     }
     bool operator!=(const EnchSet &o) const noexcept { return !(*this == o); }
 
-    // ── Serialization ──
-    void serialize(ByteStreamWriter &w) const noexcept override {
+    // ── Serialization (non-virtual; value-type) ──
+    void serialize(ByteStreamWriter &w) const noexcept {
         w << static_cast<uint64_t>(_size);
         const Ench *d = reinterpret_cast<const Ench *>(_buf);
         for (size_t i = 0; i < _size; ++i)
             w << d[i];
     }
-    void deserialize(ByteStreamReader &r) noexcept override {
+    void deserialize(ByteStreamReader &r) noexcept {
         clear();
         uint64_t n;
         r >> n;
+        if (n > INLINE_N || !r.ok()) { r.set_fail(); return; }
         Ench *d = reinterpret_cast<Ench *>(_buf);
         for (uint64_t i = 0; i < n; ++i) {
             r >> d[i];
-            if (!r.ok()) break;
+            if (!r.ok()) return;
         }
         _size = static_cast<uint8_t>(n);
     }
@@ -174,6 +186,17 @@ class EnchSet : public ISerializable {
     mutable size_t _hash_cache{0};
     alignas(Ench) uint8_t _buf[INLINE_N * sizeof(Ench)];
 };
+
+// ── Free-function streaming for EnchSet (ADL via algorithm namespace) ──
+
+inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const EnchSet& s) {
+    s.serialize(w);
+    return w;
+}
+inline ByteStreamReader& operator>>(ByteStreamReader& r, EnchSet& s) {
+    s.deserialize(r);
+    return r;
+}
 
 } // namespace algorithm
 

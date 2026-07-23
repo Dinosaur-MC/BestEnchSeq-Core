@@ -455,16 +455,17 @@ void test_take_empties_writer() {
 
 void test_i8_i16_i32_i64() {
     ByteStreamWriter w;
-    w << int8_t(-1) << int16_t(-128) << int32_t(-100000) << int64_t(-1LL << 40);
+    constexpr int64_t kNeg2Pow40 = int64_t(uint64_t(1) << 40) * -1;
+    w << int8_t(-1) << int16_t(-128) << int32_t(-100000) << kNeg2Pow40;
 
     ByteStreamReader r(w.data());
     int8_t  a; int16_t b; int32_t c; int64_t d;
     r >> a >> b >> c >> d;
 
-    expect(a == -1,            "i8: -1");
-    expect(b == -128,          "i16: -128");
-    expect(c == -100000,       "i32: -100000");
-    expect(d == (-1LL << 40),  "i64: -2^40");
+    expect(a == -1,       "i8: -1");
+    expect(b == -128,     "i16: -128");
+    expect(c == -100000,  "i32: -100000");
+    expect(d == kNeg2Pow40, "i64: -2^40");
     expect(r.ok(), "signed ints: ok");
     std::cout << "  PASS: test_i8_i16_i32_i64" << std::endl;
 }
