@@ -2,6 +2,8 @@
 
 namespace algorithm {
 
+using namespace algorithm;
+
 void IDAStarDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const {
     PoolSearchDiagnostics::flush(out);
     out.push_back({"tt_lookups",        static_cast<int64_t>(tt_lookups)});

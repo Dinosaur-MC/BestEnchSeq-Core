@@ -6,6 +6,8 @@
 
 namespace algorithm {
 
+using namespace algorithm;
+
 void DynamicPenaltyBalancingAlgorithm::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
 {

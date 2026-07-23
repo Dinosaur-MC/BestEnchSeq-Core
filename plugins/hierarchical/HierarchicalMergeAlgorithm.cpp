@@ -7,6 +7,8 @@
 
 namespace algorithm {
 
+using namespace algorithm;
+
 int32_t HierarchicalMergeAlgorithm::effective_multiplier(
     const Item& item, const EnchReg& reg) const
 {

@@ -6,6 +6,8 @@
 
 namespace algorithm {
 
+using namespace algorithm;
+
 void GreedyAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
     _target.clear();

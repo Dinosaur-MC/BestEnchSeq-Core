@@ -6,6 +6,8 @@
 
 namespace algorithm {
 
+using namespace algorithm;
+
 bool IDAStarAlgorithm::_meets_target(const std::vector<ItemID>& ids) const {
     if (ids.empty()) return false;
     const auto& equip = _pool[ids[0]];
