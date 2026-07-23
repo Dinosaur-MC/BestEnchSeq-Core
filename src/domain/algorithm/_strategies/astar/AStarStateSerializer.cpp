@@ -1,9 +1,8 @@
 #include "AStarStateSerializer.h"
 #include "AStarAlgorithm.h"
-#include "domain/algorithm/serialization/CompactSerializer.h"
-namespace algorithm {
+#include "common/io/ByteStream.h"
 
-using namespace compact_serial;
+namespace algorithm {
 
 // ── Section tag constants (algo-specific, meaningful only to this serializer) ──
 namespace {
@@ -12,13 +11,18 @@ namespace {
     constexpr uint32_t TAG_OPEN_HEAP  = 3;
     constexpr uint32_t TAG_BEST_G     = 4;
     constexpr uint32_t TAG_SCALARS    = 5;
+
+    // Hard upper bounds for deserialized counts (OOM/DoS protection)
+    constexpr uint32_t MAX_SERIAL_ITEMS  = 1'000'000;
+    constexpr uint32_t MAX_SERIAL_STEPS  = 10'000'000;
+    constexpr uint32_t MAX_SERIAL_HEAP   = 10'000'000;
 }
 
 // ─── _serialize_state: bundle each internal structure as an opaque section ──
 
-std::vector<AlgoSectionData> AStarStateSerializer::_serialize_state(const IAlgorithm& algo) const {
+std::vector<checkpoint::Section> AStarStateSerializer::_serialize_state(const IAlgorithm& algo) const {
     const auto& astar = static_cast<const AStarAlgorithm&>(algo);
-    std::vector<AlgoSectionData> sections;
+    std::vector<checkpoint::Section> sections;
     sections.reserve(5);
     sections.push_back(_write_item_pool(astar));
     sections.push_back(_write_step_pool(astar));
@@ -28,14 +32,15 @@ std::vector<AlgoSectionData> AStarStateSerializer::_serialize_state(const IAlgor
     return sections;
 }
 
-// ─── _deserialize_state: dispatch by section_tag ─────────────────────────
+// ─── _deserialize_state: dispatch by section type (masked to logical tag) ──
 
-bool AStarStateSerializer::_deserialize_state(IAlgorithm& algo, std::span<const AlgoSectionData> sections) const {
+bool AStarStateSerializer::_deserialize_state(IAlgorithm& algo, std::span<const checkpoint::Section> sections) const {
     auto& astar = static_cast<AStarAlgorithm&>(algo);
 
     for (const auto& sect : sections) {
-        ByteStreamReader r(sect.payload);
-        switch (sect.section_tag) {
+        uint32_t tag = sect.header.type & ~checkpoint::SECTION_TYPE_ALGO;
+        ByteStreamReader r(sect.payload.data(), sect.payload.size());
+        switch (tag) {
             case TAG_ITEM_POOL: _read_item_pool(r, astar); break;
             case TAG_STEP_POOL: _read_step_pool(r, astar); break;
             case TAG_OPEN_HEAP: _read_open_heap(r, astar); break;
@@ -54,16 +59,20 @@ bool AStarStateSerializer::_deserialize_state(IAlgorithm& algo, std::span<const 
 
 // ─── Write helpers ───────────────────────────────────────────────────────
 
-AlgoSectionData AStarStateSerializer::_write_item_pool(const AStarAlgorithm& astar) {
+checkpoint::Section AStarStateSerializer::_write_item_pool(const AStarAlgorithm& astar) {
     uint32_t count = static_cast<uint32_t>(astar._pool.size());
     ByteStreamWriter payload;
     payload.u32(count);
     for (AStarAlgorithm::ItemID i = 0; static_cast<uint32_t>(i) < count; ++i)
-        write(payload, astar._pool[i]);
-    return {TAG_ITEM_POOL, std::move(payload).take()};
+        payload << astar._pool[i];
+    checkpoint::Section sect;
+    sect.header.type = TAG_ITEM_POOL;
+    sect.payload = std::move(payload).take();
+    sect.header.payload_len = sect.payload.size();
+    return sect;
 }
 
-AlgoSectionData AStarStateSerializer::_write_step_pool(const AStarAlgorithm& astar) {
+checkpoint::Section AStarStateSerializer::_write_step_pool(const AStarAlgorithm& astar) {
     uint32_t count = static_cast<uint32_t>(astar._step_pool.size());
     ByteStreamWriter payload;
     payload.u32(count);
@@ -73,10 +82,14 @@ AlgoSectionData AStarStateSerializer::_write_step_pool(const AStarAlgorithm& ast
         payload.i32(sn.sac_id);
         payload.i32(sn.cost);
     }
-    return {TAG_STEP_POOL, std::move(payload).take()};
+    checkpoint::Section sect;
+    sect.header.type = TAG_STEP_POOL;
+    sect.payload = std::move(payload).take();
+    sect.header.payload_len = sect.payload.size();
+    return sect;
 }
 
-AlgoSectionData AStarStateSerializer::_write_open_heap(const AStarAlgorithm& astar) {
+checkpoint::Section AStarStateSerializer::_write_open_heap(const AStarAlgorithm& astar) {
     uint32_t count = static_cast<uint32_t>(astar._open_heap.size());
     ByteStreamWriter payload;
     payload.u32(count);
@@ -92,21 +105,33 @@ AlgoSectionData AStarStateSerializer::_write_open_heap(const AStarAlgorithm& ast
             payload.i32(id);
         payload.i32(entry.f);
     }
-    return {TAG_OPEN_HEAP, std::move(payload).take()};
+    checkpoint::Section sect;
+    sect.header.type = TAG_OPEN_HEAP;
+    sect.payload = std::move(payload).take();
+    sect.header.payload_len = sect.payload.size();
+    return sect;
 }
 
-AlgoSectionData AStarStateSerializer::_write_best_g(const AStarAlgorithm& astar) {
+checkpoint::Section AStarStateSerializer::_write_best_g(const AStarAlgorithm& astar) {
     ByteStreamWriter payload;
     astar._x_export_best_g(payload);
-    return {TAG_BEST_G, std::move(payload).take()};
+    checkpoint::Section sect;
+    sect.header.type = TAG_BEST_G;
+    sect.payload = std::move(payload).take();
+    sect.header.payload_len = sect.payload.size();
+    return sect;
 }
 
-AlgoSectionData AStarStateSerializer::_write_scalars(const AStarAlgorithm& astar) {
+checkpoint::Section AStarStateSerializer::_write_scalars(const AStarAlgorithm& astar) {
     ByteStreamWriter payload;
     payload.i32(astar._best_solution_cost);
     payload.i32(astar._solutions_found);
     payload.i64(astar._x_explored());
-    return {TAG_SCALARS, std::move(payload).take()};
+    checkpoint::Section sect;
+    sect.header.type = TAG_SCALARS;
+    sect.payload = std::move(payload).take();
+    sect.header.payload_len = sect.payload.size();
+    return sect;
 }
 
 // ─── Read helpers (same as before, with count limits + ok() checks) ────
@@ -116,8 +141,10 @@ void AStarStateSerializer::_read_item_pool(ByteStreamReader& r, AStarAlgorithm& 
     uint32_t count = r.u32();
     if (count > MAX_SERIAL_ITEMS) { r.set_fail(); return; }
     for (uint32_t i = 0; i < count; ++i) {
-        astar._pool.add(read_item(r));
+        Item item;
+        r >> item;
         if (!r.ok()) break;
+        astar._pool.add(std::move(item));
     }
 }
 

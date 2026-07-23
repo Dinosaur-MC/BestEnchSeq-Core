@@ -15,6 +15,7 @@
 #include "domain/algorithm/types/Platform.h"       // IWYU pragma: export
 #include "domain/algorithm/types/Solution.h"       // IWYU pragma: export
 #include "domain/algorithm/types/ResolverTypes.h"  // ResolverOutput, DirectResolverInput, InventoryResolverInput  // IWYU pragma: export
+#include "domain/algorithm/types/Checkpoint.h"    // checkpoint::Checkpoint, checkpoint::Section  // IWYU pragma: export
 
 // ── Core Interfaces ──
 #include "domain/algorithm/AlgorithmExecutor.h" // IWYU pragma: export

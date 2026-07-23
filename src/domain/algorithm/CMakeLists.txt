@@ -17,6 +17,7 @@ set(BESQ_ALGORITHM_SRCS
     # ── Resolvers ──
     ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/ItemResolver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/InventoryResolver.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/types/Checkpoint.cpp
 )
 
 # ── Plugin loader (AlgorithmLoader.cpp) ──

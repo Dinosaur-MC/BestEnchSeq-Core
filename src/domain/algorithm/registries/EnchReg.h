@@ -8,19 +8,11 @@ namespace algorithm {
 class EnchReg;
 }
 
-namespace compact_serial {
-void write(ByteStreamWriter &w, const algorithm::EnchReg &reg);
-algorithm::EnchReg read_ench_reg(ByteStreamReader &r);
-} // namespace compact_serial
-
 namespace algorithm {
 
 /// Compacted registry — precomputes EnchInfo for all enchantments against
 /// a specific target equipment. Provides O(1) lookup and conflict checking.
 class EnchReg : public ISerializable {
-    friend void compact_serial::write(ByteStreamWriter &w, const EnchReg &reg);
-    friend EnchReg compact_serial::read_ench_reg(ByteStreamReader &r);
-
   private:
     std::vector<EnchInfo> _ench_infos;   // compacted info, indexed by local ench id
     std::vector<int32_t> _global_ids;     // local → business global ID (for round-trip)

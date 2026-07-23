@@ -721,7 +721,8 @@ void AStarAlgorithm::_x_export_best_g(ByteStreamWriter &w) const {
 void AStarAlgorithm::_x_import_best_g(ByteStreamReader &r) {
     _best_g.clear();
     uint32_t count = r.u32();
-    if (count > compact_serial::MAX_SERIAL_BEST_G) {
+    constexpr uint32_t MAX_BEST_G = 10'000'000;
+    if (count > MAX_BEST_G) {
         r.set_fail();
         return;
     }

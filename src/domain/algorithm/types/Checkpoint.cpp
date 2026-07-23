@@ -1,0 +1,82 @@
+#include "Checkpoint.h"
+#include <chrono>
+#include <cstring>
+
+namespace checkpoint {
+
+MetaHeader::MetaHeader(std::string_view tag, uint16_t algo_ver, uint32_t sect_count)
+    : num_sections(sect_count), algo_version(algo_ver), algorithm_tag(tag)
+{
+    timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+void MetaHeader::serialize(ByteStreamWriter& w) const noexcept {
+    w << magic << version << flags << num_sections << timestamp;
+    w.bytes(crc_code, sizeof(crc_code));
+    w << algo_version << algorithm_tag;
+}
+
+void MetaHeader::deserialize(ByteStreamReader& r) noexcept {
+    r >> magic >> version >> flags >> num_sections >> timestamp;
+    if (r.ok()) {
+        auto data = r.read_bytes(sizeof(crc_code));
+        std::memcpy(crc_code, data.data(), sizeof(crc_code));
+    }
+    r >> algo_version >> algorithm_tag;
+}
+
+SectionHeader::SectionHeader(uint32_t t, uint32_t id, uint64_t len)
+    : type(t), section_id(id), payload_len(len) {}
+
+void SectionHeader::serialize(ByteStreamWriter& w) const noexcept {
+    w << type << section_id << payload_len;
+}
+
+void SectionHeader::deserialize(ByteStreamReader& r) noexcept {
+    r >> type >> section_id >> payload_len;
+}
+
+Section::Section(uint32_t type, uint32_t id, const ISerializable& body)
+    : header(type, id, 0)
+{
+    ByteStreamWriter w;
+    w << body;
+    payload = std::move(w).take();
+    header.payload_len = payload.size();
+}
+
+void Section::serialize(ByteStreamWriter& w) const noexcept {
+    w << header;
+    w.bytes(payload.data(), payload.size());
+}
+
+void Section::deserialize(ByteStreamReader& r) noexcept {
+    r >> header;
+    payload = r.read_bytes(static_cast<size_t>(header.payload_len));
+}
+
+Checkpoint::Checkpoint(std::string_view tag, uint16_t algo_ver)
+    : meta(tag, algo_ver, 0) {}
+
+void Checkpoint::add_section(uint32_t type, uint32_t id, const ISerializable& body) {
+    sections.emplace_back(type, id, body);
+    meta.num_sections = static_cast<uint32_t>(sections.size());
+}
+
+void Checkpoint::serialize(ByteStreamWriter& w) const noexcept {
+    // num_sections is maintained by add_section() during construction
+    w << meta;
+    for (const auto& sec : sections)
+        w << sec;
+}
+
+void Checkpoint::deserialize(ByteStreamReader& r) noexcept {
+    r >> meta;
+    if (!r.ok()) return;
+    sections.resize(meta.num_sections);
+    for (auto& sec : sections)
+        r >> sec;
+}
+
+} // namespace checkpoint

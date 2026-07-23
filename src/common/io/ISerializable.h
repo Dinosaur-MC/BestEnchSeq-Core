@@ -51,7 +51,8 @@ ByteStreamWriter& operator<<(ByteStreamWriter& w, const std::vector<T>& vec) {
 
 template <std::derived_from<ISerializable> T>
 ByteStreamReader& operator>>(ByteStreamReader& r, std::vector<T>& vec) {
-    size_t n = static_cast<size_t>(r.u64());
+    size_t n;
+    r.read(n);
     vec.resize(n);
     for (auto& v : vec) r >> v;
     return r;
