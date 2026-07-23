@@ -1,9 +1,5 @@
 #include "RegistryEditor.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
-#include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/types/Enchantment.h"
-#include "domain/business/types/Equipment.h"
+#include "domain/business/business.h"
 #include "common/CommonTypes.h"
 #include "common/utils/ParserUtils.hpp"
 #include <stdexcept>

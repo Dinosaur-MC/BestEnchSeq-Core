@@ -2,6 +2,7 @@
 #include <cstring>
 #include <chrono>
 namespace compact_serial {
+using namespace algorithm;
 
 
 // ── CRC-56 helper ───────────────────────────────────────────────────────

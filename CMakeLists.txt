@@ -115,7 +115,6 @@ set(BESQ_EMBEDDED_SRCS
 # ═══════════════════════════════════════════════════════════════════════════════
 add_subdirectory(src/common)
 add_subdirectory(src/domain)
-add_subdirectory(src/orchestration)
 
 # ── besq-core (shared library) ──────────────────────────────────────────────
 # Links all domain libraries together.  On Windows, auto-export all symbols

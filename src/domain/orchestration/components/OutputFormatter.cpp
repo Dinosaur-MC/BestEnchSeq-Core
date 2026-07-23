@@ -1,7 +1,5 @@
 #include "OutputFormatter.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
-#include "domain/business/types/Enchantment.h"
+#include "domain/business/business.h"
 
 namespace {
 

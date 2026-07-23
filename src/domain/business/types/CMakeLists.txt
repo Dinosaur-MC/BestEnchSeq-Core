@@ -1,1 +1,0 @@
-# OBSOLETE — Superseded by src/domain/business/CMakeLists.txt

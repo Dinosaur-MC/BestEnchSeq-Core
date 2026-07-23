@@ -2,8 +2,8 @@
 #include "ProfileSet.h"
 #include "SolvePipeline.h"
 #include "parsers/EnchInfoParser.h"
-#include "orchestration/components/EnchSerializer.h"
-#include "orchestration/components/RawTypeAdapter.h"
+#include "domain/orchestration/components/EnchSerializer.h"
+#include "domain/orchestration/components/RawTypeAdapter.h"
 #include "domain/algorithm/resolvers/ItemResolver.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 
@@ -16,7 +16,7 @@
 // ====================================================================
 struct BesqContext::Impl {
     ProfileSet profiles;
-    AlgorithmLoader algo_loader;
+    algorithm::AlgorithmLoader algo_loader;
 };
 
 // ====================================================================

@@ -27,9 +27,6 @@
 
 namespace compact_serial {
 
-// All compact types live in namespace algorithm.
-using namespace algorithm;
-
 // ── File-level header ───────────────────────────────────────────────────
 
 inline constexpr uint32_t FILE_MAGIC   = 0x51534542; // "BESQ" LE
@@ -104,49 +101,49 @@ SectionInfo read_section_header(ByteStreamReader &r);
 
 // ── Compact type serialization ──────────────────────────────────────────
 
-void write(ByteStreamWriter &w, const Ench &e);
-Ench read_ench(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::Ench &e);
+algorithm::Ench read_ench(ByteStreamReader &r);
 
-void write(ByteStreamWriter &w, const EnchSet &s);
-EnchSet read_ench_set(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::EnchSet &s);
+algorithm::EnchSet read_ench_set(ByteStreamReader &r);
 
-void write(ByteStreamWriter &w, const Item &item);
-Item read_item(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::Item &item);
+algorithm::Item read_item(ByteStreamReader &r);
 
-void write(ByteStreamWriter &w, const EnchStep &step);
-EnchStep read_ench_step(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::EnchStep &step);
+algorithm::EnchStep read_ench_step(ByteStreamReader &r);
 
-void write(ByteStreamWriter &w, const EnchSolution &sol);
-EnchSolution read_ench_solution(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::EnchSolution &sol);
+algorithm::EnchSolution read_ench_solution(ByteStreamReader &r);
 
 // ── Configuration types ───────────────────────────────────────────────────
 
-void write(ByteStreamWriter &w, const ForgeConfig &c);
-ForgeConfig read_forge_config(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::ForgeConfig &c);
+algorithm::ForgeConfig read_forge_config(ByteStreamReader &r);
 
-void write(ByteStreamWriter &w, const SearchConfig &c);
-SearchConfig read_search_config(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::SearchConfig &c);
+algorithm::SearchConfig read_search_config(ByteStreamReader &r);
 
 // ── Domain types ──────────────────────────────────────────────────────────
 
-void write(ByteStreamWriter &w, const Equipment &eq);
-Equipment read_equipment(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::Equipment &eq);
+algorithm::Equipment read_equipment(ByteStreamReader &r);
 
-void write(ByteStreamWriter &w, const EnchInfo &info);
-EnchInfo read_ench_info(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::EnchInfo &info);
+algorithm::EnchInfo read_ench_info(ByteStreamReader &r);
 
 // ── Compact types (non-primitive) ─────────────────────────────────────────
 
-void write(ByteStreamWriter &w, const EnchInfo &info);
-EnchInfo read_compact_ench_info(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::EnchInfo &info);
+algorithm::EnchInfo read_compact_ench_info(ByteStreamReader &r);
 
-void write(ByteStreamWriter &w, const EnchReg &reg);
-EnchReg read_ench_reg(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::EnchReg &reg);
+algorithm::EnchReg read_ench_reg(ByteStreamReader &r);
 
 // ── Algorithm I/O ─────────────────────────────────────────────────────────
 
-void write(ByteStreamWriter &w, const AlgorithmInput &input);
-AlgorithmInput read_algorithm_input(ByteStreamReader &r);
+void write(ByteStreamWriter &w, const algorithm::AlgorithmInput &input);
+algorithm::AlgorithmInput read_algorithm_input(ByteStreamReader &r);
 
 // ── Container helpers ────────────────────────────────────────────────
 
