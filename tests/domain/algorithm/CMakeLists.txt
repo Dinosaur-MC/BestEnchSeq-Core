@@ -9,8 +9,7 @@ besq_test(test_ench_reg test_ench_reg.cpp)
 besq_test(test_algorithm_registry test_algorithm_registry.cpp)
 
 # Serialization tests (compact types, AStar state serializer)
-# TODO: fix compact_serializer — needs to use compact types instead of business types
-# besq_test(test_compact_serializer test_compact_serializer.cpp)
+besq_test(test_compact_serializer test_compact_serializer.cpp)
 besq_test(test_astar_state_serializer test_astar_state_serializer.cpp)
 
 # Strategy integration tests (needs registries, AlgorithmExecutor, RegistryAccess)

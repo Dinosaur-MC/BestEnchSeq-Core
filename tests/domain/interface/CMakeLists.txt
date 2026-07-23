@@ -26,9 +26,8 @@ set_tests_properties(test_item_parser PROPERTIES WORKING_DIRECTORY ${PROJECT_ROO
 besq_test(test_cli_parser test_cli_parser.cpp)
 besq_test(test_cli_acceptance test_cli_acceptance.cpp)
 
-# Full data loading test (needs registries with data)
-# TODO: re-enable when EnchInfoParser API stabilizes
-# besq_test(test_ench_info_parser test_ench_info_parser.cpp)
+# Full data loading test
+besq_test(test_ench_info_parser test_ench_info_parser.cpp)
 
 # API context test (needs BesqContext compiled — enabled now)
 # TODO: currently has linker errors; re-enable when API layer is complete
