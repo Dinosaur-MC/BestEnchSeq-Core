@@ -1,6 +1,6 @@
 #include "framework/test_utils.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
 
@@ -161,7 +161,7 @@ void test_get_name_map() {
 int main() {
     try {
         // Initialize category registry with builtins (needed for some lookups)
-        EquipmentCategoryRegistry cat_reg;
+        EquipmentTagRegistry cat_reg;
         cat_reg.initialize();
 
         test_initialize_and_get();

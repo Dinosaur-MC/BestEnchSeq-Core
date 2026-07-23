@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/resolvers/InventoryResolver.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 
 #include <filesystem>
@@ -12,7 +12,7 @@
 namespace {
 
 struct TestEnv {
-    EquipmentCategoryRegistry cat_reg;
+    EquipmentTagRegistry cat_reg;
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
     std::filesystem::path temp_dir;
@@ -22,13 +22,13 @@ struct TestEnv {
 
         eq_reg.initialize({Equipment{
             "minecraft:diamond_sword", "Diamond Sword",
-            EquipmentCategory::ID_SWORD, 1561
+            1, 1561
         }});
 
         std::vector<EnchInfo> infos;
         infos.push_back({"minecraft:sharpness", "Sharpness",
             MCE::All, 5, 5, 1, false, {},
-            {EquipmentCategory::ID_SWORD}});
+            {1}});
         ench_reg.initialize(infos);
 
         temp_dir = std::filesystem::temp_directory_path() / "besq_test_inv";

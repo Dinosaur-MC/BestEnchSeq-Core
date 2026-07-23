@@ -16,7 +16,7 @@
 #include "domain/business/types/Equipment.h"
 // REMOVED: RegistryAccess.h — create local registries instead
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "builtin/DataLoader.h"
 #include "io/json.h"

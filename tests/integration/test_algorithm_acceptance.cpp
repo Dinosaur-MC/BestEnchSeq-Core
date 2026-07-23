@@ -15,7 +15,7 @@
 #include "domain/orchestration/components/CompactAdapter.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 // REMOVED: RegistryAccess.h — create local registries instead
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/orchestration/components/EnchSerializer.h"

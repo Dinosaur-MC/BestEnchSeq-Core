@@ -2,7 +2,7 @@
 #include "framework/test_fixture.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
@@ -63,7 +63,7 @@ struct TestContext {
                         const std::vector<algorithm::Ench>& wanted) {
         algorithm::Equipment eq;
         eq.id = 0;
-        eq.category_id = EquipmentCategory::ID_SWORD;
+        eq.category_id = 1;
         eq.max_durability = 1561;
 
         // Build compact EnchReg from domain enchantment registry

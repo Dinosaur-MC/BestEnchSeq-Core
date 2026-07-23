@@ -6,7 +6,7 @@
 #include "domain/orchestration/components/RawTypeAdapter.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 // REMOVED: RegistryAccess.h — create local registries instead
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"

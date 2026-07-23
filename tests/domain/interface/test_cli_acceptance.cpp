@@ -11,7 +11,7 @@
 #include "domain/interface/parsers/EnchParser.h"
 #include "domain/interface/parsers/ItemParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "framework/test_utils.h"

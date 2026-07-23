@@ -1,7 +1,7 @@
 #pragma once
 
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/registries/AlgorithmRegistry.h"
@@ -24,7 +24,7 @@ using algorithm::AlgorithmRegistry;
 
 struct TestFixture {
     EnchantmentRegistry enchants;
-    EquipmentCategoryRegistry categories;
+    EquipmentTagRegistry categories;
     EquipmentRegistry equipment;
     AlgorithmRegistry algorithms;
 

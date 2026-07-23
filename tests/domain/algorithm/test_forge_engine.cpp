@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/registries/EnchReg.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/ConfigTypes.h"
@@ -16,7 +16,7 @@ namespace {
 
 struct TestFixture {
     EnchantmentRegistry enchants;
-    EquipmentCategoryRegistry categories;
+    EquipmentTagRegistry categories;
     algorithm::EnchReg reg;
 
     TestFixture() {
@@ -54,11 +54,11 @@ struct TestFixture {
         // Build compact EnchReg for sword
         algorithm::Equipment target_equip;
         target_equip.id = 0;
-        target_equip.category_id = EquipmentCategory::ID_SWORD;
+        target_equip.category_id = 1;
         target_equip.max_durability = 1561;
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<int32_t> global_ids;
-        // Map enchantment name â†’ local id for conflict resolution
+        // Map enchantment name â†?local id for conflict resolution
         std::unordered_map<std::string, int32_t> name_to_local;
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             global_ids.push_back(i);
@@ -74,7 +74,7 @@ struct TestFixture {
         std::vector<bool> visited(enchants.size(), false);
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             if (visited[i] || enchants.get(i).exclusive_set.empty()) continue;
-            // Found a new conflict group â€” assign a shared bit to all members
+            // Found a new conflict group â€?assign a shared bit to all members
             uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
             next_group++;
             // Mark i and all its exclusive_set members with the same bit
