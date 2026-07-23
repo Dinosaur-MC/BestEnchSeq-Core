@@ -25,7 +25,6 @@ inline MCE parse_platform(const std::string &str) {
     }
     if (lower == "java" || lower == "je") return MCE::Java;
     if (lower == "bedrock" || lower == "be") return MCE::Bedrock;
-    if (lower == "all" || lower == "both") return MCE::All;
     return MCE::Java;
 }
 
@@ -33,10 +32,8 @@ inline std::string platform_to_string(MCE p) {
     switch (p) {
     case MCE::Java:    return "java";
     case MCE::Bedrock: return "bedrock";
-    case MCE::All:     return "all";
-    case MCE::None:    return "none";
+    default:                     return "unknown";
     }
-    return "java";
 }
 
 // ─── Minecraft data-pack structure detection ──────────────────────────────

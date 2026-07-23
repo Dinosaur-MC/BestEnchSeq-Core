@@ -35,7 +35,12 @@ ResolvedInput ItemResolver::resolve(
         }
     }
 
-    return ResolvedInput{target_item, source_ench, target_ench, std::move(books)};
+    // The returned target_item must have only the SOURCE (current) enchantments,
+    // not the desired ones.  The desired state goes into target_ench separately.
+    // This ensures the algorithm doesn't see the target as already met.
+    Item result_item = target_item;
+    result_item.enchs = source_ench;
+    return ResolvedInput{result_item, source_ench, target_ench, std::move(books)};
 }
 
 } // namespace algorithm

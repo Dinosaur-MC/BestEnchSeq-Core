@@ -13,8 +13,7 @@
 class EnchantmentRegistry;
 class EquipmentRegistry;
 class EquipmentCategoryRegistry;
-class AlgorithmLoader;
-struct ResolvedInput;
+namespace algorithm { class AlgorithmLoader; struct ResolvedInput; }
 
 /// Input to the solve pipeline.
 ///
@@ -63,32 +62,33 @@ public:
     /// Run the full pipeline: resolve → apply → execute → recall.
     static SolveResult run(
         const SolveInput& input,
-        const AlgorithmLoader& loader,
+        const algorithm::AlgorithmLoader& loader,
         const EnchantmentRegistry& ench_reg,
         const EquipmentRegistry& eq_reg,
         const EquipmentCategoryRegistry& cat_reg);
 
     /// Stage 1: Domain resolution.  Validates inputs and builds
-    /// ResolvedInput (with graduated books for direct mode).
-    static ResolvedInput resolve(const SolveInput& input,
-                                 const EnchantmentRegistry& ench_reg,
-                                 const EquipmentRegistry& eq_reg);
+    /// algorithm::ResolvedInput (with graduated books for direct mode).
+    static algorithm::ResolvedInput resolve(const SolveInput& input,
+                                            const EnchantmentRegistry& ench_reg,
+                                            const EquipmentRegistry& eq_reg);
 
     /// Stage 2: Domain → compact conversion (via CompactAdapter).
-    static algorithm::AlgorithmInput apply(const ResolvedInput& resolved,
-                                const EnchantmentRegistry& ench_reg);
+    static algorithm::AlgorithmInput apply(const algorithm::ResolvedInput& resolved,
+                                           const ::Equipment& target_equipment,
+                                           const EnchantmentRegistry& ench_reg);
 
     /// Stage 3: Compact algorithm execution.
     /// Creates the requested strategy, checks mode support, runs the executor.
-    static ExecuteResult execute(const algorithm::AlgorithmInput& algo_input,
+    static ExecuteResult execute(algorithm::AlgorithmInput& algo_input,
                                  const std::string& algorithm,
-                                 const AlgorithmLoader& loader);
+                                 const algorithm::AlgorithmLoader& loader);
 
     /// Stage 4: Compact → domain conversion (via CompactAdapter::recall)
     /// wrapped in a SolveResult.
     static SolveResult recall(const algorithm::AlgorithmOutput& output,
                               const algorithm::AlgorithmInput& algo_input,
-                              const ResolvedInput& resolved);
+                              const algorithm::ResolvedInput& resolved);
 };
 
 } // namespace detail

@@ -18,11 +18,22 @@ void EnchReg::_build_conflict_matrix() {
     }
 }
 
-void EnchReg::init(const EnchInfo &ench_infos, const Equipment &target_equip) {
+void EnchReg::init(std::vector<EnchInfo> ench_infos, std::vector<int32_t> global_ids,
+                   const Equipment &target_equip) {
+    _ench_infos  = std::move(ench_infos);
+    _global_ids  = std::move(global_ids);
     _target_equip = target_equip;
     _mask_size    = _ench_infos.size() / MASK_ELEM_SIZE + 1;
 
     _build_conflict_matrix();
+}
+
+int16_t EnchReg::to_local_id(int32_t global_id) const {
+    for (size_t i = 0; i < _global_ids.size(); ++i) {
+        if (_global_ids[i] == global_id)
+            return static_cast<int16_t>(i);
+    }
+    return -1;
 }
 
 } // namespace algorithm

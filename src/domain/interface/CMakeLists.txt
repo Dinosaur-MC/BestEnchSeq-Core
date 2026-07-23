@@ -11,8 +11,8 @@ set(BESQ_INTERFACE_SRCS
     # ── CLI ──
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/cli.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/RegistryEditor.cpp
-    # ── Pending API migration (needs business↔algorithm type bridging) ──
-    # ${CMAKE_CURRENT_SOURCE_DIR}/api/SolvePipeline.cpp
+    # ── Core solve pipeline ──
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/SolvePipeline.cpp
     # ── Pending API migration ──
     # ${CMAKE_CURRENT_SOURCE_DIR}/api/BesqContext.cpp
     # ${CMAKE_CURRENT_SOURCE_DIR}/api/CAbiBindings.cpp
