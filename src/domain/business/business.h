@@ -12,6 +12,9 @@
 #include "domain/business/types/Item.h"           // IWYU pragma: export
 #include "domain/business/types/Solution.h"       // IWYU pragma: export
 
+// ── Components ──
+#include "domain/business/components/Serializer.h"                 // IWYU pragma: export
+
 // ── Registries ──
 #include "domain/business/registries/EnchantmentRegistry.h"        // IWYU pragma: export
 #include "domain/business/registries/EquipmentRegistry.h"          // IWYU pragma: export

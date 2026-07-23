@@ -26,8 +26,6 @@ void EnchantmentRegistry::reset_for_testing() {
     instances_.clear();
     name_to_index_.clear();
     incompatible_table_.clear();
-    local_to_global_.clear();
-    global_to_local_.clear();
 }
 
 void EnchantmentRegistry::initialize(const std::vector<EnchInfo>& infos) {
@@ -36,8 +34,6 @@ void EnchantmentRegistry::initialize(const std::vector<EnchInfo>& infos) {
     instances_.clear();
     name_to_index_.clear();
     incompatible_table_.clear();
-    local_to_global_.clear();
-    global_to_local_.clear();
 
     instances_.reserve(infos.size());
     for (int32_t i = 0; i < static_cast<int32_t>(infos.size()); i++) {
@@ -53,59 +49,6 @@ void EnchantmentRegistry::initialize(const std::vector<EnchInfo>& infos) {
             incompatible_table_[j].insert(i);
         }
     }
-}
-
-EnchantmentRegistry EnchantmentRegistry::create_subset(const std::vector<int32_t>& global_ids) const {
-    EnchantmentRegistry subset;
-
-    subset.instances_.reserve(global_ids.size());
-    subset.local_to_global_.reserve(global_ids.size());
-
-    int32_t local_id = 0;
-    for (int32_t gid : global_ids) {
-        if (gid < 0 || gid >= static_cast<int32_t>(instances_.size()))
-            throw std::out_of_range("EnchantmentRegistry::create_subset: global id "
-                                    + std::to_string(gid) + " out of range [0, "
-                                    + std::to_string(instances_.size()) + ")");
-        subset.instances_.push_back(instances_[gid]);
-        subset.name_to_index_[instances_[gid].name_id] = local_id;
-        subset.local_to_global_.push_back(gid);
-        subset.global_to_local_[gid] = local_id;
-        local_id++;
-    }
-
-    // Build remapped incompatibility table for subset
-    for (int32_t li = 0; li < static_cast<int32_t>(subset.instances_.size()); li++) {
-        int32_t gi = subset.local_to_global_[li];
-        auto it = incompatible_table_.find(gi);
-        if (it == incompatible_table_.end())
-            continue;
-        for (int32_t other_gi : it->second) {
-            auto jt = subset.global_to_local_.find(other_gi);
-            if (jt != subset.global_to_local_.end()) {
-                subset.incompatible_table_[li].insert(jt->second);
-            }
-        }
-    }
-
-    return subset;
-}
-
-int32_t EnchantmentRegistry::to_global_id(int32_t local_id) const {
-    if (local_to_global_.empty())
-        return local_id;  // root registry: identity
-    if (local_id < 0 || local_id >= static_cast<int32_t>(local_to_global_.size()))
-        throw std::out_of_range("Local id out of range");
-    return local_to_global_[local_id];
-}
-
-int32_t EnchantmentRegistry::to_local_id(int32_t global_id) const {
-    if (global_to_local_.empty())
-        return global_id;  // root registry: identity
-    auto it = global_to_local_.find(global_id);
-    if (it == global_to_local_.end())
-        throw std::out_of_range("Global id not found in subset");
-    return it->second;
 }
 
 const EnchInfo& EnchantmentRegistry::get(int32_t index) const {

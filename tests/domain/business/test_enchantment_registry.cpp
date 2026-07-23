@@ -91,39 +91,6 @@ void test_get_bounds() {
 }
 
 // ---------------------------------------------------------------------------
-// test_create_subset
-// ---------------------------------------------------------------------------
-void test_create_subset() {
-    EnchantmentRegistry reg;
-    auto infos = make_valid_enchants();
-    reg.initialize(infos);
-
-    // Create subset with only sharpness
-    auto subset = reg.create_subset({0});
-    expect(subset.size() == 1, "subset size should be 1");
-    expect(subset.get(0).name_id == "minecraft:sharpness", "subset contains sharpness");
-    expect(subset.is_subset(), "subset should report is_subset()");
-    expect(subset.to_global_id(0) == 0, "subset local 0 -> global 0");
-
-    // Create subset with both
-    auto subset2 = reg.create_subset({0, 1});
-    expect(subset2.size() == 2, "full subset size");
-    expect(subset2.to_global_id(0) == 0, "full subset local 0 -> global 0");
-    expect(subset2.to_global_id(1) == 1, "full subset local 1 -> global 1");
-
-    // Out-of-range global id should throw
-    bool threw = false;
-    try {
-        reg.create_subset({0, 999});
-    } catch (const std::out_of_range&) {
-        threw = true;
-    }
-    expect(threw, "create_subset with invalid global id should throw");
-
-    std::cout << "PASS: test_create_subset" << std::endl;
-}
-
-// ---------------------------------------------------------------------------
 // test_check_validation
 // ---------------------------------------------------------------------------
 void test_check_validation() {
@@ -278,7 +245,6 @@ int main() {
     try {
         test_initialize_and_get();
         test_get_bounds();
-        test_create_subset();
         test_check_validation();
         test_is_incompatible();
         test_exclusive_set_access();
