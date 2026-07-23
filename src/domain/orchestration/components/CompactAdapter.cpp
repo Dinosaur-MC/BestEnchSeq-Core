@@ -11,9 +11,7 @@
 
 algorithm::AlgorithmInput CompactAdapter::apply(
     const algorithm::Item& target_item,
-    const algorithm::EnchSet& /*source_ench*/,
-    const algorithm::EnchSet& target_ench,
-    const algorithm::ItemCollection& extra_items,
+    const algorithm::EnchSet& source_ench,
     const ::Equipment& target_eq,
     const EnchantmentRegistry& global_registry)
 {
@@ -24,8 +22,6 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     algo_equip.max_durability = target_eq.max_durability;
 
     // ── 2. Determine applicable enchantment IDs ────────────────────────
-    // Scan the business registry and pick enchantments that can go on the
-    // target equipment's category.  Build a mapping from global ID → local ID.
     const auto& all_infos = global_registry.get_instances();
 
     std::vector<algorithm::EnchInfo> algo_infos;
@@ -34,8 +30,6 @@ algorithm::AlgorithmInput CompactAdapter::apply(
 
     for (int32_t gid = 0; gid < static_cast<int32_t>(all_infos.size()); ++gid) {
         const auto& biz = all_infos[gid];
-
-        // Check applicability
         bool applicable = false;
         for (int32_t cat_id : biz.applicable_category_ids) {
             if (cat_id == algo_equip.category_id || cat_id == 0) {
@@ -45,14 +39,10 @@ algorithm::AlgorithmInput CompactAdapter::apply(
         }
         if (!applicable) continue;
 
-        // Build algorithm EnchInfo
         algorithm::EnchInfo ai;
         ai.mul     = static_cast<uint16_t>(biz.multiplier);
-        ai.mul_b   = static_cast<uint16_t>(biz.multiplier); // same in vanilla
+        ai.mul_b   = static_cast<uint16_t>(biz.multiplier);
         ai.max_lvl = static_cast<uint16_t>(biz.max_level);
-
-        // Build exclusive-set bitmask: iterate algorithm infos built so far
-        // and check if this new enchantment conflicts with any existing one.
         ai.exc_mask.resize(algo_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
         for (size_t local_idx = 0; local_idx < algo_infos.size(); ++local_idx) {
             const std::string& existing_name = all_infos[applicable_global_ids[local_idx]].name_id;
@@ -60,12 +50,10 @@ algorithm::AlgorithmInput CompactAdapter::apply(
                 size_t word = local_idx / algorithm::MASK_ELEM_SIZE;
                 size_t bit  = local_idx % algorithm::MASK_ELEM_SIZE;
                 ai.exc_mask[word] |= (algorithm::MaskType(1) << bit);
-                // Also set the symmetric bit in the existing entry
                 if (word < algo_infos[local_idx].exc_mask.size())
                     algo_infos[local_idx].exc_mask[word] |= (algorithm::MaskType(1) << bit);
             }
         }
-
         ai.applicable = true;
 
         int16_t local_id = static_cast<int16_t>(algo_infos.size());
@@ -78,10 +66,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     algorithm::EnchReg ench_reg;
     ench_reg.init(std::move(algo_infos), std::move(applicable_global_ids), algo_equip);
 
-    // ── 4. Convert items: algorithm domain ────────────────────────────
-    // The input items are algorithm-domain items (from ItemResolver).
-    // Copy them and remap enchantment IDs from business (int32_t) to
-    // compact (int16_t local).
+    // ── 4. Remap helper ───────────────────────────────────────────────
     auto remap_ench_set = [&](const algorithm::EnchSet& src) -> algorithm::EnchSet {
         algorithm::EnchSet dst;
         for (const auto& e : src) {
@@ -92,30 +77,18 @@ algorithm::AlgorithmInput CompactAdapter::apply(
         return dst;
     };
 
+    // ── 5. Build AlgorithmInput ───────────────────────────────────────
     algorithm::AlgorithmInput input;
     input.ench_reg = std::move(ench_reg);
 
-    // Target equipment (item[0])
-    input.items.reserve(1 + extra_items.size());
-    algorithm::Item start_item = target_item;
-    start_item.enchs = remap_ench_set(target_item.enchs);
-    input.items.push_back(std::move(start_item));
+    // input.target = desired (wanted enchantments after forge)
+    input.target = target_item;
+    input.target.enchs = remap_ench_set(input.target.enchs);
 
-    // Extra items (items[1..]) — for inventory mode; books are generated
-    // later by IAlgorithm::resolve().
-    for (const auto& item : extra_items) {
-        algorithm::Item algo_item = item;
-        algo_item.enchs = remap_ench_set(item.enchs);
-        input.items.push_back(std::move(algo_item));
-    }
-
-    // Target enchantments
-    input.target.reserve(target_ench.size());
-    for (const auto& e : target_ench) {
-        auto it = global_to_local.find(e.id);
-        if (it != global_to_local.end())
-            input.target.push_back({it->second, e.level});
-    }
+    // items[0] = equipment with SOURCE (current) enchantments
+    algorithm::Item equip_item = target_item;
+    equip_item.enchs = remap_ench_set(source_ench);
+    input.items.push_back(std::move(equip_item));
 
     return input;
 }
@@ -153,9 +126,9 @@ std::vector<Solution> CompactAdapter::recall(
 
         // Determine platform from forge config
         MCE plat = MCE::Java;
-        if (input.config.platform == MCE::Java)
+        if (input.f_config.platform == MCE::Java)
             plat = MCE::Java;
-        else if (input.config.platform == MCE::Bedrock)
+        else if (input.f_config.platform == MCE::Bedrock)
             plat = MCE::Bedrock;
         else
             plat = MCE::Java;
@@ -182,7 +155,6 @@ algorithm::Item CompactAdapter::from_domain(const Item& item, const algorithm::E
     citem.ppn  = static_cast<uint8_t>(item.prior_penalty);
     citem.dur  = static_cast<int16_t>(item.durability);
 
-    // Convert enchantments: map business int32_t IDs to compact int16_t IDs
     for (const auto& ench : item.enchantments) {
         int16_t eid = static_cast<int16_t>(reg.to_local_id(ench.id));
         if (eid >= 0)

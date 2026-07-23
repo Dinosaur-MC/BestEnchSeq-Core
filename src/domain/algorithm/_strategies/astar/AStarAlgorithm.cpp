@@ -117,7 +117,7 @@ int32_t AStarAlgorithm::_delta_h(int32_t parent_h, const Item &forged, const Ite
 // ─── Execute ────────────────────────────────────────────────────────────
 
 void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     const auto &items  = input.items;
     const auto &reg    = input.ench_reg;
     const auto &target = input.target;
@@ -141,7 +141,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
     _step_pool.clear();
     _open_heap.clear();
     _ench_reg = &input.ench_reg;
-    _target   = target;
+    _target.clear(); for (const auto& e : target.enchs) _target.push_back(e);
     _target_level_map.assign(_ench_reg->size(), 0);
     for (const auto &t : _target)
         _target_level_map[t.id] = t.level;
@@ -149,10 +149,10 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
     _diag               = AStarDiagnostics{};
 
     // Cache config from AlgorithmInput
-    _max_solutions   = input.search.max_solutions;
-    _max_search_time = input.search.max_search_time;
+    _max_solutions   = input.s_config.max_solutions;
+    _max_search_time = input.s_config.max_search_time;
     _budget          = AStarMemoryBudget::from_memory_mb(
-        input.search.memory_mb > 0 ? input.search.memory_mb : 2048, static_cast<int32_t>(items.size())
+        input.s_config.memory_mb > 0 ? input.s_config.memory_mb : 2048, static_cast<int32_t>(items.size())
     );
 
     // Seed ItemPool with initial items
@@ -456,17 +456,17 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
 void AStarAlgorithm::_restore_and_execute(const AlgorithmInput &input, ExecutionContext &ctx) {
     ctx.report_progress(0, ProgressStatus::Starting);
 
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     _ench_reg = &input.ench_reg;
-    _target   = input.target;
+    _target.clear(); for (const auto& e : input.target.enchs) _target.push_back(e);
     _target_level_map.assign(_ench_reg->size(), 0);
     for (const auto &t : _target)
         _target_level_map[t.id] = t.level;
 
-    _max_solutions   = input.search.max_solutions;
-    _max_search_time = input.search.max_search_time;
+    _max_solutions   = input.s_config.max_solutions;
+    _max_search_time = input.s_config.max_search_time;
     _budget          = AStarMemoryBudget::from_memory_mb(
-        input.search.memory_mb > 0 ? input.search.memory_mb : 2048, static_cast<int32_t>(input.items.size())
+        input.s_config.memory_mb > 0 ? input.s_config.memory_mb : 2048, static_cast<int32_t>(input.items.size())
     );
 
     _pool.set_max(_budget.max_items_pool);

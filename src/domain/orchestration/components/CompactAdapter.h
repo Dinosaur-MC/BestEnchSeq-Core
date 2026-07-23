@@ -10,14 +10,12 @@
 
 struct CompactAdapter {
     /// Build AlgorithmInput from domain-level types.
-    /// items[0] = equipment with source enchantments.
-    /// extra_items are placed into items[1..] and later processed by
-    /// IAlgorithm::resolve() (which generates books or filters by priority).
+    /// Populates ench_reg, target, and config framework.
+    /// The data union (source enchants or available items) is filled
+    /// by the caller after apply().
     static algorithm::AlgorithmInput apply(
         const algorithm::Item& target_item,
         const algorithm::EnchSet& source_ench,
-        const algorithm::EnchSet& target_ench,
-        const algorithm::ItemCollection& extra_items,
         const ::Equipment& target_eq,
         const EnchantmentRegistry& global_registry
     );

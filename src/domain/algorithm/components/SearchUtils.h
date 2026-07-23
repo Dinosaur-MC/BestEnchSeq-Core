@@ -14,7 +14,9 @@ namespace algorithm {
 /// Check whether \p equipment satisfies all enchantments in \p target.
 /// Returns true when every target enchantment is present at or above
 /// the required level.
-inline bool meets_target(const Item &equipment, const EnchCollection &target) noexcept {
+/// Accepts any iterable collection of Ench (EnchSet or EnchCollection).
+template <typename EnchRange>
+inline bool meets_target(const Item &equipment, const EnchRange &target) noexcept {
     for (const auto &t : target) {
         auto it = equipment.enchs.find(t.id);
         if (it == equipment.enchs.end() || it->level < t.level)
@@ -24,8 +26,9 @@ inline bool meets_target(const Item &equipment, const EnchCollection &target) no
 }
 
 /// Pool-based overload: resolves \p equip_id through \p pool.
+template <typename EnchRange>
 inline bool
-meets_target(ItemPool::ItemID equip_id, const ItemPool &pool, const EnchCollection &target) noexcept {
+meets_target(ItemPool::ItemID equip_id, const ItemPool &pool, const EnchRange &target) noexcept {
     return meets_target(pool[equip_id], target);
 }
 

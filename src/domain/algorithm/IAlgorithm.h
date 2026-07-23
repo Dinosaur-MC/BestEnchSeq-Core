@@ -40,7 +40,7 @@ class IAlgorithm {
     virtual bool simulate(const AlgorithmInput &input) const noexcept {
         if (input.items.empty())
             return false;
-        if (meets_target(input.items[0], input.target))
+        if (meets_target(input.items[0], input.target.enchs))
             return true;
         return input.items.size() > 1;
     }

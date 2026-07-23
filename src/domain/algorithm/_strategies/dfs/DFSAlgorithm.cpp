@@ -82,7 +82,7 @@ int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
@@ -90,8 +90,8 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _start_time = std::chrono::steady_clock::now();
 
     _ench_reg = &input.ench_reg;
-    _search_config = input.search;
-    _target = target;
+    _search_config = input.s_config;
+    _target.clear(); for (const auto& e : target.enchs) _target.push_back(e);
 
     _best_cost = INT32_MAX;
     _best_steps.clear();

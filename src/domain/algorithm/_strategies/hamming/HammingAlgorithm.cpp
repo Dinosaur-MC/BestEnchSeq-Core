@@ -61,7 +61,7 @@ void HammingAlgorithm::arrange_by_popcount(
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.config);
+    _forge_engine.set_config(input.f_config);
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
     ctx.report_progress(0, ProgressStatus::Starting);
@@ -73,7 +73,7 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         return;
     }
 
-    if (meets_target(input.items[0], target)) {
+    if (meets_target(input.items[0], target.enchs)) {
         ctx.report_solution({});
         ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
@@ -199,7 +199,7 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
         for (auto it = tiers.rbegin(); it != tiers.rend(); ++it) {
             for (auto& item : *it) {
                 if (item.type == ItemType::Equip
-                    && meets_target(item, target))
+                    && meets_target(item, target.enchs))
                 {
                     int32_t total_cost = std::accumulate(
                         steps.begin(), steps.end(), int32_t{0},
@@ -231,7 +231,7 @@ void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
 
 bool HammingAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
     if (input.items.empty()) return false;
-    if (meets_target(input.items[0], input.target)) return true;
+    if (meets_target(input.items[0], input.target.enchs)) return true;
     return input.items.size() > 1;
 }
 

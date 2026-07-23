@@ -11,12 +11,11 @@ ResolverOutput IAlgorithm::resolve(const AlgorithmInput &input) const {
     switch (input.mode) {
     case AlgorithmMode::direct: {
         // items[0] carries source enchants; target holds desired.
-        // Build a temporary Item with desired enchants for the resolver.
-        Item desired    = input.items[0];
+        // Build a temporary Item with desired enchantments for the resolver.
+        Item desired = input.items[0];
         desired.enchs.clear();
-        for (const auto &e : input.target)
+        for (const auto &e : input.target.enchs)
             desired.enchs.insert(e);
-
         return ItemResolver::resolve(desired, input.items[0].enchs);
     }
     case AlgorithmMode::inventory: {

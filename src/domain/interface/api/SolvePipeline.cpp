@@ -87,39 +87,45 @@ algorithm::AlgorithmInput detail::SolvePipeline::apply(
     const ::Equipment& target_equipment,
     const EnchantmentRegistry& ench_reg)
 {
+    // Build the target Item (with desired enchantments in algorithm ID space)
     auto algo_target = to_algo_item(input.target_item);
+
+    // Build source enchantments (also converted to algorithm IDs)
     auto algo_source = to_algo_enchset(input.source_enchantments);
-    auto algo_desired = to_algo_enchset(input.target_item.enchantments);
 
-    // items[0] MUST carry source enchantments, not desired.
-    // IAlgorithm::resolve() reads items[0].enchs to compute diff vs target.
-    algo_target.enchs = algo_source;
-
-    // Convert extra items (inventory mode) to algorithm domain
-    algorithm::ItemCollection extra;
-    if (input.is_inventory_mode) {
-        extra.reserve(input.extra_items.size());
-        for (const auto& item : input.extra_items)
-            extra.push_back(to_algo_item(item));
-    }
-
+    // Build AlgorithmInput via CompactAdapter
     auto algo_input = CompactAdapter::apply(
-        algo_target, algo_source, algo_desired, extra,
-        target_equipment, ench_reg);
+        algo_target, algo_source, target_equipment, ench_reg);
 
     // Wire up config / search / mode
-    algo_input.config = input.forge_config;
-    algo_input.search = input.search_config;
+    algo_input.f_config = input.forge_config;
+    algo_input.s_config = input.search_config;
     algo_input.mode = input.is_inventory_mode
         ? algorithm::AlgorithmMode::inventory
         : algorithm::AlgorithmMode::direct;
     algo_input.priorities = input.extra_item_priorities;
 
+    // Fill the union: direct mode → source enchants; inventory → available items
+    if (!input.is_inventory_mode) {
+        // Convert EnchSet to EnchCollection (variant expects vector<Ench>)
+        algorithm::EnchCollection src_vec;
+        src_vec.reserve(algo_source.size());
+        for (const auto& e : algo_source)
+            src_vec.push_back(e);
+        algo_input.data = std::move(src_vec);
+    } else {
+        algorithm::ItemCollection extra;
+        extra.reserve(input.extra_items.size());
+        for (const auto& item : input.extra_items)
+            extra.push_back(to_algo_item(item));
+        algo_input.data = std::move(extra);
+    }
+
     return algo_input;
 }
 
 // ====================================================================
-// Stage 2: Create algorithm → resolve → execute
+// Stage 2: Create algorithm → execute
 // ====================================================================
 
 detail::ExecuteResult detail::SolvePipeline::execute(
@@ -139,7 +145,7 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     }
 
     // Check mode support
-    if (!(algo->supported_mode() & algo_input.mode)) {
+    if (!(algo->supported_mode() == algo_input.mode)) {
         std::string mode_str =
             (algo_input.mode == algorithm::AlgorithmMode::inventory) ? "inventory" : "direct";
         throw std::runtime_error("Algorithm '" + algorithm +
@@ -153,27 +159,23 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     exec_result.algorithm_name = algorithm;
 
     // Check reachability after resolve
-    if (resolved.empty() && algo_input.mode == algorithm::AlgorithmMode::inventory) {
-        LOG_INFO("resolve: target not reachable from given items");
+    if (resolved.empty()) {
+        if (algo_input.mode == algorithm::AlgorithmMode::inventory)
+            LOG_INFO("resolve: inventory unreachable");
+        else
+            LOG_INFO("resolve: target already satisfied");
         return exec_result;
     }
 
-    // Append resolved items (books / filtered inventory)
+    // Append resolved items (books / filtered inventory) to the items list
     size_t old_size = algo_input.items.size();
     algo_input.items.resize(old_size + resolved.size());
     for (size_t i = 0; i < resolved.size(); ++i)
         algo_input.items[old_size + i] = std::move(resolved[i]);
 
-    // If only the equipment remains (no books/extra items to forge), nothing to do.
-    if (algo_input.items.size() == 1 && algo_input.mode == algorithm::AlgorithmMode::direct) {
-        LOG_INFO("resolve: target already satisfied, nothing to forge");
-        // Return an empty success — target already met.
-        return exec_result;
-    }
-
     // Feasibility pre-check
-    if (algo_input.mode == algorithm::AlgorithmMode::inventory && !algo->simulate(algo_input)) {
-        LOG_INFO("simulate: target not reachable from given items");
+    if (!algo->simulate(algo_input)) {
+        LOG_INFO("simulate: target not reachable");
         return exec_result;
     }
 
@@ -227,14 +229,11 @@ SolveResult detail::SolvePipeline::recall(
         );
     }
 
-    // Build business ItemCollection from algo_input items[1..]
+    // Build business ItemCollection from algorithm input's inventory items
     ItemCollection biz_items;
-    if (algo_input.items.size() > 1) {
-        biz_items.reserve(algo_input.items.size() - 1);
-        for (size_t i = 1; i < algo_input.items.size(); ++i) {
-            auto biz = CompactAdapter::to_domain(algo_input.items[i], algo_input.ench_reg);
-            biz_items.push_back(std::move(biz));
-        }
+    if (algo_input.is_inventory()) {
+        for (const auto& item : algo_input.inventory_items())
+            biz_items.push_back(CompactAdapter::to_domain(item, algo_input.ench_reg));
     }
 
     result.solutions = CompactAdapter::recall(

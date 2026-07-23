@@ -148,7 +148,7 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     _start_time = std::chrono::steady_clock::now();
 
     // Start timeout watcher if max_search_time > 0
-    _start_timeout_watcher(input.search.max_search_time);
+    _start_timeout_watcher(input.s_config.max_search_time);
 
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
     if (warmup)
@@ -203,7 +203,7 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
     _algo_name_cache = std::string(_algorithm->name());
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
-    _start_timeout_watcher(_algorithm_input.search.max_search_time);
+    _start_timeout_watcher(_algorithm_input.s_config.max_search_time);
 
     _worker.emplace([this]() mutable {
         try {
