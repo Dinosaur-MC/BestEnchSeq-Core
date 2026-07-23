@@ -4,7 +4,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include <concepts>
 #include <type_traits>
 
 template <typename T>
@@ -43,7 +42,10 @@ public:
 
     /// Length-prefixed string: u32(size) + raw bytes
     void string(std::string_view s) {
-        u32(static_cast<uint32_t>(s.size()));
+        if constexpr (sizeof(std::string_view::size_type) == 4)
+            u32(s.size());
+        else
+            u64(s.size());
         bytes(s.data(), s.size());
     }
 
