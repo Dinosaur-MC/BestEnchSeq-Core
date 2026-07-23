@@ -46,6 +46,7 @@ struct Ench {
         r >> id >> level;
     }
 };
+static_assert(std::has_unique_object_representations_v<Ench>);
 
 using EnchCollection = std::vector<Ench>;
 
@@ -98,6 +99,7 @@ class EnchSet {
             _size = o._size;
             std::memcpy(_buf, o._buf, INLINE_BYTES);
             o._size = 0;
+            o._hash_cache = 0;
         }
         return *this;
     }
