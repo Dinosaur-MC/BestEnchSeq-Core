@@ -46,8 +46,11 @@ public:
 
     // ── Write convenience — thin wrappers for call-site compatibility ──
     void u8(uint8_t   v) { write(v); }
+    void u16(uint16_t v) { write(v); }
     void u32(uint32_t v) { write(v); }
     void u64(uint64_t v) { write(v); }
+    void i8(int8_t    v) { write(v); }
+    void i16(int16_t  v) { write(v); }
     void i32(int32_t  v) { write(v); }
     void i64(int64_t  v) { write(v); }
 
@@ -135,11 +138,14 @@ public:
     ByteStreamReader& operator>>(T& v) { read(v); return *this; }
 
     // ── Read convenience — thin wrappers for expression-context usage ──
-    uint8_t  u8()  { uint8_t  v; read(v); return v; }
-    uint32_t u32() { uint32_t v; read(v); return v; }
-    uint64_t u64() { uint64_t v; read(v); return v; }
-    int32_t  i32() { int32_t  v; read(v); return v; }
-    int64_t  i64() { int64_t  v; read(v); return v; }
+    uint8_t  u8()  { uint8_t  v{}; read(v); return v; }
+    uint16_t u16() { uint16_t v{}; read(v); return v; }
+    uint32_t u32() { uint32_t v{}; read(v); return v; }
+    uint64_t u64() { uint64_t v{}; read(v); return v; }
+    int8_t   i8()  { int8_t   v{}; read(v); return v; }
+    int16_t  i16() { int16_t  v{}; read(v); return v; }
+    int32_t  i32() { int32_t  v{}; read(v); return v; }
+    int64_t  i64() { int64_t  v{}; read(v); return v; }
 
     ByteStreamReader& operator>>(std::string& s) { s = string(); return *this; }
 
