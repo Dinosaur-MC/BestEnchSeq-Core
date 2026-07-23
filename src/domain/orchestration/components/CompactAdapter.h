@@ -9,18 +9,15 @@
 #include <vector>
 
 struct CompactAdapter {
-    /// Convert domain-level resolved items to compact AlgorithmInput.
-    /// @param target_item   Target equipment (with source enchantments)
-    /// @param source_ench   Source enchantments already on the equipment
-    /// @param target_ench   Desired final enchantments
-    /// @param books         Graduated books (ResolverOutput from ItemResolver)
-    /// @param target_eq     Business Equipment descriptor for the target item
-    /// @param global_registry Full business enchantment registry
+    /// Build AlgorithmInput from domain-level types.
+    /// items[0] = equipment with source enchantments.
+    /// extra_items are placed into items[1..] and later processed by
+    /// IAlgorithm::resolve() (which generates books or filters by priority).
     static algorithm::AlgorithmInput apply(
         const algorithm::Item& target_item,
         const algorithm::EnchSet& source_ench,
         const algorithm::EnchSet& target_ench,
-        const algorithm::ResolverOutput& books,
+        const algorithm::ItemCollection& extra_items,
         const ::Equipment& target_eq,
         const EnchantmentRegistry& global_registry
     );

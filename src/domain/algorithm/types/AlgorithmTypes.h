@@ -32,18 +32,19 @@ struct AlgorithmInput : ISerializable {
     ForgeConfig config;                         // forge configuration (platform, flags)
     SearchConfig search;                        // search configuration (solutions, depth, time)
     AlgorithmMode mode = AlgorithmMode::direct; // operation mode
-    ItemCollection items;                       // items[0] = equipment, rest = books
+    ItemCollection items;                       // items[0] = equipment, items[1..] = resolved
+    std::vector<int32_t> priorities;            // priority per item (inventory mode)
     EnchCollection target;                      // desired final enchantments
     EnchReg ench_reg;                           // compact registry (must be initialized)
     int32_t initial_bound = INT32_MAX;          // warm-start: skip own bound if tighter
 
     void serialize(ByteStreamWriter &w) const noexcept override {
-        w << config << search << items << target << ench_reg
+        w << config << search << items << priorities << target << ench_reg
           << static_cast<uint8_t>(mode) << initial_bound;
     }
     void deserialize(ByteStreamReader &r) noexcept override {
         uint8_t m;
-        r >> config >> search >> items >> target >> ench_reg >> m >> initial_bound;
+        r >> config >> search >> items >> priorities >> target >> ench_reg >> m >> initial_bound;
         mode = static_cast<AlgorithmMode>(m);
     }
 };

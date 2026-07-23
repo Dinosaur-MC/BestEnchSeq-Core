@@ -13,7 +13,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     const algorithm::Item& target_item,
     const algorithm::EnchSet& /*source_ench*/,
     const algorithm::EnchSet& target_ench,
-    const algorithm::ResolverOutput& books,
+    const algorithm::ItemCollection& extra_items,
     const ::Equipment& target_eq,
     const EnchantmentRegistry& global_registry)
 {
@@ -96,16 +96,17 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     input.ench_reg = std::move(ench_reg);
 
     // Target equipment (item[0])
-    input.items.reserve(1 + books.size());
+    input.items.reserve(1 + extra_items.size());
     algorithm::Item start_item = target_item;
     start_item.enchs = remap_ench_set(target_item.enchs);
     input.items.push_back(std::move(start_item));
 
-    // Books (items[1..])
-    for (const auto& book : books) {
-        algorithm::Item algo_book = book;
-        algo_book.enchs = remap_ench_set(book.enchs);
-        input.items.push_back(std::move(algo_book));
+    // Extra items (items[1..]) — for inventory mode; books are generated
+    // later by IAlgorithm::resolve().
+    for (const auto& item : extra_items) {
+        algorithm::Item algo_item = item;
+        algo_item.enchs = remap_ench_set(item.enchs);
+        input.items.push_back(std::move(algo_item));
     }
 
     // Target enchantments

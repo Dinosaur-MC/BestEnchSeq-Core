@@ -3,6 +3,7 @@
 # serialization, plugin loader.  Depends only on besq-common.
 
 set(BESQ_ALGORITHM_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/IAlgorithm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/AlgorithmExecutor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ExecutionContext.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/forge_engine/ForgeEngine.cpp

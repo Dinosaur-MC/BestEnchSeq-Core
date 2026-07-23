@@ -3,12 +3,10 @@
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/Solution.h"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#include "domain/algorithm/types/AlgorithmTypes.h"
-#include "domain/algorithm/types/ResolverTypes.h"
 
 // Forward declarations
 class EnchantmentRegistry;
@@ -22,12 +20,12 @@ namespace algorithm { class AlgorithmLoader; }
 /// enchantments (target_ench).  source_enchantments describes what
 /// the equipment already has.  The pipeline computes the diff.
 struct SolveInput {
-    Item target_item;                  ///< Equipment piece with desired enchants
+    Item target_item;                       ///< Equipment piece with desired enchants
     EnchSet source_enchantments;            ///< Enchantments already on the equipment
-    algorithm::ForgeConfig forge_config;               ///< Forge behaviour flags
-    algorithm::SearchConfig search_config;             ///< Search limits (solutions, memory, time)
+    algorithm::ForgeConfig forge_config;    ///< Forge behaviour flags
+    algorithm::SearchConfig search_config;  ///< Search limits (solutions, memory, time)
     std::string algorithm = "hamming";      ///< Algorithm strategy name
-    std::vector<Item> extra_items;     ///< Additional items (inventory mode)
+    std::vector<Item> extra_items;          ///< Additional items (inventory mode)
     std::vector<int32_t> extra_item_priorities; ///< Priority per extra item (inventory mode)
     bool is_inventory_mode = false;         ///< Whether extra_items replaces book generation
 };
@@ -50,15 +48,7 @@ struct SolveResult {
 
 namespace detail {
 
-/// Result of the resolve stage — carries graduated books + target metadata.
-struct ResolveResult {
-    algorithm::Item target_item;      // equipment with SOURCE enchantments
-    algorithm::EnchSet source_ench;
-    algorithm::EnchSet target_ench;   // desired enchantments
-    algorithm::ResolverOutput books;  // generated items (empty = done)
-};
-
-/// Internal result of the execute stage — carries AlgorithmOutput for recall().
+/// Internal result of the execute stage.
 struct ExecuteResult {
     algorithm::AlgorithmOutput algo_output;
     int64_t computation_time_ms = 0;
@@ -69,7 +59,7 @@ struct ExecuteResult {
 /// reusable stages for testability and library usage.
 class SolvePipeline {
 public:
-    /// Run the full pipeline: resolve → apply → execute → recall.
+    /// Run the full pipeline: apply → resolve → execute → recall.
     static SolveResult run(
         const SolveInput& input,
         const algorithm::AlgorithmLoader& loader,
@@ -77,23 +67,24 @@ public:
         const EquipmentRegistry& eq_reg,
         const EquipmentCategoryRegistry& cat_reg);
 
-    /// Stage 1: Domain resolution.  Validates inputs and builds
-    /// ResolveResult with graduated books.
-    static ResolveResult resolve(const SolveInput& input);
+    /// Stage 1: Type conversion + EnchReg building (via CompactAdapter).
+    /// Returns partial AlgorithmInput: items[0] = equipment with source enchants;
+    /// extra_items populate items[1..] for inventory mode.
+    /// Books are NOT generated here — they come from IAlgorithm::resolve().
+    static algorithm::AlgorithmInput apply(
+        const SolveInput& input,
+        const ::Equipment& target_equipment,
+        const EnchantmentRegistry& ench_reg);
 
-    /// Stage 2: Domain → compact conversion (via CompactAdapter).
-    static algorithm::AlgorithmInput apply(const ResolveResult& resolved,
-                                           const ::Equipment& target_equipment,
-                                           const EnchantmentRegistry& ench_reg);
+    /// Stage 2: Create algorithm, run resolve(), then execute search.
+    /// Returns (AlgorithmOutput + timing).  algo_input is modified in place:
+    /// resolved items are appended to items.
+    static ExecuteResult execute(
+        algorithm::AlgorithmInput& algo_input,
+        const std::string& algorithm,
+        const algorithm::AlgorithmLoader& loader);
 
-    /// Stage 3: Compact algorithm execution.
-    /// Creates the requested strategy, checks mode support, runs the executor.
-    static ExecuteResult execute(algorithm::AlgorithmInput& algo_input,
-                                 const std::string& algorithm,
-                                 const algorithm::AlgorithmLoader& loader);
-
-    /// Stage 4: Compact → domain conversion (via CompactAdapter::recall)
-    /// wrapped in a SolveResult.
+    /// Stage 3: Compact → domain conversion (via CompactAdapter::recall).
     static SolveResult recall(const algorithm::AlgorithmOutput& output,
                               const algorithm::AlgorithmInput& algo_input,
                               const algorithm::EnchSet& original_source_ench,

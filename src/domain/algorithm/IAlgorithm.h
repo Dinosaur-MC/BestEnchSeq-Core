@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/algorithm/types/ResolverTypes.h"
 
 namespace algorithm {
 class ExecutionContext;
@@ -16,10 +17,19 @@ class IAlgorithm {
 
     virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
 
+    /// Pre-process input before execution.
+    ///
+    /// Direct mode: reads source enchants from items[0].enchs and desired
+    /// from target, computes diff, generates graduated books.
+    /// Inventory mode: reads items[1..] as available pool, sorts by
+    /// priorities, filters by reachability.
+    ///
+    /// Returns generated/filtered items.  Empty = unreachable / no work
+    /// needed.  The caller appends the result to input.items.
+    virtual ResolverOutput resolve(const AlgorithmInput &input) const;
+
     /// Returns the set of operation modes this algorithm supports.
     /// Default: direct mode only.
-    /// Override e.g.:
-    ///   `return AlgorithmMode::direct | AlgorithmMode::inventory;`
     virtual AlgorithmMode supported_mode() const noexcept { return AlgorithmMode::direct; }
 
     /// Quick feasibility check: returns true if the target is reachable
