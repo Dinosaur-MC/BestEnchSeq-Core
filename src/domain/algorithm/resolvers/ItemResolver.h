@@ -1,32 +1,16 @@
 #pragma once
-#include "domain/algorithm/types/Item.h"
+#include "domain/algorithm/types/ResolverTypes.h"
 
 namespace algorithm {
 
-/// Domain-level resolved input — output of ItemResolver,
-/// consumed by CompactAdapter.
-struct ResolvedInput {
-    Item target_item;
-    EnchSet source_ench;
-    EnchSet target_ench;
-    ItemCollection available_items;
-};
-
 /// Direct-mode input preprocessing.
-///   1. Validates target enchantments are applicable to target equipment
-///   2. Validates no exclusive_set conflicts among target enchantments
-///   3. Computes diff = target_ench - source_ench
-///   4. Generates graduated equipment books (items) for the diff
+///   1. Computes diff = target_item.enchs - source_ench
+///   2. Generates graduated books for each required level
 ///
-/// Throws std::invalid_argument on validation failure.
-/// Domain-level only — compact conversion and strict validation are
-/// handled later by CompactAdapter.
+/// Returns empty vector if target already satisfied (nothing to forge).
 struct ItemResolver {
-    static ResolvedInput resolve(
-        const Item& target_item,
-        const EnchSet& source_ench,
-        const EnchSet& target_ench
-    );
+    static ResolverOutput resolve(const Item& target_item,
+                                   const EnchSet& source_ench);
 };
 
-}; // namespace algorithm
+} // namespace algorithm
