@@ -1,5 +1,15 @@
 # ── Common domain tests ──────────────────────────────────────────────
-# Tests for besq-common: I/O, utilities, config.
+# Tests for besq-common: I/O, utilities, config, types.
+
+# --- Core type tests ---
+
+add_executable(test_nsid
+    test_nsid.cpp
+    ${PROJECT_ROOT}/src/common/CommonTypes.cpp
+)
+target_include_directories(test_nsid PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_nsid COMMAND test_nsid)
+set_tests_properties(test_nsid PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
 # --- I/O layer tests ---
 

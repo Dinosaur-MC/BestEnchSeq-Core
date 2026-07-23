@@ -40,7 +40,7 @@ split(const std::string_view &str, std::string_view delimiters, bool keep_empty 
     std::string_view token;
     size_t pos      = 0;
     size_t last_pos = 0;
-    while ((pos = str.find_first_of(delimiters, pos)) != std::string_view::npos) {
+    while ((pos = str.find_first_of(delimiters, last_pos)) != std::string_view::npos) {
         token    = str.substr(last_pos, pos - last_pos);
         last_pos = pos + delimiters.size();
         if (!token.empty() || keep_empty)

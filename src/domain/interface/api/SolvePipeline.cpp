@@ -101,8 +101,8 @@ algorithm::AlgorithmInput detail::SolvePipeline::apply(
     algo_input.f_config = input.forge_config;
     algo_input.s_config = input.search_config;
     algo_input.mode = input.is_inventory_mode
-        ? algorithm::AlgorithmMode::inventory
-        : algorithm::AlgorithmMode::direct;
+        ? AlgorithmMode::inventory
+        : AlgorithmMode::direct;
     algo_input.priorities = input.extra_item_priorities;
 
     // Fill the union: direct mode → source enchants; inventory → available items
@@ -147,7 +147,7 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     // Check mode support
     if (!(algo->supported_mode() == algo_input.mode)) {
         std::string mode_str =
-            (algo_input.mode == algorithm::AlgorithmMode::inventory) ? "inventory" : "direct";
+            (algo_input.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
         throw std::runtime_error("Algorithm '" + algorithm +
             "' does not support '" + mode_str + "' mode");
     }
@@ -160,7 +160,7 @@ detail::ExecuteResult detail::SolvePipeline::execute(
 
     // Check reachability after resolve
     if (resolved.empty()) {
-        if (algo_input.mode == algorithm::AlgorithmMode::inventory)
+        if (algo_input.mode == AlgorithmMode::inventory)
             LOG_INFO("resolve: inventory unreachable");
         else
             LOG_INFO("resolve: target already satisfied");

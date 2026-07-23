@@ -1,4 +1,5 @@
 #pragma once
+#include "common/CommonTypes.h"
 #include "common/io/ISerializable.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/ConfigTypes.h"
@@ -11,19 +12,6 @@
 #include <vector>
 
 namespace algorithm {
-
-/// Operation mode (bitmask).
-enum class AlgorithmMode : uint8_t {
-    direct    = 1 << 1,
-    inventory = 1 << 2,
-};
-
-constexpr AlgorithmMode operator|(AlgorithmMode a, AlgorithmMode b) noexcept {
-    return static_cast<AlgorithmMode>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
-}
-constexpr bool operator&(AlgorithmMode a, AlgorithmMode b) noexcept {
-    return static_cast<uint8_t>(a) & static_cast<uint8_t>(b);
-}
 
 // ─── Source data — tagged by AlgorithmMode ───────────────────────────────
 // Direct mode: EnchCollection = current enchantments on the equipment.
