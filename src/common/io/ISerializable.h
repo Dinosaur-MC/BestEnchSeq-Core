@@ -1,5 +1,6 @@
 #pragma once
 #include "ByteStream.h"
+#include <concepts>
 #include <vector>
 
 struct ISerializable {
@@ -26,3 +27,32 @@ struct ISerializable {
         return r.ok();
     }
 };
+
+// ── Free-function streaming operators for ISerializable ──
+
+inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const ISerializable& obj) {
+    obj.serialize(w);
+    return w;
+}
+
+inline ByteStreamReader& operator>>(ByteStreamReader& r, ISerializable& obj) {
+    obj.deserialize(r);
+    return r;
+}
+
+// ── vector<T> constrained to ISerializable subtypes ──
+
+template <std::derived_from<ISerializable> T>
+ByteStreamWriter& operator<<(ByteStreamWriter& w, const std::vector<T>& vec) {
+    w << vec.size();
+    for (const auto& v : vec) w << v;
+    return w;
+}
+
+template <std::derived_from<ISerializable> T>
+ByteStreamReader& operator>>(ByteStreamReader& r, std::vector<T>& vec) {
+    size_t n = static_cast<size_t>(r.u64());
+    vec.resize(n);
+    for (auto& v : vec) r >> v;
+    return r;
+}

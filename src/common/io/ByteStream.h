@@ -7,13 +7,8 @@
 #include <concepts>
 #include <type_traits>
 
-struct ISerializable;  // forward decl
-
 template <typename T>
 concept TrivialSerializable = std::is_trivially_copyable_v<T>;
-
-template <typename T>
-concept Serializable = TrivialSerializable<T> || std::is_base_of_v<ISerializable, T>;
 
 // ─── ByteStreamWriter: append-only binary writer (little-endian) ──────────
 class ByteStreamWriter {
@@ -64,12 +59,7 @@ public:
 
     ByteStreamWriter& operator<<(std::string_view s) { string(s); return *this; }
 
-    ByteStreamWriter& operator<<(const ISerializable& obj) {
-        obj.serialize(*this);
-        return *this;
-    }
-
-    template <Serializable T>
+    template <TrivialSerializable T>
     ByteStreamWriter& operator<<(const std::vector<T>& vec) {
         *this << vec.size();
         for (const auto& v : vec) *this << v;
@@ -171,12 +161,7 @@ public:
 
     ByteStreamReader& operator>>(std::string& s) { s = string(); return *this; }
 
-    ByteStreamReader& operator>>(ISerializable& obj) {
-        obj.deserialize(*this);
-        return *this;
-    }
-
-    template <Serializable T>
+    template <TrivialSerializable T>
     ByteStreamReader& operator>>(std::vector<T>& vec) {
         size_t n = static_cast<size_t>(u64());
         vec.resize(n);
