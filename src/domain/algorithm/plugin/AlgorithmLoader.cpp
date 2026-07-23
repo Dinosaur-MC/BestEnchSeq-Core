@@ -1,12 +1,11 @@
 #include "domain/algorithm/IAlgorithm.h"
-#include "domain/algorithm/strategies/Registration.h"
+#include "domain/algorithm/_strategies/Registration.h"
 #include "AlgorithmLoader.h"
 #include "common/log/log.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
-#include <sstream>
 
 // ─── Platform dlopen/dlsym abstraction ────────────────────────────────
 
