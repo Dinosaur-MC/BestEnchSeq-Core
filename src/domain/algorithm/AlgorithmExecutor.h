@@ -1,4 +1,5 @@
 #pragma once
+#include "domain/algorithm/types/AlgorithmState.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/IAlgorithm.h"
 #include <atomic>

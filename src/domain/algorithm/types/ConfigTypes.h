@@ -1,6 +1,6 @@
 #pragma once
 #include "common/io/ISerializable.h"
-#include "Platform.h"
+#include "common/CommonTypes.h"
 #include <chrono>
 #include <cstdint>
 

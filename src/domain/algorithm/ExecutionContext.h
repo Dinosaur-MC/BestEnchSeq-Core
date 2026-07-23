@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
-#include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/algorithm/diagnostics/ProgressStatus.h"
+#include "domain/algorithm/types/Solution.h"
 #include <atomic>
 #include <condition_variable>
 #include <memory>

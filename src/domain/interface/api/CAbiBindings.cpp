@@ -13,7 +13,7 @@
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Item.h"
-#include "domain/algorithm/types/Platform.h"
+#include "common/CommonTypes.h"
 #include "common/utils/ParserUtils.hpp"
 
 #include <cstdlib>

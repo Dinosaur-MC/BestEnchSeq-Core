@@ -1,8 +1,16 @@
 #pragma once
+#include "domain/algorithm/types/AlgorithmState.h"
+#include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/algorithm/types/Solution.h"
 #include <vector>
 
 namespace algorithm {
+
+/// Simple diagnostic message.
+struct DiagnosticInfo {
+    std::string message;
+};
 
 // ─── Observer (streaming callbacks, compact-only) ───
 class AlgorithmObserver {

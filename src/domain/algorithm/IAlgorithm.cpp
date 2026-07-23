@@ -1,6 +1,7 @@
 #include "IAlgorithm.h"
-#include "domain/algorithm/resolvers/ItemResolver.h"
+#include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/resolvers/InventoryResolver.h"
+#include "domain/algorithm/resolvers/ItemResolver.h"
 
 namespace algorithm {
 
@@ -31,6 +32,14 @@ ResolverOutput IAlgorithm::resolve(const AlgorithmInput &input) const {
     }
 
     return {};
+}
+
+bool IAlgorithm::simulate(const AlgorithmInput &input) const noexcept {
+    if (input.items.empty())
+        return false;
+    if (meets_target(input.items[0], input.target.enchs))
+        return true;
+    return input.items.size() > 1;
 }
 
 } // namespace algorithm

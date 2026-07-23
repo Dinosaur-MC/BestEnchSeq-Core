@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/_strategies/astar/AStarStateSerializer.h"
 #include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
-#include "domain/algorithm/types/Checkpoint.h"
+#include "domain/algorithm/serialization/Checkpoint.h"
 #include <memory>
 #include <span>
 using namespace algorithm;

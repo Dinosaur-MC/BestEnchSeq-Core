@@ -1,6 +1,6 @@
 #pragma once
 #include "domain/algorithm/types/AlgorithmTypes.h"
-#include "domain/algorithm/types/Checkpoint.h"
+#include "domain/algorithm/serialization/Checkpoint.h"
 #include <cstdint>
 #include <span>
 #include <string_view>

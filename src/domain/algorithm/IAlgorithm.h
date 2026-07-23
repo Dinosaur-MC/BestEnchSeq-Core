@@ -1,5 +1,4 @@
 #pragma once
-#include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ResolverTypes.h"
 
@@ -37,13 +36,7 @@ class IAlgorithm {
     /// Default: pessimistic but catches trivial cases (empty items, target
     /// already met, no books to work with).  Strategies may override for
     /// tighter checks (e.g., greedy pure-forge in GreedyAlgorithm).
-    virtual bool simulate(const AlgorithmInput &input) const noexcept {
-        if (input.items.empty())
-            return false;
-        if (meets_target(input.items[0], input.target.enchs))
-            return true;
-        return input.items.size() > 1;
-    }
+    virtual bool simulate(const AlgorithmInput &input) const noexcept;
 
     /// Whether this algorithm supports checkpoint serialization for resume.
     /// Default returns false.  Resumable algorithms must override to return true.
