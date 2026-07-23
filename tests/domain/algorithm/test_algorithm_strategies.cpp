@@ -3,6 +3,7 @@
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
@@ -15,30 +16,48 @@
 
 namespace {
 
+// ─── Namespace aliases for algorithm types ────────────────────────────
+using algorithm::DFSAlgorithm;
+using algorithm::AStarAlgorithm;
+using algorithm::HammingAlgorithm;
+using algorithm::AlgorithmLoader;
+using algorithm::EnchCollection;
+
 // ─── Setup helpers (shared across all strategy tests) ─────────────────
 
 constexpr int16_t ID_SHARPNESS = 0;
 constexpr int16_t ID_KNOCKBACK = 1;
 
-void setup_registries(TestFixture& fx) {
-    fx.categories.initialize();
-    fx.enchants.initialize({
-        {"sharpness", "Sharpness", MCE::All, 5, 5,
-         1, false, {}, {EquipmentCategory::ID_SWORD}},
-        {"knockback", "Knockback", MCE::All, 2, 2,
-         2, false, {}, {EquipmentCategory::ID_SWORD}},
-        {"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
-         1, false, {"sharpness"}, {EquipmentCategory::ID_SWORD}},
+TestFixture fx_global;
+
+void setup_registries() {
+    fx_global.categories.initialize();
+    fx_global.enchants.initialize({
+        {
+            NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
+            1, false,
+            std::unordered_set<NSID>{},
+            std::unordered_set<NSID>{EquipmentTag::sword()}
+        },
+        {
+            NSID("knockback"), "Knockback", MCE::All, 2, 2,
+            2, false,
+            std::unordered_set<NSID>{},
+            std::unordered_set<NSID>{EquipmentTag::sword()}
+        },
+        {
+            NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5,
+            1, false,
+            std::unordered_set<NSID>{NSID("sharpness")},
+            std::unordered_set<NSID>{EquipmentTag::sword()}
+        },
     });
 }
 
-const Equipment sword{"diamond_sword", "Diamond Sword",
-                       EquipmentCategory::ID_SWORD, 1561};
-
 struct TestContext {
     algorithm::EnchReg ench_reg;
-    std::vector<algorithm::Item> items;
-    std::vector<algorithm::Ench> target;
+    algorithm::ItemCollection items;
+    algorithm::Item target_item;
 
     explicit TestContext(const std::vector<algorithm::Item>& extra_items,
                         const std::vector<algorithm::Ench>& wanted) {
@@ -46,6 +65,46 @@ struct TestContext {
         eq.id = 0;
         eq.category_id = EquipmentCategory::ID_SWORD;
         eq.max_durability = 1561;
+
+        // Build compact EnchReg from domain enchantment registry
+        std::vector<algorithm::EnchInfo> compact_infos;
+        std::vector<int32_t> global_ids;
+        std::unordered_map<std::string, int32_t> name_to_local;
+        for (int32_t i = 0; i < static_cast<int32_t>(fx_global.enchants.size()); ++i) {
+            global_ids.push_back(i);
+            name_to_local[fx_global.enchants.get(i).id.str()] = i;
+        }
+        size_t mask_size = (fx_global.enchants.size() + 63) / 64;
+        std::vector<std::vector<algorithm::MaskType>> exc_masks(
+            fx_global.enchants.size(), std::vector<algorithm::MaskType>(mask_size, 0));
+        uint64_t next_group = 0;
+        std::vector<bool> visited(fx_global.enchants.size(), false);
+        for (int32_t i = 0; i < static_cast<int32_t>(fx_global.enchants.size()); ++i) {
+            if (visited[i] || fx_global.enchants.get(i).exclusive_set.empty()) continue;
+            uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
+            next_group++;
+            visited[i] = true;
+            exc_masks[i][0] |= group_bit;
+            for (const auto& ex_nsid : fx_global.enchants.get(i).exclusive_set) {
+                auto it = name_to_local.find(ex_nsid.str());
+                if (it != name_to_local.end()) {
+                    int32_t j = it->second;
+                    visited[j] = true;
+                    exc_masks[j][0] |= group_bit;
+                }
+            }
+        }
+        for (int32_t i = 0; i < static_cast<int32_t>(fx_global.enchants.size()); ++i) {
+            const auto& ei = fx_global.enchants.get(i);
+            bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
+            algorithm::EnchInfo info;
+            info.mul = static_cast<uint16_t>(ei.multiplier);
+            info.mul_b = static_cast<uint16_t>(ei.multiplier);
+            info.max_lvl = static_cast<uint16_t>(ei.max_level);
+            info.exc_mask = exc_masks[i];
+            info.applicable = applicable;
+            compact_infos.push_back(std::move(info));
+        }
         ench_reg.init(compact_infos, global_ids, eq);
 
         algorithm::Item equip{algorithm::ItemType::Equip, 1561, 0, {}};
@@ -53,7 +112,10 @@ struct TestContext {
         for (const auto& item : extra_items)
             items.push_back(item);
 
-        target = wanted;
+        // Build target item with wanted enchantments
+        target_item = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
+        for (const auto& ench : wanted)
+            target_item.enchs.insert(ench);
     }
 };
 
@@ -65,20 +127,22 @@ algorithm::Item book(int16_t id, int16_t level) {
 
 // ─── Run a strategy and return the total cost ─────────────────────────
 
-int32_t run_strategy(std::unique_ptr<IAlgorithm> algo,
+int32_t run_strategy(std::unique_ptr<algorithm::IAlgorithm> algo,
                      const TestContext& ctx) {
-    AlgorithmExecutor executor(std::move(algo));
+    algorithm::AlgorithmExecutor executor(std::move(algo));
 
-    AlgorithmInput input;
-    input.config.platform = MCE::Java;
+    algorithm::AlgorithmInput input;
+    input.f_config.platform = MCE::Java;
     input.ench_reg = ctx.ench_reg;
     input.items = ctx.items;
-    input.target = ctx.target;
+    input.target = ctx.target_item;
+    // Direct mode: no pre-existing enchants on the target equipment
+    input.data = algorithm::EnchCollection{};
 
     executor.start(std::move(input));
     auto state = executor.wait();
 
-    if (state != AlgorithmState::Completed)
+    if (state != algorithm::AlgorithmState::Completed)
         return -1;
 
     auto out = executor.output();

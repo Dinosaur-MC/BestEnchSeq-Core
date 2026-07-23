@@ -1,7 +1,9 @@
 #include "CompactAdapter.h"
+#include "common/CommonTypes.h"
 #include "common/utils/ExpCalculator.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <unordered_map>
 #include <vector>
 
@@ -17,8 +19,8 @@ algorithm::AlgorithmInput CompactAdapter::apply(
 {
     // ── 1. Build algorithm Equipment from business Equipment ───────────
     algorithm::Equipment algo_equip;
-    algo_equip.id            = target_eq.name_id.empty() ? 0 : 1; // placeholder
-    algo_equip.category_id   = target_eq.category_id;
+    algo_equip.id            = target_eq.id.empty() ? 0 : 1; // placeholder
+    algo_equip.category_id   = 0; // TODO: map NSID category to algorithm int32_t category_id
     algo_equip.max_durability = target_eq.max_durability;
 
     // ── 2. Determine applicable enchantment IDs ────────────────────────
@@ -30,13 +32,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(
 
     for (int32_t gid = 0; gid < static_cast<int32_t>(all_infos.size()); ++gid) {
         const auto& biz = all_infos[gid];
-        bool applicable = false;
-        for (int32_t cat_id : biz.applicable_category_ids) {
-            if (cat_id == algo_equip.category_id || cat_id == 0) {
-                applicable = true;
-                break;
-            }
-        }
+        bool applicable = biz.applicable_equipments.count(target_eq.category) > 0 || biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
         if (!applicable) continue;
 
         algorithm::EnchInfo ai;
@@ -45,8 +41,8 @@ algorithm::AlgorithmInput CompactAdapter::apply(
         ai.max_lvl = static_cast<uint16_t>(biz.max_level);
         ai.exc_mask.resize(algo_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
         for (size_t local_idx = 0; local_idx < algo_infos.size(); ++local_idx) {
-            const std::string& existing_name = all_infos[applicable_global_ids[local_idx]].name_id;
-            if (biz.exclusive_set.count(existing_name)) {
+            const NSID& existing_nsid = all_infos[applicable_global_ids[local_idx]].id;
+            if (biz.exclusive_set.count(existing_nsid)) {
                 size_t word = local_idx / algorithm::MASK_ELEM_SIZE;
                 size_t bit  = local_idx % algorithm::MASK_ELEM_SIZE;
                 ai.exc_mask[word] |= (algorithm::MaskType(1) << bit);
@@ -137,7 +133,9 @@ std::vector<Solution> CompactAdapter::recall(
             plat, original_ench, target_item, available_items,
             domain_steps, true,
             Solution::MetaData{
-                output.algorithm_name, output.algorithm_version, 0, 0
+                output.algorithm_name, output.algorithm_version,
+                std::chrono::system_clock::now(),
+                std::chrono::milliseconds(0)
             }
         ));
     }
@@ -156,9 +154,9 @@ algorithm::Item CompactAdapter::from_domain(const Item& item, const algorithm::E
     citem.dur  = static_cast<int16_t>(item.durability);
 
     for (const auto& ench : item.enchantments) {
-        int16_t eid = static_cast<int16_t>(reg.to_local_id(ench.id));
-        if (eid >= 0)
-            citem.enchs.insert(algorithm::Ench{eid, static_cast<int16_t>(ench.level)});
+        // TEMP: NSID to local-id mapping requires EnchantmentRegistry
+        // which is not available at this layer yet.
+        citem.enchs.insert(algorithm::Ench{0, static_cast<int16_t>(ench.level)});
     }
     return citem;
 }
@@ -171,15 +169,17 @@ Item CompactAdapter::to_domain(const algorithm::Item& item, const algorithm::Enc
     EnchSet ench_set;
     for (const auto& e : item.enchs) {
         int32_t global_id = reg.to_global_id(e.id);
-        if (global_id >= 0)
-            ench_set.emplace(global_id, e.level);
+        if (global_id >= 0) {
+            std::string id_str = std::to_string(global_id);
+            ench_set.emplace(NSID(id_str), id_str, e.level);
+        }
     }
 
-    if (item.type == algorithm::ItemType::Book)
-        return Item(ench_set, item.ppn);
-    else
-        return Item(
-            ::Equipment{"", "", reg.get_target_equip().category_id,
-                         reg.get_target_equip().max_durability},
-            ench_set, item.ppn, item.dur);
+    if (item.type == algorithm::ItemType::Book) {
+        return Item(NSID("minecraft:enchanted_book"), ench_set, item.ppn);
+    } else {
+        const auto& equip = reg.get_target_equip();
+        NSID eq_id(std::to_string(equip.id));
+        return Item(eq_id, ench_set, item.ppn, item.dur);
+    }
 }

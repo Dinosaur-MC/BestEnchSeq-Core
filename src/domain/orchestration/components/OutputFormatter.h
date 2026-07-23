@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/business/types/Solution.h"
 #include "domain/business/types/Item.h"
+#include "domain/business/types/Equipment.h"
 
 #include "common/io/json.h"
 
@@ -8,21 +9,21 @@
 #include <vector>
 
 class EnchantmentRegistry;
-class EquipmentCategoryRegistry;
+class EquipmentTagRegistry;
 
 class OutputFormatter {
   public:
     static std::string format_verbose(
         const std::vector<Solution> &solutions,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg,
+        const EquipmentTagRegistry &cat_reg,
         const std::string &mode_name
     );
 
     static std::string format_compact(
         const std::vector<Solution> &solutions,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg,
+        const EquipmentTagRegistry &cat_reg,
         const std::string &mode_name
     );
 
@@ -33,14 +34,14 @@ class OutputFormatter {
     static std::string format_json(
         const std::vector<Solution> &solutions,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg,
+        const EquipmentTagRegistry &cat_reg,
         const std::string &mode_name
     );
 
     static std::vector<Solution> parse_json(
         const std::string &json_str,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg
+        const EquipmentTagRegistry &cat_reg
     );
 
   private:
@@ -63,23 +64,23 @@ class OutputFormatter {
     static Json item_to_json(
         const Item &item,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg
+        const EquipmentTagRegistry &cat_reg
     );
     static Item item_from_json(
         const Json &j,
         std::vector<Equipment> &equipment_cache,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg
+        const EquipmentTagRegistry &cat_reg
     );
     static Json step_to_json(
         const Solution::EnchStep &step,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg
+        const EquipmentTagRegistry &cat_reg
     );
     static Solution::EnchStep step_from_json(
         const Json &j,
         std::vector<Equipment> &equipment_cache,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentCategoryRegistry &cat_reg
+        const EquipmentTagRegistry &cat_reg
     );
 };

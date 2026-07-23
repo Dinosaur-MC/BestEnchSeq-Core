@@ -1,5 +1,4 @@
 #pragma once
-#include "EquipmentCategory.h"
 #include "common/CommonTypes.h"
 #include <string>
 

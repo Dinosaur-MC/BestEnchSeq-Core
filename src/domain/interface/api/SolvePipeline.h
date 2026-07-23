@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Enchantment.h"
+#include "domain/business/types/Equipment.h"
 #include "domain/business/types/Solution.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
@@ -11,7 +12,7 @@
 // Forward declarations
 class EnchantmentRegistry;
 class EquipmentRegistry;
-class EquipmentCategoryRegistry;
+class EquipmentTagRegistry;
 namespace algorithm { class AlgorithmLoader; }
 
 /// Input to the solve pipeline.
@@ -38,9 +39,9 @@ struct SolveResult {
     int64_t computation_time_ms = 0;                         ///< Wall-clock execution time
 
     std::string to_json(const EnchantmentRegistry& ench_reg,
-                        const EquipmentCategoryRegistry& cat_reg) const;
+                        const EquipmentTagRegistry& cat_reg) const;
     std::string to_text(const EnchantmentRegistry& ench_reg,
-                        const EquipmentCategoryRegistry& cat_reg) const;
+                        const EquipmentTagRegistry& cat_reg) const;
 
     /// Raw JSON output — no registry dependencies, uses raw IDs and cost info only.
     std::string to_json_raw() const;
@@ -65,7 +66,7 @@ public:
         const algorithm::AlgorithmLoader& loader,
         const EnchantmentRegistry& ench_reg,
         const EquipmentRegistry& eq_reg,
-        const EquipmentCategoryRegistry& cat_reg);
+        const EquipmentTagRegistry& cat_reg);
 
     /// Stage 1: Type conversion + EnchReg building (via CompactAdapter).
     /// Returns partial AlgorithmInput: items[0] = equipment with source enchants;

@@ -31,11 +31,11 @@ std::string to_roman(int level) {
 // ---------------------------------------------------------------------------
 // Enchantment name helpers (with graceful fallback when EnchInfo is absent)
 // ---------------------------------------------------------------------------
-std::string ench_name_id(int32_t id, const EnchantmentRegistry &ench_reg) {
+std::string ench_name_id(const NSID& id, const EnchantmentRegistry &ench_reg) {
     try {
-        return ench_reg.get(id).name_id;
+        return ench_reg.get(id).id.str();
     } catch (const std::exception &) {
-        return "ench_" + std::to_string(id);
+        return "ench_" + id.str();
     }
 }
 
@@ -88,9 +88,9 @@ EnchSet enchset_from_json_array(const Json::Array &arr, const EnchantmentRegistr
         const Json::Object &obj = std::get<Json::Object>(elem_val);
         std::string eid = json_str(obj.at("id"));
         int32_t level   = json_int(obj.at("level"));
-        int32_t id      = ench_reg.get_id(eid);
+        int32_t id      = ench_reg.get_id(NSID(eid));
         if (id >= 0) {
-            result.emplace(id, level);
+            result.emplace(NSID(eid), eid, level);
         }
     }
     return result;
@@ -110,7 +110,7 @@ std::string OutputFormatter::describe_item_verbose(
 ) {
     std::string result;
 
-    if (item.is_book() || !item.equipment) {
+    if (item.is_book()) {
         result = "附魔书(";
         if (item.enchantments.empty()) {
             result += "无魔咒";
@@ -125,7 +125,7 @@ std::string OutputFormatter::describe_item_verbose(
         result += ")";
     } else {
         // Equipment
-        result += item.equipment->name + "(";
+        result += item.id.str() + "(";
         bool first = true;
         for (const auto &ench : item.enchantments) {
             if (!first) result += ", ";
@@ -150,7 +150,7 @@ std::string OutputFormatter::describe_item_verbose(
 std::string OutputFormatter::describe_item_compact(
     const Item &item, const EnchantmentRegistry &ench_reg
 ) {
-    if (item.is_book() || !item.equipment) {
+    if (item.is_book()) {
         std::string result = "B;";
         bool first = true;
         for (const auto &ench : item.enchantments) {
@@ -163,7 +163,7 @@ std::string OutputFormatter::describe_item_compact(
     }
 
     // Equipment
-    std::string result = "E;" + item.equipment->name_id + ";";
+    std::string result = "E;" + item.id.str() + ";";
     bool first = true;
     for (const auto &ench : item.enchantments) {
         if (!first) result += ",";
@@ -212,7 +212,7 @@ std::string OutputFormatter::platform_to_display(MCE p) {
 std::string OutputFormatter::format_verbose(
     const std::vector<Solution> &solutions,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg,
+    const EquipmentTagRegistry &cat_reg,
     const std::string &mode_name
 ) {
     (void)cat_reg;
@@ -289,7 +289,7 @@ std::string OutputFormatter::format_verbose(
 std::string OutputFormatter::format_compact(
     const std::vector<Solution> &solutions,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg,
+    const EquipmentTagRegistry &cat_reg,
     const std::string &mode_name
 ) {
     (void)cat_reg;
@@ -326,7 +326,7 @@ std::string OutputFormatter::format_compact(
 std::string OutputFormatter::format_json(
     const std::vector<Solution> &solutions,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg,
+    const EquipmentTagRegistry &cat_reg,
     const std::string &mode_name
 ) {
     Json::Object root;
@@ -385,9 +385,9 @@ std::string OutputFormatter::format_json(
         // Metadata
         Json::Object meta;
         meta["algorithm_name"]   = Json(Json::String(sol.metadata.algorithm_name));
-        meta["version"]          = Json(Json::String(sol.metadata.version));
-        meta["created_at"]       = Json(Json::Number(static_cast<int64_t>(sol.metadata.created_at)));
-        meta["computation_time"] = Json(Json::Number(static_cast<int64_t>(sol.metadata.computation_time)));
+        meta["algorithm_version"] = Json(Json::String(sol.metadata.algorithm_version));
+        meta["created_at"]       = Json(Json::Number(static_cast<int64_t>(sol.metadata.created_at.time_since_epoch().count())));
+        meta["computation_time"] = Json(Json::Number(static_cast<int64_t>(sol.metadata.computation_time.count())));
         s["metadata"]            = Json(meta);
 
         sol_arr.push_back(Json(s));
@@ -411,7 +411,7 @@ void OutputFormatter::clear_cache() {
 std::vector<Solution> OutputFormatter::parse_json(
     const std::string &input,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg
+    const EquipmentTagRegistry &cat_reg
 ) {
     // NOTE: _json_eq_cache is intentionally NOT cleared here.
     // Item_from_json and step_from_json store Equipment objects in this
@@ -484,12 +484,14 @@ std::vector<Solution> OutputFormatter::parse_json(
             const Json::Object &meta_obj = std::get<Json::Object>(meta_obj_val);
             auto algo_it = meta_obj.find("algorithm_name");
             if (algo_it != meta_obj.end()) meta.algorithm_name = json_str(algo_it->second);
-            auto ver_it = meta_obj.find("version");
-            if (ver_it != meta_obj.end()) meta.version = json_str(ver_it->second);
+            auto ver_it = meta_obj.find("algorithm_version");
+            if (ver_it != meta_obj.end()) meta.algorithm_version = json_str(ver_it->second);
             auto ca_it = meta_obj.find("created_at");
-            if (ca_it != meta_obj.end()) meta.created_at = static_cast<size_t>(json_int64(ca_it->second));
+            if (ca_it != meta_obj.end())
+                meta.created_at = std::chrono::system_clock::time_point{std::chrono::seconds(json_int64(ca_it->second))};
             auto ct_it = meta_obj.find("computation_time");
-            if (ct_it != meta_obj.end()) meta.computation_time = static_cast<size_t>(json_int64(ct_it->second));
+            if (ct_it != meta_obj.end())
+                meta.computation_time = std::chrono::milliseconds(json_int64(ct_it->second));
         }
 
         // is_success
@@ -517,21 +519,17 @@ std::vector<Solution> OutputFormatter::parse_json(
 Json OutputFormatter::item_to_json(
     const Item &item,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg
+    const EquipmentTagRegistry &cat_reg
 ) {
     Json::Object obj;
 
     // Equipment
-    if (item.equipment) {
+    if (!item.is_book()) {
         Json::Object eq;
-        int32_t cid = item.equipment->category_id;
-        std::string cat_name = "unknown";
-        if (cid >= 0 && static_cast<size_t>(cid) < cat_reg.size())
-            cat_name = cat_reg.get(cid).name_id;
-        eq["id"]             = Json(Json::String(item.equipment->name_id));
-        eq["category"]       = Json(Json::String(cat_name));
-        eq["name"]           = Json(Json::String(item.equipment->name));
-        eq["max_durability"] = Json(Json::Number(item.equipment->max_durability));
+        eq["id"]             = Json(Json::String(item.id.str()));
+        eq["category"]       = Json(Json::String("unknown")); // temp
+        eq["name"]           = Json(Json::String(item.id.str()));
+        eq["max_durability"] = Json(Json::Number(0));
         obj["equipment"]     = Json(eq);
         obj["is_book"]       = Json(Json::Bool(false));
     } else {
@@ -562,7 +560,7 @@ Item OutputFormatter::item_from_json(
     const Json &j,
     std::vector<Equipment> &equipment_cache,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg
+    const EquipmentTagRegistry &cat_reg
 ) {
     Json::Value j_val = j.get_value();
     const Json::Object &obj = std::get<Json::Object>(j_val);
@@ -585,10 +583,8 @@ Item OutputFormatter::item_from_json(
                 max_dur = json_int(md_it->second);
             }
 
-            int32_t cat_id = cat_reg.get_id(cat);
-            if (cat_id < 0) cat_id = EquipmentCategory::ID_ANY;
             equipment_cache.emplace_back(Equipment{
-                id, name, cat_id, max_dur
+                NSID(id), name, NSID(), max_dur
             });
             eq_ptr = &equipment_cache.back();
         }
@@ -619,8 +615,8 @@ Item OutputFormatter::item_from_json(
     }
 
     if (eq_ptr)
-        return Item(*eq_ptr, ench_set, prior_penalty, durability);
-    return Item(ench_set, prior_penalty);
+        return Item(eq_ptr->id, ench_set, prior_penalty, durability);
+    return Item(NSID("minecraft:enchanted_book"), ench_set, prior_penalty);
 }
 
 // ---------------------------------------------------------------------------
@@ -629,7 +625,7 @@ Item OutputFormatter::item_from_json(
 Json OutputFormatter::step_to_json(
     const Solution::EnchStep &step,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg
+    const EquipmentTagRegistry &cat_reg
 ) {
     Json::Object obj;
     obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg);
@@ -646,7 +642,7 @@ Solution::EnchStep OutputFormatter::step_from_json(
     const Json &j,
     std::vector<Equipment> &equipment_cache,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentCategoryRegistry &cat_reg
+    const EquipmentTagRegistry &cat_reg
 ) {
     Json::Value j_val = j.get_value();
     const Json::Object &obj = std::get<Json::Object>(j_val);

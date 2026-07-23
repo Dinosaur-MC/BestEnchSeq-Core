@@ -1,7 +1,7 @@
 #pragma once
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include <string>
 #include <vector>
 
@@ -10,7 +10,7 @@ struct Profile {
     std::string name;
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
-    EquipmentCategoryRegistry cat_reg;
+    EquipmentTagRegistry cat_reg;
     bool builtin_loaded = false;
 };
 

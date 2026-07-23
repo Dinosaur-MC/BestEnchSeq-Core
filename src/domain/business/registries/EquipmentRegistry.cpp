@@ -70,8 +70,9 @@ bool EquipmentRegistry::add(const Equipment& eq) {
 bool EquipmentRegistry::remove(const NSID& id) {
     auto it = name_to_id_.find(id);
     if (it == name_to_id_.end()) return false;
+    int32_t idx = it->second;
     name_to_id_.erase(it);
     // Keep index stability for existing references; mark as invalid
-    instances_[it->second] = Equipment{};
+    instances_[idx] = Equipment{};
     return true;
 }

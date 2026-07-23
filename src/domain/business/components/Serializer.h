@@ -8,7 +8,7 @@
 #include "domain/business/types/Solution.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "common/io/json.h"
 
 #include <string>
@@ -41,9 +41,9 @@ const Json& operator>>(const Json& json, EnchInfo& info);
 Json& operator<<(Json& json, const EnchSet& set);
 const Json& operator>>(const Json& json, EnchSet& set);
 
-// ── EquipmentCategory ──
-Json& operator<<(Json& json, const EquipmentCategory& cat);
-const Json& operator>>(const Json& json, EquipmentCategory& cat);
+// ── EquipmentTag ──
+Json& operator<<(Json& json, const EquipmentTag& tag);
+const Json& operator>>(const Json& json, EquipmentTag& tag);
 
 // ── Equipment ──
 Json& operator<<(Json& json, const Equipment& eq);
@@ -73,9 +73,9 @@ const Json& operator>>(const Json& json, EnchantmentRegistry& reg);
 Json& operator<<(Json& json, const EquipmentRegistry& reg);
 const Json& operator>>(const Json& json, EquipmentRegistry& reg);
 
-// ── EquipmentCategoryRegistry ──
-Json& operator<<(Json& json, const EquipmentCategoryRegistry& reg);
-const Json& operator>>(const Json& json, EquipmentCategoryRegistry& reg);
+// ── EquipmentTagRegistry ──
+Json& operator<<(Json& json, const EquipmentTagRegistry& reg);
+const Json& operator>>(const Json& json, EquipmentTagRegistry& reg);
 
 // ══════════════════════════════════════════════════════════════════════════
 // Serializer — utility methods (MCE helpers + string-level convenience)

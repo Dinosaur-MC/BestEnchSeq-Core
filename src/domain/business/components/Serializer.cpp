@@ -210,21 +210,21 @@ const Json& operator>>(const Json& json, EnchSet& set) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// EquipmentCategory
+// EquipmentTag
 // ══════════════════════════════════════════════════════════════════════════
 
-Json& operator<<(Json& json, const EquipmentCategory& cat) {
+Json& operator<<(Json& json, const EquipmentTag& tag) {
     Json::Object obj;
-    obj["id"]      = Json(Json::Number(cat.id));
-    obj["name_id"] = Json(Json::String(cat.name_id));
+    obj["id"]   = Json(Json::String(tag.id.str()));
+    obj["name"] = Json(Json::String(tag.name));
     json = Json(obj);
     return json;
 }
 
-const Json& operator>>(const Json& json, EquipmentCategory& cat) {
+const Json& operator>>(const Json& json, EquipmentTag& tag) {
     auto obj = json_obj(json);
-    cat.id      = json_int32(json_get(obj, "id"));
-    cat.name_id = json_str(json_get(obj, "name_id"));
+    tag.id   = NSID(json_str(json_get(obj, "id")));
+    tag.name = json_str(json_get(obj, "name"));
     return json;
 }
 
@@ -496,23 +496,23 @@ const Json& operator>>(const Json& json, EquipmentRegistry& reg) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// EquipmentCategoryRegistry
+// EquipmentTagRegistry
 // ══════════════════════════════════════════════════════════════════════════
 
-Json& operator<<(Json& json, const EquipmentCategoryRegistry& reg) {
+Json& operator<<(Json& json, const EquipmentTagRegistry& reg) {
     Json::Array arr;
     const auto& instances = reg.get_instances();
     arr.reserve(instances.size());
-    for (const auto& cat : instances) {
+    for (const auto& tag : instances) {
         Json j;
-        j << cat;
+        j << tag;
         arr.push_back(std::move(j));
     }
     json = Json(arr);
     return json;
 }
 
-const Json& operator>>(const Json& json, EquipmentCategoryRegistry& reg) {
+const Json& operator>>(const Json& json, EquipmentTagRegistry& reg) {
     auto arr = json_arr(json);
     std::vector<std::string> names;
     names.reserve(arr.size());
@@ -521,7 +521,7 @@ const Json& operator>>(const Json& json, EquipmentCategoryRegistry& reg) {
             names.push_back(json_str(elem));
         } else {
             auto obj = json_obj(elem);
-            names.push_back(json_str(json_get(obj, "name_id")));
+            names.push_back(json_str(json_get(obj, "name")));
         }
     }
 

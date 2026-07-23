@@ -6,7 +6,7 @@
 
 void apply_registry_edits(
     const std::string &ops, EnchantmentRegistry &ench_reg, EquipmentRegistry &eq_reg,
-    EquipmentCategoryRegistry &cat_reg
+    EquipmentTagRegistry &cat_reg
 ) {
     auto op_list = ParserUtils::split_string(ops, ';');
     for (const auto &op : op_list) {
@@ -31,11 +31,11 @@ void apply_registry_edits(
 
         if (action == "rm") {
             if (target == "ench") {
-                ench_reg.remove(id);
+                ench_reg.remove(NSID(id));
                 continue;
             }
             if (target == "eq") {
-                eq_reg.remove(id);
+                eq_reg.remove(NSID(id));
                 continue;
             }
             throw std::runtime_error("Unsupported: remove from '" + target + "'");
@@ -43,14 +43,13 @@ void apply_registry_edits(
 
         if (action == "add") {
             if (target == "cat") {
-                cat_reg.add(id);
+                if (!cat_reg.contains(id))
+                    cat_reg.initialize({id});
                 continue;
             }
 
             if (target == "eq") {
-                std::string cat = (parts.size() > 2) ? parts[2] : "any";
-                int32_t cat_id  = cat_reg.add(cat);
-                eq_reg.add(Equipment{id, id, cat_id, 0});
+                eq_reg.add(Equipment{NSID(id), id, NSID(), 0});
                 continue;
             }
 
@@ -78,7 +77,7 @@ void apply_registry_edits(
                     if (k == "is_treasure")
                         is_treasure = (v == "true");
                 }
-                EnchInfo info{id, id, MCE::All, max_level, limited_level, multiplier, is_treasure, {}, {}};
+                EnchInfo info{NSID(id), id, MCE::All, max_level, limited_level, multiplier, is_treasure, {}, {}};
                 ench_reg.add(info);
                 continue;
             }
@@ -112,7 +111,7 @@ void apply_registry_edits(
                         );
                     }
                 }
-                ench_reg.modify(id, patch);
+                ench_reg.modify(NSID(id), patch);
                 continue;
             }
 

@@ -230,7 +230,7 @@ Item build_target(
     const EquipmentRegistry& eq_reg)
 {
     // Look up equipment (registry has built-in "minecraft:" fallback)
-    int32_t eq_id = eq_reg.get_id(spec.item_id);
+    int32_t eq_id = eq_reg.get_id(NSID(spec.item_id));
     if (eq_id < 0)
         throw std::runtime_error("Unknown equipment: '" + spec.item_id + "'");
     const Equipment& equip = eq_reg.get(eq_id);
@@ -239,16 +239,16 @@ Item build_target(
     EnchSet ench_set;
     for (const auto& s : spec.inline_enchants) {
         std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
-        int32_t id = ench_reg.get_id(key);
+        int32_t id = ench_reg.get_id(NSID(key));
         if (id < 0) {
-            id = ench_reg.get_id(s.id);  // bare fallback
+            id = ench_reg.get_id(NSID(s.id));  // bare fallback
         }
         if (id < 0)
             throw std::runtime_error("Unknown enchantment: '" + key + "'");
-        ench_set.emplace(id, s.level);
+        ench_set.emplace(ench_reg.get(id).id, ench_reg.get(id).name, s.level);
     }
 
-    return Item(equip, ench_set, 0);
+    return Item(equip.id, ench_set, 0);
 }
 
 EnchSet build_enchset(
@@ -258,13 +258,13 @@ EnchSet build_enchset(
     EnchSet result;
     for (const auto& s : specs) {
         std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
-        int32_t id = ench_reg.get_id(key);
+        int32_t id = ench_reg.get_id(NSID(key));
         if (id < 0) {
-            id = ench_reg.get_id(s.id);  // bare fallback
+            id = ench_reg.get_id(NSID(s.id));  // bare fallback
         }
         if (id < 0)
             throw std::runtime_error("Unknown enchantment: '" + key + "'");
-        result.emplace(id, s.level);
+        result.emplace(ench_reg.get(id).id, ench_reg.get(id).name, s.level);
     }
     return result;
 }

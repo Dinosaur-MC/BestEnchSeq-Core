@@ -21,5 +21,5 @@
 // ── Registries ──
 #include "domain/business/registries/EnchantmentRegistry.h"        // IWYU pragma: export
 #include "domain/business/registries/EquipmentRegistry.h"          // IWYU pragma: export
-#include "domain/business/registries/EquipmentCategoryRegistry.h"  // IWYU pragma: export
+#include "domain/business/registries/EquipmentTagRegistry.h"  // IWYU pragma: export
 #include "domain/business/registries/RegistryManager.h"            // IWYU pragma: export

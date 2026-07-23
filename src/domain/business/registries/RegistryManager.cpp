@@ -43,7 +43,7 @@ void RegistryManager::scan_registry_dir(const std::filesystem::path& dir) {
 
 void RegistryManager::load_and_resolve(
     std::optional<std::string> filter,
-    EquipmentCategoryRegistry& cat_reg,
+    EquipmentTagRegistry& cat_reg,
     EquipmentRegistry& eq_reg,
     EnchantmentRegistry& ench_reg
 ) {

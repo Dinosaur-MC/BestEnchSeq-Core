@@ -2,8 +2,10 @@
 #include "domain/algorithm/algorithm.h"
 #include "domain/business/business.h"
 #include "domain/orchestration/orchestration.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
+#include "common/CommonTypes.h"
 
 #include <chrono>
 #include <cstdint>
@@ -17,14 +19,14 @@
 
 std::string SolveResult::to_json(
     const EnchantmentRegistry& ench_reg,
-    const EquipmentCategoryRegistry& cat_reg) const
+    const EquipmentTagRegistry& cat_reg) const
 {
     return OutputFormatter::format_json(solutions, ench_reg, cat_reg, "direct");
 }
 
 std::string SolveResult::to_text(
     const EnchantmentRegistry& ench_reg,
-    const EquipmentCategoryRegistry& cat_reg) const
+    const EquipmentTagRegistry& cat_reg) const
 {
     return OutputFormatter::format_verbose(solutions, ench_reg, cat_reg, "direct");
 }
@@ -52,19 +54,22 @@ std::string SolveResult::to_json_raw() const {
 // Type conversion helpers
 // ====================================================================
 
-/// Convert a business EnchSet (int32_t IDs) to algorithm EnchSet (int16_t IDs).
+/// Convert a business EnchSet (NSID IDs) to algorithm EnchSet (int16_t IDs).
+/// Uses 0 as a temporary algorithm ID — proper mapping requires EnchReg.
 static algorithm::EnchSet to_algo_enchset(const EnchSet& src) {
     algorithm::EnchSet dst;
     for (const auto& e : src)
-        dst.insert(algorithm::Ench{static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+        dst.insert(algorithm::Ench{0, static_cast<int16_t>(e.level)});
     return dst;
 }
 
-/// Convert an algorithm EnchSet (int16_t IDs) back to business EnchSet (int32_t IDs).
+/// Convert an algorithm EnchSet (int16_t IDs) back to business EnchSet (NSID IDs).
 static EnchSet to_biz_enchset(const algorithm::EnchSet& src) {
     EnchSet dst;
-    for (const auto& e : src)
-        dst.emplace(e.id, e.level);
+    for (const auto& e : src) {
+        std::string id_str = std::to_string(e.id);
+        dst.emplace(NSID(id_str), id_str, e.level);
+    }
     return dst;
 }
 
@@ -210,19 +215,22 @@ SolveResult detail::SolvePipeline::recall(
 
     // Build a business EnchSet for original_ench from resolved source
     EnchSet original_ench;
-    for (const auto& e : original_source_ench)
-        original_ench.emplace(e.id, e.level);
+    for (const auto& e : original_source_ench) {
+        std::string id_str = std::to_string(e.id);
+        original_ench.emplace(NSID(id_str), id_str, e.level);
+    }
 
     // Build business Item for target_item
     Item target_item;
     if (original_target_item.is_book()) {
         target_item = Item(
+            NSID("minecraft:enchanted_book"),
             to_biz_enchset(original_source_ench),
             original_target_item.prior_penalty
         );
     } else {
         target_item = Item(
-            original_target_item.equipment.value_or(::Equipment{}),
+            original_target_item.id,
             to_biz_enchset(original_source_ench),
             original_target_item.prior_penalty,
             original_target_item.durability
@@ -252,12 +260,11 @@ SolveResult detail::SolvePipeline::run(
     const algorithm::AlgorithmLoader& loader,
     const EnchantmentRegistry& ench_reg,
     const EquipmentRegistry& /*eq_reg*/,
-    const EquipmentCategoryRegistry& /*cat_reg*/)
+    const EquipmentTagRegistry& /*cat_reg*/)
 {
     // Stage 1: Apply — build AlgorithmInput (equipment + EnchReg, no books yet)
-    auto algo_input = apply(input,
-        input.target_item.equipment.value_or(::Equipment{}),
-        ench_reg);
+    ::Equipment target_equip{input.target_item.id, input.target_item.id.str(), NSID(), 0};
+    auto algo_input = apply(input, target_equip, ench_reg);
 
     // Stage 2: Execute — create algorithm, run resolve, execute search
     auto exec_result = execute(algo_input, input.algorithm, loader);
@@ -270,10 +277,10 @@ SolveResult detail::SolvePipeline::run(
         return empty_result;
     }
 
-    // Stage 3: Recall — convert back to business types
+    // Stage 3: Recall — convert back to business types (temp algorithm ID 0)
     algorithm::EnchSet algo_source;
     for (const auto& e : input.source_enchantments)
-        algo_source.insert({static_cast<int16_t>(e.id), static_cast<int16_t>(e.level)});
+        algo_source.insert({0, static_cast<int16_t>(e.level)});
 
     auto result = recall(exec_result.algo_output, algo_input,
                          algo_source, input.target_item);

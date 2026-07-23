@@ -7,12 +7,14 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 // REMOVED: RegistryAccess.h — create local registries instead
 #include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "framework/test_utils.h"
 
-static auto& test_ench_reg = registries::enchants();
-static auto& test_cat_reg  = registries::categories();
+static EnchantmentRegistry test_ench_reg;
+static EquipmentTagRegistry test_cat_reg;
 
 #include "domain/orchestration/components/CompactAdapter.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
@@ -66,12 +68,12 @@ void check_json_solutions(const std::string &json_str, size_t expected_count) {
 // Full pipeline: direct mode with builtin data
 // ---------------------------------------------------------------------------
 void test_full_pipeline_direct() {
-    registries::categories().initialize();
+    test_cat_reg.initialize();
 
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    registries::enchants().initialize(ench_infos);
+    test_ench_reg.initialize(ench_infos);
 
     auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
@@ -93,9 +95,9 @@ void test_full_pipeline_direct() {
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
     expect(resolved.available_items.size() == 7,
            "full_pipeline_direct: auto-complete should generate 7 graduated books");
-    expect(resolved.target_item.equipment.has_value(),
+    expect(!resolved.target_item.id.empty(),
            "full_pipeline_direct: target should have equipment");
-    expect(resolved.target_item.equipment->name_id == "minecraft:diamond_sword",
+    expect(resolved.target_item.id.str() == "minecraft:diamond_sword",
            "full_pipeline_direct: target should be diamond sword");
 
     std::cout << "  PASS: test_full_pipeline_direct" << std::endl;
@@ -105,11 +107,11 @@ void test_full_pipeline_direct() {
 // Inventory mode pipeline
 // ---------------------------------------------------------------------------
 void test_full_pipeline_inventory() {
-    registries::categories().initialize();
+    test_cat_reg.initialize();
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    registries::enchants().initialize(ench_infos);
+    test_ench_reg.initialize(ench_infos);
 
     auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
@@ -123,26 +125,23 @@ void test_full_pipeline_inventory() {
 
     // Build available items to simulate inventory
     ItemCollection available_items;
-    int32_t sharpness_id = test_ench_reg.get_id("sharpness");
-    int32_t kb_id = test_ench_reg.get_id("knockback");
     {
         EnchSet book_enchs;
-        book_enchs.emplace(sharpness_id, 5);
-        available_items.emplace_back(book_enchs, 0);
+        book_enchs.emplace(NSID("sharpness"), "sharpness", 5);
+        available_items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);
     }
     {
         EnchSet book_enchs;
-        book_enchs.emplace(kb_id, 2);
-        available_items.emplace_back(book_enchs, 0);
+        book_enchs.emplace(NSID("knockback"), "knockback", 2);
+        available_items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);
     }
     {
-        int32_t eq_id = eq_reg.get_id("diamond_sword");
-        available_items.emplace_back(eq_reg.get(eq_id), EnchSet{}, 0, 1561);
+        available_items.emplace_back(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
     }
 
     expect(available_items.size() >= 2,
            "full_pipeline_inventory: should have at least 2 items");
-    expect(target_item.equipment.has_value(),
+    expect(!target_item.id.empty(),
            "full_pipeline_inventory: target should have equipment");
 
     std::cout << "  PASS: test_full_pipeline_inventory" << std::endl;
@@ -153,18 +152,18 @@ void test_full_pipeline_inventory() {
 // Enchantment lookup from builtin data
 // ---------------------------------------------------------------------------
 void test_builtin_enchantment_lookup() {
-    registries::categories().initialize();
+    test_cat_reg.initialize();
     auto [raw_ench, _] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    registries::enchants().initialize(ench_infos);
+    test_ench_reg.initialize(ench_infos);
 
-    expect(registries::enchants().get_id("minecraft:sharpness") >= 0, "builtin: sharpness found");
-    expect(registries::enchants().get_id("nonexistent") < 0, "builtin: nonexistent not found");
+    expect(test_ench_reg.get_id(NSID("minecraft:sharpness")) >= 0, "builtin: sharpness found");
+    expect(test_ench_reg.get_id(NSID("nonexistent")) < 0, "builtin: nonexistent not found");
 
-    auto &sharpness = registries::enchants().get("minecraft:sharpness");
-    expect(sharpness.name_id == "minecraft:sharpness",
-           "builtin: sharpness name_id is minecraft:sharpness");
+    auto &sharpness = test_ench_reg.get(NSID("minecraft:sharpness"));
+    expect(sharpness.id.str() == "minecraft:sharpness",
+           "builtin: sharpness id is minecraft:sharpness");
     expect(sharpness.max_level == 5, "builtin: sharpness max_level is 5");
     expect(sharpness.multiplier == 1, "builtin: sharpness multiplier is 1");
 
@@ -175,7 +174,7 @@ void test_builtin_enchantment_lookup() {
 // Equipment lookup from builtin data
 // ---------------------------------------------------------------------------
 void test_builtin_equipment_lookup() {
-    registries::categories().initialize();
+    test_cat_reg.initialize();
     auto [_, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
     auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
@@ -183,14 +182,14 @@ void test_builtin_equipment_lookup() {
     bool found_sword = false;
     bool found_netherite_helmet = false;
     for (const auto &eq : equipments) {
-        if (eq.name_id == "minecraft:diamond_sword") {
+        if (eq.id.str() == "minecraft:diamond_sword") {
             found_sword = true;
-            expect(eq.category_id == EquipmentCategory::ID_SWORD,
+            expect(eq.category == EquipmentTag::sword(),
                    "builtin_eq: diamond_sword category is sword");
             expect(eq.max_durability == 1561,
                    "builtin_eq: diamond_sword max_durability is 1561");
         }
-        if (eq.name_id == "minecraft:netherite_helmet") {
+        if (eq.id.str() == "minecraft:netherite_helmet") {
             found_netherite_helmet = true;
         }
     }
@@ -205,11 +204,11 @@ void test_builtin_equipment_lookup() {
 // Output formatting with empty solutions (no algorithm)
 // ---------------------------------------------------------------------------
 void test_output_formatting_empty() {
-    registries::categories().initialize();
+    test_cat_reg.initialize();
     auto [raw_ench, _] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    registries::enchants().initialize(ench_infos);
+    test_ench_reg.initialize(ench_infos);
 
     std::vector<Solution> empty_solutions;
 
@@ -233,11 +232,11 @@ void test_output_formatting_empty() {
 // End-to-end: full pipeline (parse -> execute -> format)
 // ---------------------------------------------------------------------------
 void test_full_pipeline_execute() {
-    registries::categories().initialize();
+    test_cat_reg.initialize();
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    registries::enchants().initialize(ench_infos);
+    test_ench_reg.initialize(ench_infos);
 
     auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
@@ -250,7 +249,7 @@ void test_full_pipeline_execute() {
     // 2. Build domain input
     auto target_spec = ItemParser::parse(config.target);
     Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
-    expect(target_item.equipment.has_value(),
+    expect(!target_item.id.empty(),
            "execute: target should have equipment");
 
     EnchSet existing;    // equipment starts empty
@@ -262,7 +261,7 @@ void test_full_pipeline_execute() {
            "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
 
     // 3. Build AlgorithmInput via CompactAdapter (new API)
-    AlgorithmInput algo_input = CompactAdapter::apply(resolved, registries::enchants());
+    AlgorithmInput algo_input = CompactAdapter::apply(resolved, test_ench_reg);
     algo_input.config.platform = MCE::Java;
 
     expect(algo_input.target.size() == 1,

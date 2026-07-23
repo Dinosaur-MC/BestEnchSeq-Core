@@ -66,45 +66,33 @@ static EnchInfo parse_ench_info_json(const Json::Object& obj) {
 
     std::string v;
     v = ParserUtils::get_json_string(obj, "id");
-    if (!v.empty()) info.name_id = std::move(v);
+    if (!v.empty()) info.id = NSID(std::move(v));
 
     v = ParserUtils::get_json_string(obj, "name");
     if (!v.empty()) info.name = std::move(v);
 
     if (info.name.empty())
-        info.name = info.name_id;
+        info.name = info.id.str();
 
     info.max_level     = ParserUtils::get_json_int(obj, "max_level");
     info.multiplier    = ParserUtils::get_json_int(obj, "multiplier");
     info.limited_level = ParserUtils::get_json_int(obj, "limited_level");
     info.is_treasure   = ParserUtils::get_json_bool(obj, "is_treasure");
 
-    // exclusive_set: array of strings
+    // exclusive_set: array of strings (now NSIDs)
     {
         auto raw = ParserUtils::get_json_string_array(obj, "exclusive_set");
         for (auto& s : raw)
-            info.exclusive_set.insert(std::move(s));
+            info.exclusive_set.insert(NSID(std::move(s)));
     }
 
-    // applicable_category_ids: optional array of integers
+    // applicable_equipments: optional array of NSID strings (formerly applicable_category_ids)
     {
-        auto it = obj.find("applicable_category_ids");
+        auto it = obj.find("applicable_equipments");
         if (it != obj.end()) {
-            auto val = it->second.get_value();
-            if (std::holds_alternative<Json::Array>(val)) {
-                const auto& arr = std::get<Json::Array>(val);
-                for (const auto& elem : arr) {
-                    auto ev = elem.get_value();
-                    if (std::holds_alternative<Json::Number>(ev)) {
-                        const auto& num = std::get<Json::Number>(ev);
-                        if (std::holds_alternative<int32_t>(num))
-                            info.applicable_category_ids.insert(std::get<int32_t>(num));
-                        else if (std::holds_alternative<int64_t>(num))
-                            info.applicable_category_ids.insert(
-                                static_cast<int32_t>(std::get<int64_t>(num)));
-                    }
-                }
-            }
+            auto raw = ParserUtils::get_json_string_array(obj, "applicable_equipments");
+            for (auto& s : raw)
+                info.applicable_equipments.insert(NSID(std::move(s)));
         }
     }
 
@@ -142,15 +130,20 @@ static Equipment parse_equipment_json(const Json::Object& obj) {
 
     std::string v;
     v = ParserUtils::get_json_string(obj, "id");
-    if (!v.empty()) eq.name_id = std::move(v);
+    if (!v.empty()) eq.id = NSID(std::move(v));
 
     v = ParserUtils::get_json_string(obj, "name");
     if (!v.empty()) eq.name = std::move(v);
 
     if (eq.name.empty())
-        eq.name = eq.name_id;
+        eq.name = eq.id.str();
 
-    eq.category_id     = ParserUtils::get_json_int(obj, "category_id");
+    std::string cat_v = ParserUtils::get_json_string(obj, "category");
+    if (!cat_v.empty())
+        eq.category = NSID(std::move(cat_v));
+    else
+        eq.category = NSID("unknown");
+
     eq.max_durability  = ParserUtils::get_json_int(obj, "max_durability");
 
     return eq;
@@ -168,9 +161,11 @@ static EnchSet parse_ench_set(const Json::Array& arr,
         int32_t lvl     = ParserUtils::get_json_int(eo, "level");
         if (lvl < 1) lvl = 1;
 
-        int32_t idx = ench_reg.get_id(eid);
-        if (idx >= 0)
-            result.emplace(idx, lvl);
+        int32_t idx = ench_reg.get_id(NSID(eid));
+        if (idx >= 0) {
+            const auto& ench = ench_reg.get(idx);
+            result.emplace(ench.id, ench.name, lvl);
+        }
     }
     return result;
 }
@@ -378,10 +373,11 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
             std::string eq_id = ParserUtils::get_json_string(target_obj, "equipment");
             if (!eq_id.empty()) {
                 const auto& eq_reg = c->impl.equipment();
-                int32_t eq_idx = eq_reg.get_id(eq_id);
+                int32_t eq_idx = eq_reg.get_id(NSID(eq_id));
                 if (eq_idx >= 0) {
+                    const auto& equip = eq_reg.get(eq_idx);
                     input.target_item =
-                        Item(eq_reg.get(eq_idx), EnchSet{}, 0);
+                        Item(equip.id, EnchSet{}, 0, equip.max_durability);
                 }
             }
 

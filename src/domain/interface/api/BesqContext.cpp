@@ -52,7 +52,7 @@ void BesqContext::load_file(const std::string& path) {
     // Resolve raw enchantments into domain EnchInfo objects
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, profile.cat_reg);
     for (auto& info : ench_infos) {
-        if (profile.ench_reg.get_id(info.name_id) < 0) {
+        if (profile.ench_reg.get_id(info.id) < 0) {
             profile.ench_reg.add(info);
         }
     }
@@ -60,7 +60,7 @@ void BesqContext::load_file(const std::string& path) {
     // Resolve raw equipment into domain Equipment objects
     auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, profile.cat_reg);
     for (auto& eq : equipments) {
-        if (profile.eq_reg.get_id(eq.name_id) < 0) {
+        if (profile.eq_reg.get_id(eq.id) < 0) {
             profile.eq_reg.add(eq);
         }
     }
@@ -126,11 +126,19 @@ bool BesqContext::add_equipment(const Equipment& eq) {
 }
 
 bool BesqContext::remove_equipment(const std::string& name_id) {
-    return _impl->profiles.active().eq_reg.remove(name_id);
+    return _impl->profiles.active().eq_reg.remove(NSID(name_id));
 }
 
 int32_t BesqContext::add_category(const std::string& name) {
-    return _impl->profiles.active().cat_reg.add(name);
+    auto& tag_reg = _impl->profiles.active().cat_reg;
+    if (tag_reg.contains(name))
+        return tag_reg.get_id(name);
+    std::vector<std::string> all;
+    for (size_t i = 0; i < tag_reg.size(); ++i)
+        all.push_back(tag_reg.at(i).name);
+    all.push_back(name);
+    tag_reg.initialize(all);
+    return tag_reg.get_id(name);
 }
 
 // ====================================================================
@@ -145,7 +153,7 @@ const EquipmentRegistry& BesqContext::equipment() const noexcept {
     return _impl->profiles.active().eq_reg;
 }
 
-const EquipmentCategoryRegistry& BesqContext::categories() const noexcept {
+const EquipmentTagRegistry& BesqContext::categories() const noexcept {
     return _impl->profiles.active().cat_reg;
 }
 

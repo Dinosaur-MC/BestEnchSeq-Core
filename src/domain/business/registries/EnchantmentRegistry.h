@@ -30,7 +30,15 @@ class EnchantmentRegistry {
     const std::unordered_set<NSID> &get_exclusive_set(const NSID &e) const;
     bool is_incompatible(const NSID &e1, const NSID &e2) const;
 
-    // Validation (moved from EnchInfo statics)
+    // Mutable operations (for incremental editing)
+    bool add(const EnchInfo &info);
+    bool remove(const NSID &id);
+    bool modify(const NSID &id, const EnchInfo &patch);
+    // String overloads for backward compat (convert to NSID internally)
+    bool remove(const std::string &name_id);
+    bool modify(const std::string &name_id, const EnchInfo &patch);
+
+    // Validation
     static bool check_validation(const std::vector<EnchInfo> &infos);
 
   private:

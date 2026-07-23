@@ -3,6 +3,7 @@
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EquipmentCategoryRegistry.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Equipment.h"
 #include <cstdint>
@@ -24,14 +25,30 @@ struct TestFixture {
         // Enchantment data:
         //   sharpness (id=0), knockback (id=1), bane_of_arthropods (id=2), protection (id=3)
         std::vector<EnchInfo> infos;
-        infos.push_back({"sharpness", "Sharpness", MCE::All, 5, 5,
-                         1, false, {}, {EquipmentCategory::ID_SWORD}});
-        infos.push_back({"knockback", "Knockback", MCE::All, 2, 2,
-                         2, false, {}, {EquipmentCategory::ID_SWORD}});
-        infos.push_back({"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
-                         1, false, {"sharpness"}, {EquipmentCategory::ID_SWORD}});
-        infos.push_back({"protection", "Protection", MCE::All, 4, 4,
-                         1, false, {}, {EquipmentCategory::ID_CHESTPLATE}});
+        infos.push_back({
+            NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
+            1, false,
+            std::unordered_set<NSID>{},
+            std::unordered_set<NSID>{EquipmentTag::sword()}
+        });
+        infos.push_back({
+            NSID("knockback"), "Knockback", MCE::All, 2, 2,
+            2, false,
+            std::unordered_set<NSID>{},
+            std::unordered_set<NSID>{EquipmentTag::sword()}
+        });
+        infos.push_back({
+            NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5,
+            1, false,
+            std::unordered_set<NSID>{NSID("sharpness")},
+            std::unordered_set<NSID>{EquipmentTag::sword()}
+        });
+        infos.push_back({
+            NSID("protection"), "Protection", MCE::All, 4, 4,
+            1, false,
+            std::unordered_set<NSID>{},
+            std::unordered_set<NSID>{EquipmentTag::chestplate()}
+        });
         enchants.initialize(infos);
 
         // Build compact EnchReg for sword
@@ -45,7 +62,7 @@ struct TestFixture {
         std::unordered_map<std::string, int32_t> name_to_local;
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             global_ids.push_back(i);
-            name_to_local[enchants.get(i).name_id] = i;
+            name_to_local[enchants.get(i).id.str()] = i;
         }
         size_t mask_size = (enchants.size() + 63) / 64;
         std::vector<std::vector<algorithm::MaskType>> exc_masks(enchants.size(),
@@ -63,8 +80,8 @@ struct TestFixture {
             // Mark i and all its exclusive_set members with the same bit
             visited[i] = true;
             exc_masks[i][0] |= group_bit;
-            for (const auto& ex_name : enchants.get(i).exclusive_set) {
-                auto it = name_to_local.find(ex_name);
+            for (const auto& ex_nsid : enchants.get(i).exclusive_set) {
+                auto it = name_to_local.find(ex_nsid.str());
                 if (it != name_to_local.end()) {
                     int32_t j = it->second;
                     visited[j] = true;
@@ -74,7 +91,7 @@ struct TestFixture {
         }
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             const auto& ei = enchants.get(i);
-            bool applicable = ei.applicable_category_ids.count(EquipmentCategory::ID_SWORD) > 0;
+            bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.mul = static_cast<uint16_t>(ei.multiplier);
             info.mul_b = static_cast<uint16_t>(ei.multiplier);
@@ -88,7 +105,7 @@ struct TestFixture {
 
     // Get local IDs for named enchants
     int16_t id(const std::string& name_id) const {
-        return static_cast<int16_t>(enchants.get_id(name_id));
+        return static_cast<int16_t>(enchants.get_id(NSID(name_id)));
     }
 
     algorithm::Item make_book(int16_t ench_id, int16_t level) const {

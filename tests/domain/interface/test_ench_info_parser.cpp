@@ -1,12 +1,13 @@
 #include "framework/test_utils.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/interface/parsers/EnchInfoParser.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/types/EquipmentTag.h"
 // REMOVED: RegistryAccess.h — create local registries instead
 #include "io/json.h"
 
 // All tests share this category registry instance
-static EquipmentCategoryRegistry test_cat_reg;
+static EquipmentTagRegistry test_cat_reg;
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -723,14 +724,14 @@ void test_mc_official_namespaced_name() {
 void test_to_json_round_trip() {
     // Create test data — is_treasure is derived from limited_level==0 in new RawEnchantment
     std::vector<EnchInfo> original;
-    original.emplace_back("minecraft:sharpness", "Sharpness", MCE::Java,
+    original.emplace_back(NSID("minecraft:sharpness"), "Sharpness", MCE::Java,
                           5, 0, 1, true,  // limited_level=0 → treasure=true
-                          std::unordered_set<std::string>{"minecraft:smite", "minecraft:bane_of_arthropods"},
-                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD, EquipmentCategory::ID_AXE});
-    original.emplace_back("minecraft:protection", "Protection", MCE::All,
+                          std::unordered_set<NSID>{NSID("minecraft:smite"), NSID("minecraft:bane_of_arthropods")},
+                          std::unordered_set<NSID>{EquipmentTag::sword(), EquipmentTag::axe()});
+    original.emplace_back(NSID("minecraft:protection"), "Protection", MCE::All,
                           4, 4, 2, false,
-                          std::unordered_set<std::string>{},
-                          std::unordered_set<int32_t>{EquipmentCategory::ID_HELMET, EquipmentCategory::ID_CHESTPLATE});
+                          std::unordered_set<NSID>{},
+                          std::unordered_set<NSID>{EquipmentTag::helmet(), EquipmentTag::chestplate()});
 
     // Serialize to JSON
     std::string json_str = EnchSerializer::to_json(original, test_cat_reg);
@@ -749,7 +750,7 @@ void test_to_json_round_trip() {
     expect(enchantments.size() == original.size(), "ench JSON round-trip: same count");
 
     if (enchantments.size() >= 1) {
-        expect(enchantments[0].id.str() == original[0].name_id, "ench JSON round-trip: id preserved");
+        expect(enchantments[0].id.str() == original[0].id.str(), "ench JSON round-trip: id preserved");
         expect(enchantments[0].display_name == original[0].name, "ench JSON round-trip: name preserved");
         expect(enchantments[0].max_level == original[0].max_level, "ench JSON round-trip: max_level");
         expect(enchantments[0].limited_level == original[0].limited_level, "ench JSON round-trip: limited_level");
@@ -778,14 +779,14 @@ void test_to_json_round_trip() {
 void test_to_csv_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
-    original.emplace_back("sharpness", "Sharpness", MCE::Java,
+    original.emplace_back(NSID("sharpness"), "Sharpness", MCE::Java,
                           5, 5, 1, false,
-                          std::unordered_set<std::string>{"smite"},
-                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
-    original.emplace_back("knockback", "Knockback", MCE::Java,
+                          std::unordered_set<NSID>{NSID("smite")},
+                          std::unordered_set<NSID>{EquipmentTag::sword()});
+    original.emplace_back(NSID("knockback"), "Knockback", MCE::Java,
                           2, 2, 1, false,
-                          std::unordered_set<std::string>{},
-                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
+                          std::unordered_set<NSID>{},
+                          std::unordered_set<NSID>{EquipmentTag::sword()});
 
     // Serialize to CSV
     std::string csv_str = EnchSerializer::to_csv(original, test_cat_reg);
@@ -804,7 +805,7 @@ void test_to_csv_round_trip() {
     expect(enchantments.size() == original.size(), "ench CSV round-trip: same count");
 
     if (enchantments.size() >= 1) {
-        expect(enchantments[0].id.path == original[0].name_id, "ench CSV round-trip: id preserved");
+        expect(enchantments[0].id.path == original[0].id.get_id(), "ench CSV round-trip: id preserved");
         expect(enchantments[0].max_level == original[0].max_level, "ench CSV round-trip: max_level");
         expect(enchantments[0].multiplier == original[0].multiplier, "ench CSV round-trip: multiplier");
         expect(enchantments[0].exclusive_set.size() == original[0].exclusive_set.size(),
@@ -820,10 +821,10 @@ void test_to_csv_round_trip() {
 void test_export_mc_official_round_trip() {
     // Create test data
     std::vector<EnchInfo> original;
-    original.emplace_back("minecraft:sharpness", "Sharpness", MCE::All,
+    original.emplace_back(NSID("minecraft:sharpness"), "Sharpness", MCE::All,
                           5, 5, 1, false,
-                          std::unordered_set<std::string>{"minecraft:smite"},
-                          std::unordered_set<int32_t>{EquipmentCategory::ID_SWORD});
+                          std::unordered_set<NSID>{NSID("minecraft:smite")},
+                          std::unordered_set<NSID>{EquipmentTag::sword()});
 
     // Export to MC official format
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_rt_mc_off";
@@ -836,7 +837,7 @@ void test_export_mc_official_round_trip() {
 
     expect(enchantments.size() == original.size(), "mc official round-trip: same count");
     if (!enchantments.empty()) {
-        expect(enchantments[0].id.str() == original[0].name_id, "mc official round-trip: id preserved");
+        expect(enchantments[0].id.str() == original[0].id.str(), "mc official round-trip: id preserved");
         expect(enchantments[0].multiplier == original[0].multiplier, "mc official round-trip: multiplier");
         expect(enchantments[0].max_level == original[0].max_level, "mc official round-trip: max_level");
     }

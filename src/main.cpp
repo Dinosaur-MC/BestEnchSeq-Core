@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 namespace {
 
@@ -23,7 +24,7 @@ namespace {
 static void load_registry_dir(
     EnchantmentRegistry& ench_reg,
     EquipmentRegistry& eq_reg,
-    EquipmentCategoryRegistry& cat_reg,
+    EquipmentTagRegistry& tag_reg,
     const std::string& dir_path)
 {
     namespace fs = std::filesystem;
@@ -40,17 +41,17 @@ static void load_registry_dir(
 
         std::vector<std::string> custom_categories;
         for (const auto& eq : raw_eq) {
-            if (cat_reg.get_id(eq.category) < 0)
+            if (tag_reg.get_id(eq.category) < 0)
                 custom_categories.push_back(eq.category);
         }
         if (!custom_categories.empty())
-            cat_reg.initialize(custom_categories);
+            tag_reg.initialize(custom_categories);
 
-        auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, cat_reg);
+        auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
         for (auto& info : ench_infos)
             ench_reg.add(info);
 
-        auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, cat_reg);
+        auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
         for (auto& eq : equipments)
             eq_reg.add(eq);
         return;
@@ -64,17 +65,17 @@ static void load_registry_dir(
 
             std::vector<std::string> custom_categories;
             for (const auto& eq : raw_eq) {
-                if (cat_reg.get_id(eq.category) < 0)
+                if (tag_reg.get_id(eq.category) < 0)
                     custom_categories.push_back(eq.category);
             }
             if (!custom_categories.empty())
-                cat_reg.initialize(custom_categories);
+                tag_reg.initialize(custom_categories);
 
-            auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, cat_reg);
+            auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
             for (auto& info : ench_infos)
                 ench_reg.add(info);
 
-            auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, cat_reg);
+            auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
             for (auto& eq : equipments)
                 eq_reg.add(eq);
         } catch (const std::exception& e) {
@@ -109,8 +110,8 @@ int main(int argc, char* argv[]) try {
     // ── Initialise registries with built-in vanilla data ──
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
-    EquipmentCategoryRegistry cat_reg;
-    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
+    EquipmentTagRegistry tag_reg;
+    besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
     LOG_INFO("Loaded built-in vanilla data (%zu enchantments, %zu equipment)",
              ench_reg.size(), eq_reg.size());
 
@@ -136,16 +137,16 @@ int main(int argc, char* argv[]) try {
 
     // ── Load external registry data ──
     if (config.registry_dir)
-        load_registry_dir(ench_reg, eq_reg, cat_reg, *config.registry_dir);
+        load_registry_dir(ench_reg, eq_reg, tag_reg, *config.registry_dir);
 
     if (config.registries) {
         for (const auto& reg : ParserUtils::split_string(*config.registries, ',')) {
             if (reg.empty()) continue;
             if (std::filesystem::exists(reg)) {
                 auto [raw_ench, raw_eq] = EnchInfoParser::parse(reg);
-                auto infos = RawTypeAdapter::resolve_ench_info(raw_ench, cat_reg);
+                auto infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
                 for (auto& info : infos) ench_reg.add(info);
-                auto eqs = RawTypeAdapter::resolve_equipment(raw_eq, cat_reg);
+                auto eqs = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
                 for (auto& eq : eqs) eq_reg.add(eq);
             }
         }
@@ -153,11 +154,11 @@ int main(int argc, char* argv[]) try {
 
     // ── Runtime registry edits ──
     if (config.registry_edit)
-        apply_registry_edits(*config.registry_edit, ench_reg, eq_reg, cat_reg);
+        apply_registry_edits(*config.registry_edit, ench_reg, eq_reg, tag_reg);
 
     // ── Registry export ──
     if (config.export_registry) {
-        bool ok = EnchSerializer::export_json(*config.export_registry, ench_reg, eq_reg, cat_reg);
+        bool ok = EnchSerializer::export_json(*config.export_registry, ench_reg, eq_reg, tag_reg);
         if (!ok)
             throw std::runtime_error("Failed to export registry to: " + *config.export_registry);
         LOG_INFO("Registry exported to %s", config.export_registry->c_str());
@@ -192,19 +193,19 @@ int main(int argc, char* argv[]) try {
 
         // Run the pipeline
         auto result = detail::SolvePipeline::run(
-            solve_input, algo_loader, ench_reg, eq_reg, cat_reg);
+            solve_input, algo_loader, ench_reg, eq_reg, tag_reg);
 
         // Format output
         std::string output;
         if (config.format == "json")
             output = OutputFormatter::format_json(
-                result.solutions, ench_reg, cat_reg, config.mode);
+                result.solutions, ench_reg, tag_reg, config.mode);
         else if (config.format == "compact")
             output = OutputFormatter::format_compact(
-                result.solutions, ench_reg, cat_reg, config.mode);
+                result.solutions, ench_reg, tag_reg, config.mode);
         else
             output = OutputFormatter::format_verbose(
-                result.solutions, ench_reg, cat_reg, config.mode);
+                result.solutions, ench_reg, tag_reg, config.mode);
 
         if (config.output) {
             std::ofstream out(*config.output);

@@ -10,7 +10,7 @@ void test_add_builtin_idempotent() {
     mgr.add_builtin();
     mgr.add_builtin();  // second call must be no-op
     // Verify by loading successfully
-    EquipmentCategoryRegistry cat_reg;
+    EquipmentTagRegistry cat_reg;
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
     mgr.load_and_resolve(std::nullopt, cat_reg, eq_reg, ench_reg);
@@ -44,7 +44,7 @@ void test_scan_file_not_dir_throws() {
 
 void test_load_empty_no_filter() {
     RegistryManager mgr;
-    EquipmentCategoryRegistry cat_reg;
+    EquipmentTagRegistry cat_reg;
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
     // No sources, no filter — should log WARN but not throw
@@ -54,7 +54,7 @@ void test_load_empty_no_filter() {
 
 void test_load_filter_not_found_throws() {
     RegistryManager mgr;
-    EquipmentCategoryRegistry cat_reg;
+    EquipmentTagRegistry cat_reg;
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
     bool threw = false;
@@ -70,7 +70,7 @@ void test_load_filter_not_found_throws() {
 void test_load_builtin_success() {
     RegistryManager mgr;
     mgr.add_builtin();
-    EquipmentCategoryRegistry cat_reg;
+    EquipmentTagRegistry cat_reg;
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
     mgr.load_and_resolve(std::nullopt, cat_reg, eq_reg, ench_reg);
@@ -82,7 +82,7 @@ void test_load_builtin_success() {
 void test_load_builtin_by_name() {
     RegistryManager mgr;
     mgr.add_builtin();
-    EquipmentCategoryRegistry cat_reg;
+    EquipmentTagRegistry cat_reg;
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
     mgr.load_and_resolve("Vanilla", cat_reg, eq_reg, ench_reg);

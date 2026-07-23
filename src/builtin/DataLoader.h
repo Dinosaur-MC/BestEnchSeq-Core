@@ -1,6 +1,6 @@
 #pragma once
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include <filesystem>
 
@@ -12,7 +12,7 @@ namespace besq::data {
 /// to data embedded in the binary.  Accepts explicit registry references
 /// so both main.cpp (local instances) and benchmarks (singletons) can use it.
 void load_builtin_data(
-    EquipmentCategoryRegistry& cat_reg,
+    EquipmentTagRegistry& tag_reg,
     EnchantmentRegistry& ench_reg,
     EquipmentRegistry& eq_reg,
     const std::filesystem::path& data_dir = "data/builtin"

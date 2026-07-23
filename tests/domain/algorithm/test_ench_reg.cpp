@@ -1,7 +1,8 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include <stdexcept>
@@ -11,25 +12,41 @@ namespace {
 
 struct TestFixture {
     EnchantmentRegistry enchants;
-    EquipmentCategoryRegistry categories;
+    EquipmentTagRegistry categories;
     algorithm::EnchReg reg;
 
     TestFixture() {
         categories.initialize();
         enchants.initialize({
-            {"sharpness", "Sharpness", MCE::All, 5, 5,
-             1, false, {}, {EquipmentCategory::ID_SWORD}},
-            {"knockback", "Knockback", MCE::All, 2, 2,
-             2, false, {}, {EquipmentCategory::ID_SWORD}},
-            {"bane_of_arthropods", "Bane of Arthropods", MCE::All, 5, 5,
-             1, false, {"sharpness"}, {EquipmentCategory::ID_SWORD}},
-            {"protection", "Protection", MCE::All, 4, 4,
-             1, false, {}, {EquipmentCategory::ID_CHESTPLATE}},
+            {
+                NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
+                1, false,
+                std::unordered_set<NSID>{},
+                std::unordered_set<NSID>{EquipmentTag::sword()}
+            },
+            {
+                NSID("knockback"), "Knockback", MCE::All, 2, 2,
+                2, false,
+                std::unordered_set<NSID>{},
+                std::unordered_set<NSID>{EquipmentTag::sword()}
+            },
+            {
+                NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5,
+                1, false,
+                std::unordered_set<NSID>{NSID("sharpness")},
+                std::unordered_set<NSID>{EquipmentTag::sword()}
+            },
+            {
+                NSID("protection"), "Protection", MCE::All, 4, 4,
+                1, false,
+                std::unordered_set<NSID>{},
+                std::unordered_set<NSID>{EquipmentTag::chestplate()}
+            },
         });
 
         algorithm::Equipment target_equip;
         target_equip.id = 0;
-        target_equip.category_id = EquipmentCategory::ID_SWORD;
+        target_equip.category_id = 0;
         target_equip.max_durability = 1561;
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<int32_t> global_ids;
@@ -37,7 +54,7 @@ struct TestFixture {
         std::unordered_map<std::string, int32_t> name_to_local;
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             global_ids.push_back(i);
-            name_to_local[enchants.get(i).name_id] = i;
+            name_to_local[enchants.get(i).id.str()] = i;
         }
         size_t mask_size = (enchants.size() + 63) / 64;
         std::vector<std::vector<algorithm::MaskType>> exc_masks(enchants.size(),
@@ -51,8 +68,8 @@ struct TestFixture {
             next_group++;
             visited[i] = true;
             exc_masks[i][0] |= group_bit;
-            for (const auto& ex_name : enchants.get(i).exclusive_set) {
-                auto it = name_to_local.find(ex_name);
+            for (const auto& ex_nsid : enchants.get(i).exclusive_set) {
+                auto it = name_to_local.find(ex_nsid.str());
                 if (it != name_to_local.end()) {
                     int32_t j = it->second;
                     visited[j] = true;
@@ -62,7 +79,7 @@ struct TestFixture {
         }
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             const auto& ei = enchants.get(i);
-            bool applicable = ei.applicable_category_ids.count(EquipmentCategory::ID_SWORD) > 0;
+            bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.mul = static_cast<uint16_t>(ei.multiplier);
             info.mul_b = static_cast<uint16_t>(ei.multiplier);

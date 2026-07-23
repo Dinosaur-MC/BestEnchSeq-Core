@@ -11,16 +11,16 @@
 std::vector<EnchInfo> make_valid_enchants() {
     std::vector<EnchInfo> infos;
     infos.emplace_back(
-        "minecraft:sharpness", "Sharpness", MCE::Java,
+        NSID("minecraft:sharpness"), "Sharpness", MCE::Java,
         5, 5, 1, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
     infos.emplace_back(
-        "minecraft:smite", "Smite", MCE::Java,
+        NSID("minecraft:smite"), "Smite", MCE::Java,
         5, 5, 1, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
     return infos;
 }
@@ -37,14 +37,14 @@ void test_initialize_and_get() {
 
     // Get by index
     const auto& s0 = reg.get(0);
-    expect(s0.name_id == "minecraft:sharpness", "get(0) name_id");
+    expect(s0.id.str() == "minecraft:sharpness", "get(0) id.str()");
 
     const auto& s1 = reg.get(1);
-    expect(s1.name_id == "minecraft:smite", "get(1) name_id");
+    expect(s1.id.str() == "minecraft:smite", "get(1) id.str()");
 
-    // Get by string
-    const auto& by_name = reg.get("minecraft:sharpness");
-    expect(by_name.max_level == 5, "get by string: max_level");
+    // Get by NSID
+    const auto& by_name = reg.get(NSID("minecraft:sharpness"));
+    expect(by_name.max_level == 5, "get by NSID: max_level");
 
     std::cout << "PASS: test_initialize_and_get" << std::endl;
 }
@@ -75,17 +75,17 @@ void test_get_bounds() {
     }
     expect(threw, "get(999) should throw out_of_range");
 
-    // Unknown string
+    // Unknown NSID
     threw = false;
     try {
-        reg.get("unknown_ench");
+        reg.get(NSID("unknown_ench"));
     } catch (const std::runtime_error&) {
         threw = true;
     }
-    expect(threw, "get(\"unknown\") should throw");
+    expect(threw, "get(NSID(\"unknown\")) should throw");
 
     // get_id for unknown
-    expect(reg.get_id("nonexistent") == -1, "get_id(\"nonexistent\") == -1");
+    expect(reg.get_id(NSID("nonexistent")) == -1, "get_id(NSID(\"nonexistent\")) == -1");
 
     std::cout << "PASS: test_get_bounds" << std::endl;
 }
@@ -98,53 +98,53 @@ void test_check_validation() {
     auto valid = make_valid_enchants();
     expect(EnchantmentRegistry::check_validation(valid), "valid data passes validation");
 
-    // Empty name_id
+    // Empty NSID
     std::vector<EnchInfo> bad_name;
     bad_name.emplace_back(
-        "", "Empty", MCE::Java,
+        NSID(), "Empty", MCE::Java,
         1, 1, 1, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
-    expect(!EnchantmentRegistry::check_validation(bad_name), "empty name should fail validation");
+    expect(!EnchantmentRegistry::check_validation(bad_name), "empty NSID should fail validation");
 
     // max_level <= 0
     std::vector<EnchInfo> bad_max;
     bad_max.emplace_back(
-        "test", "Test", MCE::Java,
+        NSID("test"), "Test", MCE::Java,
         0, 0, 1, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
     expect(!EnchantmentRegistry::check_validation(bad_max), "max_level <= 0 should fail");
 
     // multiplier <= 0
     std::vector<EnchInfo> bad_mult;
     bad_mult.emplace_back(
-        "test", "Test", MCE::Java,
+        NSID("test"), "Test", MCE::Java,
         1, 1, 0, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
     expect(!EnchantmentRegistry::check_validation(bad_mult), "multiplier <= 0 should fail");
 
     // limited_level > max_level
     std::vector<EnchInfo> bad_limited;
     bad_limited.emplace_back(
-        "test", "Test", MCE::Java,
+        NSID("test"), "Test", MCE::Java,
         1, 5, 1, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
     expect(!EnchantmentRegistry::check_validation(bad_limited), "limited > max should fail");
 
     // exclusive_set references non-existent enchantment
     std::vector<EnchInfo> bad_excl;
     bad_excl.emplace_back(
-        "test", "Test", MCE::Java,
+        NSID("test"), "Test", MCE::Java,
         1, 1, 1, false,
-        std::unordered_set<std::string>{"nonexistent_ench"},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{NSID("nonexistent_ench")},
+        std::unordered_set<NSID>{}
     );
     expect(!EnchantmentRegistry::check_validation(bad_excl), "bad exclusive ref should fail");
 
@@ -158,50 +158,50 @@ void test_is_incompatible() {
     EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
     infos.emplace_back(
-        "sharpness", "Sharpness", MCE::Java,
+        NSID("sharpness"), "Sharpness", MCE::Java,
         5, 5, 1, false,
-        std::unordered_set<std::string>{"smite", "bane_of_arthropods"},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{NSID("smite"), NSID("bane_of_arthropods")},
+        std::unordered_set<NSID>{}
     );
     infos.emplace_back(
-        "smite", "Smite", MCE::Java,
+        NSID("smite"), "Smite", MCE::Java,
         5, 5, 1, false,
-        std::unordered_set<std::string>{"sharpness"},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{NSID("sharpness")},
+        std::unordered_set<NSID>{}
     );
     infos.emplace_back(
-        "bane_of_arthropods", "Bane of Arthropods", MCE::Java,
+        NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::Java,
         5, 5, 1, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
     infos.emplace_back(
-        "unbreaking", "Unbreaking", MCE::Java,
+        NSID("unbreaking"), "Unbreaking", MCE::Java,
         3, 3, 1, false,
-        std::unordered_set<std::string>{},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{},
+        std::unordered_set<NSID>{}
     );
 
     reg.initialize(infos);
 
     // sharpness and smite are incompatible (mutual exclusive_set)
-    expect(reg.is_incompatible(0, 1), "sharpness and smite are incompatible");
-    expect(reg.is_incompatible(1, 0), "smite and sharpness are incompatible (symmetric)");
+    expect(reg.is_incompatible(reg.get(0).id, reg.get(1).id), "sharpness and smite are incompatible");
+    expect(reg.is_incompatible(reg.get(1).id, reg.get(0).id), "smite and sharpness are incompatible (symmetric)");
 
     // sharpness and bane_of_arthropods are incompatible (sharpness lists it)
-    expect(reg.is_incompatible(0, 2), "sharpness incompatible with bane_of_arthropods");
-    expect(reg.is_incompatible(2, 0), "bane_of_arthropods incompatible with sharpness");
+    expect(reg.is_incompatible(reg.get(0).id, reg.get(2).id), "sharpness incompatible with bane_of_arthropods");
+    expect(reg.is_incompatible(reg.get(2).id, reg.get(0).id), "bane_of_arthropods incompatible with sharpness");
 
     // smite and bane should NOT be incompatible (no mutual exclusivity defined)
-    expect(!reg.is_incompatible(1, 2), "smite and bane are compatible");
+    expect(!reg.is_incompatible(reg.get(1).id, reg.get(2).id), "smite and bane are compatible");
 
     // unbreaking is compatible with everything
-    expect(!reg.is_incompatible(3, 0), "unbreaking compatible with sharpness");
-    expect(!reg.is_incompatible(3, 1), "unbreaking compatible with smite");
-    expect(!reg.is_incompatible(3, 2), "unbreaking compatible with bane");
+    expect(!reg.is_incompatible(reg.get(3).id, reg.get(0).id), "unbreaking compatible with sharpness");
+    expect(!reg.is_incompatible(reg.get(3).id, reg.get(1).id), "unbreaking compatible with smite");
+    expect(!reg.is_incompatible(reg.get(3).id, reg.get(2).id), "unbreaking compatible with bane");
 
     // Same enchantment is never incompatible with itself
-    expect(!reg.is_incompatible(0, 0), "same ench is never incompatible");
+    expect(!reg.is_incompatible(reg.get(0).id, reg.get(0).id), "same ench is never incompatible");
 
     std::cout << "PASS: test_is_incompatible" << std::endl;
 }
@@ -213,27 +213,27 @@ void test_exclusive_set_access() {
     EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
     infos.emplace_back(
-        "sharpness", "Sharpness", MCE::Java,
+        NSID("sharpness"), "Sharpness", MCE::Java,
         5, 5, 1, false,
-        std::unordered_set<std::string>{"smite"},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{NSID("smite")},
+        std::unordered_set<NSID>{}
     );
     infos.emplace_back(
-        "smite", "Smite", MCE::Java,
+        NSID("smite"), "Smite", MCE::Java,
         5, 5, 1, false,
-        std::unordered_set<std::string>{"sharpness"},
-        std::unordered_set<int32_t>{}
+        std::unordered_set<NSID>{NSID("sharpness")},
+        std::unordered_set<NSID>{}
     );
 
     reg.initialize(infos);
 
-    const auto& excl = reg.get_exclusive_set(0);
-    expect(excl.size() == 1, "exclusive_set(0) should have 1 entry");
-    expect(excl.contains(1), "exclusive_set(0) should contain smite (id=1)");
+    const auto& excl = reg.get_exclusive_set(reg.get(0).id);
+    expect(excl.size() == 1, "exclusive_set(sharpness) should have 1 entry");
+    expect(excl.contains(reg.get(1).id), "exclusive_set(sharpness) should contain smite");
 
     // Enchantment with no incompatibilities
-    const auto& empty = reg.get_exclusive_set(99);
-    expect(empty.empty(), "exclusive_set for unknown id should be empty");
+    const auto& empty = reg.get_exclusive_set(NSID("nonexistent"));
+    expect(empty.empty(), "exclusive_set for unknown NSID should be empty");
 
     std::cout << "PASS: test_exclusive_set_access" << std::endl;
 }

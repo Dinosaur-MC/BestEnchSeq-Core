@@ -1,6 +1,6 @@
 #pragma once
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include <filesystem>
 #include <optional>
@@ -38,7 +38,7 @@ class RegistryManager {
     /// loaded directly as a new source (name from filename stem or dir name).
     /// Otherwise the value is matched by name against already-discovered sources.
     void load_and_resolve(
-        std::optional<std::string> filter, EquipmentCategoryRegistry &cat_reg, EquipmentRegistry &eq_reg,
+        std::optional<std::string> filter, EquipmentTagRegistry &tag_reg, EquipmentRegistry &eq_reg,
         EnchantmentRegistry &ench_reg
     );
 

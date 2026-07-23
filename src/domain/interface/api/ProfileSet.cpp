@@ -62,9 +62,9 @@ void ProfileSet::merge(const std::string& source, const std::string& dest) {
 
     // Enchantments: overwrite existing, add new
     for (const auto& ench : src.ench_reg.get_instances()) {
-        if (ench.name_id.empty()) continue;
-        if (dst.ench_reg.get_id(ench.name_id) >= 0) {
-            dst.ench_reg.modify(ench.name_id, ench);
+        if (ench.id.str().empty()) continue;
+        if (dst.ench_reg.get_id(ench.id) >= 0) {
+            dst.ench_reg.modify(ench.id.str(), ench);
         } else {
             dst.ench_reg.add(ench);
         }
@@ -72,17 +72,23 @@ void ProfileSet::merge(const std::string& source, const std::string& dest) {
 
     // Equipment: add if not already present
     for (const auto& eq : src.eq_reg.get_instances()) {
-        if (eq.name_id.empty()) continue;
-        if (dst.eq_reg.get_id(eq.name_id) < 0) {
+        if (eq.id.str().empty()) continue;
+        if (dst.eq_reg.get_id(eq.id) < 0) {
             dst.eq_reg.add(eq);
         }
     }
 
-    // Categories: idempotent add
+    // Categories: ensure present (skip dynamic add — EquipmentTagRegistry uses initialize())
     for (size_t i = 0; i < src.cat_reg.size(); ++i) {
-        const auto& cat = src.cat_reg.get(static_cast<int32_t>(i));
-        if (cat.name_id.empty()) continue;
-        dst.cat_reg.add(cat.name_id);
+        const auto& cat = src.cat_reg.at(i);
+        if (cat.name.empty()) continue;
+        if (!dst.cat_reg.contains(cat.name)) {
+            std::vector<std::string> existing;
+            for (size_t j = 0; j < dst.cat_reg.size(); ++j)
+                existing.push_back(dst.cat_reg.at(j).name);
+            existing.push_back(cat.name);
+            dst.cat_reg.initialize(existing);
+        }
     }
 }
 

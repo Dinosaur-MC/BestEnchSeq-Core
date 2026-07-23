@@ -1,7 +1,7 @@
 #pragma once
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/interface/types/RawTypes.h"
@@ -33,7 +33,7 @@ struct RawTypeAdapter {
     static void resolve(
         const std::vector<RawEnchantment>& enchants,
         const std::vector<RawEquipment>& equipments,
-        EquipmentCategoryRegistry& cat_reg,
+        EquipmentTagRegistry& tag_reg,
         EquipmentRegistry& eq_reg,
         EnchantmentRegistry& ench_reg);
 
@@ -41,24 +41,23 @@ struct RawTypeAdapter {
     /// Category name strings are converted to int32_t IDs via cat_reg.
     static std::vector<EnchInfo> resolve_ench_info(
         const std::vector<RawEnchantment>& raw,
-        const EquipmentCategoryRegistry& cat_reg);
+        const EquipmentTagRegistry& tag_reg);
 
     /// Resolve a vector of raw equipment info into domain Equipment objects.
     /// Category name strings are converted to int32_t IDs via cat_reg.
     /// Unknown category names map to EquipmentCategory::ID_ANY.
     static std::vector<Equipment> resolve_equipment(
         const std::vector<RawEquipment>& raw,
-        const EquipmentCategoryRegistry& cat_reg);
+        const EquipmentTagRegistry& tag_reg);
 
     // ── Domain → raw ────────────────────────────────────────────────────────
 
     /// Convert registry contents back to raw intermediate types.
-    /// Requires the EquipmentCategoryRegistry for category ID -> name
-    /// resolution.
+    /// Requires the EquipmentTagRegistry for tag -> name resolution.
     static void revert(
         const EnchantmentRegistry& ench_reg,
         const EquipmentRegistry& eq_reg,
-        const EquipmentCategoryRegistry& cat_reg,
+        const EquipmentTagRegistry& tag_reg,
         std::vector<RawEnchantment>& out_enchants,
         std::vector<RawEquipment>& out_equipments);
 };

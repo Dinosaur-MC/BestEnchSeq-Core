@@ -1,4 +1,6 @@
 #include "RawTypeAdapter.h"
+#include "common/CommonTypes.h"
+#include "domain/business/types/EnchInfo.h"
 #include "domain/business/types/Equipment.h"
 
 #include <cstdint>
@@ -14,45 +16,45 @@
 
 std::vector<EnchInfo> RawTypeAdapter::resolve_ench_info(
     const std::vector<RawEnchantment>& raw,
-    const EquipmentCategoryRegistry& cat_reg)
+    const EquipmentTagRegistry& tag_reg)
 {
     std::vector<EnchInfo> result;
     result.reserve(raw.size());
 
     for (const auto& r : raw) {
-        // Resolve applicable item strings -> int32_t category IDs
-        std::unordered_set<int32_t> category_ids;
-        category_ids.reserve(r.applicable_items.size());
+        // Resolve applicable item strings -> NSIDs (from equipment tags)
+        std::unordered_set<NSID> applicable_eq;
+        applicable_eq.reserve(r.applicable_items.size());
         for (const auto& item_str : r.applicable_items) {
-            int32_t cid = cat_reg.get_id(item_str);
+            int32_t cid = tag_reg.get_id(item_str);
             if (cid >= 0)
-                category_ids.insert(cid);
+                applicable_eq.insert(tag_reg.at(cid).id);
         }
 
         // platform and is_treasure are dropped from RawEnchantment:
         //   - platform defaults to All (cross-platform)
         //   - is_treasure is derived from limited_level == 0
         // Namespace-qualify exclusive_set entries (bare "breach" -> "minecraft:breach")
-        // to match namespaced name_id convention.
-        std::unordered_set<std::string> ns_exclusive;
-        ns_exclusive.reserve(r.exclusive_set.size());
+        // to match namespaced NSID convention.
+        std::unordered_set<NSID> ns_exclusive_nsid;
+        ns_exclusive_nsid.reserve(r.exclusive_set.size());
         for (const auto& excl : r.exclusive_set) {
             if (excl.find(':') == std::string::npos)
-                ns_exclusive.insert("minecraft:" + excl);
+                ns_exclusive_nsid.insert(NSID("minecraft:" + excl));
             else
-                ns_exclusive.insert(excl);
+                ns_exclusive_nsid.insert(NSID(excl));
         }
 
         result.emplace_back(
-            r.id.str(),
+            NSID(r.id.str()),
             r.display_name,
             MCE::All,
             r.max_level,
             r.limited_level,
             r.multiplier,
             r.limited_level == 0,
-            std::move(ns_exclusive),
-            std::move(category_ids)
+            std::move(ns_exclusive_nsid),
+            std::move(applicable_eq)
         );
     }
 
@@ -61,20 +63,18 @@ std::vector<EnchInfo> RawTypeAdapter::resolve_ench_info(
 
 std::vector<Equipment> RawTypeAdapter::resolve_equipment(
     const std::vector<RawEquipment>& raw,
-    const EquipmentCategoryRegistry& cat_reg)
+    const EquipmentTagRegistry& tag_reg)
 {
     std::vector<Equipment> result;
     result.reserve(raw.size());
 
     for (const auto& r : raw) {
-        int32_t cat_id = cat_reg.get_id(r.category);
-        if (cat_id < 0)
-            cat_id = EquipmentCategory::ID_ANY;
+        int32_t cid = tag_reg.get_id(r.category);
 
         result.emplace_back(Equipment{
-            r.id.str(),
+            NSID(r.id.str()),
             r.display_name,
-            cat_id,
+            cid >= 0 ? tag_reg.at(cid).id : NSID(),
             r.max_durability
         });
     }
@@ -89,13 +89,13 @@ std::vector<Equipment> RawTypeAdapter::resolve_equipment(
 void RawTypeAdapter::resolve(
     const std::vector<RawEnchantment>& enchants,
     const std::vector<RawEquipment>& equipments,
-    EquipmentCategoryRegistry& cat_reg,
+    EquipmentTagRegistry& tag_reg,
     EquipmentRegistry& eq_reg,
     EnchantmentRegistry& ench_reg)
 {
-    // -- Step 1: Build EquipmentCategoryRegistry ------------------------------
+    // -- Step 1: Build EquipmentTagRegistry -----------------------------------
     // Collect unique category names from all equipment definitions and
-    // initialize the category registry with builtins + any custom categories.
+    // initialize the tag registry with builtins + any custom categories.
     {
         std::unordered_set<std::string> seen;
         std::vector<std::string> custom_categories;
@@ -104,18 +104,18 @@ void RawTypeAdapter::resolve(
             if (seen.insert(eq.category).second)
                 custom_categories.push_back(eq.category);
         }
-        cat_reg.initialize(custom_categories);
+        tag_reg.initialize(custom_categories);
     }
 
     // -- Step 2: Build EquipmentRegistry -------------------------------------
     {
-        auto eq_list = resolve_equipment(equipments, cat_reg);
+        auto eq_list = resolve_equipment(equipments, tag_reg);
         eq_reg.initialize(std::move(eq_list));
     }
 
     // -- Step 3: Build EnchantmentRegistry -----------------------------------
     {
-        auto ench_infos = resolve_ench_info(enchants, cat_reg);
+        auto ench_infos = resolve_ench_info(enchants, tag_reg);
         ench_reg.initialize(std::move(ench_infos));
     }
 }
@@ -127,7 +127,7 @@ void RawTypeAdapter::resolve(
 void RawTypeAdapter::revert(
     const EnchantmentRegistry& ench_reg,
     const EquipmentRegistry& eq_reg,
-    const EquipmentCategoryRegistry& cat_reg,
+    const EquipmentTagRegistry& tag_reg,
     std::vector<RawEnchantment>& out_enchants,
     std::vector<RawEquipment>& out_equipments)
 {
@@ -136,33 +136,40 @@ void RawTypeAdapter::revert(
     out_enchants.reserve(ench_infos.size());
     for (const auto& info : ench_infos) {
         Id id;
-        auto colon = info.name_id.find(':');
+        auto str_id = info.id.str();
+        auto colon = str_id.find(':');
         if (colon != std::string::npos) {
-            id.ns = info.name_id.substr(0, colon);
-            id.path = info.name_id.substr(colon + 1);
+            id.ns = str_id.substr(0, colon);
+            id.path = str_id.substr(colon + 1);
         } else {
             id.ns = "minecraft";
-            id.path = info.name_id;
+            id.path = str_id;
         }
 
-        // Category IDs -> string names
+        // Equipment NSIDs -> string names
         std::unordered_set<std::string> applicable;
-        for (int32_t cid : info.applicable_category_ids) {
-            try {
-                applicable.insert(cat_reg.get(cid).name_id);
-            } catch (const std::out_of_range&) {
-                // Skip unknown category IDs silently
+        for (const auto& eq_nsid : info.applicable_equipments) {
+            bool found = false;
+            for (size_t i = 0; i < tag_reg.size(); ++i) {
+                if (tag_reg.at(i).id == eq_nsid) {
+                    applicable.insert(tag_reg.at(i).name);
+                    found = true;
+                    break;
+                }
             }
+            if (!found)
+                applicable.insert(eq_nsid.str());
         }
 
         // Strip "minecraft:" prefix from exclusive_set namespaced IDs
         std::unordered_set<std::string> excl_bare;
         for (const auto& excl : info.exclusive_set) {
-            auto ec = excl.find(':');
-            if (ec != std::string::npos && excl.substr(0, ec) == "minecraft")
-                excl_bare.insert(excl.substr(ec + 1));
+            auto excl_str = excl.str();
+            auto ec = excl_str.find(':');
+            if (ec != std::string::npos && excl_str.substr(0, ec) == "minecraft")
+                excl_bare.insert(excl_str.substr(ec + 1));
             else
-                excl_bare.insert(excl);
+                excl_bare.insert(excl_str);
         }
 
         out_enchants.push_back({
@@ -176,26 +183,32 @@ void RawTypeAdapter::revert(
         });
     }
 
-    // -- EquipmentRegistry -> RawEquipment[] ---------------------------------
+    // -- EquipmentRegistry -> RawEquipment[] ----------------------------------
     const auto& eq_instances = eq_reg.get_instances();
     out_equipments.reserve(eq_instances.size());
     for (const auto& eq : eq_instances) {
         Id id;
-        auto colon = eq.name_id.find(':');
+        auto str_id = eq.id.str();
+        auto colon = str_id.find(':');
         if (colon != std::string::npos) {
-            id.ns = eq.name_id.substr(0, colon);
-            id.path = eq.name_id.substr(colon + 1);
+            id.ns = str_id.substr(0, colon);
+            id.path = str_id.substr(colon + 1);
         } else {
             id.ns = "minecraft";
-            id.path = eq.name_id;
+            id.path = str_id;
         }
 
         std::string category_name;
-        try {
-            category_name = cat_reg.get(eq.category_id).name_id;
-        } catch (const std::out_of_range&) {
-            category_name = "any";
+        bool found = false;
+        for (size_t i = 0; i < tag_reg.size(); ++i) {
+            if (tag_reg.at(i).id == eq.category) {
+                category_name = tag_reg.at(i).name;
+                found = true;
+                break;
+            }
         }
+        if (!found)
+            category_name = "any";
 
         out_equipments.push_back({
             std::move(id),
