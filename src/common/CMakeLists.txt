@@ -1,11 +1,9 @@
 # ── besq-common ────────────────────────────────────────────────────────────
 # Project-neutral infrastructure: I/O primitives, logging, utility types.
 
-set(BESQ_COMMON_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/CommonTypes.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/io/json.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/io/CsvIO.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/log/Logger.cpp
+file(GLOB_RECURSE BESQ_COMMON_SRCS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 
 add_library(besq-common STATIC ${BESQ_COMMON_SRCS})

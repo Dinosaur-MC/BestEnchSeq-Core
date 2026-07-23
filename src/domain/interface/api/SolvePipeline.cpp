@@ -145,7 +145,7 @@ detail::ExecuteResult detail::SolvePipeline::execute(
     }
 
     // Check mode support
-    if (!(algo->supported_mode() == algo_input.mode)) {
+    if (!(algo->supported_mode() & algo_input.mode)) {
         std::string mode_str =
             (algo_input.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
         throw std::runtime_error("Algorithm '" + algorithm +

@@ -41,7 +41,10 @@ NSID::NSID(const std::string_view &strid) {
         *this = NSID("", tokens[0]);
 }
 
-std::string NSID::str() const { return _is_tag ? "#" + _ns + ":" + _id : _ns + ":" + _id; }
+std::string NSID::str() const {
+    if (_ns.empty() && _id.empty()) return "";
+    return _is_tag ? "#" + _ns + ":" + _id : _ns + ":" + _id;
+}
 
 NSID &NSID::operator=(const std::string_view &strid) {
     *this = NSID(strid);

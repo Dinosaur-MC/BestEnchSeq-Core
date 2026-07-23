@@ -2,15 +2,9 @@
 # Business (domain model) domain: user-facing game concept types and
 # registries.  Depends only on besq-common.
 
-set(BESQ_BUSINESS_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/types/Enchantment.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/types/Equipment.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/types/Item.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/types/Solution.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/registries/EnchantmentRegistry.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/registries/EquipmentCategoryRegistry.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/registries/EquipmentRegistry.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/registries/RegistryManager.cpp
+file(GLOB_RECURSE BESQ_BUSINESS_SRCS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 
 add_library(besq-domain-business STATIC ${BESQ_BUSINESS_SRCS})

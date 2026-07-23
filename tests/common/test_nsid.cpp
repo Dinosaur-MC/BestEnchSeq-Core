@@ -16,8 +16,7 @@ void test_default_construction() {
     expect(!id.is_tag(), "default NSID should not be a tag");
     expect_eq(id.get_ns(), "", "default NSID namespace should be empty");
     expect_eq(id.get_id(), "", "default NSID id should be empty");
-    // str() returns ":" for empty — existing behavior
-    expect_eq(id.str(), ":", "default NSID str() should be ':'");
+    expect_eq(id.str(), "", "default NSID str() should be empty");
 
     std::cout << "  PASS: test_default_construction" << std::endl;
 }
