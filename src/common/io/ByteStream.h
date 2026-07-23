@@ -4,6 +4,16 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <concepts>
+#include <type_traits>
+
+struct ISerializable;  // forward decl
+
+template <typename T>
+concept TrivialSerializable = std::is_trivially_copyable_v<T>;
+
+template <typename T>
+concept Serializable = TrivialSerializable<T> || std::is_base_of_v<ISerializable, T>;
 
 // ─── ByteStreamWriter: append-only binary writer (little-endian) ──────────
 class ByteStreamWriter {
@@ -40,6 +50,36 @@ public:
     void string(std::string_view s) {
         u32(static_cast<uint32_t>(s.size()));
         bytes(s.data(), s.size());
+    }
+
+    // ── operator<< ──
+    ByteStreamWriter& operator<<(uint8_t v)   { u8(v);  return *this; }
+    ByteStreamWriter& operator<<(uint16_t v)  { u16(v); return *this; }
+    ByteStreamWriter& operator<<(uint32_t v)  { u32(v); return *this; }
+    ByteStreamWriter& operator<<(uint64_t v)  { u64(v); return *this; }
+    ByteStreamWriter& operator<<(int8_t v)    { i8(v);  return *this; }
+    ByteStreamWriter& operator<<(int16_t v)   { i16(v); return *this; }
+    ByteStreamWriter& operator<<(int32_t v)   { i32(v); return *this; }
+    ByteStreamWriter& operator<<(int64_t v)   { i64(v); return *this; }
+
+    ByteStreamWriter& operator<<(std::string_view s) { string(s); return *this; }
+
+    ByteStreamWriter& operator<<(const ISerializable& obj) {
+        obj.serialize(*this);
+        return *this;
+    }
+
+    template <Serializable T>
+    ByteStreamWriter& operator<<(const std::vector<T>& vec) {
+        *this << vec.size();
+        for (const auto& v : vec) *this << v;
+        return *this;
+    }
+
+    ByteStreamWriter& operator<<(const std::vector<uint8_t>& blob) {
+        *this << blob.size();
+        bytes(blob.data(), blob.size());
+        return *this;
     }
 
     const std::vector<uint8_t>& data() const& { return _buf; }
@@ -117,6 +157,37 @@ public:
         std::vector<uint8_t> result(_pos, _pos + n);
         _pos += n;
         return result;
+    }
+
+    // ── operator>> ──
+    ByteStreamReader& operator>>(uint8_t& v)   { v = u8();  return *this; }
+    ByteStreamReader& operator>>(uint16_t& v)  { v = u16(); return *this; }
+    ByteStreamReader& operator>>(uint32_t& v)  { v = u32(); return *this; }
+    ByteStreamReader& operator>>(uint64_t& v)  { v = u64(); return *this; }
+    ByteStreamReader& operator>>(int8_t& v)    { v = i8();  return *this; }
+    ByteStreamReader& operator>>(int16_t& v)   { v = i16(); return *this; }
+    ByteStreamReader& operator>>(int32_t& v)   { v = i32(); return *this; }
+    ByteStreamReader& operator>>(int64_t& v)   { v = i64(); return *this; }
+
+    ByteStreamReader& operator>>(std::string& s) { s = string(); return *this; }
+
+    ByteStreamReader& operator>>(ISerializable& obj) {
+        obj.deserialize(*this);
+        return *this;
+    }
+
+    template <Serializable T>
+    ByteStreamReader& operator>>(std::vector<T>& vec) {
+        size_t n = static_cast<size_t>(u64());
+        vec.resize(n);
+        for (auto& v : vec) *this >> v;
+        return *this;
+    }
+
+    ByteStreamReader& operator>>(std::vector<uint8_t>& blob) {
+        size_t n = static_cast<size_t>(u64());
+        blob = read_bytes(n);
+        return *this;
     }
 
 private:
