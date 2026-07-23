@@ -44,6 +44,11 @@ public:
     template <TrivialSerializable T>
     ByteStreamWriter& operator<<(T v) { write(v); return *this; }
 
+    ByteStreamWriter& operator<<(bool v) { write(v); return *this; }
+
+    // ── Special case: bool serializes as 1 byte (uint8_t) ──
+    void write(bool v) { _buf.push_back(static_cast<uint8_t>(v)); }
+
     // ── Write convenience — thin wrappers for call-site compatibility ──
     void u8(uint8_t   v) { write(v); }
     void u16(uint16_t v) { write(v); }
@@ -136,6 +141,11 @@ public:
 
     template <TrivialSerializable T>
     ByteStreamReader& operator>>(T& v) { read(v); return *this; }
+
+    ByteStreamReader& operator>>(bool& v) { read(v); return *this; }
+
+    // ── Special case: bool reads as 1 byte (uint8_t) ──
+    void read(bool& v) noexcept { v = u8() != 0; }
 
     // ── Read convenience — thin wrappers for expression-context usage ──
     uint8_t  u8()  { uint8_t  v{}; read(v); return v; }
