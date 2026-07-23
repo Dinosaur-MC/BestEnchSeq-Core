@@ -5,19 +5,26 @@
 #include "domain/algorithm/types/Item.h"
 #include "domain/algorithm/types/Solution.h"
 #include <chrono>
-#include <variant>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace algorithm {
 
-/// Operation mode.
+/// Operation mode (bitmask).
 enum class AlgorithmMode : uint8_t {
-    direct,
-    inventory,
+    direct    = 1 << 1,
+    inventory = 1 << 2,
 };
+
+constexpr AlgorithmMode operator|(AlgorithmMode a, AlgorithmMode b) noexcept {
+    return static_cast<AlgorithmMode>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+constexpr bool operator&(AlgorithmMode a, AlgorithmMode b) noexcept {
+    return static_cast<uint8_t>(a) & static_cast<uint8_t>(b);
+}
 
 // ─── Source data — tagged by AlgorithmMode ───────────────────────────────
 // Direct mode: EnchCollection = current enchantments on the equipment.
@@ -26,34 +33,26 @@ using SourceData = std::variant<EnchCollection, ItemCollection>;
 
 // ─── Algorithm input ───
 struct AlgorithmInput : ISerializable {
-    ForgeConfig f_config;                    // forge configuration (platform, flags)
-    SearchConfig s_config;                   // search configuration (solutions, mode)
-    EnchReg ench_reg;                        // compact registry (must be initialized)
-    Item target;                             // target item with wanted enchantments
+    ForgeConfig f_config;  // forge configuration (platform, flags)
+    SearchConfig s_config; // search configuration (solutions, mode)
+    EnchReg ench_reg;      // compact registry (must be initialized)
+    Item target;           // target item with wanted enchantments
     AlgorithmMode mode = AlgorithmMode::direct;
-    SourceData data;                         // source (direct) or available items (inventory)
-    std::vector<int32_t> priorities;         // priority per item (inventory mode)
+    SourceData data;                 // source (direct) or available items (inventory)
+    std::vector<int32_t> priorities; // priority per item (inventory mode)
 
     // Flattened execution view — populated by pipeline before execute().
     // items[0] = equipment (target with source enchants), rest = books/extra.
     ItemCollection items;
-    int32_t initial_bound = INT32_MAX;       // warm-start bound
+    int32_t initial_bound = INT32_MAX; // warm-start bound
 
     bool is_direct() const noexcept { return mode == AlgorithmMode::direct; }
     bool is_inventory() const noexcept { return mode == AlgorithmMode::inventory; }
 
-    const EnchCollection& source() const noexcept {
-        return std::get<EnchCollection>(data);
-    }
-    EnchCollection& source() noexcept {
-        return std::get<EnchCollection>(data);
-    }
-    const ItemCollection& inventory_items() const noexcept {
-        return std::get<ItemCollection>(data);
-    }
-    ItemCollection& inventory_items() noexcept {
-        return std::get<ItemCollection>(data);
-    }
+    const EnchCollection &source() const noexcept { return std::get<EnchCollection>(data); }
+    EnchCollection &source() noexcept { return std::get<EnchCollection>(data); }
+    const ItemCollection &inventory_items() const noexcept { return std::get<ItemCollection>(data); }
+    ItemCollection &inventory_items() noexcept { return std::get<ItemCollection>(data); }
 
     void serialize(ByteStreamWriter &w) const noexcept override {
         w << f_config << s_config << ench_reg << target << static_cast<uint8_t>(mode);

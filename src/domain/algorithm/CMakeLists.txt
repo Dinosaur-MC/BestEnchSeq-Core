@@ -2,24 +2,8 @@
 # Algorithm domain: compact types, forge engine, strategies, diagnostics,
 # serialization, plugin loader.  Depends only on besq-common.
 
-set(BESQ_ALGORITHM_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/IAlgorithm.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/AlgorithmExecutor.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ExecutionContext.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/forge_engine/ForgeEngine.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/AlgorithmDiagnostics.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/DiagnosticsService.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/DiagnosticsWriter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/serialization/CompactSerializer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/serialization/IAlgorithmSerializer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/registries/AlgorithmRegistry.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/registries/EnchReg.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/types/Enchantment.cpp
-    # ── Resolvers ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/ItemResolver.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/resolvers/InventoryResolver.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/types/Checkpoint.cpp
-)
+file(GLOB_RECURSE BESQ_ALGORITHM_SRCS CONFIGURE_DEPENDS "*.cpp" "*.hpp")
+list(FILTER BESQ_ALGORITHM_SRCS EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/(plugin/|_strategies/)")
 
 # ── Plugin loader (AlgorithmLoader.cpp) ──
 include(${CMAKE_CURRENT_SOURCE_DIR}/plugin/CMakeLists.txt)

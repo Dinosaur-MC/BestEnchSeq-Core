@@ -264,7 +264,6 @@ SolveResult detail::SolvePipeline::run(
 
     // Short-circuit if no output to recall
     if (!exec_result.algo_output.is_valid) {
-        algorithm::DiagnosticsService::instance().flush();
         SolveResult empty_result;
         empty_result.algorithm_used = exec_result.algorithm_name;
         empty_result.computation_time_ms = exec_result.computation_time_ms;
@@ -280,9 +279,6 @@ SolveResult detail::SolvePipeline::run(
                          algo_source, input.target_item);
     result.algorithm_used = exec_result.algorithm_name;
     result.computation_time_ms = exec_result.computation_time_ms;
-
-    // Flush diagnostics
-    algorithm::DiagnosticsService::instance().flush();
 
     return result;
 }

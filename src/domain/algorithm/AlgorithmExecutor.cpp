@@ -147,12 +147,26 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
 
+    // Verify the algorithm supports the requested mode
+    if (!(_algorithm->supported_mode() & input.mode)) {
+        std::string mode_str =
+            (input.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
+        throw std::runtime_error(std::string(_algorithm->name()) +
+            " does not support '" + mode_str + "' mode");
+    }
+
     // Start timeout watcher if max_search_time > 0
     _start_timeout_watcher(input.s_config.max_search_time);
 
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
-    if (warmup)
+    if (warmup) {
+        if (!(warmup->supported_mode() & input.mode))
+            throw std::runtime_error(std::string(warmup->name()) +
+                " (warmup) does not support '" +
+                (input.mode == AlgorithmMode::inventory ? "inventory" : "direct") +
+                "' mode");
         _run_warmup(input, *warmup);
+    }
 
     _algorithm_input = std::move(input);
 
