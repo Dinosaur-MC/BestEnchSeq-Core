@@ -42,7 +42,11 @@ struct TestContext {
 
     explicit TestContext(const std::vector<algorithm::Item>& extra_items,
                         const std::vector<algorithm::Ench>& wanted) {
-        ench_reg.init(compact_infos, global_ids, algorithm::Equipment{0, EquipmentCategory::ID_SWORD, 1561});
+        algorithm::Equipment eq;
+        eq.id = 0;
+        eq.category_id = EquipmentCategory::ID_SWORD;
+        eq.max_durability = 1561;
+        ench_reg.init(compact_infos, global_ids, eq);
 
         algorithm::Item equip{algorithm::ItemType::Equip, 1561, 0, {}};
         items.push_back(std::move(equip));

@@ -35,7 +35,10 @@ struct TestFixture {
         enchants.initialize(infos);
 
         // Build compact EnchReg for sword
-        algorithm::Equipment target_equip{0, EquipmentCategory::ID_SWORD, 1561};
+        algorithm::Equipment target_equip;
+        target_equip.id = 0;
+        target_equip.category_id = EquipmentCategory::ID_SWORD;
+        target_equip.max_durability = 1561;
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<int32_t> global_ids;
         // Map enchantment name → local id for conflict resolution
@@ -72,13 +75,13 @@ struct TestFixture {
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             const auto& ei = enchants.get(i);
             bool applicable = ei.applicable_category_ids.count(EquipmentCategory::ID_SWORD) > 0;
-            compact_infos.push_back({
-                static_cast<uint16_t>(ei.multiplier),
-                static_cast<uint16_t>(ei.multiplier),
-                static_cast<uint16_t>(ei.max_level),
-                exc_masks[i],
-                applicable
-            });
+            algorithm::EnchInfo info;
+            info.mul = static_cast<uint16_t>(ei.multiplier);
+            info.mul_b = static_cast<uint16_t>(ei.multiplier);
+            info.max_lvl = static_cast<uint16_t>(ei.max_level);
+            info.exc_mask = exc_masks[i];
+            info.applicable = applicable;
+            compact_infos.push_back(std::move(info));
         }
         reg.init(compact_infos, global_ids, target_equip);
     }
@@ -173,7 +176,12 @@ void test_penalty_cost() {
     expect(engine.penalty_cost(4) == 15, "penalty_cost(4) should be 15");
     expect(engine.penalty_cost(5) == 31, "penalty_cost(5) should be 31");
 
-    algorithm::ForgeEngine no_pen{algorithm::ForgeConfig{true, false, false, MCE::Java}};
+    algorithm::ForgeConfig no_pen_cfg;
+    no_pen_cfg.ignore_penalty_cost = true;
+    no_pen_cfg.ignore_repair_cost = false;
+    no_pen_cfg.ignore_cost_cap = false;
+    no_pen_cfg.platform = MCE::Java;
+    algorithm::ForgeEngine no_pen{no_pen_cfg};
     expect(no_pen.penalty_cost(5) == 0, "penalty_cost(5)+ignore should be 0");
     std::cout << "PASS: test_penalty_cost" << std::endl;
 }
@@ -186,7 +194,12 @@ void test_apply_cap() {
     expect(engine.apply_cap(40) == 39, "apply_cap(40) should be 39");
     expect(engine.apply_cap(100) == 39, "apply_cap(100) should be 39");
 
-    algorithm::ForgeEngine no_cap{algorithm::ForgeConfig{false, false, true, MCE::Java}};
+    algorithm::ForgeConfig no_cap_cfg;
+    no_cap_cfg.ignore_penalty_cost = false;
+    no_cap_cfg.ignore_repair_cost = false;
+    no_cap_cfg.ignore_cost_cap = true;
+    no_cap_cfg.platform = MCE::Java;
+    algorithm::ForgeEngine no_cap{no_cap_cfg};
     expect(no_cap.apply_cap(100) == 100, "apply_cap(100)+ignore should be 100");
     expect(no_cap.apply_cap(40) == 40,   "apply_cap(40)+ignore should be 40");
     std::cout << "PASS: test_apply_cap" << std::endl;
@@ -214,8 +227,18 @@ void test_estimate_forge_cost() {
 void test_be_forge_cost() {
     TestFixture fx;
 
-    algorithm::ForgeEngine be_engine{algorithm::ForgeConfig{false, false, false, MCE::Bedrock}};
-    algorithm::ForgeEngine je_engine{algorithm::ForgeConfig{false, false, false, MCE::Java}};
+    algorithm::ForgeConfig be_cfg;
+    be_cfg.ignore_penalty_cost = false;
+    be_cfg.ignore_repair_cost = false;
+    be_cfg.ignore_cost_cap = false;
+    be_cfg.platform = MCE::Bedrock;
+    algorithm::ForgeEngine be_engine{be_cfg};
+    algorithm::ForgeConfig je_cfg;
+    je_cfg.ignore_penalty_cost = false;
+    je_cfg.ignore_repair_cost = false;
+    je_cfg.ignore_cost_cap = false;
+    je_cfg.platform = MCE::Java;
+    algorithm::ForgeEngine je_engine{je_cfg};
 
     auto eq = fx.make_equip(fx.id("sharpness"), 3);
     auto book = fx.make_book(fx.id("sharpness"), 4);
@@ -231,8 +254,18 @@ void test_be_forge_cost() {
 void test_be_conflict_cost() {
     TestFixture fx;
 
-    algorithm::ForgeEngine be_engine{algorithm::ForgeConfig{false, false, false, MCE::Bedrock}};
-    algorithm::ForgeEngine je_engine{algorithm::ForgeConfig{false, false, false, MCE::Java}};
+    algorithm::ForgeConfig be_cfg2;
+    be_cfg2.ignore_penalty_cost = false;
+    be_cfg2.ignore_repair_cost = false;
+    be_cfg2.ignore_cost_cap = false;
+    be_cfg2.platform = MCE::Bedrock;
+    algorithm::ForgeEngine be_engine{be_cfg2};
+    algorithm::ForgeConfig je_cfg2;
+    je_cfg2.ignore_penalty_cost = false;
+    je_cfg2.ignore_repair_cost = false;
+    je_cfg2.ignore_cost_cap = false;
+    je_cfg2.platform = MCE::Java;
+    algorithm::ForgeEngine je_engine{je_cfg2};
 
     auto eq = fx.make_equip(fx.id("sharpness"), 5);
     auto book = fx.make_book(fx.id("bane_of_arthropods"), 4);
@@ -307,7 +340,12 @@ void test_cap_behavior() {
     TestFixture fx2;
 
     algorithm::ForgeEngine capped_engine;
-    algorithm::ForgeEngine uncapped_engine{algorithm::ForgeConfig{false, false, true, MCE::Java}};
+    algorithm::ForgeConfig uncapped_cfg;
+    uncapped_cfg.ignore_penalty_cost = false;
+    uncapped_cfg.ignore_repair_cost = false;
+    uncapped_cfg.ignore_cost_cap = true;
+    uncapped_cfg.platform = MCE::Java;
+    algorithm::ForgeEngine uncapped_engine{uncapped_cfg};
 
     algorithm::Item equip{algorithm::ItemType::Equip, 1561, 4, {}};
     algorithm::Item book{algorithm::ItemType::Book, 0, 4, {}};

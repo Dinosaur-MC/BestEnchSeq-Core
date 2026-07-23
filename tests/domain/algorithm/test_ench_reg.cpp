@@ -27,7 +27,10 @@ struct TestFixture {
              1, false, {}, {EquipmentCategory::ID_CHESTPLATE}},
         });
 
-        algorithm::Equipment target_equip{0, EquipmentCategory::ID_SWORD, 1561};
+        algorithm::Equipment target_equip;
+        target_equip.id = 0;
+        target_equip.category_id = EquipmentCategory::ID_SWORD;
+        target_equip.max_durability = 1561;
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<int32_t> global_ids;
         // Map enchantment name → local id for conflict resolution
@@ -60,13 +63,13 @@ struct TestFixture {
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             const auto& ei = enchants.get(i);
             bool applicable = ei.applicable_category_ids.count(EquipmentCategory::ID_SWORD) > 0;
-            compact_infos.push_back({
-                static_cast<uint16_t>(ei.multiplier),
-                static_cast<uint16_t>(ei.multiplier),
-                static_cast<uint16_t>(ei.max_level),
-                exc_masks[i],
-                applicable
-            });
+            algorithm::EnchInfo info;
+            info.mul = static_cast<uint16_t>(ei.multiplier);
+            info.mul_b = static_cast<uint16_t>(ei.multiplier);
+            info.max_lvl = static_cast<uint16_t>(ei.max_level);
+            info.exc_mask = exc_masks[i];
+            info.applicable = applicable;
+            compact_infos.push_back(std::move(info));
         }
         reg.init(compact_infos, global_ids, target_equip);
     }
