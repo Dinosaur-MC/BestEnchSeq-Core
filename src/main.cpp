@@ -39,21 +39,19 @@ static void load_registry_dir(
     if (fs::is_directory(dir / "data")) {
         auto [raw_ench, raw_eq] = EnchInfoParser::parse(dir_path);
 
-        std::vector<std::string> custom_categories;
         for (const auto& eq : raw_eq) {
-            if (tag_reg.get_id(eq.category) < 0)
-                custom_categories.push_back(eq.category);
+            NSID cat_nsid("#minecraft:" + eq.category);
+            if (tag_reg.find(cat_nsid) == tag_reg.end())
+                tag_reg.insert({cat_nsid, eq.category});
         }
-        if (!custom_categories.empty())
-            tag_reg.initialize(custom_categories);
 
         auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
         for (auto& info : ench_infos)
-            ench_reg.add(info);
+            ench_reg.insert(info);
 
         auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
         for (auto& eq : equipments)
-            eq_reg.add(eq);
+            eq_reg.insert(eq);
         return;
     }
 
@@ -63,21 +61,19 @@ static void load_registry_dir(
         try {
             auto [raw_ench, raw_eq] = EnchInfoParser::parse(entry.path());
 
-            std::vector<std::string> custom_categories;
             for (const auto& eq : raw_eq) {
-                if (tag_reg.get_id(eq.category) < 0)
-                    custom_categories.push_back(eq.category);
+                NSID cat_nsid("#minecraft:" + eq.category);
+                if (tag_reg.find(cat_nsid) == tag_reg.end())
+                    tag_reg.insert({cat_nsid, eq.category});
             }
-            if (!custom_categories.empty())
-                tag_reg.initialize(custom_categories);
 
             auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
             for (auto& info : ench_infos)
-                ench_reg.add(info);
+                ench_reg.insert(info);
 
             auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
             for (auto& eq : equipments)
-                eq_reg.add(eq);
+                eq_reg.insert(eq);
         } catch (const std::exception& e) {
             LOG_DEBUG("Skipping non-registry entry '%s': %s",
                       entry.path().string().c_str(), e.what());
@@ -145,9 +141,9 @@ int main(int argc, char* argv[]) try {
             if (std::filesystem::exists(reg)) {
                 auto [raw_ench, raw_eq] = EnchInfoParser::parse(reg);
                 auto infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
-                for (auto& info : infos) ench_reg.add(info);
+                for (auto& info : infos) ench_reg.insert(info);
                 auto eqs = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
-                for (auto& eq : eqs) eq_reg.add(eq);
+                for (auto& eq : eqs) eq_reg.insert(eq);
             }
         }
     }
