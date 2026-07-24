@@ -1,13 +1,10 @@
 #include "EnchantmentRegistry.h"
 
-#include <stdexcept>
-
 EnchantmentRegistry::EnchantmentRegistry(const std::vector<EnchInfo>& infos) {
     _data.reserve(infos.size());
     for (size_t i = 0; i < infos.size(); i++) {
         auto& info = infos[i];
-        _data.push_back(info);
-        name_to_index_[info.id] = static_cast<int32_t>(i);
+        _data.emplace(info.id, info);
     }
     for (size_t i = 0; i < infos.size(); i++) {
         auto& info = infos[i];
@@ -38,17 +35,6 @@ bool EnchantmentRegistry::check_validation(const std::vector<EnchInfo>& infos) {
     return true;
 }
 
-const EnchInfo& EnchantmentRegistry::get(int32_t id) const {
-    return _data.at(static_cast<size_t>(id));
-}
-
-const EnchInfo& EnchantmentRegistry::get(const NSID& id) const {
-    auto it = name_to_index_.find(id);
-    if (it == name_to_index_.end())
-        throw std::out_of_range("Enchantment not found: " + id.str());
-    return _data[it->second];
-}
-
 const std::unordered_set<NSID>& EnchantmentRegistry::get_exclusive_set(const NSID& e) const {
     static const std::unordered_set<NSID> empty_set;
     auto it = incompatible_table_.find(e);
@@ -68,65 +54,34 @@ bool EnchantmentRegistry::is_incompatible(const NSID& e1, const NSID& e2) const 
 
 // ── IRegistry overrides ────────────────────────────────────────────────
 
-EnchantmentRegistry::iterator EnchantmentRegistry::find(const NSID& id) {
-    auto it = name_to_index_.find(id);
-    if (it == name_to_index_.end())
-        return _data.end();
-    return _data.begin() + it->second;
-}
-
-EnchantmentRegistry::const_iterator EnchantmentRegistry::find(const NSID& id) const {
-    auto it = name_to_index_.find(id);
-    if (it == name_to_index_.end())
-        return _data.end();
-    return _data.begin() + it->second;
-}
-
-bool EnchantmentRegistry::insert(const EnchInfo& item) {
-    if (name_to_index_.count(item.id))
-        return false;
-
-    int32_t idx = static_cast<int32_t>(_data.size());
-    name_to_index_[item.id] = idx;
-    _data.push_back(item);
-
-    // Build incompatibility table entries
-    for (const auto& excl : item.exclusive_set) {
-        incompatible_table_[item.id].insert(excl);
-        incompatible_table_[excl].insert(item.id);
+std::pair<EnchantmentRegistry::iterator, bool>
+EnchantmentRegistry::insert(const EnchInfo& item) {
+    auto [it, inserted] = _data.try_emplace(item.id, item);
+    if (inserted) {
+        // Build incompatibility table entries
+        for (const auto& excl : item.exclusive_set) {
+            incompatible_table_[item.id].insert(excl);
+            incompatible_table_[excl].insert(item.id);
+        }
     }
-    return true;
+    return {iterator(it), inserted};
 }
 
-bool EnchantmentRegistry::remove(const NSID& id) {
-    auto it = name_to_index_.find(id);
-    if (it == name_to_index_.end())
+bool EnchantmentRegistry::erase(const NSID& id) {
+    auto it = _data.find(id);
+    if (it == _data.end())
         return false;
-
-    int32_t idx = it->second;
-    const NSID& removed_id = id;
 
     // Remove from incompatibility table
-    incompatible_table_.erase(removed_id);
+    incompatible_table_.erase(it->first);
     for (auto& [_, excl_set] : incompatible_table_)
-        excl_set.erase(removed_id);
+        excl_set.erase(it->first);
 
-    // Remove from index map
-    name_to_index_.erase(it);
-
-    // Remove from data
-    _data.erase(_data.begin() + idx);
-
-    // Shift indices
-    for (auto& [_, index] : name_to_index_)
-        if (index > idx)
-            --index;
-
+    _data.erase(it);
     return true;
 }
 
 void EnchantmentRegistry::clear() noexcept {
     _data.clear();
-    name_to_index_.clear();
     incompatible_table_.clear();
 }
