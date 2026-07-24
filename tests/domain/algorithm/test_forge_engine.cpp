@@ -20,8 +20,6 @@ struct TestFixture {
     algorithm::EnchReg reg;
 
     TestFixture() {
-        categories.initialize();
-
         // Enchantment data:
         //   sharpness (id=0), knockback (id=1), bane_of_arthropods (id=2), protection (id=3)
         std::vector<EnchInfo> infos;
@@ -49,7 +47,7 @@ struct TestFixture {
             std::unordered_set<NSID>{},
             std::unordered_set<NSID>{EquipmentTag::chestplate()}
         });
-        enchants.initialize(infos);
+        enchants = EnchantmentRegistry(infos);
 
         // Build compact EnchReg for sword
         algorithm::Equipment target_equip;
@@ -58,7 +56,7 @@ struct TestFixture {
         target_equip.max_durability = 1561;
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<int32_t> global_ids;
-        // Map enchantment name â†?local id for conflict resolution
+        // Map enchantment name ï¿½?local id for conflict resolution
         std::unordered_map<std::string, int32_t> name_to_local;
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             global_ids.push_back(i);
@@ -74,7 +72,7 @@ struct TestFixture {
         std::vector<bool> visited(enchants.size(), false);
         for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
             if (visited[i] || enchants.get(i).exclusive_set.empty()) continue;
-            // Found a new conflict group â€?assign a shared bit to all members
+            // Found a new conflict group ï¿½?assign a shared bit to all members
             uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
             next_group++;
             // Mark i and all its exclusive_set members with the same bit
@@ -105,7 +103,8 @@ struct TestFixture {
 
     // Get local IDs for named enchants
     int16_t id(const std::string& name_id) const {
-        return static_cast<int16_t>(enchants.get_id(NSID(name_id)));
+        auto idx = enchants.index(NSID(name_id));
+        return idx != EnchantmentRegistry::nops ? static_cast<int16_t>(idx) : -1;
     }
 
     algorithm::Item make_book(int16_t ench_id, int16_t level) const {

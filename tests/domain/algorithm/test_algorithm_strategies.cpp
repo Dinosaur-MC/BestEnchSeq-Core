@@ -31,8 +31,7 @@ constexpr int16_t ID_KNOCKBACK = 1;
 TestFixture fx_global;
 
 void setup_registries() {
-    fx_global.categories.initialize();
-    fx_global.enchants.initialize({
+    fx_global.enchants = EnchantmentRegistry({
         {
             NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
             1, false,

@@ -21,7 +21,7 @@ namespace {
 void test_format_book_solution() {
     g_fx.init_sword_set();
     EquipmentTagRegistry tag_reg;
-    tag_reg.initialize();
+    tag_reg.clear();
 
     Solution solution;
     solution.is_success = true;
@@ -55,7 +55,7 @@ void test_format_book_solution() {
 void test_format_combined_solution() {
     g_fx.init_chestplate_set();
     EquipmentTagRegistry tag_reg;
-    tag_reg.initialize();
+    tag_reg.clear();
     EnchantmentRegistry& enchants = g_fx.enchants;
 
     // Create a protection 3 book
@@ -93,7 +93,7 @@ void test_format_combined_solution() {
 void test_format_no_steps() {
     g_fx.init_sword_set();
     EquipmentTagRegistry tag_reg;
-    tag_reg.initialize();
+    tag_reg.clear();
 
     Solution solution;
     solution.is_success = true;
@@ -116,7 +116,7 @@ void test_format_no_steps() {
 void test_format_unsuccessful() {
     g_fx.init_sword_set();
     EquipmentTagRegistry tag_reg;
-    tag_reg.initialize();
+    tag_reg.clear();
 
     Solution solution;
     solution.is_success = false;
@@ -139,7 +139,7 @@ void test_format_unsuccessful() {
 void test_format_multi_step() {
     g_fx.init_chestplate_set();
     EquipmentTagRegistry tag_reg;
-    tag_reg.initialize();
+    tag_reg.clear();
     EnchantmentRegistry& enchants = g_fx.enchants;
 
     EnchSet prot3;

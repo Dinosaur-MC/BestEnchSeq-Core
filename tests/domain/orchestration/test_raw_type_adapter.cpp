@@ -33,12 +33,12 @@ void test_resolve_basic() {
     EnchantmentRegistry ench_reg;
     RawTypeAdapter::resolve(enchants, equipments, tag_reg, eq_reg, ench_reg);
 
-    expect(tag_reg.get_id("sword") >= 0, "sword tag created");
-    expect(tag_reg.get_id("axe") >= 0, "axe tag created");
+    expect(tag_reg.contains(NSID("#minecraft:sword")), "sword tag created");
+    expect(tag_reg.contains(NSID("#minecraft:axe")), "axe tag created");
     expect(eq_reg.size() == 2, "two equipment registered");
     expect(ench_reg.size() == 1, "one enchantment registered");
 
-    const auto& instances = ench_reg.get_instances();
+    const auto& instances = ench_reg.data();
     expect(instances[0].applicable_equipments.size() == 2,
            "sharpness applicable to 2 categories");
 
@@ -57,12 +57,12 @@ void test_resolve_empty() {
     expect(ench_reg.size() == 0, "no enchantments");
     expect(eq_reg.size() == 0, "no equipment");
 
-    // Tag registry always has 14 builtin categories (no "any" tag).
-    expect(tag_reg.size() == 14,
-           "tag registry has 14 builtin categories");
+    // No equipment provided, so no categories registered.
+    expect(tag_reg.size() == 0,
+           "tag registry is empty with no equipment");
 
-    // Builtin "sword" tag is always present.
-    expect(tag_reg.get_id("sword") >= 0, "builtin 'sword' tag exists");
+    // No "sword" tag without equipment specifying that category.
+    expect(!tag_reg.contains(NSID("#minecraft:sword")), "no 'sword' tag with no equipment");
 
     TEST_PASS("test_resolve_empty");
 }
@@ -80,19 +80,17 @@ void test_resolve_category_dedup() {
     EnchantmentRegistry ench_reg;
     RawTypeAdapter::resolve({}, equipments, tag_reg, eq_reg, ench_reg);
 
-    int32_t sword_id = tag_reg.get_id("sword");
-    expect(sword_id >= 0, "sword tag exists");
+    expect(tag_reg.contains(NSID("#minecraft:sword")), "sword tag exists");
 
     // Both equipment should reference the same category NSID
-    const auto& instances = eq_reg.get_instances();
+    const auto& instances = eq_reg.data();
     expect(instances.size() == 2, "two equipment registered");
     expect(instances[0].category == instances[1].category,
            "both equipment share same category");
 
-    // category "sword" is a builtin, so no duplicate was added
-    // Only register "sword" once — means 14 builtin categories
-    expect(tag_reg.size() == 14,
-           "tag registry has exactly the 14 builtin categories (no dupes)");
+    // Only one unique category ("sword") from equipment definitions
+    expect(tag_reg.size() == 1,
+           "tag registry has exactly 1 category (sword, no dupes)");
 
     TEST_PASS("test_resolve_category_dedup");
 }
@@ -129,7 +127,7 @@ void test_resolve_enchantment_exclusive_set() {
     RawTypeAdapter::resolve(enchants, equipments, tag_reg, eq_reg, ench_reg);
 
     expect(ench_reg.size() == 2, "two enchantments registered");
-    const auto& ench_instances = ench_reg.get_instances();
+    const auto& ench_instances = ench_reg.data();
     expect(ench_reg.is_incompatible(ench_instances[0].id, ench_instances[1].id),
            "sharpness and bane are incompatible");
     expect(ench_reg.is_incompatible(ench_instances[1].id, ench_instances[0].id),
@@ -159,7 +157,7 @@ void test_resolve_applicable_items_unknown_category() {
     EnchantmentRegistry ench_reg;
     RawTypeAdapter::resolve(enchants, equipments, tag_reg, eq_reg, ench_reg);
 
-    const auto& instances = ench_reg.get_instances();
+    const auto& instances = ench_reg.data();
     // "sword" resolves, "nonexistent_category" is silently dropped
     expect(instances[0].applicable_equipments.size() == 1,
            "only 'sword' category resolved");

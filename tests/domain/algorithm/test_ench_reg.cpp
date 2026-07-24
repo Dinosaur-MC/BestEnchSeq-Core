@@ -16,8 +16,7 @@ struct TestFixture {
     algorithm::EnchReg reg;
 
     TestFixture() {
-        categories.initialize();
-        enchants.initialize({
+        enchants = EnchantmentRegistry({
             {
                 NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
                 1, false,

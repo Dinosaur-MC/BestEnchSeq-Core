@@ -331,7 +331,7 @@ void test_missing_enchantments_key() {
 // test_applicable_equipment_parsing
 // ---------------------------------------------------------------------------
 void test_applicable_equipment_parsing() {
-    test_cat_reg.initialize();
+    test_cat_reg.clear();
     auto temp_dir = std::filesystem::temp_directory_path() / "besq_test_equip";
     std::filesystem::create_directories(temp_dir);
     auto file = (temp_dir / "test_equip.json").string();
@@ -849,7 +849,7 @@ void test_export_mc_official_round_trip() {
 
 int main() {
     try {
-        test_cat_reg.initialize();
+        test_cat_reg.clear();
         test_parse_basic_enchantments();
         test_platform_mapping();
         test_tag_resolution_in_exclusive_set();

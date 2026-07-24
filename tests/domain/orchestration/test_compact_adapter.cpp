@@ -16,8 +16,7 @@ namespace {
 
 // Helper: create a test EnchantmentRegistry with sword-applicable enchants
 EnchantmentRegistry make_sword_registry() {
-    EnchantmentRegistry reg;
-    reg.initialize({
+    return EnchantmentRegistry({
         {NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
          1, false, {}, {EquipmentTag::sword()}},
         {NSID("knockback"), "Knockback", MCE::All, 2, 2,
@@ -25,7 +24,6 @@ EnchantmentRegistry make_sword_registry() {
         {NSID("protection"), "Protection", MCE::All, 4, 4,
          1, false, {}, {EquipmentTag::chestplate()}},
     });
-    return reg;
 }
 
 // ─── Test 1: minimal valid input produces correct AlgorithmInput ───
