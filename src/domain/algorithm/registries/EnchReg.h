@@ -1,4 +1,5 @@
 #pragma once
+#include "CommonTypes.h"
 #include "common/io/ISerializable.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
@@ -15,9 +16,8 @@ namespace algorithm {
 class EnchReg : public ISerializable {
   private:
     std::vector<EnchInfo> _ench_infos;   // compacted info, indexed by local ench id
-    std::vector<int32_t> _global_ids;     // local → business global ID (for round-trip)
+    std::vector<NSID> _global_ids;     // local → business global ID (for round-trip)
     Equipment _target_equip;
-    size_t _mask_size; // exc_mask vector size
 
     std::vector<char> _conflict_matrix; // flat N×N, row-major
     void _build_conflict_matrix();
@@ -28,11 +28,10 @@ class EnchReg : public ISerializable {
     /// Initialize with compact enchantment info and target equipment.
     /// `global_ids` maps each local index to its original business-registry ID,
     /// enabling the reverse mapping in AlgorithmOutput → domain conversion.
-    void init(std::vector<EnchInfo> ench_infos, std::vector<int32_t> global_ids,
+    void init(std::vector<EnchInfo> ench_infos, std::vector<NSID> global_ids,
               const Equipment &target_equip);
 
     [[nodiscard]] size_t size() const noexcept { return _ench_infos.size(); }
-    [[nodiscard]] size_t get_mask_size() const noexcept { return _mask_size; }
 
     [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }
     [[nodiscard]] const EnchInfo &get(int16_t id) const { return _ench_infos.at(id); }
@@ -43,16 +42,28 @@ class EnchReg : public ISerializable {
     }
 
     /// Convert between local (compact) and global (business) enchantment IDs.
-    [[nodiscard]] int32_t to_global_id(int16_t local_id) const { return _global_ids.at(local_id); }
-    [[nodiscard]] int16_t to_local_id(int32_t global_id) const; // -1 if not found
+    [[nodiscard]] NSID to_global_id(int16_t local_id) const { return _global_ids.at(local_id); }
+    [[nodiscard]] int16_t to_local_id(NSID global_id) const; // -1 if not found
 
     // ── Serialization ──
     void serialize(ByteStreamWriter &w) const noexcept override {
-        w << _ench_infos << _global_ids << _target_equip;
+        w << _ench_infos << _target_equip;
+        // Serialize _global_ids manually since NSID is not TrivialSerializable
+        w << _global_ids.size();
+        for (const auto& nsid : _global_ids)
+            w << nsid.str();
     }
     void deserialize(ByteStreamReader &r) noexcept override {
-        r >> _ench_infos >> _global_ids >> _target_equip;
-        _mask_size = _ench_infos.size() / MASK_ELEM_SIZE + 1;
+        r >> _ench_infos >> _target_equip;
+        // Deserialize _global_ids manually
+        size_t n = 0;
+        r >> n;
+        _global_ids.resize(n);
+        for (size_t i = 0; i < n; ++i) {
+            std::string s;
+            r >> s;
+            _global_ids[i] = NSID(s);
+        }
         _build_conflict_matrix();
     }
 };
