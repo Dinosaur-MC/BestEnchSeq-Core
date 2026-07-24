@@ -61,13 +61,13 @@ void test_parse_basic_enchantments() {
     auto [enchantments, equipment] = EnchInfoParser::parse_native_json(file);
 
     expect(enchantments.size() == 2, "should parse 2 enchantments");
-    expect(enchantments[0].id.path == "sharpness", "first ench id");
+    expect(enchantments[0].id.get_id() == "sharpness", "first ench id");
     expect(enchantments[0].max_level == 5, "max level");
     expect(enchantments[0].multiplier == 1, "multiplier");
     expect(enchantments[0].exclusive_set.size() == 1, "exclusive set size");
     expect(enchantments[0].exclusive_set.contains("smite"), "exclusive contains smite");
 
-    expect(enchantments[1].id.path == "knockback", "second ench id");
+    expect(enchantments[1].id.get_id() == "knockback", "second ench id");
     expect(enchantments[1].max_level == 2, "knockback max level");
     expect(enchantments[1].exclusive_set.empty(), "knockback has no exclusives");
 
@@ -93,7 +93,7 @@ void test_platform_mapping() {
     auto [enchantments, equipment] = EnchInfoParser::parse_native_json(file);
 
     expect(enchantments.size() == 1, "should parse 1 entry");
-    expect(enchantments[0].id.path == "a", "id preserved");
+    expect(enchantments[0].id.get_id() == "a", "id preserved");
 
     std::filesystem::remove_all(temp_dir);
 }
@@ -193,7 +193,7 @@ void test_missing_fields_skipped() {
     auto [enchantments, equipment] = EnchInfoParser::parse_native_json(file);
 
     expect(enchantments.size() == 1, "only 1 valid enchantment should be parsed");
-    expect(enchantments[0].id.path == "valid", "the valid one is 'valid'");
+    expect(enchantments[0].id.get_id() == "valid", "the valid one is 'valid'");
     expect(enchantments[0].max_level == 3, "max_level = 3");
     expect(enchantments[0].multiplier == 2, "multiplier = 2");
 
@@ -415,7 +415,7 @@ void test_parse_method_auto_detect_json() {
     auto [enchantments, equipment] = EnchInfoParser::parse(file);
 
     expect(enchantments.size() == 2, "parse() should auto-detect JSON and return 2 entries");
-    expect(enchantments[0].id.path == "a", "first ench via parse()");
+    expect(enchantments[0].id.get_id() == "a", "first ench via parse()");
 
     std::filesystem::remove_all(temp_dir);
 }
@@ -472,7 +472,7 @@ void test_csv_basic_parsing() {
     auto [enchantments, equipment] = EnchInfoParser::parse_native_csv(file);
 
     expect(enchantments.size() == 2, "csv: 2 enchantments");
-    expect(enchantments[0].id.path == "sharpness", "csv: first ench id");
+    expect(enchantments[0].id.get_id() == "sharpness", "csv: first ench id");
     expect(enchantments[0].display_name == "Sharpness", "csv: first ench name");
     expect(enchantments[0].max_level == 5, "csv: first max_level");
     expect(enchantments[0].multiplier == 1, "csv: first multiplier");
@@ -484,7 +484,7 @@ void test_csv_basic_parsing() {
     expect(enchantments[0].applicable_items.contains("axe"),
            "csv: first contains axe");
 
-    expect(enchantments[1].id.path == "knockback", "csv: second ench id");
+    expect(enchantments[1].id.get_id() == "knockback", "csv: second ench id");
     expect(enchantments[1].display_name == "Knockback", "csv: second ench name");
     expect(enchantments[1].max_level == 2, "csv: second max_level");
     expect(enchantments[1].multiplier == 1, "csv: second multiplier");
@@ -805,7 +805,7 @@ void test_to_csv_round_trip() {
     expect(enchantments.size() == original.size(), "ench CSV round-trip: same count");
 
     if (enchantments.size() >= 1) {
-        expect(enchantments[0].id.path == original[0].id.get_id(), "ench CSV round-trip: id preserved");
+        expect(enchantments[0].id.get_id() == original[0].id.get_id(), "ench CSV round-trip: id preserved");
         expect(enchantments[0].max_level == original[0].max_level, "ench CSV round-trip: max_level");
         expect(enchantments[0].multiplier == original[0].multiplier, "ench CSV round-trip: multiplier");
         expect(enchantments[0].exclusive_set.size() == original[0].exclusive_set.size(),

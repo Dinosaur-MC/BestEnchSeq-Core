@@ -45,7 +45,7 @@ std::vector<EnchInfo> RawTypeAdapter::resolve_ench_info(
         }
 
         result.emplace_back(
-            NSID(r.id.str()),
+            r.id,
             r.display_name,
             MCE::All,
             r.max_level,
@@ -72,7 +72,7 @@ std::vector<Equipment> RawTypeAdapter::resolve_equipment(
         auto cat_it = tag_reg.find(cat_nsid);
 
         result.emplace_back(Equipment{
-            NSID(r.id.str()),
+            r.id,
             r.display_name,
             cat_it != tag_reg.end() ? cat_it->id : NSID(),
             r.max_durability
@@ -139,17 +139,6 @@ void RawTypeAdapter::revert(
     const auto& ench_infos_map = ench_reg.data();
     out_enchants.reserve(ench_infos_map.size());
     for (const auto& [nsid, info] : ench_infos_map) {
-        Id id;
-        auto str_id = nsid.str();
-        auto colon = str_id.find(':');
-        if (colon != std::string::npos) {
-            id.ns = str_id.substr(0, colon);
-            id.path = str_id.substr(colon + 1);
-        } else {
-            id.ns = "minecraft";
-            id.path = str_id;
-        }
-
         // Equipment NSIDs -> string names
         std::unordered_set<std::string> applicable;
         for (const auto& eq_nsid : info.applicable_equipments) {
@@ -172,7 +161,7 @@ void RawTypeAdapter::revert(
         }
 
         out_enchants.push_back({
-            std::move(id),
+            nsid,
             info.name,
             info.multiplier,
             info.max_level,
@@ -186,16 +175,6 @@ void RawTypeAdapter::revert(
     const auto& eq_map = eq_reg.data();
     out_equipments.reserve(eq_map.size());
     for (const auto& [eq_nsid, eq] : eq_map) {
-        Id id;
-        auto str_id = eq_nsid.str();
-        auto colon = str_id.find(':');
-        if (colon != std::string::npos) {
-            id.ns = str_id.substr(0, colon);
-            id.path = str_id.substr(colon + 1);
-        } else {
-            id.ns = "minecraft";
-            id.path = str_id;
-        }
 
         std::string category_name;
         auto tag_it = tag_reg.find(eq.category);
@@ -205,7 +184,7 @@ void RawTypeAdapter::revert(
             category_name = "any";
 
         out_equipments.push_back({
-            std::move(id),
+            eq_nsid,
             eq.name,
             std::move(category_name),
             eq.max_durability

@@ -15,7 +15,7 @@
 void test_resolve_basic() {
     std::vector<RawEnchantment> enchants;
     RawEnchantment sharp;
-    sharp.id = Id{"minecraft", "sharpness"};
+    sharp.id = NSID("minecraft", "sharpness");
     sharp.display_name = "Sharpness";
     sharp.max_level = 5;
     sharp.multiplier = 1;
@@ -23,7 +23,7 @@ void test_resolve_basic() {
     enchants.push_back(std::move(sharp));
 
     std::vector<RawEquipment> equipments;
-    equipments.push_back({{"minecraft", "diamond_sword"}, "Diamond Sword", "sword", 1561});
+    equipments.push_back({NSID("minecraft", "diamond_sword"), "Diamond Sword", "sword", 1561});
     equipments.push_back({{"minecraft", "diamond_axe"}, "Diamond Axe", "axe", 1561});
 
     EquipmentTagRegistry tag_reg;
@@ -109,7 +109,7 @@ void test_resolve_enchantment_exclusive_set() {
 
     // sharpness is exclusive with bane_of_arthropods
     RawEnchantment sharp;
-    sharp.id = Id{"minecraft", "sharpness"};
+    sharp.id = NSID("minecraft", "sharpness");
     sharp.display_name = "Sharpness";
     sharp.max_level = 5;
     sharp.multiplier = 1;
@@ -117,7 +117,7 @@ void test_resolve_enchantment_exclusive_set() {
     enchants.push_back(std::move(sharp));
 
     RawEnchantment bane;
-    bane.id = Id{"minecraft", "bane_of_arthropods"};
+    bane.id = NSID("minecraft", "bane_of_arthropods");
     bane.display_name = "Bane of Arthropods";
     bane.max_level = 5;
     bane.multiplier = 1;
@@ -125,7 +125,7 @@ void test_resolve_enchantment_exclusive_set() {
     enchants.push_back(std::move(bane));
 
     std::vector<RawEquipment> equipments;
-    equipments.push_back({{"minecraft", "diamond_sword"}, "Diamond Sword", "sword", 1561});
+    equipments.push_back({NSID("minecraft", "diamond_sword"), "Diamond Sword", "sword", 1561});
 
     EquipmentTagRegistry tag_reg;
     EquipmentRegistry eq_reg;
@@ -152,7 +152,7 @@ void test_resolve_enchantment_exclusive_set() {
 void test_resolve_applicable_items_unknown_category() {
     std::vector<RawEnchantment> enchants;
     RawEnchantment sharp;
-    sharp.id = Id{"minecraft", "sharpness"};
+    sharp.id = NSID("minecraft", "sharpness");
     sharp.display_name = "Sharpness";
     sharp.max_level = 5;
     sharp.multiplier = 1;
@@ -160,7 +160,7 @@ void test_resolve_applicable_items_unknown_category() {
     enchants.push_back(std::move(sharp));
 
     std::vector<RawEquipment> equipments;
-    equipments.push_back({{"minecraft", "diamond_sword"}, "Diamond Sword", "sword", 1561});
+    equipments.push_back({NSID("minecraft", "diamond_sword"), "Diamond Sword", "sword", 1561});
 
     EquipmentTagRegistry tag_reg;
     EquipmentRegistry eq_reg;

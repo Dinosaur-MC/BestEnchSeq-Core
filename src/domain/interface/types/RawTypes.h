@@ -4,34 +4,22 @@
 #include <string>
 #include <unordered_set>
 
+#include "common/CommonTypes.h"
+
 // ─── Raw (pre-resolution) intermediate types ──────────────────────────────
 //
 // These types are produced by parser layer functions and consumed by
-// RawTypeAdapter to convert string-based references into resolved int32_t
-// IDs.  They decouple parsing from registry availability: parsers never
+// RawTypeAdapter to convert string-based references into resolved NSID IDs.
+// They decouple parsing from registry availability: parsers never
 // call into the registry layer.
-
-/// A namespaced identifier (e.g. "minecraft:sharpness").
-struct Id {
-    std::string ns = "minecraft";
-    std::string path;
-
-    [[nodiscard]] std::string str() const noexcept { return ns + ":" + path; }
-
-    bool operator==(const Id& o) const noexcept { return ns == o.ns && path == o.path; }
-    bool operator<(const Id& o) const noexcept {
-        if (ns != o.ns) return ns < o.ns;
-        return path < o.path;
-    }
-};
 
 /// String-based intermediate representation of an enchantment definition,
 /// produced by parsers before registry resolution.
 ///
-/// All category references are still strings — resolution to integer IDs
+/// All category references are still strings — resolution to NSIDs
 /// happens in a separate RawTypeAdapter step.
 struct RawEnchantment {
-    Id id;
+    NSID id;
     std::string display_name;
     int32_t multiplier = 0;
     int32_t max_level = 0;
@@ -44,8 +32,8 @@ struct RawEnchantment {
 
 /// String-based intermediate representation of an equipment definition.
 struct RawEquipment {
-    Id id;
+    NSID id;
     std::string display_name;
-    std::string category;            // category name string, not yet resolved to int32_t
+    std::string category;            // category name string, not yet resolved to NSID
     int32_t max_durability = 0;
 };
