@@ -1,20 +1,21 @@
 #pragma once
 #include "CommonTypes.h"
-#include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <functional>
-#include <vector>
+#include <unordered_map>
 
 // ══════════════════════════════════════════════════════════════════════════
 // IRegistry<T> — uniform interface for business-domain registries
 //
-// All three registries (EnchantmentRegistry, EquipmentRegistry,
-// EquipmentTagRegistry) implement this interface.
+// Backed by std::unordered_map<NSID, T>. All lookup/modify operations are
+// O(1) average. No positional index — items are identified by NSID key.
 //
-// Default implementations operate on _data (protected vector).
-// Specialized registries override methods like insert(), get(), remove()
-// to add key-map lookups.
+// Subclass only when you need additional side-effects on insert/erase
+// (e.g. EnchantmentRegistry's incompatibility table).
+//
+// Iterators dereference to T& / const T& (value iterators), not pairs,
+// so existing range-for loops work unchanged.
 // ══════════════════════════════════════════════════════════════════════════
 
 template <typename T>
@@ -28,107 +29,114 @@ concept IRegistryItem = std::copyable<T> &&              // 可复制
                             { t.id } -> std::convertible_to<NSID>;                     // 有 NSID 成员变量
                         };
 
-template <IRegistryItem T, bool IsSorted = false> class IRegistry {
+template <IRegistryItem T>
+class IRegistry {
   public:
     virtual ~IRegistry() = default;
 
-    using iterator               = std::vector<T>::iterator;
-    using const_iterator         = std::vector<T>::const_iterator;
-    static constexpr size_t nops = static_cast<size_t>(-1);
+    // -- STL compatible type aliases -------------------------------------------
+    using key_type        = NSID;
+    using value_type      = T;
+    using container_type  = std::unordered_map<NSID, T>;
 
-    /// Iterator access.
-    virtual iterator begin() { return _data.begin(); }
-    virtual const_iterator begin() const { return _data.begin(); }
-    virtual iterator end() { return _data.end(); }
-    virtual const_iterator end() const { return _data.end(); }
+    // -- Value iterator — dereferences to T& (not pair<const NSID, T>&) --------
+    template <typename MapIter, typename ValueRef>
+    class value_iterator {
+      public:
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type   = ptrdiff_t;
+        using value_type        = std::remove_cvref_t<ValueRef>;
+        using pointer           = std::add_pointer_t<ValueRef>;
+        using reference         = ValueRef;
 
-    /// Access by index (position in storage). Throws if out of range.
-    virtual const T &at(size_t index) const { return _data.at(index); }
-    virtual T &at(size_t index) { return _data.at(index); }
+        value_iterator() = default;
+        explicit value_iterator(MapIter it) : _it(it) {}
 
-    /// Find the iterator of an item, or end() if not found.
-    virtual const_iterator find(const NSID &id) const {
-        if constexpr (IsSorted)
-            return std::lower_bound(_data.begin(), _data.end(), id, [](const T &i) { return i.id; });
-        else
-            return std::find_if(_data.begin(), _data.end(), [id](const T &i) { return i.id == id; });
-    }
-    virtual iterator find(const NSID &id) {
-        if constexpr (IsSorted)
-            return std::lower_bound(_data.begin(), _data.end(), id, [](const T &i) { return i.id; });
-        else
-            return std::find_if(_data.begin(), _data.end(), [id](const T &i) { return i.id == id; });
-    }
+        reference operator*()  const { return _it->second; }
+        pointer   operator->() const { return &_it->second; }
 
-    /// Find the index of an item, or nops if not found.
-    virtual size_t index(const NSID &id) const noexcept {
-        auto it = find(id);
-        if (it == _data.end())
-            return nops;
-        return std::distance(_data.begin(), it);
-    }
+        value_iterator& operator++()    { ++_it; return *this; }
+        value_iterator  operator++(int) { auto tmp = *this; ++(*this); return tmp; }
 
-    /// Membership test.
-    virtual bool contains(const NSID &id) const noexcept { return find(id) != _data.end(); }
+        bool operator==(const value_iterator& o) const { return _it == o._it; }
+        bool operator!=(const value_iterator& o) const { return _it != o._it; }
 
-    /// Bulk access.
-    virtual const std::vector<T> &data() const noexcept { return _data; }
+        // Implicit conversion from iterator to const_iterator
+        using const_value_iterator = value_iterator<
+            typename container_type::const_iterator, const T&>;
+        operator const_value_iterator() const {
+            return const_value_iterator(_it);
+        }
 
-    /// Query.
-    virtual bool empty() const noexcept { return _data.empty(); }
-    virtual size_t size() const noexcept { return _data.size(); }
+      private:
+        MapIter _it;
+    };
 
-    /// Reset all state.
+    using iterator       = value_iterator<typename container_type::iterator,       T&>;
+    using const_iterator = value_iterator<typename container_type::const_iterator, const T&>;
+
+    // -- Capacity --------------------------------------------------------------
+    virtual bool      empty() const noexcept { return _data.empty(); }
+    virtual size_t    size() const noexcept  { return _data.size(); }
+
+    // -- Iteration (value iterators, not pair iterators) -----------------------
+    virtual iterator       begin()       { return iterator(_data.begin()); }
+    virtual const_iterator begin() const { return const_iterator(_data.begin()); }
+    virtual iterator       end()         { return iterator(_data.end()); }
+    virtual const_iterator end()   const { return const_iterator(_data.end()); }
+
+    // -- Lookup ----------------------------------------------------------------
+    /// Throws std::out_of_range if key not found.
+    virtual const T& at(const NSID& id) const  { return _data.at(id); }
+    virtual T&       at(const NSID& id)        { return _data.at(id); }
+
+    /// Returns iterator or end().
+    virtual iterator       find(const NSID& id)       { return iterator(_data.find(id)); }
+    virtual const_iterator find(const NSID& id) const { return const_iterator(_data.find(id)); }
+
+    virtual bool contains(const NSID& id) const noexcept { return _data.contains(id); }
+
+    // -- Bulk access -----------------------------------------------------------
+    virtual const container_type& data() const noexcept { return _data; }
+
+    // -- Modifiers -------------------------------------------------------------
     virtual void clear() noexcept { _data.clear(); }
 
-    /// Utility.
-    virtual void reverse() noexcept { std::reverse(_data.begin(), _data.end()); }
-    virtual void resize(size_t n) noexcept { _data.resize(n); }
-    virtual void sort() noexcept { std::sort(_data.begin(), _data.end()); }
-
-    /// Insert a new item. Returns false if the item already exists.
-    virtual bool insert(const T &item) {
-        if constexpr (IsSorted) {
-            auto it = find(item.id);
-            if (it != _data.end())
-                return false;
-            _data.insert(it, item);
-        } else {
-            if (contains(item.id))
-                return false;
-            _data.push_back(item);
-        }
-        return true;
+    /// Insert. Returns {iterator, true} on success, {iterator, false} on duplicate.
+    virtual std::pair<iterator, bool> insert(const T& item) {
+        auto [it, inserted] = _data.try_emplace(item.id, item);
+        return {iterator(it), inserted};
     }
 
-    /// Remove by value. Returns false if not found.
-    virtual bool remove(const NSID &id) {
-        auto it = find(id);
-        if (it == _data.end())
+    /// Insert or assign (overwrite if exists). Returns {iterator, true} if
+    /// inserted, {iterator, false} if assigned.
+    virtual std::pair<iterator, bool> insert_or_assign(const T& item) {
+        auto [it, inserted] = _data.insert_or_assign(item.id, item);
+        return {iterator(it), inserted};
+    }
+
+    /// Erase by key. Returns true if the element was removed.
+    virtual bool erase(const NSID& id) { return _data.erase(id) > 0; }
+
+    /// Update if exists. Returns false if the key was not found.
+    virtual bool update(const T& item) {
+        if (!_data.contains(item.id))
             return false;
-        _data.erase(it);
+        _data.insert_or_assign(item.id, item);
         return true;
     }
 
-    /// Update by value. Returns false if not found.
-    virtual bool update(const T &item) {
-        auto it = find(item.id);
-        if (it == _data.end())
-            return false;
-        *it = item;
-        return true;
-    }
+    // -- Utility ---------------------------------------------------------------
 
-    /// Create a new registry containing only items matching filter_func.
-    virtual IRegistry<T> create_subset(std::function<bool(const T &)> filter_func) const {
-        IRegistry<T> subset;
-        for (const auto &item : _data)
-            if (filter_func(item))
-                subset._data.push_back(item);
-        subset.sort();
+    /// Create a new registry containing only items matching the predicate.
+    virtual IRegistry create_subset(std::function<bool(const T&)> pred) const {
+        IRegistry subset;
+        for (const auto& [id, item] : _data)
+            if (pred(item))
+                subset._data.emplace(id, item);
         return subset;
     }
 
   protected:
-    std::vector<T> _data;
+    container_type _data;
 };
