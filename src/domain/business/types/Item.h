@@ -5,15 +5,17 @@
 
 /// Forgeable item stack — pure data container.
 struct Item {
-    NSID id;                  // was optional<Equipment> equipment
+    NSID id;
     EnchSet enchantments;
     int32_t prior_penalty;
     int32_t durability;
     int32_t priority = 99;
 
     Item() : prior_penalty(0), durability(0) {}
-    Item(NSID id_, const EnchSet& enchs_, int32_t ppn_, int32_t dur_);
-    Item(NSID id_, const EnchSet& enchs_, int32_t ppn_ = 0);
+    Item(NSID id_, const EnchSet &enchs_, int32_t ppn_, int32_t dur_);
+    Item(NSID id_, const EnchSet &enchs_, int32_t ppn_ = 0);
+
+    bool operator<(const Item &o) const { return id.str() < o.id.str(); }
 
     bool is_book() const {
         static const NSID book("minecraft:book");

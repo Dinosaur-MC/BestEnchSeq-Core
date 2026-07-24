@@ -7,6 +7,6 @@
 // Will be removed once all consumers are updated (Phase 2+).
 
 #pragma once
-#include "Ench.h"           // IWYU pragma: export
-#include "EnchInfo.h"       // IWYU pragma: export
-#include "EnchSet.h"        // IWYU pragma: export
+#include "Ench.h"     // IWYU pragma: export
+#include "EnchInfo.h" // IWYU pragma: export
+#include "EnchSet.h"  // IWYU pragma: export

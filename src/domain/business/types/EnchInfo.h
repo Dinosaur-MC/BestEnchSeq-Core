@@ -13,12 +13,13 @@ struct EnchInfo {
     int32_t multiplier     = 0;
     bool is_treasure       = false;
     std::unordered_set<NSID> exclusive_set;
-    std::unordered_set<NSID> applicable_equipments;  // was applicable_category_ids (int32_t)
+    std::unordered_set<NSID> applicable_equipments;
 
-    bool operator==(const EnchInfo& o) const { return id == o.id; }
+    bool operator==(const EnchInfo &o) const { return id == o.id; }
+    bool operator<(const EnchInfo &o) const { return id.str() < o.id.str(); }
 
     struct Hash {
-        size_t operator()(const EnchInfo& info) const { return std::hash<NSID>()(info.id); }
+        size_t operator()(const EnchInfo &info) const { return std::hash<NSID>()(info.id); }
     };
 };
 

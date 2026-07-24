@@ -15,7 +15,7 @@ struct SolutionMetaData {
     std::chrono::system_clock::time_point created_at;
     std::chrono::milliseconds computation_time;
     AlgorithmMode mode = AlgorithmMode::direct;
-    size_t task_id = 0;
+    size_t task_id     = 0;
 };
 
 struct Solution {
@@ -45,9 +45,8 @@ struct Solution {
     int32_t get_peak_exp_cost() const;
 
     static Solution make(
-        MCE platform, const EnchSet& original_ench, const Item& target_item,
-        const std::vector<Item>& available_items, const std::vector<EnchStep>& steps,
-        bool is_valid = true,
+        MCE platform, const EnchSet &original_ench, const Item &target_item,
+        const std::vector<Item> &available_items, const std::vector<EnchStep> &steps, bool is_valid = true,
         MetaData meta_data = MetaData{}
     );
 };

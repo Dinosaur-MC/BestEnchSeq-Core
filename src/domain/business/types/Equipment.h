@@ -10,12 +10,13 @@
 struct Equipment {
     NSID id;
     std::string name;
-    NSID category;           // was int32_t category_id
+    NSID category;
     int32_t max_durability;
 
-    bool operator==(const Equipment& o) const { return id == o.id; }
+    bool operator==(const Equipment &o) const { return id == o.id; }
+    bool operator<(const Equipment &o) const { return id.str() < o.id.str(); }
 };
 
 template <> struct std::hash<Equipment> {
-    size_t operator()(const Equipment& eq) const noexcept { return std::hash<NSID>()(eq.id); }
+    size_t operator()(const Equipment &eq) const noexcept { return std::hash<NSID>()(eq.id); }
 };
