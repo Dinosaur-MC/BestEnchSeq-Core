@@ -6,6 +6,7 @@
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
+#include "domain/business/types/Profile.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/registries/EquipmentTagRegistry.h"
@@ -76,6 +77,14 @@ const Json& operator>>(const Json& json, EquipmentRegistry& reg);
 // ── EquipmentTagRegistry ──
 Json& operator<<(Json& json, const EquipmentTagRegistry& reg);
 const Json& operator>>(const Json& json, EquipmentTagRegistry& reg);
+
+// ── ProfileMetadata ──
+Json& operator<<(Json& json, const ProfileMetadata& meta);
+const Json& operator>>(const Json& json, ProfileMetadata& meta);
+
+// ── Profile ──
+Json& operator<<(Json& json, const Profile& profile);
+const Json& operator>>(const Json& json, Profile& profile);
 
 // ══════════════════════════════════════════════════════════════════════════
 // Serializer — utility methods (MCE helpers + string-level convenience)

@@ -107,11 +107,3 @@ private:
     EquipmentRegistry _eq;
     EquipmentTagRegistry _tags;
 };
-
-// ── Json streaming operators (under global ns, found via ADL on Json) ─
-
-Json& operator<<(Json& json, const ProfileMetadata& meta);
-const Json& operator>>(const Json& json, ProfileMetadata& meta);
-
-Json& operator<<(Json& json, const Profile& profile);
-const Json& operator>>(const Json& json, Profile& profile);

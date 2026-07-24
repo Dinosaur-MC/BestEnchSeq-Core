@@ -1,6 +1,8 @@
 #include "OutputFormatter.h"
 #include "domain/business/business.h"
 
+#include <chrono>
+
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -385,9 +387,11 @@ std::string OutputFormatter::format_json(
         // Metadata
         Json::Object meta;
         meta["algorithm_name"]   = Json(Json::String(sol.metadata.algorithm_name));
-        meta["algorithm_version"] = Json(Json::String(sol.metadata.algorithm_version));
-        meta["created_at"]       = Json(Json::Number(static_cast<int64_t>(sol.metadata.created_at.time_since_epoch().count())));
         meta["computation_time"] = Json(Json::Number(static_cast<int64_t>(sol.metadata.computation_time.count())));
+        meta["created_at"]       = Json(Json::Number(static_cast<int64_t>(
+                                     std::chrono::duration_cast<std::chrono::seconds>(
+                                         sol.metadata.created_at.time_since_epoch()).count())));
+        meta["version"]          = Json(Json::String(sol.metadata.algorithm_version));
         s["metadata"]            = Json(meta);
 
         sol_arr.push_back(Json(s));
