@@ -230,22 +230,21 @@ Item build_target(
     const EquipmentRegistry& eq_reg)
 {
     // Look up equipment (registry has built-in "minecraft:" fallback)
-    int32_t eq_id = eq_reg.get_id(NSID(spec.item_id));
-    if (eq_id < 0)
+    auto eq_it = eq_reg.find(NSID(spec.item_id));
+    if (eq_it == eq_reg.end())
         throw std::runtime_error("Unknown equipment: '" + spec.item_id + "'");
-    const Equipment& equip = eq_reg.get(eq_id);
+    const Equipment& equip = *eq_it;
 
     // Build enchantment set from inline specs
     EnchSet ench_set;
     for (const auto& s : spec.inline_enchants) {
         std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
-        int32_t id = ench_reg.get_id(NSID(key));
-        if (id < 0) {
-            id = ench_reg.get_id(NSID(s.id));  // bare fallback
-        }
-        if (id < 0)
+        auto ench_it = ench_reg.find(NSID(key));
+        if (ench_it == ench_reg.end())
+            ench_it = ench_reg.find(NSID(s.id));  // bare fallback
+        if (ench_it == ench_reg.end())
             throw std::runtime_error("Unknown enchantment: '" + key + "'");
-        ench_set.emplace(ench_reg.get(id).id, ench_reg.get(id).name, s.level);
+        ench_set.emplace(ench_it->id, ench_it->name, s.level);
     }
 
     return Item(equip.id, ench_set, 0);
@@ -258,13 +257,12 @@ EnchSet build_enchset(
     EnchSet result;
     for (const auto& s : specs) {
         std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
-        int32_t id = ench_reg.get_id(NSID(key));
-        if (id < 0) {
-            id = ench_reg.get_id(NSID(s.id));  // bare fallback
-        }
-        if (id < 0)
+        auto ench_it = ench_reg.find(NSID(key));
+        if (ench_it == ench_reg.end())
+            ench_it = ench_reg.find(NSID(s.id));  // bare fallback
+        if (ench_it == ench_reg.end())
             throw std::runtime_error("Unknown enchantment: '" + key + "'");
-        result.emplace(ench_reg.get(id).id, ench_reg.get(id).name, s.level);
+        result.emplace(ench_it->id, ench_it->name, s.level);
     }
     return result;
 }

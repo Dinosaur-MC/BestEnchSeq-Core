@@ -61,33 +61,31 @@ void ProfileSet::merge(const std::string& source, const std::string& dest) {
     Profile& dst = get(dest);
 
     // Enchantments: overwrite existing, add new
-    for (const auto& ench : src.ench_reg.get_instances()) {
+    for (const auto& ench : src.ench_reg.data()) {
         if (ench.id.str().empty()) continue;
-        if (dst.ench_reg.get_id(ench.id) >= 0) {
-            dst.ench_reg.modify(ench.id.str(), ench);
+        auto idx = dst.ench_reg.index(ench.id);
+        if (idx != IRegistry<EnchInfo>::nops) {
+            dst.ench_reg.update(ench);  // overwrite
         } else {
-            dst.ench_reg.add(ench);
+            dst.ench_reg.insert(ench);
         }
     }
 
     // Equipment: add if not already present
-    for (const auto& eq : src.eq_reg.get_instances()) {
+    for (const auto& eq : src.eq_reg.data()) {
         if (eq.id.str().empty()) continue;
-        if (dst.eq_reg.get_id(eq.id) < 0) {
-            dst.eq_reg.add(eq);
+        if (dst.eq_reg.index(eq.id) == IRegistry<Equipment>::nops) {
+            dst.eq_reg.insert(eq);
         }
     }
 
-    // Categories: ensure present (skip dynamic add — EquipmentTagRegistry uses initialize())
+    // Categories: ensure present
     for (size_t i = 0; i < src.cat_reg.size(); ++i) {
         const auto& cat = src.cat_reg.at(i);
         if (cat.name.empty()) continue;
-        if (!dst.cat_reg.contains(cat.name)) {
-            std::vector<std::string> existing;
-            for (size_t j = 0; j < dst.cat_reg.size(); ++j)
-                existing.push_back(dst.cat_reg.at(j).name);
-            existing.push_back(cat.name);
-            dst.cat_reg.initialize(existing);
+        NSID cat_nsid("#minecraft:" + cat.name);
+        if (dst.cat_reg.index(cat_nsid) == IRegistry<EquipmentTag>::nops) {
+            dst.cat_reg.insert({cat_nsid, cat.name});
         }
     }
 }

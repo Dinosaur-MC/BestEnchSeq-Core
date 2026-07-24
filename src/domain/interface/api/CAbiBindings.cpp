@@ -161,10 +161,9 @@ static EnchSet parse_ench_set(const Json::Array& arr,
         int32_t lvl     = ParserUtils::get_json_int(eo, "level");
         if (lvl < 1) lvl = 1;
 
-        int32_t idx = ench_reg.get_id(NSID(eid));
-        if (idx >= 0) {
-            const auto& ench = ench_reg.get(idx);
-            result.emplace(ench.id, ench.name, lvl);
+        auto ench_it = ench_reg.find(NSID(eid));
+        if (ench_it != ench_reg.end()) {
+            result.emplace(ench_it->id, ench_it->name, lvl);
         }
     }
     return result;
@@ -373,11 +372,10 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
             std::string eq_id = ParserUtils::get_json_string(target_obj, "equipment");
             if (!eq_id.empty()) {
                 const auto& eq_reg = c->impl.equipment();
-                int32_t eq_idx = eq_reg.get_id(NSID(eq_id));
-                if (eq_idx >= 0) {
-                    const auto& equip = eq_reg.get(eq_idx);
+                auto eq_it = eq_reg.find(NSID(eq_id));
+                if (eq_it != eq_reg.end()) {
                     input.target_item =
-                        Item(equip.id, EnchSet{}, 0, equip.max_durability);
+                        Item(eq_it->id, EnchSet{}, 0, eq_it->max_durability);
                 }
             }
 

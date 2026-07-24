@@ -43,13 +43,14 @@ void apply_registry_edits(
 
         if (action == "add") {
             if (target == "cat") {
-                if (!cat_reg.contains(id))
-                    cat_reg.initialize({id});
+                NSID cat_nsid("#minecraft:" + id);
+                if (!cat_reg.contains(cat_nsid))
+                    cat_reg.insert({cat_nsid, id});
                 continue;
             }
 
             if (target == "eq") {
-                eq_reg.add(Equipment{NSID(id), id, NSID(), 0});
+                eq_reg.insert(Equipment{NSID(id), id, NSID(), 0});
                 continue;
             }
 
@@ -78,7 +79,7 @@ void apply_registry_edits(
                         is_treasure = (v == "true");
                 }
                 EnchInfo info{NSID(id), id, MCE::All, max_level, limited_level, multiplier, is_treasure, {}, {}};
-                ench_reg.add(info);
+                ench_reg.insert(info);
                 continue;
             }
 
@@ -111,7 +112,16 @@ void apply_registry_edits(
                         );
                     }
                 }
-                ench_reg.modify(NSID(id), patch);
+                {
+                    auto current = ench_reg.get(NSID(id));
+                    if (patch.multiplier > 0)
+                        current.multiplier = patch.multiplier;
+                    if (patch.max_level > 0)
+                        current.max_level = patch.max_level;
+                    if (patch.limited_level >= 0)
+                        current.limited_level = patch.limited_level;
+                    ench_reg.update(current);
+                }
                 continue;
             }
 
