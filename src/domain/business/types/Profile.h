@@ -100,6 +100,7 @@ public:
 private:
     friend class ProfileManager;
     friend class RegistryManager;
+    friend class ProfileLoader;
 
     ProfileMetadata _meta;
     EnchantmentRegistry _ench;
