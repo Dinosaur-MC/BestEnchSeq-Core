@@ -15,6 +15,8 @@ public:
     EquipmentRegistry(const std::vector<Equipment>& eq_list);
     EquipmentRegistry(const EquipmentRegistry&) = default;
     EquipmentRegistry& operator=(const EquipmentRegistry&) = default;
+    EquipmentRegistry(EquipmentRegistry&&) = default;
+    EquipmentRegistry& operator=(EquipmentRegistry&&) = default;
 
     // ── Lookup ─────────────────────────────────────────────────────────
 

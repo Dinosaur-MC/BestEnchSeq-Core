@@ -65,6 +65,54 @@ EnchantmentRegistry::insert(const EnchInfo& item) {
     return {iterator(it), inserted};
 }
 
+std::pair<EnchantmentRegistry::iterator, bool>
+EnchantmentRegistry::insert_or_assign(const EnchInfo& item) {
+    auto it = _data.find(item.id);
+    if (it == _data.end()) {
+        // New insertion — build incompatibility entries
+        auto [new_it, inserted] = _data.emplace(item.id, item);
+        for (const auto& excl : item.exclusive_set) {
+            incompatible_table_[item.id].insert(excl);
+            incompatible_table_[excl].insert(item.id);
+        }
+        return {iterator(new_it), true};
+    }
+
+    // Existing entry — rebuild incompatibility table only if exclusive_set changed
+    if (it->second.exclusive_set != item.exclusive_set) {
+        // Remove old entries for item.id from the table
+        incompatible_table_.erase(item.id);
+        for (auto& [_, excl_set] : incompatible_table_)
+            excl_set.erase(item.id);
+        // Add new entries based on item.exclusive_set
+        for (const auto& excl : item.exclusive_set) {
+            incompatible_table_[item.id].insert(excl);
+            incompatible_table_[excl].insert(item.id);
+        }
+    }
+
+    it->second = item;
+    return {iterator(it), false};
+}
+
+bool EnchantmentRegistry::update(const EnchInfo& entry) {
+    auto it = _data.find(entry.id);
+    if (it == _data.end())
+        return false;
+
+    // Rebuild incompatibility entries for this entry
+    incompatible_table_.erase(entry.id);
+    for (auto& [_, excl_set] : incompatible_table_)
+        excl_set.erase(entry.id);
+    for (const auto& excl : entry.exclusive_set) {
+        incompatible_table_[entry.id].insert(excl);
+        incompatible_table_[excl].insert(entry.id);
+    }
+
+    it->second = entry;
+    return true;
+}
+
 bool EnchantmentRegistry::erase(const NSID& id) {
     auto it = _data.find(id);
     if (it == _data.end())

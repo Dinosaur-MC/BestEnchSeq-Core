@@ -16,6 +16,10 @@ class EquipmentTagRegistry : public IRegistry<EquipmentTag> {
 public:
     EquipmentTagRegistry() = default;
     EquipmentTagRegistry(const std::vector<EquipmentTag>& tags);
+    EquipmentTagRegistry(const EquipmentTagRegistry&) = default;
+    EquipmentTagRegistry& operator=(const EquipmentTagRegistry&) = default;
+    EquipmentTagRegistry(EquipmentTagRegistry&&) = default;
+    EquipmentTagRegistry& operator=(EquipmentTagRegistry&&) = default;
 
     /// Convenience: get a tag by its short name.
     /// Equivalent to at(NSID("#minecraft:" + name)).

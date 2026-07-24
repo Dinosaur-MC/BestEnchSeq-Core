@@ -10,6 +10,10 @@ class EnchantmentRegistry : public IRegistry<EnchInfo> {
   public:
     EnchantmentRegistry() = default;
     EnchantmentRegistry(const std::vector<EnchInfo>& infos);
+    EnchantmentRegistry(const EnchantmentRegistry&) = default;
+    EnchantmentRegistry& operator=(const EnchantmentRegistry&) = default;
+    EnchantmentRegistry(EnchantmentRegistry&&) = default;
+    EnchantmentRegistry& operator=(EnchantmentRegistry&&) = default;
 
     // Incompatibility table
     const std::unordered_set<NSID>& get_exclusive_set(const NSID& e) const;
@@ -20,7 +24,9 @@ class EnchantmentRegistry : public IRegistry<EnchInfo> {
 
     // ── IRegistry overrides ────────────────────────────────────────────
     std::pair<iterator, bool> insert(const EnchInfo& item) override;
+    std::pair<iterator, bool> insert_or_assign(const EnchInfo& item) override;
     bool erase(const NSID& id) override;
+    bool update(const EnchInfo& entry) override;
     void clear() noexcept override;
 
   private:

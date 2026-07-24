@@ -32,6 +32,11 @@ concept IRegistryEntry = std::copyable<T> &&              // 可复制
 template <IRegistryEntry T> class IRegistry {
   public:
     virtual ~IRegistry() = default;
+    IRegistry() = default;
+    IRegistry(const IRegistry&) = default;
+    IRegistry& operator=(const IRegistry&) = default;
+    IRegistry(IRegistry&&) = default;
+    IRegistry& operator=(IRegistry&&) = default;
 
     // -- STL compatible type aliases -------------------------------------------
     using key_type       = NSID;
