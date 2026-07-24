@@ -7,14 +7,11 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 // REMOVED: RegistryAccess.h — create local registries instead
 #include "domain/business/registries/EquipmentTagRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include "builtin/DataLoader.h"
 #include "framework/test_utils.h"
-
-static EnchantmentRegistry test_ench_reg;
-static EquipmentTagRegistry test_cat_reg;
 
 #include "domain/orchestration/components/CompactAdapter.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
@@ -68,16 +65,12 @@ void check_json_solutions(const std::string &json_str, size_t expected_count) {
 // Full pipeline: direct mode with builtin data
 // ---------------------------------------------------------------------------
 void test_full_pipeline_direct() {
-    test_cat_reg.initialize();
-
+    EquipmentTagRegistry cat_reg;
+    EnchantmentRegistry ench_reg;
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    test_ench_reg.initialize(ench_infos);
-
-    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
-    eq_reg.initialize(equipments);
+    RawTypeAdapter::resolve(raw_ench, raw_eq, cat_reg, eq_reg, ench_reg);
 
     // Use inline target syntax: diamond_sword[sharpness=5,knockback=2]
     const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=5,knockback=2]"};
@@ -85,12 +78,12 @@ void test_full_pipeline_direct() {
 
     // Build domain input from CLI spec
     auto target_spec = ItemParser::parse(config.target);
-    Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    Item target_item = build_target(target_spec, ench_reg, eq_reg);
 
     EnchSet source_ench;  // no --source flag
-    EnchSet target_ench = build_enchset(target_spec.inline_enchants, test_ench_reg);
+    EnchSet target_ench = build_enchset(target_spec.inline_enchants, ench_reg);
 
-    auto resolved = ItemResolver::resolve(target_item, source_ench, target_ench, test_ench_reg);
+    auto resolved = ItemResolver::resolve(target_item, source_ench, target_ench, ench_reg);
 
     // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
     expect(resolved.available_items.size() == 7,
@@ -107,21 +100,18 @@ void test_full_pipeline_direct() {
 // Inventory mode pipeline
 // ---------------------------------------------------------------------------
 void test_full_pipeline_inventory() {
-    test_cat_reg.initialize();
+    EquipmentTagRegistry cat_reg;
+    EnchantmentRegistry ench_reg;
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    test_ench_reg.initialize(ench_infos);
-
-    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
-    eq_reg.initialize(equipments);
+    RawTypeAdapter::resolve(raw_ench, raw_eq, cat_reg, eq_reg, ench_reg);
 
     // Build target with inline syntax
     TargetSpec target_spec;
     target_spec.item_id = "diamond_sword";
     target_spec.inline_enchants.push_back({"minecraft", "sharpness", 5});
-    Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    Item target_item = build_target(target_spec, ench_reg, eq_reg);
 
     // Build available items to simulate inventory
     ItemCollection available_items;
@@ -152,16 +142,15 @@ void test_full_pipeline_inventory() {
 // Enchantment lookup from builtin data
 // ---------------------------------------------------------------------------
 void test_builtin_enchantment_lookup() {
-    test_cat_reg.initialize();
-    auto [raw_ench, _] = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json");
-    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    test_ench_reg.initialize(ench_infos);
+    EquipmentTagRegistry cat_reg;
+    EnchantmentRegistry ench_reg;
+    EquipmentRegistry eq_reg;
+    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
 
-    expect(test_ench_reg.get_id(NSID("minecraft:sharpness")) >= 0, "builtin: sharpness found");
-    expect(test_ench_reg.get_id(NSID("nonexistent")) < 0, "builtin: nonexistent not found");
+    expect(ench_reg.index(NSID("minecraft:sharpness")) != IRegistry<EnchInfo>::nops, "builtin: sharpness found");
+    expect(ench_reg.index(NSID("nonexistent")) == IRegistry<EnchInfo>::nops, "builtin: nonexistent not found");
 
-    auto &sharpness = test_ench_reg.get(NSID("minecraft:sharpness"));
+    auto &sharpness = ench_reg.get(NSID("minecraft:sharpness"));
     expect(sharpness.id.str() == "minecraft:sharpness",
            "builtin: sharpness id is minecraft:sharpness");
     expect(sharpness.max_level == 5, "builtin: sharpness max_level is 5");
@@ -174,10 +163,12 @@ void test_builtin_enchantment_lookup() {
 // Equipment lookup from builtin data
 // ---------------------------------------------------------------------------
 void test_builtin_equipment_lookup() {
-    test_cat_reg.initialize();
-    auto [_, raw_eq] = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json");
-    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
+    EquipmentTagRegistry cat_reg;
+    EnchantmentRegistry ench_reg;
+    EquipmentRegistry eq_reg;
+    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
+
+    auto equipments = eq_reg.data();
 
     bool found_sword = false;
     bool found_netherite_helmet = false;
@@ -204,22 +195,21 @@ void test_builtin_equipment_lookup() {
 // Output formatting with empty solutions (no algorithm)
 // ---------------------------------------------------------------------------
 void test_output_formatting_empty() {
-    test_cat_reg.initialize();
-    auto [raw_ench, _] = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json");
-    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    test_ench_reg.initialize(ench_infos);
+    EquipmentTagRegistry cat_reg;
+    EnchantmentRegistry ench_reg;
+    EquipmentRegistry eq_reg;
+    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
 
     std::vector<Solution> empty_solutions;
 
-    auto verbose = OutputFormatter::format_verbose(empty_solutions, test_ench_reg, test_cat_reg, "direct");
+    auto verbose = OutputFormatter::format_verbose(empty_solutions, ench_reg, cat_reg, "direct");
     expect(verbose.empty(), "format_verbose: empty solutions produce empty output");
 
-    auto compact = OutputFormatter::format_compact(empty_solutions, test_ench_reg, test_cat_reg, "direct");
+    auto compact = OutputFormatter::format_compact(empty_solutions, ench_reg, cat_reg, "direct");
     expect(compact.find("MODE=direct") != std::string::npos,
            "format_compact: should contain MODE=direct");
 
-    auto json_str = OutputFormatter::format_json(empty_solutions, test_ench_reg, test_cat_reg, "direct");
+    auto json_str = OutputFormatter::format_json(empty_solutions, ench_reg, cat_reg, "direct");
     expect(json_str.find("\"solutions\"") != std::string::npos,
            "format_json: should contain solutions array");
     // Structured JSON validation
@@ -232,15 +222,12 @@ void test_output_formatting_empty() {
 // End-to-end: full pipeline (parse -> execute -> format)
 // ---------------------------------------------------------------------------
 void test_full_pipeline_execute() {
-    test_cat_reg.initialize();
+    EquipmentTagRegistry cat_reg;
+    EnchantmentRegistry ench_reg;
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    test_ench_reg.initialize(ench_infos);
-
-    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
     EquipmentRegistry eq_reg;
-    eq_reg.initialize(equipments);
+    RawTypeAdapter::resolve(raw_ench, raw_eq, cat_reg, eq_reg, ench_reg);
 
     // 1. Parse CLI using inline target syntax
     const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=3]"};
@@ -248,20 +235,20 @@ void test_full_pipeline_execute() {
 
     // 2. Build domain input
     auto target_spec = ItemParser::parse(config.target);
-    Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
+    Item target_item = build_target(target_spec, ench_reg, eq_reg);
     expect(!target_item.id.empty(),
            "execute: target should have equipment");
 
     EnchSet existing;    // equipment starts empty
-    EnchSet target_ench = build_enchset(target_spec.inline_enchants, test_ench_reg);
+    EnchSet target_ench = build_enchset(target_spec.inline_enchants, ench_reg);
 
     // Use ItemResolver to validate and generate graduated books
-    auto resolved = ItemResolver::resolve(target_item, existing, target_ench, test_ench_reg);
+    auto resolved = ItemResolver::resolve(target_item, existing, target_ench, ench_reg);
     expect(resolved.available_items.size() == 3,
            "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
 
     // 3. Build AlgorithmInput via CompactAdapter (new API)
-    AlgorithmInput algo_input = CompactAdapter::apply(resolved, test_ench_reg);
+    AlgorithmInput algo_input = CompactAdapter::apply(resolved, ench_reg);
     algo_input.config.platform = MCE::Java;
 
     expect(algo_input.target.size() == 1,
@@ -300,14 +287,14 @@ void test_full_pipeline_execute() {
 
     // 8. Format output in all 3 formats and verify content
     //    Verbose
-    auto verbose_text = OutputFormatter::format_verbose(solutions, test_ench_reg, test_cat_reg, "direct");
+    auto verbose_text = OutputFormatter::format_verbose(solutions, ench_reg, cat_reg, "direct");
     expect(!verbose_text.empty(),
            "execute: verbose output should not be empty");
     expect(verbose_text.find("sharpness") != std::string::npos,
            "execute: verbose output should contain 'sharpness'");
 
     //    Compact
-    auto compact_text = OutputFormatter::format_compact(solutions, test_ench_reg, test_cat_reg, "direct");
+    auto compact_text = OutputFormatter::format_compact(solutions, ench_reg, cat_reg, "direct");
     expect(!compact_text.empty(),
            "execute: compact output should not be empty");
     expect(compact_text.find("MODE=direct") != std::string::npos,
@@ -316,7 +303,7 @@ void test_full_pipeline_execute() {
            "execute: compact output should contain 'sharpness'");
 
     //    JSON
-    auto json_text = OutputFormatter::format_json(solutions, test_ench_reg, test_cat_reg, "direct");
+    auto json_text = OutputFormatter::format_json(solutions, ench_reg, cat_reg, "direct");
     expect(!json_text.empty(),
            "execute: JSON output should not be empty");
     expect(json_text.find("\"is_success\"") != std::string::npos,

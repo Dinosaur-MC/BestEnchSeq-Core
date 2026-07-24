@@ -32,16 +32,15 @@
 
 // ─── Registry initialization ─────────────────────────────────────────────
 
+static EnchantmentRegistry g_ench_reg;
+static EquipmentTagRegistry g_tag_reg;
+static EquipmentRegistry g_eq_reg;
+static bool g_loaded = false;
+
 static void ensure_registries_loaded() {
-    static bool loaded = false;
-    if (!loaded) {
-        registries::categories().initialize();
-        besq::data::load_builtin_data(
-            registries::categories(),
-            registries::enchants(),
-            registries::equipment()
-        );
-        loaded = true;
+    if (!g_loaded) {
+        besq::data::load_builtin_data(g_tag_reg, g_ench_reg, g_eq_reg);
+        g_loaded = true;
     }
 }
 
@@ -50,12 +49,12 @@ static void ensure_registries_loaded() {
 static AlgorithmInput create_boots_full_input() {
     ensure_registries_loaded();
 
-    auto& ench_reg = registries::enchants();
-    auto& eq_reg   = registries::equipment();
+    auto& ench_reg = g_ench_reg;
+    auto& eq_reg   = g_eq_reg;
 
-    int32_t eq_id = eq_reg.get_id("diamond_boots");
-    if (eq_id < 0) throw std::runtime_error("diamond_boots not found");
-    const Equipment& eq = eq_reg.get(eq_id);
+    size_t eq_id = eq_reg.index(NSID("minecraft:diamond_boots"));
+    if (eq_id == EquipmentRegistry::nops) throw std::runtime_error("diamond_boots not found");
+    const Equipment& eq = eq_reg.get(static_cast<int32_t>(eq_id));
 
     const char* wanted_names[] = {
         "protection", "feather_falling", "depth_strider",
@@ -66,8 +65,8 @@ static AlgorithmInput create_boots_full_input() {
 
     std::vector<algorithm::Item> books;
     for (size_t i = 0; i < NUM_WANTED; ++i) {
-        int32_t eid = ench_reg.get_id(wanted_names[i]);
-        if (eid < 0) continue;
+        size_t eid = ench_reg.index(NSID("minecraft:" + std::string(wanted_names[i])));
+        if (eid == EnchantmentRegistry::nops) continue;
         algorithm::Item book;
         book.type = algorithm::ItemType::Book;
         book.dur = 0;
@@ -89,9 +88,9 @@ static AlgorithmInput create_boots_full_input() {
         input.items.push_back(std::move(book));
 
     for (size_t i = 0; i < NUM_WANTED; ++i) {
-        int32_t eid = ench_reg.get_id(wanted_names[i]);
-        if (eid < 0) continue;
-        int16_t lid = static_cast<int16_t>(creg.to_local_id(eid));
+        size_t eid = ench_reg.index(NSID("minecraft:" + std::string(wanted_names[i])));
+        if (eid == EnchantmentRegistry::nops) continue;
+        int16_t lid = static_cast<int16_t>(creg.to_local_id(static_cast<int32_t>(eid)));
         if (lid >= 0)
             input.target.push_back({lid, static_cast<int16_t>(wanted_levels[i])});
     }

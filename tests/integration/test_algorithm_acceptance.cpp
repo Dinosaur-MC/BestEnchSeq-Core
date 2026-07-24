@@ -21,6 +21,7 @@
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "builtin/DataLoader.h"
 #include "io/json.h"
 #include "framework/test_utils.h"
 
@@ -32,8 +33,18 @@
 #include <stdexcept>
 #include <vector>
 
-static auto& test_ench_reg = registries::enchants();
-static auto& test_cat_reg  = registries::categories();
+static EnchantmentRegistry test_ench_reg;
+static EquipmentTagRegistry test_cat_reg;
+static EquipmentRegistry test_eq_reg;
+static bool test_registries_loaded = false;
+
+// Lazy-load registries on first access
+static void load_test_registries() {
+    if (!test_registries_loaded) {
+        besq::data::load_builtin_data(test_cat_reg, test_ench_reg, test_eq_reg);
+        test_registries_loaded = true;
+    }
+}
 
 static AlgorithmLoader& algo_loader() {
     static AlgorithmLoader loader;
@@ -47,13 +58,12 @@ static AlgorithmLoader& algo_loader() {
 // ---------------------------------------------------------------------------
 
 static void load_builtin_data(EquipmentRegistry& eq_reg) {
-    test_cat_reg.initialize();
+    load_test_registries();
+    // Rebuild equipment in the provided registry from raw data
     auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
         "data/builtin/vanilla.json");
-    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, test_cat_reg);
-    test_ench_reg.initialize(ench_infos);
     auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, test_cat_reg);
-    eq_reg.initialize(equipments);
+    eq_reg = EquipmentRegistry(std::move(equipments));
 }
 
 
@@ -312,17 +322,17 @@ void test_export_content() {
         expect(valid_eq.size() >= 10, "should have at least 10 equipment entries");
 
         // Verify known enchantment IDs resolve correctly
-        expect(test_ench_reg.get_id("minecraft:sharpness") >= 0,
+        expect(test_ench_reg.index(NSID("minecraft:sharpness")) != EnchantmentRegistry::nops,
                "sharpness should be in registry");
-        expect(test_ench_reg.get_id("minecraft:protection") >= 0,
+        expect(test_ench_reg.index(NSID("minecraft:protection")) != EnchantmentRegistry::nops,
                "protection should be in registry");
-        expect(test_ench_reg.get_id("minecraft:fortune") >= 0,
+        expect(test_ench_reg.index(NSID("minecraft:fortune")) != EnchantmentRegistry::nops,
                "fortune should be in registry");
 
         // Verify known equipment IDs resolve correctly
-        expect(eq_reg.get_id("minecraft:diamond_sword") >= 0,
+        expect(eq_reg.index(NSID("minecraft:diamond_sword")) != EquipmentRegistry::nops,
                "diamond_sword should be in equipment registry");
-        expect(eq_reg.get_id("minecraft:diamond_pickaxe") >= 0,
+        expect(eq_reg.index(NSID("minecraft:diamond_pickaxe")) != EquipmentRegistry::nops,
                "diamond_pickaxe should be in equipment registry");
 
         // Verify JSON serialization produces valid output

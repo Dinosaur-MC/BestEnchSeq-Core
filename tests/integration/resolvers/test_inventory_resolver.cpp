@@ -18,18 +18,20 @@ struct TestEnv {
     std::filesystem::path temp_dir;
 
     TestEnv() {
-        cat_reg.initialize();
+        cat_reg = EquipmentTagRegistry({
+            {EquipmentTag::sword(), "sword"},
+        });
 
-        eq_reg.initialize({Equipment{
-            "minecraft:diamond_sword", "Diamond Sword",
-            1, 1561
+        eq_reg = EquipmentRegistry({Equipment{
+            NSID("minecraft:diamond_sword"), "Diamond Sword",
+            EquipmentTag::sword(), 1561
         }});
 
         std::vector<EnchInfo> infos;
-        infos.push_back({"minecraft:sharpness", "Sharpness",
+        infos.push_back({NSID("minecraft:sharpness"), "Sharpness",
             MCE::All, 5, 5, 1, false, {},
-            {1}});
-        ench_reg.initialize(infos);
+            {EquipmentTag::sword()}});
+        ench_reg = EnchantmentRegistry(infos);
 
         temp_dir = std::filesystem::temp_directory_path() / "besq_test_inv";
         std::filesystem::create_directories(temp_dir);

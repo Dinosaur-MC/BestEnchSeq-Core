@@ -18,29 +18,31 @@ struct TestRegistries {
     EnchantmentRegistry ench_reg;
 
     TestRegistries() {
-        cat_reg.initialize();
+        cat_reg = EquipmentTagRegistry({
+            {EquipmentTag::sword(), "sword"},
+        });
 
-        eq_reg.initialize({Equipment{
-            "minecraft:diamond_sword", "Diamond Sword",
-            1, 1561
+        eq_reg = EquipmentRegistry({Equipment{
+            NSID("minecraft:diamond_sword"), "Diamond Sword",
+            EquipmentTag::sword(), 1561
         }});
 
         std::vector<EnchInfo> infos;
-        infos.push_back({"minecraft:sharpness", "Sharpness",
+        infos.push_back({NSID("minecraft:sharpness"), "Sharpness",
             MCE::All, 5, 5, 1, false, {},
-            {1}});
-        infos.push_back({"minecraft:knockback", "Knockback",
+            {EquipmentTag::sword()}});
+        infos.push_back({NSID("minecraft:knockback"), "Knockback",
             MCE::All, 2, 2, 2, false, {},
-            {1}});
-        infos.push_back({"minecraft:riptide", "Riptide",
+            {EquipmentTag::sword()}});
+        infos.push_back({NSID("minecraft:riptide"), "Riptide",
             MCE::All, 3, 3, 2, false,
-            {"minecraft:sharpness"},
-            {13}});
-        infos.push_back({"minecraft:smite", "Smite",
+            {NSID("minecraft:sharpness")},
+            {NSID("#minecraft:trident")}});
+        infos.push_back({NSID("minecraft:smite"), "Smite",
             MCE::All, 5, 5, 1, false,
-            {"minecraft:sharpness"},
-            {1}});
-        ench_reg.initialize(infos);
+            {NSID("minecraft:sharpness")},
+            {EquipmentTag::sword()}});
+        ench_reg = EnchantmentRegistry(infos);
     }
 };
 
@@ -49,7 +51,7 @@ void test_resolve_basic() {
     Item sword(regs.eq_reg.get("minecraft:diamond_sword"), {}, 0);
     EnchSet source;
     EnchSet target;
-    target.emplace(regs.ench_reg.get_id("sharpness"), 5);
+    target.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:sharpness"))), 5);
 
     auto result = ItemResolver::resolve(sword, source, target, regs.ench_reg);
     expect(result.target_item.equipment.has_value(), "equipment preserved");
@@ -63,7 +65,7 @@ void test_resolve_inapplicable_throws() {
     TestRegistries regs;
     Item sword(regs.eq_reg.get("minecraft:diamond_sword"), {}, 0);
     EnchSet target;
-    target.emplace(regs.ench_reg.get_id("riptide"), 1);
+    target.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:riptide"))), 1);
 
     bool threw = false;
     try {
@@ -80,8 +82,8 @@ void test_resolve_conflict_throws() {
     TestRegistries regs;
     Item sword(regs.eq_reg.get("minecraft:diamond_sword"), {}, 0);
     EnchSet target;
-    target.emplace(regs.ench_reg.get_id("sharpness"), 5);
-    target.emplace(regs.ench_reg.get_id("smite"), 5);
+    target.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:sharpness"))), 5);
+    target.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:smite"))), 5);
 
     bool threw = false;
     try {
@@ -98,10 +100,10 @@ void test_resolve_diff_and_books() {
     TestRegistries regs;
     Item sword(regs.eq_reg.get("minecraft:diamond_sword"), {}, 0);
     EnchSet source;
-    source.emplace(regs.ench_reg.get_id("sharpness"), 3);
+    source.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:sharpness"))), 3);
     EnchSet target;
-    target.emplace(regs.ench_reg.get_id("sharpness"), 5);
-    target.emplace(regs.ench_reg.get_id("knockback"), 2);
+    target.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:sharpness"))), 5);
+    target.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:knockback"))), 2);
 
     auto result = ItemResolver::resolve(sword, source, target, regs.ench_reg);
     expect(result.available_items.size() == 4,
@@ -114,9 +116,9 @@ void test_resolve_source_already_has_target() {
     TestRegistries regs;
     Item sword(regs.eq_reg.get("minecraft:diamond_sword"), {}, 0);
     EnchSet source;
-    source.emplace(regs.ench_reg.get_id("sharpness"), 5);
+    source.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:sharpness"))), 5);
     EnchSet target;
-    target.emplace(regs.ench_reg.get_id("sharpness"), 5);
+    target.emplace(static_cast<int32_t>(regs.ench_reg.index(NSID("minecraft:sharpness"))), 5);
 
     auto result = ItemResolver::resolve(sword, source, target, regs.ench_reg);
     expect(result.available_items.empty(), "no books needed when source already meets target");
