@@ -1,4 +1,5 @@
 #include "Enchantment.h"
+#include "common/utils/HashUtils.hpp"
 #include <algorithm>
 
 namespace algorithm {
@@ -62,6 +63,43 @@ void EnchSet::sort() {
     _hash_cache = 0;
     Ench *d     = reinterpret_cast<Ench *>(_buf);
     std::sort(d, d + _size, [](const Ench &a, const Ench &b) { return a.id < b.id; });
+}
+
+// ─── EnchSet: lazy hash, serialization ────────────────────────────────
+
+size_t EnchSet::hash() const noexcept {
+    if (_hash_cache == 0 && _size > 0) {
+        size_t h      = _size;
+        const Ench *d = reinterpret_cast<const Ench *>(_buf);
+        for (size_t i = 0; i < _size; ++i)
+            hash_combine(h, static_cast<size_t>(d[i].id) ^ (static_cast<size_t>(d[i].level) << 16));
+        _hash_cache = h;
+    }
+    return _hash_cache;
+}
+
+void EnchSet::serialize(ByteStreamWriter &w) const noexcept {
+    w << static_cast<uint64_t>(_size);
+    const Ench *d = reinterpret_cast<const Ench *>(_buf);
+    for (size_t i = 0; i < _size; ++i)
+        w << d[i];
+}
+
+void EnchSet::deserialize(ByteStreamReader &r) noexcept {
+    clear();
+    uint64_t n;
+    r >> n;
+    if (n > INLINE_N || !r.ok()) {
+        r.set_fail();
+        return;
+    }
+    Ench *d = reinterpret_cast<Ench *>(_buf);
+    for (uint64_t i = 0; i < n; ++i) {
+        r >> d[i];
+        if (!r.ok())
+            return;
+    }
+    _size = static_cast<uint8_t>(n);
 }
 
 } // namespace algorithm

@@ -16,12 +16,8 @@ struct Equipment : ISerializable {
 
     bool operator==(const Equipment &other) const;
 
-    void serialize(ByteStreamWriter &w) const noexcept override {
-        w << id << category_id << max_durability;
-    }
-    void deserialize(ByteStreamReader &r) noexcept override {
-        r >> id >> category_id >> max_durability;
-    }
+    void serialize(ByteStreamWriter &w) const noexcept override { w << id << category_id << max_durability; }
+    void deserialize(ByteStreamReader &r) noexcept override { r >> id >> category_id >> max_durability; }
 };
 
 } // namespace algorithm

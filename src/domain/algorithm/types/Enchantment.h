@@ -1,6 +1,5 @@
 #pragma once
 #include "common/io/ISerializable.h"
-#include "common/utils/HashUtils.hpp"
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -20,8 +19,7 @@ struct EnchInfo : ISerializable {
     [[nodiscard]] bool is_conflict(const EnchInfo &other) const noexcept;
 
     void serialize(ByteStreamWriter &w) const noexcept override {
-        w << mul << mul_b << max_lvl << exc_mask
-          << static_cast<uint8_t>(applicable);
+        w << mul << mul_b << max_lvl << exc_mask << static_cast<uint8_t>(applicable);
     }
     void deserialize(ByteStreamReader &r) noexcept override {
         uint8_t app;
@@ -39,12 +37,8 @@ struct Ench {
 
     bool operator==(const Ench &o) const noexcept { return id == o.id && level == o.level; }
 
-    void serialize(ByteStreamWriter &w) const noexcept {
-        w << id << level;
-    }
-    void deserialize(ByteStreamReader &r) noexcept {
-        r >> id >> level;
-    }
+    void serialize(ByteStreamWriter &w) const noexcept { w << id << level; }
+    void deserialize(ByteStreamReader &r) noexcept { r >> id >> level; }
 };
 static_assert(std::has_unique_object_representations_v<Ench>);
 
@@ -52,11 +46,11 @@ using EnchCollection = std::vector<Ench>;
 
 // ── Free-function streaming for Ench (non-virtual, small value type) ──
 
-inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const Ench& e) {
+inline ByteStreamWriter &operator<<(ByteStreamWriter &w, const Ench &e) {
     e.serialize(w);
     return w;
 }
-inline ByteStreamReader& operator>>(ByteStreamReader& r, Ench& e) {
+inline ByteStreamReader &operator>>(ByteStreamReader &r, Ench &e) {
     e.deserialize(r);
     return r;
 }
@@ -98,7 +92,7 @@ class EnchSet {
         if (this != &o) {
             _size = o._size;
             std::memcpy(_buf, o._buf, INLINE_BYTES);
-            o._size = 0;
+            o._size       = 0;
             o._hash_cache = 0;
         }
         return *this;
@@ -139,16 +133,7 @@ class EnchSet {
     //     inline buffer.  If you modify enchantments through them, you
     //     MUST call rehash() afterwards, otherwise hash() returns a
     //     stale value.  Prefer insert() / clear() / sort() when possible.
-    [[nodiscard]] size_t hash() const noexcept {
-        if (_hash_cache == 0 && _size > 0) {
-            size_t h      = _size;
-            const Ench *d = reinterpret_cast<const Ench *>(_buf);
-            for (size_t i = 0; i < _size; ++i)
-                hash_combine(h, static_cast<size_t>(d[i].id) ^ (static_cast<size_t>(d[i].level) << 16));
-            _hash_cache = h;
-        }
-        return _hash_cache;
-    }
+    [[nodiscard]] size_t hash() const noexcept;
 
     /// Force-recompute the hash cache.  Use after raw buffer modifications
     /// via mutable iterators when insert/clear/sort are not an option.
@@ -164,24 +149,8 @@ class EnchSet {
     bool operator!=(const EnchSet &o) const noexcept { return !(*this == o); }
 
     // ── Serialization (non-virtual; value-type) ──
-    void serialize(ByteStreamWriter &w) const noexcept {
-        w << static_cast<uint64_t>(_size);
-        const Ench *d = reinterpret_cast<const Ench *>(_buf);
-        for (size_t i = 0; i < _size; ++i)
-            w << d[i];
-    }
-    void deserialize(ByteStreamReader &r) noexcept {
-        clear();
-        uint64_t n;
-        r >> n;
-        if (n > INLINE_N || !r.ok()) { r.set_fail(); return; }
-        Ench *d = reinterpret_cast<Ench *>(_buf);
-        for (uint64_t i = 0; i < n; ++i) {
-            r >> d[i];
-            if (!r.ok()) return;
-        }
-        _size = static_cast<uint8_t>(n);
-    }
+    void serialize(ByteStreamWriter &w) const noexcept;
+    void deserialize(ByteStreamReader &r) noexcept;
 
   private:
     uint8_t _size{0};
@@ -191,11 +160,11 @@ class EnchSet {
 
 // ── Free-function streaming for EnchSet (ADL via algorithm namespace) ──
 
-inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const EnchSet& s) {
+inline ByteStreamWriter &operator<<(ByteStreamWriter &w, const EnchSet &s) {
     s.serialize(w);
     return w;
 }
-inline ByteStreamReader& operator>>(ByteStreamReader& r, EnchSet& s) {
+inline ByteStreamReader &operator>>(ByteStreamReader &r, EnchSet &s) {
     s.deserialize(r);
     return r;
 }

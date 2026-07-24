@@ -1,5 +1,6 @@
 #pragma once
 #include "Enchantment.h"
+#include "common/utils/HashUtils.hpp"
 
 namespace algorithm {
 enum class ItemType : uint8_t {
@@ -36,29 +37,32 @@ using ItemCollection = std::vector<Item>;
 
 // ── Free-function streaming for Item (non-virtual, ADL via algorithm ns) ──
 
-inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const Item& item) {
+inline ByteStreamWriter &operator<<(ByteStreamWriter &w, const Item &item) {
     item.serialize(w);
     return w;
 }
-inline ByteStreamReader& operator>>(ByteStreamReader& r, Item& item) {
+inline ByteStreamReader &operator>>(ByteStreamReader &r, Item &item) {
     item.deserialize(r);
     return r;
 }
 
 // ── vector<Item> streaming (ItemCollection) ──
 
-inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const ItemCollection& items) {
+inline ByteStreamWriter &operator<<(ByteStreamWriter &w, const ItemCollection &items) {
     w << items.size();
-    for (const auto& item : items)
+    for (const auto &item : items)
         w << item;
     return w;
 }
-inline ByteStreamReader& operator>>(ByteStreamReader& r, ItemCollection& items) {
+inline ByteStreamReader &operator>>(ByteStreamReader &r, ItemCollection &items) {
     size_t n{};
     r.read(n);
-    if (!r.ok()) { items.clear(); return r; }
+    if (!r.ok()) {
+        items.clear();
+        return r;
+    }
     items.resize(n);
-    for (auto& item : items)
+    for (auto &item : items)
         r >> item;
     return r;
 }

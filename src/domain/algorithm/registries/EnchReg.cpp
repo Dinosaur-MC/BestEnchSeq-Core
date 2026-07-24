@@ -33,4 +33,26 @@ int16_t EnchReg::to_local_id(NSID global_id) const {
     return -1;
 }
 
+// ── Serialization ──
+void EnchReg::serialize(ByteStreamWriter &w) const noexcept {
+    w << _ench_infos << _target_equip;
+    // Serialize _global_ids manually since NSID is not TrivialSerializable
+    w << _global_ids.size();
+    for (const auto &nsid : _global_ids)
+        w << nsid.str();
+}
+void EnchReg::deserialize(ByteStreamReader &r) noexcept {
+    r >> _ench_infos >> _target_equip;
+    // Deserialize _global_ids manually
+    size_t n = 0;
+    r >> n;
+    _global_ids.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+        std::string s;
+        r >> s;
+        _global_ids[i] = NSID(s);
+    }
+    _build_conflict_matrix();
+}
+
 } // namespace algorithm
