@@ -471,43 +471,56 @@ minecraft:foot_armor  → ["minecraft:diamond_boots", "minecraft:iron_boots", ..
 
 ## 12. C++ 侧解析流程
 
-C++ 代码通过两个解析入口读取 `vanilla.json`：
+C++ 代码通过 `business/parsers/` 下的三个解析器读取 `vanilla.json`：
 
-### 魔咒解析 — `EnchInfoParser::parse_native_json()`
+### 原生 JSON 解析 — `NativeJsonParser`
+
+```
+FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
+```
 
 1. 读取 JSON → 提取 `enchantments` 数组
-2. 依次处理内联标签（`tags` 对象）
-3. 遍历每个魔咒条目，构造 `EnchInfo` 对象
-4. 字段映射：
+2. 调用 `process_inline_tags()` 处理 `tags` 对象（TagResolver 注册）
+3. 遍历每个魔咒条目，解析为 `EnchantmentData` DTO
+4. 提取 `equipments` 数组，解析为 `EquipmentData` DTO
+5. 字段映射（通过 `RegistryLoader::from_dto()` 转为业务类型）：
 
-| JSON 字段 | EnchInfo 字段 | 说明 |
-|-----------|--------------|------|
-| `id` | `name_id` | 唯一标识 |
-| `name` | `name` | 显示名称 |
-| `platform` | `supported_platform` | 平台 |
+| JSON 字段 | EnchantmentData → EnchInfo 字段 | 说明 |
+|-----------|--------------------------------|------|
+| `id` | `id` (string → NSID) | 唯一标识 |
+| `name` | `display_name` → `name` | 显示名称 |
 | `max_level` | `max_level` | 最大等级 |
 | `limited_level` | `limited_level` | 0 或缺失时 = max_level |
 | `multiplier` | `multiplier` | 费用倍率 |
-| `exclusive_set` | `exclusive_set` | 冲突魔咒集合 |
-| `applicable_equipment` | `applicable_equipment` | EquipmentCategory 集合 |
+| `exclusive_set` | `exclusive_with` (string[]) → `exclusive_set` | 冲突魔咒集合 |
+| `applicable_equipment` | `applicable_to` (string[]) → `applicable_equipments` | 适用装备类别 |
 
-### 装备解析 — `EquipmentParser::parse_native_json()`
+### 装备解析
 
-1. 读取 JSON → 提取 `equipments` 数组
-2. 遍历每个装备条目
-3. 字段映射：
+由 `NativeJsonParser::parse_equipments_json()` 处理：
 
-| JSON 字段 | Equipment 字段 |
-|-----------|-------------------|
-| `id` | `id` |
-| `name` | `name` |
-| `category` | `category` (EquipmentCategory) |
+| JSON 字段 | EquipmentData → Equipment 字段 |
+|-----------|-------------------------------|
+| `id` | `id` (string → NSID) |
+| `name` | `display_name` → `name` |
+| `category` | `category` (string) → `category` (通过 TagRegistry 解析为 NSID) |
 | `max_durability` | `max_durability` |
+
+### CSV 解析 — `NativeCsvParser`
+
+调用 `FormatDetector::parse(path)` 自动识别 `.csv` 扩展名，由 `NativeCsvParser::parse_file()` 处理。
+CSV 格式仅支持魔咒数据，不支持装备。
+
+### MC 官方格式解析 — `McOfficialParser`
+
+调用 `FormatDetector::parse(dir)` 自动识别 `data/<ns>/enchantment/` 目录结构，由 `McOfficialParser::parse()` 处理。
+遍历 `data/<ns>/enchantment/<id>.json` 文件，使用 `TagResolver` 展开 `#` 标签引用，并从 `tags/item/` 标签文件推导装备列表。
 
 ### 内联标签处理
 
-`process_inline_tags()` 从 JSON 的 `tags` 对象读取标签定义，
-通过 `TagResolver.add_tag()` 注册到全局标签解析器中，在后续 `#` 引用展开时使用。
+`NativeJsonParser` 内部的 `process_inline_tags()` 从 JSON 的 `tags` 对象读取标签定义，
+通过 `TagResolver::add_tag()` 注册标签解析器，在后续 `#` 引用展开时使用。
+支持递归引用和循环检测。
 
 ---
 

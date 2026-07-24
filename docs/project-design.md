@@ -1,6 +1,6 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：1.2 · 最后更新：2026-07-24
+> 版本：1.3 · 最后更新：2026-07-25
 
 ---
 
@@ -128,31 +128,33 @@ struct ForgeConfig {
 
 ### 数据加载管线
 
-数据加载由 `RegistryManager` 统一管理，替换了原先的 `load_all_data()`：
+数据加载以 **Profile** 为单位，由 `ProfileLoader` + `RegistryLoader` 统一管理：
 
 ```
-内建数据 (embedded vanilla.json, name="Vanilla")
+外部文件/目录
      │
-     ├── --registry-dir <dir> 扫描目录下的合法 registry 文件
-     │       (auto-detects JSON / CSV / MC Official format)
-     │
-     ├── --registries 筛选
-     │     ├── 未设置 → 加载全部，失败 WARN+SKIP
-     │     └── 已设置 → 只加载匹配 registry，全部必须成功
+     ├── FormatDetector::parse() 自动检测格式
+     │     ├── NativeJson  (vanilla.json)
+     │     ├── NativeCsv   (CSV 格式)
+     │     └── McOfficial  (MC data-driven 格式)
      │
      ▼
-RawEnchantment[] + RawEquipment[] 合并流
+EnchantmentData[] + EquipmentData[]  DTO 流
      │
      ▼
-RawTypeAdapter::resolve()
+RegistryLoader::from_dto()
      │
-     ├── EquipmentTagRegistry
-     ├── EquipmentRegistry
-     └── EnchantmentRegistry
+     ├── EquipmentTagRegistry   (category string → NSID)
+     ├── EquipmentRegistry      (category NSID resolved)
+     └── EnchantmentRegistry    (exclusive/applicable resolved)
+     │
+     ▼
+Profile (ench() + eq() + tags() 三元组)
 ```
 
-`--data-pack` 已删除，功能合并到 `--registry-dir`（`EnchInfoParser::parse()` 自动识别格式）。
-`--registries` 支持名称匹配和文件/目录路径两种指定方式。
+内置数据通过 `ProfileLoader::load_builtin()` 加载，委托 `builtin/` 层读取嵌入的 vanilla.json。
+`--registry-dir` / `--registries` CLI 选项调用 `FormatDetector` 自动识别格式（JSON / CSV / MC Official）。
+数据源筛选（`--registries`）支持名称匹配和文件/目录路径两种指定方式。
 
 ### 注册表体系
 
@@ -239,14 +241,27 @@ Algorithm domain (src/domain/algorithm/registries/):
 - N×N 扁平冲突矩阵（`vector<char>`）
 - 预计算 `CompactEnchInfo[]`（multiplier、max_level、applicable、exc_mask）
 
-### `src/domain/business/registries/`（业务注册表）
-**RegistryManager**：注册表数据源管理，处理多 registry 的发现、筛选、加载和解析。
-- `add_builtin()` — 注册内建 Vanilla 数据
-- `scan_registry_dir()` — 扫描目录发现所有合法 registry
-- `load_and_resolve()` — 根据筛选条件加载并解析到 domain registries
-- 无筛选时加载全部（WARN+SKIP），有筛选时严格模式（全部必须成功）
+### `src/domain/business/`（业务域）
 
-`EnchantmentRegistry` 提供完整的 NSID 注册表操作（名称查询、添加、修改、删除）。
+业务域是自包含的核心域，以 **Profile** 为操作的一等公民：
+
+```
+business/
+├── types/             值类型 + Profile + DTO
+├── registries/        纯数据容器（EnchantmentRegistry / EquipmentRegistry / EquipmentTagRegistry）
+├── parsers/           格式解析器（NativeJson / NativeCsv / McOfficial）
+├── loaders/           RegistryLoader（DTO↔Registry）+ ProfileLoader（Profile I/O）
+├── managers/          RegistryManager（筛选/集合运算）+ ProfileManager（生命周期/快照/分支）
+└── components/        Serializer + FormatDetector + TagResolver
+```
+
+**Profile** 是核心业务单元：
+- 所有正常业务操作以 Profile 为输入输出
+- 跨注册表操作通过 Profile 代理方法完成
+- 支持快照、分支、合并、集合运算（`| & + -` 运算符）
+
+**RegistryManager** 提供注册表级别操作：筛选、集合运算、diff、验证。
+**ProfileManager** 提供 Profile 生命周期管理：CRUD、激活、快照、分支、合并。
 
 ---
 
@@ -266,6 +281,11 @@ Algorithm domain (src/domain/algorithm/registries/):
 - `src/domain/algorithm/types/CompactedTypes.h/.cpp` — 紧凑类型
 - `src/domain/algorithm/registries/EnchReg.h/.cpp` — 紧凑注册表
 - `src/domain/business/registries/EnchantmentRegistry.h/.cpp` — 业务注册表
+- `src/domain/business/types/Profile.h/.cpp` — Profile 一等公民
+- `src/domain/business/loaders/ProfileLoader.h/.cpp` — Profile 加载/导出
+- `src/domain/business/managers/ProfileManager.h/.cpp` — Profile 生命周期管理
+- `src/domain/business/managers/RegistryManager.h/.cpp` — 注册表集合运算
+- `docs/domain_designs/business-domain-design.md` — 业务域详细设计
 - `src/domain/algorithm/AlgorithmExecutor.h/.cpp` — 执行引擎
 - `src/domain/algorithm/_strategies/` — 8 种算法策略
 - `docs/algorithm-design-discussion.md` — 算法设计详细探讨
