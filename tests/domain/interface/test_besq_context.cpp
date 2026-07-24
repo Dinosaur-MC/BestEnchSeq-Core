@@ -6,7 +6,7 @@
 
 #include "besq/besq.h"
 #include "besq/besq_abi.h"
-#include "domain/interface/api/SolvePipeline.h"
+#include "domain/interface/SolvePipeline.h"
 #include "domain/interface/parsers/EnchParser.h"
 #include "domain/interface/parsers/ItemParser.h"
 #include "domain/interface/cli/cli.h"

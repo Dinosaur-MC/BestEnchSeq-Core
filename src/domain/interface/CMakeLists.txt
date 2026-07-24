@@ -11,12 +11,15 @@ set(BESQ_INTERFACE_SRCS
     # ── CLI ──
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/cli.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/RegistryEditor.cpp
-    # ── Core solve pipeline ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/api/SolvePipeline.cpp
-    # ── API layer (uncommented for tests) ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/api/BesqContext.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/api/CAbiBindings.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/api/ProfileSet.cpp
+    # ── Components ──
+    ${CMAKE_CURRENT_SOURCE_DIR}/components/TagResolver.cpp
+    # ── Solve pipeline ──
+    ${CMAKE_CURRENT_SOURCE_DIR}/SolvePipeline.cpp
+    # ── API layer ──
+    ${CMAKE_CURRENT_SOURCE_DIR}/BesqContext.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ProfileSet.cpp
+    # ── ABI (C bindings) ──
+    ${CMAKE_CURRENT_SOURCE_DIR}/abi/CAbiBindings.cpp
 )
 
 add_library(besq-domain-interface STATIC ${BESQ_INTERFACE_SRCS})
@@ -28,7 +31,7 @@ target_link_libraries(besq-domain-interface PUBLIC
 )
 
 target_include_directories(besq-domain-interface PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/interface/api/SolvePipeline.h"
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/interface/SolvePipeline.h"
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>        # → #include "besq/besq.h"
     ${BESQ_GENERATED_DIR}                                  # → #include "BuildConfig.h"
 )

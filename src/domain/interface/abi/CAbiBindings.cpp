@@ -6,7 +6,7 @@
 
 #include "besq/besq_abi.h"
 #include "besq/besq.h"
-#include "SolvePipeline.h"
+#include "domain/interface/SolvePipeline.h"
 #include "common/io/json.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
