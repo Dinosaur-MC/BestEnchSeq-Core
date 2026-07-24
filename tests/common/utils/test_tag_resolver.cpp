@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "domain/interface/components/TagResolver.hpp"
+#include "domain/interface/components/TagResolver.h"
 #include "io/json.h"
 
 #include <iostream>

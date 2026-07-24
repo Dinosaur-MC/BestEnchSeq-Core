@@ -4,7 +4,7 @@
 #include "common/log/log.hpp"
 #include "domain/business/business.h"
 #include "domain/interface/parsers/EnchInfoParser.h"
-#include "domain/interface/parsers/ParserUtilsDomain.hpp"
+#include "domain/interface/components/ParserUtilsDomain.hpp"
 #include "domain/business/types/EnchInfo.h"
 
 #include <cstdint>

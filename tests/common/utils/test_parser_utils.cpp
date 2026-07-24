@@ -1,4 +1,4 @@
-#include "domain/interface/parsers/ParserUtilsDomain.hpp"
+#include "domain/interface/components/ParserUtilsDomain.hpp"
 #include "utils/ParserUtils.hpp"
 #include "io/CsvIO.h"
 #include "framework/test_utils.h"

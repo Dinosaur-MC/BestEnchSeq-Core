@@ -1,11 +1,11 @@
 #include "EnchInfoParser.h"
-#include "ParserUtilsDomain.hpp"
+#include "domain/interface/components/ParserUtilsDomain.hpp"
 #include "builtin/ItemProperties.h"
 #include "common/io/CsvIO.h"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 #include "common/utils/ParserUtils.hpp"
-#include "domain/interface/components/TagResolver.hpp"
+#include "domain/interface/components/TagResolver.h"
 
 #include <cctype>
 #include <cmath>
@@ -150,19 +150,12 @@ resolve_references(const std::vector<std::string> &items, TagResolver &tag_resol
 }
 
 // ---------------------------------------------------------------------------
-// Build a qualified Id from a bare or namespaced string
+// Build a qualified NSID from a bare or namespaced string
 // ---------------------------------------------------------------------------
-Id make_id(const std::string &id_str, const std::string &default_ns = "minecraft") {
-    Id id;
-    if (id_str.find(':') != std::string::npos) {
-        auto [ns, path] = ParserUtils::split_namespace(id_str);
-        id.ns           = ns;
-        id.path         = path;
-    } else {
-        id.ns   = default_ns;
-        id.path = id_str;
-    }
-    return id;
+NSID make_id(const std::string &id_str, const std::string &default_ns = "minecraft") {
+    if (id_str.find(':') != std::string::npos)
+        return NSID(id_str);
+    return NSID(default_ns, id_str);
 }
 
 // ---------------------------------------------------------------------------
