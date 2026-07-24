@@ -35,23 +35,12 @@ static void load_registry_dir(
     if (!fs::is_directory(dir))
         throw std::runtime_error("Not a directory: " + dir_path);
 
+    RegistryLoader loader;
+
     // MC Official structure (data/<ns>/enchantment/…): handle as one unit
     if (fs::is_directory(dir / "data")) {
-        auto [raw_ench, raw_eq] = EnchInfoParser::parse(dir_path);
-
-        for (const auto& eq : raw_eq) {
-            NSID cat_nsid("#minecraft:" + eq.category);
-            if (tag_reg.find(cat_nsid) == tag_reg.end())
-                tag_reg.insert({cat_nsid, eq.category});
-        }
-
-        auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
-        for (auto& info : ench_infos)
-            ench_reg.insert(info);
-
-        auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
-        for (auto& eq : equipments)
-            eq_reg.insert(eq);
+        auto [ench_data, eq_data] = FormatDetector::parse(dir_path);
+        loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
         return;
     }
 
@@ -59,21 +48,17 @@ static void load_registry_dir(
     for (const auto& entry : fs::directory_iterator(dir)) {
         if (!entry.is_regular_file()) continue;
         try {
-            auto [raw_ench, raw_eq] = EnchInfoParser::parse(entry.path());
+            auto [ench_data, eq_data] = FormatDetector::parse(entry.path());
 
-            for (const auto& eq : raw_eq) {
+            // Populate tag registry from equipment categories
+            for (const auto& eq : eq_data) {
                 NSID cat_nsid("#minecraft:" + eq.category);
                 if (tag_reg.find(cat_nsid) == tag_reg.end())
                     tag_reg.insert({cat_nsid, eq.category});
             }
 
-            auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
-            for (auto& info : ench_infos)
-                ench_reg.insert(info);
-
-            auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
-            for (auto& eq : equipments)
-                eq_reg.insert(eq);
+            loader.from_dto(ench_reg, tag_reg, ench_data);
+            loader.from_dto(eq_reg, tag_reg, eq_data);
         } catch (const std::exception& e) {
             LOG_DEBUG("Skipping non-registry entry '%s': %s",
                       entry.path().string().c_str(), e.what());
@@ -136,14 +121,13 @@ int main(int argc, char* argv[]) try {
         load_registry_dir(ench_reg, eq_reg, tag_reg, *config.registry_dir);
 
     if (config.registries) {
+        RegistryLoader loader;
         for (const auto& reg : ParserUtils::split_string(*config.registries, ',')) {
             if (reg.empty()) continue;
             if (std::filesystem::exists(reg)) {
-                auto [raw_ench, raw_eq] = EnchInfoParser::parse(reg);
-                auto infos = RawTypeAdapter::resolve_ench_info(raw_ench, tag_reg);
-                for (auto& info : infos) ench_reg.insert(info);
-                auto eqs = RawTypeAdapter::resolve_equipment(raw_eq, tag_reg);
-                for (auto& eq : eqs) eq_reg.insert(eq);
+                auto [ench_data, eq_data] = FormatDetector::parse(reg);
+                loader.from_dto(ench_reg, tag_reg, ench_data);
+                loader.from_dto(eq_reg, tag_reg, eq_data);
             }
         }
     }

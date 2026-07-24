@@ -3,7 +3,7 @@
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 #include "domain/business/business.h"
-#include "domain/interface/parsers/EnchInfoParser.h"
+#include "domain/business/types/EnchantmentDataPack.h"
 #include "domain/interface/components/ParserUtilsDomain.hpp"
 #include "domain/business/types/EnchInfo.h"
 

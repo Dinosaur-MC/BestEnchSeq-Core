@@ -186,7 +186,6 @@ RegistryManager::DiffResult RegistryManager::diff(
     DiffResult result;
 
     auto diff_registries = [](const auto& reg_a, const auto& reg_b) {
-        using EntryType = typename std::decay_t<decltype(reg_a)>::value_type;
         std::vector<DiffEntry> entries;
 
         // Find additions and modifications

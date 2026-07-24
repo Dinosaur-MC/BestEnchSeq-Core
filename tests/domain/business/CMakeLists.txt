@@ -11,14 +11,6 @@ besq_test(test_registry_copy_move test_registry_copy_move.cpp)
 besq_test(test_registry_subset_bulk test_registry_subset_bulk.cpp)
 besq_test(test_registry_edge test_registry_edge.cpp)
 
-# RegistryManager test needs its dedicated source (not fully in besq-domain-business)
-add_executable(test_registry_manager
-    test_registry_manager.cpp
-    ${PROJECT_ROOT}/src/domain/business/registries/RegistryManager.cpp
-)
-target_include_directories(test_registry_manager PRIVATE ${TEST_INCLUDE} ${PROJECT_ROOT}/include)
-target_link_libraries(test_registry_manager PRIVATE besq-core)
-add_test(NAME test_registry_manager COMMAND test_registry_manager)
-set_tests_properties(test_registry_manager PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_ROOT}
-)
+# Old RegistryManager test — superseded by new ProfileManager + RegistryLoader.
+# TODO: Create new tests for loaders/ and managers/
+# besq_test(test_registry_manager test_registry_manager.cpp)

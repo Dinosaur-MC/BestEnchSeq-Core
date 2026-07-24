@@ -8,24 +8,20 @@
 
 // ── Public API ──
 #include "domain/interface/SolvePipeline.h"   // IWYU pragma: export
-#include "domain/interface/ProfileSet.h"      // IWYU pragma: export
 
 // ── CLI Layer ──
 #include "domain/interface/cli/cli.h"             // IWYU pragma: export
 #include "domain/interface/cli/RegistryEditor.h"  // IWYU pragma: export
 
-// ── Parsers ──
+// ── CLI Parsers ──
 #include "domain/interface/parsers/CLIParser.h"           // IWYU pragma: export
-#include "domain/interface/parsers/EnchInfoParser.h"      // IWYU pragma: export
 #include "domain/interface/parsers/EnchParser.h"          // IWYU pragma: export
 #include "domain/interface/parsers/ItemParser.h"          // IWYU pragma: export
 
 // ── Interface Components ──
-#include "domain/interface/components/TagResolver.h"              // IWYU pragma: export
 #include "domain/interface/components/ParserUtilsDomain.hpp"      // IWYU pragma: export
 
-// ── Raw (Pre-Resolution) Types ──
-#include "domain/interface/types/RawTypes.h"      // IWYU pragma: export
+// ── CLI Spec Types ──
 #include "domain/interface/types/SpecTypes.h"     // IWYU pragma: export
 
 // ── File Format Detection ──

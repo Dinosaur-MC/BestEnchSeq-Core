@@ -1,9 +1,9 @@
 #include "besq/besq.h"
-#include "ProfileSet.h"
-#include "SolvePipeline.h"
-#include "domain/interface/parsers/EnchInfoParser.h"
+#include "domain/business/managers/ProfileManager.h"
+#include "domain/business/loaders/ProfileLoader.h"
+#include "domain/business/loaders/RegistryLoader.h"
+#include "domain/business/components/FormatDetector.h"
 #include "domain/orchestration/components/EnchSerializer.h"
-#include "domain/orchestration/components/RawTypeAdapter.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 
 #include <filesystem>
@@ -14,7 +14,8 @@
 // pImpl definition
 // ====================================================================
 struct BesqContext::Impl {
-    ProfileSet profiles;
+    ProfileManager profiles;
+    ProfileLoader loader;
     algorithm::AlgorithmLoader algo_loader;
 };
 
@@ -25,8 +26,6 @@ struct BesqContext::Impl {
 BesqContext::BesqContext()
     : _impl(std::make_unique<Impl>())
 {
-    // Register all compiled-in strategies so they are immediately
-    // available via solve() / list_algorithms().
     _impl->algo_loader.load_builtin();
 }
 
@@ -40,30 +39,32 @@ BesqContext& BesqContext::operator=(BesqContext&&) noexcept = default;
 // ====================================================================
 
 void BesqContext::load_builtin() {
-    _impl->profiles.load_builtin();
+    if (!_impl->profiles.exists(NSID("builtin:vanilla"))) {
+        _impl->loader.load_builtin(
+            _impl->profiles.create(NSID("builtin:vanilla"))
+        );
+        _impl->profiles.activate(NSID("builtin:vanilla"));
+    }
 }
 
 void BesqContext::load_file(const std::string& path) {
     auto& profile = _impl->profiles.active();
+    auto [ench_data, eq_data] = FormatDetector::parse(path);
 
-    // Parse the file (auto-detects JSON, CSV, or MC official format)
-    auto [raw_ench, raw_eq] = EnchInfoParser::parse(path);
+    // Build temporary registries then merge into profile
+    EquipmentTagRegistry tag_reg;
+    EquipmentRegistry eq_reg;
+    EnchantmentRegistry ench_reg;
+    RegistryLoader reg_loader;
+    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
 
-    // Resolve raw enchantments into domain EnchInfo objects
-    auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, profile.cat_reg);
-    for (auto& info : ench_infos) {
-        if (!profile.ench_reg.contains(info.id)) {
-            profile.ench_reg.insert(info);
-        }
-    }
-
-    // Resolve raw equipment into domain Equipment objects
-    auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, profile.cat_reg);
-    for (auto& eq : equipments) {
-        if (!profile.eq_reg.contains(eq.id)) {
-            profile.eq_reg.insert(eq);
-        }
-    }
+    // Merge into active profile via proxy methods
+    for (const auto& [nsid, tag] : tag_reg.data())
+        profile.add_tag(tag);
+    for (const auto& [nsid, eq] : eq_reg.data())
+        profile.add_equipment(eq);
+    for (const auto& [nsid, info] : ench_reg.data())
+        profile.add_enchantment(info);
 }
 
 void BesqContext::load_data(const std::vector<std::string>& filters) {
@@ -79,29 +80,36 @@ void BesqContext::load_data(const std::vector<std::string>& filters) {
 // ====================================================================
 
 const std::string& BesqContext::active_profile() const noexcept {
-    return _impl->profiles.active_name();
+    static std::string cached;
+    cached = _impl->profiles.active_name().str();
+    return cached;
 }
 
 std::vector<std::string> BesqContext::list_profiles() const {
-    return _impl->profiles.list();
+    auto nsids = _impl->profiles.list();
+    std::vector<std::string> names;
+    names.reserve(nsids.size());
+    for (const auto& nsid : nsids)
+        names.push_back(nsid.str());
+    return names;
 }
 
 void BesqContext::activate_profile(const std::string& name) {
-    _impl->profiles.activate(name);
+    _impl->profiles.activate(NSID(name));
 }
 
 void BesqContext::fork_profile(const std::string& source,
                                const std::string& dest) {
-    _impl->profiles.fork(source, dest);
+    _impl->profiles.branch(NSID(source), NSID(dest));
 }
 
 void BesqContext::merge_profile(const std::string& source,
                                 const std::string& dest) {
-    _impl->profiles.merge(source, dest);
+    _impl->profiles.merge(NSID(source), NSID(dest));
 }
 
 void BesqContext::remove_profile(const std::string& name) {
-    _impl->profiles.remove(name);
+    _impl->profiles.remove(NSID(name));
 }
 
 // ====================================================================
@@ -109,42 +117,41 @@ void BesqContext::remove_profile(const std::string& name) {
 // ====================================================================
 
 bool BesqContext::add_enchantment(const EnchInfo& info) {
-    return _impl->profiles.active().ench_reg.insert(info).second;
+    return _impl->profiles.active().add_enchantment(info);
 }
 
 bool BesqContext::remove_enchantment(const std::string& name_id) {
-    return _impl->profiles.active().ench_reg.erase(NSID(name_id));
+    return _impl->profiles.active().remove_enchantment(NSID(name_id));
 }
 
 bool BesqContext::modify_enchantment(const std::string& name_id,
                                      const EnchInfo& patch) {
-    auto& ench_reg = _impl->profiles.active().ench_reg;
+    auto& active = _impl->profiles.active();
     try {
-        auto current = ench_reg.at(NSID(name_id));
+        auto current = active.ench().at(NSID(name_id));
         if (patch.multiplier > 0)      current.multiplier = patch.multiplier;
         if (patch.max_level > 0)       current.max_level = patch.max_level;
         if (patch.limited_level >= 0)  current.limited_level = patch.limited_level;
-        return ench_reg.update(current);
+        return active.update_enchantment(current);
     } catch (const std::out_of_range&) {
         return false;
     }
 }
 
 bool BesqContext::add_equipment(const Equipment& eq) {
-    return _impl->profiles.active().eq_reg.insert(eq).second;
+    return _impl->profiles.active().add_equipment(eq);
 }
 
 bool BesqContext::remove_equipment(const std::string& name_id) {
-    return _impl->profiles.active().eq_reg.erase(NSID(name_id));
+    return _impl->profiles.active().remove_equipment(NSID(name_id));
 }
 
 bool BesqContext::add_category(const std::string& name) {
-    auto& tag_reg = _impl->profiles.active().cat_reg;
+    auto& active = _impl->profiles.active();
     NSID cat_nsid("#minecraft:" + name);
-    if (tag_reg.contains(cat_nsid))
+    if (active.tags().contains(cat_nsid))
         return false;
-    tag_reg.insert({cat_nsid, name});
-    return true;
+    return active.add_tag({cat_nsid, name});
 }
 
 // ====================================================================
@@ -152,15 +159,15 @@ bool BesqContext::add_category(const std::string& name) {
 // ====================================================================
 
 const EnchantmentRegistry& BesqContext::enchantments() const noexcept {
-    return _impl->profiles.active().ench_reg;
+    return _impl->profiles.active().ench();
 }
 
 const EquipmentRegistry& BesqContext::equipment() const noexcept {
-    return _impl->profiles.active().eq_reg;
+    return _impl->profiles.active().eq();
 }
 
 const EquipmentTagRegistry& BesqContext::categories() const noexcept {
-    return _impl->profiles.active().cat_reg;
+    return _impl->profiles.active().tags();
 }
 
 // ====================================================================
@@ -172,11 +179,11 @@ bool BesqContext::export_registry(const std::string& path) const {
     auto ext = std::filesystem::path(path).extension().string();
 
     if (ext == ".csv" || ext == ".CSV") {
-        return EnchSerializer::export_csv(path, profile.ench_reg,
-                                           profile.eq_reg, profile.cat_reg);
+        return EnchSerializer::export_csv(path, profile.ench(),
+                                           profile.eq(), profile.tags());
     }
-    return EnchSerializer::export_json(path, profile.ench_reg,
-                                        profile.eq_reg, profile.cat_reg);
+    return EnchSerializer::export_json(path, profile.ench(),
+                                        profile.eq(), profile.tags());
 }
 
 // ====================================================================
@@ -194,7 +201,7 @@ std::vector<std::string> BesqContext::list_algorithms() const {
 SolveResult BesqContext::solve(const SolveInput& input) {
     auto& profile = _impl->profiles.active();
     return detail::SolvePipeline::run(input, _impl->algo_loader,
-                                       profile.ench_reg,
-                                       profile.eq_reg,
-                                       profile.cat_reg);
+                                       profile.ench(),
+                                       profile.eq(),
+                                       profile.tags());
 }

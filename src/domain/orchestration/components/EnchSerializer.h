@@ -10,7 +10,7 @@
 
 class EquipmentTagRegistry;
 
-struct EnchantmentDataPack; // defined in parsers/EnchInfoParser.h
+#include "domain/business/types/EnchantmentDataPack.h"
 
 /// Serialization of domain EnchInfo / Equipment to JSON, CSV, or MC official
 /// data-driven format.  Requires an EquipmentTagRegistry for ID-to-name

@@ -3,21 +3,17 @@
 # Depends on besq-common + besq-domain-algorithm + besq-domain-business.
 
 set(BESQ_INTERFACE_SRCS
-    # ── Parsers ──
+    # ── CLI Parsers ──
     ${CMAKE_CURRENT_SOURCE_DIR}/parsers/CLIParser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/parsers/EnchInfoParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/parsers/EnchParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/parsers/ItemParser.cpp
     # ── CLI ──
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/cli.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/RegistryEditor.cpp
-    # ── Components ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/components/TagResolver.cpp
     # ── Solve pipeline ──
     ${CMAKE_CURRENT_SOURCE_DIR}/SolvePipeline.cpp
     # ── API layer ──
     ${CMAKE_CURRENT_SOURCE_DIR}/BesqContext.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ProfileSet.cpp
     # ── ABI (C bindings) ──
     ${CMAKE_CURRENT_SOURCE_DIR}/abi/CAbiBindings.cpp
 )
