@@ -57,9 +57,9 @@ Each solution represents one complete forge sequence.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `algorithm_name` | `string` | always | Name of the algorithm that produced this solution. |
+| `algorithm_version` | `string` | always | Algorithm version string. |
 | `computation_time` | `int64` | always | Wall-clock time in milliseconds spent searching. |
-| `created_at` | `int64` | always | Unix timestamp (seconds since epoch) when the solution was generated. |
-| `version` | `string` | always | Algorithm version string. |
+| `created_at` | `int64` | always | Timestamp when the solution was generated; precision follows the algorithm layer (typically nanoseconds since epoch). |
 
 ---
 
