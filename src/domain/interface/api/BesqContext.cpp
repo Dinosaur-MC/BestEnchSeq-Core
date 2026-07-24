@@ -52,7 +52,7 @@ void BesqContext::load_file(const std::string& path) {
     // Resolve raw enchantments into domain EnchInfo objects
     auto ench_infos = RawTypeAdapter::resolve_ench_info(raw_ench, profile.cat_reg);
     for (auto& info : ench_infos) {
-        if (profile.ench_reg.index(info.id) == IRegistry<EnchInfo>::nops) {
+        if (!profile.ench_reg.contains(info.id)) {
             profile.ench_reg.insert(info);
         }
     }
@@ -60,7 +60,7 @@ void BesqContext::load_file(const std::string& path) {
     // Resolve raw equipment into domain Equipment objects
     auto equipments = RawTypeAdapter::resolve_equipment(raw_eq, profile.cat_reg);
     for (auto& eq : equipments) {
-        if (profile.eq_reg.index(eq.id) == IRegistry<Equipment>::nops) {
+        if (!profile.eq_reg.contains(eq.id)) {
             profile.eq_reg.insert(eq);
         }
     }
@@ -109,18 +109,18 @@ void BesqContext::remove_profile(const std::string& name) {
 // ====================================================================
 
 bool BesqContext::add_enchantment(const EnchInfo& info) {
-    return _impl->profiles.active().ench_reg.insert(info);
+    return _impl->profiles.active().ench_reg.insert(info).second;
 }
 
 bool BesqContext::remove_enchantment(const std::string& name_id) {
-    return _impl->profiles.active().ench_reg.remove(NSID(name_id));
+    return _impl->profiles.active().ench_reg.erase(NSID(name_id));
 }
 
 bool BesqContext::modify_enchantment(const std::string& name_id,
                                      const EnchInfo& patch) {
     auto& ench_reg = _impl->profiles.active().ench_reg;
     try {
-        auto current = ench_reg.get(NSID(name_id));
+        auto current = ench_reg.at(NSID(name_id));
         if (patch.multiplier > 0)      current.multiplier = patch.multiplier;
         if (patch.max_level > 0)       current.max_level = patch.max_level;
         if (patch.limited_level >= 0)  current.limited_level = patch.limited_level;
@@ -131,21 +131,20 @@ bool BesqContext::modify_enchantment(const std::string& name_id,
 }
 
 bool BesqContext::add_equipment(const Equipment& eq) {
-    return _impl->profiles.active().eq_reg.insert(eq);
+    return _impl->profiles.active().eq_reg.insert(eq).second;
 }
 
 bool BesqContext::remove_equipment(const std::string& name_id) {
-    return _impl->profiles.active().eq_reg.remove(NSID(name_id));
+    return _impl->profiles.active().eq_reg.erase(NSID(name_id));
 }
 
-int32_t BesqContext::add_category(const std::string& name) {
+bool BesqContext::add_category(const std::string& name) {
     auto& tag_reg = _impl->profiles.active().cat_reg;
     NSID cat_nsid("#minecraft:" + name);
-    auto idx = tag_reg.index(cat_nsid);
-    if (idx != IRegistry<EquipmentTag>::nops)
-        return static_cast<int32_t>(idx);
+    if (tag_reg.contains(cat_nsid))
+        return false;
     tag_reg.insert({cat_nsid, name});
-    return static_cast<int32_t>(tag_reg.size() - 1);
+    return true;
 }
 
 // ====================================================================

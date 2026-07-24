@@ -31,11 +31,11 @@ void apply_registry_edits(
 
         if (action == "rm") {
             if (target == "ench") {
-                ench_reg.remove(NSID(id));
+                ench_reg.erase(NSID(id));
                 continue;
             }
             if (target == "eq") {
-                eq_reg.remove(NSID(id));
+                eq_reg.erase(NSID(id));
                 continue;
             }
             throw std::runtime_error("Unsupported: remove from '" + target + "'");
@@ -113,7 +113,7 @@ void apply_registry_edits(
                     }
                 }
                 {
-                    auto current = ench_reg.get(NSID(id));
+                    auto current = ench_reg.at(NSID(id));
                     if (patch.multiplier > 0)
                         current.multiplier = patch.multiplier;
                     if (patch.max_level > 0)

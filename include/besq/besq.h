@@ -53,7 +53,7 @@ public:
     bool modify_enchantment(const std::string& name_id, const EnchInfo& patch);
     bool add_equipment(const Equipment& eq);
     bool remove_equipment(const std::string& name_id);
-    int32_t add_category(const std::string& name);
+    bool add_category(const std::string& name);
 
     // ── Registry access (active profile, read-only) ──
     const EnchantmentRegistry& enchantments() const noexcept;
