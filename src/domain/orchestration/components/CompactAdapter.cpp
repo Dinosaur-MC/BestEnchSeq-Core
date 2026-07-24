@@ -24,7 +24,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     algo_equip.max_durability = target_eq.max_durability;
 
     // ── 2. Determine applicable enchantment IDs ────────────────────────
-    const auto& all_infos = global_registry.get_instances();
+    const auto& all_infos = global_registry.data();
 
     std::vector<algorithm::EnchInfo> algo_infos;
     std::vector<int32_t> applicable_global_ids;

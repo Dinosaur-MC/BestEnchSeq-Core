@@ -26,9 +26,10 @@ std::vector<EnchInfo> RawTypeAdapter::resolve_ench_info(
         std::unordered_set<NSID> applicable_eq;
         applicable_eq.reserve(r.applicable_items.size());
         for (const auto& item_str : r.applicable_items) {
-            int32_t cid = tag_reg.get_id(item_str);
-            if (cid >= 0)
-                applicable_eq.insert(tag_reg.at(cid).id);
+            auto nsid = NSID("#minecraft:" + item_str);
+            auto it = tag_reg.find(nsid);
+            if (it != tag_reg.end())
+                applicable_eq.insert(it->id);
         }
 
         // platform and is_treasure are dropped from RawEnchantment:
@@ -69,12 +70,13 @@ std::vector<Equipment> RawTypeAdapter::resolve_equipment(
     result.reserve(raw.size());
 
     for (const auto& r : raw) {
-        int32_t cid = tag_reg.get_id(r.category);
+        NSID cat_nsid("#minecraft:" + r.category);
+        auto cat_it = tag_reg.find(cat_nsid);
 
         result.emplace_back(Equipment{
             NSID(r.id.str()),
             r.display_name,
-            cid >= 0 ? tag_reg.at(cid).id : NSID(),
+            cat_it != tag_reg.end() ? cat_it->id : NSID(),
             r.max_durability
         });
     }
@@ -104,19 +106,23 @@ void RawTypeAdapter::resolve(
             if (seen.insert(eq.category).second)
                 custom_categories.push_back(eq.category);
         }
-        tag_reg.initialize(custom_categories);
+        tag_reg.clear();
+        for (const auto& name : custom_categories)
+            tag_reg.insert({NSID("#minecraft:" + name), name});
     }
 
     // -- Step 2: Build EquipmentRegistry -------------------------------------
     {
         auto eq_list = resolve_equipment(equipments, tag_reg);
-        eq_reg.initialize(std::move(eq_list));
+        for (auto& eq : eq_list)
+            eq_reg.insert(eq);
     }
 
     // -- Step 3: Build EnchantmentRegistry -----------------------------------
     {
         auto ench_infos = resolve_ench_info(enchants, tag_reg);
-        ench_reg.initialize(std::move(ench_infos));
+        EnchantmentRegistry reg(std::move(ench_infos));
+        ench_reg = std::move(reg);
     }
 }
 
@@ -132,7 +138,7 @@ void RawTypeAdapter::revert(
     std::vector<RawEquipment>& out_equipments)
 {
     // -- EnchantmentRegistry -> RawEnchantment[] ------------------------------
-    const auto& ench_infos = ench_reg.get_instances();
+    const auto& ench_infos = ench_reg.data();
     out_enchants.reserve(ench_infos.size());
     for (const auto& info : ench_infos) {
         Id id;
@@ -184,7 +190,7 @@ void RawTypeAdapter::revert(
     }
 
     // -- EquipmentRegistry -> RawEquipment[] ----------------------------------
-    const auto& eq_instances = eq_reg.get_instances();
+    const auto& eq_instances = eq_reg.data();
     out_equipments.reserve(eq_instances.size());
     for (const auto& eq : eq_instances) {
         Id id;

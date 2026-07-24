@@ -88,9 +88,9 @@ EnchSet enchset_from_json_array(const Json::Array &arr, const EnchantmentRegistr
         const Json::Object &obj = std::get<Json::Object>(elem_val);
         std::string eid = json_str(obj.at("id"));
         int32_t level   = json_int(obj.at("level"));
-        int32_t id      = ench_reg.get_id(NSID(eid));
-        if (id >= 0) {
-            result.emplace(NSID(eid), eid, level);
+        NSID ench_nsid(eid);
+        if (ench_reg.contains(ench_nsid)) {
+            result.emplace(std::move(ench_nsid), eid, level);
         }
     }
     return result;

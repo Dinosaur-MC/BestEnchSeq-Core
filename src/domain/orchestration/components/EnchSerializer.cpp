@@ -250,14 +250,14 @@ bool EnchSerializer::export_json(
     const EquipmentTagRegistry &cat_reg
 ) {
     // Filter out invalid (removed) entries
-    const auto &all_ench = ench_reg.get_instances();
+    const auto &all_ench = ench_reg.data();
     std::vector<EnchInfo> valid_ench;
     for (const auto &info : all_ench) {
         if (!info.id.empty())
             valid_ench.push_back(info);
     }
 
-    const auto &all_eq = eq_reg.get_instances();
+    const auto &all_eq = eq_reg.data();
     std::vector<Equipment> valid_eq;
     for (const auto &eq : all_eq) {
         if (!eq.id.empty())
@@ -301,14 +301,14 @@ bool EnchSerializer::export_csv(
     const EquipmentTagRegistry &cat_reg
 ) {
     // Filter out invalid entries
-    const auto &all_ench = ench_reg.get_instances();
+    const auto &all_ench = ench_reg.data();
     std::vector<EnchInfo> valid_ench;
     for (const auto &info : all_ench) {
         if (!info.id.empty())
             valid_ench.push_back(info);
     }
 
-    const auto &all_eq = eq_reg.get_instances();
+    const auto &all_eq = eq_reg.data();
     std::vector<Equipment> valid_eq;
     for (const auto &eq : all_eq) {
         if (!eq.id.empty())

@@ -267,7 +267,6 @@ Json& operator<<(Json& json, const Item& item) {
     }
     obj["prior_penalty"] = Json(Json::Number(item.prior_penalty));
     obj["durability"]    = Json(Json::Number(item.durability));
-    obj["priority"]      = Json(Json::Number(item.priority));
 
     json = Json(obj);
     return json;
@@ -281,7 +280,6 @@ const Json& operator>>(const Json& json, Item& item) {
     json_get(obj, "enchantments") >> item.enchantments;
     item.prior_penalty = json_int32(json_get(obj, "prior_penalty"));
     item.durability    = json_int32(json_get(obj, "durability"));
-    item.priority      = json_int32(json_get(obj, "priority"), 99);
 
     return json;
 }
@@ -437,7 +435,7 @@ const Json& operator>>(const Json& json, Solution& sol) {
 
 Json& operator<<(Json& json, const EnchantmentRegistry& reg) {
     Json::Array arr;
-    const auto& instances = reg.get_instances();
+    const auto& instances = reg.data();
     arr.reserve(instances.size());
     for (const auto& info : instances) {
         Json j;
@@ -459,7 +457,7 @@ const Json& operator>>(const Json& json, EnchantmentRegistry& reg) {
     }
 
     if (!infos.empty())
-        reg.initialize(infos);
+        reg = EnchantmentRegistry(infos);
     return json;
 }
 
@@ -469,7 +467,7 @@ const Json& operator>>(const Json& json, EnchantmentRegistry& reg) {
 
 Json& operator<<(Json& json, const EquipmentRegistry& reg) {
     Json::Array arr;
-    const auto& instances = reg.get_instances();
+    const auto& instances = reg.data();
     arr.reserve(instances.size());
     for (const auto& eq : instances) {
         Json j;
@@ -491,7 +489,7 @@ const Json& operator>>(const Json& json, EquipmentRegistry& reg) {
     }
 
     if (!eq_list.empty())
-        reg.initialize(eq_list);
+        reg = EquipmentRegistry(eq_list);
     return json;
 }
 
@@ -501,7 +499,7 @@ const Json& operator>>(const Json& json, EquipmentRegistry& reg) {
 
 Json& operator<<(Json& json, const EquipmentTagRegistry& reg) {
     Json::Array arr;
-    const auto& instances = reg.get_instances();
+    const auto& instances = reg.data();
     arr.reserve(instances.size());
     for (const auto& tag : instances) {
         Json j;
@@ -525,7 +523,15 @@ const Json& operator>>(const Json& json, EquipmentTagRegistry& reg) {
         }
     }
 
-    reg.initialize(names);
+    std::vector<EquipmentTag> tags;
+    tags.reserve(names.size());
+    for (const auto& name : names) {
+        EquipmentTag tag;
+        tag.id = NSID("#minecraft:" + name);
+        tag.name = name;
+        tags.push_back(std::move(tag));
+    }
+    reg = EquipmentTagRegistry(std::move(tags));
     return json;
 }
 
