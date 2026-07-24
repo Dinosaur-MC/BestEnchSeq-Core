@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/business/types/Item.h"
+#include "domain/interface/types/SpecTypes.h"
 #include <optional>
 #include <string>
 #include <vector>
@@ -29,17 +30,6 @@ struct CLIConfig {
     bool help            = false;
     bool list_algorithms = false; // --list-algorithms
     bool version         = false; // --version / -V
-};
-
-struct EnchantmentSpec {
-    std::string ns = "minecraft";
-    std::string id;
-    int level = 1;
-};
-
-struct TargetSpec {
-    std::string item_id;
-    std::vector<EnchantmentSpec> inline_enchants;
 };
 
 // ─── Forward declarations (registries included only in .cpp) ─────

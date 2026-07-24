@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "domain/interface/cli/cli.h"
+#include "domain/interface/types/SpecTypes.h"
 
 /// Parse enchantment spec strings from CLI input.
 ///
