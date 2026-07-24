@@ -1,16 +1,15 @@
 # ── Integration / cross-domain tests ────────────────────────────────
 #
-# NOTE: Complex integration tests are temporarily disabled during
-# domain restructuring.  They will be re-enabled once the API bindings
-# (BesqContext, SolvePipeline) and adapter layer are stabilized.
+# NOTE: Disabled until interface domain refactoring completes.
+# Integration tests depend on:
+#   - ItemResolver / InventoryResolver (interface → algorithm bridge)
+#   - CLI pipeline (parse → resolve → solve → format)
+#   - Algorithm executor with diagnostics
+#   - BesqContext / SolvePipeline API
 
-# Resolver tests (cross-domain: algorithm resolvers + business registries)
-# TODO: re-enable when ItemResolver/InventoryResolver APIs stabilize
+# TODO: re-enable when interface domain is fully refactored
 # besq_test(test_item_resolver resolvers/test_item_resolver.cpp)
 # besq_test(test_inventory_resolver resolvers/test_inventory_resolver.cpp)
-
-# Full integration tests
-# TODO: re-enable when algorithm executor/diagnostics APIs stabilize
 # besq_test(test_algorithm_executor test_algorithm_executor.cpp)
 # besq_test(test_checkpoint_roundtrip test_checkpoint_roundtrip.cpp)
 # besq_test_with_cli(test_integration test_integration.cpp)
