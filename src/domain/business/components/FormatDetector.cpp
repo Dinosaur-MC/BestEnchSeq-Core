@@ -23,7 +23,7 @@ DataFormat FormatDetector::detect(const std::filesystem::path& path) {
                     if (!sub_entry.is_directory()) continue;
                     std::string dirname = sub_entry.path().filename().string();
                     if (dirname == "enchantment" || dirname == "tags")
-                        return DataFormat::MCOfficial;
+                        return DataFormat::McOfficial;
                 }
             }
         }
@@ -33,23 +33,36 @@ DataFormat FormatDetector::detect(const std::filesystem::path& path) {
     std::string ext = path.extension().string();
     for (auto& c : ext)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (ext == ".json") return DataFormat::NativeJSON;
-    if (ext == ".csv")  return DataFormat::NativeCSV;
+    if (ext == ".json") return DataFormat::NativeJson;
+    if (ext == ".csv")  return DataFormat::NativeCsv;
+
+    // Unknown extension — return Unknown so parse() can attempt fallback
     return DataFormat::Unknown;
 }
 
 FormatDetector::Result FormatDetector::parse(const std::filesystem::path& path) {
     auto format = detect(path);
+
     switch (format) {
-    case DataFormat::NativeJSON: {
+    case DataFormat::NativeJson: {
         auto json = Json::parse(ParserUtils::read_file(path));
         return NativeJsonParser::parse(json);
     }
-    case DataFormat::NativeCSV:
+    case DataFormat::NativeCsv:
         return {NativeCsvParser::parse_file(path), {}};
-    case DataFormat::MCOfficial:
+    case DataFormat::McOfficial:
         return McOfficialParser::parse(path);
-    default:
-        throw std::runtime_error("Unknown or unsupported data format: " + path.string());
+    case DataFormat::Unknown:
+    case DataFormat::Auto:
+        // Fallback: attempt NativeJson parse
+        try {
+            auto content = ParserUtils::read_file(path);
+            return NativeJsonParser::parse_string(content);
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                "Cannot determine format and NativeJson fallback failed for: "
+                + path.string() + " — " + e.what());
+        }
     }
+    throw std::runtime_error("Unhandled format for: " + path.string());
 }

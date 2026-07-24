@@ -14,4 +14,8 @@ public:
     /// Parse from a CSV file.
     static std::vector<business::loader::EnchantmentData>
     parse_file(const std::filesystem::path& path);
+
+    /// Parse from a CSV string (in-memory content).
+    static std::vector<business::loader::EnchantmentData>
+    parse(const std::string& content);
 };
