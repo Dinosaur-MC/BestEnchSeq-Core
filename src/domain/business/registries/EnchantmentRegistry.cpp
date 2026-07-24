@@ -2,14 +2,12 @@
 
 EnchantmentRegistry::EnchantmentRegistry(const std::vector<EnchInfo>& infos) {
     _data.reserve(infos.size());
-    for (size_t i = 0; i < infos.size(); i++) {
-        auto& info = infos[i];
+    for (const auto& info : infos)
         _data.emplace(info.id, info);
-    }
-    for (size_t i = 0; i < infos.size(); i++) {
-        auto& info = infos[i];
-        for (auto& exclusive : info.exclusive_set) {
-            incompatible_table_[info.id].insert(exclusive);
+    // Build incompatibility table
+    for (const auto& [id, info] : _data) {
+        for (const auto& exclusive : info.exclusive_set) {
+            incompatible_table_[id].insert(exclusive);
             incompatible_table_[exclusive].insert(info.id);
         }
     }

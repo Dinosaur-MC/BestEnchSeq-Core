@@ -2,7 +2,6 @@
 #include "IRegistry.h"
 #include "domain/business/types/Equipment.h"
 
-#include <unordered_map>
 #include <vector>
 
 // ─── Equipment registry ───
@@ -19,9 +18,6 @@ public:
 
     // ── Lookup ─────────────────────────────────────────────────────────
 
-    /// Query by category.
-    std::vector<const Equipment*> get_by_category(const NSID& category) const;
-
-    /// Build an NSID → pointer map from current data.
-    std::unordered_map<NSID, const Equipment*> get_name_map() const;
+    /// Query by category. Returns copies of matching equipment.
+    std::vector<Equipment> get_by_category(const NSID& category) const;
 };

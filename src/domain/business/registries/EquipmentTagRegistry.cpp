@@ -1,8 +1,7 @@
 #include "EquipmentTagRegistry.h"
 #include <stdexcept>
 
-EquipmentTagRegistry::EquipmentTagRegistry(const std::vector<EquipmentTag>& tags)
-    : IRegistry<EquipmentTag>() {
+EquipmentTagRegistry::EquipmentTagRegistry(const std::vector<EquipmentTag>& tags) {
     _data.reserve(tags.size());
     for (const auto& tag : tags)
         _data.emplace(tag.id, tag);

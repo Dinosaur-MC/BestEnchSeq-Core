@@ -88,9 +88,9 @@ void test_get_by_category() {
     // Verify both swords are found
     bool found_diamond = false;
     bool found_iron = false;
-    for (const auto* s : swords) {
-        if (s->id.str() == "minecraft:diamond_sword") found_diamond = true;
-        if (s->id.str() == "minecraft:iron_sword") found_iron = true;
+    for (const auto& s : swords) {
+        if (s.id.str() == "minecraft:diamond_sword") found_diamond = true;
+        if (s.id.str() == "minecraft:iron_sword") found_iron = true;
     }
     expect(found_diamond, "diamond_sword found in swords");
     expect(found_iron, "iron_sword found in swords");
@@ -98,7 +98,7 @@ void test_get_by_category() {
     // Query for pickaxes (category EquipmentTag::pickaxe())
     auto pickaxes = reg.get_by_category(EquipmentTag::pickaxe());
     expect(pickaxes.size() == 1, "should find 1 pickaxe");
-    expect(pickaxes[0]->id.str() == "minecraft:diamond_pickaxe", "pickaxe is diamond_pickaxe");
+    expect(pickaxes[0].id.str() == "minecraft:diamond_pickaxe", "pickaxe is diamond_pickaxe");
 
     // Query for non-existent category returns empty
     auto empty = reg.get_by_category(NSID("minecraft:non_existent_category"));
@@ -108,31 +108,26 @@ void test_get_by_category() {
 }
 
 // ---------------------------------------------------------------------------
-// test_get_name_map
+// test_data_access
 // ---------------------------------------------------------------------------
-void test_get_name_map() {
+void test_data_access() {
     auto eqs = make_test_equipment();
     EquipmentRegistry reg(eqs);
 
-    auto name_map = reg.get_name_map();
+    const auto& data_map = reg.data();
+    expect(data_map.size() == 3, "data() should have 3 entries");
 
-    expect(name_map.size() == 3, "name_map should have 3 entries");
-
-    auto it = name_map.find(NSID("minecraft:diamond_sword"));
-    expect(it != name_map.end(), "diamond_sword in name_map");
-    if (it != name_map.end()) {
-        expect(it->second->name == "Diamond Sword", "name_map value has correct name");
-        expect(it->second->category == EquipmentTag::sword(), "name_map value has correct category");
+    auto it = data_map.find(NSID("minecraft:diamond_sword"));
+    expect(it != data_map.end(), "diamond_sword in data()");
+    if (it != data_map.end()) {
+        expect(it->second.name == "Diamond Sword", "data() value has correct name");
+        expect(it->second.category == EquipmentTag::sword(), "data() value has correct category");
     }
 
     // Unknown name is not in the map
-    expect(name_map.find(NSID("nonexistent")) == name_map.end(), "unknown name not in map");
+    expect(data_map.find(NSID("nonexistent")) == data_map.end(), "unknown name not in data()");
 
-    // Map values point to the actual Equipment objects
-    auto& reg_equip = reg.at(NSID("minecraft:diamond_sword"));
-    expect(name_map[NSID("minecraft:diamond_sword")] == &reg_equip, "name_map pointer matches registry instance");
-
-    std::cout << "PASS: test_get_name_map" << std::endl;
+    std::cout << "PASS: test_data_access" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,7 +138,7 @@ int main() {
         test_initialize_and_get();
         test_get_bounds();
         test_get_by_category();
-        test_get_name_map();
+        test_data_access();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
