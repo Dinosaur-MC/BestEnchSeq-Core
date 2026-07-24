@@ -7,6 +7,9 @@ besq_test(test_enchantment_registry_mutable test_enchantment_registry_mutable.cp
 besq_test(test_equipment_registry_mutable test_equipment_registry_mutable.cpp)
 besq_test(test_equipment_category_registry test_equipment_category_registry.cpp)
 besq_test(test_domain_types test_domain_types.cpp)
+besq_test(test_registry_copy_move test_registry_copy_move.cpp)
+besq_test(test_registry_subset_bulk test_registry_subset_bulk.cpp)
+besq_test(test_registry_edge test_registry_edge.cpp)
 
 # RegistryManager test needs its dedicated source (not fully in besq-domain-business)
 add_executable(test_registry_manager
