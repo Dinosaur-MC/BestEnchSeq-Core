@@ -435,9 +435,8 @@ const Json& operator>>(const Json& json, Solution& sol) {
 
 Json& operator<<(Json& json, const EnchantmentRegistry& reg) {
     Json::Array arr;
-    const auto& instances = reg.data();
-    arr.reserve(instances.size());
-    for (const auto& info : instances) {
+    arr.reserve(reg.size());
+    for (const auto& [nsid, info] : reg.data()) {
         Json j;
         j << info;
         arr.push_back(std::move(j));
@@ -467,9 +466,8 @@ const Json& operator>>(const Json& json, EnchantmentRegistry& reg) {
 
 Json& operator<<(Json& json, const EquipmentRegistry& reg) {
     Json::Array arr;
-    const auto& instances = reg.data();
-    arr.reserve(instances.size());
-    for (const auto& eq : instances) {
+    arr.reserve(reg.size());
+    for (const auto& [id, eq] : reg.data()) {
         Json j;
         j << eq;
         arr.push_back(std::move(j));
@@ -499,9 +497,8 @@ const Json& operator>>(const Json& json, EquipmentRegistry& reg) {
 
 Json& operator<<(Json& json, const EquipmentTagRegistry& reg) {
     Json::Array arr;
-    const auto& instances = reg.data();
-    arr.reserve(instances.size());
-    for (const auto& tag : instances) {
+    arr.reserve(reg.size());
+    for (const auto& [id, tag] : reg.data()) {
         Json j;
         j << tag;
         arr.push_back(std::move(j));
