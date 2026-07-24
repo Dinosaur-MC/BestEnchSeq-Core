@@ -4,9 +4,10 @@
 #include "builtin/DataLoader.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentCategoryRegistry.h"
+#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-// REMOVED: RegistryAccess.h — create local registries instead
+#include "domain/business/types/Item.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 
 #include <algorithm>
@@ -224,22 +225,25 @@ resolve_algos(const BenchConfig& cfg, const AlgorithmLoader& loader) {
     return filtered;
 }
 
+// ─── Global registries (initialised once at startup) ──
+static EnchantmentRegistry G_ENCH;
+static EquipmentRegistry G_EQ;
+static EquipmentTagRegistry G_CAT;
+
 // ─── Setup ───
 void load_builtin_data() {
-    registries::categories().initialize();
-    besq::data::load_builtin_data(registries::categories(),
-                                  registries::enchants(), registries::equipment());
+    besq::data::load_builtin_data(G_CAT, G_ENCH, G_EQ);
 }
 
 // ─── Run a single test case against every <algos> entry ───
 void run_case(const TestCase& tc, const std::vector<std::string>& algos,
               const AlgorithmLoader& loader, bool no_skip) {
-    int32_t eq_id = registries::equipment().get_id(tc.item_type);
-    if (eq_id < 0) {
+    auto eq_it = G_EQ.find(NSID(tc.item_type));
+    if (eq_it == G_EQ.end()) {
         std::cout << "  [SKIP] unknown equipment '" << tc.item_type << "'\n";
         return;
     }
-    const Equipment& eq = registries::equipment().get(eq_id);
+    const Equipment& eq = *eq_it;
 
     ::EnchSet wanted_set;
     ItemCollection books;
@@ -247,17 +251,18 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
         auto p = spec.find('=');
         std::string id = spec.substr(0, p);
         int32_t lv = std::stoi(spec.substr(p + 1));
-        int32_t eid = registries::enchants().get_id(id);
-        if (eid < 0) {
+        auto ench_it = G_ENCH.find(NSID(id));
+        if (ench_it == G_ENCH.end()) {
             std::cout << "  [SKIP] unknown enchant '" << id << "'\n";
             return;
         }
-        wanted_set.emplace(eid, lv);
-        books.emplace_back(::EnchSet{Ench(eid, lv)});
+        Ench ench{ench_it->id, ench_it->name, lv};
+        wanted_set.insert(ench);
+        books.emplace_back(NSID("enchanted_book"), ::EnchSet{std::move(ench)}, 0);
     }
 
     algorithm::EnchReg ench_reg;
-    ench_reg.init(registries::enchants(), eq);
+    ench_reg.init(G_ENCH, eq);
 
     ItemStack start_item(eq, ::EnchSet{}, 0, eq.max_durability);
 
