@@ -1,37 +1,36 @@
 #pragma once
+#include "IRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
+
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 // ─── Equipment tag registry ───
 //
-// Manages EquipmentTag definitions. Builtin tags are initialized from
-// EquipmentTag::sword() etc. accessors. Optional custom tag names can be
-// passed to initialize(). After initialize(), the registry is immutable.
+// Manages EquipmentTag definitions by tag name.
+// Each entry maps a short name ("sword", "helmet") to an EquipmentTag
+// whose NSID is "#minecraft:<name>".
 //
-// Matches EnchantmentRegistry pattern: get() returns reference, throws on invalid.
-class EquipmentTagRegistry {
+// Builtin tags are initialized via initialize() with the custom tag names
+// collected from equipment data. The name_to_id_ map enables O(1) lookup
+// by the short tag name string.
+class EquipmentTagRegistry : public IRegistry<EquipmentTag> {
 public:
     EquipmentTagRegistry() = default;
+    EquipmentTagRegistry(const std::vector<EquipmentTag>& tags);
 
-    // Lifecycle — resets builtins and optionally appends custom tag names.
-    // After this call the registry is immutable.
-    void initialize(const std::vector<std::string>& custom_tag_names = {});
+    // ── Tag-name lookup ─────────────────────────────────────────────────
 
-    // Lookup (O(1)) — throws std::out_of_range on invalid input
-    const EquipmentTag& get(const std::string& name_id) const;
-    const EquipmentTag& at(size_t index) const;
-    bool contains(const std::string& name_id) const;
-    int32_t get_id(const std::string& name_id) const;  // -1 if not found
-    size_t size() const { return instances_.size(); }
+    /// Convenience: get a tag by its short name.
+    /// Throws std::out_of_range if not found.
+    const EquipmentTag& get(const std::string& name) const;
 
-    const std::vector<EquipmentTag>& get_instances() const { return instances_; }
+    // ── IRegistry overrides ─────────────────────────────────────────────
+    bool insert(const EquipmentTag& item) override;
+    bool remove(const NSID& id) override;
+    void clear() noexcept override;
 
 private:
-    /// Reset to builtin defaults.
-    void reset();
-
-    std::vector<EquipmentTag> instances_;
     std::unordered_map<std::string, int32_t> name_to_id_;
 };

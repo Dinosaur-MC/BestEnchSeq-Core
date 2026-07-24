@@ -1,63 +1,54 @@
 #include "EquipmentTagRegistry.h"
 #include <stdexcept>
 
-void EquipmentTagRegistry::reset() {
-    instances_.clear();
-    name_to_id_.clear();
-
-    auto add = [&](const NSID& id, const std::string& name) {
-        int32_t idx = static_cast<int32_t>(instances_.size());
-        instances_.push_back({id, name});
-        name_to_id_[name] = idx;
-    };
-
-    add(EquipmentTag::sword(),       "sword");
-    add(EquipmentTag::helmet(),      "helmet");
-    add(EquipmentTag::chestplate(),  "chestplate");
-    add(EquipmentTag::leggings(),    "leggings");
-    add(EquipmentTag::boots(),       "boots");
-    add(EquipmentTag::pickaxe(),     "pickaxe");
-    add(EquipmentTag::axe(),         "axe");
-    add(EquipmentTag::shovel(),      "shovel");
-    add(EquipmentTag::hoe(),         "hoe");
-    add(EquipmentTag::bow(),         "bow");
-    add(EquipmentTag::shield(),      "shield");
-    add(EquipmentTag::crossbow(),    "crossbow");
-    add(EquipmentTag::trident(),     "trident");
-    add(EquipmentTag::fishing_rod(), "fishing_rod");
-}
-
-void EquipmentTagRegistry::initialize(const std::vector<std::string>& custom_tag_names) {
-    reset();
-
-    // Append custom tag names (duplicates of builtins are silently skipped)
-    for (const auto& tag_name : custom_tag_names) {
-        if (name_to_id_.count(tag_name))
-            continue;  // skip duplicates
-        int32_t idx = static_cast<int32_t>(instances_.size());
-        instances_.push_back({NSID("#minecraft:" + tag_name), tag_name});
-        name_to_id_[tag_name] = idx;
+EquipmentTagRegistry::EquipmentTagRegistry(const std::vector<EquipmentTag>& tags)
+    : IRegistry<EquipmentTag>() {
+    _data.reserve(tags.size());
+    for (size_t i = 0; i < tags.size(); ++i) {
+        _data.push_back(tags[i]);
+        name_to_id_[tags[i].name] = static_cast<int32_t>(i);
     }
 }
 
-const EquipmentTag& EquipmentTagRegistry::get(const std::string& name_id) const {
-    auto it = name_to_id_.find(name_id);
-    if (it != name_to_id_.end())
-        return instances_[static_cast<size_t>(it->second)];
-    throw std::out_of_range("Unknown EquipmentTag: " + name_id);
+const EquipmentTag& EquipmentTagRegistry::get(const std::string& name) const {
+    auto it = name_to_id_.find(name);
+    if (it == name_to_id_.end()) {
+        auto msg = std::string("EquipmentTag not found: ") + name;
+        throw std::out_of_range(msg.c_str());
+    }
+    return _data[it->second];
 }
 
-const EquipmentTag& EquipmentTagRegistry::at(size_t index) const {
-    if (index < instances_.size())
-        return instances_[index];
-    throw std::out_of_range("EquipmentTag index out of range: " + std::to_string(index));
+bool EquipmentTagRegistry::insert(const EquipmentTag& item) {
+    if (contains(item.id))
+        return false;
+    name_to_id_[item.name] = static_cast<int32_t>(_data.size());
+    _data.push_back(item);
+    return true;
 }
 
-bool EquipmentTagRegistry::contains(const std::string& name_id) const {
-    return name_to_id_.find(name_id) != name_to_id_.end();
+bool EquipmentTagRegistry::remove(const NSID& id) {
+    auto it = find(id);
+    if (it == _data.end())
+        return false;
+    size_t idx = std::distance(_data.begin(), it);
+    // Remove from name map
+    for (auto mit = name_to_id_.begin(); mit != name_to_id_.end(); ++mit) {
+        if (mit->second == static_cast<int32_t>(idx)) {
+            name_to_id_.erase(mit);
+            break;
+        }
+    }
+    _data.erase(it);
+    // Shift indices for entries after the removed one
+    for (auto& [_, index] : name_to_id_) {
+        if (index > static_cast<int32_t>(idx))
+            --index;
+    }
+    return true;
 }
 
-int32_t EquipmentTagRegistry::get_id(const std::string& name_id) const {
-    auto it = name_to_id_.find(name_id);
-    return it != name_to_id_.end() ? it->second : -1;
+void EquipmentTagRegistry::clear() noexcept {
+    _data.clear();
+    name_to_id_.clear();
 }

@@ -2,6 +2,22 @@
 
 #include <stdexcept>
 
+EnchantmentRegistry::EnchantmentRegistry(const std::vector<EnchInfo>& infos) {
+    _data.reserve(infos.size());
+    for (size_t i = 0; i < infos.size(); i++) {
+        auto& info = infos[i];
+        _data.push_back(info);
+        name_to_index_[info.id] = static_cast<int32_t>(i);
+    }
+    for (size_t i = 0; i < infos.size(); i++) {
+        auto& info = infos[i];
+        for (auto& exclusive : info.exclusive_set) {
+            incompatible_table_[info.id].insert(exclusive);
+            incompatible_table_[exclusive].insert(info.id);
+        }
+    }
+}
+
 bool EnchantmentRegistry::check_validation(const std::vector<EnchInfo>& infos) {
     std::unordered_set<NSID> registration, unchecked_names;
     for (size_t i = 0; i < infos.size(); i++) {
@@ -22,57 +38,15 @@ bool EnchantmentRegistry::check_validation(const std::vector<EnchInfo>& infos) {
     return true;
 }
 
-void EnchantmentRegistry::reset_for_testing() {
-    instances_.clear();
-    name_to_index_.clear();
-    incompatible_table_.clear();
-}
-
-void EnchantmentRegistry::initialize(const std::vector<EnchInfo>& infos) {
-    if (!check_validation(infos))
-        throw std::runtime_error("Validation check failed");
-    instances_.clear();
-    name_to_index_.clear();
-    incompatible_table_.clear();
-
-    instances_.reserve(infos.size());
-    for (size_t i = 0; i < infos.size(); i++) {
-        auto& info = infos[i];
-        instances_.push_back(info);
-        name_to_index_[info.id] = static_cast<int32_t>(i);
-    }
-    for (size_t i = 0; i < infos.size(); i++) {
-        auto& info = infos[i];
-        for (auto& exclusive : info.exclusive_set) {
-            incompatible_table_[info.id].insert(exclusive);
-            incompatible_table_[exclusive].insert(info.id);
-        }
-    }
-}
-
-const EnchInfo& EnchantmentRegistry::get(int32_t index) const {
-    if (index < 0 || static_cast<size_t>(index) >= instances_.size())
-        throw std::out_of_range("EnchInfo index out of range");
-    return instances_[index];
+const EnchInfo& EnchantmentRegistry::get(int32_t id) const {
+    return _data.at(static_cast<size_t>(id));
 }
 
 const EnchInfo& EnchantmentRegistry::get(const NSID& id) const {
     auto it = name_to_index_.find(id);
     if (it == name_to_index_.end())
-        throw std::runtime_error("EnchInfo not found: " + id.str());
-    return instances_[it->second];
-}
-
-int32_t EnchantmentRegistry::get_id(const NSID& id) const {
-    auto it = name_to_index_.find(id);
-    if (it != name_to_index_.end()) return it->second;
-    // Fallback: bare NSID → try with "minecraft:" prefix
-    if (id.get_ns().empty()) {
-        NSID prefixed("minecraft:" + id.get_id());
-        auto ns_it = name_to_index_.find(prefixed);
-        if (ns_it != name_to_index_.end()) return ns_it->second;
-    }
-    return -1;
+        throw std::out_of_range("Enchantment not found: " + id.str());
+    return _data[it->second];
 }
 
 const std::unordered_set<NSID>& EnchantmentRegistry::get_exclusive_set(const NSID& e) const {
@@ -92,19 +66,34 @@ bool EnchantmentRegistry::is_incompatible(const NSID& e1, const NSID& e2) const 
     return it->second.find(e2) != it->second.end();
 }
 
-// ── Mutable operations ─────────────────────────────────────────────────────
+// ── IRegistry overrides ────────────────────────────────────────────────
 
-bool EnchantmentRegistry::add(const EnchInfo& info) {
-    if (name_to_index_.count(info.id))
+EnchantmentRegistry::iterator EnchantmentRegistry::find(const NSID& id) {
+    auto it = name_to_index_.find(id);
+    if (it == name_to_index_.end())
+        return _data.end();
+    return _data.begin() + it->second;
+}
+
+EnchantmentRegistry::const_iterator EnchantmentRegistry::find(const NSID& id) const {
+    auto it = name_to_index_.find(id);
+    if (it == name_to_index_.end())
+        return _data.end();
+    return _data.begin() + it->second;
+}
+
+bool EnchantmentRegistry::insert(const EnchInfo& item) {
+    if (name_to_index_.count(item.id))
         return false;
-    int32_t idx = static_cast<int32_t>(instances_.size());
-    instances_.push_back(info);
-    name_to_index_[info.id] = idx;
 
-    // Update incompatibility table
-    for (const auto& excl : info.exclusive_set) {
-        incompatible_table_[info.id].insert(excl);
-        incompatible_table_[excl].insert(info.id);
+    int32_t idx = static_cast<int32_t>(_data.size());
+    name_to_index_[item.id] = idx;
+    _data.push_back(item);
+
+    // Build incompatibility table entries
+    for (const auto& excl : item.exclusive_set) {
+        incompatible_table_[item.id].insert(excl);
+        incompatible_table_[excl].insert(item.id);
     }
     return true;
 }
@@ -113,34 +102,31 @@ bool EnchantmentRegistry::remove(const NSID& id) {
     auto it = name_to_index_.find(id);
     if (it == name_to_index_.end())
         return false;
+
     int32_t idx = it->second;
+    const NSID& removed_id = id;
+
+    // Remove from incompatibility table
+    incompatible_table_.erase(removed_id);
+    for (auto& [_, excl_set] : incompatible_table_)
+        excl_set.erase(removed_id);
+
+    // Remove from index map
     name_to_index_.erase(it);
-    // Keep index stability for existing references; mark as invalid
-    instances_[idx] = EnchInfo{};
+
+    // Remove from data
+    _data.erase(_data.begin() + idx);
+
+    // Shift indices
+    for (auto& [_, index] : name_to_index_)
+        if (index > idx)
+            --index;
+
     return true;
 }
 
-bool EnchantmentRegistry::modify(const NSID& id, const EnchInfo& patch) {
-    auto it = name_to_index_.find(id);
-    if (it == name_to_index_.end())
-        return false;
-    EnchInfo& target = instances_[it->second];
-    if (patch.max_level > 0)
-        target.max_level = patch.max_level;
-    if (patch.limited_level >= 0 && patch.limited_level > -1)
-        target.limited_level = patch.limited_level;
-    if (patch.multiplier > 0)
-        target.multiplier = patch.multiplier;
-    if (!patch.name.empty())
-        target.name = patch.name;
-    target.is_treasure = patch.is_treasure;
-    return true;
-}
-
-bool EnchantmentRegistry::remove(const std::string& name_id) {
-    return remove(NSID(name_id));
-}
-
-bool EnchantmentRegistry::modify(const std::string& name_id, const EnchInfo& patch) {
-    return modify(NSID(name_id), patch);
+void EnchantmentRegistry::clear() noexcept {
+    _data.clear();
+    name_to_index_.clear();
+    incompatible_table_.clear();
 }
