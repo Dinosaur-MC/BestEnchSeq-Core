@@ -1,6 +1,5 @@
 #include "framework/test_utils.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
 
@@ -36,16 +35,16 @@ void test_initialize_and_get() {
 
     expect(reg.size() == 3, "should have 3 equipment entries");
 
-    // Get by index
-    const auto& e0 = reg.get(0);
-    expect(e0.id.str() == "minecraft:diamond_sword", "get(0) name_id");
+    // Get by NSID
+    const auto& e0 = reg.at(NSID("minecraft:diamond_sword"));
+    expect(e0.id.str() == "minecraft:diamond_sword", "at(diamond_sword) id matches");
 
-    const auto& e1 = reg.get(1);
-    expect(e1.id.str() == "minecraft:diamond_pickaxe", "get(1) name_id");
+    const auto& e1 = reg.at(NSID("minecraft:diamond_pickaxe"));
+    expect(e1.id.str() == "minecraft:diamond_pickaxe", "at(diamond_pickaxe) id matches");
 
     // Get by NSID
-    const auto& by_name = reg.get(NSID("minecraft:iron_sword"));
-    expect(by_name.max_durability == 250, "get by NSID: durability");
+    const auto& by_name = reg.at(NSID("minecraft:iron_sword"));
+    expect(by_name.max_durability == 250, "at(iron_sword): durability");
 
     std::cout << "PASS: test_initialize_and_get" << std::endl;
 }
@@ -57,35 +56,20 @@ void test_get_bounds() {
     auto eqs = make_test_equipment();
     EquipmentRegistry reg(eqs);
 
-    // Negative index
+    // Unknown NSID via at() — throws out_of_range
     bool threw = false;
     try {
-        reg.get(-1);
+        reg.at(NSID("unknown_equipment"));
     } catch (const std::out_of_range&) {
         threw = true;
     }
-    expect(threw, "get(-1) should throw out_of_range");
+    expect(threw, "at(NSID(\"unknown\")) should throw out_of_range");
 
-    // Out of range index
-    threw = false;
-    try {
-        reg.get(999);
-    } catch (const std::out_of_range&) {
-        threw = true;
-    }
-    expect(threw, "get(999) should throw out_of_range");
+    // contains for unknown
+    expect(!reg.contains(NSID("nonexistent")), "contains(\"nonexistent\") == false");
 
-    // Unknown NSID
-    threw = false;
-    try {
-        reg.get(NSID("unknown_equipment"));
-    } catch (const std::out_of_range&) {
-        threw = true;
-    }
-    expect(threw, "get(NSID(\"unknown\")) should throw");
-
-    // index for unknown
-    expect(reg.index(NSID("nonexistent")) == IRegistry<Equipment>::nops, "index(NSID(\"nonexistent\")) == nops");
+    // contains for existing
+    expect(reg.contains(NSID("minecraft:diamond_sword")), "contains(\"diamond_sword\") == true");
 
     std::cout << "PASS: test_get_bounds" << std::endl;
 }
@@ -145,7 +129,7 @@ void test_get_name_map() {
     expect(name_map.find(NSID("nonexistent")) == name_map.end(), "unknown name not in map");
 
     // Map values point to the actual Equipment objects
-    const auto& reg_equip = reg.get(0);
+    auto& reg_equip = reg.at(NSID("minecraft:diamond_sword"));
     expect(name_map[NSID("minecraft:diamond_sword")] == &reg_equip, "name_map pointer matches registry instance");
 
     std::cout << "PASS: test_get_name_map" << std::endl;
@@ -156,11 +140,6 @@ void test_get_name_map() {
 // ---------------------------------------------------------------------------
 int main() {
     try {
-        // Initialize category registry (needed for some lookups)
-        // Note: cat_reg is not used directly in these tests; it only served as
-        // a dependency for old API compatibility.
-        EquipmentTagRegistry cat_reg;
-
         test_initialize_and_get();
         test_get_bounds();
         test_get_by_category();

@@ -2,7 +2,6 @@
 #include "domain/business/types/Enchantment.h"
 #include "framework/test_utils.h"
 #include <iostream>
-#include <stdexcept>
 
 namespace {
 
@@ -11,10 +10,10 @@ void test_add_new_enchantment() {
     EnchantmentRegistry reg({sharp});
 
     EnchInfo new_ench{NSID("minecraft:custom_ench"), "Custom", MCE::All, 3, 3, 2, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    bool ok = reg.insert(new_ench);
+    bool ok = reg.insert(new_ench).second;
     expect(ok, "insert should succeed for new enchantment");
     expect(reg.size() == 2, "registry should have 2 entries after insert");
-    expect(reg.index(NSID("minecraft:custom_ench")) != EnchantmentRegistry::nops, "new enchantment should be findable");
+    expect(reg.contains(NSID("minecraft:custom_ench")), "new enchantment should be findable");
     TEST_PASS("test_add_new_enchantment");
 }
 
@@ -22,7 +21,7 @@ void test_add_duplicate_fails() {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
-    bool ok = reg.insert(sharp);
+    bool ok = reg.insert(sharp).second;
     expect(!ok, "insert should fail for duplicate name_id");
     TEST_PASS("test_add_duplicate_fails");
 }
@@ -31,9 +30,9 @@ void test_remove_existing() {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
-    bool ok = reg.remove(NSID("minecraft:sharpness"));
-    expect(ok, "remove should succeed for existing entry");
-    expect(reg.index(NSID("minecraft:sharpness")) == EnchantmentRegistry::nops, "removed entry should not be findable");
+    bool ok = reg.erase(NSID("minecraft:sharpness"));
+    expect(ok, "erase should succeed for existing entry");
+    expect(!reg.contains(NSID("minecraft:sharpness")), "removed entry should not be findable");
     TEST_PASS("test_remove_existing");
 }
 
@@ -41,8 +40,8 @@ void test_remove_nonexistent_fails() {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
-    bool ok = reg.remove(NSID("minecraft:nonexistent"));
-    expect(!ok, "remove should fail for nonexistent entry");
+    bool ok = reg.erase(NSID("minecraft:nonexistent"));
+    expect(!ok, "erase should fail for nonexistent entry");
     TEST_PASS("test_remove_nonexistent_fails");
 }
 
@@ -51,13 +50,13 @@ void test_modify_max_level() {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     reg = EnchantmentRegistry({sharp});
 
-    auto modified = reg.get(NSID("minecraft:sharpness"));
+    auto modified = reg.at(NSID("minecraft:sharpness"));
     EnchInfo patch = modified;
     patch.max_level = 10;
     bool ok = reg.update(patch);
     expect(ok, "update should succeed");
 
-    const auto& updated = reg.get(NSID("minecraft:sharpness"));
+    const auto& updated = reg.at(NSID("minecraft:sharpness"));
     expect(updated.max_level == 10, "max_level should be updated to 10");
     expect(updated.multiplier == 1, "multiplier should remain unchanged");
     TEST_PASS("test_modify_max_level");

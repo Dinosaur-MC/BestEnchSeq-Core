@@ -37,7 +37,7 @@ void test_format_book_solution() {
 
     // Need to construct a valid solution with target equipment
     solution.steps.push_back(step);
-    const auto& equip = g_fx.equipment.get(NSID("minecraft:diamond_sword"));
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
     solution.target_item = Item(
         equip.id,
         EnchSet{}, 0, 1561
@@ -60,13 +60,13 @@ void test_format_combined_solution() {
 
     // Create a protection 3 book
     EnchSet enchants_set;
-    const auto& prot_info = enchants.get(NSID("protection"));
+    const auto& prot_info = enchants.at(NSID("protection"));
     enchants_set.emplace(prot_info.id, prot_info.name, 3);
 
     Solution solution;
     solution.is_success = true;
     solution.platform = MCE::Java;
-    const auto& equip = g_fx.equipment.get(NSID("minecraft:diamond_chestplate"));
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_chestplate"));
     solution.target_item = Item(
         equip.id,
         EnchSet{}, 0, 528
@@ -98,7 +98,7 @@ void test_format_no_steps() {
     Solution solution;
     solution.is_success = true;
     solution.platform = MCE::Java;
-    const auto& equip = g_fx.equipment.get(NSID("minecraft:diamond_sword"));
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
     solution.target_item = Item(
         equip.id,
         EnchSet{}, 0, 1561
@@ -121,7 +121,7 @@ void test_format_unsuccessful() {
     Solution solution;
     solution.is_success = false;
     solution.platform = MCE::Java;
-    const auto& equip = g_fx.equipment.get(NSID("minecraft:diamond_sword"));
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
     solution.target_item = Item(
         equip.id,
         EnchSet{}, 0, 1561
@@ -143,17 +143,17 @@ void test_format_multi_step() {
     EnchantmentRegistry& enchants = g_fx.enchants;
 
     EnchSet prot3;
-    const auto& prot_info = enchants.get(NSID("protection"));
+    const auto& prot_info = enchants.at(NSID("protection"));
     prot3.emplace(prot_info.id, prot_info.name, 3);
 
     EnchSet unbr3;
-    const auto& unbr_info = enchants.get(NSID("unbreaking"));
+    const auto& unbr_info = enchants.at(NSID("unbreaking"));
     unbr3.emplace(unbr_info.id, unbr_info.name, 3);
 
     Solution solution;
     solution.is_success = true;
     solution.platform = MCE::Java;
-    const auto& equip = g_fx.equipment.get(NSID("minecraft:diamond_chestplate"));
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_chestplate"));
     solution.target_item = Item(
         equip.id,
         EnchSet{}, 0, 528

@@ -6,6 +6,7 @@
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Equipment.h"
+#include <algorithm>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -14,14 +15,16 @@ namespace {
 
 // ─── Test fixtures ─────────────────────────────────────────────────
 
+// Helper: build an EnchReg from the registry, mirroring the original
+// vector-index approach but using registry's unordered_map iteration.
+// The EnchReg is built with all enchantments (applicable flag is
+// determined per original test).
 struct TestFixture {
     EnchantmentRegistry enchants;
-    EquipmentTagRegistry categories;
     algorithm::EnchReg reg;
+    std::unordered_map<std::string, int16_t> name_to_local_id_;
 
     TestFixture() {
-        // Enchantment data:
-        //   sharpness (id=0), knockback (id=1), bane_of_arthropods (id=2), protection (id=3)
         std::vector<EnchInfo> infos;
         infos.push_back({
             NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
@@ -49,46 +52,64 @@ struct TestFixture {
         });
         enchants = EnchantmentRegistry(infos);
 
-        // Build compact EnchReg for sword
+        // Collect items in deterministic order (sorted by NSID id part) so
+        // local IDs are stable across runs. NSID::str() returns "minecraft:xxx"
+        // so extract just the id part for sorting and lookup.
+        std::vector<std::pair<std::string, EnchInfo>> sorted;
+        sorted.reserve(enchants.size());
+        for (const auto& [nsid, info] : enchants.data()) {
+            auto s = nsid.str();
+            auto p = s.find(':');
+            sorted.emplace_back(p != std::string::npos ? s.substr(p + 1) : s, info);
+        }
+        std::sort(sorted.begin(), sorted.end(),
+                   [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        // After sorting: 0=bane, 1=knockback, 2=protection, 3=sharpness
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i)
+            name_to_local_id_[sorted[i].first] = static_cast<int16_t>(i);
+
         algorithm::Equipment target_equip;
         target_equip.id = 0;
         target_equip.category_id = 1;
         target_equip.max_durability = 1561;
+
         std::vector<algorithm::EnchInfo> compact_infos;
-        std::vector<int32_t> global_ids;
-        // Map enchantment name �?local id for conflict resolution
+        std::vector<NSID> global_ids;
         std::unordered_map<std::string, int32_t> name_to_local;
-        for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
-            global_ids.push_back(i);
-            name_to_local[enchants.get(i).id.str()] = i;
+
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
+            global_ids.push_back(NSID(sorted[i].first));
+            name_to_local[sorted[i].first] = i;
         }
-        size_t mask_size = (enchants.size() + 63) / 64;
-        std::vector<std::vector<algorithm::MaskType>> exc_masks(enchants.size(),
-            std::vector<algorithm::MaskType>(mask_size, 0));
-        // Build conflict masks using shared group bits.
-        // Each exclusive_set defines a conflict group.  All members share a
-        // common bit position so is_conflict() (bitwise-AND) detects overlap.
+
+        size_t mask_size = (sorted.size() + 63) / 64;
+        std::vector<std::vector<algorithm::MaskType>> exc_masks(
+            sorted.size(), std::vector<algorithm::MaskType>(mask_size, 0));
+
         uint64_t next_group = 0;
-        std::vector<bool> visited(enchants.size(), false);
-        for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
-            if (visited[i] || enchants.get(i).exclusive_set.empty()) continue;
-            // Found a new conflict group �?assign a shared bit to all members
+        std::vector<bool> visited(sorted.size(), false);
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
+            if (visited[i] || sorted[i].second.exclusive_set.empty()) continue;
             uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
             next_group++;
-            // Mark i and all its exclusive_set members with the same bit
             visited[i] = true;
             exc_masks[i][0] |= group_bit;
-            for (const auto& ex_nsid : enchants.get(i).exclusive_set) {
-                auto it = name_to_local.find(ex_nsid.str());
+            for (const auto& ex_nsid : sorted[i].second.exclusive_set) {
+                // ex_nsid.str() returns "minecraft:sharpness" — extract bare id
+                auto s = ex_nsid.str();
+                auto p = s.find(':');
+                auto bare = (p != std::string::npos) ? s.substr(p + 1) : s;
+                auto it = name_to_local.find(bare);
                 if (it != name_to_local.end()) {
-                    int32_t j = it->second;
-                    visited[j] = true;
-                    exc_masks[j][0] |= group_bit;
+                    visited[it->second] = true;
+                    exc_masks[it->second][0] |= group_bit;
                 }
             }
         }
-        for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
-            const auto& ei = enchants.get(i);
+
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
+            const auto& ei = sorted[i].second;
             bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.mul = static_cast<uint16_t>(ei.multiplier);
@@ -101,10 +122,9 @@ struct TestFixture {
         reg.init(compact_infos, global_ids, target_equip);
     }
 
-    // Get local IDs for named enchants
     int16_t id(const std::string& name_id) const {
-        auto idx = enchants.index(NSID(name_id));
-        return idx != EnchantmentRegistry::nops ? static_cast<int16_t>(idx) : -1;
+        auto it = name_to_local_id_.find(name_id);
+        return it != name_to_local_id_.end() ? it->second : -1;
     }
 
     algorithm::Item make_book(int16_t ench_id, int16_t level) const {
@@ -124,10 +144,8 @@ struct TestFixture {
 
 void test_forge_books() {
     TestFixture fx;
-
     auto book_a = fx.make_book(fx.id("sharpness"), 4);
     auto book_b = fx.make_book(fx.id("sharpness"), 3);
-
     algorithm::ForgeEngine engine;
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
     expect(result.type == algorithm::ItemType::Book, "result should be book");
@@ -140,10 +158,8 @@ void test_forge_books() {
 
 void test_forge_equipment_with_book() {
     TestFixture fx;
-
     auto eq = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
     auto book = fx.make_book(fx.id("sharpness"), 5);
-
     algorithm::ForgeEngine engine;
     auto [result, cost] = engine.forge(eq, book, fx.reg);
     expect(result.type == algorithm::ItemType::Equip, "result should be equipment");
@@ -156,10 +172,8 @@ void test_forge_equipment_with_book() {
 void test_forge_incompatible_rejected() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     auto eq = fx.make_equip(fx.id("sharpness"), 5);
     auto book = fx.make_book(fx.id("bane_of_arthropods"), 4);
-
     auto [result, cost] = engine.forge(eq, book, fx.reg);
     auto it = result.enchs.find(fx.id("bane_of_arthropods"));
     expect(it == result.enchs.end(), "incompatible enchant should not be applied");
@@ -173,10 +187,8 @@ void test_forge_incompatible_rejected() {
 void test_forge_not_forgeable() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     algorithm::Item mat{algorithm::ItemType::Material, 0, 0, {}};
     auto book = fx.make_book(fx.id("sharpness"), 1);
-
     expect(!engine.is_forgeable(mat, book), "material target should not be forgeable");
     std::cout << "PASS: test_forge_not_forgeable" << std::endl;
 }
@@ -191,7 +203,6 @@ void test_penalty_cost() {
     expect(engine.penalty_cost(3) == 7,  "penalty_cost(3) should be 7");
     expect(engine.penalty_cost(4) == 15, "penalty_cost(4) should be 15");
     expect(engine.penalty_cost(5) == 31, "penalty_cost(5) should be 31");
-
     algorithm::ForgeConfig no_pen_cfg;
     no_pen_cfg.ignore_penalty_cost = true;
     no_pen_cfg.ignore_repair_cost = false;
@@ -209,7 +220,6 @@ void test_apply_cap() {
     expect(engine.apply_cap(39) == 39, "apply_cap(39) should be 39");
     expect(engine.apply_cap(40) == 39, "apply_cap(40) should be 39");
     expect(engine.apply_cap(100) == 39, "apply_cap(100) should be 39");
-
     algorithm::ForgeConfig no_cap_cfg;
     no_cap_cfg.ignore_penalty_cost = false;
     no_cap_cfg.ignore_repair_cost = false;
@@ -224,7 +234,6 @@ void test_apply_cap() {
 void test_estimate_forge_cost() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     auto eq = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
     auto book = fx.make_book(fx.id("sharpness"), 5);
     int32_t est = engine.estimate_forge_cost(eq, book, fx.reg);
@@ -233,7 +242,6 @@ void test_estimate_forge_cost() {
     algorithm::Item eq_ppn{algorithm::ItemType::Equip, 1561, 2, {}};
     auto book2 = fx.make_book(fx.id("knockback"), 2);
     int32_t est2 = engine.estimate_forge_cost(eq_ppn, book2, fx.reg);
-    // penalty(2)=3 + penalty(0)=0 + knock2 * mul_b=2 = 3+4 = 7
     expect(est2 == 7, "estimate_forge_cost: equip(ppn2)+knock2 should be 7");
     std::cout << "PASS: test_estimate_forge_cost" << std::endl;
 }
@@ -242,7 +250,6 @@ void test_estimate_forge_cost() {
 
 void test_be_forge_cost() {
     TestFixture fx;
-
     algorithm::ForgeConfig be_cfg;
     be_cfg.ignore_penalty_cost = false;
     be_cfg.ignore_repair_cost = false;
@@ -258,7 +265,6 @@ void test_be_forge_cost() {
 
     auto eq = fx.make_equip(fx.id("sharpness"), 3);
     auto book = fx.make_book(fx.id("sharpness"), 4);
-
     auto [be_result, be_cost] = be_engine.forge(eq, book, fx.reg);
     expect(be_cost == 1, "BE forge: sharpness 3+4 should cost 1");
 
@@ -269,7 +275,6 @@ void test_be_forge_cost() {
 
 void test_be_conflict_cost() {
     TestFixture fx;
-
     algorithm::ForgeConfig be_cfg2;
     be_cfg2.ignore_penalty_cost = false;
     be_cfg2.ignore_repair_cost = false;
@@ -285,7 +290,6 @@ void test_be_conflict_cost() {
 
     auto eq = fx.make_equip(fx.id("sharpness"), 5);
     auto book = fx.make_book(fx.id("bane_of_arthropods"), 4);
-
     auto [be_result, be_cost] = be_engine.forge(eq, book, fx.reg);
     expect(be_cost == 0, "BE forge: conflict should cost 0");
 
@@ -299,12 +303,10 @@ void test_be_conflict_cost() {
 void test_ppn_recalculation() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     auto book_a = fx.make_book(fx.id("sharpness"), 3);
     book_a.ppn = 0;
     auto book_b = fx.make_book(fx.id("knockback"), 2);
     book_b.ppn = 2;
-
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
     expect(result.ppn == 3, "PPN after forge(0, 2) should be 3");
 
@@ -313,22 +315,18 @@ void test_ppn_recalculation() {
     book_c.ppn = 0;
     (void)engine.forge_into(equip, book_c, fx.reg);
     expect(equip.ppn == 4, "PPN after equip(3)+book(0) should be 4");
-
-    std::cout << "PASS: test_ppn_recalculation (ppn1=" << static_cast<int>(result.ppn)
-              << ", ppn2=" << static_cast<int>(equip.ppn) << ")" << std::endl;
+    std::cout << "PASS: test_ppn_recalculation" << std::endl;
 }
 
 void test_same_level_upgrade() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     auto book_a = fx.make_book(fx.id("sharpness"), 4);
     auto book_b = fx.make_book(fx.id("sharpness"), 4);
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
     auto it = result.enchs.find(fx.id("sharpness"));
     expect(it != result.enchs.end() && it->level == 5,
            "same level combine: 4+4 should become 5 (max_level of sharpness)");
-
     auto book_c = fx.make_book(fx.id("sharpness"), 5);
     auto book_d = fx.make_book(fx.id("sharpness"), 5);
     auto [result2, cost2] = engine.forge(book_c, book_d, fx.reg);
@@ -341,7 +339,6 @@ void test_same_level_upgrade() {
 void test_different_level_max() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     auto book_a = fx.make_book(fx.id("sharpness"), 5);
     auto book_b = fx.make_book(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
@@ -354,7 +351,6 @@ void test_different_level_max() {
 void test_cap_behavior() {
     TestFixture fx;
     TestFixture fx2;
-
     algorithm::ForgeEngine capped_engine;
     algorithm::ForgeConfig uncapped_cfg;
     uncapped_cfg.ignore_penalty_cost = false;
@@ -368,7 +364,6 @@ void test_cap_behavior() {
     book.enchs.insert({fx.id("sharpness"), 5});
     book.enchs.insert({fx.id("knockback"), 2});
 
-    // penalty(15)+penalty(15) + 5*1 + 2*2 = 30 + 5 + 4 = 39 (cap at 39)
     auto eq1 = equip;
     auto bk1 = book;
     int32_t capped_cost = capped_engine.forge_into(eq1, bk1, fx.reg);
@@ -379,7 +374,6 @@ void test_cap_behavior() {
     int32_t uncapped_cost = uncapped_engine.forge_into(eq2, bk2, fx2.reg);
     expect(uncapped_cost == 39, "uncapped cost should also be 39");
 
-    // High PPN to exceed cap
     algorithm::Item equip_high{algorithm::ItemType::Equip, 1561, 5, {}};
     algorithm::Item book_high{algorithm::ItemType::Book, 0, 5, {}};
     book_high.enchs.insert({fx.id("sharpness"), 5});
@@ -394,9 +388,7 @@ void test_cap_behavior() {
     auto bk4 = book_high;
     int32_t uncapped_high = uncapped_engine.forge_into(eq4, bk4, fx3.reg);
     expect(uncapped_high == 67, "uncapped high cost should be 67");
-
-    std::cout << "PASS: test_cap_behavior (capped=" << capped_high
-              << ", uncapped=" << uncapped_high << ")" << std::endl;
+    std::cout << "PASS: test_cap_behavior" << std::endl;
 }
 
 // ─── Malformed item / error path tests ─────────────────────────────
@@ -404,10 +396,8 @@ void test_cap_behavior() {
 void test_negative_enchant_level() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     algorithm::Item book{algorithm::ItemType::Book, 0, 0, {}};
     book.enchs.insert({fx.id("sharpness"), -5});
-
     auto eq = fx.make_equip(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(eq, book, fx.reg);
     auto it = result.enchs.find(fx.id("sharpness"));
@@ -419,7 +409,6 @@ void test_negative_enchant_level() {
 void test_zero_level_enchant() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-
     auto book = fx.make_book(fx.id("sharpness"), 0);
     auto eq = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
     auto [result, cost] = engine.forge(eq, book, fx.reg);
@@ -433,12 +422,12 @@ void test_zero_level_enchant() {
 
 int main() {
     try {
+        test_penalty_cost();
+        test_apply_cap();
+        test_forge_not_forgeable();
         test_forge_books();
         test_forge_equipment_with_book();
         test_forge_incompatible_rejected();
-        test_forge_not_forgeable();
-        test_penalty_cost();
-        test_apply_cap();
         test_estimate_forge_cost();
         test_be_forge_cost();
         test_be_conflict_cost();

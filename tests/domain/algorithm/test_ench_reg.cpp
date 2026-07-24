@@ -5,8 +5,10 @@
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
+#include <algorithm>
 #include <stdexcept>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -47,27 +49,38 @@ struct TestFixture {
         target_equip.id = 0;
         target_equip.category_id = 0;
         target_equip.max_durability = 1561;
+        // Sort by NSID for deterministic local ID assignment
+        std::vector<std::pair<std::string, EnchInfo>> sorted_enchs;
+        sorted_enchs.reserve(enchants.size());
+        for (const auto& [nsid, info] : enchants.data())
+            sorted_enchs.emplace_back(nsid.str(), info);
+        std::sort(sorted_enchs.begin(), sorted_enchs.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+
         std::vector<algorithm::EnchInfo> compact_infos;
-        std::vector<int32_t> global_ids;
+        std::vector<NSID> global_ids;
         // Map enchantment name → local id for conflict resolution
         std::unordered_map<std::string, int32_t> name_to_local;
-        for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
-            global_ids.push_back(i);
-            name_to_local[enchants.get(i).id.str()] = i;
+
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
+            NSID nsid(sorted_enchs[i].first);
+            global_ids.push_back(nsid);
+            name_to_local[sorted_enchs[i].first] = i;
         }
+
         size_t mask_size = (enchants.size() + 63) / 64;
         std::vector<std::vector<algorithm::MaskType>> exc_masks(enchants.size(),
             std::vector<algorithm::MaskType>(mask_size, 0));
         // Build conflict masks using shared group bits.
         uint64_t next_group = 0;
         std::vector<bool> visited(enchants.size(), false);
-        for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
-            if (visited[i] || enchants.get(i).exclusive_set.empty()) continue;
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
+            if (visited[i] || sorted_enchs[i].second.exclusive_set.empty()) continue;
             uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
             next_group++;
             visited[i] = true;
             exc_masks[i][0] |= group_bit;
-            for (const auto& ex_nsid : enchants.get(i).exclusive_set) {
+            for (const auto& ex_nsid : sorted_enchs[i].second.exclusive_set) {
                 auto it = name_to_local.find(ex_nsid.str());
                 if (it != name_to_local.end()) {
                     int32_t j = it->second;
@@ -76,8 +89,8 @@ struct TestFixture {
                 }
             }
         }
-        for (int32_t i = 0; i < static_cast<int32_t>(enchants.size()); ++i) {
-            const auto& ei = enchants.get(i);
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
+            const auto& ei = sorted_enchs[i].second;
             bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.mul = static_cast<uint16_t>(ei.multiplier);
@@ -128,12 +141,14 @@ void test_safe_get_bounds() {
 void test_conflict_detection() {
     TestFixture fx;
 
-    // sharpness(0) and bane_of_arthropods(2) should conflict
-    expect(fx.reg.is_conflict(0, 2), "conflict: sharpness vs bane should conflict");
-    expect(fx.reg.is_conflict(2, 0), "conflict: bane vs sharpness should conflict (symmetric)");
+    // After NSID-sorted ordering:
+    //   0 = bane_of_arthropods, 1 = knockback, 2 = protection, 3 = sharpness
+    // bane(0) and sharpness(3) should conflict
+    expect(fx.reg.is_conflict(0, 3), "conflict: bane vs sharpness should conflict");
+    expect(fx.reg.is_conflict(3, 0), "conflict: sharpness vs bane should conflict (symmetric)");
 
-    // sharpness(0) and knockback(1) should NOT conflict
-    expect(!fx.reg.is_conflict(0, 1), "conflict: sharpness vs knockback should NOT conflict");
+    // knockback(1) and bane(0) should NOT conflict
+    expect(!fx.reg.is_conflict(0, 1), "conflict: bane vs knockback should NOT conflict");
 
     // Self-check should NOT conflict
     expect(!fx.reg.is_conflict(0, 0), "conflict: self should NOT conflict");
