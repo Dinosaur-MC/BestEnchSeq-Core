@@ -13,10 +13,11 @@
 class NativeJsonParser {
 public:
     /// Parse from a pre-parsed Json DOM.
-    static std::pair<std::vector<EnchantmentData>, std::vector<EquipmentData>>
-    parse(const Json& json);
+    using Result = std::pair<
+        std::vector<business::loader::EnchantmentData>,
+        std::vector<business::loader::EquipmentData>
+    >;
 
-    /// Parse from a JSON string.
-    static std::pair<std::vector<EnchantmentData>, std::vector<EquipmentData>>
-    parse_string(const std::string& content);
+    static Result parse(const Json& json);
+    static Result parse_string(const std::string& content);
 };

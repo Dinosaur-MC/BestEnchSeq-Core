@@ -1,6 +1,7 @@
 #pragma once
 
 #include "domain/business/components/TagResolver.h"
+#include "builtin/ItemProperties.h"
 #include "common/CommonTypes.h"
 
 #include <algorithm>
@@ -102,12 +103,6 @@ inline std::string get_category_suffix(const std::string& item_id) {
 
 // ── Limited level computation ──────────────────────────────────────────
 // Compute max reachable level from cost formula and item enchantability.
-
-struct ItemProperty {
-    int32_t enchantability = 0;
-    int32_t durability = 0;
-    std::string category;
-};
 
 inline int32_t compute_limited_level(
     int32_t max_level,
