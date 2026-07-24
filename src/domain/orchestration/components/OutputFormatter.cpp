@@ -33,7 +33,7 @@ std::string to_roman(int level) {
 // ---------------------------------------------------------------------------
 std::string ench_name_id(const NSID& id, const EnchantmentRegistry &ench_reg) {
     try {
-        return ench_reg.get(id).id.str();
+        return ench_reg.at(id).id.str();
     } catch (const std::exception &) {
         return "ench_" + id.str();
     }

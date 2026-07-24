@@ -2,6 +2,7 @@
 #include "common/CommonTypes.h"
 #include "common/utils/ExpCalculator.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <unordered_map>
@@ -24,14 +25,22 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     algo_equip.max_durability = target_eq.max_durability;
 
     // ── 2. Determine applicable enchantment IDs ────────────────────────
-    const auto& all_infos = global_registry.data();
+    // Sort by NSID for deterministic global_id assignment (unordered_map
+    // iteration is otherwise non-deterministic).
+    const auto& all_infos_map = global_registry.data();
+    std::vector<std::pair<NSID, EnchInfo>> sorted_infos;
+    sorted_infos.reserve(all_infos_map.size());
+    for (const auto& [nsid, info] : all_infos_map)
+        sorted_infos.emplace_back(nsid, info);
+    std::sort(sorted_infos.begin(), sorted_infos.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
 
     std::vector<algorithm::EnchInfo> algo_infos;
-    std::vector<int32_t> applicable_global_ids;
+    std::vector<NSID> applicable_global_nsids;
     std::unordered_map<int32_t, int16_t> global_to_local;
 
-    for (int32_t gid = 0; gid < static_cast<int32_t>(all_infos.size()); ++gid) {
-        const auto& biz = all_infos[gid];
+    for (int32_t gid = 0; gid < static_cast<int32_t>(sorted_infos.size()); ++gid) {
+        const auto& biz = sorted_infos[gid].second;
         bool applicable = biz.applicable_equipments.count(target_eq.category) > 0 || biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
         if (!applicable) continue;
 
@@ -41,7 +50,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(
         ai.max_lvl = static_cast<uint16_t>(biz.max_level);
         ai.exc_mask.resize(algo_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
         for (size_t local_idx = 0; local_idx < algo_infos.size(); ++local_idx) {
-            const NSID& existing_nsid = all_infos[applicable_global_ids[local_idx]].id;
+            const NSID& existing_nsid = applicable_global_nsids[local_idx];
             if (biz.exclusive_set.count(existing_nsid)) {
                 size_t word = local_idx / algorithm::MASK_ELEM_SIZE;
                 size_t bit  = local_idx % algorithm::MASK_ELEM_SIZE;
@@ -54,13 +63,13 @@ algorithm::AlgorithmInput CompactAdapter::apply(
 
         int16_t local_id = static_cast<int16_t>(algo_infos.size());
         global_to_local[gid] = local_id;
-        applicable_global_ids.push_back(gid);
+        applicable_global_nsids.push_back(sorted_infos[gid].first);
         algo_infos.push_back(std::move(ai));
     }
 
     // ── 3. Init compact registry ──────────────────────────────────────
     algorithm::EnchReg ench_reg;
-    ench_reg.init(std::move(algo_infos), std::move(applicable_global_ids), algo_equip);
+    ench_reg.init(std::move(algo_infos), std::move(applicable_global_nsids), algo_equip);
 
     // ── 4. Remap helper ───────────────────────────────────────────────
     auto remap_ench_set = [&](const algorithm::EnchSet& src) -> algorithm::EnchSet {
@@ -168,11 +177,8 @@ algorithm::Item CompactAdapter::from_domain(const Item& item, const algorithm::E
 Item CompactAdapter::to_domain(const algorithm::Item& item, const algorithm::EnchReg& reg) {
     EnchSet ench_set;
     for (const auto& e : item.enchs) {
-        int32_t global_id = reg.to_global_id(e.id);
-        if (global_id >= 0) {
-            std::string id_str = std::to_string(global_id);
-            ench_set.emplace(NSID(id_str), id_str, e.level);
-        }
+        NSID nsid = reg.to_global_id(e.id);
+        ench_set.emplace(nsid, nsid.str(), e.level);
     }
 
     if (item.type == algorithm::ItemType::Book) {

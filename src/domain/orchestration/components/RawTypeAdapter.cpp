@@ -3,8 +3,6 @@
 #include "domain/business/types/EnchInfo.h"
 #include "domain/business/types/Equipment.h"
 
-#include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -138,11 +136,11 @@ void RawTypeAdapter::revert(
     std::vector<RawEquipment>& out_equipments)
 {
     // -- EnchantmentRegistry -> RawEnchantment[] ------------------------------
-    const auto& ench_infos = ench_reg.data();
-    out_enchants.reserve(ench_infos.size());
-    for (const auto& info : ench_infos) {
+    const auto& ench_infos_map = ench_reg.data();
+    out_enchants.reserve(ench_infos_map.size());
+    for (const auto& [nsid, info] : ench_infos_map) {
         Id id;
-        auto str_id = info.id.str();
+        auto str_id = nsid.str();
         auto colon = str_id.find(':');
         if (colon != std::string::npos) {
             id.ns = str_id.substr(0, colon);
@@ -155,15 +153,10 @@ void RawTypeAdapter::revert(
         // Equipment NSIDs -> string names
         std::unordered_set<std::string> applicable;
         for (const auto& eq_nsid : info.applicable_equipments) {
-            bool found = false;
-            for (size_t i = 0; i < tag_reg.size(); ++i) {
-                if (tag_reg.at(i).id == eq_nsid) {
-                    applicable.insert(tag_reg.at(i).name);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found)
+            auto tag_it = tag_reg.find(eq_nsid);
+            if (tag_it != tag_reg.end())
+                applicable.insert(tag_it->name);
+            else
                 applicable.insert(eq_nsid.str());
         }
 
@@ -190,11 +183,11 @@ void RawTypeAdapter::revert(
     }
 
     // -- EquipmentRegistry -> RawEquipment[] ----------------------------------
-    const auto& eq_instances = eq_reg.data();
-    out_equipments.reserve(eq_instances.size());
-    for (const auto& eq : eq_instances) {
+    const auto& eq_map = eq_reg.data();
+    out_equipments.reserve(eq_map.size());
+    for (const auto& [eq_nsid, eq] : eq_map) {
         Id id;
-        auto str_id = eq.id.str();
+        auto str_id = eq_nsid.str();
         auto colon = str_id.find(':');
         if (colon != std::string::npos) {
             id.ns = str_id.substr(0, colon);
@@ -205,15 +198,10 @@ void RawTypeAdapter::revert(
         }
 
         std::string category_name;
-        bool found = false;
-        for (size_t i = 0; i < tag_reg.size(); ++i) {
-            if (tag_reg.at(i).id == eq.category) {
-                category_name = tag_reg.at(i).name;
-                found = true;
-                break;
-            }
-        }
-        if (!found)
+        auto tag_it = tag_reg.find(eq.category);
+        if (tag_it != tag_reg.end())
+            category_name = tag_it->name;
+        else
             category_name = "any";
 
         out_equipments.push_back({
