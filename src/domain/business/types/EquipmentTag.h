@@ -7,7 +7,7 @@ struct EquipmentTag {
     std::string name;
 
     bool operator==(const EquipmentTag &o) const { return id == o.id; }
-    bool operator<(const EquipmentTag &o) const { return id.str() < o.id.str(); }
+    auto operator<=>(const EquipmentTag &o) const { return id <=> o.id; }
 
     // Builtin tag accessors — function-local static, avoids static init order
     static const NSID &dummy()       { static const NSID id("#minecraft:dummy");       return id; }
@@ -25,4 +25,8 @@ struct EquipmentTag {
     static const NSID &trident()     { static const NSID id("#minecraft:trident");     return id; }
     static const NSID &shield()      { static const NSID id("#minecraft:shield");      return id; }
     static const NSID &fishing_rod() { static const NSID id("#minecraft:fishing_rod"); return id; }
+};
+
+template <> struct std::hash<EquipmentTag> {
+    size_t operator()(const EquipmentTag &tag) const { return std::hash<NSID>()(tag.id); }
 };

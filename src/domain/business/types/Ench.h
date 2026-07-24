@@ -1,5 +1,6 @@
 #pragma once
 #include "common/CommonTypes.h"
+#include "common/utils/HashUtils.hpp"
 #include <string>
 
 struct Ench {
@@ -13,15 +14,16 @@ struct Ench {
 
     bool operator==(const Ench &o) const noexcept { return id == o.id && level == o.level; }
     bool operator<(const Ench &o) const noexcept {
-        if (id == o.id) return level < o.level;
-        return id.str() < o.id.str();
+        if (id == o.id)
+            return level < o.level;
+        return id < o.id;
     }
 };
 
 template <> struct std::hash<Ench> {
     size_t operator()(const Ench &e) const noexcept {
         size_t h = std::hash<NSID>()(e.id);
-        h ^= static_cast<size_t>(e.level) << 16;
+        hash_combine(h, e.level);
         return h;
     }
 };

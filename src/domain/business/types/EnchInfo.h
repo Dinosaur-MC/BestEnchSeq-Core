@@ -16,11 +16,11 @@ struct EnchInfo {
     std::unordered_set<NSID> applicable_equipments;
 
     bool operator==(const EnchInfo &o) const { return id == o.id; }
-    bool operator<(const EnchInfo &o) const { return id.str() < o.id.str(); }
+    auto operator<=>(const EnchInfo &o) const { return id <=> o.id; }
+};
 
-    struct Hash {
-        size_t operator()(const EnchInfo &info) const { return std::hash<NSID>()(info.id); }
-    };
+template <> struct std::hash<EnchInfo> {
+    size_t operator()(const EnchInfo &info) const { return std::hash<NSID>()(info.id); }
 };
 
 using EnchInfoList = std::vector<EnchInfo>;

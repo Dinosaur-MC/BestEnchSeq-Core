@@ -14,7 +14,7 @@ struct Equipment {
     int32_t max_durability;
 
     bool operator==(const Equipment &o) const { return id == o.id; }
-    bool operator<(const Equipment &o) const { return id.str() < o.id.str(); }
+    auto operator<=>(const Equipment &o) const { return id <=> o.id; }
 };
 
 template <> struct std::hash<Equipment> {

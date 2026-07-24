@@ -49,6 +49,11 @@ struct Solution {
         const std::vector<Item> &available_items, const std::vector<EnchStep> &steps, bool is_valid = true,
         MetaData meta_data = MetaData{}
     );
+
+    bool operator<(const Solution &o) const {
+        return total_exp_cost == o.total_exp_cost ? get_peak_level_cost() < o.get_peak_level_cost()
+                                                  : total_exp_cost < o.total_exp_cost;
+    }
 };
 
 using EnchStepList = std::vector<Solution::EnchStep>;
