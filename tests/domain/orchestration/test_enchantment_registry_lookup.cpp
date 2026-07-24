@@ -7,41 +7,39 @@
 namespace {
 
 void test_registry_get_id_bare() {
-    EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
     infos.push_back({NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
                      std::unordered_set<NSID>{},
                      std::unordered_set<NSID>{EquipmentTag::sword()}});
-    reg.initialize(infos);
+    EnchantmentRegistry reg(infos);
 
-    int32_t id = reg.get_id(NSID("sharpness"));
-    expect(id >= 0, "bare name 'sharpness' should resolve");
+    size_t id = reg.index(NSID("sharpness"));
+    expect(id != EnchantmentRegistry::nops, "bare name 'sharpness' should resolve");
 
-    int32_t missing = reg.get_id(NSID("nonexistent"));
-    expect(missing < 0, "unknown name should return -1");
+    size_t missing = reg.index(NSID("nonexistent"));
+    expect(missing == EnchantmentRegistry::nops, "unknown name should return nops");
 
     std::cout << "  PASS: test_registry_get_id_bare" << std::endl;
 }
 
 void test_registry_get_id_namespaced() {
-    EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
     infos.push_back({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
                      std::unordered_set<NSID>{},
                      std::unordered_set<NSID>{EquipmentTag::sword()}});
-    reg.initialize(infos);
+    EnchantmentRegistry reg(infos);
 
-    // Bare lookup -- registry falls back to "minecraft:" prefix
-    int32_t id = reg.get_id(NSID("sharpness"));
-    expect(id >= 0, "bare name should resolve to namespaced entry");
+    // Bare lookup -- NSID("sharpness") normalizes to "minecraft:sharpness"
+    size_t id = reg.index(NSID("sharpness"));
+    expect(id != EnchantmentRegistry::nops, "bare name should resolve to namespaced entry");
 
     // Full namespaced lookup
-    int32_t ns_id = reg.get_id(NSID("minecraft:sharpness"));
-    expect(ns_id >= 0, "ns:id should resolve");
+    size_t ns_id = reg.index(NSID("minecraft:sharpness"));
+    expect(ns_id != EnchantmentRegistry::nops, "ns:id should resolve");
 
     // Unknown enchantment
-    int32_t missing = reg.get_id(NSID("mod:unknown"));
-    expect(missing < 0, "unknown ns:id should return -1");
+    size_t missing = reg.index(NSID("mod:unknown"));
+    expect(missing == EnchantmentRegistry::nops, "unknown ns:id should return nops");
 
     std::cout << "  PASS: test_registry_get_id_namespaced" << std::endl;
 }

@@ -7,43 +7,39 @@
 namespace {
 
 void test_add_new_enchantment() {
-    EnchantmentRegistry reg;
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    reg.initialize({sharp});
+    EnchantmentRegistry reg({sharp});
 
     EnchInfo new_ench{NSID("minecraft:custom_ench"), "Custom", MCE::All, 3, 3, 2, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    bool ok = reg.add(new_ench);
-    expect(ok, "add should succeed for new enchantment");
-    expect(reg.size() == 2, "registry should have 2 entries after add");
-    expect(reg.get_id(NSID("minecraft:custom_ench")) >= 0, "new enchantment should be findable");
+    bool ok = reg.insert(new_ench);
+    expect(ok, "insert should succeed for new enchantment");
+    expect(reg.size() == 2, "registry should have 2 entries after insert");
+    expect(reg.index(NSID("minecraft:custom_ench")) != EnchantmentRegistry::nops, "new enchantment should be findable");
     TEST_PASS("test_add_new_enchantment");
 }
 
 void test_add_duplicate_fails() {
-    EnchantmentRegistry reg;
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    reg.initialize({sharp});
+    EnchantmentRegistry reg({sharp});
 
-    bool ok = reg.add(sharp);
-    expect(!ok, "add should fail for duplicate name_id");
+    bool ok = reg.insert(sharp);
+    expect(!ok, "insert should fail for duplicate name_id");
     TEST_PASS("test_add_duplicate_fails");
 }
 
 void test_remove_existing() {
-    EnchantmentRegistry reg;
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    reg.initialize({sharp});
+    EnchantmentRegistry reg({sharp});
 
     bool ok = reg.remove(NSID("minecraft:sharpness"));
     expect(ok, "remove should succeed for existing entry");
-    expect(reg.get_id(NSID("minecraft:sharpness")) < 0, "removed entry should not be findable");
+    expect(reg.index(NSID("minecraft:sharpness")) == EnchantmentRegistry::nops, "removed entry should not be findable");
     TEST_PASS("test_remove_existing");
 }
 
 void test_remove_nonexistent_fails() {
-    EnchantmentRegistry reg;
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    reg.initialize({sharp});
+    EnchantmentRegistry reg({sharp});
 
     bool ok = reg.remove(NSID("minecraft:nonexistent"));
     expect(!ok, "remove should fail for nonexistent entry");
@@ -53,23 +49,25 @@ void test_remove_nonexistent_fails() {
 void test_modify_max_level() {
     EnchantmentRegistry reg;
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    reg.initialize({sharp});
+    reg = EnchantmentRegistry({sharp});
 
-    EnchInfo patch;
+    auto modified = reg.get(NSID("minecraft:sharpness"));
+    EnchInfo patch = modified;
     patch.max_level = 10;
-    bool ok = reg.modify(NSID("minecraft:sharpness"), patch);
-    expect(ok, "modify should succeed");
+    bool ok = reg.update(patch);
+    expect(ok, "update should succeed");
 
-    auto& modified = reg.get(NSID("minecraft:sharpness"));
-    expect(modified.max_level == 10, "max_level should be updated to 10");
-    expect(modified.multiplier == 1, "multiplier should remain unchanged");
+    const auto& updated = reg.get(NSID("minecraft:sharpness"));
+    expect(updated.max_level == 10, "max_level should be updated to 10");
+    expect(updated.multiplier == 1, "multiplier should remain unchanged");
     TEST_PASS("test_modify_max_level");
 }
 
 void test_modify_nonexistent_fails() {
     EnchantmentRegistry reg;
-    bool ok = reg.modify(NSID("nonexistent"), EnchInfo{});
-    expect(!ok, "modify should fail for nonexistent entry");
+    EnchInfo nonexistent{NSID("minecraft:nonexistent"), "Nonexistent", MCE::All, 1, 1, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    bool ok = reg.update(nonexistent);
+    expect(!ok, "update should fail for nonexistent entry");
     TEST_PASS("test_modify_nonexistent_fails");
 }
 

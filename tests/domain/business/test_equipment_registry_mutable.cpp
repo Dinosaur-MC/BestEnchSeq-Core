@@ -6,35 +6,32 @@
 namespace {
 
 void test_add_new_equipment() {
-    EquipmentRegistry reg;
     Equipment sword{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID(), 1561};
-    reg.initialize({sword});
+    EquipmentRegistry reg({sword});
 
     Equipment new_eq{NSID("minecraft:custom_item"), "Custom", NSID(), 100};
-    bool ok = reg.add(new_eq);
-    expect(ok, "add should succeed for new equipment");
+    bool ok = reg.insert(new_eq);
+    expect(ok, "insert should succeed for new equipment");
     expect(reg.size() == 2, "registry should have 2 entries");
     TEST_PASS("test_add_new_equipment");
 }
 
 void test_add_duplicate_fails() {
-    EquipmentRegistry reg;
     Equipment sword{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID(), 1561};
-    reg.initialize({sword});
+    EquipmentRegistry reg({sword});
 
-    bool ok = reg.add(sword);
-    expect(!ok, "add should fail for duplicate name_id");
+    bool ok = reg.insert(sword);
+    expect(!ok, "insert should fail for duplicate name_id");
     TEST_PASS("test_add_duplicate_fails");
 }
 
 void test_remove_existing() {
-    EquipmentRegistry reg;
     Equipment sword{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID(), 1561};
-    reg.initialize({sword});
+    EquipmentRegistry reg({sword});
 
     bool ok = reg.remove(NSID("minecraft:diamond_sword"));
     expect(ok, "remove should succeed for existing entry");
-    expect(reg.get_id(NSID("minecraft:diamond_sword")) < 0, "removed entry should not be findable");
+    expect(reg.index(NSID("minecraft:diamond_sword")) == EquipmentRegistry::nops, "removed entry should not be findable");
     TEST_PASS("test_remove_existing");
 }
 

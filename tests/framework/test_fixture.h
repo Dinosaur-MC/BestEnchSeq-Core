@@ -5,8 +5,6 @@
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/registries/AlgorithmRegistry.h"
-#include <cstdint>
-#include <string>
 #include <vector>
 
 using algorithm::AlgorithmRegistry;
@@ -18,8 +16,7 @@ using algorithm::AlgorithmRegistry;
 //
 // Usage:
 //   TestFixture fx;
-//   fx.categories.initialize();
-//   fx.enchants.initialize({...});
+//   fx.init_sword_set();
 //   // then pass fx.enchants / fx.categories / fx.equipment to code under test
 
 struct TestFixture {
@@ -37,8 +34,11 @@ struct TestFixture {
 };
 
 inline void TestFixture::init_sword_set() {
-    categories.initialize();
-    enchants.initialize({
+    categories = EquipmentTagRegistry({
+        {EquipmentTag::sword(), "sword"},
+        {EquipmentTag::chestplate(), "chestplate"},
+    });
+    enchants = EnchantmentRegistry({
         EnchInfo{NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
          1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{EquipmentTag::sword()}},
         EnchInfo{NSID("knockback"), "Knockback", MCE::All, 2, 2,
@@ -48,7 +48,7 @@ inline void TestFixture::init_sword_set() {
         EnchInfo{NSID("protection"), "Protection", MCE::All, 4, 4,
          1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{EquipmentTag::chestplate()}},
     });
-    equipment.initialize({
+    equipment = EquipmentRegistry({
         {NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561},
         {NSID("minecraft:diamond_chestplate"), "Diamond Chestplate",
          EquipmentTag::chestplate(), 528},
@@ -56,8 +56,10 @@ inline void TestFixture::init_sword_set() {
 }
 
 inline void TestFixture::init_chestplate_set() {
-    categories.initialize();
-    enchants.initialize({
+    categories = EquipmentTagRegistry({
+        {EquipmentTag::chestplate(), "chestplate"},
+    });
+    enchants = EnchantmentRegistry({
         EnchInfo{NSID("protection"), "Protection", MCE::All, 4, 4,
          1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{EquipmentTag::chestplate()}},
         EnchInfo{NSID("unbreaking"), "Unbreaking", MCE::All, 3, 3,
@@ -65,7 +67,7 @@ inline void TestFixture::init_chestplate_set() {
         EnchInfo{NSID("thorns"), "Thorns", MCE::All, 3, 3,
          1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{EquipmentTag::chestplate()}},
     });
-    equipment.initialize({
+    equipment = EquipmentRegistry({
         {NSID("minecraft:diamond_chestplate"), "Diamond Chestplate",
          EquipmentTag::chestplate(), 528},
     });

@@ -29,9 +29,8 @@ std::vector<EnchInfo> make_valid_enchants() {
 // test_initialize_and_get
 // ---------------------------------------------------------------------------
 void test_initialize_and_get() {
-    EnchantmentRegistry reg;
     auto infos = make_valid_enchants();
-    reg.initialize(infos);
+    EnchantmentRegistry reg(infos);
 
     expect(reg.size() == 2, "should have 2 enchantments");
 
@@ -53,9 +52,8 @@ void test_initialize_and_get() {
 // test_get_bounds
 // ---------------------------------------------------------------------------
 void test_get_bounds() {
-    EnchantmentRegistry reg;
     auto infos = make_valid_enchants();
-    reg.initialize(infos);
+    EnchantmentRegistry reg(infos);
 
     // Negative index
     bool threw = false;
@@ -84,8 +82,8 @@ void test_get_bounds() {
     }
     expect(threw, "get(NSID(\"unknown\")) should throw");
 
-    // get_id for unknown
-    expect(reg.get_id(NSID("nonexistent")) == -1, "get_id(NSID(\"nonexistent\")) == -1");
+    // index for unknown
+    expect(reg.index(NSID("nonexistent")) == IRegistry<EnchInfo>::nops, "index(NSID(\"nonexistent\")) == nops");
 
     std::cout << "PASS: test_get_bounds" << std::endl;
 }
@@ -155,7 +153,6 @@ void test_check_validation() {
 // test_is_incompatible
 // ---------------------------------------------------------------------------
 void test_is_incompatible() {
-    EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
     infos.emplace_back(
         NSID("sharpness"), "Sharpness", MCE::Java,
@@ -182,9 +179,7 @@ void test_is_incompatible() {
         std::unordered_set<NSID>{}
     );
 
-    reg.initialize(infos);
-
-    // sharpness and smite are incompatible (mutual exclusive_set)
+    EnchantmentRegistry reg(infos);
     expect(reg.is_incompatible(reg.get(0).id, reg.get(1).id), "sharpness and smite are incompatible");
     expect(reg.is_incompatible(reg.get(1).id, reg.get(0).id), "smite and sharpness are incompatible (symmetric)");
 
@@ -210,7 +205,6 @@ void test_is_incompatible() {
 // test_exclusive_set_access
 // ---------------------------------------------------------------------------
 void test_exclusive_set_access() {
-    EnchantmentRegistry reg;
     std::vector<EnchInfo> infos;
     infos.emplace_back(
         NSID("sharpness"), "Sharpness", MCE::Java,
@@ -225,7 +219,7 @@ void test_exclusive_set_access() {
         std::unordered_set<NSID>{}
     );
 
-    reg.initialize(infos);
+    EnchantmentRegistry reg(infos);
 
     const auto& excl = reg.get_exclusive_set(reg.get(0).id);
     expect(excl.size() == 1, "exclusive_set(sharpness) should have 1 entry");

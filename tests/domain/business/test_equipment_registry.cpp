@@ -31,9 +31,8 @@ std::vector<Equipment> make_test_equipment() {
 // test_initialize_and_get
 // ---------------------------------------------------------------------------
 void test_initialize_and_get() {
-    EquipmentRegistry reg;
     auto eqs = make_test_equipment();
-    reg.initialize(eqs);
+    EquipmentRegistry reg(eqs);
 
     expect(reg.size() == 3, "should have 3 equipment entries");
 
@@ -55,9 +54,8 @@ void test_initialize_and_get() {
 // test_get_bounds
 // ---------------------------------------------------------------------------
 void test_get_bounds() {
-    EquipmentRegistry reg;
     auto eqs = make_test_equipment();
-    reg.initialize(eqs);
+    EquipmentRegistry reg(eqs);
 
     // Negative index
     bool threw = false;
@@ -86,8 +84,8 @@ void test_get_bounds() {
     }
     expect(threw, "get(NSID(\"unknown\")) should throw");
 
-    // get_id for unknown
-    expect(reg.get_id(NSID("nonexistent")) == -1, "get_id(NSID(\"nonexistent\")) == -1");
+    // index for unknown
+    expect(reg.index(NSID("nonexistent")) == IRegistry<Equipment>::nops, "index(NSID(\"nonexistent\")) == nops");
 
     std::cout << "PASS: test_get_bounds" << std::endl;
 }
@@ -96,9 +94,8 @@ void test_get_bounds() {
 // test_get_by_category
 // ---------------------------------------------------------------------------
 void test_get_by_category() {
-    EquipmentRegistry reg;
     auto eqs = make_test_equipment();
-    reg.initialize(eqs);
+    EquipmentRegistry reg(eqs);
 
     // Query for swords (category EquipmentTag::sword())
     auto swords = reg.get_by_category(EquipmentTag::sword());
@@ -130,9 +127,8 @@ void test_get_by_category() {
 // test_get_name_map
 // ---------------------------------------------------------------------------
 void test_get_name_map() {
-    EquipmentRegistry reg;
     auto eqs = make_test_equipment();
-    reg.initialize(eqs);
+    EquipmentRegistry reg(eqs);
 
     auto name_map = reg.get_name_map();
 
@@ -160,9 +156,10 @@ void test_get_name_map() {
 // ---------------------------------------------------------------------------
 int main() {
     try {
-        // Initialize category registry with builtins (needed for some lookups)
+        // Initialize category registry (needed for some lookups)
+        // Note: cat_reg is not used directly in these tests; it only served as
+        // a dependency for old API compatibility.
         EquipmentTagRegistry cat_reg;
-        cat_reg.initialize();
 
         test_initialize_and_get();
         test_get_bounds();

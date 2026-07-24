@@ -2,23 +2,41 @@
 #include "domain/business/registries/EquipmentTagRegistry.h"
 #include <stdexcept>
 
+// All 14 vanilla equipment tags for testing
+static std::vector<EquipmentTag> all_builtin_tags() {
+    return {
+        {EquipmentTag::sword(), "sword"},
+        {EquipmentTag::helmet(), "helmet"},
+        {EquipmentTag::chestplate(), "chestplate"},
+        {EquipmentTag::leggings(), "leggings"},
+        {EquipmentTag::boots(), "boots"},
+        {EquipmentTag::pickaxe(), "pickaxe"},
+        {EquipmentTag::axe(), "axe"},
+        {EquipmentTag::shovel(), "shovel"},
+        {EquipmentTag::hoe(), "hoe"},
+        {EquipmentTag::bow(), "bow"},
+        {EquipmentTag::crossbow(), "crossbow"},
+        {EquipmentTag::trident(), "trident"},
+        {EquipmentTag::shield(), "shield"},
+        {EquipmentTag::fishing_rod(), "fishing_rod"},
+    };
+}
+
 void test_builtins_present() {
-    EquipmentTagRegistry categories;
-    categories.initialize();
+    EquipmentTagRegistry categories(all_builtin_tags());
 
     expect(categories.size() == 14,
            "builtins: should have 14 builtin tags");
-    expect(categories.get_id("sword") >= 0,
+    expect(categories.index(NSID("#minecraft:sword")) != EquipmentTagRegistry::nops,
            "builtins: sword should be present");
-    expect(categories.get_id("any") == -1,
+    expect(categories.index(NSID("#minecraft:any")) == EquipmentTagRegistry::nops,
            "builtins: 'any' is not a builtin tag");
 
     std::cout << "PASS: test_builtins_present" << std::endl;
 }
 
 void test_lookup_throwing() {
-    EquipmentTagRegistry categories;
-    categories.initialize();
+    EquipmentTagRegistry categories(all_builtin_tags());
 
     bool threw = false;
     try {
@@ -36,34 +54,40 @@ void test_lookup_throwing() {
     }
     expect(threw, "lookup: get(\"nonexistent\") should throw");
 
-    expect(categories.get_id("nonexistent") == -1,
-           "lookup: get_id(\"nonexistent\") should return -1");
+    expect(categories.index(NSID("#minecraft:nonexistent")) == EquipmentTagRegistry::nops,
+           "lookup: index(\"#minecraft:nonexistent\") should return nops");
 
     std::cout << "PASS: test_lookup_throwing" << std::endl;
 }
 
 void test_custom_categories() {
-    EquipmentTagRegistry categories;
-    categories.initialize({"mace", "wand"});
+    auto base = all_builtin_tags();
+    base.push_back({NSID("#minecraft:mace"), "mace"});
+    base.push_back({NSID("#minecraft:wand"), "wand"});
+    EquipmentTagRegistry categories(base);
 
-    expect(categories.size() >= 16,
-           "custom: size should be >= 16 (14 builtin + 2 custom)");
+    expect(categories.size() == 16,
+           "custom: size should be 16 (14 builtin + 2 custom)");
 
-    int32_t mace_id = categories.get_id("mace");
+    size_t mace_id = categories.index(NSID("#minecraft:mace"));
     expect(mace_id >= 14, "custom: mace should have id >= 14");
 
     std::cout << "PASS: test_custom_categories" << std::endl;
 }
 
 void test_duplicate_custom_skipped() {
-    EquipmentTagRegistry categories;
-    categories.initialize({"boots", "custom_item"});
+    auto base = all_builtin_tags();
+    base.push_back({NSID("#minecraft:custom_item"), "custom_item"});
+    // boots already exists in builtins, but EquipmentTagRegistry::insert()
+    // will reject duplicates, so we add it and verify only 15 exist
+    EquipmentTagRegistry categories(base);
+    categories.insert({EquipmentTag::boots(), "boots"});
 
     expect(categories.size() == 15,
-           "duplicate: size should be 15 (boots skipped)");
+           "duplicate: size should be 15 (boots insert rejected)");
 
-    // boots should still be present at its builtin index
-    expect(categories.get_id("boots") >= 0,
+    // boots should still be present
+    expect(categories.index(NSID("#minecraft:boots")) != EquipmentTagRegistry::nops,
            "duplicate: boots should still be present");
 
     std::cout << "PASS: test_duplicate_custom_skipped" << std::endl;
