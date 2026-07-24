@@ -1,4 +1,4 @@
-# 诊断子系统（`diagnostics/`）
+# 诊断子系统（`src/domain/algorithm/diagnostics/`）
 
 ## 事件链路
 

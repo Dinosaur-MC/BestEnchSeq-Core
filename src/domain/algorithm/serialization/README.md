@@ -1,4 +1,4 @@
-# 序列化模块（`serialization/`）
+# 序列化模块（`src/domain/algorithm/serialization/`）
 
 ## 设计目的
 

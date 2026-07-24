@@ -1,4 +1,4 @@
-# I/O 层（`io/`）
+# I/O 层（`src/common/io/`）
 
 自包含的 I/O 工具集，负责 JSON 解析、CSV 读写、二进制流操作。
 

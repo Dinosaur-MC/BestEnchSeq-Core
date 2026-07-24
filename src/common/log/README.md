@@ -1,4 +1,4 @@
-# 日志层（`log/`）
+# 日志层（`src/common/log/`）
 
 全局异步日志系统，基于 `std::atomic::wait` 实现零 CPU 空闲等待。
 

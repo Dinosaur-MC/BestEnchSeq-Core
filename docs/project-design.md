@@ -1,6 +1,6 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：1.1 · 最后更新：2026-07-20
+> 版本：1.2 · 最后更新：2026-07-24
 
 ---
 
@@ -12,12 +12,12 @@
 
 | 层面 | 命名空间 | 用途 | 特点 |
 |------|---------|------|------|
-| **Domain 类型** | 全局（`::`） | 输入解析、输出格式化、边界 I/O | 字符串 ID、完整元数据、可抛异常 |
-| **Compact 类型** | `compact::` | 算法热路径、forge 引擎 | `int16_t` 稠密 ID、连续内存、零异常路径 |
+| **Domain 类型** | 全局（`::`） | 输入解析、输出格式化、边界 I/O | 字符串 ID（NSID）、完整元数据、可抛异常 |
+| **Compact 类型** | `algorithm::` | 算法热路径、forge 引擎 | `int16_t` 稠密 ID、连续内存、零异常路径 |
 
-Domain 类型（`ItemStack`、`::EnchSet`、`EnchInfo` 等）是"胖对象"，包含字符串字段、Registry 指针、校验逻辑。它们适合在 CLI/JSON 边界处使用，但效率不足以支撑算法对数百万状态的搜索。
+Domain 类型（`Item`、`EnchSet`、`EnchInfo` 等）是"胖对象"，包含字符串字段、校验逻辑。它们适合在 CLI/JSON 边界处使用，但效率不足以支撑算法对数百万状态的搜索。
 
-Compact 类型（`compact::Item`、`compact::EnchSet`、`compact::Ench`）是"瘦值"，每个字段经过位宽裁剪，容器使用 `vector<Ench>` 而非 `unordered_set`。它们是为 L1 缓存行优化的算法内部表示。
+Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Ench`）是"瘦值"，每个字段经过位宽裁剪，容器使用 `vector<Ench>` 而非 `unordered_set`。它们是为 L1 缓存行优化的算法内部表示。
 
 **转换边界**：两种模型在 `CompactAdapter` 中互转，`main.cpp` 的管线中转换各发生一次。
 
@@ -27,25 +27,25 @@ Compact 类型（`compact::Item`、`compact::EnchSet`、`compact::Ench`）是"�
 
 ```cpp
 struct AlgorithmInput {
-    ForgeConfig config;
-    compact::ItemCollection items;   // 装备 + 书
-    compact::EnchCollection target;  // 目标附魔
-    Equipment equipment;             // 装备副本
-    compact::EnchReg ench_reg;       // 剪枝后的注册表
+    ForgeConfig f_config;              // 锻造配置（平台、忽略惩罚/上限等）
+    SearchConfig s_config;             // 搜索配置（最大解数、内存限制等）
+    algorithm::ItemCollection items;   // 装备 + 书
+    algorithm::EnchCollection target;  // 目标附魔
+    algorithm::EnchReg ench_reg;       // 剪枝后的紧凑注册表
 };
 ```
 
 没有指针、没有引用、没有全局单例依赖。`EnchReg` 作为值嵌入——传入 `AlgorithmExecutor` 后所有权一次性移交到工作线程。调用方不再持有任何共享状态。
 
-**推论**：`EnchReg` 不再是单例。每次 `apply()` 创建独立的 `EnchReg`，用 `create_subset()` 剪枝后直接放入 `AlgorithmInput`。
+**推论**：`EnchReg` 不再是单例。`CompactAdapter::apply()` 每调用创建独立的 `EnchReg`，用 `EnchReg::init()` 初始化后直接放入 `AlgorithmInput`。
 
 ### 3. 计算逻辑下沉到算法层
 
 Domain 类型逐渐剥离计算职责，成为纯数据容器：
 
-- `::EnchSet` — 删除 `combine()`、`combine_s()`、`is_incompatible()`、`update_cache()`
+- `EnchSet` — 删除 `combine()`、`combine_s()`、`is_incompatible()`、`update_cache()`
 - `Ench` — 删除 `operator+`
-- `ItemStack` — 删除 `update_cache()`、`get_penalty_cost()`
+- `Item` — 删除 `update_cache()`、`get_penalty_cost()`
 
 所有 forge 逻辑集中到 `IForgeEngine` 虚接口中，由 `ForgeEngine`（原版）或其子类（mod）实现。
 
@@ -122,7 +122,7 @@ struct ForgeConfig {
                                                         │
                                             ┌───────────▼───────────┐
                                             │  OutputFormatter     │
-                                            │  (domain EnchSolution)│
+                                            │  (domain Solution)   │
                                             └───────────────────────┘
 ```
 
@@ -146,7 +146,7 @@ RawEnchantment[] + RawEquipment[] 合并流
      ▼
 RawTypeAdapter::resolve()
      │
-     ├── EquipmentCategoryRegistry
+     ├── EquipmentTagRegistry
      ├── EquipmentRegistry
      └── EnchantmentRegistry
 ```
@@ -156,23 +156,25 @@ RawTypeAdapter::resolve()
 
 ### 注册表体系
 
+算法域和业务域各自维护自己的注册表，中间通过 `CompactAdapter` 桥接：
+
 ```
-EnchantmentRegistry (global, full)
+Business domain (src/domain/business/registries/):
+  EnchantmentRegistry (global, NSID keyed, full metadata)
+  EquipmentRegistry (NSID keyed)
+  EquipmentTagRegistry (tag-based equipment classification)
        │
-       │ create_subset(applicable_ids)
+       │ CompactAdapter::apply()
        ▼
-EnchantmentRegistry (subset, dense IDs 0..N-1)
-       │
-       │ EnchReg::init(subset, target_equip)
-       ▼
-compact::EnchReg (flat conflict matrix)
+Algorithm domain (src/domain/algorithm/registries/):
+  EnchReg (flat conflict matrix, int16_t dense IDs)
        │
        │ owned by AlgorithmInput → executor → worker thread
        ▼
 算法搜索: is_conflict(), reg[id].mul, reg[id].mul_b, reg[id].max_lvl
 ```
 
-`EnchantmentRegistry` 支持子集派生，新子集的 ID 重新映射为 `0..N-1` 的稠密序列，通过 `to_global_id()` / `to_local_id()` 双向映射。
+`CompactAdapter::apply()` 提取目标装备适用的附魔，构造 `CompactEnchInfo[]` 向量，用 `EnchReg::init()` 初始化为紧凑注册表。`EnchReg` 维护 `to_global_id()` / `to_local_id()` 双向映射。
 
 ### 算法策略体系
 
@@ -209,40 +211,42 @@ compact::EnchReg (flat conflict matrix)
 
 ---
 
-## 模块职责
+## 模块职责（四域架构）
 
-### `src/adapters/`
+### `src/domain/orchestration/components/`（编排域）
 **CompactAdapter** 是 domain ↔ compact 双向转换的唯一边界：
-- `apply()`：验证输入 → `create_subset()` 剪枝 EnchReg → 转换物品 → 返回 `AlgorithmInput`
-- `recall()`：遍历 compact steps → `to_global_id()` 恢复附魔 ID → 构建 `EnchSolution`
+- `apply()`：验证输入 → 构造 CompactEnchInfo → init EnchReg → 转换物品 → 返回 `AlgorithmInput`
+- `recall()`：遍历 compact steps → `to_global_id()` 恢复附魔 ID → 构建 `Solution`
 - `from_domain()` / `to_domain()`：单物品转换
 
-### `src/algorithm/forge/`
+### `src/domain/algorithm/forge_engine/`（算法域）
 **IForgeEngine**（虚接口）+ **ForgeEngine**（原版实现）：
 - `forge_into()`：原地锻造（修改 target），返回成本
 - `forge()`：非修改锻造，返回 `{result, cost}`
 - `is_forgeable()`：物品可锻造性
-- Sub-ops：`penalty_cost`、`apply_cap`、`estimate_forge_cost`（书本乘数由 `compact::EnchInfo::mul_b` 预计算）
+- Sub-ops：`penalty_cost`、`apply_cap`、`estimate_forge_cost`（书本乘数由 `algorithm::EnchInfo::mul_b` 预计算）
 
-### `src/types/CompactedTypes.h`
+### `src/domain/algorithm/types/`（算法类型）
 算法层使用的紧凑数据类型：
-- `compact::Ench`（int16_t id + level）
-- `compact::EnchSet`（vector<Ench> 有序存储，lower_bound 插入）
-- `compact::Item`（type + dur + ppn + enchs）
-- `compact::EnchStep`（base + sacrifice + cost）
-- `compact::EnchInfo`（mul + max_lvl + exc_mask + applicable）
+- `algorithm::Ench`（int16_t id + level）
+- `algorithm::EnchSet`（vector<Ench> 有序存储，lower_bound 插入）
+- `algorithm::Item`（type + dur + ppn + enchs）
+- `algorithm::EnchStep`（base + sacrifice + cost）
+- `algorithm::CompactEnchInfo`（mul + max_lvl + exc_mask + applicable）
 
-### `src/registries/CompactedRegistries.h`
-**compact::EnchReg**：预计算针对特定装备的紧凑注册表：
+### `src/domain/algorithm/registries/`（算法注册表）
+**algorithm::EnchReg**：预计算针对特定装备的紧凑注册表：
 - N×N 扁平冲突矩阵（`vector<char>`）
-- 预计算 `EnchInfo[]`（multiplier、max_level、applicable、exc_mask）
+- 预计算 `CompactEnchInfo[]`（multiplier、max_level、applicable、exc_mask）
 
-### `src/registries/RegistryManager.h/.cpp`
+### `src/domain/business/registries/`（业务注册表）
 **RegistryManager**：注册表数据源管理，处理多 registry 的发现、筛选、加载和解析。
 - `add_builtin()` — 注册内建 Vanilla 数据
 - `scan_registry_dir()` — 扫描目录发现所有合法 registry
 - `load_and_resolve()` — 根据筛选条件加载并解析到 domain registries
 - 无筛选时加载全部（WARN+SKIP），有筛选时严格模式（全部必须成功）
+
+`EnchantmentRegistry` 提供完整的 NSID 注册表操作（名称查询、添加、修改、删除）。
 
 ---
 
@@ -256,13 +260,14 @@ compact::EnchReg (flat conflict matrix)
 
 ## 参考
 
-- `src/adapters/CompactAdapter.h/.cpp` — 边界转换
-- `src/algorithm/forge/IForgeEngine.h` — forge 接口
-- `src/algorithm/forge/ForgeEngine.h/.cpp` — 原版实现
-- `src/types/CompactedTypes.h/.cpp` — 紧凑类型
-- `src/registries/CompactedRegistries.h/.cpp` — 紧凑注册表
-- `src/algorithm/AlgorithmExecutor.h/.cpp` — 执行引擎
-- `src/algorithm/strategies/` — 8 种算法策略
+- `src/domain/orchestration/components/CompactAdapter.h/.cpp` — 边界转换
+- `src/domain/algorithm/forge_engine/IForgeEngine.h` — forge 接口
+- `src/domain/algorithm/forge_engine/ForgeEngine.h/.cpp` — 原版实现
+- `src/domain/algorithm/types/CompactedTypes.h/.cpp` — 紧凑类型
+- `src/domain/algorithm/registries/EnchReg.h/.cpp` — 紧凑注册表
+- `src/domain/business/registries/EnchantmentRegistry.h/.cpp` — 业务注册表
+- `src/domain/algorithm/AlgorithmExecutor.h/.cpp` — 执行引擎
+- `src/domain/algorithm/_strategies/` — 8 种算法策略
 - `docs/algorithm-design-discussion.md` — 算法设计详细探讨
 - `docs/anvil-mechanics-reference.md` — 铁砧机制参考
 - `docs/MPMCQueue.md` — MPMC/SPSC 无锁队列设计、正确性证明与性能模型

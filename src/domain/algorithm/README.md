@@ -1,4 +1,4 @@
-# 算法层（`src/algorithm/`）
+# 算法层（`src/domain/algorithm/`）
 
 ## 架构
 
@@ -61,13 +61,13 @@ CLI → EnchParser/ItemParser → build_target/build_enchset (cli helpers)
 
 ## 紧凑类型约定
 
-算法层**只能使用 `compact` 命名空间中的类型**，不允许 domain 类型泄漏进来。每个策略 `.cpp` 默认 `using namespace compact;`，所有 `compact::` 前缀省略。
+算法层**只能使用 `algorithm` 命名空间中的类型**，不允许 domain 类型泄漏进来。核心紧凑类型定义在 `src/domain/algorithm/types/` 下。
 
 核心紧凑类型：
 
 | 类型 | 内存 | 说明 |
 |---|---|---|
-| `Ench` | 4 B | int16_t id + level |
+| `Enchantment` (Ench) | 4 B | int16_t id + level |
 | `EnchSet` | ≤ 64 B inline | 最多 16 附魔，零堆分配 |
 | `Item` | ~72 B | type + dur + ppn + EnchSet |
 | `EnchSolution` | — | 步骤序列 + 总消耗 |

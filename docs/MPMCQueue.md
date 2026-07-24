@@ -2,7 +2,7 @@
 
 > 目标平台：LLVM Clang++ 22 / C++20  
 > 设计约束：完全无锁（zero mutex）、零阻塞、百万并发友好  
-> 仓库位置：`src/utils/queue/BoundedMPMCQueue.hpp` · `src/utils/queue/SegmentedMPMCQueue.hpp`
+> 仓库位置：`src/common/utils/queue/BoundedMPMCQueue.hpp` · `src/common/utils/queue/SegmentedMPMCQueue.hpp`
 
 ---
 
@@ -246,7 +246,7 @@ if (pos < block->base_ticket) [[unlikely]] {
 
 ## 4. 统一接口层：IQueue 与 QueueType
 
-所有队列类型继承自 `IQueue<T>` 虚接口（位于 `src/utils/queue/IQueue.h`），并提供统一的
+所有队列类型继承自 `IQueue<T>` 虚接口（位于 `src/common/utils/queue/IQueue.h`），并提供统一的
 `try_push(const T&) -> bool`、`try_push(T&&) -> bool`、`try_pop(T&) -> bool` 签名。
 
 ### QueueType 概念
@@ -577,13 +577,13 @@ numa_run_on_node(node_id);
 
 ## 10. 与现有队列对比
 
-所有队列实现共享 `IQueue<T>` 虚接口（`src/utils/queue/IQueue.h`），并通过
+所有队列实现共享 `IQueue<T>` 虚接口（`src/common/utils/queue/IQueue.h`），并通过
 `QueueType<T>` 概念约束泛型消费者。参见第 4 节。
 
 ### 10.1 SPSCQueue
 
 ```
-src/utils/queue/SPSCQueue.hpp — 单生产者单消费者
+src/common/utils/queue/SPSCQueue.hpp — 单生产者单消费者
 
 特点：无 CAS，纯 load/store，极致简单
 限制：仅 1P/1C
@@ -593,7 +593,7 @@ src/utils/queue/SPSCQueue.hpp — 单生产者单消费者
 ### 10.2 SPMCQueue
 
 ```
-src/utils/queue/SPMCQueue.hpp — 单生产者多消费者
+src/common/utils/queue/SPMCQueue.hpp — 单生产者多消费者
 
 特点：generational slot，消费者可以自由读取
 限制：仅 1P/N 消费者

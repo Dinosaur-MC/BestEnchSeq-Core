@@ -57,11 +57,11 @@ cd build && ctest --output-on-failure
 
 ## Architecture
 
-The project uses a **two-tier type system**: compact types (`namespace compact`) for algorithm hot paths, and domain types for I/O boundaries. The algorithm layer has zero domain type dependencies.
+The project uses a **four-domain architecture** built on shared utilities. The algorithm domain uses compact types (`namespace algorithm`) for hot paths, while business/interface domains use domain types for I/O boundaries. The algorithm layer has zero domain type dependencies.
 
 ```
-CLI → CLIParser + ItemParser/EnchParser (domain)
-  → ItemResolver / InventoryResolver (domain validation)
+CLI → Interface parsers (domain)
+  → Interface resolvers (domain validation)
   → CompactAdapter::apply() (validates + prunes EnchReg + converts)
   → AlgorithmInput (compact) → AlgorithmExecutor → IAlgorithm
   → AlgorithmOutput (compact steps)
@@ -73,136 +73,126 @@ CLI → CLIParser + ItemParser/EnchParser (domain)
 
 ```
 src/
-├── main.cpp                     ← Entrypoint: init registries → parse → CompactAdapter → executor → output
-├── config/                      ← Configuration layer (leaf, only STL + EnvUtil)
-│   ├── ForgeConfig.h            ← Forge behavior config (uses MCE from types/Platform.h)
-│   ├── SearchConfig.h           ← Search limits (max_solutions, max_depth, memory_mb, time)
-│   ├── AppConfig.h              ← Application-level config (env-var backed)
-│   └── BuildConfig.h.in         ← CMake-generated compile-time config (version, feature toggles)
-├── cli/                         ← CLI config + parsing (CLIConfig, EnchantmentSpec, TargetSpec)
-│   ├── cli.h/.cpp               ← parse_cli(), build_target(), build_enchset(), apply_config_pairs()
-│   └── RegistryEditor.h/.cpp    ← apply_registry_edits() for --registry-edit
-├── adapters/                    ← Domain ↔ compact / serialization boundary
-│   ├── CompactAdapter.h/.cpp    ← apply / recall (domain ↔ compact)
-│   ├── RawTypeAdapter.h/.cpp    ← Raw (string) ↔ Domain registries (resolve / revert)
-│   ├── OutputFormatter.h/.cpp   ← EnchSolution → text/compact/json
-│   └── EnchSerializer.h/.cpp    ← EnchInfo/Equipment ↔ JSON/CSV/MC official
-├── types/                       ← Domain data types (pure data, no computation)
-│   ├── CompactedTypes.h/.cpp    ← Compact types (namespace compact): Ench, EnchSet, Item, EnchStep
-│   ├── EnchInfo.h/.cpp          ← Full enchantment definition
-│   ├── EnchSet.h/.cpp           ← EnchSet container
-│   ├── Ench.h                   ← Enchantment ID + level pair
-│   ├── ItemStack.h/.cpp         ← Item with enchantments
-│   ├── Equipment.h/.cpp         ← Equipment definition
-│   ├── EnchSolution.h/.cpp      ← Solution type
-│   ├── Platform.h               ← MCE enum (Minecraft edition Java/Bedrock/All)
-│   ├── AlgorithmTypes.h         ← AlgorithmInput, AlgorithmOutput, ProgressStatus, AlgorithmState
-│   ├── LogTypes.h               ← LogLevel, LogEntry
-│   ├── RawTypes.h               ← String-based intermediates (RawEnchInfo, RawEquipment)
-│   └── EquipmentCategory.h      ← Equipment category constants
-├── log/                         ← Global async Logger (singleton; uses LogLevel/types)
-│   ├── Logger.h/.cpp            ← Global async Logger. Built on EventLoop data
-│   │                               mode (SegmentedMPSCQueue + FileHandler).
-│   └── log.hpp                  ← Free-function wrappers + LOG_INFO / LOG_WARN macros
-├── resolvers/                   ← Domain-level input resolution
-│   ├── ItemResolver.h/.cpp      ← Direct-mode: applicability, conflict, diff, book generation
-│   ├── InventoryResolver.h/.cpp ← Inventory-mode: parse JSON inventory, resolve IDs, sort by priority
-│   └── TagResolver.hpp          ← Tag reference (#tag) resolution (for MC official format)
-├── registries/                  ← Domain registries
-│   ├── EnchantmentRegistry.h/.cpp  ← Full enchantment registry with subset derivation
-│   ├── EquipmentRegistry.h/.cpp
-│   ├── EquipmentCategoryRegistry.h/.cpp
-│   ├── AlgorithmRegistry.h/.cpp ← Algorithm factory
-│   ├── CompactedRegistries.h/.cpp ← EnchReg: compact subset with O(1) conflict matrix
-│   ├── RegistryAccess.h         ← Meyer's singleton accessors
-│   └── RegistryManager.h/.cpp   ← Registry data source management (discovery, loading, filtering)
-├── parsers/                     ← Input parsing (zero registry dependencies)
-│   ├── CLIParser.h/.cpp         ← Generic key-value CLI parser
-│   ├── InputParser.h/.cpp       ← CLIConfig → ParsedInput
-│   ├── EnchInfoParser.h/.cpp    ← Data file → RawEnchInfo
-│   ├── EquipmentParser.h/.cpp   ← Data file → RawEquipment
-│   └── ParserUtilsDomain.hpp    ← Domain helpers (DataFormat, parse_platform, split_namespace; from utils/)
-├── algorithm/                   ← Zero domain types
-│   ├── IAlgorithm.h             ← AlgorithmInput + AlgorithmOutput + IAlgorithm interface
-│   ├── AlgorithmExecutor.h/.cpp ← Async engine (thread lifecycle + observer dispatch)
-│   ├── ExecutionContext.h/.cpp  ← Cancel/pause/progress + accumulator
-│   ├── diagnostics/             ← Async diagnostics pipeline (event-driven)
-│   │   ├── AlgorithmObserver.h  ← Streaming callback interface
-│   │   ├── DiagnosticsService.h/.cpp ← Event dispatch + observer notification
-│   │   ├── DiagnosticsWriter.h/.cpp  ← Persist-to-disk
-│   │   └── AlgorithmDiagnostics.h/.cpp ← Exit diagnostics struct hierarchy
-│   ├── components/              ← Algorithm building blocks
-│   │   ├── Heuristic.h          ← Pool-based admissible heuristic
-│   │   ├── HeuristicBasic.h     ← Direct Item-vector heuristic (no ItemPool dep)
-│   │   ├── SearchUtils.h        ← fill_max_levels / compute_h helpers
-│   │   ├── StateHash.h          ← State hashing utilities
-│   │   └── ItemPool.h           ← Hash-dedup item pool (backed by MemoryPool)
-│   ├── serialization/           ← Checkpoint: binary serialization for algorithm state
-│   │   ├── IAlgorithmSerializer.h/.cpp ← Base class: file header + common sections + CRC
-│   │   ├── CompactSerializer.h/.cpp    ← Compact type read/write primitives (Ench, Item, …)
-│   │   └── CMakeLists.txt
-│   ├── forge/
-│   │   ├── IForgeEngine.h       ← Virtual interface + default sub-ops
-│   │   └── ForgeEngine.h/.cpp   ← Vanilla implementation
-│   └── strategies/              ← Algorithm strategy implementations
-│       ├── greedy/              GreedyAlgorithm (fast approximate)
-│       ├── diff_first/          DiffFirstAlgorithm (difficulty_first, PPN-layer merge)
-│       ├── hamming/             HammingAlgorithm (popcount-balanced tree)
-│       ├── hierarchical/        HierarchicalMergeAlgorithm (large-scale approx)
-│       ├── penalty_balance/     DynamicPenaltyBalancingAlgorithm
-│       ├── dfs/                 DFSAlgorithm (branch-and-bound + heuristic)
-│       ├── astar/               AStarAlgorithm (exact optimal + ItemPool)
-│       │   ├── AStarAlgorithm.* / AStarDiagnostics.* / AStarMemoryBudget.*
-│       └── idastar/             IDAStarAlgorithm (TTTable, memory-efficient)
-│           ├── IDAStarAlgorithm.* / IDAStarDiagnostics.*
-│           └── TTTable.h        ← Epoch-based transposition table
-├── utils/                       ← Generic utilities, zero project dependencies
-│   ├── ParserUtils.hpp          ← String/JSON/file helpers (general)
-│   ├── EnvUtil.hpp              ← Env-var access (get_env<T>)
-│   ├── ExpCalculator.hpp        ← Level ↔ XP conversion
-│   ├── HashUtils.hpp            ← hash_combine()
-│   ├── FlatHashMap.hpp          ← Open-addressing hash map
-│   ├── MemoryPool.hpp           ← PMR monotonic buffer memory resource
-│   ├── ObjectPool.hpp           ← Fixed-size freelist object pool
-│   ├── EventLoop.hpp            ← Zero-CPU-idle event loop (atomic::wait).
-│   │                               Callable mode (default) + Data mode
-│   │                               (compile-time via Handler template param)
-│   └── queue/                   ← Lock-free queue family (Vyukov sequence numbers)
-│       ├── IQueue.h             ← Virtual queue interface + QueueType concept
-│       ├── BoundedMPMCQueue.hpp ← MPMC bounded
-│       ├── BoundedMPSCQueue.hpp ← MPSC bounded
-│       ├── SegmentedMPMCQueue.hpp ← MPMC unbounded
-│       ├── SegmentedMPSCQueue.hpp ← MPSC unbounded
-│       ├── SPSCQueue.hpp        ← SPSC bounded
-│       └── SPMCQueue.hpp        ← SPMC bounded
-├── io/                          ← I/O primitives (leaf, zero project deps)
-│   ├── json.h/.cpp              ← Generic JSON DOM (parse + serialize)
-│   ├── CsvIO.h/.cpp             ← CSV parse / format / write
-│   └── ByteStream.h             ← Binary byte I/O (u8/16/32/64, varint, string)
+├── main.cpp                             ← Entrypoint
+├── BESQTypes.h                          ← Umbrella include
+├── common/                              ← Shared utilities (zero domain deps)
+│   ├── io/                              ← JSON DOM, CSV reader/writer, ByteStream
+│   ├── log/                             ← Global async Logger (SegmentedMPSCQueue + EventLoop)
+│   │   ├── Logger.h/.cpp                ← Logger + LOG_INFO / LOG_WARN macros
+│   │   └── log.hpp                      ← Free-function wrappers
+│   └── utils/                           ← Generic utilities
+│       ├── ParserUtils.hpp              ← String/JSON/file helpers
+│       ├── EnvUtil.hpp                  ← Env-var access (get_env<T>)
+│       ├── ExpCalculator.hpp            ← Level ↔ XP conversion
+│       ├── HashUtils.hpp                ← hash_combine()
+│       ├── FlatHashMap.hpp              ← Open-addressing hash map
+│       ├── MemoryPool.hpp               ← PMR monotonic buffer
+│       ├── ObjectPool.hpp               ← Fixed-size freelist pool
+│       ├── EventLoop.hpp                ← Zero-CPU-idle event loop
+│       └── queue/                       ← Lock-free queue family
+│           ├── IQueue.h                 ← Virtual interface + QueueType concept
+│           ├── BoundedMPMCQueue.hpp      ← MPMC bounded
+│           ├── BoundedMPSCQueue.hpp      ← MPSC bounded
+│           ├── SegmentedMPMCQueue.hpp    ← MPMC unbounded
+│           ├── SegmentedMPSCQueue.hpp    ← MPSC unbounded
+│           ├── SPSCQueue.hpp             ← SPSC bounded
+│           └── SPMCQueue.hpp             ← SPMC bounded
+├── domain/
+│   ├── algorithm/                       ← Algorithm domain (zero business/interface deps)
+│   │   ├── IAlgorithm.h                 ← AlgorithmInput/Output + IAlgorithm interface
+│   │   ├── AlgorithmExecutor.h/.cpp     ← Async engine (thread lifecycle + observer)
+│   │   ├── ExecutionContext.h/.cpp      ← Cancel/pause/progress + solution accumulator
+│   │   ├── types/                       ← Compact types + config types
+│   │   │   ├── CompactedTypes.h/.cpp    ← Ench, EnchSet, Item, EnchStep (namespace algorithm)
+│   │   │   ├── AlgorithmTypes.h         ← AlgorithmInput, AlgorithmOutput, AlgorithmState
+│   │   │   └── ConfigTypes.h            ← ForgeConfig, SearchConfig
+│   │   ├── registries/                  ← Compact EnchReg (O(1) conflict matrix)
+│   │   │   └── EnchReg.h/.cpp           ← N×N vector<char> conflict matrix
+│   │   ├── forge_engine/                ← Forge engine (virtual + vanilla impl)
+│   │   │   ├── IForgeEngine.h           ← Virtual interface + default sub-ops
+│   │   │   └── ForgeEngine.h/.cpp       ← Vanilla implementation
+│   │   ├── _strategies/                 ← Algorithm strategy implementations
+│   │   │   ├── greedy/                  GreedyAlgorithm (fast approximate)
+│   │   │   ├── dfs/                     DFSAlgorithm (B&B + hash memoization)
+│   │   │   ├── astar/                   AStarAlgorithm (exact optimal)
+│   │   │   ├── idastar/                 IDAStarAlgorithm (TTTable, memory-efficient)
+│   │   │   ├── hamming/                 HammingAlgorithm (popcount-balanced tree)
+│   │   │   ├── hierarchical/            HierarchicalMergeAlgorithm (large-scale approx)
+│   │   │   ├── penalty_balance/         DynamicPenaltyBalancingAlgorithm
+│   │   │   └── diff_first/              DiffFirstAlgorithm (PPN-layer merge)
+│   │   ├── components/                  ← Algorithm building blocks
+│   │   │   ├── Heuristic.h              ← Pool-based admissible heuristic
+│   │   │   ├── HeuristicBasic.h         ← Direct Item-vector heuristic
+│   │   │   ├── SearchUtils.h            ← fill_max_levels / compute_h helpers
+│   │   │   ├── StateHash.h              ← State hashing utilities
+│   │   │   └── ItemPool.h               ← Hash-dedup item pool (MemoryPool-backed)
+│   │   ├── diagnostics/                 ← Event-driven diagnostics pipeline
+│   │   │   ├── IAlgorithmObserver.h     ← Streaming callback interface
+│   │   │   ├── DiagnosticsService.h/.cpp← Event dispatch + observer notification
+│   │   │   ├── DiagnosticsWriter.h/.cpp ← Persist-to-disk
+│   │   │   └── AlgorithmDiagnostics.h/.cpp ← Exit diagnostics struct hierarchy
+│   │   ├── serialization/               ← Binary checkpoint for algorithm state
+│   │   │   ├── IAlgorithmSerializer.h/.cpp ← Base class + common sections + CRC
+│   │   │   └── CompactSerializer.h/.cpp ← Compact type read/write (Ench, Item, …)
+│   │   ├── plugin/                      ← AlgorithmLoader (built-in + plugin hot-loading)
+│   │   └── resolvers/                   ← Algorithm-level resolution helpers
+│   ├── business/                        ← Business domain (types and registries)
+│   │   ├── types/
+│   │   │   ├── Item.h/.cpp              ← Item (was ItemStack)
+│   │   │   ├── Ench.h                   ← Enchantment ID + level pair
+│   │   │   ├── EnchSet.h/.cpp           ← EnchSet container
+│   │   │   ├── EnchInfo.h/.cpp          ← Full enchantment definition
+│   │   │   ├── Equipment.h/.cpp         ← Equipment definition
+│   │   │   ├── EquipmentTag.h           ← Equipment tag (was EquipmentCategory)
+│   │   │   ├── Solution.h/.cpp          ← Solution type (was EnchSolution)
+│   │   │   └── CommonTypes.h            ← MCE enum, NSID type
+│   │   └── registries/
+│   │       ├── EnchantmentRegistry.h/.cpp  ← Full enchantment registry (mutable)
+│   │       ├── EquipmentRegistry.h/.cpp
+│   │       ├── EquipmentTagRegistry.h/.cpp ← Equipment tag registry
+│   │       └── RegistryManager.h/.cpp      ← Discovery/loading/filtering
+│   ├── interface/                       ← Interface domain (I/O boundary)
+│   │   ├── cli/                         ← CLI argument parsing
+│   │   ├── parsers/                     ← File format parsers (auto-detect JSON/CSV/MC)
+│   │   ├── api/                         ← Library API for external consumers
+│   │   ├── abi/                         ← ABI stability layer
+│   │   ├── types/                       ← Interface-level types
+│   │   ├── components/                  ← Input validation, orchestrator helpers
+│   │   └── fs/                          ← Filesystem operations
+│   └── orchestration/                   ← Orchestration domain (cross-domain glue)
+│       ├── components/
+│       │   ├── CompactAdapter.h/.cpp    ← apply / recall (domain ↔ compact)
+│       │   ├── RawTypeAdapter.h/.cpp    ← Raw (string) ↔ Domain registries
+│       │   ├── OutputFormatter.h/.cpp   ← Solution → text/compact/json
+│       │   └── EnchSerializer.h/.cpp    ← EnchInfo/Equipment ↔ JSON/CSV/MC official
+│       └── types/                       ← Cross-domain result/error types
 ├── data/
-│   ├── CMakeLists.txt           ← Embeds vanilla.json into binary at compile time
-│   └── builtin/vanilla.json     ← Built-in Vanilla Minecraft enchantment data
-└── BESQTypes.h                  ← Umbrella include for domain types
+│   ├── CMakeLists.txt                   ← Embeds vanilla.json at compile time
+│   └── builtin/vanilla.json             ← Built-in Vanilla data
+├── builtin/
+│   └── DataLoader.h/.cpp                ← Built-in data loading
+
+tests/                                   ← Per-component standalone test executables
+benchmarks/                              ← Performance benchmarks
 ```
 
 See `docs/MPMCQueue.md` for the full queue design documentation.
-Per-layer READMEs (architecture, API reference, development guide):
-`src/types/`, `src/utils/`, `src/parsers/`, `src/adapters/`, `src/algorithm/serialization/`,
-`src/registries/`, `src/io/`, `src/log/`, and `src/algorithm/` (with sub-directories).
 
 ### Key Design Decisions
 
-**Compact types**: `Ench` (4 bytes), `compact::EnchSet` (sorted vector, O(log N) lookup), `Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
+**Compact types (algorithm::)**: `algorithm::Ench` (4 bytes), `algorithm::EnchSet` (sorted vector, O(log N) lookup), `algorithm::Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
 
-**Flat conflict matrix**: `EnchReg` stores an N×N `vector<char>` for O(1) incompatibility checks — single allocation, contiguous memory.
+**Flat conflict matrix**: `algorithm::EnchReg` stores an N×N `vector<char>` for O(1) incompatibility checks — single allocation, contiguous memory.
 
-**EnchReg pruning**: `CompactAdapter::apply()` builds a subset of the global registry (via `EnchantmentRegistry::create_subset()`) that only includes enchantments applicable to the target equipment. Smaller conflict matrix, faster lookups.
+**EnchReg pruning**: `CompactAdapter::apply()` builds a subset of the global registry (via `CompactEnchInfo` construction) that only includes enchantments applicable to the target equipment. Smaller conflict matrix, faster lookups.
 
-**IForgeEngine virtual interface**: All forge sub-operations (`penalty_cost`, `apply_cap`, `estimate_forge_cost`) have default vanilla implementations. Subclass only what you need for modded rules. `ForgeEngine` overrides to respect `ForgeConfig` flags. Book multiplier is precomputed as `compact::EnchInfo::mul_b` at data-load time.
+**IForgeEngine virtual interface**: All forge sub-operations (`penalty_cost`, `apply_cap`, `estimate_forge_cost`) have default vanilla implementations. Subclass only what you need for modded rules. `ForgeEngine` overrides to respect `ForgeConfig` flags. Book multiplier is precomputed as `algorithm::EnchInfo::mul_b` at data-load time.
 
-**AlgorithmInput owns data**: `EnchReg`, `Equipment`, and item collections are stored by value — no pointers, no external lifetime dependencies. Once passed to `executor.start()`, ownership transfers completely.
+**AlgorithmInput owns data**: `algorithm::EnchReg`, `algorithm::Item` vector, and target collection are stored by value — no pointers, no external lifetime dependencies. The struct owns two config sub-objects: `f_config` (forge config, `ForgeConfig`) and `s_config` (search config, `SearchConfig`).
 
-**Domain types are pure data**: `EnchSet`, `Ench`, `ItemStack` are containers only. All combine/cost/penalty computation moved to compact forge engine.
+**Domain types are pure data**: Business domain types (`EnchSet`, `Ench`, `Item`) are containers only. All combine/cost/penalty computation lives in the algorithm domain's forge engine.
+
+**Four-domain layering**: `algorithm/` depends on nothing outside `common/`. `business/` adds domain types and registries. `interface/` adds CLI, parsers, API. `orchestration/` wires everything together via CompactAdapter and OutputFormatter.
 
 **No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
 

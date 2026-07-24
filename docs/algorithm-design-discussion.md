@@ -444,16 +444,16 @@ private:
 ## 参考
 
 - `docs/anvil-mechanics-reference.md` — 铁砧机制算法参考
-- `src/algorithm/strategies/GreedyAlgorithm.h/cpp` — 贪心实现（compact 类型）
-- `src/algorithm/strategies/DFSAlgorithm.h/cpp` — DFS + 分支定界（迭代框架）
-- `src/algorithm/strategies/AStarAlgorithm.h/cpp` — A* 搜索（步骤链表优化）
-- `src/algorithm/strategies/DynamicPenaltyBalancing.h/cpp` — 动态惩罚均衡
-- `src/algorithm/strategies/HierarchicalMergeStrategy.h/cpp` — 分层合成策略
-- `src/algorithm/forge/ForgeEngine.h/cpp` — IForgeEngine 的原版实现
-- `src/algorithm/forge/IForgeEngine.h` — 锻造引擎虚接口 + ForgeConfig + 默认子操作实现
-- `src/algorithm/AlgorithmExecutor.h/cpp` — 异步执行引擎（compact-only）
-- `src/types/CompactedTypes.h/cpp` — 紧凑算法类型（namespace compact）
-- `src/registries/CompactedRegistries.h/cpp` — 紧凑注册表（EnchReg）
+- `src/domain/algorithm/_strategies/GreedyAlgorithm.h/cpp` — 贪心实现（compact 类型）
+- `src/domain/algorithm/_strategies/DFSAlgorithm.h/cpp` — DFS + 分支定界（迭代框架）
+- `src/domain/algorithm/_strategies/AStarAlgorithm.h/cpp` — A* 搜索（步骤链表优化）
+- `src/domain/algorithm/_strategies/DynamicPenaltyBalancing.h/cpp` — 动态惩罚均衡
+- `src/domain/algorithm/_strategies/HierarchicalMergeStrategy.h/cpp` — 分层合成策略
+- `src/domain/algorithm/forge_engine/ForgeEngine.h/cpp` — IForgeEngine 的原版实现
+- `src/domain/algorithm/forge_engine/IForgeEngine.h` — 锻造引擎虚接口 + ForgeConfig + 默认子操作实现
+- `src/domain/algorithm/AlgorithmExecutor.h/cpp` — 异步执行引擎（compact-only）
+- `src/domain/algorithm/types/CompactedTypes.h/cpp` — 紧凑算法类型（namespace algorithm）
+- `src/domain/algorithm/registries/EnchReg.h/cpp` — 紧凑注册表（EnchReg）
 - `.temp/qwen/algorithm_design.md` — 外部研究：A* 框架与分层合成策略
 - `.temp/qwen/theoretical_framework.md` — 外部研究：形式化建模与双场景分析
 - `https://minecraft.wiki/w/Anvil_mechanics` — Minecraft Wiki 铁砧机制（英文）

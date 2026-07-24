@@ -1,4 +1,4 @@
-# 共享组件（`components/`）
+# 共享组件（`src/domain/algorithm/components/`）
 
 通用搜索基础设施，被多个算法策略共享。策略专用组件（如 `AStarMemoryBudget` → `strategies/astar/`、`TTTable` → `strategies/idastar/`）已移至对应策略目录。
 

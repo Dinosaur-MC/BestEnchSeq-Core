@@ -3,8 +3,8 @@
 > 依据 Minecraft Wiki (minecraft.wiki) 及 JE 源码整理，对齐 Java Edition 最新版本。
 > 本文件作为算法层开发的权威参考，所有 forge 逻辑应与此保持一致。
 > 参见：docs/MPMCQueue.md 了解算法引擎使用的并发原语。
-> 代码实现：src/algorithm/forge/ForgeEngine.h（Vanilla forge engine，所有子操作可通过继承覆写）。
-> 接口定义：src/algorithm/forge/IForgeEngine.h（虚接口 + 默认实现）。
+> 代码实现：src/domain/algorithm/forge_engine/ForgeEngine.h（Vanilla forge engine，所有子操作可通过继承覆写）。
+> 接口定义：src/domain/algorithm/forge_engine/IForgeEngine.h（虚接口 + 默认实现）。
 
 ---
 

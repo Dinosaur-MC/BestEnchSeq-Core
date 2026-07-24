@@ -1,4 +1,4 @@
-# 工具层（`utils/`）
+# 工具层（`src/common/utils/`）
 
 ## 设计原则
 

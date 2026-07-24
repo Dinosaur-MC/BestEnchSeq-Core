@@ -1,4 +1,4 @@
-# 解析器层（`parsers/`）
+# 解析器层（`src/domain/interface/parsers/`）
 
 ## 设计原则
 

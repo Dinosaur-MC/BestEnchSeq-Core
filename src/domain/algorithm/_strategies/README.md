@@ -1,4 +1,4 @@
-# 内置算法策略（`strategies/`）
+# 内置算法策略（`src/domain/algorithm/_strategies/`）
 
 本目录存放编译进 `besq-core` 的内置策略。外部策略作为插件独立构建，见 `plugins/`。
 

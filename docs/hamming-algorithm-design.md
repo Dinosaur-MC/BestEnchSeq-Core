@@ -2,7 +2,7 @@
 
 **Name:** `hamming`  
 **Version:** `1.0.0`  
-**Source:** `src/algorithm/strategies/HammingAlgorithm.{h,cpp}`  
+**Source:** `src/domain/algorithm/_strategies/hamming/HammingAlgorithm.{h,cpp}`  
 **Port of:** `Alg_Hamming()` from BestEnchSeq v2.x (Qt/C++)
 
 ---
