@@ -603,6 +603,59 @@ void test_serialize_profile_roundtrip() {
     TEST_PASS("test_serialize_profile_roundtrip");
 }
 
+// ---------------------------------------------------------------------------
+// 14. Load a tag from a Json DOM object and verify resolution.
+// ---------------------------------------------------------------------------
+void test_tag_load_tag_json() {
+    TagResolver resolver;
+
+    // Build Json with values array
+    Json::Object root_obj;
+    {
+        Json::Array values;
+        values.push_back(Json("minecraft:diamond_sword"));
+        values.push_back(Json("minecraft:iron_sword"));
+        root_obj["values"] = Json(values);
+    }
+    Json tag_json(root_obj);
+
+    // Load via load_tag_json
+    resolver.load_tag_json("minecraft:tags/swords", tag_json);
+
+    // Resolve and verify
+    auto result = resolver.resolve("#minecraft:tags/swords");
+    expect(result.size() == 2,
+           "load_tag_json resolution should have 2 items");
+    expect(result.contains("minecraft:diamond_sword"),
+           "load_tag_json result contains diamond_sword");
+    expect(result.contains("minecraft:iron_sword"),
+           "load_tag_json result contains iron_sword");
+
+    TEST_PASS("test_tag_load_tag_json");
+}
+
+// ---------------------------------------------------------------------------
+// 15. Load a tag from a raw JSON string and verify resolution.
+// ---------------------------------------------------------------------------
+void test_tag_load_tag_content() {
+    TagResolver resolver;
+
+    // Load via load_tag_content with raw JSON string
+    resolver.load_tag_content("minecraft:swords",
+        R"({"values": ["minecraft:diamond_sword", "minecraft:iron_sword"]})");
+
+    // Resolve and verify
+    auto result = resolver.resolve("#minecraft:swords");
+    expect(result.size() == 2,
+           "load_tag_content resolution should have 2 items");
+    expect(result.contains("minecraft:diamond_sword"),
+           "load_tag_content result contains diamond_sword");
+    expect(result.contains("minecraft:iron_sword"),
+           "load_tag_content result contains iron_sword");
+
+    TEST_PASS("test_tag_load_tag_content");
+}
+
 } // anonymous namespace
 
 // =============================================================================
@@ -630,6 +683,10 @@ int main() {
         // Section C -- Serializer
         test_serialize_profile();
         test_serialize_profile_roundtrip();
+
+        // Section D -- Tag loading
+        test_tag_load_tag_json();
+        test_tag_load_tag_content();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

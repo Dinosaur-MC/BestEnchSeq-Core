@@ -1,5 +1,6 @@
 #include "framework/test_utils.h"
 #include "domain/business/components/Serializer.h"
+#include "domain/orchestration/components/EnchSerializer.h"
 
 // ─── test_serialize_ench ───────────────────────────────────────────────
 // Round-trip an Ench through Json: serialize, deserialize, verify fields.
@@ -442,6 +443,68 @@ void test_serializer_to_from_string() {
     std::cout << "PASS: test_serializer_to_from_string" << std::endl;
 }
 
+// ─── test_to_mc_official_strings ──────────────────────────────────────────
+// Serialize EnchInfo vector to MC official format strings and verify keys/content.
+
+void test_to_mc_official_strings() {
+    // Create EquipmentTagRegistry with sword tag
+    EquipmentTagRegistry tag_reg;
+    tag_reg.insert({NSID("#minecraft:sword"), "sword"});
+
+    // Create EnchInfo vector with 2 enchants applicable to sword
+    std::unordered_set<NSID> excl_sharp = {NSID("minecraft:smite")};
+    std::unordered_set<NSID> excl_smite = {NSID("minecraft:sharpness")};
+    std::unordered_set<NSID> sword_applicable = {NSID("#minecraft:sword")};
+
+    std::vector<EnchInfo> infos;
+    infos.emplace_back(NSID("minecraft:sharpness"), "Sharpness", MCE::All,
+                       5, 5, 1, false, excl_sharp, sword_applicable);
+    infos.emplace_back(NSID("minecraft:smite"), "Smite", MCE::All,
+                       5, 5, 1, false, excl_smite, sword_applicable);
+
+    // Serialize to MC official format
+    auto result = EnchSerializer::to_mc_official_strings(infos, tag_reg);
+
+    // Verify map size
+    expect(result.size() == 2,
+           "mc_official_strings should have 2 entries");
+
+    // Verify keys exist
+    expect(result.find("data/minecraft/enchantment/sharpness.json") != result.end(),
+           "mc_official_strings contains sharpness.json key");
+    expect(result.find("data/minecraft/enchantment/smite.json") != result.end(),
+           "mc_official_strings contains smite.json key");
+
+    // Verify content strings are non-empty
+    const auto& sharp_content = result.at("data/minecraft/enchantment/sharpness.json");
+    expect(!sharp_content.empty(),
+           "sharpness content is non-empty");
+    const auto& smite_content = result.at("data/minecraft/enchantment/smite.json");
+    expect(!smite_content.empty(),
+           "smite content is non-empty");
+
+    // Verify content contains expected fields
+    expect(sharp_content.find("anvil_cost") != std::string::npos,
+           "sharpness content contains anvil_cost");
+    expect(sharp_content.find("max_level") != std::string::npos,
+           "sharpness content contains max_level");
+    expect(sharp_content.find("exclusive_set") != std::string::npos,
+           "sharpness content contains exclusive_set");
+    expect(sharp_content.find("supported_items") != std::string::npos,
+           "sharpness content contains supported_items");
+    expect(sharp_content.find("minecraft:smite") != std::string::npos,
+           "sharpness exclusive_set contains minecraft:smite");
+
+    expect(smite_content.find("anvil_cost") != std::string::npos,
+           "smite content contains anvil_cost");
+    expect(smite_content.find("exclusive_set") != std::string::npos,
+           "smite content contains exclusive_set");
+    expect(smite_content.find("minecraft:sharpness") != std::string::npos,
+           "smite exclusive_set contains minecraft:sharpness");
+
+    std::cout << "PASS: test_to_mc_official_strings" << std::endl;
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────
 
 int main() {
@@ -459,6 +522,7 @@ int main() {
         test_serialize_ench_registry();
         test_serializer_mce_helpers();
         test_serializer_to_from_string();
+        test_to_mc_official_strings();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

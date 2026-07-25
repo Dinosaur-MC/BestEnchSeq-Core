@@ -114,7 +114,7 @@ bool parse_enchantment_path(const std::string& path,
     out_ns = p.substr(ns_start, ench_pos - ns_start);
 
     // Extract filename (without extension)
-    auto fname_start = ench_pos + 12;  // length of "/enchantment/"
+    auto fname_start = ench_pos + 13;  // length of "/enchantment/"
     auto dot_pos = p.find('.', fname_start);
     if (dot_pos == std::string::npos) {
         out_filename = p.substr(fname_start);

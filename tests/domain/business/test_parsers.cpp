@@ -2,10 +2,12 @@
 
 #include "domain/business/parsers/NativeJsonParser.h"
 #include "domain/business/parsers/NativeCsvParser.h"
+#include "domain/business/parsers/McOfficialParser.h"
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // ============================================================================
@@ -322,6 +324,165 @@ void test_csv_parse_multiple_rows() {
 }
 
 // ============================================================================
+// Section C — McOfficialParser
+//
+// McOfficialParser parses the MC 1.21+ data-driven format.
+// parse_single_enchantment() handles one enchantment JSON given a namespace,
+// filename, content string, and TagResolver. parse_files() accepts a map of
+// data-pack relative paths to content strings and returns paired enchantment
+// and equipment vectors.
+//
+// JSON fields (MC 1.21+): anvil_cost (→multiplier), max_level, exclusive_set
+// (→exclusive_with), supported_items (→applicable_to), min_cost (→limited_level).
+// Display name is derived from the filename (e.g. "sharpness" → "Sharpness").
+// ============================================================================
+
+// ─── test_mc_single_enchantment_basic ──────────────────────────────────
+// Parse a minimal enchantment JSON via parse_single_enchantment().
+// Load a tag for "#minecraft:sword" into the TagResolver so that
+// supported_items resolves to concrete equipment IDs.
+// Verify id, max_level, display_name, resolved applicable_to.
+
+void test_mc_single_enchantment_basic() {
+    TagResolver tag_resolver;
+    tag_resolver.load_tag_content("minecraft:sword",
+        R"({"values": ["minecraft:diamond_sword"]})");
+
+    std::string content = R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "exclusive_set": [],
+        "supported_items": ["#minecraft:sword"]
+    })";
+
+    auto ench = McOfficialParser::parse_single_enchantment(
+        "minecraft", "sharpness", content, tag_resolver);
+
+    expect_eq(ench.id, std::string("minecraft:sharpness"),
+              "mc_single_basic: ench id");
+    expect_eq(ench.max_level, 5,
+              "mc_single_basic: max_level");
+    expect_eq(ench.display_name, std::string("Sharpness"),
+              "mc_single_basic: display_name");
+    expect(ench.multiplier > 0,
+           "mc_single_basic: multiplier > 0");
+
+    // applicable_to should contain the resolved item from the tag
+    bool has_sword = false;
+    for (const auto& a : ench.applicable_to) {
+        if (a == "minecraft:diamond_sword") { has_sword = true; break; }
+    }
+    expect(has_sword,
+           "mc_single_basic: applicable_to contains diamond_sword");
+
+    // exclusive_set should be empty
+    expect(ench.exclusive_with.empty(),
+           "mc_single_basic: exclusive_with empty");
+
+    TEST_PASS("test_mc_single_enchantment_basic");
+}
+
+// ─── test_mc_single_enchantment_with_exclusive ─────────────────────────
+// Parse an enchantment with a non-empty exclusive_set containing a concrete
+// enchantment ID ("minecraft:smite"). Also verify concrete supported_items
+// pass through resolve() unchanged.
+
+void test_mc_single_enchantment_with_exclusive() {
+    TagResolver tag_resolver;
+
+    std::string content = R"({
+        "anvil_cost": 2,
+        "max_level": 5,
+        "exclusive_set": ["minecraft:smite"],
+        "supported_items": ["minecraft:diamond_sword"]
+    })";
+
+    auto ench = McOfficialParser::parse_single_enchantment(
+        "minecraft", "sharpness", content, tag_resolver);
+
+    expect_eq(ench.id, std::string("minecraft:sharpness"),
+              "mc_single_exclusive: ench id");
+    expect_eq(ench.max_level, 5,
+              "mc_single_exclusive: max_level");
+    expect_eq(ench.multiplier, 2,
+              "mc_single_exclusive: multiplier");
+
+    // exclusive_set should contain "minecraft:smite"
+    bool has_smite = false;
+    for (const auto& e : ench.exclusive_with) {
+        if (e == "minecraft:smite") { has_smite = true; break; }
+    }
+    expect(has_smite,
+           "mc_single_exclusive: exclusive_with contains smite");
+
+    // Concrete supported_items pass through resolve() unchanged
+    bool has_sword = false;
+    for (const auto& a : ench.applicable_to) {
+        if (a == "minecraft:diamond_sword") { has_sword = true; break; }
+    }
+    expect(has_sword,
+           "mc_single_exclusive: applicable_to contains diamond_sword");
+
+    TEST_PASS("test_mc_single_enchantment_with_exclusive");
+}
+
+// ─── test_mc_parse_files_basic ─────────────────────────────────────────
+// Use parse_files() with a map containing one enchantment file and one
+// item tag file. Verify the enchantment is parsed and equipment is derived
+// from the tag's item IDs.
+
+void test_mc_parse_files_basic() {
+    std::unordered_map<std::string, std::string> files;
+
+    files["data/minecraft/enchantment/sharpness.json"] = R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "exclusive_set": [],
+        "supported_items": ["#minecraft:sword"]
+    })";
+
+    files["data/minecraft/tags/item/sword.json"] = R"({
+        "values": ["minecraft:diamond_sword"]
+    })";
+
+    auto result = McOfficialParser::parse_files(files);
+    const auto& enchantments = result.first;
+    const auto& equipment    = result.second;
+
+    expect_eq(static_cast<int>(enchantments.size()), 1,
+              "mc_files_basic: 1 enchantment");
+    expect_eq(enchantments[0].id,
+              std::string("minecraft:sharpness"),
+              "mc_files_basic: ench id");
+    expect_eq(enchantments[0].max_level, 5,
+              "mc_files_basic: max_level");
+
+    expect_eq(static_cast<int>(equipment.size()), 1,
+              "mc_files_basic: 1 equipment");
+    expect_eq(equipment[0].id,
+              std::string("minecraft:diamond_sword"),
+              "mc_files_basic: eq id");
+
+    TEST_PASS("test_mc_parse_files_basic");
+}
+
+// ─── test_mc_parse_files_empty ─────────────────────────────────────────
+// parse_files() with an empty file map. Verify empty results with no crash.
+
+void test_mc_parse_files_empty() {
+    std::unordered_map<std::string, std::string> files;
+
+    auto result = McOfficialParser::parse_files(files);
+    const auto& enchantments = result.first;
+    const auto& equipment    = result.second;
+
+    expect(enchantments.empty(), "mc_files_empty: no enchantments");
+    expect(equipment.empty(),    "mc_files_empty: no equipment");
+
+    TEST_PASS("test_mc_parse_files_empty");
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -339,6 +500,12 @@ int main() {
         test_csv_parse_with_exclusive();
         test_csv_parse_empty_header_only();
         test_csv_parse_multiple_rows();
+
+        // Section C — McOfficialParser
+        test_mc_single_enchantment_basic();
+        test_mc_single_enchantment_with_exclusive();
+        test_mc_parse_files_basic();
+        test_mc_parse_files_empty();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
