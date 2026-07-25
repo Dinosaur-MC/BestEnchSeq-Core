@@ -1,9 +1,9 @@
 #pragma once
 #include "Item.h"
-#include "common/io/ISerializable.h"
+#include "common/serialization/IBinarySerializable.h"
 
 namespace algorithm {
-struct EnchStep : ISerializable {
+struct EnchStep : IBinarySerializable {
     Item base;      // 锻造前的目标物品
     Item sacrifice; // 锻造前的祭品
     int32_t cost;   // 经验等级消耗
@@ -21,7 +21,7 @@ struct EnchStep : ISerializable {
 };
 
 /// A complete solution: ordered forge steps + total cost.
-struct EnchSolution : ISerializable {
+struct EnchSolution : IBinarySerializable {
     std::vector<EnchStep> steps;
     int32_t total_cost{0};
 

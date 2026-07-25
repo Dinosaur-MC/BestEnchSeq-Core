@@ -37,7 +37,7 @@ void SectionHeader::deserialize(ByteStreamReader& r) noexcept {
     r >> type >> section_id >> payload_len;
 }
 
-Section::Section(uint32_t type, uint32_t id, const ISerializable& body)
+Section::Section(uint32_t type, uint32_t id, const IBinarySerializable& body)
     : header(type, id, 0)
 {
     ByteStreamWriter w;
@@ -59,7 +59,7 @@ void Section::deserialize(ByteStreamReader& r) noexcept {
 Checkpoint::Checkpoint(std::string_view tag, uint16_t algo_ver)
     : meta(tag, algo_ver, 0) {}
 
-void Checkpoint::add_section(uint32_t type, uint32_t id, const ISerializable& body) {
+void Checkpoint::add_section(uint32_t type, uint32_t id, const IBinarySerializable& body) {
     sections.emplace_back(type, id, body);
     meta.num_sections = static_cast<uint32_t>(sections.size());
 }

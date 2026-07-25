@@ -1,5 +1,5 @@
 #pragma once
-#include "common/io/ISerializable.h"
+#include "common/serialization/IBinarySerializable.h"
 #include "common/CommonTypes.h"
 #include <chrono>
 #include <cstdint>
@@ -7,7 +7,7 @@
 namespace algorithm {
 
 // ─── Search configuration ─────────────────────────────────────────
-struct SearchConfig : ISerializable {
+struct SearchConfig : IBinarySerializable {
     int32_t max_solutions = 0;
     int32_t max_depth     = 0;
     int32_t memory_mb     = 0;
@@ -25,7 +25,7 @@ struct SearchConfig : ISerializable {
 };
 
 // ─── Forge configuration ────────────────────────────────────────────────────
-struct ForgeConfig : ISerializable {
+struct ForgeConfig : IBinarySerializable {
 
     bool ignore_penalty_cost = false;
     bool ignore_repair_cost  = false; // when true, skip equip+equip repair fee (+2)

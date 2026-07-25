@@ -1,6 +1,6 @@
 #pragma once
 #include "common/CommonTypes.h"
-#include "common/io/ISerializable.h"
+#include "common/serialization/IBinarySerializable.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Item.h"
@@ -19,7 +19,7 @@ namespace algorithm {
 using SourceData = std::variant<EnchCollection, ItemCollection>;
 
 // ─── Algorithm input ───
-struct AlgorithmInput : ISerializable {
+struct AlgorithmInput : IBinarySerializable {
     ForgeConfig f_config;  // forge configuration (platform, flags)
     SearchConfig s_config; // search configuration (solutions, mode)
     EnchReg ench_reg;      // compact registry (must be initialized)

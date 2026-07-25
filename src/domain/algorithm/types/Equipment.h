@@ -1,11 +1,11 @@
 #pragma once
-#include "common/io/ISerializable.h"
+#include "common/serialization/IBinarySerializable.h"
 #include <cstdint>
 #include <functional>
 
 namespace algorithm {
 
-struct Equipment : ISerializable {
+struct Equipment : IBinarySerializable {
     int32_t id;
     int32_t category_id;
     int32_t max_durability;

@@ -1,6 +1,6 @@
 #pragma once
 #include "CommonTypes.h"
-#include "common/io/ISerializable.h"
+#include "common/serialization/IBinarySerializable.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
 #include <vector>
@@ -13,7 +13,7 @@ namespace algorithm {
 
 /// Compacted registry — precomputes EnchInfo for all enchantments against
 /// a specific target equipment. Provides O(1) lookup and conflict checking.
-class EnchReg : public ISerializable {
+class EnchReg : public IBinarySerializable {
   private:
     std::vector<EnchInfo> _ench_infos;   // compacted info, indexed by local ench id
     std::vector<NSID> _global_ids;     // local → business global ID (for round-trip)

@@ -1,5 +1,5 @@
 #pragma once
-#include "common/io/ISerializable.h"
+#include "common/serialization/IBinarySerializable.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -15,7 +15,7 @@ inline constexpr uint32_t SECTION_TYPE_INPUT  = 0x00000001u;
 inline constexpr uint32_t FILE_MAGIC   = 0x51534542; // "BESQ" LE
 inline constexpr uint16_t FILE_VERSION = 1;
 
-struct MetaHeader : ISerializable {
+struct MetaHeader : IBinarySerializable {
     uint32_t magic         = FILE_MAGIC;
     uint16_t version       = FILE_VERSION;
     uint16_t flags         = 0;
@@ -32,7 +32,7 @@ struct MetaHeader : ISerializable {
     void deserialize(ByteStreamReader& r) noexcept override;
 };
 
-struct SectionHeader : ISerializable {
+struct SectionHeader : IBinarySerializable {
     uint32_t type       = 0;
     uint32_t section_id = 0;
     uint64_t payload_len = 0;
@@ -44,25 +44,25 @@ struct SectionHeader : ISerializable {
     void deserialize(ByteStreamReader& r) noexcept override;
 };
 
-struct Section : ISerializable {
+struct Section : IBinarySerializable {
     SectionHeader header;
     std::vector<uint8_t> payload;
 
     Section() = default;
-    Section(uint32_t type, uint32_t id, const ISerializable& body);
+    Section(uint32_t type, uint32_t id, const IBinarySerializable& body);
 
     void serialize(ByteStreamWriter& w) const noexcept override;
     void deserialize(ByteStreamReader& r) noexcept override;
 };
 
-struct Checkpoint : ISerializable {
+struct Checkpoint : IBinarySerializable {
     MetaHeader meta;
     std::vector<Section> sections;
 
     Checkpoint() = default;
     explicit Checkpoint(std::string_view tag, uint16_t algo_ver);
 
-    void add_section(uint32_t type, uint32_t id, const ISerializable& body);
+    void add_section(uint32_t type, uint32_t id, const IBinarySerializable& body);
 
     void serialize(ByteStreamWriter& w) const noexcept override;
     void deserialize(ByteStreamReader& r) noexcept override;

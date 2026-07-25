@@ -1,5 +1,5 @@
 #pragma once
-#include "common/io/ISerializable.h"
+#include "common/serialization/IBinarySerializable.h"
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -9,7 +9,7 @@ namespace algorithm {
 using MaskType                         = uint64_t;
 inline constexpr size_t MASK_ELEM_SIZE = 8ULL * sizeof(MaskType);
 
-struct EnchInfo : ISerializable {
+struct EnchInfo : IBinarySerializable {
     uint16_t mul;                   // 经验乘数
     uint16_t mul_b;                 // 书本经验乘数
     uint16_t max_lvl;               // 最大等级
