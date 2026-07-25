@@ -49,12 +49,7 @@ struct BesqContextC {
 static int32_t int_field(const Json::Object& obj, const std::string& key) {
     auto it = obj.find(key);
     if (it == obj.end()) return 0;
-    auto val = it->second.get_value();
-    if (!std::holds_alternative<Json::Number>(val)) return 0;
-    const auto& num = std::get<Json::Number>(val);
-    if (std::holds_alternative<int64_t>(num))
-        return static_cast<int32_t>(std::get<int64_t>(num));
-    return 0;
+    return static_cast<int32_t>(it->second.as<int64_t>());
 }
 
 /// Build an EnchInfo from a JSON object produced by besq_add_enchantment.
@@ -137,15 +132,11 @@ static void apply_ench_patch(const Json::Object& obj, EnchInfo& patch) {
         patch.multiplier = int_field(obj, "multiplier");
 
     if (obj.find("is_treasure") != obj.end()) {
-        auto val = obj.at("is_treasure").get_value();
-        if (std::holds_alternative<Json::Bool>(val))
-            patch.is_treasure = std::get<Json::Bool>(val);
+        patch.is_treasure = obj.at("is_treasure").as<bool>();
     }
 
     if (obj.find("name") != obj.end()) {
-        auto val = obj.at("name").get_value();
-        if (std::holds_alternative<Json::String>(val))
-            patch.name = std::get<Json::String>(val);
+        patch.name = obj.at("name").as<std::string>();
     }
 }
 
@@ -200,7 +191,7 @@ static EnchSet parse_ench_set(const Json::Array& arr,
 {
     EnchSet result;
     for (const auto& elem : arr) {
-        auto eo = std::get<Json::Object>(elem.get_value());
+        auto eo = elem.as<Json::Object>();
         std::string eid;
         int32_t lvl     = 0;
         {
@@ -334,7 +325,7 @@ int besq_add_enchantment(BesqContext* ctx, const char* json_info) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
     BESQ_CAPI_TRY(c,
         auto json = Json::parse(json_info);
-        auto obj  = std::get<Json::Object>(json.get_value());
+        auto obj  = json.as<Json::Object>();
         auto info = parse_ench_info_json(obj);
         if (!c->impl.add_enchantment(info))
             throw std::runtime_error("add_enchantment failed (duplicate name_id?)");
@@ -353,13 +344,13 @@ int besq_modify_enchantment(BesqContext* ctx, const char* json_patch) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
     BESQ_CAPI_TRY(c,
         auto json = Json::parse(json_patch);
-        auto obj  = std::get<Json::Object>(json.get_value());
+        auto obj  = json.as<Json::Object>();
 
         auto id_it = obj.find("id");
         if (id_it == obj.end())
             throw std::runtime_error("Missing 'id' field in enchantment patch");
 
-        std::string ench_id = std::get<Json::String>(id_it->second.get_value());
+        std::string ench_id = id_it->second.as<std::string>();
         EnchInfo patch;
         apply_ench_patch(obj, patch);
 
@@ -372,7 +363,7 @@ int besq_add_equipment(BesqContext* ctx, const char* json_eq) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
     BESQ_CAPI_TRY(c,
         auto json = Json::parse(json_eq);
-        auto obj  = std::get<Json::Object>(json.get_value());
+        auto obj  = json.as<Json::Object>();
         auto eq   = parse_equipment_json(obj);
         if (!c->impl.add_equipment(eq))
             throw std::runtime_error("add_equipment failed (duplicate name_id?)");
@@ -412,14 +403,13 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
 
     try {
         auto json = Json::parse(json_input);
-        auto root = std::get<Json::Object>(json.get_value());
+        auto root = json.as<Json::Object>();
         SolveRequest request;
 
         // ── Target ────────────────────────────────────────────────────────
         auto target_it = root.find("target");
         if (target_it != root.end()) {
-            auto target_obj =
-                std::get<Json::Object>(target_it->second.get_value());
+            auto target_obj = target_it->second.as<Json::Object>();
 
             std::string eq_id;
             {
@@ -438,8 +428,7 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
             // Target enchantments (desired final state)
             auto ench_it = target_obj.find("enchantments");
             if (ench_it != target_obj.end()) {
-                auto ench_arr =
-                    std::get<Json::Array>(ench_it->second.get_value());
+                auto ench_arr = ench_it->second.as<Json::Array>();
                 request.target_item.enchantments =
                     parse_ench_set(ench_arr, c->impl.enchantments());
             }
@@ -449,7 +438,7 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         EnchSet source_enchants;
         auto src_it = root.find("source");
         if (src_it != root.end()) {
-            auto src_arr = std::get<Json::Array>(src_it->second.get_value());
+            auto src_arr = src_it->second.as<Json::Array>();
             source_enchants =
                 parse_ench_set(src_arr, c->impl.enchantments());
         }
@@ -501,18 +490,17 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
 
         // ── Format result as raw JSON ─────────────────────────────────────
         Json::Object root_obj;
-        root_obj["success"] = Json(Json::Bool(result.success));
-        root_obj["algorithm"] = Json(Json::String(result.algorithm_used));
-        root_obj["computation_time_ms"] =
-            Json(Json::Number(static_cast<int64_t>(result.computation_time_ms)));
+        root_obj["success"] = Json(result.success);
+        root_obj["algorithm"] = Json(result.algorithm_used);
+        root_obj["computation_time_ms"] = Json(result.computation_time_ms);
 
         Json::Array sol_arr;
         for (const auto& sol : result.solutions) {
             Json::Object s;
-            s["total_exp_level_cost"] = Json(Json::Number(sol.total_exp_level_cost));
-            s["total_exp_cost"] = Json(Json::Number(sol.total_exp_cost));
-            s["is_success"] = Json(Json::Bool(sol.is_success));
-            s["step_count"] = Json(Json::Number(static_cast<int32_t>(sol.steps.size())));
+            s["total_exp_level_cost"] = Json(sol.total_exp_level_cost);
+            s["total_exp_cost"] = Json(sol.total_exp_cost);
+            s["is_success"] = Json(sol.is_success);
+            s["step_count"] = Json(static_cast<int64_t>(sol.steps.size()));
             sol_arr.push_back(Json(s));
         }
         root_obj["solutions"] = Json(sol_arr);

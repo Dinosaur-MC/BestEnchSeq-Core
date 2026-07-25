@@ -25,28 +25,28 @@ std::string EnchSerializer::to_json(
 
     // Add metadata if provided
     if (metadata) {
-        root["name"]        = Json(Json::String(metadata->name));
-        root["description"] = Json(Json::String(metadata->description));
-        root["author"]      = Json(Json::String(metadata->author));
-        root["version"]     = Json(Json::String(metadata->version));
+        root["name"]        = Json(metadata->name);
+        root["description"] = Json(metadata->description);
+        root["author"]      = Json(metadata->author);
+        root["version"]     = Json(metadata->version);
     }
 
     // Build enchantments array
     Json::Array enchants;
     for (const auto &info : infos) {
         Json::Object obj;
-        obj["id"]            = Json(Json::String(info.id.str()));
-        obj["name"]          = Json(Json::String(info.name));
-        obj["platform"]      = Json(Json::String(ParserUtils::platform_to_string(info.supported_platform)));
-        obj["max_level"]     = Json(Json::Number(static_cast<int32_t>(info.max_level)));
-        obj["limited_level"] = Json(Json::Number(static_cast<int32_t>(info.limited_level)));
-        obj["multiplier"]    = Json(Json::Number(static_cast<int32_t>(info.multiplier)));
-        obj["is_treasure"]   = Json(Json::Bool(info.is_treasure));
+        obj["id"]            = Json(info.id.str());
+        obj["name"]          = Json(info.name);
+        obj["platform"]      = Json(ParserUtils::platform_to_string(info.supported_platform));
+        obj["max_level"]     = Json(info.max_level);
+        obj["limited_level"] = Json(info.limited_level);
+        obj["multiplier"]    = Json(info.multiplier);
+        obj["is_treasure"]   = Json(info.is_treasure);
 
         // exclusive_set array
         Json::Array excl;
         for (const auto &e : info.exclusive_set) {
-            excl.push_back(Json(Json::String(e.str())));
+            excl.push_back(Json(e.str()));
         }
         obj["exclusive_set"] = Json(excl);
 
@@ -55,7 +55,7 @@ std::string EnchSerializer::to_json(
         for (const auto &cat_nsid : info.applicable_equipments) {
             auto cat_it = cat_reg.find(cat_nsid);
             std::string cat_name = cat_it != cat_reg.end() ? cat_it->name : "unknown";
-            eq.push_back(Json(Json::String(cat_name)));
+            eq.push_back(Json(cat_name));
         }
         obj["applicable_equipment"] = Json(eq);
 
@@ -132,14 +132,14 @@ void EnchSerializer::export_to_mc_official(
         std::filesystem::create_directories(ench_dir);
 
         Json::Object obj;
-        obj["anvil_cost"] = Json(Json::Number(static_cast<int32_t>(info.multiplier)));
-        obj["max_level"]  = Json(Json::Number(static_cast<int32_t>(info.max_level)));
+        obj["anvil_cost"] = Json(info.multiplier);
+        obj["max_level"]  = Json(info.max_level);
 
         // exclusive_set as namespaced IDs
         Json::Array excl;
         for (const auto &e : info.exclusive_set) {
             std::string qualified = ParserUtils::qualify_id(e.str());
-            excl.push_back(Json(Json::String(qualified)));
+            excl.push_back(Json(qualified));
         }
         obj["exclusive_set"] = Json(excl);
 
@@ -150,9 +150,9 @@ void EnchSerializer::export_to_mc_official(
             std::string cat_str = cat_it != cat_reg.end() ? cat_it->name : "unknown";
             // Avoid double-namespacing: cat may already contain "mod:item"
             if (cat_str.find(':') != std::string::npos) {
-                supp.push_back(Json(Json::String(cat_str)));
+                supp.push_back(Json(cat_str));
             } else {
-                supp.push_back(Json(Json::String("minecraft:" + cat_str)));
+                supp.push_back(Json("minecraft:" + cat_str));
             }
         }
         obj["supported_items"] = Json(supp);
@@ -183,10 +183,10 @@ EnchSerializer::to_json(const std::vector<Equipment> &equipments, const Equipmen
         auto cat_it = cat_reg.find(eq.category);
         std::string cat_name = cat_it != cat_reg.end() ? cat_it->name : "unknown";
         Json::Object obj;
-        obj["id"]             = Json(Json::String(eq.id.str()));
-        obj["name"]           = Json(Json::String(eq.name));
-        obj["category"]       = Json(Json::String(cat_name));
-        obj["max_durability"] = Json(Json::Number(static_cast<int32_t>(eq.max_durability)));
+        obj["id"]             = Json(eq.id.str());
+        obj["name"]           = Json(eq.name);
+        obj["category"]       = Json(cat_name);
+        obj["max_durability"] = Json(eq.max_durability);
         eq_arr.push_back(Json(obj));
     }
 
@@ -238,24 +238,18 @@ bool EnchSerializer::export_json(
     std::string eq_json   = to_json(valid_eq, profile);
 
     Json::Object obj;
-    obj["name"] = Json(Json::String("BestEnchSeq Registry Export"));
+    obj["name"] = Json("BestEnchSeq Registry Export");
 
     auto ench_root = Json::parse(ench_json);
     if (ench_root.is_valid()) {
-        Json::Value root_val = ench_root.get_value();
-        auto& root = std::get<Json::Object>(root_val);
-        auto it = root.find("enchantments");
-        if (it != root.end())
-            obj["enchantments"] = it->second;
+        if (ench_root.has("enchantments"))
+            obj["enchantments"] = ench_root["enchantments"];
     }
 
     auto eq_root = Json::parse(eq_json);
     if (eq_root.is_valid()) {
-        Json::Value root_val = eq_root.get_value();
-        auto& root = std::get<Json::Object>(root_val);
-        auto it = root.find("equipments");
-        if (it != root.end())
-            obj["equipments"] = it->second;
+        if (eq_root.has("equipments"))
+            obj["equipments"] = eq_root["equipments"];
     }
 
     std::ofstream f(path);

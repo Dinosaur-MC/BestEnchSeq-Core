@@ -40,10 +40,6 @@ int32_t json_int(const Json &j) {
     return static_cast<int32_t>(j.as_int());
 }
 
-int64_t json_int64(const Json &j) {
-    return j.as_int();
-}
-
 std::string json_str(const Json &j) {
     return j.as_string();
 }
@@ -70,10 +66,8 @@ std::string ench_summary_str(const EnchSet &enchs, const EnchantmentRegistry &en
 EnchSet enchset_from_json_array(const Json::Array &arr, const EnchantmentRegistry &ench_reg) {
     EnchSet result;
     for (const auto &elem : arr) {
-        Json::Value elem_val = elem.get_value();
-        const Json::Object &obj = std::get<Json::Object>(elem_val);
-        std::string eid = json_str(obj.at("id"));
-        int32_t level   = json_int(obj.at("level"));
+        std::string eid = json_str(elem["id"]);
+        int32_t level   = json_int(elem["level"]);
         NSID ench_nsid(eid);
         if (ench_reg.contains(ench_nsid)) {
             result.emplace(std::move(ench_nsid), eid, level);
@@ -324,29 +318,29 @@ std::string OutputFormatter::format_json(
     const auto &ench_reg = profile.ench();
     const auto &cat_reg = profile.tags();
     Json::Object root;
-    root["schema_version"] = Json(Json::String("1.0"));
-    root["mode"]           = Json(Json::String(mode_to_raw(mode)));
+    root["schema_version"] = Json("1.0");
+    root["mode"]           = Json(mode_to_raw(mode));
 
     Json::Array sol_arr;
     for (size_t si = 0; si < solutions.size(); ++si) {
         const auto &sol = solutions[si];
         Json::Object s;
-        s["rank"] = Json(Json::Number(static_cast<int32_t>(si + 1)));
+        s["rank"] = Json(static_cast<int32_t>(si + 1));
 
         // Platform
         switch (sol.platform) {
-        case MCE::Java:    s["platform"] = Json(Json::String("Java"));    break;
-        case MCE::Bedrock: s["platform"] = Json(Json::String("Bedrock")); break;
-        case MCE::All:     s["platform"] = Json(Json::String("All"));     break;
-        default:                     s["platform"] = Json(Json::String("None"));    break;
+        case MCE::Java:    s["platform"] = Json("Java");    break;
+        case MCE::Bedrock: s["platform"] = Json("Bedrock"); break;
+        case MCE::All:     s["platform"] = Json("All");     break;
+        default:                     s["platform"] = Json("None");    break;
         }
 
         // Original enchantments
         Json::Array orig_arr;
         for (const auto &ench : sol.original_ench) {
             Json::Object eo;
-            eo["id"]    = Json(Json::String(ench_name_id(ench.id, ench_reg)));
-            eo["level"] = Json(Json::Number(static_cast<int32_t>(ench.level)));
+            eo["id"]    = Json(ench_name_id(ench.id, ench_reg));
+            eo["level"] = Json(ench.level);
             orig_arr.push_back(Json(eo));
         }
         s["original_ench"] = Json(orig_arr);
@@ -369,19 +363,19 @@ std::string OutputFormatter::format_json(
         s["steps"] = Json(steps_arr);
 
         // Summary
-        s["total_exp_level_cost"] = Json(Json::Number(sol.total_exp_level_cost));
-        s["total_exp_cost"]       = Json(Json::Number(sol.total_exp_cost));
-        s["peak_level_cost"]      = Json(Json::Number(sol.get_peak_level_cost()));
-        s["peak_exp_cost"]        = Json(Json::Number(sol.get_peak_exp_cost()));
-        s["max_cost_step_index"]  = Json(Json::Number(static_cast<int64_t>(sol.max_cost_step_index)));
-        s["is_success"]           = Json(Json::Bool(sol.is_success));
+        s["total_exp_level_cost"] = Json(sol.total_exp_level_cost);
+        s["total_exp_cost"]       = Json(sol.total_exp_cost);
+        s["peak_level_cost"]      = Json(sol.get_peak_level_cost());
+        s["peak_exp_cost"]        = Json(sol.get_peak_exp_cost());
+        s["max_cost_step_index"]  = Json(static_cast<int64_t>(sol.max_cost_step_index));
+        s["is_success"]           = Json(sol.is_success);
 
         // Metadata
         Json::Object meta;
-        meta["algorithm_name"]   = Json(Json::String(sol.metadata.algorithm_name));
-        meta["algorithm_version"] = Json(Json::String(sol.metadata.algorithm_version));
-        meta["created_at"]       = Json(Json::Number(static_cast<int64_t>(sol.metadata.created_at.time_since_epoch().count())));
-        meta["computation_time"] = Json(Json::Number(static_cast<int64_t>(sol.metadata.computation_time.count())));
+        meta["algorithm_name"]   = Json(sol.metadata.algorithm_name);
+        meta["algorithm_version"] = Json(sol.metadata.algorithm_version);
+        meta["created_at"]       = Json(static_cast<int64_t>(sol.metadata.created_at.time_since_epoch().count()));
+        meta["computation_time"] = Json(static_cast<int64_t>(sol.metadata.computation_time.count()));
         s["metadata"]            = Json(meta);
 
         sol_arr.push_back(Json(s));
@@ -403,87 +397,67 @@ std::vector<Solution> OutputFormatter::parse_json(
 
     std::vector<Equipment> equipment_cache;
 
-    Json root  = Json::parse(input);
-    Json::Value root_val = root.get_value();
-    const Json::Object &root_obj = std::get<Json::Object>(root_val);
+    Json root = Json::parse(input);
 
     // Solutions array
-    auto sol_it = root_obj.find("solutions");
-    if (sol_it == root_obj.end()) {
+    if (!root.has("solutions")) {
         return {};
     }
-    Json::Value sol_arr_val = sol_it->second.get_value();
-    const Json::Array &sol_arr = std::get<Json::Array>(sol_arr_val);
+    Json::Array sol_arr = root["solutions"].as_array();
 
     std::vector<Solution> results;
     results.reserve(sol_arr.size());
 
     for (const auto &sol_json : sol_arr) {
-        Json::Value obj_val = sol_json.get_value();
-        const Json::Object &obj = std::get<Json::Object>(obj_val);
-
         // Platform
-        std::string plat_str = json_str(obj.at("platform"));
+        std::string plat_str = json_str(sol_json["platform"]);
         MCE plat = MCE::None;
         if (plat_str == "Java")       plat = MCE::Java;
         else if (plat_str == "Bedrock") plat = MCE::Bedrock;
         else if (plat_str == "All")   plat = MCE::All;
 
         // Original enchantments
-        Json::Value orig_ench_val = obj.at("original_ench").get_value();
         EnchSet orig_ench = enchset_from_json_array(
-            std::get<Json::Array>(orig_ench_val), ench_reg
+            sol_json["original_ench"].as_array(), ench_reg
         );
 
         // Target item
-        Item target_item = item_from_json(obj.at("target_item"), equipment_cache, ench_reg, cat_reg);
+        Item target_item = item_from_json(sol_json["target_item"], equipment_cache, ench_reg, cat_reg);
 
         // Available items
         ItemCollection avail_items;
-        auto avail_it = obj.find("available_items");
-        if (avail_it != obj.end()) {
-            Json::Value avail_arr_val = avail_it->second.get_value();
-            const Json::Array &avail_arr = std::get<Json::Array>(avail_arr_val);
-            for (const auto &avail_j : avail_arr) {
+        if (sol_json.has("available_items")) {
+            for (const auto &avail_j : sol_json["available_items"].as_array()) {
                 avail_items.push_back(item_from_json(avail_j, equipment_cache, ench_reg, cat_reg));
             }
         }
 
         // Steps
         EnchStepList steps;
-        auto steps_it = obj.find("steps");
-        if (steps_it != obj.end()) {
-            Json::Value steps_arr_val = steps_it->second.get_value();
-            const Json::Array &steps_arr = std::get<Json::Array>(steps_arr_val);
-            for (const auto &step_j : steps_arr) {
+        if (sol_json.has("steps")) {
+            for (const auto &step_j : sol_json["steps"].as_array()) {
                 steps.push_back(step_from_json(step_j, equipment_cache, ench_reg, cat_reg));
             }
         }
 
         // Metadata
         Solution::MetaData meta;
-        auto meta_it = obj.find("metadata");
-        if (meta_it != obj.end()) {
-            Json::Value meta_obj_val = meta_it->second.get_value();
-            const Json::Object &meta_obj = std::get<Json::Object>(meta_obj_val);
-            auto algo_it = meta_obj.find("algorithm_name");
-            if (algo_it != meta_obj.end()) meta.algorithm_name = json_str(algo_it->second);
-            auto ver_it = meta_obj.find("algorithm_version");
-            if (ver_it != meta_obj.end()) meta.algorithm_version = json_str(ver_it->second);
-            auto ca_it = meta_obj.find("created_at");
-            if (ca_it != meta_obj.end())
-                meta.created_at = std::chrono::system_clock::time_point{std::chrono::seconds(json_int64(ca_it->second))};
-            auto ct_it = meta_obj.find("computation_time");
-            if (ct_it != meta_obj.end())
-                meta.computation_time = std::chrono::milliseconds(json_int64(ct_it->second));
+        if (sol_json.has("metadata")) {
+            Json meta_val = sol_json["metadata"];
+            if (meta_val.has("algorithm_name"))
+                meta.algorithm_name = meta_val["algorithm_name"].as<std::string>();
+            if (meta_val.has("algorithm_version"))
+                meta.algorithm_version = meta_val["algorithm_version"].as<std::string>();
+            if (meta_val.has("created_at"))
+                meta.created_at = std::chrono::system_clock::time_point{std::chrono::seconds(meta_val["created_at"].as<int64_t>())};
+            if (meta_val.has("computation_time"))
+                meta.computation_time = std::chrono::milliseconds(meta_val["computation_time"].as<int64_t>());
         }
 
         // is_success
         bool is_success = true;
-        auto succ_it = obj.find("is_success");
-        if (succ_it != obj.end()) {
-            Json::Value succ_val = succ_it->second.get_value();
-            is_success = std::get<Json::Bool>(succ_val);
+        if (sol_json.has("is_success")) {
+            is_success = sol_json["is_success"].as<bool>();
         }
 
         // Build solution via make() so costs are recomputed consistently
@@ -510,29 +484,29 @@ Json OutputFormatter::item_to_json(
     // Equipment
     if (!item.is_book()) {
         Json::Object eq;
-        eq["id"]             = Json(Json::String(item.id.str()));
-        eq["category"]       = Json(Json::String("unknown")); // temp
-        eq["name"]           = Json(Json::String(item.id.str()));
-        eq["max_durability"] = Json(Json::Number(0));
+        eq["id"]             = Json(item.id.str());
+        eq["category"]       = Json("unknown"); // temp
+        eq["name"]           = Json(item.id.str());
+        eq["max_durability"] = Json(0);
         obj["equipment"]     = Json(eq);
-        obj["is_book"]       = Json(Json::Bool(false));
+        obj["is_book"]       = Json(false);
     } else {
         obj["equipment"] = Json::null();
-        obj["is_book"]   = Json(Json::Bool(true));
+        obj["is_book"]   = Json(true);
     }
 
     // Enchantments
     Json::Array ench_arr;
     for (const auto &ench : item.enchantments) {
         Json::Object eo;
-        eo["id"]    = Json(Json::String(ench_name_id(ench.id, ench_reg)));
-        eo["level"] = Json(Json::Number(static_cast<int32_t>(ench.level)));
+        eo["id"]    = Json(ench_name_id(ench.id, ench_reg));
+        eo["level"] = Json(ench.level);
         ench_arr.push_back(Json(eo));
     }
     obj["enchantments"] = Json(ench_arr);
 
-    obj["prior_penalty"] = Json(Json::Number(item.prior_penalty));
-    obj["durability"]    = Json(Json::Number(item.durability));
+    obj["prior_penalty"] = Json(item.prior_penalty);
+    obj["durability"]    = Json(item.durability);
 
     return Json(obj);
 }
@@ -546,25 +520,18 @@ Item OutputFormatter::item_from_json(
     const EnchantmentRegistry &ench_reg,
     const EquipmentTagRegistry &cat_reg
 ) {
-    Json::Value j_val = j.get_value();
-    const Json::Object &obj = std::get<Json::Object>(j_val);
-
     // Equipment (may be null for books)
     const Equipment *eq_ptr = nullptr;
-    auto eq_it = obj.find("equipment");
-    if (eq_it != obj.end()) {
-        if (std::holds_alternative<Json::Null>(eq_it->second.get_value())) {
+    if (j.has("equipment")) {
+        if (j["equipment"].is_null()) {
             eq_ptr = nullptr;
         } else {
-            Json::Value eq_val = eq_it->second.get_value();
-            const Json::Object &eq_obj = std::get<Json::Object>(eq_val);
-            std::string id     = json_str(eq_obj.at("id"));
-            std::string cat    = json_str(eq_obj.at("category"));
-            std::string name   = json_str(eq_obj.at("name"));
+            std::string id     = json_str(j["equipment"]["id"]);
+            std::string cat    = json_str(j["equipment"]["category"]);
+            std::string name   = json_str(j["equipment"]["name"]);
             int32_t max_dur    = 0;
-            auto md_it = eq_obj.find("max_durability");
-            if (md_it != eq_obj.end()) {
-                max_dur = json_int(md_it->second);
+            if (j["equipment"].has("max_durability")) {
+                max_dur = json_int(j["equipment"]["max_durability"]);
             }
 
             equipment_cache.emplace_back(Equipment{
@@ -576,26 +543,22 @@ Item OutputFormatter::item_from_json(
 
     // Enchantments
     EnchSet ench_set;
-    auto ench_it = obj.find("enchantments");
-    if (ench_it != obj.end()) {
-        Json::Value ench_arr_val = ench_it->second.get_value();
+    if (j.has("enchantments")) {
         ench_set = enchset_from_json_array(
-            std::get<Json::Array>(ench_arr_val), ench_reg
+            j["enchantments"].as_array(), ench_reg
         );
     }
 
     // Prior penalty
     int32_t prior_penalty = 0;
-    auto pp_it = obj.find("prior_penalty");
-    if (pp_it != obj.end()) {
-        prior_penalty = json_int(pp_it->second);
+    if (j.has("prior_penalty")) {
+        prior_penalty = json_int(j["prior_penalty"]);
     }
 
     // Durability
     int32_t durability = -1;
-    auto dur_it = obj.find("durability");
-    if (dur_it != obj.end()) {
-        durability = json_int(dur_it->second);
+    if (j.has("durability")) {
+        durability = json_int(j["durability"]);
     }
 
     if (eq_ptr)
@@ -614,8 +577,8 @@ Json OutputFormatter::step_to_json(
     Json::Object obj;
     obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg);
     obj["item_b"]         = item_to_json(step.item_b, ench_reg, cat_reg);
-    obj["exp_level_cost"] = Json(Json::Number(step.exp_level_cost));
-    obj["exp_cost"]       = Json(Json::Number(step.exp_cost));
+    obj["exp_level_cost"] = Json(step.exp_level_cost);
+    obj["exp_cost"]       = Json(step.exp_cost);
     return Json(obj);
 }
 
@@ -628,12 +591,10 @@ Solution::EnchStep OutputFormatter::step_from_json(
     const EnchantmentRegistry &ench_reg,
     const EquipmentTagRegistry &cat_reg
 ) {
-    Json::Value j_val = j.get_value();
-    const Json::Object &obj = std::get<Json::Object>(j_val);
     Solution::EnchStep step;
-    step.item_a         = item_from_json(obj.at("item_a"), equipment_cache, ench_reg, cat_reg);
-    step.item_b         = item_from_json(obj.at("item_b"), equipment_cache, ench_reg, cat_reg);
-    step.exp_level_cost = json_int(obj.at("exp_level_cost"));
-    step.exp_cost       = json_int(obj.at("exp_cost"));
+    step.item_a         = item_from_json(j["item_a"], equipment_cache, ench_reg, cat_reg);
+    step.item_b         = item_from_json(j["item_b"], equipment_cache, ench_reg, cat_reg);
+    step.exp_level_cost = json_int(j["exp_level_cost"]);
+    step.exp_cost       = json_int(j["exp_cost"]);
     return step;
 }

@@ -166,33 +166,31 @@ Profile Profile::clone(const NSID& new_name) const {
 // ============================================================================
 
 Json Profile::to_json() const {
-    Json::Object obj;
-
-    // Metadata
-    obj[std::string(ProfileMetadata::KEY_NAME)]        = Json(Json::String(_meta.name.str()));
-    obj[std::string(ProfileMetadata::KEY_DESCRIPTION)] = Json(Json::String(_meta.description));
-    obj[std::string(ProfileMetadata::KEY_AUTHOR)]      = Json(Json::String(_meta.author));
-    obj[std::string(ProfileMetadata::KEY_VERSION)]     = Json(Json::String(_meta.version));
+    Json obj = Json::object()
+        .set(std::string(ProfileMetadata::KEY_NAME),        Json(_meta.name.str()))
+        .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(_meta.description))
+        .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(_meta.author))
+        .set(std::string(ProfileMetadata::KEY_VERSION),     Json(_meta.version));
 
     // Enchantments
     Json ej;
     ej << _ench;
-    obj[std::string(ProfileMetadata::KEY_ENCHANTMENTS)] = ej;
+    obj.set(std::string(ProfileMetadata::KEY_ENCHANTMENTS), ej);
 
     // Equipment
     Json eqj;
     eqj << _eq;
-    obj[std::string(ProfileMetadata::KEY_EQUIPMENTS)] = eqj;
+    obj.set(std::string(ProfileMetadata::KEY_EQUIPMENTS), eqj);
 
     // Tags — serialize as array of name strings (vanilla.json format)
     {
         Json::Array arr;
         for (const auto& [id, tag] : _tags.data())
-            arr.push_back(Json(Json::String(tag.name)));
-        obj[std::string(ProfileMetadata::KEY_TAGS)] = Json(std::move(arr));
+            arr.push_back(Json(tag.name));
+        obj.set(std::string(ProfileMetadata::KEY_TAGS), Json(std::move(arr)));
     }
 
-    return Json(std::move(obj));
+    return obj;
 }
 
 void Profile::from_json(const Json& json) {
@@ -202,59 +200,40 @@ void Profile::from_json(const Json& json) {
 Profile Profile::from_json_static(const Json& json) {
     Profile p;
 
-    auto obj = [&]() -> Json::Object {
-        if (json.type() == JsonType::Object)
-            return std::get<Json::Object>(json.get_value());
-        return {};
-    }();
+    if (json.type() != JsonType::Object)
+        return p;
 
-    auto get_str = [&](const std::string& key) -> std::string {
-        auto it = obj.find(key);
-        if (it != obj.end() && it->second.type() == JsonType::String)
-            return std::get<Json::String>(it->second.get_value());
-        return {};
-    };
-
-    p._meta.name        = NSID(get_str(std::string(ProfileMetadata::KEY_NAME)));
-    p._meta.description = get_str(std::string(ProfileMetadata::KEY_DESCRIPTION));
-    p._meta.author      = get_str(std::string(ProfileMetadata::KEY_AUTHOR));
-    p._meta.version     = get_str(std::string(ProfileMetadata::KEY_VERSION));
+    p._meta.name        = NSID(json.has(std::string(ProfileMetadata::KEY_NAME)) ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>() : "");
+    p._meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
+    p._meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
+    p._meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";
     p._meta.created_at  = std::chrono::system_clock::now();
     p._meta.updated_at  = p._meta.created_at;
 
     // Enchantments
-    {
-        auto it = obj.find(std::string(ProfileMetadata::KEY_ENCHANTMENTS));
-        if (it != obj.end()) {
-            Json ench_json(it->second);
-            ench_json >> p._ench;
-        }
+    if (json.has(std::string(ProfileMetadata::KEY_ENCHANTMENTS))) {
+        Json ench_json = json[std::string(ProfileMetadata::KEY_ENCHANTMENTS)];
+        ench_json >> p._ench;
     }
 
     // Equipment
-    {
-        auto it = obj.find(std::string(ProfileMetadata::KEY_EQUIPMENTS));
-        if (it != obj.end()) {
-            Json eq_json(it->second);
-            eq_json >> p._eq;
-        }
+    if (json.has(std::string(ProfileMetadata::KEY_EQUIPMENTS))) {
+        Json eq_json = json[std::string(ProfileMetadata::KEY_EQUIPMENTS)];
+        eq_json >> p._eq;
     }
 
     // Tags
-    {
-        auto it = obj.find(std::string(ProfileMetadata::KEY_TAGS));
-        if (it != obj.end()) {
-            auto tag_val = it->second.get_value();
-            if (std::holds_alternative<Json::Array>(tag_val)) {
-                const auto& arr = std::get<Json::Array>(tag_val);
-                for (const auto& elem : arr) {
-                    if (elem.type() == JsonType::String) {
-                        std::string name = std::get<Json::String>(elem.get_value());
-                        EquipmentTag tag;
-                        tag.id   = NSID("#minecraft:" + name);
-                        tag.name = std::move(name);
-                        p._tags.insert(std::move(tag));
-                    }
+    if (json.has(std::string(ProfileMetadata::KEY_TAGS))) {
+        Json tag_val = json[std::string(ProfileMetadata::KEY_TAGS)];
+        if (tag_val.type() == JsonType::Array) {
+            Json::Array arr = tag_val.as<Json::Array>();
+            for (const auto& elem : arr) {
+                if (elem.type() == JsonType::String) {
+                    std::string name = elem.as<std::string>();
+                    EquipmentTag tag;
+                    tag.id   = NSID("#minecraft:" + name);
+                    tag.name = std::move(name);
+                    p._tags.insert(std::move(tag));
                 }
             }
         }
@@ -278,32 +257,21 @@ const Json& operator>>(const Json& json, Profile& profile) {
 }
 
 Json& operator<<(Json& json, const ProfileMetadata& meta) {
-    json = Json(Json::Object{
-        {std::string(ProfileMetadata::KEY_NAME),        Json(Json::String(meta.name.str()))},
-        {std::string(ProfileMetadata::KEY_DESCRIPTION), Json(Json::String(meta.description))},
-        {std::string(ProfileMetadata::KEY_AUTHOR),      Json(Json::String(meta.author))},
-        {std::string(ProfileMetadata::KEY_VERSION),     Json(Json::String(meta.version))},
-    });
+    json = Json::object()
+        .set(std::string(ProfileMetadata::KEY_NAME),        Json(meta.name.str()))
+        .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(meta.description))
+        .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(meta.author))
+        .set(std::string(ProfileMetadata::KEY_VERSION),     Json(meta.version));
     return json;
 }
 
 const Json& operator>>(const Json& json, ProfileMetadata& meta) {
-    auto obj = [&]() -> Json::Object {
-        if (json.type() == JsonType::Object)
-            return std::get<Json::Object>(json.get_value());
-        return {};
-    }();
+    if (json.type() != JsonType::Object)
+        return json;
 
-    auto get_str = [&](const std::string& key) -> std::string {
-        auto it = obj.find(key);
-        if (it != obj.end() && it->second.type() == JsonType::String)
-            return std::get<Json::String>(it->second.get_value());
-        return {};
-    };
-
-    meta.name        = NSID(get_str(std::string(ProfileMetadata::KEY_NAME)));
-    meta.description = get_str(std::string(ProfileMetadata::KEY_DESCRIPTION));
-    meta.author      = get_str(std::string(ProfileMetadata::KEY_AUTHOR));
-    meta.version     = get_str(std::string(ProfileMetadata::KEY_VERSION));
+    meta.name        = NSID(json.has(std::string(ProfileMetadata::KEY_NAME)) ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>() : "");
+    meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
+    meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
+    meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";
     return json;
 }
