@@ -13,6 +13,8 @@ besq_test(test_registry_edge test_registry_edge.cpp)
 besq_test(test_serializer test_serializer.cpp)
 besq_test(test_profile_manager test_profile_manager.cpp)
 besq_test(test_registry_loader test_registry_loader.cpp)
+besq_test(test_parser_detail test_parser_detail.cpp)
+besq_test(test_parsers test_parsers.cpp)
 
 # Old RegistryManager test — superseded by new ProfileManager + RegistryLoader.
 # besq_test(test_registry_manager test_registry_manager.cpp)

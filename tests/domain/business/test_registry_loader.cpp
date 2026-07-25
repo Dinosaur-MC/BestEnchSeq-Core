@@ -1,6 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/components/TagResolver.h"
+#include "domain/business/components/Serializer.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/registries/EquipmentTagRegistry.h"
@@ -473,6 +474,135 @@ void test_tag_unknown_tag() {
     std::cout << "PASS: test_tag_unknown_tag" << std::endl;
 }
 
+// ---------------------------------------------------------------------------
+// 8. Resolve a simple tag with concrete items (standalone, no registry init).
+// ---------------------------------------------------------------------------
+void test_tag_resolver_basic() {
+    TagResolver resolver;
+    resolver.add_tag("minecraft:swords",
+        {"minecraft:diamond_sword", "minecraft:iron_sword"});
+
+    auto result = resolver.resolve("#minecraft:swords");
+    expect(result.size() == 2, "swords tag should have 2 entries");
+    expect(result.contains("minecraft:diamond_sword"),
+           "swords tag contains diamond_sword");
+    expect(result.contains("minecraft:iron_sword"),
+           "swords tag contains iron_sword");
+    TEST_PASS("test_tag_resolver_basic");
+}
+
+// ---------------------------------------------------------------------------
+// 9. Resolve a composite tag with transitive (nested) tag references.
+// ---------------------------------------------------------------------------
+void test_tag_resolver_nested() {
+    TagResolver resolver;
+
+    // swords -> #minecraft:all_swords (tag reference)
+    // all_swords -> diamond_sword
+    resolver.add_tag("minecraft:swords",
+        {"#minecraft:all_swords"});
+    resolver.add_tag("minecraft:all_swords",
+        {"minecraft:diamond_sword"});
+
+    auto result = resolver.resolve("#minecraft:swords");
+    expect(result.size() == 1,
+           "nested swords tag resolves to 1 entry");
+    expect(result.contains("minecraft:diamond_sword"),
+           "transitive resolution yields diamond_sword");
+    TEST_PASS("test_tag_resolver_nested");
+}
+
+// ---------------------------------------------------------------------------
+// 10. Resolve a tag that does not exist in the resolver.
+// ---------------------------------------------------------------------------
+void test_tag_resolver_unknown() {
+    TagResolver resolver;
+
+    auto result = resolver.resolve("#minecraft:nonexistent");
+    expect(result.empty(),
+           "non-existent tag returns empty set");
+    TEST_PASS("test_tag_resolver_unknown");
+}
+
+// ---------------------------------------------------------------------------
+// 11. Resolve a bare ID (no '#') returns a set containing the ID itself.
+// ---------------------------------------------------------------------------
+void test_tag_resolver_no_hash() {
+    TagResolver resolver;
+
+    auto result = resolver.resolve("minecraft:sharpness");
+    expect(result.size() == 1,
+           "bare ID reference returns set of 1");
+    expect(result.contains("minecraft:sharpness"),
+           "bare ID passthrough works");
+    TEST_PASS("test_tag_resolver_no_hash");
+}
+
+// =============================================================================
+// Section C -- Serializer tests
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// 12. Serialize a Profile to JSON and verify expected fields.
+// ---------------------------------------------------------------------------
+void test_serialize_profile() {
+    Profile profile(NSID("test:profile"));
+    profile.set_description("Test description");
+    profile.set_version("1.0.0");
+
+    Json json;
+    json << profile;
+
+    expect(json.is_valid(),           "profile JSON is valid");
+    expect(json.has("name"),          "JSON has name field");
+    expect(json.has("description"),   "JSON has description field");
+    expect(json.has("version"),       "JSON has version field");
+    expect(json.has("enchantments"),  "JSON has enchantments field");
+    expect(json.has("equipments"),    "JSON has equipments field");
+    expect(json.has("tags"),          "JSON has tags field");
+
+    expect(json["name"].as_string() == "test:profile",
+           "name field matches");
+    expect(json["description"].as_string() == "Test description",
+           "description field matches");
+    expect(json["version"].as_string() == "1.0.0",
+           "version field matches");
+
+    TEST_PASS("test_serialize_profile");
+}
+
+// ---------------------------------------------------------------------------
+// 13. Profile serialization roundtrip: serialize, deserialize, verify.
+// ---------------------------------------------------------------------------
+void test_serialize_profile_roundtrip() {
+    Profile original(NSID("test:roundtrip"));
+    original.set_description("Roundtrip test");
+
+    EnchInfo sharpness(
+        NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
+        std::unordered_set<NSID>{}, std::unordered_set<NSID>{}
+    );
+    original.add_enchantment(sharpness);
+
+    // -- Serialize --
+    Json json;
+    json << original;
+
+    // -- Deserialize --
+    Profile restored;
+    json >> restored;
+
+    // -- Verify --
+    expect(restored.name() == NSID("test:roundtrip"),
+           "name preserved after roundtrip");
+    expect(restored.ench().contains(NSID("minecraft:sharpness")),
+           "enchantment present after roundtrip");
+    expect(restored.ench().at(NSID("minecraft:sharpness")).max_level == 5,
+           "sharpness max_level preserved after roundtrip");
+
+    TEST_PASS("test_serialize_profile_roundtrip");
+}
+
 } // anonymous namespace
 
 // =============================================================================
@@ -490,6 +620,16 @@ int main() {
         test_tag_resolve_basic();
         test_tag_resolve_composite();
         test_tag_unknown_tag();
+
+        // Section B (continued) -- TagResolver standalone
+        test_tag_resolver_basic();
+        test_tag_resolver_nested();
+        test_tag_resolver_unknown();
+        test_tag_resolver_no_hash();
+
+        // Section C -- Serializer
+        test_serialize_profile();
+        test_serialize_profile_roundtrip();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
