@@ -467,7 +467,7 @@ void test_tag_iterator() {
         (void)tag;
         ++count;
     }
-    expect(count == 14, "range-for should iterate exactly 14 builtin tags");
+    expect(count == 15, "range-for should iterate exactly 15 builtin tags");
     TEST_PASS("test_tag_iterator");
 }
 

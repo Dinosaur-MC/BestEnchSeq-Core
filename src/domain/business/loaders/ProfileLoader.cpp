@@ -26,6 +26,8 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
 
         RegistryLoader loader;
         EquipmentTagRegistry tag_reg;
+        EquipmentRegistry eq_reg;
+        EnchantmentRegistry ench_reg;
 
         // Step 1: Build tag registry from equipment categories
         {
@@ -36,20 +38,13 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
             }
         }
 
-        // Step 2: Populate equipment
-        loader.from_dto(profile._eq, tag_reg, eq_data);
+        // Step 2: Populate registries into temporary containers
+        loader.from_dto(eq_reg, tag_reg, eq_data);
+        loader.from_dto(ench_reg, tag_reg, ench_data);
 
-        // Step 3: Populate enchantments
-        loader.from_dto(profile._ench, tag_reg, ench_data);
-
-        // Step 4: Copy tags
-        profile._tags = std::move(tag_reg);
-
-        // Set metadata from filename
+        // Step 3: Construct Profile via full-parameter constructor
         std::string stem = path.stem().string();
-        profile._meta.name = NSID(stem);
-        profile._meta.created_at = std::chrono::system_clock::now();
-        profile._meta.updated_at = profile._meta.created_at;
+        profile = Profile(NSID(stem), std::move(ench_reg), std::move(eq_reg), std::move(tag_reg));
 
         return true;
     } catch (const std::exception& e) {
@@ -82,14 +77,12 @@ Profile ProfileLoader::load_builtin() {
 
 bool ProfileLoader::load_builtin(Profile& profile) {
     try {
-        besq::data::load_builtin_data(
-            profile._tags, profile._ench, profile._eq
-        );
-        if (profile.name().empty()) {
-            profile._meta.name = NSID("builtin:vanilla");
-        }
-        profile._meta.created_at = std::chrono::system_clock::now();
-        profile._meta.updated_at = profile._meta.created_at;
+        EquipmentTagRegistry tag_reg;
+        EnchantmentRegistry ench_reg;
+        EquipmentRegistry eq_reg;
+        besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
+        profile = Profile(NSID("builtin:vanilla"), std::move(ench_reg),
+                          std::move(eq_reg), std::move(tag_reg));
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to load built-in data: %s", e.what());

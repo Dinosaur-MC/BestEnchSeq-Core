@@ -15,6 +15,17 @@ Profile::Profile(NSID name) {
     _meta.updated_at = _meta.created_at;
 }
 
+Profile::Profile(NSID name, EnchantmentRegistry ench, EquipmentRegistry eq,
+                 EquipmentTagRegistry tags)
+    : _ench(std::move(ench))
+    , _eq(std::move(eq))
+    , _tags(std::move(tags))
+{
+    _meta.name = std::move(name);
+    _meta.created_at = std::chrono::system_clock::now();
+    _meta.updated_at = _meta.created_at;
+}
+
 // ============================================================================
 // Proxy Queries
 // ============================================================================

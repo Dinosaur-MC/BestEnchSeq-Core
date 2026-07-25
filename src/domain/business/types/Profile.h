@@ -43,6 +43,11 @@ public:
     Profile() = default;
     explicit Profile(NSID name);
 
+    /// Full-parameter constructor: construct with all data upfront.
+    /// Takes ownership of the three registries by move.
+    Profile(NSID name, EnchantmentRegistry ench, EquipmentRegistry eq,
+            EquipmentTagRegistry tags);
+
     // -- Metadata -------------------------------------------------------
 
     const ProfileMetadata& metadata() const noexcept { return _meta; }
@@ -98,10 +103,6 @@ public:
     static Profile from_json(const Json& json);
 
 private:
-    friend class ProfileManager;
-    friend class RegistryManager;
-    friend class ProfileLoader;
-
     ProfileMetadata _meta;
     EnchantmentRegistry _ench;
     EquipmentRegistry _eq;
