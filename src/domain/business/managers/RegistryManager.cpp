@@ -97,7 +97,7 @@ RegistryManager& RegistryManager::intersect(const Profile& other) {
 
 Profile RegistryManager::build(const NSID& result_name) const {
     return Profile(
-        ProfileMetadata{result_name},
+        ProfileMetadata(result_name),
         _ench.value_or(EnchantmentRegistry{}),
         _eq.value_or(EquipmentRegistry{}),
         _tags.value_or(EquipmentTagRegistry{})
@@ -148,7 +148,7 @@ Profile RegistryManager::subtract(
             tag_result.insert(tag);
     }
 
-    return Profile(ProfileMetadata{name}, std::move(ench_result),
+    return Profile(ProfileMetadata(name), std::move(ench_result),
                    std::move(eq_result), std::move(tag_result));
 }
 

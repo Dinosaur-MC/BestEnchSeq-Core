@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/io/json.h"
+
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -27,27 +29,44 @@ using TagValue = std::variant<EntryRef, TagRef>;
 
 class TagResolver {
   public:
-    // Load all tag files from a data pack directory.
-    // Scans data/<ns>/tags/enchantment/ and data/<ns>/tags/item/
-    // Stores raw TagValue references -- expansion is deferred to resolve().
+    // ── Filesystem loading ────────────────────────────────────────────────
+
+    /// Load all tag files from a data pack directory.
+    /// Scans data/<ns>/tags/enchantment/ and data/<ns>/tags/item/
+    /// Stores raw TagValue references -- expansion is deferred to resolve().
     void load_from(const std::filesystem::path &data_pack_dir);
 
-    // Resolve a reference to concrete IDs.
-    // If reference starts with '#', it is a tag that gets expanded via BFS.
-    // Otherwise, the reference is returned as-is (it is already a concrete ID).
+    // ── In-memory tag loading (no filesystem access) ──────────────────────
+
+    /// Load a single tag from a Json DOM object expected to have a "values" array.
+    /// The key is the fully qualified tag identifier (e.g. "minecraft:enchantment/treasure").
+    void load_tag_json(const std::string &key, const Json &json);
+
+    /// Load a single tag from a raw JSON string.
+    /// Parses the string as JSON then delegates to load_tag_json().
+    void load_tag_content(const std::string &key, const std::string &json_content);
+
+    // ── Resolution ────────────────────────────────────────────────────────
+
+    /// Resolve a reference to concrete IDs.
+    /// If reference starts with '#', it is a tag that gets expanded via BFS.
+    /// Otherwise, the reference is returned as-is (it is already a concrete ID).
     std::unordered_set<std::string> resolve(const std::string &reference) const;
     std::unordered_set<std::string> resolve(const std::vector<std::string> &references) const;
 
-    // Direct tag access. Returns nullptr if the tag does not exist.
-    // Resolves on-the-fly; threads through the mutable cache.
+    /// Direct tag access. Returns nullptr if the tag does not exist.
+    /// Resolves on-the-fly; threads through the mutable cache.
     const std::unordered_set<std::string> *get_tag(const std::string &ns, const std::string &name) const;
 
-    // Programmatically add a raw tag (backward-compatible overload).
-    // Each value is stored as EntryRef (no '#') or TagRef (starts with '#').
+    /// Programmatically add a raw tag (backward-compatible overload).
+    /// Each value is stored as EntryRef (no '#') or TagRef (starts with '#').
     void add_tag(const std::string &key, const std::unordered_set<std::string> &values);
 
-    // Check if a reference looks like a tag (starts with '#').
+    /// Check if a reference looks like a tag (starts with '#').
     static bool is_tag(const std::string &reference);
+
+  private:
+    void parse_tag_values(const Json &json, std::vector<TagValue> &out) const;
 
   private:
     std::unordered_map<std::string, std::vector<TagValue>> _raw_tags;

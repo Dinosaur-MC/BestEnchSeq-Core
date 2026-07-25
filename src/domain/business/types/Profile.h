@@ -20,6 +20,26 @@ struct ProfileMetadata {
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point updated_at;
 
+    /// Default constructor (keeps Profile() = default valid).
+    ProfileMetadata() = default;
+
+    /// Name-only constructor: timestamps default to now.
+    explicit ProfileMetadata(NSID name_)
+        : name(std::move(name_))
+        , created_at(std::chrono::system_clock::now())
+        , updated_at(created_at) {}
+
+    /// Full-parameter constructor.
+    ProfileMetadata(NSID name_, std::string desc, std::string author_,
+                    std::string ver, std::string parent_)
+        : name(std::move(name_))
+        , description(std::move(desc))
+        , author(std::move(author_))
+        , version(std::move(ver))
+        , parent(std::move(parent_))
+        , created_at(std::chrono::system_clock::now())
+        , updated_at(created_at) {}
+
     // JSON keys (matching vanilla.json structure)
     static constexpr std::string_view KEY_NAME        = "name";
     static constexpr std::string_view KEY_DESCRIPTION = "description";

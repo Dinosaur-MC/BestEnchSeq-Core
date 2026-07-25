@@ -9,11 +9,7 @@
 // Construction
 // ============================================================================
 
-Profile::Profile(NSID name) {
-    _meta.name = std::move(name);
-    _meta.created_at = std::chrono::system_clock::now();
-    _meta.updated_at = _meta.created_at;
-}
+Profile::Profile(NSID name) : _meta(ProfileMetadata(std::move(name))) {}
 
 Profile::Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq,
                  EquipmentTagRegistry tags)
@@ -22,6 +18,8 @@ Profile::Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegist
     , _eq(std::move(eq))
     , _tags(std::move(tags))
 {
+    // ProfileMetadata constructors already set timestamps to now.
+    // Only guard against edge cases like raw default-constructed metadata.
     if (_meta.created_at == std::chrono::system_clock::time_point{})
         _meta.created_at = std::chrono::system_clock::now();
     if (_meta.updated_at == std::chrono::system_clock::time_point{})

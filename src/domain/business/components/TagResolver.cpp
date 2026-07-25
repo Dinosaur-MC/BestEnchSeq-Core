@@ -3,7 +3,79 @@
 #include "common/io/json.h"
 
 // ---------------------------------------------------------------------------
-// load_from  --  collect raw TagValue, do NOT expand
+// Internal: parse a JSON tag file's "values" array into TagValue entries
+// ---------------------------------------------------------------------------
+void TagResolver::parse_tag_values(const Json &json, std::vector<TagValue> &out) const {
+    auto root_var = json.get_value();
+    if (!std::holds_alternative<Json::Object>(root_var)) return;
+
+    const auto &root_obj = std::get<Json::Object>(root_var);
+    auto values_it       = root_obj.find("values");
+    if (values_it == root_obj.end()) return;
+
+    auto values_var = values_it->second.get_value();
+    if (!std::holds_alternative<Json::Array>(values_var)) return;
+
+    const auto &values_arr = std::get<Json::Array>(values_var);
+    for (const auto &elem : values_arr) {
+        auto elem_var = elem.get_value();
+
+        // ---- plain string entry ----
+        if (auto *s = std::get_if<Json::String>(&elem_var)) {
+            if (!s->empty() && (*s)[0] == '#') {
+                out.push_back(TagRef{s->substr(1)});
+            } else {
+                out.push_back(EntryRef{*s, true});
+            }
+            continue;
+        }
+
+        // ---- object entry  { "id": "...", "required": ... } ----
+        if (auto *obj = std::get_if<Json::Object>(&elem_var)) {
+            auto id_it = obj->find("id");
+            if (id_it == obj->end()) continue;
+            auto id_val       = id_it->second.get_value();
+            auto *id_str      = std::get_if<Json::String>(&id_val);
+            if (!id_str) continue;
+
+            bool required = true;
+            auto req_it = obj->find("required");
+            if (req_it != obj->end()) {
+                auto req_val = req_it->second.get_value();
+                if (auto *req_bool = std::get_if<Json::Bool>(&req_val)) {
+                    required = *req_bool;
+                }
+            }
+
+            if (!id_str->empty() && (*id_str)[0] == '#') {
+                out.push_back(TagRef{id_str->substr(1)});
+            } else {
+                out.push_back(EntryRef{*id_str, required});
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// load_tag_json  --  load a single tag from a pre-parsed Json DOM
+// ---------------------------------------------------------------------------
+void TagResolver::load_tag_json(const std::string &key, const Json &json) {
+    _resolved_cache.clear();
+    auto &vec = _raw_tags[key];
+    vec.clear();
+    parse_tag_values(json, vec);
+}
+
+// ---------------------------------------------------------------------------
+// load_tag_content  --  load a single tag from a raw JSON string
+// ---------------------------------------------------------------------------
+void TagResolver::load_tag_content(const std::string &key, const std::string &json_content) {
+    Json json = Json::parse(json_content);
+    load_tag_json(key, json);
+}
+
+// ---------------------------------------------------------------------------
+// load_from  --  collect raw TagValue from filesystem, do NOT expand
 // ---------------------------------------------------------------------------
 void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
     // NOTE: _raw_tags is NOT cleared before loading. Tags from inline JSON and
@@ -75,72 +147,11 @@ void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
 
                     std::string key = ns + ":" + relative;
 
-                    // Parse JSON and extract "values" array
+                    // Parse JSON and load via the in-memory path
                     try {
                         std::string content = file_utils::read_file(file_entry.path());
                         Json json          = Json::parse(content);
-
-                        auto root_var = json.get_value();
-                        if (!std::holds_alternative<Json::Object>(root_var)) {
-                            continue;
-                        }
-
-                        const auto &root_obj = std::get<Json::Object>(root_var);
-                        auto values_it       = root_obj.find("values");
-                        if (values_it == root_obj.end()) {
-                            continue;
-                        }
-
-                        auto values_var = values_it->second.get_value();
-                        if (!std::holds_alternative<Json::Array>(values_var)) {
-                            continue;
-                        }
-
-                        auto &vec = _raw_tags[key];
-                        vec.clear();
-
-                        const auto &values_arr = std::get<Json::Array>(values_var);
-                        for (const auto &elem : values_arr) {
-                            auto elem_var = elem.get_value();
-
-                            // ---- plain string entry ----
-                            if (auto *s = std::get_if<Json::String>(&elem_var)) {
-                                if (!s->empty() && (*s)[0] == '#') {
-                                    vec.push_back(TagRef{s->substr(1)});
-                                } else {
-                                    vec.push_back(EntryRef{*s, true});
-                                }
-                                continue;
-                            }
-
-                            // ---- object entry  { "id": "...", "required": ... } ----
-                            if (auto *obj = std::get_if<Json::Object>(&elem_var)) {
-                                auto id_it = obj->find("id");
-                                if (id_it == obj->end()) {
-                                    continue;
-                                }
-                                auto id_val = id_it->second.get_value();
-                                auto *id_str = std::get_if<Json::String>(&id_val);
-                                if (!id_str) {
-                                    continue;
-                                }
-
-                                bool required = true;
-                                auto req_it = obj->find("required");
-                                if (req_it != obj->end()) {
-                                    auto req_val = req_it->second.get_value();
-                                    if (auto *req_bool = std::get_if<Json::Bool>(&req_val)) {
-                                        required = *req_bool;
-                                    }
-                                }
-
-                                if (!id_str->empty() && (*id_str)[0] == '#') {
-                                    vec.push_back(TagRef{id_str->substr(1)});
-                                } else {
-                                    vec.push_back(EntryRef{*id_str, required});
-                                }
-                            }
-                        }
+                        load_tag_json(key, json);
                     } catch (const std::exception &) {
                         // Skip files that cannot be read or parsed
                         continue;

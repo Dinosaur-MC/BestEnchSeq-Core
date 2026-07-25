@@ -4,6 +4,7 @@
 #include "domain/business/types/Equipment.h"
 #include <filesystem>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class EquipmentTagRegistry;
@@ -35,6 +36,13 @@ struct EnchSerializer {
         const std::vector<EnchInfo> &infos,
         const EquipmentTagRegistry &cat_reg,
         const std::filesystem::path &output_dir
+    );
+
+    /// Serialize enchantments to MC official format in memory.
+    /// Returns map of relative data-pack path → JSON content string.
+    static std::unordered_map<std::string, std::string> to_mc_official_strings(
+        const std::vector<EnchInfo> &infos,
+        const EquipmentTagRegistry &cat_reg
     );
 
     // ── Equipment serialization ──────────────────────────────────────────
@@ -85,6 +93,12 @@ struct EnchSerializer {
     );
     static std::string to_csv(
         const std::vector<Equipment>& equipments,
+        const Profile& profile
+    );
+
+    /// Profile-aware overload: return map of path → JSON content.
+    static std::unordered_map<std::string, std::string> to_mc_official_strings(
+        const std::vector<EnchInfo>& infos,
         const Profile& profile
     );
 };

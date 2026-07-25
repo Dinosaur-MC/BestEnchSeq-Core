@@ -39,6 +39,48 @@ static std::string qualify_id(const std::string& id, const std::string& default_
 }
 
 // ============================================================================
+// Internal: build a per-enchantment MC official JSON object
+// ============================================================================
+
+/// Build the JSON object for one enchantment in MC official data-pack format.
+/// Returns a pair: {relative_path, json_object_string}
+///   relative_path: "data/<ns>/enchantment/<id>.json"
+static std::pair<std::string, std::string> build_mc_official_entry(
+    const EnchInfo &info, const EquipmentTagRegistry &cat_reg)
+{
+    auto [ns, id] = split_namespace(info.id.str());
+
+    Json::Object obj;
+    obj["anvil_cost"] = Json(info.multiplier);
+    obj["max_level"]  = Json(info.max_level);
+
+    // exclusive_set as namespaced IDs
+    Json::Array excl;
+    for (const auto &e : info.exclusive_set) {
+        std::string qualified = qualify_id(e.str());
+        excl.push_back(Json(qualified));
+    }
+    obj["exclusive_set"] = Json(excl);
+
+    // supported_items — convert category NSIDs back to item IDs
+    Json::Array supp;
+    for (const auto &cat_nsid : info.applicable_equipments) {
+        auto cat_it = cat_reg.find(cat_nsid);
+        std::string cat_str = cat_it != cat_reg.end() ? cat_it->name : "unknown";
+        if (cat_str.find(':') != std::string::npos) {
+            supp.push_back(Json(cat_str));
+        } else {
+            supp.push_back(Json("minecraft:" + cat_str));
+        }
+    }
+    obj["supported_items"] = Json(supp);
+
+    std::string path = "data/" + ns + "/enchantment/" + id + ".json";
+    std::string content = Json(obj).to_string(Json::Pretty);
+    return {std::move(path), std::move(content)};
+}
+
+// ============================================================================
 // Enchantment serialization
 // ============================================================================
 
@@ -148,53 +190,38 @@ void EnchSerializer::export_to_mc_official(
     const std::vector<EnchInfo> &infos, const EquipmentTagRegistry &cat_reg,
     const std::filesystem::path &output_dir
 ) {
-    for (const auto &info : infos) {
-        // Split id into namespace and id
-        auto [ns, id] = split_namespace(info.id.str());
+    auto entries = to_mc_official_strings(infos, cat_reg);
+    for (const auto &[rel_path, content] : entries) {
+        // Convert relative path (e.g. "data/minecraft/enchantment/sharpness.json")
+        // to an absolute path under output_dir
+        auto out_path = output_dir / rel_path;
+        std::filesystem::create_directories(out_path.parent_path());
 
-        // Construct output path: <output_dir>/data/<ns>/enchantment/<id>.json
-        std::filesystem::path ench_dir = output_dir / "data" / ns / "enchantment";
-        std::filesystem::create_directories(ench_dir);
-
-        Json::Object obj;
-        obj["anvil_cost"] = Json(info.multiplier);
-        obj["max_level"]  = Json(info.max_level);
-
-        // exclusive_set as namespaced IDs
-        Json::Array excl;
-        for (const auto &e : info.exclusive_set) {
-            std::string qualified = qualify_id(e.str());
-            excl.push_back(Json(qualified));
-        }
-        obj["exclusive_set"] = Json(excl);
-
-        // supported_items — convert category NSIDs back to item IDs
-        Json::Array supp;
-        for (const auto &cat_nsid : info.applicable_equipments) {
-            auto cat_it = cat_reg.find(cat_nsid);
-            std::string cat_str = cat_it != cat_reg.end() ? cat_it->name : "unknown";
-            // Avoid double-namespacing: cat may already contain "mod:item"
-            if (cat_str.find(':') != std::string::npos) {
-                supp.push_back(Json(cat_str));
-            } else {
-                supp.push_back(Json("minecraft:" + cat_str));
-            }
-        }
-        obj["supported_items"] = Json(supp);
-
-        // Write the file
-        std::string json_str            = Json(obj).to_string(Json::Pretty);
-        std::filesystem::path file_path = ench_dir / (id + ".json");
-        std::ofstream f(file_path);
+        std::ofstream f(out_path);
         if (f.is_open()) {
-            f << json_str;
+            f << content;
             if (!f.good()) {
-                LOG_WARN("Warning: Write error for %s", file_path.c_str());
+                LOG_WARN("Warning: Write error for %s", out_path.c_str());
             }
         } else {
-            LOG_WARN("Warning: Could not open %s for writing", file_path.c_str());
+            LOG_WARN("Warning: Could not open %s for writing", out_path.c_str());
         }
     }
+}
+
+// ============================================================================
+
+std::unordered_map<std::string, std::string>
+EnchSerializer::to_mc_official_strings(
+    const std::vector<EnchInfo> &infos, const EquipmentTagRegistry &cat_reg)
+{
+    std::unordered_map<std::string, std::string> result;
+    result.reserve(infos.size());
+    for (const auto &info : infos) {
+        auto [path, content] = build_mc_official_entry(info, cat_reg);
+        result[std::move(path)] = std::move(content);
+    }
+    return result;
 }
 
 // ============================================================================
@@ -354,4 +381,14 @@ void EnchSerializer::export_to_mc_official(
     for (const auto& [nsid, info] : profile.ench().data())
         infos.push_back(info);
     export_to_mc_official(infos, profile.tags(), output_dir);
+}
+
+// ── Profile-aware MC official strings ─────────────────────────────────────
+
+std::unordered_map<std::string, std::string>
+EnchSerializer::to_mc_official_strings(
+    const std::vector<EnchInfo>& infos,
+    const Profile& profile)
+{
+    return to_mc_official_strings(infos, profile.tags());
 }
