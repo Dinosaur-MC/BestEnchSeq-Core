@@ -2,7 +2,7 @@
 
 > Version: 2.0
 > Last updated: 2026-07-26
-> Status: Draft
+> Status: Implemented
 
 ---
 
@@ -262,19 +262,30 @@ interface/
 
 ---
 
-## 6. Implementation Plan
+## 6. Implementation Status
 
-### Current State
+All four phases are **completed** (2026-07-26).
 
-The interface domain has already been partially refactored:
-- `BesqContext.cpp` — already delegates to business domain (ProfileManager, FormatDetector, etc.)
-- CLI parsers already in `parsers/` (need move to `cli/` + registry-aware)
+| # | Task | Status | Description |
+|---|------|--------|-------------|
+| **S1** | Registry-aware parsers | ✅ | EnchParser returns `EnchSet` (registry-aware), ItemParser returns `Item`, `SpecTypes.h` deleted, `build_target()`/`build_enchset()` removed |
+| **S2** | Move parsers to `cli/` | ✅ | `CLIParser`, `EnchParser`, `ItemParser` from `parsers/` → `cli/`, all includes and CMake updated |
+| **S3** | Cleanup | ✅ | `ParserUtilsDomain.hpp` and `FileFormat.h` deleted; utility functions inlined to `EnchSerializer.cpp` |
+| **S4** | Finalize | ✅ | `interface.h` and `CMakeLists.txt` reflect final structure |
 
-### Steps
+### Final Directory Structure
 
-| # | Task | Files | Description |
-|---|------|-------|-------------|
-| **S1** | Registry-aware parsers | `EnchParser.h/cpp`, `ItemParser.h/cpp`, `cli.h/cpp` | Make parsers return `EnchSet`/`Item` directly, delete `SpecTypes.h`, remove `build_target()`/`build_enchset()` |
-| **S2** | Move parsers to `cli/` | `parsers/CLIParser.*`, `parsers/EnchParser.*`, `parsers/ItemParser.*` → `cli/` | Physically move files, update CMakeLists.txt and includes |
-| **S3** | Cleanup | `components/ParserUtilsDomain.hpp`, `fs/FileFormat.h` | Delete files, handle any remaining references |
-| **S4** | Finalize | `interface.h`, `CMakeLists.txt` | Update umbrella header and build to reflect final structure |
+```
+src/domain/interface/
+├── interface.h                       ← Umbrella header
+├── CMakeLists.txt
+├── BesqContext.cpp                   ← Session context
+├── cli/                              ← CLI module
+│   ├── cli.h/cpp                     CLIConfig, parse_cli(), apply_config_pairs()
+│   ├── CLIParser.h/cpp               Generic --key=value argument parser
+│   ├── EnchParser.h/cpp              "sharpness=5" → EnchSet (registry-aware)
+│   ├── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
+│   └── RegistryEditor.h/cpp          --registry-edit operations
+└── abi/
+    └── CAbiBindings.cpp              C ABI implementation
+```
