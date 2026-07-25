@@ -3,31 +3,48 @@
 #include "common/utils/ExpCalculator.hpp"
 
 #include <algorithm>
-#include <cassert>
 #include <chrono>
+#include <type_traits>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 // ============================================================================
-// apply — business → algorithm  (domain → compact)
+// apply — Profile + SolveRequest -> AlgorithmInput
 // ============================================================================
 
 algorithm::AlgorithmInput CompactAdapter::apply(
-    const algorithm::Item& target_item,
-    const algorithm::EnchSet& source_ench,
-    const ::Equipment& target_eq,
-    const EnchantmentRegistry& global_registry)
+    const Profile& profile,
+    const SolveRequest& request)
 {
-    // ── 1. Build algorithm Equipment from business Equipment ───────────
+    // ── 1. Resolve registries and equipment ─────────────────────────────
+    const auto& ench_registry = profile.ench();
+    const auto& eq_registry   = profile.eq();
+
+    // Look up target equipment by item id.  Books may not be in the
+    // equipment registry — fall back to a minimal placeholder.
+    const bool is_book = request.target_item.is_book();
+    ::Equipment target_eq;
+    if (is_book) {
+        target_eq = ::Equipment{request.target_item.id,
+                                request.target_item.id.str(), NSID(), 0};
+    } else {
+        try {
+            target_eq = eq_registry.at(request.target_item.id);
+        } catch (const std::out_of_range&) {
+            target_eq = ::Equipment{request.target_item.id,
+                                    request.target_item.id.str(), NSID(), 0};
+        }
+    }
+
+    // ── 2. Build algorithm Equipment ────────────────────────────────────
     algorithm::Equipment algo_equip;
-    algo_equip.id            = target_eq.id.empty() ? 0 : 1; // placeholder
-    algo_equip.category_id   = 0; // TODO: map NSID category to algorithm int32_t category_id
+    algo_equip.id             = 0; // placeholder; TODO: map NSID to int32_t
+    algo_equip.category_id    = 0;
     algo_equip.max_durability = target_eq.max_durability;
 
-    // ── 2. Determine applicable enchantment IDs ────────────────────────
-    // Sort by NSID for deterministic global_id assignment (unordered_map
-    // iteration is otherwise non-deterministic).
-    const auto& all_infos_map = global_registry.data();
+    // ── 3. Sort full registry by NSID (deterministic global_id) ─────────
+    const auto& all_infos_map = ench_registry.data();
     std::vector<std::pair<NSID, EnchInfo>> sorted_infos;
     sorted_infos.reserve(all_infos_map.size());
     for (const auto& [nsid, info] : all_infos_map)
@@ -35,13 +52,15 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     std::sort(sorted_infos.begin(), sorted_infos.end(),
               [](const auto& a, const auto& b) { return a.first < b.first; });
 
+    // ── 4. Filter applicable enchantments, build compact EnchReg ───────
     std::vector<algorithm::EnchInfo> algo_infos;
     std::vector<NSID> applicable_global_nsids;
-    std::unordered_map<int32_t, int16_t> global_to_local;
+    std::unordered_map<NSID, int16_t> nsid_to_local;
 
     for (int32_t gid = 0; gid < static_cast<int32_t>(sorted_infos.size()); ++gid) {
         const auto& biz = sorted_infos[gid].second;
-        bool applicable = biz.applicable_equipments.count(target_eq.category) > 0 || biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
+        bool applicable = biz.applicable_equipments.count(target_eq.category) > 0
+                       || biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
         if (!applicable) continue;
 
         algorithm::EnchInfo ai;
@@ -62,56 +81,120 @@ algorithm::AlgorithmInput CompactAdapter::apply(
         ai.applicable = true;
 
         int16_t local_id = static_cast<int16_t>(algo_infos.size());
-        global_to_local[gid] = local_id;
+        nsid_to_local[sorted_infos[gid].first] = local_id;
         applicable_global_nsids.push_back(sorted_infos[gid].first);
         algo_infos.push_back(std::move(ai));
     }
 
-    // ── 3. Init compact registry ──────────────────────────────────────
+    // ── 5. Init compact registry ───────────────────────────────────────
     algorithm::EnchReg ench_reg;
-    ench_reg.init(std::move(algo_infos), std::move(applicable_global_nsids), algo_equip);
+    ench_reg.init(std::move(algo_infos),
+                  std::move(applicable_global_nsids), algo_equip);
 
-    // ── 4. Remap helper ───────────────────────────────────────────────
-    auto remap_ench_set = [&](const algorithm::EnchSet& src) -> algorithm::EnchSet {
+    // ── 6. NSID -> local_id remap helper ───────────────────────────────
+    auto remap_nsid_to_local = [&](const EnchSet& src) -> algorithm::EnchSet {
         algorithm::EnchSet dst;
         for (const auto& e : src) {
-            auto it = global_to_local.find(static_cast<int32_t>(e.id));
-            if (it != global_to_local.end())
-                dst.insert(algorithm::Ench{it->second, e.level});
+            auto it = nsid_to_local.find(e.id);
+            if (it != nsid_to_local.end())
+                dst.insert(algorithm::Ench{it->second,
+                            static_cast<int16_t>(e.level)});
         }
         return dst;
     };
 
-    // ── 5. Build AlgorithmInput ───────────────────────────────────────
+    // ── 7. Build AlgorithmInput skeleton ───────────────────────────────
     algorithm::AlgorithmInput input;
     input.ench_reg = std::move(ench_reg);
+    input.f_config = request.forge_config;
+    input.s_config = request.search_config;
+    input.mode     = request.mode;
 
-    // input.target = desired (wanted enchantments after forge)
-    input.target = target_item;
-    input.target.enchs = remap_ench_set(input.target.enchs);
+    // Convert target_item (domain -> algorithm)
+    algorithm::Item algo_target;
+    algo_target.type = is_book ? algorithm::ItemType::Book
+                               : algorithm::ItemType::Equip;
+    algo_target.ppn  = static_cast<uint8_t>(request.target_item.prior_penalty);
+    algo_target.dur  = static_cast<int16_t>(request.target_item.durability);
+    algo_target.enchs = remap_nsid_to_local(request.target_item.enchantments);
+    input.target = std::move(algo_target);
 
-    // items[0] = equipment with SOURCE (current) enchantments
-    algorithm::Item equip_item = target_item;
-    equip_item.enchs = remap_ench_set(source_ench);
-    input.items.push_back(std::move(equip_item));
+    // ── 8. Convert payload ─────────────────────────────────────────────
+    std::visit([&](const auto& payload) {
+        using T = std::decay_t<decltype(payload)>;
+        if constexpr (std::is_same_v<T, DirectPayload>) {
+            // Direct mode: items[0] = equipment with CURRENT (source) enchants
+            algorithm::Item equip_item = input.target;
+            equip_item.enchs = remap_nsid_to_local(payload.source_enchantments);
+            input.items.push_back(std::move(equip_item));
+
+            // Data union: source enchantments as EnchCollection
+            algorithm::EnchCollection src_vec;
+            for (const auto& e : input.items[0].enchs)
+                src_vec.push_back(e);
+            input.data = std::move(src_vec);
+        } else if constexpr (std::is_same_v<T, InventoryPayload>) {
+            // Inventory mode: items[0] = equipment with its current enchants
+            // (target_item.enchantments ARE the current state in inventory mode)
+            algorithm::Item equip_item = input.target;
+            input.items.push_back(std::move(equip_item));
+
+            // Convert extra_items
+            algorithm::ItemCollection inv_items;
+            for (const auto& item : payload.extra_items) {
+                algorithm::Item algo_item;
+                algo_item.type = item.is_book()
+                    ? algorithm::ItemType::Book
+                    : algorithm::ItemType::Equip;
+                algo_item.ppn = static_cast<uint8_t>(item.prior_penalty);
+                algo_item.dur = static_cast<int16_t>(item.durability);
+                algo_item.enchs = remap_nsid_to_local(item.enchantments);
+                input.items.push_back(algo_item);
+                inv_items.push_back(std::move(algo_item));
+            }
+
+            // Data union: extra items as ItemCollection
+            input.data = std::move(inv_items);
+            input.priorities = payload.extra_item_priorities;
+        }
+    }, request.payload);
 
     return input;
 }
 
 // ============================================================================
-// recall — algorithm → business  (compact → domain)
+// recall — algorithm -> business (compact -> domain)
 // ============================================================================
 
 std::vector<Solution> CompactAdapter::recall(
     const algorithm::AlgorithmOutput& output,
-    const algorithm::AlgorithmInput& input,
-    const EnchSet& original_ench,
-    const Item& target_item,
-    const ItemCollection& available_items)
+    const algorithm::AlgorithmInput& input)
 {
     if (!output.is_valid)
         return {};
 
+    // ── 1. Reconstruct business types from AlgorithmInput ───────────────
+
+    // original_ench: from input.source() for direct mode
+    EnchSet original_ench;
+    if (input.is_direct()) {
+        for (const auto& e : input.source()) {
+            NSID nsid = input.ench_reg.to_global_id(e.id);
+            original_ench.emplace(nsid, nsid.str(), e.level);
+        }
+    }
+
+    // target_item: from input.target via to_domain()
+    Item target_item = to_domain(input.target, input.ench_reg);
+
+    // available_items: from input.inventory_items() for inventory mode
+    ItemCollection available_items;
+    if (input.is_inventory()) {
+        for (const auto& item : input.inventory_items())
+            available_items.push_back(to_domain(item, input.ench_reg));
+    }
+
+    // ── 2. Convert each compact solution ───────────────────────────────
     std::vector<Solution> solutions;
     solutions.reserve(output.solutions.size());
 
@@ -153,28 +236,39 @@ std::vector<Solution> CompactAdapter::recall(
 }
 
 // ============================================================================
-// from_domain  —  business Item → algorithm Item
+// from_domain  —  business Item -> algorithm Item
 // ============================================================================
 
-algorithm::Item CompactAdapter::from_domain(const Item& item, const algorithm::EnchReg& reg) {
+algorithm::Item CompactAdapter::from_domain(
+    const Item& item,
+    const algorithm::EnchReg& reg,
+    const EnchantmentRegistry& ench_reg)
+{
+    (void)ench_reg; // reg.to_local_id() provides the NSID -> local_id mapping
+
     algorithm::Item citem;
-    citem.type = item.is_book() ? algorithm::ItemType::Book : algorithm::ItemType::Equip;
+    citem.type = item.is_book() ? algorithm::ItemType::Book
+                                : algorithm::ItemType::Equip;
     citem.ppn  = static_cast<uint8_t>(item.prior_penalty);
     citem.dur  = static_cast<int16_t>(item.durability);
 
     for (const auto& ench : item.enchantments) {
-        // TEMP: NSID to local-id mapping requires EnchantmentRegistry
-        // which is not available at this layer yet.
-        citem.enchs.insert(algorithm::Ench{0, static_cast<int16_t>(ench.level)});
+        int16_t local_id = reg.to_local_id(ench.id);
+        if (local_id >= 0)
+            citem.enchs.insert(algorithm::Ench{local_id,
+                                static_cast<int16_t>(ench.level)});
     }
     return citem;
 }
 
 // ============================================================================
-// to_domain  —  algorithm Item → business Item
+// to_domain  —  algorithm Item -> business Item
 // ============================================================================
 
-Item CompactAdapter::to_domain(const algorithm::Item& item, const algorithm::EnchReg& reg) {
+Item CompactAdapter::to_domain(
+    const algorithm::Item& item,
+    const algorithm::EnchReg& reg)
+{
     EnchSet ench_set;
     for (const auto& e : item.enchs) {
         NSID nsid = reg.to_global_id(e.id);
