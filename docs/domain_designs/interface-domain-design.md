@@ -160,7 +160,7 @@ struct EnchParser {
 };
 ```
 
-**ItemParser** — `"diamond_sword[sharpness=5]"` → `Item`:
+**ItemParser** — `"diamond_sword[sharpness=5]{prior_penalty:2,durability:500}"` → `Item`:
 
 ```cpp
 struct ItemParser {
@@ -172,10 +172,24 @@ struct ItemParser {
 };
 ```
 
+Format:
+```
+<item_id>[<ench>=<level>,...]{<key>:<value>,...}
+```
+
+| Part | Example | Description |
+|------|---------|-------------|
+| item_id | `minecraft:diamond_sword` | Equipment name (required) |
+| `[ ]` | `[sharpness=5,knockback=2]` | Enchantments (optional) |
+| `{ }` | `{prior_penalty:3,durability:500}` | Item properties (optional) |
+
+Supportd property keys: `prior_penalty` (anvil prior-work penalty), `durability`.
+
 **Key change from v1:**
 - `EnchantmentSpec`/`TargetSpec` eliminated
 - `build_target()` / `build_enchset()` in cli.h eliminated
 - Parsers resolve NSIDs directly via registries, same logic previously in the builder helpers
+- `{key:value,...}` syntax for `prior_penalty` and `durability` fields
 
 **CLIParser** — Generic `--key=value` parser, zero business knowledge:
 
