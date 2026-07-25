@@ -24,11 +24,10 @@ struct CompactAdapter {
         const algorithm::AlgorithmInput& input
     );
 
-    /// Business Item -> algorithm Item (requires EnchantmentRegistry for NSID -> local_id).
+    /// Business Item -> algorithm Item (uses EnchReg::to_local_id for NSID mapping).
     static algorithm::Item from_domain(
         const Item& item,
-        const algorithm::EnchReg& reg,
-        const EnchantmentRegistry& ench_reg
+        const algorithm::EnchReg& reg
     );
 
     /// algorithm Item -> business Item.

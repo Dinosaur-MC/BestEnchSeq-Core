@@ -241,10 +241,8 @@ std::vector<Solution> CompactAdapter::recall(
 
 algorithm::Item CompactAdapter::from_domain(
     const Item& item,
-    const algorithm::EnchReg& reg,
-    const EnchantmentRegistry& ench_reg)
+    const algorithm::EnchReg& reg)
 {
-    (void)ench_reg; // reg.to_local_id() provides the NSID -> local_id mapping
 
     algorithm::Item citem;
     citem.type = item.is_book() ? algorithm::ItemType::Book
