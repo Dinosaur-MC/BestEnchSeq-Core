@@ -74,6 +74,8 @@ void RegistryLoader::from_dto(
 // ============================================================================
 
 bool RegistryLoader::from_json(EnchantmentRegistry& reg, const Json& json) {
+    if (json.type() == JsonType::Null || json.type() == JsonType::Empty)
+        return false;
     try {
         json >> reg;
         return true;
@@ -83,6 +85,8 @@ bool RegistryLoader::from_json(EnchantmentRegistry& reg, const Json& json) {
 }
 
 bool RegistryLoader::from_json(EquipmentRegistry& reg, const Json& json) {
+    if (json.type() == JsonType::Null || json.type() == JsonType::Empty)
+        return false;
     try {
         json >> reg;
         return true;
@@ -92,6 +96,8 @@ bool RegistryLoader::from_json(EquipmentRegistry& reg, const Json& json) {
 }
 
 bool RegistryLoader::from_json(EquipmentTagRegistry& reg, const Json& json) {
+    if (json.type() == JsonType::Null || json.type() == JsonType::Empty)
+        return false;
     try {
         json >> reg;
         return true;

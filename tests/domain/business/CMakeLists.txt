@@ -10,7 +10,9 @@ besq_test(test_domain_types test_domain_types.cpp)
 besq_test(test_registry_copy_move test_registry_copy_move.cpp)
 besq_test(test_registry_subset_bulk test_registry_subset_bulk.cpp)
 besq_test(test_registry_edge test_registry_edge.cpp)
+besq_test(test_serializer test_serializer.cpp)
+besq_test(test_profile_manager test_profile_manager.cpp)
+besq_test(test_registry_loader test_registry_loader.cpp)
 
 # Old RegistryManager test — superseded by new ProfileManager + RegistryLoader.
-# TODO: Create new tests for loaders/ and managers/
 # besq_test(test_registry_manager test_registry_manager.cpp)
