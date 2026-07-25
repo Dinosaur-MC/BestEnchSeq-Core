@@ -9,23 +9,8 @@
 
 namespace {
 
-int32_t json_int32(const Json& j, int32_t def = 0) {
-    if (j.type() != JsonType::Number) return def;
-    return static_cast<int32_t>(j.as_int());
-}
-
-int64_t json_int64(const Json& j, int64_t def = 0) {
-    if (j.type() != JsonType::Number) return def;
-    return j.as_int();
-}
-
 std::string json_str(const Json& j) {
     return j.as_string();
-}
-
-bool json_bool(const Json& j, bool def = false) {
-    if (j.type() != JsonType::Bool) return def;
-    return j.as_bool();
 }
 
 Json::Array json_arr(const Json& j) {
