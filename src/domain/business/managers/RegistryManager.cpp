@@ -1,6 +1,5 @@
 #include "RegistryManager.h"
 
-#include <algorithm>
 #include <unordered_set>
 
 // ============================================================================
@@ -8,9 +7,16 @@
 // ============================================================================
 
 RegistryManager& RegistryManager::load(const Profile& from) {
-    _ench = from._ench;
-    _eq   = from._eq;
-    _tags = from._tags;
+    // Deep-copy registries via Json serialization (no friend access needed)
+    auto copy_reg = [](const auto& src) -> std::decay_t<decltype(src)> {
+        std::decay_t<decltype(src)> dst;
+        for (const auto& [id, entry] : src.data())
+            dst.insert(entry);
+        return dst;
+    };
+    _ench = copy_reg(from.ench());
+    _eq   = copy_reg(from.eq());
+    _tags = copy_reg(from.tags());
     return *this;
 }
 
@@ -41,27 +47,20 @@ RegistryManager& RegistryManager::filter_equipment(const NSID& category) {
 }
 
 RegistryManager& RegistryManager::unite(const Profile& other) {
-    if (_ench && other._ench.size() > 0) {
-        for (const auto& [id, info] : other._ench.data())
-            _ench->insert_or_assign(info);
-    } else if (other._ench.size() > 0) {
-        _ench = other._ench;
-    }
-
-    if (_eq && other._eq.size() > 0) {
-        for (const auto& [id, eq] : other._eq.data())
-            _eq->insert_or_assign(eq);
-    } else if (other._eq.size() > 0) {
-        _eq = other._eq;
-    }
-
-    if (_tags && other._tags.size() > 0) {
-        for (const auto& [id, tag] : other._tags.data())
-            _tags->insert_or_assign(tag);
-    } else if (other._tags.size() > 0) {
-        _tags = other._tags;
-    }
-
+    auto unite_reg = [](auto& opt, const auto& src) {
+        if (opt && src.size() > 0) {
+            for (const auto& [id, entry] : src.data())
+                opt->insert_or_assign(entry);
+        } else if (src.size() > 0) {
+            std::decay_t<decltype(src)> reg;
+            for (const auto& [id, entry] : src.data())
+                reg.insert(entry);
+            opt = std::move(reg);
+        }
+    };
+    unite_reg(_ench, other.ench());
+    unite_reg(_eq, other.eq());
+    unite_reg(_tags, other.tags());
     return *this;
 }
 
@@ -69,7 +68,7 @@ RegistryManager& RegistryManager::intersect(const Profile& other) {
     if (_ench) {
         EnchantmentRegistry result;
         for (const auto& [id, info] : _ench->data()) {
-            if (other._ench.contains(id))
+            if (other.ench().contains(id))
                 result.insert(info);
         }
         _ench = std::move(result);
@@ -78,7 +77,7 @@ RegistryManager& RegistryManager::intersect(const Profile& other) {
     if (_eq) {
         EquipmentRegistry result;
         for (const auto& [id, eq] : _eq->data()) {
-            if (other._eq.contains(id))
+            if (other.eq().contains(id))
                 result.insert(eq);
         }
         _eq = std::move(result);
@@ -87,7 +86,7 @@ RegistryManager& RegistryManager::intersect(const Profile& other) {
     if (_tags) {
         EquipmentTagRegistry result;
         for (const auto& [id, tag] : _tags->data()) {
-            if (other._tags.contains(id))
+            if (other.tags().contains(id))
                 result.insert(tag);
         }
         _tags = std::move(result);
@@ -97,11 +96,12 @@ RegistryManager& RegistryManager::intersect(const Profile& other) {
 }
 
 Profile RegistryManager::build(const NSID& result_name) const {
-    Profile p(result_name);
-    if (_ench) p._ench = *_ench;
-    if (_eq)   p._eq   = *_eq;
-    if (_tags) p._tags = *_tags;
-    return p;
+    return Profile(
+        ProfileMetadata{result_name},
+        _ench.value_or(EnchantmentRegistry{}),
+        _eq.value_or(EquipmentRegistry{}),
+        _tags.value_or(EquipmentTagRegistry{})
+    );
 }
 
 // ============================================================================
@@ -127,51 +127,47 @@ Profile RegistryManager::intersect(
 Profile RegistryManager::subtract(
     const NSID& name, const Profile& base, const Profile& other)
 {
-    Profile p(base.clone(name));
-
-    // Remove enchantments that exist in other
+    // Enchantments: keep those NOT in other
     EnchantmentRegistry ench_result;
-    for (const auto& [id, info] : p._ench.data()) {
-        if (!other._ench.contains(id))
+    for (const auto& [id, info] : base.ench().data()) {
+        if (!other.ench().contains(id))
             ench_result.insert(info);
     }
-    p._ench = std::move(ench_result);
 
-    // Remove equipment that exists in other
+    // Equipment: keep those NOT in other
     EquipmentRegistry eq_result;
-    for (const auto& [id, eq] : p._eq.data()) {
-        if (!other._eq.contains(id))
+    for (const auto& [id, eq] : base.eq().data()) {
+        if (!other.eq().contains(id))
             eq_result.insert(eq);
     }
-    p._eq = std::move(eq_result);
 
-    // Remove tags that exist in other
+    // Tags: keep those NOT in other
     EquipmentTagRegistry tag_result;
-    for (const auto& [id, tag] : p._tags.data()) {
-        if (!other._tags.contains(id))
+    for (const auto& [id, tag] : base.tags().data()) {
+        if (!other.tags().contains(id))
             tag_result.insert(tag);
     }
-    p._tags = std::move(tag_result);
 
-    return p;
+    return Profile(ProfileMetadata{name}, std::move(ench_result),
+                   std::move(eq_result), std::move(tag_result));
 }
 
 Profile RegistryManager::merge(
     const NSID& name, const Profile& base, const Profile& other)
 {
-    Profile p(base.clone(name));
+    Profile p = base.clone(name);
 
     // Merge enchantments (other overwrites base)
-    for (const auto& [id, info] : other._ench.data())
-        p._ench.insert_or_assign(info);
+    for (const auto& [id, info] : other.ench().data())
+        p.add_enchantment(info);
 
     // Merge equipment
-    for (const auto& [id, eq] : other._eq.data())
-        p._eq.insert_or_assign(eq);
+    for (const auto& [id, eq] : other.eq().data())
+        p.add_equipment(eq);
 
     // Merge tags
-    for (const auto& [id, tag] : other._tags.data())
-        p._tags.insert_or_assign(tag);
+    for (const auto& [id, tag] : other.tags().data())
+        p.add_tag(tag);
 
     return p;
 }
@@ -207,9 +203,9 @@ RegistryManager::DiffResult RegistryManager::diff(
         return entries;
     };
 
-    result.enchantments = diff_registries(a._ench, b._ench);
-    result.equipment    = diff_registries(a._eq, b._eq);
-    result.tags         = diff_registries(a._tags, b._tags);
+    result.enchantments = diff_registries(a.ench(), b.ench());
+    result.equipment    = diff_registries(a.eq(), b.eq());
+    result.tags         = diff_registries(a.tags(), b.tags());
 
     return result;
 }

@@ -44,7 +44,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
 
         // Step 3: Construct Profile via full-parameter constructor
         std::string stem = path.stem().string();
-        profile = Profile(NSID(stem), std::move(ench_reg), std::move(eq_reg), std::move(tag_reg));
+        profile = Profile(ProfileMetadata{NSID(stem)}, std::move(ench_reg), std::move(eq_reg), std::move(tag_reg));
 
         return true;
     } catch (const std::exception& e) {
@@ -81,7 +81,7 @@ bool ProfileLoader::load_builtin(Profile& profile) {
         EnchantmentRegistry ench_reg;
         EquipmentRegistry eq_reg;
         besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
-        profile = Profile(NSID("builtin:vanilla"), std::move(ench_reg),
+        profile = Profile(ProfileMetadata{NSID("builtin:vanilla")}, std::move(ench_reg),
                           std::move(eq_reg), std::move(tag_reg));
         return true;
     } catch (const std::exception& e) {

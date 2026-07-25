@@ -44,8 +44,8 @@ public:
     explicit Profile(NSID name);
 
     /// Full-parameter constructor: construct with all data upfront.
-    /// Takes ownership of the three registries by move.
-    Profile(NSID name, EnchantmentRegistry ench, EquipmentRegistry eq,
+    /// Takes ownership of metadata (by move) and three registries.
+    Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq,
             EquipmentTagRegistry tags);
 
     // -- Metadata -------------------------------------------------------

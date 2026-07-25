@@ -15,15 +15,17 @@ Profile::Profile(NSID name) {
     _meta.updated_at = _meta.created_at;
 }
 
-Profile::Profile(NSID name, EnchantmentRegistry ench, EquipmentRegistry eq,
+Profile::Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq,
                  EquipmentTagRegistry tags)
-    : _ench(std::move(ench))
+    : _meta(std::move(meta))
+    , _ench(std::move(ench))
     , _eq(std::move(eq))
     , _tags(std::move(tags))
 {
-    _meta.name = std::move(name);
-    _meta.created_at = std::chrono::system_clock::now();
-    _meta.updated_at = _meta.created_at;
+    if (_meta.created_at == std::chrono::system_clock::time_point{})
+        _meta.created_at = std::chrono::system_clock::now();
+    if (_meta.updated_at == std::chrono::system_clock::time_point{})
+        _meta.updated_at = std::chrono::system_clock::now();
 }
 
 // ============================================================================

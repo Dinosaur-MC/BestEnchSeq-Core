@@ -107,8 +107,7 @@ Profile& ProfileManager::snapshot(const NSID& source, const NSID& snapshot_name)
 
     const Profile& src = *find(source);
     auto p = std::make_unique<Profile>(src.clone(snapshot_name));
-    p->_meta.parent = source.str();
-    p->_meta.version = "snapshot";  // mark as snapshot
+    p->set_version("snapshot");  // mark as snapshot
     Profile& ref = *p;
     _profiles[snapshot_name] = std::move(p);
     return ref;
@@ -124,7 +123,6 @@ Profile& ProfileManager::branch(const NSID& source, const NSID& branch_name) {
 
     const Profile& src = *find(source);
     auto p = std::make_unique<Profile>(src.clone(branch_name));
-    p->_meta.parent = source.str();
     Profile& ref = *p;
     _profiles[branch_name] = std::move(p);
     return ref;
@@ -138,24 +136,22 @@ void ProfileManager::merge(const NSID& source, const NSID& dest) {
     Profile& dst = *find(dest);
 
     // Enchantments: overwrite existing, add new
-    for (const auto& [nsid, ench] : src._ench.data()) {
-        if (dst._ench.contains(nsid))
-            dst._ench.insert_or_assign(ench);
+    for (const auto& [nsid, ench] : src.ench().data()) {
+        if (dst.ench().contains(nsid))
+            dst.update_enchantment(ench);  // overwrite
         else
-            dst._ench.insert(ench);
+            dst.add_enchantment(ench);     // insert new
     }
 
     // Equipment: add if not already present
-    for (const auto& [id, eq] : src._eq.data()) {
-        if (!dst._eq.contains(id))
-            dst._eq.insert(eq);
+    for (const auto& [id, eq] : src.eq().data()) {
+        if (!dst.eq().contains(id))
+            dst.add_equipment(eq);
     }
 
     // Tags: ensure present
-    for (const auto& [nsid, tag] : src._tags.data()) {
-        if (!dst._tags.contains(nsid))
-            dst._tags.insert(tag);
+    for (const auto& [nsid, tag] : src.tags().data()) {
+        if (!dst.tags().contains(nsid))
+            dst.add_tag(tag);
     }
-
-    dst._meta.updated_at = std::chrono::system_clock::now();
 }
