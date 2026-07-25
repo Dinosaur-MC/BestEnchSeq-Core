@@ -1,5 +1,5 @@
 #include "cli.h"
-#include "domain/interface/parsers/CLIParser.h"
+#include "domain/interface/cli/CLIParser.h"
 #include "domain/business/business.h"
 #include "BuildConfig.h"
 #include "common/utils/StringUtils.hpp"
@@ -218,53 +218,6 @@ CLIConfig parse_cli(int argc, char *argv[]) {
     }
 
     return config;
-}
-
-// ============================================================================
-// Registry-aware helpers (replace old unordered_map-based lookup functions)
-// ============================================================================
-
-Item build_target(
-    const TargetSpec& spec,
-    const EnchantmentRegistry& ench_reg,
-    const EquipmentRegistry& eq_reg)
-{
-    // Look up equipment (registry has built-in "minecraft:" fallback)
-    auto eq_it = eq_reg.find(NSID(spec.item_id));
-    if (eq_it == eq_reg.end())
-        throw std::runtime_error("Unknown equipment: '" + spec.item_id + "'");
-    const Equipment& equip = *eq_it;
-
-    // Build enchantment set from inline specs
-    EnchSet ench_set;
-    for (const auto& s : spec.inline_enchants) {
-        std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
-        auto ench_it = ench_reg.find(NSID(key));
-        if (ench_it == ench_reg.end())
-            ench_it = ench_reg.find(NSID(s.id));  // bare fallback
-        if (ench_it == ench_reg.end())
-            throw std::runtime_error("Unknown enchantment: '" + key + "'");
-        ench_set.emplace(ench_it->id, ench_it->name, s.level);
-    }
-
-    return Item(equip.id, ench_set, 0);
-}
-
-EnchSet build_enchset(
-    const std::vector<EnchantmentSpec>& specs,
-    const EnchantmentRegistry& ench_reg)
-{
-    EnchSet result;
-    for (const auto& s : specs) {
-        std::string key = s.ns.empty() ? s.id : s.ns + ":" + s.id;
-        auto ench_it = ench_reg.find(NSID(key));
-        if (ench_it == ench_reg.end())
-            ench_it = ench_reg.find(NSID(s.id));  // bare fallback
-        if (ench_it == ench_reg.end())
-            throw std::runtime_error("Unknown enchantment: '" + key + "'");
-        result.emplace(ench_it->id, ench_it->name, s.level);
-    }
-    return result;
 }
 
 // ============================================================================

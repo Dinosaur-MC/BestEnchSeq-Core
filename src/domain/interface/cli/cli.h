@@ -1,7 +1,7 @@
 #pragma once
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/business/types/Item.h"
-#include "domain/interface/types/SpecTypes.h"
+#include "domain/business/types/EnchSet.h"
 #include <optional>
 #include <string>
 #include <vector>
@@ -44,17 +44,6 @@ CLIConfig parse_cli(int argc, char *argv[]);
 
 /// Business help text describing all options and their semantics.
 std::string get_cli_help_text(const std::string &program_name = "besq");
-
-/// Build an ItemStack from a TargetSpec by resolving equipment name
-/// and inline enchantments against the given registries.
-/// Throws std::runtime_error if equipment is unknown.
-Item build_target(
-    const TargetSpec &spec, const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg
-);
-
-/// Build an EnchSet from parsed EnchantmentSpec[] by resolving
-/// enchantment names via the registry (with "minecraft:" fallback).
-EnchSet build_enchset(const std::vector<EnchantmentSpec> &specs, const EnchantmentRegistry &ench_reg);
 
 /// Parse a --config value and apply recognized key=value pairs to a ForgeConfig.
 ///

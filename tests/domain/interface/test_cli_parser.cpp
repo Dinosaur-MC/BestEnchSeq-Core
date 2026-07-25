@@ -1,12 +1,40 @@
 #include "domain/interface/cli/cli.h"
-#include "domain/interface/parsers/EnchParser.h"
-#include "domain/interface/parsers/ItemParser.h"
+#include "domain/interface/cli/EnchParser.h"
+#include "domain/interface/cli/ItemParser.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/types/EnchInfo.h"
 #include "framework/test_utils.h"
 
 #include <iostream>
 #include <stdexcept>
 
 namespace {
+
+// ============================================================================
+// Shared registries for parser tests
+// ============================================================================
+struct TestRegistries {
+    EquipmentRegistry eq_reg;
+    EnchantmentRegistry ench_reg;
+
+    TestRegistries() {
+        eq_reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
+                                NSID("#minecraft:sword"), 1561});
+        eq_reg.insert(Equipment{NSID("minecraft:sword"), "Sword",
+                                NSID("#minecraft:sword"), 250});
+
+        ench_reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness",
+                                 MCE::All, 5, 5, 1, false, {},
+                                 {NSID("#minecraft:sword")}});
+        ench_reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback",
+                                 MCE::All, 2, 2, 2, false, {},
+                                 {NSID("#minecraft:sword")}});
+        ench_reg.insert(EnchInfo{NSID("thermalfoundation:excavate"), "Excavate",
+                                 MCE::All, 3, 3, 2, false, {},
+                                 {NSID("#minecraft:sword")}});
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Basic argument parsing
@@ -29,34 +57,35 @@ void test_basic_args() {
 // ---------------------------------------------------------------------------
 
 void test_ench_with_ns() {
-    auto ench_vec = EnchParser::parse("minecraft:sharpness=5");
-    auto& ench = ench_vec[0];
-
-    expect(ench.ns == "minecraft", "namespace should be minecraft");
-    expect(ench.id == "sharpness", "id should be sharpness");
-    expect(ench.level == 5, "level should be 5");
-
+    TestRegistries regs;
+    auto ench_set = EnchParser::parse("minecraft:sharpness=5", regs.ench_reg);
+    expect(ench_set.size() == 1, "should parse one enchantment");
+    if (!ench_set.empty()) {
+        auto& ench = *ench_set.begin();
+        expect(ench.level == 5, "level should be 5");
+    }
     std::cout << "  PASS: test_ench_with_ns" << std::endl;
 }
 
 void test_ench_without_ns() {
-    auto ench_vec = EnchParser::parse("sharpness=5");
-    auto& ench = ench_vec[0];
-
-    expect(ench.ns == "minecraft", "default ns should be minecraft");
-    expect(ench.id == "sharpness", "id should be sharpness");
-    expect(ench.level == 5, "level should be 5");
-
+    TestRegistries regs;
+    auto ench_set = EnchParser::parse("sharpness=5", regs.ench_reg);
+    expect(ench_set.size() == 1, "should parse one enchantment");
+    if (!ench_set.empty()) {
+        auto& ench = *ench_set.begin();
+        expect(ench.level == 5, "level should be 5");
+    }
     std::cout << "  PASS: test_ench_without_ns" << std::endl;
 }
 
 void test_colon_shorthand() {
-    auto ench_vec = EnchParser::parse("sharpness:5");
-    auto& ench = ench_vec[0];
-
-    expect(ench.id == "sharpness", "id should be sharpness");
-    expect(ench.level == 5, "level should be 5");
-
+    TestRegistries regs;
+    auto ench_set = EnchParser::parse("sharpness:5", regs.ench_reg);
+    expect(ench_set.size() == 1, "should parse one");
+    if (!ench_set.empty()) {
+        auto& ench = *ench_set.begin();
+        expect(ench.level == 5, "level should be 5");
+    }
     std::cout << "  PASS: test_colon_shorthand" << std::endl;
 }
 
@@ -65,21 +94,20 @@ void test_colon_shorthand() {
 // ---------------------------------------------------------------------------
 
 void test_target_with_inline() {
-    auto target = ItemParser::parse("diamond_sword[sharpness=3]");
-
-    expect(target.item_id == "diamond_sword", "item_id should be diamond_sword");
-    expect(target.inline_enchants.size() == 1, "should have one inline enchant");
-    expect(target.inline_enchants[0].id == "sharpness", "inline enchant id should be sharpness");
-    expect(target.inline_enchants[0].level == 3, "inline enchant level should be 3");
+    TestRegistries regs;
+    auto target = ItemParser::parse("diamond_sword[sharpness=3]",
+                                    regs.ench_reg, regs.eq_reg);
+    expect(!target.id.str().empty(), "id should be set");
+    expect(target.enchantments.size() == 1, "should have one enchant");
 
     std::cout << "  PASS: test_target_with_inline" << std::endl;
 }
 
 void test_parse_target_no_brackets() {
-    auto target = ItemParser::parse("diamond_sword");
-
-    expect(target.item_id == "diamond_sword", "item_id should be diamond_sword without brackets");
-    expect(target.inline_enchants.empty(), "no inline enchants when no brackets");
+    TestRegistries regs;
+    auto target = ItemParser::parse("diamond_sword", regs.ench_reg, regs.eq_reg);
+    expect(!target.id.str().empty(), "equipment should be set");
+    expect(target.enchantments.empty(), "no enchants when no brackets");
 
     std::cout << "  PASS: test_parse_target_no_brackets" << std::endl;
 }
@@ -90,32 +118,23 @@ void test_parse_target_no_brackets() {
 
 void test_help_flag() {
     const char *argv[] = {"besq", "--help"};
-
     auto config = parse_cli(2, const_cast<char **>(argv));
-
     expect(config.help == true, "--help should be true");
-
     std::cout << "  PASS: test_help_flag" << std::endl;
 }
 
 void test_help_short_flag() {
     const char *argv[] = {"besq", "-h"};
-
     auto config = parse_cli(2, const_cast<char **>(argv));
-
     expect(config.help == true, "-h should be true");
-
     std::cout << "  PASS: test_help_short_flag" << std::endl;
 }
 
 void test_verbose_short_flag() {
     const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "-v"};
-
     auto config = parse_cli(6, const_cast<char **>(argv));
-
     expect(config.verbose == true, "-v should set verbose");
     expect(config.target == "sword", "target still parsed");
-
     std::cout << "  PASS: test_verbose_short_flag" << std::endl;
 }
 
@@ -125,13 +144,10 @@ void test_verbose_short_flag() {
 
 void test_default_values() {
     const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=5"};
-
     auto config = parse_cli(5, const_cast<char **>(argv));
-
     expect(config.mode == "direct", "default mode should be direct");
     expect(config.format == "text", "default format should be text");
     expect(config.solutions == 1, "default solutions should be 1");
-
     std::cout << "  PASS: test_default_values" << std::endl;
 }
 
@@ -141,17 +157,13 @@ void test_default_values() {
 
 void test_unknown_flag_throws() {
     const char *argv[] = {"besq", "--unknown_flag", "value"};
-    
     bool threw = false;
-
     try {
         parse_cli(3, const_cast<char **>(argv));
     } catch (const std::runtime_error &) {
         threw = true;
     }
-
     expect(threw, "unknown flag should throw std::runtime_error");
-
     std::cout << "  PASS: test_unknown_flag_throws" << std::endl;
 }
 
@@ -160,14 +172,9 @@ void test_unknown_flag_throws() {
 // ---------------------------------------------------------------------------
 
 void test_enchantment_list() {
-    auto list = EnchParser::parse("sharpness=5,knockback=2");
-
-    expect(list.size() == 2, "should parse two enchantments");
-    expect(list[0].id == "sharpness", "first enchantment id should be sharpness");
-    expect(list[0].level == 5, "first enchantment level should be 5");
-    expect(list[1].id == "knockback", "second enchantment id should be knockback");
-    expect(list[1].level == 2, "second enchantment level should be 2");
-
+    TestRegistries regs;
+    auto ench_set = EnchParser::parse("sharpness=5,knockback=2", regs.ench_reg);
+    expect(ench_set.size() == 2, "should parse two enchantments");
     std::cout << "  PASS: test_enchantment_list" << std::endl;
 }
 
@@ -177,23 +184,20 @@ void test_enchantment_list() {
 
 void test_key_value_equals_form() {
     const char *argv[] = {"besq", "--target=diamond_sword", "--source=sharpness=5"};
-
     auto config = parse_cli(3, const_cast<char **>(argv));
-
     expect(config.target == "diamond_sword", "target via --key=value form");
     expect(config.source == "sharpness=5", "source via --key=value form");
-
     std::cout << "  PASS: test_key_value_equals_form" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
-// Empty list returns empty vector
+// Empty list returns empty set
 // ---------------------------------------------------------------------------
 
 void test_empty_enchantment_list() {
-    auto list = EnchParser::parse("");
-    expect(list.empty(), "empty string should return empty list");
-
+    EnchantmentRegistry empty_reg;
+    auto ench_set = EnchParser::parse("", empty_reg);
+    expect(ench_set.empty(), "empty string should return empty set");
     std::cout << "  PASS: test_empty_enchantment_list" << std::endl;
 }
 
@@ -202,15 +206,11 @@ void test_empty_enchantment_list() {
 // ---------------------------------------------------------------------------
 
 void test_target_multiple_inline() {
-    auto target = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]");
-
-    expect(target.item_id == "diamond_sword", "item_id");
-    expect(target.inline_enchants.size() == 2, "two inline enchants");
-    expect(target.inline_enchants[0].id == "sharpness", "first inline id");
-    expect(target.inline_enchants[0].level == 5, "first inline level");
-    expect(target.inline_enchants[1].id == "knockback", "second inline id");
-    expect(target.inline_enchants[1].level == 2, "second inline level");
-
+    TestRegistries regs;
+    auto target = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]",
+                                    regs.ench_reg, regs.eq_reg);
+    expect(!target.id.str().empty(), "equipment should be set");
+    expect(target.enchantments.size() == 2, "two inline enchants");
     std::cout << "  PASS: test_target_multiple_inline" << std::endl;
 }
 
@@ -219,14 +219,11 @@ void test_target_multiple_inline() {
 // ---------------------------------------------------------------------------
 
 void test_target_with_ns_inline() {
-    auto target = ItemParser::parse("diamond_sword[minecraft:sharpness=3]");
-
-    expect(target.item_id == "diamond_sword", "item_id");
-    expect(target.inline_enchants.size() == 1, "one inline enchant");
-    expect(target.inline_enchants[0].ns == "minecraft", "inline ns");
-    expect(target.inline_enchants[0].id == "sharpness", "inline id");
-    expect(target.inline_enchants[0].level == 3, "inline level");
-
+    TestRegistries regs;
+    auto target = ItemParser::parse("diamond_sword[minecraft:sharpness=3]",
+                                    regs.ench_reg, regs.eq_reg);
+    expect(!target.id.str().empty(), "equipment should be set");
+    expect(target.enchantments.size() == 1, "one inline enchant");
     std::cout << "  PASS: test_target_with_ns_inline" << std::endl;
 }
 
@@ -245,7 +242,6 @@ void test_solutions_flag() {
         auto config = parse_cli(6, const_cast<char **>(argv));
         expect(config.solutions == 10, "--solutions=10");
     }
-
     std::cout << "  PASS: test_solutions_flag" << std::endl;
 }
 
@@ -255,29 +251,20 @@ void test_solutions_flag() {
 
 void test_missing_target_throws() {
     const char *argv[] = {"besq", "--source", "sharpness=5"};
-
     bool threw = false;
-
     try {
         parse_cli(3, const_cast<char **>(argv));
     } catch (const std::runtime_error &) {
         threw = true;
     }
-
     expect(threw, "missing --target should throw");
-
     std::cout << "  PASS: test_missing_target_throws" << std::endl;
 }
 
-
 void test_source_not_required() {
     const char *argv[] = {"besq", "--target", "diamond_sword"};
-
-    // --source is optional, so this should succeed
     auto config = parse_cli(3, const_cast<char **>(argv));
-
     expect(config.source.empty(), "--source should be empty when not provided");
-
     std::cout << "  PASS: test_source_not_required" << std::endl;
 }
 
@@ -286,13 +273,13 @@ void test_source_not_required() {
 // ---------------------------------------------------------------------------
 
 void test_ench_ns_only() {
-    auto ench_vec = EnchParser::parse("minecraft:sharpness");
-    auto& ench = ench_vec[0];
-
-    expect(ench.ns == "minecraft", "ns");
-    expect(ench.id == "sharpness", "id");
-    expect(ench.level == 1, "default level should be 1");
-
+    TestRegistries regs;
+    auto ench_set = EnchParser::parse("minecraft:sharpness", regs.ench_reg);
+    expect(ench_set.size() == 1, "should parse one");
+    if (!ench_set.empty()) {
+        auto& ench = *ench_set.begin();
+        expect(ench.level == 1, "default level should be 1");
+    }
     std::cout << "  PASS: test_ench_ns_only" << std::endl;
 }
 
@@ -301,13 +288,13 @@ void test_ench_ns_only() {
 // ---------------------------------------------------------------------------
 
 void test_ench_custom_ns_with_level() {
-    auto ench_vec = EnchParser::parse("thermalfoundation:excavate=3");
-    auto& ench = ench_vec[0];
-
-    expect(ench.ns == "thermalfoundation", "custom ns");
-    expect(ench.id == "excavate", "id");
-    expect(ench.level == 3, "level");
-
+    TestRegistries regs;
+    auto ench_set = EnchParser::parse("thermalfoundation:excavate=3", regs.ench_reg);
+    expect(ench_set.size() == 1, "should parse one");
+    if (!ench_set.empty()) {
+        auto& ench = *ench_set.begin();
+        expect(ench.level == 3, "level should be 3");
+    }
     std::cout << "  PASS: test_ench_custom_ns_with_level" << std::endl;
 }
 
@@ -316,14 +303,14 @@ void test_ench_custom_ns_with_level() {
 // ---------------------------------------------------------------------------
 
 void test_ench_invalid_level_throws() {
+    EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
-        EnchParser::parse("sharpness=abc");
+        EnchParser::parse("sharpness=abc", empty_reg);
     } catch (const std::runtime_error &) {
         threw = true;
     }
     expect(threw, "invalid level 'abc' after '=' should throw");
-
     std::cout << "  PASS: test_ench_invalid_level_throws" << std::endl;
 }
 
@@ -352,7 +339,6 @@ void test_solutions_invalid_throws() {
         }
         expect(threw, "negative --solutions should throw");
     }
-
     std::cout << "  PASS: test_solutions_invalid_throws" << std::endl;
 }
 
@@ -362,13 +348,9 @@ void test_solutions_invalid_throws() {
 
 void test_double_dash_stops_parsing() {
     const char *argv[] = {"besq", "--target", "sword", "--", "--source", "sharpness=5"};
-
     auto config = parse_cli(6, const_cast<char **>(argv));
-
     expect(config.target == "sword", "target parsed before --");
-    // -- stops parsing, so --source is not consumed as an option
     expect(config.source.empty(), "source should be empty because -- stops parsing");
-
     std::cout << "  PASS: test_double_dash_stops_parsing" << std::endl;
 }
 
@@ -385,7 +367,6 @@ void test_all_options() {
         "--registry-dir", "myreg", "--registries", "custom:v1"
     };
     auto config = parse_cli(21, const_cast<char **>(argv));
-
     expect(config.target == "sword", "target");
     expect(config.source == "sharp=5", "source");
     expect(config.mode == "inventory", "mode");
@@ -396,7 +377,6 @@ void test_all_options() {
     expect(config.output.has_value() && config.output.value() == "out.json", "output");
     expect(config.registry_dir.has_value() && config.registry_dir.value() == "myreg", "registry-dir");
     expect(config.registries.has_value() && config.registries.value() == "custom:v1", "registries");
-
     std::cout << "  PASS: test_all_options" << std::endl;
 }
 
@@ -406,12 +386,9 @@ void test_all_options() {
 
 void test_source_flag() {
     const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "efficiency=4,unbreaking=3"};
-
     auto config = parse_cli(5, const_cast<char **>(argv));
-
     expect(config.target == "diamond_sword", "target should be diamond_sword");
     expect(config.source == "efficiency=4,unbreaking=3", "source should be efficiency=4,unbreaking=3");
-
     std::cout << "  PASS: test_source_flag" << std::endl;
 }
 

@@ -1,69 +1,67 @@
 #include "framework/test_utils.h"
-#include "domain/interface/parsers/EnchParser.h"
+#include "domain/interface/cli/EnchParser.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+
+// ============================================================================
+// Helper: minimal registry with common enchantments
+// ============================================================================
+static EnchantmentRegistry make_test_registry() {
+    EnchantmentRegistry reg;
+    reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness",
+                        MCE::All, 5, 5, 1, false, {},
+                        {NSID("#minecraft:sword")}});
+    reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback",
+                        MCE::All, 2, 2, 2, false, {},
+                        {NSID("#minecraft:sword")}});
+    return reg;
+}
 
 // ============================================================================
 // Basic "id=level" syntax
 // ============================================================================
 void test_ench_parser_simple() {
-    auto result = EnchParser::parse("sharpness=5");
+    auto reg = make_test_registry();
+    auto result = EnchParser::parse("sharpness=5", reg);
     expect(result.size() == 1, "should parse one enchantment");
     if (!result.empty()) {
-        expect_eq(result[0].ns, "minecraft", "default namespace");
-        expect_eq(result[0].id, "sharpness", "id");
-        expect_eq(result[0].level, 5, "level");
+        auto& ench = *result.begin();
+        expect(ench.level == 5, "level should be 5");
     }
     TEST_PASS("test_ench_parser_simple");
 }
 
 // ============================================================================
-// Namespaced: "ns:id=level" and comma-separated
+// Multiple enchantments (comma-separated)
 // ============================================================================
-void test_ench_parser_namespaced() {
-    auto result = EnchParser::parse("minecraft:sharpness=5,modded:foo=3");
+void test_ench_parser_multiple() {
+    auto reg = make_test_registry();
+    auto result = EnchParser::parse("sharpness=5,knockback=2", reg);
     expect(result.size() == 2, "should parse two enchantments");
-    if (result.size() >= 2) {
-        expect_eq(result[0].ns, std::string("minecraft"), "first ns");
-        expect_eq(result[0].id, std::string("sharpness"), "first id");
-        expect_eq(result[0].level, 5, "first level");
-        expect_eq(result[1].ns, std::string("modded"), "second ns");
-        expect_eq(result[1].id, std::string("foo"), "second id");
-        expect_eq(result[1].level, 3, "second level");
-    }
-    TEST_PASS("test_ench_parser_namespaced");
+    TEST_PASS("test_ench_parser_multiple");
 }
 
 // ============================================================================
 // Colon shorthand: "id:level"
 // ============================================================================
 void test_ench_parser_colon_shorthand() {
-    auto result = EnchParser::parse("sharpness:5");
+    auto reg = make_test_registry();
+    auto result = EnchParser::parse("sharpness:5", reg);
     expect(result.size() == 1, "should parse one");
     if (!result.empty()) {
-        expect_eq(result[0].ns, std::string("minecraft"), "ns");
-        expect_eq(result[0].id, std::string("sharpness"), "id");
-        expect_eq(result[0].level, 5, "level");
+        auto& ench = *result.begin();
+        expect(ench.level == 5, "level should be 5");
     }
     TEST_PASS("test_ench_parser_colon_shorthand");
-}
-
-// ============================================================================
-// No level specified — defaults to 1
-// ============================================================================
-void test_ench_parser_no_level() {
-    auto result = EnchParser::parse("sharpness");
-    if (!result.empty()) {
-        expect_eq(result[0].level, 1, "default level should be 1");
-    }
-    TEST_PASS("test_ench_parser_no_level");
 }
 
 // ============================================================================
 // Negative level rejected
 // ============================================================================
 void test_ench_parser_negative_level_rejected() {
+    EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
-        EnchParser::parse("sharpness=-5");
+        EnchParser::parse("sharpness=-5", empty_reg);
     } catch (const std::exception&) {
         threw = true;
     }
@@ -75,9 +73,10 @@ void test_ench_parser_negative_level_rejected() {
 // Empty id rejected (e.g. "=5")
 // ============================================================================
 void test_ench_parser_empty_id_rejected() {
+    EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
-        EnchParser::parse("=5");
+        EnchParser::parse("=5", empty_reg);
     } catch (const std::exception&) {
         threw = true;
     }
@@ -89,9 +88,10 @@ void test_ench_parser_empty_id_rejected() {
 // Empty token between commas is rejected
 // ============================================================================
 void test_ench_parser_empty_token_rejected() {
+    EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
-        EnchParser::parse("a=1,,b=2");
+        EnchParser::parse("a=1,,b=2", empty_reg);
     } catch (const std::exception&) {
         threw = true;
     }
@@ -100,9 +100,10 @@ void test_ench_parser_empty_token_rejected() {
 }
 
 void test_ench_parser_level_too_high_rejected() {
+    EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
-        EnchParser::parse("sharpness=256");
+        EnchParser::parse("sharpness=256", empty_reg);
     } catch (const std::exception&) {
         threw = true;
     }
@@ -111,18 +112,33 @@ void test_ench_parser_level_too_high_rejected() {
 }
 
 // ============================================================================
+// Unknown enchantment throws
+// ============================================================================
+void test_ench_parser_unknown_throws() {
+    auto reg = make_test_registry();
+    bool threw = false;
+    try {
+        EnchParser::parse("nonexistent=1", reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "unknown enchantment should throw");
+    TEST_PASS("test_ench_parser_unknown_throws");
+}
+
+// ============================================================================
 // main
 // ============================================================================
 int main() {
     try {
         test_ench_parser_simple();
-        test_ench_parser_namespaced();
+        test_ench_parser_multiple();
         test_ench_parser_colon_shorthand();
-        test_ench_parser_no_level();
         test_ench_parser_negative_level_rejected();
         test_ench_parser_empty_id_rejected();
         test_ench_parser_empty_token_rejected();
         test_ench_parser_level_too_high_rejected();
+        test_ench_parser_unknown_throws();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

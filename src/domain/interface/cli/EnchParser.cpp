@@ -1,4 +1,5 @@
 #include "EnchParser.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
 #include "common/utils/StringUtils.hpp"
 
 #include <cctype>
@@ -21,11 +22,13 @@ static bool is_integer(const std::string& s) {
 }
 
 // ============================================================================
-// EnchParser::parse — parse enchantment spec strings
+// EnchParser::parse — parse enchantment spec strings into an EnchSet
 // ============================================================================
 
-std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
-    std::vector<EnchantmentSpec> result;
+EnchSet EnchParser::parse(const std::string& input,
+                          const EnchantmentRegistry& ench_reg)
+{
+    EnchSet result;
 
     // Check for empty tokens (e.g. "a=1,,b=2") before splitting
     for (size_t i = 0; i + 1 < input.size(); ++i) {
@@ -40,7 +43,8 @@ std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
     auto tokens = string_utils::split(input, ',');
 
     for (const auto& token : tokens) {
-        EnchantmentSpec spec;
+        std::string ns, id;
+        int level = 1;
 
         // ── Look for '=' separator (level) ─────────────────────────────────
         auto eq_pos = token.find('=');
@@ -48,12 +52,12 @@ std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
             // Level from after '='
             std::string level_str = token.substr(eq_pos + 1);
             try {
-                spec.level = std::stoi(level_str);
+                level = std::stoi(level_str);
             } catch (const std::exception&) {
                 throw std::runtime_error(
                     "Invalid enchantment level: '" + level_str + "' in '" + token + "'");
             }
-            if (spec.level < 1 || spec.level > 255) {
+            if (level < 1 || level > 255) {
                 throw std::runtime_error(
                     "Invalid enchantment level: '" + level_str + "' in '" + token + "'");
             }
@@ -66,11 +70,11 @@ std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
 
             auto colon_pos = spec_part.find(':');
             if (colon_pos != std::string::npos) {
-                spec.ns = spec_part.substr(0, colon_pos);
-                spec.id = spec_part.substr(colon_pos + 1);
+                ns = spec_part.substr(0, colon_pos);
+                id = spec_part.substr(colon_pos + 1);
             } else {
-                spec.ns = "minecraft";
-                spec.id = spec_part;
+                ns = "minecraft";
+                id = spec_part;
             }
         } else {
             // ── No '=' — check for colon shorthand or namespace prefix ────
@@ -79,38 +83,47 @@ std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
                 std::string after = token.substr(colon_pos + 1);
                 if (is_integer(after)) {
                     // Colon shorthand: id:level
-                    spec.ns = "minecraft";
-                    spec.id = token.substr(0, colon_pos);
+                    ns = "minecraft";
+                    id = token.substr(0, colon_pos);
                     try {
-                        spec.level = std::stoi(after);
+                        level = std::stoi(after);
                     } catch (const std::exception&) {
                         throw std::runtime_error(
                             "Invalid enchantment level: '" + after + "' in '" + token + "'");
                     }
-                    if (spec.level < 1 || spec.level > 255) {
+                    if (level < 1 || level > 255) {
                         throw std::runtime_error(
                             "Invalid enchantment level: '" + after + "' in '" + token + "'");
                     }
                 } else {
                     // Namespace prefix: ns:id
-                    spec.ns = token.substr(0, colon_pos);
-                    spec.id = after;
-                    spec.level = 1;
+                    ns = token.substr(0, colon_pos);
+                    id = after;
+                    level = 1;
                 }
             } else {
                 // Plain id, no namespace, no level
-                spec.ns = "minecraft";
-                spec.id = token;
-                spec.level = 1;
+                ns = "minecraft";
+                id = token;
+                level = 1;
             }
         }
 
         // ── Validate id is not empty ──────────────────────────────────────
-        if (spec.id.empty()) {
+        if (id.empty()) {
             throw std::runtime_error("Empty enchantment id in '" + token + "'");
         }
 
-        result.push_back(std::move(spec));
+        // ── Resolve against registry and insert into EnchSet ──────────────
+        std::string key = (ns.empty() || ns == "minecraft") ? id : ns + ":" + id;
+        auto it = ench_reg.find(NSID(key));
+        if (it == ench_reg.end()) {
+            // bare-ID fallback
+            it = ench_reg.find(NSID(id));
+            if (it == ench_reg.end())
+                throw std::runtime_error("Unknown enchantment: '" + key + "'");
+        }
+        result.emplace(it->id, it->name, level);
     }
 
     return result;

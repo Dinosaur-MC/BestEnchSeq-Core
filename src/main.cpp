@@ -98,16 +98,14 @@ int main(int argc, char* argv[]) try {
     if (!config.target.empty()) {
         auto& profile = profiles.active();
 
-        auto target_spec = ItemParser::parse(config.target);
-        auto target_item = build_target(target_spec, profile.ench(), profile.eq());
+        Item target_item = ItemParser::parse(config.target, profile.ench(), profile.eq());
 
         SolveRequest request;
         request.target_item = target_item;
         request.mode = (config.mode == "inventory") ? AlgorithmMode::inventory : AlgorithmMode::direct;
 
         if (!config.source.empty()) {
-            auto source_specs = EnchParser::parse(config.source);
-            auto source_enchants = build_enchset(source_specs, profile.ench());
+            auto source_enchants = EnchParser::parse(config.source, profile.ench());
             request.payload = DirectPayload{source_enchants};
         } else {
             request.payload = DirectPayload{};
