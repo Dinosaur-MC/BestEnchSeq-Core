@@ -1,9 +1,10 @@
 #pragma once
 #include "common/CommonTypes.h"
+#include "common/serialization/IJsonSerializable.h"
 #include "common/utils/HashUtils.hpp"
 #include <string>
 
-struct Ench {
+struct Ench : IJsonSerializable {
     NSID id;
     std::string name;
     int32_t level = 1;
@@ -18,6 +19,10 @@ struct Ench {
             return level < o.level;
         return id < o.id;
     }
+
+    // -- ISerializable --
+    Json to_json() const override;
+    void from_json(const Json& json) override;
 };
 
 template <> struct std::hash<Ench> {

@@ -1,10 +1,11 @@
 #pragma once
 #include "common/CommonTypes.h"
+#include "common/serialization/IJsonSerializable.h"
 #include <string>
 #include <unordered_set>
 #include <vector>
 
-struct EnchInfo {
+struct EnchInfo : IJsonSerializable {
     NSID id;
     std::string name;
     MCE supported_platform = MCE::None;
@@ -15,8 +16,22 @@ struct EnchInfo {
     std::unordered_set<NSID> exclusive_set;
     std::unordered_set<NSID> applicable_equipments;
 
+    EnchInfo() = default;
+    EnchInfo(NSID id_, std::string name_, MCE platform_, int32_t max_level_,
+             int32_t limited_level_, int32_t multiplier_, bool is_treasure_,
+             std::unordered_set<NSID> exclusive_set_,
+             std::unordered_set<NSID> applicable_equipments_)
+        : id(std::move(id_)), name(std::move(name_)), supported_platform(platform_),
+          max_level(max_level_), limited_level(limited_level_), multiplier(multiplier_),
+          is_treasure(is_treasure_), exclusive_set(std::move(exclusive_set_)),
+          applicable_equipments(std::move(applicable_equipments_)) {}
+
     bool operator==(const EnchInfo &o) const { return id == o.id; }
     auto operator<=>(const EnchInfo &o) const { return id <=> o.id; }
+
+    // -- ISerializable --
+    Json to_json() const override;
+    void from_json(const Json& json) override;
 };
 
 template <> struct std::hash<EnchInfo> {

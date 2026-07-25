@@ -1,5 +1,5 @@
 #include "io/json.h"
-#include "common/io/IJsonSerializable.h"
+#include "common/serialization/IJsonSerializable.h"
 #include "framework/test_utils.h"
 
 #include <iostream>
@@ -769,7 +769,7 @@ void test_iserializable_roundtrip() {
     Json j = serialize(original);
     auto restored = deserialize<TestSerializable>(j);
 
-    expect(restored == original, "IJsonSerializable round-trip preserves data");
+    expect(restored == original, "ISerializable round-trip preserves data");
 
     std::cout << "  PASS: test_iserializable_roundtrip" << std::endl;
 }

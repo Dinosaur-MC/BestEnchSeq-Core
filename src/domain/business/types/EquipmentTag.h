@@ -1,10 +1,19 @@
 #pragma once
 #include "common/CommonTypes.h"
+#include "common/serialization/IJsonSerializable.h"
 #include <string>
 
-struct EquipmentTag {
+struct EquipmentTag : IJsonSerializable {
     NSID id;
     std::string name;
+
+    EquipmentTag() = default;
+    EquipmentTag(NSID id_, std::string name_)
+        : id(std::move(id_)), name(std::move(name_)) {}
+
+    // -- ISerializable --
+    Json to_json() const override;
+    void from_json(const Json& json) override;
 
     bool operator==(const EquipmentTag &o) const { return id == o.id; }
     auto operator<=>(const EquipmentTag &o) const { return id <=> o.id; }

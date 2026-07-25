@@ -1,11 +1,12 @@
 #pragma once
 #include "EnchSet.h"
 #include "common/CommonTypes.h"
+#include "common/serialization/IJsonSerializable.h"
 #include "common/utils/HashUtils.hpp"
 #include <vector>
 
 /// Forgeable item stack — pure data container.
-struct Item {
+struct Item : IJsonSerializable {
     NSID id;
     EnchSet enchantments;
     int32_t prior_penalty;
@@ -24,6 +25,10 @@ struct Item {
         return id == book || id == enchanted_book;
     }
     bool is_equipment() const { return !is_book() && durability > 0; }
+
+    // -- ISerializable --
+    Json to_json() const override;
+    void from_json(const Json& json) override;
 };
 
 template <> struct std::hash<Item> {

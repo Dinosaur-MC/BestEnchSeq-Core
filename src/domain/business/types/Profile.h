@@ -4,6 +4,7 @@
 #include "domain/business/registries/EquipmentTagRegistry.h"
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
+#include "common/serialization/IJsonSerializable.h"
 #include <chrono>
 #include <string>
 #include <string_view>
@@ -38,7 +39,7 @@ struct ProfileMetadata {
 class ProfileManager;
 class RegistryManager;
 
-class Profile {
+class Profile : IJsonSerializable {
 public:
     Profile() = default;
     explicit Profile(NSID name);
@@ -99,8 +100,9 @@ public:
 
     // -- Serialization --------------------------------------------------
 
-    Json to_json() const;
-    static Profile from_json(const Json& json);
+    Json to_json() const final;
+    void from_json(const Json& json) final;
+    static Profile from_json_static(const Json& json);
 
 private:
     ProfileMetadata _meta;

@@ -195,7 +195,11 @@ Json Profile::to_json() const {
     return Json(std::move(obj));
 }
 
-Profile Profile::from_json(const Json& json) {
+void Profile::from_json(const Json& json) {
+    *this = from_json_static(json);
+}
+
+Profile Profile::from_json_static(const Json& json) {
     Profile p;
 
     auto obj = [&]() -> Json::Object {
@@ -269,7 +273,7 @@ Json& operator<<(Json& json, const Profile& profile) {
 }
 
 const Json& operator>>(const Json& json, Profile& profile) {
-    profile = Profile::from_json(json);
+    profile = Profile::from_json_static(json);
     return json;
 }
 

@@ -61,7 +61,7 @@ Profile ProfileLoader::from_json(const Json& json) {
 
 bool ProfileLoader::from_json(Profile& profile, const Json& json) {
     try {
-        profile = Profile::from_json(json);
+        profile = Profile::from_json_static(json);
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to parse profile from JSON: %s", e.what());

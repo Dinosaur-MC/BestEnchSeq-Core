@@ -1,10 +1,10 @@
 #pragma once
-#include "ByteStream.h"
+#include "common/io/ByteStream.h"
 #include <concepts>
 #include <vector>
 
-struct ISerializable {
-    virtual ~ISerializable() = default;
+struct IBinarySerializable {
+    virtual ~IBinarySerializable() = default;
 
     virtual void serialize(ByteStreamWriter& w) const noexcept = 0;
     virtual void deserialize(ByteStreamReader& r) noexcept = 0;
@@ -28,28 +28,28 @@ struct ISerializable {
     }
 };
 
-// ── Free-function streaming operators for ISerializable ──
+// ── Free-function streaming operators for IBinarySerializable ──
 
-inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const ISerializable& obj) {
+inline ByteStreamWriter& operator<<(ByteStreamWriter& w, const IBinarySerializable& obj) {
     obj.serialize(w);
     return w;
 }
 
-inline ByteStreamReader& operator>>(ByteStreamReader& r, ISerializable& obj) {
+inline ByteStreamReader& operator>>(ByteStreamReader& r, IBinarySerializable& obj) {
     obj.deserialize(r);
     return r;
 }
 
-// ── vector<T> constrained to ISerializable subtypes ──
+// ── vector<T> constrained to IBinarySerializable subtypes ──
 
-template <std::derived_from<ISerializable> T>
+template <std::derived_from<IBinarySerializable> T>
 ByteStreamWriter& operator<<(ByteStreamWriter& w, const std::vector<T>& vec) {
     w << vec.size();
     for (const auto& v : vec) w << v;
     return w;
 }
 
-template <std::derived_from<ISerializable> T>
+template <std::derived_from<IBinarySerializable> T>
 ByteStreamReader& operator>>(ByteStreamReader& r, std::vector<T>& vec) {
     size_t n;
     r.read(n);
