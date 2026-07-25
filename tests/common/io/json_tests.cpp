@@ -1,4 +1,5 @@
 #include "io/json.h"
+#include "common/io/IJsonSerializable.h"
 #include "framework/test_utils.h"
 
 #include <iostream>
@@ -693,6 +694,102 @@ void test_empty_path() {
     std::cout << "  PASS: test_empty_path" << std::endl;
 }
 
+// ===========================================================================
+// IJsonSerializable
+// ===========================================================================
+
+namespace {
+
+struct TestSerializable : IJsonSerializable {
+    std::string name;
+    int32_t value = 0;
+
+    Json to_json() const override {
+        return Json::object()
+            .set("name", name)
+            .set("value", value);
+    }
+
+    void from_json(const Json& json) override {
+        name  = json["name"].as<std::string>();
+        value = static_cast<int32_t>(json["value"].as<int64_t>());
+    }
+
+    bool operator==(const TestSerializable& o) const {
+        return name == o.name && value == o.value;
+    }
+};
+
+} // anonymous namespace (for TestSerializable)
+
+void test_iserializable_concept() {
+    static_assert(JsonSerializable<TestSerializable>,
+                  "TestSerializable should satisfy JsonSerializable concept");
+    static_assert(!JsonSerializable<int>,
+                  "int should NOT satisfy JsonSerializable concept");
+
+    std::cout << "  PASS: test_iserializable_concept" << std::endl;
+}
+
+void test_iserializable_serialize() {
+    TestSerializable obj;
+    obj.name = "sharpness";
+    obj.value = 5;
+    Json j = serialize(obj);
+
+    expect(j["name"].as<std::string>() == "sharpness", "serialize() name");
+    expect(j["value"].as<int64_t>() == 5, "serialize() value");
+
+    std::cout << "  PASS: test_iserializable_serialize" << std::endl;
+}
+
+void test_iserializable_deserialize() {
+    Json j = Json::object()
+        .set("name", "unbreaking")
+        .set("value", 3);
+
+    TestSerializable obj;
+    deserialize(obj, j);
+
+    expect(obj.name == "unbreaking", "deserialize(obj, j) name");
+    expect(obj.value == 3, "deserialize(obj, j) value");
+
+    // factory-style deserialize
+    auto obj2 = deserialize<TestSerializable>(j);
+    expect(obj2.name == "unbreaking", "deserialize<T>(j) name");
+    expect(obj2.value == 3, "deserialize<T>(j) value");
+
+    std::cout << "  PASS: test_iserializable_deserialize" << std::endl;
+}
+
+void test_iserializable_roundtrip() {
+    TestSerializable original;
+    original.name = "fortune";
+    original.value = 3;
+    Json j = serialize(original);
+    auto restored = deserialize<TestSerializable>(j);
+
+    expect(restored == original, "IJsonSerializable round-trip preserves data");
+
+    std::cout << "  PASS: test_iserializable_roundtrip" << std::endl;
+}
+
+void test_iserializable_vector() {
+    TestSerializable a, b, c;
+    a.name = "a"; a.value = 1;
+    b.name = "b"; b.value = 2;
+    c.name = "c"; c.value = 3;
+    std::vector<TestSerializable> vec = {a, b, c};
+    Json arr = serialize_vector(vec);
+
+    expect(arr.type() == JsonType::Array, "serialize_vector produces Array");
+    expect(arr[0]["name"].as<std::string>() == "a", "serialize_vector[0].name");
+    expect(arr[1]["value"].as<int64_t>() == 2, "serialize_vector[1].value");
+    expect(arr[2]["name"].as<std::string>() == "c", "serialize_vector[2].name");
+
+    std::cout << "  PASS: test_iserializable_vector" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -728,6 +825,11 @@ int main() {
         test_mutable_subscript();
         test_json_path();
         test_empty_path();
+        test_iserializable_concept();
+        test_iserializable_serialize();
+        test_iserializable_deserialize();
+        test_iserializable_roundtrip();
+        test_iserializable_vector();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
