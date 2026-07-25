@@ -66,13 +66,6 @@ target_include_directories(test_app_config PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_app_config COMMAND test_app_config)
 set_tests_properties(test_app_config PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
-# Generic parser utilities
-add_executable(test_parser_utils
-    utils/test_parser_utils.cpp
-    ${PROJECT_ROOT}/src/common/log/Logger.cpp
-    ${PROJECT_ROOT}/src/common/io/json.cpp
-    ${PROJECT_ROOT}/src/common/io/CsvIO.cpp
-)
-target_include_directories(test_parser_utils PRIVATE ${TEST_INCLUDE})
-add_test(NAME test_parser_utils COMMAND test_parser_utils)
-set_tests_properties(test_parser_utils PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+# Generic parser utilities (DISABLED: tests deleted interface-domain components)
+# TODO: when FormatDetector tests are needed, add them in tests/domain/business/
+# add_executable(test_parser_utils ...)

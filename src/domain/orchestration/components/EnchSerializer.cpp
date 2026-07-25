@@ -4,7 +4,6 @@
 #include "common/log/log.hpp"
 #include "domain/business/business.h"
 #include "domain/business/types/EnchantmentDataPack.h"
-#include "domain/interface/components/ParserUtilsDomain.hpp"
 #include "domain/business/types/EnchInfo.h"
 
 #include <cstdint>
@@ -12,6 +11,32 @@
 #include <fstream>
 #include <string>
 #include <vector>
+
+// ============================================================================
+// Local helpers (migrated from interface/domain/ParserUtilsDomain.hpp)
+// ============================================================================
+
+/// Convert platform enum to string.
+static std::string platform_to_string(MCE p) {
+    switch (p) {
+    case MCE::Java:    return "java";
+    case MCE::Bedrock: return "bedrock";
+    default:                     return "unknown";
+    }
+}
+
+/// Split "ns:id" into {ns, id}. If no colon, ns is empty.
+static std::pair<std::string, std::string> split_namespace(const std::string& qualified_id) {
+    size_t colon_pos = qualified_id.find(':');
+    if (colon_pos == std::string::npos) return {std::string(), qualified_id};
+    return {qualified_id.substr(0, colon_pos), qualified_id.substr(colon_pos + 1)};
+}
+
+/// Ensure a string has a namespace prefix (default: "minecraft").
+static std::string qualify_id(const std::string& id, const std::string& default_ns = "minecraft") {
+    if (id.find(':') != std::string::npos) return id;
+    return default_ns + ":" + id;
+}
 
 // ============================================================================
 // Enchantment serialization
@@ -37,7 +62,7 @@ std::string EnchSerializer::to_json(
         Json::Object obj;
         obj["id"]            = Json(info.id.str());
         obj["name"]          = Json(info.name);
-        obj["platform"]      = Json(ParserUtils::platform_to_string(info.supported_platform));
+        obj["platform"]      = Json(platform_to_string(info.supported_platform));
         obj["max_level"]     = Json(info.max_level);
         obj["limited_level"] = Json(info.limited_level);
         obj["multiplier"]    = Json(info.multiplier);
@@ -104,7 +129,7 @@ EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const EquipmentTagReg
         table.push_back({
             info.id.str(),
             info.name,
-            ParserUtils::platform_to_string(info.supported_platform),
+            platform_to_string(info.supported_platform),
             std::to_string(info.max_level),
             std::to_string(info.limited_level),
             std::to_string(info.multiplier),
@@ -125,7 +150,7 @@ void EnchSerializer::export_to_mc_official(
 ) {
     for (const auto &info : infos) {
         // Split id into namespace and id
-        auto [ns, id] = ParserUtils::split_namespace(info.id.str());
+        auto [ns, id] = split_namespace(info.id.str());
 
         // Construct output path: <output_dir>/data/<ns>/enchantment/<id>.json
         std::filesystem::path ench_dir = output_dir / "data" / ns / "enchantment";
@@ -138,7 +163,7 @@ void EnchSerializer::export_to_mc_official(
         // exclusive_set as namespaced IDs
         Json::Array excl;
         for (const auto &e : info.exclusive_set) {
-            std::string qualified = ParserUtils::qualify_id(e.str());
+            std::string qualified = qualify_id(e.str());
             excl.push_back(Json(qualified));
         }
         obj["exclusive_set"] = Json(excl);
