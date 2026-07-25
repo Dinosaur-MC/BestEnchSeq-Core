@@ -611,15 +611,46 @@ enum class DataFormat {
 
 ### Serializer
 
-Unchanged from the current `business/components/Serializer.h`. Provide `operator<<` / `operator>>` for `Json ↔ business types`. Extended to support `Profile ↔ Json`:
+Business types now inherit `IJsonSerializable` (defined in `common/serialization/`) and implement `to_json()` / `from_json()` directly:
 
 ```cpp
-// New additions to existing Serializer:
-Json& operator<<(Json& json, const ProfileMetadata& meta);
-const Json& operator>>(const Json& json, ProfileMetadata& meta);
-Json& operator<<(Json& json, const Profile& profile);
-const Json& operator>>(const Json& json, Profile& profile);
+struct EnchInfo : IJsonSerializable {
+    // ... fields ...
+    Json to_json() const override { /* in EnchInfo.cpp */ }
+    void from_json(const Json& json) override { /* in EnchInfo.cpp */ }
+};
 ```
+
+The `Serializer.h` still provides `operator<<` / `operator>>` free functions for ADL compatibility, but they are now thin delegates that call the member functions:
+
+```cpp
+Json& operator<<(Json& json, const EnchInfo& info) {
+    json = info.to_json();
+    return json;
+}
+```
+
+### Serialization Module
+
+The `common/serialization/` module defines three interfaces in an inheritance hierarchy:
+
+| Interface | File | Purpose | Methods |
+|-----------|------|---------|---------|
+| `ISerializable` | `ISerializable.h` | Generic base (format-independent) | `virtual ~ISerializable()` |
+| `IJsonSerializable` | `IJsonSerializable.h` | JSON serialization | `to_json()`, `from_json()` |
+| `IBinarySerializable` | `IBinarySerializable.h` | Binary (ByteStream) serialization | `serialize()`, `deserialize()` |
+
+Template helpers in `json::` namespace:
+```cpp
+#include "common/serialization/IJsonSerializable.h"
+
+auto j = json::serialize(obj);                              // → obj.to_json()
+auto obj = json::deserialize<MyType>(json);                  // → construct + from_json
+json::deserialize(existing_obj, json);                       // → existing.from_json()
+auto arr = json::serialize_vector(vec);                      // → array of to_json()
+```
+
+Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `EquipmentTagRegistry`) keep their operator pairs in Serializer.cpp, as they iterate and delegate to element serialization.
 
 ---
 

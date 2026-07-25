@@ -252,8 +252,10 @@ business/
 ├── parsers/           格式解析器（NativeJson / NativeCsv / McOfficial）
 ├── loaders/           RegistryLoader（DTO↔Registry）+ ProfileLoader（Profile I/O）
 ├── managers/          RegistryManager（筛选/集合运算）+ ProfileManager（生命周期/快照/分支）
-└── components/        Serializer + FormatDetector + TagResolver
+└── components/        Serializer (thin ADL layer) + FormatDetector + TagResolver
 ```
+
+业务域类型继承 `IJsonSerializable`（定义在 `common/serialization/`），各自实现 `to_json()` / `from_json()`。`Serializer` 的 operator 作为薄委托层保留以兼容 ADL。
 
 **Profile** 是核心业务单元：
 - 所有正常业务操作以 Profile 为输入输出
@@ -285,6 +287,10 @@ business/
 - `src/domain/business/loaders/ProfileLoader.h/.cpp` — Profile 加载/导出
 - `src/domain/business/managers/ProfileManager.h/.cpp` — Profile 生命周期管理
 - `src/domain/business/managers/RegistryManager.h/.cpp` — 注册表集合运算
+- `src/common/serialization/ISerializable.h` — 序列化通用根接口
+- `src/common/serialization/IJsonSerializable.h` — JSON 序列化接口（to_json/from_json）
+- `src/common/serialization/IBinarySerializable.h` — 二进制序列化接口（ByteStream）
+- `src/domain/business/components/Serializer.h/.cpp` — ADL 兼容的序列化 delegate
 - `docs/domain_designs/business-domain-design.md` — 业务域详细设计
 - `src/domain/algorithm/AlgorithmExecutor.h/.cpp` — 执行引擎
 - `src/domain/algorithm/_strategies/` — 8 种算法策略
