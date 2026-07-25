@@ -256,10 +256,6 @@ class Parser {
             }
 
             long long integer = std::stoll(token);
-            if (integer >= std::numeric_limits<int32_t>::min() &&
-                integer <= std::numeric_limits<int32_t>::max()) {
-                return Json(Json::Number(static_cast<int32_t>(integer)));
-            }
             return Json(Json::Number(static_cast<int64_t>(integer)));
         } catch (const std::exception &) {
             throw_error("Invalid number");
@@ -450,7 +446,7 @@ std::string serialize_value(const Json &json, Json::JsonStyle style, std::size_t
         return std::visit(
             [](const auto &number) -> std::string {
                 using NumberType = std::decay_t<decltype(number)>;
-                if constexpr (std::is_same_v<NumberType, int32_t> || std::is_same_v<NumberType, int64_t>) {
+                if constexpr (std::is_integral_v<NumberType>) {
                     return std::to_string(number);
                 } else {
                     return format_floating(number);
@@ -534,6 +530,73 @@ std::string serialize_value(const Json &json, Json::JsonStyle style, std::size_t
 }
 
 } // namespace
+
+int64_t Json::as_int() const {
+    if (!std::holds_alternative<Number>(value_))
+        throw JsonException("Json value is not a Number");
+    const auto& num = std::get<Number>(value_);
+    if (std::holds_alternative<int64_t>(num)) return std::get<int64_t>(num);
+    return static_cast<int64_t>(std::get<double>(num));
+}
+
+double Json::as_double() const {
+    if (!std::holds_alternative<Number>(value_))
+        throw JsonException("Json value is not a Number");
+    const auto& num = std::get<Number>(value_);
+    if (std::holds_alternative<double>(num)) return std::get<double>(num);
+    return static_cast<double>(std::get<int64_t>(num));
+}
+
+std::string Json::as_string() const {
+    if (!std::holds_alternative<String>(value_))
+        throw JsonException("Json value is not a String");
+    return std::get<String>(value_);
+}
+
+bool Json::as_bool() const {
+    if (!std::holds_alternative<Bool>(value_))
+        throw JsonException("Json value is not a Bool");
+    return std::get<Bool>(value_);
+}
+
+Json::Array Json::as_array() const {
+    if (!std::holds_alternative<Array>(value_))
+        throw JsonException("Json value is not an Array");
+    return std::get<Array>(value_);
+}
+
+Json::Object Json::as_object() const {
+    if (!std::holds_alternative<Object>(value_))
+        throw JsonException("Json value is not an Object");
+    return std::get<Object>(value_);
+}
+
+Json Json::operator[](const std::string& key) const {
+    if (!std::holds_alternative<Object>(value_))
+        return Json::null();
+    const auto& obj = std::get<Object>(value_);
+    auto it = obj.find(key);
+    if (it != obj.end()) return it->second;
+    return Json::null();
+}
+
+Json Json::operator[](size_t index) const {
+    if (!std::holds_alternative<Array>(value_))
+        return Json::null();
+    const auto& arr = std::get<Array>(value_);
+    if (index < arr.size()) return arr[index];
+    return Json::null();
+}
+
+bool Json::is_null() const noexcept {
+    return std::holds_alternative<Null>(value_);
+}
+
+bool Json::has(const std::string& key) const {
+    if (!std::holds_alternative<Object>(value_)) return false;
+    const auto& obj = std::get<Object>(value_);
+    return obj.find(key) != obj.end();
+}
 
 Json::Json(const Value &other) : value_(other) {}
 

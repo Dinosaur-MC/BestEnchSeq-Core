@@ -28,9 +28,7 @@ inline int32_t get_json_int(const Json::Object &obj, const std::string &key) {
     auto val = it->second.get_value();
     if (std::holds_alternative<Json::Number>(val)) {
         const auto &num = std::get<Json::Number>(val);
-        if (std::holds_alternative<int32_t>(num)) return std::get<int32_t>(num);
         if (std::holds_alternative<int64_t>(num)) return static_cast<int32_t>(std::get<int64_t>(num));
-        if (std::holds_alternative<float>(num))   return static_cast<int32_t>(std::get<float>(num));
         if (std::holds_alternative<double>(num))  return static_cast<int32_t>(std::get<double>(num));
     }
     return 0;

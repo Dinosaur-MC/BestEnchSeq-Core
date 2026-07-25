@@ -388,6 +388,151 @@ void test_stream_parsing() {
     std::cout << "  PASS: test_stream_parsing" << std::endl;
 }
 
+// ===========================================================================
+// New API: convenience constructors, accessors, subscript, query
+// ===========================================================================
+
+void test_convenience_constructors() {
+    // Json(int32_t) stores as Number
+    Json i32(static_cast<int32_t>(42));
+    expect(i32.type() == JsonType::Number, "Json(int32_t) type is Number");
+    expect(i32.to_string() == "42", "Json(int32_t) serializes");
+
+    // Json(int64_t) stores as Number
+    Json i64(static_cast<int64_t>(99));
+    expect(i64.type() == JsonType::Number, "Json(int64_t) type is Number");
+
+    // Json(float) stores as Number
+    Json flt(3.14f);
+    expect(flt.type() == JsonType::Number, "Json(float) type is Number");
+
+    // Json(double) stores as Number
+    Json dbl(2.71828);
+    expect(dbl.type() == JsonType::Number, "Json(double) type is Number");
+
+    // Json(const char*) stores as String
+    Json cstr("hello");
+    expect(cstr.type() == JsonType::String, "Json(const char*) type is String");
+    expect(cstr.to_string() == "\"hello\"", "Json(const char*) serializes");
+
+    // Json(std::string) stores as String
+    Json str(std::string("world"));
+    expect(str.type() == JsonType::String, "Json(std::string) type is String");
+    expect(str.to_string() == "\"world\"", "Json(std::string) serializes");
+
+    // Json(bool) stores as Bool
+    Json b(true);
+    expect(b.type() == JsonType::Bool, "Json(bool) type is Bool");
+    expect(b.to_string() == "true", "Json(bool) serializes");
+
+    std::cout << "  PASS: test_convenience_constructors" << std::endl;
+}
+
+void test_accessors() {
+    // as_int on Number
+    Json num(42);
+    expect(num.as_int() == 42, "as_int() on Number returns value");
+    Json big(static_cast<int64_t>(99999999999LL));
+    expect(big.as_int() == 99999999999LL, "as_int() on large Number");
+
+    // as_int throws on non-Number
+    try {
+        Json("hello").as_int();
+        expect(false, "as_int() on String should throw");
+    } catch (const JsonException&) {}
+
+    // as_double on Number
+    Json pi(3.14159);
+    expect(pi.as_double() > 3.14 && pi.as_double() < 3.15, "as_double() on Number");
+
+    // as_double on int64_t promotes
+    Json two(2);
+    expect(two.as_double() == 2.0, "as_double() on int64_t promotes");
+
+    // as_double throws on non-Number
+    try {
+        Json(true).as_double();
+        expect(false, "as_double() on Bool should throw");
+    } catch (const JsonException&) {}
+
+    // as_string on String
+    Json s("test");
+    expect(s.as_string() == "test", "as_string() on String returns value");
+
+    // as_string throws on non-String
+    try {
+        Json(42).as_string();
+        expect(false, "as_string() on Number should throw");
+    } catch (const JsonException&) {}
+
+    // as_bool on Bool
+    Json t(true);
+    expect(t.as_bool() == true, "as_bool() on true Bool");
+    Json f(false);
+    expect(f.as_bool() == false, "as_bool() on false Bool");
+
+    // as_bool throws on non-Bool
+    try {
+        Json::null().as_bool();
+        expect(false, "as_bool() on Null should throw");
+    } catch (const JsonException&) {}
+
+    std::cout << "  PASS: test_accessors" << std::endl;
+}
+
+void test_subscript_operators() {
+    // operator[] on Object
+    Json obj = Json::parse("{\"a\":1,\"b\":\"two\",\"c\":true}");
+    expect(obj["a"].as_int() == 1, "obj[\"a\"] returns int");
+    expect(obj["b"].as_string() == "two", "obj[\"b\"] returns string");
+    expect(obj["c"].as_bool() == true, "obj[\"c\"] returns bool");
+
+    // operator[] on Object returns null() for missing key
+    Json missing = obj["nonexistent"];
+    expect(missing.is_null(), "obj[\"missing\"] returns null");
+
+    // operator[] on Array
+    Json arr = Json::parse("[10,20,30]");
+    expect(arr[0].as_int() == 10, "arr[0] returns first element");
+    expect(arr[1].as_int() == 20, "arr[1] returns second element");
+    expect(arr[2].as_int() == 30, "arr[2] returns third element");
+
+    // operator[] on Array returns null() for OOB index
+    Json oob = arr[100];
+    expect(oob.is_null(), "arr[OOB] returns null");
+
+    // operator[] on non-container type returns null()
+    Json scalar(42);
+    expect(scalar["key"].is_null(), "scalar[\"key\"] returns null");
+    expect(scalar[0].is_null(), "scalar[0] returns null");
+
+    std::cout << "  PASS: test_subscript_operators" << std::endl;
+}
+
+void test_query_methods() {
+    // is_null
+    expect(Json::null().is_null(), "Json::null() is null");
+    expect(!Json(42).is_null(), "Json(42) is not null");
+    expect(!Json(true).is_null(), "Json(true) is not null");
+    expect(!Json("text").is_null(), "Json(\"text\") is not null");
+    expect(!Json::parse("[]").is_null(), "empty array is not null");
+    expect(!Json::parse("{}").is_null(), "empty object is not null");
+
+    // has on Object
+    Json obj = Json::parse("{\"present\":1,\"also\":2}");
+    expect(obj.has("present"), "has() on existing key returns true");
+    expect(obj.has("also"), "has() on another existing key returns true");
+    expect(!obj.has("missing"), "has() on missing key returns false");
+
+    // has on non-Object
+    Json arr = Json::parse("[1,2,3]");
+    expect(!arr.has("key"), "has() on Array returns false");
+    Json num(42);
+    expect(!num.has("key"), "has() on Number returns false");
+
+    std::cout << "  PASS: test_query_methods" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -412,6 +557,10 @@ int main() {
         test_parse_errors();
         test_round_trip();
         test_stream_parsing();
+        test_convenience_constructors();
+        test_accessors();
+        test_subscript_operators();
+        test_query_methods();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

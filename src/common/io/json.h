@@ -50,7 +50,7 @@ class Json {
 
     using Null   = std::monostate;
     using Bool   = bool;
-    using Number = std::variant<int32_t, int64_t, float, double>;
+    using Number = std::variant<int64_t, double>;
     using String = std::string;
     using Array  = std::vector<Json>;
     using Object = std::map<std::string, Json>;
@@ -75,6 +75,15 @@ class Json {
 
   public:
     Json() = default;
+    // Convenience constructors (inline)
+    Json(int32_t v)     : value_(Number(static_cast<int64_t>(v))) {}
+    Json(int64_t v)     : value_(Number(v)) {}
+    Json(float v)       : value_(Number(static_cast<double>(v))) {}
+    Json(double v)      : value_(Number(v)) {}
+    Json(const char* s) : value_(String(s)) {}
+    Json(std::string s) : value_(String(std::move(s))) {}
+    Json(bool v)        : value_(Bool(v)) {}
+
     Json(const Value &other);
     Json(const Json &other)     = default;
     Json(Json &&other) noexcept = default;
@@ -82,6 +91,22 @@ class Json {
     Json &operator=(const Json &other)     = default;
     Json &operator=(Json &&other) noexcept = default;
     bool operator==(const Json &other) const;
+
+    // Accessors (throw JsonException on type mismatch)
+    int64_t         as_int() const;
+    double          as_double() const;
+    std::string     as_string() const;
+    bool            as_bool() const;
+    Array           as_array() const;
+    Object          as_object() const;
+
+    // Subscript operators
+    Json            operator[](const std::string& key) const;
+    Json            operator[](size_t index) const;
+
+    // Query
+    bool            is_null() const noexcept;
+    bool            has(const std::string& key) const;
 
     JsonType type() const;
     JsonType type(const std::string &path) const;

@@ -12,38 +12,29 @@ namespace {
 
 int32_t json_int32(const Json& j, int32_t def = 0) {
     if (j.type() != JsonType::Number) return def;
-    auto num = std::get<Json::Number>(j.get_value());
-    if (std::holds_alternative<int32_t>(num)) return std::get<int32_t>(num);
-    if (std::holds_alternative<int64_t>(num)) return static_cast<int32_t>(std::get<int64_t>(num));
-    return def;
+    return static_cast<int32_t>(j.as_int());
 }
 
 int64_t json_int64(const Json& j, int64_t def = 0) {
     if (j.type() != JsonType::Number) return def;
-    auto num = std::get<Json::Number>(j.get_value());
-    if (std::holds_alternative<int32_t>(num)) return std::get<int32_t>(num);
-    if (std::holds_alternative<int64_t>(num)) return std::get<int64_t>(num);
-    return def;
+    return j.as_int();
 }
 
 std::string json_str(const Json& j) {
-    if (j.type() != JsonType::String) return {};
-    return std::get<Json::String>(j.get_value());
+    return j.as_string();
 }
 
 bool json_bool(const Json& j, bool def = false) {
     if (j.type() != JsonType::Bool) return def;
-    return std::get<Json::Bool>(j.get_value());
+    return j.as_bool();
 }
 
 Json::Array json_arr(const Json& j) {
-    if (j.type() != JsonType::Array) return {};
-    return std::get<Json::Array>(j.get_value());
+    return j.as_array();
 }
 
 Json::Object json_obj(const Json& j) {
-    if (j.type() != JsonType::Object) return {};
-    return std::get<Json::Object>(j.get_value());
+    return j.as_object();
 }
 
 Json json_get(const Json::Object& obj, const std::string& key) {

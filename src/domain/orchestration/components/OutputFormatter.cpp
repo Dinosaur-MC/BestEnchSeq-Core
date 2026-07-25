@@ -37,23 +37,15 @@ std::string ench_name_id(const NSID& id, const EnchantmentRegistry &ench_reg) {
 // JSON extraction helpers
 // ---------------------------------------------------------------------------
 int32_t json_int(const Json &j) {
-    Json::Value val = j.get_value();
-    const auto &num = std::get<Json::Number>(val);
-    if (std::holds_alternative<int32_t>(num)) return std::get<int32_t>(num);
-    if (std::holds_alternative<int64_t>(num)) return static_cast<int32_t>(std::get<int64_t>(num));
-    return static_cast<int32_t>(std::get<double>(num));
+    return static_cast<int32_t>(j.as_int());
 }
 
 int64_t json_int64(const Json &j) {
-    Json::Value val = j.get_value();
-    const auto &num = std::get<Json::Number>(val);
-    if (std::holds_alternative<int64_t>(num)) return std::get<int64_t>(num);
-    if (std::holds_alternative<int32_t>(num)) return std::get<int32_t>(num);
-    return static_cast<int64_t>(std::get<double>(num));
+    return j.as_int();
 }
 
 std::string json_str(const Json &j) {
-    return std::get<Json::String>(j.get_value());
+    return j.as_string();
 }
 
 // ---------------------------------------------------------------------------
