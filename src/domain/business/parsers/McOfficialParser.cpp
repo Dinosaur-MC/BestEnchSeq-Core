@@ -3,7 +3,7 @@
 #include "domain/business/components/TagResolver.h"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
-#include "common/utils/ParserUtils.hpp"
+#include "common/io/FileUtils.hpp"
 
 #include <cctype>
 #include <filesystem>
@@ -63,7 +63,7 @@ std::vector<business::loader::EquipmentData> derive_equipment_from_tags(
                 if (file_entry.path().extension() != ".json") continue;
 
                 try {
-                    std::string content = ParserUtils::read_file(file_entry.path());
+                    std::string content = file_utils::read_file(file_entry.path());
                     Json json           = Json::parse(content);
                     auto root_var       = json.get_value();
                     if (!std::holds_alternative<Json::Object>(root_var)) continue;
@@ -146,7 +146,7 @@ McOfficialParser::Result McOfficialParser::parse(const std::filesystem::path& di
 
             std::string content;
             try {
-                content = ParserUtils::read_file(ench_file.path());
+                content = file_utils::read_file(ench_file.path());
             } catch (...) {
                 LOG_WARN("Could not read %s", ench_file.path().c_str());
                 continue;
@@ -164,8 +164,15 @@ McOfficialParser::Result McOfficialParser::parse(const std::filesystem::path& di
             if (!std::holds_alternative<Json::Object>(root_var)) continue;
             const auto& obj = std::get<Json::Object>(root_var);
 
-            int32_t multiplier = ParserUtils::get_json_int(obj, "anvil_cost");
-            int32_t max_level  = ParserUtils::get_json_int(obj, "max_level");
+            int32_t multiplier = 0, max_level = 0;
+            {
+                auto it = obj.find("anvil_cost");
+                if (it != obj.end()) multiplier = it->second.as<int32_t>();
+            }
+            {
+                auto it = obj.find("max_level");
+                if (it != obj.end()) max_level = it->second.as<int32_t>();
+            }
 
             if (max_level <= 0 || multiplier <= 0) {
                 LOG_WARN("Skipping %s:%s (max_level=%d, anvil_cost=%d)",
@@ -175,10 +182,26 @@ McOfficialParser::Result McOfficialParser::parse(const std::filesystem::path& di
 
             std::string display_name = business::parser_detail::derive_display_name(filename);
 
-            auto excl_items    = ParserUtils::get_json_string_array(obj, "exclusive_set");
+            std::vector<std::string> excl_items;
+            {
+                auto it = obj.find("exclusive_set");
+                if (it != obj.end()) {
+                    Json::Array arr = it->second.as<Json::Array>();
+                    for (const auto& elem : arr)
+                        excl_items.push_back(elem.as<std::string>());
+                }
+            }
             auto exclusive_set = business::parser_detail::resolve_references(excl_items, tag_resolver);
 
-            auto supp_items       = ParserUtils::get_json_string_array(obj, "supported_items");
+            std::vector<std::string> supp_items;
+            {
+                auto it = obj.find("supported_items");
+                if (it != obj.end()) {
+                    Json::Array arr = it->second.as<Json::Array>();
+                    for (const auto& elem : arr)
+                        supp_items.push_back(elem.as<std::string>());
+                }
+            }
             auto applicable_items = business::parser_detail::resolve_references(supp_items, tag_resolver);
 
             // Compute limited_level from cost formula
@@ -187,8 +210,16 @@ McOfficialParser::Result McOfficialParser::parse(const std::filesystem::path& di
             if (min_cost_it != obj.end()) {
                 auto mc = min_cost_it->second.get_value();
                 if (auto* mc_obj = std::get_if<Json::Object>(&mc)) {
-                    int32_t min_base      = ParserUtils::get_json_int(*mc_obj, "base");
-                    int32_t min_per_level = ParserUtils::get_json_int(*mc_obj, "per_level_above_first");
+                    int32_t min_base      = 0;
+                    int32_t min_per_level = 0;
+                    {
+                        auto it = mc_obj->find("base");
+                        if (it != mc_obj->end()) min_base = it->second.as<int32_t>();
+                    }
+                    {
+                        auto it = mc_obj->find("per_level_above_first");
+                        if (it != mc_obj->end()) min_per_level = it->second.as<int32_t>();
+                    }
                     if (min_base > 0 && min_per_level >= 0) {
                         limited_level = business::parser_detail::compute_limited_level(
                             max_level, min_base, min_per_level, applicable_items, item_props

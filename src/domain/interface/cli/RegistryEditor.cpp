@@ -1,19 +1,19 @@
 #include "RegistryEditor.h"
 #include "domain/business/business.h"
 #include "common/CommonTypes.h"
-#include "common/utils/ParserUtils.hpp"
+#include "common/utils/StringUtils.hpp"
 #include <stdexcept>
 
 void apply_registry_edits(
     const std::string &ops, EnchantmentRegistry &ench_reg, EquipmentRegistry &eq_reg,
     EquipmentTagRegistry &cat_reg
 ) {
-    auto op_list = ParserUtils::split_string(ops, ';');
+    auto op_list = string_utils::split(ops, ';');
     for (const auto &op : op_list) {
         if (op.empty())
             continue;
 
-        auto parts = ParserUtils::split_string(op, ',');
+        auto parts = string_utils::split(op, ',');
         if (parts.size() < 2)
             throw std::runtime_error("Invalid registry edit: '" + op + "'");
 
@@ -137,12 +137,12 @@ void apply_registry_edits(
 // ====================================================================
 
 void apply_registry_edits(const std::string& ops, Profile& profile) {
-    auto op_list = ParserUtils::split_string(ops, ';');
+    auto op_list = string_utils::split(ops, ';');
     for (const auto& op : op_list) {
         if (op.empty())
             continue;
 
-        auto parts = ParserUtils::split_string(op, ',');
+        auto parts = string_utils::split(op, ',');
         if (parts.size() < 2)
             throw std::runtime_error("Invalid registry edit: '" + op + "'");
 

@@ -2,7 +2,7 @@
 #include "ParserShared.h"
 #include "common/io/CsvIO.h"
 #include "common/log/log.hpp"
-#include "common/utils/ParserUtils.hpp"
+#include "common/utils/StringUtils.hpp"
 
 #include <sstream>
 #include <unordered_map>
@@ -104,7 +104,7 @@ parse_csv_rows(const csv::CsvTable& rows) {
         std::unordered_set<std::string> exclusive_set;
         std::string excl_str = get_field(fields, "exclusive_set");
         if (!excl_str.empty()) {
-            auto items = ParserUtils::split_string(excl_str, ';');
+            auto items = string_utils::split(excl_str, ';');
             auto resolved = resolve_references(items, tag_resolver);
             exclusive_set = std::move(resolved);
         }
@@ -112,7 +112,7 @@ parse_csv_rows(const csv::CsvTable& rows) {
         std::vector<std::string> applicable_items;
         std::string eq_str = get_field(fields, "applicable_equipment");
         if (!eq_str.empty()) {
-            auto items = ParserUtils::split_string(eq_str, ';');
+            auto items = string_utils::split(eq_str, ';');
             auto resolved = resolve_references(items, tag_resolver);
             applicable_items.assign(resolved.begin(), resolved.end());
         }

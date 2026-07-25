@@ -1,7 +1,7 @@
 #include "ItemProperties.h"
 #include "EmbeddedData.h"
+#include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
-#include "common/utils/ParserUtils.hpp"
 
 #include <filesystem>
 #include <string>
@@ -17,7 +17,7 @@ std::unordered_map<std::string, ItemProperty> load_item_properties() {
         // Fallback: try filesystem
         auto fs_path = std::filesystem::path("data/builtin/item_properties.json");
         if (std::filesystem::exists(fs_path))
-            content = ParserUtils::read_file(fs_path);
+            content = file_utils::read_file(fs_path);
     }
 
     std::unordered_map<std::string, ItemProperty> result;
@@ -49,9 +49,18 @@ std::unordered_map<std::string, ItemProperty> load_item_properties() {
         if (!io) continue;
 
         ItemProperty prop;
-        prop.durability = ParserUtils::get_json_int(*io, "durability");
-        prop.enchantability = ParserUtils::get_json_int(*io, "enchantability");
-        prop.category = ParserUtils::get_json_string(*io, "category");
+        {
+            auto it = io->find("durability");
+            if (it != io->end()) prop.durability = it->second.as<int32_t>();
+        }
+        {
+            auto it = io->find("enchantability");
+            if (it != io->end()) prop.enchantability = it->second.as<int32_t>();
+        }
+        {
+            auto it = io->find("category");
+            if (it != io->end()) prop.category = it->second.as<std::string>();
+        }
 
         result[item_id] = std::move(prop);
     }

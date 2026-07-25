@@ -13,7 +13,6 @@
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Item.h"
 #include "common/CommonTypes.h"
-#include "common/utils/ParserUtils.hpp"
 
 #include <cstdlib>
 #include <cstring>
@@ -62,35 +61,63 @@ static int32_t int_field(const Json::Object& obj, const std::string& key) {
 static EnchInfo parse_ench_info_json(const Json::Object& obj) {
     EnchInfo info;
 
-    std::string v;
-    v = ParserUtils::get_json_string(obj, "id");
-    if (!v.empty()) info.id = NSID(std::move(v));
+    {
+        auto it = obj.find("id");
+        if (it != obj.end()) {
+            std::string v = it->second.as<std::string>();
+            if (!v.empty()) info.id = NSID(std::move(v));
+        }
+    }
 
-    v = ParserUtils::get_json_string(obj, "name");
-    if (!v.empty()) info.name = std::move(v);
+    {
+        auto it = obj.find("name");
+        if (it != obj.end()) {
+            std::string v = it->second.as<std::string>();
+            if (!v.empty()) info.name = std::move(v);
+        }
+    }
 
     if (info.name.empty())
         info.name = info.id.str();
 
-    info.max_level     = ParserUtils::get_json_int(obj, "max_level");
-    info.multiplier    = ParserUtils::get_json_int(obj, "multiplier");
-    info.limited_level = ParserUtils::get_json_int(obj, "limited_level");
-    info.is_treasure   = ParserUtils::get_json_bool(obj, "is_treasure");
+    {
+        auto it = obj.find("max_level");
+        if (it != obj.end()) info.max_level = it->second.as<int32_t>();
+    }
+    {
+        auto it = obj.find("multiplier");
+        if (it != obj.end()) info.multiplier = it->second.as<int32_t>();
+    }
+    {
+        auto it = obj.find("limited_level");
+        if (it != obj.end()) info.limited_level = it->second.as<int32_t>();
+    }
+    {
+        auto it = obj.find("is_treasure");
+        if (it != obj.end()) info.is_treasure = it->second.as<bool>();
+    }
 
     // exclusive_set: array of strings (now NSIDs)
     {
-        auto raw = ParserUtils::get_json_string_array(obj, "exclusive_set");
-        for (auto& s : raw)
-            info.exclusive_set.insert(NSID(std::move(s)));
+        auto it = obj.find("exclusive_set");
+        if (it != obj.end()) {
+            Json::Array arr = it->second.as<Json::Array>();
+            for (const auto& elem : arr) {
+                std::string s = elem.as<std::string>();
+                info.exclusive_set.insert(NSID(std::move(s)));
+            }
+        }
     }
 
     // applicable_equipments: optional array of NSID strings (formerly applicable_category_ids)
     {
         auto it = obj.find("applicable_equipments");
         if (it != obj.end()) {
-            auto raw = ParserUtils::get_json_string_array(obj, "applicable_equipments");
-            for (auto& s : raw)
+            Json::Array arr = it->second.as<Json::Array>();
+            for (const auto& elem : arr) {
+                std::string s = elem.as<std::string>();
                 info.applicable_equipments.insert(NSID(std::move(s)));
+            }
         }
     }
 
@@ -126,23 +153,42 @@ static void apply_ench_patch(const Json::Object& obj, EnchInfo& patch) {
 static Equipment parse_equipment_json(const Json::Object& obj) {
     Equipment eq;
 
-    std::string v;
-    v = ParserUtils::get_json_string(obj, "id");
-    if (!v.empty()) eq.id = NSID(std::move(v));
+    {
+        auto it = obj.find("id");
+        if (it != obj.end()) {
+            std::string v = it->second.as<std::string>();
+            if (!v.empty()) eq.id = NSID(std::move(v));
+        }
+    }
 
-    v = ParserUtils::get_json_string(obj, "name");
-    if (!v.empty()) eq.name = std::move(v);
+    {
+        auto it = obj.find("name");
+        if (it != obj.end()) {
+            std::string v = it->second.as<std::string>();
+            if (!v.empty()) eq.name = std::move(v);
+        }
+    }
 
     if (eq.name.empty())
         eq.name = eq.id.str();
 
-    std::string cat_v = ParserUtils::get_json_string(obj, "category");
-    if (!cat_v.empty())
-        eq.category = NSID(std::move(cat_v));
-    else
-        eq.category = NSID("unknown");
+    {
+        auto it = obj.find("category");
+        if (it != obj.end()) {
+            std::string v = it->second.as<std::string>();
+            if (!v.empty())
+                eq.category = NSID(std::move(v));
+            else
+                eq.category = NSID("unknown");
+        } else {
+            eq.category = NSID("unknown");
+        }
+    }
 
-    eq.max_durability  = ParserUtils::get_json_int(obj, "max_durability");
+    {
+        auto it = obj.find("max_durability");
+        if (it != obj.end()) eq.max_durability = it->second.as<int32_t>();
+    }
 
     return eq;
 }
@@ -155,8 +201,16 @@ static EnchSet parse_ench_set(const Json::Array& arr,
     EnchSet result;
     for (const auto& elem : arr) {
         auto eo = std::get<Json::Object>(elem.get_value());
-        std::string eid = ParserUtils::get_json_string(eo, "id");
-        int32_t lvl     = ParserUtils::get_json_int(eo, "level");
+        std::string eid;
+        int32_t lvl     = 0;
+        {
+            auto it = eo.find("id");
+            if (it != eo.end()) eid = it->second.as<std::string>();
+        }
+        {
+            auto it = eo.find("level");
+            if (it != eo.end()) lvl = it->second.as<int32_t>();
+        }
         if (lvl < 1) lvl = 1;
 
         auto ench_it = ench_reg.find(NSID(eid));
@@ -367,7 +421,11 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
             auto target_obj =
                 std::get<Json::Object>(target_it->second.get_value());
 
-            std::string eq_id = ParserUtils::get_json_string(target_obj, "equipment");
+            std::string eq_id;
+            {
+                auto it = target_obj.find("equipment");
+                if (it != target_obj.end()) eq_id = it->second.as<std::string>();
+            }
             if (!eq_id.empty()) {
                 const auto& eq_reg = c->impl.equipment();
                 auto eq_it = eq_reg.find(NSID(eq_id));
@@ -397,7 +455,11 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         }
 
         // ── Mode & payload ────────────────────────────────────────────────
-        std::string mode_str = ParserUtils::get_json_string(root, "mode");
+        std::string mode_str;
+        {
+            auto it = root.find("mode");
+            if (it != root.end()) mode_str = it->second.as<std::string>();
+        }
         if (mode_str == "inventory") {
             request.mode = AlgorithmMode::inventory;
             request.payload = InventoryPayload{};
@@ -407,19 +469,30 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         }
 
         // ── Algorithm ─────────────────────────────────────────────────────
-        request.algorithm = ParserUtils::get_json_string(root, "algorithm");
+        {
+            auto it = root.find("algorithm");
+            if (it != root.end()) request.algorithm = it->second.as<std::string>();
+        }
         if (request.algorithm.empty())
             request.algorithm = "greedy";
 
         // ── Platform ──────────────────────────────────────────────────────
-        std::string plat = ParserUtils::get_json_string(root, "platform");
+        std::string plat;
+        {
+            auto it = root.find("platform");
+            if (it != root.end()) plat = it->second.as<std::string>();
+        }
         if (plat == "bedrock")
             request.forge_config.platform = MCE::Bedrock;
         else
             request.forge_config.platform = MCE::Java;
 
         // ── Max solutions ─────────────────────────────────────────────────
-        int32_t max_sol = ParserUtils::get_json_int(root, "max_solutions");
+        int32_t max_sol = 0;
+        {
+            auto it = root.find("max_solutions");
+            if (it != root.end()) max_sol = it->second.as<int32_t>();
+        }
         if (max_sol > 0)
             request.search_config.max_solutions = max_sol;
 

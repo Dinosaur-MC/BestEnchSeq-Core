@@ -65,4 +65,21 @@ inline T join(
     return result;
 }
 
+// Single-character delimiter split (skips empty tokens, matches old ParserUtils::split_string semantics)
+inline std::vector<std::string> split(const std::string& str, char delimiter) {
+    std::vector<std::string> tokens;
+    if (str.empty()) return tokens;
+    size_t start = 0;
+    while (true) {
+        size_t end = str.find(delimiter, start);
+        if (end == std::string::npos) {
+            if (start < str.size()) tokens.push_back(str.substr(start));
+            break;
+        }
+        if (end > start) tokens.push_back(str.substr(start, end - start));
+        start = end + 1;
+    }
+    return tokens;
+}
+
 }; // namespace string_utils

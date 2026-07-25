@@ -487,8 +487,9 @@ void test_subscript_operators() {
     expect(obj["b"].as_string() == "two", "obj[\"b\"] returns string");
     expect(obj["c"].as_bool() == true, "obj[\"c\"] returns bool");
 
-    // operator[] on Object returns null() for missing key
-    Json missing = obj["nonexistent"];
+    // operator[] on Object returns null() for missing key (const overload)
+    const Json& const_obj = obj;
+    Json missing = const_obj["nonexistent"];
     expect(missing.is_null(), "obj[\"missing\"] returns null");
 
     // operator[] on Array
@@ -497,14 +498,16 @@ void test_subscript_operators() {
     expect(arr[1].as_int() == 20, "arr[1] returns second element");
     expect(arr[2].as_int() == 30, "arr[2] returns third element");
 
-    // operator[] on Array returns null() for OOB index
-    Json oob = arr[100];
+    // operator[] on Array returns null() for OOB index (const overload)
+    const Json& const_arr = arr;
+    Json oob = const_arr[100];
     expect(oob.is_null(), "arr[OOB] returns null");
 
-    // operator[] on non-container type returns null()
+    // operator[] on non-container type returns null() (const overload)
     Json scalar(42);
-    expect(scalar["key"].is_null(), "scalar[\"key\"] returns null");
-    expect(scalar[0].is_null(), "scalar[0] returns null");
+    const Json& const_scalar2 = scalar;
+    expect(const_scalar2["key"].is_null(), "scalar[\"key\"] returns null");
+    expect(const_scalar2[0].is_null(), "scalar[0] returns null");
 
     std::cout << "  PASS: test_subscript_operators" << std::endl;
 }
@@ -531,6 +534,163 @@ void test_query_methods() {
     expect(!num.has("key"), "has() on Number returns false");
 
     std::cout << "  PASS: test_query_methods" << std::endl;
+}
+
+// ===========================================================================
+// New API: template as<T>(), factories, chainable builders, mutable
+//           subscript, JSON Path
+// ===========================================================================
+
+void test_template_as() {
+    // as<bool>
+    expect(Json(true).as<bool>() == true, "as<bool>() on Bool");
+    expect(Json(false).as<bool>() == false, "as<bool>() on false Bool");
+
+    // as<int64_t>
+    expect(Json(42).as<int64_t>() == 42, "as<int64_t>() on Number");
+    expect(Json(static_cast<int64_t>(999)).as<int64_t>() == 999, "as<int64_t>() large");
+
+    // as<std::string>
+    expect(Json("hello").as<std::string>() == "hello", "as<std::string>()");
+
+    // as<int32_t> promotes
+    expect(Json(42).as<int32_t>() == 42, "as<int32_t>() promotes");
+
+    // as<double>
+    Json pi(3.14159);
+    expect(pi.as<double>() > 3.14, "as<double>()");
+
+    // as<float>
+    expect(Json(2.5f).as<float>() > 2.4f, "as<float>()");
+
+    std::cout << "  PASS: test_template_as" << std::endl;
+}
+
+void test_factories() {
+    auto obj = Json::object();
+    expect(obj.type() == JsonType::Object, "Json::object() creates Object");
+    expect(obj.to_string() == "{}", "Json::object() serializes");
+
+    auto arr = Json::array();
+    expect(arr.type() == JsonType::Array, "Json::array() creates Array");
+    expect(arr.to_string() == "[]", "Json::array() serializes");
+
+    std::cout << "  PASS: test_factories" << std::endl;
+}
+
+void test_chainable_set() {
+    auto obj = Json::object();
+    obj.set("name", "test").set("value", 42).set("active", true);
+
+    expect(obj["name"].as_string() == "test", "set().set().set() name");
+    expect(obj["value"].as_int() == 42, "set() chain value");
+    expect(obj["active"].as_bool() == true, "set() chain active");
+
+    // set on non-object auto-converts
+    Json j;
+    j.set("key", 1);
+    expect(j.type() == JsonType::Object, "set() auto-converts to Object");
+
+    // Chained construction pattern
+    auto cfg = Json::object()
+        .set("host", "localhost")
+        .set("port", 8080);
+    expect(cfg["host"].as_string() == "localhost", "factory chain host");
+    expect(cfg["port"].as_int() == 8080, "factory chain port");
+
+    std::cout << "  PASS: test_chainable_set" << std::endl;
+}
+
+void test_chainable_push_back() {
+    auto arr = Json::array();
+    arr.push_back(1).push_back(2).push_back(3);
+
+    expect(arr[0].as_int() == 1, "push_back chain [0]");
+    expect(arr[1].as_int() == 2, "push_back chain [1]");
+    expect(arr[2].as_int() == 3, "push_back chain [2]");
+
+    // push_back on non-array auto-converts
+    Json j;
+    j.push_back("hello");
+    expect(j.type() == JsonType::Array, "push_back auto-converts to Array");
+
+    std::cout << "  PASS: test_chainable_push_back" << std::endl;
+}
+
+void test_mutable_subscript() {
+    // Mutable object subscript
+    Json obj = Json::object();
+    obj["name"] = Json("test");
+    obj["count"] = Json(42);
+    expect(obj["name"].as_string() == "test", "mutable obj[\"name\"]");
+    expect(obj["count"].as_int() == 42, "mutable obj[\"count\"]");
+
+    // Mutable array subscript
+    Json arr = Json::array();
+    arr.push_back(10);
+    arr.push_back(20);
+    arr[0] = Json(99);
+    expect(arr[0].as_int() == 99, "mutable arr[0] after assignment");
+
+    // Array OOB throws
+    try {
+        arr[10] = Json(0);
+        expect(false, "OOB array assignment should throw");
+    } catch (const JsonException&) {}
+
+    std::cout << "  PASS: test_mutable_subscript" << std::endl;
+}
+
+void test_json_path() {
+    // Build a complex JSON structure using the new API
+    auto data = Json::object()
+        .set("solutions", Json::array()
+            .push_back(Json::object()
+                .set("rank", 1)
+                .set("steps", Json::array()
+                    .push_back(Json::object()
+                        .set("item_a", "diamond_sword")
+                        .set("cost", 5)
+                    )
+                )
+            )
+        );
+
+    // at() with dot notation
+    expect(data.at("solutions").type() == JsonType::Array, "at('solutions') is Array");
+
+    // at() with bracket index + dot
+    auto first = data.at("solutions[0]");
+    expect(first.type() == JsonType::Object, "at('solutions[0]') is Object");
+    expect(first["rank"].as_int() == 1, "at('solutions[0]') rank");
+
+    // Deep path
+    expect(data.at("solutions[0].steps[0].item_a").as_string() == "diamond_sword",
+           "deep path solutions[0].steps[0].item_a");
+    expect(data.at("solutions[0].steps[0].cost").as_int() == 5,
+           "deep path solutions[0].steps[0].cost");
+
+    // at() throws on missing key
+    try {
+        data.at("nonexistent");
+        expect(false, "at() on missing key should throw");
+    } catch (const JsonException&) {}
+
+    // at() with default
+    expect(data.at("missing", Json("fallback")).as_string() == "fallback",
+           "at() with default on missing returns default");
+    expect(data.at("solutions[0].rank", Json(0)).as_int() == 1,
+           "at() with default on existing returns actual value");
+
+    std::cout << "  PASS: test_json_path" << std::endl;
+}
+
+void test_empty_path() {
+    Json obj = Json::parse("{\"a\":1}");
+    expect(obj.at("").type() == JsonType::Object, "at('') returns root");
+    expect(obj.at("", Json::null()).type() == JsonType::Object, "at('', default) returns root");
+
+    std::cout << "  PASS: test_empty_path" << std::endl;
 }
 
 } // anonymous namespace
@@ -561,6 +721,13 @@ int main() {
         test_accessors();
         test_subscript_operators();
         test_query_methods();
+        test_template_as();
+        test_factories();
+        test_chainable_set();
+        test_chainable_push_back();
+        test_mutable_subscript();
+        test_json_path();
+        test_empty_path();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

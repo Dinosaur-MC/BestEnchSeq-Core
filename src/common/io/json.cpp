@@ -1,5 +1,6 @@
 #include "json.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <iomanip>
@@ -529,6 +530,32 @@ std::string serialize_value(const Json &json, Json::JsonStyle style, std::size_t
     return output;
 }
 
+// Internal helper: parse one path segment, return (key, start_of_next)
+static std::pair<std::string, std::size_t> _parse_path_segment(
+    const std::string& path, std::size_t pos)
+{
+    if (pos >= path.size()) return {"", pos};
+
+    // Skip leading dot
+    if (path[pos] == '.') pos++;
+
+    std::size_t start = pos;
+
+    // Check for bracket index
+    if (pos < path.size() && path[pos] == '[') {
+        pos++; // skip '['
+        start = pos;
+        while (pos < path.size() && path[pos] != ']') pos++;
+        std::string seg = path.substr(start, pos - start);
+        if (pos < path.size() && path[pos] == ']') pos++; // skip ']'
+        return {seg, pos};
+    }
+
+    // Otherwise read until '.' or '[' or end
+    while (pos < path.size() && path[pos] != '.' && path[pos] != '[') pos++;
+    return {path.substr(start, pos - start), pos};
+}
+
 } // namespace
 
 int64_t Json::as_int() const {
@@ -569,6 +596,96 @@ Json::Object Json::as_object() const {
     if (!std::holds_alternative<Object>(value_))
         throw JsonException("Json value is not an Object");
     return std::get<Object>(value_);
+}
+
+// Template specializations
+template<> bool Json::as<bool>() const { return as_bool(); }
+template<> std::string Json::as<std::string>() const { return as_string(); }
+template<> int64_t Json::as<int64_t>() const { return as_int(); }
+template<> int32_t Json::as<int32_t>() const { return static_cast<int32_t>(as_int()); }
+template<> double Json::as<double>() const { return as_double(); }
+template<> float Json::as<float>() const { return static_cast<float>(as_double()); }
+template<> Json::Array Json::as<Json::Array>() const { return as_array(); }
+template<> Json::Object Json::as<Json::Object>() const { return as_object(); }
+
+// Static factories
+Json Json::object() { return Json(Json::Object{}); }
+Json Json::array() { return Json(Json::Array{}); }
+
+// Chainable builder
+Json& Json::set(std::string key, Json value) {
+    if (!std::holds_alternative<Object>(value_))
+        value_ = Object{};
+    std::get<Object>(value_)[std::move(key)] = std::move(value);
+    return *this;
+}
+
+Json& Json::push_back(Json value) {
+    if (!std::holds_alternative<Array>(value_))
+        value_ = Array{};
+    std::get<Array>(value_).push_back(std::move(value));
+    return *this;
+}
+
+// Mutable subscript
+Json& Json::operator[](const std::string& key) {
+    if (!std::holds_alternative<Object>(value_))
+        value_ = Object{};
+    return std::get<Object>(value_)[key];
+}
+
+Json& Json::operator[](size_t index) {
+    if (!std::holds_alternative<Array>(value_))
+        value_ = Array{};
+    auto& arr = std::get<Array>(value_);
+    if (index >= arr.size())
+        throw JsonException("array index out of bounds");
+    return arr[index];
+}
+
+// JSON Path
+Json Json::at(const std::string& path) const {
+    Json current = *this;
+    std::size_t pos = 0;
+
+    while (pos < path.size()) {
+        auto [segment, next] = _parse_path_segment(path, pos);
+        if (segment.empty()) break;
+
+        // Numeric segment -> array index
+        bool is_number = !segment.empty() &&
+            std::all_of(segment.begin(), segment.end(), ::isdigit);
+
+        if (is_number) {
+            std::size_t idx = static_cast<std::size_t>(std::stoll(segment));
+            if (!std::holds_alternative<Array>(current.value_))
+                throw JsonException("cannot index non-array with '" + segment + "'");
+            auto& arr = std::get<Array>(current.value_);
+            if (idx >= arr.size())
+                throw JsonException("array index " + segment + " out of bounds");
+            current = Json(arr[idx]);
+        } else {
+            if (!std::holds_alternative<Object>(current.value_))
+                throw JsonException("cannot access field '" + segment + "' on non-object");
+            auto& obj = std::get<Object>(current.value_);
+            auto it = obj.find(segment);
+            if (it == obj.end())
+                throw JsonException("key '" + segment + "' not found");
+            current = Json(it->second);
+        }
+
+        pos = next;
+    }
+
+    return current;
+}
+
+Json Json::at(const std::string& path, const Json& def) const {
+    try {
+        return at(path);
+    } catch (const JsonException&) {
+        return def;
+    }
 }
 
 Json Json::operator[](const std::string& key) const {
@@ -625,39 +742,12 @@ JsonType Json::type() const {
 }
 
 JsonType Json::type(const std::string &path) const {
-    if (path.empty()) {
-        return type();
+    if (path.empty()) return type();
+    try {
+        return at(path).type();
+    } catch (const JsonException&) {
+        return JsonType::Empty;
     }
-
-    const Json *current = this;
-    std::size_t start   = 0;
-
-    while (start < path.size()) {
-        std::size_t dot = path.find('.', start);
-        std::string key = path.substr(start, dot == std::string::npos ? std::string::npos : dot - start);
-
-        if (key.empty()) {
-            return JsonType::Empty;
-        }
-        if (!std::holds_alternative<Object>(current->value_)) {
-            return JsonType::Empty;
-        }
-
-        const Object &object = std::get<Object>(current->value_);
-        auto it              = object.find(key);
-        if (it == object.end()) {
-            return JsonType::Empty;
-        }
-
-        current = &it->second;
-
-        if (dot == std::string::npos) {
-            break;
-        }
-        start = dot + 1;
-    }
-
-    return current->type();
 }
 
 bool Json::is_valid() const { return valid_; }

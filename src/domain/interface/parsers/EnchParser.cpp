@@ -1,5 +1,5 @@
 #include "EnchParser.h"
-#include "common/utils/ParserUtils.hpp"
+#include "common/utils/StringUtils.hpp"
 
 #include <cctype>
 #include <stdexcept>
@@ -37,7 +37,7 @@ std::vector<EnchantmentSpec> EnchParser::parse(const std::string& input) {
         throw std::runtime_error("Trailing comma in enchantment list");
     }
 
-    auto tokens = ParserUtils::split_string(input, ',');
+    auto tokens = string_utils::split(input, ',');
 
     for (const auto& token : tokens) {
         EnchantmentSpec spec;

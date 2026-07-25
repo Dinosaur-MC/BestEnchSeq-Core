@@ -1,6 +1,6 @@
 #include "domain/interface/components/ParserUtilsDomain.hpp"
-#include "utils/ParserUtils.hpp"
 #include "io/CsvIO.h"
+#include "io/FileUtils.hpp"
 #include "framework/test_utils.h"
 
 #include <filesystem>
@@ -234,41 +234,41 @@ void test_file_io() {
     create_temp_file(tmp / "sub", "d.json", "{}");
 
     // find_files - recursive
-    auto json_files = ParserUtils::find_files(tmp, ".json");
+    auto json_files = file_utils::find_files(tmp, ".json");
     expect(json_files.size() == 3, "found 3 json files recursively");
 
-    auto csv_files = ParserUtils::find_files(tmp, ".csv");
+    auto csv_files = file_utils::find_files(tmp, ".csv");
     expect(csv_files.size() == 1, "found 1 csv file");
 
-    auto txt_files = ParserUtils::find_files(tmp, ".txt");
+    auto txt_files = file_utils::find_files(tmp, ".txt");
     expect(txt_files.size() == 0, "no txt files");
 
     // find_files with extension without leading dot
-    auto json_files2 = ParserUtils::find_files(tmp, "json");
+    auto json_files2 = file_utils::find_files(tmp, "json");
     expect(json_files2.size() == 3, "extension without dot normalized");
 
     // find_files with empty extension (return all)
-    auto all_files = ParserUtils::find_files(tmp, "");
+    auto all_files = file_utils::find_files(tmp, "");
     expect(all_files.size() == 4, "empty extension returns all files");
 
     // find_files with non-existent directory
-    auto no_files = ParserUtils::find_files(tmp / "nonexistent", ".json");
+    auto no_files = file_utils::find_files(tmp / "nonexistent", ".json");
     expect(no_files.size() == 0, "no files in non-existent dir");
 
     // find_files with a file path (not a directory)
     auto existing_file = create_temp_file(tmp, "dummy.txt", "dummy");
-    no_files = ParserUtils::find_files(existing_file, ".json");
+    no_files = file_utils::find_files(existing_file, ".json");
     expect(no_files.size() == 0, "no files when path is a file not dir");
     fs::remove(existing_file);
 
     // read_file
     auto file_path = create_temp_file(tmp, "test.txt", "Hello, World!");
-    auto content = ParserUtils::read_file(file_path);
+    auto content = file_utils::read_file(file_path);
     expect(content == "Hello, World!", "read_file content");
 
     // read_file with non-existent file
     try {
-        ParserUtils::read_file(tmp / "nonexistent.txt");
+        file_utils::read_file(tmp / "nonexistent.txt");
         expect(false, "should throw for non-existent file");
     } catch (const std::runtime_error &) {
         expect(true, "threw for non-existent file");

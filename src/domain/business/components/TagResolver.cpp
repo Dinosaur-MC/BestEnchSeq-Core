@@ -1,5 +1,5 @@
 #include "TagResolver.h"
-#include "common/utils/ParserUtils.hpp"
+#include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 
 // ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
 
                     // Parse JSON and extract "values" array
                     try {
-                        std::string content = ParserUtils::read_file(file_entry.path());
+                        std::string content = file_utils::read_file(file_entry.path());
                         Json json          = Json::parse(content);
 
                         auto root_var = json.get_value();

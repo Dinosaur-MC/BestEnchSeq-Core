@@ -2,7 +2,7 @@
 #include "domain/interface/parsers/CLIParser.h"
 #include "domain/business/business.h"
 #include "BuildConfig.h"
-#include "common/utils/ParserUtils.hpp"
+#include "common/utils/StringUtils.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -111,7 +111,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             if (value.empty())
                 throw std::runtime_error("Empty --registry-edit value.\n");
             // Basic format validation: must contain at least one ':'
-            auto ops = ParserUtils::split_string(value, ';');
+            auto ops = string_utils::split(value, ';');
             for (const auto& op : ops) {
                 if (op.find(':') == std::string::npos)
                     throw std::runtime_error("Invalid --registry-edit operation: '" +
@@ -134,7 +134,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             // to ForgeConfig happens later via apply_config_pairs().
             if (value.empty())
                 throw std::runtime_error("Empty --config value.\n");
-            auto pairs = ParserUtils::split_string(value, ',');
+            auto pairs = string_utils::split(value, ',');
             for (const auto& pair : pairs) {
                 auto eq = pair.find('=');
                 if (eq == std::string::npos)
@@ -273,7 +273,7 @@ EnchSet build_enchset(
 
 void apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg) {
     if (config_pairs.empty()) return;
-    auto pairs = ParserUtils::split_string(config_pairs, ',');
+    auto pairs = string_utils::split(config_pairs, ',');
     for (const auto& pair : pairs) {
         auto eq = pair.find('=');
         if (eq == std::string::npos)

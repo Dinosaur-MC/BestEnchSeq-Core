@@ -1,7 +1,7 @@
 #include "AppConfig.h"
 #include "BuildConfig.h"
 #include "common/log/log.hpp"
-#include "common/utils/ParserUtils.hpp"
+#include "common/utils/StringUtils.hpp"
 #include "domain/interface/interface.h"
 #include "domain/business/business.h"
 #include "domain/algorithm/algorithm.h"
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) try {
     }
 
     if (config.registries) {
-        for (const auto& reg : ParserUtils::split_string(*config.registries, ',')) {
+        for (const auto& reg : string_utils::split(*config.registries, ',')) {
             if (reg.empty()) continue;
             if (std::filesystem::exists(reg)) {
                 ManageRequest req;

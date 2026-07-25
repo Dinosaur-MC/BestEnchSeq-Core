@@ -2,7 +2,7 @@
 #include "domain/business/parsers/NativeJsonParser.h"
 #include "domain/business/parsers/NativeCsvParser.h"
 #include "domain/business/parsers/McOfficialParser.h"
-#include "common/utils/ParserUtils.hpp"
+#include "common/io/FileUtils.hpp"
 
 #include <cctype>
 #include <filesystem>
@@ -45,7 +45,7 @@ FormatDetector::Result FormatDetector::parse(const std::filesystem::path& path) 
 
     switch (format) {
     case DataFormat::NativeJson: {
-        auto json = Json::parse(ParserUtils::read_file(path));
+        auto json = Json::parse(file_utils::read_file(path));
         return NativeJsonParser::parse(json);
     }
     case DataFormat::NativeCsv:
@@ -56,7 +56,7 @@ FormatDetector::Result FormatDetector::parse(const std::filesystem::path& path) 
     case DataFormat::Auto:
         // Fallback: attempt NativeJson parse
         try {
-            auto content = ParserUtils::read_file(path);
+            auto content = file_utils::read_file(path);
             return NativeJsonParser::parse_string(content);
         } catch (const std::exception& e) {
             throw std::runtime_error(

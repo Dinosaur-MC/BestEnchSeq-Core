@@ -2,7 +2,6 @@
 #include "ParserShared.h"
 #include "domain/business/components/TagResolver.h"
 #include "common/log/log.hpp"
-#include "common/utils/ParserUtils.hpp"
 
 #include <unordered_set>
 #include <vector>
@@ -124,23 +123,56 @@ business::loader::EnchantmentData parse_ench_entry(
 ) {
     using namespace business::parser_detail;
 
-    std::string id_str             = ParserUtils::get_json_string(elem_obj, "id");
-    int32_t max_level              = ParserUtils::get_json_int(elem_obj, "max_level");
-    int32_t multiplier             = ParserUtils::get_json_int(elem_obj, "multiplier");
-    std::string display_name       = ParserUtils::get_json_string(elem_obj, "name");
+    std::string id_str, display_name;
+    int32_t max_level = 0, multiplier = 0, limited_level = 0;
+    std::vector<std::string> exclusive_set_items, app_items;
+
+    {
+        auto it = elem_obj.find("id");
+        if (it != elem_obj.end()) id_str = it->second.as<std::string>();
+    }
+    {
+        auto it = elem_obj.find("max_level");
+        if (it != elem_obj.end()) max_level = it->second.as<int32_t>();
+    }
+    {
+        auto it = elem_obj.find("multiplier");
+        if (it != elem_obj.end()) multiplier = it->second.as<int32_t>();
+    }
+    {
+        auto it = elem_obj.find("name");
+        if (it != elem_obj.end()) display_name = it->second.as<std::string>();
+    }
     if (display_name.empty()) display_name = id_str;
 
-    int32_t limited_level = ParserUtils::get_json_int(elem_obj, "limited_level");
+    {
+        auto it = elem_obj.find("limited_level");
+        if (it != elem_obj.end()) limited_level = it->second.as<int32_t>();
+    }
     if (limited_level <= 0) limited_level = 0;
 
-    auto exclusive_set_items = ParserUtils::get_json_string_array(elem_obj, "exclusive_set");
-    auto exclusive_set       = resolve_references(exclusive_set_items, tag_resolver);
+    {
+        auto it = elem_obj.find("exclusive_set");
+        if (it != elem_obj.end()) {
+            Json::Array arr = it->second.as<Json::Array>();
+            for (const auto& elem : arr)
+                exclusive_set_items.push_back(elem.as<std::string>());
+        }
+    }
+    auto exclusive_set = resolve_references(exclusive_set_items, tag_resolver);
 
-    auto app_items        = ParserUtils::get_json_string_array(elem_obj, "applicable_equipment");
+    {
+        auto it = elem_obj.find("applicable_equipment");
+        if (it != elem_obj.end()) {
+            Json::Array arr = it->second.as<Json::Array>();
+            for (const auto& elem : arr)
+                app_items.push_back(elem.as<std::string>());
+        }
+    }
     auto applicable_items = resolve_references(app_items, tag_resolver);
 
     business::loader::EnchantmentData ench;
-    ench.id               = ParserUtils::get_json_string(elem_obj, "id");
+    ench.id               = id_str;
     ench.display_name     = std::move(display_name);
     ench.multiplier       = multiplier;
     ench.max_level        = max_level;
@@ -168,18 +200,33 @@ std::vector<business::loader::EquipmentData> parse_equipments_json(const Json::O
         if (!std::holds_alternative<Json::Object>(elem_val)) continue;
         const auto& elem_obj = std::get<Json::Object>(elem_val);
 
-        std::string id_str   = ParserUtils::get_json_string(elem_obj, "id");
-        std::string category = ParserUtils::get_json_string(elem_obj, "category");
+        std::string id_str, category, name;
+        int32_t max_durability = 0;
+
+        {
+            auto it = elem_obj.find("id");
+            if (it != elem_obj.end()) id_str = it->second.as<std::string>();
+        }
+        {
+            auto it = elem_obj.find("category");
+            if (it != elem_obj.end()) category = it->second.as<std::string>();
+        }
 
         if (id_str.empty() || category.empty()) {
             LOG_WARN("Warning: Skipping equipment entry with missing id or category.");
             continue;
         }
 
-        std::string name = ParserUtils::get_json_string(elem_obj, "name");
+        {
+            auto it = elem_obj.find("name");
+            if (it != elem_obj.end()) name = it->second.as<std::string>();
+        }
         if (name.empty()) name = id_str;
 
-        int32_t max_durability = ParserUtils::get_json_int(elem_obj, "max_durability");
+        {
+            auto it = elem_obj.find("max_durability");
+            if (it != elem_obj.end()) max_durability = it->second.as<int32_t>();
+        }
         if (max_durability <= 0) max_durability = 0;
 
         EquipmentData eq;
@@ -219,9 +266,20 @@ NativeJsonParser::Result NativeJsonParser::parse(const Json& json) {
                 if (!std::holds_alternative<Json::Object>(elem_val)) continue;
                 const auto& elem_obj = std::get<Json::Object>(elem_val);
 
-                std::string id     = ParserUtils::get_json_string(elem_obj, "id");
-                int32_t max_level  = ParserUtils::get_json_int(elem_obj, "max_level");
-                int32_t multiplier = ParserUtils::get_json_int(elem_obj, "multiplier");
+                std::string id;
+                int32_t max_level = 0, multiplier = 0;
+                {
+                    auto it = elem_obj.find("id");
+                    if (it != elem_obj.end()) id = it->second.as<std::string>();
+                }
+                {
+                    auto it = elem_obj.find("max_level");
+                    if (it != elem_obj.end()) max_level = it->second.as<int32_t>();
+                }
+                {
+                    auto it = elem_obj.find("multiplier");
+                    if (it != elem_obj.end()) multiplier = it->second.as<int32_t>();
+                }
 
                 if (id.empty() || max_level <= 0 || multiplier <= 0) {
                     LOG_WARN("Warning: Skipping enchantment with missing/invalid fields "
