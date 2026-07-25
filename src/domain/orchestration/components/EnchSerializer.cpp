@@ -217,36 +217,34 @@ EnchSerializer::to_csv(const std::vector<Equipment> &equipments, const Equipment
 }
 
 // ============================================================================
-// Full-registry export
+// Profile-aware export
 // ============================================================================
 
 bool EnchSerializer::export_json(
-    const std::string &path, const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg,
-    const EquipmentTagRegistry &cat_reg
-) {
-    // Collect valid entries (map stores items keyed by NSID, so all entries are valid)
+    const std::string& path,
+    const Profile& profile)
+{
     std::vector<EnchInfo> valid_ench;
-    valid_ench.reserve(ench_reg.size());
-    for (const auto &[nsid, info] : ench_reg.data())
+    valid_ench.reserve(profile.ench().size());
+    for (const auto& [nsid, info] : profile.ench().data())
         valid_ench.push_back(info);
 
     std::vector<Equipment> valid_eq;
-    valid_eq.reserve(eq_reg.size());
-    for (const auto &[id, eq] : eq_reg.data())
+    valid_eq.reserve(profile.eq().size());
+    for (const auto& [id, eq] : profile.eq().data())
         valid_eq.push_back(eq);
 
-    std::string ench_json = to_json(valid_ench, cat_reg);
-    std::string eq_json   = to_json(valid_eq, cat_reg);
+    std::string ench_json = to_json(valid_ench, profile);
+    std::string eq_json   = to_json(valid_eq, profile);
 
     Json::Object obj;
     obj["name"] = Json(Json::String("BestEnchSeq Registry Export"));
 
-    // Extract inner arrays from the serialized JSON objects
     auto ench_root = Json::parse(ench_json);
     if (ench_root.is_valid()) {
         Json::Value root_val = ench_root.get_value();
-        auto &root           = std::get<Json::Object>(root_val);
-        auto it              = root.find("enchantments");
+        auto& root = std::get<Json::Object>(root_val);
+        auto it = root.find("enchantments");
         if (it != root.end())
             obj["enchantments"] = it->second;
     }
@@ -254,53 +252,87 @@ bool EnchSerializer::export_json(
     auto eq_root = Json::parse(eq_json);
     if (eq_root.is_valid()) {
         Json::Value root_val = eq_root.get_value();
-        auto &root           = std::get<Json::Object>(root_val);
-        auto it              = root.find("equipments");
+        auto& root = std::get<Json::Object>(root_val);
+        auto it = root.find("equipments");
         if (it != root.end())
             obj["equipments"] = it->second;
     }
 
     std::ofstream f(path);
-    if (!f)
-        return false;
+    if (!f) return false;
     f << Json(obj).to_string(Json::Pretty);
     return true;
 }
 
 bool EnchSerializer::export_csv(
-    const std::string &path, const EnchantmentRegistry &ench_reg, const EquipmentRegistry &eq_reg,
-    const EquipmentTagRegistry &cat_reg
-) {
-    // Collect valid entries
+    const std::string& path,
+    const Profile& profile)
+{
     std::vector<EnchInfo> valid_ench;
-    valid_ench.reserve(ench_reg.size());
-    for (const auto &[nsid, info] : ench_reg.data())
+    valid_ench.reserve(profile.ench().size());
+    for (const auto& [nsid, info] : profile.ench().data())
         valid_ench.push_back(info);
 
     std::vector<Equipment> valid_eq;
-    valid_eq.reserve(eq_reg.size());
-    for (const auto &[id, eq] : eq_reg.data())
+    valid_eq.reserve(profile.eq().size());
+    for (const auto& [id, eq] : profile.eq().data())
         valid_eq.push_back(eq);
 
-    // Write enchantments CSV to the given path
-    {
-        std::string ench_csv = to_csv(valid_ench, cat_reg);
-        std::ofstream f(path);
-        if (!f)
-            return false;
-        f << ench_csv;
-    }
+    std::string ench_csv = to_csv(valid_ench, profile);
+    std::ofstream f(path);
+    if (!f) return false;
+    f << ench_csv;
 
-    // Write equipment CSV to a sibling file
     std::filesystem::path p(path);
     auto eq_path = p.parent_path() / ("equipments_" + p.filename().string());
-    {
-        std::string eq_csv = to_csv(valid_eq, cat_reg);
-        std::ofstream f_eq(eq_path);
-        if (!f_eq)
-            return false;
-        f_eq << eq_csv;
-    }
+    std::string eq_csv = to_csv(valid_eq, profile);
+    std::ofstream f_eq(eq_path);
+    if (!f_eq) return false;
+    f_eq << eq_csv;
 
     return true;
+}
+
+// ── Profile-aware delegates ─────────────────────────────────────────────
+
+std::string EnchSerializer::to_json(
+    const std::vector<EnchInfo>& infos,
+    const Profile& profile,
+    const EnchantmentDataPack* metadata)
+{
+    return to_json(infos, profile.tags(), metadata);
+}
+
+std::string EnchSerializer::to_csv(
+    const std::vector<EnchInfo>& infos,
+    const Profile& profile)
+{
+    return to_csv(infos, profile.tags());
+}
+
+std::string EnchSerializer::to_json(
+    const std::vector<Equipment>& equipments,
+    const Profile& profile)
+{
+    return to_json(equipments, profile.tags());
+}
+
+std::string EnchSerializer::to_csv(
+    const std::vector<Equipment>& equipments,
+    const Profile& profile)
+{
+    return to_csv(equipments, profile.tags());
+}
+
+// ── Profile-aware MC official export ────────────────────────────────────
+
+void EnchSerializer::export_to_mc_official(
+    const std::filesystem::path& output_dir,
+    const Profile& profile)
+{
+    std::vector<EnchInfo> infos;
+    infos.reserve(profile.ench().size());
+    for (const auto& [nsid, info] : profile.ench().data())
+        infos.push_back(info);
+    export_to_mc_official(infos, profile.tags(), output_dir);
 }

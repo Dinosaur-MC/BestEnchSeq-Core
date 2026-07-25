@@ -6,6 +6,9 @@ set(BESQ_ORCHESTRATION_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/components/CompactAdapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/EnchSerializer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/components/OutputFormatter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/pipelines/ExportPipeline.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/pipelines/ManagePipeline.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/pipelines/SolvePipeline.cpp
 )
 
 add_library(besq-orchestration STATIC ${BESQ_ORCHESTRATION_SRCS})

@@ -6,9 +6,6 @@
 // CLI, public API, parsers, and intermediate data types for external
 // consumers (end users, tests, higher-level tools).
 
-// ── Public API ──
-#include "domain/interface/SolvePipeline.h"   // IWYU pragma: export
-
 // ── CLI Layer ──
 #include "domain/interface/cli/cli.h"             // IWYU pragma: export
 #include "domain/interface/cli/RegistryEditor.h"  // IWYU pragma: export

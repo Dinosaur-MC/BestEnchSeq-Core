@@ -4,12 +4,6 @@
 namespace {
 
 // ---------------------------------------------------------------------------
-// Equipment cache for JSON deserialization.
-// Grows monotonically per process — acceptable for CLI (see clear_cache).
-// ---------------------------------------------------------------------------
-std::vector<Equipment> _json_eq_cache;
-
-// ---------------------------------------------------------------------------
 // Roman numeral conversion (1 .. 10)
 // ---------------------------------------------------------------------------
 std::string to_roman(int level) {
@@ -187,11 +181,12 @@ std::string OutputFormatter::describe_ench_roman(
 // ---------------------------------------------------------------------------
 // mode_display_name
 // ---------------------------------------------------------------------------
-std::string OutputFormatter::mode_display_name(const std::string &mode) {
-    if (mode == "direct")    return "简单锻造";
-    if (mode == "inventory") return "库存锻造";
-    // Fallback: return the mode string itself
-    return mode;
+std::string OutputFormatter::mode_display_name(AlgorithmMode mode) {
+    switch (mode) {
+    case AlgorithmMode::direct:    return "简单锻造";
+    case AlgorithmMode::inventory: return "库存锻造";
+    default:                       return "未知";
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -211,11 +206,10 @@ std::string OutputFormatter::platform_to_display(MCE p) {
 // ===========================================================================
 std::string OutputFormatter::format_verbose(
     const std::vector<Solution> &solutions,
-    const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg,
-    const std::string &mode_name
+    const Profile &profile,
+    AlgorithmMode mode
 ) {
-    (void)cat_reg;
+    const auto &ench_reg = profile.ench();
     if (solutions.empty()) return {};
 
     std::string out;
@@ -239,7 +233,7 @@ std::string OutputFormatter::format_verbose(
         out += "===========================================\n";
 
         // Mode and platform
-        out += "模式: " + mode_display_name(mode_name) + "\n";
+        out += "模式: " + mode_display_name(mode) + "\n";
         out += "平台: " + platform_to_display(sol.platform) + "\n";
 
         // Rank
@@ -288,13 +282,12 @@ std::string OutputFormatter::format_verbose(
 // ===========================================================================
 std::string OutputFormatter::format_compact(
     const std::vector<Solution> &solutions,
-    const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg,
-    const std::string &mode_name
+    const Profile &profile,
+    AlgorithmMode mode
 ) {
-    (void)cat_reg;
+    const auto &ench_reg = profile.ench();
     std::string out;
-    out += "#MODE=" + mode_name + "\n";
+    out += "#MODE=" + mode_display_name(mode) + "\n";
     if (solutions.empty()) return out;
 
     out += "#PLATFORM=" + platform_to_display(solutions[0].platform) + "\n";
@@ -325,13 +318,14 @@ std::string OutputFormatter::format_compact(
 // ===========================================================================
 std::string OutputFormatter::format_json(
     const std::vector<Solution> &solutions,
-    const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg,
-    const std::string &mode_name
+    const Profile &profile,
+    AlgorithmMode mode
 ) {
+    const auto &ench_reg = profile.ench();
+    const auto &cat_reg = profile.tags();
     Json::Object root;
     root["schema_version"] = Json(Json::String("1.0"));
-    root["mode"]           = Json(Json::String(mode_name));
+    root["mode"]           = Json(Json::String(mode_display_name(mode)));
 
     Json::Array sol_arr;
     for (size_t si = 0; si < solutions.size(); ++si) {
@@ -398,26 +392,16 @@ std::string OutputFormatter::format_json(
 }
 
 // ===========================================================================
-// Cache management
-// ===========================================================================
-void OutputFormatter::clear_cache() {
-    _json_eq_cache.clear();
-    _json_eq_cache.shrink_to_fit();
-}
-
-// ===========================================================================
 // Parse JSON
 // ===========================================================================
 std::vector<Solution> OutputFormatter::parse_json(
     const std::string &input,
-    const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg
+    const Profile &profile
 ) {
-    // NOTE: _json_eq_cache is intentionally NOT cleared here.
-    // Item_from_json and step_from_json store Equipment objects in this
-    // cache and return const Equipment* pointers into it. Clearing would
-    // invalidate those pointers. The cache grows monotonically per process,
-    // which is acceptable for a CLI tool.
+    const auto &ench_reg = profile.ench();
+    const auto &cat_reg = profile.tags();
+
+    std::vector<Equipment> equipment_cache;
 
     Json root  = Json::parse(input);
     Json::Value root_val = root.get_value();
@@ -452,7 +436,7 @@ std::vector<Solution> OutputFormatter::parse_json(
         );
 
         // Target item
-        Item target_item = item_from_json(obj.at("target_item"), _json_eq_cache, ench_reg, cat_reg);
+        Item target_item = item_from_json(obj.at("target_item"), equipment_cache, ench_reg, cat_reg);
 
         // Available items
         ItemCollection avail_items;
@@ -461,7 +445,7 @@ std::vector<Solution> OutputFormatter::parse_json(
             Json::Value avail_arr_val = avail_it->second.get_value();
             const Json::Array &avail_arr = std::get<Json::Array>(avail_arr_val);
             for (const auto &avail_j : avail_arr) {
-                avail_items.push_back(item_from_json(avail_j, _json_eq_cache, ench_reg, cat_reg));
+                avail_items.push_back(item_from_json(avail_j, equipment_cache, ench_reg, cat_reg));
             }
         }
 
@@ -472,7 +456,7 @@ std::vector<Solution> OutputFormatter::parse_json(
             Json::Value steps_arr_val = steps_it->second.get_value();
             const Json::Array &steps_arr = std::get<Json::Array>(steps_arr_val);
             for (const auto &step_j : steps_arr) {
-                steps.push_back(step_from_json(step_j, _json_eq_cache, ench_reg, cat_reg));
+                steps.push_back(step_from_json(step_j, equipment_cache, ench_reg, cat_reg));
             }
         }
 

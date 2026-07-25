@@ -370,8 +370,13 @@ void test_export_content() {
         const std::string test_json = "besq_test_export.json";
         const std::string test_csv  = "besq_test_export.csv";
 
+        // Build a Profile from the test registries (copies passed by value)
+        ProfileMetadata meta;
+        meta.name = NSID("besq:test_export");
+        Profile export_profile(std::move(meta), test_ench_reg, eq_reg, test_cat_reg);
+
         // JSON file export
-        bool ok = EnchSerializer::export_json(test_json, test_ench_reg, eq_reg, test_cat_reg);
+        bool ok = EnchSerializer::export_json(test_json, export_profile);
         expect(ok, "JSON file export should succeed");
         if (ok && std::filesystem::exists(test_json)) {
             expect(std::filesystem::file_size(test_json) > 0, "JSON export file should not be empty");
@@ -379,7 +384,7 @@ void test_export_content() {
         }
 
         // CSV file export
-        ok = EnchSerializer::export_csv(test_csv, test_ench_reg, eq_reg, test_cat_reg);
+        ok = EnchSerializer::export_csv(test_csv, export_profile);
         expect(ok, "CSV file export should succeed");
         if (ok && std::filesystem::exists(test_csv)) {
             expect(std::filesystem::file_size(test_csv) > 0, "CSV export file should not be empty");

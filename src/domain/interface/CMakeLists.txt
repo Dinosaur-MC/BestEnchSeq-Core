@@ -10,8 +10,6 @@ set(BESQ_INTERFACE_SRCS
     # ── CLI ──
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/cli.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/RegistryEditor.cpp
-    # ── Solve pipeline ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/SolvePipeline.cpp
     # ── API layer ──
     ${CMAKE_CURRENT_SOURCE_DIR}/BesqContext.cpp
     # ── ABI (C bindings) ──

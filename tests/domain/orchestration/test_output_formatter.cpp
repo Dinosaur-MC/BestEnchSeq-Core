@@ -1,13 +1,12 @@
 #include "framework/test_utils.h"
 #include "framework/test_fixture.h"
-#include "domain/orchestration/components/OutputFormatter.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
-#include "domain/business/types/Enchantment.h"
-#include "domain/business/types/Item.h"
-#include "domain/business/types/Solution.h"
+#include "domain/orchestration/orchestration.h"
+#include "domain/business/types/Profile.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "domain/business/types/EnchSet.h"
+#include "domain/business/types/Item.h"
+#include "domain/business/types/Solution.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -16,12 +15,20 @@ static TestFixture g_fx;
 
 namespace {
 
+// Helper: build a Profile from the TestFixture's registries
+Profile profile_from_fx(const TestFixture& fx) {
+    Profile profile(NSID("test:formatter"));
+    for (const auto& tag : fx.categories) profile.add_tag(tag);
+    for (const auto& eq : fx.equipment) profile.add_equipment(eq);
+    for (const auto& ench : fx.enchants) profile.add_enchantment(ench);
+    return profile;
+}
+
 // ─── Test 1: format a simple book solution ─────────────────────────
 
 void test_format_book_solution() {
     g_fx.init_sword_set();
-    EquipmentTagRegistry tag_reg;
-    tag_reg.clear();
+    auto profile = profile_from_fx(g_fx);
 
     Solution solution;
     solution.is_success = true;
@@ -44,7 +51,7 @@ void test_format_book_solution() {
     );
 
     auto formatted = OutputFormatter::format_compact(
-        {solution}, g_fx.enchants, tag_reg, "test");
+        {solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format: should produce non-empty output");
 
     std::cout << "PASS: test_format_book_solution" << std::endl;
@@ -54,8 +61,7 @@ void test_format_book_solution() {
 
 void test_format_combined_solution() {
     g_fx.init_chestplate_set();
-    EquipmentTagRegistry tag_reg;
-    tag_reg.clear();
+    auto profile = profile_from_fx(g_fx);
     EnchantmentRegistry& enchants = g_fx.enchants;
 
     // Create a protection 3 book
@@ -82,7 +88,7 @@ void test_format_combined_solution() {
     solution.total_exp_cost = 3;
 
     auto formatted = OutputFormatter::format_compact(
-        {solution}, g_fx.enchants, tag_reg, "test");
+        {solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format_combined: should produce non-empty output");
 
     std::cout << "PASS: test_format_combined_solution" << std::endl;
@@ -92,8 +98,7 @@ void test_format_combined_solution() {
 
 void test_format_no_steps() {
     g_fx.init_sword_set();
-    EquipmentTagRegistry tag_reg;
-    tag_reg.clear();
+    auto profile = profile_from_fx(g_fx);
 
     Solution solution;
     solution.is_success = true;
@@ -105,7 +110,7 @@ void test_format_no_steps() {
     );
 
     auto formatted = OutputFormatter::format_compact(
-        {solution}, g_fx.enchants, tag_reg, "test");
+        {solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format_no_steps: should still produce output");
 
     std::cout << "PASS: test_format_no_steps" << std::endl;
@@ -115,8 +120,7 @@ void test_format_no_steps() {
 
 void test_format_unsuccessful() {
     g_fx.init_sword_set();
-    EquipmentTagRegistry tag_reg;
-    tag_reg.clear();
+    auto profile = profile_from_fx(g_fx);
 
     Solution solution;
     solution.is_success = false;
@@ -128,7 +132,7 @@ void test_format_unsuccessful() {
     );
 
     auto formatted = OutputFormatter::format_compact(
-        {solution}, g_fx.enchants, tag_reg, "test");
+        {solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format_unsuccessful: should still produce output");
 
     std::cout << "PASS: test_format_unsuccessful" << std::endl;
@@ -138,8 +142,7 @@ void test_format_unsuccessful() {
 
 void test_format_multi_step() {
     g_fx.init_chestplate_set();
-    EquipmentTagRegistry tag_reg;
-    tag_reg.clear();
+    auto profile = profile_from_fx(g_fx);
     EnchantmentRegistry& enchants = g_fx.enchants;
 
     EnchSet prot3;
@@ -179,7 +182,7 @@ void test_format_multi_step() {
     solution.total_exp_cost = 6;
 
     auto formatted = OutputFormatter::format_compact(
-        {solution}, g_fx.enchants, tag_reg, "test");
+        {solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format_multi: should produce output");
 
     // Multi-step output should be non-empty (size comparison removed as

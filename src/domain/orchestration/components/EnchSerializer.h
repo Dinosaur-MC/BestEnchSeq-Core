@@ -1,7 +1,5 @@
 #pragma once
 
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/Equipment.h"
 #include <filesystem>
@@ -11,6 +9,7 @@
 class EquipmentTagRegistry;
 
 #include "domain/business/types/EnchantmentDataPack.h"
+#include "domain/business/types/Profile.h"
 
 /// Serialization of domain EnchInfo / Equipment to JSON, CSV, or MC official
 /// data-driven format.  Requires an EquipmentTagRegistry for ID-to-name
@@ -50,17 +49,42 @@ struct EnchSerializer {
         const EquipmentTagRegistry &cat_reg
     );
 
-    // ── Full-registry export ────────────────────────────────────────────
+    // ── Profile-aware export ──────────────────────────────────────────
 
-    /// Export current registry state to a JSON file.
-    static bool export_json(const std::string& path,
-                            const EnchantmentRegistry& ench_reg,
-                            const EquipmentRegistry& eq_reg,
-                            const EquipmentTagRegistry& cat_reg);
+    static bool export_json(
+        const std::string& path,
+        const Profile& profile
+    );
 
-    /// Export current registry state to CSV files (enchantments.csv + equipments.csv in same dir).
-    static bool export_csv(const std::string& path,
-                           const EnchantmentRegistry& ench_reg,
-                           const EquipmentRegistry& eq_reg,
-                           const EquipmentTagRegistry& cat_reg);
+    static bool export_csv(
+        const std::string& path,
+        const Profile& profile
+    );
+
+    // ── Profile-aware export ──────────────────────────────────────────
+
+    static void export_to_mc_official(
+        const std::filesystem::path& output_dir,
+        const Profile& profile
+    );
+
+    // ── Profile-aware serialization overloads ─────────────────────────
+
+    static std::string to_json(
+        const std::vector<EnchInfo>& infos,
+        const Profile& profile,
+        const EnchantmentDataPack* metadata = nullptr
+    );
+    static std::string to_csv(
+        const std::vector<EnchInfo>& infos,
+        const Profile& profile
+    );
+    static std::string to_json(
+        const std::vector<Equipment>& equipments,
+        const Profile& profile
+    );
+    static std::string to_csv(
+        const std::vector<Equipment>& equipments,
+        const Profile& profile
+    );
 };

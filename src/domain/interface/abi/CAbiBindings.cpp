@@ -6,7 +6,6 @@
 
 #include "besq/besq_abi.h"
 #include "besq/besq.h"
-#include "domain/interface/SolvePipeline.h"
 #include "common/io/json.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
@@ -361,7 +360,7 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
     try {
         auto json = Json::parse(json_input);
         auto root = std::get<Json::Object>(json.get_value());
-        SolveInput input;
+        SolveRequest request;
 
         // ── Target ────────────────────────────────────────────────────────
         auto target_it = root.find("target");
@@ -374,7 +373,7 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
                 const auto& eq_reg = c->impl.equipment();
                 auto eq_it = eq_reg.find(NSID(eq_id));
                 if (eq_it != eq_reg.end()) {
-                    input.target_item =
+                    request.target_item =
                         Item(eq_it->id, EnchSet{}, 0, eq_it->max_durability);
                 }
             }
@@ -384,46 +383,69 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
             if (ench_it != target_obj.end()) {
                 auto ench_arr =
                     std::get<Json::Array>(ench_it->second.get_value());
-                input.target_item.enchantments =
+                request.target_item.enchantments =
                     parse_ench_set(ench_arr, c->impl.enchantments());
             }
         }
 
-        // ── Source enchantments ───────────────────────────────────────────
+        // ── Source enchantments (DirectPayload) ───────────────────────────
+        EnchSet source_enchants;
         auto src_it = root.find("source");
         if (src_it != root.end()) {
             auto src_arr = std::get<Json::Array>(src_it->second.get_value());
-            input.source_enchantments =
+            source_enchants =
                 parse_ench_set(src_arr, c->impl.enchantments());
         }
 
+        // ── Mode & payload ────────────────────────────────────────────────
+        std::string mode_str = ParserUtils::get_json_string(root, "mode");
+        if (mode_str == "inventory") {
+            request.mode = AlgorithmMode::inventory;
+            request.payload = InventoryPayload{};
+        } else {
+            request.mode = AlgorithmMode::direct;
+            request.payload = DirectPayload{source_enchants};
+        }
+
         // ── Algorithm ─────────────────────────────────────────────────────
-        input.algorithm = ParserUtils::get_json_string(root, "algorithm");
-        if (input.algorithm.empty())
-            input.algorithm = "greedy";
+        request.algorithm = ParserUtils::get_json_string(root, "algorithm");
+        if (request.algorithm.empty())
+            request.algorithm = "greedy";
 
         // ── Platform ──────────────────────────────────────────────────────
         std::string plat = ParserUtils::get_json_string(root, "platform");
-        if (plat == "java")
-            input.forge_config.platform = MCE::Java;
-        else if (plat == "bedrock")
-            input.forge_config.platform = MCE::Bedrock;
+        if (plat == "bedrock")
+            request.forge_config.platform = MCE::Bedrock;
         else
-            input.forge_config.platform = MCE::Java;
-
-        // ── Mode ──────────────────────────────────────────────────────────
-        std::string mode = ParserUtils::get_json_string(root, "mode");
-        input.is_inventory_mode = (mode == "inventory");
+            request.forge_config.platform = MCE::Java;
 
         // ── Max solutions ─────────────────────────────────────────────────
         int32_t max_sol = ParserUtils::get_json_int(root, "max_solutions");
         if (max_sol > 0)
-            input.search_config.max_solutions = max_sol;
+            request.search_config.max_solutions = max_sol;
 
         // ── Solve ─────────────────────────────────────────────────────────
-        auto result = c->impl.solve(input);
-        auto json_out = result.to_json(c->impl.enchantments(),
-                                       c->impl.categories());
+        auto result = c->impl.solve(request);
+
+        // ── Format result as raw JSON ─────────────────────────────────────
+        Json::Object root_obj;
+        root_obj["success"] = Json(Json::Bool(result.success));
+        root_obj["algorithm"] = Json(Json::String(result.algorithm_used));
+        root_obj["computation_time_ms"] =
+            Json(Json::Number(static_cast<int64_t>(result.computation_time_ms)));
+
+        Json::Array sol_arr;
+        for (const auto& sol : result.solutions) {
+            Json::Object s;
+            s["total_exp_level_cost"] = Json(Json::Number(sol.total_exp_level_cost));
+            s["total_exp_cost"] = Json(Json::Number(sol.total_exp_cost));
+            s["is_success"] = Json(Json::Bool(sol.is_success));
+            s["step_count"] = Json(Json::Number(static_cast<int32_t>(sol.steps.size())));
+            sol_arr.push_back(Json(s));
+        }
+        root_obj["solutions"] = Json(sol_arr);
+
+        auto json_out = Json(root_obj).to_string(Json::Pretty);
         return strdup(json_out.c_str());
     }
     catch (const std::exception& e) {

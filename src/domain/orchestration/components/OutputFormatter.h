@@ -2,7 +2,9 @@
 #include "domain/business/types/Solution.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Equipment.h"
+#include "domain/business/types/Profile.h"
 
+#include "common/CommonTypes.h"
 #include "common/io/json.h"
 
 #include <string>
@@ -15,33 +17,25 @@ class OutputFormatter {
   public:
     static std::string format_verbose(
         const std::vector<Solution> &solutions,
-        const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg,
-        const std::string &mode_name
+        const Profile &profile,
+        AlgorithmMode mode
     );
 
     static std::string format_compact(
         const std::vector<Solution> &solutions,
-        const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg,
-        const std::string &mode_name
+        const Profile &profile,
+        AlgorithmMode mode
     );
-
-    /// Clear the internal JSON deserialization equipment cache.
-    /// Call between bulk parse_json calls to cap memory growth.
-    static void clear_cache();
 
     static std::string format_json(
         const std::vector<Solution> &solutions,
-        const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg,
-        const std::string &mode_name
+        const Profile &profile,
+        AlgorithmMode mode
     );
 
     static std::vector<Solution> parse_json(
         const std::string &json_str,
-        const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg
+        const Profile &profile
     );
 
   private:
@@ -57,7 +51,7 @@ class OutputFormatter {
         const Ench &ench,
         const EnchantmentRegistry &ench_reg
     );
-    static std::string mode_display_name(const std::string &mode);
+    static std::string mode_display_name(AlgorithmMode mode);
     static std::string platform_to_display(MCE p);
 
     // JSON helpers

@@ -179,11 +179,9 @@ bool BesqContext::export_registry(const std::string& path) const {
     auto ext = std::filesystem::path(path).extension().string();
 
     if (ext == ".csv" || ext == ".CSV") {
-        return EnchSerializer::export_csv(path, profile.ench(),
-                                           profile.eq(), profile.tags());
+        return EnchSerializer::export_csv(path, profile);
     }
-    return EnchSerializer::export_json(path, profile.ench(),
-                                        profile.eq(), profile.tags());
+    return EnchSerializer::export_json(path, profile);
 }
 
 // ====================================================================
@@ -198,10 +196,7 @@ std::vector<std::string> BesqContext::list_algorithms() const {
     return _impl->algo_loader.list();
 }
 
-SolveResult BesqContext::solve(const SolveInput& input) {
+SolveResult BesqContext::solve(const SolveRequest& request) {
     auto& profile = _impl->profiles.active();
-    return detail::SolvePipeline::run(input, _impl->algo_loader,
-                                       profile.ench(),
-                                       profile.eq(),
-                                       profile.tags());
+    return SolvePipeline::run(profile, request, _impl->algo_loader);
 }

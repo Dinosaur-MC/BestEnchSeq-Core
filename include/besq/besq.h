@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "domain/interface/SolvePipeline.h"
+#include "domain/orchestration/orchestration.h"
 
 // ─── BesqContext (pImpl) ────────────────────────────────────────────
 
@@ -65,7 +65,7 @@ public:
 
     // ── Solve ──
     /// Run the solve pipeline with the given input.
-    SolveResult solve(const SolveInput& input);
+    SolveResult solve(const SolveRequest& request);
 
     /// List all registered algorithm strategy names (built-in + plugins).
     std::vector<std::string> list_algorithms() const;
