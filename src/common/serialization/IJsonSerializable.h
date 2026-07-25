@@ -19,6 +19,8 @@ concept JsonSerializable = std::is_base_of_v<IJsonSerializable, T>;
 
 // ── Template serialization helpers ──────────────────────────────────────
 
+namespace json {
+
 template<JsonSerializable T>
 Json serialize(const T& obj) { return obj.to_json(); }
 
@@ -47,3 +49,5 @@ Json serialize_vector(const std::vector<T>& vec) {
     for (const auto& item : vec) arr.push_back(item.to_json());
     return Json(arr);
 }
+
+} // namespace json

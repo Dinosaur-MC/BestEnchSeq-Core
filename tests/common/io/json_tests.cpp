@@ -735,7 +735,7 @@ void test_iserializable_serialize() {
     TestSerializable obj;
     obj.name = "sharpness";
     obj.value = 5;
-    Json j = serialize(obj);
+    Json j = json::serialize(obj);
 
     expect(j["name"].as<std::string>() == "sharpness", "serialize() name");
     expect(j["value"].as<int64_t>() == 5, "serialize() value");
@@ -749,13 +749,13 @@ void test_iserializable_deserialize() {
         .set("value", 3);
 
     TestSerializable obj;
-    deserialize(obj, j);
+    json::deserialize(obj, j);
 
     expect(obj.name == "unbreaking", "deserialize(obj, j) name");
     expect(obj.value == 3, "deserialize(obj, j) value");
 
     // factory-style deserialize
-    auto obj2 = deserialize<TestSerializable>(j);
+    auto obj2 = json::deserialize<TestSerializable>(j);
     expect(obj2.name == "unbreaking", "deserialize<T>(j) name");
     expect(obj2.value == 3, "deserialize<T>(j) value");
 
@@ -766,8 +766,8 @@ void test_iserializable_roundtrip() {
     TestSerializable original;
     original.name = "fortune";
     original.value = 3;
-    Json j = serialize(original);
-    auto restored = deserialize<TestSerializable>(j);
+    Json j = json::serialize(original);
+    auto restored = json::deserialize<TestSerializable>(j);
 
     expect(restored == original, "ISerializable round-trip preserves data");
 
@@ -780,7 +780,7 @@ void test_iserializable_vector() {
     b.name = "b"; b.value = 2;
     c.name = "c"; c.value = 3;
     std::vector<TestSerializable> vec = {a, b, c};
-    Json arr = serialize_vector(vec);
+    Json arr = json::serialize_vector(vec);
 
     expect(arr.type() == JsonType::Array, "serialize_vector produces Array");
     expect(arr[0]["name"].as<std::string>() == "a", "serialize_vector[0].name");
