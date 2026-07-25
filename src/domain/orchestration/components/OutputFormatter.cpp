@@ -13,6 +13,7 @@ std::string to_roman(int level) {
         {2, "II"},   {1, "I"},
     };
     std::string result;
+    if (level > 10) return "enchantment.level." + std::to_string(level);
     for (const auto &pair : romans) {
         while (level >= pair.first) {
             result += pair.second;
