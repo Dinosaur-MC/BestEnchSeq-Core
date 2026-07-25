@@ -3,6 +3,7 @@
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "common/utils/StringUtils.hpp"
 #include <cctype>
+#include <limits>
 #include <stdexcept>
 
 // ============================================================================
@@ -18,10 +19,16 @@ static int32_t parse_nonneg_int(const std::string& str, const std::string& conte
             throw std::runtime_error("Invalid integer value '" + str + "' for " + context);
     }
     // safe: all digits at this point
-    return static_cast<int32_t>(std::stoll(str));
+    unsigned long long val = std::stoull(str);
+    if (val > static_cast<unsigned long long>(std::numeric_limits<int32_t>::max()))
+        throw std::runtime_error("Value '" + str + "' for " + context + " exceeds int32 range");
+    return static_cast<int32_t>(val);
 }
 
 /// Parse {key:value,...} properties block. Returns trailing position after '}'.
+/// prior_penalty and durability are filled in if present in the block;
+/// values already set are treated as defaults and are NOT overwritten
+/// when the corresponding key is absent.
 static size_t parse_properties(const std::string& input, size_t start,
                                int32_t& prior_penalty, int32_t& durability)
 {
@@ -57,6 +64,16 @@ static size_t parse_properties(const std::string& input, size_t start,
     return close_pos + 1;  // position after '}'
 }
 
+/// Validate durability is within equipment bounds.
+static void validate_durability(int32_t durability, int32_t max_durability,
+                                const std::string& item_id)
+{
+    if (durability > max_durability)
+        throw std::runtime_error("durability " + std::to_string(durability) +
+            " exceeds max_durability " + std::to_string(max_durability) +
+            " for '" + item_id + "'");
+}
+
 // ============================================================================
 // ItemParser::parse
 // ============================================================================
@@ -69,7 +86,6 @@ Item ItemParser::parse(const std::string &input,
     EnchSet ench_set;
     int32_t prior_penalty = 0;
     int32_t durability = 0;
-
     size_t pos = 0;
 
     // ── Parse enchantment block [ ... ] ──
@@ -92,7 +108,18 @@ Item ItemParser::parse(const std::string &input,
         pos = brace_pos == std::string::npos ? input.size() : brace_pos;
     }
 
-    // ── Parse properties block { ... } ──
+    if (item_id.empty())
+        throw std::runtime_error("Empty item id in target spec");
+
+    // ── Look up equipment (needed for max_durability defaults) ──
+    auto eq_it = eq_reg.find(NSID(item_id));
+    if (eq_it == eq_reg.end())
+        throw std::runtime_error("Unknown equipment: '" + item_id + "'");
+
+    // ── Set defaults from equipment data ──
+    durability = eq_it->max_durability;
+
+    // ── Parse properties block { ... } (overrides defaults) ──
     size_t after_props = parse_properties(input, pos, prior_penalty, durability);
 
     // ── Reject trailing content ──
@@ -101,13 +128,8 @@ Item ItemParser::parse(const std::string &input,
         throw std::runtime_error(
             "Malformed target spec: unexpected content after '}' in '" + input + "'");
 
-    if (item_id.empty())
-        throw std::runtime_error("Empty item id in target spec");
-
-    // Look up equipment in registry
-    auto eq_it = eq_reg.find(NSID(item_id));
-    if (eq_it == eq_reg.end())
-        throw std::runtime_error("Unknown equipment: '" + item_id + "'");
+    // ── Post-parse validation ──
+    validate_durability(durability, eq_it->max_durability, item_id);
 
     return Item(eq_it->id, ench_set, prior_penalty, durability);
 }

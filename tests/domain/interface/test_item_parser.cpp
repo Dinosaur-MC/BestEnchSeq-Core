@@ -10,6 +10,8 @@ static EquipmentRegistry make_eq_reg() {
     EquipmentRegistry reg;
     reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
                          NSID("#minecraft:sword"), 1561});
+    reg.insert(Equipment{NSID("minecraft:netherite_helmet"), "Netherite Helmet",
+                         NSID("#minecraft:helmet"), 407});
     return reg;
 }
 
@@ -21,6 +23,9 @@ static EnchantmentRegistry make_ench_reg() {
     reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback",
                         MCE::All, 2, 2, 2, false, {},
                         {NSID("#minecraft:sword")}});
+    reg.insert(EnchInfo{NSID("minecraft:protection"), "Protection",
+                        MCE::All, 4, 4, 1, false, {},
+                        {NSID("#minecraft:helmet")}});
     return reg;
 }
 
@@ -36,7 +41,7 @@ void test_item_parser_bare() {
            "id should be diamond_sword");
     expect(result.enchantments.empty(), "no enchantments");
     expect(result.prior_penalty == 0, "default prior_penalty should be 0");
-    expect(result.durability == 0, "default durability should be 0");
+    expect(result.durability == 1561, "default durability = max_durability 1561");
     TEST_PASS("test_item_parser_bare");
 }
 
@@ -48,7 +53,7 @@ void test_item_parser_with_enchants() {
     expect(!result.id.str().empty(), "id should be set");
     expect(result.enchantments.size() == 2, "should have 2 enchants");
     expect(result.prior_penalty == 0, "default prior_penalty");
-    expect(result.durability == 0, "default durability");
+    expect(result.durability == 1561, "default durability = max_durability");
     TEST_PASS("test_item_parser_with_enchants");
 }
 
@@ -92,7 +97,7 @@ void test_item_parser_unknown_equip_throws() {
 }
 
 // ============================================================================
-// Properties block { } tests
+// Properties block { } — prior_penalty
 // ============================================================================
 
 void test_item_parser_prior_penalty() {
@@ -101,20 +106,69 @@ void test_item_parser_prior_penalty() {
     auto result = ItemParser::parse("diamond_sword{prior_penalty:3}",
                                     ench_reg, eq_reg);
     expect(result.prior_penalty == 3, "prior_penalty should be 3");
-    expect(result.durability == 0, "durability default");
+    expect(result.durability == 1561, "durability defaults to max_durability");
     expect(result.enchantments.empty(), "no enchants");
     TEST_PASS("test_item_parser_prior_penalty");
 }
 
-void test_item_parser_durability() {
+// ============================================================================
+// Properties block { } — durability
+// ============================================================================
+
+void test_item_parser_durability_explicit() {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword{durability:500}",
                                     ench_reg, eq_reg);
-    expect(result.durability == 500, "durability should be 500");
+    expect(result.durability == 500, "explicit durability override");
     expect(result.prior_penalty == 0, "prior_penalty default");
-    TEST_PASS("test_item_parser_durability");
+    TEST_PASS("test_item_parser_durability_explicit");
 }
+
+void test_item_parser_durability_default_max() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    // netherite_helmet has max_durability=407
+    auto result = ItemParser::parse("netherite_helmet", ench_reg, eq_reg);
+    expect(result.durability == 407, "durability defaults to max_durability 407");
+    TEST_PASS("test_item_parser_durability_default_max");
+}
+
+void test_item_parser_durability_exceeds_max_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        // diamond_sword has max_durability=1561
+        ItemParser::parse("diamond_sword{durability:2000}", ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "durability > max_durability should throw");
+    TEST_PASS("test_item_parser_durability_exceeds_max_throws");
+}
+
+void test_item_parser_durability_at_max_ok() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("diamond_sword{durability:1561}",
+                                    ench_reg, eq_reg);
+    expect(result.durability == 1561, "durability at max is allowed");
+    TEST_PASS("test_item_parser_durability_at_max_ok");
+}
+
+void test_item_parser_durability_zero_allowed() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("diamond_sword{durability:0}",
+                                    ench_reg, eq_reg);
+    expect(result.durability == 0, "durability 0 is allowed");
+    TEST_PASS("test_item_parser_durability_zero_allowed");
+}
+
+// ============================================================================
+// Properties block { } — combined and edge cases
+// ============================================================================
 
 void test_item_parser_both_properties() {
     auto eq_reg = make_eq_reg();
@@ -179,7 +233,7 @@ void test_item_parser_trailing_after_brace_throws() {
     TEST_PASS("test_item_parser_trailing_after_brace_throws");
 }
 
-void test_item_parser_negative_property_throws() {
+void test_item_parser_negative_prior_penalty_throws() {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -189,7 +243,21 @@ void test_item_parser_negative_property_throws() {
         threw = true;
     }
     expect(threw, "negative prior_penalty should throw");
-    TEST_PASS("test_item_parser_negative_property_throws");
+    TEST_PASS("test_item_parser_negative_prior_penalty_throws");
+}
+
+void test_item_parser_durability_overflow_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        // value beyond int32 range
+        ItemParser::parse("diamond_sword{durability:9999999999}", ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "durability beyond int32 range should throw");
+    TEST_PASS("test_item_parser_durability_overflow_throws");
 }
 
 int main() {
@@ -199,14 +267,22 @@ int main() {
         test_item_parser_no_bracket_close();
         test_item_parser_trailing_content();
         test_item_parser_unknown_equip_throws();
+        // prior_penalty
         test_item_parser_prior_penalty();
-        test_item_parser_durability();
+        // durability defaults and validation
+        test_item_parser_durability_explicit();
+        test_item_parser_durability_default_max();
+        test_item_parser_durability_exceeds_max_throws();
+        test_item_parser_durability_at_max_ok();
+        test_item_parser_durability_zero_allowed();
+        // combined + edge
         test_item_parser_both_properties();
         test_item_parser_properties_only();
         test_item_parser_missing_brace_throws();
         test_item_parser_unknown_property_throws();
         test_item_parser_trailing_after_brace_throws();
-        test_item_parser_negative_property_throws();
+        test_item_parser_negative_prior_penalty_throws();
+        test_item_parser_durability_overflow_throws();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

@@ -18,7 +18,7 @@ struct ItemParser {
     ///
     /// Properties block { }:
     ///   "prior_penalty:3"          -> anvil prior-work penalty (default 0)
-    ///   "durability:500"           -> item durability (default 0)
+    ///   "durability:500"           -> item durability (default: equipment's max_durability)
     ///
     /// Examples:
     ///   "diamond_sword"
