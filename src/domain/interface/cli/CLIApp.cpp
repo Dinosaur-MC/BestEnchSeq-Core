@@ -28,6 +28,12 @@ std::string CLIApp::detect_target(int argc, char* argv[]) {
 int CLIApp::run(int argc, char* argv[]) {
     // 1. Parse CLI args
     auto config = CLI::parse(argc, argv);
+
+    // Re-select language if --lang was explicitly set (handles --lang=value syntax)
+    if (!config.lang.empty())
+        LanguageManager::instance().select(
+            LanguageManager::instance().resolve_locale(config.lang));
+
     if (config.help || config.version) return 0;
 
     // 2. Initialize context with built-in data
