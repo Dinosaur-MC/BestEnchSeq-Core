@@ -76,7 +76,7 @@ struct CLI::UserI18nTranslator {
 // ============================================================================
 
 std::string CLI::help_text(std::string_view program_name) {
-    return CLIParser(BESQ_OPTIONS).format_help(program_name, UserI18nTranslator{});
+    return CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name);
 }
 
 // ============================================================================

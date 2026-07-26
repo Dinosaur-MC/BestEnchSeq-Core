@@ -2,6 +2,7 @@
 #pragma once
 
 #include "CLICommon.h"
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -231,27 +232,34 @@ struct OptionTable {
         : entries(std::move(args)...) {}
 
     consteval void validate() const noexcept {
-        // Check for duplicate long_names (non-empty)
-        check_unique_long_names(std::index_sequence_for<Entries...>{});
-        // Check for duplicate short_names (non-'\0')
-        check_unique_short_names(std::index_sequence_for<Entries...>{});
+        check_unique_names(std::index_sequence_for<Entries...>{});
     }
 
 private:
     template<size_t... Is>
-    consteval void check_unique_long_names(std::index_sequence<Is...>) const noexcept {
-        // Validated at compile time: checks each pair for duplicate long_name
-        // (Full implementation uses fold expression over pairs — added in Task 3)
-    }
-
-    template<size_t... Is>
-    consteval void check_unique_short_names(std::index_sequence<Is...>) const noexcept {
-        // Same pattern as long names, checking short_name != '\0'
+    consteval void check_unique_names(std::index_sequence<Is...>) const noexcept {
+        constexpr auto long_names = std::array{ std::get<Is>(entries).long_name... };
+        constexpr auto short_names = std::array{ std::get<Is>(entries).short_name... };
+        for (size_t i = 0; i < long_names.size(); ++i) {
+            for (size_t j = i + 1; j < long_names.size(); ++j) {
+                if (!long_names[i].empty() && long_names[i] == long_names[j])
+                    throw;  // compile error in consteval context: duplicate long_name
+                if (short_names[i] != '\0' && short_names[j] != '\0' && short_names[i] == short_names[j])
+                    throw;  // compile error: duplicate short_name
+            }
+        }
     }
 };
 
 template<typename... Entries>
 OptionTable(Entries...) -> OptionTable<Entries...>;
+
+// Default help translator — returns the key as-is (English fallback)
+struct DefaultHelpTranslator {
+    std::string operator()(std::string_view key) const noexcept {
+        return std::string(key);
+    }
+};
 
 // ============================================================================
 // ParseResult
@@ -272,39 +280,45 @@ struct ParseResult {
 template<typename... Entries>
 class CLIParser {
     OptionTable<Entries...> _table;
+    std::function<std::string(std::string_view)> _help_trans;
 
 public:
     using result_type = ParseResult<Entries...>;
 
-    constexpr CLIParser() = default;
+    constexpr CLIParser() noexcept = default;
 
+    /// Construct with an option table and optional help translator.
+    /// The translator is a callable: string(string_view_key) → localized text.
+    /// Defaults to English (returns key as-is).
     explicit constexpr CLIParser(OptionTable<Entries...> table) noexcept
-        : _table(table) {}
+        : _table(std::move(table)), _help_trans(DefaultHelpTranslator{}) {}
+
+    /// Construct with an option table and a custom help translator.
+    template<typename HT>
+    CLIParser(OptionTable<Entries...> table, HT translator) noexcept(std::is_nothrow_move_constructible_v<HT>)
+        : _table(std::move(table)), _help_trans(std::move(translator)) {}
+
+    /// Set/replace the help text translator.
+    void set_help_translator(std::function<std::string(std::string_view)> t) noexcept {
+        _help_trans = std::move(t);
+    }
 
     /// Parse command-line arguments.
     ParseResult<Entries...> parse(std::span<const char*> args) const;
 
-    /// Generate help text (English fallback).
-    std::string format_help(std::string_view program_name) const;
-
     /// Generate localized help text.
-    template<typename HT>
-    std::string format_help(std::string_view program_name, const HT& trans) const {
-        return format_help_impl(program_name, trans);
-    }
+    std::string format_help(std::string_view program_name) const;
 
     /// Access the underlying option table.
     const OptionTable<Entries...>& table() const noexcept { return _table; }
-
-private:
-    /// Shared implementation of help text generation.
-    template<typename HT>
-    std::string format_help_impl(std::string_view program_name, const HT& help_trans) const;
 };
 
-// CTAD deduction guide
+// CTAD deduction guides
 template<typename... Entries>
 CLIParser(OptionTable<Entries...>) -> CLIParser<Entries...>;
+
+template<typename... Entries, typename HT>
+CLIParser(OptionTable<Entries...>, HT) -> CLIParser<Entries...>;
 
 // ============================================================================
 // CLIParser member implementations
@@ -472,23 +486,8 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
     return result;
 }
 
-// Default help translator -- returns the key as-is (English fallback)
-struct DefaultHelpTranslator {
-    std::string operator()(std::string_view key) const noexcept {
-        return std::string(key);
-    }
-};
-
 template<typename... Entries>
 std::string CLIParser<Entries...>::format_help(std::string_view program_name) const {
-    return format_help_impl(program_name, DefaultHelpTranslator{});
-}
-
-template<typename... Entries>
-template<typename HT>
-std::string CLIParser<Entries...>::format_help_impl(
-    std::string_view program_name, const HT& help_trans) const
-{
     std::string result;
     result += "Usage: ";
     result += program_name;
@@ -539,7 +538,7 @@ std::string CLIParser<Entries...>::format_help_impl(
 
             while (line.size() < 28) line += ' ';
 
-            line += help_trans(entry.help_key);
+            line += _help_trans(entry.help_key);
 
             if constexpr (!std::is_same_v<ET, Flag>) {
                 if constexpr (requires { entry.default_v; }) {

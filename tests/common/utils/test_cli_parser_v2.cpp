@@ -206,7 +206,7 @@ void test_format_help_with_translator() {
         }
     };
     CapsTranslator tr;
-    std::string help = CLIParser(TEST_OPTS).format_help("prog", tr);
+    std::string help = CLIParser(TEST_OPTS, tr).format_help("prog");
     expect(help.find("TRANSLATED:") != std::string::npos,
            "help with translator should show translated text");
     TEST_PASS("format_help with translator");
