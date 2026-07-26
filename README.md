@@ -10,7 +10,7 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 - [x] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
 - [x] Support third-party/custom enchantments by editing custom enchantment sheet
 - [x] Support third-party/custom equipments by editing custom equipment sheet
-- [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical, idastar, hamming, diff_first
+- [x] Pluggable algorithm strategies: hamming, dfs, astar, dp_merge, plus external plugins
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Moddable forge engine via IForgeEngine virtual interface
 - [x] Profile-based data management with versioning, branching, merging
@@ -63,8 +63,8 @@ cd build && ctest --output-on-failure
 The project uses a **four-domain architecture** built on shared utilities.
 
 ```
-CLI → Interface CLI parsers (CLIParser, EnchParser, ItemParser)
-  → BesqContext (session facade)
+CLI → CLIApp (application runner)
+  → BesqContext (session facade, pImpl)
   → Orchestration Pipeline (SolvePipeline / ManagePipeline / ExportPipeline)
   → CompactAdapter::apply() (validates + prunes EnchReg + converts)
   → AlgorithmInput (compact) → AlgorithmExecutor → IAlgorithm
@@ -75,77 +75,63 @@ CLI → Interface CLI parsers (CLIParser, EnchParser, ItemParser)
 
 ### Domain Overview
 
-| Domain | Namespace | Purpose | External Dependencies |
-|--------|-----------|---------|----------------------|
-| `algorithm/` | `algorithm::` | Algorithm execution: compact types, forge engine, search strategies, diagnostics | `common/` only |
-| `business/` | `::` | Business types, registries, Profile, parsers, loaders, managers | `common/` only |
-| `interface/` | `::` | I/O boundary: CLI parsing, C ABI, BesqContext | `common/`, `business/`, `orchestration/` |
-| `orchestration/` | `orchestration::` | Cross-domain wiring: pipelines, CompactAdapter, formatters | All domains |
+| Domain | Namespace | Purpose | Dependencies |
+|--------|-----------|---------|-------------|
+| `algorithm/` | `algorithm::` | Algorithm execution: compact types, forge engine, strategies, diagnostics | `common-core` + log |
+| `business/` | `::` | Business types, registries, Profile, parsers, loaders, managers | `common-core` + io + log |
+| `orchestration/` | `orchestration::` | Cross-domain wiring: pipelines, CompactAdapter, formatters | algorithm + business |
+| `interface/` | `::` | I/O boundary: CLIApp, BesqContext, C ABI | orchestration + common sub-targets |
 
 ### Source Layout
 
 ```
 src/
-├── main.cpp                             ← Entry point
-├── BESQTypes.h                          ← Umbrella include
+├── main.cpp                             ← Entry point (router)
+├── AppConfig.h                          ← Environment config loader
+├── BuildConfig.h.in                     ← Generated config (version, project name)
 ├── builtin/                             ← Built-in data (embedded resource → DTO)
 │   ├── DataLoader.h/.cpp                ← Load built-in data from embedded JSON
-│   ├── EmbeddedData.h                   ← Embedded resource declarations
+│   ├── I18nLoader.h/.cpp                ← Register built-in translations
 │   └── ItemProperties.h/.cpp            ← Vanilla item property definitions
-├── common/                              ← Shared utilities (zero domain deps)
-│   ├── CommonTypes.h/.cpp               ← NSID, MCE enum
+├── common/                              ← Shared utilities (5 independent sub-libraries)
+│   ├── CommonTypes.h/.cpp               ← NSID, MCE enum, AlgorithmMode
 │   ├── io/                              ← JSON DOM, CSV reader/writer, ByteStream
-│   │   ├── json.h/.cpp                  ← Recursive-descent JSON parser
-│   │   ├── CsvIO.h/.cpp                 ← CSV read/write
-│   │   ├── ByteStream.h                 ← Binary stream
-│   │   └── FileUtils.hpp                ← File I/O helpers
-│   ├── log/                             ← Global async Logger
+│   ├── log/                             ← Global async Logger + log.hpp wrappers
+│   ├── i18n/                            ← Language manager, LocaleDetector
 │   ├── serialization/                   ← Serialization interfaces
-│   │   ├── ISerializable.h              ← Format-independent base
-│   │   ├── IJsonSerializable.h          ← to_json() / from_json()
-│   │   └── IBinarySerializable.h        ← serialize() / deserialize()
-│   └── utils/                           ← Generic utilities
-│       ├── EventLoop.hpp                ← Zero-CPU-idle event loop
-│       ├── MemoryPool.hpp               ← Monotonic buffer
-│       ├── ObjectPool.hpp               ← Freelist pool
-│       ├── FlatHashMap.hpp              ← Open-addressing hash map
-│       ├── HashUtils.hpp                ← hash_combine()
-│       ├── StringUtils.hpp              ← String helpers
-│       ├── EnvUtil.hpp                  ← Type-safe env-var access
-│       ├── ExpCalculator.hpp            ← Level ↔ XP conversion
-│       └── queue/                       ← Lock-free queue family
+│   └── utils/
+│       ├── cli/                         ← C++20 CLIParser v2
+│       ├── queue/                       ← Lock-free queue family
+│       └── ...                           ← MemoryPool, EventLoop, HashUtils, etc.
 ├── domain/
-│   ├── algorithm/                       ← Algorithm domain (zero business deps)
-│   │   ├── IAlgorithm.h/.cpp            ← AlgorithmInput/Output + IAlgorithm
-│   │   ├── AlgorithmExecutor.h/.cpp     ← Async engine
-│   │   ├── ExecutionContext.h/.cpp       ← Control + progress + solution accumulator
-│   │   ├── types/                       ← Compact types (Enchantment, EnchSet, Item, etc.)
-│   │   ├── registries/                  ← EnchReg + AlgorithmRegistry
+│   ├── algorithm/                       ← Algorithm domain (compact types)
+│   │   ├── _strategies/                 ← Built-in strategies (astar, dfs, dp_merge, hamming)
+│   │   ├── plugin/                      ← AlgorithmLoader (hot-load external .so/.dll)
 │   │   ├── forge_engine/                ← IForgeEngine + ForgeEngine
-│   │   ├── _strategies/                 ← Built-in strategies (astar, dfs, hamming)
-│   │   ├── components/                  ← Heuristic, ItemPool, StateHash, SearchUtils
 │   │   ├── diagnostics/                 ← Event-driven diagnostics pipeline
 │   │   ├── serialization/               ← Binary checkpoint
-│   │   ├── plugin/                      ← AlgorithmLoader
-│   │   └── resolvers/                   ← ItemResolver, InventoryResolver
-│   ├── business/                        ← Business domain (self-contained)
+│   │   └── ...
+│   ├── business/                        ← Business domain (domain model)
 │   │   ├── types/                       ← Domain types + DTOs
 │   │   ├── registries/                  ← EnchantmentRegistry, EquipmentRegistry, etc.
 │   │   ├── parsers/                     ← File format parsers (JSON/CSV/MC)
 │   │   ├── loaders/                     ← RegistryLoader, ProfileLoader
 │   │   ├── managers/                    ← RegistryManager, ProfileManager
 │   │   └── components/                  ← FormatDetector, Serializer, TagResolver
-│   ├── interface/                       ← Interface domain (I/O boundary)
-│   │   ├── BesqContext.h/.cpp           ← Session facade
-│   │   ├── cli/                         ← CLI parsing
-│   │   └── abi/                         ← C ABI
-│   └── orchestration/                   ← Orchestration domain (glue)
-│       ├── types/                       ← Pipeline contracts (SolveRequest, etc.)
-│       ├── pipelines/                   ← SolvePipeline, ManagePipeline, ExportPipeline
-│       └── components/                  ← CompactAdapter, OutputFormatter, EnchSerializer
+│   ├── orchestration/                   ← Cross-domain glue
+│   │   ├── types/                       ← Pipeline contracts (SolveRequest, SolveResult)
+│   │   ├── pipelines/                   ← SolvePipeline, ManagePipeline, ExportPipeline
+│   │   └── components/                  ← CompactAdapter, OutputFormatter, EnchSerializer
+│   └── interface/                       ← I/O boundary
+│       ├── BesqContext.h/.cpp           ← Session facade (pImpl)
+│       ├── cli/                         ← CLIApp, EnchParser, ItemParser, RegistryEditor
+│       └── abi/                         ← C ABI
 ├── data/
-│   ├── CMakeLists.txt
-│   └── builtin/vanilla.json             ← Embedded built-in data
+│   ├── builtin/vanilla.json             ← Embedded built-in data
+│   ├── builtin/item_properties.json
+│   └── i18n/                            ← Translation tables (zh_CN, en_US)
+└── include/
+    └── besq/besq.h                       ← Public umbrella header
 
 tests/                                   ← Standalone test executables
 benchmarks/                              ← Performance benchmarks
@@ -155,13 +141,14 @@ benchmarks/                              ← Performance benchmarks
 
 | Strategy | Type | Optimality | Scale | Origin | Mechanism |
 |----------|------|-----------|-------|--------|-----------|
+| DP Merge | Approx | No | Large | Built-in (src/) | Dynamic programming merge (default) |
+| Hamming | Approx | No | Large | Built-in (src/) | Popcount-balanced binary merge tree |
+| DFS | Exact | Yes | ≤ 8 | Built-in (src/) | B&B + hash memoization |
+| A* | Exact | Yes | ≤ 9 | Built-in (src/) | Admissible heuristic + priority queue |
 | Greedy | Approx | No | Any | Plugin (plugins/) | Cost-sorted greedy merge |
 | Penalty Balance | Approx | No | Any | Plugin (plugins/) | Merge closest penalty pairs |
 | Hierarchical | Approx | No | Large | Plugin (plugins/) | Hierarchical group-then-merge |
 | DiffFirst | Approx | No | Any | Plugin (plugins/) | PPN-layer, cheapest pair per layer |
-| Hamming | Approx | No | Large | Built-in (src/) | Popcount-balanced binary merge tree |
-| DFS | Exact | Yes | ≤ 8 | Built-in (src/) | B&B + hash memoization |
-| A* | Exact | Yes | ≤ 9 | Built-in (src/) | Admissible heuristic + priority queue |
 | IDA* | Exact | Yes | ≤ 10 | Plugin (plugins/) | Iterative deepening + TT pruning |
 
 All algorithms share `IForgeEngine` and compact types. New algorithms only need to implement `IAlgorithm::execute()` to gain thread management, pause/cancel, and progress reporting.
@@ -184,7 +171,7 @@ All algorithms share `IForgeEngine` and compact types. New algorithms only need 
 
 **Serialization interfaces**: Business types implement `IJsonSerializable` (`to_json()` / `from_json()`). ADL-compatible free functions in `Serializer.h` delegate to member implementations.
 
-**Four-domain layering**: `algorithm/` depends on nothing outside `common/`. `business/` adds domain types and registries. `interface/` adds CLI, C ABI, BesqContext. `orchestration/` wires everything via pipelines.
+**Four-domain layering**: `algorithm/` depends only on `besq-common-core` + log. `business/` adds domain types and registries (depends on core + io + log). `orchestration/` wires algorithm + business together. `interface/` adds CLIApp, BesqContext, C ABI (depends on orchestration + common sub-targets). `besq-common/` is split into 5 independent static libraries (core, io, log, i18n, cli) — targets link only what they need.
 
 **No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
 

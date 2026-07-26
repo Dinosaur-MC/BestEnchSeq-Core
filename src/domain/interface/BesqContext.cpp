@@ -6,7 +6,6 @@
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/orchestration/components/OutputFormatter.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
-#include "domain/interface/cli/RegistryEditor.h"
 
 #include <filesystem>
 #include <string>
@@ -211,10 +210,6 @@ void BesqContext::import_registry(const std::string& path) {
 void BesqContext::import_registries(const std::vector<std::string>& paths) {
     for (const auto& path : paths)
         import_registry(path);
-}
-
-void BesqContext::apply_registry_edits(const std::string& spec) {
-    ::apply_registry_edits(spec, _impl->profiles.active());
 }
 
 // ====================================================================

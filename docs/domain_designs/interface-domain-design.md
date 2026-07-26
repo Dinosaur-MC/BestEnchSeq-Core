@@ -55,10 +55,11 @@ src/domain/interface/
 ├── BesqContext.cpp                   ← Application session facade
 │
 ├── cli/                              ← CLI module
-│   ├── cli.h/cpp                     CLIConfig, parse_cli(), apply_config_pairs()
+│   ├── CLIApp.h/cpp                  CLI entry: CLIApp::Config, CLIApp::parse(), CLIApp::run()
 │   ├── EnchParser.h/cpp              "sharpness=5" → EnchSet (registry-aware)
-│   ├── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
-│   └── RegistryEditor.h/cpp          --registry-edit operations
+│   └── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
+│
+├── components/                       ← Reusable components (no CLI dependency)
 │
 └── abi/
     └── CAbiBindings.cpp              C ABI implementation
@@ -306,10 +307,12 @@ src/domain/interface/
 ├── CMakeLists.txt
 ├── BesqContext.cpp                   ← Session context
 ├── cli/                              ← CLI module
-│   ├── cli.h/cpp                     CLIConfig, parse_cli(), apply_config_pairs()
+│   ├── CLIApp.h/cpp                  CLI entry: CLIApp::Config, CLIApp::parse(), CLIApp::run()
 │   ├── EnchParser.h/cpp              "sharpness=5" → EnchSet (registry-aware)
-│   ├── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
-│   └── RegistryEditor.h/cpp          --registry-edit operations
+│   └── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
+│
+├── components/                       ← Reusable components (no CLI dependency)
+│
 └── abi/
     └── CAbiBindings.cpp              C ABI implementation
 ```

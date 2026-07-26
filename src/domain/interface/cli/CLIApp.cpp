@@ -2,6 +2,9 @@
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/interface/BesqContext.h"
+#include "domain/business/types/EnchInfo.h"
+#include "domain/business/types/Equipment.h"
+#include "common/CommonTypes.h"
 #include "common/i18n/Language.h"
 #include "common/utils/cli/CLIParser.hpp"
 #include "BuildConfig.h"
@@ -66,7 +69,7 @@ int CLIApp::run(int argc, char* argv[]) {
     }
 
     if (config.registry_edit)
-        _ctx.apply_registry_edits(*config.registry_edit);
+        CLIApp::apply_registry_edits(*config.registry_edit, _ctx);
 
     // 5. Registry export
     if (config.export_registry) {
@@ -339,5 +342,98 @@ void CLIApp::apply_config_pairs(const std::string& config_pairs, algorithm::Forg
         if (k == "ignore-cost-cap")       cfg.ignore_cost_cap = val;
         else if (k == "ignore-penalty-cost") cfg.ignore_penalty_cost = val;
         else if (k == "ignore-repair-cost")  cfg.ignore_repair_cost = val;
+    }
+}
+
+// ====================================================================
+// apply_registry_edits — parse --registry-edit format and dispatch
+// ====================================================================
+
+void CLIApp::apply_registry_edits(const std::string& ops, BesqContext& ctx) {
+    auto op_list = string_utils::split(ops, ';');
+    for (const auto& op : op_list) {
+        if (op.empty())
+            continue;
+
+        auto parts = string_utils::split(op, ',');
+        if (parts.size() < 2)
+            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_op", op));
+
+        auto& header = parts[0];
+        auto colon   = header.find(':');
+        if (colon == std::string::npos)
+            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_header", header));
+
+        std::string target = header.substr(0, colon);
+        std::string action = header.substr(colon + 1);
+        std::string id     = parts[1];
+        if (id.empty())
+            throw std::runtime_error(tr_fmt("cli.err.empty_registry_edit_id", op));
+
+        if (action == "rm") {
+            if (target == "ench") { ctx.remove_enchantment(id); continue; }
+            if (target == "eq")   { ctx.remove_equipment(id);   continue; }
+            throw std::runtime_error(tr_fmt("cli.err.unsupported_remove", target));
+        }
+
+        if (action == "add") {
+            if (target == "cat") { ctx.add_category(id); continue; }
+
+            if (target == "eq") {
+                ctx.add_equipment(Equipment{NSID(id), id, NSID(), 0});
+                continue;
+            }
+
+            if (target == "ench") {
+                int32_t multiplier = 1, max_level = 1, limited_level = 0;
+                bool is_treasure = false;
+                for (size_t i = 2; i < parts.size(); ++i) {
+                    auto eq_pos = parts[i].find('=');
+                    if (eq_pos == std::string::npos) continue;
+                    auto k = parts[i].substr(0, eq_pos);
+                    auto v = parts[i].substr(eq_pos + 1);
+                    try {
+                        if (k == "multiplier")    multiplier = std::stoi(v);
+                        if (k == "max_level")     max_level = std::stoi(v);
+                        if (k == "limited_level") limited_level = std::stoi(v);
+                    } catch (const std::exception&) {
+                        throw std::runtime_error(tr_fmt("cli.err.invalid_numeric", k, v, op));
+                    }
+                    if (k == "is_treasure") is_treasure = (v == "true");
+                }
+                ctx.add_enchantment(EnchInfo{NSID(id), id, MCE::All, max_level, limited_level, multiplier, is_treasure, {}, {}});
+                continue;
+            }
+
+            throw std::runtime_error(tr_fmt("cli.err.unknown_registry_target", target));
+        }
+
+        if (action == "mod") {
+            if (target == "ench") {
+                EnchInfo patch;
+                patch.max_level     = 0;
+                patch.limited_level = -1;
+                patch.multiplier    = 0;
+                for (size_t i = 2; i < parts.size(); ++i) {
+                    auto eq_pos = parts[i].find('=');
+                    if (eq_pos == std::string::npos) continue;
+                    auto k = parts[i].substr(0, eq_pos);
+                    auto v = parts[i].substr(eq_pos + 1);
+                    try {
+                        if (k == "multiplier")    patch.multiplier = std::stoi(v);
+                        if (k == "max_level")     patch.max_level = std::stoi(v);
+                        if (k == "limited_level") patch.limited_level = std::stoi(v);
+                    } catch (const std::exception&) {
+                        throw std::runtime_error(tr_fmt("cli.err.invalid_numeric", k, v, op));
+                    }
+                }
+                ctx.modify_enchantment(id, patch);
+                continue;
+            }
+
+            throw std::runtime_error(tr_fmt("cli.err.unsupported_modify", target));
+        }
+
+        throw std::runtime_error(tr_fmt("cli.err.unknown_action", action));
     }
 }

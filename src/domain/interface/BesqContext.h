@@ -44,7 +44,6 @@ public:
     // ── Registry import / export ──
     void import_registry(const std::string& path);
     void import_registries(const std::vector<std::string>& paths);
-    void apply_registry_edits(const std::string& spec);
     bool export_registry(const std::string& path) const;
 
     // ── Registry access (active profile, read-only) ──

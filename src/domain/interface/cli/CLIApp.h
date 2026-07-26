@@ -52,6 +52,8 @@ public:
 private:
     struct UserI18nTranslator;
 
+    static void apply_registry_edits(const std::string& spec, BesqContext& ctx);
+
     BesqContext _ctx;
 
     template<typename... Entries>

@@ -1,6 +1,6 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：2.0 · 最后更新：2026-07-26
+> 版本：2.1 · 最后更新：2026-07-27
 
 ---
 
@@ -12,11 +12,11 @@
 
 | 域 | 命名空间 | 职责 | 依赖 |
 |------|---------|------|------|
-| `common/` | — | 共享工具集（零业务知识） | 无 |
-| `domain/algorithm/` | `algorithm::` | 算法执行：紧凑类型、锻造引擎、搜索策略、诊断 | `common/` 仅 |
-| `domain/business/` | `::` | 业务类型、注册表、Profile、解析器、加载器、管理器 | `common/` 仅 |
-| `domain/interface/` | `::` | I/O 边界：CLI 解析、C ABI、BesqContext | `common/` + `business/` + `orchestration/` |
-| `domain/orchestration/` | `orchestration::` | 跨域胶水：Pipeline、CompactAdapter、格式化器 | 所有域 |
+| `common/*` | — | 5 个独立子库（core/io/log/i18n/cli） | 无（各自独立） |
+| `domain/algorithm/` | `algorithm::` | 紧凑类型、锻造引擎、搜索策略、诊断 | `common-core` + `log` |
+| `domain/business/` | `::` | 业务类型、注册表、Profile、解析器、加载器 | `common-core` + `io` + `log` |
+| `domain/orchestration/` | `orchestration::` | Pipeline、CompactAdapter、格式化器 | `algorithm` + `business` |
+| `domain/interface/` | `::` | BesqContext、CLIApp、C ABI | `orchestration` + `common` 子库 |
 
 ### 2. 双层类型系统
 
@@ -306,7 +306,8 @@ Algorithm domain (src/domain/algorithm/registries/):
 纯翻译层，无业务逻辑。
 
 - `BesqContext`：应用会话外观，持有 ProfileManager 和 AlgorithmLoader，委托所有操作到 orchestration pipeline
-- **cli/**：`CLIParser`（通用 `--key=value` 解析器）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）、`RegistryEditor`（`--registry-edit` 操作）
+- **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）；`--registry-edit` 解析内联在 CLIApp 中
+- **components/**：公共组件预留（暂无内容）
 - **abi/**：`CAbiBindings`（C ABI 包装，JSON 交换）
 
 ### `src/domain/orchestration/`（编排域）
