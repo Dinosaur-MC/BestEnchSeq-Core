@@ -56,7 +56,6 @@ src/domain/interface/
 │
 ├── cli/                              ← CLI module
 │   ├── cli.h/cpp                     CLIConfig, parse_cli(), apply_config_pairs()
-│   ├── CLIParser.h/cpp               Generic --key=value argument parser
 │   ├── EnchParser.h/cpp              "sharpness=5" → EnchSet (registry-aware)
 │   ├── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
 │   └── RegistryEditor.h/cpp          --registry-edit operations
@@ -75,6 +74,7 @@ src/domain/interface/
 | `protocol/SolveResponse.h` | Same as above |
 | `components/ParserUtilsDomain.hpp` | Absorbed by business domain (FormatDetector) + common utils |
 | `fs/FileFormat.h` | Replaced by `business/components/FormatDetector` |
+| `cli/CLIParser.h/cpp` | Extracted to `common/utils/cli/` as modern C++20 type-safe parser |
 
 ---
 
@@ -191,14 +191,23 @@ Supportd property keys: `prior_penalty` (anvil prior-work penalty), `durability`
 - Parsers resolve NSIDs directly via registries, same logic previously in the builder helpers
 - `{key:value,...}` syntax for `prior_penalty` and `durability` fields
 
-**CLIParser** — Generic `--key=value` parser, zero business knowledge:
+**CLIParser (v2)** — Extracted to `common/utils/cli/`. Modern C++20 type-safe parser with:
 
 ```cpp
-struct CLIParser {
-    struct ParsedArg { std::string key; std::string value; };
-    static std::vector<ParsedArg> parse(int argc, char* argv[]);
-};
+// src/common/utils/cli/CLIParser.h
+template<Parsable T> struct Option { ... };  // --target, --solutions
+struct Flag { ... };                          // --verbose, -h
+template<Parsable T> struct Positional { ... };
+
+template<typename... Entries>
+struct OptionTable : Entries... { ... };
+
+template<typename... Entries>
+auto parse(const OptionTable<Entries...>&, std::span<const char*>)
+    -> ParseResult<Entries...>;
 ```
+
+Key features: compile-time option validation (consteval), type-safe `from_string<T>()`, error accumulation (never throw), pluggable i18n via `DiagnosticTranslator` concept, auto-generated `format_help()`. See `docs/superpowers/specs/2026-07-27-cliparser-modernization-design.md`.
 
 **cli.h/cpp** — Business-aware CLI layer, with i18n support via `common/i18n/Language.h`:
 
@@ -281,14 +290,13 @@ interface/
 
 ## 6. Implementation Status
 
-All four phases are **completed** (2026-07-26).
-
 | # | Task | Status | Description |
 |---|------|--------|-------------|
 | **S1** | Registry-aware parsers | ✅ | EnchParser returns `EnchSet` (registry-aware), ItemParser returns `Item`, `SpecTypes.h` deleted, `build_target()`/`build_enchset()` removed |
 | **S2** | Move parsers to `cli/` | ✅ | `CLIParser`, `EnchParser`, `ItemParser` from `parsers/` → `cli/`, all includes and CMake updated |
 | **S3** | Cleanup | ✅ | `ParserUtilsDomain.hpp` and `FileFormat.h` deleted; utility functions inlined to `EnchSerializer.cpp` |
 | **S4** | Finalize | ✅ | `interface.h` and `CMakeLists.txt` reflect final structure |
+| **S5** | Extract CLIParser to common | ✅ | CLIParser moved to `common/utils/cli/` and rewritten as modern C++20 type-safe parser with compile-time validation, error accumulation, pluggable i18n, and `format_help()` |
 
 ### Final Directory Structure
 
@@ -299,10 +307,11 @@ src/domain/interface/
 ├── BesqContext.cpp                   ← Session context
 ├── cli/                              ← CLI module
 │   ├── cli.h/cpp                     CLIConfig, parse_cli(), apply_config_pairs()
-│   ├── CLIParser.h/cpp               Generic --key=value argument parser
 │   ├── EnchParser.h/cpp              "sharpness=5" → EnchSet (registry-aware)
 │   ├── ItemParser.h/cpp              "diamond_sword[...]" → Item (registry-aware)
 │   └── RegistryEditor.h/cpp          --registry-edit operations
 └── abi/
     └── CAbiBindings.cpp              C ABI implementation
 ```
+
+CLIParser now lives in `src/common/utils/cli/` — see `docs/superpowers/specs/2026-07-27-cliparser-modernization-design.md`.
