@@ -68,7 +68,7 @@
         {
             "name": "minimal",
             "displayName": "Minimal (algorithm only)",
-            "description": "Build besq-minimal — compact algorithm core with Hamming strategy only. No logging, diagnostics, parsers, or CLI. Intended for embedders that drive AlgorithmInput programmatically.",
+            "description": "Build besq-minimal — compact algorithm core with Hamming strategy only. Links only besq-common-core (NSID, LogLevel, memory pools). No JSON, CSV, Logger, i18n, CLI parser, diagnostics, or embedded data.",
             "binaryDir": "${sourceDir}/build",
             "generator": "Ninja",
             "cacheVariables": {

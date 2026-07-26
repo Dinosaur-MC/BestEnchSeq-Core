@@ -147,7 +147,7 @@ add_library(besq-core SHARED
 )
 
 target_link_libraries(besq-core PUBLIC
-    besq-domain-interface   # transitively pulls orchestration + algorithm + business + common
+    besq-domain-interface   # PUBLIC so transitive include paths (via orchestration → algorithm → common-core) propagate to consumers
 )
 
 target_include_directories(besq-core PUBLIC
@@ -177,7 +177,11 @@ if(WIN32)
     set(BESQ_CORE_CONFIG_IMPORT
 "# Windows: link static libs directly (DLL export does not cover static deps)
 set(_besq_static_libs
-    \"\${_besq_build}/src/common/besq-common.lib\"
+    \"\${_besq_build}/src/common/besq-common-core.lib\"
+    \"\${_besq_build}/src/common/besq-common-io.lib\"
+    \"\${_besq_build}/src/common/besq-common-log.lib\"
+    \"\${_besq_build}/src/common/besq-common-i18n.lib\"
+    \"\${_besq_build}/src/common/besq-common-cli.lib\"
     \"\${_besq_build}/src/domain/algorithm/besq-domain-algorithm.lib\"
     \"\${_besq_build}/src/domain/business/besq-domain-business.lib\"
     \"\${_besq_build}/src/domain/orchestration/besq-domain-orchestration.lib\"
@@ -213,8 +217,9 @@ ${BESQ_CORE_CONFIG_IMPORT}
 # ═══════════════════════════════════════════════════════════════════════════════
 # besq-minimal (static library for embedders)
 # ═══════════════════════════════════════════════════════════════════════════════
-# Compact algorithm core with Hamming strategy only.  No plugin loader,
-# serialization, or non-Hamming strategies.
+# Compact algorithm core with Hamming strategy only.  Links only
+# besq-common-core (NSID, LogLevel, memory pools).  No plugin loader,
+# serialization, Logger, i18n, CLI parser, or embedded data.
 #
 # Build with: cmake --preset minimal && cmake --build build --preset minimal
 
@@ -251,7 +256,7 @@ add_library(besq-minimal STATIC
     "${BESQ_MINIMAL_REG}"
 )
 
-target_link_libraries(besq-minimal PUBLIC besq-common)
+target_link_libraries(besq-minimal PUBLIC besq-common-core)
 
 target_include_directories(besq-minimal PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>

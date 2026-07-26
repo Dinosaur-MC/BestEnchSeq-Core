@@ -13,6 +13,9 @@ target_link_libraries(besq-domain-orchestration PUBLIC
     besq-domain-algorithm
     besq-domain-business
 )
+target_link_libraries(besq-domain-orchestration PRIVATE
+    besq-common-log           # internal logging (not propagated)
+)
 
 target_include_directories(besq-domain-orchestration PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/orchestration/components/CompactAdapter.h"
