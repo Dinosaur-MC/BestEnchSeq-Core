@@ -1,5 +1,6 @@
 #include "OutputFormatter.h"
 #include "domain/business/business.h"
+#include "common/i18n/Language.h"
 
 namespace {
 
@@ -53,7 +54,7 @@ std::string ench_summary_str(const EnchSet &enchs, const EnchantmentRegistry &en
     std::string result;
     bool first = true;
     for (const auto &ench : enchs) {
-        if (!first) result += " + ";
+        if (!first) result += tr("output.item.enchant_sep");
         first = false;
         result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
     }
@@ -92,13 +93,13 @@ std::string OutputFormatter::describe_item_verbose(
     std::string result;
 
     if (item.is_book()) {
-        result = "附魔书(";
+        result = tr("output.item.enchanted_book");
         if (item.enchantments.empty()) {
-            result += "无魔咒";
+            result += tr("output.item.no_enchants");
         } else {
             bool first = true;
             for (const auto &ench : item.enchantments) {
-                if (!first) result += ", ";
+                if (!first) result += tr("output.item.book_equip_sep");
                 first = false;
                 result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
             }
@@ -109,17 +110,17 @@ std::string OutputFormatter::describe_item_verbose(
         result += item.id.str() + "(";
         bool first = true;
         for (const auto &ench : item.enchantments) {
-            if (!first) result += ", ";
+            if (!first) result += tr("output.item.book_equip_sep");
             first = false;
             result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
         }
         result += ")";
-        result += "[铁砧惩罚 x" + std::to_string(item.prior_penalty) + "]";
-        result += "[耐久 " + std::to_string(item.durability) + "]";
+        result += tr_fmt("output.item.anvil_penalty", item.prior_penalty);
+        result += tr_fmt("output.item.durability", item.durability);
     }
 
     if (item.prior_penalty == 0 && item.enchantments.empty()) {
-        result += "(免费)";
+        result += tr("output.item.free");
     }
 
     return result;
@@ -170,9 +171,9 @@ std::string OutputFormatter::describe_ench_roman(
 // ---------------------------------------------------------------------------
 std::string OutputFormatter::mode_display_name(AlgorithmMode mode) {
     switch (mode) {
-    case AlgorithmMode::direct:    return "简单锻造";
-    case AlgorithmMode::inventory: return "库存锻造";
-    default:                       return "未知";
+    case AlgorithmMode::direct:    return tr("output.mode.direct");
+    case AlgorithmMode::inventory: return tr("output.mode.inventory");
+    default:                       return tr("output.mode.unknown");
     }
 }
 
@@ -189,10 +190,10 @@ static std::string mode_to_raw(AlgorithmMode mode) {
 // ---------------------------------------------------------------------------
 std::string OutputFormatter::platform_to_display(MCE p) {
     switch (p) {
-    case MCE::Java:    return "Java版";
-    case MCE::Bedrock: return "Bedrock版";
-    case MCE::All:     return "通用";
-    default:                     return "未知";
+    case MCE::Java:    return tr("output.platform.java");
+    case MCE::Bedrock: return tr("output.platform.bedrock");
+    case MCE::All:     return tr("output.platform.all");
+    default:                     return tr("output.platform.unknown");
     }
 }
 
@@ -215,58 +216,55 @@ std::string OutputFormatter::format_verbose(
 
         // Separator between solutions (not before first)
         if (i > 0) {
-            out += "===========================================\n";
+            out += tr("output.verbose.separator") + "\n";
         }
 
         // Header line
-        out += "===========================================\n";
-        out += "  锻造方案";
+        out += tr("output.verbose.separator") + "\n";
+        out += "   " + tr("output.verbose.forge_plan");
         if (!sol.is_success) {
-            out += " [不可行]";
+            out += " " + tr("output.verbose.infeasible");
         }
         out += " - " + ench_summary_str(sol.original_ench, ench_reg) + "\n";
-        out += "===========================================\n";
+        out += tr("output.verbose.separator") + "\n";
 
         // Mode and platform
-        out += "模式: " + mode_display_name(mode) + "\n";
-        out += "平台: " + platform_to_display(sol.platform) + "\n";
+        out += tr_fmt("output.verbose.mode", mode_display_name(mode)) + "\n";
+        out += tr_fmt("output.verbose.platform", platform_to_display(sol.platform)) + "\n";
 
         // Rank
-        out += "方案: " + std::to_string(i + 1) + "/" + std::to_string(solutions.size());
+        out += tr_fmt("output.verbose.rank", i + 1, solutions.size());
         if (i > 0 && sol.total_exp_level_cost == reference_cost) {
-            out += " (同消耗)";
+            out += " " + tr("output.verbose.same_cost");
         }
         out += "\n\n";
 
         // Total cost
-        out += "总消耗: " + std::to_string(sol.total_exp_level_cost) + " 等级 (" +
-               std::to_string(sol.total_exp_cost) + " 经验值)\n";
+        out += tr_fmt("output.verbose.total_cost", sol.total_exp_level_cost, sol.total_exp_cost) + "\n";
 
         // Peak step
         if (sol.is_feasible()) {
-            out += "峰值单步: Step " + std::to_string(sol.max_cost_step_index + 1) + " - " +
-                   std::to_string(sol.get_peak_level_cost()) + " 等级 (" +
-                   std::to_string(sol.get_peak_exp_cost()) + " 经验值)\n";
+            out += tr_fmt("output.verbose.peak_step", sol.max_cost_step_index + 1,
+                          sol.get_peak_level_cost(), sol.get_peak_exp_cost()) + "\n";
         }
 
-        out += "\n输入:\n";
-        out += "  目标物品: " + describe_item_verbose(sol.target_item, ench_reg) + "\n";
-        out += "  可用物品:\n";
+        out += "\n" + tr("output.verbose.input_section") + "\n";
+        out += tr_fmt("output.verbose.target_item", describe_item_verbose(sol.target_item, ench_reg)) + "\n";
+        out += tr("output.verbose.available_items") + "\n";
         for (const auto &item : sol.available_items) {
             out += "    - " + describe_item_verbose(item, ench_reg) + "\n";
         }
 
-        out += "-------------------------------------------\n";
+        out += tr("output.verbose.step_separator") + "\n";
         for (size_t j = 0; j < sol.steps.size(); ++j) {
             const auto &step = sol.steps[j];
 
-            out += "  Step " + std::to_string(j + 1) + ": " +
-                   describe_item_verbose(step.item_a, ench_reg) + " + " +
+            out += tr_fmt("output.verbose.step_prefix", j + 1) +
+                   describe_item_verbose(step.item_a, ench_reg) + tr("output.verbose.plus") +
                    describe_item_verbose(step.item_b, ench_reg) + "\n";
-            out += "          - 消耗: " + std::to_string(step.exp_level_cost) +
-                   " 等级 (" + std::to_string(step.exp_cost) + " 经验值)\n";
+            out += tr_fmt("output.verbose.step_cost", step.exp_level_cost, step.exp_cost) + "\n";
         }
-        out += "-------------------------------------------\n";
+        out += tr("output.verbose.step_separator") + "\n";
     }
 
     return out;
