@@ -2,6 +2,7 @@
 #pragma once
 
 #include "CLICommon.h"
+#include "CLIFormatter.h"
 #include <functional>
 #include <span>
 #include <string>
@@ -254,13 +255,6 @@ private:
 template<typename... Entries>
 OptionTable(Entries...) -> OptionTable<Entries...>;
 
-// Default help translator — returns the key as-is (English fallback)
-struct DefaultHelpTranslator {
-    std::string operator()(std::string_view key) const noexcept {
-        return std::string(key);
-    }
-};
-
 // ============================================================================
 // ParseResult
 // ============================================================================
@@ -269,68 +263,33 @@ template<typename... Entries>
 struct ParseResult {
     std::tuple<OptionValue<Entries>...> value;
     std::vector<Diagnostic> diagnostics;
+    std::vector<std::string> messages;  // human-readable translations of diagnostics
 
     explicit operator bool() const noexcept { return diagnostics.empty(); }
 };
 
-// ============================================================================
-// CLIParser — object-oriented parser
-// ============================================================================
-
-// ============================================================================
-// Default English fallbacks (used when no custom translator is provided)
-// ============================================================================
-
-namespace detail {
-
-inline std::string default_diag_format(const Diagnostic& d) {
-    using enum ParseErrorCode;
-    switch (d.code) {
-        case unknown_option:
-            return "error: unknown option '" + std::string(d.arg) + "'";
-        case missing_value:
-            return "error: option '" + std::string(d.option_name.value_or(d.arg)) + "' requires a value";
-        case invalid_value:
-            return "error: invalid value '" + std::string(d.arg) + "'";
-        case required_missing:
-            return "error: required option '--" + std::string(d.option_name.value_or("")) + "' is missing";
-        case unexpected_positional:
-            return "error: unexpected positional argument '" + std::string(d.arg) + "'";
-        default:
-            return "error: unknown parse error";
-    }
-}
-
 // SFINAE helper: construct diagnostic translator from T if callable, else English
-inline auto make_diag_trans(auto& t)
-    -> std::function<std::string(const Diagnostic&)>
-{
+namespace detail {
+inline auto make_diag_trans(auto& t) -> std::function<std::string(const Diagnostic&)> {
     if constexpr (requires { t(std::declval<const Diagnostic&>()); })
         return std::function<std::string(const Diagnostic&)>(t);
     else
-        return default_diag_format;
+        return DefaultDiagnosticFormatter{};
 }
-
 } // namespace detail
 
 // ============================================================================
 // CLIParser — type-safe, i18n-capable CLI argument parser
 // ============================================================================
 //
-// Two i18n modes:
-//   1. Raw mode (no i18n) — parse() returns Diagnostics with error codes
-//   2. Translated mode — format_diagnostic() / format_diagnostics() / format_help()
-//      use the configured translators. Default = English.
+// Translation is handled entirely inside. Provide a translator at construction;
+// parse() returns ParseResult with both raw Diagnostics and translated messages.
 //
 // Usage:
-//   // Raw mode (programmatic)
-//   auto result = parser.parse(args);
-//   for (auto& d : result.diagnostics) handle_code(d.code);
-//
-//   // Translated mode (user-facing)
-//   CLIParser parser(table, help_translator, diag_translator);
-//   auto result = parser.parse(args);
-//   for (auto& msg : parser.format_diagnostics(result)) std::cerr << msg;
+//   CLIParser parser(table, my_translator);   // see UnifiedDefaultFormatter
+//   auto r = parser.parse(args);
+//   for (auto& msg : r.messages) std::cerr << msg;
+//   std::cout << parser.format_help("prog");
 
 template<typename... Entries>
 class CLIParser {
@@ -343,15 +302,15 @@ public:
 
     constexpr CLIParser() noexcept = default;
 
-    /// Construct with table only — English fallback for both help and diagnostics.
+    /// Construct with table only — English fallback.
     explicit constexpr CLIParser(OptionTable<Entries...> table) noexcept
         : _table(std::move(table))
-        , _help_trans(DefaultHelpTranslator{})
-        , _diag_trans(detail::default_diag_format) {}
+        , _help_trans(UnifiedDefaultFormatter{})
+        , _diag_trans(UnifiedDefaultFormatter{}) {}
 
-    /// Construct with a unified translator (handles help text + optionally diagnostics).
-    /// If the translator also accepts `const Diagnostic&`, it's used for error messages;
-    /// otherwise falls back to default English.
+    /// Construct with a unified translator.
+    /// If it supports `const Diagnostic&`, used for both help and diagnostics.
+    /// Otherwise, diagnostics fall back to English.
     template<typename T>
         requires (!std::is_same_v<std::decay_t<T>, OptionTable<Entries...>>)
     CLIParser(OptionTable<Entries...> table, T&& translator)
@@ -359,42 +318,20 @@ public:
         , _help_trans(translator)
         , _diag_trans(detail::make_diag_trans(translator)) {}
 
-    /// Set/replace the help text translator.
     void set_help_translator(std::function<std::string(std::string_view)> t) noexcept {
         _help_trans = std::move(t);
     }
 
-    /// Set/replace the diagnostic (error message) translator.
     void set_diagnostic_translator(std::function<std::string(const Diagnostic&)> t) noexcept {
         _diag_trans = std::move(t);
     }
 
-    // ── Parse (raw) ──────────────────────────────────────────────────────────
-
-    /// Parse command-line arguments.
-    /// Returns raw Diagnostics with error codes — no human-readable strings.
+    /// Parse arguments — returns result with translated messages filled.
     ParseResult<Entries...> parse(std::span<const char*> args) const;
-
-    // ── Format with i18n ─────────────────────────────────────────────────────
-
-    /// Translate a single diagnostic to a human-readable string.
-    std::string format_diagnostic(const Diagnostic& d) const {
-        return _diag_trans(d);
-    }
-
-    /// Translate all diagnostics from a parse result.
-    std::vector<std::string> format_diagnostics(const ParseResult<Entries...>& r) const {
-        std::vector<std::string> msgs;
-        msgs.reserve(r.diagnostics.size());
-        for (auto& d : r.diagnostics)
-            msgs.push_back(_diag_trans(d));
-        return msgs;
-    }
 
     /// Generate localized help text.
     std::string format_help(std::string_view program_name) const;
 
-    /// Access the underlying option table.
     const OptionTable<Entries...>& table() const noexcept { return _table; }
 };
 
@@ -567,6 +504,11 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
 
     // Check required options
     detail::check_required(tup, entries, result.diagnostics);
+
+    // Translate diagnostics to human-readable messages
+    result.messages.reserve(result.diagnostics.size());
+    for (auto& d : result.diagnostics)
+        result.messages.push_back(_diag_trans(d));
 
     return result;
 }

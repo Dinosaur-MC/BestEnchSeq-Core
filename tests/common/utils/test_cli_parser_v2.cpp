@@ -2,7 +2,7 @@
 // Tests for the new C++20 CLI parser in common/utils/cli/
 
 #include "common/utils/cli/CLIParser.h"
-#include "common/utils/cli/CLIParserI18n.h"
+#include "common/utils/cli/CLIFormatter.h"
 #include "framework/test_utils.h"
 
 #include <iostream>

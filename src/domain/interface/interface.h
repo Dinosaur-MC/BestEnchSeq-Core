@@ -8,7 +8,7 @@
 
 // ── CLI Module ──
 #include "common/utils/cli/CLIParser.h"       // IWYU pragma: export
-#include "common/utils/cli/CLIParserI18n.h"    // IWYU pragma: export
+#include "common/utils/cli/CLIFormatter.h"    // IWYU pragma: export
 #include "domain/interface/cli/cli.h"             // IWYU pragma: export
 #include "domain/interface/cli/EnchParser.h"      // IWYU pragma: export
 #include "domain/interface/cli/ItemParser.h"      // IWYU pragma: export

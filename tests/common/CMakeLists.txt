@@ -79,7 +79,7 @@ add_executable(test_cli_parser_v2
     utils/test_cli_parser_v2.cpp
     ${PROJECT_ROOT}/src/common/utils/cli/CLIParser.cpp
     ${PROJECT_ROOT}/src/common/utils/cli/CLICommon.cpp
-    ${PROJECT_ROOT}/src/common/utils/cli/CLIParserI18n.cpp
+    ${PROJECT_ROOT}/src/common/utils/cli/CLIFormatter.cpp
 )
 target_include_directories(test_cli_parser_v2 PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_cli_parser_v2 COMMAND test_cli_parser_v2)

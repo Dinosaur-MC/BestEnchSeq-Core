@@ -105,8 +105,8 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
             return early_cfg;
         }
 
-        // Print all translated diagnostics
-        for (auto& msg : cli_parser.format_diagnostics(result))
+        // Print all translated diagnostics (filled by CLIParser::parse)
+        for (auto& msg : result.messages)
             std::cerr << msg << std::endl;
 
         // Fatal error codes → throw
