@@ -77,3 +77,12 @@ template <> struct std::hash<algorithm::Item> {
         return h;
     }
 };
+
+template <> struct std::hash<algorithm::ItemCollection> {
+    size_t operator()(const algorithm::ItemCollection &items) const noexcept {
+        size_t h = items.size();
+        for (const auto &item : items)
+            hash_combine(h, std::hash<algorithm::Item>()(item));
+        return h;
+    }
+};

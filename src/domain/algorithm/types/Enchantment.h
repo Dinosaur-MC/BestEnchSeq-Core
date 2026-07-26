@@ -1,5 +1,6 @@
 #pragma once
 #include "common/serialization/IBinarySerializable.h"
+#include "utils/HashUtils.hpp"
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -179,4 +180,13 @@ template <> struct std::hash<algorithm::Ench> {
 
 template <> struct std::hash<algorithm::EnchSet> {
     size_t operator()(const algorithm::EnchSet &s) const noexcept { return s.hash(); }
+};
+
+template <> struct std::hash<algorithm::EnchCollection> {
+    size_t operator()(const algorithm::EnchCollection &enchs) const noexcept {
+        size_t h = enchs.size();
+        for (const auto &ench : enchs)
+            hash_combine(h, std::hash<algorithm::Ench>()(ench));
+        return h;
+    }
 };
