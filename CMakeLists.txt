@@ -108,10 +108,22 @@ embed_resource(
     SYMBOL item_properties
     OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_item_props.cpp"
 )
+embed_resource(
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/zh_CN.json"
+    SYMBOL i18n_zh_CN
+    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_zh_CN.cpp"
+)
+embed_resource(
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/en_US.json"
+    SYMBOL i18n_en_US
+    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_en_US.cpp"
+)
 
 set(BESQ_EMBEDDED_SRCS
     "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
     "${BESQ_GENERATED_DIR}/EmbeddedData_item_props.cpp"
+    "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_zh_CN.cpp"
+    "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_en_US.cpp"
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -131,6 +143,7 @@ add_library(besq-core SHARED
     ${BESQ_EMBEDDED_SRCS}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/DataLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/ItemProperties.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/I18nLoader.cpp
 )
 
 target_link_libraries(besq-core PUBLIC
