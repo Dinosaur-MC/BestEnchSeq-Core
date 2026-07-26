@@ -218,6 +218,16 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
 
     Config cfg = bind(result);
 
+    // Handle --help / --version for clean parses (no diagnostics)
+    if (cfg.help) {
+        std::cout << help_text(prog) << std::endl;
+        return cfg;
+    }
+    if (cfg.version) {
+        std::cout << prog << " version " << BESQ_VERSION << std::endl;
+        return cfg;
+    }
+
     // Post-bind: --memory (supports "auto")
     {
         auto& raw_mem = std::get<20>(result.value);
