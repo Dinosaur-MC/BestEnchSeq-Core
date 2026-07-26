@@ -354,8 +354,8 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
             std::string warmup_name = algo_name.substr(0, plus);
             std::string main_name   = algo_name.substr(plus + 1);
 
-            if (!no_skip && (main_name == "astar" || main_name == "idastar")
-                && tc.wanted.size() > 8) {
+            if (!no_skip && (main_name == "astar" || main_name == "idastar" || main_name == "dfs")
+                && tc.wanted.size() > 9) {
                 std::cout << "SKIP (too many enchants)\n";
                 continue;
             }
@@ -386,8 +386,8 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
         }
 
         // ── Single algorithm ────────────────────────────────────────────
-        if (!no_skip && (algo_name == "astar" || algo_name == "idastar")
-            && tc.wanted.size() > 8) {
+        if (!no_skip && (algo_name == "astar" || algo_name == "idastar" || algo_name == "dfs")
+            && tc.wanted.size() > 9) {
             std::cout << "SKIP (too many enchants)\n";
             continue;
         }
