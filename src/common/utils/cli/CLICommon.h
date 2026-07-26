@@ -34,11 +34,6 @@ struct Diagnostic {
 // Parsable Concept — types that can be parsed from string
 // ============================================================================
 
-// Forward declarations for entry types (defined in CLIParser.h)
-template<typename T> struct Option;
-struct Flag;
-template<typename T> struct Positional;
-
 // Free-function from_string — user-extensible via ADL / specialization
 // Returns true on success, false on failure (no exceptions)
 bool from_string(std::string_view sv, int& out) noexcept;
@@ -54,6 +49,11 @@ template<typename T>
 concept Parsable = requires(std::string_view sv, T& out) {
     { from_string(sv, out) } -> std::convertible_to<bool>;
 };
+
+// Forward declarations for entry types (defined in CLIParser.h)
+template<Parsable T> struct Option;
+struct Flag;
+template<Parsable T> struct Positional;
 
 // ============================================================================
 // OptionValue Type Mapping — maps entry types to their value types
