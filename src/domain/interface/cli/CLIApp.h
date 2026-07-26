@@ -6,6 +6,22 @@
 #include <string>
 
 // ============================================================================
+// CLIApp — CLI Application Runner
+// ============================================================================
+//
+// Full CLI application that owns a BesqContext and executes all operations.
+
+class CLIApp {
+public:
+    /// Run the CLI application. Returns exit code (0 for success).
+    static int run(int argc, char* argv[]);
+
+    /// Detect which app target is requested from args.
+    /// Checks --api <name>; returns "cli" by default.
+    static std::string detect_target(int argc, char* argv[]);
+};
+
+// ============================================================================
 // CLI — Command-Line Interface Facade
 // ============================================================================
 //

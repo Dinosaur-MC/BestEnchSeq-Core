@@ -1,10 +1,112 @@
-#include "CLIApp.h"
+#include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/cli/EnchParser.h"
+#include "domain/interface/cli/ItemParser.h"
+#include "domain/interface/BesqContext.h"
 #include "common/i18n/Language.h"
 #include "common/utils/cli/CLIParser.hpp"
 #include "BuildConfig.h"
 #include "common/utils/StringUtils.hpp"
+#include "common/log/log.hpp"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
+
+// ============================================================================
+// CLIApp — Application runner
+// ============================================================================
+
+std::string CLIApp::detect_target(int argc, char* argv[]) {
+    for (int i = 1; i < argc - 1; ++i) {
+        if (std::string_view(argv[i]) == "--api")
+            return argv[i + 1];
+    }
+    return "cli";
+}
+
+int CLIApp::run(int argc, char* argv[]) {
+    // 1. Parse CLI args
+    auto config = CLI::parse(argc, argv);
+    if (config.help || config.version) return 0;
+
+    // 2. Initialize context with built-in data
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // 3. Load algorithm plugins
+    if (config.algo_dir)
+        ctx.load_algorithms(*config.algo_dir);
+
+    // 4. --list-algorithms
+    if (config.list_algorithms) {
+        auto algos = ctx.list_algorithms();
+        std::cout << tr_fmt("cli.msg.list_algorithms", algos.size()) << "\n";
+        for (const auto& name : algos)
+            std::cout << "  " << name << "\n";
+        return 0;
+    }
+
+    // 5. Registry operations
+    if (config.registry_dir)
+        ctx.import_registry(*config.registry_dir);
+
+    if (config.registries) {
+        for (const auto& reg : string_utils::split(*config.registries, ',')) {
+            if (!reg.empty())
+                ctx.import_registry(reg);
+        }
+    }
+
+    if (config.registry_edit)
+        ctx.apply_registry_edits(*config.registry_edit);
+
+    // 6. Registry export
+    if (config.export_registry) {
+        bool ok = ctx.export_registry(*config.export_registry);
+        if (!ok) throw std::runtime_error(
+            tr_fmt("main.err.export_failed", *config.export_registry));
+        LOG_INFO("%s", tr_fmt("main.msg.registry_exported",
+            *config.export_registry).c_str());
+        return 0;
+    }
+
+    // 7. Solve
+    if (!config.target.empty()) {
+        auto mode = (config.mode == "inventory")
+            ? AlgorithmMode::inventory : AlgorithmMode::direct;
+
+        SolveRequest request;
+        request.target_item = ItemParser::parse(
+            config.target, ctx.enchantments(), ctx.equipment());
+        request.mode = mode;
+        request.payload = DirectPayload{};
+        if (!config.source.empty()) {
+            request.payload = DirectPayload{
+                EnchParser::parse(config.source, ctx.enchantments())
+            };
+        }
+        request.forge_config.platform = (config.platform == "bedrock")
+            ? MCE::Bedrock : MCE::Java;
+        request.search_config.max_solutions = config.solutions;
+        request.algorithm = config.algorithm;
+        CLI::apply_config_pairs(config.config_pairs, request.forge_config);
+
+        auto result = ctx.solve(request);
+        auto output = ctx.format(result, mode, config.format);
+
+        if (config.output) {
+            std::ofstream out(*config.output);
+            if (!out) throw std::runtime_error(
+                tr_fmt("main.err.output_failed", *config.output));
+            out << output;
+        } else {
+            std::cout << output;
+        }
+    }
+
+    return 0;
+}
 
 // ============================================================================
 // Parser options table (hidden from header)
