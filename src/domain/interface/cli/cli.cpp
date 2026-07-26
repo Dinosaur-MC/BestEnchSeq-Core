@@ -86,14 +86,12 @@ std::string CLI::help_text(std::string_view program_name) {
 CLI::Config CLI::parse(int argc, char* argv[]) {
     std::string prog = argc > 0 ? argv[0] : "besq";
 
-    // Parse with type-safe parser class
-    auto cli_parser = CLIParser(BESQ_OPTIONS);
+    // Parser with unified i18n translator (handles help + diagnostics)
+    auto cli_parser = CLIParser(BESQ_OPTIONS, UserI18nTranslator{});
     auto result = cli_parser.parse(
         std::span<const char*>((const char**)argv, argc));
 
-    // ── Handle diagnostics (errors accumulated, never thrown by parser) ──
-    UserI18nTranslator user_i18n;
-
+    // ── Handle diagnostics ──
     if (!result.diagnostics.empty()) {
         // Early-out for --help / --version even with minor errors
         Config early_cfg = bind(result);
@@ -107,9 +105,9 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
             return early_cfg;
         }
 
-        // Print all diagnostics
-        for (auto& d : result.diagnostics)
-            std::cerr << user_i18n(d) << std::endl;
+        // Print all translated diagnostics
+        for (auto& msg : cli_parser.format_diagnostics(result))
+            std::cerr << msg << std::endl;
 
         // Fatal error codes → throw
         for (auto& d : result.diagnostics) {
