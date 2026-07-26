@@ -10,6 +10,7 @@ struct CLIConfig {
     std::string mode      = "direct";
     std::string target;
     std::string source;
+    std::string lang;        // --lang (locale override)
     std::string config_pairs; // raw --config value
     std::optional<std::string> input;
     std::optional<std::string> registry_dir;

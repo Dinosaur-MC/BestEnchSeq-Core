@@ -5,6 +5,9 @@
 #include "domain/business/business.h"
 #include "domain/algorithm/algorithm.h"
 #include "domain/orchestration/orchestration.h"
+#include "builtin/I18nLoader.h"
+#include "common/i18n/LocaleDetector.h"
+#include "common/i18n/Language.h"
 
 #include <filesystem>
 #include <fstream>
@@ -28,6 +31,19 @@ int main(int argc, char* argv[]) try {
       :                          LogLevel::Debug);
     Logger::instance().set_retention(app_cfg.log_retention);
 
+    // ── i18n setup ──
+    auto& lang_mgr = LanguageManager::instance();
+    register_builtin_translations(lang_mgr);
+
+    std::string lang_code;
+    if (!config.lang.empty()) {
+        lang_code = config.lang;
+    } else {
+        const char* env_lang = std::getenv("BESQ_LANG");
+        lang_code = env_lang ? env_lang : detect_system_locale();
+    }
+    lang_mgr.select(lang_mgr.resolve_locale(lang_code));
+
     // ── Early exit for --help / --version ──
     if (config.help || config.version)
         return 0;
@@ -38,7 +54,7 @@ int main(int argc, char* argv[]) try {
     auto& builtin = profiles.create(NSID("builtin:vanilla"));
     loader.load_builtin(builtin);
     profiles.activate(NSID("builtin:vanilla"));
-    LOG_INFO("Loaded built-in vanilla data");
+    LOG_INFO("%s", tr("main.msg.loaded_builtin").c_str());
 
     // ── Algorithm loader (built-in strategies) ──
     algorithm::AlgorithmLoader algo_loader;
@@ -54,7 +70,7 @@ int main(int argc, char* argv[]) try {
     // ── --list-algorithms ──
     if (config.list_algorithms) {
         auto algos = algo_loader.list();
-        std::cout << "Available algorithm strategies (" << algos.size() << "):\n";
+        std::cout << tr_fmt("cli.msg.list_algorithms", algos.size()) << "\n";
         for (const auto& name : algos)
             std::cout << "  " << name << "\n";
         return 0;
@@ -88,8 +104,8 @@ int main(int argc, char* argv[]) try {
     if (config.export_registry) {
         bool ok = EnchSerializer::export_json(*config.export_registry, profiles.active());
         if (!ok)
-            throw std::runtime_error("Failed to export registry to: " + *config.export_registry);
-        LOG_INFO("Registry exported to %s", config.export_registry->c_str());
+            throw std::runtime_error(tr_fmt("main.err.export_failed", *config.export_registry));
+        LOG_INFO("%s", tr_fmt("main.msg.registry_exported", *config.export_registry).c_str());
         return 0;
     }
 
@@ -134,7 +150,7 @@ int main(int argc, char* argv[]) try {
         if (config.output) {
             std::ofstream out(*config.output);
             if (!out)
-                throw std::runtime_error("Failed to open output file: " + *config.output);
+                throw std::runtime_error(tr_fmt("main.err.output_failed", *config.output));
             out << output;
         } else {
             std::cout << output;
@@ -144,6 +160,6 @@ int main(int argc, char* argv[]) try {
     return 0;
 
 } catch (const std::exception& e) {
-    std::cerr << "Error: " << e.what() << std::endl;
+    std::cerr << tr_fmt("main.err.error_prefix", e.what()) << std::endl;
     return 1;
 }
