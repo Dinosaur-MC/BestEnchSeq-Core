@@ -3,6 +3,7 @@
 
 #include "CLICommon.h"
 #include <span>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <vector>
@@ -59,6 +60,145 @@ inline constexpr bool has_default(const auto& entry) noexcept {
         return false;
 }
 
+// ============================================================================
+// Runtime dispatch helpers -- fold-expression-based index lookup
+// ============================================================================
+
+template<typename... Entries, size_t... Is>
+bool is_flag_impl(const std::tuple<Entries...>&, size_t index, std::index_sequence<Is...>) noexcept {
+    bool result = false;
+    ((index == Is ? (result = std::is_same_v<std::tuple_element_t<Is, std::tuple<Entries...>>, Flag>, true) : false) || ...);
+    return result;
+}
+
+template<typename... Entries>
+bool is_flag_by_index(const std::tuple<Entries...>& entries, size_t index) noexcept {
+    return is_flag_impl<Entries...>(entries, index, std::index_sequence_for<Entries...>{});
+}
+
+template<typename... Entries, size_t... Is>
+std::string_view get_entry_long_name_impl(const std::tuple<Entries...>& entries, size_t index, std::index_sequence<Is...>) noexcept {
+    std::string_view result;
+    ((index == Is ? (result = std::get<Is>(entries).long_name, true) : false) || ...);
+    return result;
+}
+
+template<typename... Entries>
+std::string_view get_entry_long_name(const std::tuple<Entries...>& entries, size_t index) noexcept {
+    return get_entry_long_name_impl<Entries...>(entries, index, std::index_sequence_for<Entries...>{});
+}
+
+template<typename... Entries>
+int find_by_long_name(const std::tuple<Entries...>& tup, std::string_view name) noexcept {
+    int result = -1;
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        ((std::get<Is>(tup).long_name == name ? (result = static_cast<int>(Is), false) : true) && ...);
+    }(std::index_sequence_for<Entries...>{});
+    return result;
+}
+
+template<typename... Entries>
+int find_by_short_name(const std::tuple<Entries...>& tup, char name) noexcept {
+    if (name == '\0') return -1;
+    int result = -1;
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        ((std::get<Is>(tup).short_name == name ? (result = static_cast<int>(Is), false) : true) && ...);
+    }(std::index_sequence_for<Entries...>{});
+    return result;
+}
+
+// Set value at compile-time index
+template<typename... Entries, size_t I>
+void set_value_impl(std::tuple<OptionValue<Entries>...>& tup,
+                    std::string_view val_str,
+                    std::vector<Diagnostic>& diags,
+                    std::string_view option_name) noexcept {
+    using EntryT = std::tuple_element_t<I, std::tuple<Entries...>>;
+    if constexpr (std::is_same_v<EntryT, Flag>) {
+        std::get<I>(tup) = true;
+    } else {
+        using ValT = typename OptionValueType<EntryT>::type::value_type;
+        ValT parsed{};
+        if (from_string(val_str, parsed)) {
+            std::get<I>(tup) = std::move(parsed);
+        } else {
+            diags.push_back(Diagnostic{ParseErrorCode::invalid_value, val_str, option_name});
+        }
+    }
+}
+
+// Set value by runtime index -- dispatch through fold expression
+template<typename... Entries>
+void set_value_by_index(std::tuple<OptionValue<Entries>...>& tup,
+                        size_t index,
+                        std::string_view val_str,
+                        std::vector<Diagnostic>& diags,
+                        std::string_view option_name) noexcept {
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        ((index == Is ? (set_value_impl<Entries..., Is>(tup, val_str, diags, option_name), true) : false) || ...);
+    }(std::index_sequence_for<Entries...>{});
+}
+
+// Apply defaults for unset non-flag options
+template<typename... Entries>
+void apply_defaults(std::tuple<OptionValue<Entries>...>& tup,
+                    const std::tuple<Entries...>& entries) noexcept {
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        ((apply_default_one<Entries..., Is>(tup, entries)), ...);
+    }(std::index_sequence_for<Entries...>{});
+}
+
+template<typename... Entries, size_t I>
+void apply_default_one(std::tuple<OptionValue<Entries>...>& tup,
+                       const std::tuple<Entries...>& entries) noexcept {
+    using EntryT = std::tuple_element_t<I, std::tuple<Entries...>>;
+    if constexpr (!std::is_same_v<EntryT, Flag>) {
+        auto& val = std::get<I>(tup);
+        if (!val.has_value()) {
+            const auto& entry = std::get<I>(entries);
+            if constexpr (requires { entry.default_v; }) {
+                if (entry.default_v.has_value()) {
+                    val = *entry.default_v;
+                }
+            }
+        }
+    }
+}
+
+// Check required options
+template<typename... Entries>
+void check_required(const std::tuple<OptionValue<Entries>...>& tup,
+                    const std::tuple<Entries...>& entries,
+                    std::vector<Diagnostic>& diags) noexcept {
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        ((check_required_one<Entries..., Is>(tup, entries, diags)), ...);
+    }(std::index_sequence_for<Entries...>{});
+}
+
+template<typename... Entries, size_t I>
+void check_required_one(const std::tuple<OptionValue<Entries>...>& tup,
+                        const std::tuple<Entries...>& entries,
+                        std::vector<Diagnostic>& diags) noexcept {
+    if constexpr (requires { std::get<I>(entries).required; }) {
+        if (std::get<I>(entries).required) {
+            const auto& val = std::get<I>(tup);
+            if constexpr (requires { val.has_value(); }) {
+                if (!val.has_value()) {
+                    diags.push_back(Diagnostic{
+                        ParseErrorCode::required_missing,
+                        {},
+                        std::get<I>(entries).long_name
+                    });
+                }
+            }
+        }
+    }
+}
+
+// Compile-time generated: for each entry index, a setter function pointer
+template<typename... Entries>
+using SetterFn = void (*)(std::tuple<OptionValue<Entries>...>&, std::string_view);
+
 } // namespace detail
 
 template<typename... Entries>
@@ -104,19 +244,171 @@ struct ParseResult {
 // parse() -- main parsing function
 // ============================================================================
 
-namespace detail {
-
-// Compile-time generated: for each entry index, a setter function pointer
-template<typename... Entries>
-using SetterFn = void (*)(std::tuple<OptionValue<Entries>...>&, std::string_view);
-
-} // namespace detail
-
 template<typename... Entries>
 ParseResult<Entries...> parse(
     const OptionTable<Entries...>& table,
-    std::span<const char*> args
-);
+    std::span<const char*> args)
+{
+    ParseResult<Entries...> result;
+    auto& tup = result.value;
+    const auto& entries = table.entries;
+
+    size_t arg_start = (args.size() > 0) ? 1 : 0;
+    bool options_ended = false;
+
+    for (size_t i = arg_start; i < args.size(); ++i) {
+        std::string_view arg(args[i]);
+
+        // -- end-of-options marker
+        if (arg == "--") {
+            options_ended = true;
+            continue;
+        }
+
+        // Positional argument (after -- or no - prefix)
+        if (options_ended || !(arg.size() >= 2 && arg[0] == '-')) {
+            bool assigned = false;
+            [&]<size_t... Is>(std::index_sequence<Is...>) {
+                ((!assigned && [&]() -> bool {
+                    using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                    if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
+                        if (!std::get<Is>(tup).has_value()) {
+                            typename ET::value_type parsed{};
+                            if (from_string(arg, parsed)) {
+                                std::get<Is>(tup) = std::move(parsed);
+                                assigned = true;
+                            }
+                        }
+                    }
+                    return false;
+                }()) || ...);
+            }(std::index_sequence_for<Entries...>{});
+            if (!assigned) {
+                result.diagnostics.push_back(Diagnostic{
+                    ParseErrorCode::unexpected_positional, arg, {}
+                });
+            }
+            continue;
+        }
+
+        // Long option: --key=value or --key value or --flag
+        if (arg[1] == '-') {
+            auto eq_pos = arg.find('=', 2);
+            std::string_view key;
+            std::string_view value;
+            bool has_eq = eq_pos != std::string_view::npos;
+
+            if (has_eq) {
+                key = arg.substr(2, eq_pos - 2);
+                value = arg.substr(eq_pos + 1);
+            } else {
+                key = arg.substr(2);
+            }
+
+            int idx = detail::find_by_long_name(entries, key);
+            if (idx < 0) {
+                result.diagnostics.push_back(Diagnostic{
+                    ParseErrorCode::unknown_option, arg, key
+                });
+                continue;
+            }
+
+            if (detail::is_flag_by_index(entries, idx)) {
+                detail::set_value_by_index<Entries...>(tup, idx, {}, result.diagnostics, key);
+            } else {
+                if (has_eq) {
+                    detail::set_value_by_index<Entries...>(tup, idx, value, result.diagnostics, key);
+                } else {
+                    if (i + 1 < args.size()) {
+                        std::string_view next(args[i + 1]);
+                        if (!next.empty() && next[0] != '-') {
+                            ++i;
+                            detail::set_value_by_index<Entries...>(tup, idx, next, result.diagnostics, key);
+                        } else {
+                            result.diagnostics.push_back(Diagnostic{
+                                ParseErrorCode::missing_value, arg, key
+                            });
+                        }
+                    } else {
+                        result.diagnostics.push_back(Diagnostic{
+                            ParseErrorCode::missing_value, arg, key
+                        });
+                    }
+                }
+            }
+            continue;
+        }
+
+        // Short option: -x, -abc
+        std::string_view short_chars = arg.substr(1);
+
+        // Try to expand -abc (only if all chars reference Flag entries)
+        if (short_chars.size() > 1) {
+            bool all_flags = true;
+            for (char c : short_chars) {
+                int idx = detail::find_by_short_name(entries, c);
+                if (idx < 0 || !detail::is_flag_by_index(entries, idx)) {
+                    all_flags = false;
+                    break;
+                }
+            }
+            if (all_flags) {
+                for (char c : short_chars) {
+                    int idx = detail::find_by_short_name(entries, c);
+                    if (idx >= 0) {
+                        detail::set_value_by_index<Entries...>(tup, idx, {}, result.diagnostics, {&c, 1});
+                    } else {
+                        result.diagnostics.push_back(Diagnostic{
+                            ParseErrorCode::unknown_option, arg, std::string_view(&c, 1)
+                        });
+                    }
+                }
+                continue;
+            }
+        }
+
+        // Single short option
+        char first = short_chars[0];
+        int idx = detail::find_by_short_name(entries, first);
+        if (idx < 0) {
+            result.diagnostics.push_back(Diagnostic{
+                ParseErrorCode::unknown_option, arg, std::string_view(&first, 1)
+            });
+            continue;
+        }
+
+        if (detail::is_flag_by_index(entries, idx)) {
+            detail::set_value_by_index<Entries...>(tup, idx, {}, result.diagnostics, {&first, 1});
+        } else {
+            if (short_chars.size() > 1) {
+                // -n5 style: rest of chars is the value
+                detail::set_value_by_index<Entries...>(tup, idx, short_chars.substr(1), result.diagnostics, {&first, 1});
+            } else if (i + 1 < args.size()) {
+                std::string_view next(args[i + 1]);
+                if (!next.empty() && next[0] != '-') {
+                    ++i;
+                    detail::set_value_by_index<Entries...>(tup, idx, next, result.diagnostics, std::string_view(&first, 1));
+                } else {
+                    result.diagnostics.push_back(Diagnostic{
+                        ParseErrorCode::missing_value, arg, std::string_view(&first, 1)
+                    });
+                }
+            } else {
+                result.diagnostics.push_back(Diagnostic{
+                    ParseErrorCode::missing_value, arg, std::string_view(&first, 1)
+                });
+            }
+        }
+    }
+
+    // Apply defaults for unset values
+    detail::apply_defaults(tup, entries);
+
+    // Check required options
+    detail::check_required(tup, entries, result.diagnostics);
+
+    return result;
+}
 
 // ============================================================================
 // format_help() -- auto-generate help text
@@ -132,12 +424,101 @@ struct DefaultHelpTranslator {
 template<typename... Entries>
 std::string format_help(
     const OptionTable<Entries...>& table,
-    std::string_view program_name
-);
+    std::string_view program_name)
+{
+    return format_help(table, program_name, DefaultHelpTranslator{});
+}
 
 template<typename... Entries, typename HT>
 std::string format_help(
     const OptionTable<Entries...>& table,
     std::string_view program_name,
-    const HT& help_trans
-);
+    const HT& help_trans)
+{
+    std::string result;
+    result += "Usage: ";
+    result += program_name;
+    result += " [options]";
+
+    // Append positional argument names
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&]{
+            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
+                const auto& entry = std::get<Is>(table.entries);
+                result += " <";
+                result += entry.name;
+                result += '>';
+            }
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
+
+    result += "\n\nOptions:\n";
+
+    // List all options
+    [&]<size_t... Is>(std::index_sequence<Is...>) {
+        (([&]{
+            const auto& entry = std::get<Is>(table.entries);
+            using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+
+            std::string line = "  ";
+
+            // Short name
+            if constexpr (requires { entry.short_name; }) {
+                if (entry.short_name != '\0') {
+                    line += '-';
+                    line += entry.short_name;
+                    line += ", ";
+                } else {
+                    line += "    ";
+                }
+            }
+
+            // Long name
+            if constexpr (requires { entry.long_name; }) {
+                if (!entry.long_name.empty()) {
+                    line += "--";
+                    line += entry.long_name;
+                    if constexpr (!std::is_same_v<ET, Flag>) {
+                        line += " <value>";
+                    }
+                }
+            }
+
+            // Padding
+            while (line.size() < 28) line += ' ';
+
+            // Help text (translated)
+            line += help_trans(entry.help_key);
+
+            // Default value hint
+            if constexpr (!std::is_same_v<ET, Flag>) {
+                if constexpr (requires { entry.default_v; }) {
+                    if (entry.default_v.has_value()) {
+                        line += " (default: ";
+                        if constexpr (std::is_same_v<typename ET::value_type, std::string>) {
+                            line += *entry.default_v;
+                        } else if constexpr (std::is_same_v<typename ET::value_type, int>) {
+                            line += std::to_string(*entry.default_v);
+                        } else {
+                            line += "set";
+                        }
+                        line += ')';
+                    }
+                }
+            }
+
+            // Required hint
+            if constexpr (requires { entry.required; }) {
+                if (entry.required) {
+                    line += " (required)";
+                }
+            }
+
+            line += '\n';
+            result += line;
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
+
+    return result;
+}
