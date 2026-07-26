@@ -1,4 +1,4 @@
-#include "domain/interface/cli/cli.h"
+#include "domain/interface/CLIApp/CLIApp.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/orchestration/components/OutputFormatter.h"

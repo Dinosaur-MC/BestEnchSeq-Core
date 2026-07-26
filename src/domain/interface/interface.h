@@ -10,4 +10,4 @@
 //   CLI  — CLI::Config, CLI::parse(), CLI::help_text()
 //   ABI  — C ABI bindings (CAbiBindings.cpp, no public header)
 
-#include "domain/interface/cli/cli.h"  // IWYU pragma: export
+#include "domain/interface/cli/CLIApp.h"  // IWYU pragma: export

@@ -77,7 +77,6 @@ add_executable(test_i18n
 
 add_executable(test_cli_parser_v2
     utils/test_cli_parser_v2.cpp
-    ${PROJECT_ROOT}/src/common/utils/cli/CLIParser.cpp
     ${PROJECT_ROOT}/src/common/utils/cli/CLICommon.cpp
     ${PROJECT_ROOT}/src/common/utils/cli/CLIFormatter.cpp
 )

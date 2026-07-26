@@ -6,19 +6,12 @@
 // --target, --max-time, --registry-edit, --config) parse correctly.
 // =============================================================================
 
-#include "domain/interface/cli/cli.h"
-#include "domain/interface/cli/EnchParser.h"
-#include "domain/interface/cli/ItemParser.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
-#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/interface/cli/CLIApp.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "framework/test_utils.h"
 
 #include <iostream>
-#include <stdexcept>
 #include <string>
-#include <vector>
 
 // ---------------------------------------------------------------------------
 // Test: --export-registry without --target is valid

@@ -6,7 +6,7 @@
 // non-empty output in all three output formats.
 // =============================================================================
 
-#include "domain/interface/cli/cli.h"
+#include "domain/interface/CLIApp/CLIApp.h"
 #include "domain/interface/parsers/EnchInfoParser.h"
 #include "domain/interface/parsers/EnchParser.h"
 #include "domain/interface/parsers/ItemParser.h"

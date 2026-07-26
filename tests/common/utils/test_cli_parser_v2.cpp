@@ -1,9 +1,11 @@
 // tests/common/utils/test_cli_parser_v2.cpp
 // Tests for the new C++20 CLI parser in common/utils/cli/
 
-#include "common/utils/cli/CLIParser.h"
+#include "common/utils/cli/CLIParser.hpp"
 #include "common/utils/cli/CLIFormatter.h"
 #include "framework/test_utils.h"
+
+using namespace cli;
 
 #include <iostream>
 #include <string>

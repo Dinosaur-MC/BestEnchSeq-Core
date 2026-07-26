@@ -1,7 +1,7 @@
 // src/common/utils/cli/CLIFormatter.cpp
 #include "CLIFormatter.h"
 
-std::string DefaultDiagnosticFormatter::operator()(const Diagnostic& d) const {
+std::string cli::DefaultDiagnosticFormatter::operator()(const Diagnostic& d) const {
     using enum ParseErrorCode;
     switch (d.code) {
         case unknown_option:

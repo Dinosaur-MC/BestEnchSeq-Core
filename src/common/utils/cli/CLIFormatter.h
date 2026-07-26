@@ -5,8 +5,10 @@
 #include <string>
 #include <string_view>
 
+namespace cli {
+
 // ============================================================================
-// DiagnosticTranslator Concept — translates Diagnostic → human-readable string
+// DiagnosticTranslator concept
 // ============================================================================
 
 template<typename F>
@@ -15,7 +17,7 @@ concept DiagnosticTranslator = requires(F& f, const Diagnostic& diag) {
 };
 
 // ============================================================================
-// HelpTranslator Concept — translates help key → localized string
+// HelpTranslator concept
 // ============================================================================
 
 template<typename F>
@@ -24,7 +26,7 @@ concept HelpTranslator = requires(F& f, std::string_view key) {
 };
 
 // ============================================================================
-// DefaultHelpFormatter — returns the key as-is (English fallback)
+// DefaultHelpFormatter
 // ============================================================================
 
 struct DefaultHelpFormatter {
@@ -34,7 +36,7 @@ struct DefaultHelpFormatter {
 };
 
 // ============================================================================
-// DefaultDiagnosticFormatter — English error messages
+// DefaultDiagnosticFormatter
 // ============================================================================
 
 struct DefaultDiagnosticFormatter {
@@ -42,7 +44,7 @@ struct DefaultDiagnosticFormatter {
 };
 
 // ============================================================================
-// UnifiedDefaultFormatter — handles both help and diagnostics (English)
+// UnifiedDefaultFormatter — handles both help text and diagnostics
 // ============================================================================
 
 struct UnifiedDefaultFormatter {
@@ -53,3 +55,5 @@ struct UnifiedDefaultFormatter {
         return DefaultDiagnosticFormatter{}(d);
     }
 };
+
+} // namespace cli

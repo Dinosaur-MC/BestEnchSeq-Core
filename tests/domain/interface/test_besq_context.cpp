@@ -9,7 +9,7 @@
 #include "domain/interface/SolvePipeline.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
-#include "domain/interface/cli/cli.h"
+#include "domain/interface/CLIApp/CLIApp.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "framework/test_utils.h"

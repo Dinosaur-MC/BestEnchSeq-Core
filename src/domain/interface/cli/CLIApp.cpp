@@ -1,6 +1,6 @@
-#include "cli.h"
+#include "CLIApp.h"
 #include "common/i18n/Language.h"
-#include "common/utils/cli/CLIParser.h"
+#include "common/utils/cli/CLIParser.hpp"
 #include "BuildConfig.h"
 #include "common/utils/StringUtils.hpp"
 #include <iostream>
@@ -11,6 +11,7 @@
 // ============================================================================
 
 namespace {
+using namespace cli;
 
 const auto BESQ_OPTIONS = OptionTable{
     Flag    {.long_name = "help",             .short_name = 'h', .help_key = "cli.help.help_desc"},
@@ -37,17 +38,15 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<int>        {.long_name = "max-time",                  .help_key = "cli.help.max_time_desc"},
 };
 
-}
-
-const auto& CLI::table() { return BESQ_OPTIONS; }
+} // anonymous namespace
 
 // ============================================================================
-// i18n translator — bridges CLIParser diagnostics to project tr()
+// i18n translator — bridges cli::Diagnostic to project tr()
 // ============================================================================
 
 struct CLI::UserI18nTranslator {
-    std::string operator()(const Diagnostic& diag) const {
-        using enum ParseErrorCode;
+    std::string operator()(const cli::Diagnostic& diag) const {
+        using enum cli::ParseErrorCode;
         switch (diag.code) {
             case unknown_option:
                 return tr_fmt("cli.err.unknown_option", diag.arg);
@@ -66,9 +65,7 @@ struct CLI::UserI18nTranslator {
         }
     }
 
-    std::string operator()(std::string_view key) const {
-        return tr(key);
-    }
+    std::string operator()(std::string_view key) const { return tr(key); }
 };
 
 // ============================================================================
@@ -76,7 +73,7 @@ struct CLI::UserI18nTranslator {
 // ============================================================================
 
 std::string CLI::help_text(std::string_view program_name) {
-    return CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name);
+    return cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name);
 }
 
 // ============================================================================
@@ -86,14 +83,11 @@ std::string CLI::help_text(std::string_view program_name) {
 CLI::Config CLI::parse(int argc, char* argv[]) {
     std::string prog = argc > 0 ? argv[0] : "besq";
 
-    // Parser with unified i18n translator (handles help + diagnostics)
-    auto cli_parser = CLIParser(BESQ_OPTIONS, UserI18nTranslator{});
+    auto cli_parser = cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{});
     auto result = cli_parser.parse(
         std::span<const char*>((const char**)argv, argc));
 
-    // ── Handle diagnostics ──
     if (!result.diagnostics.empty()) {
-        // Early-out for --help / --version even with minor errors
         Config early_cfg = bind(result);
 
         if (early_cfg.help) {
@@ -105,27 +99,24 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
             return early_cfg;
         }
 
-        // Print all translated diagnostics (filled by CLIParser::parse)
         for (auto& msg : result.messages)
             std::cerr << msg << std::endl;
 
-        // Fatal error codes → throw
         for (auto& d : result.diagnostics) {
             switch (d.code) {
-                case ParseErrorCode::required_missing:
-                case ParseErrorCode::unknown_option:
-                case ParseErrorCode::invalid_value:
-                case ParseErrorCode::missing_value:
+                case cli::ParseErrorCode::required_missing:
+                case cli::ParseErrorCode::unknown_option:
+                case cli::ParseErrorCode::invalid_value:
+                case cli::ParseErrorCode::missing_value:
                     throw std::runtime_error(tr("cli.err.parse_failed"));
                 default: break;
             }
         }
     }
 
-    // ── Bind parsed values to Config ──
     Config cfg = bind(result);
 
-    // ── Post-bind: --memory (supports "auto") ──
+    // Post-bind: --memory (supports "auto")
     {
         auto& raw_mem = std::get<20>(result.value);
         if (raw_mem.has_value()) {
@@ -134,13 +125,10 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
             } else {
                 try {
                     int n = std::stoi(*raw_mem);
-                    if (n <= 0)
-                        throw std::runtime_error(tr("cli.err.memory_not_positive"));
-                    if (n > 1048576)
-                        throw std::runtime_error(tr("cli.err.memory_out_of_range"));
+                    if (n <= 0) throw std::runtime_error(tr("cli.err.memory_not_positive"));
+                    if (n > 1048576) throw std::runtime_error(tr("cli.err.memory_out_of_range"));
                     cfg.memory_mb = n;
-                } catch (const std::runtime_error&) {
-                    throw;
+                } catch (const std::runtime_error&) { throw;
                 } catch (const std::exception&) {
                     throw std::runtime_error(tr_fmt("cli.err.invalid_memory", *raw_mem));
                 }
@@ -148,26 +136,22 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
         }
     }
 
-    // ── Post-bind: --config (empty check) ──
+    // Post-bind: --config (empty check)
     {
         auto& raw_cfg = std::get<18>(result.value);
         if (raw_cfg.has_value() && raw_cfg->empty())
             throw std::runtime_error(tr("cli.err.empty_config"));
     }
 
-    // ── Business validation ──────────────────────────────────────────────
-
+    // Business validation
     if (!cfg.target.empty()) {
         if (cfg.mode != "direct" && cfg.mode != "inventory")
             throw std::runtime_error(tr_fmt("cli.err.invalid_mode", cfg.mode));
     }
-
     if (cfg.platform != "java" && cfg.platform != "bedrock" && cfg.platform != "auto")
         throw std::runtime_error(tr_fmt("cli.err.invalid_platform", cfg.platform));
-
     if (cfg.format != "text" && cfg.format != "compact" && cfg.format != "json")
         throw std::runtime_error(tr_fmt("cli.err.invalid_format", cfg.format));
-
     if (cfg.solutions < 0)
         throw std::runtime_error(tr("cli.err.solutions_negative"));
     if (cfg.solutions > static_cast<int>(BESQ_MAX_SOLUTIONS))
@@ -204,7 +188,6 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
 
     if (cfg.algo_dir.has_value() && cfg.algo_dir->empty())
         throw std::runtime_error(tr_fmt("cli.err.empty_algo_dir"));
-
     if (cfg.export_registry.has_value() && cfg.export_registry->empty())
         throw std::runtime_error(tr_fmt("cli.err.empty_export_registry"));
 
@@ -220,25 +203,18 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
 // apply_config_pairs — parse --config value and apply to ForgeConfig
 // ============================================================================
 
-void CLI::apply_config_pairs(
-    const std::string& config_pairs,
-    algorithm::ForgeConfig& cfg)
-{
+void CLI::apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg) {
     if (config_pairs.empty()) return;
     auto pairs = string_utils::split(config_pairs, ',');
     for (const auto& pair : pairs) {
         auto eq = pair.find('=');
         if (eq == std::string::npos)
-            throw std::runtime_error(
-                "Invalid config pair: '" + pair + "'. Expected key=value format.\n");
+            throw std::runtime_error("Invalid config pair: '" + pair + "'. Expected key=value format.\n");
         std::string k = pair.substr(0, eq);
         std::string v = pair.substr(eq + 1);
         bool val = (v == "true");
-        if (k == "ignore-cost-cap")
-            cfg.ignore_cost_cap = val;
-        else if (k == "ignore-penalty-cost")
-            cfg.ignore_penalty_cost = val;
-        else if (k == "ignore-repair-cost")
-            cfg.ignore_repair_cost = val;
+        if (k == "ignore-cost-cap")       cfg.ignore_cost_cap = val;
+        else if (k == "ignore-penalty-cost") cfg.ignore_penalty_cost = val;
+        else if (k == "ignore-repair-cost")  cfg.ignore_repair_cost = val;
     }
 }
