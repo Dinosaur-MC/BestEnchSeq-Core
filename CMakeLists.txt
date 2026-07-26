@@ -37,10 +37,10 @@ if(MSVC)
     add_compile_options("/utf-8")
 elseif(UNIX OR MINGW)
     # -fPIC required for shared library (libbesq-core.so) on Linux
-    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter -fPIC)
+    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-missing-designated-field-initializers -fPIC)
 else()
     # Windows + Clang-cl or other targets
-    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
+    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-missing-designated-field-initializers)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
