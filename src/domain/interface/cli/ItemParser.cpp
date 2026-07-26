@@ -1,5 +1,6 @@
 #include "EnchParser.h"
 #include "ItemParser.h"
+#include "common/i18n/Language.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "common/utils/StringUtils.hpp"
 #include <cctype>
@@ -16,7 +17,7 @@ static int32_t parse_nonneg_int(const std::string& str, const std::string& conte
         throw std::runtime_error("Empty value for " + context);
     for (char c : str) {
         if (!std::isdigit(static_cast<unsigned char>(c)))
-            throw std::runtime_error("Invalid integer value '" + str + "' for " + context);
+            throw std::runtime_error(tr_fmt("cli.err.invalid_int", str, context));
     }
     // safe: all digits at this point
     unsigned long long val = std::stoull(str);
@@ -56,8 +57,7 @@ static size_t parse_properties(const std::string& input, size_t start,
             else if (key == "durability")
                 durability = parse_nonneg_int(val, "durability");
             else
-                throw std::runtime_error("Unknown property key '" + key +
-                    "' (valid: prior_penalty, durability) in '" + input + "'");
+                throw std::runtime_error(tr_fmt("cli.err.unknown_property", key));
         }
     }
 
@@ -114,7 +114,7 @@ Item ItemParser::parse(const std::string &input,
     // ── Look up equipment (needed for max_durability defaults) ──
     auto eq_it = eq_reg.find(NSID(item_id));
     if (eq_it == eq_reg.end())
-        throw std::runtime_error("Unknown equipment: '" + item_id + "'");
+        throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", item_id));
 
     // ── Set defaults from equipment data ──
     durability = eq_it->max_durability;

@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "common/i18n/Language.h"
 #include "domain/interface/cli/CLIParser.h"
 #include "BuildConfig.h"
 #include "common/utils/StringUtils.hpp"
@@ -14,48 +15,38 @@
 // ============================================================================
 std::string get_cli_help_text(const std::string &program_name) {
     return
-        "Usage: " + program_name + " [options] --target <item>\n"
-        "   or: " + program_name + " --export-registry <path> [options]\n"
-        "   or: " + program_name + " (no args: show this help)\n"
+        tr_fmt("cli.help.usage", program_name) + "\n"
+        "   " + tr_fmt("cli.help.usage_export", program_name) + "\n"
+        "   " + tr_fmt("cli.help.usage_noargs", program_name) + "\n"
         "\n"
-        "Options:\n"
-        "  -h, --help              Show this help message\n"
-        "  -V, --version           Show version info\n"
-        "  --algorithm <name>      Search algorithm: hamming (default), dfs, astar\n"
-        "                           (use --list-algorithms to see all available,\n"
-        "                           including externally loaded plugins)\n"
-        "  --source <list>         Source enchantments (e.g., sharpness=5,knockback=2)\n"
-        "  --target <spec>         Target item with wanted enchantments\n"
-        "                           (e.g., diamond_sword[sharpness=3])\n"
-        "  --mode <mode>           Operation mode: direct (default) or inventory\n"
-        "  --platform <platform>   Platform: java, bedrock, or auto (default)\n"
-        "  --solutions <n>         Maximum solutions (0 = unlimited, default: 1, max: " BESQ_STR(BESQ_MAX_SOLUTIONS) ")\n"
-        "  --format <format>       Output format: text (default), compact, or json\n"
-        "  --input <file>          Input file path (inventory mode)\n"
-        "  --output <file>         Output file path (default: stdout)\n"
-        "  --registry-dir <dir>    Scan directory for registry data files/subdirs\n"
-        "                           (auto-detects JSON, CSV, MC Official format)\n"
-        "  --registries <list>     Registry names or paths to activate\n"
-        "                           (default: all discovered registries;\n"
-        "                           e.g., --registries Vanilla,./custom.json)\n"
-        "  --registry-edit <ops>   Runtime registry edits before execution\n"
-        "                           Format: <target>:<action>,<id>[,<field>=<val>...]\n"
-        "                           Targets: ench | eq | cat  Actions: add | mod | rm\n"
-        "                           e.g., --registry-edit \"ench:mod,sharpness,max_level=10\"\n"
+        + tr("cli.help.options_header") + ":\n"
+        "  -h, --help              " + tr("cli.help.help_desc") + "\n"
+        "  -V, --version           " + tr("cli.help.version_desc") + "\n"
+        "  --algorithm <name>      " + tr("cli.help.algorithm_desc") + "\n"
+        "  --source <list>         " + tr("cli.help.source_desc") + "\n"
+        "  --target <spec>         " + tr("cli.help.target_desc") + "\n"
+        "  --mode <mode>           " + tr("cli.help.mode_desc") + "\n"
+        "  --platform <platform>   " + tr("cli.help.platform_desc") + "\n"
+        "  --solutions <n>         " + tr_fmt("cli.help.solutions_desc", BESQ_STR(BESQ_MAX_SOLUTIONS)) + "\n"
+        "  --format <format>       " + tr("cli.help.format_desc") + "\n"
+        "  --input <file>          " + tr("cli.help.input_desc") + "\n"
+        "  --output <file>         " + tr("cli.help.output_desc") + "\n"
+        "  --registry-dir <dir>    " + tr("cli.help.registry_dir_desc") + "\n"
+        "  --registries <list>     " + tr("cli.help.registries_desc") + "\n"
+        "  --registry-edit <ops>   " + tr("cli.help.registry_edit_desc") + "\n"
         "  --export-registry <path>\n"
-        "                           Export current registry to file (.json / .csv)\n"
-        "  --config <pairs>        Config key=value pairs (comma-separated).\n"
-        "                           Keys: ignore-cost-cap, ignore-penalty-cost,\n"
-        "                                 ignore-repair-cost (all: true|false)\n"
-        "  --memory <MB|auto>      Memory budget for AStar search (default: auto)\n"
-        "  --algo-dir <dir>        Directory with external .so/.dll algorithm strategies\n"
-        "  --max-time <seconds>    Max search time in seconds (0 = unlimited, default: 0)\n"
-        "  -v, --verbose           Show algorithm diagnostic counters on completion\n"
+        "                           " + tr("cli.help.export_registry_desc") + "\n"
+        "  --config <pairs>        " + tr("cli.help.config_desc") + "\n"
+        "  --memory <MB|auto>      " + tr("cli.help.memory_desc") + "\n"
+        "  --algo-dir <dir>        " + tr("cli.help.algo_dir_desc") + "\n"
+        "  --max-time <seconds>    " + tr("cli.help.max_time_desc") + "\n"
+        "  --lang <code>           " + tr("cli.help.lang_desc") + "\n"
+        "  -v, --verbose           " + tr("cli.help.verbose_desc") + "\n"
         "\n"
-        "Enchantment formats:\n"
-        "  id=level                e.g., sharpness=5\n"
-        "  ns:id=level             e.g., minecraft:sharpness=5\n"
-        "  id:level                e.g., sharpness:5 (colon shorthand)\n";
+        + tr("cli.help.ench_format_header") + ":\n"
+        "  " + tr("cli.help.ench_format_id_level") + "\n"
+        "  " + tr("cli.help.ench_format_nsid_level") + "\n"
+        "  " + tr("cli.help.ench_format_colon") + "\n";
 }
 
 // ============================================================================
@@ -95,7 +86,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
 
         if (key == "mode") {
             if (value != "direct" && value != "inventory") {
-                throw std::runtime_error("Invalid mode: '" + value + "'. Expected 'direct' or 'inventory'.\n");
+                throw std::runtime_error(tr_fmt("cli.err.invalid_mode", value));
             }
             config.mode = value;
         } else if (key == "target") {
@@ -108,47 +99,46 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.registries = value;
         } else if (key == "registry-edit") {
             if (value.empty())
-                throw std::runtime_error("Empty --registry-edit value.\n");
+                throw std::runtime_error(tr_fmt("cli.err.empty_registry_edit"));
             // Basic format validation: must contain at least one ':'
             auto ops = string_utils::split(value, ';');
             for (const auto& op : ops) {
                 if (op.find(':') == std::string::npos)
-                    throw std::runtime_error("Invalid --registry-edit operation: '" +
-                        op + "'. Expected format <target>:<action>,<id>[,<field>=<val>...]\n");
+                    throw std::runtime_error(
+                        tr_fmt("cli.err.invalid_registry_edit", op));
             }
             config.registry_edit = value;
         } else if (key == "list-algorithms") {
             config.list_algorithms = true;
         } else if (key == "algo-dir") {
             if (value.empty())
-                throw std::runtime_error("Empty --algo-dir value.\n");
+                throw std::runtime_error(tr_fmt("cli.err.empty_algo_dir"));
             config.algo_dir = value;
         } else if (key == "export-registry") {
             if (value.empty())
-                throw std::runtime_error("Empty --export-registry value.\n");
+                throw std::runtime_error(tr_fmt("cli.err.empty_export_registry"));
             config.export_registry = value;
         } else if (key == "config") {
             config.config_pairs = value;
             // Validate syntax and recognize keys; actual application
             // to ForgeConfig happens later via apply_config_pairs().
             if (value.empty())
-                throw std::runtime_error("Empty --config value.\n");
+                throw std::runtime_error(tr_fmt("cli.err.empty_config"));
             auto pairs = string_utils::split(value, ',');
             for (const auto& pair : pairs) {
                 auto eq = pair.find('=');
                 if (eq == std::string::npos)
-                    throw std::runtime_error("Invalid config pair: '" + pair + "'. Expected key=value format.\n");
+                    throw std::runtime_error(tr_fmt("cli.err.invalid_config_pair", pair));
                 if (eq == 0)
-                    throw std::runtime_error("Invalid config pair: '" + pair + "'. Empty key.\n");
+                    throw std::runtime_error(tr_fmt("cli.err.empty_config_key", pair));
                 auto k = pair.substr(0, eq);
                 auto v = pair.substr(eq + 1);
                 if (v.empty())
-                    throw std::runtime_error("Invalid config pair: '" + pair + "'. Empty value.\n");
+                    throw std::runtime_error(tr_fmt("cli.err.empty_config_value", pair));
                 if (k != "ignore-cost-cap" && k != "ignore-penalty-cost" && k != "ignore-repair-cost")
-                    throw std::runtime_error("Unknown config key: '" + k + "'. "
-                        "Valid keys: ignore-cost-cap, ignore-penalty-cost, ignore-repair-cost.\n");
+                    throw std::runtime_error(tr_fmt("cli.err.unknown_config_key", k));
                 if (v != "true" && v != "false")
-                    throw std::runtime_error("Invalid config value for '" + k + "': '" + v + "'. Expected 'true' or 'false'.\n");
+                    throw std::runtime_error(tr_fmt("cli.err.invalid_config_value", k, v));
             }
         } else if (key == "input") {
             config.input = value;
@@ -156,12 +146,12 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             config.output = value;
         } else if (key == "platform") {
             if (value != "java" && value != "bedrock" && value != "auto") {
-                throw std::runtime_error("Invalid platform: '" + value + "'. Expected 'java', 'bedrock', or 'auto'.\n");
+                throw std::runtime_error(tr_fmt("cli.err.invalid_platform", value));
             }
             config.platform = value;
         } else if (key == "format") {
             if (value != "text" && value != "compact" && value != "json") {
-                throw std::runtime_error("Invalid format: '" + value + "'. Expected 'text', 'compact', or 'json'.\n");
+                throw std::runtime_error(tr_fmt("cli.err.invalid_format", value));
             }
             config.format = value;
         } else if (key == "algorithm") {
@@ -169,14 +159,14 @@ CLIConfig parse_cli(int argc, char *argv[]) {
         } else if (key == "solutions") {
             try {
                 int n = std::stoi(value);
-                if (n < 0) throw std::runtime_error("must be >= 0");
+                if (n < 0) throw std::runtime_error(tr("cli.err.solutions_negative"));
                 if (n > static_cast<int>(BESQ_MAX_SOLUTIONS))
-                    throw std::runtime_error("--solutions must be <= " BESQ_STR(BESQ_MAX_SOLUTIONS) "\n");
+                    throw std::runtime_error(tr_fmt("cli.err.solutions_out_of_range", BESQ_MAX_SOLUTIONS));
                 config.solutions = n;
             } catch (const std::runtime_error &) {
                 throw;
             } catch (const std::exception &) {
-                throw std::runtime_error("Invalid --solutions value: '" + value + "'. Expected an integer.\n");
+                throw std::runtime_error(tr_fmt("cli.err.invalid_solutions", value));
             }
         } else if (key == "memory") {
             if (value == "auto") {
@@ -184,27 +174,31 @@ CLIConfig parse_cli(int argc, char *argv[]) {
             } else {
                 try {
                     int n = std::stoi(value);
-                    if (n <= 0) throw std::runtime_error("must be positive");
-                    if (n > 1048576) throw std::runtime_error("--memory must be <= 1048576\n");
+                    if (n <= 0) throw std::runtime_error(tr("cli.err.memory_not_positive"));
+                    if (n > 1048576) throw std::runtime_error(tr("cli.err.memory_out_of_range"));
                     config.memory_mb = n;
                 } catch (const std::runtime_error &) {
                     throw;
                 } catch (const std::exception &) {
-                    throw std::runtime_error("Invalid --memory value: '" + value + "'. Expected a positive integer or 'auto'.\n");
+                    throw std::runtime_error(tr_fmt("cli.err.invalid_memory", value));
                 }
             }
         } else if (key == "max-time") {
             try {
                 int n = std::stoi(value);
-                if (n < 0) throw std::runtime_error("must be >= 0");
+                if (n < 0) throw std::runtime_error(tr("cli.err.max_time_negative"));
                 config.max_time = n;
             } catch (const std::runtime_error &) {
                 throw;
             } catch (const std::exception &) {
-                throw std::runtime_error("Invalid --max-time value: '" + value + "'. Expected a non-negative integer.\n");
+                throw std::runtime_error(tr_fmt("cli.err.invalid_max_time", value));
             }
+        } else if (key == "lang") {
+            if (value.empty())
+                throw std::runtime_error(tr("cli.err.empty_lang"));
+            config.lang = value;
         } else {
-            throw std::runtime_error("Unknown option: --" + key + "\n");
+            throw std::runtime_error(tr_fmt("cli.err.unknown_option", key));
         }
     }
 
@@ -212,8 +206,7 @@ CLIConfig parse_cli(int argc, char *argv[]) {
     // --target or --export-registry or --list-algorithms is required
     if (!config.help && !config.version) {
         if (config.target.empty() && !config.export_registry.has_value() && !config.list_algorithms)
-            throw std::runtime_error(
-                "Missing required argument: --target (or --export-registry to export registry only)\n");
+            throw std::runtime_error(tr("cli.err.missing_target"));
     }
 
     return config;

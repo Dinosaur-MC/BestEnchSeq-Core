@@ -1,4 +1,5 @@
 #include "EnchParser.h"
+#include "common/i18n/Language.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "common/utils/StringUtils.hpp"
 
@@ -55,11 +56,11 @@ EnchSet EnchParser::parse(const std::string& input,
                 level = std::stoi(level_str);
             } catch (const std::exception&) {
                 throw std::runtime_error(
-                    "Invalid enchantment level: '" + level_str + "' in '" + token + "'");
+                    tr_fmt("cli.err.invalid_ench_level", level_str, token));
             }
             if (level < 1 || level > 255) {
                 throw std::runtime_error(
-                    "Invalid enchantment level: '" + level_str + "' in '" + token + "'");
+                    tr_fmt("cli.err.invalid_ench_level", level_str, token));
             }
 
             // Spec part before '='
@@ -121,7 +122,7 @@ EnchSet EnchParser::parse(const std::string& input,
             // bare-ID fallback
             it = ench_reg.find(NSID(id));
             if (it == ench_reg.end())
-                throw std::runtime_error("Unknown enchantment: '" + key + "'");
+                throw std::runtime_error(tr_fmt("cli.err.unknown_ench", key));
         }
         result.emplace(it->id, it->name, level);
     }

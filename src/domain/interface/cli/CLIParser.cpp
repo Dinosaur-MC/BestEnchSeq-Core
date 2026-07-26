@@ -1,4 +1,5 @@
 #include "CLIParser.h"
+#include "common/i18n/Language.h"
 #include "common/log/log.hpp"
 
 #include <cstring>
@@ -42,7 +43,7 @@ std::vector<ParsedArg> CLIParser::parse(int argc, char *argv[]) {
         if (arg == "--") {
             // Warn about any remaining arguments after --
             for (int j = i + 1; j < argc; ++j) {
-                LOG_WARN("Warning: argument '%s' after -- ignored", argv[j]);
+                LOG_WARN("%s", tr_fmt("cli.err.arg_after_double_dash", argv[j]).c_str());
             }
             break;
         }
@@ -82,7 +83,7 @@ std::vector<ParsedArg> CLIParser::parse(int argc, char *argv[]) {
             if (long_name) {
                 result.push_back({long_name, "", true});
             } else {
-                throw std::runtime_error("Unknown option: '" + arg + "'");
+                throw std::runtime_error(tr_fmt("cli.err.unknown_short_option", arg));
             }
             continue;
         }
@@ -93,7 +94,7 @@ std::vector<ParsedArg> CLIParser::parse(int argc, char *argv[]) {
         // This can happen with `-k value` where the value itself starts with -
         // but wasn't consumed because we don't know which flags take values.
         // The business layer (parse_cli) handles this.
-        throw std::runtime_error("Unexpected argument: '" + arg + "'");
+        throw std::runtime_error(tr_fmt("cli.err.unexpected_arg", arg));
     }
 
     return result;
