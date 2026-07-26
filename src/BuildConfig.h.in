@@ -9,6 +9,7 @@
 
 // ── Version ──
 #define BESQ_VERSION "@PROJECT_VERSION@"
+#define BESQ_PROJECT_NAME "@PROJECT_NAME@"
 
 // ── Feature flags ──
 //

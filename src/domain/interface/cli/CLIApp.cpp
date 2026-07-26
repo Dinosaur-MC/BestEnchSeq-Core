@@ -8,7 +8,6 @@
 #include "common/utils/StringUtils.hpp"
 #include "common/log/log.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -203,7 +202,7 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
             return early_cfg;
         }
         if (early_cfg.version) {
-            std::cout << std::filesystem::path(prog).filename().string() << " version " << BESQ_VERSION << std::endl;
+            std::cout << BESQ_PROJECT_NAME << " v" << BESQ_VERSION << std::endl;
             return early_cfg;
         }
 
@@ -230,7 +229,7 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
         return cfg;
     }
     if (cfg.version) {
-        std::cout << std::filesystem::path(prog).filename().string() << " version " << BESQ_VERSION << std::endl;
+        std::cout << BESQ_PROJECT_NAME << " v" << BESQ_VERSION << std::endl;
         return cfg;
     }
 
