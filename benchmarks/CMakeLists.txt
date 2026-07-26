@@ -22,8 +22,7 @@ function(besq_bench NAME SOURCE)
 endfunction()
 
 # ── forge_benchmark (full algorithm benchmark) ──
-# TODO: re-enable when registries API is stabilized in benchmark harness
-# besq_bench(forge_benchmark forge_benchmark.cpp)
+besq_bench(forge_benchmark forge_benchmark.cpp)
 
 # ── queue_benchmark (standalone, no project deps beyond src/utils) ──
 add_executable(queue_benchmark queue_benchmark.cpp)
@@ -34,7 +33,6 @@ add_executable(eloop_benchmark eloop_benchmark.cpp)
 target_include_directories(eloop_benchmark PRIVATE ${BENCH_INCLUDE})
 
 # Quick smoke test for ctest — runs one small case with greedy algo (< 5s)
-# Disabled: forge_benchmark needs registries API migration
-# add_test(NAME benchmark_smoke
-#     COMMAND forge_benchmark --test crossbow --algo greedy
-#     WORKING_DIRECTORY ${PROJECT_ROOT})
+add_test(NAME benchmark_smoke
+    COMMAND forge_benchmark --test crossbow --algo hamming
+    WORKING_DIRECTORY ${PROJECT_ROOT})

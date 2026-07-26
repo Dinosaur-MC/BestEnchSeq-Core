@@ -1,14 +1,14 @@
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/orchestration/components/CompactAdapter.h"
 #include "builtin/DataLoader.h"
-#include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/Item.h"
-#include "domain/algorithm/types/AlgorithmTypes.h"
-#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/business/types/Enchantment.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -190,7 +190,7 @@ BenchConfig parse_cli(int argc, char* argv[]) {
 // When --alg was given, warns about any requested algorithm that isn't loaded
 // and silently excludes it.
 static std::vector<std::string>
-resolve_algos(const BenchConfig& cfg, const AlgorithmLoader& loader) {
+resolve_algos(const BenchConfig& cfg, const algorithm::AlgorithmLoader& loader) {
     std::vector<std::string> all = loader.list();
     std::sort(all.begin(), all.end());
 
@@ -237,7 +237,7 @@ void load_builtin_data() {
 
 // ─── Run a single test case against every <algos> entry ───
 void run_case(const TestCase& tc, const std::vector<std::string>& algos,
-              const AlgorithmLoader& loader, bool no_skip) {
+              const algorithm::AlgorithmLoader& loader, bool no_skip) {
     auto eq_it = G_EQ.find(NSID(tc.item_type));
     if (eq_it == G_EQ.end()) {
         std::cout << "  [SKIP] unknown equipment '" << tc.item_type << "'\n";
@@ -245,6 +245,7 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
     }
     const Equipment& eq = *eq_it;
 
+    // ── Parse wanted enchants + build business items ───────────────────
     ::EnchSet wanted_set;
     ItemCollection books;
     for (const auto& spec : tc.wanted) {
@@ -258,28 +259,86 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
         }
         Ench ench{ench_it->id, ench_it->name, lv};
         wanted_set.insert(ench);
-        books.emplace_back(NSID("enchanted_book"), ::EnchSet{std::move(ench)}, 0);
+        books.emplace_back(NSID("minecraft:enchanted_book"),
+                           ::EnchSet{std::move(ench)}, 0);
     }
 
+    // ── Build compact EnchReg for this equipment ───────────────────────
     algorithm::EnchReg ench_reg;
-    ench_reg.init(G_ENCH, eq);
+    {
+        // Build sorted applicable EnchInfos + NSID mapping
+        const auto& all_infos = G_ENCH.data();
+        std::vector<std::pair<NSID, EnchInfo>> sorted(all_infos.begin(), all_infos.end());
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
 
-    ItemStack start_item(eq, ::EnchSet{}, 0, eq.max_durability);
+        std::vector<algorithm::EnchInfo> algo_infos;
+        std::vector<NSID> global_ids;
+        std::unordered_map<NSID, int16_t> nsid_to_local;
 
-    AlgorithmInput algo_input;
-    algo_input.config.platform = MCE::Java;
+        for (int32_t gid = 0; gid < static_cast<int32_t>(sorted.size()); ++gid) {
+            const auto& biz = sorted[gid].second;
+            bool applicable = biz.applicable_equipments.count(eq.category) > 0
+                           || biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
+            if (!applicable) continue;
+
+            algorithm::EnchInfo ai;
+            ai.mul     = static_cast<uint16_t>(biz.multiplier);
+            ai.mul_b   = static_cast<uint16_t>(biz.multiplier);
+            ai.max_lvl = static_cast<uint16_t>(biz.max_level);
+            ai.exc_mask.resize(algo_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
+            for (size_t li = 0; li < algo_infos.size(); ++li) {
+                if (biz.exclusive_set.count(global_ids[li])) {
+                    size_t word = li / algorithm::MASK_ELEM_SIZE;
+                    size_t bit  = li % algorithm::MASK_ELEM_SIZE;
+                    ai.exc_mask[word] |= (algorithm::MaskType(1) << bit);
+                    if (word < algo_infos[li].exc_mask.size())
+                        algo_infos[li].exc_mask[word] |= (algorithm::MaskType(1) << bit);
+                }
+            }
+
+            int16_t lid = static_cast<int16_t>(algo_infos.size());
+            nsid_to_local[sorted[gid].first] = lid;
+            global_ids.push_back(sorted[gid].first);
+            algo_infos.push_back(std::move(ai));
+        }
+
+        algorithm::Equipment algo_equip;
+        algo_equip.id             = 0;
+        algo_equip.category_id    = 0;
+        algo_equip.max_durability = eq.max_durability;
+
+        ench_reg.init(std::move(algo_infos), std::move(global_ids), algo_equip);
+    }
+
+    // ── Build AlgorithmInput via from_domain ───────────────────────────
+    algorithm::AlgorithmInput algo_input;
+    algo_input.f_config.platform = MCE::Java;
     algo_input.ench_reg = std::move(ench_reg);
 
-    algo_input.items.push_back(CompactAdapter::from_domain(start_item, algo_input.ench_reg));
-    for (const auto& book : books)
-        algo_input.items.push_back(CompactAdapter::from_domain(book, algo_input.ench_reg));
-
-    algo_input.target.reserve(wanted_set.size());
-    for (const auto& e : wanted_set) {
-        int16_t _lid = static_cast<int16_t>(algo_input.ench_reg.to_local_id(e.id));
-        if (_lid >= 0)
-            algo_input.target.push_back({_lid, static_cast<int16_t>(e.level)});
+    // Convert target enchantments
+    {
+        algorithm::EnchSet target_enchs;
+        for (const auto& e : wanted_set) {
+            int16_t lid = algo_input.ench_reg.to_local_id(e.id);
+            if (lid >= 0)
+                target_enchs.insert(algorithm::Ench{lid, static_cast<int16_t>(e.level)});
+        }
+        algo_input.target.enchs = std::move(target_enchs);
+        algo_input.target.type  = algorithm::ItemType::Equip;
+        algo_input.target.ppn   = 0;
+        algo_input.target.dur   = static_cast<int16_t>(eq.max_durability);
     }
+    algo_input.mode = AlgorithmMode::direct;
+    algo_input.data = algorithm::EnchCollection{};
+
+    // Convert business items -> algorithm items
+    Item start_item(eq.id, ::EnchSet{}, 0, eq.max_durability);
+    algo_input.items.push_back(
+        CompactAdapter::from_domain(start_item, algo_input.ench_reg));
+    for (const auto& book : books)
+        algo_input.items.push_back(
+            CompactAdapter::from_domain(book, algo_input.ench_reg));
 
     // ══════════════════════════════════════════════════════════════════════
     // Iterate algos in sorted order
@@ -300,22 +359,22 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
             }
             try {
                 auto main_algo = loader.create(main_name);
-                AlgorithmExecutor executor(std::move(main_algo));
-                AlgorithmInput run_input = algo_input;
+                algorithm::AlgorithmExecutor executor(std::move(main_algo));
+                algorithm::AlgorithmInput run_input = algo_input;
                 executor.start(std::move(run_input),
                                loader.create(warmup_name));
                 executor.wait();
-                if (executor.state() != AlgorithmState::Completed) {
+                if (executor.state() != algorithm::AlgorithmState::Completed) {
                     std::cout << "no solution\n"; continue;
                 }
-                AlgorithmOutput out = executor.output();
+                algorithm::AlgorithmOutput out = executor.output();
                 if (out.solutions.empty()) {
                     std::cout << "no solution\n"; continue;
                 }
                 int32_t total = out.solutions[0].total_cost;
                 bool ok = total <= tc.max_cost;
                 std::cout << std::right << std::setw(4) << total << "L"
-                          << (ok ? "  ✅" : "  ⚠")
+                          << (ok ? "  \xe2\x9c\x85" : "  \xe2\x9a\xa0")
                           << "  " << std::setw(4) << out.computation_time.count()
                           << "ms\n";
             } catch (const std::exception& e) {
@@ -333,22 +392,22 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
 
         try {
             auto algo = loader.create(algo_name);
-            AlgorithmExecutor executor(std::move(algo));
-            AlgorithmInput run_input = algo_input;
+            algorithm::AlgorithmExecutor executor(std::move(algo));
+            algorithm::AlgorithmInput run_input = algo_input;
             executor.start(std::move(run_input));
             executor.wait();
 
-            if (executor.state() != AlgorithmState::Completed) {
+            if (executor.state() != algorithm::AlgorithmState::Completed) {
                 std::cout << "no solution\n"; continue;
             }
-            AlgorithmOutput out = executor.output();
+            algorithm::AlgorithmOutput out = executor.output();
             if (out.solutions.empty()) {
                 std::cout << "no solution\n"; continue;
             }
             int32_t total = out.solutions[0].total_cost;
             bool ok = total <= tc.max_cost;
             std::cout << std::right << std::setw(4) << total << "L"
-                      << (ok ? "  ✅" : "  ⚠")
+                      << (ok ? "  \xe2\x9c\x85" : "  \xe2\x9a\xa0")
                       << "  " << std::setw(4) << out.computation_time.count()
                       << "ms\n";
         } catch (const std::exception& e) {
@@ -391,7 +450,7 @@ int main(int argc, char* argv[]) {
     // ═════════════════════════════════════════════════════════════════════
     // Load algorithms: built-in + optional plugins
     // ═════════════════════════════════════════════════════════════════════
-    AlgorithmLoader loader;
+    algorithm::AlgorithmLoader loader;
     loader.load_builtin();
 
     if (!cfg.algo_dir.empty()) {
