@@ -4,7 +4,6 @@
 
 set(BESQ_INTERFACE_SRCS
     # ── CLI module ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/cli/CLIParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/EnchParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/ItemParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cli/cli.cpp

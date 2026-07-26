@@ -7,7 +7,6 @@
 // =============================================================================
 
 #include "domain/interface/cli/cli.h"
-#include "domain/interface/cli/CLIParser.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
