@@ -107,6 +107,7 @@ void test_wait_if_paused_resume() {
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
 
 struct MockObserver : IAlgorithmObserver {
+    virtual ~MockObserver() = default;
     size_t seen_task{0};
     int progress_cnt{0};
     int solution_cnt{0};

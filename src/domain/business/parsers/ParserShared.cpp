@@ -1,6 +1,8 @@
 #include "ParserShared.h"
 #include "builtin/ItemProperties.h"
 
+#include <cmath>
+
 namespace business::parser_detail {
 
 std::string get_category_suffix(const std::string& item_id) {

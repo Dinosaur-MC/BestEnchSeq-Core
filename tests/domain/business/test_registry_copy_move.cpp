@@ -237,7 +237,10 @@ void test_ench_self_assignment() {
     EnchantmentRegistry reg(infos);
 
     // Self-copy-assignment must be a no-op
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-assign-overloaded"
     reg = reg;
+#pragma clang diagnostic pop
 
     expect(reg.size() == 4, "self assign: size unchanged");
     expect(reg.contains(NSID("sharpness")), "self assign: sharpness present");
