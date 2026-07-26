@@ -4,7 +4,10 @@
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/components/FormatDetector.h"
 #include "domain/orchestration/components/EnchSerializer.h"
+#include "domain/orchestration/components/OutputFormatter.h"
+#include "domain/orchestration/pipelines/ManagePipeline.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/interface/cli/RegistryEditor.h"
 
 #include <filesystem>
 #include <string>
@@ -182,6 +185,66 @@ bool BesqContext::export_registry(const std::string& path) const {
         return EnchSerializer::export_csv(path, profile);
     }
     return EnchSerializer::export_json(path, profile);
+}
+
+// ====================================================================
+// Registry import
+// ====================================================================
+
+void BesqContext::import_registry(const std::string& path) {
+    auto& profile = _impl->profiles.active();
+    auto [ench_data, eq_data] = FormatDetector::parse(path);
+
+    EquipmentTagRegistry tag_reg;
+    EquipmentRegistry eq_reg;
+    EnchantmentRegistry ench_reg;
+    RegistryLoader reg_loader;
+    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
+
+    for (const auto& [nsid, tag] : tag_reg.data())
+        profile.add_tag(tag);
+    for (const auto& [nsid, eq] : eq_reg.data())
+        profile.add_equipment(eq);
+    for (const auto& [nsid, info] : ench_reg.data())
+        profile.add_enchantment(info);
+}
+
+void BesqContext::import_registries(const std::vector<std::string>& paths) {
+    for (const auto& path : paths)
+        import_registry(path);
+}
+
+void BesqContext::apply_registry_edits(const std::string& spec) {
+    ::apply_registry_edits(spec, _impl->profiles.active());
+}
+
+// ====================================================================
+// Output formatting
+// ====================================================================
+
+std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode,
+                                std::string_view fmt) const {
+    auto& profile = _impl->profiles.active();
+    if (fmt == "json")
+        return OutputFormatter::format_json(result.solutions, profile, mode);
+    if (fmt == "compact")
+        return OutputFormatter::format_compact(result.solutions, profile, mode);
+    return OutputFormatter::format_verbose(result.solutions, profile, mode);
+}
+
+std::string BesqContext::format_verbose(const SolveResult& result, AlgorithmMode mode) const {
+    return OutputFormatter::format_verbose(
+        result.solutions, _impl->profiles.active(), mode);
+}
+
+std::string BesqContext::format_compact(const SolveResult& result, AlgorithmMode mode) const {
+    return OutputFormatter::format_compact(
+        result.solutions, _impl->profiles.active(), mode);
+}
+
+std::string BesqContext::format_json(const SolveResult& result, AlgorithmMode mode) const {
+    return OutputFormatter::format_json(
+        result.solutions, _impl->profiles.active(), mode);
 }
 
 // ====================================================================
