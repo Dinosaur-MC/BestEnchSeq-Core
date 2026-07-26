@@ -65,21 +65,10 @@ private:
         bool empty() const { return entries.empty(); }
     };
 
-    // ── Cache key: sorted vector of Items ──────────────────────────────
-    struct ItemVectorHash {
-        size_t operator()(const std::vector<Item>& items) const noexcept {
-            size_t h = items.size();
-            for (const auto& item : items) {
-                auto ih = static_cast<size_t>(std::hash<Item>{}(item));
-                hash_combine(h, ih);
-            }
-            return h;
-        }
-    };
-
     // Top-level cache: item-set → Pareto frontier.
+    // std::hash<ItemCollection> is provided by Item.h.
     // std::unordered_map handles collisions via element-wise Item equality.
-    std::unordered_map<std::vector<Item>, Frontier, ItemVectorHash> _cache;
+    std::unordered_map<ItemCollection, Frontier> _cache;
 
     ForgeEngine _forge_engine;
     const EnchReg* _ench_reg{nullptr};
