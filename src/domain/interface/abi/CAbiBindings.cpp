@@ -4,7 +4,7 @@
 #define _CRT_NONSTDC_NO_DEPRECATE
 #endif
 
-#include "besq/besq_abi.h"
+#include "domain/interface/abi/abi.h"
 #include "domain/interface/BesqContext.h"
 #include "common/io/json.h"
 #include "domain/business/registries/EnchantmentRegistry.h"

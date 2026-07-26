@@ -124,7 +124,7 @@ src/
 │   │   └── components/                  ← CompactAdapter, OutputFormatter, EnchSerializer
 │   └── interface/                       ← I/O boundary
 │       ├── BesqContext.h/.cpp           ← Session facade (pImpl)
-│       ├── cli/                         ← CLIApp, EnchParser, ItemParser, RegistryEditor
+│       ├── cli/                         ← CLIApp, EnchParser, ItemParser
 │       └── abi/                         ← C ABI
 ├── data/
 │   ├── builtin/vanilla.json             ← Embedded built-in data
