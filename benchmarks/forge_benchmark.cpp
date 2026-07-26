@@ -1,5 +1,6 @@
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/orchestration/components/CompactAdapter.h"
@@ -297,6 +298,8 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
                 }
             }
 
+            ai.applicable = true;
+
             int16_t lid = static_cast<int16_t>(algo_infos.size());
             nsid_to_local[sorted[gid].first] = lid;
             global_ids.push_back(sorted[gid].first);
@@ -506,6 +509,11 @@ int main(int argc, char* argv[]) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }
     }
+
+    // Flush any pending diagnostics events before static destruction.
+    // Disable persistence first to avoid file I/O during shutdown.
+    algorithm::DiagnosticsService::instance().set_persist(false);
+    algorithm::DiagnosticsService::instance().flush();
 
     std::cout << "\n=== Done ===" << std::endl;
     return 0;
