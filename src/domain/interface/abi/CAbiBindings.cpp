@@ -5,10 +5,9 @@
 #endif
 
 #include "besq/besq_abi.h"
-#include "besq/besq.h"
+#include "domain/interface/BesqContext.h"
 #include "common/io/json.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Item.h"

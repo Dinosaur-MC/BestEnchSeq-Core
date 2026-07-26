@@ -4,8 +4,6 @@
 // Tests the public C++ API: profile lifecycle, registry editing, solve pipeline.
 // =============================================================================
 
-#include "besq/besq.h"
-#include "besq/besq_abi.h"
 #include "domain/interface/SolvePipeline.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
@@ -99,7 +97,7 @@ void test_besq_solve() {
     // Build SolveInput using ItemParser + CLI helpers (same as main.cpp)
     std::string target_str = "diamond_sword[sharpness=3]";
     const char* argv[] = {"besq", "--target", target_str.c_str()};
-    auto config = parse_cli(3, const_cast<char**>(argv));
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
 
     auto target_spec = ItemParser::parse(config.target);
     auto target_item = build_target(target_spec, ctx.enchantments(), ctx.equipment());

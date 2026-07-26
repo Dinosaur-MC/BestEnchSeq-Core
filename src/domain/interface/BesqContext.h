@@ -1,13 +1,11 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "domain/orchestration/orchestration.h"
-#include "domain/algorithm/types/ConfigTypes.h"
 
 /// Main public API class for BestEnchSeq.
 /// Manages profiles, registries, solving, and formatting.

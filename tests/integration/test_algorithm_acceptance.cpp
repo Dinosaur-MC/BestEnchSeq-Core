@@ -139,7 +139,7 @@ void test_all_algorithms_all_formats() {
     // Use a simple target to keep search times manageable for all algorithms
     const std::string target_spec_str = "diamond_sword[sharpness=3]";
     const char* argv[] = {"besq", "--target", target_spec_str.c_str()};
-    auto config = parse_cli(3, const_cast<char**>(argv));
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
 
     auto target_spec = ItemParser::parse(config.target);
     Item target_item = build_target(target_spec, test_ench_reg, eq_reg);
@@ -247,7 +247,7 @@ void test_diff_first_alias() {
     load_builtin_data(eq_reg);
 
     const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=3]"};
-    auto config = parse_cli(3, const_cast<char**>(argv));
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
 
     auto target_spec = ItemParser::parse(config.target);
     auto target_item = build_target(target_spec, test_ench_reg, eq_reg);
@@ -287,9 +287,9 @@ void test_diff_first_alias() {
 // ---------------------------------------------------------------------------
 
 void test_cli_export_only_valid() {
-    // parse_cli with only --export-registry (no --target) should succeed
+    // CLIApp::parse with only --export-registry (no --target) should succeed
     const char* argv[] = {"besq", "--export-registry", "/tmp/test_export.json"};
-    auto config = parse_cli(3, const_cast<char**>(argv));
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
     expect(config.target.empty(), "target should be empty");
     expect(config.export_registry.has_value(), "export_registry should be set");
     expect(*config.export_registry == "/tmp/test_export.json",
@@ -409,7 +409,7 @@ void test_full_export_pipeline() {
     const std::string test_path = "besq_cli_export.json";
 
     const char* argv[] = {"besq", "--export-registry", test_path.c_str()};
-    auto config = parse_cli(3, const_cast<char**>(argv));
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
     expect(config.export_registry.has_value(), "--export-registry path should be set");
     expect(*config.export_registry == test_path, "path should match input");
 

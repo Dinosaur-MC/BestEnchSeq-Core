@@ -72,7 +72,7 @@ void test_full_pipeline_direct() {
 
     // Use inline target syntax: diamond_sword[sharpness=5,knockback=2]
     const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=5,knockback=2]"};
-    auto config = parse_cli(3, const_cast<char **>(argv));
+    auto config = CLIApp::parse(3, const_cast<char **>(argv));
 
     // Build domain input from CLI spec
     auto target_spec = ItemParser::parse(config.target);
@@ -229,7 +229,7 @@ void test_full_pipeline_execute() {
 
     // 1. Parse CLI using inline target syntax
     const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=3]"};
-    auto config = parse_cli(3, const_cast<char **>(argv));
+    auto config = CLIApp::parse(3, const_cast<char **>(argv));
 
     // 2. Build domain input
     auto target_spec = ItemParser::parse(config.target);
