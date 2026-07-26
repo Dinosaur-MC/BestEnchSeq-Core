@@ -80,7 +80,7 @@ class IAlgorithmSerializer;
 
 class IAlgorithm {
   public:
-    virtual ~IAlgorithm() = default;
+    virtual ~IAlgorithm() noexcept = default;
 
     virtual std::string_view name() const noexcept    = 0;
     virtual std::string_view version() const noexcept = 0;

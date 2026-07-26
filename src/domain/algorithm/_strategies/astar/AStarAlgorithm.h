@@ -16,22 +16,40 @@
 namespace algorithm {
 class AStarStateSerializer;
 
-/// A* using Item pool + flat ID-indexed states.
+/// Best-first search with admissible heuristic and pool-based ID-indexed states.
+///
+/// Algorithm:
+///   1. Open set (priority queue) keyed by f = g + h, where h is an
+///      admissible lower bound: sum of (missing_level × mul_b) across
+///      all target enchants.  Ignores penalties/conflicts → always ≤ real cost.
+///   2. State representation via ItemPool (flat int16_t IDs + contiguous Items).
+///      Step history in a linear StepNode array with parent indices.
+///   3. Three-phase expansion per state:
+///      Phase A: lightweight estimate_forge_cost pre-pruning
+///      Phase B: real forge_into (only survivors from Phase A)
+///      Phase C: delta heuristic update + best_g + enqueue
+///
+/// Optimal for direct mode under vanilla cost model (admissible heuristic +
+/// consistent best-g pruning).  Serialisation support enables suspend/resume
+/// across executions.
+///
+/// Complexity: O(b^d) worst-case (branching factor b = n², depth d = n-1).
+/// For n ≤ 8 typically completes in < 500ms; n = 9 is ~500ms.
 class AStarAlgorithm : public IAlgorithm {
   public:
     using ItemID                            = ItemPool::ItemID;
     static constexpr ItemID INVALID_ITEM_ID = ItemPool::INVALID_ITEM_ID;
 
-    explicit AStarAlgorithm(ForgeConfig cfg = {});
+    explicit AStarAlgorithm(ForgeConfig cfg = {}) noexcept;
 
     std::string_view name() const noexcept override { return "astar"; }
     std::string_view version() const noexcept override { return "2.0.0"; }
     void execute(const AlgorithmInput &input, ExecutionContext &ctx) override;
     AlgorithmMode supported_mode() const noexcept override { return AlgorithmMode::direct; }
 
-    // ── Serialization support ────────────────────────────────────────────
-    IAlgorithmSerializer *get_serializer() noexcept override { return _serializer.get(); }
-    const IAlgorithmSerializer *get_serializer() const noexcept override { return _serializer.get(); }
+    // ── Serialization support (lazy: serializer allocated on first access) ─
+    IAlgorithmSerializer *get_serializer() noexcept override;
+    const IAlgorithmSerializer *get_serializer() const noexcept override;
     bool is_resumable() const noexcept override { return true; }
 
     // friend declaration — serializer accesses private _x_ helpers + state
@@ -97,7 +115,7 @@ class AStarAlgorithm : public IAlgorithm {
     std::vector<int16_t> _target_level_map; // target level per ench, 0 = not target
 
     // ─── 序列化 ───
-    std::unique_ptr<IAlgorithmSerializer> _serializer;
+    mutable std::unique_ptr<IAlgorithmSerializer> _serializer;
     bool _state_restored{false};
     bool _deserialize_ok{false};
     int64_t _explored{0};
@@ -112,4 +130,11 @@ class AStarAlgorithm : public IAlgorithm {
     int64_t _x_explored() const noexcept { return _explored; }
     void _x_set_explored(int64_t v) { _explored = v; }
 };
+
+// ── Compile-time checks (design-rule enforcement) ────────────────────────
+static_assert(std::is_nothrow_destructible_v<AStarAlgorithm>,
+    "AStarAlgorithm: destructor must not throw");
+static_assert(sizeof(AStarAlgorithm) < 4096,
+    "AStarAlgorithm: size exceeds expected range — check for unintended member bloat");
+
 } // namespace algorithm

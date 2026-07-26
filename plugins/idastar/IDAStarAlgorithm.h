@@ -11,8 +11,16 @@
 
 /// DFS branch-and-bound with cost-aware transposition table.
 ///
-/// Exhaustive search with best_g pruning (TT tracks min g per state).
-/// Combines DFS memory footprint with optimality guarantees.
+/// Exhaustive search with best_g pruning via TTTable (hash → min g).
+/// Uses delta heuristic and cheap-first candidate ordering for fast
+/// upper-bound convergence.
+///
+/// TTTable is lazily allocated on first store() call — constructing
+/// an IDAStarAlgorithm allocates zero heap memory.
+///
+/// Optimal for direct mode (admissible heuristic + global TT best-g
+/// pruning).  Memory: TTTable ~25 MiB at full occupancy, only allocated
+/// while execute() is running.
 namespace algorithm {
 
 class IDAStarAlgorithm : public IAlgorithm {
@@ -66,5 +74,9 @@ private:
 
     IDAStarDiagnostics _diag;
 };
+
+// ── Compile-time checks ─────────────────────────────────────────────────
+static_assert(std::is_nothrow_destructible_v<IDAStarAlgorithm>,
+    "IDAStarAlgorithm: destructor must not throw");
 
 } // namespace algorithm

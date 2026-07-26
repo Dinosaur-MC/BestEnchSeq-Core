@@ -71,4 +71,11 @@ private:
     ForgeEngine _forge_engine;
     AlgorithmDiagnostics _diag;
 };
+
+// ── Compile-time checks ─────────────────────────────────────────────────
+static_assert(std::is_nothrow_destructible_v<HammingAlgorithm>,
+    "HammingAlgorithm: destructor must not throw");
+static_assert(sizeof(HammingAlgorithm) < 2048,
+    "HammingAlgorithm: size exceeds expected range — check for member bloat");
+
 } // namespace algorithm

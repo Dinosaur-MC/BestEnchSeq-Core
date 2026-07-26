@@ -5,6 +5,14 @@
 #include <cstdint>
 #include <vector>
 
+/// Cheapest-first greedy merge into equipment.
+///
+/// Sorts books by estimated forge cost ascending, then merges each into the
+/// equipment sequentially.  Early-exits when the target is met.
+///
+/// O(n log n) — fastest algorithm, useful as a quick upper-bound provider.
+/// Does not explore alternative merge topologies: can be 2–3× more expensive
+/// than the optimal solution.
 namespace algorithm {
 
 class GreedyAlgorithm : public IAlgorithm {
@@ -30,5 +38,9 @@ private:
     std::vector<Ench> _target;
     AlgorithmDiagnostics _diag;
 };
+
+// ── Compile-time checks ─────────────────────────────────────────────────
+static_assert(std::is_nothrow_destructible_v<GreedyAlgorithm>,
+    "GreedyAlgorithm: destructor must not throw");
 
 } // namespace algorithm

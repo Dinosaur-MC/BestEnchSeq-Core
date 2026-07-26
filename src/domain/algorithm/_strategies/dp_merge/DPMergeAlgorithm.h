@@ -83,4 +83,10 @@ private:
     static void canonicalize(std::vector<Item>& items) noexcept;
 };
 
+// ── Compile-time checks ─────────────────────────────────────────────────
+static_assert(std::is_nothrow_destructible_v<DPMergeAlgorithm>,
+    "DPMergeAlgorithm: destructor must not throw");
+static_assert(sizeof(DPMergeAlgorithm) < 4096,
+    "DPMergeAlgorithm: size exceeds expected range — check for member bloat");
+
 } // namespace algorithm

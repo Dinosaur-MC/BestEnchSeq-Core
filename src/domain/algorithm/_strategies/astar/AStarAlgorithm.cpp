@@ -12,10 +12,21 @@ namespace algorithm {
 
 using namespace algorithm;
 
-// ─── Constructor ────────────────────────────────────────────────────────
+// ─── Constructor (zero heap — serializer allocated lazily on first access) ─
 
-AStarAlgorithm::AStarAlgorithm(ForgeConfig cfg)
-    : _forge_engine(std::move(cfg)), _serializer(std::make_unique<AStarStateSerializer>()) {}
+AStarAlgorithm::AStarAlgorithm(ForgeConfig cfg) noexcept
+    : _forge_engine(std::move(cfg)) {}
+
+// ─── Lazy serializer access ──────────────────────────────────────────────
+
+IAlgorithmSerializer *AStarAlgorithm::get_serializer() noexcept {
+    if (!_serializer)
+        _serializer = std::make_unique<AStarStateSerializer>();
+    return _serializer.get();
+}
+const IAlgorithmSerializer *AStarAlgorithm::get_serializer() const noexcept {
+    return const_cast<AStarAlgorithm *>(this)->get_serializer();
+}
 
 // ─── ItemPool helpers ───────────────────────────────────────────────────
 

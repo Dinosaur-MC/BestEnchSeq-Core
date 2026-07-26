@@ -73,4 +73,11 @@ class DFSAlgorithm : public IAlgorithm {
 
     SearchDiagnostics _diag;
 };
+
+// ── Compile-time checks ─────────────────────────────────────────────────
+static_assert(std::is_nothrow_destructible_v<DFSAlgorithm>,
+    "DFSAlgorithm: destructor must not throw");
+static_assert(sizeof(DFSAlgorithm) < 4096,
+    "DFSAlgorithm: size exceeds expected range — check for member bloat");
+
 } // namespace algorithm

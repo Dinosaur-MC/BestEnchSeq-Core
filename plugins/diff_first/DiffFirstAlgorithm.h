@@ -35,4 +35,8 @@ private:
     AlgorithmDiagnostics _diag;
 };
 
+// ── Compile-time checks ─────────────────────────────────────────────────
+static_assert(std::is_nothrow_destructible_v<DiffFirstAlgorithm>,
+    "DiffFirstAlgorithm: destructor must not throw");
+
 } // namespace algorithm
