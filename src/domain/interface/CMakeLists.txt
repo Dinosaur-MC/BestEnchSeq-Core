@@ -2,16 +2,9 @@
 # Interface domain: session context + CLI + ABI bindings.
 # Depends on besq-common + besq-domain-algorithm + besq-domain-business.
 
-set(BESQ_INTERFACE_SRCS
-    # ── CLI module ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/cli/EnchParser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cli/ItemParser.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cli/cli.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cli/RegistryEditor.cpp
-    # ── Application context ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/BesqContext.cpp
-    # ── C ABI ──
-    ${CMAKE_CURRENT_SOURCE_DIR}/abi/CAbiBindings.cpp
+file(GLOB_RECURSE BESQ_INTERFACE_SRCS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 
 add_library(besq-domain-interface STATIC ${BESQ_INTERFACE_SRCS})

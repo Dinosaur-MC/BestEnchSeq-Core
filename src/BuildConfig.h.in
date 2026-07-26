@@ -5,7 +5,7 @@
 //
 // Available CMake toggles:
 //   -DBESQ_DISABLE_DIAGNOSTICS=ON   Remove diagnostics code at compile time
-//   -DBESQ_MAX_SOLUTIONS=<N>        Max solutions stored per execution (default: 128)
+//   -DBESQ_MAX_SOLUTIONS=<N>        Max solutions stored per execution (default: 32, see CMakePresets.json for per-preset values)
 
 // ── Version ──
 #define BESQ_VERSION "@PROJECT_VERSION@"

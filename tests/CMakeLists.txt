@@ -64,10 +64,7 @@ function(besq_test NAME SOURCE)
     besq_test_common_props(${NAME})
 endfunction()
 
-# Helper for tests that need CLI/parser code (now all in besq-core)
-function(besq_test_with_cli NAME SOURCE)
-    besq_test(${NAME} ${SOURCE})
-endfunction()
+# Helper for tests that need CLI/parser code (currently same as besq_test)
 
 # ─── Subdirectories (per domain) ───
 add_subdirectory(common)

@@ -1,7 +1,7 @@
 # ── besq-common ────────────────────────────────────────────────────────────
 # Project-neutral infrastructure: I/O primitives, logging, utility types.
 
-file(GLOB_RECURSE BESQ_COMMON_SRCS
+file(GLOB_RECURSE BESQ_COMMON_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )

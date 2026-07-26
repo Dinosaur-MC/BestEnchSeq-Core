@@ -2,13 +2,9 @@
 # Orchestration layer: cross-domain adapters, serializers, formatters.
 # Links all domains transitively.
 
-set(BESQ_ORCHESTRATION_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/components/CompactAdapter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/components/EnchSerializer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/components/OutputFormatter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/pipelines/ExportPipeline.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/pipelines/ManagePipeline.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/pipelines/SolvePipeline.cpp
+file(GLOB_RECURSE BESQ_ORCHESTRATION_SRCS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 
 add_library(besq-orchestration STATIC ${BESQ_ORCHESTRATION_SRCS})

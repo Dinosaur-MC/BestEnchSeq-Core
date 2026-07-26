@@ -80,7 +80,7 @@ option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
 option(BESQ_BUILD_CLI "Build the besq CLI executable" ON)
 option(BUILD_TESTING "Build test targets" ON)
 option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
-set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution")
+set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution (presets override this)")
 
 set(CMAKE_DEFAULT_BUILD_TARGET besq)
 
@@ -209,6 +209,59 @@ get_filename_component(_besq_build \"\${CMAKE_CURRENT_LIST_DIR}\" ABSOLUTE)
 get_filename_component(_besq_src \"\${_besq_build}/..\" ABSOLUTE)
 ${BESQ_CORE_CONFIG_IMPORT}
 ")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# besq-minimal (static library for embedders)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Compact algorithm core with Hamming strategy only.  No plugin loader,
+# serialization, or non-Hamming strategies.
+#
+# Build with: cmake --preset minimal && cmake --build build --preset minimal
+
+file(GLOB_RECURSE BESQ_MINIMAL_ALGO_SRCS CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/*.hpp"
+)
+# Exclude plugin loader and serialization
+list(FILTER BESQ_MINIMAL_ALGO_SRCS EXCLUDE REGEX
+    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/(plugin/|serialization/)")
+# Exclude all built-in strategies — add back only hamming below
+list(FILTER BESQ_MINIMAL_ALGO_SRCS EXCLUDE REGEX
+    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/_strategies/")
+
+# Add Hamming strategy
+file(GLOB BESQ_MINIMAL_HAMMING_SRCS CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/_strategies/hamming/*.cpp")
+
+# Minimal strategy registration (hamming only)
+set(BESQ_MINIMAL_REG "${BESQ_GENERATED_DIR}/_minimal_registration.cpp")
+file(WRITE "${BESQ_MINIMAL_REG}"
+    "// GENERATED -- do not edit\n"
+    "#include \"domain/algorithm/_strategies/Registration.h\"\n"
+    "#include \"domain/algorithm/_strategies/hamming/HammingAlgorithm.h\"\n"
+    "\n"
+    "void besq_register_builtin_strategies(algorithm::AlgorithmRegistry &reg) {\n"
+    "    reg.register_algorithm(\"hamming\", []{ return std::make_unique<algorithm::HammingAlgorithm>(); });\n"
+    "}\n"
+)
+
+add_library(besq-minimal STATIC
+    ${BESQ_MINIMAL_ALGO_SRCS}
+    ${BESQ_MINIMAL_HAMMING_SRCS}
+    "${BESQ_MINIMAL_REG}"
+)
+
+target_link_libraries(besq-minimal PUBLIC besq-common)
+
+target_include_directories(besq-minimal PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${BESQ_GENERATED_DIR}>
+)
+
+target_compile_definitions(besq-minimal PUBLIC
+    BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
+    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI executable (guarded by BESQ_BUILD_CLI)

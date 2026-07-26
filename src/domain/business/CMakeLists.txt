@@ -2,7 +2,7 @@
 # Business (domain model) domain: user-facing game concept types and
 # registries.  Depends only on besq-common.
 
-file(GLOB_RECURSE BESQ_BUSINESS_SRCS
+file(GLOB_RECURSE BESQ_BUSINESS_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )

@@ -12,5 +12,5 @@
 # besq_test(test_inventory_resolver resolvers/test_inventory_resolver.cpp)
 # besq_test(test_algorithm_executor test_algorithm_executor.cpp)
 # besq_test(test_checkpoint_roundtrip test_checkpoint_roundtrip.cpp)
-# besq_test_with_cli(test_integration test_integration.cpp)
-# besq_test_with_cli(test_algorithm_acceptance test_algorithm_acceptance.cpp)
+# besq_test(test_integration test_integration.cpp)
+# besq_test(test_algorithm_acceptance test_algorithm_acceptance.cpp)
