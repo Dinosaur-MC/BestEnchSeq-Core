@@ -135,6 +135,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         // may reallocate the vector and invalidate all references/iterators.
         size_t frame_idx = _stack.size() - 1;
 
+        bool was_backtrack = false;
         if (_stack[frame_idx].has_backtrack) {
             size_t adj_base = (_stack[frame_idx].sac_idx < _stack[frame_idx].base_idx)
                 ? _stack[frame_idx].base_idx - 1 : _stack[frame_idx].base_idx;
@@ -143,9 +144,14 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
                 _stack[frame_idx].items.begin() + _stack[frame_idx].sac_idx, std::move(_stack[frame_idx].saved_sac));
             _current_steps.resize(_stack[frame_idx].saved_steps_size);
             _stack[frame_idx].has_backtrack = false;
+            was_backtrack = true;
         }
 
-        {
+        // Skip _visited_best check after backtrack: prevents self-pruning where
+        // a frame matches its own stored entry and drops remaining unprocessed pairs.
+        // Cross-branch pruning (different path to same state with higher g) is
+        // still handled correctly for first-entry frames.
+        if (!was_backtrack) {
             auto it = _visited_best.find(_stack[frame_idx].items);
             if (it != _visited_best.end() && it->second <= _stack[frame_idx].cost_so_far) {
                 ctx.incr_nodes_pruned();
