@@ -16,10 +16,6 @@ struct Equipment : IBinarySerializable {
     /// registry are guaranteed to be applicable to the target equipment.
     std::vector<int16_t> applicable_enchs;
 
-    struct Hash {
-        size_t operator()(const Equipment &eq) const { return std::hash<size_t>()(eq.id); }
-    };
-
     bool operator==(const Equipment &other) const;
 
     void serialize(ByteStreamWriter &w) const noexcept override {
@@ -31,3 +27,9 @@ struct Equipment : IBinarySerializable {
 };
 
 } // namespace algorithm
+
+template <> struct std::hash<algorithm::Equipment> {
+    size_t operator()(const algorithm::Equipment &eq) const noexcept {
+        return std::hash<size_t>()(static_cast<size_t>(eq.id));
+    }
+};
