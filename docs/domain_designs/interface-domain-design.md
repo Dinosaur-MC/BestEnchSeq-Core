@@ -200,7 +200,7 @@ struct CLIParser {
 };
 ```
 
-**cli.h/cpp** — Business-aware CLI layer:
+**cli.h/cpp** — Business-aware CLI layer, with i18n support via `common/i18n/Language.h`:
 
 ```cpp
 struct CLIConfig {
@@ -209,6 +209,7 @@ struct CLIConfig {
     std::string target;
     std::string source;
     std::string config_pairs;
+    std::string lang;          // --lang <code> (empty = auto-detect)
     // ... other fields
 };
 
@@ -216,6 +217,8 @@ CLIConfig parse_cli(int argc, char* argv[]);
 std::string get_cli_help_text(const std::string& program_name = "besq");
 void apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg);
 ```
+
+All user-facing strings (help text, error messages, forge plan output) use `tr("key")` / `tr_fmt("key", ...)` and are translated via `data/i18n/{zh_CN,en_US}.json`. Locale selection: `--lang` > `BESQ_LANG` env var > system auto-detect.
 
 ### 3.3 C ABI
 

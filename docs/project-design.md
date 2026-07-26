@@ -197,6 +197,12 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 `CompactAdapter::apply()` 提取目标装备适用的附魔，构造 `CompactEnchInfo[]` 向量，用 `EnchReg::init()` 初始化为紧凑注册表。`EnchReg` 维护 `to_global_id()` / `to_local_id()` 双向映射。
 
+### 国际化 (i18n)
+
+采用自定义轻量字符串表方案（`common/i18n/Language.h/.cpp`）。翻译数据以 JSON 格式存储在 `data/i18n/`，通过 `EmbedResource.cmake` 编译时嵌入二进制。所有用户可见输出（CLI 帮助文本、错误消息、锻造方案输出）使用 `tr("key")` / `tr_fmt("key", ...)`。
+
+语言选择三级降级：`--lang` CLI 标志 > `BESQ_LANG` 环境变量 > 系统 locale 自动检测。先支持中文 (`zh_CN`) 和英文 (`en_US`)，架构可扩展。机器可读格式（compact、JSON）和日志不翻译。
+
 ### 算法策略体系
 
 | 策略 | 类型 | 最优性 | 适用规模 | 来源 | 核心机制 |
