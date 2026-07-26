@@ -19,9 +19,26 @@
 // main
 // ====================================================================
 int main(int argc, char* argv[]) try {
-    // ── Configuration & CLI parsing ──
+    // ── Configuration ──
     auto app_cfg = AppConfig::load();
+
+    // ── i18n setup (before CLI parsing so help text is translated) ──
+    auto& lang_mgr = LanguageManager::instance();
+    register_builtin_translations(lang_mgr);
+
+    // Initial locale: env var > system detect
+    {
+        const char* env_lang = std::getenv("BESQ_LANG");
+        std::string lang_code = env_lang ? env_lang : detect_system_locale();
+        lang_mgr.select(lang_mgr.resolve_locale(lang_code));
+    }
+
+    // ── CLI parsing (may override --lang) ──
     auto config = parse_cli(argc, argv);
+
+    // If --lang was explicitly set, re-select
+    if (!config.lang.empty())
+        lang_mgr.select(lang_mgr.resolve_locale(config.lang));
 
     // ── Logger setup ──
     Logger::instance().set_level(
@@ -30,19 +47,6 @@ int main(int argc, char* argv[]) try {
       : app_cfg.log_level >= 1 ? LogLevel::Info
       :                          LogLevel::Debug);
     Logger::instance().set_retention(app_cfg.log_retention);
-
-    // ── i18n setup ──
-    auto& lang_mgr = LanguageManager::instance();
-    register_builtin_translations(lang_mgr);
-
-    std::string lang_code;
-    if (!config.lang.empty()) {
-        lang_code = config.lang;
-    } else {
-        const char* env_lang = std::getenv("BESQ_LANG");
-        lang_code = env_lang ? env_lang : detect_system_locale();
-    }
-    lang_mgr.select(lang_mgr.resolve_locale(lang_code));
 
     // ── Early exit for --help / --version ──
     if (config.help || config.version)
