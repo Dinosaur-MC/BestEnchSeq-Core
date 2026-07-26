@@ -65,7 +65,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(
 
         algorithm::EnchInfo ai;
         ai.mul     = static_cast<uint16_t>(biz.multiplier);
-        ai.mul_b   = static_cast<uint16_t>(biz.multiplier);
+        ai.mul_b   = static_cast<uint16_t>(std::max(1, biz.multiplier >> 1));
         ai.max_lvl = static_cast<uint16_t>(biz.max_level);
         ai.exc_mask.resize(algo_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
         for (size_t local_idx = 0; local_idx < algo_infos.size(); ++local_idx) {

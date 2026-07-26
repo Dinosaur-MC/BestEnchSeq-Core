@@ -113,7 +113,7 @@ struct TestFixture {
             bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.mul = static_cast<uint16_t>(ei.multiplier);
-            info.mul_b = static_cast<uint16_t>(ei.multiplier);
+            info.mul_b = static_cast<uint16_t>(std::max(1, ei.multiplier >> 1));
             info.max_lvl = static_cast<uint16_t>(ei.max_level);
             info.exc_mask = exc_masks[i];
             info.applicable = applicable;
@@ -242,7 +242,7 @@ void test_estimate_forge_cost() {
     algorithm::Item eq_ppn{algorithm::ItemType::Equip, 1561, 2, {}};
     auto book2 = fx.make_book(fx.id("knockback"), 2);
     int32_t est2 = engine.estimate_forge_cost(eq_ppn, book2, fx.reg);
-    expect(est2 == 7, "estimate_forge_cost: equip(ppn2)+knock2 should be 7");
+    expect(est2 == 5, "estimate_forge_cost: equip(ppn2)+knock2 should be 5");
     std::cout << "PASS: test_estimate_forge_cost" << std::endl;
 }
 
@@ -367,12 +367,12 @@ void test_cap_behavior() {
     auto eq1 = equip;
     auto bk1 = book;
     int32_t capped_cost = capped_engine.forge_into(eq1, bk1, fx.reg);
-    expect(capped_cost == 39, "capped cost should be 39");
+    expect(capped_cost == 37, "capped cost should be 37");
 
     auto eq2 = equip;
     auto bk2 = book;
     int32_t uncapped_cost = uncapped_engine.forge_into(eq2, bk2, fx2.reg);
-    expect(uncapped_cost == 39, "uncapped cost should also be 39");
+    expect(uncapped_cost == 37, "uncapped cost should also be 37");
 
     algorithm::Item equip_high{algorithm::ItemType::Equip, 1561, 5, {}};
     algorithm::Item book_high{algorithm::ItemType::Book, 0, 5, {}};

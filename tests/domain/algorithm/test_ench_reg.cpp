@@ -94,7 +94,7 @@ struct TestFixture {
             bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.mul = static_cast<uint16_t>(ei.multiplier);
-            info.mul_b = static_cast<uint16_t>(ei.multiplier);
+            info.mul_b = static_cast<uint16_t>(std::max(1, ei.multiplier >> 1));
             info.max_lvl = static_cast<uint16_t>(ei.max_level);
             info.exc_mask = exc_masks[i];
             info.applicable = applicable;
