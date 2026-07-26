@@ -57,6 +57,20 @@ inline void printf(LogLevel, const char*, Args&&...) {}
 
 #include "Logger.h"
 
+// ─── Logger setup helper (avoids direct Logger::instance() calls) ─────────
+
+/// Configure the global Logger from an AppConfig-compatible level +
+/// retention pair.  log_level map: 0=Debug, 1=Info, 2=Warn, 3+=Error.
+/// Defaults match AppConfig defaults (Debug, retention 5).
+inline void setup_logger(int log_level = 0, size_t retention = 5) {
+    Logger::instance().set_level(
+        log_level >= 3 ? LogLevel::Error
+      : log_level >= 2 ? LogLevel::Warn
+      : log_level >= 1 ? LogLevel::Info
+      :                  LogLevel::Debug);
+    Logger::instance().set_retention(retention);
+}
+
 namespace besq {
 namespace log {
 
