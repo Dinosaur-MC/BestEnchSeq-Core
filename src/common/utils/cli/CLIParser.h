@@ -266,17 +266,55 @@ struct ParseResult {
 };
 
 // ============================================================================
-// parse() -- main parsing function
+// CLIParser — object-oriented parser
 // ============================================================================
 
 template<typename... Entries>
-ParseResult<Entries...> parse(
-    const OptionTable<Entries...>& table,
-    std::span<const char*> args)
-{
+class CLIParser {
+    OptionTable<Entries...> _table;
+
+public:
+    using result_type = ParseResult<Entries...>;
+
+    constexpr CLIParser() = default;
+
+    explicit constexpr CLIParser(OptionTable<Entries...> table) noexcept
+        : _table(table) {}
+
+    /// Parse command-line arguments.
+    ParseResult<Entries...> parse(std::span<const char*> args) const;
+
+    /// Generate help text (English fallback).
+    std::string format_help(std::string_view program_name) const;
+
+    /// Generate localized help text.
+    template<typename HT>
+    std::string format_help(std::string_view program_name, const HT& trans) const {
+        return format_help_impl(program_name, trans);
+    }
+
+    /// Access the underlying option table.
+    const OptionTable<Entries...>& table() const noexcept { return _table; }
+
+private:
+    /// Shared implementation of help text generation.
+    template<typename HT>
+    std::string format_help_impl(std::string_view program_name, const HT& help_trans) const;
+};
+
+// CTAD deduction guide
+template<typename... Entries>
+CLIParser(OptionTable<Entries...>) -> CLIParser<Entries...>;
+
+// ============================================================================
+// CLIParser member implementations
+// ============================================================================
+
+template<typename... Entries>
+ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args) const {
     ParseResult<Entries...> result;
     auto& tup = result.value;
-    const auto& entries = table.entries;
+    const auto& entries = _table.entries;
 
     size_t arg_start = (args.size() > 0) ? 1 : 0;
     bool options_ended = false;
@@ -406,7 +444,6 @@ ParseResult<Entries...> parse(
             detail::set_value_by_index<Entries...>(tup, idx, {}, result.diagnostics, {&first, 1});
         } else {
             if (short_chars.size() > 1) {
-                // -n5 style: rest of chars is the value
                 detail::set_value_by_index<Entries...>(tup, idx, short_chars.substr(1), result.diagnostics, {&first, 1});
             } else if (i + 1 < args.size()) {
                 std::string_view next(args[i + 1]);
@@ -435,10 +472,6 @@ ParseResult<Entries...> parse(
     return result;
 }
 
-// ============================================================================
-// format_help() -- auto-generate help text
-// ============================================================================
-
 // Default help translator -- returns the key as-is (English fallback)
 struct DefaultHelpTranslator {
     std::string operator()(std::string_view key) const noexcept {
@@ -447,18 +480,14 @@ struct DefaultHelpTranslator {
 };
 
 template<typename... Entries>
-std::string format_help(
-    const OptionTable<Entries...>& table,
-    std::string_view program_name)
-{
-    return format_help(table, program_name, DefaultHelpTranslator{});
+std::string CLIParser<Entries...>::format_help(std::string_view program_name) const {
+    return format_help_impl(program_name, DefaultHelpTranslator{});
 }
 
-template<typename... Entries, typename HT>
-std::string format_help(
-    const OptionTable<Entries...>& table,
-    std::string_view program_name,
-    const HT& help_trans)
+template<typename... Entries>
+template<typename HT>
+std::string CLIParser<Entries...>::format_help_impl(
+    std::string_view program_name, const HT& help_trans) const
 {
     std::string result;
     result += "Usage: ";
@@ -470,7 +499,7 @@ std::string format_help(
         (([&]{
             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
             if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
-                const auto& entry = std::get<Is>(table.entries);
+                const auto& entry = std::get<Is>(_table.entries);
                 result += " <";
                 result += entry.name;
                 result += '>';
@@ -483,12 +512,11 @@ std::string format_help(
     // List all options
     [&]<size_t... Is>(std::index_sequence<Is...>) {
         (([&]{
-            const auto& entry = std::get<Is>(table.entries);
+            const auto& entry = std::get<Is>(_table.entries);
             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
 
             std::string line = "  ";
 
-            // Short name
             if constexpr (requires { entry.short_name; }) {
                 if (entry.short_name != '\0') {
                     line += '-';
@@ -499,7 +527,6 @@ std::string format_help(
                 }
             }
 
-            // Long name
             if constexpr (requires { entry.long_name; }) {
                 if (!entry.long_name.empty()) {
                     line += "--";
@@ -510,13 +537,10 @@ std::string format_help(
                 }
             }
 
-            // Padding
             while (line.size() < 28) line += ' ';
 
-            // Help text (translated)
             line += help_trans(entry.help_key);
 
-            // Default value hint
             if constexpr (!std::is_same_v<ET, Flag>) {
                 if constexpr (requires { entry.default_v; }) {
                     if (entry.default_v.has_value()) {
@@ -533,7 +557,6 @@ std::string format_help(
                 }
             }
 
-            // Required hint
             if constexpr (requires { entry.required; }) {
                 if (entry.required) {
                     line += " (required)";
@@ -547,43 +570,3 @@ std::string format_help(
 
     return result;
 }
-
-// ============================================================================
-// CLIParser — object-oriented wrapper
-// ============================================================================
-
-template<typename... Entries>
-class CLIParser {
-    OptionTable<Entries...> _table;
-
-public:
-    using result_type = ParseResult<Entries...>;
-
-    constexpr CLIParser() = default;
-
-    explicit constexpr CLIParser(OptionTable<Entries...> table) noexcept
-        : _table(table) {}
-
-    /// Parse command-line arguments.
-    ParseResult<Entries...> parse(std::span<const char*> args) const {
-        return ::parse(_table, args);
-    }
-
-    /// Generate help text (English fallback).
-    std::string format_help(std::string_view program_name) const {
-        return ::format_help(_table, program_name);
-    }
-
-    /// Generate localized help text.
-    template<typename HT>
-    std::string format_help(std::string_view program_name, const HT& trans) const {
-        return ::format_help(_table, program_name, trans);
-    }
-
-    /// Access the underlying option table.
-    const OptionTable<Entries...>& table() const noexcept { return _table; }
-};
-
-// CTAD deduction guide
-template<typename... Entries>
-CLIParser(OptionTable<Entries...>) -> CLIParser<Entries...>;
