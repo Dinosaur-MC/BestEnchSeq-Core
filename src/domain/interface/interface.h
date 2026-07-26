@@ -5,12 +5,9 @@
 // ====================================================================
 // Translation layer: external input → domain types → orchestration.
 // Stateless at the module level; BesqContext owns per-session state.
+//
+// Exported modules:
+//   CLI  — CLI::Config, CLI::parse(), CLI::help_text()
+//   ABI  — C ABI bindings (CAbiBindings.cpp, no public header)
 
-// ── CLI Module ──
-#include "common/utils/cli/CLIParser.h"       // IWYU pragma: export
-#include "common/utils/cli/CLIFormatter.h"    // IWYU pragma: export
-#include "domain/interface/cli/cli.h"             // IWYU pragma: export
-#include "domain/interface/cli/EnchParser.h"      // IWYU pragma: export
-#include "domain/interface/cli/ItemParser.h"      // IWYU pragma: export
-#include "domain/interface/cli/RegistryEditor.h"  // IWYU pragma: export
-
+#include "domain/interface/cli/cli.h"  // IWYU pragma: export
