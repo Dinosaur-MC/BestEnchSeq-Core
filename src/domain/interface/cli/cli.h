@@ -1,10 +1,7 @@
 #pragma once
 #include "domain/algorithm/types/ConfigTypes.h"
-#include "domain/business/types/Item.h"
-#include "domain/business/types/EnchSet.h"
 #include <optional>
 #include <string>
-#include <vector>
 
 // ─── CLI data types ──────────────────────────────────────────────────────
 

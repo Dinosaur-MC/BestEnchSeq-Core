@@ -25,7 +25,6 @@
 #include "queue/BoundedMPMCQueue.hpp"
 #include "queue/BoundedMPSCQueue.hpp"
 #include "queue/SegmentedMPSCQueue.hpp"
-#include "queue/SegmentedMPMCQueue.hpp"
 #include "queue/SPSCQueue.hpp"
 
 // ─── EventLoop ────────────────────────────────────────────────────────────

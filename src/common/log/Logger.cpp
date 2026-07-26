@@ -5,7 +5,6 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
-#include <optional>
 #include <vector>
 
 namespace fs = std::filesystem;

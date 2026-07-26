@@ -1,5 +1,4 @@
 #include "AppConfig.h"
-#include "BuildConfig.h"
 #include "common/log/log.hpp"
 #include "common/utils/StringUtils.hpp"
 #include "domain/interface/interface.h"

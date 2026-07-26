@@ -6,7 +6,6 @@
 #include "domain/business/types/EnchantmentDataPack.h"
 #include "domain/business/types/EnchInfo.h"
 
-#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>

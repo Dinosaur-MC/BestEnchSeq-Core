@@ -1,6 +1,5 @@
 #include "cli.h"
 #include "domain/interface/cli/CLIParser.h"
-#include "domain/business/business.h"
 #include "BuildConfig.h"
 #include "common/utils/StringUtils.hpp"
 #include <iostream>

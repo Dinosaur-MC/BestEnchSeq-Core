@@ -1,4 +1,5 @@
 #include "utils/EventLoop.hpp"
+#include "utils/queue/SegmentedMPMCQueue.hpp"
 
 #include <algorithm>
 #include <atomic>

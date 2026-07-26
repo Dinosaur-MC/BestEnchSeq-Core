@@ -1,5 +1,6 @@
 #include "framework/test_utils.h"
 #include "utils/EventLoop.hpp"
+#include "utils/queue/SegmentedMPMCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <future>

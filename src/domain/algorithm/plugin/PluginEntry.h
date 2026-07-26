@@ -13,7 +13,6 @@
 ///   }
 
 #include "PluginAPI.h"
-#include "domain/algorithm/IAlgorithm.h"
 
 #define BESQ_PLUGIN_ENTRY(AlgoClass) \
     extern "C" { \
