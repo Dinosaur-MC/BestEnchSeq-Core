@@ -157,7 +157,7 @@ fi
 if [ $leak_check -eq 1 ]; then
     valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose \
     --log-file="$output_dir/valgrind.log" \
-    -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args \
+    -- "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args \
     2>&1 > "$output_dir/valgrind_program_out.txt" &
 fi
 
@@ -166,7 +166,7 @@ if [ $callgrind_check -eq 1 ]; then
     (
         valgrind --tool=callgrind --dump-instr=yes \
             --callgrind-out-file="$output_dir/callgrind.out" \
-            -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args
+            -- "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args
         python3 scripts/parse_callgrind.py "$output_dir/callgrind.out" > "$output_dir/callgrind.out.brief.log"
     ) 2>&1 > "$output_dir/callgrind_program_out.txt" &
 fi
@@ -175,7 +175,7 @@ fi
 if [ $massif_check -eq 1 ]; then
     (
         valgrind --tool=massif --massif-out-file="$output_dir/massif.out" \
-            -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args
+            -- "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args
         ms_print "$output_dir/massif.out" > "$output_dir/massif.out.ms_print"
         python3 scripts/parse_massif.py "$output_dir/massif.out.ms_print" > "$output_dir/massif.out.brief.log"
     ) 2>&1 > "$output_dir/massif_program_out.txt" &
@@ -185,7 +185,7 @@ fi
 if [ $cachegrind_check -eq 1 ]; then
     (
         valgrind --tool=cachegrind --cache-sim=yes --cachegrind-out-file="$output_dir/cachegrind.out" \
-            -- --algo-dir "$build_dir/plugins" "$build_dir/bin/forge_benchmark" $program_args
+            -- "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args
         python3 scripts/parse_cachegrind.py "$output_dir/cachegrind.out" > "$output_dir/cachegrind.out.brief.log"
     ) 2>&1 > "$output_dir/cachegrind_program_out.txt" &
 fi
