@@ -96,10 +96,10 @@ void expect_throws_as(F&& expr, const std::string& message) {
         expr();
         tests_failed++;
         throw test_error(message + " - expected exception but none thrown");
+    } catch (const test_error&) {
+        throw;  // Always re-throw test errors first (before E catch)
     } catch (const E&) {
         tests_passed++;
-    } catch (const test_error&) {
-        throw;
     } catch (const std::exception& e) {
         tests_failed++;
         std::string msg = message + " - expected " + typeid(E).name()
