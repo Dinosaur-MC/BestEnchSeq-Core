@@ -72,6 +72,18 @@ add_executable(test_i18n
     i18n/test_i18n.cpp
     ${PROJECT_ROOT}/src/common/i18n/Language.cpp
 )
+
+# --- CLI Parser v2 tests ---
+
+add_executable(test_cli_parser_v2
+    utils/test_cli_parser_v2.cpp
+    ${PROJECT_ROOT}/src/common/utils/cli/CLIParser.cpp
+    ${PROJECT_ROOT}/src/common/utils/cli/CLICommon.cpp
+    ${PROJECT_ROOT}/src/common/utils/cli/CLIParserI18n.cpp
+)
+target_include_directories(test_cli_parser_v2 PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_cli_parser_v2 COMMAND test_cli_parser_v2)
+set_tests_properties(test_cli_parser_v2 PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 target_include_directories(test_i18n PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_i18n COMMAND test_i18n)
 set_tests_properties(test_i18n PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})

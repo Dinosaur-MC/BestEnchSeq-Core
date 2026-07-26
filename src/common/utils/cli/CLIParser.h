@@ -14,6 +14,7 @@
 
 template<Parsable T>
 struct Option {
+    using value_type = T;
     std::string_view  long_name;         // "--target"
     char              short_name = '\0'; // 't', '\0' = none
     std::string_view  help_key;          // translation key or fallback English text
@@ -22,6 +23,7 @@ struct Option {
 };
 
 struct Flag {
+    using value_type = bool;
     std::string_view  long_name;
     char              short_name = '\0';
     std::string_view  help_key;
@@ -29,6 +31,7 @@ struct Flag {
 
 template<Parsable T>
 struct Positional {
+    using value_type = T;
     std::string_view  name;              // display name in help text
     std::string_view  help_key;
     std::optional<T>  default_v;         // has default => not required
@@ -40,12 +43,18 @@ struct Positional {
 
 namespace detail {
 
-// Helper: get long_name from any entry type
+// Helper: get long_name from any entry type (SFINAE-safe)
 inline constexpr std::string_view get_long_name(const auto& entry) noexcept {
-    return entry.long_name;
+    if constexpr (requires { entry.long_name; })
+        return entry.long_name;
+    else
+        return {};
 }
 inline constexpr char get_short_name(const auto& entry) noexcept {
-    return entry.short_name;
+    if constexpr (requires { entry.short_name; })
+        return entry.short_name;
+    else
+        return '\0';
 }
 inline constexpr bool is_required(const auto& entry) noexcept {
     if constexpr (requires { entry.required; })
@@ -67,7 +76,11 @@ inline constexpr bool has_default(const auto& entry) noexcept {
 template<typename... Entries, size_t... Is>
 bool is_flag_impl(const std::tuple<Entries...>&, size_t index, std::index_sequence<Is...>) noexcept {
     bool result = false;
-    ((index == Is ? (result = std::is_same_v<std::tuple_element_t<Is, std::tuple<Entries...>>, Flag>, true) : false) || ...);
+    ([&]{
+        if (index == Is) {
+            result = std::is_same_v<std::tuple_element_t<Is, std::tuple<Entries...>>, Flag>;
+        }
+    }(), ...);
     return result;
 }
 
@@ -79,7 +92,13 @@ bool is_flag_by_index(const std::tuple<Entries...>& entries, size_t index) noexc
 template<typename... Entries, size_t... Is>
 std::string_view get_entry_long_name_impl(const std::tuple<Entries...>& entries, size_t index, std::index_sequence<Is...>) noexcept {
     std::string_view result;
-    ((index == Is ? (result = std::get<Is>(entries).long_name, true) : false) || ...);
+    (([&]{
+        if (index == Is) {
+            const auto& entry = std::get<Is>(entries);
+            if constexpr (requires { entry.long_name; })
+                result = entry.long_name;
+        }
+    }()), ...);
     return result;
 }
 
@@ -92,7 +111,16 @@ template<typename... Entries>
 int find_by_long_name(const std::tuple<Entries...>& tup, std::string_view name) noexcept {
     int result = -1;
     [&]<size_t... Is>(std::index_sequence<Is...>) {
-        ((std::get<Is>(tup).long_name == name ? (result = static_cast<int>(Is), false) : true) && ...);
+        (([&]() -> bool {
+            const auto& entry = std::get<Is>(tup);
+            if constexpr (requires { entry.long_name; }) {
+                if (entry.long_name == name) {
+                    result = static_cast<int>(Is);
+                    return false;
+                }
+            }
+            return true;
+        }()) && ...);
     }(std::index_sequence_for<Entries...>{});
     return result;
 }
@@ -102,29 +130,18 @@ int find_by_short_name(const std::tuple<Entries...>& tup, char name) noexcept {
     if (name == '\0') return -1;
     int result = -1;
     [&]<size_t... Is>(std::index_sequence<Is...>) {
-        ((std::get<Is>(tup).short_name == name ? (result = static_cast<int>(Is), false) : true) && ...);
+        (([&]() -> bool {
+            const auto& entry = std::get<Is>(tup);
+            if constexpr (requires { entry.short_name; }) {
+                if (entry.short_name == name) {
+                    result = static_cast<int>(Is);
+                    return false;
+                }
+            }
+            return true;
+        }()) && ...);
     }(std::index_sequence_for<Entries...>{});
     return result;
-}
-
-// Set value at compile-time index
-template<typename... Entries, size_t I>
-void set_value_impl(std::tuple<OptionValue<Entries>...>& tup,
-                    std::string_view val_str,
-                    std::vector<Diagnostic>& diags,
-                    std::string_view option_name) noexcept {
-    using EntryT = std::tuple_element_t<I, std::tuple<Entries...>>;
-    if constexpr (std::is_same_v<EntryT, Flag>) {
-        std::get<I>(tup) = true;
-    } else {
-        using ValT = typename OptionValueType<EntryT>::type::value_type;
-        ValT parsed{};
-        if (from_string(val_str, parsed)) {
-            std::get<I>(tup) = std::move(parsed);
-        } else {
-            diags.push_back(Diagnostic{ParseErrorCode::invalid_value, val_str, option_name});
-        }
-    }
 }
 
 // Set value by runtime index -- dispatch through fold expression
@@ -135,7 +152,21 @@ void set_value_by_index(std::tuple<OptionValue<Entries>...>& tup,
                         std::vector<Diagnostic>& diags,
                         std::string_view option_name) noexcept {
     [&]<size_t... Is>(std::index_sequence<Is...>) {
-        ((index == Is ? (set_value_impl<Entries..., Is>(tup, val_str, diags, option_name), true) : false) || ...);
+        ((index == Is ? [&]() -> bool {
+            using EntryT = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (std::is_same_v<EntryT, Flag>) {
+                std::get<Is>(tup) = true;
+            } else {
+                using ValT = typename OptionValueType<EntryT>::type::value_type;
+                ValT parsed{};
+                if (from_string(val_str, parsed)) {
+                    std::get<Is>(tup) = std::move(parsed);
+                } else {
+                    diags.push_back(Diagnostic{ParseErrorCode::invalid_value, val_str, option_name});
+                }
+            }
+            return true;
+        }() : false) || ...);
     }(std::index_sequence_for<Entries...>{});
 }
 
@@ -144,25 +175,21 @@ template<typename... Entries>
 void apply_defaults(std::tuple<OptionValue<Entries>...>& tup,
                     const std::tuple<Entries...>& entries) noexcept {
     [&]<size_t... Is>(std::index_sequence<Is...>) {
-        ((apply_default_one<Entries..., Is>(tup, entries)), ...);
-    }(std::index_sequence_for<Entries...>{});
-}
-
-template<typename... Entries, size_t I>
-void apply_default_one(std::tuple<OptionValue<Entries>...>& tup,
-                       const std::tuple<Entries...>& entries) noexcept {
-    using EntryT = std::tuple_element_t<I, std::tuple<Entries...>>;
-    if constexpr (!std::is_same_v<EntryT, Flag>) {
-        auto& val = std::get<I>(tup);
-        if (!val.has_value()) {
-            const auto& entry = std::get<I>(entries);
-            if constexpr (requires { entry.default_v; }) {
-                if (entry.default_v.has_value()) {
-                    val = *entry.default_v;
+        (([&]{
+            using EntryT = std::tuple_element_t<Is, std::tuple<Entries...>>;
+            if constexpr (!std::is_same_v<EntryT, Flag>) {
+                auto& val = std::get<Is>(tup);
+                if (!val.has_value()) {
+                    const auto& entry = std::get<Is>(entries);
+                    if constexpr (requires { entry.default_v; }) {
+                        if (entry.default_v.has_value()) {
+                            val = *entry.default_v;
+                        }
+                    }
                 }
             }
-        }
-    }
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
 }
 
 // Check required options
@@ -171,28 +198,23 @@ void check_required(const std::tuple<OptionValue<Entries>...>& tup,
                     const std::tuple<Entries...>& entries,
                     std::vector<Diagnostic>& diags) noexcept {
     [&]<size_t... Is>(std::index_sequence<Is...>) {
-        ((check_required_one<Entries..., Is>(tup, entries, diags)), ...);
-    }(std::index_sequence_for<Entries...>{});
-}
-
-template<typename... Entries, size_t I>
-void check_required_one(const std::tuple<OptionValue<Entries>...>& tup,
-                        const std::tuple<Entries...>& entries,
-                        std::vector<Diagnostic>& diags) noexcept {
-    if constexpr (requires { std::get<I>(entries).required; }) {
-        if (std::get<I>(entries).required) {
-            const auto& val = std::get<I>(tup);
-            if constexpr (requires { val.has_value(); }) {
-                if (!val.has_value()) {
-                    diags.push_back(Diagnostic{
-                        ParseErrorCode::required_missing,
-                        {},
-                        std::get<I>(entries).long_name
-                    });
+        (([&]{
+            if constexpr (requires { std::get<Is>(entries).required; }) {
+                if (std::get<Is>(entries).required) {
+                    const auto& val = std::get<Is>(tup);
+                    if constexpr (requires { val.has_value(); }) {
+                        if (!val.has_value()) {
+                            diags.push_back(Diagnostic{
+                                ParseErrorCode::required_missing,
+                                {},
+                                std::get<Is>(entries).long_name
+                            });
+                        }
+                    }
                 }
             }
-        }
-    }
+        }()), ...);
+    }(std::index_sequence_for<Entries...>{});
 }
 
 // Compile-time generated: for each entry index, a setter function pointer
@@ -204,6 +226,9 @@ using SetterFn = void (*)(std::tuple<OptionValue<Entries>...>&, std::string_view
 template<typename... Entries>
 struct OptionTable {
     std::tuple<Entries...> entries;
+
+    constexpr OptionTable(Entries... args) noexcept
+        : entries(std::move(args)...) {}
 
     consteval void validate() const noexcept {
         // Check for duplicate long_names (non-empty)
