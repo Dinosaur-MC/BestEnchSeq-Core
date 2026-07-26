@@ -3,11 +3,11 @@
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include "common/utils/FlatHashMap.hpp"
 #include "common/utils/HashUtils.hpp"
 #include <chrono>
 #include <cstdint>
 #include <deque>
-#include <unordered_map>
 #include <vector>
 
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
@@ -28,21 +28,6 @@ class DFSAlgorithm : public IAlgorithm {
         int32_t est_cost;
     };
 
-    struct ItemVectorHash {
-        size_t operator()(const std::vector<Item> &items) const noexcept {
-            size_t h = items.size();
-            for (const auto &item : items) {
-                for (const auto &e : item.enchs) {
-                    size_t eh = static_cast<size_t>(e.id) ^ (static_cast<size_t>(e.level) << 16);
-                    hash_combine(h, eh);
-                }
-                hash_combine(h, static_cast<size_t>(item.ppn));
-                hash_combine(h, static_cast<size_t>(item.dur));
-            }
-            return h;
-        }
-    };
-
     struct DFSFrame {
         std::vector<Item> items;
         int32_t cost_so_far{0};
@@ -58,6 +43,9 @@ class DFSAlgorithm : public IAlgorithm {
 
     void _dfs_iterative(ExecutionContext &ctx);
     std::vector<ForgePair> _collect_pairs(const std::vector<Item> &items) const;
+
+    // ── Hash-based visited_best helpers ─────────────────────────────────
+    static size_t _hash_state(const std::vector<Item> &items) noexcept;
 
     int32_t _heuristic(const std::vector<Item> &items) const;
     int32_t _greedy_bound(const std::vector<Item> &items, const EnchReg &reg) const;
@@ -76,7 +64,7 @@ class DFSAlgorithm : public IAlgorithm {
     std::vector<EnchStep> _best_steps;
     std::vector<EnchStep> _current_steps;
 
-    std::unordered_map<std::vector<Item>, int32_t, ItemVectorHash> _visited_best;
+    FlatHashMap<size_t, int32_t> _visited_best; // state_hash → min_g
     std::vector<DFSFrame> _stack;
     std::deque<std::vector<ForgePair>> _frame_pairs;
 
