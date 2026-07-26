@@ -4,7 +4,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
 // ============================================================================
 // Parse Error Codes

@@ -1,6 +1,5 @@
 #include "CLICommon.h"
 #include <charconv>
-#include <cstring>
 
 bool from_string(std::string_view sv, int& out) noexcept {
     auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), out);
