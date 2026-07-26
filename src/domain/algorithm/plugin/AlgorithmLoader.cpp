@@ -1,5 +1,6 @@
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/_strategies/Registration.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "AlgorithmLoader.h"
 #include "common/log/log.hpp"
 
@@ -71,7 +72,14 @@ namespace algorithm {
 // Lifecycle
 // ====================================================================
 
-AlgorithmLoader::~AlgorithmLoader() { unload_all(); }
+AlgorithmLoader::~AlgorithmLoader() {
+    // Process all pending diagnostics events while plugins are still loaded.
+    // Plugin-derived objects (e.g. IDAStarDiagnostics) may be referenced by
+    // queued events — flushing here ensures their virtual destructors and
+    // flush() calls complete before dl_close() unmaps the plugin code.
+    DiagnosticsService::instance().flush();
+    unload_all();
+}
 
 void AlgorithmLoader::load_builtin() {
     if (_builtin_loaded)
