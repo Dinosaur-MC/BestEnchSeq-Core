@@ -1,13 +1,11 @@
 #include "AppConfig.h"
-#include "common/log/log.hpp"
-#include "common/utils/StringUtils.hpp"
 #include "domain/interface/cli/CLIApp.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/LocaleDetector.h"
 #include "common/i18n/Language.h"
+#include "common/log/log.hpp"
 
 #include <iostream>
-#include <stdexcept>
 #include <string>
 
 int main(int argc, char* argv[]) try {
@@ -44,7 +42,7 @@ int main(int argc, char* argv[]) try {
     auto target = CLIApp::detect_target(argc, argv);
 
     if (target == "cli")
-        return CLIApp::run(argc, argv);
+        return CLIApp().run(argc, argv);
 
     std::cerr << "Unknown API target: " << target << "\n";
     return 1;

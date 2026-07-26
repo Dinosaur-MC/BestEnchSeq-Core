@@ -24,9 +24,15 @@ std::string CLIApp::detect_target(int argc, char* argv[]) {
     return "cli";
 }
 
+CLIApp::CLIApp()
+    : _ctx()
+{
+    _ctx.load_builtin();
+}
+
 int CLIApp::run(int argc, char* argv[]) {
     // 1. Parse CLI args
-    auto config = CLI::parse(argc, argv);
+    auto config = CLIApp::parse(argc, argv);
 
     // Re-select language if --lang was explicitly set (handles --lang=value syntax)
     if (!config.lang.empty())
@@ -35,40 +41,36 @@ int CLIApp::run(int argc, char* argv[]) {
 
     if (config.help || config.version) return 0;
 
-    // 2. Initialize context with built-in data
-    BesqContext ctx;
-    ctx.load_builtin();
-
-    // 3. Load algorithm plugins
+    // 2. Load algorithm plugins
     if (config.algo_dir)
-        ctx.load_algorithms(*config.algo_dir);
+        _ctx.load_algorithms(*config.algo_dir);
 
-    // 4. --list-algorithms
+    // 3. --list-algorithms
     if (config.list_algorithms) {
-        auto algos = ctx.list_algorithms();
+        auto algos = _ctx.list_algorithms();
         std::cout << tr_fmt("cli.msg.list_algorithms", algos.size()) << "\n";
         for (const auto& name : algos)
             std::cout << "  " << name << "\n";
         return 0;
     }
 
-    // 5. Registry operations
+    // 4. Registry operations
     if (config.registry_dir)
-        ctx.import_registry(*config.registry_dir);
+        _ctx.import_registry(*config.registry_dir);
 
     if (config.registries) {
         for (const auto& reg : string_utils::split(*config.registries, ',')) {
             if (!reg.empty())
-                ctx.import_registry(reg);
+                _ctx.import_registry(reg);
         }
     }
 
     if (config.registry_edit)
-        ctx.apply_registry_edits(*config.registry_edit);
+        _ctx.apply_registry_edits(*config.registry_edit);
 
-    // 6. Registry export
+    // 5. Registry export
     if (config.export_registry) {
-        bool ok = ctx.export_registry(*config.export_registry);
+        bool ok = _ctx.export_registry(*config.export_registry);
         if (!ok) throw std::runtime_error(
             tr_fmt("main.err.export_failed", *config.export_registry));
         LOG_INFO("%s", tr_fmt("main.msg.registry_exported",
@@ -76,29 +78,29 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
-    // 7. Solve
+    // 6. Solve
     if (!config.target.empty()) {
         auto mode = (config.mode == "inventory")
             ? AlgorithmMode::inventory : AlgorithmMode::direct;
 
         SolveRequest request;
         request.target_item = ItemParser::parse(
-            config.target, ctx.enchantments(), ctx.equipment());
+            config.target, _ctx.enchantments(), _ctx.equipment());
         request.mode = mode;
         request.payload = DirectPayload{};
         if (!config.source.empty()) {
             request.payload = DirectPayload{
-                EnchParser::parse(config.source, ctx.enchantments())
+                EnchParser::parse(config.source, _ctx.enchantments())
             };
         }
         request.forge_config.platform = (config.platform == "bedrock")
             ? MCE::Bedrock : MCE::Java;
         request.search_config.max_solutions = config.solutions;
         request.algorithm = config.algorithm;
-        CLI::apply_config_pairs(config.config_pairs, request.forge_config);
+        CLIApp::apply_config_pairs(config.config_pairs, request.forge_config);
 
-        auto result = ctx.solve(request);
-        auto output = ctx.format(result, mode, config.format);
+        auto result = _ctx.solve(request);
+        auto output = _ctx.format(result, mode, config.format);
 
         if (config.output) {
             std::ofstream out(*config.output);
@@ -151,7 +153,7 @@ const auto BESQ_OPTIONS = OptionTable{
 // i18n translator — bridges cli::Diagnostic to project tr()
 // ============================================================================
 
-struct CLI::UserI18nTranslator {
+struct CLIApp::UserI18nTranslator {
     std::string operator()(const cli::Diagnostic& diag) const {
         using enum cli::ParseErrorCode;
         switch (diag.code) {
@@ -179,7 +181,7 @@ struct CLI::UserI18nTranslator {
 // Help text
 // ============================================================================
 
-std::string CLI::help_text(std::string_view program_name) {
+std::string CLIApp::help_text(std::string_view program_name) {
     return cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name);
 }
 
@@ -187,7 +189,7 @@ std::string CLI::help_text(std::string_view program_name) {
 // Main CLI argument parsing
 // ============================================================================
 
-CLI::Config CLI::parse(int argc, char* argv[]) {
+CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
     std::string prog = argc > 0 ? argv[0] : "besq";
 
     auto cli_parser = cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{});
@@ -324,7 +326,7 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
 // apply_config_pairs — parse --config value and apply to ForgeConfig
 // ============================================================================
 
-void CLI::apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg) {
+void CLIApp::apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg) {
     if (config_pairs.empty()) return;
     auto pairs = string_utils::split(config_pairs, ',');
     for (const auto& pair : pairs) {

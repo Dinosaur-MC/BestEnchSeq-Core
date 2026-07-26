@@ -2,39 +2,23 @@
 
 #include "common/utils/cli/CLICommon.h"  // cli::ParseResult (for bind())
 #include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/interface/BesqContext.h"
 #include <optional>
 #include <string>
 
 // ============================================================================
-// CLIApp — CLI Application Runner
+// CLIApp — Full CLI Application
 // ============================================================================
 //
-// Full CLI application that owns a BesqContext and executes all operations.
+// Owns a BesqContext and runs the CLI workflow.  Created per-invocation.
 
 class CLIApp {
 public:
-    /// Run the CLI application. Returns exit code (0 for success).
-    static int run(int argc, char* argv[]);
-
-    /// Detect which app target is requested from args.
-    /// Checks --api <name>; returns "cli" by default.
+    CLIApp();
+    int run(int argc, char* argv[]);
     static std::string detect_target(int argc, char* argv[]);
-};
 
-// ============================================================================
-// CLI — Command-Line Interface Facade
-// ============================================================================
-//
-// Encapsulates business-level CLI argument parsing and validation.
-// Uses the generic cli::CLIParser internally for type-safe option parsing.
-//
-// Usage:
-//   auto cfg = CLI::parse(argc, argv);
-//   std::cout << CLI::help_text("besq");
-//   CLI::apply_config_pairs(pairs, forge_cfg);
-
-class CLI {
-public:
+    // ── Parser types ──
     struct Config {
         std::string algorithm = "hamming";
         std::string mode      = "direct";
@@ -60,12 +44,15 @@ public:
         bool version         = false;
     };
 
+    // ── Parser methods ──
     static Config parse(int argc, char* argv[]);
     static std::string help_text(std::string_view program_name = "besq");
     static void apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg);
 
 private:
     struct UserI18nTranslator;
+
+    BesqContext _ctx;
 
     template<typename... Entries>
     static Config bind(const cli::ParseResult<Entries...>& result) {
@@ -96,11 +83,3 @@ private:
         return cfg;
     }
 };
-
-// ── Backward-compatible aliases ─────────────────────────────────────────
-
-using CLIConfig = CLI::Config;
-
-inline CLIConfig parse_cli(int argc, char* argv[]) { return CLI::parse(argc, argv); }
-inline std::string get_cli_help_text(const std::string& p = "besq") { return CLI::help_text(p); }
-inline void apply_config_pairs(const std::string& p, algorithm::ForgeConfig& c) { CLI::apply_config_pairs(p, c); }
