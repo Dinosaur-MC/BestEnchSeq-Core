@@ -309,7 +309,7 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
     if (cfg.export_registry.has_value() && cfg.export_registry->empty())
         throw std::runtime_error(tr_fmt("cli.err.empty_export_registry"));
 
-    if (!cfg.help && !cfg.version) {
+    if (!cfg.help && !cfg.version && !cfg.list_algorithms) {
         if (cfg.target.empty() && !cfg.export_registry.has_value())
             throw std::runtime_error(tr("cli.err.missing_target_or_export"));
     }
