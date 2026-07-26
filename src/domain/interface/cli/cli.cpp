@@ -76,7 +76,7 @@ struct CLI::UserI18nTranslator {
 // ============================================================================
 
 std::string CLI::help_text(std::string_view program_name) {
-    return format_help(BESQ_OPTIONS, program_name, UserI18nTranslator{});
+    return CLIParser(BESQ_OPTIONS).format_help(program_name, UserI18nTranslator{});
 }
 
 // ============================================================================
@@ -86,9 +86,10 @@ std::string CLI::help_text(std::string_view program_name) {
 CLI::Config CLI::parse(int argc, char* argv[]) {
     std::string prog = argc > 0 ? argv[0] : "besq";
 
-    // Parse with type-safe parser (::parse = CLIParser free function)
-    auto result = ::parse(BESQ_OPTIONS,
-                          std::span<const char*>((const char**)argv, argc));
+    // Parse with type-safe parser class
+    auto cli_parser = CLIParser(BESQ_OPTIONS);
+    auto result = cli_parser.parse(
+        std::span<const char*>((const char**)argv, argc));
 
     // ── Handle diagnostics (errors accumulated, never thrown by parser) ──
     UserI18nTranslator user_i18n;

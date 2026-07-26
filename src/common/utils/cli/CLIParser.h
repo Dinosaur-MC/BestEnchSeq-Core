@@ -547,3 +547,43 @@ std::string format_help(
 
     return result;
 }
+
+// ============================================================================
+// CLIParser — object-oriented wrapper
+// ============================================================================
+
+template<typename... Entries>
+class CLIParser {
+    OptionTable<Entries...> _table;
+
+public:
+    using result_type = ParseResult<Entries...>;
+
+    constexpr CLIParser() = default;
+
+    explicit constexpr CLIParser(OptionTable<Entries...> table) noexcept
+        : _table(table) {}
+
+    /// Parse command-line arguments.
+    ParseResult<Entries...> parse(std::span<const char*> args) const {
+        return ::parse(_table, args);
+    }
+
+    /// Generate help text (English fallback).
+    std::string format_help(std::string_view program_name) const {
+        return ::format_help(_table, program_name);
+    }
+
+    /// Generate localized help text.
+    template<typename HT>
+    std::string format_help(std::string_view program_name, const HT& trans) const {
+        return ::format_help(_table, program_name, trans);
+    }
+
+    /// Access the underlying option table.
+    const OptionTable<Entries...>& table() const noexcept { return _table; }
+};
+
+// CTAD deduction guide
+template<typename... Entries>
+CLIParser(OptionTable<Entries...>) -> CLIParser<Entries...>;
