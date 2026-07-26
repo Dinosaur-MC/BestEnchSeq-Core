@@ -4,6 +4,7 @@
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "common/i18n/Language.h"
 #include "common/log/log.hpp"
 #include <chrono>
 
@@ -52,20 +53,21 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(
     auto algo = loader.create(algorithm);
     if (!algo) {
         auto available = loader.list();
-        std::string msg = "Unknown algorithm: '" + algorithm + "'. Available: ";
-        for (size_t i = 0; i < available.size(); ++i) {
-            if (i > 0) msg += ", ";
-            msg += available[i];
+        {
+            std::string avail_str;
+            for (size_t i = 0; i < available.size(); ++i) {
+                if (i > 0) avail_str += ", ";
+                avail_str += available[i];
+            }
+            throw std::runtime_error(tr_fmt("pipeline.err.unknown_algo", algorithm, avail_str));
         }
-        throw std::runtime_error(msg);
     }
 
     // Check mode support
     if (!(algo->supported_mode() & algo_input.mode)) {
         std::string mode_str = (algo_input.mode == AlgorithmMode::inventory)
             ? "inventory" : "direct";
-        throw std::runtime_error("Algorithm '" + algorithm +
-            "' does not support '" + mode_str + "' mode");
+        throw std::runtime_error(tr_fmt("pipeline.err.unsupported_mode", algorithm, mode_str));
     }
 
     // Resolve: generate books or filter inventory

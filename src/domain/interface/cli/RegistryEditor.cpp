@@ -1,6 +1,7 @@
 #include "RegistryEditor.h"
 #include "domain/business/business.h"
 #include "common/CommonTypes.h"
+#include "common/i18n/Language.h"
 #include "common/utils/StringUtils.hpp"
 #include <stdexcept>
 
@@ -15,19 +16,19 @@ void apply_registry_edits(
 
         auto parts = string_utils::split(op, ',');
         if (parts.size() < 2)
-            throw std::runtime_error("Invalid registry edit: '" + op + "'");
+            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_op", op));
 
         // First part: <target>:<action>
         auto &header = parts[0];
         auto colon   = header.find(':');
         if (colon == std::string::npos)
-            throw std::runtime_error("Invalid registry edit header: '" + header + "'");
+            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_header", header));
 
         std::string target = header.substr(0, colon);
         std::string action = header.substr(colon + 1);
         std::string id     = parts[1];
         if (id.empty())
-            throw std::runtime_error("Empty id in registry edit operation: '" + op + "'");
+            throw std::runtime_error(tr_fmt("cli.err.empty_registry_edit_id", op));
 
         if (action == "rm") {
             if (target == "ench") {
@@ -38,7 +39,7 @@ void apply_registry_edits(
                 eq_reg.erase(NSID(id));
                 continue;
             }
-            throw std::runtime_error("Unsupported: remove from '" + target + "'");
+            throw std::runtime_error(tr_fmt("cli.err.unsupported_remove", target));
         }
 
         if (action == "add") {
@@ -72,7 +73,7 @@ void apply_registry_edits(
                             limited_level = std::stoi(v);
                     } catch (const std::exception &) {
                         throw std::runtime_error(
-                            "Invalid numeric value for '" + k + "': '" + v + "' in operation: " + op
+                            tr_fmt("cli.err.invalid_numeric", k, v, op)
                         );
                     }
                     if (k == "is_treasure")
@@ -83,7 +84,7 @@ void apply_registry_edits(
                 continue;
             }
 
-            throw std::runtime_error("Unknown target: '" + target + "'");
+            throw std::runtime_error(tr_fmt("cli.err.unknown_registry_target", target));
         }
 
         if (action == "mod") {
@@ -108,7 +109,7 @@ void apply_registry_edits(
                             patch.limited_level = std::stoi(v);
                     } catch (const std::exception &) {
                         throw std::runtime_error(
-                            "Invalid numeric value for '" + k + "': '" + v + "' in operation: " + op
+                            tr_fmt("cli.err.invalid_numeric", k, v, op)
                         );
                     }
                 }
@@ -125,10 +126,10 @@ void apply_registry_edits(
                 continue;
             }
 
-            throw std::runtime_error("Unsupported: modify '" + target + "'");
+            throw std::runtime_error(tr_fmt("cli.err.unsupported_modify", target));
         }
 
-        throw std::runtime_error("Unknown action: '" + action + "'");
+        throw std::runtime_error(tr_fmt("cli.err.unknown_action", action));
     }
 }
 
@@ -144,19 +145,19 @@ void apply_registry_edits(const std::string& ops, Profile& profile) {
 
         auto parts = string_utils::split(op, ',');
         if (parts.size() < 2)
-            throw std::runtime_error("Invalid registry edit: '" + op + "'");
+            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_op", op));
 
         // First part: <target>:<action>
         auto& header = parts[0];
         auto colon   = header.find(':');
         if (colon == std::string::npos)
-            throw std::runtime_error("Invalid registry edit header: '" + header + "'");
+            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_header", header));
 
         std::string target = header.substr(0, colon);
         std::string action = header.substr(colon + 1);
         std::string id     = parts[1];
         if (id.empty())
-            throw std::runtime_error("Empty id in registry edit operation: '" + op + "'");
+            throw std::runtime_error(tr_fmt("cli.err.empty_registry_edit_id", op));
 
         if (action == "rm") {
             if (target == "ench") {
@@ -167,7 +168,7 @@ void apply_registry_edits(const std::string& ops, Profile& profile) {
                 profile.remove_equipment(NSID(id));
                 continue;
             }
-            throw std::runtime_error("Unsupported: remove from '" + target + "'");
+            throw std::runtime_error(tr_fmt("cli.err.unsupported_remove", target));
         }
 
         if (action == "add") {
@@ -201,7 +202,7 @@ void apply_registry_edits(const std::string& ops, Profile& profile) {
                             limited_level = std::stoi(v);
                     } catch (const std::exception&) {
                         throw std::runtime_error(
-                            "Invalid numeric value for '" + k + "': '" + v + "' in operation: " + op
+                            tr_fmt("cli.err.invalid_numeric", k, v, op)
                         );
                     }
                     if (k == "is_treasure")
@@ -212,7 +213,7 @@ void apply_registry_edits(const std::string& ops, Profile& profile) {
                 continue;
             }
 
-            throw std::runtime_error("Unknown target: '" + target + "'");
+            throw std::runtime_error(tr_fmt("cli.err.unknown_registry_target", target));
         }
 
         if (action == "mod") {
@@ -236,7 +237,7 @@ void apply_registry_edits(const std::string& ops, Profile& profile) {
                             patch.limited_level = std::stoi(v);
                     } catch (const std::exception&) {
                         throw std::runtime_error(
-                            "Invalid numeric value for '" + k + "': '" + v + "' in operation: " + op
+                            tr_fmt("cli.err.invalid_numeric", k, v, op)
                         );
                     }
                 }
@@ -253,9 +254,9 @@ void apply_registry_edits(const std::string& ops, Profile& profile) {
                 continue;
             }
 
-            throw std::runtime_error("Unsupported: modify '" + target + "'");
+            throw std::runtime_error(tr_fmt("cli.err.unsupported_modify", target));
         }
 
-        throw std::runtime_error("Unknown action: '" + action + "'");
+        throw std::runtime_error(tr_fmt("cli.err.unknown_action", action));
     }
 }
