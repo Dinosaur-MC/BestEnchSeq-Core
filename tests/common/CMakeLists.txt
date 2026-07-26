@@ -66,6 +66,16 @@ target_include_directories(test_app_config PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_app_config COMMAND test_app_config)
 set_tests_properties(test_app_config PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# --- i18n tests ---
+
+add_executable(test_i18n
+    i18n/test_i18n.cpp
+    ${PROJECT_ROOT}/src/common/i18n/Language.cpp
+)
+target_include_directories(test_i18n PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_i18n COMMAND test_i18n)
+set_tests_properties(test_i18n PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
 # Generic parser utilities (DISABLED: tests deleted interface-domain components)
 # TODO: when FormatDetector tests are needed, add them in tests/domain/business/
 # add_executable(test_parser_utils ...)
