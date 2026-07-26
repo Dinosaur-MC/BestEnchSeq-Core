@@ -147,7 +147,7 @@ add_library(besq-core SHARED
 )
 
 target_link_libraries(besq-core PUBLIC
-    besq-orchestration   # transitively pulls in all domains + common
+    besq-domain-interface   # transitively pulls orchestration + algorithm + business + common
 )
 
 target_include_directories(besq-core PUBLIC
@@ -180,8 +180,8 @@ set(_besq_static_libs
     \"\${_besq_build}/src/common/besq-common.lib\"
     \"\${_besq_build}/src/domain/algorithm/besq-domain-algorithm.lib\"
     \"\${_besq_build}/src/domain/business/besq-domain-business.lib\"
+    \"\${_besq_build}/src/domain/orchestration/besq-domain-orchestration.lib\"
     \"\${_besq_build}/src/domain/interface/besq-domain-interface.lib\"
-    \"\${_besq_build}/src/domain/orchestration/besq-orchestration.lib\"
 )
 add_library(besq-core::besq-core INTERFACE IMPORTED)
 set_target_properties(besq-core::besq-core PROPERTIES

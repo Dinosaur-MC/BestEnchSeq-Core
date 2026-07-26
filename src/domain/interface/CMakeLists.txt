@@ -1,6 +1,7 @@
 # ── besq-domain-interface ─────────────────────────────────────────────────
 # Interface domain: session context + CLI + ABI bindings.
-# Depends on besq-common + besq-domain-algorithm + besq-domain-business.
+# Depends on orchestration (which brings algorithm + business transitively)
+# plus common for shared utilities.
 
 file(GLOB_RECURSE BESQ_INTERFACE_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
@@ -10,9 +11,8 @@ file(GLOB_RECURSE BESQ_INTERFACE_SRCS CONFIGURE_DEPENDS
 add_library(besq-domain-interface STATIC ${BESQ_INTERFACE_SRCS})
 
 target_link_libraries(besq-domain-interface PUBLIC
+    besq-domain-orchestration          # brings algorithm + business transitively
     besq-common
-    besq-domain-algorithm
-    besq-domain-business
 )
 
 target_include_directories(besq-domain-interface PUBLIC

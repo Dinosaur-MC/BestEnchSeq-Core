@@ -1,18 +1,19 @@
-# ── besq-orchestration ─────────────────────────────────────────────────────
+# ── besq-domain-orchestration ──────────────────────────────────────────────
 # Orchestration layer: cross-domain adapters, serializers, formatters.
-# Links all domains transitively.
+# Sits between business/algorithm and interface — interface depends on it.
 
 file(GLOB_RECURSE BESQ_ORCHESTRATION_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 
-add_library(besq-orchestration STATIC ${BESQ_ORCHESTRATION_SRCS})
+add_library(besq-domain-orchestration STATIC ${BESQ_ORCHESTRATION_SRCS})
 
-target_link_libraries(besq-orchestration PUBLIC
-    besq-domain-interface   # transitively pulls in algorithm + business + common
+target_link_libraries(besq-domain-orchestration PUBLIC
+    besq-domain-algorithm
+    besq-domain-business
 )
 
-target_include_directories(besq-orchestration PUBLIC
+target_include_directories(besq-domain-orchestration PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/orchestration/components/CompactAdapter.h"
 )

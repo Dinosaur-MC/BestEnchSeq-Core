@@ -1,5 +1,5 @@
 # ── Orchestration domain tests ─────────────────────────────────────
-# Tests for besq-orchestration: adapters, serializers, formatters.
+# Tests for besq-domain-orchestration: adapters, serializers, formatters.
 
 besq_test(test_output_formatter test_output_formatter.cpp)
 besq_test(test_compact_adapter test_compact_adapter.cpp)

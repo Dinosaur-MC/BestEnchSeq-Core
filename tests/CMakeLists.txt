@@ -12,7 +12,7 @@
 #     algorithm/    → besq-domain-algorithm
 #     business/     → besq-domain-business
 #     interface/    → besq-domain-interface
-#     orchestration/→ besq-orchestration
+#     orchestration/→ besq-domain-orchestration
 #   integration/  → cross-domain integration tests
 
 # Project root (parent of tests/)
