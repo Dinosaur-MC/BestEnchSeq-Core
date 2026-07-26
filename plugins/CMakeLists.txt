@@ -44,6 +44,7 @@ get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 # target's INTERFACE_INCLUDE_DIRECTORIES, which may contain host-only paths.
 set(PLUGIN_SYSTEM_INCLUDES
     "${PROJECT_ROOT}/src"
+    "${PROJECT_ROOT}/src/common"
 )
 # Try to locate the host build's generated directory for BuildConfig.h
 foreach(_hint ${besq-core_DIR} "${CMAKE_BINARY_DIR}/..")
