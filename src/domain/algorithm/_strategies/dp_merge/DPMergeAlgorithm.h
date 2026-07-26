@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-/// Divide-and-conquer DP merge-order optimizer (port of enchant-order).
+/// Divide-and-conquer DP merge-order optimizer (port of https://github.com/iamcal/enchant-order).
 ///
 /// Algorithm:
 ///   1. Enumerate all 2-partitions of the current item set (Catalan split).
