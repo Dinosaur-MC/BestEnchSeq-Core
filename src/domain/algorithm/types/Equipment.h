@@ -16,7 +16,11 @@ struct Equipment : IBinarySerializable {
     /// registry are guaranteed to be applicable to the target equipment.
     std::vector<int16_t> applicable_enchs;
 
-    bool operator==(const Equipment &other) const;
+    bool operator==(const Equipment &other) const {
+        return id == other.id && category_id == other.category_id
+            && max_durability == other.max_durability
+            && applicable_enchs == other.applicable_enchs;
+    }
 
     void serialize(ByteStreamWriter &w) const noexcept override {
         w << id << category_id << max_durability << applicable_enchs;
