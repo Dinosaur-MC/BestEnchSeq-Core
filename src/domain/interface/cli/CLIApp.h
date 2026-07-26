@@ -20,7 +20,7 @@ public:
 
     // ── Parser types ──
     struct Config {
-        std::string algorithm = "hamming";
+        std::string algorithm = "dp_merge";
         std::string mode      = "direct";
         std::string target;
         std::string source;

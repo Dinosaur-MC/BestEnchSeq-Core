@@ -24,5 +24,5 @@ struct SolveRequest {
     SolvePayload payload;
     algorithm::ForgeConfig forge_config;
     algorithm::SearchConfig search_config;
-    std::string algorithm = "hamming";
+    std::string algorithm = "dp_merge";
 };

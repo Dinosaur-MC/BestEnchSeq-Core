@@ -127,7 +127,7 @@ const auto BESQ_OPTIONS = OptionTable{
     Flag    {.long_name = "verbose",          .short_name = 'v', .help_key = "cli.help.verbose_desc"},
     Flag    {.long_name = "version",          .short_name = 'V', .help_key = "cli.help.version_desc"},
     Flag    {.long_name = "list-algorithms",                      .help_key = "List available algorithms"},
-    Option<std::string>{.long_name = "algorithm",                 .help_key = "cli.help.algorithm_desc",    .default_v = std::string("hamming")},
+    Option<std::string>{.long_name = "algorithm",                 .help_key = "cli.help.algorithm_desc",    .default_v = std::string("dp_merge")},
     Option<std::string>{.long_name = "target",                    .help_key = "cli.help.target_desc"},
     Option<std::string>{.long_name = "source",                    .help_key = "cli.help.source_desc"},
     Option<std::string>{.long_name = "mode",                      .help_key = "cli.help.mode_desc",         .default_v = std::string("direct")},

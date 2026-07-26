@@ -8,7 +8,7 @@
     "cli.help.options_header": "选项",
     "cli.help.help_desc": "显示此帮助信息",
     "cli.help.version_desc": "显示版本信息",
-    "cli.help.algorithm_desc": "搜索算法: hamming (默认), dfs, astar\n                           (使用 --list-algorithms 查看所有可用算法,\n                           包括通过插件外部加载的)",
+    "cli.help.algorithm_desc": "搜索算法: dp_merge (默认), dfs, astar, hamming\n                           (使用 --list-algorithms 查看所有可用算法,\n                           包括通过插件外部加载的)",
     "cli.help.source_desc": "来源附魔 (例如 sharpness=5,knockback=2)",
     "cli.help.target_desc": "目标物品及其所需附魔\n                           (例如 diamond_sword[sharpness=3])",
     "cli.help.mode_desc": "操作模式: direct (默认) 或 inventory",

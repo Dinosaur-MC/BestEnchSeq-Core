@@ -8,7 +8,7 @@
     "cli.help.options_header": "Options",
     "cli.help.help_desc": "Show this help message",
     "cli.help.version_desc": "Show version info",
-    "cli.help.algorithm_desc": "Search algorithm: hamming (default), dfs, astar\n                           (use --list-algorithms to see all available,\n                           including externally loaded plugins)",
+    "cli.help.algorithm_desc": "Search algorithm: dp_merge (default), dfs, astar, hamming\n                           (use --list-algorithms to see all available,\n                           including externally loaded plugins)",
     "cli.help.source_desc": "Source enchantments (e.g., sharpness=5,knockback=2)",
     "cli.help.target_desc": "Target item with wanted enchantments\n                           (e.g., diamond_sword[sharpness=3])",
     "cli.help.mode_desc": "Operation mode: direct (default) or inventory",
