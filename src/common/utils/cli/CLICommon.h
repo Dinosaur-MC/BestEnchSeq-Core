@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <concepts>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 // ============================================================================
 // Parse Error Codes
@@ -40,11 +42,13 @@ template<typename T> struct Positional;
 // Free-function from_string — user-extensible via ADL / specialization
 // Returns true on success, false on failure (no exceptions)
 bool from_string(std::string_view sv, int& out) noexcept;
+bool from_string(std::string_view sv, unsigned int& out) noexcept;
 bool from_string(std::string_view sv, long& out) noexcept;
+bool from_string(std::string_view sv, unsigned long& out) noexcept;
 bool from_string(std::string_view sv, float& out) noexcept;
 bool from_string(std::string_view sv, double& out) noexcept;
 bool from_string(std::string_view sv, bool& out) noexcept;
-bool from_string(std::string_view sv, std::string& out) noexcept;
+bool from_string(std::string_view sv, std::string& out);
 
 template<typename T>
 concept Parsable = requires(std::string_view sv, T& out) {

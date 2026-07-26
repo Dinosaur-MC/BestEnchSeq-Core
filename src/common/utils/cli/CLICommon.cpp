@@ -6,7 +6,17 @@ bool from_string(std::string_view sv, int& out) noexcept {
     return ec == std::errc{} && ptr == sv.data() + sv.size();
 }
 
+bool from_string(std::string_view sv, unsigned int& out) noexcept {
+    auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), out);
+    return ec == std::errc{} && ptr == sv.data() + sv.size();
+}
+
 bool from_string(std::string_view sv, long& out) noexcept {
+    auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), out);
+    return ec == std::errc{} && ptr == sv.data() + sv.size();
+}
+
+bool from_string(std::string_view sv, unsigned long& out) noexcept {
     auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), out);
     return ec == std::errc{} && ptr == sv.data() + sv.size();
 }
@@ -27,7 +37,7 @@ bool from_string(std::string_view sv, bool& out) noexcept {
     return false;
 }
 
-bool from_string(std::string_view sv, std::string& out) noexcept {
+bool from_string(std::string_view sv, std::string& out) {
     out = sv;
     return true;
 }
