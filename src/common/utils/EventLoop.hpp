@@ -235,13 +235,14 @@ private:
             }
 
             // ── Queue empty — check for stop ──
-            // Drain one more item to handle the race where a producer
-            // posts after the drain loop but before stop_requested().
+            // Graceful stop: drain ALL remaining items before exiting so the
+            // queue is empty when the worker terminates.  This also handles
+            // the race where a producer posts between the drain loop above
+            // and the stop request.
             if (st.stop_requested()) {
-                if (_queue.try_pop(item)) {
-                    _dispatch(item);
-                    continue;
-                }
+                T drain;
+                while (_queue.try_pop(drain))
+                    _dispatch(drain);
                 return;
             }
 
