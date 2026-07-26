@@ -7,8 +7,6 @@ besq_test(test_item_parser test_item_parser.cpp)
 besq_test(test_cli_parser test_cli_parser.cpp)
 besq_test(test_cli_acceptance test_cli_acceptance.cpp)
 
-# TODO: Re-enable after migrating to new NativeJsonParser/ProfileLoader tests
-# besq_test(test_ench_info_parser test_ench_info_parser.cpp)
 
 # API context test (needs BesqContext compiled — enabled now)
 # TODO: currently has linker errors; re-enable when API layer is complete

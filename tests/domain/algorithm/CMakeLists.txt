@@ -12,6 +12,6 @@ besq_test(test_algorithm_registry test_algorithm_registry.cpp)
 besq_test(test_compact_serializer test_compact_serializer.cpp)
 besq_test(test_astar_state_serializer test_astar_state_serializer.cpp)
 
-# Strategy integration tests (needs registries, AlgorithmExecutor, RegistryAccess)
-# TODO: re-enable when CompactAdapter / AlgorithmExecutor APIs stabilize
-# besq_test(test_algorithm_strategies test_algorithm_strategies.cpp)
+besq_test(test_diagnostics test_diagnostics.cpp)
+besq_test(test_algorithm_loader test_algorithm_loader.cpp)
+besq_test(test_algorithm_strategies test_algorithm_strategies.cpp)

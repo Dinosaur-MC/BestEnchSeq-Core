@@ -11,6 +11,7 @@
 #include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
 #include "domain/orchestration/components/CompactAdapter.h"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -66,45 +67,45 @@ struct TestContext {
         eq.max_durability = 1561;
 
         // Build compact EnchReg from domain enchantment registry
+        // Collect enchantments in deterministic order (sorted by NSID string)
+        std::vector<std::pair<std::string, EnchInfo>> sorted_enchs;
+        sorted_enchs.reserve(fx_global.enchants.size());
+        for (const auto& [nsid, info] : fx_global.enchants.data())
+            sorted_enchs.emplace_back(nsid.str(), info);
+        std::sort(sorted_enchs.begin(), sorted_enchs.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
+
         std::vector<algorithm::EnchInfo> compact_infos;
-        std::vector<int32_t> global_ids;
-        std::unordered_map<std::string, int32_t> name_to_local;
-        for (int32_t i = 0; i < static_cast<int32_t>(fx_global.enchants.size()); ++i) {
-            global_ids.push_back(i);
-            name_to_local[fx_global.enchants.get(i).id.str()] = i;
-        }
-        size_t mask_size = (fx_global.enchants.size() + 63) / 64;
-        std::vector<std::vector<algorithm::MaskType>> exc_masks(
-            fx_global.enchants.size(), std::vector<algorithm::MaskType>(mask_size, 0));
-        uint64_t next_group = 0;
-        std::vector<bool> visited(fx_global.enchants.size(), false);
-        for (int32_t i = 0; i < static_cast<int32_t>(fx_global.enchants.size()); ++i) {
-            if (visited[i] || fx_global.enchants.get(i).exclusive_set.empty()) continue;
-            uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
-            next_group++;
-            visited[i] = true;
-            exc_masks[i][0] |= group_bit;
-            for (const auto& ex_nsid : fx_global.enchants.get(i).exclusive_set) {
-                auto it = name_to_local.find(ex_nsid.str());
-                if (it != name_to_local.end()) {
-                    int32_t j = it->second;
-                    visited[j] = true;
-                    exc_masks[j][0] |= group_bit;
+        std::vector<NSID> global_ids;
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i)
+            global_ids.push_back(NSID(sorted_enchs[i].first));
+
+        // Build compact EnchInfos with pair-wise exclusive_set matching
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
+            const auto& biz = sorted_enchs[i].second;
+            bool applicable = biz.applicable_equipments.count(EquipmentTag::sword()) > 0;
+
+            algorithm::EnchInfo ai;
+            ai.mul = static_cast<uint16_t>(biz.multiplier);
+            ai.mul_b = static_cast<uint16_t>(std::max(1, biz.multiplier >> 1));
+            ai.max_lvl = static_cast<uint16_t>(biz.max_level);
+            ai.applicable = applicable;
+
+            // Build exc_mask: check against previously-added enchantments
+            ai.exc_mask.resize(compact_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
+            for (size_t j = 0; j < compact_infos.size(); ++j) {
+                if (biz.exclusive_set.count(global_ids[j])) {
+                    size_t word = j / algorithm::MASK_ELEM_SIZE;
+                    size_t bit = j % algorithm::MASK_ELEM_SIZE;
+                    ai.exc_mask[word] |= (algorithm::MaskType(1) << bit);
+                    if (word < compact_infos[j].exc_mask.size())
+                        compact_infos[j].exc_mask[word] |= (algorithm::MaskType(1) << bit);
                 }
             }
+
+            compact_infos.push_back(std::move(ai));
         }
-        for (int32_t i = 0; i < static_cast<int32_t>(fx_global.enchants.size()); ++i) {
-            const auto& ei = fx_global.enchants.get(i);
-            bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
-            algorithm::EnchInfo info;
-            info.mul = static_cast<uint16_t>(ei.multiplier);
-            info.mul_b = static_cast<uint16_t>(std::max(1, ei.multiplier >> 1));
-            info.max_lvl = static_cast<uint16_t>(ei.max_level);
-            info.exc_mask = exc_masks[i];
-            info.applicable = applicable;
-            compact_infos.push_back(std::move(info));
-        }
-        ench_reg.init(compact_infos, global_ids, eq);
+        ench_reg.init(std::move(compact_infos), std::move(global_ids), eq);
 
         algorithm::Item equip{algorithm::ItemType::Equip, 1561, 0, {}};
         items.push_back(std::move(equip));
