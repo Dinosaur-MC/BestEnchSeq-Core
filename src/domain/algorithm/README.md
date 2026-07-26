@@ -5,14 +5,15 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  IAlgorithm  ── 纯虚策略接口                                │
-│     ├── Hamming             Popcount 平衡树   [内置]        │
-│     ├── DFS                 DFS + 剪枝         [内置]        │
-│     ├── AStar               A* 搜索（ItemPool）[内置]        │
-│     ├── Greedy              贪心合并           [插件]        │
-│     ├── DiffFirst           PPN 分层合并       [插件]        │
-│     ├── HierarchicalMerge   分层合并           [插件]        │
-│     ├── DynamicPenalty      动态惩罚均衡       [插件]        │
-│     └── IDAStar             IDA* 搜索（TT）    [插件]        │
+│     ├── Hamming             Popcount 平衡树     [内置]       │
+│     ├── DFS                 DFS + 哈希剪枝      [内置]       │
+│     ├── AStar               A* 搜索（ItemPool） [内置]       │
+│     ├── dp_merge            分治 DP + Pareto    [内置]       │
+│     ├── Greedy              贪心合并            [插件]       │
+│     ├── DiffFirst           PPN 分层合并        [插件]       │
+│     ├── HierarchicalMerge   分层合并            [插件]       │
+│     ├── DynamicPenalty      动态惩罚均衡        [插件]       │
+│     └── IDAStar             IDA* 搜索（TT）     [插件]       │
 │                                                             │
 │  AlgorithmExecutor  ─── 异步执行引擎                         │
 │     ├── 状态机: Idle→Running→Paused→Completed|Failed|Cancelled

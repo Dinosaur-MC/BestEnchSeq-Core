@@ -21,14 +21,17 @@ public:
 | 策略 | 目录 | 复杂度 | 方法 |
 |---|---|---|---|
 | Hamming | `hamming/` | O(n log n) | Popcount 平衡二叉合并树 |
+| dp_merge | `dp_merge/` | O(2^N) 带剪枝 | 分治 DP + (EnchSet, PPN) Pareto 分桶 |
 
 确定性算法**不展开搜索树**，通过固定策略合并物品。速度快但解的质量不可控。
+
+dp_merge 是最快的确定性算法，对于 N ≤ 10 可在毫秒级达到最优解（见对比数据）。
 
 ### 搜索算法
 
 | 策略 | 目录 | 方法 | 状态表示 |
 |---|---|---|---|
-| DFS | `dfs/` | 回溯 + visited 表 + 启发式剪枝 | `vector<Item>` 拷贝 |
+| DFS | `dfs/` | 回溯 + 哈希剪枝 + 启发式剪枝 | `vector<Item>` 拷贝，哈希化 visited 表 |
 | A* | `astar/` | 最佳优先 + ItemPool ID 索引 | `vector<ItemID>` + best_g 表 |
 
 搜索算法可以找到更优解，但时间随搜索空间指数增长。
@@ -50,7 +53,7 @@ public:
 
 | _diag 类型 | 适用策略 |
 |---|---|
-| `AlgorithmDiagnostics` | 确定性算法（Hamming）|
+| `AlgorithmDiagnostics` | 确定性算法（Hamming、dp_merge）|
 | `SearchDiagnostics` | 搜索但无 ItemPool（DFS）|
 | `PoolSearchDiagnostics` + 具体类型 | 有 ItemPool 的搜索（A* → `AStarDiagnostics`）|
 
@@ -132,11 +135,13 @@ IAlgorithm::execute(input, ctx)
 
 ## 新增内置策略开发清单
 
-- [ ] 在 `strategies/<name>/` 下创建 `NameAlgorithm.h` 和 `NameAlgorithm.cpp`
+- [ ] 在 `_strategies/<name>/` 下创建 `NameAlgorithm.h` 和 `NameAlgorithm.cpp`
+- [ ] 类名与文件名匹配：`<name>/NameAlgorithm.h` → `algorithm::NameAlgorithm`
 - [ ] 继承 `IAlgorithm`，实现 `name()` / `version()` / `execute()`
 - [ ] 选择正确的 `_diag` 类型（见上表）
 - [ ] 实现 `execute()`，按规范使用 ExecutionContext API
-- [ ] 在 `_strategies/Registration.h` 中添加 `BESQ_REGISTER_STRATEGY` 宏调用
-- [ ] 在 `tests/domain/algorithm/test_algorithm_strategies.cpp` 中添加测试
+- [ ] 目录名成为注册名（CMake 自动 glob `*Algorithm.h`，生成注册代码）
 - [ ] 如果使用 ItemPool，添加 `simulate()` 快速可行性检查
+- [ ] 在 `tests/domain/algorithm/test_algorithm_strategies.cpp` 中添加测试
+- [ ] 运行 `cmake --build build` 让 CMake 重新 glob 发现新策略
 - [ ] 运行 `ctest` 确认全部测试通过
