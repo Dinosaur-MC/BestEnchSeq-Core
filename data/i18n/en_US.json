@@ -35,7 +35,7 @@
     "cli.err.invalid_mode": "Invalid mode: '{0}'. Expected 'direct' or 'inventory'.",
     "cli.err.invalid_platform": "Invalid platform: '{0}'. Expected 'java', 'bedrock', or 'auto'.",
     "cli.err.invalid_format": "Invalid format: '{0}'. Expected 'text', 'compact', or 'json'.",
-    "cli.err.unknown_option": "Unknown option: --{0}",
+    "cli.err.unknown_option": "Unknown option: {0}",
     "cli.err.unknown_short_option": "Unknown option: '{0}'",
     "cli.err.unexpected_arg": "Unexpected argument: '{0}'",
     "cli.err.missing_target": "Missing required argument: --target (or --export-registry to export registry only)",

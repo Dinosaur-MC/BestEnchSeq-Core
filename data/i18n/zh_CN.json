@@ -35,7 +35,7 @@
     "cli.err.invalid_mode": "无效模式: '{0}'。请使用 'direct' 或 'inventory'。",
     "cli.err.invalid_platform": "无效平台: '{0}'。请使用 'java'、'bedrock' 或 'auto'。",
     "cli.err.invalid_format": "无效输出格式: '{0}'。请使用 'text'、'compact' 或 'json'。",
-    "cli.err.unknown_option": "未知选项: --{0}",
+    "cli.err.unknown_option": "未知选项: {0}",
     "cli.err.unknown_short_option": "未知选项: '{0}'",
     "cli.err.unexpected_arg": "意外参数: '{0}'",
     "cli.err.missing_target": "缺少必要参数: --target (或使用 --export-registry 仅导出注册表)",
