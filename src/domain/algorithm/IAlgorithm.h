@@ -7,6 +7,77 @@ class ExecutionContext;
 class IAlgorithmSerializer;
 
 // ─── IAlgorithm (pure interface, compact-only) ───
+//
+// == 算法策略设计核心规范 =================================================
+//
+// 所有内置策略和插件策略必须遵守以下规范。违反规范的策略可能在代码审查
+// 中被拒绝，或在运行时出现不可预期的行为。
+//
+// --- 1. 内存分配规则 ---------------------------------------------------
+//
+//   构造期不允许堆分配  所有预分配必须推迟到 execute() 中。
+//                     构造函数应 noexcept 且零分配。
+//                     反例：IDASTAR 的 TTTable 构造期分配 25MB
+//                     已被修复为首次 store() 延迟分配。
+//
+//   execute() 内分配   scratch buffer 应在 execute() 开始时 resize/assign，
+//                      不要在状态展开循环中反复分配。
+//                      反例：_target_level_map.assign(reg.size(), 0) ✅
+//
+//   ItemPool 预分配      如果使用 ItemPool，在 execute() 中 reserve(est)。
+//                      估计值 = min(factorial_estimate, max_pool_cap)。
+//
+// --- 2. 热路径计数器 ---------------------------------------------------
+//
+//   所有搜索策略必须在每次状态展开时调用 incr_nodes_visited()。
+//   每次剪枝必须调用 incr_nodes_pruned()。
+//   每次 forge() 必须调用 incr_steps_forged()。
+//   这三个计数器使用 memory_order_relaxed，零同步开销。
+//   确定性策略可以跳过 visited/pruned，但必须调用 incr_steps_forged()。
+//
+// --- 3. 流式通知 -------------------------------------------------------
+//
+//   report_progress(pct, status)   5% 限频，observer 异步接收。
+//   report_solution(steps)         自动推送到 observer + 累积到 output。
+//                                  提供 const&（1 次 copy）和 &&（0 copy）重载。
+//
+// --- 4. 退出诊断 -------------------------------------------------------
+//
+//   填充策略相关的 _diag 字段后调用 ctx.set_exit_diagnostics(_diag)。
+//   框架自动补充 algorithm_name、wall_ms、原子计数器。
+//   _diag 类型选择：
+//     AlgorithmDiagnostics   确定性合成算法（Hamming、dp_merge）
+//     SearchDiagnostics      搜索但无 ItemPool（DFS）
+//     PoolSearchDiagnostics  有 ItemPool 的搜索（A* → AStarDiagnostics）
+//
+// --- 5. 编译期检查 -----------------------------------------------------
+//
+//   所有策略必须添加以下 static_assert：
+//     - 非拷贝非平凡：   static_assert(!std::is_trivially_copyable_v<MyAlgo>);
+//     - 默认 noexcept：  static_assert(std::is_nothrow_default_constructible_v<MyAlgo>);
+//     反例：TTTable 的 BUCKETS 2 的幂检查和 PEAK_BYTES < 256 MiB 检查。
+//
+// --- 6. 注册方式 -------------------------------------------------------
+//
+//   内置策略：在 _strategies/<name>/ 下放置 *Algorithm.h 和 *.cpp。
+//            CMake 自动 glob *Algorithm.h，生成注册代码。
+//            目录名 <name> 成为注册名。
+//            无需手动修改 Registration.h 或 CMakeLists.txt。
+//
+//   插件策略：在 plugins/<name>/ 下构建独立共享库。
+//            提供 besq_create_algorithm() 入口。
+//
+// --- 7. 文档要求 -------------------------------------------------------
+//
+//   头文件顶部必须包含文档注释块，说明：
+//     - 算法核心思路和复杂度
+//     - 预期用例和推荐的使用场景
+//     - 如果有理论保证（最优性、完备性），明确注明
+//     反例：HammingAlgorithm.h 的 popcount 平衡树文档 ✅
+//          DPMergeAlgorithm.h 的分治 DP + Pareto 分桶文档 ✅
+//
+// =========================================================================
+
 class IAlgorithm {
   public:
     virtual ~IAlgorithm() = default;
