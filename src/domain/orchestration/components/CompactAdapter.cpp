@@ -87,6 +87,11 @@ algorithm::AlgorithmInput CompactAdapter::apply(
     }
 
     // ── 5. Init compact registry ───────────────────────────────────────
+    // Populate applicable local enchantment IDs on the equipment.
+    algo_equip.applicable_enchs.reserve(algo_infos.size());
+    for (int16_t i = 0; i < static_cast<int16_t>(algo_infos.size()); ++i)
+        algo_equip.applicable_enchs.push_back(i);
+
     algorithm::EnchReg ench_reg;
     ench_reg.init(std::move(algo_infos),
                   std::move(applicable_global_nsids), algo_equip);
