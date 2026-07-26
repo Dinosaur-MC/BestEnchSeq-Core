@@ -5,7 +5,6 @@
 #include "domain/business/components/FormatDetector.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/orchestration/components/OutputFormatter.h"
-#include "domain/orchestration/pipelines/ManagePipeline.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/interface/cli/RegistryEditor.h"
 
