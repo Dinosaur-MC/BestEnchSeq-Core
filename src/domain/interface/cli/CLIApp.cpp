@@ -203,7 +203,7 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
             return early_cfg;
         }
         if (early_cfg.version) {
-            std::cout << prog << " version " << BESQ_VERSION << std::endl;
+            std::cout << std::filesystem::path(prog).filename().string() << " version " << BESQ_VERSION << std::endl;
             return early_cfg;
         }
 
@@ -230,7 +230,7 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
         return cfg;
     }
     if (cfg.version) {
-        std::cout << prog << " version " << BESQ_VERSION << std::endl;
+        std::cout << std::filesystem::path(prog).filename().string() << " version " << BESQ_VERSION << std::endl;
         return cfg;
     }
 
@@ -270,10 +270,14 @@ CLI::Config CLI::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr_fmt("cli.err.invalid_platform", cfg.platform));
     if (cfg.format != "text" && cfg.format != "compact" && cfg.format != "json")
         throw std::runtime_error(tr_fmt("cli.err.invalid_format", cfg.format));
-    if (cfg.solutions < 0)
-        throw std::runtime_error(tr("cli.err.solutions_negative"));
+    if (cfg.solutions <= 0)
+        throw std::runtime_error(tr("cli.err.solutions_not_positive"));
     if (cfg.solutions > static_cast<int>(BESQ_MAX_SOLUTIONS))
         throw std::runtime_error(tr_fmt("cli.err.solutions_exceed_max", BESQ_MAX_SOLUTIONS));
+
+    // --source requires --target
+    if (!cfg.source.empty() && cfg.target.empty())
+        throw std::runtime_error(tr("cli.err.source_without_target"));
 
     if (!cfg.config_pairs.empty()) {
         auto pairs = string_utils::split(cfg.config_pairs, ',');
