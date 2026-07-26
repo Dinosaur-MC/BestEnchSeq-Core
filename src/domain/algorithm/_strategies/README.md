@@ -39,12 +39,12 @@ public:
 
 内置策略由 CMake 自动发现并注册，无需手动维护列表：
 
-1. CMake globs `src/algorithm/strategies/*/*Algorithm.h`
+1. CMake globs `_strategies/*/*Algorithm.h`
 2. 生成 `_strategy_registration.cpp`，包含所有策略头文件并调用 `reg.register_algorithm(name, factory)`
 3. 生成的 `.cpp` 编译为 `besq-core` 的一部分
 4. `AlgorithmLoader::load_builtin()` 调用 `besq_register_builtin_strategies()` 完成注册
 
-新增内置策略只需在 `strategies/<name>/` 下放入文件，CMake 下次 configure 时自动包含。
+新增内置策略只需在 `_strategies/<name>/` 下放入文件，CMake 下次 configure 时自动包含。
 
 ## 诊断类型选择
 
@@ -136,6 +136,7 @@ IAlgorithm::execute(input, ctx)
 - [ ] 继承 `IAlgorithm`，实现 `name()` / `version()` / `execute()`
 - [ ] 选择正确的 `_diag` 类型（见上表）
 - [ ] 实现 `execute()`，按规范使用 ExecutionContext API
-- [ ] 在 `tests/algorithm/test_algorithm_strategies.cpp` 中添加测试
+- [ ] 在 `_strategies/Registration.h` 中添加 `BESQ_REGISTER_STRATEGY` 宏调用
+- [ ] 在 `tests/domain/algorithm/test_algorithm_strategies.cpp` 中添加测试
 - [ ] 如果使用 ItemPool，添加 `simulate()` 快速可行性检查
 - [ ] 运行 `ctest` 确认全部测试通过

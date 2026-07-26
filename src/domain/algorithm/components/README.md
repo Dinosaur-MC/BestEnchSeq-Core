@@ -15,7 +15,7 @@ operator[](ItemID) → Item // O(1) 索引
 
 - 所有 Item 连续存储，`ItemID = int32_t` 直接索引
 - 默认容量上限 10M，超限返回 `INVALID_ITEM_ID`
-- A* 和 IDA* 用它为搜索状态提供稳定索引，避免 `vector<Item>` 拷贝
+- A* 用 ItemPool 为搜索状态提供稳定索引，避免 `vector<Item>` 拷贝
 
 ### SearchUtils
 
@@ -59,4 +59,4 @@ compute(ids, pool, reg, target, buf, dirty) → h
 
 ## 后续规划
 
-- 通用 `TTTable`（当前 IDAStar 专用版在 `strategies/idastar/`，计划抽离为公共组件）
+- 通用 `TTTable`（当前 IDAStar 专用版在 `plugins/idastar/`，计划抽离为公共组件）

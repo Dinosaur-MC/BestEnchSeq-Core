@@ -7,14 +7,17 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 ### Key Features
 
 - [x] Calculate the best enchanting order/forging sequence by your given needs
-- [ ] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
+- [x] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
 - [x] Support third-party/custom enchantments by editing custom enchantment sheet
 - [x] Support third-party/custom equipments by editing custom equipment sheet
 - [x] Pluggable algorithm strategies: greedy, dfs, astar, penalty_balance, hierarchical, idastar, hamming, diff_first
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Moddable forge engine via IForgeEngine virtual interface
+- [x] Profile-based data management with versioning, branching, merging
+- [x] Multi-format data loading: vanilla JSON, CSV, MC data-driven format
+- [x] Built-in + plugin algorithm strategies
+- [x] Binary checkpointing for long-running searches
 - [x] Input validation + EnchReg pruning via CompactAdapter::apply()
-- [x] Easily export to share calculation results with others
 - [ ] Optionally hosting a RESTful API service for external applications
 
 ### Quick Start
@@ -57,11 +60,12 @@ cd build && ctest --output-on-failure
 
 ## Architecture
 
-The project uses a **four-domain architecture** built on shared utilities. The algorithm domain uses compact types (`namespace algorithm`) for hot paths, while business/interface domains use domain types for I/O boundaries. The algorithm layer has zero domain type dependencies.
+The project uses a **four-domain architecture** built on shared utilities.
 
 ```
-CLI → Interface parsers (domain)
-  → Interface resolvers (domain validation)
+CLI → Interface CLI parsers (CLIParser, EnchParser, ItemParser)
+  → BesqContext (session facade)
+  → Orchestration Pipeline (SolvePipeline / ManagePipeline / ExportPipeline)
   → CompactAdapter::apply() (validates + prunes EnchReg + converts)
   → AlgorithmInput (compact) → AlgorithmExecutor → IAlgorithm
   → AlgorithmOutput (compact steps)
@@ -69,130 +73,118 @@ CLI → Interface parsers (domain)
   → OutputFormatter (domain)
 ```
 
+### Domain Overview
+
+| Domain | Namespace | Purpose | External Dependencies |
+|--------|-----------|---------|----------------------|
+| `algorithm/` | `algorithm::` | Algorithm execution: compact types, forge engine, search strategies, diagnostics | `common/` only |
+| `business/` | `::` | Business types, registries, Profile, parsers, loaders, managers | `common/` only |
+| `interface/` | `::` | I/O boundary: CLI parsing, C ABI, BesqContext | `common/`, `business/`, `orchestration/` |
+| `orchestration/` | `orchestration::` | Cross-domain wiring: pipelines, CompactAdapter, formatters | All domains |
+
 ### Source Layout
 
 ```
 src/
-├── main.cpp                             ← Entrypoint
+├── main.cpp                             ← Entry point
 ├── BESQTypes.h                          ← Umbrella include
+├── builtin/                             ← Built-in data (embedded resource → DTO)
+│   ├── DataLoader.h/.cpp                ← Load built-in data from embedded JSON
+│   ├── EmbeddedData.h                   ← Embedded resource declarations
+│   └── ItemProperties.h/.cpp            ← Vanilla item property definitions
 ├── common/                              ← Shared utilities (zero domain deps)
+│   ├── CommonTypes.h/.cpp               ← NSID, MCE enum
 │   ├── io/                              ← JSON DOM, CSV reader/writer, ByteStream
-│   ├── log/                             ← Global async Logger (SegmentedMPSCQueue + EventLoop)
-│   │   ├── Logger.h/.cpp                ← Logger + LOG_INFO / LOG_WARN macros
-│   │   └── log.hpp                      ← Free-function wrappers
+│   │   ├── json.h/.cpp                  ← Recursive-descent JSON parser
+│   │   ├── CsvIO.h/.cpp                 ← CSV read/write
+│   │   ├── ByteStream.h                 ← Binary stream
+│   │   └── FileUtils.hpp                ← File I/O helpers
+│   ├── log/                             ← Global async Logger
+│   ├── serialization/                   ← Serialization interfaces
+│   │   ├── ISerializable.h              ← Format-independent base
+│   │   ├── IJsonSerializable.h          ← to_json() / from_json()
+│   │   └── IBinarySerializable.h        ← serialize() / deserialize()
 │   └── utils/                           ← Generic utilities
-│       ├── ParserUtils.hpp              ← String/JSON/file helpers
-│       ├── EnvUtil.hpp                  ← Env-var access (get_env<T>)
-│       ├── ExpCalculator.hpp            ← Level ↔ XP conversion
-│       ├── HashUtils.hpp                ← hash_combine()
-│       ├── FlatHashMap.hpp              ← Open-addressing hash map
-│       ├── MemoryPool.hpp               ← PMR monotonic buffer
-│       ├── ObjectPool.hpp               ← Fixed-size freelist pool
 │       ├── EventLoop.hpp                ← Zero-CPU-idle event loop
+│       ├── MemoryPool.hpp               ← Monotonic buffer
+│       ├── ObjectPool.hpp               ← Freelist pool
+│       ├── FlatHashMap.hpp              ← Open-addressing hash map
+│       ├── HashUtils.hpp                ← hash_combine()
+│       ├── StringUtils.hpp              ← String helpers
+│       ├── EnvUtil.hpp                  ← Type-safe env-var access
+│       ├── ExpCalculator.hpp            ← Level ↔ XP conversion
 │       └── queue/                       ← Lock-free queue family
-│           ├── IQueue.h                 ← Virtual interface + QueueType concept
-│           ├── BoundedMPMCQueue.hpp      ← MPMC bounded
-│           ├── BoundedMPSCQueue.hpp      ← MPSC bounded
-│           ├── SegmentedMPMCQueue.hpp    ← MPMC unbounded
-│           ├── SegmentedMPSCQueue.hpp    ← MPSC unbounded
-│           ├── SPSCQueue.hpp             ← SPSC bounded
-│           └── SPMCQueue.hpp             ← SPMC bounded
 ├── domain/
-│   ├── algorithm/                       ← Algorithm domain (zero business/interface deps)
-│   │   ├── IAlgorithm.h                 ← AlgorithmInput/Output + IAlgorithm interface
-│   │   ├── AlgorithmExecutor.h/.cpp     ← Async engine (thread lifecycle + observer)
-│   │   ├── ExecutionContext.h/.cpp      ← Cancel/pause/progress + solution accumulator
-│   │   ├── types/                       ← Compact types + config types
-│   │   │   ├── CompactedTypes.h/.cpp    ← Ench, EnchSet, Item, EnchStep (namespace algorithm)
-│   │   │   ├── AlgorithmTypes.h         ← AlgorithmInput, AlgorithmOutput, AlgorithmState
-│   │   │   └── ConfigTypes.h            ← ForgeConfig, SearchConfig
-│   │   ├── registries/                  ← Compact EnchReg (O(1) conflict matrix)
-│   │   │   └── EnchReg.h/.cpp           ← N×N vector<char> conflict matrix
-│   │   ├── forge_engine/                ← Forge engine (virtual + vanilla impl)
-│   │   │   ├── IForgeEngine.h           ← Virtual interface + default sub-ops
-│   │   │   └── ForgeEngine.h/.cpp       ← Vanilla implementation
-│   │   ├── _strategies/                 ← Algorithm strategy implementations
-│   │   │   ├── greedy/                  GreedyAlgorithm (fast approximate)
-│   │   │   ├── dfs/                     DFSAlgorithm (B&B + hash memoization)
-│   │   │   ├── astar/                   AStarAlgorithm (exact optimal)
-│   │   │   ├── idastar/                 IDAStarAlgorithm (TTTable, memory-efficient)
-│   │   │   ├── hamming/                 HammingAlgorithm (popcount-balanced tree)
-│   │   │   ├── hierarchical/            HierarchicalMergeAlgorithm (large-scale approx)
-│   │   │   ├── penalty_balance/         DynamicPenaltyBalancingAlgorithm
-│   │   │   └── diff_first/              DiffFirstAlgorithm (PPN-layer merge)
-│   │   ├── components/                  ← Algorithm building blocks
-│   │   │   ├── Heuristic.h              ← Pool-based admissible heuristic
-│   │   │   ├── HeuristicBasic.h         ← Direct Item-vector heuristic
-│   │   │   ├── SearchUtils.h            ← fill_max_levels / compute_h helpers
-│   │   │   ├── StateHash.h              ← State hashing utilities
-│   │   │   └── ItemPool.h               ← Hash-dedup item pool (MemoryPool-backed)
+│   ├── algorithm/                       ← Algorithm domain (zero business deps)
+│   │   ├── IAlgorithm.h/.cpp            ← AlgorithmInput/Output + IAlgorithm
+│   │   ├── AlgorithmExecutor.h/.cpp     ← Async engine
+│   │   ├── ExecutionContext.h/.cpp       ← Control + progress + solution accumulator
+│   │   ├── types/                       ← Compact types (Enchantment, EnchSet, Item, etc.)
+│   │   ├── registries/                  ← EnchReg + AlgorithmRegistry
+│   │   ├── forge_engine/                ← IForgeEngine + ForgeEngine
+│   │   ├── _strategies/                 ← Built-in strategies (astar, dfs, hamming)
+│   │   ├── components/                  ← Heuristic, ItemPool, StateHash, SearchUtils
 │   │   ├── diagnostics/                 ← Event-driven diagnostics pipeline
-│   │   │   ├── IAlgorithmObserver.h     ← Streaming callback interface
-│   │   │   ├── DiagnosticsService.h/.cpp← Event dispatch + observer notification
-│   │   │   ├── DiagnosticsWriter.h/.cpp ← Persist-to-disk
-│   │   │   └── AlgorithmDiagnostics.h/.cpp ← Exit diagnostics struct hierarchy
-│   │   ├── serialization/               ← Binary checkpoint for algorithm state
-│   │   │   ├── IAlgorithmSerializer.h/.cpp ← Base class + common sections + CRC
-│   │   │   └── CompactSerializer.h/.cpp ← Compact type read/write (Ench, Item, …)
-│   │   ├── plugin/                      ← AlgorithmLoader (built-in + plugin hot-loading)
-│   │   └── resolvers/                   ← Algorithm-level resolution helpers
-│   ├── business/                        ← Business domain (types and registries)
-│   │   ├── types/
-│   │   │   ├── Item.h/.cpp              ← Item (was ItemStack)
-│   │   │   ├── Ench.h                   ← Enchantment ID + level pair
-│   │   │   ├── EnchSet.h/.cpp           ← EnchSet container
-│   │   │   ├── EnchInfo.h/.cpp          ← Full enchantment definition
-│   │   │   ├── Equipment.h/.cpp         ← Equipment definition
-│   │   │   ├── EquipmentTag.h           ← Equipment tag (was EquipmentCategory)
-│   │   │   ├── Solution.h/.cpp          ← Solution type (was EnchSolution)
-│   │   │   └── CommonTypes.h            ← MCE enum, NSID type
-│   │   └── registries/
-│   │       ├── EnchantmentRegistry.h/.cpp  ← Full enchantment registry (mutable)
-│   │       ├── EquipmentRegistry.h/.cpp
-│   │       ├── EquipmentTagRegistry.h/.cpp ← Equipment tag registry
-│   │       └── RegistryManager.h/.cpp      ← Discovery/loading/filtering
+│   │   ├── serialization/               ← Binary checkpoint
+│   │   ├── plugin/                      ← AlgorithmLoader
+│   │   └── resolvers/                   ← ItemResolver, InventoryResolver
+│   ├── business/                        ← Business domain (self-contained)
+│   │   ├── types/                       ← Domain types + DTOs
+│   │   ├── registries/                  ← EnchantmentRegistry, EquipmentRegistry, etc.
+│   │   ├── parsers/                     ← File format parsers (JSON/CSV/MC)
+│   │   ├── loaders/                     ← RegistryLoader, ProfileLoader
+│   │   ├── managers/                    ← RegistryManager, ProfileManager
+│   │   └── components/                  ← FormatDetector, Serializer, TagResolver
 │   ├── interface/                       ← Interface domain (I/O boundary)
-│   │   ├── cli/                         ← CLI argument parsing
-│   │   ├── parsers/                     ← File format parsers (auto-detect JSON/CSV/MC)
-│   │   ├── api/                         ← Library API for external consumers
-│   │   ├── abi/                         ← ABI stability layer
-│   │   ├── types/                       ← Interface-level types
-│   │   ├── components/                  ← Input validation, orchestrator helpers
-│   │   └── fs/                          ← Filesystem operations
-│   └── orchestration/                   ← Orchestration domain (cross-domain glue)
-│       ├── components/
-│       │   ├── CompactAdapter.h/.cpp    ← apply / recall (domain ↔ compact)
-│       │   ├── RawTypeAdapter.h/.cpp    ← Raw (string) ↔ Domain registries
-│       │   ├── OutputFormatter.h/.cpp   ← Solution → text/compact/json
-│       │   └── EnchSerializer.h/.cpp    ← EnchInfo/Equipment ↔ JSON/CSV/MC official
-│       └── types/                       ← Cross-domain result/error types
+│   │   ├── BesqContext.h/.cpp           ← Session facade
+│   │   ├── cli/                         ← CLI parsing
+│   │   └── abi/                         ← C ABI
+│   └── orchestration/                   ← Orchestration domain (glue)
+│       ├── types/                       ← Pipeline contracts (SolveRequest, etc.)
+│       ├── pipelines/                   ← SolvePipeline, ManagePipeline, ExportPipeline
+│       └── components/                  ← CompactAdapter, OutputFormatter, EnchSerializer
 ├── data/
-│   ├── CMakeLists.txt                   ← Embeds vanilla.json at compile time
-│   └── builtin/vanilla.json             ← Built-in Vanilla data
-├── builtin/
-│   └── DataLoader.h/.cpp                ← Built-in data loading
+│   ├── CMakeLists.txt
+│   └── builtin/vanilla.json             ← Embedded built-in data
 
-tests/                                   ← Per-component standalone test executables
+tests/                                   ← Standalone test executables
 benchmarks/                              ← Performance benchmarks
 ```
 
-See `docs/MPMCQueue.md` for the full queue design documentation.
+### Algorithm Strategies
+
+| Strategy | Type | Optimality | Scale | Origin | Mechanism |
+|----------|------|-----------|-------|--------|-----------|
+| Greedy | Approx | No | Any | Plugin (plugins/) | Cost-sorted greedy merge |
+| Penalty Balance | Approx | No | Any | Plugin (plugins/) | Merge closest penalty pairs |
+| Hierarchical | Approx | No | Large | Plugin (plugins/) | Hierarchical group-then-merge |
+| DiffFirst | Approx | No | Any | Plugin (plugins/) | PPN-layer, cheapest pair per layer |
+| Hamming | Approx | No | Large | Built-in (src/) | Popcount-balanced binary merge tree |
+| DFS | Exact | Yes | ≤ 8 | Built-in (src/) | B&B + hash memoization |
+| A* | Exact | Yes | ≤ 9 | Built-in (src/) | Admissible heuristic + priority queue |
+| IDA* | Exact | Yes | ≤ 10 | Plugin (plugins/) | Iterative deepening + TT pruning |
+
+All algorithms share `IForgeEngine` and compact types. New algorithms only need to implement `IAlgorithm::execute()` to gain thread management, pause/cancel, and progress reporting.
 
 ### Key Design Decisions
 
-**Compact types (algorithm::)**: `algorithm::Ench` (4 bytes), `algorithm::EnchSet` (sorted vector, O(log N) lookup), `algorithm::Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
+**Compact types (`algorithm::`)**: `algorithm::Enchantment` (4 bytes: int16_t id + level), `algorithm::EnchSet` (sorted vector, O(log N) lookup), `algorithm::Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
 
 **Flat conflict matrix**: `algorithm::EnchReg` stores an N×N `vector<char>` for O(1) incompatibility checks — single allocation, contiguous memory.
 
-**EnchReg pruning**: `CompactAdapter::apply()` builds a subset of the global registry (via `CompactEnchInfo` construction) that only includes enchantments applicable to the target equipment. Smaller conflict matrix, faster lookups.
+**EnchReg pruning**: `CompactAdapter::apply()` builds a subset of the global registry that only includes enchantments applicable to the target equipment. Smaller conflict matrix, faster lookups.
 
-**IForgeEngine virtual interface**: All forge sub-operations (`penalty_cost`, `apply_cap`, `estimate_forge_cost`) have default vanilla implementations. Subclass only what you need for modded rules. `ForgeEngine` overrides to respect `ForgeConfig` flags. Book multiplier is precomputed as `algorithm::EnchInfo::mul_b` at data-load time.
+**IForgeEngine virtual interface**: All forge sub-operations have default vanilla implementations. Subclass only what you need for modded rules. `ForgeEngine` overrides to respect `ForgeConfig` flags.
 
 **AlgorithmInput owns data**: `algorithm::EnchReg`, `algorithm::Item` vector, and target collection are stored by value — no pointers, no external lifetime dependencies. The struct owns two config sub-objects: `f_config` (forge config, `ForgeConfig`) and `s_config` (search config, `SearchConfig`).
 
-**Domain types are pure data**: Business domain types (`EnchSet`, `Ench`, `Item`) are containers only. All combine/cost/penalty computation lives in the algorithm domain's forge engine.
+**Profile as first-class citizen**: All pipelines receive `Profile` (or `ProfileManager`), never raw registries extracted from Profile. `Profile` owns `EnchantmentRegistry`, `EquipmentRegistry`, and `EquipmentTagRegistry` as a unit.
 
-**Four-domain layering**: `algorithm/` depends on nothing outside `common/`. `business/` adds domain types and registries. `interface/` adds CLI, parsers, API. `orchestration/` wires everything together via CompactAdapter and OutputFormatter.
+**Pipeline pattern**: Every pipeline is a standalone struct with a single `run()` method. No polymorphism, no registration — dispatch by switch at `BesqContext` or `main.cpp`.
+
+**Serialization interfaces**: Business types implement `IJsonSerializable` (`to_json()` / `from_json()`). ADL-compatible free functions in `Serializer.h` delegate to member implementations.
+
+**Four-domain layering**: `algorithm/` depends on nothing outside `common/`. `business/` adds domain types and registries. `interface/` adds CLI, C ABI, BesqContext. `orchestration/` wires everything via pipelines.
 
 **No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
 

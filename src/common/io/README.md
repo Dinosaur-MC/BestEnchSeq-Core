@@ -26,6 +26,12 @@ CSV 读写工具。支持自定义分隔符，默认逗号。用于附魔/装备
 
 ---
 
+## FileUtils（`FileUtils.hpp`）
+
+文件操作工具。提供跨平台的文件读取/写入（`read_file` / `write_file`）、路径操作等。
+
+---
+
 ## 开发说明
 
 - JSON 库是手写的递归下降解析器，无 rapidjson / nlohmann 依赖

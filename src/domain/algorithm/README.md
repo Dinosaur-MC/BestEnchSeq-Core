@@ -5,14 +5,14 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  IAlgorithm  ── 纯虚策略接口                                │
-│     ├── Greedy            贪心合并（快速上界）              │
-│     ├── DiffFirst         PPN 分层合并                      │
-│     ├── Hamming           Popcount 平衡树                   │
-│     ├── HierarchicalMerge 分层合并                          │
-│     ├── DynamicPenalty    动态惩罚均衡                      │
-│     ├── DFS               DFS + 剪枝                        │
-│     ├── AStar             A* 搜索（ItemPool + ID 索引）     │
-│     └── IDAStar           IDA* 搜索（TT + 分支定界）        │
+│     ├── Hamming             Popcount 平衡树   [内置]        │
+│     ├── DFS                 DFS + 剪枝         [内置]        │
+│     ├── AStar               A* 搜索（ItemPool）[内置]        │
+│     ├── Greedy              贪心合并           [插件]        │
+│     ├── DiffFirst           PPN 分层合并       [插件]        │
+│     ├── HierarchicalMerge   分层合并           [插件]        │
+│     ├── DynamicPenalty      动态惩罚均衡       [插件]        │
+│     └── IDAStar             IDA* 搜索（TT）    [插件]        │
 │                                                             │
 │  AlgorithmExecutor  ─── 异步执行引擎                         │
 │     ├── 状态机: Idle→Running→Paused→Completed|Failed|Cancelled
@@ -35,8 +35,8 @@
 ## 数据管道
 
 ```
-CLI → EnchParser/ItemParser → build_target/build_enchset (cli helpers)
-  → ItemResolver::resolve() → ResolvedInput (domain)
+CLI → EnchParser/ItemParser (registry-aware)
+  → SolvePipeline::stage_apply()
   → CompactAdapter::apply()
   → AlgorithmInput (compact)                     ← 分界线
       │
@@ -70,13 +70,14 @@ CLI → EnchParser/ItemParser → build_target/build_enchset (cli helpers)
 | `Enchantment` (Ench) | 4 B | int16_t id + level |
 | `EnchSet` | ≤ 64 B inline | 最多 16 附魔，零堆分配 |
 | `Item` | ~72 B | type + dur + ppn + EnchSet |
+| `Equipment` | 8 B | type + max_durability + applicable_tag_mask |
 | `EnchSolution` | — | 步骤序列 + 总消耗 |
 
 ## 开发规范
 
-### 新增一个算法的步骤
+### 新增一个内置算法的步骤
 
-1. 在 `strategies/<name>/` 下创建目录，实现 `IAlgorithm`
+1. 在 `_strategies/<name>/` 下创建目录，实现 `IAlgorithm`
 2. 选择合适的 `_diag` 类型：
    - 确定性策略 → `AlgorithmDiagnostics`
    - 搜索策略（有展开节点） → `SearchDiagnostics`
@@ -99,9 +100,12 @@ _diag.solution_cost = cost;
 ctx.set_exit_diagnostics(_diag);          // 模板推导具体类型
 ```
 
-4. 在 `src/algorithm/strategies/Strategies.h` 注册工厂函数
-5. 在 `src/main.cpp` 的 `register_builtin_algorithms()` 中登记
-6. 添加单元测试到 `tests/algorithm/`
+4. 在 `_strategies/Registration.h` 中使用 `BESQ_REGISTER_STRATEGY` 宏注册工厂
+5. 添加单元测试到 `tests/domain/algorithm/`
+
+> 注意：内置算法由 CMake 自动发现，无需修改 `main.cpp`。CMake globs `_strategies/*/*Algorithm.h`，
+> 生成 `_strategy_registration.cpp`，编译为 `besq-core` 的一部分。
+> `AlgorithmLoader::load_builtin()` 调用 `besq_register_builtin_strategies()` 完成注册。
 
 ### 性能注意事项
 

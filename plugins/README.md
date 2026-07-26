@@ -83,7 +83,7 @@ extern "C" void* besq_create_algorithm();
 在 `plugin.cpp` 中使用 `BESQ_PLUGIN_ENTRY` 宏即可自动生成导出符号：
 
 ```cpp
-#include "loader/PluginEntry.h"
+#include "domain/algorithm/plugin/PluginEntry.h"
 #include "<name>/<Name>Algorithm.h"
 BESQ_PLUGIN_ENTRY(NameAlgorithm)
 ```

@@ -1,12 +1,24 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：1.3 · 最后更新：2026-07-25
+> 版本：2.0 · 最后更新：2026-07-26
 
 ---
 
 ## 核心设计理念
 
-### 1. 双层类型系统
+### 1. 四域架构
+
+项目采用**四域架构**，由底层到顶层依次为：
+
+| 域 | 命名空间 | 职责 | 依赖 |
+|------|---------|------|------|
+| `common/` | — | 共享工具集（零业务知识） | 无 |
+| `domain/algorithm/` | `algorithm::` | 算法执行：紧凑类型、锻造引擎、搜索策略、诊断 | `common/` 仅 |
+| `domain/business/` | `::` | 业务类型、注册表、Profile、解析器、加载器、管理器 | `common/` 仅 |
+| `domain/interface/` | `::` | I/O 边界：CLI 解析、C ABI、BesqContext | `common/` + `business/` + `orchestration/` |
+| `domain/orchestration/` | `orchestration::` | 跨域胶水：Pipeline、CompactAdapter、格式化器 | 所有域 |
+
+### 2. 双层类型系统
 
 项目区分两类数据类型，各自承担不同职责：
 
@@ -17,11 +29,11 @@
 
 Domain 类型（`Item`、`EnchSet`、`EnchInfo` 等）是"胖对象"，包含字符串字段、校验逻辑。它们适合在 CLI/JSON 边界处使用，但效率不足以支撑算法对数百万状态的搜索。
 
-Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Ench`）是"瘦值"，每个字段经过位宽裁剪，容器使用 `vector<Ench>` 而非 `unordered_set`。它们是为 L1 缓存行优化的算法内部表示。
+Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Enchantment`）是"瘦值"，每个字段经过位宽裁剪，容器使用 `vector<Enchantment>` 而非 `unordered_set`。它们是为 L1 缓存行优化的算法内部表示。
 
 **转换边界**：两种模型在 `CompactAdapter` 中互转，`main.cpp` 的管线中转换各发生一次。
 
-### 2. 数据所有权通过值传递
+### 3. 数据所有权通过值传递
 
 `AlgorithmInput` 是一个值类型，内部包含所有执行所需的数据：
 
@@ -39,26 +51,25 @@ struct AlgorithmInput {
 
 **推论**：`EnchReg` 不再是单例。`CompactAdapter::apply()` 每调用创建独立的 `EnchReg`，用 `EnchReg::init()` 初始化后直接放入 `AlgorithmInput`。
 
-### 3. 计算逻辑下沉到算法层
+### 4. 计算逻辑下沉到算法层
 
-Domain 类型逐渐剥离计算职责，成为纯数据容器：
+Domain 类型是纯数据容器，不包含 forge 计算逻辑：
 
-- `EnchSet` — 删除 `combine()`、`combine_s()`、`is_incompatible()`、`update_cache()`
-- `Ench` — 删除 `operator+`
-- `Item` — 删除 `update_cache()`、`get_penalty_cost()`
+- `EnchSet` 不包含 `combine()`、`combine_s()`、`is_incompatible()` 等方法
+- `Ench` 不包含 `operator+`
+- `Item` 不包含 `update_cache()`、`get_penalty_cost()`
 
-所有 forge 逻辑集中到 `IForgeEngine` 虚接口中，由 `ForgeEngine`（原版）或其子类（mod）实现。
+所有 forge 逻辑集中在 `IForgeEngine` 虚接口中，由 `ForgeEngine`（原版）或其子类（mod）实现。
 
 **优势**：forge 规则变化只需修改 ForgeEngine，不用动 domain 类型。算法层通过 `reg[id].mul` / `reg[id].mul_b` / `reg.is_conflict()` 访问 compact 注册表，不接触 domain 注册表。
 
-### 4. 虚接口可扩展性
+### 5. 虚接口可扩展性
 
 `IForgeEngine` 定义完整的 forge 操作集合：
 
 ```
-Core:      forge_into() / forge() / is_forgeable()
+Core:      forge_into() / forge() / is_forgeable() / pure_forge_into()
 Sub-ops:   penalty_cost() / apply_cap() / estimate_forge_cost()
-           // 书本乘数 mul_b 数据加载时预计算，不再需要 book_multiplier()
 ```
 
 所有 sub-op 提供默认原版实现。Mod 只要继承 `IForgeEngine`，覆盖需要的部分：
@@ -72,9 +83,26 @@ class ModForgeEngine : public IForgeEngine {
 };
 ```
 
-`estimate_forge_cost()` 默认实现调用了 `penalty_cost()` 并直接读取 `reg[id].mul`/`reg[id].mul_b`，所以覆盖这些 sub-op 会自动影响算法排序和启发式——无需改动算法代码。
+### 6. Profile 一等公民
 
-### 5. 配置驱动行为
+`Profile` 是**所有正常业务操作的基本单位**：
+
+- Profile 同时持有 `EnchantmentRegistry`、`EquipmentRegistry`、`EquipmentTagRegistry`
+- 所有 Pipeline 接收 Profile 或 ProfileManager，不接收裸注册表
+- 支持快照、分支、合并、集合运算（`| & + -`）
+- JSON 序列化格式与 vanilla.json 兼容
+
+### 7. Pipeline 模式
+
+每个 Pipeline 是**带单个 `run()` 方法的纯结构体**。不自注册、不虚分派——`BesqContext` 或 `main.cpp` 通过 switch 或直接调用分派。
+
+```cpp
+struct XxxPipeline {
+    static XxxResult run(/* domain dependencies */, const XxxRequest& request);
+};
+```
+
+### 8. 配置驱动行为
 
 `ForgeConfig` 承载所有可调参数：
 
@@ -93,37 +121,29 @@ struct ForgeConfig {
 
 ## 系统架构
 
-### 管线流程图
+### 主数据流
 
 ```
-┌──────────────┐    ┌──────────────────────┐    ┌───────────────┐    ┌────────────┐
-│  CLI / JSON  │───→│  CLIParser +         │───→│ CompactAdapter│───→│ Algorithm  │
-│   输入解析    │    │  ItemResolver /      │    │ ::apply()     │    │  Executor  │
-│              │    │  InventoryResolver   │    │               │    │            │
-└──────────────┘    └──────────────────────┘    └───────┬───────┘    └─────┬──────┘
-                                            │                  │
-                                     ┌──────▼───────┐    ┌─────▼──────┐
-                                     │ AlgorithmInput│    │ IAlgorithm │
-                                     │ (compact)     │───→│ ::execute()│
-                                     │ ench_reg      │    │ (compact)  │
-                                     │ items, target │    └─────┬──────┘
-                                     └──────────────┘          │
-                                                          ┌─────▼──────┐
-                                                          │ Algorithm  │
-                                                          │ Output     │
-                                                          │ (compact)  │
-                                                          └─────┬──────┘
-                                                                │
-                                                ┌───────────────▼────┐
-                                                │ CompactAdapter    │
-                                                │ ::recall()        │
-                                                │ (restore IDs)     │
-                                                └───────┬───────────┘
-                                                        │
-                                            ┌───────────▼───────────┐
-                                            │  OutputFormatter     │
-                                            │  (domain Solution)   │
-                                            └───────────────────────┘
+外部输入（CLI 参数 / C ABI 调用）
+  → interface/cli/parse_cli()          CLIConfig
+  → interface/cli/EnchParser           字符串 → EnchSet
+  → interface/cli/ItemParser           字符串 → Item
+  → 组装 SolveRequest                  (orchestration/types/SolveRequest.h)
+  → orchestration/SolvePipeline::run()
+       │
+       ├─ stage_apply()
+       │   CompactAdapter::apply(profile, request)
+       │     → AlgorithmInput { ench_reg, target, items, config }
+       │
+       ├─ stage_execute()
+       │   → loader.create(algorithm)
+       │   → resolver.resolve(input)
+       │   → executor.start(input)     (异步)
+       │   → AlgorithmOutput
+       │
+       └─ stage_recall()
+           → CompactAdapter::recall(output, input)
+           → SolveResult { solutions, algorithm_used, timing }
 ```
 
 ### 数据加载管线
@@ -139,7 +159,7 @@ struct ForgeConfig {
      │     └── McOfficial  (MC data-driven 格式)
      │
      ▼
-EnchantmentData[] + EquipmentData[]  DTO 流
+EnchantmentData[] + EquipmentData[] DTO 流
      │
      ▼
 RegistryLoader::from_dto()
@@ -152,9 +172,8 @@ RegistryLoader::from_dto()
 Profile (ench() + eq() + tags() 三元组)
 ```
 
-内置数据通过 `ProfileLoader::load_builtin()` 加载，委托 `builtin/` 层读取嵌入的 vanilla.json。
+内置数据通过 `ProfileLoader::load_builtin()` 加载，委托 `builtin/DataLoader` 层读取嵌入的 vanilla.json。
 `--registry-dir` / `--registries` CLI 选项调用 `FormatDetector` 自动识别格式（JSON / CSV / MC Official）。
-数据源筛选（`--registries`）支持名称匹配和文件/目录路径两种指定方式。
 
 ### 注册表体系
 
@@ -162,14 +181,14 @@ Profile (ench() + eq() + tags() 三元组)
 
 ```
 Business domain (src/domain/business/registries/):
-  EnchantmentRegistry (global, NSID keyed, full metadata)
+  EnchantmentRegistry (NSID keyed, full metadata, mutable)
   EquipmentRegistry (NSID keyed)
   EquipmentTagRegistry (tag-based equipment classification)
        │
        │ CompactAdapter::apply()
        ▼
 Algorithm domain (src/domain/algorithm/registries/):
-  EnchReg (flat conflict matrix, int16_t dense IDs)
+  EnchReg (flat conflict matrix, int16_t dense IDs, pruned per target)
        │
        │ owned by AlgorithmInput → executor → worker thread
        ▼
@@ -180,24 +199,32 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 ### 算法策略体系
 
-| 策略 | 类型 | 最优性 | 适用规模 | 核心机制 |
-|------|------|--------|---------|---------|
-| Greedy | 近似 | 否 | 任意 | 成本排序贪心 |
-| Penalty Balance | 近似 | 否 | 任意 | 惩罚值最接近对合并 |
-| Hierarchical | 近似 | 否 | 大量 | 分层分组 → 组内合并 |
-| DiffFirst (difficulty_first) | 近似 | 否 | 任意 | PPN 分层，每层选最便宜对 |
-| Hamming | 近似 | 否 | 大量 | Popcount 平衡二叉合并树 |
-| DFS | 精确 | 是 | ≤ 8 | 迭代 B&B + 哈希记忆化 |
-| A* | 精确 | 是 | ≤ 9 | 可采启发 + 优先队列 |
-| IDA* | 精确 | 是 | ≤ 10 | 迭代加深 + TT 剪枝 |
+| 策略 | 类型 | 最优性 | 适用规模 | 来源 | 核心机制 |
+|------|------|--------|---------|------|---------|
+| Greedy | 近似 | 否 | 任意 | 插件 | 成本排序贪心 |
+| Penalty Balance | 近似 | 否 | 任意 | 插件 | 惩罚值最接近对合并 |
+| Hierarchical | 近似 | 否 | 大量 | 插件 | 分层分组 → 组内合并 |
+| DiffFirst | 近似 | 否 | 任意 | 插件 | PPN 分层，每层选最便宜对 |
+| Hamming | 近似 | 否 | 大量 | 内置 | Popcount 平衡二叉合并树 |
+| DFS | 精确 | 是 | ≤ 8 | 内置 | 迭代 B&B + 哈希记忆化 |
+| A* | 精确 | 是 | ≤ 9 | 内置 | 可采启发 + 优先队列 |
+| IDA* | 精确 | 是 | ≤ 10 | 插件 | 迭代加深 + TT 剪枝 |
 
 所有算法共用 `IForgeEngine` 接口和 compact 类型系统。新算法只需实现 `IAlgorithm::execute()`，自动获得线程管理、暂停/取消、进度报告能力。
+
+### Pipeline 架构
+
+| Pipeline | 职责 | 关键依赖 |
+|----------|------|---------|
+| `SolvePipeline` | 锻造求解（apply → execute → recall） | CompactAdapter, AlgorithmLoader, AlgorithmExecutor |
+| `ManagePipeline` | Profile/注册表管理 | ProfileManager, ProfileLoader, RegistryManager |
+| `ExportPipeline` | 数据导出 | EnchSerializer, OutputFormatter |
 
 ### 并发模型
 
 `AlgorithmExecutor` 管理工作线程生命周期（`Idle → Running → Paused → Completed | Failed | Cancelled`）。工作线程持有 `ExecutionContext`，算法通过它报告进度、投递解方案、响应暂停/取消。
 
-诊断事件通过 **`DiagnosticsService` 全局单例** 的异步管道传递：
+诊断事件通过 **`DiagnosticsService` 全局单例**的异步管道传递：
 
 ```
 算法线程 → ExecutionContext::report_progress() / report_solution()
@@ -205,65 +232,84 @@ Algorithm domain (src/domain/algorithm/registries/):
         → try_post_emplace (placement new 到 BoundedMPMCQueue<DiagnosticsEvent, 64>)
         → EventLoop 线程 (atomic::wait 零 CPU 空闲)
         → DiagnosticsHandler
-        → DiagnosticsWriter::write() (文件持久化，to_string 在此发生)
+        → DiagnosticsWriter::write() (文件持久化)
         → AlgorithmObserver::on_*() (异步回调)
 ```
 
-`DiagnosticsEvent` 是 4-kind tagged variant（Exit / Progress / Solution / StateChange），每个事件携带 `task_id`，Observer 可通过 `accept_task_id()` 按任务过滤。所有字符串格式化（`to_string`）只在 EventLoop 线程的文件写入路径中发生，算法线程零开销。
+`DiagnosticsEvent` 是 4-kind tagged variant（Exit / Progress / Solution / StateChange），每个事件携带 `task_id`，Observer 可通过 `accept_task_id()` 按任务过滤。所有字符串格式化只在 EventLoop 线程的文件写入路径中发生，算法线程零开销。
 
 ---
 
 ## 模块职责（四域架构）
 
-### `src/domain/orchestration/components/`（编排域）
-**CompactAdapter** 是 domain ↔ compact 双向转换的唯一边界：
-- `apply()`：验证输入 → 构造 CompactEnchInfo → init EnchReg → 转换物品 → 返回 `AlgorithmInput`
-- `recall()`：遍历 compact steps → `to_global_id()` 恢复附魔 ID → 构建 `Solution`
-- `from_domain()` / `to_domain()`：单物品转换
+### `src/builtin/`（内置数据层）
 
-### `src/domain/algorithm/forge_engine/`（算法域）
-**IForgeEngine**（虚接口）+ **ForgeEngine**（原版实现）：
-- `forge_into()`：原地锻造（修改 target），返回成本
-- `forge()`：非修改锻造，返回 `{result, cost}`
-- `is_forgeable()`：物品可锻造性
-- Sub-ops：`penalty_cost`、`apply_cap`、`estimate_forge_cost`（书本乘数由 `algorithm::EnchInfo::mul_b` 预计算）
+项目级内置数据工具，由 `ProfileLoader::load_builtin()` 调用。
 
-### `src/domain/algorithm/types/`（算法类型）
-算法层使用的紧凑数据类型：
-- `algorithm::Ench`（int16_t id + level）
-- `algorithm::EnchSet`（vector<Ench> 有序存储，lower_bound 插入）
-- `algorithm::Item`（type + dur + ppn + enchs）
-- `algorithm::EnchStep`（base + sacrifice + cost）
-- `algorithm::CompactEnchInfo`（mul + max_lvl + exc_mask + applicable）
+- `DataLoader`：读取编译时嵌入的 `vanilla.json` → 输出 DTO 流
+- `EmbeddedData`：声明由 CMake `EmbedResource.cmake` 嵌入的二进制资源
+- `ItemProperties`：原版物品属性定义（耐久度、最大合并等级等）
 
-### `src/domain/algorithm/registries/`（算法注册表）
-**algorithm::EnchReg**：预计算针对特定装备的紧凑注册表：
-- N×N 扁平冲突矩阵（`vector<char>`）
-- 预计算 `CompactEnchInfo[]`（multiplier、max_level、applicable、exc_mask）
+### `src/common/`（共享工具层）
+
+零业务知识的通用工具集，所有域都可以使用。
+
+**io/**：JSON 手写递归下降解析器（零外部依赖）、CSV 读写、ByteStream 二进制流
+**log/**：Logger 全局异步日志（SegmentedMPSCQueue + EventLoop + atomic::wait 零 CPU 空闲）
+**serialization/**：`ISerializable` → `IJsonSerializable` / `IBinarySerializable` 序列化接口层级
+**utils/**：EventLoop、MemoryPool、ObjectPool、FlatHashMap、HashUtils、StringUtils、EnvUtil、ExpCalculator、无锁队列家族（BoundedMPMC/MPSC、SegmentedMPMC/MPSC、SPSC、SPMC）
+
+### `src/domain/algorithm/`（算法域）
+
+零业务/接口依赖，仅使用 compact 类型。
+
+**核心接口**：
+- `IAlgorithm` — 算法策略虚接口（`name()` / `execute()`）
+- `AlgorithmExecutor` — 异步执行引擎（线程管理 + 状态机）
+- `ExecutionContext` — 一站式算法交互接口（控制 + 计数器 + 进度 + 方案累积）
+
+**types/**：紧凑类型系统
+- `algorithm::Enchantment` (int16_t id + level, 4 bytes)
+- `algorithm::EnchSet` (sorted vector, O(log N))
+- `algorithm::Item` (type + dur + ppn + enchs)
+- `algorithm::Equipment` (id + max_durability + applicable_tags)
+- `AlgorithmInput` / `AlgorithmOutput` / 配置类型
+
+**forge_engine/**：`IForgeEngine`（虚接口）+ `ForgeEngine`（原版实现）
+**registries/**：`EnchReg`（N×N 扁平冲突矩阵 + 紧凑注册表）、`AlgorithmRegistry`（工厂）
+**_strategies/**：内置策略（A*、DFS、Hamming），通过 `Registration.h` 自动注册
+**components/**：Heuristic、ItemPool、StateHash、SearchUtils 等共享搜索基础设施
+**diagnostics/**：事件驱动诊断管道（`DiagnosticsService` + `IAlgorithmObserver` + `DiagnosticsWriter`）
+**serialization/**：二进制 checkpoint（`IAlgorithmSerializer` + `CompactSerializer` + `Checkpoint`）
+**plugin/**：`AlgorithmLoader`（内置注册 + 插件热加载）
+**resolvers/**：`ItemResolver`、`InventoryResolver`（算法级解析辅助）
 
 ### `src/domain/business/`（业务域）
 
-业务域是自包含的核心域，以 **Profile** 为操作的一等公民：
+自包含的核心域，以 **Profile** 为操作的一等公民。
 
-```
-business/
-├── types/             值类型 + Profile + DTO
-├── registries/        纯数据容器（EnchantmentRegistry / EquipmentRegistry / EquipmentTagRegistry）
-├── parsers/           格式解析器（NativeJson / NativeCsv / McOfficial）
-├── loaders/           RegistryLoader（DTO↔Registry）+ ProfileLoader（Profile I/O）
-├── managers/          RegistryManager（筛选/集合运算）+ ProfileManager（生命周期/快照/分支）
-└── components/        Serializer (thin ADL layer) + FormatDetector + TagResolver
-```
+**types/**：值类型（`Ench`、`EnchInfo`、`EnchSet`、`Item`、`Equipment`、`EquipmentTag`、`Solution`、`Profile`）+ DTO（`EnchantmentData`、`EquipmentData`）
+**registries/**：纯数据容器（`EnchantmentRegistry`、`EquipmentRegistry`、`EquipmentTagRegistry`，均继承自 `IRegistry`）
+**parsers/**：格式解析器（`NativeJsonParser`、`NativeCsvParser`、`McOfficialParser`，共享 `ParserShared`）
+**loaders/**：DTO ↔ 注册表/Profile 转换（`RegistryLoader`、`ProfileLoader`）
+**managers/**：Profile 生命周期（`ProfileManager`）+ 集合运算（`RegistryManager`，含 `| & + -` 运算符）
+**components/**：`FormatDetector`（格式检测+自动分派）、`Serializer`（JSON ADL 委托）、`TagResolver`（标签解析）
 
-业务域类型继承 `IJsonSerializable`（定义在 `common/serialization/`），各自实现 `to_json()` / `from_json()`。`Serializer` 的 operator 作为薄委托层保留以兼容 ADL。
+### `src/domain/interface/`（接口域）
 
-**Profile** 是核心业务单元：
-- 所有正常业务操作以 Profile 为输入输出
-- 跨注册表操作通过 Profile 代理方法完成
-- 支持快照、分支、合并、集合运算（`| & + -` 运算符）
+纯翻译层，无业务逻辑。
 
-**RegistryManager** 提供注册表级别操作：筛选、集合运算、diff、验证。
-**ProfileManager** 提供 Profile 生命周期管理：CRUD、激活、快照、分支、合并。
+- `BesqContext`：应用会话外观，持有 ProfileManager 和 AlgorithmLoader，委托所有操作到 orchestration pipeline
+- **cli/**：`CLIParser`（通用 `--key=value` 解析器）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）、`RegistryEditor`（`--registry-edit` 操作）
+- **abi/**：`CAbiBindings`（C ABI 包装，JSON 交换）
+
+### `src/domain/orchestration/`（编排域）
+
+跨域胶水层，拥有管线编排。
+
+**types/**：Pipeline 契约（`SolveRequest` / `SolveResult`、`ManageRequest` / `ManageResult`、`ExportRequest` / `ExportResult`）
+**pipelines/**：任务协调器（`SolvePipeline` 3 阶段锻造求解、`ManagePipeline` 管理分派、`ExportPipeline` 导出分派）
+**components/**：`CompactAdapter`（domain ↔ compact 双向转换）、`OutputFormatter`（Solution → text/compact/json）、`EnchSerializer`（注册表 JSON/CSV/MC Official 序列化）
 
 ---
 
@@ -277,23 +323,36 @@ business/
 
 ## 参考
 
-- `src/domain/orchestration/components/CompactAdapter.h/.cpp` — 边界转换
+项目关键文件与设计文档索引：
+
+- `src/common/serialization/ISerializable.h` — 序列化通用根接口
+- `src/common/serialization/IJsonSerializable.h` — JSON 序列化接口
+- `src/common/serialization/IBinarySerializable.h` — 二进制序列化接口
+- `src/domain/algorithm/IAlgorithm.h` — AlgorithmInput/Output + IAlgorithm 接口
+- `src/domain/algorithm/AlgorithmExecutor.h/.cpp` — 异步执行引擎
+- `src/domain/algorithm/ExecutionContext.h/.cpp` — 执行控制上下文
+- `src/domain/algorithm/types/Enchantment.h/.cpp` — 紧凑类型
+- `src/domain/algorithm/registries/EnchReg.h/.cpp` — 紧凑注册表
 - `src/domain/algorithm/forge_engine/IForgeEngine.h` — forge 接口
 - `src/domain/algorithm/forge_engine/ForgeEngine.h/.cpp` — 原版实现
-- `src/domain/algorithm/types/CompactedTypes.h/.cpp` — 紧凑类型
-- `src/domain/algorithm/registries/EnchReg.h/.cpp` — 紧凑注册表
-- `src/domain/business/registries/EnchantmentRegistry.h/.cpp` — 业务注册表
+- `src/domain/algorithm/_strategies/` — 内置算法策略
 - `src/domain/business/types/Profile.h/.cpp` — Profile 一等公民
 - `src/domain/business/loaders/ProfileLoader.h/.cpp` — Profile 加载/导出
 - `src/domain/business/managers/ProfileManager.h/.cpp` — Profile 生命周期管理
 - `src/domain/business/managers/RegistryManager.h/.cpp` — 注册表集合运算
-- `src/common/serialization/ISerializable.h` — 序列化通用根接口
-- `src/common/serialization/IJsonSerializable.h` — JSON 序列化接口（to_json/from_json）
-- `src/common/serialization/IBinarySerializable.h` — 二进制序列化接口（ByteStream）
 - `src/domain/business/components/Serializer.h/.cpp` — ADL 兼容的序列化 delegate
+- `src/domain/orchestration/components/CompactAdapter.h/.cpp` — 边界转换
+- `src/domain/orchestration/components/OutputFormatter.h/.cpp` — 输出格式化
+- `src/domain/orchestration/components/EnchSerializer.h/.cpp` — 注册表序列化
+- `src/domain/orchestration/pipelines/SolvePipeline.h/.cpp` — 锻造求解管线
+- `src/domain/orchestration/pipelines/ManagePipeline.h/.cpp` — 管理管线
+- `src/domain/orchestration/pipelines/ExportPipeline.h/.cpp` — 导出管线
 - `docs/domain_designs/business-domain-design.md` — 业务域详细设计
-- `src/domain/algorithm/AlgorithmExecutor.h/.cpp` — 执行引擎
-- `src/domain/algorithm/_strategies/` — 8 种算法策略
-- `docs/algorithm-design-discussion.md` — 算法设计详细探讨
-- `docs/anvil-mechanics-reference.md` — 铁砧机制参考
-- `docs/MPMCQueue.md` — MPMC/SPSC 无锁队列设计、正确性证明与性能模型
+- `docs/domain_designs/orchestration-domain-design.md` — 编排域详细设计
+- `docs/domain_designs/interface-domain-design.md` — 接口域详细设计
+- `docs/algotithm_designs/algorithm-design-discussion.md` — 算法设计详细探讨
+- `docs/algotithm_designs/hamming-algorithm-design.md` — Hamming 算法设计
+- `docs/component_designs/MPMCQueue.md` — 无锁队列设计
+- `docs/mc/anvil-mechanics-reference.md` — 铁砧机制参考
+- `docs/json-output-schema.md` — JSON 输出格式规范
+- `docs/data-sources.md` — 数据来源文档

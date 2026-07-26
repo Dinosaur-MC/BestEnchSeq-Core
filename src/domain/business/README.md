@@ -1,0 +1,23 @@
+# 业务域（`src/domain/business/`）
+
+自包含的核心域，以 **Profile** 为操作的一等公民。仅依赖 `common/`。
+
+## 目录结构
+
+```
+types/          ← 值类型（Ench, EnchInfo, EnchSet, Item, Equipment, etc.）
+  dto/          ← 数据传输对象（EnchantmentData, EquipmentData）
+registries/     ← 纯数据容器（EnchantmentRegistry, EquipmentRegistry, EquipmentTagRegistry）
+parsers/        ← 文件格式 → DTO（NativeJsonParser, NativeCsvParser, McOfficialParser）
+loaders/        ← DTO ↔ Registry/Profile（RegistryLoader, ProfileLoader）
+managers/       ← 集合运算 + 生命周期（RegistryManager, ProfileManager）
+components/     ← FormatDetector, Serializer, TagResolver
+```
+
+## 关键设计
+
+- **Profile 是一等公民**：同时持有 EnchantmentRegistry + EquipmentRegistry + EquipmentTagRegistry
+- **数据流**：File → FormatDetector → Parser → DTO → RegistryLoader → Profile
+- **序列化**：类型实现 `IJsonSerializable`，`Serializer.h` 提供 ADL 兼容的自由函数委托
+
+详见 `docs/domain_designs/business-domain-design.md`。

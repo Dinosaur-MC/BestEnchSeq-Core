@@ -127,5 +127,5 @@ AlgorithmInput 由 Executor 持有，序列化/反序列化时作为显式参数
 
 | 测试 | 内容 | 位置 |
 |---|---|---|
-| `test_compact_serializer` | Ench / EnchSet / Item / EnchStep / EnchSolution round-trip | `tests/algorithm/test_compact_serializer.cpp` |
-| `test_astar_state_serializer` | AStarStateSerializer 接口 + 标识 | `tests/algorithm/test_astar_state_serializer.cpp` |
+| `test_compact_serializer` | Ench / EnchSet / Item / EnchStep / EnchSolution round-trip | `tests/domain/algorithm/test_compact_serializer.cpp` |
+| `test_astar_state_serializer` | AStarStateSerializer 接口 + 标识 | `tests/domain/algorithm/test_astar_state_serializer.cpp` |

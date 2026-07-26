@@ -96,6 +96,10 @@ EnvUtil: 类型安全的环境变量读取，支持 int/float/bool/string 等类
 
 ExpCalculator: 经验等级 ↔ 总经验点数 转换。
 
+### `StringUtils.hpp`
+
+StringUtils: 字符串分割、修剪、大小写转换、Unicode 处理等通用字符串操作。
+
 ### `ParserUtils.hpp`
 
 ParserUtils: 文件读取、JSON 工具、字符串分割、Tag 引用解析。
