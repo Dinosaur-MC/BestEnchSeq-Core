@@ -349,11 +349,8 @@ void print_result(const BenchResult& r, int iters) {
 struct Config {
     bool run_java      = true;
     bool run_bedrock   = true;
-    bool run_cap_on    = true;
-    bool run_cap_off   = true;
     bool run_book_eq   = true;
     bool run_eq_eq     = true;
-    bool run_all_ops   = true;
 };
 
 Config parse_cli(int argc, char* argv[]) {
@@ -363,19 +360,14 @@ Config parse_cli(int argc, char* argv[]) {
         if (a == "--help") {
             std::cout << "ForgeEngine Benchmark\n";
             std::cout << "Usage: forge_engine_benchmark [options]\n";
-            std::cout << "  --all        Run all configurations (default)\n";
             std::cout << "  --java       Java platform only\n";
             std::cout << "  --bedrock    Bedrock platform only\n";
-            std::cout << "  --cap-on     Cost cap enabled only\n";
-            std::cout << "  --cap-off    Cost cap disabled only\n";
             std::cout << "  --book       Book->equip only\n";
             std::cout << "  --equip      Equip->equip only\n";
             std::cout << "  --help       This help\n";
             exit(0);
         } else if (a == "--java")      { cfg.run_bedrock = false; }
         else if (a == "--bedrock")     { cfg.run_java = false; }
-        else if (a == "--cap-on")      { cfg.run_cap_off = false; }
-        else if (a == "--cap-off")     { cfg.run_cap_on = false; }
         else if (a == "--book")        { cfg.run_eq_eq = false; }
         else if (a == "--equip")       { cfg.run_book_eq = false; }
     }
@@ -399,8 +391,6 @@ int main(int argc, char* argv[]) {
               << "Configurations: "
               << (cfg.run_java ? "Java " : "")
               << (cfg.run_bedrock ? "Bedrock " : "")
-              << (cfg.run_cap_on ? "cap-on " : "")
-              << (cfg.run_cap_off ? "cap-off " : "")
               << (cfg.run_book_eq ? "book→equip " : "")
               << (cfg.run_eq_eq ? "equip→equip " : "")
               << "\n";
@@ -416,26 +406,19 @@ int main(int argc, char* argv[]) {
     for (auto plat : {MCE::Java, MCE::Bedrock}) {
         if (plat == MCE::Java && !cfg.run_java) continue;
         if (plat == MCE::Bedrock && !cfg.run_bedrock) continue;
-        for (bool cap_on : {true, false}) {
-            if (cap_on && !cfg.run_cap_on) continue;
-            if (!cap_on && !cfg.run_cap_off) continue;
-            for (bool book_to_equip : {true, false}) {
-                if (book_to_equip && !cfg.run_book_eq) continue;
-                if (!book_to_equip && !cfg.run_eq_eq) continue;
+        for (bool book_to_equip : {true, false}) {
+            if (book_to_equip && !cfg.run_book_eq) continue;
+            if (!book_to_equip && !cfg.run_eq_eq) continue;
 
-                ForgeConfig fcfg;
-                fcfg.platform = plat;
-                fcfg.ignore_cost_cap = !cap_on;
-                // Keep penalty cost enabled for realistic benchmarks
-                fcfg.ignore_penalty_cost = false;
-                fcfg.ignore_repair_cost = false;
+            ForgeConfig fcfg;
+            fcfg.platform = plat;
+            fcfg.ignore_penalty_cost = false;
+            fcfg.ignore_repair_cost = false;
 
-                std::string label = (plat == MCE::Java ? "Java" : "Bedrock")
-                                  + std::string(", cap=") + (cap_on ? "on" : "off")
-                                  + std::string(", ") + (book_to_equip ? "book→equip" : "equip→equip");
+            std::string label = (plat == MCE::Java ? "Java" : "Bedrock")
+                              + std::string(", ") + (book_to_equip ? "book→equip" : "equip→equip");
 
-                configs.push_back({label, fcfg, book_to_equip});
-            }
+            configs.push_back({label, fcfg, book_to_equip});
         }
     }
 
