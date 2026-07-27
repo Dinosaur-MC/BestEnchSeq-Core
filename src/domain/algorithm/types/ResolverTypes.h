@@ -6,7 +6,7 @@
 namespace algorithm {
 
 /// Output of any resolver.  Empty vector means "unreachable / no work needed".
-using ResolverOutput = std::vector<Item>;
+using ResolverOutput = ItemCollection;
 
 /// Input for direct-mode resolution.
 struct DirectResolverInput {

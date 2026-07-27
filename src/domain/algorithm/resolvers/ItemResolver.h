@@ -5,7 +5,7 @@ namespace algorithm {
 
 /// Direct-mode input preprocessing.
 ///   1. Computes diff = target_item.enchs - source_ench
-///   2. Generates graduated books for each required level
+///   2. Generates books for each required level
 ///
 /// Returns empty vector if target already satisfied (nothing to forge).
 struct ItemResolver {

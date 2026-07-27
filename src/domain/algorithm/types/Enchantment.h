@@ -73,6 +73,17 @@ class EnchSet {
     using const_iterator = const Ench *;
 
     EnchSet() noexcept : _size(0) {}
+    EnchSet(std::initializer_list<Ench> il) noexcept : _size(il.size()) {
+        std::memcpy(_buf, il.begin(), sizeof(Ench) * il.size());
+        sort();
+    }
+    template <
+        typename Iter,
+        std::enable_if_t<std::is_convertible_v<decltype(*std::declval<Iter &>()), Ench>, int> = 0>
+    EnchSet(Iter first, Iter last) noexcept : _size(std::distance(first, last)) {
+        std::copy(first, last, _buf);
+        sort();
+    }
 
     EnchSet(const EnchSet &o) noexcept : _size(o._size) { std::memcpy(_buf, o._buf, INLINE_BYTES); }
 
