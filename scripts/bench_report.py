@@ -333,8 +333,13 @@ def save_history(path, history):
 
 def extract_enchs_count(dataset_name):
     """从数据集名称提取附魔数，如 'sword_basic (3 enchants, max 35L):' → 3"""
-    m = re.search(r"\((\d+)\s+enchants?,", dataset_name)
+    m = re.search(r"\((\d+)\s+enchants?[,:)]", dataset_name)
     return int(m.group(1)) if m else None
+
+
+def normalize_ds_name(dataset_name):
+    """去除数据集名称中的 max level 信息，使相同附魔数的数据集统一分组"""
+    return re.sub(r",\s*max\s+\d+L", "", dataset_name)
 
 
 def parse_group_config(config_str: str):
@@ -413,8 +418,32 @@ def plot_trends(history: dict[str, list[dict]], output_dir, group_config=None):
         offset = total_before - MAX_POINTS
         entries = entries[-MAX_POINTS:]
 
-    # 收集所有数据集和算法
-    all_datasets = sorted({ds for e in entries for ds in e.get("datasets", {})})
+    # 归一化数据集名称（去除 max level 差异）以便统一分组和趋势图
+    def _norm(name):
+        return re.sub(r",\s*max\s+\d+L", "", name)
+
+    def _best_rec(e, nds, algo):
+        """在 entry 中按归一化名称查找 algo 记录，多条时取最优"""
+        found = []
+        for ds, recs in e.get("datasets", {}).items():
+            if _norm(ds) == nds and algo in recs:
+                found.append(recs[algo])
+        if len(found) <= 1:
+            return found[0] if found else None
+        # 多条记录取最优（L 越小越好，时间越短越好）
+        best = found[0]
+        for r in found[1:]:
+            if r["L"] < best["L"] or (r["L"] == best["L"] and r["time_ms"] < best["time_ms"]):
+                best = r
+        return best
+
+    # 收集所有数据集和算法（使用归一化名称）
+    norm_to_originals = {}
+    for e in entries:
+        for ds in e.get("datasets", {}):
+            nds = _norm(ds)
+            norm_to_originals.setdefault(nds, set()).add(ds)
+    all_datasets = sorted(norm_to_originals.keys())
     all_algos = sorted(
         {algo for e in entries for ds in e.get("datasets", {}).values() for algo in ds}
     )
@@ -447,7 +476,7 @@ def plot_trends(history: dict[str, list[dict]], output_dir, group_config=None):
             for algo in all_algos:
                 vals = []
                 for e in entries:
-                    rec = e.get("datasets", {}).get(ds, {}).get(algo)
+                    rec = _best_rec(e, ds, algo)
                     vals.append(rec["time_ms"] if rec else None)
                 pts = [(r, v) for r, v in zip(run_numbers, vals) if v is not None]
                 if pts:
@@ -459,7 +488,7 @@ def plot_trends(history: dict[str, list[dict]], output_dir, group_config=None):
             for algo in all_algos:
                 vals = []
                 for e in entries:
-                    rec = e.get("datasets", {}).get(ds, {}).get(algo)
+                    rec = _best_rec(e, ds, algo)
                     vals.append(rec["L"] if rec else None)
                 pts = [(r, v) for r, v in zip(run_numbers, vals) if v is not None]
                 if pts:
@@ -650,18 +679,58 @@ def main():
             # 加载 / 创建历史记录
             history = load_history(hist_path)
 
-            # 创建新历史条目
+            # 归一化已有历史记录中的数据集名称（去除 max level，兼容旧纪录）
+            history_changed = False
+            for entry in history.get("entries", []):
+                old_ds = entry.get("datasets", {})
+                new_ds = {}
+                for ds, algos in old_ds.items():
+                    nds = normalize_ds_name(ds)
+                    if nds not in new_ds:
+                        new_ds[nds] = {}
+                    for algo, rec in algos.items():
+                        existing = new_ds[nds].get(algo)
+                        if existing is None:
+                            new_ds[nds][algo] = rec
+                        else:
+                            # 取最优
+                            if rec["L"] < existing["L"] or (
+                                rec["L"] == existing["L"] and rec["time_ms"] < existing["time_ms"]
+                            ):
+                                new_ds[nds][algo] = rec
+                if new_ds != old_ds:
+                    entry["datasets"] = new_ds
+                    history_changed = True
+            if history_changed:
+                save_history(hist_path, history)
+                print("已迁移历史记录（归一化数据集名称）")
+
+            # 创建新历史条目（使用归一化名称，去除 max level 差异）
             new_entry = {"timestamp": in_time if in_time else "N/A", "datasets": {}}
             for ds in in_order:
-                new_entry["datasets"][ds] = {}
+                nds = normalize_ds_name(ds)
+                if nds not in new_entry["datasets"]:
+                    new_entry["datasets"][nds] = {}
+                nds_algos = new_entry["datasets"][nds]
                 algos = sorted(in_algo.get(ds, []), key=str.lower)
                 for algo in algos:
                     rec = in_datasets[ds].get(algo)
                     if rec and rec.get("status") == "✅":
-                        new_entry["datasets"][ds][algo] = {
-                            "L": rec["L"],
-                            "time_ms": rec["time_ms"],
-                        }
+                        existing = nds_algos.get(algo)
+                        if existing is None:
+                            nds_algos[algo] = {
+                                "L": rec["L"],
+                                "time_ms": rec["time_ms"],
+                            }
+                        else:
+                            # 多条时取最优（L 越小越好，时间越短越好）
+                            if rec["L"] < existing["L"] or (
+                                rec["L"] == existing["L"] and rec["time_ms"] < existing["time_ms"]
+                            ):
+                                nds_algos[algo] = {
+                                    "L": rec["L"],
+                                    "time_ms": rec["time_ms"],
+                                }
 
             # 输入文件无有效数据则跳过历史记录
             if not in_time or not any(new_entry["datasets"].values()):
