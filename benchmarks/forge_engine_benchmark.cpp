@@ -185,6 +185,9 @@ const SizeSpec SIZES[] = {
     {"L", 7, 10},
 };
 
+// Item pair type for forge operations.
+enum class ItemPair { BookBook, BookEquip, EquipEquip };
+
 // Build target & sacrifice items for a given operation type and size.
 // `reg_n` is the total number of enchants in the registry.
 struct TestPair {
@@ -193,7 +196,26 @@ struct TestPair {
     std::string label;
 };
 
-TestPair make_pair(OpType op, const SizeSpec& size, int16_t reg_n, bool book_to_equip) {
+static Item make_item(ItemPair pair_type, bool is_target, int16_t dur, uint8_t ppn, EnchSet enchs) {
+    if (pair_type == ItemPair::BookBook)
+        return make_target(ItemType::Book, 0, 0, std::move(enchs));
+    if (pair_type == ItemPair::BookEquip)
+        return is_target ? make_equip(dur, ppn, std::move(enchs))
+                         : make_book(std::move(enchs));
+    // EquipEquip
+    return make_equip(dur, ppn, std::move(enchs));
+}
+
+static std::string pair_label(ItemPair p) {
+    switch (p) {
+        case ItemPair::BookBook:   return "book+book";
+        case ItemPair::BookEquip:  return "book+equip";
+        case ItemPair::EquipEquip: return "equip+equip";
+    }
+    return "?";
+}
+
+TestPair make_pair(OpType op, const SizeSpec& size, int16_t reg_n, ItemPair pair_type) {
     int16_t tgt_n = size.target_ench_count;
     int16_t sac_n = size.sac_ench_count;
     std::string op_name = [&]() -> std::string {
@@ -209,72 +231,57 @@ TestPair make_pair(OpType op, const SizeSpec& size, int16_t reg_n, bool book_to_
 
     switch (op) {
     case OpType::Merge: {
-        // target: enchants 0..tgt_n-1
-        // sacrifice: enchants tgt_n..tgt_n+sac_n-1 (all new)
         auto target_enchs = generate_enchants(0, tgt_n);
         auto sac_enchs    = generate_enchants(tgt_n, sac_n);
-        Item target = make_equip(500, 0, std::move(target_enchs));
-        Item sac    = book_to_equip ? make_book(std::move(sac_enchs))
-                                    : make_equip(500, 0, std::move(sac_enchs));
+        Item target = make_item(pair_type, true, 500, 0, std::move(target_enchs));
+        Item sac    = make_item(pair_type, false, 500, 0, std::move(sac_enchs));
         return {std::move(target), std::move(sac), label};
     }
     case OpType::Upgrade: {
-        // target & sacrifice share the same enchant IDs;
-        // sacrifice has same or higher levels
         auto target_enchs = generate_enchants(0, tgt_n, 3);
         EnchSet sac_enchs;
         for (int16_t i = 0; i < sac_n; ++i) {
             int16_t eid = i % tgt_n;
-            int16_t lvl = 2 + (i % 2); // level 2 or 3
+            int16_t lvl = 2 + (i % 2);
             sac_enchs.insert(Ench{eid, lvl});
         }
-        Item target = make_equip(500, 1, std::move(target_enchs));
-        Item sac    = book_to_equip ? make_book(std::move(sac_enchs))
-                                    : make_equip(500, 1, std::move(sac_enchs));
+        Item target = make_item(pair_type, true, 500, 1, std::move(target_enchs));
+        Item sac    = make_item(pair_type, false, 500, 1, std::move(sac_enchs));
         return {std::move(target), std::move(sac), label};
     }
     case OpType::Conflict: {
-        // target has even IDs; sacrifice has even+2 (conflict) + odd (safe)
         auto target_enchs = generate_enchants(0, tgt_n);
         EnchSet sac_enchs;
         int16_t half = sac_n / 2;
         for (int16_t i = 0; i < half; ++i) {
-            // Conflict: add (even+2) % reg_n
             int16_t eid = static_cast<int16_t>(((i * 2) + 2) % reg_n);
             sac_enchs.insert(Ench{eid, static_cast<int16_t>(1 + (i % 3))});
         }
         for (int16_t i = half; i < sac_n; ++i) {
-            // Safe odd enchants that are new
             int16_t eid = static_cast<int16_t>((i * 2 + 1) % reg_n);
             sac_enchs.insert(Ench{eid, static_cast<int16_t>(1 + (i % 3))});
         }
-        Item target = make_equip(500, 0, std::move(target_enchs));
-        Item sac    = book_to_equip ? make_book(std::move(sac_enchs))
-                                    : make_equip(500, 0, std::move(sac_enchs));
+        Item target = make_item(pair_type, true, 500, 0, std::move(target_enchs));
+        Item sac    = make_item(pair_type, false, 500, 0, std::move(sac_enchs));
         return {std::move(target), std::move(sac), label};
     }
     case OpType::Mixed: {
-        // ~50% merge, ~25% upgrade, ~25% conflict
         auto target_enchs = generate_enchants(0, tgt_n);
         EnchSet sac_enchs;
         int16_t upgrade_n = sac_n / 4;
         int16_t conflict_n = sac_n / 4;
         int16_t merge_n = sac_n - upgrade_n - conflict_n;
         int16_t pos = 0;
-        // upgrade: reuse target enchants with higher levels
         for (int16_t i = 0; i < upgrade_n && pos < tgt_n; ++i, ++pos)
             sac_enchs.insert(Ench{static_cast<int16_t>(pos), 5});
-        // conflict: use conflicting IDs
         for (int16_t i = 0; i < conflict_n; ++i, ++pos)
             sac_enchs.insert(Ench{static_cast<int16_t>(((pos * 2) + 2) % reg_n),
                                   static_cast<int16_t>(1 + (i % 3))});
-        // merge: use new IDs beyond target range
         for (int16_t i = 0; i < merge_n; ++i, ++pos)
             sac_enchs.insert(Ench{static_cast<int16_t>(tgt_n + (pos % (reg_n - tgt_n))),
                                   static_cast<int16_t>(1 + (i % 3))});
-        Item target = make_equip(500, 1, std::move(target_enchs));
-        Item sac    = book_to_equip ? make_book(std::move(sac_enchs))
-                                    : make_equip(500, 1, std::move(sac_enchs));
+        Item target = make_item(pair_type, true, 500, 1, std::move(target_enchs));
+        Item sac    = make_item(pair_type, false, 500, 1, std::move(sac_enchs));
         return {std::move(target), std::move(sac), label};
     }
     }
@@ -358,11 +365,12 @@ void print_result(const BenchResult& r, int iters) {
 // ══════════════════════════════════════════════════════════════════════════
 
 struct Config {
-    bool run_java      = true;
-    bool run_bedrock   = true;
-    bool run_book_eq   = true;
-    bool run_eq_eq     = true;
-    bool show_summary  = true;  // default: summary on
+    bool run_java         = true;
+    bool run_bedrock      = true;
+    bool run_book_book    = true;
+    bool run_book_eq      = true;
+    bool run_eq_eq        = true;
+    bool show_summary     = true;  // default: summary on
 };
 
 Config parse_cli(int argc, char* argv[]) {
@@ -373,21 +381,22 @@ Config parse_cli(int argc, char* argv[]) {
         if (a == "--help") {
             std::cout << "ForgeEngine Benchmark\n";
             std::cout << "Usage: forge_engine_benchmark [options]\n";
-            std::cout << "  (no args)   All configs with summary table (default)\n";
+            std::cout << "  (no args)     All configs with summary table (default)\n";
             std::cout << "  --no-summary  Suppress summary table\n";
-            std::cout << "  --java       Java platform only\n";
-            std::cout << "  --bedrock    Bedrock platform only\n";
-            std::cout << "  --book       Book->equip only\n";
-            std::cout << "  --equip      Equip->equip only\n";
-            std::cout << "  --help       This help\n";
+            std::cout << "  --java        Java platform only\n";
+            std::cout << "  --bedrock     Bedrock platform only\n";
+            std::cout << "  --book-book   Book+book only\n";
+            std::cout << "  --book        Book+equip only\n";
+            std::cout << "  --equip       Equip->equip only\n";
+            std::cout << "  --help        This help\n";
             exit(0);
         } else if (a == "--no-summary")  { cfg.show_summary = false; }
         else if (a == "--java")          { cfg.run_bedrock = false; any_filter = true; }
         else if (a == "--bedrock")       { cfg.run_java = false; any_filter = true; }
-        else if (a == "--book")          { cfg.run_eq_eq = false; any_filter = true; }
-        else if (a == "--equip")         { cfg.run_book_eq = false; any_filter = true; }
+        else if (a == "--book-book")     { cfg.run_book_eq = false; cfg.run_eq_eq = false; any_filter = true; }
+        else if (a == "--book")          { cfg.run_book_book = false; cfg.run_eq_eq = false; any_filter = true; }
+        else if (a == "--equip")         { cfg.run_book_book = false; cfg.run_book_eq = false; any_filter = true; }
     }
-    // Summary only works when all 4 configs are present; if user filters, turn it off
     if (any_filter) cfg.show_summary = false;
     return cfg;
 }
@@ -409,24 +418,26 @@ int main(int argc, char* argv[]) {
               << "Configurations: "
               << (cfg.run_java ? "Java " : "")
               << (cfg.run_bedrock ? "Bedrock " : "")
-              << (cfg.run_book_eq ? "book→equip " : "")
-              << (cfg.run_eq_eq ? "equip→equip " : "")
+              << (cfg.run_book_book ? "book+book " : "")
+              << (cfg.run_book_eq ? "book+equip " : "")
+              << (cfg.run_eq_eq ? "equip+equip " : "")
               << "\n";
 
     // ── Configurations to run ──────────────────────────────────────────
     struct RunConfig {
         std::string label;
         ForgeConfig fcfg;
-        bool book_to_equip;
+        ItemPair pair_type;
     };
 
     std::vector<RunConfig> configs;
     for (auto plat : {MCE::Java, MCE::Bedrock}) {
         if (plat == MCE::Java && !cfg.run_java) continue;
         if (plat == MCE::Bedrock && !cfg.run_bedrock) continue;
-        for (bool book_to_equip : {true, false}) {
-            if (book_to_equip && !cfg.run_book_eq) continue;
-            if (!book_to_equip && !cfg.run_eq_eq) continue;
+        for (auto pt : {ItemPair::BookBook, ItemPair::BookEquip, ItemPair::EquipEquip}) {
+            if (pt == ItemPair::BookBook   && !cfg.run_book_book) continue;
+            if (pt == ItemPair::BookEquip  && !cfg.run_book_eq) continue;
+            if (pt == ItemPair::EquipEquip && !cfg.run_eq_eq) continue;
 
             ForgeConfig fcfg;
             fcfg.platform = plat;
@@ -434,15 +445,15 @@ int main(int argc, char* argv[]) {
             fcfg.ignore_repair_cost = false;
 
             std::string label = (plat == MCE::Java ? "Java" : "Bedrock")
-                              + std::string(", ") + (book_to_equip ? "book→equip" : "equip→equip");
+                              + std::string(", ") + pair_label(pt);
 
-            configs.push_back({label, fcfg, book_to_equip});
+            configs.push_back({label, fcfg, pt});
         }
     }
 
     // ── Estimate baseline (single small merge) to size iterations ──────
     ForgeEngine est_engine;
-    auto est_pair = make_pair(OpType::Merge, SIZES[0], reg_n, true);
+    auto est_pair = make_pair(OpType::Merge, SIZES[0], reg_n, ItemPair::BookEquip);
     auto est_runner = make_forge_into_runner(est_engine, reg, est_pair.target, est_pair.sacrifice);
     auto start = Clock::now();
     int est_n = 100'000;
@@ -450,7 +461,8 @@ int main(int argc, char* argv[]) {
         est_runner();
     auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
     int base_iters = determine_iterations(static_cast<double>(ns) / est_n);
-    std::cout << "Base iterations: " << base_iters << "\n\n";
+    std::cout << "Base iterations: " << base_iters << "\n";
+    std::cout << "Sizes:  S(1+1)  M(5+5)  L(7+10)  (target enchants + sacrifice enchants)\n\n";
 
     // ── Results storage (avoids re-running for the summary) ──────────
     struct PerfRow {
@@ -473,7 +485,7 @@ int main(int argc, char* argv[]) {
 
         for (auto op : {OpType::Merge, OpType::Upgrade, OpType::Conflict, OpType::Mixed}) {
             for (auto& size : SIZES) {
-                auto pair = make_pair(op, size, reg_n, rc.book_to_equip);
+                auto pair = make_pair(op, size, reg_n, rc.pair_type);
 
                 // forge_into
                 {
@@ -504,7 +516,7 @@ int main(int argc, char* argv[]) {
 
         // estimate_forge_cost — use the Merge/S pair (fast)
         {
-            auto pair = make_pair(OpType::Merge, SIZES[0], reg_n, rc.book_to_equip);
+            auto pair = make_pair(OpType::Merge, SIZES[0], reg_n, rc.pair_type);
             auto runner = make_estimate_runner(engine, reg, pair.target, pair.sacrifice);
             auto r = bench("estimate/S", runner, base_iters * 5);
             print_result(r, base_iters * 5);
@@ -513,7 +525,7 @@ int main(int argc, char* argv[]) {
 
         // forge() copy overhead — compare with forge_into for Merge/M
         {
-            auto pair = make_pair(OpType::Merge, SIZES[1], reg_n, rc.book_to_equip);
+            auto pair = make_pair(OpType::Merge, SIZES[1], reg_n, rc.pair_type);
             auto into_runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
             auto forge_runner = make_forge_runner(engine, reg, pair.target, pair.sacrifice);
             auto r_into  = bench("forge_into/M", into_runner, base_iters);
@@ -534,10 +546,10 @@ int main(int argc, char* argv[]) {
     // ── Summary table ─────────────────────────────────────────────────
     if (cfg.show_summary && perf_rows.size() == 4) {
         std::cout << "\n";
-        std::cout << "+---------------------------+----------------------+---------------------+--------------------------+\n";
-        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  |  pure_frge (ns/op)  | Overhead vs Merge/M      |\n";
-        std::cout << "| Config                    |  S     M     L       |  S     M     L      | upgr  cnfl  mix  copy    |\n";
-        std::cout << "+---------------------------+----------------------+---------------------+--------------------------+\n";
+        std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
+        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  |  pure_frge (ns/op)  | Overhead vs Merge/M    |\n";
+        std::cout << "| Config                    |    S     M     L     |    S     M     L    | upgr  cnfl  mix  copy  |\n";
+        std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
 
         for (auto& row : perf_rows) {
             double up_penalty  = (row.merge_m_ns > 0) ? (double)row.upgrade_m_ns / row.merge_m_ns : 0;
@@ -547,7 +559,7 @@ int main(int argc, char* argv[]) {
 
             char buf[256];
             snprintf(buf, sizeof(buf),
-                     "| %-25s | %3lld %4lld %5lld  | %3lld %4lld %5lld  | %3.0f%% %3.0f%% %3.0f%% %3.0f%% |",
+                     "| %-25s |   %2lld   %3lld   %3lld     |   %2lld   %3lld   %3lld    | %3.0f%%  %3.0f%% %3.0f%%  %3.0f%%  |",
                      row.config.c_str(),
                      (long long)row.merge_s_ns, (long long)row.merge_m_ns, (long long)row.merge_l_ns,
                      (long long)row.pure_s_ns, (long long)row.pure_m_ns, (long long)row.pure_l_ns,
@@ -558,7 +570,7 @@ int main(int argc, char* argv[]) {
             std::cout << buf << "\n";
         }
 
-        std::cout << "+---------------------------+-------------------------------------------+-----------------------------+\n";
+        std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
         std::cout << "  upgr=Upgrade cnfl=Conflict mix=Mixed copy=forge() vs forge_into()\n";
     }
 
