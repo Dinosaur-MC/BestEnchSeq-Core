@@ -61,6 +61,8 @@ void EnchSet::insert(const Ench &ench) {
 
 void EnchSet::sort() {
     _hash_cache = 0;
+    if (_size > INLINE_N) [[unlikely]]
+        _size = INLINE_N;
     Ench *d     = reinterpret_cast<Ench *>(_buf);
     std::sort(d, d + _size, [](const Ench &a, const Ench &b) { return a.id < b.id; });
 }

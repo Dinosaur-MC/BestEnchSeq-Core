@@ -73,15 +73,17 @@ class EnchSet {
     using const_iterator = const Ench *;
 
     EnchSet() noexcept : _size(0) {}
-    EnchSet(std::initializer_list<Ench> il) noexcept : _size(il.size()) {
-        std::memcpy(_buf, il.begin(), sizeof(Ench) * il.size());
+    EnchSet(std::initializer_list<Ench> il) noexcept
+        : _size(static_cast<uint8_t>(std::min<size_t>(il.size(), INLINE_N))) {
+        std::memcpy(_buf, il.begin(), sizeof(Ench) * _size);
         sort();
     }
     template <
         typename Iter,
         std::enable_if_t<std::is_convertible_v<decltype(*std::declval<Iter &>()), Ench>, int> = 0>
-    EnchSet(Iter first, Iter last) noexcept : _size(std::distance(first, last)) {
-        std::copy(first, last, _buf);
+    EnchSet(Iter first, Iter last) noexcept
+        : _size(static_cast<uint8_t>(std::min<size_t>(std::distance(first, last), INLINE_N))) {
+        std::copy(first, first + _size, _buf);
         sort();
     }
 
@@ -90,6 +92,7 @@ class EnchSet {
     EnchSet &operator=(const EnchSet &o) noexcept {
         if (this != &o) {
             _size = o._size;
+            _hash_cache = 0;
             std::memcpy(_buf, o._buf, INLINE_BYTES);
         }
         return *this;
@@ -103,6 +106,7 @@ class EnchSet {
     EnchSet &operator=(EnchSet &&o) noexcept {
         if (this != &o) {
             _size = o._size;
+            _hash_cache = 0;
             std::memcpy(_buf, o._buf, INLINE_BYTES);
             o._size       = 0;
             o._hash_cache = 0;

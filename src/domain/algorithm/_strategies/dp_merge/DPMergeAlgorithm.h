@@ -3,7 +3,6 @@
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/registries/EnchReg.h"
-#include "common/utils/MemoryPool.hpp"
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -16,17 +15,12 @@
 ///   3. Combine sub-results via forge_into, try both base/sacrifice directions.
 ///   4. Bucket by (EnchSet, PPN, type): within each equivalence class, keep
 ///      only the cheapest entry.
-///
-/// Cache map nodes are backed by a MemoryPool to avoid heap fragmentation
-/// from millions of small allocations.  Frontier data (vectors) use the
-/// regular heap for fast allocation/deallocation of temporary objects.
 namespace algorithm {
 
 class DPMergeAlgorithm : public IAlgorithm {
 public:
     explicit DPMergeAlgorithm(ForgeConfig cfg = {}) noexcept
-        : _forge_engine(std::move(cfg))
-    {}
+        : _forge_engine(std::move(cfg)) {}
 
     std::string_view name() const noexcept override { return "dp_merge"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
@@ -37,13 +31,13 @@ public:
 
 private:
     struct ParetoEntry {
-        int32_t cost{0};
-        uint8_t ppn{0};
-        Item item;
+        int64_t cost{0};         // total cumulative cost (levels), int64_t to prevent overflow
+        uint8_t ppn{0};           // prior work penalty
+        Item item;                // the resulting item
         std::vector<EnchStep> steps;
 
         ParetoEntry() = default;
-        ParetoEntry(int32_t c, uint8_t p, Item i, std::vector<EnchStep> s)
+        ParetoEntry(int64_t c, uint8_t p, Item i, std::vector<EnchStep> s)
             : cost(c), ppn(p), item(std::move(i)), steps(std::move(s)) {}
     };
 
@@ -54,10 +48,10 @@ private:
         bool empty() const { return entries.empty(); }
     };
 
+    // Memoisation cache: item-set → Pareto frontier.
+    std::unordered_map<ItemCollection, Frontier> _cache;
+
     ForgeEngine _forge_engine;
-    // Cache uses MemoryPool for map nodes to prevent heap fragmentation.
-    MemoryPool _pool;
-    std::pmr::unordered_map<ItemCollection, Frontier> _cache{&_pool};
     const EnchReg* _ench_reg{nullptr};
     std::vector<Ench> _target;
 
@@ -66,8 +60,8 @@ private:
     Frontier solve(std::vector<Item> items);
     static void canonicalize(std::vector<Item>& items) noexcept;
 
-    // Safety limit: prevent unbounded memory growth for large N.
-    static constexpr size_t MAX_CACHE_ENTRIES = 200000;
+    // Cache size limit prevents unbounded memory growth for large N.
+    static constexpr size_t MAX_CACHE_ENTRIES = 500000;
 };
 
 static_assert(std::is_nothrow_destructible_v<DPMergeAlgorithm>,

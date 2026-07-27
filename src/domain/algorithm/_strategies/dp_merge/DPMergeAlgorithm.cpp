@@ -3,6 +3,7 @@
 #include "domain/algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace algorithm {
@@ -83,6 +84,7 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
 
     const size_t n = items.size();
 
+    if (n >= 64) return {};
     if (n > 20) {
         _cache[std::move(items)] = Frontier{};
         return {};
@@ -125,7 +127,12 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
                 if (_forge_engine.is_forgeable(entry_a.item, entry_b.item)) {
                     auto [new_item, cost] = _forge_engine.forge(
                         entry_a.item, entry_b.item, *_ench_reg);
-                    int32_t total = entry_a.cost + entry_b.cost + cost;
+                    // Use int64_t for accumulation to prevent overflow;
+                    // saturate to INT32_MAX for solution output.
+                    int64_t total = static_cast<int64_t>(entry_a.cost)
+                                  + entry_b.cost + cost;
+                    if (total > std::numeric_limits<int32_t>::max())
+                        total = std::numeric_limits<int32_t>::max();
 
                     std::vector<EnchStep> steps;
                     steps.reserve(entry_a.steps.size() +
@@ -144,7 +151,10 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
                 if (_forge_engine.is_forgeable(entry_b.item, entry_a.item)) {
                     auto [new_item, cost] = _forge_engine.forge(
                         entry_b.item, entry_a.item, *_ench_reg);
-                    int32_t total = entry_a.cost + entry_b.cost + cost;
+                    int64_t total = static_cast<int64_t>(entry_a.cost)
+                                  + entry_b.cost + cost;
+                    if (total > std::numeric_limits<int32_t>::max())
+                        total = std::numeric_limits<int32_t>::max();
 
                     std::vector<EnchStep> steps;
                     steps.reserve(entry_a.steps.size() +
@@ -179,10 +189,7 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
 
-    // Reset pool and clear cache before each run.
-    _pool.release();
     _cache.clear();
-
     _diag = AlgorithmDiagnostics{};
 
     ctx.report_progress(0, ProgressStatus::Starting);
@@ -227,7 +234,7 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
     }
 
     if (best) {
-        _diag.solution_cost = best->cost;
+        _diag.solution_cost = static_cast<int32_t>(best->cost);
         _diag.status        = "Complete";
         ctx.set_exit_diagnostics(_diag);
         ctx.report_solution(best->steps);
@@ -237,10 +244,6 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
         ctx.set_exit_diagnostics(_diag);
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
     }
-
-    // Cleanup: release pool + clear cache (map nodes use pool → no-op free).
-    _pool.release();
-    _cache.clear();
 }
 
 } // namespace algorithm
