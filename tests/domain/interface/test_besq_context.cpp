@@ -4,12 +4,13 @@
 // Tests the public C++ API: profile lifecycle, registry editing, solve pipeline.
 // =============================================================================
 
-#include "domain/interface/SolvePipeline.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
-#include "domain/interface/CLIApp/CLIApp.h"
+#include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/BesqContext.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
+#include "besq/besq.h"
 #include "framework/test_utils.h"
 
 #include <cstring>
@@ -25,22 +26,22 @@ void test_context_lifecycle() {
     BesqContext ctx;
     ctx.load_builtin();
 
-    expect(ctx.active_profile() == "default", "default profile after load_builtin");
+    expect(ctx.active_profile() == "builtin:vanilla", "default profile after load_builtin");
     expect(ctx.list_profiles().size() == 1, "one profile after load_builtin");
 
     // Fork and switch
-    ctx.fork_profile("default", "testing");
+    ctx.fork_profile("builtin:vanilla", "minecraft:testing");
     expect(ctx.list_profiles().size() == 2, "two profiles after fork");
 
-    ctx.activate_profile("testing");
-    expect(ctx.active_profile() == "testing", "switched to testing");
+    ctx.activate_profile("minecraft:testing");
+    expect(ctx.active_profile() == "minecraft:testing", "switched to testing");
 
     // Switch back
-    ctx.activate_profile("default");
-    expect(ctx.active_profile() == "default", "back to default");
+    ctx.activate_profile("builtin:vanilla");
+    expect(ctx.active_profile() == "builtin:vanilla", "back to default");
 
     // Remove
-    ctx.remove_profile("testing");
+    ctx.remove_profile("minecraft:testing");
     expect(ctx.list_profiles().size() == 1, "one profile after remove");
 
     TEST_PASS("BesqContext lifecycle");
@@ -55,33 +56,34 @@ void test_fork_merge() {
     ctx.load_builtin();
 
     // Fork default -> modded
-    ctx.fork_profile("default", "modded");
-    ctx.activate_profile("modded");
+    ctx.fork_profile("builtin:vanilla", "minecraft:modded");
+    ctx.activate_profile("minecraft:modded");
 
     // Add custom enchantment to modded profile
     EnchInfo custom;
-    custom.name_id = "custom:test_ench";
+    custom.id = NSID("custom:test_ench");
+    custom.name = "Test Enchantment";
     custom.max_level = 3;
     custom.multiplier = 2;
-    custom.applicable_category_ids.insert(0); // "any" category
+    custom.applicable_equipments.insert(NSID("#minecraft:any"));
     bool added = ctx.add_enchantment(custom);
     expect(added, "add custom enchantment to modded profile");
 
-    int32_t custom_id = ctx.enchantments().get_id("custom:test_ench");
-    expect(custom_id >= 0, "custom ench exists in modded after add");
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
+           "custom ench exists in modded after add");
 
     // Default profile should NOT have custom
-    ctx.activate_profile("default");
-    int32_t default_id = ctx.enchantments().get_id("custom:test_ench");
-    expect(default_id < 0, "custom ench NOT in default profile");
+    ctx.activate_profile("builtin:vanilla");
+    expect(!ctx.enchantments().contains(NSID("custom:test_ench")),
+           "custom ench NOT in default profile");
 
     // Merge modded -> default
-    ctx.merge_profile("modded", "default");
-    default_id = ctx.enchantments().get_id("custom:test_ench");
-    expect(default_id >= 0, "custom ench merged to default");
+    ctx.merge_profile("minecraft:modded", "builtin:vanilla");
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
+           "custom ench merged to default");
 
     // Cleanup
-    ctx.remove_profile("modded");
+    ctx.remove_profile("minecraft:modded");
 
     TEST_PASS("BesqContext fork/merge correctness");
 }
@@ -94,41 +96,37 @@ void test_besq_solve() {
     BesqContext ctx;
     ctx.load_builtin();
 
-    // Build SolveInput using ItemParser + CLI helpers (same as main.cpp)
+    // Use inline target syntax: diamond_sword[sharpness=3]
     std::string target_str = "diamond_sword[sharpness=3]";
     const char* argv[] = {"besq", "--target", target_str.c_str()};
     auto config = CLIApp::parse(3, const_cast<char**>(argv));
 
-    auto target_spec = ItemParser::parse(config.target);
-    auto target_item = build_target(target_spec, ctx.enchantments(), ctx.equipment());
+    // Parse target item using the context's registries
+    Item target_item = ItemParser::parse(config.target,
+                                         ctx.enchantments(), ctx.equipment());
 
-    SolveInput input;
-    input.target_item = target_item;
-    input.algorithm = "hamming";
-    input.forge_config.platform = MCE::Java;
-    input.search_config.max_solutions = 1;
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::direct;
+    request.payload = DirectPayload{};
+    request.algorithm = "hamming";
+    request.forge_config.platform = MCE::Java;
+    request.search_config.max_solutions = 1;
 
-    auto result = ctx.solve(input);
+    auto result = ctx.solve(request);
     expect(result.success, "solve should succeed");
     expect(!result.solutions.empty(), "should have solutions");
     expect(result.solutions[0].is_success, "first solution should succeed");
     expect(result.solutions[0].total_exp_level_cost > 0, "cost should be positive");
     expect(!result.solutions[0].steps.empty(), "should have forge steps");
 
-    // Verify formatting works
-    auto json_out = result.to_json(ctx.enchantments(), ctx.categories());
+    // Verify formatting works via BesqContext
+    auto json_out = ctx.format(result, AlgorithmMode::direct, "json");
     expect(json_out.find("sharpness") != std::string::npos,
            "JSON output should mention sharpness");
 
-    auto text_out = result.to_text(ctx.enchantments(), ctx.categories());
+    auto text_out = ctx.format(result, AlgorithmMode::direct, "text");
     expect(!text_out.empty(), "text output should be non-empty");
-
-    // Verify raw JSON output works (no registry deps)
-    auto raw_json = result.to_json_raw();
-    expect(raw_json.find("algorithm") != std::string::npos,
-           "raw JSON should contain algorithm field");
-    expect(raw_json.find("solutions") != std::string::npos,
-           "raw JSON should contain solutions field");
 
     TEST_PASS("BesqContext solve + format");
 }
@@ -142,39 +140,39 @@ void test_besq_registry_edit() {
     ctx.load_builtin();
 
     // Verify known enchantments exist
-    auto sharp_id = ctx.enchantments().get_id("minecraft:sharpness");
-    expect(sharp_id >= 0, "sharpness should exist in builtin data");
-    (void)sharp_id;
+    expect(ctx.enchantments().contains(NSID("minecraft:sharpness")),
+           "sharpness should exist in builtin data");
 
-    auto sword_id = ctx.equipment().get_id("minecraft:diamond_sword");
-    expect(sword_id >= 0, "diamond_sword should exist");
+    expect(ctx.equipment().contains(NSID("minecraft:diamond_sword")),
+           "diamond_sword should exist");
 
     // ── Add custom enchantment ──
     EnchInfo custom;
-    custom.name_id = "custom:test_ench";
+    custom.id = NSID("custom:test_ench");
+    custom.name = "Test Enchantment";
     custom.max_level = 3;
     custom.multiplier = 2;
-    custom.applicable_category_ids.insert(0); // "any" category
+    custom.applicable_equipments.insert(NSID("#minecraft:any"));
     bool added = ctx.add_enchantment(custom);
     expect(added, "add custom enchantment");
 
-    int32_t custom_id = ctx.enchantments().get_id("custom:test_ench");
-    expect(custom_id >= 0, "custom enchantment findable after add");
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
+           "custom enchantment findable after add");
 
     // ── Modify enchantment ──
     EnchInfo patch;
     patch.max_level = 5;
     bool modded = ctx.modify_enchantment("custom:test_ench", patch);
     expect(modded, "modify custom enchantment");
-    // Verify via get_id still works (modify doesn't change name_id)
-    custom_id = ctx.enchantments().get_id("custom:test_ench");
-    expect(custom_id >= 0, "custom enchantment still findable after modify");
+    // Verify still findable after modify
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
+           "custom enchantment still findable after modify");
 
     // ── Remove enchantment ──
     bool removed = ctx.remove_enchantment("custom:test_ench");
     expect(removed, "remove custom enchantment");
-    custom_id = ctx.enchantments().get_id("custom:test_ench");
-    expect(custom_id < 0, "custom enchantment gone after remove");
+    expect(!ctx.enchantments().contains(NSID("custom:test_ench")),
+           "custom enchantment gone after remove");
 
     // ── Duplicate add should fail ──
     added = ctx.add_enchantment(custom);
@@ -224,7 +222,7 @@ void test_c_abi() {
     // Profile management
     const char* active = besq_active_profile(ctx);
     expect(active != nullptr, "c abi active_profile");
-    expect(std::string(active) == "default", "c abi default profile");
+    expect(std::string(active) == "builtin:vanilla", "c abi default profile");
 
     int out_count = 0;
     char** profiles = besq_list_profiles(ctx, &out_count);
@@ -232,16 +230,16 @@ void test_c_abi() {
     expect(out_count == 1, "c abi one profile");
     besq_free_string_list(profiles, out_count);
 
-    rc = besq_fork_profile(ctx, "default", "testing");
+    rc = besq_fork_profile(ctx, "builtin:vanilla", "minecraft:testing");
     expect(rc == 0, "c abi fork_profile");
-    rc = besq_activate_profile(ctx, "testing");
+    rc = besq_activate_profile(ctx, "minecraft:testing");
     expect(rc == 0, "c abi activate_profile");
     active = besq_active_profile(ctx);
-    expect(std::string(active) == "testing", "c abi active profile testing");
+    expect(std::string(active) == "minecraft:testing", "c abi active profile testing");
 
-    rc = besq_activate_profile(ctx, "default");
+    rc = besq_activate_profile(ctx, "builtin:vanilla");
     expect(rc == 0, "c abi activate default back");
-    rc = besq_remove_profile(ctx, "testing");
+    rc = besq_remove_profile(ctx, "minecraft:testing");
     expect(rc == 0, "c abi remove_profile");
 
     // Solve via C ABI

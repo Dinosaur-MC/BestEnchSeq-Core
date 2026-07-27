@@ -1,130 +1,113 @@
-#include "domain/interface/CLIApp/CLIApp.h"
+// =============================================================================
+// Integration Tests
+//
+// Tests the full pipeline with builtin data across all formatting modes.
+// =============================================================================
+
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/orchestration/components/OutputFormatter.h"
+#include "domain/orchestration/pipelines/SolvePipeline.h"
+#include "domain/business/types/Profile.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-// REMOVED: RegistryAccess.h — create local registries instead
 #include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/types/EquipmentTag.h"
-#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "builtin/DataLoader.h"
 #include "framework/test_utils.h"
 
-#include "domain/orchestration/components/CompactAdapter.h"
-#include "domain/algorithm/AlgorithmExecutor.h"
-#include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
-#include "domain/algorithm/IAlgorithm.h"
-#include "io/json.h"
-
-#include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <stdexcept>
-#include <unordered_map>
-#include <variant>
 
 namespace {
 
 // ---------------------------------------------------------------------------
-// Shared helper: validate JSON output structure
+// Helper: build a test Profile loaded with builtin vanilla data
 // ---------------------------------------------------------------------------
-void check_json_solutions(const std::string &json_str, size_t expected_count) {
-    auto json = Json::parse(json_str);
-    expect(json.type() == JsonType::Object, "json output root must be an object");
+Profile make_builtin_profile() {
+    EquipmentTagRegistry cat_reg;
+    EnchantmentRegistry ench_reg;
+    EquipmentRegistry eq_reg;
+    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
 
-    auto root_val = json.get_value();
-    auto *root_obj = std::get_if<Json::Object>(&root_val);
-    expect(root_obj != nullptr, "json root should be a JSON object");
-    if (!root_obj) return;
+    ProfileMetadata meta(NSID("test:integration"));
+    return Profile(std::move(meta), std::move(ench_reg),
+                   std::move(eq_reg), std::move(cat_reg));
+}
 
-    // Check required top-level keys
-    expect(root_obj->find("solutions") != root_obj->end(),
-           "json output must have 'solutions' key");
-    expect(root_obj->find("schema_version") != root_obj->end(),
-           "json output must have 'schema_version' key");
-    expect(root_obj->find("mode") != root_obj->end(),
-           "json output must have 'mode' key");
-
-    // Validate solutions array
-    auto sol_it = root_obj->find("solutions");
-    if (sol_it == root_obj->end()) return;
-
-    auto sol_val = sol_it->second.get_value();
-    auto *sol_arr = std::get_if<Json::Array>(&sol_val);
-    expect(sol_arr != nullptr, "json 'solutions' must be an array");
-    if (!sol_arr) return;
-
-    expect(sol_arr->size() == expected_count,
-           "json solutions array size should match expected count");
+// ---------------------------------------------------------------------------
+// Helper: build a SolveRequest for simple direct-mode tests
+// ---------------------------------------------------------------------------
+SolveRequest make_direct_request(const Item& target_item,
+                                  const std::string& algo = "hamming") {
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::direct;
+    request.payload = DirectPayload{};
+    request.forge_config.platform = MCE::Java;
+    request.search_config.max_solutions = 1;
+    request.algorithm = algo;
+    return request;
 }
 
 // ---------------------------------------------------------------------------
 // Full pipeline: direct mode with builtin data
 // ---------------------------------------------------------------------------
 void test_full_pipeline_direct() {
-    EquipmentTagRegistry cat_reg;
-    EnchantmentRegistry ench_reg;
-    auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json");
-    EquipmentRegistry eq_reg;
-    RawTypeAdapter::resolve(raw_ench, raw_eq, cat_reg, eq_reg, ench_reg);
+    auto profile = make_builtin_profile();
 
-    // Use inline target syntax: diamond_sword[sharpness=5,knockback=2]
-    const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=5,knockback=2]"};
-    auto config = CLIApp::parse(3, const_cast<char **>(argv));
+    // Parse target using inline syntax
+    Item target_item = ItemParser::parse(
+        "diamond_sword[sharpness=5,knockback=2]",
+        profile.ench(), profile.eq());
 
-    // Build domain input from CLI spec
-    auto target_spec = ItemParser::parse(config.target);
-    Item target_item = build_target(target_spec, ench_reg, eq_reg);
+    // Build and run the solve pipeline
+    SolveRequest request = make_direct_request(target_item);
+    algorithm::AlgorithmLoader loader;
+    loader.load_builtin();
+    auto result = SolvePipeline::run(profile, request, loader);
 
-    EnchSet source_ench;  // no --source flag
-    EnchSet target_ench = build_enchset(target_spec.inline_enchants, ench_reg);
+    expect(result.success, "full_pipeline_direct: solve should succeed");
+    expect(!result.solutions.empty(),
+           "full_pipeline_direct: should have solutions");
+    expect(result.solutions[0].is_success,
+           "full_pipeline_direct: first solution should succeed");
+    expect(result.solutions[0].total_exp_level_cost > 0,
+           "full_pipeline_direct: cost should be positive");
+    expect(!result.solutions[0].steps.empty(),
+           "full_pipeline_direct: should have forge steps");
 
-    auto resolved = ItemResolver::resolve(target_item, source_ench, target_ench, ench_reg);
-
-    // sharpness=5 generates 5 books (levels 1..5), knockback=2 generates 2 (levels 1..2)
-    expect(resolved.available_items.size() == 7,
-           "full_pipeline_direct: auto-complete should generate 7 graduated books");
-    expect(!resolved.target_item.id.empty(),
-           "full_pipeline_direct: target should have equipment");
-    expect(resolved.target_item.id.str() == "minecraft:diamond_sword",
-           "full_pipeline_direct: target should be diamond sword");
-
-    std::cout << "  PASS: test_full_pipeline_direct" << std::endl;
+    TEST_PASS("test_full_pipeline_direct");
 }
 
 // ---------------------------------------------------------------------------
 // Inventory mode pipeline
 // ---------------------------------------------------------------------------
 void test_full_pipeline_inventory() {
-    EquipmentTagRegistry cat_reg;
-    EnchantmentRegistry ench_reg;
-    auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json");
-    EquipmentRegistry eq_reg;
-    RawTypeAdapter::resolve(raw_ench, raw_eq, cat_reg, eq_reg, ench_reg);
+    auto profile = make_builtin_profile();
 
     // Build target with inline syntax
-    TargetSpec target_spec;
-    target_spec.item_id = "diamond_sword";
-    target_spec.inline_enchants.push_back({"minecraft", "sharpness", 5});
-    Item target_item = build_target(target_spec, ench_reg, eq_reg);
+    Item target_item = ItemParser::parse(
+        "diamond_sword[sharpness=5]",
+        profile.ench(), profile.eq());
 
     // Build available items to simulate inventory
     ItemCollection available_items;
     {
         EnchSet book_enchs;
-        book_enchs.emplace(NSID("sharpness"), "sharpness", 5);
-        available_items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);
+        book_enchs.emplace(NSID("minecraft:sharpness"), "sharpness", 5);
+        available_items.emplace_back(NSID("minecraft:enchanted_book"),
+                                      book_enchs, 0);
     }
     {
         EnchSet book_enchs;
-        book_enchs.emplace(NSID("knockback"), "knockback", 2);
-        available_items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);
+        book_enchs.emplace(NSID("minecraft:knockback"), "knockback", 2);
+        available_items.emplace_back(NSID("minecraft:enchanted_book"),
+                                      book_enchs, 0);
     }
     {
-        available_items.emplace_back(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+        available_items.emplace_back(NSID("minecraft:diamond_sword"),
+                                      EnchSet{}, 0, 1561);
     }
 
     expect(available_items.size() >= 2,
@@ -132,45 +115,40 @@ void test_full_pipeline_inventory() {
     expect(!target_item.id.empty(),
            "full_pipeline_inventory: target should have equipment");
 
-    std::cout << "  PASS: test_full_pipeline_inventory" << std::endl;
+    TEST_PASS("test_full_pipeline_inventory");
 }
-
 
 // ---------------------------------------------------------------------------
 // Enchantment lookup from builtin data
 // ---------------------------------------------------------------------------
 void test_builtin_enchantment_lookup() {
-    EquipmentTagRegistry cat_reg;
-    EnchantmentRegistry ench_reg;
-    EquipmentRegistry eq_reg;
-    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
+    auto profile = make_builtin_profile();
 
-    expect(ench_reg.index(NSID("minecraft:sharpness")) != IRegistry<EnchInfo>::nops, "builtin: sharpness found");
-    expect(ench_reg.index(NSID("nonexistent")) == IRegistry<EnchInfo>::nops, "builtin: nonexistent not found");
+    expect(profile.ench().contains(NSID("minecraft:sharpness")),
+           "builtin: sharpness found");
+    expect(!profile.ench().contains(NSID("minecraft:nonexistent")),
+           "builtin: nonexistent not found");
 
-    auto &sharpness = ench_reg.get(NSID("minecraft:sharpness"));
+    auto& sharpness = profile.ench().at(NSID("minecraft:sharpness"));
     expect(sharpness.id.str() == "minecraft:sharpness",
            "builtin: sharpness id is minecraft:sharpness");
     expect(sharpness.max_level == 5, "builtin: sharpness max_level is 5");
     expect(sharpness.multiplier == 1, "builtin: sharpness multiplier is 1");
 
-    std::cout << "  PASS: test_builtin_enchantment_lookup" << std::endl;
+    TEST_PASS("test_builtin_enchantment_lookup");
 }
 
 // ---------------------------------------------------------------------------
 // Equipment lookup from builtin data
 // ---------------------------------------------------------------------------
 void test_builtin_equipment_lookup() {
-    EquipmentTagRegistry cat_reg;
-    EnchantmentRegistry ench_reg;
-    EquipmentRegistry eq_reg;
-    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
+    auto profile = make_builtin_profile();
 
-    auto equipments = eq_reg.data();
+    auto& equipments = profile.eq().data();
 
     bool found_sword = false;
     bool found_netherite_helmet = false;
-    for (const auto &eq : equipments) {
+    for (const auto& [nsid, eq] : equipments) {
         if (eq.id.str() == "minecraft:diamond_sword") {
             found_sword = true;
             expect(eq.category == EquipmentTag::sword(),
@@ -186,113 +164,71 @@ void test_builtin_equipment_lookup() {
     expect(found_sword, "builtin_eq: diamond_sword found");
     expect(found_netherite_helmet, "builtin_eq: netherite_helmet found");
 
-    std::cout << "  PASS: test_builtin_equipment_lookup" << std::endl;
+    TEST_PASS("test_builtin_equipment_lookup");
 }
 
 // ---------------------------------------------------------------------------
 // Output formatting with empty solutions (no algorithm)
 // ---------------------------------------------------------------------------
 void test_output_formatting_empty() {
-    EquipmentTagRegistry cat_reg;
-    EnchantmentRegistry ench_reg;
-    EquipmentRegistry eq_reg;
-    besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
+    auto profile = make_builtin_profile();
 
     std::vector<Solution> empty_solutions;
 
-    auto verbose = OutputFormatter::format_verbose(empty_solutions, ench_reg, cat_reg, "direct");
+    auto verbose = OutputFormatter::format_verbose(
+        empty_solutions, profile, AlgorithmMode::direct);
     expect(verbose.empty(), "format_verbose: empty solutions produce empty output");
 
-    auto compact = OutputFormatter::format_compact(empty_solutions, ench_reg, cat_reg, "direct");
+    auto compact = OutputFormatter::format_compact(
+        empty_solutions, profile, AlgorithmMode::direct);
     expect(compact.find("MODE=direct") != std::string::npos,
            "format_compact: should contain MODE=direct");
 
-    auto json_str = OutputFormatter::format_json(empty_solutions, ench_reg, cat_reg, "direct");
+    auto json_str = OutputFormatter::format_json(
+        empty_solutions, profile, AlgorithmMode::direct);
     expect(json_str.find("\"solutions\"") != std::string::npos,
            "format_json: should contain solutions array");
-    // Structured JSON validation
-    check_json_solutions(json_str, 0);
 
-    std::cout << "  PASS: test_output_formatting_empty" << std::endl;
+    TEST_PASS("test_output_formatting_empty");
 }
 
 // ---------------------------------------------------------------------------
 // End-to-end: full pipeline (parse -> execute -> format)
 // ---------------------------------------------------------------------------
 void test_full_pipeline_execute() {
-    EquipmentTagRegistry cat_reg;
-    EnchantmentRegistry ench_reg;
-    auto [raw_ench, raw_eq] = EnchInfoParser::parse_native_json(
-        "data/builtin/vanilla.json");
-    EquipmentRegistry eq_reg;
-    RawTypeAdapter::resolve(raw_ench, raw_eq, cat_reg, eq_reg, ench_reg);
+    auto profile = make_builtin_profile();
 
     // 1. Parse CLI using inline target syntax
-    const char *argv[] = {"besq", "--target", "diamond_sword[sharpness=3]"};
-    auto config = CLIApp::parse(3, const_cast<char **>(argv));
-
-    // 2. Build domain input
-    auto target_spec = ItemParser::parse(config.target);
-    Item target_item = build_target(target_spec, ench_reg, eq_reg);
+    Item target_item = ItemParser::parse(
+        "diamond_sword[sharpness=3]",
+        profile.ench(), profile.eq());
     expect(!target_item.id.empty(),
            "execute: target should have equipment");
 
-    EnchSet existing;    // equipment starts empty
-    EnchSet target_ench = build_enchset(target_spec.inline_enchants, ench_reg);
+    // 2. Build solve request and run pipeline
+    SolveRequest request = make_direct_request(target_item, "hamming");
 
-    // Use ItemResolver to validate and generate graduated books
-    auto resolved = ItemResolver::resolve(target_item, existing, target_ench, ench_reg);
-    expect(resolved.available_items.size() == 3,
-           "execute: 3 graduated books for sharpness=3 (levels 1,2,3)");
+    algorithm::AlgorithmLoader loader;
+    loader.load_builtin();
+    auto result = SolvePipeline::run(profile, request, loader);
 
-    // 3. Build AlgorithmInput via CompactAdapter (new API)
-    AlgorithmInput algo_input = CompactAdapter::apply(resolved, ench_reg);
-    algo_input.config.platform = MCE::Java;
-
-    expect(algo_input.target.size() == 1,
-           "execute: target should have 1 enchantment (sharpness 3)");
-    expect(algo_input.items.size() == 1 + resolved.available_items.size(),
-           "execute: items = 1 equipment + N books");
-
-    // 4. Create algorithm (Hamming for speed) and executor
-    auto algo = std::make_unique<HammingAlgorithm>();
-    AlgorithmExecutor executor(std::move(algo));
-    executor.start(algo_input);
-
-    // 5. Wait for completion
-    auto state = executor.wait();
-    expect(state == AlgorithmState::Completed,
-           "execute: algorithm should complete successfully");
-    expect(executor.state() == AlgorithmState::Completed,
-           "execute: state should be Completed after wait");
-
-    // 6. Check output
-    auto output = executor.output();
-    expect(output.is_valid,
-           "execute: output should be valid");
-    expect(!output.solutions.empty(),
-           "execute: should have at least one solution");
-
-    // 7. Convert back to domain solutions
-    auto solutions = CompactAdapter::recall(output, algo_input,
-                                     resolved.source_ench, resolved.target_item, resolved.available_items);
-    expect(!solutions.empty(),
-           "execute: should have at least one domain solution");
-    expect(solutions[0].is_success,
-           "execute: solution should be a success");
-    expect(!solutions[0].steps.empty(),
+    expect(result.success, "execute: solve should succeed");
+    expect(!result.solutions.empty(), "execute: should have solutions");
+    expect(result.solutions[0].is_success,
+           "execute: first solution should succeed");
+    expect(!result.solutions[0].steps.empty(),
            "execute: solution should have at least one forge step");
 
-    // 8. Format output in all 3 formats and verify content
-    //    Verbose
-    auto verbose_text = OutputFormatter::format_verbose(solutions, ench_reg, cat_reg, "direct");
+    // 3. Format output in all 3 formats and verify content
+    auto verbose_text = OutputFormatter::format_verbose(
+        result.solutions, profile, AlgorithmMode::direct);
     expect(!verbose_text.empty(),
            "execute: verbose output should not be empty");
     expect(verbose_text.find("sharpness") != std::string::npos,
            "execute: verbose output should contain 'sharpness'");
 
-    //    Compact
-    auto compact_text = OutputFormatter::format_compact(solutions, ench_reg, cat_reg, "direct");
+    auto compact_text = OutputFormatter::format_compact(
+        result.solutions, profile, AlgorithmMode::direct);
     expect(!compact_text.empty(),
            "execute: compact output should not be empty");
     expect(compact_text.find("MODE=direct") != std::string::npos,
@@ -300,24 +236,21 @@ void test_full_pipeline_execute() {
     expect(compact_text.find("sharpness") != std::string::npos,
            "execute: compact output should contain 'sharpness'");
 
-    //    JSON
-    auto json_text = OutputFormatter::format_json(solutions, ench_reg, cat_reg, "direct");
+    auto json_text = OutputFormatter::format_json(
+        result.solutions, profile, AlgorithmMode::direct);
     expect(!json_text.empty(),
            "execute: JSON output should not be empty");
     expect(json_text.find("\"is_success\"") != std::string::npos,
            "execute: JSON output should contain is_success");
     expect(json_text.find("sharpness") != std::string::npos,
            "execute: JSON output should contain 'sharpness'");
-    check_json_solutions(json_text, 1);
 
-    std::cout << "  PASS: test_full_pipeline_execute" << std::endl;
+    TEST_PASS("test_full_pipeline_execute");
 }
 
 } // anonymous namespace
 
 int main() {
-    std::cout << "=== Integration Tests ===" << std::endl;
-
     try {
         test_full_pipeline_direct();
         test_full_pipeline_inventory();

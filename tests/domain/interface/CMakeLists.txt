@@ -8,6 +8,4 @@ besq_test(test_cli_parser test_cli_parser.cpp)
 besq_test(test_cli_acceptance test_cli_acceptance.cpp)
 
 
-# API context test (needs BesqContext compiled — enabled now)
-# TODO: currently has linker errors; re-enable when API layer is complete
-# besq_test(test_besq_context test_besq_context.cpp)
+besq_test(test_besq_context test_besq_context.cpp)
