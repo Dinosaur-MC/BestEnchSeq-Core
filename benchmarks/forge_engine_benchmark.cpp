@@ -186,7 +186,7 @@ const SizeSpec SIZES[] = {
 };
 
 // Item pair type for forge operations.
-enum class ItemPair { BookBook, BookEquip, EquipEquip };
+enum class ItemPair { BookBook, EquipBook, EquipEquip };
 
 // Build target & sacrifice items for a given operation type and size.
 // `reg_n` is the total number of enchants in the registry.
@@ -199,7 +199,7 @@ struct TestPair {
 static Item make_item(ItemPair pair_type, bool is_target, int16_t dur, uint8_t ppn, EnchSet enchs) {
     if (pair_type == ItemPair::BookBook)
         return make_target(ItemType::Book, 0, 0, std::move(enchs));
-    if (pair_type == ItemPair::BookEquip)
+    if (pair_type == ItemPair::EquipBook)
         return is_target ? make_equip(dur, ppn, std::move(enchs))
                          : make_book(std::move(enchs));
     // EquipEquip
@@ -209,7 +209,7 @@ static Item make_item(ItemPair pair_type, bool is_target, int16_t dur, uint8_t p
 static std::string pair_label(ItemPair p) {
     switch (p) {
         case ItemPair::BookBook:   return "book+book";
-        case ItemPair::BookEquip:  return "book+equip";
+        case ItemPair::EquipBook:  return "equip+book";
         case ItemPair::EquipEquip: return "equip+equip";
     }
     return "?";
@@ -386,7 +386,7 @@ Config parse_cli(int argc, char* argv[]) {
             std::cout << "  --java        Java platform only\n";
             std::cout << "  --bedrock     Bedrock platform only\n";
             std::cout << "  --book-book   Book+book only\n";
-            std::cout << "  --book        Book+equip only\n";
+            std::cout << "  --book        Equip+book only\n";
             std::cout << "  --equip       Equip->equip only\n";
             std::cout << "  --help        This help\n";
             exit(0);
@@ -419,7 +419,7 @@ int main(int argc, char* argv[]) {
               << (cfg.run_java ? "Java " : "")
               << (cfg.run_bedrock ? "Bedrock " : "")
               << (cfg.run_book_book ? "book+book " : "")
-              << (cfg.run_book_eq ? "book+equip " : "")
+              << (cfg.run_book_eq ? "equip+book " : "")
               << (cfg.run_eq_eq ? "equip+equip " : "")
               << "\n";
 
@@ -434,9 +434,9 @@ int main(int argc, char* argv[]) {
     for (auto plat : {MCE::Java, MCE::Bedrock}) {
         if (plat == MCE::Java && !cfg.run_java) continue;
         if (plat == MCE::Bedrock && !cfg.run_bedrock) continue;
-        for (auto pt : {ItemPair::BookBook, ItemPair::BookEquip, ItemPair::EquipEquip}) {
+        for (auto pt : {ItemPair::BookBook, ItemPair::EquipBook, ItemPair::EquipEquip}) {
             if (pt == ItemPair::BookBook   && !cfg.run_book_book) continue;
-            if (pt == ItemPair::BookEquip  && !cfg.run_book_eq) continue;
+            if (pt == ItemPair::EquipBook  && !cfg.run_book_eq) continue;
             if (pt == ItemPair::EquipEquip && !cfg.run_eq_eq) continue;
 
             ForgeConfig fcfg;
@@ -453,7 +453,7 @@ int main(int argc, char* argv[]) {
 
     // ── Estimate baseline (single small merge) to size iterations ──────
     ForgeEngine est_engine;
-    auto est_pair = make_pair(OpType::Merge, SIZES[0], reg_n, ItemPair::BookEquip);
+    auto est_pair = make_pair(OpType::Merge, SIZES[0], reg_n, ItemPair::EquipBook);
     auto est_runner = make_forge_into_runner(est_engine, reg, est_pair.target, est_pair.sacrifice);
     auto start = Clock::now();
     int est_n = 100'000;
@@ -544,10 +544,10 @@ int main(int argc, char* argv[]) {
     }
 
     // ── Summary table ─────────────────────────────────────────────────
-    if (cfg.show_summary && perf_rows.size() == 4) {
+    if (cfg.show_summary && perf_rows.size() >= 4) {
         std::cout << "\n";
         std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
-        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  |  pure_frge (ns/op)  | Overhead vs Merge/M    |\n";
+        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  |  pure_frge (ns/op)  | Overhead vs Merge (/M) |\n";
         std::cout << "| Config                    |    S     M     L     |    S     M     L    | upgr  cnfl  mix  copy  |\n";
         std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
 
