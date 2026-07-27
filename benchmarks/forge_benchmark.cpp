@@ -191,6 +191,82 @@ static std::vector<std::string> split_profiles(const std::string& group_name) {
     return names;
 }
 
+// ─── Algorithm enchant limit matrix ───────────────────────────────────
+//
+// Each entry defines the maximum enchant count an algorithm can handle
+// Each algorithm has a row across tier levels 0..6.  For a given --tier N,
+// the algorithm runs only when ench_count ≤ row[N].  -1 = unlimited.
+// Higher tier = more permissive; lower tier = more restrictive.
+//
+//              tier→ 0   1   2   3   4   5   6   ...
+struct AlgoLimit {
+    const char* name;
+    int8_t max_ench_by_tier[9];   // -1 = unlimited
+};
+
+static constexpr AlgoLimit ALGO_LIMITS[] = {
+    // Fastest: handle any enchant count instantly
+    {"hamming",          {-1, -1, -1, -1, -1, -1, -1, -1, -1}},
+    {"difficulty_first", {-1, -1, -1, -1, -1, -1, -1, -1, -1}},
+    {"penalty_balance",  {-1, -1, -1, -1, -1, -1, -1, -1, -1}},
+    // Medium: near-optimal, moderate speed
+    {"dp_merge",         { 7,  9,  12,12, 12, 14, 16, 16, 16}},
+    // Slow: exact search, practical up to 9 enchants
+    {"astar",            { 7,  9,  9,  9, 12, 12, 14, 14, 15}},
+    {"idastar",          { 7,  9,  9,  9, 10, 10, 12, 12, 14}},
+    // Slowest: dfs caps lower by default
+    {"dfs",              { 7,  8,  8,  9,  9,  9, 10, 10, 12}},
+};
+
+static constexpr int TIER_LEVELS = 9;  // 0..8
+static constexpr int DEFAULT_TIER = 2;
+
+/// Look up an algorithm's limit entry (nullptr if unknown).
+static const AlgoLimit* find_limit(const std::string& name) {
+    for (const auto& limit : ALGO_LIMITS)
+        if (name == limit.name) return &limit;
+    return nullptr;
+}
+
+/// Get the "main" name from a chain "warmup+main".
+static std::string main_name(const std::string& algo) {
+    auto p = algo.find('+');
+    return (p != std::string::npos) ? algo.substr(p + 1) : algo;
+}
+
+/// Check whether \p algo should be skipped for test case with
+/// \p ench_count at configured \p tier.  Returns false when \p no_skip.
+static bool should_skip(const std::string& algo, int ench_count,
+                         int tier, bool no_skip) {
+    if (no_skip) return false;
+    auto* lim = find_limit(main_name(algo));
+    if (!lim) return false;
+    int8_t limit = lim->max_ench_by_tier[tier];
+    return limit >= 0 && ench_count > limit;
+}
+
+/// Print the algorithm limit matrix to stdout.
+static void print_algo_limits() {
+    std::cout << "\nAlgorithm enchant limits (--tier N selects column):\n";
+    std::cout << "  " << std::left << std::setw(20) << "Algorithm";
+    for (int t = 0; t < TIER_LEVELS; ++t)
+        std::cout << std::right << std::setw(4) << t;
+    std::cout << "\n";
+    std::cout << "  " << std::string(4 * TIER_LEVELS + 20, '-') << "\n";
+    for (const auto& limit : ALGO_LIMITS) {
+        std::cout << "  " << std::left << std::setw(20) << limit.name;
+        for (int t = 0; t < TIER_LEVELS; ++t) {
+            if (limit.max_ench_by_tier[t] < 0)
+                std::cout << std::right << std::setw(4) << "--";
+            else
+                std::cout << std::right << std::setw(4) << (int)limit.max_ench_by_tier[t];
+        }
+        std::cout << "\n";
+    }
+    std::cout << "  (default tier " << DEFAULT_TIER
+              << ".  --no-skip disables all limits.)\n";
+}
+
 // ─── Helper: comma-separated list → unordered_set ───
 static std::unordered_set<std::string> split_csv(const std::string& s) {
     std::unordered_set<std::string> out;
@@ -206,6 +282,7 @@ struct BenchConfig {
     std::unordered_set<std::string> test_names; // empty = all
     std::unordered_set<std::string> raw_algos;  // from --alg; empty = all loaded
     std::string algo_dir;                       // plugin dir, empty = none
+    int tier = DEFAULT_TIER;                    // 0..6 permissiveness level
     bool list_only = false;
     bool no_skip = false;
 };
@@ -216,13 +293,14 @@ BenchConfig parse_cli(int argc, char* argv[]) {
     auto die = [](const std::string& msg) {
         std::cerr << "Error: " << msg << "\n"
                   << "Usage: forge_benchmark [options]\n"
-                  << "  --list                List test cases & groups\n"
+                  << "  --list                List test cases, groups & algorithm limits\n"
                   << "  --test  <names>       Comma-separated test names\n"
                   << "  --group <names>       Comma-separated group names\n"
                   << "  --alg   <names>       Comma-separated algorithm names (--algo also accepted)\n"
                   << "  --algo-dir <dir>      Load algorithm plugins from directory\n"
-                  << "  --no-skip             Run all algorithms (by default astar/idastar are skipped for >8 enchants)\n"
-                  << "  --help                This help\n";
+                  << "  --tier <num>          Algorithm permissiveness level (0-" << TIER_LEVELS - 1 << ", default " << DEFAULT_TIER << ")\n"
+                  << "  --no-skip             Run all algorithms without enchant limits\n"
+                  << "  --help                This help" << std::endl;
         std::exit(1);
     };
 
@@ -258,18 +336,25 @@ BenchConfig parse_cli(int argc, char* argv[]) {
         } else if (arg == "--algo-dir") {
             if (i + 1 >= argc) die("--algo-dir requires a value");
             cfg.algo_dir = argv[++i];
+        } else if (arg == "--tier") {
+            if (i + 1 >= argc) die("--tier requires a value (0-" + std::to_string(TIER_LEVELS - 1) + ")");
+            int t = std::atoi(argv[++i]);
+            if (t < 0 || t > TIER_LEVELS - 1) die("--tier must be 0-" + std::to_string(TIER_LEVELS - 1));
+            cfg.tier = t;
         } else if (arg == "--no-skip") {
             cfg.no_skip = true;
         } else if (arg == "--help") {
             std::cout << "Usage: forge_benchmark [options]\n"
-                      << "  --list                List test cases & groups\n"
+                      << "  --list                List test cases, groups & algorithm limits\n"
                       << "  --test  <names>       Comma-separated test names\n"
                       << "  --group <names>       Comma-separated group names\n"
                       << "  --alg   <names>       Comma-separated algorithm names (--algo also accepted)\n"
                       << "  --algo-dir <dir>      Load algorithm plugins from directory\n"
-                      << "  --no-skip             Run all algorithms (by default astar/idastar are skipped for >8 enchants)\n"
-                      << "  --help                This help\n"
-                      << "\nExamples:\n"
+                      << "  --tier <num>          Algorithm permissiveness level (0-" << TIER_LEVELS - 1 << ", default " << DEFAULT_TIER << ")\n"
+                      << "  --no-skip             Run all algorithms without enchant limits\n"
+                      << "  --help                This help\n";
+            print_algo_limits();
+            std::cout << "\nExamples:\n"
                       << "  forge_benchmark --group netherite\n"
                       << "  forge_benchmark --test netherite_sword,boots_full --alg dp_merge\n"
                       << "  forge_benchmark --group armor --alg astar\n"
@@ -335,7 +420,8 @@ resolve_algos(const BenchConfig& cfg, const algorithm::AlgorithmLoader& loader) 
 
 void run_case(const TestCase& tc, const Profile& profile,
               const std::vector<std::string>& algos,
-              const algorithm::AlgorithmLoader& loader, bool no_skip) {
+              const algorithm::AlgorithmLoader& loader,
+              int tier, bool no_skip) {
     const auto& G_ENCH = profile.ench();
     const auto& G_EQ   = profile.eq();
 
@@ -452,9 +538,8 @@ void run_case(const TestCase& tc, const Profile& profile,
             std::string warmup_name = algo_name.substr(0, plus);
             std::string main_name   = algo_name.substr(plus + 1);
 
-            if (!no_skip && (main_name == "astar" || main_name == "idastar" || main_name == "dfs")
-                && tc.wanted.size() > 9) {
-                std::cout << "SKIP (too many enchants)\n";
+            if (should_skip(main_name, static_cast<int>(tc.wanted.size()), tier, no_skip)) {
+                std::cout << "SKIP (too many enchants)" << std::endl;
                 continue;
             }
             try {
@@ -465,27 +550,26 @@ void run_case(const TestCase& tc, const Profile& profile,
                                loader.create(warmup_name));
                 executor.wait();
                 if (executor.state() != algorithm::AlgorithmState::Completed) {
-                    std::cout << "no solution\n"; continue;
+                    std::cout << "no solution" << std::endl; continue;
                 }
                 algorithm::AlgorithmOutput out = executor.output();
                 if (out.solutions.empty()) {
-                    std::cout << "no solution\n"; continue;
+                    std::cout << "no solution" << std::endl; continue;
                 }
                 int32_t total = out.solutions[0].total_cost;
                 bool ok = total <= tc.max_cost;
                 std::cout << std::right << std::setw(4) << total << "L"
                           << (ok ? "  \xe2\x9c\x85" : "  \xe2\x9a\xa0")
                           << "  " << std::setw(4) << out.computation_time.count()
-                          << "ms\n";
+                          << "ms" << std::endl;
             } catch (const std::exception& e) {
-                std::cout << "ERROR: " << e.what() << '\n';
+                std::cout << "ERROR: " << e.what() << std::endl;
             }
             continue;
         }
 
-        if (!no_skip && (algo_name == "astar" || algo_name == "idastar" || algo_name == "dfs")
-            && tc.wanted.size() > 9) {
-            std::cout << "SKIP (too many enchants)\n";
+        if (should_skip(algo_name, static_cast<int>(tc.wanted.size()), tier, no_skip)) {
+            std::cout << "SKIP (too many enchants)" << std::endl;
             continue;
         }
         try {
@@ -496,20 +580,20 @@ void run_case(const TestCase& tc, const Profile& profile,
             executor.wait();
 
             if (executor.state() != algorithm::AlgorithmState::Completed) {
-                std::cout << "no solution\n"; continue;
+                std::cout << "no solution" << std::endl; continue;
             }
             algorithm::AlgorithmOutput out = executor.output();
             if (out.solutions.empty()) {
-                std::cout << "no solution\n"; continue;
+                std::cout << "no solution" << std::endl; continue;
             }
             int32_t total = out.solutions[0].total_cost;
             bool ok = total <= tc.max_cost;
             std::cout << std::right << std::setw(4) << total << "L"
                       << (ok ? "  \xe2\x9c\x85" : "  \xe2\x9a\xa0")
                       << "  " << std::setw(4) << out.computation_time.count()
-                      << "ms\n";
+                      << "ms" << std::endl;
         } catch (const std::exception& e) {
-            std::cout << "ERROR: " << e.what() << '\n';
+            std::cout << "ERROR: " << e.what() << std::endl;
         }
     }
 }
@@ -526,6 +610,7 @@ void list_cases() {
         std::cout << "\n";
     }
     std::cout << "Total: " << total << " test cases\n";
+    print_algo_limits();
 }
 
 } // anonymous namespace
@@ -636,7 +721,7 @@ int main(int argc, char* argv[]) {
         std::cout << "\n" << qc.tc->name << " (" << qc.tc->wanted.size()
                   << " enchants, max " << qc.tc->max_cost << "L):" << std::endl;
         try {
-            run_case(*qc.tc, *qc.profile, algos, loader, cfg.no_skip);
+            run_case(*qc.tc, *qc.profile, algos, loader, cfg.tier, cfg.no_skip);
         } catch (const std::exception& e) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }
