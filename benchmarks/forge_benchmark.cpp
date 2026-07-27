@@ -110,7 +110,6 @@ struct BenchConfig {
     std::unordered_set<std::string> test_names; // empty = all
     std::unordered_set<std::string> raw_algos;  // from --alg; empty = all loaded
     std::string algo_dir;                       // plugin dir, empty = none
-    std::string registry_dir;                   // custom data dir, empty = builtin
     bool list_only = false;
     bool no_skip = false;
 };
@@ -161,9 +160,6 @@ BenchConfig parse_cli(int argc, char* argv[]) {
         } else if (arg == "--algo-dir") {
             if (i + 1 >= argc) die("--algo-dir requires a value");
             cfg.algo_dir = argv[++i];
-        } else if (arg == "--registry-dir") {
-            if (i + 1 >= argc) die("--registry-dir requires a value");
-            cfg.registry_dir = argv[++i];
         } else if (arg == "--no-skip") {
             cfg.no_skip = true;
         } else if (arg == "--help") {
@@ -173,8 +169,6 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                       << "  --group <names>       Comma-separated group names\n"
                       << "  --alg   <names>       Comma-separated algorithm names (--algo also accepted)\n"
                       << "  --algo-dir <dir>      Load algorithm plugins from directory\n"
-                      << "  --registry-dir <dir>  Load enchantment/equipment data from directory\n"
-                      << "                        (default: data/builtin)\n"
                       << "  --no-skip             Run all algorithms (by default astar/idastar are skipped for >8 enchants)\n"
                       << "  --help                This help\n"
                       << "\nExamples:\n"
@@ -182,7 +176,7 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                       << "  forge_benchmark --test netherite_sword,boots_full --alg greedy,dfs\n"
                       << "  forge_benchmark --group armor --alg astar\n"
                       << "  forge_benchmark --algo-dir build/plugins --group sword\n"
-                      << "  forge_benchmark --registry-dir data/tests --group large --alg dp_merge\n";
+                      << "  forge_benchmark --group large\n";
             std::exit(0);
         } else if (arg.size() > 1 && arg[0] == '-') {
             die("unknown flag '" + arg + "'");
@@ -249,12 +243,14 @@ static EquipmentRegistry G_EQ;
 static EquipmentTagRegistry G_CAT;
 
 // ─── Setup ───
-void load_builtin_data(const std::string& data_dir = "") {
-    if (data_dir.empty()) {
-        besq::data::load_builtin_data(G_CAT, G_ENCH, G_EQ);
+// Auto-detect data/tests/vanilla.json for large test cases, fall back to builtin.
+void load_builtin_data() {
+    std::filesystem::path test_data("data/tests/vanilla.json");
+    if (std::filesystem::exists(test_data)) {
+        std::cout << "Registry: data/tests/vanilla.json (57 enchants)" << std::endl;
+        besq::data::load_builtin_data(G_CAT, G_ENCH, G_EQ, "data/tests");
     } else {
-        besq::data::load_builtin_data(G_CAT, G_ENCH, G_EQ,
-                                       std::filesystem::path(data_dir));
+        besq::data::load_builtin_data(G_CAT, G_ENCH, G_EQ);
     }
 }
 
@@ -471,10 +467,7 @@ int main(int argc, char* argv[]) {
               << std::endl;
     std::cout << "=== Dataset Benchmark ===" << std::endl;
 
-    load_builtin_data(cfg.registry_dir);
-
-    if (!cfg.registry_dir.empty())
-        std::cout << "Registry dir: " << cfg.registry_dir << std::endl;
+    load_builtin_data();
 
     // ═════════════════════════════════════════════════════════════════════
     // Load algorithms: built-in + optional plugins
