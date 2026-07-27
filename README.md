@@ -84,57 +84,156 @@ CLI → CLIApp (application runner)
 
 ### Source Layout
 
-```
-src/
-├── main.cpp                             ← Entry point (router)
-├── AppConfig.h                          ← Environment config loader
-├── BuildConfig.h.in                     ← Generated config (version, project name)
-├── builtin/                             ← Built-in data (embedded resource → DTO)
-│   ├── DataLoader.h/.cpp                ← Load built-in data from embedded JSON
-│   ├── I18nLoader.h/.cpp                ← Register built-in translations
-│   └── ItemProperties.h/.cpp            ← Vanilla item property definitions
-├── common/                              ← Shared utilities (5 independent sub-libraries)
-│   ├── CommonTypes.h/.cpp               ← NSID, MCE enum, AlgorithmMode
-│   ├── io/                              ← JSON DOM, CSV reader/writer, ByteStream
-│   ├── log/                             ← Global async Logger + log.hpp wrappers
-│   ├── i18n/                            ← Language manager, LocaleDetector
-│   ├── serialization/                   ← Serialization interfaces
-│   └── utils/
-│       ├── cli/                         ← C++20 CLIParser v2
-│       ├── queue/                       ← Lock-free queue family
-│       └── ...                           ← MemoryPool, EventLoop, HashUtils, etc.
-├── domain/
-│   ├── algorithm/                       ← Algorithm domain (compact types)
-│   │   ├── _strategies/                 ← Built-in strategies (astar, dfs, dp_merge, hamming)
-│   │   ├── plugin/                      ← AlgorithmLoader (hot-load external .so/.dll)
-│   │   ├── forge_engine/                ← IForgeEngine + ForgeEngine
-│   │   ├── diagnostics/                 ← Event-driven diagnostics pipeline
-│   │   ├── serialization/               ← Binary checkpoint
-│   │   └── ...
-│   ├── business/                        ← Business domain (domain model)
-│   │   ├── types/                       ← Domain types + DTOs
-│   │   ├── registries/                  ← EnchantmentRegistry, EquipmentRegistry, etc.
-│   │   ├── parsers/                     ← File format parsers (JSON/CSV/MC)
-│   │   ├── loaders/                     ← RegistryLoader, ProfileLoader
-│   │   ├── managers/                    ← RegistryManager, ProfileManager
-│   │   └── components/                  ← FormatDetector, Serializer, TagResolver
-│   ├── orchestration/                   ← Cross-domain glue
-│   │   ├── types/                       ← Pipeline contracts (SolveRequest, SolveResult)
-│   │   ├── pipelines/                   ← SolvePipeline, ManagePipeline, ExportPipeline
-│   │   └── components/                  ← CompactAdapter, OutputFormatter, EnchSerializer
-│   └── interface/                       ← I/O boundary
-│       ├── BesqContext.h/.cpp           ← Session facade (pImpl)
-│       ├── cli/                         ← CLIApp, EnchParser, ItemParser
-│       └── abi/                         ← C ABI
-├── data/
-│   ├── builtin/vanilla.json             ← Embedded built-in data
-│   ├── builtin/item_properties.json
-│   └── i18n/                            ← Translation tables (zh_CN, en_US)
-└── include/
-    └── besq/besq.h                       ← Public umbrella header
+```mermaid
+flowchart TB
+    %% ── Style definitions ──
+    classDef common fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px
+    classDef algo   fill:#e3f2fd,stroke:#1565c0,stroke-width:1.5px
+    classDef biz    fill:#fff3e0,stroke:#e65100,stroke-width:1.5px
+    classDef orch   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px
+    classDef iface  fill:#fce4ec,stroke:#c62828,stroke-width:1.5px
+    classDef data   fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,stroke-dasharray:4 3
+    classDef entry  fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef legend fill:#ffffff,stroke:#cccccc,stroke-width:1px
 
-tests/                                   ← Standalone test executables
-benchmarks/                              ← Performance benchmarks
+    %% ── Entry point ──
+    Entry["main.cpp / CLI"]:::entry
+    AppConfig["AppConfig.h<br/>BuildConfig.h.in"]:::data
+
+    %% ── Data sources ──
+    subgraph Data[" "]
+        Vanilla["data/builtin/*.json<br/>Vanilla + item properties"]
+        I18nData["data/i18n/*.json<br/>Translations (zh_CN, en_US)"]
+        ExtSheets["External JSON / CSV<br/>Custom registry sheets"]
+        Plugins["Plugins .so/.dll<br/>External algorithms"]
+    end
+    style Data fill:#fafafa,stroke:#bdbdbd,stroke-dasharray:6 3
+
+    %% ── Common layer ──
+    subgraph Common["common/ — Shared Libraries"]
+        direction TB
+        CT["CommonTypes.h<br/>NSID / MCE / AlgorithmMode"]
+        IO["io/<br/>JSON DOM / CsvIO / ByteStream"]
+        I18n["i18n/<br/>Language / LocaleDetector"]
+        Log["log/<br/>Async Logger"]
+        Ser["serialization/<br/>ISerializable interfaces"]
+        Utils["utils/<br/>CLIParser / Queues / MemoryPool / EventLoop"]
+    end
+    style Common fill:#f1f8e9,stroke:#558b2f
+
+    %% ── Algorithm domain ──
+    subgraph Algorithm["domain/algorithm/ — Algorithm Domain"]
+        direction TB
+        AlgoInput["AlgorithmInput / AlgorithmOutput<br/>EnchReg / compact types"]
+        Executor["AlgorithmExecutor / ExecutionContext"]
+        Strategies["_strategies/<br/>A* / DFS / DP Merge / Hamming"]
+        Forge["forge_engine/<br/>IForgeEngine / ForgeEngine"]
+        Plugin["plugin/<br/>AlgorithmLoader"]
+        Diag["diagnostics/<br/>IAlgorithmObserver"]
+        Check["serialization/<br/>Binary Checkpoint"]
+    end
+    style Algorithm fill:#e3f2fd,stroke:#1565c0
+
+    %% ── Business domain ──
+    subgraph Business["domain/business/ — Business Domain"]
+        direction TB
+        Profile["Profile<br/>EnchantmentRegistry / EquipmentRegistry<br/>EquipmentTagRegistry"]
+        Types["types/<br/>Ench / EnchInfo / Item / Solution / DTOs"]
+        Registries["registries/<br/>IRegistry / EnchantmentRegistry<br/>EquipmentRegistry / TagRegistry"]
+        Parsers["parsers/<br/>NativeJsonParser / NativeCsvParser<br/>McOfficialParser"]
+        Loaders["loaders/<br/>RegistryLoader / ProfileLoader"]
+        Managers["managers/<br/>RegistryManager / ProfileManager"]
+        Comp["components/<br/>FormatDetector / Serializer / TagResolver"]
+    end
+    style Business fill:#fff3e0,stroke:#e65100
+
+    %% ── Orchestration domain ──
+    subgraph Orchestration["domain/orchestration/ — Orchestration Domain"]
+        direction TB
+        Pipelines["pipelines/<br/>SolvePipeline / ManagePipeline / ExportPipeline"]
+        Adapter["components/<br/>CompactAdapter (apply / recall)"]
+        Formatter["components/<br/>OutputFormatter (verbose / compact / json)"]
+        EnchSer["components/<br/>EnchSerializer (JSON / CSV export)"]
+        Contracts["types/<br/>SolveRequest / SolveResult<br/>ManageRequest / ExportRequest"]
+    end
+    style Orchestration fill:#f3e5f5,stroke:#6a1b9a
+
+    %% ── Interface domain ──
+    subgraph Interface["domain/interface/ — Interface Domain"]
+        direction TB
+        Ctx["BesqContext.h/.cpp<br/>Session Facade (pImpl)"]
+        CLI["cli/<br/>CLIApp / EnchParser / ItemParser"]
+        ABI["abi/<br/>C ABI (besq.h)"]
+    end
+    style Interface fill:#fce4ec,stroke:#c62828
+
+    %% ── Tests & Benchmarks ──
+    Tests["tests/<br/>Standalone test executables"]:::data
+    Bench["benchmarks/<br/>Performance benchmarks"]:::data
+
+    %% ── Data flow arrows ──
+    Entry --> CLI
+    CLI --> Ctx
+    Ctx --> Pipelines
+    Pipelines --> Adapter
+    Adapter --> AlgoInput
+    AlgoInput --> Executor
+    Executor --> Strategies & Plugin
+    Executor --> Forge
+    Strategies --> Diag
+    AlgoInput -.-> Check
+
+    %% Business ← Data
+    ExtSheets -.-> Parsers
+    Vanilla -.-> Loaders
+    I18nData -.-> I18n
+
+    %% Orchestration ← Business
+    Adapter --> Profile
+    Pipelines -.-> Contracts
+    Pipelines --> Profile
+    Formatter --> Profile
+    EnchSer --> Profile
+    Profile --> Types & Registries
+    Loaders --> Registries
+    Managers --> Profile
+
+    %% Common → all domains
+    Algorithm -.-> Common
+    Business -.-> Common
+    Orchestration -.-> Common
+    Interface -.-> Common
+
+    %% Plugin loading
+    Plugin -.-> Plugins
+
+    %% Tests & Benchmarks
+    Tests -.-> Profiles & Pipelines
+    Bench -.-> Executor
+
+    %% ── Legend ──
+    subgraph Legend[" "]
+        L1["main.cpp / Entry"]:::entry
+        L2["Data / Config / Metadata"]:::data
+    end
+    style Legend fill:#ffffff,stroke:#cccccc,stroke-width:1px
+```
+
+Directory layout mirrors the domain structure above:
+
+```
+src/                          tests/                        benchmarks/
+├── main.cpp                   ├── common/                    └── forge_benchmark
+├── builtin/                   ├── domain/
+├── common/                    │   ├── algorithm/
+├── domain/                    │   ├── business/
+│   ├── algorithm/             │   ├── orchestration/
+│   ├── business/              │   └── interface/
+│   ├── orchestration/         └── integration/
+│   └── interface/
+├── data/
+└── include/
+    └── besq/besq.h
 ```
 
 ### Algorithm Strategies
