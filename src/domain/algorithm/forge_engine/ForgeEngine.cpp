@@ -18,9 +18,10 @@ int32_t ForgeEngine::apply_cap(int32_t raw_cost) const noexcept {
     return raw_cost > 39 ? 39 : raw_cost;
 }
 
-int32_t ForgeEngine::estimate_forge_cost(const Item &target, const Item &sacrifice,
-                                         const EnchReg &reg) const noexcept {
-    int32_t cost = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
+int32_t ForgeEngine::estimate_forge_cost(
+    const Item &target, const Item &sacrifice, const EnchReg &reg
+) const noexcept {
+    int32_t cost     = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
     bool sac_is_book = (sacrifice.type == ItemType::Book);
     for (const auto &e : sacrifice.enchs) {
         int32_t mult = sac_is_book ? reg[e.id].mul_b : reg[e.id].mul;
@@ -52,10 +53,13 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
         }
     }
 
-    auto plat = _config.platform;
+    auto plat        = _config.platform;
     bool sac_is_book = (sacrifice.type == ItemType::Book);
 
     for (const auto &se : sacrifice.enchs) {
+        if (target.type == ItemType::Equip && !reg.is_applicable(se.id))
+            continue;
+
         bool conflict = false;
         for (const auto &te : target.enchs) {
             if (reg.is_conflict(te.id, se.id)) {
@@ -103,8 +107,7 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
 
 // ─── Pure forge (cost-free, for simulate()) ──────────────────────────────────
 
-void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice,
-                                   const EnchReg &reg) const noexcept {
+void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice, const EnchReg &reg) const noexcept {
     // Repair: equip + equip
     if (target.type == ItemType::Equip && sacrifice.type == ItemType::Equip && !_config.ignore_repair_cost) {
         auto max_dur = reg.get_target_equip().max_durability;
@@ -115,6 +118,9 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice,
 
     // Enchantment merging (no cost arithmetic)
     for (const auto &se : sacrifice.enchs) {
+        if (target.type == ItemType::Equip && !reg.is_applicable(se.id))
+            continue;
+
         bool conflict = false;
         for (const auto &te : target.enchs) {
             if (reg.is_conflict(te.id, se.id)) {
@@ -122,7 +128,8 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice,
                 break;
             }
         }
-        if (conflict) continue;
+        if (conflict)
+            continue;
 
         auto it = target.enchs.find(se.id);
         if (it != target.enchs.end()) {
@@ -141,9 +148,9 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice,
 
 // ─── Forge (non-mutating) ───────────────────────────────────────────────────
 
-std::pair<Item, int32_t> ForgeEngine::forge(const Item &target, const Item &sacrifice,
-                                                     const EnchReg &reg) const {
-    Item result = target;
+std::pair<Item, int32_t>
+ForgeEngine::forge(const Item &target, const Item &sacrifice, const EnchReg &reg) const {
+    Item result  = target;
     int32_t cost = forge_into(result, sacrifice, reg);
     return {std::move(result), cost};
 }

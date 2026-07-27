@@ -15,7 +15,7 @@ namespace algorithm {
 /// a specific target equipment. Provides O(1) lookup and conflict checking.
 class EnchReg : public IBinarySerializable {
   private:
-    std::vector<EnchInfo> _ench_infos;   // compacted info, indexed by local ench id
+    std::vector<EnchInfo> _ench_infos; // compacted info, indexed by local ench id
     std::vector<NSID> _global_ids;     // local → business global ID (for round-trip)
     Equipment _target_equip;
 
@@ -28,18 +28,24 @@ class EnchReg : public IBinarySerializable {
     /// Initialize with compact enchantment info and target equipment.
     /// `global_ids` maps each local index to its original business-registry ID,
     /// enabling the reverse mapping in AlgorithmOutput → domain conversion.
-    void init(std::vector<EnchInfo> ench_infos, std::vector<NSID> global_ids,
-              const Equipment &target_equip);
+    void init(std::vector<EnchInfo> ench_infos, std::vector<NSID> global_ids, const Equipment &target_equip);
 
     [[nodiscard]] size_t size() const noexcept { return _ench_infos.size(); }
+    [[nodiscard]] bool empty() const noexcept { return _ench_infos.empty(); }
+    [[nodiscard]] const std::vector<EnchInfo> &get_ench_infos() const noexcept { return _ench_infos; }
+    [[nodiscard]] const std::vector<NSID> &get_global_ids() const noexcept { return _global_ids; }
 
-    [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }
     [[nodiscard]] const EnchInfo &get(int16_t id) const { return _ench_infos.at(id); }
     /// Bounds-unchecked access — hot-path design.
     [[nodiscard]] const EnchInfo &operator[](int16_t id) const noexcept { return _ench_infos[id]; }
+
+    [[nodiscard]] bool is_applicable(int16_t id) const noexcept {
+        return _target_equip.applicable_enchs.contains(id);
+    }
     [[nodiscard]] bool is_conflict(int16_t id1, int16_t id2) const noexcept {
         return _conflict_matrix[id1 * _ench_infos.size() + id2];
     }
+    [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }
 
     /// Convert between local (compact) and global (business) enchantment IDs.
     [[nodiscard]] NSID to_global_id(int16_t local_id) const { return _global_ids.at(local_id); }

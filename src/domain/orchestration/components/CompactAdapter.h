@@ -21,8 +21,7 @@ struct CompactAdapter {
     /// the AlgorithmInput itself.
     static std::vector<Solution> recall(
         const algorithm::AlgorithmOutput& output,
-        const algorithm::AlgorithmInput& input,
-        const NSID& target_eq_nsid = {}
+        const algorithm::AlgorithmInput& input
     );
 
     /// Business Item -> algorithm Item (uses EnchReg::to_local_id for NSID mapping).
@@ -36,7 +35,6 @@ struct CompactAdapter {
     ///                        defaults to empty NSID (unknown fallback).
     static Item to_domain(
         const algorithm::Item& item,
-        const algorithm::EnchReg& reg,
-        const NSID& target_eq_nsid = {}
+        const algorithm::EnchReg& reg
     );
 };

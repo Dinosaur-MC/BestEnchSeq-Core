@@ -41,7 +41,6 @@ struct SolvePipeline {
     );
     static SolveResult stage_recall(
         const algorithm::AlgorithmOutput& output,
-        const algorithm::AlgorithmInput& algo_input,
-        const NSID& target_eq_nsid = {}
+        const algorithm::AlgorithmInput& algo_input
     );
 };
