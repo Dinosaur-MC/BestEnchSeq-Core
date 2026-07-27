@@ -10,16 +10,6 @@ namespace algorithm {
 using namespace algorithm;
 
 // ─── Frontier::insert ──────────────────────────────────────────────────────
-//
-// Bucket by (EnchSet, PPN) equivalence class.  Items with identical enchants
-// at the same PPN are strictly interchangeable for any future forge:
-//   - Forge cost contribution of sacrifice = Σ(ench × mul_b) + 2^ppn − 1
-//     (the penalty part is identical for same PPN; the ench part is identical
-//      for same EnchSet)
-//   - All enchants transfer to the base (modulo incompatibility, which is
-//     also identical for the same EnchSet)
-//
-// Therefore only the cheapest entry per (EnchSet, PPN) pair needs to survive.
 
 void DPMergeAlgorithm::Frontier::insert(ParetoEntry entry) {
     for (auto& existing : entries) {
@@ -40,7 +30,6 @@ void DPMergeAlgorithm::Frontier::insert(ParetoEntry entry) {
 void DPMergeAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
     std::sort(items.begin(), items.end(),
         [](const Item& a, const Item& b) {
-            // Equip before Book before Material
             auto order = [](ItemType t) -> uint8_t {
                 switch (t) {
                     case ItemType::Equip:  return 0;
@@ -59,14 +48,12 @@ void DPMergeAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
 // ─── solve (recursive DP with memoization) ─────────────────────────────────
 
 DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
-    // ── Base case: single item ─────────────────────────────────────
     if (items.size() == 1) {
         Frontier f;
         f.entries.push_back(ParetoEntry{0, items[0].ppn, std::move(items[0]), {}});
         return f;
     }
 
-    // ── Base case: two items — try both forge directions ───────────
     if (items.size() == 2) {
         Frontier f;
         const Item& a = items[0];
@@ -94,19 +81,8 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
             return it->second;
     }
 
-    // ── Partition enumeration (recursive case) ──────────────────────
-    //
-    // Enumerate all 2-partitions via bitmask.  mask bit i == 1 means
-    // items[i] goes to the left group.  For each mask, recursively solve
-    // both halves and combine their Pareto frontiers via forge_into.
-    //
-    // To avoid symmetric duplicates we only keep masks with
-    // popcount ≤ n/2.  For even n and popcount == n/2 we additionally
-    // require bit 0 set (first item in left group).
-
     const size_t n = items.size();
 
-    // Safety guard — DP is impractical for n > 20
     if (n > 20) {
         _cache[std::move(items)] = Frontier{};
         return {};
@@ -115,7 +91,6 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
     Frontier result;
     const uint64_t limit = 1ULL << n;
 
-    // Reusable buffers (avoid reallocation per mask)
     std::vector<Item> left_buf, right_buf;
     left_buf.reserve(n);
     right_buf.reserve(n);
@@ -123,9 +98,7 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
     for (uint64_t mask = 1; mask + 1 < limit; ++mask) {
         size_t k = __builtin_popcountll(mask);
 
-        // Symmetry reduction: only keep masks with popcount ≤ n/2
         if (k * 2 > n) continue;
-        // For even n and k == n/2: enforce first item in left group
         if ((n & 1) == 0 && k * 2 == n && !(mask & 1)) continue;
 
         left_buf.clear();
@@ -138,7 +111,6 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
                 right_buf.push_back(items[i]);
         }
 
-        // Canonicalise before recursive calls (cache key requirement)
         canonicalize(left_buf);
         canonicalize(right_buf);
 
@@ -148,10 +120,8 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
         if (left_f.empty() || right_f.empty())
             continue;
 
-        // ── Combine sub-results via Cartesian product ────────────
         for (const auto& entry_a : left_f.entries) {
             for (const auto& entry_b : right_f.entries) {
-                // a → b
                 if (_forge_engine.is_forgeable(entry_a.item, entry_b.item)) {
                     auto [new_item, cost] = _forge_engine.forge(
                         entry_a.item, entry_b.item, *_ench_reg);
@@ -171,7 +141,6 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
                                               std::move(steps)});
                 }
 
-                // b → a
                 if (_forge_engine.is_forgeable(entry_b.item, entry_a.item)) {
                     auto [new_item, cost] = _forge_engine.forge(
                         entry_b.item, entry_a.item, *_ench_reg);
@@ -194,8 +163,9 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
         }
     }
 
-    // ── Store in cache ──────────────────────────────────────────────
-    _cache[std::move(items)] = result;
+    // ── Store in cache (limit size to prevent heap exhaustion) ─────
+    if (_cache.size() < MAX_CACHE_ENTRIES)
+        _cache[std::move(items)] = result;
     return result;
 }
 
@@ -209,14 +179,16 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
 
+    // Reset pool and clear cache before each run.
+    _pool.release();
     _cache.clear();
+
     _diag = AlgorithmDiagnostics{};
 
     ctx.report_progress(0, ProgressStatus::Starting);
 
     const auto& items = input.items;
 
-    // ── Guard: empty input ───────────────────────────────────────────
     if (items.empty()) {
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         _diag.status = "CompleteNoSolution";
@@ -224,7 +196,6 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
         return;
     }
 
-    // ── Guard: target already met ────────────────────────────────────
     if (meets_target(items[0], _target)) {
         ctx.report_solution({});
         ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
@@ -233,7 +204,6 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
         return;
     }
 
-    // ── Guard: no books to work with ────────────────────────────────
     if (items.size() <= 1) {
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         _diag.status = "CompleteNoSolution";
@@ -241,13 +211,11 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
         return;
     }
 
-    // ── Run DP ───────────────────────────────────────────────────────
     std::vector<Item> mutable_items = items;
     canonicalize(mutable_items);
 
     Frontier frontier = solve(std::move(mutable_items));
 
-    // ── Find cheapest entry that meets target ────────────────────────
     const ParetoEntry* best = nullptr;
     for (const auto& entry : frontier.entries) {
         if (entry.item.type == ItemType::Equip &&
@@ -262,7 +230,6 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
         _diag.solution_cost = best->cost;
         _diag.status        = "Complete";
         ctx.set_exit_diagnostics(_diag);
-
         ctx.report_solution(best->steps);
         ctx.report_progress(100, ProgressStatus::Complete);
     } else {
@@ -270,6 +237,10 @@ void DPMergeAlgorithm::execute(const AlgorithmInput& input,
         ctx.set_exit_diagnostics(_diag);
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
     }
+
+    // Cleanup: release pool + clear cache (map nodes use pool → no-op free).
+    _pool.release();
+    _cache.clear();
 }
 
 } // namespace algorithm
