@@ -312,3 +312,4 @@ res/*
 !res/README.md
 logs/
 *.local.*
+tmp*
