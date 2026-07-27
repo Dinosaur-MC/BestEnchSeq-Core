@@ -212,24 +212,6 @@ void test_penalty_cost() {
     std::cout << "PASS: test_penalty_cost" << std::endl;
 }
 
-void test_apply_cap() {
-    algorithm::ForgeEngine engine;
-    expect(engine.apply_cap(0) == 0, "apply_cap(0) should be 0");
-    expect(engine.apply_cap(20) == 20, "apply_cap(20) should be 20");
-    expect(engine.apply_cap(39) == 39, "apply_cap(39) should be 39");
-    expect(engine.apply_cap(40) == 39, "apply_cap(40) should be 39");
-    expect(engine.apply_cap(100) == 39, "apply_cap(100) should be 39");
-    algorithm::ForgeConfig no_cap_cfg;
-    no_cap_cfg.ignore_penalty_cost = false;
-    no_cap_cfg.ignore_repair_cost  = false;
-    no_cap_cfg.ignore_cost_cap     = true;
-    no_cap_cfg.platform            = MCE::Java;
-    algorithm::ForgeEngine no_cap{no_cap_cfg};
-    expect(no_cap.apply_cap(100) == 100, "apply_cap(100)+ignore should be 100");
-    expect(no_cap.apply_cap(40) == 40, "apply_cap(40)+ignore should be 40");
-    std::cout << "PASS: test_apply_cap" << std::endl;
-}
-
 void test_estimate_forge_cost() {
     TestFixture fx;
     algorithm::ForgeEngine engine;
@@ -347,49 +329,6 @@ void test_different_level_max() {
     std::cout << "PASS: test_different_level_max" << std::endl;
 }
 
-void test_cap_behavior() {
-    TestFixture fx;
-    TestFixture fx2;
-    algorithm::ForgeEngine capped_engine;
-    algorithm::ForgeConfig uncapped_cfg;
-    uncapped_cfg.ignore_penalty_cost = false;
-    uncapped_cfg.ignore_repair_cost  = false;
-    uncapped_cfg.ignore_cost_cap     = true;
-    uncapped_cfg.platform            = MCE::Java;
-    algorithm::ForgeEngine uncapped_engine{uncapped_cfg};
-
-    algorithm::Item equip{algorithm::ItemType::Equip, 1561, 4, {}};
-    algorithm::Item book{algorithm::ItemType::Book, 0, 4, {}};
-    book.enchs.insert({fx.id("sharpness"), 5});
-    book.enchs.insert({fx.id("knockback"), 2});
-
-    auto eq1            = equip;
-    auto bk1            = book;
-    int32_t capped_cost = capped_engine.forge_into(eq1, bk1, fx.reg);
-    expect(capped_cost == 37, "capped cost should be 37");
-
-    auto eq2              = equip;
-    auto bk2              = book;
-    int32_t uncapped_cost = uncapped_engine.forge_into(eq2, bk2, fx2.reg);
-    expect(uncapped_cost == 37, "uncapped cost should also be 37");
-
-    algorithm::Item equip_high{algorithm::ItemType::Equip, 1561, 5, {}};
-    algorithm::Item book_high{algorithm::ItemType::Book, 0, 5, {}};
-    book_high.enchs.insert({fx.id("sharpness"), 5});
-
-    auto eq3            = equip_high;
-    auto bk3            = book_high;
-    int32_t capped_high = capped_engine.forge_into(eq3, bk3, fx.reg);
-    expect(capped_high == 39, "capped high cost should be 39");
-
-    TestFixture fx3;
-    auto eq4              = equip_high;
-    auto bk4              = book_high;
-    int32_t uncapped_high = uncapped_engine.forge_into(eq4, bk4, fx3.reg);
-    expect(uncapped_high == 67, "uncapped high cost should be 67");
-    std::cout << "PASS: test_cap_behavior" << std::endl;
-}
-
 // ─── Malformed item / error path tests ─────────────────────────────
 
 void test_negative_enchant_level() {
@@ -423,7 +362,6 @@ void test_zero_level_enchant() {
 int main() {
     try {
         test_penalty_cost();
-        test_apply_cap();
         test_forge_not_forgeable();
         test_forge_books();
         test_forge_equipment_with_book();
@@ -434,7 +372,6 @@ int main() {
         test_ppn_recalculation();
         test_same_level_upgrade();
         test_different_level_max();
-        test_cap_behavior();
         test_negative_enchant_level();
         test_zero_level_enchant();
     } catch (const test_error &e) {

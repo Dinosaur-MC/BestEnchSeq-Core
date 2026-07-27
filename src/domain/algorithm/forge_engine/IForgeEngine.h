@@ -40,7 +40,6 @@ class IForgeEngine {
             return INT32_MAX;
         return (1 << ppn) - 1;
     }
-    virtual int32_t apply_cap(int32_t raw_cost) const noexcept { return raw_cost > 39 ? 39 : raw_cost; }
     /// Quick cost estimate for pair ordering and pre-pruning only.
     /// Does NOT apply cost cap (39 max) — intentional: overestimate is safe
     /// for ordering heuristics and upper-bound pruning.  Do not use as an

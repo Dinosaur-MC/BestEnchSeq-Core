@@ -12,12 +12,6 @@ int32_t ForgeEngine::penalty_cost(int8_t ppn) const noexcept {
     return (1 << ppn) - 1;
 }
 
-int32_t ForgeEngine::apply_cap(int32_t raw_cost) const noexcept {
-    if (_config.ignore_cost_cap)
-        return raw_cost;
-    return raw_cost > 39 ? 39 : raw_cost;
-}
-
 int32_t ForgeEngine::estimate_forge_cost(
     const Item &target, const Item &sacrifice, const EnchReg &reg
 ) const noexcept {
@@ -81,9 +75,9 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
             int16_t old_level = it->level;
             int16_t new_level;
             if (old_level == se.level)
-                new_level = static_cast<int16_t>(std::min<int32_t>(old_level + 1, reg[se.id].max_lvl));
+                new_level = std::min<int16_t>(old_level + 1, reg[se.id].max_lvl);
             else
-                new_level = static_cast<int16_t>(std::max<int32_t>(old_level, se.level));
+                new_level = std::max<int16_t>(old_level, se.level);
 
             it->level = new_level;
 
@@ -102,7 +96,7 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
 
     target.ppn = static_cast<uint8_t>(1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
 
-    return apply_cap(cost);
+    return cost;
 }
 
 // ─── Pure forge (cost-free, for simulate()) ──────────────────────────────────
@@ -134,9 +128,9 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice, const Enc
         auto it = target.enchs.find(se.id);
         if (it != target.enchs.end()) {
             if (it->level == se.level)
-                it->level = static_cast<int16_t>(std::min<int32_t>(it->level + 1, reg[se.id].max_lvl));
+                it->level = std::min<int16_t>(it->level + 1, reg[se.id].max_lvl);
             else
-                it->level = static_cast<int16_t>(std::max<int32_t>(it->level, se.level));
+                it->level = std::max<int16_t>(it->level, se.level);
         } else {
             target.enchs.insert(se);
         }

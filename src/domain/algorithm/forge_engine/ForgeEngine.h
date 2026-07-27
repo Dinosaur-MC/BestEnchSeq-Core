@@ -55,7 +55,6 @@ public:
     // ── IForgeEngine sub-operations ───────────────────────────────────────────
 
     int32_t penalty_cost(int8_t ppn) const noexcept override;
-    int32_t apply_cap(int32_t raw_cost) const noexcept override;
 
     int32_t estimate_forge_cost(const Item& target,
                                  const Item& sacrifice,
