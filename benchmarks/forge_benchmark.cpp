@@ -630,6 +630,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Sort queue by enchantment count (ascending)
+    std::sort(queue.begin(), queue.end(),
+        [](const QueuedCase& a, const QueuedCase& b) {
+            return a.tc->wanted.size() < b.tc->wanted.size();
+        });
+
     if (queue.empty()) {
         std::cerr << "No matching test cases. Use --list to see available tests."
                   << std::endl;
