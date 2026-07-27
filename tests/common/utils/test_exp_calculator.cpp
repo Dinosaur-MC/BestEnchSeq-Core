@@ -18,15 +18,14 @@ void test_level_to_exp() {
 }
 
 void test_peak_analysis() {
-    std::vector<EnchSolution::EnchStep> steps;
+    std::vector<Solution::EnchStep> steps;
     // Empty
     expect(ExpCalculator::peak_level_cost(steps.begin(), steps.end()) == 0, "empty → peak 0");
 
     // Add some steps
-    // exp_cost should match level_to_exp(exp_level_cost) for consistency
-    EnchSolution::EnchStep s1{{}, {}, 4, ExpCalculator::level_to_exp(4)};
-    EnchSolution::EnchStep s2{{}, {}, 10, ExpCalculator::level_to_exp(10)};
-    EnchSolution::EnchStep s3{{}, {}, 7, ExpCalculator::level_to_exp(7)};
+    Solution::EnchStep s1{{}, {}, 4, ExpCalculator::level_to_exp(4)};
+    Solution::EnchStep s2{{}, {}, 10, ExpCalculator::level_to_exp(10)};
+    Solution::EnchStep s3{{}, {}, 7, ExpCalculator::level_to_exp(7)};
     steps.push_back(s1);
     steps.push_back(s2);
     steps.push_back(s3);

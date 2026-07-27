@@ -61,6 +61,13 @@ target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_env_util COMMAND test_env_util)
 set_tests_properties(test_env_util PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# ExpCalculator (needs business types -> besq-core link)
+add_executable(test_exp_calculator utils/test_exp_calculator.cpp)
+target_include_directories(test_exp_calculator PRIVATE ${TEST_INCLUDE} ${PROJECT_ROOT}/include)
+target_link_libraries(test_exp_calculator PRIVATE besq-core)
+add_test(NAME test_exp_calculator COMMAND test_exp_calculator)
+set_tests_properties(test_exp_calculator PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
 add_executable(test_app_config config/test_app_config.cpp)
 target_include_directories(test_app_config PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_app_config COMMAND test_app_config)
