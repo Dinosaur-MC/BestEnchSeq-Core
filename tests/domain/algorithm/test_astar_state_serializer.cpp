@@ -56,8 +56,6 @@ void test_astar_state_bad_tag() {
     auto buf = std::move(w).take();
 
     AlgorithmInput out;
-    // The deserialize doesn't check algorithm_tag (it's metadata only),
-    // so it will succeed since the structure is valid.
     bool ok = ser.deserialize(algo, out, std::span<const uint8_t>(buf.data(), buf.size()));
     expect(ok, "wrong algorithm tag with empty sections should still succeed (tag is metadata)");
     TEST_PASS("test_astar_state_bad_tag");

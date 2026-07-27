@@ -2,14 +2,12 @@
 #include "framework/test_fixture.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
 #include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
 #include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
-#include "domain/orchestration/components/CompactAdapter.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include <algorithm>
 #include <memory>
@@ -62,8 +60,7 @@ struct TestContext {
     explicit TestContext(const std::vector<algorithm::Item>& extra_items,
                         const std::vector<algorithm::Ench>& wanted) {
         algorithm::Equipment eq;
-        eq.id = 0;
-        eq.category_id = 1;
+        eq.id             = "test";
         eq.max_durability = 1561;
 
         // Build compact EnchReg from domain enchantment registry
@@ -104,6 +101,11 @@ struct TestContext {
             }
 
             compact_infos.push_back(std::move(ai));
+        }
+        // Populate applicable_enchs on the target equipment before init.
+        for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
+            if (sorted_enchs[i].second.applicable_equipments.count(EquipmentTag::sword()) > 0)
+                eq.applicable_enchs.insert(static_cast<int16_t>(i));
         }
         ench_reg.init(std::move(compact_infos), std::move(global_ids), eq);
 

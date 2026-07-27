@@ -306,9 +306,10 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
         }
 
         algorithm::Equipment algo_equip;
-        algo_equip.id             = 0;
-        algo_equip.category_id    = 0;
+        algo_equip.id             = NSID("builtin_benchmark_equip");
         algo_equip.max_durability = eq.max_durability;
+        for (int16_t i = 0; i < static_cast<int16_t>(algo_infos.size()); ++i)
+            algo_equip.applicable_enchs.insert(i);
 
         ench_reg.init(std::move(algo_infos), std::move(global_ids), algo_equip);
     }

@@ -3,7 +3,6 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
-#include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include <algorithm>
 #include <stdexcept>
@@ -46,8 +45,7 @@ struct TestFixture {
         });
 
         algorithm::Equipment target_equip;
-        target_equip.id = 0;
-        target_equip.category_id = 0;
+        target_equip.id = "test";
         target_equip.max_durability = 1561;
         // Sort by NSID for deterministic local ID assignment
         std::vector<std::pair<std::string, EnchInfo>> sorted_enchs;
@@ -108,8 +106,8 @@ void test_basic_init_and_size() {
     TestFixture fx;
 
     expect(fx.reg.size() == 4, "size: should have 4 enchantments");
-    expect(fx.reg.get_target_equip().id == 0,
-           "target: should be equipment id 0");
+    expect(fx.reg.get_target_equip().id == NSID("test"),
+           "target: should be equipment id test");
 
     std::cout << "PASS: test_basic_init_and_size" << std::endl;
 }

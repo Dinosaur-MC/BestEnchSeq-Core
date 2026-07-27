@@ -35,6 +35,9 @@ class NSID {
     NSID() = default;
     NSID(const std::string_view &ns, const std::string_view &id);
     NSID(const std::string_view &strid);
+    explicit NSID(const char *strid) : NSID(std::string_view(strid)) {}
+    template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    NSID(T) = delete;
 
     bool empty() const noexcept { return _ns.empty() && _id.empty(); }
     bool operator==(const NSID &o) const noexcept {
@@ -47,6 +50,8 @@ class NSID {
     std::string str() const;
 
     NSID &operator=(const std::string_view &strid);
+    template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+    NSID &operator=(T) = delete;
     auto operator<=>(const NSID &other) const { return str() <=> other.str(); }
 };
 

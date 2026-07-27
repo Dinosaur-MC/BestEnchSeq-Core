@@ -42,15 +42,27 @@ void EnchReg::serialize(ByteStreamWriter &w) const noexcept {
         w << nsid.str();
 }
 void EnchReg::deserialize(ByteStreamReader &r) noexcept {
-    r >> _ench_infos >> _target_equip;
-    // Deserialize _global_ids manually
+    r >> _ench_infos;
+    // Manual Equipment deserialize — NSID("") would throw, so use default ctor
+    // when the id string is empty.
+    {
+        std::string id_str;
+        std::vector<int16_t> enchs_vec;
+        int32_t dur = 0;
+        r >> id_str >> dur >> enchs_vec;
+        _target_equip.id             = id_str.empty() ? NSID() : NSID(id_str);
+        _target_equip.max_durability = dur;
+        _target_equip.applicable_enchs = std::unordered_set<int16_t>(
+            enchs_vec.begin(), enchs_vec.end());
+    }
+    // Deserialize _global_ids manually — same NSID("") guard.
     size_t n = 0;
     r >> n;
     _global_ids.resize(n);
     for (size_t i = 0; i < n; ++i) {
         std::string s;
         r >> s;
-        _global_ids[i] = NSID(s);
+        _global_ids[i] = s.empty() ? NSID() : NSID(s);
     }
     _build_conflict_matrix();
 }
