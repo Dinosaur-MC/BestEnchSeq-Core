@@ -3,94 +3,187 @@
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/orchestration/components/CompactAdapter.h"
-#include "builtin/DataLoader.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
-#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Enchantment.h"
+#include "common/io/json.h"
 
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace {
 
-// ─── Inline dataset ───
+// ─── Data structures (dynamically loaded from disk) ─────────────────────
+
 struct TestCase {
     std::string name;
     std::string item_type;
     std::vector<std::string> wanted;
-    int max_cost;   // upper bound reference (Minecraft anvil cap: 39)
+    int max_cost;
 };
 
-TestCase CASES[] = {
-    // Swords
-    {"sword_basic", "diamond_sword",
-     {"sharpness=5", "looting=3", "unbreaking=3"}, 30},
-    {"sword_combat_5", "diamond_sword",
-     {"sharpness=5", "looting=3", "fire_aspect=2", "knockback=2", "unbreaking=3"}, 40},
-    {"sword_combat_7", "diamond_sword",
-     {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1"}, 56},
-    // Tools
-    {"pickaxe_fortune", "diamond_pickaxe",
-     {"efficiency=5", "fortune=3", "unbreaking=3", "mending=1"}, 36},
-    {"pickaxe_silk", "diamond_pickaxe",
-     {"efficiency=5", "silk_touch=1", "unbreaking=3", "mending=1"}, 36},
-    // Ranged
-    {"bow_power", "bow",
-     {"power=5", "infinity=1", "flame=1", "punch=2", "unbreaking=3"}, 40},
-    {"crossbow", "crossbow",
-     {"quick_charge=3", "piercing=4", "unbreaking=3", "mending=1"}, 30},
-    // Armor
-    {"helmet", "diamond_helmet",
-     {"protection=4", "aqua_affinity=1", "respiration=3", "mending=1", "unbreaking=3"}, 36},
-    {"chestplate", "diamond_chestplate",
-     {"protection=4", "thorns=3", "unbreaking=3", "mending=1"}, 40},
-    {"leggings", "diamond_leggings",
-     {"protection=4", "swift_sneak=3", "unbreaking=3", "mending=1"}, 40},
-    {"boots", "diamond_boots",
-     {"protection=4", "feather_falling=4", "depth_strider=3", "unbreaking=3", "mending=1"}, 40},
-    {"boots_full", "diamond_boots",
-     {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
-      "thorns=3", "unbreaking=3", "mending=1"}, 72},
-    // Netherite
-    {"netherite_sword", "netherite_sword",
-     {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"}, 100},
-    {"netherite_boots", "netherite_boots",
-     {"protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
-      "thorns=3", "unbreaking=3", "mending=1",
-      "vanishing_curse=1", "binding_curse=1"}, 150},
-    // Large-scale (modded data via --registry-dir)
-    {"sword_12", "netherite_sword",
-     {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1",
-      "leeching=2", "brutality=3", "dexterity=3", "gnashing=3"}, 120},
-    {"sword_16", "netherite_sword",
-     {"sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
-      "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1",
-      "leeching=2", "brutality=3", "dexterity=3", "gnashing=3",
-      "shattering=2", "subjugation=3", "thunderbolting=1", "swift_slash=3"}, 180},
+struct TestGroup {
+    std::string name;
+    std::vector<TestCase> cases;
 };
 
-// ─── Groups ───
-struct GroupMap { const char* name; std::initializer_list<const char*> members; };
-const GroupMap GROUPS[] = {
-    {"sword",     {"sword_basic", "sword_combat_5", "sword_combat_7"}},
-    {"tool",      {"pickaxe_fortune", "pickaxe_silk"}},
-    {"ranged",    {"bow_power", "crossbow"}},
-    {"armor",     {"helmet", "chestplate", "leggings", "boots", "boots_full"}},
-    {"netherite", {"netherite_sword", "netherite_boots"}},
-    {"large",     {"sword_12", "sword_16"}},
-};
+// ─── Global state (loaded once at startup) ─────────────────────────────
+
+static std::unordered_map<std::string, Profile> g_profiles;
+static std::vector<TestGroup> g_groups;
+
+// ─── Profile loading ──────────────────────────────────────────────────
+
+void load_profiles(const std::filesystem::path& dir) {
+    ProfileLoader loader;
+
+    if (std::filesystem::is_directory(dir)) {
+        for (auto& entry : std::filesystem::directory_iterator(dir)) {
+            if (entry.path().extension() != ".json") continue;
+            try {
+                Profile p = loader.load(entry.path());
+                // Use local ID (without "minecraft:" prefix) as lookup key
+                std::string name = p.name().get_id();
+                if (name.empty()) name = entry.path().stem().string();
+                g_profiles[name] = std::move(p);
+                std::cout << "  Profile: " << name << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "  WARN: failed to load profile '"
+                          << entry.path().filename() << "': " << e.what() << std::endl;
+            }
+        }
+    }
+
+    // Fallback: builtin data if no profiles loaded
+    if (g_profiles.empty()) {
+        std::cout << "  Profile: (builtin)" << std::endl;
+        Profile p = loader.load_builtin();
+        g_profiles[p.name().str()] = std::move(p);
+    }
+}
+
+// ─── Profile merging ──────────────────────────────────────────────────
+
+/// Merge multiple profiles into one.  The first profile is the base;
+/// subsequent profiles are merged into it via ProfileManager::merge().
+Profile merge_profiles(const std::vector<std::string>& names) {
+    if (names.empty())
+        return {};
+
+    // Clone first profile as the base.
+    auto base_it = g_profiles.find(names[0]);
+    if (base_it == g_profiles.end())
+        return {};
+    Profile merged = base_it->second.clone(NSID("__merged__"));
+
+    // Merge subsequent profiles directly via Profile mutation methods.
+    for (size_t i = 1; i < names.size(); ++i) {
+        auto it = g_profiles.find(names[i]);
+        if (it == g_profiles.end()) {
+            std::cerr << "  WARN: profile '" << names[i] << "' not found, skipping\n";
+            continue;
+        }
+        const auto& src = it->second;
+
+        for (const auto& [nsid, ench] : src.ench().data()) {
+            if (merged.ench().contains(nsid))
+                merged.update_enchantment(ench);
+            else
+                merged.add_enchantment(ench);
+        }
+        for (const auto& [id, eq] : src.eq().data()) {
+            if (!merged.eq().contains(id))
+                merged.add_equipment(eq);
+        }
+        for (const auto& [nsid, tag] : src.tags().data()) {
+            if (!merged.tags().contains(nsid))
+                merged.add_tag(tag);
+        }
+    }
+
+    return merged;
+}
+
+// ─── Test case loading ────────────────────────────────────────────────
+
+void load_testcases(const std::filesystem::path& dir) {
+    if (!std::filesystem::is_directory(dir)) {
+        std::cerr << "  WARN: testcases directory '" << dir << "' not found\n";
+        return;
+    }
+
+    for (auto& entry : std::filesystem::directory_iterator(dir)) {
+        if (entry.path().extension() != ".json") continue;
+
+        try {
+            std::ifstream ifs(entry.path());
+            Json json = Json::parse(ifs);
+
+            // Resolve profile(s) — either single "profile" or "profiles" array
+            std::vector<std::string> profile_names;
+            if (json.has("profiles") && json["profiles"].type() == JsonType::Array) {
+                for (auto& jp : json["profiles"].as_array())
+                    profile_names.push_back(jp.as_string());
+            } else if (json.has("profile")) {
+                profile_names.push_back(json["profile"].as_string());
+            } else {
+                profile_names.push_back("vanilla");  // sensible default
+            }
+
+            for (auto& jgroup : json["groups"].as_array()) {
+                TestGroup group;
+                group.name = jgroup["group"].as_string();
+                group.cases.reserve(jgroup["cases"].as_array().size());
+
+                for (auto& jcase : jgroup["cases"].as_array()) {
+                    TestCase tc;
+                    tc.name      = jcase["name"].as_string();
+                    tc.item_type = jcase["item_type"].as_string();
+                    tc.max_cost  = static_cast<int>(jcase["max_cost"].as_int());
+                    for (auto& w : jcase["wanted"].as_array())
+                        tc.wanted.push_back(w.as_string());
+                    group.cases.push_back(std::move(tc));
+                }
+
+                // Stash profile names on the group metadata for run_case
+                // by appending them into the group name for now.
+                group.name += "|";
+                for (size_t i = 0; i < profile_names.size(); ++i) {
+                    if (i > 0) group.name += "+";
+                    group.name += profile_names[i];
+                }
+
+                g_groups.push_back(std::move(group));
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "  WARN: failed to load testcases from '"
+                      << entry.path().filename() << "': " << e.what() << std::endl;
+        }
+    }
+}
+
+// ─── Parse profile names from group (stored after '|') ────────────────
+
+static std::vector<std::string> split_profiles(const std::string& group_name) {
+    auto p = group_name.find('|');
+    if (p == std::string::npos)
+        return {"vanilla"};
+    std::string rest = group_name.substr(p + 1);
+    std::vector<std::string> names;
+    std::istringstream ss(rest);
+    for (std::string tok; std::getline(ss, tok, '+');)
+        if (!tok.empty()) names.push_back(tok);
+    return names;
+}
 
 // ─── Helper: comma-separated list → unordered_set ───
 static std::unordered_set<std::string> split_csv(const std::string& s) {
@@ -101,11 +194,8 @@ static std::unordered_set<std::string> split_csv(const std::string& s) {
     return out;
 }
 
-// ─── CLI flag parsing ───
-//
-// Algorithm validation is deferred: --alg values are stored raw and later
-// intersected with what the AlgorithmLoader actually has (after --algo-dir
-// plugins are loaded and built-in strategies are registered).
+// ─── CLI flag parsing ──────────────────────────────────────────────────
+
 struct BenchConfig {
     std::unordered_set<std::string> test_names; // empty = all
     std::unordered_set<std::string> raw_algos;  // from --alg; empty = all loaded
@@ -143,10 +233,12 @@ BenchConfig parse_cli(int argc, char* argv[]) {
             cfg.test_names.clear();
             for (const auto& tok : split_csv(argv[++i])) {
                 bool found = false;
-                for (const auto& g : GROUPS) {
-                    if (tok == g.name) {
-                        for (auto* m : g.members)
-                            cfg.test_names.insert(m);
+                for (const auto& g : g_groups) {
+                    // Compare just the display name (before '|')
+                    auto display = g.name.substr(0, g.name.find('|'));
+                    if (tok == display) {
+                        for (const auto& tc : g.cases)
+                            cfg.test_names.insert(tc.name);
                         found = true;
                         break;
                     }
@@ -173,7 +265,7 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                       << "  --help                This help\n"
                       << "\nExamples:\n"
                       << "  forge_benchmark --group netherite\n"
-                      << "  forge_benchmark --test netherite_sword,boots_full --alg greedy,dfs\n"
+                      << "  forge_benchmark --test netherite_sword,boots_full --alg dp_merge\n"
                       << "  forge_benchmark --group armor --alg astar\n"
                       << "  forge_benchmark --algo-dir build/plugins --group sword\n"
                       << "  forge_benchmark --group large\n";
@@ -186,8 +278,9 @@ BenchConfig parse_cli(int argc, char* argv[]) {
     // Validate: --test names must exist
     if (!cfg.test_names.empty()) {
         std::unordered_set<std::string> valid_tests;
-        for (const auto& tc : CASES)
-            valid_tests.insert(tc.name);
+        for (const auto& g : g_groups)
+            for (const auto& tc : g.cases)
+                valid_tests.insert(tc.name);
         for (const auto& t : cfg.test_names)
             if (!valid_tests.contains(t))
                 die("unknown test '" + t + "'");
@@ -196,25 +289,20 @@ BenchConfig parse_cli(int argc, char* argv[]) {
     return cfg;
 }
 
-// ─── Resolve algorithm list after loader is ready ───
-//
-// Returns sorted unique names (including chain "warmup+main" entries).
-// When --alg was given, warns about any requested algorithm that isn't loaded
-// and silently excludes it.
+// ─── Resolve algorithm list after loader is ready ─────────────────────
+
 static std::vector<std::string>
 resolve_algos(const BenchConfig& cfg, const algorithm::AlgorithmLoader& loader) {
     std::vector<std::string> all = loader.list();
     std::sort(all.begin(), all.end());
 
     if (cfg.raw_algos.empty())
-        return all;  // every loaded algorithm
+        return all;
 
-    // Filter to only those the user asked for
     std::vector<std::string> filtered;
     for (const auto& name : cfg.raw_algos) {
         auto plus = name.find('+');
         if (plus != std::string::npos) {
-            // Chain syntax: warmup+main
             std::string w = name.substr(0, plus);
             std::string m = name.substr(plus + 1);
             if (!loader.contains(w) || !loader.contains(m)) {
@@ -237,26 +325,14 @@ resolve_algos(const BenchConfig& cfg, const algorithm::AlgorithmLoader& loader) 
     return filtered;
 }
 
-// ─── Global registries (initialised once at startup) ──
-static EnchantmentRegistry G_ENCH;
-static EquipmentRegistry G_EQ;
-static EquipmentTagRegistry G_CAT;
+// ─── Run a single test case against every <algos> entry ───────────────
 
-// ─── Setup ───
-// Auto-detect data/tests/vanilla.json for large test cases, fall back to builtin.
-void load_builtin_data() {
-    std::filesystem::path test_data("data/tests/vanilla.json");
-    if (std::filesystem::exists(test_data)) {
-        std::cout << "Registry: data/tests/vanilla.json (57 enchants)" << std::endl;
-        besq::data::load_builtin_data(G_CAT, G_ENCH, G_EQ, "data/tests");
-    } else {
-        besq::data::load_builtin_data(G_CAT, G_ENCH, G_EQ);
-    }
-}
-
-// ─── Run a single test case against every <algos> entry ───
-void run_case(const TestCase& tc, const std::vector<std::string>& algos,
+void run_case(const TestCase& tc, const Profile& profile,
+              const std::vector<std::string>& algos,
               const algorithm::AlgorithmLoader& loader, bool no_skip) {
+    const auto& G_ENCH = profile.ench();
+    const auto& G_EQ   = profile.eq();
+
     auto eq_it = G_EQ.find(NSID(tc.item_type));
     if (eq_it == G_EQ.end()) {
         std::cout << "  [SKIP] unknown equipment '" << tc.item_type << "'\n";
@@ -285,7 +361,6 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
     // ── Build compact EnchReg for this equipment ───────────────────────
     algorithm::EnchReg ench_reg;
     {
-        // Build sorted applicable EnchInfos + NSID mapping
         const auto& all_infos = G_ENCH.data();
         std::vector<std::pair<NSID, EnchInfo>> sorted(all_infos.begin(), all_infos.end());
         std::sort(sorted.begin(), sorted.end(),
@@ -338,7 +413,6 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
     algo_input.f_config.platform = MCE::Java;
     algo_input.ench_reg = std::move(ench_reg);
 
-    // Convert target enchantments
     {
         algorithm::EnchSet target_enchs;
         for (const auto& e : wanted_set) {
@@ -354,7 +428,6 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
     algo_input.mode = AlgorithmMode::direct;
     algo_input.data = algorithm::EnchCollection{};
 
-    // Convert business items -> algorithm items
     Item start_item(eq.id, ::EnchSet{}, 0, eq.max_durability);
     algo_input.items.push_back(
         CompactAdapter::from_domain(start_item, algo_input.ench_reg));
@@ -362,13 +435,12 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
         algo_input.items.push_back(
             CompactAdapter::from_domain(book, algo_input.ench_reg));
 
-    // ══════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════
     // Iterate algos in sorted order
-    // ══════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════
     for (const auto& algo_name : algos) {
         std::cout << "  " << std::left << std::setw(18) << algo_name;
 
-        // ── Chain: warmup+main ──────────────────────────────────────────
         auto plus = algo_name.find('+');
         if (plus != std::string::npos) {
             std::string warmup_name = algo_name.substr(0, plus);
@@ -405,7 +477,6 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
             continue;
         }
 
-        // ── Single algorithm ────────────────────────────────────────────
         if (!no_skip && (algo_name == "astar" || algo_name == "idastar" || algo_name == "dfs")
             && tc.wanted.size() > 9) {
             std::cout << "SKIP (too many enchants)\n";
@@ -439,21 +510,31 @@ void run_case(const TestCase& tc, const std::vector<std::string>& algos,
 }
 
 void list_cases() {
-    std::cout << "Test cases (" << (sizeof(CASES) / sizeof(CASES[0])) << " total):\n";
-    for (const auto& tc : CASES)
-        std::cout << "  " << tc.name << "  (" << tc.item_type << ", "
-                  << tc.wanted.size() << " enchants)\n";
-    std::cout << "\nGroups:\n";
-    for (const auto& g : GROUPS) {
-        std::cout << "  " << g.name << ":";
-        for (auto* m : g.members) std::cout << " " << m;
+    int total = 0;
+    for (const auto& g : g_groups) {
+        auto display = g.name.substr(0, g.name.find('|'));
+        std::cout << "  " << display << ":";
+        for (const auto& tc : g.cases) {
+            std::cout << " " << tc.name;
+            ++total;
+        }
         std::cout << "\n";
     }
+    std::cout << "Total: " << total << " test cases\n";
 }
 
-} // namespace
+} // anonymous namespace
 
 int main(int argc, char* argv[]) {
+    // ── Load profiles & test cases before CLI parsing (needed for group validation) ──
+    std::cout << "=== Dataset Benchmark ===\n"
+              << "Loading profiles..." << std::endl;
+    load_profiles("data/tests/profiles");
+
+    std::cout << "Loading test cases..." << std::endl;
+    load_testcases("data/tests/testcases");
+    std::cout << std::endl;
+
     BenchConfig cfg = parse_cli(argc, argv);
 
     if (cfg.list_only) {
@@ -465,9 +546,6 @@ int main(int argc, char* argv[]) {
               << std::chrono::current_zone()->to_local(
                      std::chrono::system_clock::now())
               << std::endl;
-    std::cout << "=== Dataset Benchmark ===" << std::endl;
-
-    load_builtin_data();
 
     // ═════════════════════════════════════════════════════════════════════
     // Load algorithms: built-in + optional plugins
@@ -487,7 +565,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Resolve effective algorithm list
     std::vector<std::string> algos = resolve_algos(cfg, loader);
     if (algos.empty()) {
         std::cerr << "No algorithms available after filtering. "
@@ -495,21 +572,46 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Show context
     std::cout << "Using " << algos.size() << " algorithm(s)"
               << " (" << loader.size() << " loaded)"
               << (cfg.algo_dir.empty() ? ". Use --algo-dir to load plugins."
                                        : ".")
               << std::endl;
 
-    // Build test queue
-    std::vector<const TestCase*> queue;
-    if (cfg.test_names.empty()) {
-        for (const auto& tc : CASES) queue.push_back(&tc);
-    } else {
-        for (const auto& tc : CASES)
-            if (cfg.test_names.count(tc.name))
-                queue.push_back(&tc);
+    // ── Build test queue ──────────────────────────────────────────────
+    // Keep merged profiles alive here (outlives the run loop below).
+    struct QueuedCase {
+        const TestCase* tc;
+        const Profile*  profile;
+    };
+    std::vector<QueuedCase> queue;
+    std::vector<Profile> merged_profiles;  // owns merged profile lifetimes
+
+    for (const auto& g : g_groups) {
+        auto profile_names = split_profiles(g.name);
+
+        const Profile* resolved = nullptr;
+        if (profile_names.size() == 1) {
+            auto it = g_profiles.find(profile_names[0]);
+            if (it != g_profiles.end())
+                resolved = &it->second;
+        } else {
+            merged_profiles.push_back(merge_profiles(profile_names));
+            if (!merged_profiles.back().name().str().empty())
+                resolved = &merged_profiles.back();
+        }
+
+        if (!resolved) {
+            std::cerr << "  WARN: profile(s) for group '"
+                      << g.name.substr(0, g.name.find('|'))
+                      << "' not available, skipping" << std::endl;
+            continue;
+        }
+
+        for (const auto& tc : g.cases) {
+            if (cfg.test_names.empty() || cfg.test_names.count(tc.name))
+                queue.push_back({&tc, resolved});
+        }
     }
 
     if (queue.empty()) {
@@ -518,12 +620,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Run each test case
-    for (auto* tc : queue) {
-        std::cout << "\n" << tc->name << " (" << tc->wanted.size()
-                  << " enchants, max " << tc->max_cost << "L):" << std::endl;
+    // ── Run each test case ────────────────────────────────────────────
+    for (auto& qc : queue) {
+        std::cout << "\n" << qc.tc->name << " (" << qc.tc->wanted.size()
+                  << " enchants, max " << qc.tc->max_cost << "L):" << std::endl;
         try {
-            run_case(*tc, algos, loader, cfg.no_skip);
+            run_case(*qc.tc, *qc.profile, algos, loader, cfg.no_skip);
         } catch (const std::exception& e) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }

@@ -1,0 +1,194 @@
+{
+  "name": "modded_sword",
+  "description": "Modded sword enchantments (incremental, merge with vanilla)",
+  "author": "benchmark",
+  "version": "1.0.0",
+  "schema_version": "2.1.0",
+  "enchantments": [
+    {
+      "id": "leeching",
+      "name": "Leeching",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "brutality",
+      "name": "Brutality",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 3,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "dexterity",
+      "name": "Dexterity",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "gnashing",
+      "name": "Gnashing",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "shattering",
+      "name": "Shattering",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 3,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "subjugation",
+      "name": "Subjugation",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "thunderbolting",
+      "name": "Thunderbolting",
+      "platform": "java",
+      "max_level": 1,
+      "limited_level": 1,
+      "multiplier": 6,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "poison_aspect",
+      "name": "Poison Aspect",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 3,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "wither_aspect",
+      "name": "Wither Aspect",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 4,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "swift_slash",
+      "name": "Swift Slash",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "velocity",
+      "name": "Velocity",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "explosive",
+      "name": "Explosive",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 5,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "windshear",
+      "name": "Windshear",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 3,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    },
+    {
+      "id": "immolation",
+      "name": "Immolation",
+      "platform": "java",
+      "max_level": 2,
+      "limited_level": 2,
+      "multiplier": 3,
+      "exclusive_set": [],
+      "applicable_equipment": [
+        "sword"
+      ],
+      "is_treasure": true
+    }
+  ],
+  "equipments": [],
+  "tags": [],
+  "categories": []
+}

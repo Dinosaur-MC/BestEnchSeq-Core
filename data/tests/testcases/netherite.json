@@ -1,0 +1,17 @@
+{
+    "profile": "vanilla",
+    "groups": [
+        {
+            "group": "netherite",
+            "cases": [
+                {"name": "netherite_sword", "item_type": "netherite_sword",
+                 "wanted": ["sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
+                            "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1"], "max_cost": 100},
+                {"name": "netherite_boots", "item_type": "netherite_boots",
+                 "wanted": ["protection=4", "feather_falling=4", "depth_strider=3", "soul_speed=3",
+                            "thorns=3", "unbreaking=3", "mending=1",
+                            "vanishing_curse=1", "binding_curse=1"], "max_cost": 150}
+            ]
+        }
+    ]
+}

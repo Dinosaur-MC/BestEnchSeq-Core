@@ -1,0 +1,19 @@
+{
+    "profiles": ["vanilla", "modded_sword"],
+    "groups": [
+        {
+            "group": "large",
+            "cases": [
+                {"name": "sword_12", "item_type": "netherite_sword",
+                 "wanted": ["sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
+                            "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1",
+                            "leeching=2", "brutality=3", "dexterity=3", "gnashing=3"], "max_cost": 120},
+                {"name": "sword_16", "item_type": "netherite_sword",
+                 "wanted": ["sharpness=5", "sweeping_edge=3", "looting=3", "unbreaking=3",
+                            "fire_aspect=2", "knockback=2", "mending=1", "vanishing_curse=1",
+                            "leeching=2", "brutality=3", "dexterity=3", "gnashing=3",
+                            "shattering=2", "subjugation=3", "thunderbolting=1", "swift_slash=3"], "max_cost": 180}
+            ]
+        }
+    ]
+}
