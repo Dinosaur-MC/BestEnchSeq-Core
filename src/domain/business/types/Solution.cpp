@@ -83,6 +83,8 @@ Json Solution::to_json() const {
         .set("available_items", items_arr)
         .set("total_exp_level_cost", total_exp_level_cost)
         .set("total_exp_cost", total_exp_cost)
+        .set("peak_level_cost", get_peak_level_cost())
+        .set("peak_exp_cost", get_peak_exp_cost())
         .set("steps", steps_arr)
         .set("max_cost_step_index", static_cast<int64_t>(max_cost_step_index))
         .set("is_success", is_success);

@@ -154,6 +154,7 @@ void besq_free_string(char* str);
 // ── Persistence ─────────────────────────────────────────────────────────────
 
 int besq_export_registry(BesqContext* ctx, const char* path);
+int besq_import_registry(BesqContext* ctx, const char* path);
 
 // ── Error handling ──────────────────────────────────────────────────────────
 

@@ -4,14 +4,18 @@
 #include "domain/algorithm/types/AlgorithmTypes.h"
 
 class Profile;
-namespace algorithm { class AlgorithmLoader; }
+namespace algorithm { class AlgorithmLoader; class AlgorithmExecutor; }
 
 struct SolvePipeline {
     /// Run the full solve pipeline: apply -> execute -> recall.
+    /// @param out_executor  Optional — set to the AlgorithmExecutor during
+    ///                      stage_execute; cleared after stage_execute returns.
+    ///                      Use for cross-thread cancellation (besq_abort_solve).
     static SolveResult run(
         Profile& profile,
         const SolveRequest& request,
-        algorithm::AlgorithmLoader& loader
+        algorithm::AlgorithmLoader& loader,
+        algorithm::AlgorithmExecutor** out_executor = nullptr
     );
 
     // Stage helpers exposed for targeted testing.
@@ -32,7 +36,8 @@ struct SolvePipeline {
     static Stage2Result stage_execute(
         algorithm::AlgorithmInput& algo_input,
         const std::string& algorithm,
-        algorithm::AlgorithmLoader& loader
+        algorithm::AlgorithmLoader& loader,
+        algorithm::AlgorithmExecutor** out_executor = nullptr
     );
     static SolveResult stage_recall(
         const algorithm::AlgorithmOutput& output,

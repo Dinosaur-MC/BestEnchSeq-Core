@@ -11,13 +11,14 @@
 SolveResult SolvePipeline::run(
     Profile& profile,
     const SolveRequest& request,
-    algorithm::AlgorithmLoader& loader)
+    algorithm::AlgorithmLoader& loader,
+    algorithm::AlgorithmExecutor** out_executor)
 {
     // Stage 1: Apply
     auto s1 = stage_apply(profile, request);
 
     // Stage 2: Execute
-    auto s2 = stage_execute(s1.algo_input, request.algorithm, loader);
+    auto s2 = stage_execute(s1.algo_input, request.algorithm, loader, out_executor);
 
     // Short-circuit if no output
     if (!s2.algo_output.is_valid) {
@@ -47,7 +48,8 @@ SolvePipeline::Stage1Result SolvePipeline::stage_apply(
 SolvePipeline::Stage2Result SolvePipeline::stage_execute(
     algorithm::AlgorithmInput& algo_input,
     const std::string& algorithm,
-    algorithm::AlgorithmLoader& loader)
+    algorithm::AlgorithmLoader& loader,
+    algorithm::AlgorithmExecutor** out_executor)
 {
     Stage2Result result;
 
@@ -96,8 +98,12 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(
     // Execute
     auto start = std::chrono::steady_clock::now();
     algorithm::AlgorithmExecutor executor(std::move(algo));
+    // Expose executor for cross-thread cancellation (besq_abort_solve).
+    // out_executor stays valid until stage_execute returns.
+    if (out_executor) *out_executor = &executor;
     executor.start(algo_input);
     executor.wait();
+    if (out_executor) *out_executor = nullptr;
     auto end = std::chrono::steady_clock::now();
 
     result.computation_time_ms = std::chrono::duration_cast<

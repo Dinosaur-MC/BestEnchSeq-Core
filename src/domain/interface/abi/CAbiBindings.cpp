@@ -458,6 +458,7 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
             request.mode = AlgorithmMode::direct;
             request.payload = DirectPayload{source_enchants};
         }
+        std::string mode_json = (request.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
 
         // ── Algorithm ─────────────────────────────────────────────────────
         {
@@ -490,17 +491,20 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         // ── Solve ─────────────────────────────────────────────────────────
         auto result = c->impl.solve(request);
 
-        // ── Format result as raw JSON ─────────────────────────────────────
+        // ── Format result as raw JSON (aligns with OutputFormatter's schema) ─
         Json::Object root_obj;
+        root_obj["schema_version"] = Json("1.0");
+        root_obj["mode"] = Json(mode_json);
         root_obj["success"] = Json(result.success);
         root_obj["algorithm"] = Json(result.algorithm_used);
         root_obj["computation_time_ms"] = Json(result.computation_time_ms);
 
         Json::Array sol_arr;
-        for (const auto& sol : result.solutions) {
-            // Use full Solution::to_json() so consumers get
-            // step-by-step details, target item, original enchants, etc.
-            sol_arr.push_back(sol.to_json());
+        for (size_t si = 0; si < result.solutions.size(); ++si) {
+            auto sol_json = result.solutions[si].to_json();
+            // to_json() provides all fields except rank (a contextual index)
+            sol_json.as_object()["rank"] = Json(static_cast<int32_t>(si + 1));
+            sol_arr.push_back(sol_json);
         }
         root_obj["solutions"] = Json(sol_arr);
 
@@ -571,6 +575,11 @@ int besq_export_registry(BesqContext* ctx, const char* path) {
     );
 }
 
+int besq_import_registry(BesqContext* ctx, const char* path) {
+    auto* c = reinterpret_cast<BesqContextC*>(ctx);
+    BESQ_CAPI_TRY(c, c->impl.import_registry(path));
+}
+
 // ── Error handling ──────────────────────────────────────────────────────────
 
 const char* besq_last_error(BesqContext* ctx) {
@@ -614,12 +623,10 @@ char** besq_list_algorithms(BesqContext* ctx, int* out_count) {
 }
 
 // ── Solver lifecycle ─────────────────────────────────────────────────────────
-// TODO: Wire up to AlgorithmExecutor::cancel() once BesqContext exposes it.
 
 int besq_abort_solve(BesqContext* ctx) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
-    c->last_error = "abort_solve is not yet implemented";
-    return -1;
+    BESQ_CAPI_TRY(c, c->impl.abort_solve());
 }
 
 } // extern "C"

@@ -7,6 +7,8 @@
 
 #include "domain/orchestration/orchestration.h"
 
+namespace algorithm { class AlgorithmExecutor; }
+
 /// Main public API class for BestEnchSeq.
 /// Manages profiles, registries, solving, and formatting.
 class BesqContext {
@@ -53,6 +55,7 @@ public:
 
     // ── Solve ──
     SolveResult solve(const SolveRequest& request);
+    void abort_solve();
 
     // ── Format ──
     std::string format(const SolveResult& result, AlgorithmMode mode,

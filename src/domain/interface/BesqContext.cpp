@@ -5,6 +5,7 @@
 #include "domain/business/components/FormatDetector.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/orchestration/components/OutputFormatter.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 
 #include <filesystem>
@@ -18,6 +19,7 @@ struct BesqContext::Impl {
     ProfileManager profiles;
     ProfileLoader loader;
     algorithm::AlgorithmLoader algo_loader;
+    algorithm::AlgorithmExecutor* active_executor{nullptr};
 };
 
 // ====================================================================
@@ -255,5 +257,15 @@ std::vector<std::string> BesqContext::list_algorithms() const {
 
 SolveResult BesqContext::solve(const SolveRequest& request) {
     auto& profile = _impl->profiles.active();
-    return SolvePipeline::run(profile, request, _impl->algo_loader);
+    _impl->active_executor = nullptr;
+    auto result = SolvePipeline::run(profile, request, _impl->algo_loader,
+                                     &_impl->active_executor);
+    _impl->active_executor = nullptr;
+    return result;
+}
+
+void BesqContext::abort_solve() {
+    if (auto* exec = _impl->active_executor) {
+        exec->cancel();
+    }
 }
