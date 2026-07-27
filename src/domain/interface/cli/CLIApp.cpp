@@ -274,10 +274,10 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr_fmt("cli.err.invalid_platform", cfg.platform));
     if (cfg.format != "text" && cfg.format != "compact" && cfg.format != "json")
         throw std::runtime_error(tr_fmt("cli.err.invalid_format", cfg.format));
-    if (cfg.solutions <= 0)
+    if (cfg.solutions < 0)
         throw std::runtime_error(tr("cli.err.solutions_not_positive"));
     if (cfg.solutions > static_cast<int>(BESQ_MAX_SOLUTIONS))
-        throw std::runtime_error(tr_fmt("cli.err.solutions_exceed_max", BESQ_MAX_SOLUTIONS));
+        throw std::runtime_error(tr_fmt("cli.err.solutions_out_of_range", BESQ_MAX_SOLUTIONS));
 
     // --source requires --target
     if (!cfg.source.empty() && cfg.target.empty())

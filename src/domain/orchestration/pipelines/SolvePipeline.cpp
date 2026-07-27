@@ -28,7 +28,7 @@ SolveResult SolvePipeline::run(
     }
 
     // Stage 3: Recall
-    auto result = stage_recall(s2.algo_output, s1.algo_input);
+    auto result = stage_recall(s2.algo_output, s1.algo_input, s1.target_eq_nsid);
     result.algorithm_used = s2.algorithm_name;
     result.computation_time_ms = s2.computation_time_ms;
     return result;
@@ -40,6 +40,7 @@ SolvePipeline::Stage1Result SolvePipeline::stage_apply(
 {
     Stage1Result result;
     result.algo_input = CompactAdapter::apply(profile, request);
+    result.target_eq_nsid = request.target_item.id;
     return result;
 }
 
@@ -107,13 +108,14 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(
 
 SolveResult SolvePipeline::stage_recall(
     const algorithm::AlgorithmOutput& output,
-    const algorithm::AlgorithmInput& algo_input)
+    const algorithm::AlgorithmInput& algo_input,
+    const NSID& target_eq_nsid)
 {
     SolveResult result;
     result.algorithm_used = output.algorithm_name;
     result.computation_time_ms = output.computation_time.count();
 
-    result.solutions = CompactAdapter::recall(output, algo_input);
+    result.solutions = CompactAdapter::recall(output, algo_input, target_eq_nsid);
     result.success = !result.solutions.empty();
     return result;
 }

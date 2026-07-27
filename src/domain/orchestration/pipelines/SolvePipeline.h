@@ -17,6 +17,7 @@ struct SolvePipeline {
     // Stage helpers exposed for targeted testing.
     struct Stage1Result {
         algorithm::AlgorithmInput algo_input;
+        NSID target_eq_nsid;                  // equipment NSID for round-trip recall
     };
     struct Stage2Result {
         algorithm::AlgorithmOutput algo_output;
@@ -35,6 +36,7 @@ struct SolvePipeline {
     );
     static SolveResult stage_recall(
         const algorithm::AlgorithmOutput& output,
-        const algorithm::AlgorithmInput& algo_input
+        const algorithm::AlgorithmInput& algo_input,
+        const NSID& target_eq_nsid = {}
     );
 };

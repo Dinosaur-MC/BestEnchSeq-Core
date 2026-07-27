@@ -173,7 +173,8 @@ algorithm::AlgorithmInput CompactAdapter::apply(
 
 std::vector<Solution> CompactAdapter::recall(
     const algorithm::AlgorithmOutput& output,
-    const algorithm::AlgorithmInput& input)
+    const algorithm::AlgorithmInput& input,
+    const NSID& target_eq_nsid)
 {
     if (!output.is_valid)
         return {};
@@ -189,14 +190,14 @@ std::vector<Solution> CompactAdapter::recall(
         }
     }
 
-    // target_item: from input.target via to_domain()
-    Item target_item = to_domain(input.target, input.ench_reg);
+    // target_item: from input.target via to_domain() with equipment NSID
+    Item target_item = to_domain(input.target, input.ench_reg, target_eq_nsid);
 
     // available_items: from input.inventory_items() for inventory mode
     ItemCollection available_items;
     if (input.is_inventory()) {
         for (const auto& item : input.inventory_items())
-            available_items.push_back(to_domain(item, input.ench_reg));
+            available_items.push_back(to_domain(item, input.ench_reg, target_eq_nsid));
     }
 
     // ── 2. Convert each compact solution ───────────────────────────────
@@ -208,8 +209,8 @@ std::vector<Solution> CompactAdapter::recall(
         domain_steps.reserve(csol.steps.size());
 
         for (const auto& s : csol.steps) {
-            auto base = to_domain(s.base, input.ench_reg);
-            auto sac  = to_domain(s.sacrifice, input.ench_reg);
+            auto base = to_domain(s.base, input.ench_reg, target_eq_nsid);
+            auto sac  = to_domain(s.sacrifice, input.ench_reg, target_eq_nsid);
 
             domain_steps.push_back(Solution::EnchStep{
                 std::move(base), std::move(sac),
@@ -270,7 +271,8 @@ algorithm::Item CompactAdapter::from_domain(
 
 Item CompactAdapter::to_domain(
     const algorithm::Item& item,
-    const algorithm::EnchReg& reg)
+    const algorithm::EnchReg& reg,
+    const NSID& target_eq_nsid)
 {
     EnchSet ench_set;
     for (const auto& e : item.enchs) {
@@ -281,8 +283,8 @@ Item CompactAdapter::to_domain(
     if (item.type == algorithm::ItemType::Book) {
         return Item(NSID("minecraft:enchanted_book"), ench_set, item.ppn);
     } else {
-        const auto& equip = reg.get_target_equip();
-        NSID eq_id(std::to_string(equip.id));
-        return Item(eq_id, ench_set, item.ppn, item.dur);
+        // Use the NSID from the caller if non-empty; fall back to unknown.
+        NSID id = target_eq_nsid.empty() ? NSID("minecraft:unknown") : target_eq_nsid;
+        return Item(id, ench_set, item.ppn, item.dur);
     }
 }
