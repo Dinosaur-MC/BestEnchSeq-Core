@@ -262,6 +262,10 @@ if(BESQ_BUILD_CLI)
     )
 endif()
 
+install(FILES ${CMAKE_SOURCE_DIR}/include/besq/besq.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/besq
+)
+
 install(DIRECTORY data/
     DESTINATION ${CMAKE_INSTALL_DATADIR}/BestEnchSeq-Core/data
 )

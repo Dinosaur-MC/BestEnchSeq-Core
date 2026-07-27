@@ -7,11 +7,12 @@
 #include "domain/interface/abi/abi.h"
 #include "domain/interface/BesqContext.h"
 #include "common/io/json.h"
+#include "common/CommonTypes.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Item.h"
-#include "common/CommonTypes.h"
+#include "BuildConfig.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -532,6 +533,50 @@ int besq_export_registry(BesqContext* ctx, const char* path) {
 const char* besq_last_error(BesqContext* ctx) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
     return c->last_error.c_str();
+}
+
+// ── Version ─────────────────────────────────────────────────────────────────
+
+const char* besq_get_version(void) {
+    return BESQ_VERSION;
+}
+
+// ── Algorithm enumeration ───────────────────────────────────────────────────
+
+char** besq_list_algorithms(BesqContext* ctx, int* out_count) {
+    auto* c = reinterpret_cast<BesqContextC*>(ctx);
+    try {
+        auto names = c->impl.list_algorithms();
+        *out_count = static_cast<int>(names.size());
+        char** arr = static_cast<char**>(std::malloc(names.size() * sizeof(char*)));
+        if (!arr) {
+            *out_count = 0;
+            return nullptr;
+        }
+        for (size_t i = 0; i < names.size(); ++i) {
+            arr[i] = strdup(names[i].c_str());
+            if (!arr[i]) {
+                for (size_t j = 0; j < i; ++j) std::free(arr[j]);
+                std::free(arr);
+                *out_count = 0;
+                return nullptr;
+            }
+        }
+        return arr;
+    } catch (const std::exception& e) {
+        c->last_error = e.what();
+        *out_count = 0;
+        return nullptr;
+    }
+}
+
+// ── Solver lifecycle ─────────────────────────────────────────────────────────
+// TODO: Wire up to AlgorithmExecutor::cancel() once BesqContext exposes it.
+
+int besq_abort_solve(BesqContext* ctx) {
+    auto* c = reinterpret_cast<BesqContextC*>(ctx);
+    c->last_error = "abort_solve is not yet implemented";
+    return -1;
 }
 
 } // extern "C"
