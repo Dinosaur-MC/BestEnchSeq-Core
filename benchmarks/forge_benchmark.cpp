@@ -162,6 +162,12 @@ void load_testcases(const std::filesystem::path& dir) {
                     group.name += profile_names[i];
                 }
 
+                // Sort cases by enchantment count (ascending)
+                std::sort(group.cases.begin(), group.cases.end(),
+                    [](const TestCase& a, const TestCase& b) {
+                        return a.wanted.size() < b.wanted.size();
+                    });
+
                 g_groups.push_back(std::move(group));
             }
         } catch (const std::exception& e) {

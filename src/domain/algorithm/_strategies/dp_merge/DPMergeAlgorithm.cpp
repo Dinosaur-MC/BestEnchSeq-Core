@@ -23,7 +23,9 @@ using namespace algorithm;
 
 void DPMergeAlgorithm::Frontier::insert(ParetoEntry entry) {
     for (auto& existing : entries) {
-        if (existing.ppn == entry.ppn && existing.item.enchs == entry.item.enchs) {
+        if (existing.ppn == entry.ppn &&
+            existing.item.type == entry.item.type &&
+            existing.item.enchs == entry.item.enchs) {
             if (entry.cost < existing.cost) {
                 existing = std::move(entry);
             }
