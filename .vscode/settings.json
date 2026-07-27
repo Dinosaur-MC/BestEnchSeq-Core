@@ -3,6 +3,7 @@
         "*.h.in": "cpp",
         "*.hpp.in": "cpp",
         "*.c.in": "c",
-        "*.cpp.in": "cpp"
+        "*.cpp.in": "cpp",
+        "*.cmake.in": "cmake"
     }
 }

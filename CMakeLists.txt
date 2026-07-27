@@ -170,8 +170,11 @@ endif()
 # Export for plugin build system — auto-generated config for plugins/
 # ═══════════════════════════════════════════════════════════════════════════════
 
-include(cmake/BesqCoreConfig.cmake)
-generate_besq_core_config()
+configure_file(
+    "${CMAKE_SOURCE_DIR}/cmake/besq-coreConfig.cmake.in"
+    "${CMAKE_BINARY_DIR}/besq-coreConfig.cmake"
+    @ONLY
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # besq-minimal (static library for embedders)
