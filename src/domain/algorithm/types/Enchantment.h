@@ -81,9 +81,13 @@ class EnchSet {
     template <
         typename Iter,
         std::enable_if_t<std::is_convertible_v<decltype(*std::declval<Iter &>()), Ench>, int> = 0>
-    EnchSet(Iter first, Iter last) noexcept
-        : _size(static_cast<uint8_t>(std::min<size_t>(std::distance(first, last), INLINE_N))) {
-        std::copy(first, first + _size, _buf);
+    EnchSet(Iter first, Iter last) noexcept {
+        // Copy up to INLINE_N elements (safe for any iterator category).
+        Ench* d = reinterpret_cast<Ench*>(_buf);
+        size_t n = 0;
+        for (; n < INLINE_N && first != last; ++n, ++first)
+            d[n] = *first;
+        _size = static_cast<uint8_t>(n);
         sort();
     }
 
