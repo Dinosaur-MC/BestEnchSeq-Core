@@ -24,6 +24,9 @@ endfunction()
 # ── forge_benchmark (full algorithm benchmark) ──
 besq_bench(forge_benchmark forge_benchmark.cpp)
 
+# ── forge_engine_benchmark (ForgeEngine microbenchmark) ──
+besq_bench(forge_engine_benchmark forge_engine_benchmark.cpp)
+
 # RPATH so dlopen'd plugins can find libbesq-core.so at runtime.
 # forge_benchmark sits in build/bin/, lib is in build/ → $ORIGIN/..
 # -rdynamic exports linked library symbols to dlopen'd plugins.
