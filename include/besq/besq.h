@@ -94,6 +94,22 @@ int besq_remove_profile(BesqContext* ctx, const char* name);
 /// @returns  An array of C strings, or NULL on error.
 char** besq_list_algorithms(BesqContext* ctx, int* out_count);
 
+// ── Registry query ──────────────────────────────────────────────────────────
+
+/// List all enchantments in the active profile as a JSON array.
+/// Each element has fields: id, name, max_level, multiplier, etc.
+/// Caller must free the returned string via besq_free_string().
+char* besq_list_enchantments(BesqContext* ctx);
+
+/// List all equipment in the active profile as a JSON array.
+/// Each element has fields: id, name, category, max_durability, etc.
+/// Caller must free the returned string via besq_free_string().
+char* besq_list_equipment(BesqContext* ctx);
+
+/// List all equipment categories as a JSON array of strings.
+/// Caller must free the returned string via besq_free_string().
+char* besq_list_categories(BesqContext* ctx);
+
 // ── Registry editing (JSON bridge) ──────────────────────────────────────────
 
 /// Add an enchantment from a JSON object.

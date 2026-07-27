@@ -10,7 +10,9 @@
 #include "common/CommonTypes.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
+#include "domain/business/types/EnchInfo.h"
 #include "domain/business/types/Equipment.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/business/types/Item.h"
 #include "BuildConfig.h"
 
@@ -496,12 +498,9 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
 
         Json::Array sol_arr;
         for (const auto& sol : result.solutions) {
-            Json::Object s;
-            s["total_exp_level_cost"] = Json(sol.total_exp_level_cost);
-            s["total_exp_cost"] = Json(sol.total_exp_cost);
-            s["is_success"] = Json(sol.is_success);
-            s["step_count"] = Json(static_cast<int64_t>(sol.steps.size()));
-            sol_arr.push_back(Json(s));
+            // Use full Solution::to_json() so consumers get
+            // step-by-step details, target item, original enchants, etc.
+            sol_arr.push_back(sol.to_json());
         }
         root_obj["solutions"] = Json(sol_arr);
 
@@ -516,6 +515,50 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
 
 void besq_free_string(char* str) {
     std::free(str);
+}
+
+// ── Registry query ───────────────────────────────────────────────────────────
+
+char* besq_list_enchantments(BesqContext* ctx) {
+    auto* c = reinterpret_cast<BesqContextC*>(ctx);
+    c->last_error.clear();
+    try {
+        Json::Array arr;
+        for (const auto& ench : c->impl.enchantments())
+            arr.push_back(ench.to_json());
+        return strdup(Json(arr).to_string(Json::Pretty).c_str());
+    } catch (const std::exception& e) {
+        c->last_error = e.what();
+        return nullptr;
+    }
+}
+
+char* besq_list_equipment(BesqContext* ctx) {
+    auto* c = reinterpret_cast<BesqContextC*>(ctx);
+    c->last_error.clear();
+    try {
+        Json::Array arr;
+        for (const auto& eq : c->impl.equipment())
+            arr.push_back(eq.to_json());
+        return strdup(Json(arr).to_string(Json::Pretty).c_str());
+    } catch (const std::exception& e) {
+        c->last_error = e.what();
+        return nullptr;
+    }
+}
+
+char* besq_list_categories(BesqContext* ctx) {
+    auto* c = reinterpret_cast<BesqContextC*>(ctx);
+    c->last_error.clear();
+    try {
+        Json::Array arr;
+        for (const auto& tag : c->impl.categories())
+            arr.push_back(tag.to_json());
+        return strdup(Json(arr).to_string(Json::Pretty).c_str());
+    } catch (const std::exception& e) {
+        c->last_error = e.what();
+        return nullptr;
+    }
 }
 
 // ── Persistence ────────────────────────────────────────────────────────────
