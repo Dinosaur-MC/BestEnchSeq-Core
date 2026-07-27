@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -351,6 +352,7 @@ struct Config {
     bool run_bedrock   = true;
     bool run_book_eq   = true;
     bool run_eq_eq     = true;
+    bool show_summary  = false; // print cross-config summary at end
 };
 
 Config parse_cli(int argc, char* argv[]) {
@@ -360,13 +362,15 @@ Config parse_cli(int argc, char* argv[]) {
         if (a == "--help") {
             std::cout << "ForgeEngine Benchmark\n";
             std::cout << "Usage: forge_engine_benchmark [options]\n";
+            std::cout << "  --all        Run all configs with summary table\n";
             std::cout << "  --java       Java platform only\n";
             std::cout << "  --bedrock    Bedrock platform only\n";
             std::cout << "  --book       Book->equip only\n";
             std::cout << "  --equip      Equip->equip only\n";
             std::cout << "  --help       This help\n";
             exit(0);
-        } else if (a == "--java")      { cfg.run_bedrock = false; }
+        } else if (a == "--all")       { cfg.show_summary = true; }
+        else if (a == "--java")        { cfg.run_bedrock = false; }
         else if (a == "--bedrock")     { cfg.run_java = false; }
         else if (a == "--book")        { cfg.run_eq_eq = false; }
         else if (a == "--equip")       { cfg.run_book_eq = false; }
@@ -423,67 +427,137 @@ int main(int argc, char* argv[]) {
     }
 
     // ── Estimate baseline (single small merge) to size iterations ──────
-    {
-        ForgeEngine engine;
-        auto pair = make_pair(OpType::Merge, SIZES[0], reg_n, true);
-        auto runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
-        auto start = Clock::now();
-        int est_n = 100'000;
-        for (int i = 0; i < est_n; ++i)
-            runner();
-        auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
-        int base_iters = determine_iterations(static_cast<double>(ns) / est_n);
-        std::cout << "Base iterations: " << base_iters << "\n\n";
+    ForgeEngine est_engine;
+    auto est_pair = make_pair(OpType::Merge, SIZES[0], reg_n, true);
+    auto est_runner = make_forge_into_runner(est_engine, reg, est_pair.target, est_pair.sacrifice);
+    auto start = Clock::now();
+    int est_n = 100'000;
+    for (int i = 0; i < est_n; ++i)
+        est_runner();
+    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
+    int base_iters = determine_iterations(static_cast<double>(ns) / est_n);
+    std::cout << "Base iterations: " << base_iters << "\n\n";
 
-        // ── Run each configuration ────────────────────────────────────────
-        for (auto& rc : configs) {
-            ForgeEngine engine(rc.fcfg);
-            print_header(rc.label);
+    // ── Run each configuration ────────────────────────────────────────
+    for (auto& rc : configs) {
+        ForgeEngine engine(rc.fcfg);
+        print_header(rc.label);
 
-            for (auto op : {OpType::Merge, OpType::Upgrade, OpType::Conflict, OpType::Mixed}) {
-                for (auto& size : SIZES) {
-                    auto pair = make_pair(op, size, reg_n, rc.book_to_equip);
+        for (auto op : {OpType::Merge, OpType::Upgrade, OpType::Conflict, OpType::Mixed}) {
+            for (auto& size : SIZES) {
+                auto pair = make_pair(op, size, reg_n, rc.book_to_equip);
 
-                    // forge_into
-                    {
-                        auto runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
-                        auto r = bench("forge_into/" + pair.label, runner, base_iters);
-                        print_result(r, base_iters);
-                    }
+                // forge_into
+                {
+                    auto runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
+                    auto r = bench("forge_into/" + pair.label, runner, base_iters);
+                    print_result(r, base_iters);
+                }
 
-                    // pure_forge_into (only for merge/pure subset)
-                    if (op == OpType::Merge) {
-                        auto runner = make_pure_forge_runner(engine, reg, pair.target, pair.sacrifice);
-                        auto r = bench("pure_frge/" + pair.label, runner, base_iters * 2);
-                        print_result(r, base_iters * 2);
-                    }
+                // pure_forge_into (only for merge/pure subset)
+                if (op == OpType::Merge) {
+                    auto runner = make_pure_forge_runner(engine, reg, pair.target, pair.sacrifice);
+                    auto r = bench("pure_frge/" + pair.label, runner, base_iters * 2);
+                    print_result(r, base_iters * 2);
                 }
             }
-
-            // estimate_forge_cost — use the Merge/S pair (fast)
-            {
-                auto pair = make_pair(OpType::Merge, SIZES[0], reg_n, rc.book_to_equip);
-                auto runner = make_estimate_runner(engine, reg, pair.target, pair.sacrifice);
-                auto r = bench("estimate/S", runner, base_iters * 5);
-                print_result(r, base_iters * 5);
-            }
-
-            // forge() copy overhead — compare with forge_into for Merge/M
-            {
-                auto pair = make_pair(OpType::Merge, SIZES[1], reg_n, rc.book_to_equip);
-                auto into_runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
-                auto forge_runner = make_forge_runner(engine, reg, pair.target, pair.sacrifice);
-                auto r_into  = bench("forge_into/M", into_runner, base_iters);
-                auto r_forge = bench("forge(copy)/M", forge_runner, base_iters);
-                print_result(r_into, base_iters);
-                print_result(r_forge, base_iters);
-                double copy_overhead = (r_forge.ns_per_op - r_into.ns_per_op) * 100.0 / r_into.ns_per_op;
-                std::cout << std::left << std::setw(22) << "  copy overhead"
-                          << std::right << std::setw(20)
-                          << "+" + std::to_string(static_cast<int>(copy_overhead)) + "%"
-                          << "\n";
-            }
         }
+
+        // estimate_forge_cost — use the Merge/S pair (fast)
+        {
+            auto pair = make_pair(OpType::Merge, SIZES[0], reg_n, rc.book_to_equip);
+            auto runner = make_estimate_runner(engine, reg, pair.target, pair.sacrifice);
+            auto r = bench("estimate/S", runner, base_iters * 5);
+            print_result(r, base_iters * 5);
+        }
+
+        // forge() copy overhead — compare with forge_into for Merge/M
+        {
+            auto pair = make_pair(OpType::Merge, SIZES[1], reg_n, rc.book_to_equip);
+            auto into_runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
+            auto forge_runner = make_forge_runner(engine, reg, pair.target, pair.sacrifice);
+            auto r_into  = bench("forge_into/M", into_runner, base_iters);
+            auto r_forge = bench("forge(copy)/M", forge_runner, base_iters);
+            print_result(r_into, base_iters);
+            print_result(r_forge, base_iters);
+            double copy_overhead = (r_forge.ns_per_op - r_into.ns_per_op) * 100.0 / r_into.ns_per_op;
+            std::cout << std::left << std::setw(22) << "  copy overhead"
+                      << std::right << std::setw(20)
+                      << "+" + std::to_string(static_cast<int>(copy_overhead)) + "%"
+                      << "\n";
+        }
+    }
+
+    // ── Summary table (--all only) ──────────────────────────────────────
+    if (cfg.show_summary && configs.size() == 4) {
+        struct SummaryRow {
+            std::string config;
+            int64_t merge_s_ns, merge_m_ns, merge_l_ns;
+            int64_t pure_s_ns, pure_m_ns, pure_l_ns;
+            int64_t upgrade_m_ns, conflict_m_ns, mixed_m_ns;
+            int64_t estimate_ns;
+            int64_t forge_copy_ns;
+        };
+        std::vector<SummaryRow> rows;
+
+        for (auto& rc : configs) {
+            ForgeEngine engine(rc.fcfg);
+            SummaryRow row;
+            row.config = rc.label;
+
+            auto meas = [&](auto&& runner, int iters) {
+                return bench("", std::forward<decltype(runner)>(runner), iters).ns_per_op;
+            };
+
+            auto pS = make_pair(OpType::Merge, SIZES[0], reg_n, rc.book_to_equip);
+            auto pM = make_pair(OpType::Merge, SIZES[1], reg_n, rc.book_to_equip);
+            auto pL = make_pair(OpType::Merge, SIZES[2], reg_n, rc.book_to_equip);
+            auto pUp = make_pair(OpType::Upgrade, SIZES[1], reg_n, rc.book_to_equip);
+            auto pCf = make_pair(OpType::Conflict, SIZES[1], reg_n, rc.book_to_equip);
+            auto pMx = make_pair(OpType::Mixed, SIZES[1], reg_n, rc.book_to_equip);
+
+            row.merge_s_ns   = meas(make_forge_into_runner(engine, reg, pS.target, pS.sacrifice), base_iters);
+            row.merge_m_ns   = meas(make_forge_into_runner(engine, reg, pM.target, pM.sacrifice), base_iters);
+            row.merge_l_ns   = meas(make_forge_into_runner(engine, reg, pL.target, pL.sacrifice), base_iters);
+            row.pure_s_ns    = meas(make_pure_forge_runner(engine, reg, pS.target, pS.sacrifice), base_iters * 2);
+            row.pure_m_ns    = meas(make_pure_forge_runner(engine, reg, pM.target, pM.sacrifice), base_iters * 2);
+            row.pure_l_ns    = meas(make_pure_forge_runner(engine, reg, pL.target, pL.sacrifice), base_iters * 2);
+            row.upgrade_m_ns = meas(make_forge_into_runner(engine, reg, pUp.target, pUp.sacrifice), base_iters);
+            row.conflict_m_ns= meas(make_forge_into_runner(engine, reg, pCf.target, pCf.sacrifice), base_iters);
+            row.mixed_m_ns   = meas(make_forge_into_runner(engine, reg, pMx.target, pMx.sacrifice), base_iters);
+            row.estimate_ns  = meas(make_estimate_runner(engine, reg, pS.target, pS.sacrifice), base_iters * 5);
+            row.forge_copy_ns= meas(make_forge_runner(engine, reg, pM.target, pM.sacrifice), base_iters);
+            rows.push_back(row);
+        }
+
+        // Print summary table
+        std::cout << "\n";
+        std::cout << "+---------------------------+-------------------------------------------+-----------------------------+\n";
+        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)   | pure_frge (ns/op)   | Overhead vs Merge/M       |\n";
+        std::cout << "| Config                    |  S     M     L        | S     M     L        | upgr  cnfl  mix  copy    |\n";
+        std::cout << "+---------------------------+------------------------+----------------------+---------------------------+\n";
+
+        for (auto& row : rows) {
+            double up_penalty  = (row.merge_m_ns > 0) ? (double)row.upgrade_m_ns / row.merge_m_ns : 0;
+            double cf_penalty  = (row.merge_m_ns > 0) ? (double)row.conflict_m_ns / row.merge_m_ns : 0;
+            double mx_penalty  = (row.merge_m_ns > 0) ? (double)row.mixed_m_ns / row.merge_m_ns : 0;
+            double copy_ov     = (row.merge_m_ns > 0) ? (double)(row.forge_copy_ns - row.merge_m_ns) / row.merge_m_ns : 0;
+
+            char buf[256];
+            snprintf(buf, sizeof(buf),
+                     "| %-25s | %3lld %4lld %5lld  | %3lld %4lld %5lld  | %3.0f%% %3.0f%% %3.0f%% %3.0f%% |",
+                     row.config.c_str(),
+                     (long long)row.merge_s_ns, (long long)row.merge_m_ns, (long long)row.merge_l_ns,
+                     (long long)row.pure_s_ns, (long long)row.pure_m_ns, (long long)row.pure_l_ns,
+                     up_penalty * 100.0 - 100.0,
+                     cf_penalty * 100.0 - 100.0,
+                     mx_penalty * 100.0 - 100.0,
+                     copy_ov * 100.0);
+            std::cout << buf << "\n";
+        }
+
+        std::cout << "+---------------------------+-------------------------------------------+-----------------------------+\n";
+        std::cout << "  upgr=Upgrade cnfl=Conflict mix=Mixed copy=forge() vs forge_into()\n";
     }
 
     std::cout << "\n=== Done ===\n";
