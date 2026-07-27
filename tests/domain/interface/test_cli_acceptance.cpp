@@ -94,14 +94,7 @@ void test_config_parsing() {
     // Valid configs
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "ignore-cost-cap=true"};
-        auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(!config.config_pairs.empty(), "config should be non-empty");
-        TEST_PASS("--config ignore-cost-cap=true");
-    }
-    {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "ignore-cost-cap=true,ignore-penalty-cost=false"};
+                              "--config", "ignore-repair-cost=true,ignore-penalty-cost=false"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         expect(!config.config_pairs.empty(), "multi-config should be non-empty");
         TEST_PASS("--config multiple pairs");
@@ -131,7 +124,7 @@ void test_config_parsing() {
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "ignore-cost-cap=maybe"};
+                              "--config", "ignore-repair-cost=maybe"};
         expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
                       "Invalid --config value should throw");
         TEST_PASS("--config invalid value throws");
@@ -238,23 +231,15 @@ void test_memory_parsing() {
 
 void test_apply_config_pairs() {
     algorithm::ForgeConfig cfg;
-    cfg.ignore_cost_cap = false;
     cfg.ignore_penalty_cost = false;
     cfg.ignore_repair_cost = false;
 
-    CLIApp::apply_config_pairs("ignore-cost-cap=true", cfg);
-    expect(cfg.ignore_cost_cap, "cost cap should be true");
     expect(!cfg.ignore_penalty_cost, "penalty cost should remain false");
     expect(!cfg.ignore_repair_cost, "repair cost should remain false");
 
     CLIApp::apply_config_pairs("ignore-penalty-cost=true,ignore-repair-cost=true", cfg);
     expect(cfg.ignore_penalty_cost, "penalty cost should now be true");
     expect(cfg.ignore_repair_cost, "repair cost should now be true");
-
-    // Reset
-    cfg.ignore_cost_cap = false;
-    CLIApp::apply_config_pairs("ignore-cost-cap=false", cfg);
-    expect(!cfg.ignore_cost_cap, "cost cap should be false again");
 
     TEST_PASS("CLIApp::apply_config_pairs functional");
 }

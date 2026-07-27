@@ -205,7 +205,6 @@ void test_penalty_cost() {
     algorithm::ForgeConfig no_pen_cfg;
     no_pen_cfg.ignore_penalty_cost = true;
     no_pen_cfg.ignore_repair_cost  = false;
-    no_pen_cfg.ignore_cost_cap     = false;
     no_pen_cfg.platform            = MCE::Java;
     algorithm::ForgeEngine no_pen{no_pen_cfg};
     expect(no_pen.penalty_cost(5) == 0, "penalty_cost(5)+ignore should be 0");
@@ -234,13 +233,11 @@ void test_be_forge_cost() {
     algorithm::ForgeConfig be_cfg;
     be_cfg.ignore_penalty_cost = false;
     be_cfg.ignore_repair_cost  = false;
-    be_cfg.ignore_cost_cap     = false;
     be_cfg.platform            = MCE::Bedrock;
     algorithm::ForgeEngine be_engine{be_cfg};
     algorithm::ForgeConfig je_cfg;
     je_cfg.ignore_penalty_cost = false;
     je_cfg.ignore_repair_cost  = false;
-    je_cfg.ignore_cost_cap     = false;
     je_cfg.platform            = MCE::Java;
     algorithm::ForgeEngine je_engine{je_cfg};
 
@@ -259,13 +256,11 @@ void test_be_conflict_cost() {
     algorithm::ForgeConfig be_cfg2;
     be_cfg2.ignore_penalty_cost = false;
     be_cfg2.ignore_repair_cost  = false;
-    be_cfg2.ignore_cost_cap     = false;
     be_cfg2.platform            = MCE::Bedrock;
     algorithm::ForgeEngine be_engine{be_cfg2};
     algorithm::ForgeConfig je_cfg2;
     je_cfg2.ignore_penalty_cost = false;
     je_cfg2.ignore_repair_cost  = false;
-    je_cfg2.ignore_cost_cap     = false;
     je_cfg2.platform            = MCE::Java;
     algorithm::ForgeEngine je_engine{je_cfg2};
 

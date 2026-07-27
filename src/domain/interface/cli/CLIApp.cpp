@@ -295,7 +295,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
             auto v = pair.substr(eq + 1);
             if (v.empty())
                 throw std::runtime_error(tr_fmt("cli.err.empty_config_value", pair));
-            if (k != "ignore-cost-cap" && k != "ignore-penalty-cost" && k != "ignore-repair-cost")
+            if (k != "ignore-penalty-cost" && k != "ignore-repair-cost")
                 throw std::runtime_error(tr_fmt("cli.err.unknown_config_key", k));
             if (v != "true" && v != "false")
                 throw std::runtime_error(tr_fmt("cli.err.invalid_config_value", k, v));
@@ -339,8 +339,7 @@ void CLIApp::apply_config_pairs(const std::string& config_pairs, algorithm::Forg
         std::string k = pair.substr(0, eq);
         std::string v = pair.substr(eq + 1);
         bool val = (v == "true");
-        if (k == "ignore-cost-cap")       cfg.ignore_cost_cap = val;
-        else if (k == "ignore-penalty-cost") cfg.ignore_penalty_cost = val;
+        if (k == "ignore-penalty-cost")  cfg.ignore_penalty_cost = val;
         else if (k == "ignore-repair-cost")  cfg.ignore_repair_cost = val;
     }
 }

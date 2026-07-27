@@ -4,7 +4,6 @@
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
 #include "domain/algorithm/types/Solution.h"
-#include <climits>
 #include <cstring>
 
 namespace {
@@ -246,7 +245,6 @@ void test_forge_config_roundtrip() {
     algorithm::ForgeConfig original;
     original.ignore_penalty_cost = true;
     original.ignore_repair_cost = false;
-    original.ignore_cost_cap = true;
     original.platform = MCE::Bedrock;
 
     ByteStreamWriter w;
@@ -259,7 +257,6 @@ void test_forge_config_roundtrip() {
     expect(r.ok(), "deserialize should succeed");
     expect_eq(result.ignore_penalty_cost, true, "ignore_penalty_cost");
     expect_eq(result.ignore_repair_cost, false, "ignore_repair_cost");
-    expect_eq(result.ignore_cost_cap, true, "ignore_cost_cap");
     expect_eq(result.platform, MCE::Bedrock, "platform");
     TEST_PASS("test_forge_config_roundtrip");
 }
