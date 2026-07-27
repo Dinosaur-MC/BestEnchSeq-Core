@@ -451,6 +451,11 @@ void run_case(const TestCase& tc, const Profile& profile,
                 std::cout << "SKIP (too many enchants)\n";
                 continue;
             }
+            if (!no_skip && main_name == "dp_merge"
+                && tc.wanted.size() > 14) {
+                std::cout << "SKIP (too many enchants)\n";
+                continue;
+            }
             try {
                 auto main_algo = loader.create(main_name);
                 algorithm::AlgorithmExecutor executor(std::move(main_algo));
@@ -479,6 +484,11 @@ void run_case(const TestCase& tc, const Profile& profile,
 
         if (!no_skip && (algo_name == "astar" || algo_name == "idastar" || algo_name == "dfs")
             && tc.wanted.size() > 9) {
+            std::cout << "SKIP (too many enchants)\n";
+            continue;
+        }
+        if (!no_skip && algo_name == "dp_merge"
+            && tc.wanted.size() > 14) {
             std::cout << "SKIP (too many enchants)\n";
             continue;
         }
