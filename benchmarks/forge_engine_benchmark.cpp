@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <iomanip>
@@ -28,6 +29,9 @@ namespace {
 
 using namespace algorithm;
 using Clock = std::chrono::steady_clock;
+
+// Optimization barrier: prevents dead-code elimination of benchmark results
+static volatile int64_t bench_sink = 0;
 
 // ══════════════════════════════════════════════════════════════════════════
 // Synthetic registry — small controlled set of enchantments
@@ -134,32 +138,59 @@ struct BenchResult {
     std::string name;
     int64_t ns_per_op;
     double  ops_per_sec;  // million ops/sec
+    double  rel_stddev;   // coefficient of variation (%)
+    int     iterations;   // per-round iteration count
 };
 
-// Determine iteration count so the batch runs for ~200ms
-int determine_iterations(double expected_ns) {
-    int iters = static_cast<int>(200'000'000.0 / expected_ns);
-    iters = std::clamp(iters, 100, 5'000'000);
-    return iters;
-}
-
 template <typename Fn>
-BenchResult bench(const std::string& name, Fn&& fn, int iterations) {
-    // Warmup: 3 runs discarded
-    for (int i = 0; i < 3; ++i)
+BenchResult bench(const std::string& name, Fn&& fn) {
+    // ── Warmup: run for ~50ms to stabilize CPU freq + caches ─
+    auto wstart = Clock::now();
+    int64_t welapsed = 0;
+    int wcount = 0;
+    while (welapsed < 50'000'000) {
         fn();
+        ++wcount;
+        welapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            Clock::now() - wstart).count();
+    }
 
-    // Timed run
-    auto start = Clock::now();
-    for (int i = 0; i < iterations; ++i)
-        fn();
-    auto end  = Clock::now();
-    auto ns   = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    // ── Calibrate iterations per round (~80ms each) ──────────
+    int64_t single_ns = welapsed / std::max(1, wcount);
+    int iters = static_cast<int>(80'000'000.0 / single_ns);
+    iters = std::clamp(iters, 10, 5'000'000);
 
-    int64_t ns_per_op = ns / iterations;
-    double ops_per_sec = (iterations * 1'000'000'000.0) / ns / 1'000'000.0; // M ops/s
+    // ── Multiple rounds for statistical stability ────────────
+    constexpr int ROUNDS = 5;
+    int64_t round_ns[ROUNDS] = {};
 
-    return {name, ns_per_op, ops_per_sec};
+    for (int r = 0; r < ROUNDS; ++r) {
+        auto start = Clock::now();
+        for (int i = 0; i < iters; ++i)
+            fn();
+        auto end = Clock::now();
+        round_ns[r] = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    }
+
+    // ── Statistics (sorted → median) ─────────────────────────
+    std::sort(round_ns, round_ns + ROUNDS);
+    int64_t median_ns = round_ns[ROUNDS / 2];
+    int64_t ns_per_op = median_ns / iters;
+
+    double mean = 0;
+    for (auto t : round_ns) mean += static_cast<double>(t);
+    mean /= ROUNDS;
+    double variance = 0;
+    for (auto t : round_ns) {
+        double d = static_cast<double>(t) - mean;
+        variance += d * d;
+    }
+    variance /= ROUNDS;
+    double rel_stddev = (mean > 0) ? std::sqrt(variance) / mean * 100.0 : 0.0;
+
+    double ops_per_sec = (iters * 1'000'000'000.0) / double(median_ns) / 1'000'000.0;
+
+    return {name, ns_per_op, ops_per_sec, rel_stddev, iters};
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -300,16 +331,15 @@ auto make_forge_into_runner(const ForgeEngine& engine, const EnchReg& reg,
     // Copy target each iteration so forge_into() mutates a fresh copy
     return [&engine, &reg, target, sacrifice]() {
         Item t = target;
-        volatile int32_t cost = engine.forge_into(t, sacrifice, reg);
-        (void)cost;
+        bench_sink += engine.forge_into(t, sacrifice, reg);
     };
 }
 
 auto make_forge_runner(const ForgeEngine& engine, const EnchReg& reg,
                         const Item& target, const Item& sacrifice) {
     return [&engine, &reg, target, sacrifice]() {
-        volatile auto result = engine.forge(target, sacrifice, reg);
-        (void)result;
+        auto result = engine.forge(target, sacrifice, reg);
+        bench_sink += result.second;
     };
 }
 
@@ -318,14 +348,14 @@ auto make_pure_forge_runner(const ForgeEngine& engine, const EnchReg& reg,
     return [&engine, &reg, target, sacrifice]() {
         Item t = target;
         engine.pure_forge_into(t, sacrifice, reg);
+        bench_sink += t.enchs.size() + t.ppn;
     };
 }
 
 auto make_estimate_runner(const ForgeEngine& engine, const EnchReg& reg,
                            const Item& target, const Item& sacrifice) {
     return [&engine, &reg, target, sacrifice]() {
-        volatile int32_t cost = engine.estimate_forge_cost(target, sacrifice, reg);
-        (void)cost;
+        bench_sink += engine.estimate_forge_cost(target, sacrifice, reg);
     };
 }
 
@@ -338,8 +368,9 @@ void print_header(const std::string& config_label) {
     std::cout << std::left << std::setw(22) << "Benchmark"
               << std::right << std::setw(8) << "Iters"
               << std::setw(12) << "ns/op"
-              << std::setw(14) << "M ops/s" << "\n";
-    std::cout << std::string(56, '-') << "\n";
+              << std::setw(14) << "M ops/s"
+              << std::setw(10) << "CV%" << "\n";
+    std::cout << std::string(66, '-') << "\n";
 }
 
 std::string format_iters(int n) {
@@ -352,11 +383,12 @@ std::string format_iters(int n) {
     return std::to_string(n);
 }
 
-void print_result(const BenchResult& r, int iters) {
+void print_result(const BenchResult& r) {
     std::cout << std::left << std::setw(22) << r.name
-              << std::right << std::setw(8) << format_iters(iters)
+              << std::right << std::setw(8) << format_iters(r.iterations)
               << std::setw(12) << r.ns_per_op
               << std::setw(14) << std::fixed << std::setprecision(2) << r.ops_per_sec
+              << std::setw(10) << std::fixed << std::setprecision(2) << r.rel_stddev
               << "\n";
 }
 
@@ -451,18 +483,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // ── Estimate baseline (single small merge) to size iterations ──────
-    ForgeEngine est_engine;
-    auto est_pair = make_pair(OpType::Merge, SIZES[0], reg_n, ItemPair::EquipBook);
-    auto est_runner = make_forge_into_runner(est_engine, reg, est_pair.target, est_pair.sacrifice);
-    auto start = Clock::now();
-    int est_n = 100'000;
-    for (int i = 0; i < est_n; ++i)
-        est_runner();
-    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count();
-    int base_iters = determine_iterations(static_cast<double>(ns) / est_n);
-    std::cout << "Base iterations: " << base_iters << "\n";
-    std::cout << "Sizes:  S(1+1)  M(5+5)  L(7+10)  (target enchants + sacrifice enchants)\n\n";
+    std::cout << "Sizes:  S(1+1)  M(5+5)  L(7+10)  (target enchants + sacrifice enchants)\n";
+    std::cout << "Each benchmark: 50ms warmup + 5 rounds (median, CV = stability indicator)\n\n";
 
     // ── Results storage (avoids re-running for the summary) ──────────
     struct PerfRow {
@@ -490,8 +512,8 @@ int main(int argc, char* argv[]) {
                 // forge_into
                 {
                     auto runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
-                    auto r = bench("forge_into/" + pair.label, runner, base_iters);
-                    print_result(r, base_iters);
+                    auto r = bench("forge_into/" + pair.label, runner);
+                    print_result(r);
                     if (op == OpType::Merge) {
                         if (&size == &SIZES[0]) pr.merge_s_ns = r.ns_per_op;
                         else if (&size == &SIZES[1]) pr.merge_m_ns = r.ns_per_op;
@@ -505,8 +527,8 @@ int main(int argc, char* argv[]) {
                 // pure_forge_into (only for merge)
                 if (op == OpType::Merge) {
                     auto runner = make_pure_forge_runner(engine, reg, pair.target, pair.sacrifice);
-                    auto r = bench("pure_frge/" + pair.label, runner, base_iters * 2);
-                    print_result(r, base_iters * 2);
+                    auto r = bench("pure_frge/" + pair.label, runner);
+                    print_result(r);
                     if (&size == &SIZES[0]) pr.pure_s_ns = r.ns_per_op;
                     else if (&size == &SIZES[1]) pr.pure_m_ns = r.ns_per_op;
                     else pr.pure_l_ns = r.ns_per_op;
@@ -518,8 +540,8 @@ int main(int argc, char* argv[]) {
         {
             auto pair = make_pair(OpType::Merge, SIZES[0], reg_n, rc.pair_type);
             auto runner = make_estimate_runner(engine, reg, pair.target, pair.sacrifice);
-            auto r = bench("estimate/S", runner, base_iters * 5);
-            print_result(r, base_iters * 5);
+            auto r = bench("estimate/S", runner);
+            print_result(r);
             pr.estimate_ns = r.ns_per_op;
         }
 
@@ -528,10 +550,10 @@ int main(int argc, char* argv[]) {
             auto pair = make_pair(OpType::Merge, SIZES[1], reg_n, rc.pair_type);
             auto into_runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
             auto forge_runner = make_forge_runner(engine, reg, pair.target, pair.sacrifice);
-            auto r_into  = bench("forge_into/M", into_runner, base_iters);
-            auto r_forge = bench("forge(copy)/M", forge_runner, base_iters);
-            print_result(r_into, base_iters);
-            print_result(r_forge, base_iters);
+            auto r_into  = bench("forge_into/M", into_runner);
+            auto r_forge = bench("forge(copy)/M", forge_runner);
+            print_result(r_into);
+            print_result(r_forge);
             pr.forge_copy_ns = r_forge.ns_per_op;
             double copy_overhead = (r_forge.ns_per_op - r_into.ns_per_op) * 100.0 / r_into.ns_per_op;
             std::cout << std::left << std::setw(22) << "  copy overhead"
@@ -547,7 +569,7 @@ int main(int argc, char* argv[]) {
     if (cfg.show_summary && perf_rows.size() >= 4) {
         std::cout << "\n";
         std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
-        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  |  pure_frge (ns/op)  | Overhead vs Merge (/M) |\n";
+        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  | pure_forge (ns/op)  | Overhead vs Merge (/M) |\n";
         std::cout << "| Config                    |    S     M     L     |    S     M     L    | upgr  cnfl  mix  copy  |\n";
         std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
 
