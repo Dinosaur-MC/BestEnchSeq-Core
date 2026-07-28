@@ -80,7 +80,10 @@ LanguageManager &LanguageManager::instance() {
 }
 
 void LanguageManager::register_language(Language lang) {
-    auto [it, _] = _langs.emplace(lang.name(), std::move(lang));
+    // try_emplace: if the key already exists, lang is NOT consumed (still valid).
+    auto [it, inserted] = _langs.try_emplace(lang.name(), std::move(lang));
+    if (!inserted)
+        it->second.merge(lang);   // merge incoming translations into existing entry
     if (!_active)
         _active = &it->second;
 }
