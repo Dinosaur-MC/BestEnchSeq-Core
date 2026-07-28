@@ -33,6 +33,10 @@ bool ForgeEngine::is_forgeable(const Item &a, const Item &b) const noexcept {
 // ─── Forge (mutating) ───────────────────────────────────────────────────────
 
 int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchReg &reg) const {
+    // Reject invalid pairs — defensive guard; callers should check is_forgeable() first.
+    if (!is_forgeable(target, sacrifice))
+        return INT32_MAX;
+
     int32_t cost = 0;
 
     if (!_config.ignore_penalty_cost)
