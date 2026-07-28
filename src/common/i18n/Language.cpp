@@ -1,7 +1,9 @@
 #include "Language.h"
+#include "common/io/json.h"
 #include <cctype>
 #include <charconv>
 #include <cstdlib>
+#include <fstream>
 
 namespace {
 constexpr std::string_view kDefaultLang = "en_US";
@@ -90,8 +92,17 @@ bool LanguageManager::select(std::string_view code) {
         _active = &it->second;
         return true;
     }
-    
-    // 2. Fallback to en_US
+
+    // 2. Try on-disk loading
+    if (load_language_from_disk(code)) {
+        auto loaded = _langs.find(code);
+        if (loaded != _langs.end()) {
+            _active = &loaded->second;
+            return true;
+        }
+    }
+
+    // 3. Fallback to en_US
     auto fb = _langs.find(kDefaultLang);
     if (fb != _langs.end()) {
         _active = &fb->second;
@@ -144,4 +155,43 @@ std::string LanguageManager::resolve_locale(std::string_view locale) const {
 
     // 4. Fallback
     return std::string(kDefaultLang);
+}
+
+void LanguageManager::set_langs_dir(std::filesystem::path dir) {
+    _langs_dir = std::move(dir);
+}
+
+bool LanguageManager::load_language(std::string_view code) {
+    return load_language_from_disk(code);
+}
+
+bool LanguageManager::load_language_from_disk(std::string_view code) {
+    if (_langs_dir.empty())
+        return false;
+
+    auto path = _langs_dir / (std::string(code) + ".json");
+    std::ifstream file(path);
+    if (!file.is_open())
+        return false;
+
+    try {
+        std::string content((std::istreambuf_iterator<char>(file)),
+                             std::istreambuf_iterator<char>());
+        Json root = Json::parse(content);
+
+        // Validate: must have "strings" object
+        if (!root.has("strings") || root["strings"].type() != JsonType::Object)
+            return false;
+
+        Language::Table table;
+        const auto& strings = root["strings"].as_object();
+        for (const auto& [key, value] : strings) {
+            table[std::string(key)] = value.as_string();
+        }
+
+        register_language(Language(code, std::move(table)));
+        return true;
+    } catch (...) {
+        return false;
+    }
 }

@@ -43,8 +43,19 @@ CLIApp::CLIApp()
 void CLIApp::apply_lang(int argc, char* argv[]) {
     auto& lang_mgr = LanguageManager::instance();
 
+    // 0. Set up on-demand language loading directory (next to the executable).
+    if (argc > 0 && argv[0]) {
+        try {
+            auto exe_dir = std::filesystem::path(argv[0]).parent_path();
+            lang_mgr.set_langs_dir(exe_dir / "langs");
+        } catch (...) {
+            // best-effort: ignore if path resolution fails
+        }
+    }
+
     // 1. Select base language from BESQ_LANG env var or system locale.
-    //    LanguageManager::select() handles case/_/- normalization internally.
+    //    LanguageManager::select() handles case/_/- normalization internally
+    //    and will try to load from langs/ on demand.
     std::string base_code = get_env<std::string>("BESQ_LANG", detect_system_locale());
     if (!lang_mgr.select(base_code))
         lang_mgr.select(lang_mgr.resolve_locale(base_code));

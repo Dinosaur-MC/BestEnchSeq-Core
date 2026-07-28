@@ -1,4 +1,5 @@
 #pragma once
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -85,6 +86,16 @@ class LanguageManager {
     static LanguageManager &instance();
 
     void register_language(Language lang);
+
+    /// Select a language by code.
+    ///
+    /// Resolution order:
+    ///   1. Already registered → activate directly.
+    ///   2. On-disk file `{langs_dir}/{code}.json` exists → load & activate.
+    ///   3. Not found → fallback to en_US (keep current active if available).
+    ///
+    /// Returns true when the requested language is now active (including after
+    /// a successful on-disk load). Returns false when falling back to en_US.
     bool select(std::string_view code);
 
     const Language &active() const noexcept;
@@ -94,13 +105,26 @@ class LanguageManager {
     /// 1) exact match, 2) language-prefix match, 3) "en_US" fallback.
     std::string resolve_locale(std::string_view locale) const;
 
+    /// Set a directory to search for on-demand language file loading.
+    /// Directory should contain `{code}.json` files matching the i18n format:
+    ///   { "language": "zh_CN", "strings": { "key": "value", ... } }
+    void set_langs_dir(std::filesystem::path dir);
+
+    /// Attempt to load a language from `{langs_dir}/{code}.json`.
+    /// Returns true if the file was found, parsed and registered.
+    bool load_language(std::string_view code);
+
   private:
     LanguageManager()                                   = default;
     LanguageManager(const LanguageManager &)            = delete;
     LanguageManager &operator=(const LanguageManager &) = delete;
     LanguageManager(LanguageManager &&)                 = delete;
     LanguageManager &operator=(LanguageManager &&)      = delete;
+
+    bool load_language_from_disk(std::string_view code);
+
     std::unordered_map<std::string, Language, detail::TransparentHash, detail::TransparentEqual> _langs;
+    std::filesystem::path _langs_dir;
     const Language *_active = nullptr;
 };
 
