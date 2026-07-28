@@ -256,7 +256,7 @@ std::string OutputFormatter::format_verbose(
         }
 
         out += "\n" + tr("output.verbose.input_section") + "\n";
-        out += tr_fmt("output.verbose.target_item", describe_item_verbose(sol.target_item, ench_reg)) + "\n";
+        // Source/available items first, then target item
         if (!sol.original_ench.empty() && mode == AlgorithmMode::direct) {
             out += tr_fmt("output.verbose.source_enchants", ench_summary_str(sol.original_ench, ench_reg)) + "\n";
         }
@@ -266,6 +266,7 @@ std::string OutputFormatter::format_verbose(
                 out += "    - " + describe_item_verbose(item, ench_reg) + "\n";
             }
         }
+        out += tr_fmt("output.verbose.target_item", describe_item_verbose(sol.target_item, ench_reg)) + "\n";
 
         out += tr("output.verbose.step_separator") + "\n";
         for (size_t j = 0; j < sol.steps.size(); ++j) {
