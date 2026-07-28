@@ -3,6 +3,7 @@
 #include "common/CommonTypes.h"
 #include "common/serialization/IJsonSerializable.h"
 #include <chrono>
+#include <optional>
 #include <vector>
 
 struct Solution;
@@ -73,6 +74,9 @@ struct Solution : IJsonSerializable {
     std::vector<EnchStep> steps;
     size_t max_cost_step_index;
     bool is_success;
+
+    // ── Final item (result after all forge steps) ──
+    std::optional<Item> final_item;
 
     // -- ISerializable --
     Json to_json() const override;

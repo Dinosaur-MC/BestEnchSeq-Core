@@ -75,7 +75,7 @@ Json Solution::to_json() const {
     for (const auto& step : steps)
         steps_arr.push_back(step.to_json());
 
-    return Json::object()
+    Json obj = Json::object()
         .set("metadata", metadata.to_json())
         .set("platform", std::string(Serializer::mce_to_string(platform)))
         .set("original_ench", original_ench.to_json())
@@ -88,6 +88,11 @@ Json Solution::to_json() const {
         .set("steps", steps_arr)
         .set("max_cost_step_index", static_cast<int64_t>(max_cost_step_index))
         .set("is_success", is_success);
+
+    if (final_item.has_value())
+        obj.set("final_item", final_item->to_json());
+
+    return obj;
 }
 
 void Solution::from_json(const Json& json) {
@@ -133,6 +138,12 @@ void Solution::from_json(const Json& json) {
         max_cost_step_index = static_cast<size_t>(json["max_cost_step_index"].as<int64_t>());
     if (json.has("is_success"))
         is_success = json["is_success"].as<bool>();
+
+    if (json.has("final_item")) {
+        Item fi;
+        fi.from_json(json["final_item"]);
+        final_item = std::move(fi);
+    }
 }
 
 bool Solution::is_feasible() const { return is_success && steps.size() > 0; }

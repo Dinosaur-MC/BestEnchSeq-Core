@@ -321,6 +321,27 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.computation_time = _computation_time;
     out.solutions = _ctx->get_solutions();
     out.is_valid = true;
+
+    // ── Compute final_item ──
+    if (!_algorithm_input.items.empty() && !out.solutions.empty()) {
+        const auto& input_equip = _algorithm_input.items[0];
+        out.final_item.type = input_equip.type;
+        out.final_item.dur  = input_equip.dur;
+
+        // Enchantments from source (direct mode) or input equipment
+        if (_algorithm_input.is_direct()) {
+            const auto& src = _algorithm_input.source();
+            out.final_item.enchs = algorithm::EnchSet(src.begin(), src.end());
+        } else {
+            out.final_item.enchs = input_equip.enchs;
+        }
+
+        // Prior penalty from last step's base item
+        const auto& steps = out.solutions[0].steps;
+        if (!steps.empty())
+            out.final_item.ppn = steps.back().base.ppn;
+    }
+
     return out;
 }
 

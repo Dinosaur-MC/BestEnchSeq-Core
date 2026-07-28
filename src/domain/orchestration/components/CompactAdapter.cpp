@@ -195,6 +195,13 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
     std::vector<Solution> solutions;
     solutions.reserve(output.solutions.size());
 
+    // Convert final_item (compact → domain) once, shared by all solutions
+    std::optional<Item> domain_final_item;
+    if (output.final_item.type != algorithm::ItemType::Book ||
+        !output.final_item.enchs.empty() || output.final_item.ppn != 0) {
+        domain_final_item = to_domain(output.final_item, input.ench_reg);
+    }
+
     for (const auto &csol : output.solutions) {
         std::vector<Solution::EnchStep> domain_steps;
         domain_steps.reserve(csol.steps.size());
@@ -219,15 +226,15 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
         else
             plat = MCE::Java;
 
-        solutions.push_back(
-            Solution::make(
-                plat, original_ench, target_item, available_items, domain_steps, true,
-                Solution::MetaData{
-                    output.algorithm_name, output.algorithm_version, std::chrono::system_clock::now(),
-                    std::chrono::milliseconds(0)
-                }
-            )
+        auto sol = Solution::make(
+            plat, original_ench, target_item, available_items, domain_steps, true,
+            Solution::MetaData{
+                output.algorithm_name, output.algorithm_version, std::chrono::system_clock::now(),
+                std::chrono::milliseconds(0)
+            }
         );
+        sol.final_item = domain_final_item;  // set final item (shared by all solutions)
+        solutions.push_back(std::move(sol));
     }
 
     return solutions;
