@@ -8,9 +8,11 @@ besq_test(test_astar_memory_budget test_astar_memory_budget.cpp)
 besq_test(test_ench_reg test_ench_reg.cpp)
 besq_test(test_algorithm_registry test_algorithm_registry.cpp)
 
-# Serialization tests (compact types, AStar state serializer)
+# Serialization tests (compact types, state serializers)
 besq_test(test_compact_serializer test_compact_serializer.cpp)
 besq_test(test_astar_state_serializer test_astar_state_serializer.cpp)
+besq_test(test_dfs_state_serializer test_dfs_state_serializer.cpp)
+besq_test(test_dp_merge_state_serializer test_dp_merge_state_serializer.cpp)
 
 besq_test(test_diagnostics test_diagnostics.cpp)
 besq_test(test_algorithm_loader test_algorithm_loader.cpp)

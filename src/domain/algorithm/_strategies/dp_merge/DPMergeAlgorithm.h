@@ -3,7 +3,9 @@
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/registries/EnchReg.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -16,6 +18,7 @@
 ///   4. Bucket by (EnchSet, PPN, type): within each equivalence class, keep
 ///      only the cheapest entry.
 namespace algorithm {
+class DPMergeStateSerializer;
 
 class DPMergeAlgorithm : public IAlgorithm {
 public:
@@ -32,6 +35,14 @@ public:
     AlgorithmMode supported_mode() const noexcept override {
         return AlgorithmMode::direct;
     }
+
+    // ── Serialization support ─────────────────────────────────────────
+    void init(const AlgorithmInput &input, const ExecutionContext &ctx) override;
+    IAlgorithmSerializer *get_serializer() noexcept override;
+    const IAlgorithmSerializer *get_serializer() const noexcept override;
+    bool is_resumable() const noexcept override { return true; }
+
+    friend class DPMergeStateSerializer;
 
 private:
     struct ParetoEntry {
@@ -66,6 +77,9 @@ private:
 
     // Cache size limit prevents unbounded memory growth for large N.
     static constexpr size_t MAX_CACHE_ENTRIES = 500000;
+
+    // ── 序列化 ───
+    mutable std::unique_ptr<IAlgorithmSerializer> _serializer;
 };
 
 static_assert(std::is_nothrow_destructible_v<DPMergeAlgorithm>,

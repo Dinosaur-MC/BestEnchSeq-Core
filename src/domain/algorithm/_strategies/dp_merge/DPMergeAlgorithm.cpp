@@ -1,10 +1,12 @@
 #include "DPMergeAlgorithm.h"
+#include "DPMergeStateSerializer.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <vector>
 
 namespace algorithm {
@@ -180,18 +182,43 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
     return result;
 }
 
-// ─── execute ──────────────────────────────────────────────────────────────
+// ─── Serialization support ─────────────────────────────────────────────────
 
-void DPMergeAlgorithm::execute(AlgorithmInput input,
-                                ExecutionContext& ctx) {
-    _forge_engine.set_config(input.f_config);
+IAlgorithmSerializer *DPMergeAlgorithm::get_serializer() noexcept {
+    if (!_serializer)
+        _serializer = std::make_unique<DPMergeStateSerializer>();
+    return _serializer.get();
+}
+const IAlgorithmSerializer *DPMergeAlgorithm::get_serializer() const noexcept {
+    return const_cast<DPMergeAlgorithm *>(this)->get_serializer();
+}
+
+// ─── init ─────────────────────────────────────────────────────────────────
+
+void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
     _ench_reg  = &input.ench_reg;
     _target.clear();
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
 
+    if (ctx.is_restored())
+        return;  // _cache already restored by serializer
+
+    // Fresh start: clear memoisation cache
     _cache.clear();
     _diag = AlgorithmDiagnostics{};
+}
+
+// ─── execute ──────────────────────────────────────────────────────────────
+
+void DPMergeAlgorithm::execute(AlgorithmInput input,
+                                ExecutionContext& ctx) {
+    _forge_engine.set_config(input.f_config);
+
+    if (!ctx.is_restored()) {
+        _cache.clear();
+        _diag = AlgorithmDiagnostics{};
+    }
 
     ctx.report_progress(0, ProgressStatus::Starting);
 

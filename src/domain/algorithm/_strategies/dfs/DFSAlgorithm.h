@@ -2,16 +2,20 @@
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/registries/EnchReg.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "common/utils/FlatHashMap.hpp"
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <vector>
 
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 
 namespace algorithm {
+class DFSStateSerializer;
+
 class DFSAlgorithm : public IAlgorithm {
   public:
     explicit DFSAlgorithm(ForgeConfig cfg = {}) noexcept : _forge_engine(std::move(cfg)) {}
@@ -24,6 +28,14 @@ class DFSAlgorithm : public IAlgorithm {
         return std::make_unique<ForgeEngine>(_forge_engine);
     }
     AlgorithmMode supported_mode() const noexcept override { return AlgorithmMode::direct; }
+
+    // ── Serialization support ─────────────────────────────────────────
+    void init(const AlgorithmInput &input, const ExecutionContext &ctx) override;
+    IAlgorithmSerializer *get_serializer() noexcept override;
+    const IAlgorithmSerializer *get_serializer() const noexcept override;
+    bool is_resumable() const noexcept override { return true; }
+
+    friend class DFSStateSerializer;
 
   private:
     struct ForgePair {
@@ -75,6 +87,9 @@ class DFSAlgorithm : public IAlgorithm {
     std::chrono::steady_clock::time_point _start_time;
 
     SearchDiagnostics _diag;
+
+    // ── 序列化 ───
+    mutable std::unique_ptr<IAlgorithmSerializer> _serializer;
 };
 
 // ── Compile-time checks ─────────────────────────────────────────────────

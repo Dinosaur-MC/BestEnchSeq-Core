@@ -1,10 +1,12 @@
 #include "DFSAlgorithm.h"
+#include "DFSStateSerializer.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/components/Heuristic.h"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>
+#include <memory>
 
 #include <vector>
 
@@ -89,20 +91,30 @@ int32_t DFSAlgorithm::_heuristic(const std::vector<Item>& items) const {
         _h_buf, _h_dirty);
 }
 
-// ─── execute ───────────────────────────────────────────────────────────────
+// ─── Serialization support ─────────────────────────────────────────────────
 
-void DFSAlgorithm::execute(AlgorithmInput input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.f_config);
-    const auto& items = input.items;
-    const auto& reg = input.ench_reg;
-    const auto& target = input.target;
-    ctx.report_progress(0, ProgressStatus::Starting);
-    _start_time = std::chrono::steady_clock::now();
+IAlgorithmSerializer *DFSAlgorithm::get_serializer() noexcept {
+    if (!_serializer)
+        _serializer = std::make_unique<DFSStateSerializer>();
+    return _serializer.get();
+}
+const IAlgorithmSerializer *DFSAlgorithm::get_serializer() const noexcept {
+    return const_cast<DFSAlgorithm *>(this)->get_serializer();
+}
 
+// ─── init ─────────────────────────────────────────────────────────────────
+
+void DFSAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
     _ench_reg = &input.ench_reg;
     _search_config = input.s_config;
-    _target.clear(); for (const auto& e : target.enchs) _target.push_back(e);
+    _target.clear();
+    for (const auto& e : input.target.enchs)
+        _target.push_back(e);
 
+    if (ctx.is_restored())
+        return;  // stack/frame_pairs/visited_best/steps already restored by serializer
+
+    // Fresh start: reset all state
     _best_cost = INT32_MAX;
     _best_steps.clear();
     _current_steps.clear();
@@ -110,16 +122,29 @@ void DFSAlgorithm::execute(AlgorithmInput input, ExecutionContext& ctx) {
     _stack.clear();
     _frame_pairs.clear();
     _solutions_found = 0;
+    _diag = SearchDiagnostics{};
+}
 
-    if (items.size() > 1)
-        _best_cost = _greedy_bound(items, reg);
+// ─── execute ───────────────────────────────────────────────────────────────
 
-    // Warm-start bound from executor chain (tighter than our own)
-    if (input.initial_bound < _best_cost)
-        _best_cost = input.initial_bound;
+void DFSAlgorithm::execute(AlgorithmInput input, ExecutionContext& ctx) {
+    _forge_engine.set_config(input.f_config);
+    const auto& items = input.items;
+    const auto& reg = input.ench_reg;
+    ctx.report_progress(0, ProgressStatus::Starting);
+    _start_time = std::chrono::steady_clock::now();
 
-    _stack.push_back({items, 0, 0, 0, {}, {}, 0, 0, false});
-    _frame_pairs.emplace_back();
+    if (!ctx.is_restored()) {
+        if (items.size() > 1)
+            _best_cost = _greedy_bound(items, reg);
+
+        // Warm-start bound from executor chain (tighter than our own)
+        if (input.initial_bound < _best_cost)
+            _best_cost = input.initial_bound;
+
+        _stack.push_back({items, 0, 0, 0, {}, {}, 0, 0, false});
+        _frame_pairs.emplace_back();
+    }
 
     _dfs_iterative(ctx);
 
