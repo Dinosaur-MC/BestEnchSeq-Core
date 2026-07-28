@@ -767,9 +767,13 @@ std::optional<Item> AStarAlgorithm::process(const EnchSolution &solution) const 
         return std::nullopt;
 
     // Replay forge steps sequentially to compute the final item.
+    // When a step's base is equipment, switch to it — books are intermediate.
     Item result = solution.steps[0].base;
-    for (const auto &step : solution.steps)
+    for (const auto &step : solution.steps) {
+        if (step.base.type == ItemType::Equip)
+            result = step.base;
         _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
+    }
     return result;
 }
 

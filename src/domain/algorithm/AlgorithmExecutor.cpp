@@ -322,26 +322,13 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.solutions = _ctx->get_solutions();
     out.is_valid = true;
 
-    // ── Derive final_item from first solution's forge steps ──
-    // Enchantments accumulate across steps; penalty from last step's base ppn.
-    if (!_algorithm_input.items.empty() && !out.solutions.empty()) {
-        const auto& input_equip = _algorithm_input.items[0];
-        out.final_item.type = input_equip.type;
-        out.final_item.dur  = input_equip.dur;
-
-        algorithm::EnchSet merged;
-        const auto& steps = out.solutions[0].steps;
-        if (!steps.empty()) {
-            // Start with first step's base enchantments
-            for (const auto& ench : steps[0].base.enchs)
-                merged.insert(ench);
-            // Merge sacrifice enchantments from all steps
-            for (const auto& step : steps)
-                for (const auto& ench : step.sacrifice.enchs)
-                    merged.insert(ench);
-            out.final_item.ppn = steps.back().base.ppn;
-        }
-        out.final_item.enchs = std::move(merged);
+    // ── Derive final_item from first solution via algorithm's process() ──
+    // Delegates to each strategy's own forge replay (handles level merging,
+    // conflict resolution, PPN tracking correctly).
+    if (!out.solutions.empty()) {
+        auto final = _algorithm->process(out.solutions[0]);
+        if (final.has_value())
+            out.final_item = std::move(*final);
     }
 
     return out;
