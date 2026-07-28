@@ -66,6 +66,16 @@ target_include_directories(besq-common-i18n PUBLIC
 )
 target_link_libraries(besq-common-i18n PUBLIC besq-common-io)
 
+# ── besq-common-thread ────────────────────────────────────────────────────────────
+
+add_library(besq-common-thread STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/thread/ThreadPool.cpp"
+)
+target_include_directories(besq-common-thread PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "utils/thread/ThreadPool.h"
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "common/utils/thread/ThreadPool.h"
+)
+
 # ── besq-common-cli ───────────────────────────────────────────────────────────
 
 add_library(besq-common-cli STATIC
@@ -85,6 +95,7 @@ target_link_libraries(besq-common INTERFACE
     besq-common-io
     besq-common-log
     besq-common-i18n
+    besq-common-thread
     besq-common-cli
 )
 target_include_directories(besq-common INTERFACE

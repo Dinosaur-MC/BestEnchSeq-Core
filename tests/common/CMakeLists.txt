@@ -44,6 +44,15 @@ target_include_directories(test_event_loop PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_event_loop COMMAND test_event_loop)
 set_tests_properties(test_event_loop PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# ThreadPool
+add_executable(test_thread_pool
+    utils/test_thread_pool.cpp
+    ${PROJECT_ROOT}/src/common/utils/thread/ThreadPool.cpp
+)
+target_include_directories(test_thread_pool PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_thread_pool COMMAND test_thread_pool)
+set_tests_properties(test_thread_pool PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
 # MemoryPool / ObjectPool
 add_executable(test_memory_pool utils/MemoryPoolTest.cpp)
 target_include_directories(test_memory_pool PRIVATE ${TEST_INCLUDE})

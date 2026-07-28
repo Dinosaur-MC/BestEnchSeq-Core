@@ -44,6 +44,13 @@ target_include_directories(queue_benchmark PRIVATE ${BENCH_INCLUDE})
 add_executable(eloop_benchmark eloop_benchmark.cpp)
 target_include_directories(eloop_benchmark PRIVATE ${BENCH_INCLUDE})
 
+# ── thread_pool_benchmark (standalone, ThreadPool) ──
+add_executable(thread_pool_benchmark
+    thread_pool_benchmark.cpp
+    ${PROJECT_ROOT}/src/common/utils/thread/ThreadPool.cpp
+)
+target_include_directories(thread_pool_benchmark PRIVATE ${BENCH_INCLUDE})
+
 # Quick smoke test for ctest — runs one small case with greedy algo (< 5s)
 add_test(NAME benchmark_smoke
     COMMAND forge_benchmark --test crossbow --algo hamming
