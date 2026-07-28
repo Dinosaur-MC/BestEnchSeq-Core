@@ -31,14 +31,12 @@
     "cli.help.ench_format_id_level": "id=level                e.g., sharpness=5",
     "cli.help.ench_format_nsid_level": "ns:id=level             e.g., minecraft:sharpness=5",
     "cli.help.ench_format_colon": "id:level                e.g., sharpness:5 (colon shorthand)",
-
     "cli.help.group_basic": "Basic Options",
     "cli.help.group_output": "Output Options",
     "cli.help.group_platform": "Platform Options",
     "cli.help.group_registry": "Registry Options",
     "cli.help.group_advanced": "Advanced Options",
     "cli.help.group_info": "Information",
-
     "cli.err.invalid_mode": "Invalid mode: '{0}'. Expected 'direct' or 'inventory'.",
     "cli.err.invalid_platform": "Invalid platform: '{0}'. Expected 'java', 'bedrock', or 'auto'.",
     "cli.err.invalid_format": "Invalid format: '{0}'. Expected 'text', 'compact', or 'json'.",
@@ -91,19 +89,15 @@
     "cli.err.required_missing": "Required option '--{0}' is missing",
     "cli.err.parse_failed": "Failed to parse command line arguments",
     "cli.err.missing_target_or_export": "Missing --target or --export-registry",
-
     "cli.msg.version": "{0} version {1}",
     "cli.msg.list_algorithms": "Available algorithm strategies ({0}):",
-
     "output.mode.direct": "Simple Crafting",
     "output.mode.inventory": "Inventory Crafting",
     "output.mode.unknown": "Unknown",
-
     "output.platform.java": "Java Edition",
     "output.platform.bedrock": "Bedrock Edition",
     "output.platform.all": "Universal",
     "output.platform.unknown": "Unknown",
-
     "output.verbose.forge_plan": "Forge Plan",
     "output.verbose.infeasible": "[Infeasible]",
     "output.verbose.separator": "===========================================",
@@ -122,18 +116,10 @@
     "output.verbose.step_prefix": "  Step {0}: ",
     "output.verbose.plus": " + ",
     "output.verbose.step_cost": "          - Cost: {0} levels ({1} XP)",
-
-    "output.item.enchanted_book": "Enchanted Book(",
-    "output.item.no_enchants": "no enchantments",
     "output.item.free": "(free)",
-    "output.item.anvil_penalty": "[Anvil Penalty x{0}]",
-    "output.item.durability": "[Durability {0}]",
     "output.item.enchant_sep": " + ",
-    "output.item.book_equip_sep": ", ",
-
     "pipeline.err.unknown_algo": "Unknown algorithm: '{0}'. Available: {1}",
     "pipeline.err.unsupported_mode": "Algorithm '{0}' does not support '{1}' mode",
-
     "main.err.export_failed": "Failed to export registry to: {0}",
     "main.err.output_failed": "Failed to open output file: {0}",
     "main.err.error_prefix": "Error: {0}",

@@ -105,7 +105,7 @@ std::string OutputFormatter::describe_item_verbose(
 
     if (item.is_book()) {
         if (item.enchantments.empty()) {
-            return "enchanted_book (free)";
+            return "enchanted_book " + tr("output.item.free");
         }
         return "enchanted_book[" + ench_part + "]{ppn=" + std::to_string(item.prior_penalty) + "}";
     }
@@ -119,7 +119,7 @@ std::string OutputFormatter::describe_item_verbose(
               ",dur=" + std::to_string(item.durability) + "}";
 
     if (item.prior_penalty == 0 && item.enchantments.empty()) {
-        result += " (free)";
+        result += " " + tr("output.item.free");
     }
 
     return result;

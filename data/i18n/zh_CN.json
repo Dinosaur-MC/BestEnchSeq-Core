@@ -31,14 +31,12 @@
     "cli.help.ench_format_id_level": "id=level                例如 sharpness=5",
     "cli.help.ench_format_nsid_level": "ns:id=level             例如 minecraft:sharpness=5",
     "cli.help.ench_format_colon": "id:level                例如 sharpness:5 (冒号简写)",
-
     "cli.help.group_basic": "基本选项",
     "cli.help.group_output": "输出选项",
     "cli.help.group_platform": "平台选项",
     "cli.help.group_registry": "注册表选项",
     "cli.help.group_advanced": "高级选项",
     "cli.help.group_info": "信息",
-
     "cli.err.invalid_mode": "无效模式: '{0}'。请使用 'direct' 或 'inventory'。",
     "cli.err.invalid_platform": "无效平台: '{0}'。请使用 'java'、'bedrock' 或 'auto'。",
     "cli.err.invalid_format": "无效输出格式: '{0}'。请使用 'text'、'compact' 或 'json'。",
@@ -91,19 +89,15 @@
     "cli.err.required_missing": "缺少必要选项 '--{0}'",
     "cli.err.parse_failed": "命令行参数解析失败",
     "cli.err.missing_target_or_export": "缺少 --target 或 --export-registry",
-
     "cli.msg.version": "{0} version {1}",
     "cli.msg.list_algorithms": "可用算法策略 ({0}):",
-
     "output.mode.direct": "简单锻造",
     "output.mode.inventory": "库存锻造",
     "output.mode.unknown": "未知",
-
     "output.platform.java": "Java版",
     "output.platform.bedrock": "Bedrock版",
     "output.platform.all": "通用",
     "output.platform.unknown": "未知",
-
     "output.verbose.forge_plan": "锻造方案",
     "output.verbose.infeasible": "[不可行]",
     "output.verbose.separator": "===========================================",
@@ -122,18 +116,10 @@
     "output.verbose.step_prefix": "  步骤 {0}: ",
     "output.verbose.plus": " + ",
     "output.verbose.step_cost": "          - 消耗: {0} 等级 ({1} 经验值)",
-
-    "output.item.enchanted_book": "附魔书(",
-    "output.item.no_enchants": "无魔咒",
     "output.item.free": "(免费)",
-    "output.item.anvil_penalty": "[铁砧惩罚 x{0}]",
-    "output.item.durability": "[耐久 {0}]",
     "output.item.enchant_sep": " + ",
-    "output.item.book_equip_sep": ", ",
-
     "pipeline.err.unknown_algo": "未知算法: '{0}'。可用算法: {1}",
     "pipeline.err.unsupported_mode": "算法 '{0}' 不支持 '{1}' 模式",
-
     "main.err.export_failed": "导出注册表失败: {0}",
     "main.err.output_failed": "无法打开输出文件: {0}",
     "main.err.error_prefix": "错误: {0}",

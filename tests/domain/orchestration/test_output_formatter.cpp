@@ -217,8 +217,10 @@ void test_verbose_item_format() {
     // Check for new format patterns
     expect(output.find("{ppn=0,dur=1561}") != std::string::npos,
            "verbose output should have new attribute format with ppn and dur");
-    expect(output.find("(free)") != std::string::npos,
-           "verbose output should show (free) for empty items with ppn=0");
+    // Note: tr() returns the key string when Language is uninitialized in tests
+    expect(output.find("output.item.free") != std::string::npos ||
+           output.find("(free)") != std::string::npos,
+           "verbose output should show free indicator for empty items with ppn=0");
     expect(output.find("enchanted_book") != std::string::npos,
            "verbose output should show 'enchanted_book' for books");
 
