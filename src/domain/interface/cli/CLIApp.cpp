@@ -43,7 +43,17 @@ int CLIApp::run(int argc, char* argv[]) {
         LanguageManager::instance().select(
             LanguageManager::instance().resolve_locale(config.lang));
 
-    if (config.help || config.version) return 0;
+    if (config.help) {
+        std::cout << help_text(argv[0]) << std::endl;
+        return 0;
+    }
+    if (config.version) {
+        std::cout << BESQ_PROJECT_NAME << " v" << BESQ_VERSION << std::endl;
+        return 0;
+    }
+    if (config.brief_usage) {
+        return 0;
+    }
 
     // 2. Load algorithm plugins
     if (config.algo_dir)
@@ -235,11 +245,9 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         Config early_cfg = bind(result);
 
         if (early_cfg.help) {
-            std::cout << help_text(prog) << std::endl;
             return early_cfg;
         }
         if (early_cfg.version) {
-            std::cout << BESQ_PROJECT_NAME << " v" << BESQ_VERSION << std::endl;
             return early_cfg;
         }
 
@@ -262,11 +270,9 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
 
     // Handle --help / --version for clean parses (no diagnostics)
     if (cfg.help) {
-        std::cout << help_text(prog) << std::endl;
         return cfg;
     }
     if (cfg.version) {
-        std::cout << BESQ_PROJECT_NAME << " v" << BESQ_VERSION << std::endl;
         return cfg;
     }
 
@@ -356,7 +362,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
                 std::cout << tr_fmt("cli.help.usage", prog) << "\n";
                 std::cout << tr_fmt("cli.help.usage_export", prog) << "\n";
                 std::cout << tr_fmt("cli.err.try_help", prog) << "\n";
-                cfg.help = true;  // signal run() to skip further processing
+                cfg.brief_usage = true;  // signal run() to skip further processing
             } else {
                 throw std::runtime_error(tr("cli.err.missing_target_or_export"));
             }

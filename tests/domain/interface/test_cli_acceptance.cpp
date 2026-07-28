@@ -200,7 +200,7 @@ void test_algorithm_name() {
 void test_no_args_shows_usage() {
     const char* argv[] = {"besq"};
     auto config = CLIApp::parse(1, const_cast<char**>(argv));
-    expect(config.help, "no args should set help flag (not throw)");
+    expect(config.brief_usage, "no args should set brief_usage flag (not throw)");
     TEST_PASS("test_no_args_shows_usage");
 }
 

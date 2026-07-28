@@ -40,8 +40,9 @@ public:
         int max_time         = 0;
         bool verbose         = false;
         bool help            = false;
-        bool list_algorithms = false;
         bool version         = false;
+        bool brief_usage     = false;
+        bool list_algorithms = false;
     };
 
     // ── Parser methods ──
