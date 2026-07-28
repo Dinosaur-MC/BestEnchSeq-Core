@@ -23,8 +23,10 @@
 
 #include "domain/algorithm/registries/AlgorithmRegistry.h"
 #include "PluginAPI.h"
+#include "PluginAudit.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -51,12 +53,19 @@ class AlgorithmLoader {
     /// Load a single plugin by full path. Returns true on success.
     bool load_plugin(const std::string &so_path);
 
+    // ── Security audit ────────────────────────────────────────────────
+    /// Standalone scanning: use audit_plugin_binary() from PluginAudit.h.
+
     // ── Query ─────────────────────────────────────────────────────────
 
     /// List all registered algorithm names (built-in + plugins).
     std::vector<std::string> list() const;
     bool contains(std::string_view name) const;
     size_t size() const;
+
+    /// Retrieve the audit report for a loaded plugin.
+    /// Returns nullptr if the plugin was not audited or not found.
+    const PluginAuditReport *get_audit_report(std::string_view name) const;
 
     // ── Factory ───────────────────────────────────────────────────────
 
@@ -69,12 +78,20 @@ class AlgorithmLoader {
     void unload(const std::string &name);
     void unload_all();
 
+  public:
+    /// Retrieve the audit report for the most recently loaded plugin.
+    /// Returns nullptr if no plugin has been loaded yet.
+    const PluginAuditReport *last_audit() const { return _last_audit ? &_last_audit.value() : nullptr; }
+
   private:
     struct LoadedPlugin {
         void *handle{nullptr};
         std::string name;
         std::string path; // canonicalized so_path for dedup
+        PluginAuditReport audit;
     };
+
+    std::optional<PluginAuditReport> _last_audit;
 
     bool resolve_plugin(void *handle, const std::string &path, BesqCreateFn &out_create);
 

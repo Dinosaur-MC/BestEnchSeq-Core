@@ -2,6 +2,7 @@
 #include "domain/algorithm/_strategies/Registration.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "AlgorithmLoader.h"
+#include "PluginAudit.h"
 #include "common/log/log.hpp"
 
 #include <algorithm>
@@ -130,27 +131,100 @@ size_t AlgorithmLoader::scan_and_load(const std::string &dir_path) {
 bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     // Avoid double-load on exact path
     auto resolved = std::filesystem::weakly_canonical(so_path).string();
-    for (const auto &p : _plugins) {
+    for (const auto &p : _plugins)
         if (p.path == resolved) {
             LOG_WARN("Algorithm plugin already loaded: %s", so_path.c_str());
             return true;
         }
-    }
 
-    void *handle = dl_open(so_path);
-    if (!handle) {
-        LOG_WARN("Failed to load algorithm plugin '%s': %s", so_path.c_str(), dl_error().c_str());
+    // ── Step 1: Pre-load binary audit ────────────────────────────────
+    PluginAuditReport audit = audit_plugin_binary(resolved);
+    _last_audit = audit;
+
+    // W^X segment is a hard reject — indicates a JIT / code-injection risk.
+    if (audit.has_wx_segment) {
+        LOG_ERROR("[Audit] REFUSED '%s' — W+X memory segment (exploit risk)",
+                  so_path.c_str());
         return false;
     }
 
+    // General audit failure (corrupted / truncated / non-native format).
+    if (!audit.passed) {
+        LOG_ERROR("[Audit] REFUSED '%s' — binary audit failed (corrupted or "
+                  "unrecognized format)", so_path.c_str());
+        return false;
+    }
+
+    // Log extra exports (if any)
+    if (!audit.extra_exports.empty()) {
+        // clang-format off
+        LOG_WARN("[Audit] '%s' exports %zu unexpected symbol(s):", so_path.c_str(),
+                 audit.extra_exports.size());
+        for (const auto &s : audit.extra_exports)
+            LOG_WARN("[Audit]   export → %s", s.c_str());
+        // clang-format on
+    }
+
+    // Log dangerous imports (if any)
+    if (!audit.dangerous_imports.empty()) {
+        // clang-format off
+        LOG_WARN("[Audit] '%s' imports %zu dangerous symbol(s):", so_path.c_str(),
+                 audit.dangerous_imports.size());
+        for (const auto &s : audit.dangerous_imports)
+            LOG_WARN("[Audit]   import → %s", s.c_str());
+        // clang-format on
+    }
+
+    // Log linked libraries (always informative)
+    if (!audit.linked_libraries.empty()) {
+        std::string joined;
+        for (const auto &lib : audit.linked_libraries) {
+            if (!joined.empty()) joined += ", ";
+            joined += lib;
+        }
+        LOG_INFO("[Audit] '%s' links: %s", so_path.c_str(), joined.c_str());
+    }
+
+    // ── Step 2: dlopen ───────────────────────────────────────────────
+    void *handle = dl_open(resolved);
+    if (!handle) {
+        LOG_WARN("Failed to load algorithm plugin '%s': %s",
+                 so_path.c_str(), dl_error().c_str());
+        return false;
+    }
+
+    // ── Step 3: Verify required entry point ──────────────────────────
     BesqCreateFn create_fn = nullptr;
     if (!resolve_plugin(handle, so_path, create_fn)) {
         dl_close(handle);
         return false;
     }
 
-    // Instantiate once to get the algorithm name via its virtual method.
-    // This also validates that the plugin works with our besq-core.
+    // ── Step 4: Read capability manifest (post-dlopen) ──────────────
+    {
+        auto cap_fn = reinterpret_cast<BesqCapabilityFn>(
+            dl_sym(handle, BESQ_PLUGIN_CAPABILITY_SYM));
+        if (cap_fn) {
+            audit.has_manifest = true;
+            audit.capability   = cap_fn();
+        }
+
+        if (!audit.has_manifest) {
+            LOG_WARN("[Audit] '%s' does not declare a capability manifest. "
+                     "Add BESQ_PLUGIN_ENTRY_CAP(..., PluginCapability::None) "
+                     "to its plugin.cpp.", so_path.c_str());
+        } else if (audit.capability != PluginCapability::None) {
+            LOG_WARN("[Audit] '%s' declares capability '%s' — suspicious for a "
+                     "pure-compute forge plugin.",
+                     so_path.c_str(),
+                     audit.capability == PluginCapability::Filesystem ? "Filesystem" :
+                     audit.capability == PluginCapability::Network    ? "Network" :
+                     audit.capability == PluginCapability::Unrestricted ? "Unrestricted" :
+                     "Unknown");
+        }
+    }
+
+    // ── Step 5: Probe (validate ABI by creating an instance) ─────────
     std::unique_ptr<IAlgorithm> probe(static_cast<IAlgorithm *>(create_fn()));
     if (!probe) {
         LOG_WARN("Plugin '%s' returned null from create", so_path.c_str());
@@ -159,14 +233,11 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     }
     std::string algo_name(probe->name());
 
-    // If a previously-loaded plugin has the same name, replace it.
+    // ── Step 6: Register ─────────────────────────────────────────────
     _registry.unregister_algorithm(algo_name);
-
-    // Register factory
     _registry.register_algorithm(algo_name, [create_fn]() -> std::unique_ptr<IAlgorithm> {
         void *raw = create_fn();
-        if (!raw)
-            return nullptr;
+        if (!raw) return nullptr;
         return std::unique_ptr<IAlgorithm>(static_cast<IAlgorithm *>(raw));
     });
 
@@ -174,6 +245,7 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     plugin.handle = handle;
     plugin.name   = algo_name;
     plugin.path   = std::move(resolved);
+    plugin.audit  = std::move(audit);
     _plugins.push_back(std::move(plugin));
 
     LOG_INFO("Loaded algorithm plugin: %s (from %s)", algo_name.c_str(), so_path.c_str());
@@ -207,6 +279,16 @@ size_t AlgorithmLoader::size() const { return _registry.size(); }
 
 std::unique_ptr<IAlgorithm> AlgorithmLoader::create(std::string_view name) const {
     return _registry.create(name);
+}
+
+// ====================================================================
+// Audit
+// ====================================================================
+
+const PluginAuditReport *AlgorithmLoader::get_audit_report(std::string_view name) const {
+    auto it = std::find_if(_plugins.begin(), _plugins.end(),
+                           [&](const auto &p) { return p.name == name; });
+    return it != _plugins.end() ? &it->audit : nullptr;
 }
 
 // ====================================================================

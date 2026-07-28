@@ -78,14 +78,29 @@ extern "C" void* besq_create_algorithm();
 
 主机通过 `GetProcAddress` / `dlsym` 查找此符号并调用工厂函数。主机与插件共享 `besq-core` 库的 vtable 和堆，因此无需特殊的销毁函数。
 
+### 安全审计（自动执行）
+
+从 `besq-core` 开始，每个插件加载时会自动执行安全审查：
+
+1. **W^X 检查** — 检测是否有同时可写和可执行的内存段（拒绝加载）
+2. **导入检查** — 检测是否导入了 `socket`、`fork`、`dlopen` 等危险符号
+3. **导出检查** — 列举除标准入口外的额外导出符号
+4. **链接库审计** — 列出所有 DT_NEEDED / Import DLL
+5. **Capability Manifest** — 验证插件声明的权限等级
+
 ### 便捷宏
 
-在 `plugin.cpp` 中使用 `BESQ_PLUGIN_ENTRY` 宏即可自动生成导出符号：
+在 `plugin.cpp` 中使用 `BESQ_PLUGIN_ENTRY` 宏即可自动生成导出符号和权限声明：
 
 ```cpp
 #include "domain/algorithm/plugin/PluginEntry.h"
 #include "<name>/<Name>Algorithm.h"
+
+// 默认声明为 PluginCapability::None（纯计算，推荐）
 BESQ_PLUGIN_ENTRY(NameAlgorithm)
+
+// 或显式指定权限等级：
+// BESQ_PLUGIN_ENTRY_CAP(NameAlgorithm, PluginCapability::None)
 ```
 
 ## 创建新插件

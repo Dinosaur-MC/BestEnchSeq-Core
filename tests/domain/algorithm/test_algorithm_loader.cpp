@@ -1,5 +1,6 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/algorithm/plugin/PluginAudit.h"
 #include "domain/algorithm/IAlgorithm.h"
 
 using namespace algorithm;
@@ -87,6 +88,46 @@ void test_loader_double_load() {
     std::cout << "PASS: test_loader_double_load" << std::endl;
 }
 
+// ─── Audit tests ───────────────────────────────────────────────────
+
+void test_audit_default_state() {
+    AlgorithmLoader loader;
+    loader.load_builtin();
+
+    // Before any plugin load, last_audit() should be nullptr
+    expect(loader.last_audit() == nullptr, "audit: last_audit is null before any load");
+
+    std::cout << "PASS: test_audit_default_state" << std::endl;
+}
+
+void test_audit_static_method() {
+    // Scan a non-existent file — should return passed=false
+    auto report = audit_plugin_binary("nonexistent_plugin.so");
+    expect(!report.passed, "audit: nonexistent file returns passed=false");
+
+    // Scan a regular source file (not a valid ELF/PE) — should return passed=false
+    // because the binary format will not be recognized.
+    auto report2 = audit_plugin_binary("test_algorithm_loader.cpp");
+    expect(!report2.passed, "audit: non-binary file returns passed=false");
+
+    std::cout << "PASS: test_audit_static_method" << std::endl;
+}
+
+void test_audit_report_defaults() {
+    PluginAuditReport r;
+
+    expect(r.passed, "audit: default report has passed=true");
+    expect(!r.has_wx_segment, "audit: default report has no W+X");
+    expect(r.extra_exports.empty(), "audit: default report has no extra exports");
+    expect(r.dangerous_imports.empty(), "audit: default report has no dangerous imports");
+    expect(r.linked_libraries.empty(), "audit: default report has no linked libs");
+    expect(!r.has_manifest, "audit: default report has no manifest");
+    expect(r.capability == PluginCapability::Unrestricted,
+           "audit: default capability is Unrestricted");
+
+    std::cout << "PASS: test_audit_report_defaults" << std::endl;
+}
+
 int main() {
     try {
         test_loader_builtin_list();
@@ -94,6 +135,9 @@ int main() {
         test_loader_create();
         test_loader_size();
         test_loader_double_load();
+        test_audit_default_state();
+        test_audit_static_method();
+        test_audit_report_defaults();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
