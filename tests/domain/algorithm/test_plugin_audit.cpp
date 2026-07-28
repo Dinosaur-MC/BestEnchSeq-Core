@@ -34,15 +34,17 @@ namespace {
 
 // ── Little-endian write helpers ────────────────────────────────
 
-/// Append v as 2 LE bytes to vector.
+/// Append v as 2 LE bytes to vector (PE-specific).
+#if defined(_WIN32)
 void append_le16(std::vector<uint8_t> &b, uint16_t v) {
     b.push_back(static_cast<uint8_t>(v));
     b.push_back(static_cast<uint8_t>(v >> 8));
 }
-/// Append v as 4 LE bytes to vector.
+/// Append v as 4 LE bytes to vector (PE-specific).
 void append_le32(std::vector<uint8_t> &b, uint32_t v) {
     for (int i = 0; i < 4; ++i) { b.push_back(static_cast<uint8_t>(v)); v >>= 8; }
 }
+#endif
 // (append_le64 intentionally omitted — not needed)
 
 /// Write v as 4 LE bytes at position pos in a pre-sized vector.
@@ -286,8 +288,9 @@ void test_audit_valid_elf() {
 }
 
 void test_audit_elf_wx_segment() {
-    // PF_W | PF_X = 6
-    auto elf = make_elf64_with_phdr(6);
+    // PF_W | PF_X = 2 | 1 = 3  (ELF: PF_X=1, PF_W=2, PF_R=4)
+    constexpr uint32_t PF_W = 2, PF_X = 1;
+    auto elf = make_elf64_with_phdr(PF_W | PF_X);
     TempFile tf(elf);
     if (!tf.valid()) { TEST_PASS("audit: ELF W+X (skipped)"); return; }
     auto r = audit_plugin_binary(tf.path);
@@ -309,7 +312,8 @@ void test_audit_elf_32bit_rejected() {
 
 void test_audit_elf_safe_segment() {
     // PF_R | PF_X = 5 (read + execute, no write — safe)
-    auto elf = make_elf64_with_phdr(5);
+    constexpr uint32_t PF_R = 4, PF_X = 1;
+    auto elf = make_elf64_with_phdr(PF_R | PF_X);
     TempFile tf(elf);
     if (!tf.valid()) { TEST_PASS("audit: ELF safe segment (skipped)"); return; }
     auto r = audit_plugin_binary(tf.path);
