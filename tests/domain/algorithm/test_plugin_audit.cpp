@@ -43,12 +43,7 @@ void append_le16(std::vector<uint8_t> &b, uint16_t v) {
 void append_le32(std::vector<uint8_t> &b, uint32_t v) {
     for (int i = 0; i < 4; ++i) { b.push_back(static_cast<uint8_t>(v)); v >>= 8; }
 }
-/// Append v as 8 LE bytes to vector (ELF-specific).
-#if defined(__linux__)
-void append_le64(std::vector<uint8_t> &b, uint64_t v) {
-    for (int i = 0; i < 8; ++i) { b.push_back(static_cast<uint8_t>(v)); v >>= 8; }
-}
-#endif
+// (append_le64 intentionally omitted — not needed)
 
 /// Write v as 4 LE bytes at position pos in a pre-sized vector.
 void set_le32(std::vector<uint8_t> &b, size_t pos, uint32_t v) {
@@ -168,6 +163,7 @@ std::vector<uint8_t> make_pe64_base() {
 }
 
 /// PE with one section whose characteristics include the given flags.
+#if defined(_WIN32)
 std::vector<uint8_t> make_pe64_with_section(uint32_t characteristics) {
     auto pe = make_pe64_base();
 
@@ -192,6 +188,7 @@ std::vector<uint8_t> make_pe64_with_section(uint32_t characteristics) {
 
     return pe;
 }
+#endif // _WIN32
 
 } // anonymous namespace
 
