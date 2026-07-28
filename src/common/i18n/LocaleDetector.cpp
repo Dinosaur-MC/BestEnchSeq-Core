@@ -1,4 +1,7 @@
 #include "LocaleDetector.h"
+#ifndef _WIN32
+#include "common/utils/EnvUtil.hpp"
+#endif
 #include <string>
 #include <string_view>
 #include <algorithm>
@@ -23,23 +26,25 @@ std::string detect_system_locale() {
         return result;
     }
 #elif defined(__APPLE__)
-    const char* lang = std::getenv("LANG");
-    if (lang && *lang) {
-        std::string s(lang);
-        auto dot = s.find('.');
-        if (dot != std::string::npos) s = s.substr(0, dot);
-        return s;
+    {
+        std::string lang = get_env_str("LANG");
+        if (!lang.empty()) {
+            auto dot = lang.find('.');
+            if (dot != std::string::npos) lang = lang.substr(0, dot);
+            return lang;
+        }
     }
 #else
     // Linux: LC_ALL > LC_MESSAGES > LANG
-    const char* lang = std::getenv("LC_ALL");
-    if (!lang || !*lang) lang = std::getenv("LC_MESSAGES");
-    if (!lang || !*lang) lang = std::getenv("LANG");
-    if (lang && *lang) {
-        std::string s(lang);
-        auto dot = s.find('.');
-        if (dot != std::string::npos) s = s.substr(0, dot);
-        return s;
+    {
+        std::string lang = get_env_str("LC_ALL");
+        if (lang.empty()) lang = get_env_str("LC_MESSAGES");
+        if (lang.empty()) lang = get_env_str("LANG");
+        if (!lang.empty()) {
+            auto dot = lang.find('.');
+            if (dot != std::string::npos) lang = lang.substr(0, dot);
+            return lang;
+        }
     }
 #endif
     return std::string(kDefaultLocale);
