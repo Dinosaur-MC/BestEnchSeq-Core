@@ -92,35 +92,34 @@ std::string OutputFormatter::describe_item_verbose(
 ) {
     std::string result;
 
-    if (item.is_book()) {
-        result = tr("output.item.enchanted_book");
-        if (item.enchantments.empty()) {
-            result += tr("output.item.no_enchants");
-        } else {
-            bool first = true;
-            for (const auto &ench : item.enchantments) {
-                if (!first) result += tr("output.item.book_equip_sep");
-                first = false;
-                result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
-            }
-        }
-        result += ")";
-    } else {
-        // Equipment
-        result += item.id.str() + "(";
+    // Build enchantment part "Ench X, Ench Y"
+    std::string ench_part;
+    if (!item.enchantments.empty()) {
         bool first = true;
         for (const auto &ench : item.enchantments) {
-            if (!first) result += tr("output.item.book_equip_sep");
+            if (!first) ench_part += ", ";
             first = false;
-            result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
+            ench_part += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
         }
-        result += ")";
-        result += tr_fmt("output.item.anvil_penalty", item.prior_penalty);
-        result += tr_fmt("output.item.durability", item.durability);
     }
 
+    if (item.is_book()) {
+        if (item.enchantments.empty()) {
+            return "enchanted_book (free)";
+        }
+        return "enchanted_book[" + ench_part + "]{ppn=" + std::to_string(item.prior_penalty) + "}";
+    }
+
+    // Equipment
+    result = item.id.str();
+    if (!ench_part.empty()) {
+        result += "[" + ench_part + "]";
+    }
+    result += "{ppn=" + std::to_string(item.prior_penalty) +
+              ",dur=" + std::to_string(item.durability) + "}";
+
     if (item.prior_penalty == 0 && item.enchantments.empty()) {
-        result += tr("output.item.free");
+        result += " (free)";
     }
 
     return result;

@@ -190,6 +190,41 @@ void test_format_multi_step() {
     std::cout << "PASS: test_format_multi_step" << std::endl;
 }
 
+// ─── Test 6: verbose item format with new simplified format ──────────
+
+void test_verbose_item_format() {
+    g_fx.init_sword_set();
+    auto profile = profile_from_fx(g_fx);
+
+    Solution sol;
+    sol.is_success = true;
+    sol.platform = MCE::Java;
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
+    sol.target_item = Item(equip.id, EnchSet{}, 0, 1561);
+    sol.total_exp_level_cost = 0;
+    sol.total_exp_cost = 0;
+
+    // Step with empty items (should show as free)
+    Solution::EnchStep step;
+    step.exp_level_cost = 0;
+    step.exp_cost = 0;
+    step.item_a = sol.target_item;
+    step.item_b = Item(NSID("minecraft:enchanted_book"), EnchSet{}, 0);
+    sol.steps.push_back(step);
+
+    auto output = OutputFormatter::format_verbose({sol}, profile, AlgorithmMode::direct);
+
+    // Check for new format patterns
+    expect(output.find("{ppn=0,dur=1561}") != std::string::npos,
+           "verbose output should have new attribute format with ppn and dur");
+    expect(output.find("(free)") != std::string::npos,
+           "verbose output should show (free) for empty items with ppn=0");
+    expect(output.find("enchanted_book") != std::string::npos,
+           "verbose output should show 'enchanted_book' for books");
+
+    TEST_PASS("test_verbose_item_format");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -201,6 +236,7 @@ int main() {
         test_format_no_steps();
         test_format_unsuccessful();
         test_format_multi_step();
+        test_verbose_item_format();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
