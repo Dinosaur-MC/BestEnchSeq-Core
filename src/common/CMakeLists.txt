@@ -64,6 +64,7 @@ target_include_directories(besq-common-i18n PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "i18n/Language.h"
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "common/i18n/Language.h"
 )
+target_link_libraries(besq-common-i18n PUBLIC besq-common-io)
 
 # ── besq-common-cli ───────────────────────────────────────────────────────────
 

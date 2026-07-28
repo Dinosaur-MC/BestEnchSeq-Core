@@ -78,6 +78,7 @@ set_tests_properties(test_app_config PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT
 add_executable(test_i18n
     i18n/test_i18n.cpp
     ${PROJECT_ROOT}/src/common/i18n/Language.cpp
+    ${PROJECT_ROOT}/src/common/io/json.cpp
 )
 
 # --- CLI Parser v2 tests ---
