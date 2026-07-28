@@ -231,8 +231,19 @@ std::string OutputFormatter::format_verbose(
 
         // Algorithm, mode, platform
         out += tr_fmt("output.verbose.mode", mode_display_name(mode)) + "\n";
-        if (!sol.metadata.algorithm_name.empty())
-            out += "Algorithm: " + sol.metadata.algorithm_name + "\n";
+        if (!sol.metadata.algorithm_name.empty()) {
+            out += "Algorithm: " + sol.metadata.algorithm_name;
+            if (!sol.metadata.algorithm_version.empty())
+                out += " v" + sol.metadata.algorithm_version;
+            out += "\n";
+        }
+        if (sol.metadata.computation_time.count() > 0) {
+            auto ms = sol.metadata.computation_time.count();
+            if (ms < 1000)
+                out += "Time: " + std::to_string(ms) + "ms\n";
+            else
+                out += "Time: " + std::to_string(ms / 1000) + "." + std::to_string(ms % 1000) + "s\n";
+        }
         out += tr_fmt("output.verbose.platform", platform_to_display(sol.platform)) + "\n";
 
         // Rank

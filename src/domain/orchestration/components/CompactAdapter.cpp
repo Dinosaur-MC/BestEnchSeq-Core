@@ -231,8 +231,8 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
         auto sol = Solution::make(
             plat, original_ench, target_item, available_items, domain_steps, true,
             Solution::MetaData{
-                output.algorithm_name, output.algorithm_version, std::chrono::system_clock::now(),
-                std::chrono::milliseconds(0)
+                output.algorithm_name, output.algorithm_version, output.created_at,
+                output.computation_time
             }
         );
         sol.final_item = domain_final_item;  // set final item (shared by all solutions)
