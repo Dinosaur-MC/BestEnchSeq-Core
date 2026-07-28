@@ -24,7 +24,12 @@ public:
 
     std::string_view name() const noexcept override { return "difficulty_first"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
+    int64_t evaluate(int16_t ench_count) const noexcept override;
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
+    std::optional<Item> process(const EnchSolution &solution) const override;
+    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
+        return std::make_unique<ForgeEngine>(_forge_engine);
+    }
     bool simulate(const AlgorithmInput& input) const noexcept override;
     AlgorithmMode supported_mode() const noexcept override {
         return AlgorithmMode::direct;
@@ -32,6 +37,7 @@ public:
 
 private:
     ForgeEngine _forge_engine;
+    const EnchReg *_ench_reg{nullptr};
     AlgorithmDiagnostics _diag;
 };
 

@@ -6,6 +6,7 @@
 #include "common/utils/FlatHashMap.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <queue>
 namespace algorithm {
@@ -744,6 +745,33 @@ void AStarAlgorithm::_x_import_best_g(ByteStreamReader &r) {
             break;
         _best_g[key] = val;
     }
+}
+
+
+
+// ─── evaluate ──────────────────────────────────────────────────────────────────
+
+int64_t AStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
+    // Fitted from benchmark data:  t(e) ≈ 0.025 × 3.8^e
+    // (best-first A*, confirmed 11ms@7 / 475ms@9 / 22s@12)
+    double r = 0.025 * std::pow(3.8, static_cast<double>(ench_count));
+    if (r > 9e18) return INT64_MAX;
+    return static_cast<int64_t>(r + 0.5);
+}
+
+// ─── process ───────────────────────────────────────────────────────────────────
+
+std::optional<Item> AStarAlgorithm::process(const EnchSolution &solution) const {
+    if (solution.steps.empty())
+        return std::nullopt;
+    if (!_ench_reg)
+        return std::nullopt;
+
+    // Replay forge steps sequentially to compute the final item.
+    Item result = solution.steps[0].base;
+    for (const auto &step : solution.steps)
+        _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
+    return result;
 }
 
 } // namespace algorithm

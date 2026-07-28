@@ -134,6 +134,34 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
         : ProgressStatus::CompleteNoSolution);
 }
 
+// ─── evaluate ──────────────────────────────────────────────────────────────────
+
+int64_t DFSAlgorithm::evaluate(int16_t ench_count) const noexcept {
+    // Branch-and-bound DFS: O(b^d) worst-case.  Slightly slower than A* in
+    // practice due to weaker pruning.
+    if (ench_count <= 3) return 1;
+    if (ench_count <= 5) return 10;
+    if (ench_count <= 7) return 150;
+    if (ench_count == 8) return 800;
+    if (ench_count == 9) return 8000;
+    return 60000; // ≥10 — likely to hit timeout
+}
+
+// ─── process ───────────────────────────────────────────────────────────────────
+
+std::optional<Item> DFSAlgorithm::process(const EnchSolution &solution) const {
+    if (solution.steps.empty())
+        return std::nullopt;
+    if (!_ench_reg)
+        return std::nullopt;
+
+    // Replay forge steps sequentially to compute the final item.
+    Item result = solution.steps[0].base;
+    for (const auto &step : solution.steps)
+        _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
+    return result;
+}
+
 // ─── Iterative search ──────────────────────────────────────────────────────
 
 void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {

@@ -62,6 +62,7 @@ void HammingAlgorithm::arrange_by_popcount(
 
 void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
+    _ench_reg = &input.ench_reg;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
     ctx.report_progress(0, ProgressStatus::Starting);
@@ -233,6 +234,30 @@ bool HammingAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
     if (input.items.empty()) return false;
     if (meets_target(input.items[0], input.target.enchs)) return true;
     return input.items.size() > 1;
+}
+
+
+// ─── evaluate ──────────────────────────────────────────────────────────────────
+
+int64_t HammingAlgorithm::evaluate(int16_t ench_count) const noexcept {
+    (void)ench_count;
+    // O(n log n) deterministic construction — always sub-millisecond.
+    return 0;
+}
+
+// ─── process ───────────────────────────────────────────────────────────────────
+
+std::optional<Item> HammingAlgorithm::process(const EnchSolution &solution) const {
+    if (solution.steps.empty())
+        return std::nullopt;
+    if (!_ench_reg)
+        return std::nullopt;
+
+    // Replay forge steps sequentially to compute the final item.
+    Item result = solution.steps[0].base;
+    for (const auto &step : solution.steps)
+        _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
+    return result;
 }
 
 } // namespace algorithm

@@ -8,10 +8,28 @@
 using namespace algorithm;
 
 
+namespace {
+struct TestForgeEngine : IForgeEngine {
+    ForgeConfig _cfg;
+    const ForgeConfig &get_config() const noexcept override { return _cfg; }
+    void set_config(const ForgeConfig &c) noexcept override { _cfg = c; }
+    int32_t forge_into(Item &, const Item &, const EnchReg &) const override { return 0; }
+    std::pair<Item, int32_t> forge(const Item &t, const Item &s, const EnchReg &r) const override {
+        Item c = t; return {std::move(c), forge_into(c, s, r)};
+    }
+    bool is_forgeable(const Item &, const Item &) const noexcept override { return true; }
+};
+} // namespace
+
 class TestAlgorithm : public IAlgorithm {
 public:
     std::string_view name() const noexcept override { return "test_algo"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
+    int64_t evaluate(int16_t) const noexcept override { return 0; }
+    std::optional<Item> process(const EnchSolution &) const override { return std::nullopt; }
+    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
+        return std::make_unique<TestForgeEngine>();
+    }
     AlgorithmMode supported_mode() const noexcept override { return AlgorithmMode::direct; }
 
     void execute(const AlgorithmInput&, ExecutionContext&) override {}

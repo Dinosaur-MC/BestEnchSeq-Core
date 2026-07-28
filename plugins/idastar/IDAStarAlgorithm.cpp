@@ -3,6 +3,7 @@
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/components/StateHash.h"
 #include <algorithm>
+#include <cmath>
 
 namespace algorithm {
 
@@ -262,6 +263,32 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
                                : ProgressStatus::CompleteNoSolution);
     }
     ctx.set_exit_diagnostics(_diag);
+}
+
+
+// ─── evaluate ──────────────────────────────────────────────────────────────────
+
+int64_t IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
+    // IDA*: iterative deepening adds ~50% overhead vs A* due to
+    // re-exploration at each depth threshold.
+    // Base:  t(e) ≈ 0.025 × 3.8^e  (A* curve), scaled 1.5× for IDA*.
+    double r = 1.5 * 0.025 * std::pow(3.8, static_cast<double>(ench_count));
+    if (r > 9e18) return INT64_MAX;
+    return static_cast<int64_t>(r + 0.5);
+}
+
+// ─── process ───────────────────────────────────────────────────────────────────
+
+std::optional<Item> IDAStarAlgorithm::process(const EnchSolution &solution) const {
+    if (solution.steps.empty())
+        return std::nullopt;
+    if (!_ench_reg)
+        return std::nullopt;
+
+    Item result = solution.steps[0].base;
+    for (const auto &step : solution.steps)
+        _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
+    return result;
 }
 
 } // namespace algorithm

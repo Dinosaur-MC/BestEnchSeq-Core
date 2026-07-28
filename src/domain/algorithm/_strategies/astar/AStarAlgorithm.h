@@ -44,7 +44,12 @@ class AStarAlgorithm : public IAlgorithm {
 
     std::string_view name() const noexcept override { return "astar"; }
     std::string_view version() const noexcept override { return "2.0.0"; }
+    int64_t evaluate(int16_t ench_count) const noexcept override;
     void execute(const AlgorithmInput &input, ExecutionContext &ctx) override;
+    std::optional<Item> process(const EnchSolution &solution) const override;
+    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
+        return std::make_unique<ForgeEngine>(_forge_engine);
+    }
     AlgorithmMode supported_mode() const noexcept override { return AlgorithmMode::direct; }
 
     // ── Serialization support (lazy: serializer allocated on first access) ─

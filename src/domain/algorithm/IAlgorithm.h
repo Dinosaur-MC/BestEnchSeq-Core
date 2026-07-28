@@ -1,6 +1,9 @@
 #pragma once
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ResolverTypes.h"
+#include "forge_engine/IForgeEngine.h"
+#include <memory>
+#include <optional>
 
 namespace algorithm {
 class ExecutionContext;
@@ -84,7 +87,16 @@ class IAlgorithm {
 
     virtual std::string_view name() const noexcept    = 0;
     virtual std::string_view version() const noexcept = 0;
+    /// Returns the set of operation modes this algorithm supports.
+    /// Default: direct mode only.
+    virtual AlgorithmMode supported_mode() const noexcept { return AlgorithmMode::direct; }
+    /// Whether this algorithm supports checkpoint serialization for resume.
+    /// Default returns false.  Resumable algorithms must override to return true.
+    virtual bool is_resumable() const noexcept { return false; }
+    /// Evaluate the cost time (ms) grade of the given enchantment count.
+    virtual int64_t evaluate(int16_t ench_count) const noexcept = 0;
 
+    /// Execute the algorithm on the given input.
     virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
 
     /// Pre-process input before execution.
@@ -98,10 +110,6 @@ class IAlgorithm {
     /// needed.  The caller appends the result to input.items.
     virtual ResolverOutput resolve(const AlgorithmInput &input) const;
 
-    /// Returns the set of operation modes this algorithm supports.
-    /// Default: direct mode only.
-    virtual AlgorithmMode supported_mode() const noexcept { return AlgorithmMode::direct; }
-
     /// Quick feasibility check: returns true if the target is reachable
     /// from the given items without computing exact costs.
     /// Default: pessimistic but catches trivial cases (empty items, target
@@ -109,9 +117,11 @@ class IAlgorithm {
     /// tighter checks (e.g., greedy pure-forge in GreedyAlgorithm).
     virtual bool simulate(const AlgorithmInput &input) const noexcept;
 
-    /// Whether this algorithm supports checkpoint serialization for resume.
-    /// Default returns false.  Resumable algorithms must override to return true.
-    virtual bool is_resumable() const noexcept { return false; }
+    /// Process the solution. Returns the final item if successful.
+    virtual std::optional<Item> process(const EnchSolution &solution) const = 0;
+
+    /// Returns the associated forge engine for this algorithm.
+    virtual std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept = 0;
 
     /// Returns the associated serializer for this algorithm's state.
     /// Returns nullptr if the algorithm does not support serialization.

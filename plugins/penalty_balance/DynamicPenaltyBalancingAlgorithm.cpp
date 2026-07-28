@@ -12,6 +12,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
     const AlgorithmInput& input, ExecutionContext& ctx)
 {
     _forge_engine.set_config(input.f_config);
+    _ench_reg = &input.ench_reg;
     const auto& items = input.items;
     const auto& reg = input.ench_reg;
     const auto& target = input.target;
@@ -135,6 +136,29 @@ void DynamicPenaltyBalancingAlgorithm::execute(
 
     ctx.report_solution(compact_steps);
     ctx.report_progress(100, ProgressStatus::Complete);
+}
+
+
+// ─── evaluate ──────────────────────────────────────────────────────────────────
+
+int64_t DynamicPenaltyBalancingAlgorithm::evaluate(int16_t ench_count) const noexcept {
+    (void)ench_count;
+    // O(n²) per merge step — small constant, always fast.
+    return 0;
+}
+
+// ─── process ───────────────────────────────────────────────────────────────────
+
+std::optional<Item> DynamicPenaltyBalancingAlgorithm::process(const EnchSolution &solution) const {
+    if (solution.steps.empty())
+        return std::nullopt;
+    if (!_ench_reg)
+        return std::nullopt;
+
+    Item result = solution.steps[0].base;
+    for (const auto &step : solution.steps)
+        _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
+    return result;
 }
 
 } // namespace algorithm
