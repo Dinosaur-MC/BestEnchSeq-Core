@@ -74,7 +74,7 @@ EnchSet EnchParser::parse(const std::string& input,
             // Spec part before '='
             std::string spec_part = token.substr(0, eq_pos);
             if (spec_part.empty()) {
-                throw std::runtime_error("Empty enchantment id in '" + token + "'");
+                throw std::runtime_error(tr_fmt("cli.err.empty_ench_id", token));
             }
 
             auto colon_pos = spec_part.find(':');
@@ -120,7 +120,7 @@ EnchSet EnchParser::parse(const std::string& input,
 
         // ── Validate id is not empty ──────────────────────────────────────
         if (id.empty()) {
-            throw std::runtime_error("Empty enchantment id in '" + token + "'");
+            throw std::runtime_error(tr_fmt("cli.err.empty_ench_id", token));
         }
 
         // ── Resolve against registry and insert into EnchSet ──────────────
