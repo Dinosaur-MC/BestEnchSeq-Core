@@ -1,9 +1,20 @@
 #include "Language.h"
+#include <cctype>
 #include <charconv>
 #include <cstdlib>
 
 namespace {
     constexpr std::string_view kDefaultLang = "en_US";
+
+    // Normalize a language code: lowercase, '-' → '_'.
+    std::string normalize(std::string_view code) {
+        std::string n(code);
+        for (auto& c : n) {
+            if (c == '-') c = '_';
+            else c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return n;
+    }
 }
 
 Language::Language(std::string name, Table table)
@@ -68,12 +79,23 @@ void LanguageManager::register_language(Language lang) {
 }
 
 bool LanguageManager::select(std::string_view code) {
+    // 1. Exact match
     auto it = _langs.find(std::string(code));
     if (it != _langs.end()) {
         _active = &it->second;
         return true;
     }
-    // Fallback to en_US
+    // 2. Normalized match (case-insensitive, _/- tolerant)
+    {
+        std::string norm = normalize(code);
+        for (const auto& [candidate, lang] : _langs) {
+            if (normalize(candidate) == norm) {
+                _active = &lang;
+                return true;
+            }
+        }
+    }
+    // 3. Fallback to en_US
     auto fb = _langs.find(std::string(kDefaultLang));
     if (fb != _langs.end()) {
         _active = &fb->second;
@@ -100,18 +122,31 @@ std::string LanguageManager::resolve_locale(std::string_view locale) const {
     if (_langs.count(std::string(locale)))
         return std::string(locale);
 
-    // 2. Language-only match
-    auto underscore = locale.find('_');
-    if (underscore != std::string::npos) {
-        std::string lang(locale.substr(0, underscore));
+    // 2. Normalized match
+    {
+        std::string norm = normalize(locale);
         for (const auto& [code, _] : _langs) {
-            if (code.compare(0, lang.size(), lang) == 0 &&
-                (code.size() == lang.size() || code[lang.size()] == '_')) {
+            if (normalize(code) == norm)
                 return code;
+        }
+    }
+
+    // 3. Language-only match (on normalized)
+    {
+        std::string norm = normalize(locale);
+        auto underscore = norm.find('_');
+        if (underscore != std::string::npos) {
+            std::string lang_prefix = norm.substr(0, underscore);
+            for (const auto& [code, _] : _langs) {
+                std::string cnorm = normalize(code);
+                if (cnorm.substr(0, lang_prefix.size()) == lang_prefix &&
+                    (cnorm.size() == lang_prefix.size() || cnorm[lang_prefix.size()] == '_')) {
+                    return code;
+                }
             }
         }
     }
 
-    // 3. Fallback
+    // 4. Fallback
     return std::string(kDefaultLang);
 }

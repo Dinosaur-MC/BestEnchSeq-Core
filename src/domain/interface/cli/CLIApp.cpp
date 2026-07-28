@@ -14,9 +14,7 @@
 #include "common/log/log.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include <algorithm>
-#include <cctype>
 #include <fstream>
-#include <unordered_map>
 #include <iostream>
 #include <stdexcept>
 
@@ -42,39 +40,16 @@ CLIApp::CLIApp()
 // apply_lang — Select language from env / locale / CLI flag
 // ============================================================================
 
-namespace {
-
-/// Normalize a language code: lowercase, replace '-' with '_'.
-/// e.g. "zh-CN" → "zh_cn", "en_US" → "en_us".
-std::string normalize_lang_code(std::string code) {
-    for (auto& c : code) {
-        if (c == '-') c = '_';
-        else c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return code;
-}
-
-} // anonymous namespace
-
 void CLIApp::apply_lang(int argc, char* argv[]) {
     auto& lang_mgr = LanguageManager::instance();
 
-    // 1. Build a normalized lookup map: normalized → original code.
-    std::unordered_map<std::string, std::string> norm_to_orig;
-    for (const auto& code : lang_mgr.available())
-        norm_to_orig[normalize_lang_code(code)] = code;
+    // 1. Select base language from BESQ_LANG env var or system locale.
+    //    LanguageManager::select() handles case/_/- normalization internally.
+    std::string base_code = get_env<std::string>("BESQ_LANG", detect_system_locale());
+    if (!lang_mgr.select(base_code))
+        lang_mgr.select(lang_mgr.resolve_locale(base_code));
 
-    // 2. Select base language from BESQ_LANG env var or system locale.
-    std::string base_raw = get_env<std::string>("BESQ_LANG", detect_system_locale());
-    {
-        auto it = norm_to_orig.find(normalize_lang_code(base_raw));
-        if (it != norm_to_orig.end())
-            lang_mgr.select(it->second);
-        else
-            lang_mgr.select(lang_mgr.resolve_locale(base_raw));
-    }
-
-    // 3. --lang CLI flag override — validate case-insensitively, _/- tolerant.
+    // 2. --lang CLI flag override.
     for (int i = 1; i < argc; ++i) {
         std::string_view a(argv[i]);
         std::string override_code;
@@ -85,11 +60,7 @@ void CLIApp::apply_lang(int argc, char* argv[]) {
         else
             continue;
 
-        std::string norm = normalize_lang_code(override_code);
-        auto it = norm_to_orig.find(norm);
-        if (it != norm_to_orig.end()) {
-            lang_mgr.select(it->second);
-        } else {
+        if (!lang_mgr.select(override_code)) {
             auto avail = lang_mgr.available();
             std::string avail_str = string_utils::join(avail, ", ");
             std::cerr << tr_fmt("cli.err.invalid_lang", override_code, avail_str) << std::endl;
@@ -105,13 +76,12 @@ int CLIApp::run(int argc, char* argv[]) {
     // 1. Parse CLI args
     auto config = CLIApp::parse(argc, argv);
 
-    // Re-select language if --lang was explicitly set (normalized for tolerance)
+    // Re-select language if --lang was explicitly set
+    // (LanguageManager::select handles case/_/- normalization)
     if (!config.lang.empty()) {
-        std::string norm = normalize_lang_code(config.lang);
         auto& lang_mgr = LanguageManager::instance();
-        // Try normalized direct match first, then fall back to resolve_locale
-        if (!lang_mgr.select(norm))
-            lang_mgr.select(lang_mgr.resolve_locale(norm));
+        if (!lang_mgr.select(config.lang))
+            lang_mgr.select(lang_mgr.resolve_locale(config.lang));
     }
 
     if (config.help) {
