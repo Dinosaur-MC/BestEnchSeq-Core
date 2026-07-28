@@ -272,9 +272,7 @@ double IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
     // IDA*: iterative deepening adds ~50% overhead vs A* due to
     // re-exploration at each depth threshold.
     // Base:  t(e) ≈ 0.025 × 3.8^e  (A* curve), scaled 1.5× for IDA*.
-    double r = 1.5 * 0.025 * std::pow(3.8, static_cast<double>(ench_count));
-    if (r > 9e18) return INT64_MAX;
-    return static_cast<int64_t>(r + 0.5);
+    return 1.5 * 0.025 * std::pow(3.8, static_cast<double>(ench_count));
 }
 
 // ─── process ───────────────────────────────────────────────────────────────────
