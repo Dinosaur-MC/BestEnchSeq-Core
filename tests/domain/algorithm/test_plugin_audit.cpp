@@ -130,6 +130,7 @@ std::vector<uint8_t> make_elf64_with_phdr(uint32_t flags) {
 #endif // __linux__
 
 /// Minimal 64-bit PE (DLL), no sections / imports / exports.
+#if defined(_WIN32)
 std::vector<uint8_t> make_pe64_base() {
     std::vector<uint8_t> pe;
 
@@ -163,7 +164,6 @@ std::vector<uint8_t> make_pe64_base() {
 }
 
 /// PE with one section whose characteristics include the given flags.
-#if defined(_WIN32)
 std::vector<uint8_t> make_pe64_with_section(uint32_t characteristics) {
     auto pe = make_pe64_base();
 
