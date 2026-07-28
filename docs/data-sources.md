@@ -1,7 +1,7 @@
 # 数据源与提取方法
 
-> 版本：1.0
-> 最后更新：2026-07-07
+> 版本：2.0
+> 最后更新：2026-07-29
 
 ---
 
@@ -9,17 +9,19 @@
 
 1. [概述](#1-概述)
 2. [数据流水线](#2-数据流水线)
-3. [原始来源：Minecraft 客户端 Jar](#3-原始来源minecraft-客户端-jar)
-4. [步骤 1：本地化数据](#4-步骤-1本地化数据)
-5. [步骤 2：标签系统](#5-步骤-2标签系统)
-6. [步骤 3：魔咒数据提取](#6-步骤-3魔咒数据提取)
-7. [步骤 4：装备数据提取](#7-步骤-4装备数据提取)
-8. [步骤 5：物品附魔值](#8-步骤-5物品附魔值)
-9. [步骤 6：Limited_Level 计算](#9-步骤-6limited_level-计算)
-10. [步骤 7：装备类别推导](#10-步骤-7装备类别推导)
-11. [输出格式](#11-输出格式)
-12. [C++ 侧解析流程](#12-c-侧解析流程)
-13. [条目级数据来源参考](#13-条目级数据来源参考)
+3. [脚本架构](#3-脚本架构)
+4. [原始来源：Minecraft 客户端 Jar](#4-原始来源minecraft-客户端-jar)
+5. [步骤 1：本地化数据](#5-步骤-1本地化数据)
+6. [步骤 2：标签系统](#6-步骤-2标签系统)
+7. [步骤 3：魔咒数据提取](#7-步骤-3魔咒数据提取)
+8. [步骤 4：装备数据提取](#8-步骤-4装备数据提取)
+9. [步骤 5：物品附魔值](#9-步骤-5物品附魔值)
+10. [步骤 6：Limited_Level 计算](#10-步骤-6limited_level-计算)
+11. [步骤 7：装备类别推导](#11-步骤-7装备类别推导)
+12. [语言资源提取](#12-语言资源提取)
+13. [输出格式](#13-输出格式)
+14. [C++ 侧解析与 i18n](#14-c-侧解析与-i18n)
+15. [条目级数据来源参考](#15-条目级数据来源参考)
 
 ---
 
@@ -33,8 +35,14 @@
 | **equipments** | 77 | 可锻造的装备类型 |
 | **tags** | 29 | 魔咒冲突组和物品分类标签 |
 
-此文件由 `scripts/get_vanilla_data.py` 从 Mojang 官方游戏客户端 jar 自动提取生成，
-**不需要手动维护**。
+此外，`data/i18n/minecraft/` 包含从 Mojang 资源服务器提取的翻译数据：
+
+| 文件 | 条目 | 涵盖范围 |
+|------|:----:|----------|
+| `en_US.json` | 803 | 44 魔咒 + 759 物品 |
+| `zh_CN.json` | 823 | 44 魔咒 + 779 物品 |
+
+此文件由 `scripts/vanilla/` 模块包从 Mojang 官方资源自动提取生成，**不需要手动维护**。
 
 ---
 
@@ -43,11 +51,19 @@
 ```
 Mojang 版本清单 (version_manifest.json)
         │
-        ▼
-    下载最新版客户端 jar
+        ├────→ Asset Index (version_manifest_v2.json)
+        │              │
+        │              ▼
+        │       minecraft/lang/<locale>.json (哈希索引)
+        │              │
+        │              ▼
+        │       resources.download.minecraft.net/<hash[:2]>/<hash>
+        │              │
+        │              ▼
+        │       data/i18n/minecraft/<locale>.json   ← 多语言翻译
         │
         ▼
-    ZIP 解压到 res/vanilla/
+    下载最新版客户端 jar  →  ZIP 解压到 res/vanilla/
         │
         ▼
     ┌──────────────────────────────────────┐
@@ -69,18 +85,48 @@ Mojang 版本清单 (version_manifest.json)
 
 ---
 
-## 3. 原始来源：Minecraft 客户端 Jar
+## 3. 脚本架构
 
-### 3.1 版本获取
+提取脚本已重构为模块化包：
+
+```
+scripts/
+├── get_vanilla_data.py          ← 薄封装 → vanilla.cli
+├── download_mc_lang.py          ← 薄封装 → vanilla.lang
+│
+└── vanilla/                     ← 核心提取逻辑
+    ├── cli.py                   CLI + 流程编排
+    ├── meta.py                  HTTP 工具、版本清单、Asset Index
+    ├── jar.py                   客户端 jar 下载与提取
+    ├── enchantment.py           魔咒/装备数据提取、javap 分析
+    ├── lang.py                  语言文件资源下载、提取与导出
+    └── lang_config.py           语言配置（键前缀、区域映射）
+```
+
+| 模块 | 对应旧脚本功能 |
+|------|---------------|
+| `cli.py` + `meta.py` + `jar.py` | `get_vanilla_data.py` 的下载/提取/元数据部分 |
+| `enchantment.py` | `get_vanilla_data.py` 的魔咒/装备分析部分 |
+| `lang.py` + `lang_config.py` | `download_mc_lang.py` 的语言文件处理 |
+
+旧入口 `scripts/get_vanilla_data.py` 和 `scripts/download_mc_lang.py` 保留为薄封装，
+调用方式不变。
+
+---
+
+## 4. 原始来源：Minecraft 客户端 Jar
+
+### 4.1 版本获取
 
 ```python
-VERSION_MANIFEST = "https://launchermeta.mojang.com/mc/game/version_manifest.json"
+# meta.py
+VERSION_MANIFEST_V1 = "https://launchermeta.mojang.com/mc/game/version_manifest.json"
 ```
 
 脚本通过 Mojang 官方版本清单获取**最新正式版**（`latest.release`）的下载链接。
 下载客户端 jar 后缓存到 `res/vanilla.jar`，避免重复下载。
 
-### 3.2 解压结构
+### 4.2 解压结构
 
 jar 解压到 `res/vanilla/` 后，主要数据目录为：
 
@@ -100,7 +146,7 @@ res/vanilla/
 └── ...
 ```
 
-### 3.3 MC 1.21+ Data-Driven 格式
+### 4.3 MC 1.21+ Data-Driven 格式
 
 自 1.21 起，魔咒采用 data-driven 格式，每个魔咒是一个独立 JSON 文件：
 
@@ -122,11 +168,11 @@ res/vanilla/
 
 ---
 
-## 4. 步骤 1：本地化数据
+## 5. 步骤 1：本地化数据
 
 ### 来源
 
-`assets/minecraft/lang/en_us.json`
+`assets/minecraft/lang/en_us.json`（jar 内）
 
 ### 方法
 
@@ -140,9 +186,12 @@ res/vanilla/
 魔咒 JSON 中的 `description.translate` 字段（如 `"enchantment.minecraft.sharpness"`）
 作为查找键。
 
+> C++ 运行时不使用此文件。运行时显示名通过 `nsid_display_name()` + `tr()` 从
+> Language 系统的翻译表中推导。详见第 14 节。
+
 ---
 
-## 5. 步骤 2：标签系统
+## 6. 步骤 2：标签系统
 
 ### 来源
 
@@ -187,7 +236,7 @@ res/vanilla/
 
 ---
 
-## 6. 步骤 3：魔咒数据提取
+## 7. 步骤 3：魔咒数据提取
 
 ### 来源
 
@@ -198,13 +247,13 @@ res/vanilla/
 | 字段 | JSON 源 | 说明 |
 |------|---------|------|
 | `id` | 文件名 | `{ns}:{filename}`，如 `"minecraft:sharpness"` |
-| `name` | `description.translate` → 查 `en_us.json` | 显示名称 |
+| `name` | `description.translate` → 查 `en_us.json` | 显示名称（vanilla.json 中的快照，运行时由 i18n 重写） |
 | `platform` | 硬编码 `"java"` | MC 官方为跨平台数据 |
 | `max_level` | `max_level` | 铁砧/附魔台统一最大等级 |
-| `limited_level` | **计算所得** | 见[第 9 节](#9-步骤-6limited_level-计算) |
+| `limited_level` | **计算所得** | 见第 10 节 |
 | `multiplier` | `anvil_cost` | MC 1.21+ 改名，含义相同 |
 | `exclusive_set` | `exclusive_set` / `exclusiveSet` | 冲突魔咒 ID 列表，展开 `#` 标签引用 |
-| `applicable_equipment` | `supported_items` → 类别推导 | 见[第 10 节](#10-步骤-7装备类别推导) |
+| `applicable_equipment` | `supported_items` → 类别推导 | 见第 11 节 |
 
 ### 兼容性处理
 
@@ -214,7 +263,7 @@ res/vanilla/
 
 ---
 
-## 7. 步骤 4：装备数据提取
+## 8. 步骤 4：装备数据提取
 
 ### 来源
 
@@ -269,7 +318,7 @@ invokevirtual ...durability... ← 耐久度方法调用
 
 ---
 
-## 8. 步骤 5：物品附魔值
+## 9. 步骤 5：物品附魔值
 
 ### 来源
 
@@ -328,7 +377,7 @@ invokevirtual ...durability... ← 耐久度方法调用
 
 ---
 
-## 9. 步骤 6：Limited_Level 计算
+## 10. 步骤 6：Limited_Level 计算
 
 ### 背景
 
@@ -391,7 +440,7 @@ minCost(level) = min_cost.base + min_cost.per_level_above_first × (level - 1)
 
 ---
 
-## 10. 步骤 7：装备类别推导
+## 11. 步骤 7：装备类别推导
 
 ### 问题
 
@@ -425,9 +474,67 @@ minecraft:foot_armor  → ["minecraft:diamond_boots", "minecraft:iron_boots", ..
 
 ---
 
-## 11. 输出格式
+## 12. 语言资源提取
 
-`data/builtin/vanilla.json` 格式：
+### 12.1 来源
+
+Minecraft 语言文件通过 Mojang 资源服务器获取，无需下载完整客户端 jar：
+
+```
+version_manifest_v2.json
+         ↓
+  版本详情 JSON  ──→  assetIndex.url
+         ↓
+  Asset Index JSON  ──→  objects["minecraft/lang/<locale>.json"].hash
+         ↓
+  resources.download.minecraft.net/<hash[:2]>/<hash>
+         ↓
+  语言 JSON 文件
+```
+
+### 12.2 提取方法
+
+`scripts/vanilla/lang.py` 中的 `run()` 函数：
+
+1. 查询 `version_manifest_v2.json` 获取最新版本
+2. 下载 Asset Index JSON（包含所有资源文件的哈希索引）
+3. 查找 `minecraft/lang/<locale>.json` 条目
+4. 通过哈希值构造下载 URL 并下载
+5. 过滤出与项目相关的翻译键
+6. 输出到 `data/i18n/minecraft/<locale>.json`
+
+### 12.3 键过滤
+
+从原始语言文件中保留以下前缀的键：
+
+| 前缀 | 用途 | 示例 |
+|------|------|------|
+| `enchantment.minecraft.` | 魔咒显示名称 | `enchantment.minecraft.sharpness` → `"Sharpness"` / `"锋利"` |
+| `item.minecraft.` | 物品/装备名称 | `item.minecraft.diamond_sword` → `"Diamond Sword"` / `"钻石剑"` |
+
+### 12.4 多语言支持
+
+```bash
+# 默认 en_us + zh_cn
+python scripts/vanilla/cli.py --lang-only
+
+# 指定语言
+python scripts/vanilla/cli.py --lang-only --locales zh_cn,en_us,ja_jp
+
+# 下载全部 142+ 种语言
+python scripts/vanilla/cli.py --lang-only --locales all
+```
+
+### 12.5 回退机制
+
+当 locale 不在 Asset Index 中时（如 `en_us` 作为基础语言内置于游戏），
+自动回退到已提取的客户端 jar 中的语言文件。
+
+---
+
+## 13. 输出格式
+
+### 13.1 vanilla.json
 
 ```json
 {
@@ -463,94 +570,142 @@ minecraft:foot_armor  → ["minecraft:diamond_boots", "minecraft:iron_boots", ..
 }
 ```
 
+### 13.2 minecraft i18n 文件
+
+`data/i18n/minecraft/<locale>.json`：
+
+```json
+{
+  "language": "zh_CN",
+  "minecraft_locale": "zh_cn",
+  "source_version": "26.2",
+  "strings": {
+    "enchantment.minecraft.sharpness": "锋利",
+    "item.minecraft.diamond_sword": "钻石剑",
+    ...
+  }
+}
+```
+
 ### 容量
 
-当前版本：约 31 KB，43 个魔咒 + 77 个装备 + 29 个标签。
+| 文件 | 大小 |
+|------|:----:|
+| `data/builtin/vanilla.json` | ~33 KB |
+| `data/i18n/minecraft/en_US.json` | ~49 KB |
+| `data/i18n/minecraft/zh_CN.json` | ~49 KB |
 
 ---
 
-## 12. C++ 侧解析流程
+## 14. C++ 侧解析与 i18n
 
-C++ 代码通过 `business/parsers/` 下的三个解析器读取 `vanilla.json`：
+### 14.1 注册表数据加载
 
-### 原生 JSON 解析 — `NativeJsonParser`
+C++ 代码通过 `besq::data::load_builtin_data()` 从 `vanilla.json` 加载注册表：
 
 ```
 FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
+  → EnchantmentData / EquipmentData DTO
+  → RegistryLoader::from_dto()
+  → EnchantmentRegistry / EquipmentRegistry / EquipmentTagRegistry
 ```
 
-1. 读取 JSON → 提取 `enchantments` 数组
-2. 调用 `process_inline_tags()` 处理 `tags` 对象（TagResolver 注册）
-3. 遍历每个魔咒条目，解析为 `EnchantmentData` DTO
-4. 提取 `equipments` 数组，解析为 `EquipmentData` DTO
-5. 字段映射（通过 `RegistryLoader::from_dto()` 转为业务类型）：
-
-| JSON 字段 | EnchantmentData → EnchInfo 字段 | 说明 |
-|-----------|--------------------------------|------|
+| JSON 字段 | EnchInfo 字段 | 说明 |
+|-----------|-------------|------|
 | `id` | `id` (string → NSID) | 唯一标识 |
-| `name` | `display_name` → `name` | 显示名称 |
+| `name` | `display_name` → `name` | 显示名称（仅用于数据快照，运行时由 i18n 重写） |
 | `max_level` | `max_level` | 最大等级 |
 | `limited_level` | `limited_level` | 0 或缺失时 = max_level |
 | `multiplier` | `multiplier` | 费用倍率 |
-| `exclusive_set` | `exclusive_with` (string[]) → `exclusive_set` | 冲突魔咒集合 |
-| `applicable_equipment` | `applicable_to` (string[]) → `applicable_equipments` | 适用装备类别 |
+| `exclusive_set` | `exclusive_with` → `exclusive_set` | 冲突魔咒 |
+| `applicable_equipment` | `applicable_to` → `applicable_equipments` | 适用装备 |
 
-### 装备解析
+### 14.2 国际化（i18n）系统
 
-由 `NativeJsonParser::parse_equipments_json()` 处理：
+实体显示名称不再从 `vanilla.json` 的 `name` 字段读取，而是通过 NSID + Language 系统推导：
 
-| JSON 字段 | EquipmentData → Equipment 字段 |
-|-----------|-------------------------------|
-| `id` | `id` (string → NSID) |
-| `name` | `display_name` → `name` |
-| `category` | `category` (string) → `category` (通过 TagRegistry 解析为 NSID) |
-| `max_durability` | `max_durability` |
+```
+NSID "minecraft:sharpness"
+  → NSID::str(Callable) → "enchantment.minecraft.sharpness"  (翻译键)
+  → Language::get(key)  → "锋利" / "Sharpness"               (本地化名)
+  → 兜底: id.str()     → "minecraft:sharpness"               (功能无损)
+```
 
-### CSV 解析 — `NativeCsvParser`
+**关键组件：**
 
-调用 `FormatDetector::parse(path)` 自动识别 `.csv` 扩展名，由 `NativeCsvParser::parse_file()` 处理。
-CSV 格式仅支持魔咒数据，不支持装备。
+| 文件 | 说明 |
+|------|------|
+| `src/common/i18n/NsidDisplay.h` | `ench_display_name()` / `item_display_name()` — NSID 推导 + `tr()` 查询 |
+| `src/common/i18n/Language.h` | `Language` / `LanguageManager` — 翻译表 + 多语言切换 |
+| `src/builtin/I18nLoader.cpp` | 启动时注册 UI 翻译 + Minecraft 实体名称到同一 Language 实例 |
 
-### MC 官方格式解析 — `McOfficialParser`
+**数据流：**
 
-调用 `FormatDetector::parse(dir)` 自动识别 `data/<ns>/enchantment/` 目录结构，由 `McOfficialParser::parse()` 处理。
-遍历 `data/<ns>/enchantment/<id>.json` 文件，使用 `TagResolver` 展开 `#` 标签引用，并从 `tags/item/` 标签文件推导装备列表。
+```
+编译时嵌入（EmbedResource.cmake）
+  data/i18n/en_US.json          → i18n_en_US()      (UI 字符串)
+  data/i18n/zh_CN.json          → i18n_zh_CN()      (UI 字符串)
+  data/i18n/minecraft/en_US.json → mc_i18n_en_US()  (Minecraft 实体名称)
+  data/i18n/minecraft/zh_CN.json → mc_i18n_zh_CN()  (Minecraft 实体名称)
 
-### 内联标签处理
+启动时合并（I18nLoader::register_builtin_translations）
+  "zh_CN" = UI_zh_CN.merge(MC_zh_CN)
+  "en_US" = UI_en_US.merge(MC_en_US)
 
-`NativeJsonParser` 内部的 `process_inline_tags()` 从 JSON 的 `tags` 对象读取标签定义，
-通过 `TagResolver::add_tag()` 注册标签解析器，在后续 `#` 引用展开时使用。
-支持递归引用和循环检测。
+运行时查询
+  tr("enchantment.minecraft.sharpness")
+  → 已注册 → "锋利" / "Sharpness"
+  → 未注册 → 返回 "enchantment.minecraft.sharpness" 或兜底 id.str()
+```
+
+**`--verbose` 模式：**
+默认只显示翻译名（`锋利 V`），`--verbose` 时同时显示 NSID（`锋利 (minecraft:sharpness) V`）。
+
+**动态语言加载：**
+程序从可执行文件旁的 `langs/<code>.json` 目录按需加载语言文件（通过 `LanguageManager::set_langs_dir()`），
+同 key 时自动合并到已有翻译。参见 `src/main.cpp`。
+
+### 14.3 输出层适配
+
+OutputFormatter 不再使用 `EnchInfo::name` 或 `NSID::str()`，而是统一通过 `NsidDisplay.h` 中的函数：
+
+| 输出格式 | 物品名 | 魔咒名 |
+|---------|--------|--------|
+| verbose/text | `item_display_name(item.id)` | `ench_display_name(ench.id)` |
+| compact | `item.id.str()`（NSID 字符串，机器可读） | `ench.id.str()` |
+| JSON | `item.id.str()`（id 字段，机器可读） | `ench.id.str()` |
 
 ---
 
-## 13. 条目级数据来源参考
+## 15. 条目级数据来源参考
 
 ### 魔咒数据字段
 
 | 字段 | 来源文件 | 来源字段/方法 | 可靠性 |
 |------|---------|--------------|--------|
 | `id` | `data/<ns>/enchantment/<id>.json` | 文件名 | 高 |
-| `name` | `assets/<ns>/lang/en_us.json` | `description.translate` 键查表 | 高 |
+| `name` | `assets/<ns>/lang/en_us.json` → Language 系统 | `description.translate` 键查表 | 高（运行时从 Language 重写） |
 | `platform` | — | 硬编码 `"java"` | 高 |
 | `max_level` | 魔咒 JSON | `max_level` | 高 |
 | `limited_level` | — | **成本模拟计算** | 中（保守估算） |
 | `multiplier` | 魔咒 JSON | `anvil_cost` | 高 |
 | `exclusive_set` | 魔咒 JSON | `exclusive_set` | 高 |
-| `applicable_equipment` | 物品标签 + 类别推导 | 见第 10 节 | 中（启发式） |
+| `applicable_equipment` | 物品标签 + 类别推导 | 见第 11 节 | 中（启发式） |
 
 ### 装备数据字段
 
 | 字段 | 来源 | 方法 |
 |------|------|------|
 | `id` | `enchantable/*` 标签成员物品 | 标签展开 |
-| `name` | `en_us.json` | `item.minecraft.<id>` 查表 |
-| `category` | 物品分组标签 / ID 后缀启发式 | 见第 10 节 |
+| `name` | `en_us.json` → Language 系统 | `item.minecraft.<id>` 查表（运行时重写） |
+| `category` | 物品分组标签 / ID 后缀启发式 | 见第 11 节 |
 | `max_durability` | `Items.class` 字节码 + 材料常量 | 见第 7 节 |
 
 ---
 
 ## 附录 A：更新数据
+
+### 全量更新
 
 ```bash
 # 确保有 JDK（javap 用于字节码分析）
@@ -559,11 +714,26 @@ CSV 格式仅支持魔咒数据，不支持装备。
 # 删除旧 jar 强制重新下载
 rm res/vanilla.jar
 
-# 运行提取脚本
-python scripts/get_vanilla_data.py
+# 运行完整提取（ench + lang）
+python scripts/vanilla/cli.py --with-lang zh_cn,en_us
 ```
 
-首次运行会自动下载最新客户端 jar（约 200 MB），后续运行使用缓存。
+### 仅语言文件
+
+```bash
+# 独立提取语言文件（无需 jar）
+python scripts/vanilla/cli.py --lang-only
+
+# 或通过薄封装入口
+python scripts/download_mc_lang.py --locales zh_cn,en_us
+```
+
+### 仅魔咒/装备数据
+
+```bash
+python scripts/vanilla/cli.py              # 等同 python scripts/get_vanilla_data.py
+python scripts/get_vanilla_data.py         # 薄封装，同上
+```
 
 ## 附录 B：Java 源码参考位置
 
@@ -601,3 +771,10 @@ python scripts/get_vanilla_data.py
 
 对于原版物品，类别推导通常准确。模组物品的非标准命名模式可能导致误分类，
 但可以通过自定义数据包中的标签覆盖。
+
+### Q: 实体显示名从哪里来？
+
+实体显示名（魔咒名、物品名）不再存储在业务对象的 `name` 字段中。
+`Ench::name` 已移除。所有显示名通过 `NSID::str(Callable)` 构建翻译键，
+经 `Language` 系统从嵌入的 Minecraft 翻译数据中查询。无翻译时回退到 `NSID::str()`。
+参见第 14.2 节。
