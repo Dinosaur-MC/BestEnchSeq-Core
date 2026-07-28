@@ -114,6 +114,30 @@ void test_ench_parser_level_too_high_rejected() {
 // ============================================================================
 // Unknown enchantment throws
 // ============================================================================
+void test_ench_parser_blank_input_rejected() {
+    EnchantmentRegistry empty_reg;
+    bool threw = false;
+    try {
+        EnchParser::parse("   ", empty_reg);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "whitespace-only input should throw");
+    TEST_PASS("test_ench_parser_blank_input_rejected");
+}
+
+void test_ench_parser_trailing_comma_rejected() {
+    EnchantmentRegistry empty_reg;
+    bool threw = false;
+    try {
+        EnchParser::parse("sharpness=5,", empty_reg);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "trailing comma should throw");
+    TEST_PASS("test_ench_parser_trailing_comma_rejected");
+}
+
 void test_ench_parser_unknown_throws() {
     auto reg = make_test_registry();
     bool threw = false;
@@ -139,6 +163,8 @@ int main() {
         test_ench_parser_empty_token_rejected();
         test_ench_parser_level_too_high_rejected();
         test_ench_parser_unknown_throws();
+        test_ench_parser_blank_input_rejected();
+        test_ench_parser_trailing_comma_rejected();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

@@ -3,6 +3,7 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "common/utils/StringUtils.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <stdexcept>
 
@@ -31,14 +32,21 @@ EnchSet EnchParser::parse(const std::string& input,
 {
     EnchSet result;
 
+    // ── 空白输入检测 ──
+    if (input.empty() || std::all_of(input.begin(), input.end(), [](char c) {
+        return static_cast<bool>(std::isspace(static_cast<unsigned char>(c)));
+    })) {
+        throw std::runtime_error(tr("cli.err.empty_source"));
+    }
+
     // Check for empty tokens (e.g. "a=1,,b=2") before splitting
     for (size_t i = 0; i + 1 < input.size(); ++i) {
         if (input[i] == ',' && input[i + 1] == ',') {
-            throw std::runtime_error("Empty enchantment spec in list (double comma near position " + std::to_string(i) + ")");
+            throw std::runtime_error(tr_fmt("cli.err.double_comma", i));
         }
     }
     if (!input.empty() && input.back() == ',') {
-        throw std::runtime_error("Trailing comma in enchantment list");
+        throw std::runtime_error(tr("cli.err.trailing_comma"));
     }
 
     auto tokens = string_utils::split(input, ',');
