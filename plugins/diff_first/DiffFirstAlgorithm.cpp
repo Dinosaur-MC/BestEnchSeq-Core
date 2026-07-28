@@ -227,8 +227,13 @@ std::optional<Item> DiffFirstAlgorithm::process(const EnchSolution &solution) co
         return std::nullopt;
 
     Item result = solution.steps[0].base;
-    for (const auto &step : solution.steps)
+    for (const auto &step : solution.steps) {
+        if (step.base.type == ItemType::Equip)
+            result = step.base;
+        if (!_forge_engine.is_forgeable(result, step.sacrifice))
+            return std::nullopt;
         _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
+    }
     return result;
 }
 
