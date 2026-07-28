@@ -105,9 +105,9 @@ std::string OutputFormatter::describe_item_verbose(
 
     if (item.is_book()) {
         if (item.enchantments.empty()) {
-            return "enchanted_book " + tr("output.item.free");
+            return item.id.str() + " " + tr("output.item.free");
         }
-        return "enchanted_book[" + ench_part + "]{ppn=" + std::to_string(item.prior_penalty) + "}";
+        return item.id.str() + "[" + ench_part + "]{ppn=" + std::to_string(item.prior_penalty) + "}";
     }
 
     // Equipment

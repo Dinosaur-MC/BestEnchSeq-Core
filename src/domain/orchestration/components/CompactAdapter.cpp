@@ -184,11 +184,20 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
     // target_item: from input.target via to_domain() with equipment NSID
     Item target_item = to_domain(input.target, input.ench_reg);
 
-    // available_items: from input.inventory_items() for inventory mode
+    // available_items: from inventory items or extracted from steps
     ItemCollection available_items;
     if (input.is_inventory()) {
         for (const auto &item : input.inventory_items())
             available_items.push_back(to_domain(item, input.ench_reg));
+    } else {
+        // Direct mode: show sacrifice books from the first solution's steps
+        if (!output.solutions.empty()) {
+            const auto &csol = output.solutions[0];
+            for (const auto &s : csol.steps) {
+                if (s.sacrifice.type == algorithm::ItemType::Book)
+                    available_items.push_back(to_domain(s.sacrifice, input.ench_reg));
+            }
+        }
     }
 
     // ── 2. Convert each compact solution ───────────────────────────────
