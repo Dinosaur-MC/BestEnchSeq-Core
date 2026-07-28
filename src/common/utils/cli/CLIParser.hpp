@@ -180,13 +180,30 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
             if (h) { key = a.substr(2, eq - 2); val = a.substr(eq + 1); } else key = a.substr(2);
             int idx = detail::find_by_long_name(entries, key);
             if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, key}); continue; }
-            if (detail::is_flag_by_index(entries, idx)) detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, key);
-            else if (h) detail::set_value_by_index<Entries...>(tup, idx, val, r.diagnostics, key);
-            else if (i + 1 < args.size()) {
-                std::string_view n(args[i + 1]);
-                if (!n.empty() && n[0] != '-') { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, key); }
-                else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
-            } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
+            if (detail::is_flag_by_index(entries, idx)) {
+                detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, key);
+            } else {
+                // ── Duplicate check ──
+                bool already = false;
+                [&]<size_t... Is>(std::index_sequence<Is...>) {
+                    ([&]{
+                        using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                        if constexpr (!std::is_same_v<ET, Flag>) {
+                            if (idx == static_cast<int>(Is) && std::get<Is>(tup).has_value())
+                                already = true;
+                        }
+                    }(), ...);
+                }(std::index_sequence_for<Entries...>{});
+                if (already)
+                    r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, key});
+                // ── End duplicate check ──
+                if (h) detail::set_value_by_index<Entries...>(tup, idx, val, r.diagnostics, key);
+                else if (i + 1 < args.size()) {
+                    std::string_view n(args[i + 1]);
+                    if (!n.empty() && n[0] != '-') { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, key); }
+                    else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
+                } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
+            }
             continue;
         }
 
@@ -207,13 +224,30 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
         char f = sc[0];
         int idx = detail::find_by_short_name(entries, f);
         if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string_view(&f, 1)}); continue; }
-        if (detail::is_flag_by_index(entries, idx)) detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, {&f, 1});
-        else if (sc.size() > 1) detail::set_value_by_index<Entries...>(tup, idx, sc.substr(1), r.diagnostics, {&f, 1});
-        else if (i + 1 < args.size()) {
-            std::string_view n(args[i + 1]);
-            if (!n.empty() && n[0] != '-') { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, std::string_view(&f, 1)); }
-            else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
-        } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
+        if (detail::is_flag_by_index(entries, idx)) {
+            detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, {&f, 1});
+        } else {
+            // ── Duplicate check ──
+            bool already = false;
+            [&]<size_t... Is>(std::index_sequence<Is...>) {
+                ([&]{
+                    using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                    if constexpr (!std::is_same_v<ET, Flag>) {
+                        if (idx == static_cast<int>(Is) && std::get<Is>(tup).has_value())
+                            already = true;
+                    }
+                }(), ...);
+            }(std::index_sequence_for<Entries...>{});
+            if (already)
+                r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string_view(&f, 1)});
+            // ── End duplicate check ──
+            if (sc.size() > 1) detail::set_value_by_index<Entries...>(tup, idx, sc.substr(1), r.diagnostics, {&f, 1});
+            else if (i + 1 < args.size()) {
+                std::string_view n(args[i + 1]);
+                if (!n.empty() && n[0] != '-') { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, std::string_view(&f, 1)); }
+                else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
+            } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
+        }
     }
 
     detail::apply_defaults(tup, entries);
@@ -229,28 +263,116 @@ std::string CLIParser<Entries...>::format_help(std::string_view prog) const {
     r += "Usage: "; r += prog; r += " [options]";
     [&]<size_t... Is>(std::index_sequence<Is...>) {
         (([&]{ using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-            if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) { r += " <"; r += std::get<Is>(_table.entries).name; r += '>'; }
+            if constexpr (std::is_same_v<ET, Positional<typename ET::value_type>>) {
+                r += " <"; r += std::get<Is>(_table.entries).name; r += '>';
+            }
         }()), ...);
     }(std::index_sequence_for<Entries...>{});
-    r += "\n\nOptions:\n";
+    r += "\n\n";
+
+    // ── 1. Collect unique group names in encounter order ──
+    struct GroupEntry { std::string_view name; size_t first_idx; };
+    auto groups = [&]() {
+        std::vector<GroupEntry> gs;
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                const auto& e = std::get<Is>(_table.entries);
+                std::string_view g;
+                if constexpr (requires { e.help_group; }) g = e.help_group;
+                if (g.empty()) return;
+                for (auto& grp : gs) { if (grp.name == g) return; }
+                gs.push_back({g, Is});
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        return gs;
+    }();
+
+    // ── 2. Render groups in order ──
+    for (const auto& [gname, _] : groups) {
+        r += "  --- "; r += _help_trans(gname); r += " ---\n";
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                const auto& e = std::get<Is>(_table.entries);
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                std::string_view eg;
+                if constexpr (requires { e.help_group; }) eg = e.help_group;
+                if (eg != gname) return;
+                std::string l = "  ";
+                if constexpr (requires { e.short_name; }) {
+                    if (e.short_name != '\0') { l += '-'; l += e.short_name; l += ", "; }
+                    else l += "    ";
+                }
+                if constexpr (requires { e.long_name; })
+                    if (!e.long_name.empty()) { l += "--"; l += e.long_name;
+                        if constexpr (!std::is_same_v<ET, Flag>) l += " <value>"; }
+                while (l.size() < 28) l += ' ';
+                l += _help_trans(e.help_key);
+                if constexpr (!std::is_same_v<ET, Flag>)
+                    if constexpr (requires { e.default_v; })
+                        if (e.default_v.has_value()) {
+                            l += " (default: ";
+                            if constexpr (std::is_same_v<typename ET::value_type, std::string>)
+                                l += *e.default_v;
+                            else if constexpr (std::is_same_v<typename ET::value_type, int>)
+                                l += std::to_string(*e.default_v);
+                            else l += "set";
+                            l += ')';
+                        }
+                if constexpr (requires { e.required; }) if (e.required) l += " (required)";
+                l += '\n'; r += l;
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+        r += '\n';
+    }
+
+    // ── 4. Ungrouped options (no help_group set) ──
+    // Render these after all named groups without a header.
+    bool has_ungrouped = false;
     [&]<size_t... Is>(std::index_sequence<Is...>) {
-        (([&]{ const auto& e = std::get<Is>(_table.entries); using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
-            std::string l = "  ";
-            if constexpr (requires { e.short_name; }) { if (e.short_name != '\0') { l += '-'; l += e.short_name; l += ", "; } else l += "    "; }
-            if constexpr (requires { e.long_name; }) { if (!e.long_name.empty()) { l += "--"; l += e.long_name; if constexpr (!std::is_same_v<ET, Flag>) l += " <value>"; } }
-            while (l.size() < 28) l += ' ';
-            l += _help_trans(e.help_key);
-            if constexpr (!std::is_same_v<ET, Flag>) { if constexpr (requires { e.default_v; }) { if (e.default_v.has_value()) {
-                l += " (default: ";
-                if constexpr (std::is_same_v<typename ET::value_type, std::string>) l += *e.default_v;
-                else if constexpr (std::is_same_v<typename ET::value_type, int>) l += std::to_string(*e.default_v);
-                else l += "set";
-                l += ')';
-            }}}
-            if constexpr (requires { e.required; }) { if (e.required) l += " (required)"; }
-            l += '\n'; r += l;
+        (([&]{
+            const auto& e = std::get<Is>(_table.entries);
+            std::string_view eg;
+            if constexpr (requires { e.help_group; }) eg = e.help_group;
+            if (eg.empty()) has_ungrouped = true;
         }()), ...);
     }(std::index_sequence_for<Entries...>{});
+
+    if (has_ungrouped) {
+        if (!groups.empty()) r += '\n';
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&]{
+                const auto& e = std::get<Is>(_table.entries);
+                using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
+                std::string_view eg;
+                if constexpr (requires { e.help_group; }) eg = e.help_group;
+                if (!eg.empty()) return;  // only render ungrouped entries
+                std::string l = "  ";
+                if constexpr (requires { e.short_name; }) {
+                    if (e.short_name != '\0') { l += '-'; l += e.short_name; l += ", "; }
+                    else l += "    ";
+                }
+                if constexpr (requires { e.long_name; })
+                    if (!e.long_name.empty()) { l += "--"; l += e.long_name;
+                        if constexpr (!std::is_same_v<ET, Flag>) l += " <value>"; }
+                while (l.size() < 28) l += ' ';
+                l += _help_trans(e.help_key);
+                if constexpr (!std::is_same_v<ET, Flag>)
+                    if constexpr (requires { e.default_v; })
+                        if (e.default_v.has_value()) {
+                            l += " (default: ";
+                            if constexpr (std::is_same_v<typename ET::value_type, std::string>)
+                                l += *e.default_v;
+                            else if constexpr (std::is_same_v<typename ET::value_type, int>)
+                                l += std::to_string(*e.default_v);
+                            else l += "set";
+                            l += ')';
+                        }
+                if constexpr (requires { e.required; }) if (e.required) l += " (required)";
+                l += '\n'; r += l;
+            }()), ...);
+        }(std::index_sequence_for<Entries...>{});
+    }
+
     return r;
 }
 

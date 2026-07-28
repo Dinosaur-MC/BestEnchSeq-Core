@@ -16,13 +16,13 @@ using namespace cli;
 // ============================================================================
 
 static const auto TEST_OPTS = OptionTable{
-    Flag    {.long_name = "help",    .short_name = 'h', .help_key = "Show help"},
-    Flag    {.long_name = "verbose", .short_name = 'v', .help_key = "Verbose output"},
-    Flag    {.long_name = "version", .short_name = 'V', .help_key = "Show version"},
-    Option<int>{.long_name = "solutions", .short_name = 's', .help_key = "Solution count", .default_v = 1},
-    Option<std::string>{.long_name = "target", .short_name = 't', .help_key = "Target item", .required = true},
-    Option<std::string>{.long_name = "source", .short_name = 'S', .help_key = "Source enchants"},
-    Option<std::string>{.long_name = "mode",   .short_name = 'm', .help_key = "Operation mode", .default_v = std::string("direct")},
+    Flag    {.long_name = "help",    .short_name = 'h', .help_key = "Show help",           .help_group = "Info"},
+    Flag    {.long_name = "verbose", .short_name = 'v', .help_key = "Verbose output",       .help_group = "Info"},
+    Flag    {.long_name = "version", .short_name = 'V', .help_key = "Show version",         .help_group = "Info"},
+    Option<int>{.long_name = "solutions", .short_name = 's', .help_key = "Solution count",  .help_group = "Basic", .default_v = 1},
+    Option<std::string>{.long_name = "target", .short_name = 't', .help_key = "Target item", .help_group = "Basic", .required = true},
+    Option<std::string>{.long_name = "source", .short_name = 'S', .help_key = "Source enchants", .help_group = "Basic"},
+    Option<std::string>{.long_name = "mode",   .short_name = 'm', .help_key = "Operation mode", .help_group = "Basic", .default_v = std::string("direct")},
     Positional<std::string>{.name = "input", .help_key = "Input file"},
 };
 
@@ -214,6 +214,37 @@ void test_format_help_with_translator() {
     TEST_PASS("format_help with translator");
 }
 
+void test_grouped_help() {
+    const auto GROUPED_OPTS = OptionTable{
+        Flag    {.long_name = "help", .short_name = 'h', .help_key = "Show help", .help_group = "Info"},
+        Option<std::string>{.long_name = "target", .help_key = "Target item", .help_group = "Basic"},
+        Option<int>{.long_name = "solutions", .short_name = 's', .help_key = "Solution count", .help_group = "Basic"},
+    };
+    std::string help = CLIParser(GROUPED_OPTS).format_help("prog");
+    expect(help.find("--- Info ---") != std::string::npos, "grouped help should have Info header");
+    expect(help.find("--- Basic ---") != std::string::npos, "grouped help should have Basic header");
+    expect(help.find("--target") != std::string::npos, "grouped help should list --target");
+    TEST_PASS("test_grouped_help");
+}
+
+void test_duplicate_option() {
+    const char* argv[] = {"prog", "--target", "x", "--target", "y"};
+    auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 5));
+    expect(has_diag(result.diagnostics, ParseErrorCode::duplicate_option),
+           "duplicate --target should produce warning");
+    TEST_PASS("test_duplicate_option");
+}
+
+void test_ungrouped_fallback() {
+    // TEST_OPTS has no help_group set on the Positional → should render as flat list
+    std::string help = CLIParser(TEST_OPTS).format_help("prog");
+    expect(help.find("--target") != std::string::npos,
+           "ungrouped fallback should still show --target");
+    expect(help.find("--help") != std::string::npos,
+           "ungrouped fallback should show --help");
+    TEST_PASS("test_ungrouped_fallback");
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -240,6 +271,9 @@ int main() {
         test_default_diagnostic_formatter();
         test_format_help();
         test_format_help_with_translator();
+        test_grouped_help();
+        test_duplicate_option();
+        test_ungrouped_fallback();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

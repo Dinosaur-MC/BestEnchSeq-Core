@@ -42,6 +42,7 @@ enum class ParseErrorCode : uint8_t {
     invalid_value,
     required_missing,
     unexpected_positional,
+    duplicate_option,
 };
 
 // ============================================================================
@@ -73,6 +74,7 @@ struct Option {
     std::string_view  long_name;
     char              short_name = '\0';
     std::string_view  help_key;
+    std::string_view  help_group;
     std::optional<T>  default_v;
     bool              required = false;
 };
@@ -82,6 +84,7 @@ struct Flag {
     std::string_view  long_name;
     char              short_name = '\0';
     std::string_view  help_key;
+    std::string_view  help_group;
 };
 
 template<Parsable T>
