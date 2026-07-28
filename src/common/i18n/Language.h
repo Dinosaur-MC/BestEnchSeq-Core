@@ -40,6 +40,10 @@ class Language {
     /// Get all key-value pairs under a module prefix (e.g. "cli.help").
     std::vector<std::pair<std::string_view, std::string_view>> get_section(std::string_view prefix) const;
 
+    /// Merge another Language's translation table into this one.
+    /// Keys in `other` override existing keys.
+    void merge(const Language& other);
+
   private:
     std::string _name;
     Table _table;

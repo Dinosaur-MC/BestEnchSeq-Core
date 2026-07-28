@@ -49,10 +49,10 @@ class NSID {
     std::string get_id() const { return _id; }
     std::string str() const;
     template <typename Callable>
-        requires std::is_invocable_v<Callable, std::string_view> &&
-                 std::is_convertible_v<std::invoke_result_t<Callable, std::string_view>, std::string>
+        requires std::is_invocable_v<Callable, std::string_view, std::string_view> &&
+                 std::is_convertible_v<std::invoke_result_t<Callable, const std::string_view, const std::string_view>, std::string>
     std::string str(Callable transform) const {
-        return transform(str());
+        return transform(_ns, _id);
     }
 
     NSID &operator=(const char *strid);

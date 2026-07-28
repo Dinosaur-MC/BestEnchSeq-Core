@@ -11,8 +11,12 @@ std::string_view vanilla_json() noexcept;
 /// string_view, embedded into the binary at compile time.
 std::string_view item_properties() noexcept;
 
-// i18n translation tables
+// i18n translation tables (UI strings)
 std::string_view i18n_zh_CN() noexcept;
 std::string_view i18n_en_US() noexcept;
+
+// Minecraft entity name translations
+std::string_view mc_i18n_zh_CN() noexcept;
+std::string_view mc_i18n_en_US() noexcept;
 
 } // namespace besq::data

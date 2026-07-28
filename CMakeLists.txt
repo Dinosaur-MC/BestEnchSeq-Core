@@ -118,12 +118,24 @@ embed_resource(
     SYMBOL i18n_en_US
     OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_en_US.cpp"
 )
+embed_resource(
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/minecraft/zh_CN.json"
+    SYMBOL mc_i18n_zh_CN
+    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_zh_CN.cpp"
+)
+embed_resource(
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/minecraft/en_US.json"
+    SYMBOL mc_i18n_en_US
+    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_en_US.cpp"
+)
 
 set(BESQ_EMBEDDED_SRCS
     "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
     "${BESQ_GENERATED_DIR}/EmbeddedData_item_props.cpp"
     "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_zh_CN.cpp"
     "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_en_US.cpp"
+    "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_zh_CN.cpp"
+    "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_en_US.cpp"
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════

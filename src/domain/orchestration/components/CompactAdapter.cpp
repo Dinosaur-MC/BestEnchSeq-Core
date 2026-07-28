@@ -177,7 +177,7 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
     if (input.is_direct()) {
         for (const auto &e : input.source()) {
             NSID nsid = input.ench_reg.to_global_id(e.id);
-            original_ench.emplace(nsid, nsid.str(), e.level);
+            original_ench.emplace(nsid, std::string{}, e.level);
         }
     }
 
@@ -269,7 +269,7 @@ Item CompactAdapter::to_domain(const algorithm::Item &item, const algorithm::Enc
     EnchSet ench_set;
     for (const auto &e : item.enchs) {
         NSID nsid = reg.to_global_id(e.id);
-        ench_set.emplace(nsid, nsid.str(), e.level);
+        ench_set.emplace(nsid, std::string{}, e.level);
     }
 
     if (item.type == algorithm::ItemType::Book) {

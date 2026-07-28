@@ -40,6 +40,12 @@ Language::get_section(std::string_view prefix) const {
     return result;
 }
 
+void Language::merge(const Language& other) {
+    for (const auto& [k, v] : other._table) {
+        _table[k] = v;
+    }
+}
+
 std::string Language::substitute_impl(std::string_view pattern, const std::vector<std::string> &args) {
     std::string result;
     result.reserve(pattern.size());

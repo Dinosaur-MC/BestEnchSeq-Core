@@ -1,6 +1,7 @@
 #include "OutputFormatter.h"
 #include "domain/business/business.h"
 #include "common/i18n/Language.h"
+#include "common/i18n/NsidDisplay.h"
 
 namespace {
 
@@ -25,14 +26,10 @@ std::string to_roman(int level) {
 }
 
 // ---------------------------------------------------------------------------
-// Enchantment name helpers (with graceful fallback when EnchInfo is absent)
+// Enchantment name (i18n via Language system, fallback to NSID string)
 // ---------------------------------------------------------------------------
-std::string ench_name_id(const NSID& id, const EnchantmentRegistry &ench_reg) {
-    try {
-        return ench_reg.at(id).id.str();
-    } catch (const std::exception &) {
-        return "ench_" + id.str();
-    }
+std::string ench_display(const NSID& id) {
+    return ench_display_name(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +53,7 @@ std::string ench_summary_str(const EnchSet &enchs, const EnchantmentRegistry &en
     for (const auto &ench : enchs) {
         if (!first) result += tr("output.item.enchant_sep");
         first = false;
-        result += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
+        result += ench.id.str() + " " + to_roman(ench.level);
     }
     return result;
 }
@@ -99,19 +96,19 @@ std::string OutputFormatter::describe_item_verbose(
         for (const auto &ench : item.enchantments) {
             if (!first) ench_part += ", ";
             first = false;
-            ench_part += ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
+            ench_part += ench.id.str() + " " + to_roman(ench.level);
         }
     }
 
     if (item.is_book()) {
         if (item.enchantments.empty()) {
-            return item.id.str() + " " + tr("output.item.free");
+            return item_display_name(item.id) + " " + tr("output.item.free");
         }
-        return item.id.str() + "[" + ench_part + "]{ppn=" + std::to_string(item.prior_penalty) + "}";
+        return item_display_name(item.id) + "[" + ench_part + "]{ppn=" + std::to_string(item.prior_penalty) + "}";
     }
 
     // Equipment
-    result = item.id.str();
+    result = item_display_name(item.id);
     if (!ench_part.empty()) {
         result += "[" + ench_part + "]";
     }
@@ -137,7 +134,7 @@ std::string OutputFormatter::describe_item_compact(
         for (const auto &ench : item.enchantments) {
             if (!first) result += ",";
             first = false;
-            result += ench_name_id(ench.id, ench_reg) + ":" + std::to_string(ench.level);
+            result += ench.id.str() + ":" + std::to_string(ench.level);
         }
         result += ";P;" + std::to_string(item.prior_penalty);
         return result;
@@ -149,7 +146,7 @@ std::string OutputFormatter::describe_item_compact(
     for (const auto &ench : item.enchantments) {
         if (!first) result += ",";
         first = false;
-        result += ench_name_id(ench.id, ench_reg) + ":" + std::to_string(ench.level);
+        result += ench.id.str() + ":" + std::to_string(ench.level);
     }
     result += ";P;" + std::to_string(item.prior_penalty);
     result += ";D;" + std::to_string(item.durability);
@@ -162,7 +159,7 @@ std::string OutputFormatter::describe_item_compact(
 std::string OutputFormatter::describe_ench_roman(
     const Ench &ench, const EnchantmentRegistry &ench_reg
 ) {
-    return ench_name_id(ench.id, ench_reg) + " " + to_roman(ench.level);
+    return ench.id.str() + " " + to_roman(ench.level);
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +366,7 @@ std::string OutputFormatter::format_json(
         Json::Array orig_arr;
         for (const auto &ench : sol.original_ench) {
             Json::Object eo;
-            eo["id"]    = Json(ench_name_id(ench.id, ench_reg));
+            eo["id"]    = Json(ench.id.str());
             eo["level"] = Json(ench.level);
             orig_arr.push_back(Json(eo));
         }
@@ -516,7 +513,7 @@ Json OutputFormatter::item_to_json(
         Json::Object eq;
         eq["id"]             = Json(item.id.str());
         eq["category"]       = Json("unknown"); // temp
-        eq["name"]           = Json(item.id.str());
+        eq["name"]           = Json(item_display_name(item.id));
         eq["max_durability"] = Json(0);
         obj["equipment"]     = Json(eq);
         obj["is_book"]       = Json(false);
@@ -529,7 +526,7 @@ Json OutputFormatter::item_to_json(
     Json::Array ench_arr;
     for (const auto &ench : item.enchantments) {
         Json::Object eo;
-        eo["id"]    = Json(ench_name_id(ench.id, ench_reg));
+        eo["id"]    = Json(ench.id.str());
         eo["level"] = Json(ench.level);
         ench_arr.push_back(Json(eo));
     }

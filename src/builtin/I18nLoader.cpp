@@ -18,10 +18,13 @@ static Language load_from_resource(
 }
 
 void register_builtin_translations(LanguageManager& lm) {
-    lm.register_language(
-        load_from_resource(besq::data::i18n_zh_CN(), "zh_CN")
-    );
-    lm.register_language(
-        load_from_resource(besq::data::i18n_en_US(), "en_US")
-    );
+    // ── zh_CN: UI strings + Minecraft entity names ──
+    auto zh = load_from_resource(besq::data::i18n_zh_CN(), "zh_CN");
+    zh.merge(load_from_resource(besq::data::mc_i18n_zh_CN(), "zh_CN"));
+    lm.register_language(std::move(zh));
+
+    // ── en_US: UI strings + Minecraft entity names ──
+    auto en = load_from_resource(besq::data::i18n_en_US(), "en_US");
+    en.merge(load_from_resource(besq::data::mc_i18n_en_US(), "en_US"));
+    lm.register_language(std::move(en));
 }
