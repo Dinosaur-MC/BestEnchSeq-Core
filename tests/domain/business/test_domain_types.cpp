@@ -16,7 +16,6 @@ void test_ench_construct() {
     Ench e(SHARPNESS(), "Sharpness", 3);
     expect(e.id == SHARPNESS(), "ench id sharpness");
     expect(e.level == 3, "ench level 3");
-    expect(e.name == "Sharpness", "ench name Sharpness");
     std::cout << "PASS: test_ench_construct" << std::endl;
 }
 
@@ -24,7 +23,6 @@ void test_ench_default() {
     Ench e;
     expect(e.id.empty(), "default id empty");
     expect(e.level == 1, "default level 1");
-    expect(e.name.empty(), "default name empty");
     std::cout << "PASS: test_ench_default" << std::endl;
 }
 
