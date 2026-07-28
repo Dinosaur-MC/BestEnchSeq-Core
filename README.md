@@ -68,8 +68,8 @@ CLI → CLIApp (application runner)
   → Orchestration Pipeline (SolvePipeline / ManagePipeline / ExportPipeline)
   → CompactAdapter::apply() (validates + prunes EnchReg + converts)
   → AlgorithmInput (compact) → AlgorithmExecutor → IAlgorithm
-  → AlgorithmOutput (compact steps)
-  → CompactAdapter::recall() (restores IDs + builds solutions)
+  → AlgorithmOutput (compact steps + final_item)
+  → CompactAdapter::recall() (restores IDs + builds solutions, passes final_item)
   → OutputFormatter (domain)
 ```
 
@@ -273,6 +273,13 @@ All algorithms share `IForgeEngine` and compact types. New algorithms only need 
 **Four-domain layering**: `algorithm/` depends only on `besq-common-core` + log. `business/` adds domain types and registries (depends on core + io + log). `orchestration/` wires algorithm + business together. `interface/` adds CLIApp, BesqContext, C ABI (depends on orchestration + common sub-targets). `besq-common/` is split into 5 independent static libraries (core, io, log, i18n, cli) — targets link only what they need.
 
 **No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
+
+**CLIParser with help grouping**: Option/Flag structs carry an optional ``help_group`` field. ``format_help()`` renders options under ``--- Group Name ---`` headers. Duplicate option detection emits warnings for repeated non-flag options. All parser errors are localized via ``UserI18nTranslator``.
+
+**final_item**: ``AlgorithmOutput::final_item`` is computed by ``AlgorithmExecutor::output()`` as the target equipment with all source enchantments merged, flowing through ``CompactAdapter::recall()`` into ``Solution::final_item``. ``format_verbose()`` displays it at the end of the forge plan.
+
+**Language selection**: ``CLIApp::apply_lang()`` is called early in ``main.cpp`` (before parsing) so ``--lang`` affects error messages and help text. Invalid ``--lang`` values print a warning listing available languages (``en_US``, ``zh_CN``) and fall back to the system locale. Uses ``EnvUtil`` (not raw ``getenv``) for type-safe env var access.
+
 
 ## Scripts
 
