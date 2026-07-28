@@ -14,7 +14,9 @@
 #include "common/log/log.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include <algorithm>
+#include <cctype>
 #include <fstream>
+#include <unordered_map>
 #include <iostream>
 #include <stdexcept>
 
@@ -40,15 +42,39 @@ CLIApp::CLIApp()
 // apply_lang — Select language from env / locale / CLI flag
 // ============================================================================
 
+namespace {
+
+/// Normalize a language code: lowercase, replace '-' with '_'.
+/// e.g. "zh-CN" → "zh_cn", "en_US" → "en_us".
+std::string normalize_lang_code(std::string code) {
+    for (auto& c : code) {
+        if (c == '-') c = '_';
+        else c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return code;
+}
+
+} // anonymous namespace
+
 void CLIApp::apply_lang(int argc, char* argv[]) {
     auto& lang_mgr = LanguageManager::instance();
 
-    // 1. Select base language from BESQ_LANG env var or system locale first.
-    //    This ensures tr() messages use the correct locale from this point on.
-    std::string base_code = get_env<std::string>("BESQ_LANG", detect_system_locale());
-    lang_mgr.select(lang_mgr.resolve_locale(base_code));
+    // 1. Build a normalized lookup map: normalized → original code.
+    std::unordered_map<std::string, std::string> norm_to_orig;
+    for (const auto& code : lang_mgr.available())
+        norm_to_orig[normalize_lang_code(code)] = code;
 
-    // 2. --lang CLI flag override — validate against registered languages.
+    // 2. Select base language from BESQ_LANG env var or system locale.
+    std::string base_raw = get_env<std::string>("BESQ_LANG", detect_system_locale());
+    {
+        auto it = norm_to_orig.find(normalize_lang_code(base_raw));
+        if (it != norm_to_orig.end())
+            lang_mgr.select(it->second);
+        else
+            lang_mgr.select(lang_mgr.resolve_locale(base_raw));
+    }
+
+    // 3. --lang CLI flag override — validate case-insensitively, _/- tolerant.
     for (int i = 1; i < argc; ++i) {
         std::string_view a(argv[i]);
         std::string override_code;
@@ -59,18 +85,13 @@ void CLIApp::apply_lang(int argc, char* argv[]) {
         else
             continue;
 
-        auto avail = lang_mgr.available();
-        bool valid = std::find(avail.begin(), avail.end(), override_code) != avail.end();
-        if (valid) {
-            lang_mgr.select(lang_mgr.resolve_locale(override_code));
+        std::string norm = normalize_lang_code(override_code);
+        auto it = norm_to_orig.find(norm);
+        if (it != norm_to_orig.end()) {
+            lang_mgr.select(it->second);
         } else {
-            std::string avail_str;
-            // for (size_t j = 0; j < avail.size(); ++j) {
-            //     if (j > 0) avail_str += ", ";
-            //     avail_str += avail[j];
-            // }
-            avail_str = string_utils::join(avail, ", ");
-            // Warning in the base language; keep base language selected.
+            auto avail = lang_mgr.available();
+            std::string avail_str = string_utils::join(avail, ", ");
             std::cerr << tr_fmt("cli.err.invalid_lang", override_code, avail_str) << std::endl;
         }
         break;
@@ -84,10 +105,14 @@ int CLIApp::run(int argc, char* argv[]) {
     // 1. Parse CLI args
     auto config = CLIApp::parse(argc, argv);
 
-    // Re-select language if --lang was explicitly set (handles --lang=value syntax)
-    if (!config.lang.empty())
-        LanguageManager::instance().select(
-            LanguageManager::instance().resolve_locale(config.lang));
+    // Re-select language if --lang was explicitly set (normalized for tolerance)
+    if (!config.lang.empty()) {
+        std::string norm = normalize_lang_code(config.lang);
+        auto& lang_mgr = LanguageManager::instance();
+        // Try normalized direct match first, then fall back to resolve_locale
+        if (!lang_mgr.select(norm))
+            lang_mgr.select(lang_mgr.resolve_locale(norm));
+    }
 
     if (config.help) {
         std::cout << help_text(argv[0]) << std::endl;

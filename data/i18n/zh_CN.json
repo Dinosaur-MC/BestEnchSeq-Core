@@ -126,6 +126,10 @@
     "main.msg.registry_exported": "注册表已导出到 {0}",
     "main.msg.loaded_builtin": "已加载内置原版数据",
     "cli.err.invalid_lang": "无效语言: \"{0}\"。可用语言: {1}",
-    "output.verbose.source_enchants": "  来源: {0}"
+    "output.verbose.source_enchants": "  来源: {0}",
+    "output.verbose.algorithm": "算法: {0}",
+    "output.verbose.version": " v{0}",
+    "output.verbose.time_ms": "用时: {0}毫秒",
+    "output.verbose.time_s": "用时: {0}.{1}秒"
   }
 }
