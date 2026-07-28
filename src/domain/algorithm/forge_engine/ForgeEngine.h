@@ -29,7 +29,7 @@ public:
 
     // ── IForgeEngine core ─────────────────────────────────────────────────────
 
-    /// Forge sacrifice into target (mutating).
+    /// Forge target with sacrifice (mutating).
     ///
     /// Matches the formal model in docs/anvil-mechanics-reference.md §1-3, §5-7:
     ///   Cost = P_A + P_B             (§2 penalty_cost, gated by ignore_penalty_cost)
@@ -44,7 +44,7 @@ public:
                                              const Item& sacrifice,
                                              const EnchReg& reg) const override;
 
-    /// Check whether (a → b) is a valid forge operation per §8.
+    /// Check whether (target + sacrifice) is a valid forge operation per §8.
     bool is_forgeable(const Item& a, const Item& b) const noexcept override;
 
     /// Pure forge: cost-free state mutation for simulate().

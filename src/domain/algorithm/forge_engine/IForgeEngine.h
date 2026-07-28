@@ -23,7 +23,7 @@ class IForgeEngine {
 
     virtual bool is_forgeable(const Item &a, const Item &b) const noexcept = 0;
 
-    /// Pure forge: apply sacrifice into target without computing costs.
+    /// Pure forge: forge target with sacrifice without computing costs.
     /// Modifies target state (enchants, ppn, durability) but skips all cost
     /// arithmetic.  Default implementation calls forge_into() and discards
     /// the cost; subclasses may override with a cost-free path for speed.

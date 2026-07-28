@@ -16,7 +16,7 @@ IForgeEngine（纯虚基类）
 |---|---|---|
 | `forge_into(target, sacrifice, reg)` | 原地锻造 | 修改 target，返回成本。JE/BE 分支在此 |
 | `forge(target, sacrifice, reg)` | 非修改锻造 | 拷贝 target → forge_into → 返回 {result, cost} |
-| `is_forgeable(a, b)` | 可锻造性 | 当前仅 Equip→any 或 Book→Book |
+| `is_forgeable(target, sacrifice)` | 可锻造性 | 当前仅 Equip+any 或 Book+Book |
 | `pure_forge_into(target, sacrifice, reg)` | 纯状态合并 | 跳过成本计算，用于 simulate() |
 
 ### 子操作（可覆写）
@@ -51,7 +51,7 @@ forge_into(target, sacrifice, reg):
   成本 = P_A + P_B          (penalty_cost，受 ignore_penalty_cost 控制)
         + C_ench            (附魔合并，JE/BE 公式不同)
         + conflict_penalty  (JE only: +1 per conflict)
-  惩罚更新: target.ppn = max(a.ppn, b.ppn) + 1
+  惩罚更新: target.ppn = max(target.ppn, sacrifice.ppn) + 1
   附魔合并: 相同附魔取 max 或 +1（同级时）；冲突附魔跳过
   耐久度修复: equip + equip 合并，受 ignore_repair_cost 控制
   成本上限: 原版上限为 39 级，算法搜索中通过 estimate_forge_cost / cost_so_far 约束

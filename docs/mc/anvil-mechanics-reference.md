@@ -275,7 +275,7 @@ $$\text{最终费用} = \min(\text{总费用}, 39)$$
 ### 实现对应
 
 ```cpp
-// ForgeEngine::is_forgeable
+// ForgeEngine::is_forgeable(a, b) — a: target (left slot), b: sacrifice (right slot)
 bool ForgeEngine::is_forgeable(const compact::Item& a, const compact::Item& b) const noexcept {
     return a.type == compact::ItemType::Equip
         || (a.type == compact::ItemType::Book && b.type == compact::ItemType::Book);
