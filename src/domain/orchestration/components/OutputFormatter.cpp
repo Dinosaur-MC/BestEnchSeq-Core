@@ -224,11 +224,15 @@ std::string OutputFormatter::format_verbose(
         if (!sol.is_success) {
             out += " " + tr("output.verbose.infeasible");
         }
-        out += " - " + ench_summary_str(sol.original_ench, ench_reg) + "\n";
-        out += tr("output.verbose.separator") + "\n";
+        if (!sol.original_ench.empty()) {
+            out += " - " + ench_summary_str(sol.original_ench, ench_reg);
+        }
+        out += "\n" + tr("output.verbose.separator") + "\n";
 
-        // Mode and platform
+        // Algorithm, mode, platform
         out += tr_fmt("output.verbose.mode", mode_display_name(mode)) + "\n";
+        if (!sol.metadata.algorithm_name.empty())
+            out += "Algorithm: " + sol.metadata.algorithm_name + "\n";
         out += tr_fmt("output.verbose.platform", platform_to_display(sol.platform)) + "\n";
 
         // Rank
@@ -253,9 +257,11 @@ std::string OutputFormatter::format_verbose(
 
         out += "\n" + tr("output.verbose.input_section") + "\n";
         out += tr_fmt("output.verbose.target_item", describe_item_verbose(sol.target_item, ench_reg)) + "\n";
-        out += tr("output.verbose.available_items") + "\n";
-        for (const auto &item : sol.available_items) {
-            out += "    - " + describe_item_verbose(item, ench_reg) + "\n";
+        if (!sol.available_items.empty()) {
+            out += tr("output.verbose.available_items") + "\n";
+            for (const auto &item : sol.available_items) {
+                out += "    - " + describe_item_verbose(item, ench_reg) + "\n";
+            }
         }
 
         out += tr("output.verbose.step_separator") + "\n";
