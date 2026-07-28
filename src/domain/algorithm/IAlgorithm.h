@@ -98,6 +98,14 @@ class IAlgorithm {
     /// Evaluate the cost time (ms) grade of the given enchantment count.
     virtual double evaluate(int16_t ench_count) const noexcept = 0;
 
+    /// Initialize before execute().  Called once by AlgorithmExecutor before
+    /// each execute() call.  Algorithms that support checkpoint resumption
+    /// should check ctx.is_restored() here to distinguish fresh starts from
+    /// restored state and skip redundant pre-allocation.
+    virtual void init(const AlgorithmInput &input, const ExecutionContext &ctx) {
+        (void)input; (void)ctx;
+    }
+
     /// Execute the algorithm on the given input (takes ownership by value to
     /// prevent external modification during long-running search).
     virtual void execute(AlgorithmInput input, ExecutionContext &ctx) = 0;

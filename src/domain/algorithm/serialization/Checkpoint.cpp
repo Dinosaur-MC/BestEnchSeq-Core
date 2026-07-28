@@ -74,9 +74,41 @@ void Checkpoint::serialize(ByteStreamWriter& w) const noexcept {
 void Checkpoint::deserialize(ByteStreamReader& r) noexcept {
     r >> meta;
     if (!r.ok()) return;
+    if (meta.num_sections > MAX_CHECKPOINT_SECTIONS) {
+        r.set_fail();
+        return;
+    }
     sections.resize(meta.num_sections);
     for (auto& sec : sections)
         r >> sec;
+}
+
+void Checkpoint::finalize() noexcept {
+    ByteStreamWriter w;
+    w << meta.algorithm_tag << meta.algo_version;
+    for (const auto& sec : sections)
+        w.bytes(sec.payload.data(), sec.payload.size());
+    auto buf = std::move(w).take();
+    compute_crc56(buf.data(), buf.size(), meta.crc_code);
+}
+
+bool Checkpoint::verify() const noexcept {
+    // Legacy checkpoints have all-zero crc_code — skip verification.
+    bool all_zero = true;
+    for (int i = 0; i < 7; ++i) {
+        if (meta.crc_code[i] != 0) { all_zero = false; break; }
+    }
+    if (all_zero)
+        return true;
+
+    uint8_t expected[7] = {};
+    ByteStreamWriter w;
+    w << meta.algorithm_tag << meta.algo_version;
+    for (const auto& sec : sections)
+        w.bytes(sec.payload.data(), sec.payload.size());
+    auto buf = std::move(w).take();
+    compute_crc56(buf.data(), buf.size(), expected);
+    return std::memcmp(expected, meta.crc_code, 7) == 0;
 }
 
 void compute_crc56(const uint8_t* data, size_t len, uint8_t crc[7]) {

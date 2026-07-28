@@ -25,6 +25,10 @@ class ExecutionContext {
     size_t task_id() const noexcept { return _task_id; }
     const char *algorithm_name() const noexcept { return _algo_name; }
 
+    // ─── 恢复标记 — 由 Executor 在 start(checkpoint) 中设置 ────────────
+    bool is_restored() const noexcept { return _restored; }
+    void set_restored(bool v) noexcept { _restored = v; }
+
     // ═══════════════════════════════════════════════════════════════════
     // 执行控制
     // ═══════════════════════════════════════════════════════════════════
@@ -104,6 +108,9 @@ class ExecutionContext {
     // ── 进度 + 限频 ──────────────────────────────────────────────────
     std::atomic<uint8_t> _progress{0};
     std::atomic<int8_t> _progress_pct{-1};
+
+    // ── 恢复标记 — 由 Executor 在 start(checkpoint) 中设置 ────────────
+    bool _restored{false};
 
     // ── 解法累积 ─────────────────────────────────────────────────────
     mutable std::mutex _sol_mtx;

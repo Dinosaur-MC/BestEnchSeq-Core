@@ -61,6 +61,62 @@ void test_astar_state_bad_tag() {
     TEST_PASS("test_astar_state_bad_tag");
 }
 
+void test_crc_roundtrip() {
+    AStarStateSerializer ser;
+    AStarAlgorithm algo;
+
+    // Serialize a real algorithm state
+    AlgorithmInput input;
+    input.target.type = ItemType::Equip;
+    EnchSet target_set;
+    target_set.insert(Ench{0, 1});
+    input.target.enchs = target_set;
+    input.ench_reg.init({}, {}, Equipment{});
+
+    auto blob = ser.serialize(algo, input);
+    expect(!blob.empty(), "serialize should produce bytes");
+
+    // Deserialize — should succeed with CRC verification
+    AStarAlgorithm algo2;
+    AlgorithmInput out;
+    bool ok = ser.deserialize(algo2, out, blob);
+    expect(ok, "round-trip deserialize should succeed");
+    expect(out.target.type == ItemType::Equip, "target type should survive round-trip");
+    TEST_PASS("test_crc_roundtrip");
+}
+
+void test_crc_tamper_detected() {
+    AStarStateSerializer ser;
+    AStarAlgorithm algo;
+
+    AlgorithmInput input;
+    auto blob = ser.serialize(algo, input);
+    expect(!blob.empty(), "serialize should produce bytes");
+
+    // Tamper a byte in the payload region (past the header)
+    if (blob.size() > 50) {
+        blob[50] ^= 0xFF;
+        AStarAlgorithm algo2;
+        AlgorithmInput out;
+        bool ok = ser.deserialize(algo2, out, blob);
+        expect(!ok, "tampered checkpoint should be rejected by CRC");
+    }
+    TEST_PASS("test_crc_tamper_detected");
+}
+
+void test_checkpoint_min_size_rejected() {
+    AStarStateSerializer ser;
+    AStarAlgorithm algo;
+    AlgorithmInput out;
+
+    // Data too small to contain even magic+version
+    uint8_t tiny[5] = {0x42, 0x45, 0x53, 0x51, 0x01};
+    bool ok = ser.deserialize(algo, out, tiny);
+    expect(!ok, "5-byte data should be rejected");
+
+    TEST_PASS("test_checkpoint_min_size_rejected");
+}
+
 int main() {
     try {
         test_serializer_name();
@@ -68,6 +124,9 @@ int main() {
         test_astar_state_empty_rejected();
         test_astar_state_bad_magic_rejected();
         test_astar_state_bad_tag();
+        test_crc_roundtrip();
+        test_crc_tamper_detected();
+        test_checkpoint_min_size_rejected();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

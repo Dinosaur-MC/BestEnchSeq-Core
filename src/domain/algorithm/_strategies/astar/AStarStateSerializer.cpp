@@ -4,13 +4,13 @@
 
 namespace algorithm {
 
-// ── Section tag constants (algo-specific, meaningful only to this serializer) ──
+// ── AStar-specific section tag constants ──────────────────────────────
 namespace {
-    constexpr uint32_t TAG_ITEM_POOL  = 1;
-    constexpr uint32_t TAG_STEP_POOL  = 2;
-    constexpr uint32_t TAG_OPEN_HEAP  = 3;
-    constexpr uint32_t TAG_BEST_G     = 4;
-    constexpr uint32_t TAG_SCALARS    = 5;
+    constexpr uint32_t TAG_ITEM_POOL = 1;
+    constexpr uint32_t TAG_STEP_POOL = 2;
+    constexpr uint32_t TAG_OPEN_HEAP = 3;
+    constexpr uint32_t TAG_BEST_G    = 4;
+    constexpr uint32_t TAG_SCALARS   = 5;
 
     // Hard upper bounds for deserialized counts (OOM/DoS protection)
     constexpr uint32_t MAX_SERIAL_ITEMS  = 1'000'000;
@@ -38,7 +38,7 @@ bool AStarStateSerializer::_deserialize_state(IAlgorithm& algo, std::span<const 
     auto& astar = static_cast<AStarAlgorithm&>(algo);
 
     for (const auto& sect : sections) {
-        uint32_t tag = sect.header.type & ~checkpoint::SECTION_TYPE_ALGO;
+        auto tag = checkpoint::get_algo_tag(sect.header.type);
         ByteStreamReader r(sect.payload.data(), sect.payload.size());
         switch (tag) {
             case TAG_ITEM_POOL: _read_item_pool(r, astar); break;
@@ -52,8 +52,6 @@ bool AStarStateSerializer::_deserialize_state(IAlgorithm& algo, std::span<const 
         if (!r.ok()) return false;
     }
 
-    astar._deserialize_ok = true;
-    astar._state_restored = true;
     return true;
 }
 
@@ -66,7 +64,7 @@ checkpoint::Section AStarStateSerializer::_write_item_pool(const AStarAlgorithm&
     for (AStarAlgorithm::ItemID i = 0; static_cast<uint32_t>(i) < count; ++i)
         payload << astar._pool[i];
     checkpoint::Section sect;
-    sect.header.type = TAG_ITEM_POOL;
+    sect.header.type = checkpoint::make_algo_tag(TAG_ITEM_POOL);
     sect.payload = std::move(payload).take();
     sect.header.payload_len = sect.payload.size();
     return sect;
@@ -83,7 +81,7 @@ checkpoint::Section AStarStateSerializer::_write_step_pool(const AStarAlgorithm&
         payload.i32(sn.cost);
     }
     checkpoint::Section sect;
-    sect.header.type = TAG_STEP_POOL;
+    sect.header.type = checkpoint::make_algo_tag(TAG_STEP_POOL);
     sect.payload = std::move(payload).take();
     sect.header.payload_len = sect.payload.size();
     return sect;
@@ -106,7 +104,7 @@ checkpoint::Section AStarStateSerializer::_write_open_heap(const AStarAlgorithm&
         payload.i32(entry.f);
     }
     checkpoint::Section sect;
-    sect.header.type = TAG_OPEN_HEAP;
+    sect.header.type = checkpoint::make_algo_tag(TAG_OPEN_HEAP);
     sect.payload = std::move(payload).take();
     sect.header.payload_len = sect.payload.size();
     return sect;
@@ -116,7 +114,7 @@ checkpoint::Section AStarStateSerializer::_write_best_g(const AStarAlgorithm& as
     ByteStreamWriter payload;
     astar._x_export_best_g(payload);
     checkpoint::Section sect;
-    sect.header.type = TAG_BEST_G;
+    sect.header.type = checkpoint::make_algo_tag(TAG_BEST_G);
     sect.payload = std::move(payload).take();
     sect.header.payload_len = sect.payload.size();
     return sect;
@@ -128,7 +126,7 @@ checkpoint::Section AStarStateSerializer::_write_scalars(const AStarAlgorithm& a
     payload.i32(astar._solutions_found);
     payload.i64(astar._x_explored());
     checkpoint::Section sect;
-    sect.header.type = TAG_SCALARS;
+    sect.header.type = checkpoint::make_algo_tag(TAG_SCALARS);
     sect.payload = std::move(payload).take();
     sect.header.payload_len = sect.payload.size();
     return sect;

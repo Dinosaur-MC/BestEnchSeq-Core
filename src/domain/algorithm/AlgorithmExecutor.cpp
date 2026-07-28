@@ -173,6 +173,7 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     // Main phase (asynchronous): run the actual algorithm
     _worker.emplace([this]() mutable {
         try {
+            _algorithm->init(_algorithm_input, *_ctx);
             _algorithm->execute(_algorithm_input, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -221,6 +222,8 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 
     _worker.emplace([this]() mutable {
         try {
+            _ctx->set_restored(true);
+            _algorithm->init(_algorithm_input, *_ctx);
             _algorithm->execute(_algorithm_input, *_ctx);
 
             _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(

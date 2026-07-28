@@ -126,46 +126,62 @@ int32_t AStarAlgorithm::_delta_h(int32_t parent_h, const Item &forged, const Ite
     return h;
 }
 
+// ─── init ───────────────────────────────────────────────────────────────
+
+void AStarAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
+    _ench_reg = &input.ench_reg;
+    _target.clear();
+    for (const auto& e : input.target.enchs)
+        _target.push_back(e);
+    _target_level_map.assign(_ench_reg->size(), 0);
+    for (const auto &t : _target)
+        _target_level_map[t.id] = t.level;
+
+    _max_solutions   = input.s_config.max_solutions;
+    _max_search_time = input.s_config.max_search_time;
+
+    if (ctx.is_restored())
+        return;  // pool/step_pool/open_heap/best_g already restored by serializer
+
+    // Fresh start: pre-allocate scratch buffers
+    if (_h_max.size() < _ench_reg->size())
+        _h_max.assign(_ench_reg->size(), 0);
+    if (_h_buf.size() < _ench_reg->size())
+        _h_buf.assign(_ench_reg->size(), 0);
+    _h_dirty.clear();
+}
+
 // ─── Execute ────────────────────────────────────────────────────────────
 
 void AStarAlgorithm::execute(AlgorithmInput input, ExecutionContext &ctx) {
     _forge_engine.set_config(input.f_config);
     const auto &items  = input.items;
     const auto &reg    = input.ench_reg;
-    const auto &target = input.target;
-    // ─── Restore dispatch ───────────────────────────────────────────────
-    if (_state_restored) {
-        _state_restored = false;
-        if (!_deserialize_ok) {
-            // Deserialization was incomplete — don't run
-            ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
-            return;
-        }
-        _restore_and_execute(input, ctx);
-        return;
-    }
 
     ctx.report_progress(0, ProgressStatus::Starting);
     auto t0 = std::chrono::steady_clock::now();
 
-    // Reset state
-    _pool.clear();
-    _step_pool.clear();
-    _open_heap.clear();
-    _ench_reg = &input.ench_reg;
-    _target.clear(); for (const auto& e : target.enchs) _target.push_back(e);
-    _target_level_map.assign(_ench_reg->size(), 0);
-    for (const auto &t : _target)
-        _target_level_map[t.id] = t.level;
-    _best_solution_cost = INT32_MAX;
-    _diag               = AStarDiagnostics{};
-
-    // Cache config from AlgorithmInput
-    _max_solutions   = input.s_config.max_solutions;
-    _max_search_time = input.s_config.max_search_time;
-    _budget          = AStarMemoryBudget::from_memory_mb(
-        input.s_config.memory_mb > 0 ? input.s_config.memory_mb : 2048, static_cast<int32_t>(items.size())
+    size_t open_heap_cap = 0;
+    std::priority_queue<PriorityEntry, std::vector<PriorityEntry>, std::greater<>> open_set(
+        std::greater<>{}, std::move(_open_heap)
     );
+
+    // ─── Fresh start: seed pool, guards, greedy bound ─────────────────
+    if (!ctx.is_restored()) {
+        // Reset search state
+        _pool.clear();
+        _step_pool.clear();
+        _open_heap.clear();
+        _best_g.clear();
+        _best_solution_cost = INT32_MAX;
+        _solutions_found = 0;
+        _explored = 0;
+        _diag     = AStarDiagnostics{};
+        _budget   = AStarMemoryBudget::from_memory_mb(
+            input.s_config.memory_mb > 0 ? input.s_config.memory_mb : 2048,
+            static_cast<int32_t>(items.size())
+        );
+        _pool.set_max(_budget.max_items_pool);
 
     // Seed ItemPool with initial items
     std::vector<ItemID> initial_ids;
@@ -235,12 +251,7 @@ void AStarAlgorithm::execute(AlgorithmInput input, ExecutionContext &ctx) {
 
     int32_t h0           = _heuristic(initial_ids);
     size_t initial_hash  = _hash_ids(initial_ids);
-    size_t open_heap_cap = _open_heap.capacity();
-
-    // Priority queue over backing heap
-    std::priority_queue<PriorityEntry, std::vector<PriorityEntry>, std::greater<>> open_set(
-        std::greater<>{}, std::move(_open_heap)
-    );
+    open_heap_cap = _open_heap.capacity();
 
     open_set.push(PriorityEntry{SearchState{0, h0, initial_hash, -1, std::move(initial_ids)}, h0});
 
@@ -261,6 +272,31 @@ void AStarAlgorithm::execute(AlgorithmInput input, ExecutionContext &ctx) {
     }
     _explored = 0;
 
+    } else {
+        // Restored path: report restored progress
+        {
+            _state_est = 64;
+            if (items.size() > 1) {
+                size_t f = 1;
+                for (size_t k = 2; k <= items.size() && f <= (1u << 20); ++k)
+                    f *= k;
+                _state_est = std::max<size_t>(64, f);
+            }
+        }
+        uint8_t restored_progress;
+        if (_state_est <= 100000) {
+            restored_progress = static_cast<uint8_t>(_best_g.size() * 100 / std::max(_state_est, size_t(1)));
+        } else {
+            restored_progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
+        }
+        if (restored_progress > 0 && restored_progress < 100)
+            ctx.report_progress(restored_progress, ProgressStatus::Exploring);
+
+        _diag.initial_bound = _best_solution_cost;
+        open_heap_cap = _open_heap.capacity();
+    }
+
+    // ─── Main search loop (shared) ─────────────────────────────────────
     while (!open_set.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
 
@@ -440,259 +476,6 @@ void AStarAlgorithm::execute(AlgorithmInput input, ExecutionContext &ctx) {
     }
 
     // ─── Exit diagnostics ────────────────────────────────────────────────
-    _diag.explored_count      = _explored;
-    _diag.best_g_entries      = _best_g.size();
-    _diag.final_bound         = _best_solution_cost;
-    _diag.step_pool_used      = _step_pool.size();
-    _diag.step_pool_capacity  = _step_pool.capacity();
-    _diag.items_pool_used     = _pool.size();
-    _diag.items_pool_capacity = _pool.capacity();
-    _diag.open_set_pending    = open_set.size();
-    _diag.solution_cost       = _best_solution_cost;
-    _diag.estimated_peak_bytes =
-        static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item)) +
-        static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode)) +
-        static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
-    if (ctx.is_cancelled()) {
-        ctx.report_progress(100, ProgressStatus::Cancelled);
-        _diag.status = "Cancelled";
-    } else {
-        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
-        _diag.status = "CompleteNoSolution";
-    }
-    ctx.set_exit_diagnostics(_diag);
-}
-
-// ─── _restore_and_execute ───────────────────────────────────────────────
-
-void AStarAlgorithm::_restore_and_execute(AlgorithmInput input, ExecutionContext &ctx) {
-    ctx.report_progress(0, ProgressStatus::Starting);
-
-    _forge_engine.set_config(input.f_config);
-    _ench_reg = &input.ench_reg;
-    _target.clear(); for (const auto& e : input.target.enchs) _target.push_back(e);
-    _target_level_map.assign(_ench_reg->size(), 0);
-    for (const auto &t : _target)
-        _target_level_map[t.id] = t.level;
-
-    _max_solutions   = input.s_config.max_solutions;
-    _max_search_time = input.s_config.max_search_time;
-    _budget          = AStarMemoryBudget::from_memory_mb(
-        input.s_config.memory_mb > 0 ? input.s_config.memory_mb : 2048, static_cast<int32_t>(input.items.size())
-    );
-
-    _pool.set_max(_budget.max_items_pool);
-
-    // Recompute state estimate for progress reporting
-    {
-        _state_est = 64;
-        if (input.items.size() > 1) {
-            size_t f = 1;
-            for (size_t k = 2; k <= input.items.size() && f <= (1u << 20); ++k)
-                f *= k;
-            _state_est = std::max<size_t>(64, f);
-        }
-    }
-
-    // Reset diagnostics
-    _diag               = AStarDiagnostics{};
-    _diag.initial_bound = _best_solution_cost;
-
-    // Pre-allocate scratch buffers for heuristic
-    if (_h_max.size() < _ench_reg->size())
-        _h_max.assign(_ench_reg->size(), 0);
-    if (_h_buf.size() < _ench_reg->size())
-        _h_buf.assign(_ench_reg->size(), 0);
-    _h_dirty.clear();
-
-    // Rebuild open_set from restored _open_heap
-    size_t open_heap_cap = _open_heap.capacity();
-    std::priority_queue<PriorityEntry, std::vector<PriorityEntry>, std::greater<>> open_set(
-        std::greater<>{}, std::move(_open_heap)
-    );
-
-    // _best_g and _explored are already populated by deserialize
-
-    // Report restored progress immediately so observers see the current state
-    uint8_t restored_progress;
-    if (_state_est <= 100000) {
-        restored_progress = static_cast<uint8_t>(_best_g.size() * 100 / std::max(_state_est, size_t(1)));
-    } else {
-        restored_progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
-    }
-    if (restored_progress > 0 && restored_progress < 100)
-        ctx.report_progress(restored_progress, ProgressStatus::Exploring);
-
-    auto t0 = std::chrono::steady_clock::now();
-
-    // ─── Main loop (copied from execute()) ──────────────────────────────
-    while (!open_set.empty() && !ctx.is_cancelled()) {
-        ctx.wait_if_paused();
-
-        SearchState current = std::move(const_cast<PriorityEntry &>(open_set.top())).state;
-        open_set.pop();
-
-        size_t cur_h = current.hash;
-        if (int32_t *bg = _best_g.find(cur_h)) {
-            if (*bg < current.g)
-                continue;
-        }
-
-        if (_meets_target(current.ids[0])) {
-            ++_solutions_found;
-            if (current.g < _best_solution_cost)
-                _best_solution_cost = current.g;
-
-            std::vector<EnchStep> steps;
-            {
-                std::vector<int32_t> indices;
-                for (int32_t si = current.step_idx; si >= 0; si = _step_pool[si].prev)
-                    indices.push_back(si);
-                steps.reserve(indices.size());
-                for (auto it = indices.rbegin(); it != indices.rend(); ++it) {
-                    const auto &sn = _step_pool[*it];
-                    steps.push_back({_pool[sn.base_id], _pool[sn.sac_id], sn.cost});
-                }
-            }
-            ctx.report_solution(steps);
-            ctx.report_progress(100, ProgressStatus::Complete);
-
-            _diag.explored_count      = _explored;
-            _diag.best_g_entries      = _best_g.size();
-            _diag.final_bound         = _best_solution_cost;
-            _diag.step_pool_used      = _step_pool.size();
-            _diag.step_pool_capacity  = _step_pool.capacity();
-            _diag.items_pool_used     = _pool.size();
-            _diag.items_pool_capacity = _pool.capacity();
-            _diag.solution_cost       = _best_solution_cost;
-            _diag.open_set_pending    = open_set.size();
-            _diag.estimated_peak_bytes =
-                static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item)) +
-                static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode)) +
-                static_cast<int64_t>(open_heap_cap) * static_cast<int64_t>(sizeof(PriorityEntry));
-            _diag.status = "Complete";
-            ctx.set_exit_diagnostics(_diag);
-            return;
-        }
-
-        _explored++;
-        ctx.incr_nodes_visited();
-        if (_explored >= _budget.max_explored)
-            break;
-
-        if (_explored % 1024 == 0) {
-            if (_max_search_time.count() > 0) {
-                auto elapsed = std::chrono::steady_clock::now() - t0;
-                if (elapsed > _max_search_time)
-                    break;
-            }
-            if (_max_solutions > 0 && _solutions_found >= _max_solutions)
-                break;
-        }
-
-        if ((_explored & 0x3F) == 0) { // every 64 states
-            uint8_t progress;
-            if (_state_est <= 100000) {
-                progress = std::min<uint8_t>(
-                    static_cast<uint8_t>(_best_g.size() * 100 / std::max(_state_est, size_t(1))),
-                    static_cast<uint8_t>(99)
-                );
-            } else {
-                progress = std::min<uint8_t>(100 - 100 / (1 + _explored / 10000), 99);
-            }
-            ctx.report_progress(progress, ProgressStatus::Exploring);
-        }
-
-        // ─── Precompute max levels for delta heuristic ─────────────────
-        search_utils::precompute_max(current.ids, _pool, *_ench_reg, _h_max, _h_dirty);
-
-        // ─── Expand current state ────────────────────────────────────
-        const auto &cur_ids = current.ids;
-        const size_t n      = cur_ids.size();
-
-        for (size_t i = 0; i < n; ++i) {
-            for (size_t j = 0; j < n; ++j) {
-                if (i == j)
-                    continue;
-
-                if (!_forge_engine.is_forgeable(_pool[cur_ids[i]], _pool[cur_ids[j]]))
-                    continue;
-
-                // Phase A: Lightweight pre-pruning
-                int32_t est =
-                    _forge_engine.estimate_forge_cost(_pool[cur_ids[i]], _pool[cur_ids[j]], *_ench_reg);
-                int32_t child_est_g = current.g + est;
-                if (_best_solution_cost != INT32_MAX && child_est_g > _best_solution_cost) {
-                    ++_diag.pruned_by_cost;
-                    ctx.incr_nodes_pruned();
-                    continue;
-                }
-
-                std::vector<ItemID> child_ids = cur_ids;
-                child_ids.erase(child_ids.begin() + static_cast<std::ptrdiff_t>(j));
-                size_t base_in_child = (i > j) ? i - 1 : i;
-
-                bool at_cap =
-                    (_step_pool.size() >= _budget.max_step_pool ||
-                     open_set.size() >= static_cast<size_t>(_budget.max_open_set));
-                if (at_cap) {
-                    ++_diag.pruned_by_caps;
-                    ctx.incr_nodes_pruned();
-                    continue;
-                }
-
-                // Phase B: Real forge
-                ItemID old_base_id = cur_ids[i];
-                ItemID old_sac_id  = cur_ids[j];
-                Item forged        = _pool[old_base_id];
-                int32_t real_cost  = _forge_engine.forge_into(forged, _pool[old_sac_id], *_ench_reg);
-                int32_t child_g    = current.g + real_cost;
-                ctx.incr_steps_forged();
-
-                if (_best_solution_cost != INT32_MAX && child_g > _best_solution_cost)
-                    continue;
-
-                ItemID new_base_id = _pool.add(std::move(forged));
-                if (new_base_id == INVALID_ITEM_ID)
-                    continue;
-                child_ids[base_in_child] = new_base_id;
-
-                if (child_ids.size() > 2)
-                    std::sort(child_ids.begin() + 1, child_ids.end());
-
-                // Phase C: heuristic + best_g + enqueue
-                int32_t child_h_val = _delta_h(current.h, _pool[new_base_id], _pool[old_sac_id]);
-                int32_t child_fv    = child_g + child_h_val;
-                if (_best_solution_cost != INT32_MAX && child_fv > _best_solution_cost) {
-                    ++_diag.pruned_by_f;
-                    ctx.incr_nodes_pruned();
-                    continue;
-                }
-
-                size_t child_hash = _hash_ids(child_ids);
-                if (int32_t *cg = _best_g.find(child_hash)) {
-                    if (*cg <= child_g) {
-                        ++_diag.pruned_by_best_g;
-                        ctx.incr_nodes_pruned();
-                        continue;
-                    }
-                }
-                _best_g[child_hash] = child_g;
-
-                _step_pool.push_back({current.step_idx, old_base_id, old_sac_id, real_cost});
-                int32_t step_idx = static_cast<int32_t>(_step_pool.size()) - 1;
-
-                open_set.push(
-                    PriorityEntry{
-                        SearchState{child_g, child_h_val, child_hash, step_idx, std::move(child_ids)},
-                        child_fv
-                    }
-                );
-            }
-        }
-    }
-
-    // ─── Exit diagnostics ────────────────────────────────────────────
     _diag.explored_count      = _explored;
     _diag.best_g_entries      = _best_g.size();
     _diag.final_bound         = _best_solution_cost;
