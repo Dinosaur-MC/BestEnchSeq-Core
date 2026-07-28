@@ -26,7 +26,6 @@ IForgeEngine（纯虚基类）
 | 方法 | 默认实现 | 覆写场景 |
 |---|---|---|
 | `penalty_cost(ppn)` | `(1 << ppn) - 1`（上限 30 → INT32_MAX） | 惩罚公式修改 |
-| `apply_cap(raw_cost)` | `min(raw_cost, 39)` | 取消成本上限 |
 | `estimate_forge_cost(target, sacrifice, reg)` | 惩罚 + 附魔乘数（**不** 应用 cap） | 启发式重写 |
 
 ### 配置
@@ -37,7 +36,6 @@ IForgeEngine（纯虚基类）
 struct ForgeConfig {
     bool ignore_penalty_cost = false;
     bool ignore_repair_cost  = false;
-    bool ignore_cost_cap     = false;
     MCE platform             = MCE::Java;   // Java / Bedrock
 };
 ```
@@ -56,7 +54,8 @@ forge_into(target, sacrifice, reg):
   惩罚更新: target.ppn = max(a.ppn, b.ppn) + 1
   附魔合并: 相同附魔取 max 或 +1（同级时）；冲突附魔跳过
   耐久度修复: equip + equip 合并，受 ignore_repair_cost 控制
-  成本上限: apply_cap(cost) → min(cost, 39)，受 ignore_cost_cap 控制
+  成本上限: 原版上限为 39 级，算法搜索中通过 estimate_forge_cost / cost_so_far 约束
+            由 ForgeEngine 直接返回原始成本，外层 Pipeline 和 OutputFormatter 负责标记超限
 ```
 
 ## 扩展指南（Mod 支持）
@@ -69,10 +68,6 @@ public:
 
     int32_t penalty_cost(int8_t ppn) const noexcept override {
         return ppn * 2;  // 线性惩罚，非指数
-    }
-
-    int32_t apply_cap(int32_t raw_cost) const noexcept override {
-        return ignore_cost_cap() ? raw_cost : std::min(raw_cost, 99);  // 提高上限
     }
 };
 ```

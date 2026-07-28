@@ -234,13 +234,11 @@ repair_cost = 1 × unit
 
 ## 6. 费用上限
 
-「过于昂贵！」上限为 **39 级**。
+「过于昂贵！」上限为 **39 级**。单步锻造消耗超过 39 级时铁砧拒绝操作。
 
-```cpp
-final_cost = min(raw_cost, 39);    // 当 ignore_cost_cap == false
-```
-
-`ignore_cost_cap` 配置可禁用于模组环境。
+算法搜索中，ForgeEngine 直接返回原始成本（不封顶），
+外层 OutputFormatter 在输出时检查 `get_peak_level_cost() >= 39` 并显示 ⚠ 警告。
+Mod 可继承 `ForgeEngine` 并重写 `forge_into()` 自行施加封顶逻辑。
 
 ---
 

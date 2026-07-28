@@ -35,7 +35,7 @@ class IForgeEngine {
     virtual int32_t penalty_cost(int8_t ppn) const noexcept {
         // Cap at 30 to avoid UB from shifting into the sign bit (1<<31).
         // Vanilla ppn rarely exceeds 6; modded data or unbounded sequences
-        // could hit higher values when ignore_cost_cap is true.
+        // could hit higher values for out-of-range inputs.
         if (ppn < 0 || ppn > 30)
             return INT32_MAX;
         return (1 << ppn) - 1;

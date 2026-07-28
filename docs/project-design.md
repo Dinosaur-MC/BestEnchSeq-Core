@@ -69,7 +69,7 @@ Domain 类型是纯数据容器，不包含 forge 计算逻辑：
 
 ```
 Core:      forge_into() / forge() / is_forgeable() / pure_forge_into()
-Sub-ops:   penalty_cost() / apply_cap() / estimate_forge_cost()
+Sub-ops:   penalty_cost() / estimate_forge_cost()
 ```
 
 所有 sub-op 提供默认原版实现。Mod 只要继承 `IForgeEngine`，覆盖需要的部分：
@@ -110,7 +110,6 @@ struct XxxPipeline {
 struct ForgeConfig {
     bool ignore_penalty_cost = false;  // 禁用惩罚成本
     bool ignore_repair_cost  = false;  // 禁用修复成本
-    bool ignore_cost_cap     = false;  // 禁用 39 级上限
     MCE  platform            = MCE::Java;  // 目标平台
 };
 ```

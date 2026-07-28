@@ -36,7 +36,6 @@ public:
     ///        + C_ench                 (§3 ench merge, §9 JE/BE dispatching)
     ///        + conflict_penalty       (§3 incompatibility, JE only)
     ///   Result.ppn = max(a,b) + 1     (§2 penalty update)
-    ///   Return min(cost, 39)          (§6 apply_cap, gated by ignore_cost_cap)
     int32_t forge_into(Item& target, const Item& sacrifice,
                        const EnchReg& reg) const override;
 
