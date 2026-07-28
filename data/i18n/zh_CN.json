@@ -104,11 +104,11 @@
     "output.verbose.rank": "方案: {0}/{1}",
     "output.verbose.same_cost": "(同消耗)",
     "output.verbose.total_cost": "总消耗: {0} 等级 ({1} 经验值)",
-    "output.verbose.peak_step": "峰值单步: Step {0} - {1} 等级 ({2} 经验值)",
+    "output.verbose.peak_step": "峰值单步: 步骤 {0} - {1} 等级 ({2} 经验值)",
     "output.verbose.input_section": "输入:",
     "output.verbose.target_item": "  目标物品: {0}",
     "output.verbose.available_items": "  可用物品:",
-    "output.verbose.step_prefix": "  Step {0}: ",
+    "output.verbose.step_prefix": "  步骤 {0}: ",
     "output.verbose.plus": " + ",
     "output.verbose.step_cost": "          - 消耗: {0} 等级 ({1} 经验值)",
 
