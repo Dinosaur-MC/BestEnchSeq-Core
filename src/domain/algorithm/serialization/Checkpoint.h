@@ -68,4 +68,6 @@ struct Checkpoint : IBinarySerializable {
     void deserialize(ByteStreamReader& r) noexcept override;
 };
 
+void compute_crc56(const uint8_t* data, size_t len, uint8_t crc[7]);
+
 } // namespace checkpoint

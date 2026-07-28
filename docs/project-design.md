@@ -286,7 +286,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 **_strategies/**：内置策略（A*、DFS、Hamming），通过 `Registration.h` 自动注册
 **components/**：Heuristic、ItemPool、StateHash、SearchUtils 等共享搜索基础设施
 **diagnostics/**：事件驱动诊断管道（`DiagnosticsService` + `IAlgorithmObserver` + `DiagnosticsWriter`）
-**serialization/**：二进制 checkpoint（`IAlgorithmSerializer` + `CompactSerializer` + `Checkpoint`）
+**serialization/**：二进制 checkpoint（`IAlgorithmSerializer` + `Checkpoint`）
 **plugin/**：`AlgorithmLoader`（内置注册 + 插件热加载）
 **resolvers/**：`ItemResolver`、`InventoryResolver`（算法级解析辅助）
 
