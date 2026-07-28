@@ -10,6 +10,7 @@
 #include "common/utils/cli/CLIParser.hpp"
 #include "BuildConfig.h"
 #include "common/utils/StringUtils.hpp"
+#include "common/utils/EnvUtil.hpp"
 #include "common/log/log.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include <algorithm>
@@ -43,19 +44,36 @@ void CLIApp::apply_lang(int argc, char* argv[]) {
     auto& lang_mgr = LanguageManager::instance();
 
     // 1. BESQ_LANG env var
-    const char* env_lang = std::getenv("BESQ_LANG");
-    std::string lang_code = env_lang ? env_lang : detect_system_locale();
+    std::string lang_code = get_env<std::string>("BESQ_LANG", detect_system_locale());
 
     // 2. --lang CLI flag override (--lang=value or --lang value)
+    bool user_explicit = false;
     for (int i = 1; i < argc; ++i) {
         std::string_view a(argv[i]);
         if (a.starts_with("--lang=")) {
             lang_code = std::string(a.substr(7));
+            user_explicit = true;
             break;
         }
         if (a == "--lang" && i + 1 < argc) {
             lang_code = argv[i + 1];
+            user_explicit = true;
             break;
+        }
+    }
+
+    // 3. Validate explicit --lang value against registered languages
+    if (user_explicit) {
+        auto avail = lang_mgr.available();
+        bool valid = std::find(avail.begin(), avail.end(), lang_code) != avail.end();
+        if (!valid) {
+            std::string avail_str;
+            for (size_t i = 0; i < avail.size(); ++i) {
+                if (i > 0) avail_str += ", ";
+                avail_str += avail[i];
+            }
+            std::cerr << tr_fmt("cli.err.invalid_lang", lang_code, avail_str) << std::endl;
+            lang_code = "en_US";  // fall back to default
         }
     }
 
@@ -63,8 +81,8 @@ void CLIApp::apply_lang(int argc, char* argv[]) {
 }
 
 int CLIApp::run(int argc, char* argv[]) {
-    // 0. Select language early so parse errors and help use the correct one
-    apply_lang(argc, argv);
+    // Note: apply_lang() is called by main.cpp before run(), so the
+    // correct language is already selected when we get here.
 
     // 1. Parse CLI args
     auto config = CLIApp::parse(argc, argv);

@@ -124,6 +124,7 @@
     "main.err.output_failed": "Failed to open output file: {0}",
     "main.err.error_prefix": "Error: {0}",
     "main.msg.registry_exported": "Registry exported to {0}",
-    "main.msg.loaded_builtin": "Loaded built-in vanilla data"
+    "main.msg.loaded_builtin": "Loaded built-in vanilla data",
+    "cli.err.invalid_lang": "Invalid language: \"{0}\". Available: {1}"
   }
 }

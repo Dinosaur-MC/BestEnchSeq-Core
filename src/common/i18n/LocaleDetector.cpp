@@ -1,5 +1,4 @@
 #include "LocaleDetector.h"
-#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <algorithm>

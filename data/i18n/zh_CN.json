@@ -124,6 +124,7 @@
     "main.err.output_failed": "无法打开输出文件: {0}",
     "main.err.error_prefix": "错误: {0}",
     "main.msg.registry_exported": "注册表已导出到 {0}",
-    "main.msg.loaded_builtin": "已加载内置原版数据"
+    "main.msg.loaded_builtin": "已加载内置原版数据",
+    "cli.err.invalid_lang": "无效语言: \"{0}\"。可用语言: {1}"
   }
 }
