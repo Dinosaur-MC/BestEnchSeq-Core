@@ -1,6 +1,8 @@
 #pragma once
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ResolverTypes.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include "forge_engine/IForgeEngine.h"
 #include <memory>
 #include <optional>
@@ -118,7 +120,9 @@ class IAlgorithm {
     virtual bool simulate(const AlgorithmInput &input) const noexcept;
 
     /// Process the solution. Returns the final item if successful.
-    virtual std::optional<Item> process(const EnchSolution &solution) const = 0;
+    /// Default implementation: replay steps via get_forge_engine(),
+    /// switching to equipment base when encountered, guarded by is_forgeable().
+    virtual std::optional<Item> process(const EnchSolution &solution, const ForgeConfig &cfg, const EnchReg &reg) const;
 
     /// Returns the associated forge engine for this algorithm.
     virtual std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept = 0;

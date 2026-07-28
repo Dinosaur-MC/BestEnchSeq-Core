@@ -275,23 +275,5 @@ double IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
     return 1.5 * 0.025 * std::pow(3.8, static_cast<double>(ench_count));
 }
 
-// ─── process ───────────────────────────────────────────────────────────────────
-
-std::optional<Item> IDAStarAlgorithm::process(const EnchSolution &solution) const {
-    if (solution.steps.empty())
-        return std::nullopt;
-    if (!_ench_reg)
-        return std::nullopt;
-
-    Item result = solution.steps[0].base;
-    for (const auto &step : solution.steps) {
-        if (step.base.type == ItemType::Equip)
-            result = step.base;
-        if (!_forge_engine.is_forgeable(result, step.sacrifice))
-            return std::nullopt;
-        _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
-    }
-    return result;
-}
 
 } // namespace algorithm

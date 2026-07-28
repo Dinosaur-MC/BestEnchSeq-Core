@@ -758,25 +758,5 @@ double AStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
     return r;
 }
 
-// ─── process ───────────────────────────────────────────────────────────────────
-
-std::optional<Item> AStarAlgorithm::process(const EnchSolution &solution) const {
-    if (solution.steps.empty())
-        return std::nullopt;
-    if (!_ench_reg)
-        return std::nullopt;
-
-    // Replay forge steps sequentially to compute the final item.
-    // When a step's base is equipment, switch to it — books are intermediate.
-    Item result = solution.steps[0].base;
-    for (const auto &step : solution.steps) {
-        if (step.base.type == ItemType::Equip)
-            result = step.base;
-        if (!_forge_engine.is_forgeable(result, step.sacrifice))
-            return std::nullopt;
-        _forge_engine.forge_into(result, step.sacrifice, *_ench_reg);
-    }
-    return result;
-}
 
 } // namespace algorithm

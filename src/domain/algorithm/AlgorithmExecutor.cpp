@@ -326,7 +326,7 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     // Delegates to each strategy's own forge replay (handles level merging,
     // conflict resolution, PPN tracking correctly).
     if (!out.solutions.empty()) {
-        auto final = _algorithm->process(out.solutions[0]);
+        auto final = _algorithm->process(out.solutions[0], _algorithm_input.f_config, _algorithm_input.ench_reg);
         if (final.has_value())
             out.final_item = std::move(*final);
     }

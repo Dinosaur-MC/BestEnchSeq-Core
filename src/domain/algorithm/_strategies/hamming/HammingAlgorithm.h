@@ -37,7 +37,6 @@ public:
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t ench_count) const noexcept override;
     void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
-    std::optional<Item> process(const EnchSolution &solution) const override;
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<ForgeEngine>(_forge_engine);
     }

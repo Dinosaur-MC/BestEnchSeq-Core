@@ -42,4 +42,24 @@ bool IAlgorithm::simulate(const AlgorithmInput &input) const noexcept {
     return input.items.size() > 1;
 }
 
+std::optional<Item> IAlgorithm::process(const EnchSolution &solution, const ForgeConfig &cfg, const EnchReg &reg) const {
+    if (solution.steps.empty())
+        return std::nullopt;
+
+    auto engine = get_forge_engine();
+    if (!engine)
+        return std::nullopt;
+    engine->set_config(cfg);
+
+    Item result = solution.steps[0].base;
+    for (const auto &step : solution.steps) {
+        if (step.base.type == ItemType::Equip)
+            result = step.base;
+        if (!engine->is_forgeable(result, step.sacrifice))
+            return std::nullopt;
+        engine->forge_into(result, step.sacrifice, reg);
+    }
+    return result;
+}
+
 } // namespace algorithm
