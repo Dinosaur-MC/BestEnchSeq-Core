@@ -15,6 +15,11 @@ class EquipmentTagRegistry;
 
 class OutputFormatter {
   public:
+    /// When set, enchantment/item display names include the NSID in
+    /// parentheses: ``锋利 (minecraft:sharpness)`` instead of ``锋利``.
+    static void set_show_nsid(bool show) noexcept { _show_nsid = show; }
+    static bool show_nsid() noexcept { return _show_nsid; }
+
     static std::string format_verbose(
         const std::vector<Solution> &solutions,
         const Profile &profile,
@@ -39,6 +44,7 @@ class OutputFormatter {
     );
 
   private:
+    static bool _show_nsid;
     static std::string describe_item_verbose(
         const Item &item,
         const EnchantmentRegistry &ench_reg

@@ -3,6 +3,8 @@
 #include "common/i18n/Language.h"
 #include "common/i18n/NsidDisplay.h"
 
+bool OutputFormatter::_show_nsid = false;
+
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -29,7 +31,13 @@ std::string to_roman(int level) {
 // Enchantment name (i18n via Language system, fallback to NSID string)
 // ---------------------------------------------------------------------------
 std::string ench_display(const NSID& id) {
-    return ench_display_name(id);
+    auto name = ench_display_name(id);
+    if (OutputFormatter::show_nsid()) {
+        auto raw = id.str();
+        if (name != raw)
+            return name + " (" + raw + ")";
+    }
+    return name;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,7 +61,7 @@ std::string ench_summary_str(const EnchSet &enchs, const EnchantmentRegistry &en
     for (const auto &ench : enchs) {
         if (!first) result += tr("output.item.enchant_sep");
         first = false;
-        result += ench.id.str() + " " + to_roman(ench.level);
+        result += ench_display(ench.id) + " " + to_roman(ench.level);
     }
     return result;
 }
@@ -96,7 +104,7 @@ std::string OutputFormatter::describe_item_verbose(
         for (const auto &ench : item.enchantments) {
             if (!first) ench_part += ", ";
             first = false;
-            ench_part += ench.id.str() + " " + to_roman(ench.level);
+            ench_part += ench_display(ench.id) + " " + to_roman(ench.level);
         }
     }
 
@@ -159,7 +167,7 @@ std::string OutputFormatter::describe_item_compact(
 std::string OutputFormatter::describe_ench_roman(
     const Ench &ench, const EnchantmentRegistry &ench_reg
 ) {
-    return ench.id.str() + " " + to_roman(ench.level);
+    return ench_display(ench.id) + " " + to_roman(ench.level);
 }
 
 // ---------------------------------------------------------------------------

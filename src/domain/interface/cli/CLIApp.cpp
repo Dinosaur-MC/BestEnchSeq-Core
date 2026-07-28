@@ -13,6 +13,7 @@
 #include "common/utils/EnvUtil.hpp"
 #include "common/log/log.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/orchestration/components/OutputFormatter.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -169,6 +170,7 @@ int CLIApp::run(int argc, char* argv[]) {
         request.algorithm = config.algorithm;
         CLIApp::apply_config_pairs(config.config_pairs, request.forge_config);
 
+        OutputFormatter::set_show_nsid(config.verbose);
         auto result = _ctx.solve(request);
         auto output = _ctx.format(result, mode, config.format);
 
