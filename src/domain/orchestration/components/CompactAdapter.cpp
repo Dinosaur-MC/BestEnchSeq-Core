@@ -189,16 +189,9 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
     if (input.is_inventory()) {
         for (const auto &item : input.inventory_items())
             available_items.push_back(to_domain(item, input.ench_reg));
-    } else {
-        // Direct mode: show sacrifice books from the first solution's steps
-        if (!output.solutions.empty()) {
-            const auto &csol = output.solutions[0];
-            for (const auto &s : csol.steps) {
-                if (s.sacrifice.type == algorithm::ItemType::Book)
-                    available_items.push_back(to_domain(s.sacrifice, input.ench_reg));
-            }
-        }
     }
+    // Note: direct mode has no available_items — source enchantments are
+    // shown in the Forge Plan header via original_ench.
 
     // ── 2. Convert each compact solution ───────────────────────────────
     std::vector<Solution> solutions;

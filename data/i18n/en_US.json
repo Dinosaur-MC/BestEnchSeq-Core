@@ -125,6 +125,7 @@
     "main.err.error_prefix": "Error: {0}",
     "main.msg.registry_exported": "Registry exported to {0}",
     "main.msg.loaded_builtin": "Loaded built-in vanilla data",
-    "cli.err.invalid_lang": "Invalid language: \"{0}\". Available: {1}"
+    "cli.err.invalid_lang": "Invalid language: \"{0}\". Available: {1}",
+    "output.verbose.source_enchants": "  Source: {0}"
   }
 }

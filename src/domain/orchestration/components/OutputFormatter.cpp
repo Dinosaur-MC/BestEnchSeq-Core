@@ -257,6 +257,9 @@ std::string OutputFormatter::format_verbose(
 
         out += "\n" + tr("output.verbose.input_section") + "\n";
         out += tr_fmt("output.verbose.target_item", describe_item_verbose(sol.target_item, ench_reg)) + "\n";
+        if (!sol.original_ench.empty() && mode == AlgorithmMode::direct) {
+            out += tr_fmt("output.verbose.source_enchants", ench_summary_str(sol.original_ench, ench_reg)) + "\n";
+        }
         if (!sol.available_items.empty()) {
             out += tr("output.verbose.available_items") + "\n";
             for (const auto &item : sol.available_items) {
