@@ -270,7 +270,16 @@ Algorithm domain (src/domain/algorithm/registries/):
 零业务/接口依赖，仅使用 compact 类型。
 
 **核心接口**：
-- `IAlgorithm` — 算法策略虚接口（`name()` / `execute()`）
+- `IAlgorithm` — 算法策略虚接口
+  - `name()` / `version()` — 标识
+  - `evaluate(n)` — 预估 n 个附魔的计算时间（ms，`double`）
+  - `execute(input, ctx)` — 执行搜索
+  - `process(solution)` — 重放步骤计算最终物品
+  - `resolve(input)` — 预解析输入生成候选物品
+  - `simulate(input)` — 快速可行性检查
+  - `get_forge_engine()` — 返回副本（`unique_ptr<IForgeEngine>`）
+  - `get_serializer()` — 断点序列化（可选）
+  - `supported_mode()` / `is_resumable()` — 能力声明
 - `AlgorithmExecutor` — 异步执行引擎（线程管理 + 状态机）
 - `ExecutionContext` — 一站式算法交互接口（控制 + 计数器 + 进度 + 方案累积）
 
