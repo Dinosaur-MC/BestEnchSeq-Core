@@ -194,6 +194,17 @@ void test_algorithm_name() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: no args shows usage (sets help flag, doesn't throw)
+// ---------------------------------------------------------------------------
+
+void test_no_args_shows_usage() {
+    const char* argv[] = {"besq"};
+    auto config = CLIApp::parse(1, const_cast<char**>(argv));
+    expect(config.help, "no args should set help flag (not throw)");
+    TEST_PASS("test_no_args_shows_usage");
+}
+
+// ---------------------------------------------------------------------------
 // Test: --memory validation
 // ---------------------------------------------------------------------------
 
@@ -250,6 +261,7 @@ void test_apply_config_pairs() {
 
 int main() {
     try {
+        test_no_args_shows_usage();
         test_export_only_valid();
         test_missing_target_and_export_errors();
         test_max_time_parsing();

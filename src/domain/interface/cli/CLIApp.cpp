@@ -11,6 +11,7 @@
 #include "common/utils/StringUtils.hpp"
 #include "common/log/log.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -55,6 +56,20 @@ int CLIApp::run(int argc, char* argv[]) {
         for (const auto& name : algos)
             std::cout << "  " << name << "\n";
         return 0;
+    }
+
+    // Algorithm name early validation (U10)
+    if (!config.algorithm.empty() && !config.help && !config.version && !config.list_algorithms) {
+        auto algos = _ctx.list_algorithms();
+        if (std::find(algos.begin(), algos.end(), config.algorithm) == algos.end()) {
+            std::string avail_str;
+            for (size_t i = 0; i < algos.size(); ++i) {
+                if (i > 0) avail_str += ", ";
+                avail_str += algos[i];
+            }
+            throw std::runtime_error(tr_fmt("pipeline.err.unknown_algo",
+                config.algorithm, avail_str));
+        }
     }
 
     // 4. Registry operations
@@ -126,28 +141,29 @@ namespace {
 using namespace cli;
 
 const auto BESQ_OPTIONS = OptionTable{
-    Flag    {.long_name = "help",             .short_name = 'h', .help_key = "cli.help.help_desc"},
-    Flag    {.long_name = "verbose",          .short_name = 'v', .help_key = "cli.help.verbose_desc"},
-    Flag    {.long_name = "version",          .short_name = 'V', .help_key = "cli.help.version_desc"},
-    Flag    {.long_name = "list-algorithms",                      .help_key = "List available algorithms"},
-    Option<std::string>{.long_name = "algorithm",                 .help_key = "cli.help.algorithm_desc",    .default_v = std::string("dp_merge")},
-    Option<std::string>{.long_name = "target",                    .help_key = "cli.help.target_desc"},
-    Option<std::string>{.long_name = "source",                    .help_key = "cli.help.source_desc"},
-    Option<std::string>{.long_name = "mode",                      .help_key = "cli.help.mode_desc",         .default_v = std::string("direct")},
-    Option<std::string>{.long_name = "platform",                  .help_key = "cli.help.platform_desc",     .default_v = std::string("auto")},
-    Option<std::string>{.long_name = "format",                    .help_key = "cli.help.format_desc",       .default_v = std::string("text")},
-    Option<std::string>{.long_name = "lang",                      .help_key = "cli.help.lang_desc"},
-    Option<std::string>{.long_name = "input",                     .help_key = "cli.help.input_desc"},
-    Option<std::string>{.long_name = "output",                    .help_key = "cli.help.output_desc"},
-    Option<std::string>{.long_name = "registry-dir",              .help_key = "cli.help.registry_dir_desc"},
-    Option<std::string>{.long_name = "registries",                .help_key = "cli.help.registries_desc"},
-    Option<std::string>{.long_name = "registry-edit",             .help_key = "cli.help.registry_edit_desc"},
-    Option<std::string>{.long_name = "export-registry",           .help_key = "cli.help.export_registry_desc"},
-    Option<std::string>{.long_name = "algo-dir",                  .help_key = "cli.help.algo_dir_desc"},
-    Option<std::string>{.long_name = "config",                    .help_key = "cli.help.config_desc"},
-    Option<int>        {.long_name = "solutions",    .short_name = 's', .help_key = "cli.help.solutions_desc", .default_v = 1},
-    Option<std::string>{.long_name = "memory",                    .help_key = "cli.help.memory_desc"},
-    Option<int>        {.long_name = "max-time",                  .help_key = "cli.help.max_time_desc"},
+    // ── basic ──
+    Flag    {.long_name = "help",              .short_name = 'h', .help_key = "cli.help.help_desc",            .help_group = "cli.help.group_basic"},
+    Flag    {.long_name = "verbose",           .short_name = 'v', .help_key = "cli.help.verbose_desc",         .help_group = "cli.help.group_output"},
+    Flag    {.long_name = "version",           .short_name = 'V', .help_key = "cli.help.version_desc",         .help_group = "cli.help.group_info"},
+    Flag    {.long_name = "list-algorithms",                            .help_key = "List available algorithms", .help_group = "cli.help.group_info"},
+    Option<std::string>{.long_name = "algorithm",                       .help_key = "cli.help.algorithm_desc",  .help_group = "cli.help.group_basic",  .default_v = std::string("dp_merge")},
+    Option<std::string>{.long_name = "target",                          .help_key = "cli.help.target_desc",     .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "source",                          .help_key = "cli.help.source_desc",     .help_group = "cli.help.group_basic"},
+    Option<std::string>{.long_name = "mode",                            .help_key = "cli.help.mode_desc",       .help_group = "cli.help.group_basic",  .default_v = std::string("direct")},
+    Option<std::string>{.long_name = "platform",                        .help_key = "cli.help.platform_desc",   .help_group = "cli.help.group_platform", .default_v = std::string("auto")},
+    Option<std::string>{.long_name = "format",                          .help_key = "cli.help.format_desc",     .help_group = "cli.help.group_output", .default_v = std::string("text")},
+    Option<std::string>{.long_name = "lang",                            .help_key = "cli.help.lang_desc",       .help_group = "cli.help.group_info"},
+    Option<std::string>{.long_name = "input",                           .help_key = "cli.help.input_desc",      .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "output",                          .help_key = "cli.help.output_desc",     .help_group = "cli.help.group_output"},
+    Option<std::string>{.long_name = "registry-dir",                    .help_key = "cli.help.registry_dir_desc", .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "registries",                      .help_key = "cli.help.registries_desc", .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "registry-edit",                   .help_key = "cli.help.registry_edit_desc", .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "export-registry",                 .help_key = "cli.help.export_registry_desc", .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "algo-dir",                        .help_key = "cli.help.algo_dir_desc",   .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "config",                          .help_key = "cli.help.config_desc",     .help_group = "cli.help.group_platform"},
+    Option<int>        {.long_name = "solutions",          .short_name = 's', .help_key = "cli.help.solutions_desc", .help_group = "cli.help.group_basic", .default_v = 1},
+    Option<std::string>{.long_name = "memory",                           .help_key = "cli.help.memory_desc",    .help_group = "cli.help.group_advanced"},
+    Option<int>        {.long_name = "max-time",                         .help_key = "cli.help.max_time_desc",  .help_group = "cli.help.group_advanced"},
 };
 
 } // anonymous namespace
@@ -172,6 +188,8 @@ struct CLIApp::UserI18nTranslator {
                               diag.option_name.value_or(std::string_view{}));
             case unexpected_positional:
                 return tr_fmt("cli.err.unexpected_arg", diag.arg);
+            case duplicate_option:
+                return tr_fmt("cli.err.duplicate_option", diag.option_name.value_or(std::string_view{}));
             default:
                 return tr("cli.err.unknown");
         }
@@ -185,7 +203,21 @@ struct CLIApp::UserI18nTranslator {
 // ============================================================================
 
 std::string CLIApp::help_text(std::string_view program_name) {
-    return cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name);
+    std::string r = cli::CLIParser(BESQ_OPTIONS, UserI18nTranslator{}).format_help(program_name);
+
+    // Examples
+    r += "\nExamples:\n";
+    r += "  " + std::string(program_name) + " --target diamond_sword[sharpness=5,knockback=2]\n";
+    r += "  " + std::string(program_name) + " --target diamond_chestplate --source \"protection=4,unbreaking=3\"\n";
+    r += "  " + std::string(program_name) + " --export-registry out.json\n\n";
+
+    // Enchantment format reference
+    r += tr("cli.help.ench_format_header") + "\n";
+    r += "  " + tr("cli.help.ench_format_id_level") + "\n";
+    r += "  " + tr("cli.help.ench_format_nsid_level") + "\n";
+    r += "  " + tr("cli.help.ench_format_colon") + "\n";
+
+    return r;
 }
 
 // ============================================================================
@@ -318,8 +350,17 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr_fmt("cli.err.empty_export_registry"));
 
     if (!cfg.help && !cfg.version && !cfg.list_algorithms) {
-        if (cfg.target.empty() && !cfg.export_registry.has_value())
-            throw std::runtime_error(tr("cli.err.missing_target_or_export"));
+        if (cfg.target.empty() && !cfg.export_registry.has_value()) {
+            if (argc <= 1) {
+                // Pure no-args: show brief usage + hint, then exit cleanly
+                std::cout << tr_fmt("cli.help.usage", prog) << "\n";
+                std::cout << tr_fmt("cli.help.usage_export", prog) << "\n";
+                std::cout << tr_fmt("cli.err.try_help", prog) << "\n";
+                cfg.help = true;  // signal run() to skip further processing
+            } else {
+                throw std::runtime_error(tr("cli.err.missing_target_or_export"));
+            }
+        }
     }
 
     return cfg;
