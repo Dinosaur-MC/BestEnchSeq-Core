@@ -16,4 +16,5 @@ besq_test(test_dp_merge_state_serializer test_dp_merge_state_serializer.cpp)
 
 besq_test(test_diagnostics test_diagnostics.cpp)
 besq_test(test_algorithm_loader test_algorithm_loader.cpp)
+besq_test(test_plugin_audit test_plugin_audit.cpp)
 besq_test(test_algorithm_strategies test_algorithm_strategies.cpp)
