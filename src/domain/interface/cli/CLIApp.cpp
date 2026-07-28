@@ -35,6 +35,21 @@ CLIApp::CLIApp()
 }
 
 int CLIApp::run(int argc, char* argv[]) {
+    // 0. Extract --lang early so parse errors and help use the right language
+    for (int i = 1; i < argc; ++i) {
+        std::string_view a(argv[i]);
+        if (a.starts_with("--lang=")) {
+            LanguageManager::instance().select(
+                LanguageManager::instance().resolve_locale(a.substr(7)));
+            break;
+        }
+        if (a == "--lang" && i + 1 < argc) {
+            LanguageManager::instance().select(
+                LanguageManager::instance().resolve_locale(argv[i + 1]));
+            break;
+        }
+    }
+
     // 1. Parse CLI args
     auto config = CLIApp::parse(argc, argv);
 
