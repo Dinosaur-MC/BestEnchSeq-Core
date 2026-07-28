@@ -4,6 +4,7 @@
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
 
+#include <filesystem>
 #include <iostream>
 
 int main(int argc, char* argv[]) try {
@@ -12,6 +13,12 @@ int main(int argc, char* argv[]) try {
 
     // ── i18n setup ──
     register_builtin_translations(LanguageManager::instance());
+    // On-demand language file directory (next to executable → langs/<code>.json)
+    try {
+        LanguageManager::instance().set_langs_dir(
+            std::filesystem::path(argv[0]).parent_path() / "langs"
+        );
+    } catch (...) {}
     CLIApp::apply_lang(argc, argv);
 
     // ── Logger setup ──
