@@ -50,6 +50,10 @@ public:
     static std::string help_text(std::string_view program_name = "besq");
     static void apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg);
 
+    /// Select language from BESQ_LANG env var / system locale / --lang CLI flag.
+    /// Call early (before parse) so errors use the correct language.
+    static void apply_lang(int argc, char* argv[]);
+
 private:
     struct UserI18nTranslator;
 

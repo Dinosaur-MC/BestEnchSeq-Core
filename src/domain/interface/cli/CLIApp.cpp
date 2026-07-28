@@ -6,6 +6,7 @@
 #include "domain/business/types/Equipment.h"
 #include "common/CommonTypes.h"
 #include "common/i18n/Language.h"
+#include "common/i18n/LocaleDetector.h"
 #include "common/utils/cli/CLIParser.hpp"
 #include "BuildConfig.h"
 #include "common/utils/StringUtils.hpp"
@@ -34,21 +35,36 @@ CLIApp::CLIApp()
     _ctx.load_builtin();
 }
 
-int CLIApp::run(int argc, char* argv[]) {
-    // 0. Extract --lang early so parse errors and help use the right language
+// ============================================================================
+// apply_lang — Select language from env / locale / CLI flag
+// ============================================================================
+
+void CLIApp::apply_lang(int argc, char* argv[]) {
+    auto& lang_mgr = LanguageManager::instance();
+
+    // 1. BESQ_LANG env var
+    const char* env_lang = std::getenv("BESQ_LANG");
+    std::string lang_code = env_lang ? env_lang : detect_system_locale();
+
+    // 2. --lang CLI flag override (--lang=value or --lang value)
     for (int i = 1; i < argc; ++i) {
         std::string_view a(argv[i]);
         if (a.starts_with("--lang=")) {
-            LanguageManager::instance().select(
-                LanguageManager::instance().resolve_locale(a.substr(7)));
+            lang_code = std::string(a.substr(7));
             break;
         }
         if (a == "--lang" && i + 1 < argc) {
-            LanguageManager::instance().select(
-                LanguageManager::instance().resolve_locale(argv[i + 1]));
+            lang_code = argv[i + 1];
             break;
         }
     }
+
+    lang_mgr.select(lang_mgr.resolve_locale(lang_code));
+}
+
+int CLIApp::run(int argc, char* argv[]) {
+    // 0. Select language early so parse errors and help use the correct one
+    apply_lang(argc, argv);
 
     // 1. Parse CLI args
     auto config = CLIApp::parse(argc, argv);
