@@ -128,7 +128,7 @@ int32_t AStarAlgorithm::_delta_h(int32_t parent_h, const Item &forged, const Ite
 
 // ─── Execute ────────────────────────────────────────────────────────────
 
-void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
+void AStarAlgorithm::execute(AlgorithmInput input, ExecutionContext &ctx) {
     _forge_engine.set_config(input.f_config);
     const auto &items  = input.items;
     const auto &reg    = input.ench_reg;
@@ -465,7 +465,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
 
 // ─── _restore_and_execute ───────────────────────────────────────────────
 
-void AStarAlgorithm::_restore_and_execute(const AlgorithmInput &input, ExecutionContext &ctx) {
+void AStarAlgorithm::_restore_and_execute(AlgorithmInput input, ExecutionContext &ctx) {
     ctx.report_progress(0, ProgressStatus::Starting);
 
     _forge_engine.set_config(input.f_config);

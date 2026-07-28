@@ -36,7 +36,7 @@ public:
     std::string_view name() const noexcept override { return "hamming"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t ench_count) const noexcept override;
-    void execute(const AlgorithmInput& input, ExecutionContext& ctx) override;
+    void execute(AlgorithmInput input, ExecutionContext& ctx) override;
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<ForgeEngine>(_forge_engine);
     }

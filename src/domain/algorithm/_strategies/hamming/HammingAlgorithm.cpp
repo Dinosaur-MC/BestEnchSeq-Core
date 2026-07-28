@@ -60,7 +60,7 @@ void HammingAlgorithm::arrange_by_popcount(
 
 // ─── execute ───────────────────────────────────────────────────────────────
 
-void HammingAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+void HammingAlgorithm::execute(AlgorithmInput input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
     _ench_reg = &input.ench_reg;
     const auto& reg = input.ench_reg;

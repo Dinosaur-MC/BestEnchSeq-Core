@@ -45,7 +45,7 @@ class AStarAlgorithm : public IAlgorithm {
     std::string_view name() const noexcept override { return "astar"; }
     std::string_view version() const noexcept override { return "2.0.0"; }
     double evaluate(int16_t ench_count) const noexcept override;
-    void execute(const AlgorithmInput &input, ExecutionContext &ctx) override;
+    void execute(AlgorithmInput input, ExecutionContext &ctx) override;
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<ForgeEngine>(_forge_engine);
     }
@@ -126,7 +126,7 @@ class AStarAlgorithm : public IAlgorithm {
     size_t _state_est{0}; // estimated upper bound on search states
     FlatHashMap<size_t, int32_t> _best_g;
 
-    void _restore_and_execute(const AlgorithmInput &input, ExecutionContext &ctx);
+    void _restore_and_execute(AlgorithmInput input, ExecutionContext &ctx);
 
     // ── 序列化访问器 (供 AStarStateSerializer 使用) ────────────────────────
     void _x_export_best_g(ByteStreamWriter &w) const;

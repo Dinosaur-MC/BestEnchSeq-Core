@@ -10,7 +10,7 @@ namespace algorithm {
 
 using namespace algorithm;
 
-void DiffFirstAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
+void DiffFirstAlgorithm::execute(AlgorithmInput input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
     _ench_reg = &input.ench_reg;
     const auto& reg = input.ench_reg;

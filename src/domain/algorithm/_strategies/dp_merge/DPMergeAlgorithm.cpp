@@ -182,7 +182,7 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
 
 // ─── execute ──────────────────────────────────────────────────────────────
 
-void DPMergeAlgorithm::execute(const AlgorithmInput& input,
+void DPMergeAlgorithm::execute(AlgorithmInput input,
                                 ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
     _ench_reg  = &input.ench_reg;

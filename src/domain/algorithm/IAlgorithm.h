@@ -98,8 +98,9 @@ class IAlgorithm {
     /// Evaluate the cost time (ms) grade of the given enchantment count.
     virtual double evaluate(int16_t ench_count) const noexcept = 0;
 
-    /// Execute the algorithm on the given input.
-    virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
+    /// Execute the algorithm on the given input (takes ownership by value to
+    /// prevent external modification during long-running search).
+    virtual void execute(AlgorithmInput input, ExecutionContext &ctx) = 0;
 
     /// Pre-process input before execution.
     ///
