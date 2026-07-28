@@ -5,7 +5,6 @@
 RELEVANT_PREFIXES: tuple[str, ...] = (
     "enchantment.minecraft.",    # enchantment display names
     "item.minecraft.",           # item / equipment names
-    "effect.minecraft.",         # status effect names
 )
 
 # ── locale helpers ────────────────────────────────────────────────────────
