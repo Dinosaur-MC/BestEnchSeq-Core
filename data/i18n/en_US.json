@@ -114,6 +114,8 @@
     "output.verbose.same_cost": "(same cost)",
     "output.verbose.total_cost": "Total cost: {0} levels ({1} XP)",
     "output.verbose.peak_step": "Peak step: Step {0} - {1} levels ({2} XP)",
+    "output.verbose.too_expensive": "  ⚠ Peak cost exceeds 39 levels — may be \"Too Expensive!\" on anvil",
+    "output.verbose.final_item": "Final Item: {0}",
     "output.verbose.input_section": "Input:",
     "output.verbose.target_item": "  Target Item: {0}",
     "output.verbose.available_items": "  Available Items:",

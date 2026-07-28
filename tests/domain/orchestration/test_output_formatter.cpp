@@ -225,6 +225,70 @@ void test_verbose_item_format() {
     TEST_PASS("test_verbose_item_format");
 }
 
+// ─── Test 8: verbose format with final_item ──────────────────────────
+
+void test_format_verbose_final_item() {
+    g_fx.init_chestplate_set();
+    auto profile = profile_from_fx(g_fx);
+
+    Solution solution;
+    solution.is_success = true;
+    solution.platform = MCE::Java;
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_chestplate"));
+    solution.target_item = Item(equip.id, EnchSet{}, 0, 528);
+    solution.total_exp_level_cost = 0;
+    solution.total_exp_cost = 0;
+
+    Solution::EnchStep step;
+    step.exp_level_cost = 0;
+    step.exp_cost = 0;
+    step.item_a = solution.target_item;
+    step.item_b = Item(NSID("minecraft:enchanted_book"), EnchSet{}, 0);
+    solution.steps.push_back(step);
+
+    // Set final_item (simulating what Task 6 provides)
+    solution.final_item = Item(equip.id, EnchSet{}, 1, 528);
+
+    auto output = OutputFormatter::format_verbose({solution}, profile, AlgorithmMode::direct);
+    // Note: tr() returns the key when Language is not initialized in tests
+    expect(output.find("output.verbose.final_item") != std::string::npos,
+           "verbose output should contain Final Item section");
+    expect(output.find("diamond_chestplate") != std::string::npos,
+           "final item should reference the correct equipment");
+
+    std::cout << "PASS: test_format_verbose_final_item" << std::endl;
+}
+
+// ─── Test 9: verbose format with too expensive warning ───────────────
+
+void test_format_verbose_too_expensive() {
+    g_fx.init_sword_set();
+    auto profile = profile_from_fx(g_fx);
+
+    Solution solution;
+    solution.is_success = true;
+    solution.platform = MCE::Java;
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
+    solution.target_item = Item(equip.id, EnchSet{}, 0, 1561);
+    solution.total_exp_level_cost = 45;
+    solution.total_exp_cost = 45;
+
+    Solution::EnchStep step;
+    step.exp_level_cost = 45;  // over 39 threshold
+    step.exp_cost = 45;
+    step.item_a = solution.target_item;
+    step.item_b = Item(NSID("minecraft:enchanted_book"), EnchSet{}, 0);
+    solution.steps.push_back(step);
+    solution.max_cost_step_index = 0;
+
+    auto output = OutputFormatter::format_verbose({solution}, profile, AlgorithmMode::direct);
+    // Note: tr() returns the key itself when Language is not initialized in tests
+    expect(output.find("output.verbose.too_expensive") != std::string::npos,
+           "verbose output should warn about too expensive");
+
+    std::cout << "PASS: test_format_verbose_too_expensive" << std::endl;
+}
+
 } // anonymous namespace
 
 int main() {
@@ -237,6 +301,8 @@ int main() {
         test_format_unsuccessful();
         test_format_multi_step();
         test_verbose_item_format();
+        test_format_verbose_final_item();
+        test_format_verbose_too_expensive();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

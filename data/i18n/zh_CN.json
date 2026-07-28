@@ -114,6 +114,8 @@
     "output.verbose.same_cost": "(同消耗)",
     "output.verbose.total_cost": "总消耗: {0} 等级 ({1} 经验值)",
     "output.verbose.peak_step": "峰值单步: 步骤 {0} - {1} 等级 ({2} 经验值)",
+    "output.verbose.too_expensive": "  ⚠ 峰值消耗超过 39 等级——可能超过铁砧上限\"过于昂贵！\"",
+    "output.verbose.final_item": "最终物品: {0}",
     "output.verbose.input_section": "输入:",
     "output.verbose.target_item": "  目标物品: {0}",
     "output.verbose.available_items": "  可用物品:",

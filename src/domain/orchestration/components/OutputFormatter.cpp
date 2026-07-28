@@ -245,6 +245,10 @@ std::string OutputFormatter::format_verbose(
         if (sol.is_feasible()) {
             out += tr_fmt("output.verbose.peak_step", sol.max_cost_step_index + 1,
                           sol.get_peak_level_cost(), sol.get_peak_exp_cost()) + "\n";
+            // Warning for Too Expensive!
+            if (sol.get_peak_level_cost() >= 39) {
+                out += tr("output.verbose.too_expensive") + "\n";
+            }
         }
 
         out += "\n" + tr("output.verbose.input_section") + "\n";
@@ -264,6 +268,12 @@ std::string OutputFormatter::format_verbose(
             out += tr_fmt("output.verbose.step_cost", step.exp_level_cost, step.exp_cost) + "\n";
         }
         out += tr("output.verbose.step_separator") + "\n";
+
+        // Final item
+        if (sol.final_item.has_value()) {
+            out += "\n" + tr_fmt("output.verbose.final_item",
+                describe_item_verbose(*sol.final_item, ench_reg)) + "\n";
+        }
     }
 
     return out;
