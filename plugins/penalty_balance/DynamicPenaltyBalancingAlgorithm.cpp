@@ -141,7 +141,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(
 
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
-int64_t DynamicPenaltyBalancingAlgorithm::evaluate(int16_t ench_count) const noexcept {
+double DynamicPenaltyBalancingAlgorithm::evaluate(int16_t ench_count) const noexcept {
     (void)ench_count;
     // O(n²) per merge step — small constant, always fast.
     return 0;

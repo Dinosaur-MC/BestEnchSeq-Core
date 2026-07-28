@@ -94,7 +94,7 @@ class IAlgorithm {
     /// Default returns false.  Resumable algorithms must override to return true.
     virtual bool is_resumable() const noexcept { return false; }
     /// Evaluate the cost time (ms) grade of the given enchantment count.
-    virtual int64_t evaluate(int16_t ench_count) const noexcept = 0;
+    virtual double evaluate(int16_t ench_count) const noexcept = 0;
 
     /// Execute the algorithm on the given input.
     virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;

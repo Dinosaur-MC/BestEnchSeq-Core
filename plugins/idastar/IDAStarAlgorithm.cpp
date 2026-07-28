@@ -268,7 +268,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ct
 
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
-int64_t IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
+double IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
     // IDA*: iterative deepening adds ~50% overhead vs A* due to
     // re-exploration at each depth threshold.
     // Base:  t(e) ≈ 0.025 × 3.8^e  (A* curve), scaled 1.5× for IDA*.

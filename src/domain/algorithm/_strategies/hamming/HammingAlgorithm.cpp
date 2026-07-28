@@ -239,7 +239,7 @@ bool HammingAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
 
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
-int64_t HammingAlgorithm::evaluate(int16_t ench_count) const noexcept {
+double HammingAlgorithm::evaluate(int16_t ench_count) const noexcept {
     (void)ench_count;
     // O(n log n) deterministic construction — always sub-millisecond.
     return 0;

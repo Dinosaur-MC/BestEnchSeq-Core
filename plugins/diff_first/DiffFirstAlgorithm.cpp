@@ -212,7 +212,7 @@ bool DiffFirstAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
 
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
-int64_t DiffFirstAlgorithm::evaluate(int16_t ench_count) const noexcept {
+double DiffFirstAlgorithm::evaluate(int16_t ench_count) const noexcept {
     (void)ench_count;
     // O(n²) deterministic construction — sub-millisecond.
     return 0;

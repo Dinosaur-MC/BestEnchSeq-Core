@@ -136,7 +136,7 @@ void DFSAlgorithm::execute(const AlgorithmInput& input, ExecutionContext& ctx) {
 
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
-int64_t DFSAlgorithm::evaluate(int16_t ench_count) const noexcept {
+double DFSAlgorithm::evaluate(int16_t ench_count) const noexcept {
     // Branch-and-bound DFS: O(b^d) worst-case.  Slightly slower than A* in
     // practice due to weaker pruning.
     if (ench_count <= 3) return 1;
