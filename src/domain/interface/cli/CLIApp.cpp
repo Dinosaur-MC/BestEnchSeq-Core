@@ -43,41 +43,37 @@ CLIApp::CLIApp()
 void CLIApp::apply_lang(int argc, char* argv[]) {
     auto& lang_mgr = LanguageManager::instance();
 
-    // 1. BESQ_LANG env var
-    std::string lang_code = get_env<std::string>("BESQ_LANG", detect_system_locale());
+    // 1. Select base language from BESQ_LANG env var or system locale first.
+    //    This ensures tr() messages use the correct locale from this point on.
+    std::string base_code = get_env<std::string>("BESQ_LANG", detect_system_locale());
+    lang_mgr.select(lang_mgr.resolve_locale(base_code));
 
-    // 2. --lang CLI flag override (--lang=value or --lang value)
-    bool user_explicit = false;
+    // 2. --lang CLI flag override — validate against registered languages.
     for (int i = 1; i < argc; ++i) {
         std::string_view a(argv[i]);
-        if (a.starts_with("--lang=")) {
-            lang_code = std::string(a.substr(7));
-            user_explicit = true;
-            break;
-        }
-        if (a == "--lang" && i + 1 < argc) {
-            lang_code = argv[i + 1];
-            user_explicit = true;
-            break;
-        }
-    }
+        std::string override_code;
+        if (a.starts_with("--lang="))
+            override_code = std::string(a.substr(7));
+        else if (a == "--lang" && i + 1 < argc)
+            override_code = argv[i + 1];
+        else
+            continue;
 
-    // 3. Validate explicit --lang value against registered languages
-    if (user_explicit) {
         auto avail = lang_mgr.available();
-        bool valid = std::find(avail.begin(), avail.end(), lang_code) != avail.end();
-        if (!valid) {
+        bool valid = std::find(avail.begin(), avail.end(), override_code) != avail.end();
+        if (valid) {
+            lang_mgr.select(lang_mgr.resolve_locale(override_code));
+        } else {
             std::string avail_str;
-            for (size_t i = 0; i < avail.size(); ++i) {
-                if (i > 0) avail_str += ", ";
-                avail_str += avail[i];
+            for (size_t j = 0; j < avail.size(); ++j) {
+                if (j > 0) avail_str += ", ";
+                avail_str += avail[j];
             }
-            std::cerr << tr_fmt("cli.err.invalid_lang", lang_code, avail_str) << std::endl;
-            lang_code = "en_US";  // fall back to default
+            // Warning in the base language; keep base language selected.
+            std::cerr << tr_fmt("cli.err.invalid_lang", override_code, avail_str) << std::endl;
         }
+        break;
     }
-
-    lang_mgr.select(lang_mgr.resolve_locale(lang_code));
 }
 
 int CLIApp::run(int argc, char* argv[]) {
