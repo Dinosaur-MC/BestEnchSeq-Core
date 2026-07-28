@@ -65,10 +65,11 @@ void CLIApp::apply_lang(int argc, char* argv[]) {
             lang_mgr.select(lang_mgr.resolve_locale(override_code));
         } else {
             std::string avail_str;
-            for (size_t j = 0; j < avail.size(); ++j) {
-                if (j > 0) avail_str += ", ";
-                avail_str += avail[j];
-            }
+            // for (size_t j = 0; j < avail.size(); ++j) {
+            //     if (j > 0) avail_str += ", ";
+            //     avail_str += avail[j];
+            // }
+            avail_str = string_utils::join(avail, ", ");
             // Warning in the base language; keep base language selected.
             std::cerr << tr_fmt("cli.err.invalid_lang", override_code, avail_str) << std::endl;
         }

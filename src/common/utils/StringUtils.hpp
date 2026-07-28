@@ -52,31 +52,44 @@ split(const std::string_view &str, std::string_view delimiters, bool keep_empty 
     return result;
 }
 template <typename T>
-inline T join(
-    typename std::vector<T>::const_iterator begin, typename std::vector<T>::const_iterator end,
-    std::string_view delimiters
-) {
-    T result;
+    requires std::is_convertible_v<T, std::string_view>
+inline std::string join(const std::vector<T> &tokens, std::string_view delimiters) {
+    std::string result;
+    for (auto &token : tokens) {
+        if (!result.empty())
+            result += delimiters;
+        result += std::string(token);
+    }
+    return result;
+}
+template <
+    typename Iter,
+    std::enable_if_t<std::is_convertible_v<decltype(*std::declval<Iter &>()), std::string_view>, int> = 0>
+inline std::string join(const Iter begin, const Iter end, std::string_view delimiters) {
+    std::string result;
     for (auto token = begin; token != end; ++token) {
         if (!result.empty())
             result += delimiters;
-        result += *token;
+        result += std::string(*token);
     }
     return result;
 }
 
 // Single-character delimiter split (skips empty tokens, matches old ParserUtils::split_string semantics)
-inline std::vector<std::string> split(const std::string& str, char delimiter) {
+inline std::vector<std::string> split(const std::string_view &str, char delimiter) {
     std::vector<std::string> tokens;
-    if (str.empty()) return tokens;
+    if (str.empty())
+        return tokens;
     size_t start = 0;
     while (true) {
         size_t end = str.find(delimiter, start);
         if (end == std::string::npos) {
-            if (start < str.size()) tokens.push_back(str.substr(start));
+            if (start < str.size())
+                tokens.emplace_back(str.substr(start));
             break;
         }
-        if (end > start) tokens.push_back(str.substr(start, end - start));
+        if (end > start)
+            tokens.emplace_back(str.substr(start, end - start));
         start = end + 1;
     }
     return tokens;
