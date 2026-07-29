@@ -168,6 +168,7 @@ int CLIApp::run(int argc, char* argv[]) {
             ? MCE::Bedrock : MCE::Java;
         request.search_config.max_solutions = config.solutions;
         request.algorithm = config.algorithm;
+        request.search_config.max_threads = static_cast<uint32_t>(config.max_threads);
         CLIApp::apply_config_pairs(config.config_pairs, request.forge_config);
 
         OutputFormatter::set_show_nsid(config.verbose);
@@ -218,6 +219,7 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<int>        {.long_name = "solutions",          .short_name = 's', .help_key = "cli.help.solutions_desc", .help_group = "cli.help.group_basic", .default_v = 1},
     Option<std::string>{.long_name = "memory",                           .help_key = "cli.help.memory_desc",    .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-time",                         .help_key = "cli.help.max_time_desc",  .help_group = "cli.help.group_advanced"},
+    Option<int>        {.long_name = "max-threads",      .short_name = 'j', .help_key = "Maximum thread pool size (0 = auto)", .help_group = "cli.help.group_advanced"},
 };
 
 } // anonymous namespace

@@ -265,6 +265,10 @@ void DPMergeAlgorithm::execute(AlgorithmInput input,
                                 ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
 
+    // Configure thread pool concurrency from search config
+    if (input.s_config.max_threads > 0)
+        besq::ThreadPool::set_concurrency(input.s_config.max_threads);
+
     if (!ctx.is_restored()) {
         _cache.clear();
         _diag = AlgorithmDiagnostics{};

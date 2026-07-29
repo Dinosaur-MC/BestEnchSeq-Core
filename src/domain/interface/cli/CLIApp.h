@@ -38,6 +38,7 @@ public:
         int solutions        = 1;
         int memory_mb        = 0;
         int max_time         = 0;
+        int max_threads      = 0;
         bool verbose         = false;
         bool help            = false;
         bool version         = false;
@@ -87,6 +88,7 @@ private:
         cfg.solutions       = std::get<19>(v).value_or(Config{}.solutions);
         cfg.memory_mb       = 0;
         cfg.max_time        = std::get<21>(v).value_or(Config{}.max_time);
+        cfg.max_threads     = std::get<22>(v).value_or(Config{}.max_threads);
         return cfg;
     }
 };
