@@ -60,7 +60,7 @@ void DPMergeAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
 DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool parallelize) {
     if (items.size() == 1) {
         Frontier f;
-        f.entries.push_back(ParetoEntry{0, items[0].ppn, std::move(items[0]), {}});
+        f.entries.push_back(ParetoEntry{0, items[0].ppn, std::move(items[0]), StepTree{}});
         return f;
     }
 
@@ -69,17 +69,22 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
         const Item& a = items[0];
         const Item& b = items[1];
 
+        auto make_leaf = [&](const Item& base, const Item& sac,
+                              int32_t cost) -> StepTree {
+            auto node = std::make_shared<StepTree::Node>(
+                EnchStep{base, sac, cost}, nullptr, nullptr, 1);
+            return StepTree{std::move(node)};
+        };
+
         if (_forge_engine.is_forgeable(a, b)) {
             auto [result, cost] = _forge_engine.forge(a, b, *_ench_reg);
-            std::vector<EnchStep> steps;
-            steps.emplace_back(a, b, cost);
-            f.insert(ParetoEntry{cost, result.ppn, std::move(result), std::move(steps)});
+            f.insert(ParetoEntry{cost, result.ppn, std::move(result),
+                                 make_leaf(a, b, cost)});
         }
         if (_forge_engine.is_forgeable(b, a)) {
             auto [result, cost] = _forge_engine.forge(b, a, *_ench_reg);
-            std::vector<EnchStep> steps;
-            steps.emplace_back(b, a, cost);
-            f.insert(ParetoEntry{cost, result.ppn, std::move(result), std::move(steps)});
+            f.insert(ParetoEntry{cost, result.ppn, std::move(result),
+                                 make_leaf(b, a, cost)});
         }
         return f;
     }
@@ -105,9 +110,21 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
     const uint64_t limit = 1ULL << n;
 
     // ─── forge_pair lambda (shared by both paths) ──────────────────
+    // Creates a StepTree node linking to the parents' trees instead of
+    // copying the full steps vector (zero-copy sharing).
     auto forge_pair = [&](Frontier& local,
                            const ParetoEntry& a,
                            const ParetoEntry& b) {
+        auto make_tree = [&](const Item& base, const Item& sac,
+                              int32_t cost) -> StepTree {
+            auto node = std::make_shared<StepTree::Node>(
+                EnchStep{base, sac, cost},
+                a.step_tree.root_ptr(),
+                b.step_tree.root_ptr(),
+                a.step_tree.size() + b.step_tree.size() + 1);
+            return StepTree{std::move(node)};
+        };
+
         if (_forge_engine.is_forgeable(a.item, b.item)) {
             auto [new_item, cost] = _forge_engine.forge(
                 a.item, b.item, *_ench_reg);
@@ -115,14 +132,9 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
                           + b.cost + cost;
             if (total > std::numeric_limits<int32_t>::max())
                 total = std::numeric_limits<int32_t>::max();
-            std::vector<EnchStep> steps;
-            steps.reserve(a.steps.size() + b.steps.size() + 1);
-            steps.insert(steps.end(), a.steps.begin(), a.steps.end());
-            steps.insert(steps.end(), b.steps.begin(), b.steps.end());
-            steps.emplace_back(a.item, b.item, cost);
             local.insert(ParetoEntry{total, new_item.ppn,
                                      std::move(new_item),
-                                     std::move(steps)});
+                                     make_tree(a.item, b.item, cost)});
         }
         if (_forge_engine.is_forgeable(b.item, a.item)) {
             auto [new_item, cost] = _forge_engine.forge(
@@ -131,14 +143,9 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
                           + b.cost + cost;
             if (total > std::numeric_limits<int32_t>::max())
                 total = std::numeric_limits<int32_t>::max();
-            std::vector<EnchStep> steps;
-            steps.reserve(a.steps.size() + b.steps.size() + 1);
-            steps.insert(steps.end(), a.steps.begin(), a.steps.end());
-            steps.insert(steps.end(), b.steps.begin(), b.steps.end());
-            steps.emplace_back(b.item, a.item, cost);
             local.insert(ParetoEntry{total, new_item.ppn,
                                      std::move(new_item),
-                                     std::move(steps)});
+                                     make_tree(b.item, a.item, cost)});
         }
     };
 
@@ -319,7 +326,7 @@ void DPMergeAlgorithm::execute(AlgorithmInput input,
         _diag.solution_cost = static_cast<int32_t>(best->cost);
         _diag.status        = "Complete";
         ctx.set_exit_diagnostics(_diag);
-        ctx.report_solution(best->steps);
+        ctx.report_solution(best->step_tree.materialize());
         ctx.report_progress(100, ProgressStatus::Complete);
     } else {
         _diag.status = "CompleteNoSolution";
