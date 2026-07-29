@@ -19,6 +19,7 @@ add_library(besq-domain-algorithm STATIC
 )
 target_link_libraries(besq-domain-algorithm PUBLIC
     besq-common-core          # NSID types in public API
+    besq-common-thread        # ThreadPool for parallel DPMerge
 )
 target_link_libraries(besq-domain-algorithm PRIVATE
     besq-common-log           # internal logging (optional with BESQ_DISABLE_LOGGER)

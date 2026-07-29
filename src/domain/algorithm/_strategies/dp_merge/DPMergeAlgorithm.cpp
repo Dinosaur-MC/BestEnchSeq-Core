@@ -1,5 +1,6 @@
 #include "DPMergeAlgorithm.h"
 #include "DPMergeStateSerializer.h"
+#include "common/utils/thread/ThreadPool.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
 #include <algorithm>
@@ -125,54 +126,78 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
         if (left_f.empty() || right_f.empty())
             continue;
 
-        for (const auto& entry_a : left_f.entries) {
-            for (const auto& entry_b : right_f.entries) {
-                if (_forge_engine.is_forgeable(entry_a.item, entry_b.item)) {
-                    auto [new_item, cost] = _forge_engine.forge(
-                        entry_a.item, entry_b.item, *_ench_reg);
-                    // Use int64_t for accumulation to prevent overflow;
-                    // saturate to INT32_MAX for solution output.
-                    int64_t total = static_cast<int64_t>(entry_a.cost)
-                                  + entry_b.cost + cost;
-                    if (total > std::numeric_limits<int32_t>::max())
-                        total = std::numeric_limits<int32_t>::max();
+        // ── Cartesian product: combine left/right frontiers ──────────
+        // forge_pair lambda is shared by both the sequential and parallel paths
+        auto forge_pair = [&](Frontier& local,
+                               const ParetoEntry& a,
+                               const ParetoEntry& b) {
+            if (_forge_engine.is_forgeable(a.item, b.item)) {
+                auto [new_item, cost] = _forge_engine.forge(
+                    a.item, b.item, *_ench_reg);
+                int64_t total = static_cast<int64_t>(a.cost)
+                              + b.cost + cost;
+                if (total > std::numeric_limits<int32_t>::max())
+                    total = std::numeric_limits<int32_t>::max();
 
-                    std::vector<EnchStep> steps;
-                    steps.reserve(entry_a.steps.size() +
-                                  entry_b.steps.size() + 1);
-                    steps.insert(steps.end(),
-                                 entry_a.steps.begin(), entry_a.steps.end());
-                    steps.insert(steps.end(),
-                                 entry_b.steps.begin(), entry_b.steps.end());
-                    steps.emplace_back(entry_a.item, entry_b.item, cost);
-
-                    result.insert(ParetoEntry{total, new_item.ppn,
-                                              std::move(new_item),
-                                              std::move(steps)});
-                }
-
-                if (_forge_engine.is_forgeable(entry_b.item, entry_a.item)) {
-                    auto [new_item, cost] = _forge_engine.forge(
-                        entry_b.item, entry_a.item, *_ench_reg);
-                    int64_t total = static_cast<int64_t>(entry_a.cost)
-                                  + entry_b.cost + cost;
-                    if (total > std::numeric_limits<int32_t>::max())
-                        total = std::numeric_limits<int32_t>::max();
-
-                    std::vector<EnchStep> steps;
-                    steps.reserve(entry_a.steps.size() +
-                                  entry_b.steps.size() + 1);
-                    steps.insert(steps.end(),
-                                 entry_a.steps.begin(), entry_a.steps.end());
-                    steps.insert(steps.end(),
-                                 entry_b.steps.begin(), entry_b.steps.end());
-                    steps.emplace_back(entry_b.item, entry_a.item, cost);
-
-                    result.insert(ParetoEntry{total, new_item.ppn,
-                                              std::move(new_item),
-                                              std::move(steps)});
-                }
+                std::vector<EnchStep> steps;
+                steps.reserve(a.steps.size() + b.steps.size() + 1);
+                steps.insert(steps.end(), a.steps.begin(), a.steps.end());
+                steps.insert(steps.end(), b.steps.begin(), b.steps.end());
+                steps.emplace_back(a.item, b.item, cost);
+                local.insert(ParetoEntry{total, new_item.ppn,
+                                         std::move(new_item),
+                                         std::move(steps)});
             }
+
+            if (_forge_engine.is_forgeable(b.item, a.item)) {
+                auto [new_item, cost] = _forge_engine.forge(
+                    b.item, a.item, *_ench_reg);
+                int64_t total = static_cast<int64_t>(a.cost)
+                              + b.cost + cost;
+                if (total > std::numeric_limits<int32_t>::max())
+                    total = std::numeric_limits<int32_t>::max();
+
+                std::vector<EnchStep> steps;
+                steps.reserve(a.steps.size() + b.steps.size() + 1);
+                steps.insert(steps.end(), a.steps.begin(), a.steps.end());
+                steps.insert(steps.end(), b.steps.begin(), b.steps.end());
+                steps.emplace_back(b.item, a.item, cost);
+                local.insert(ParetoEntry{total, new_item.ppn,
+                                         std::move(new_item),
+                                         std::move(steps)});
+            }
+        };
+
+        const auto& left_entries  = left_f.entries;
+        const auto& right_entries = right_f.entries;
+        const size_t na = left_entries.size();
+        const size_t nb = right_entries.size();
+
+        // Parallelize the Cartesian product via the shared thread pool
+        // when the product is large enough to amortise overhead.
+        if (na * nb >= 256) {
+            // Each entry_a gets its own thread-local Frontier slot —
+            // parallel_for guarantees every index is processed by
+            // exactly one task, so no slot is shared.
+            std::vector<Frontier> local_results(na);
+
+            auto& shared_pool = besq::ThreadPool::shared();
+            parallel_for(shared_pool, size_t{0}, na,
+                [&](size_t a_idx) {
+                    const auto& entry_a = left_entries[a_idx];
+                    Frontier& local = local_results[a_idx];
+                    for (const auto& entry_b : right_entries)
+                        forge_pair(local, entry_a, entry_b);
+                });
+
+            // Merge thread-local frontiers into the global result
+            for (auto& lr : local_results)
+                for (auto& e : lr.entries)
+                    result.insert(std::move(e));
+        } else {
+            for (const auto& entry_a : left_entries)
+                for (const auto& entry_b : right_entries)
+                    forge_pair(result, entry_a, entry_b);
         }
     }
 
