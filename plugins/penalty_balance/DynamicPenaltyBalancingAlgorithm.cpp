@@ -8,8 +8,7 @@ namespace algorithm {
 
 using namespace algorithm;
 
-void DynamicPenaltyBalancingAlgorithm::execute(
-    AlgorithmInput input, ExecutionContext& ctx)
+void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx)
 {
     _forge_engine.set_config(input.f_config);
     _ench_reg = &input.ench_reg;

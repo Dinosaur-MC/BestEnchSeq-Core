@@ -127,7 +127,7 @@ void DFSAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx
 
 // ─── execute ───────────────────────────────────────────────────────────────
 
-void DFSAlgorithm::execute(AlgorithmInput input, ExecutionContext& ctx) {
+void DFSAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;

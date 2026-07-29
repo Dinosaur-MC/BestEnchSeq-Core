@@ -10,7 +10,7 @@
 class IAlgorithm {
 public:
     virtual std::string_view name() const noexcept = 0;
-    virtual void execute(AlgorithmInput input, ExecutionContext& ctx) = 0;
+    virtual void execute(const AlgorithmInput &input, ExecutionContext& ctx) = 0;
 };
 ```
 

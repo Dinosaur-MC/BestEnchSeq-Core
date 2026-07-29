@@ -108,7 +108,7 @@ class IAlgorithm {
 
     /// Execute the algorithm on the given input (takes ownership by value to
     /// prevent external modification during long-running search).
-    virtual void execute(AlgorithmInput input, ExecutionContext &ctx) = 0;
+    virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
 
     /// Pre-process input before execution.
     ///

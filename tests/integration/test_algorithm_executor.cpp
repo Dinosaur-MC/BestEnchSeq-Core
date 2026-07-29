@@ -1,7 +1,6 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
-#include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include <chrono>
@@ -38,7 +37,7 @@ public:
         return std::make_unique<TestForgeEngine>();
     }
 
-    void execute(AlgorithmInput, ExecutionContext& ctx) override {
+    void execute(const AlgorithmInput &, ExecutionContext& ctx) override {
         for (int i = 0; i < 5; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
@@ -61,7 +60,7 @@ public:
         return std::make_unique<TestForgeEngine>();
     }
 
-    void execute(AlgorithmInput, ExecutionContext& ctx) override {
+    void execute(const AlgorithmInput &, ExecutionContext& ctx) override {
         for (int i = 0; i < 20; i++) {
             if (ctx.is_cancelled()) return;
             ctx.wait_if_paused();
@@ -82,7 +81,7 @@ public:
         return std::make_unique<TestForgeEngine>();
     }
 
-    void execute(AlgorithmInput, ExecutionContext&) override {
+    void execute(const AlgorithmInput &, ExecutionContext&) override {
         throw std::runtime_error("simulated failure");
     }
 };

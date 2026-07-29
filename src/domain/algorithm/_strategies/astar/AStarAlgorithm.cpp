@@ -153,7 +153,7 @@ void AStarAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &c
 
 // ─── Execute ────────────────────────────────────────────────────────────
 
-void AStarAlgorithm::execute(AlgorithmInput input, ExecutionContext &ctx) {
+void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
     _forge_engine.set_config(input.f_config);
     const auto &items  = input.items;
     const auto &reg    = input.ench_reg;

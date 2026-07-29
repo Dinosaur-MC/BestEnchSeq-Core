@@ -268,8 +268,7 @@ void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext 
 
 // ─── execute ──────────────────────────────────────────────────────────────
 
-void DPMergeAlgorithm::execute(AlgorithmInput input,
-                                ExecutionContext& ctx) {
+void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
 
     // Configure thread pool concurrency from search config

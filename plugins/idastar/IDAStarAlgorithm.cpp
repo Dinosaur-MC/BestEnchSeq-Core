@@ -151,7 +151,7 @@ int32_t IDAStarAlgorithm::_compute_h() const {
     return search_utils::compute_h(_target, *_ench_reg, _h_max);
 }
 
-void IDAStarAlgorithm::execute(AlgorithmInput input, ExecutionContext& ctx) {
+void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
     _forge_engine.set_config(input.f_config);
     const auto& items = input.items;
     const auto& reg = input.ench_reg;

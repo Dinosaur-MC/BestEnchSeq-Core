@@ -32,7 +32,7 @@ public:
     }
     AlgorithmMode supported_mode() const noexcept override { return AlgorithmMode::direct; }
 
-    void execute(AlgorithmInput, ExecutionContext&) override {}
+    void execute(const AlgorithmInput &, ExecutionContext&) override {}
 };
 
 // ─── Tests ─────────────────────────────────────────────────────────
