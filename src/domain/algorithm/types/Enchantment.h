@@ -72,62 +72,38 @@ class EnchSet {
     using iterator       = Ench *;
     using const_iterator = const Ench *;
 
-    EnchSet() noexcept : _size(0) {}
-    EnchSet(std::initializer_list<Ench> il) noexcept
-        : _size(static_cast<uint8_t>(std::min<size_t>(il.size(), INLINE_N))) {
-        std::memcpy(_buf, il.begin(), sizeof(Ench) * _size);
-        sort();
-    }
+    EnchSet() noexcept : _size(0), _hash_cache(0) {}
+    EnchSet(std::initializer_list<Ench> il) noexcept;
     template <
         typename Iter,
         std::enable_if_t<std::is_convertible_v<decltype(*std::declval<Iter &>()), Ench>, int> = 0>
     EnchSet(Iter first, Iter last) noexcept {
         // Copy up to INLINE_N elements (safe for any iterator category).
-        Ench* d = reinterpret_cast<Ench*>(_buf);
+        Ench *d  = _buf;
         size_t n = 0;
         for (; n < INLINE_N && first != last; ++n, ++first)
             d[n] = *first;
-        _size = static_cast<uint8_t>(n);
+        _size       = n;
+        _hash_cache = 0;
         sort();
     }
 
-    EnchSet(const EnchSet &o) noexcept : _size(o._size) { std::memcpy(_buf, o._buf, INLINE_BYTES); }
+    EnchSet(const EnchSet &o) noexcept;
+    EnchSet &operator=(const EnchSet &o) noexcept;
 
-    EnchSet &operator=(const EnchSet &o) noexcept {
-        if (this != &o) {
-            _size = o._size;
-            _hash_cache = 0;
-            std::memcpy(_buf, o._buf, INLINE_BYTES);
-        }
-        return *this;
-    }
-
-    EnchSet(EnchSet &&o) noexcept : _size(o._size) {
-        std::memcpy(_buf, o._buf, INLINE_BYTES);
-        o._size = 0;
-    }
-
-    EnchSet &operator=(EnchSet &&o) noexcept {
-        if (this != &o) {
-            _size = o._size;
-            _hash_cache = 0;
-            std::memcpy(_buf, o._buf, INLINE_BYTES);
-            o._size       = 0;
-            o._hash_cache = 0;
-        }
-        return *this;
-    }
+    EnchSet(EnchSet &&o) noexcept;
+    EnchSet &operator=(EnchSet &&o) noexcept;
 
     ~EnchSet() noexcept = default;
 
     // ── Iterators ──
-    iterator begin() noexcept { return reinterpret_cast<Ench *>(_buf); }
-    iterator end() noexcept { return reinterpret_cast<Ench *>(_buf) + _size; }
-    const_iterator begin() const noexcept { return reinterpret_cast<const Ench *>(_buf); }
-    const_iterator end() const noexcept { return reinterpret_cast<const Ench *>(_buf) + _size; }
+    iterator begin() noexcept { return _buf; }
+    iterator end() noexcept { return _buf + _size; }
+    const_iterator begin() const noexcept { return _buf; }
+    const_iterator end() const noexcept { return _buf + _size; }
 
     // ── Capacity ──
-    size_t size() const noexcept { return _size; }
+    [[nodiscard]] size_t size() const noexcept { return _size; }
     [[nodiscard]] bool empty() const noexcept { return _size == 0; }
     void reserve(size_t) noexcept {}
 
@@ -137,12 +113,9 @@ class EnchSet {
     [[nodiscard]] bool contains(int16_t id) const noexcept;
 
     // ── Modifiers ──
-    void insert(const Ench &ench);
-    void clear() noexcept {
-        _size       = 0;
-        _hash_cache = 0;
-    }
-    void sort();
+    void insert(const Ench &ench) noexcept;
+    void clear() noexcept;
+    void sort() noexcept;
 
     // ── Hash (lazily cached) ──
     //
@@ -157,10 +130,7 @@ class EnchSet {
 
     /// Force-recompute the hash cache.  Use after raw buffer modifications
     /// via mutable iterators when insert/clear/sort are not an option.
-    void rehash() const noexcept {
-        _hash_cache = 0;
-        (void)hash();
-    }
+    void rehash() const noexcept;
 
     // ── Comparison ──
     bool operator==(const EnchSet &o) const noexcept {
@@ -173,9 +143,9 @@ class EnchSet {
     void deserialize(ByteStreamReader &r) noexcept;
 
   private:
-    uint8_t _size{0};
+    size_t _size{0};
     mutable size_t _hash_cache{0};
-    alignas(Ench) uint8_t _buf[INLINE_N * sizeof(Ench)];
+    alignas(Ench) Ench _buf[INLINE_N];
 };
 
 // ── Free-function streaming for EnchSet (ADL via algorithm namespace) ──
