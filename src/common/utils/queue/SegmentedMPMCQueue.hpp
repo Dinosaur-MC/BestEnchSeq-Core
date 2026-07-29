@@ -163,6 +163,7 @@ public:
             if (dequeue_pos_.compare_exchange_weak(pos, pos + 1,
                     std::memory_order_acq_rel, std::memory_order_relaxed))
                 break;
+            BESQ_PAUSE();
         }
 
         Block* block = head_block_.load(std::memory_order_acquire);
@@ -182,7 +183,7 @@ public:
 
         size_t idx = static_cast<size_t>(pos - block->base_ticket);
         while (block->sequences[idx].load(std::memory_order_acquire) != pos + BlockSize)
-            std::this_thread::yield();
+            BESQ_PAUSE();
 
         T* slot = block->slot_at(idx);
         out = std::move(*slot);

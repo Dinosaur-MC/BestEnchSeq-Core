@@ -5,6 +5,26 @@
 #include <type_traits>
 #include <utility>
 
+// ─── BESQ_PAUSE ────────────────────────────────────────────────────────────
+// CPU pause / yield hint for spin-loop body.  On x86 emits the PAUSE
+// instruction (improving SMT performance and reducing power).  On ARM
+// emits YIELD.  Falls back to empty on unknown architectures.
+//
+// Use inside ultra-short spin loops where `std::this_thread::yield()` (a
+// syscall on most OSes) would be too heavy.  For longer spins where
+// fairness matters, prefer yield().
+
+#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+#  include <intrin.h>
+#  define BESQ_PAUSE() _mm_pause()
+#elif defined(__x86_64__) || defined(__i386__)
+#  define BESQ_PAUSE() __asm__ volatile("pause" ::: "memory")
+#elif defined(__aarch64__)
+#  define BESQ_PAUSE() __asm__ volatile("yield" ::: "memory")
+#else
+#  define BESQ_PAUSE() /* no pause hint */
+#endif
+
 // ─── IQueue<T> (virtual interface) ────────────────────────────────────────
 // Runtime-polymorphic wrapper for lock-free queues.
 //

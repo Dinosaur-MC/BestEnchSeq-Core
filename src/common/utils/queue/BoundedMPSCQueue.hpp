@@ -6,16 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
-#include <thread>
 #include <type_traits>
-
-// Portably expose _mm_pause() on x86.
-#if defined(__x86_64__) || defined(__i386__) || defined(_M_AMD64) || defined(_M_IX86)
-#include <immintrin.h>
-#define BESQ_PAUSE() _mm_pause()
-#else
-#define BESQ_PAUSE() ((void)0)
-#endif
 
 // ─── BoundedMPSCQueue ───
 // Multi-Producer, Single-Consumer lock-free BOUNDED queue.
@@ -153,7 +144,7 @@ public:
         if (!claim_write_slot(pos)) return false;
         auto& slot = _slots[pos & _mask];
         while (slot.sequence.load(std::memory_order_acquire) != pos)
-            std::this_thread::yield();
+            BESQ_PAUSE();
         ::new (slot.ptr()) T(std::move(value));
         slot.sequence.store(pos + 1, std::memory_order_release);
         return true;
@@ -165,7 +156,7 @@ public:
         if (!claim_write_slot(pos)) return false;
         auto& slot = _slots[pos & _mask];
         while (slot.sequence.load(std::memory_order_acquire) != pos)
-            std::this_thread::yield();
+            BESQ_PAUSE();
         ::new (slot.ptr()) T(std::forward<Args>(args)...);
         slot.sequence.store(pos + 1, std::memory_order_release);
         return true;
