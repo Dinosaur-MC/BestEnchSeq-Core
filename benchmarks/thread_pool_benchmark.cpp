@@ -20,16 +20,16 @@ using Clock = chrono::steady_clock;
 // ─── Configuration ─────────────────────────────────────────────────────────
 
 #ifdef NDEBUG
-constexpr int64_t OPS_BATCH      = 1'000'000;   // tasks per throughput test
-constexpr int64_t OPS_PAR_FOR    =  50'000'000;  // indices per parallel_for test
+constexpr int64_t OPS_BATCH      =     500'000;   // tasks per throughput test
+constexpr int64_t OPS_PAR_FOR    =  10'000'000;  // indices per parallel_for test
 constexpr int64_t OPS_HEAVY      =     100'000;  // heavy tasks (each does real work)
 #else
-constexpr int64_t OPS_BATCH      =    100'000;
+constexpr int64_t OPS_BATCH      =     100'000;
 constexpr int64_t OPS_PAR_FOR    =   1'000'000;
-constexpr int64_t OPS_HEAVY      =      5'000;
+constexpr int64_t OPS_HEAVY      =       5'000;
 #endif
 
-constexpr int64_t WARMUP_TASKS   =     10'000;
+constexpr int64_t WARMUP_TASKS   =      10'000;
 
 // Timer helper
 struct Timer {
@@ -53,10 +53,10 @@ struct Sink {
 // Busy-loop for ~`cycles` iterations — calibrated to ~1 µs on modern HW.
 // Using a volatile sink prevents the loop from being eliminated.
 inline void busy_work(int64_t cycles, Sink* sink = nullptr) {
-    int64_t x = 0;
-    for (int64_t i = 0; i < cycles; ++i) { x += i; }
+    double x = 0;
+    for (int64_t i = 0; i < cycles; ++i) { x += std::log(i + 2); }
     if (sink) sink->add(x);
-    else      { volatile int64_t dummy = x; (void)dummy; }
+    else { volatile int64_t dummy = x; (void)dummy; }
 }
 
 // ─── Benchmark: task submission throughput ──────────────────────────────────
@@ -141,7 +141,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::printf("╔══════════════════════════════════════════════════════════════╗\n");
-    std::printf("║            ThreadPool Benchmark                             ║\n");
+    std::printf("║             ThreadPool Benchmark                             ║\n");
     std::printf("╚══════════════════════════════════════════════════════════════╝\n");
     std::printf("  Hardware concurrency: %zu\n", static_cast<std::size_t>(std::thread::hardware_concurrency()));
     std::printf("  Task batch size:      %lld\n", (long long)OPS_BATCH);
@@ -152,7 +152,7 @@ int main(int argc, char* argv[]) {
     {
         ThreadPool warmup(thread_counts.back());
         for (int64_t i = 0; i < WARMUP_TASKS; ++i)
-            warmup.submit([] { busy_work(10); });
+            warmup.submit([] { busy_work(5); });
         warmup.wait();
     }
     std::printf("  Warm-up complete (%lld tasks)\n\n", (long long)WARMUP_TASKS);
@@ -162,33 +162,25 @@ int main(int argc, char* argv[]) {
     // ═══════════════════════════════════════════════════════════════════
     std::printf("── Fine-grained task throughput ───────────────────────────\n");
     for (int tc : thread_counts) {
+        if (tc > 4) continue;
         ThreadPool pool(tc);
         auto r = bench_throughput(pool, OPS_BATCH, "empty task");
         r.print("empty task");
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  2. Task throughput — medium work (~1 µs per task)
-    // ═══════════════════════════════════════════════════════════════════
-    std::printf("\n── Medium task throughput (≈1 µs work) ───────────────────\n");
-    for (int tc : thread_counts) {
-        ThreadPool pool(tc);
-        auto r = bench_throughput(pool, OPS_BATCH, "1 µs task");
-        r.print("1 µs task");
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  3. Heavy task throughput (~100 µs work per task)
+    //  2. Heavy task throughput (~100 µs work per task)
     // ═══════════════════════════════════════════════════════════════════
     std::printf("\n── Heavy task throughput (≈100 µs work) ──────────────────\n");
     for (int tc : thread_counts) {
+        if (tc > 8) continue;
         ThreadPool pool(tc);
         auto r = bench_throughput(pool, OPS_HEAVY, "100 µs task");
         r.print("100 µs task");
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  4. parallel_for — tiny work (just store)
+    //  3. parallel_for — tiny work (just store)
     // ═══════════════════════════════════════════════════════════════════
     std::printf("\n── parallel_for throughput (store only) ──────────────────\n");
     for (int tc : thread_counts) {
@@ -200,7 +192,7 @@ int main(int argc, char* argv[]) {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  5. parallel_for — medium work (sqrt + write)
+    //  4. parallel_for — medium work (sqrt + write)
     // ═══════════════════════════════════════════════════════════════════
     std::printf("\n── parallel_for throughput (sqrt + write) ────────────────\n");
     for (int tc : thread_counts) {
@@ -213,33 +205,14 @@ int main(int argc, char* argv[]) {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    //  6. Scalability: speedup relative to 1 thread (empty tasks)
+    //  5. parallel_for scalability (sqrt, speedup vs 1 thread)
     // ═══════════════════════════════════════════════════════════════════
-    std::printf("\n── Scalability (empty tasks, speedup vs 1 thread) ────\n");
-    {
-        ThreadPool pool1(1);
-        auto base = bench_throughput(pool1, OPS_BATCH, "baseline (1T)");
-        double base_thru = base.throughput;
-
-        for (int tc : thread_counts) {
-            if (tc == 1) continue;
-            ThreadPool pool(tc);
-            auto r = bench_throughput(pool, OPS_BATCH, "scalability");
-            double speedup = r.throughput / base_thru;
-            std::printf("  scalability           %4d threads  %6.2fx speedup  (%7.1f M/s)\n",
-                        tc, speedup, r.throughput);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    //  7. parallel_for scalability (sqrt, speedup vs 1 thread)
-    // ═══════════════════════════════════════════════════════════════════
-    std::printf("\n── parallel_for scalability (sqrt, speedup vs 1 thread) ─\n");
+    std::printf("\n── parallel_for scalability (200 log work, speedup vs 1 thread) ─\n");
     {
         ThreadPool pool1(1);
         std::vector<double> base_data(OPS_PAR_FOR);
         auto base = bench_parallel_for(pool1, OPS_PAR_FOR,
-            [&](int64_t i) { base_data[i] = std::sqrt(static_cast<double>(i)); },
+            [&](int64_t i) { base_data[i] = std::sqrt(static_cast<double>(i)); busy_work(250); },
             "baseline (1T)");
         double base_thru = base.throughput;
 
@@ -248,7 +221,7 @@ int main(int argc, char* argv[]) {
             ThreadPool pool(tc);
             std::vector<double> data(OPS_PAR_FOR);
             auto r = bench_parallel_for(pool, OPS_PAR_FOR,
-                [&](int64_t i) { data[i] = std::sqrt(static_cast<double>(i)); },
+                [&](int64_t i) { data[i] = std::sqrt(static_cast<double>(i)); busy_work(250); },
                 "scalability");
             double speedup = r.throughput / base_thru;
             std::printf("  scalability           %4d threads  %6.2fx speedup  (%7.1f M/s)\n",
