@@ -6,6 +6,7 @@
 #include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include <cstdint>
 #include <memory>
+#include <shared_mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -65,6 +66,7 @@ private:
 
     // Memoisation cache: item-set → Pareto frontier.
     std::unordered_map<ItemCollection, Frontier> _cache;
+    mutable std::shared_mutex _cache_mutex;
 
     ForgeEngine _forge_engine;
     const EnchReg* _ench_reg{nullptr};
@@ -72,7 +74,7 @@ private:
 
     AlgorithmDiagnostics _diag;
 
-    Frontier solve(std::vector<Item> items);
+    Frontier solve(std::vector<Item> items, bool parallelize = false);
     static void canonicalize(std::vector<Item>& items) noexcept;
 
     // Cache size limit prevents unbounded memory growth for large N.
@@ -84,7 +86,7 @@ private:
 
 static_assert(std::is_nothrow_destructible_v<DPMergeAlgorithm>,
     "DPMergeAlgorithm: destructor must not throw");
-static_assert(sizeof(DPMergeAlgorithm) < 4096,
+static_assert(sizeof(DPMergeAlgorithm) < 8192,
     "DPMergeAlgorithm: size exceeds expected range");
 
 } // namespace algorithm

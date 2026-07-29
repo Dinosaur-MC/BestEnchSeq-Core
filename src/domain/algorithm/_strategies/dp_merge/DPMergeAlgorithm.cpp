@@ -51,8 +51,13 @@ void DPMergeAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
 }
 
 // ─── solve (recursive DP with memoization) ─────────────────────────────────
+//
+// For large N (≥ 12) the outer partition-mask loop is parallelised via
+// ThreadPool::shared() — each chunk processes its masks independently,
+// using thread-safe cache access (shared_mutex) for the recursive solve()
+// calls.  Small N uses the original sequential path.
 
-DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
+DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool parallelize) {
     if (items.size() == 1) {
         Frontier f;
         f.entries.push_back(ParetoEntry{0, items[0].ppn, std::move(items[0]), {}});
@@ -79,8 +84,9 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
         return f;
     }
 
-    // ── Check memoisation cache ────────────────────────────────────
+    // ── Check memoisation cache (thread-safe) ──────────────────────
     {
+        std::shared_lock lock(_cache_mutex);
         auto it = _cache.find(items);
         if (it != _cache.end())
             return it->second;
@@ -90,6 +96,7 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
 
     if (n >= 64) return {};
     if (n > 20) {
+        std::unique_lock lock(_cache_mutex);
         _cache[std::move(items)] = Frontier{};
         return {};
     }
@@ -97,113 +104,129 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items) {
     Frontier result;
     const uint64_t limit = 1ULL << n;
 
-    std::vector<Item> left_buf, right_buf;
-    left_buf.reserve(n);
-    right_buf.reserve(n);
-
-    for (uint64_t mask = 1; mask + 1 < limit; ++mask) {
-        size_t k = __builtin_popcountll(mask);
-
-        if (k * 2 > n) continue;
-        if ((n & 1) == 0 && k * 2 == n && !(mask & 1)) continue;
-
-        left_buf.clear();
-        right_buf.clear();
-
-        for (size_t i = 0; i < n; ++i) {
-            if (mask & (1ULL << i))
-                left_buf.push_back(items[i]);
-            else
-                right_buf.push_back(items[i]);
+    // ─── forge_pair lambda (shared by both paths) ──────────────────
+    auto forge_pair = [&](Frontier& local,
+                           const ParetoEntry& a,
+                           const ParetoEntry& b) {
+        if (_forge_engine.is_forgeable(a.item, b.item)) {
+            auto [new_item, cost] = _forge_engine.forge(
+                a.item, b.item, *_ench_reg);
+            int64_t total = static_cast<int64_t>(a.cost)
+                          + b.cost + cost;
+            if (total > std::numeric_limits<int32_t>::max())
+                total = std::numeric_limits<int32_t>::max();
+            std::vector<EnchStep> steps;
+            steps.reserve(a.steps.size() + b.steps.size() + 1);
+            steps.insert(steps.end(), a.steps.begin(), a.steps.end());
+            steps.insert(steps.end(), b.steps.begin(), b.steps.end());
+            steps.emplace_back(a.item, b.item, cost);
+            local.insert(ParetoEntry{total, new_item.ppn,
+                                     std::move(new_item),
+                                     std::move(steps)});
         }
+        if (_forge_engine.is_forgeable(b.item, a.item)) {
+            auto [new_item, cost] = _forge_engine.forge(
+                b.item, a.item, *_ench_reg);
+            int64_t total = static_cast<int64_t>(a.cost)
+                          + b.cost + cost;
+            if (total > std::numeric_limits<int32_t>::max())
+                total = std::numeric_limits<int32_t>::max();
+            std::vector<EnchStep> steps;
+            steps.reserve(a.steps.size() + b.steps.size() + 1);
+            steps.insert(steps.end(), a.steps.begin(), a.steps.end());
+            steps.insert(steps.end(), b.steps.begin(), b.steps.end());
+            steps.emplace_back(b.item, a.item, cost);
+            local.insert(ParetoEntry{total, new_item.ppn,
+                                     std::move(new_item),
+                                     std::move(steps)});
+        }
+    };
 
-        canonicalize(left_buf);
-        canonicalize(right_buf);
+    // ─── Parallel mask loop (top-level only, avoids nested parallel_for) ─
+    if (parallelize && n >= 12) {
+        auto& pool = besq::ThreadPool::shared();
+        std::mutex result_mutex;
 
-        Frontier left_f  = solve(std::move(left_buf));
-        Frontier right_f = solve(std::move(right_buf));
+        parallel_for(pool, uint64_t{1}, limit - 1,
+            [&](uint64_t mask) {
+                size_t k = __builtin_popcountll(mask);
+                if (k * 2 > n) return;
+                if ((n & 1) == 0 && k * 2 == n && !(mask & 1)) return;
 
-        if (left_f.empty() || right_f.empty())
-            continue;
+                // Build left/right partition (thread-local)
+                std::vector<Item> left, right;
+                left.reserve(n);
+                right.reserve(n);
+                for (size_t i = 0; i < n; ++i) {
+                    if (mask & (1ULL << i))
+                        left.push_back(items[i]);
+                    else
+                        right.push_back(items[i]);
+                }
+                canonicalize(left);
+                canonicalize(right);
 
-        // ── Cartesian product: combine left/right frontiers ──────────
-        // forge_pair lambda is shared by both the sequential and parallel paths
-        auto forge_pair = [&](Frontier& local,
-                               const ParetoEntry& a,
-                               const ParetoEntry& b) {
-            if (_forge_engine.is_forgeable(a.item, b.item)) {
-                auto [new_item, cost] = _forge_engine.forge(
-                    a.item, b.item, *_ench_reg);
-                int64_t total = static_cast<int64_t>(a.cost)
-                              + b.cost + cost;
-                if (total > std::numeric_limits<int32_t>::max())
-                    total = std::numeric_limits<int32_t>::max();
+                // Recursive solve — sequential only (avoids nested parallel_for)
+                Frontier left_f  = solve(std::move(left), false);
+                Frontier right_f = solve(std::move(right), false);
+                if (left_f.empty() || right_f.empty()) return;
 
-                std::vector<EnchStep> steps;
-                steps.reserve(a.steps.size() + b.steps.size() + 1);
-                steps.insert(steps.end(), a.steps.begin(), a.steps.end());
-                steps.insert(steps.end(), b.steps.begin(), b.steps.end());
-                steps.emplace_back(a.item, b.item, cost);
-                local.insert(ParetoEntry{total, new_item.ppn,
-                                         std::move(new_item),
-                                         std::move(steps)});
-            }
-
-            if (_forge_engine.is_forgeable(b.item, a.item)) {
-                auto [new_item, cost] = _forge_engine.forge(
-                    b.item, a.item, *_ench_reg);
-                int64_t total = static_cast<int64_t>(a.cost)
-                              + b.cost + cost;
-                if (total > std::numeric_limits<int32_t>::max())
-                    total = std::numeric_limits<int32_t>::max();
-
-                std::vector<EnchStep> steps;
-                steps.reserve(a.steps.size() + b.steps.size() + 1);
-                steps.insert(steps.end(), a.steps.begin(), a.steps.end());
-                steps.insert(steps.end(), b.steps.begin(), b.steps.end());
-                steps.emplace_back(b.item, a.item, cost);
-                local.insert(ParetoEntry{total, new_item.ppn,
-                                         std::move(new_item),
-                                         std::move(steps)});
-            }
-        };
-
-        const auto& left_entries  = left_f.entries;
-        const auto& right_entries = right_f.entries;
-        const size_t na = left_entries.size();
-        const size_t nb = right_entries.size();
-
-        // Parallelize the Cartesian product via the shared thread pool
-        // when the product is large enough to amortise overhead.
-        if (na * nb >= 256) {
-            // Each entry_a gets its own thread-local Frontier slot —
-            // parallel_for guarantees every index is processed by
-            // exactly one task, so no slot is shared.
-            std::vector<Frontier> local_results(na);
-
-            auto& shared_pool = besq::ThreadPool::shared();
-            parallel_for(shared_pool, size_t{0}, na,
-                [&](size_t a_idx) {
-                    const auto& entry_a = left_entries[a_idx];
-                    Frontier& local = local_results[a_idx];
-                    for (const auto& entry_b : right_entries)
+                // Cartesian product (sequential — frontiers are small)
+                Frontier local;
+                for (const auto& entry_a : left_f.entries)
+                    for (const auto& entry_b : right_f.entries)
                         forge_pair(local, entry_a, entry_b);
-                });
 
-            // Merge thread-local frontiers into the global result
-            for (auto& lr : local_results)
-                for (auto& e : lr.entries)
-                    result.insert(std::move(e));
-        } else {
-            for (const auto& entry_a : left_entries)
-                for (const auto& entry_b : right_entries)
+                // Merge into global result (mutex-protected)
+                if (!local.empty()) {
+                    std::lock_guard<std::mutex> lk(result_mutex);
+                    for (auto& e : local.entries)
+                        result.insert(std::move(e));
+                }
+            });
+    } else {
+        // ─── Sequential mask loop (original path for N < 12) ────────
+        std::vector<Item> left_buf, right_buf;
+        left_buf.reserve(n);
+        right_buf.reserve(n);
+
+        for (uint64_t mask = 1; mask + 1 < limit; ++mask) {
+            size_t k = __builtin_popcountll(mask);
+
+            if (k * 2 > n) continue;
+            if ((n & 1) == 0 && k * 2 == n && !(mask & 1)) continue;
+
+            left_buf.clear();
+            right_buf.clear();
+
+            for (size_t i = 0; i < n; ++i) {
+                if (mask & (1ULL << i))
+                    left_buf.push_back(items[i]);
+                else
+                    right_buf.push_back(items[i]);
+            }
+
+            canonicalize(left_buf);
+            canonicalize(right_buf);
+
+            Frontier left_f  = solve(std::move(left_buf));
+            Frontier right_f = solve(std::move(right_buf));
+
+            if (left_f.empty() || right_f.empty())
+                continue;
+
+            for (const auto& entry_a : left_f.entries)
+                for (const auto& entry_b : right_f.entries)
                     forge_pair(result, entry_a, entry_b);
         }
     }
 
-    // ── Store in cache (limit size to prevent heap exhaustion) ─────
-    if (_cache.size() < MAX_CACHE_ENTRIES)
-        _cache[std::move(items)] = result;
+    // ── Store in cache (thread-safe) ───────────────────────────────
+    {
+        std::unique_lock lock(_cache_mutex);
+        if (_cache.find(items) == _cache.end() && _cache.size() < MAX_CACHE_ENTRIES)
+            _cache[std::move(items)] = result;
+    }
     return result;
 }
 
@@ -274,7 +297,7 @@ void DPMergeAlgorithm::execute(AlgorithmInput input,
     std::vector<Item> mutable_items = items;
     canonicalize(mutable_items);
 
-    Frontier frontier = solve(std::move(mutable_items));
+    Frontier frontier = solve(std::move(mutable_items), true);
 
     const ParetoEntry* best = nullptr;
     for (const auto& entry : frontier.entries) {
