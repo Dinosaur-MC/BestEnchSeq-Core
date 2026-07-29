@@ -80,6 +80,11 @@ public:
     // Shared pool
     // -------------------------------------------------------------------
 
+    /// Override the thread count for the shared pool.
+    /// Must be called before the first access to shared() — subsequent
+    /// calls have no effect.
+    static void set_concurrency(std::size_t n) noexcept;
+
     static ThreadPool& shared();
 
 private:

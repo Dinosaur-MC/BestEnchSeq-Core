@@ -184,8 +184,18 @@ void ThreadPool::_worker_main(std::size_t /*id*/, std::stop_token st) {
 // Shared pool singleton
 // =======================================================================
 
+namespace {
+    std::atomic<std::size_t> s_requested_threads{0};
+}
+
+void ThreadPool::set_concurrency(std::size_t n) noexcept {
+    s_requested_threads.store(n, std::memory_order_relaxed);
+}
+
 ThreadPool& ThreadPool::shared() {
-    static ThreadPool pool(std::thread::hardware_concurrency());
+    auto n = s_requested_threads.load(std::memory_order_relaxed);
+    if (n == 0) n = std::thread::hardware_concurrency();
+    static ThreadPool pool(n);
     return pool;
 }
 
