@@ -4,74 +4,15 @@
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/serialization/IAlgorithmSerializer.h"
+#include "domain/algorithm/components/StepTree.h"
 #include <cstdint>
 #include <memory>
 #include <shared_mutex>
 #include <unordered_map>
 #include <vector>
 
-// ─── StepTree — immutable DAG of forge steps ──────────────────────────
-//
-// Instead of copying the full steps vector on every forge_pair, each
-// ParetoEntry stores a StepTree that shares its prefix nodes with other
-// entries via shared_ptr.  The tree is only materialised into a flat
-// vector when the final solution is extracted (execute()) or when
-// serialising a checkpoint.
-
 namespace algorithm {
 class DPMergeStateSerializer;
-
-class StepTree {
-public:
-    struct Node final {
-        EnchStep              step;
-        std::shared_ptr<Node> left;   // steps that produced the base item
-        std::shared_ptr<Node> right;  // steps that produced the sacrifice
-        size_t                depth;
-
-        Node(EnchStep s, std::shared_ptr<Node> l,
-             std::shared_ptr<Node> r, size_t d) noexcept
-            : step(std::move(s)), left(std::move(l)),
-              right(std::move(r)), depth(d) {}
-    };
-
-    StepTree() = default;
-    explicit StepTree(std::shared_ptr<Node> root) noexcept : _root(std::move(root)) {}
-
-    size_t size() const noexcept { return _root ? _root->depth : 0; }
-    bool   empty() const noexcept { return !_root; }
-
-    /// Materialise the tree into a flat vector (in forge order).
-    std::vector<EnchStep> materialize() const {
-        std::vector<EnchStep> out;
-        if (!_root) return out;
-        out.reserve(_root->depth);
-        _materialize(out, _root.get());
-        return out;
-    }
-
-    std::shared_ptr<Node> root_ptr() const noexcept { return _root; }
-
-    /// Build a linear chain from a flat step vector (for deserialisation).
-    static StepTree from_flat(const std::vector<EnchStep>& flat) {
-        std::shared_ptr<Node> cur;
-        for (auto it = flat.rbegin(); it != flat.rend(); ++it) {
-            cur = std::make_shared<Node>(
-                *it, std::move(cur), nullptr, flat.size());
-        }
-        return StepTree{std::move(cur)};
-    }
-
-private:
-    std::shared_ptr<Node> _root;
-
-    static void _materialize(std::vector<EnchStep>& out, const Node* n) {
-        if (!n) return;
-        _materialize(out, n->left.get());
-        _materialize(out, n->right.get());
-        out.push_back(n->step);
-    }
-};
 
 /// Divide-and-conquer DP merge-order optimizer (port of https://github.com/iamcal/enchant-order).
 ///
