@@ -142,8 +142,10 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
         }
     };
 
-    // ─── Parallel mask loop (top-level only, avoids nested parallel_for) ─
-    if (parallelize && n >= 12) {
+    // ─── Parallel mask loop (top-level only, via parallel_for) ─────────
+    // For N < 14 the parallel overhead can exceed the benefit on 32-way
+    // systems, so we keep those sequential.
+    if (parallelize && n >= 14) {
         auto& pool = besq::ThreadPool::shared();
         std::mutex result_mutex;
 
