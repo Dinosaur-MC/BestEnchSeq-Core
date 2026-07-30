@@ -1,6 +1,7 @@
 #include "EnchSet.h"
 #include "common/utils/HashUtils.hpp"
 #include <bit>
+#include <cstring>
 #include <stdexcept>
 
 namespace algorithm {
@@ -118,12 +119,12 @@ void EnchSet::clear() noexcept {
 // ── Hash (lazily cached) ──
 size_t EnchSet::hash() const noexcept {
     if (_hash_cache == 0 && _mask != 0) {
-        const size_t *p       = reinterpret_cast<const size_t *>(_lvls);
-        constexpr size_t size = sizeof(_lvls) / sizeof(size_t);
-
         size_t h = _mask;
-        for (size_t i = 0; i < size; ++i)
-            hash_combine(h, *p++);
+        for (size_t off = 0; off < sizeof(_lvls); off += sizeof(size_t)) {
+            size_t word = 0;
+            memcpy(&word, _lvls + off, sizeof(word));
+            hash_combine(h, word);
+        }
         _hash_cache = h ? h : _mask;
     }
     return _hash_cache;

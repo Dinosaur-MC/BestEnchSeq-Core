@@ -10,10 +10,10 @@ enum class ItemType : uint8_t {
 };
 
 struct Item {
-    ItemType type; // 物品类型
-    int16_t dur;   // 耐久度
-    uint8_t ppn;   // 前次惩罚次数
-    EnchSet enchs; // 附魔列表（按 id 排序）
+    ItemType type = ItemType::Book; // 物品类型
+    int16_t dur   = 0;              // 耐久度
+    uint8_t ppn   = 0;              // 前次惩罚次数
+    EnchSet enchs;                  // 附魔列表（按 id 排序）
 
     Item() = default;
     Item(ItemType type_, int16_t dur_, uint8_t ppn_, EnchSet enchs_) noexcept

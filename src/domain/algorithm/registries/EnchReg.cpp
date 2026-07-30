@@ -21,8 +21,19 @@ void EnchReg::_build_conflict_matrix() {
 void EnchReg::_build_mask_cache() {
     _mask_cache.fill(0);
     const size_t N = _ench_infos.size();
+    constexpr size_t Stride = EnchSet::MAX_SIZE;
+    // exc_mask only stores one direction of exclusive_set (the current ench's
+    // exclusive_set against already-added enchantments). The conflict matrix
+    // is symmetric after _build_conflict_matrix() computes both directions.
+    // We reconstruct the full mask from the matrix so that get_conflict_mask()
+    // returns ALL conflicts, not just the one-direction bit.
     for (size_t i = 0; i < N; ++i) {
-        _mask_cache[i] = _ench_infos[i].exc_mask;
+        mask_type mask = 0;
+        for (size_t j = 0; j < N; ++j) {
+            if (_conflict_matrix[i * Stride + j])
+                mask |= (mask_type{1} << j);
+        }
+        _mask_cache[i] = mask;
     }
 }
 

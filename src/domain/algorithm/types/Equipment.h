@@ -10,7 +10,7 @@ namespace algorithm {
 
 struct Equipment : IBinarySerializable {
     NSID id;
-    int32_t max_durability;
+    int32_t max_durability = 0;
     std::unordered_set<uint8_t> applicable_enchs;
 
     bool operator==(const Equipment &other) const {

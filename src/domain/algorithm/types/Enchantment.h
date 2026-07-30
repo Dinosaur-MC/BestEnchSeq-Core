@@ -10,12 +10,12 @@ namespace algorithm {
 using mask_type = uint64_t;
 
 struct EnchInfo : IBinarySerializable {
-    uint8_t id;         // 附魔ID
-    uint8_t mul;        // 经验乘数
-    uint8_t mul_b;      // 书本经验乘数
-    uint8_t max_lvl;    // 最大等级
-    mask_type exc_mask; // 互斥附魔位掩码
-    bool applicable;    // 是否适用目标装备类别
+    uint8_t id         = 0;
+    uint8_t mul        = 0;
+    uint8_t mul_b      = 0;
+    uint8_t max_lvl    = 0;
+    mask_type exc_mask = 0;
+    bool applicable    = false;
 
     [[nodiscard]] bool is_conflict(const EnchInfo &other) const noexcept;
 

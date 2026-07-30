@@ -4,9 +4,9 @@
 
 namespace algorithm {
 struct EnchStep : IBinarySerializable {
-    Item base;      // 锻造前的目标物品
-    Item sacrifice; // 锻造前的祭品
-    int32_t cost;   // 经验等级消耗
+    Item base;          // 锻造前的目标物品
+    Item sacrifice;     // 锻造前的祭品
+    int32_t cost = 0;   // 经验等级消耗
 
     EnchStep() = default;
     EnchStep(Item base_, Item sacrifice_, int32_t cost_) noexcept
