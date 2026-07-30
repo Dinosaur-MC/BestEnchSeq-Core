@@ -23,11 +23,8 @@ class EnchReg : public IBinarySerializable {
     Equipment _target_equip;
 
     std::array<mask_type, EnchSet::MAX_SIZE> _mask_cache; // precomputed conflict masks
-    void _build_mask_cache();
+    constexpr void _build_mask_cache();
     
-    std::array<char, EnchSet::MAX_SIZE * EnchSet::MAX_SIZE> _conflict_matrix; // flat N×N, row-major
-    void _build_conflict_matrix();
-
   public:
     EnchReg() = default;
 
@@ -36,23 +33,23 @@ class EnchReg : public IBinarySerializable {
     /// enabling the reverse mapping in AlgorithmOutput → domain conversion.
     void init(std::vector<EnchInfo> ench_infos, std::vector<NSID> global_ids, const Equipment &target_equip);
 
-    [[nodiscard]] size_t size() const noexcept { return _ench_infos.size(); }
-    [[nodiscard]] bool empty() const noexcept { return _ench_infos.empty(); }
-    [[nodiscard]] const std::vector<EnchInfo> &get_ench_infos() const noexcept { return _ench_infos; }
-    [[nodiscard]] const std::vector<NSID> &get_global_ids() const noexcept { return _global_ids; }
+    [[nodiscard]] constexpr size_t size() const noexcept { return _ench_infos.size(); }
+    [[nodiscard]] constexpr bool empty() const noexcept { return _ench_infos.empty(); }
+    [[nodiscard]] constexpr const std::vector<EnchInfo> &get_ench_infos() const noexcept { return _ench_infos; }
+    [[nodiscard]] constexpr const std::vector<NSID> &get_global_ids() const noexcept { return _global_ids; }
 
-    [[nodiscard]] const EnchInfo &get(id_type id) const { return _ench_infos.at(id); }
+    [[nodiscard]] constexpr const EnchInfo &get(id_type id) const { return _ench_infos.at(id); }
     /// Bounds-unchecked access — hot-path design.
-    [[nodiscard]] const EnchInfo &operator[](id_type id) const noexcept { return _ench_infos[id]; }
+    [[nodiscard]] constexpr const EnchInfo &operator[](id_type id) const noexcept { return _ench_infos[id]; }
 
-    [[nodiscard]] bool is_applicable(id_type id) const noexcept {
+    [[nodiscard]] constexpr bool is_applicable(id_type id) const noexcept {
         return _target_equip.applicable_enchs.contains(id);
     }
-    [[nodiscard]] bool is_conflict(id_type id1, id_type id2) const noexcept {
-        return _conflict_matrix[static_cast<size_t>(id1) * EnchSet::MAX_SIZE + id2];
+    [[nodiscard]] constexpr bool is_conflict(id_type id1, id_type id2) const noexcept {
+        return get_conflict_mask(id1) & (mask_type{1} << id2);
     }
-    [[nodiscard]] mask_type get_conflict_mask(id_type id) const noexcept { return _mask_cache[id]; }
-    [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }
+    [[nodiscard]] constexpr mask_type get_conflict_mask(id_type id) const noexcept { return _mask_cache[id]; }
+    [[nodiscard]] constexpr const Equipment &get_target_equip() const noexcept { return _target_equip; }
 
     /// Convert between local (compact) and global (business) enchantment IDs.
     [[nodiscard]] NSID to_global_id(id_type local_id) const { return _global_ids.at(local_id); }

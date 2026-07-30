@@ -4,24 +4,9 @@
 
 namespace algorithm {
 
-void EnchReg::_build_conflict_matrix() {
-    _conflict_matrix.fill(0);
-    const size_t N = _ench_infos.size();
-    constexpr size_t Stride = EnchSet::MAX_SIZE;
-    for (size_t i = 0; i < N; ++i) {
-        for (size_t j = i + 1; j < N; ++j) {
-            bool conflict =
-                _ench_infos[i].is_conflict(_ench_infos[j]) || _ench_infos[j].is_conflict(_ench_infos[i]);
-            _conflict_matrix[i * Stride + j] = conflict ? 1 : 0;
-            _conflict_matrix[j * Stride + i] = conflict ? 1 : 0;
-        }
-    }
-}
-
-void EnchReg::_build_mask_cache() {
+constexpr void EnchReg::_build_mask_cache() {
     _mask_cache.fill(0);
     const size_t N = _ench_infos.size();
-    constexpr size_t Stride = EnchSet::MAX_SIZE;
     // exc_mask only stores one direction of exclusive_set (the current ench's
     // exclusive_set against already-added enchantments). The conflict matrix
     // is symmetric after _build_conflict_matrix() computes both directions.
@@ -30,7 +15,7 @@ void EnchReg::_build_mask_cache() {
     for (size_t i = 0; i < N; ++i) {
         mask_type mask = 0;
         for (size_t j = 0; j < N; ++j) {
-            if (_conflict_matrix[i * Stride + j])
+            if (_ench_infos[i].is_conflict(_ench_infos[j]) || _ench_infos[j].is_conflict(_ench_infos[i]))
                 mask |= (mask_type{1} << j);
         }
         _mask_cache[i] = mask;
@@ -45,7 +30,6 @@ void EnchReg::init(
     _ench_infos   = std::move(ench_infos);
     _global_ids   = std::move(global_ids);
     _target_equip = target_equip;
-    _build_conflict_matrix();
     _build_mask_cache();
 }
 
@@ -88,7 +72,6 @@ void EnchReg::deserialize(ByteStreamReader &r) noexcept {
         r >> s;
         _global_ids[i] = s.empty() ? NSID() : NSID(s);
     }
-    _build_conflict_matrix();
     _build_mask_cache();
 }
 
