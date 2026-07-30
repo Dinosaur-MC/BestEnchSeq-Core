@@ -58,7 +58,7 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
     auto diff        = sacrifice.enchs - target.enchs;
     bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
     for (auto i = it.next(); i != it.npos; i = it.next()) {
-        if (reg.is_applicable(i)) {
+        if (target.type == ItemType::Book || reg.is_applicable(i)) {
             auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
             if (conflict_mask) {
                 if (plat == MCE::Java)
@@ -103,7 +103,7 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice, const Enc
     auto diff = sacrifice.enchs - target.enchs;
     bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
     for (auto i = it.next(); i < it.npos; i = it.next()) {
-        if (reg.is_applicable(i)) {
+        if (target.type == ItemType::Book || reg.is_applicable(i)) {
             auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
             if (conflict_mask)
                 continue;
