@@ -120,3 +120,41 @@ BESQ_PLUGIN_ENTRY(NameAlgorithm)
 - 插件中不能使用主程序的编译定义（如 `BESQ_DISABLE_DIAGNOSTICS`），只能依赖 `besq-core` 导出的 API
 - 插件的 `name()` 返回值不能与已有策略（内置或其他插件）重复，否则后加载的会覆盖先加载的
 - 如需新增插件测试，在插件目录内创建独立的测试文件，通过 `add_test()` 集成到插件项目的 CMakeLists 中
+
+## 算法开发规范
+
+### EnchSet 访问
+
+**优先使用非迭代器 API**。详见 `src/domain/algorithm/README.md` → "EnchSet 访问规范"。
+
+```cpp
+// ✅ 推荐
+ench_set.contains(id);              // 存在性检查
+ench_set[id];                       // 取等级
+ench_set.first() / .next(id);       // 顺序遍历
+
+// ✅ 位运算
+auto same = target.enchs & sacrifice.enchs;         // 交集
+auto diff = sacrifice.enchs - target.enchs;         // 差集
+
+// ✅ bit_iterator 遍历
+bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
+for (auto i = it.next(); i != it.npos; i = it.next()) {
+    auto level = sacrifice.enchs[i];
+    // ...
+}
+```
+
+### ForgeEngine
+
+`IForgeEngine` 是虚拟接口。`forge_into()` 已内部使用 bitmask + bit_iterator，确保 ABI 稳定：
+
+```cpp
+// forge_into 原型（修改 target，返回 cost）
+int32_t forge_into(Item &target, const Item &sacrifice, const EnchReg &reg) const;
+
+// 注册访问
+reg.is_applicable(id);              // id 是 EnchReg::id_type (= uint8_t)
+reg.get_conflict_mask(id);           // 返回 mask_type 冲突掩码
+reg[id];                            // 返回 EnchInfo&
+```

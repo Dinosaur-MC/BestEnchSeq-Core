@@ -57,6 +57,60 @@ dp_merge 是最快的确定性算法，对于 N ≤ 10 可在毫秒级达到最�
 | `SearchDiagnostics` | 搜索但无 ItemPool（DFS）|
 | `PoolSearchDiagnostics` + 具体类型 | 有 ItemPool 的搜索（A* → `AStarDiagnostics`）|
 
+## EnchSet 访问规范
+
+所有算法（内置 + 插件）**优先使用非迭代器 API**。
+
+### 查询
+
+```cpp
+// ✅ 推荐
+if (equip.enchs.contains(t.id))                                // 存在性检查
+int have = equip.enchs[t.id];                                  // 取等级
+for (auto i = equip.enchs.first(); i < EnchSet::npos;          // 顺序遍历
+     i = equip.enchs.next(i)) { ... }
+
+// ❌ 避免
+auto it = equip.enchs.find(Ench{id, 0});                       // 构造临时 Ench
+if (it != equip.enchs.end()) { auto lvl = it->level(); ... }
+```
+
+### 位运算 + 位遍历
+
+```cpp
+// 集合运算（返回 uint64_t 掩码）
+auto same = target.enchs & sacrifice.enchs;
+auto diff = sacrifice.enchs - target.enchs;
+
+// 用 bit_iterator 遍历差集
+bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
+for (auto i = it.next(); i != it.npos; i = it.next()) {
+    if (reg.is_applicable(i)) {
+        auto conflict = target.enchs & reg.get_conflict_mask(i);
+        if (conflict) { /* 冲突处理 */ continue; }
+        target.enchs.insert(i, sacrifice.enchs[i]);
+    }
+}
+// 或用 sbit_iterator 遍历交集
+for (sbit_iterator<EnchSet::mask_type, uint8_t> it(same); it; ++it) {
+    auto lvl1 = target.enchs[*it];
+    auto lvl2 = sacrifice.enchs[*it];
+    // ... 等级组合 ...
+}
+```
+
+### EnchReg 类型
+
+所有附魔 ID 参数使用 `EnchReg::id_type`（= `Ench::value_type` = `uint8_t`，范围 0-63）：
+
+```cpp
+reg.is_applicable(id);              // bool
+reg.is_conflict(id1, id2);          // bool
+reg.get_conflict_mask(id);           // mask_type
+reg.to_global_id(id);               // NSID（全局 ID 查找）
+reg.to_local_id(nsid);              // id_type（抛 out_of_range）
+```
+
 ## 算法 API 使用规范
 
 ### 执行控制

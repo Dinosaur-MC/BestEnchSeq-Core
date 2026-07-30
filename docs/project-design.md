@@ -25,11 +25,11 @@
 | 层面 | 命名空间 | 用途 | 特点 |
 |------|---------|------|------|
 | **Domain 类型** | 全局（`::`） | 输入解析、输出格式化、边界 I/O | 字符串 ID（NSID）、完整元数据、可抛异常 |
-| **Compact 类型** | `algorithm::` | 算法热路径、forge 引擎 | `int16_t` 稠密 ID、连续内存、零异常路径 |
+| **Compact 类型** | `algorithm::` | 算法热路径、forge 引擎 | `uint8_t` 稠密 ID、固定 size 数组（64×64 冲突矩阵）、零异常路径 |
 
 Domain 类型（`Item`、`EnchSet`、`EnchInfo` 等）是"胖对象"，包含字符串字段、校验逻辑。它们适合在 CLI/JSON 边界处使用，但效率不足以支撑算法对数百万状态的搜索。
 
-Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Enchantment`）是"瘦值"，每个字段经过位宽裁剪，容器使用 `vector<Enchantment>` 而非 `unordered_set`。它们是为 L1 缓存行优化的算法内部表示。
+Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Enchantment`）是"瘦值"，每个字段经过位宽裁剪：附魔 ID 和等级均为 `uint8_t`，`EnchSet` 使用 `uint64_t` 位掩码 + `uint8_t[64]` 等级数组（`O(1)` 查找），`EnchReg` 冲突矩阵为固定 `std::array<char, 64×64>`。它们是为 L1 缓存行优化的算法内部表示。
 
 **转换边界**：两种模型在 `CompactAdapter` 中互转，`main.cpp` 的管线中转换各发生一次。
 
@@ -187,7 +187,7 @@ Business domain (src/domain/business/registries/):
        │ CompactAdapter::apply()
        ▼
 Algorithm domain (src/domain/algorithm/registries/):
-  EnchReg (flat conflict matrix, int16_t dense IDs, pruned per target)
+  EnchReg (fixed 64×64 conflict matrix, uint8_t dense IDs, pruned per target)
        │
        │ owned by AlgorithmInput → executor → worker thread
        ▼
@@ -283,14 +283,14 @@ Algorithm domain (src/domain/algorithm/registries/):
 - `ExecutionContext` — 一站式算法交互接口（控制 + 计数器 + 进度 + 方案累积）
 
 **types/**：紧凑类型系统
-- `algorithm::Enchantment` (int16_t id + level, 4 bytes)
-- `algorithm::EnchSet` (sorted vector, O(log N))
+- `algorithm::Enchantment` (uint8_t id + level, 2 bytes)
+- `algorithm::EnchSet` (uint64_t bitmask + uint8_t[64] level array, O(1) lookup)
 - `algorithm::Item` (type + dur + ppn + enchs)
 - `algorithm::Equipment` (id + max_durability + applicable_tags)
 - `AlgorithmInput` / `AlgorithmOutput` / 配置类型
 
 **forge_engine/**：`IForgeEngine`（虚接口）+ `ForgeEngine`（原版实现）
-**registries/**：`EnchReg`（N×N 扁平冲突矩阵 + 紧凑注册表）、`AlgorithmRegistry`（工厂）
+**registries/**：`EnchReg`（固定 64×64 冲突矩阵 + 掩码缓存 + 紧凑注册表）、`AlgorithmRegistry`（工厂）
 **_strategies/**：内置策略（A*、DFS、Hamming），通过 `Registration.h` 自动注册
 **components/**：Heuristic、ItemPool、StateHash、SearchUtils 等共享搜索基础设施
 **diagnostics/**：事件驱动诊断管道（`DiagnosticsService` + `IAlgorithmObserver` + `DiagnosticsWriter`）

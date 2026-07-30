@@ -68,11 +68,49 @@ CLI → EnchParser/ItemParser (registry-aware)
 
 | 类型 | 内存 | 说明 |
 |---|---|---|
-| `Enchantment` (Ench) | 4 B | int16_t id + level |
-| `EnchSet` | ≤ 64 B inline | 最多 16 附魔，零堆分配 |
-| `Item` | ~72 B | type + dur + ppn + EnchSet |
-| `Equipment` | 8 B | type + max_durability + applicable_tag_mask |
+| `Ench` (`Enchantment`) | 2 B | `uint8_t id` + `uint8_t level` |
+| `EnchSet` | 72 B inline | `uint64_t` 位掩码 + `uint8_t[64]` 等级数组，最多 64 附魔 |
+| `EnchInfo` | 12 B | `uint8_t id/mul/mul_b/max_lvl + mask_type exc_mask + bool` |
+| `EnchReg` | ~4.5 KB | 固定 `array[64][64]` 冲突矩阵 + `array[64]` 掩码缓存 |
+| `Item` | ~80 B | type + dur + ppn + EnchSet |
+| `Equipment` | — | id + max_durability + `unordered_set<uint8_t>` 适用附魔 |
 | `EnchSolution` | — | 步骤序列 + 总消耗 |
+
+### EnchSet 访问规范
+
+**优先使用非迭代器 API**（更快、更简洁）：
+
+```cpp
+// ✅ 推荐：非迭代器访问
+ench_set.contains(id);          // O(1) 判断是否存在
+ench_set[id];                   // O(1) 获取等级
+ench_set.first();               // 第一个附魔 ID，无则 EnchSet::npos
+ench_set.next(id);              // 下一个附魔 ID，无则 npos
+ench_set.next_level(id);        // 下一个附魔的等级
+
+// ✅ 位运算（EnchSet::mask_type = uint64_t）
+auto same = target & sacrifice;  // 交集掩码
+auto diff = sacrifice - target;  // 差集掩码（sacrifice 独有）
+
+// ✅ 位遍历（sbit_iterator / bit_iterator）
+sbit_iterator<mask_type, uint8_t> it(mask);
+for (; it; ++it) {               // 满足 bool 检查
+    ench_set[*it];               // *it 是附魔 ID
+}
+// 或 next() 风格：
+bit_iterator<mask_type, uint8_t> it(mask);
+for (auto i = it.next(); i != it.npos; i = it.next()) {
+    ench_set[i];                 // i 是附魔 ID
+}
+
+// ❌ 避免：迭代器风格（除非需要同时访问 id 和 level）
+for (const auto &e : ench_set) {
+    e.id();        // 方法调用（代理迭代器）
+    e.level();
+}
+```
+
+参见 `src/common/utils/bit_iterator.hpp` 获取 `bit_iterator` / `sbit_iterator` 的完整文档。
 
 ## 开发规范
 

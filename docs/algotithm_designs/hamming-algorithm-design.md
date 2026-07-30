@@ -297,7 +297,7 @@ as A* on 11/14 cases, while being **3–4 orders of magnitude faster**.
 | Aspect | Old Qt code (v2.x) | Current implementation |
 |:-------|:------------------:|:----------------------:|
 | Language | C++14 + Qt (QVector, QObject) | C++20, pure STL |
-| Types | `Item{name, ench[64]}` fixed array | `compact::Item` with `EnchSet` (SBO, sorted) |
+| Types | `Item{name, ench[64]}` fixed array | `compact::Item` with `EnchSet` (uint64_t bitmask + uint8_t[64] levels) |
 | Cost model | Hard-coded edition 0/1 | `IForgeEngine` virtual dispatch (JE/BE) |
 | Forge mode | 4x `ForgeMode` enum | `ForgeConfig` (ignore_penalty, etc.) |
 | Tier routing | PPN-based (`tm_item_triangle[tm.penalty]`) | Sequential tier+1 (proven correct by debugging) |

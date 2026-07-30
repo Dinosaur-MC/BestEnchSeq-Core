@@ -437,7 +437,7 @@ struct CompactAdapter {
 
 2. Build compact registry from Profile.ench()
      → Sort by NSID for deterministic ordering
-     → Assign local_id (int16_t) per applicable enchantment
+     → Assign local_id (uint8_t, 0..63) per applicable enchantment
      → Build conflict matrix (EnchReg)
      → Build global_to_local NSID→local_id map   ← fixes the TEMP hack
 

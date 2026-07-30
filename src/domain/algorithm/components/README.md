@@ -57,6 +57,16 @@ compute(ids, pool, reg, target, buf, dirty) → h
 - **Heuristic** buffer 应复用搜索实例级别的 `_h_buf` / `_h_dirty`，不要每次都重新申请
 - `fill_max_levels` 的 yield lambda 在每个物品的每个附魔上调用，保持轻量
 
+### EnchSet / bit_iterator
+
+算法开发中：
+
+- **优先使用非迭代器 API**：`contains(id)`、`operator[](id)`、`first()`、`next()`
+- **集合运算**：`operator&` / `operator-` 返回 `uint64_t` 掩码，配合 `bit_iterator` 或 `sbit_iterator` 遍历
+- **bit_iterator**（`src/common/utils/bit_iterator.hpp`）：低开销位扫描，适用于遍历 EnchSet 差集/交集
+- **sbit_iterator**：迭代器风格的 `operator*` / `operator++` / `operator bool`，适合 `for (it; it; ++it)` 模式
+- **哨兵值**：`bit_iterator::npos` 和 `sbit_iterator::npos` 表示遍历结束
+
 ## 后续规划
 
 - 通用 `TTTable`（当前 IDAStar 专用版在 `plugins/idastar/`，计划抽离为公共组件）
