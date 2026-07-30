@@ -22,6 +22,9 @@ class EnchReg : public IBinarySerializable {
     std::vector<char> _conflict_matrix; // flat N×N, row-major
     void _build_conflict_matrix();
 
+    std::vector<MaskType> _mask_cache;
+    void _build_mask_cache();
+
   public:
     EnchReg() = default;
 
@@ -45,6 +48,7 @@ class EnchReg : public IBinarySerializable {
     [[nodiscard]] bool is_conflict(int16_t id1, int16_t id2) const noexcept {
         return _conflict_matrix[id1 * _ench_infos.size() + id2];
     }
+    [[nodiscard]] MaskType get_conflict_mask(int16_t id) const noexcept { return _mask_cache[id]; }
     [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }
 
     /// Convert between local (compact) and global (business) enchantment IDs.

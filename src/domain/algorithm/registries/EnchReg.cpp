@@ -8,10 +8,19 @@ void EnchReg::_build_conflict_matrix() {
     _conflict_matrix.assign(N * N, 0);
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = i + 1; j < N; ++j) {
-            char is_conflict            = _ench_infos[i].is_conflict(_ench_infos[j]) ? 1 : 0;
-            _conflict_matrix[i * N + j] = is_conflict;
-            _conflict_matrix[j * N + i] = is_conflict;
+            bool conflict = _ench_infos[i].is_conflict(_ench_infos[j]) ||
+                            _ench_infos[j].is_conflict(_ench_infos[i]);
+            _conflict_matrix[i * N + j] = conflict ? 1 : 0;
+            _conflict_matrix[j * N + i] = conflict ? 1 : 0;
         }
+    }
+}
+
+void EnchReg::_build_mask_cache() {
+    const size_t N = _ench_infos.size();
+    _mask_cache.assign(N, 0);
+    for (size_t i = 0; i < N; ++i) {
+        _mask_cache[i] = _ench_infos[i].exc_mask;
     }
 }
 
@@ -23,6 +32,7 @@ void EnchReg::init(
     _global_ids   = std::move(global_ids);
     _target_equip = target_equip;
     _build_conflict_matrix();
+    _build_mask_cache();
 }
 
 int16_t EnchReg::to_local_id(NSID global_id) const {

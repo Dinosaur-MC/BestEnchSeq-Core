@@ -1,4 +1,5 @@
 #pragma once
+#include "common/utils/bit_iterator.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
@@ -48,9 +49,9 @@ class IForgeEngine {
     estimate_forge_cost(const Item &target, const Item &sacrifice, const EnchReg &reg) const noexcept {
         int32_t cost     = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
         bool sac_is_book = (sacrifice.type == ItemType::Book);
-        for (const auto &e : sacrifice.enchs) {
-            int32_t mult = sac_is_book ? reg[e.id].mul_b : reg[e.id].mul;
-            cost += e.level * mult;
+        for (sbit_iterator<EnchSet::mask_type, uint8_t> it(sacrifice.enchs.get_mask()); it; ++it) {
+            int32_t mult = sac_is_book ? reg[*it].mul_b : reg[*it].mul;
+            cost += sacrifice.enchs[*it] * mult;
         }
         return cost;
     }

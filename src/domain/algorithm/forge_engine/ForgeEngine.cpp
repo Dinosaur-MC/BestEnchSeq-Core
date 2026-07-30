@@ -1,5 +1,6 @@
 #include "ForgeEngine.h"
 #include <algorithm>
+
 namespace algorithm {
 
 // ─── IForgeEngine sub-operations ──────────────────────────────────────────────
@@ -17,9 +18,9 @@ int32_t ForgeEngine::estimate_forge_cost(
 ) const noexcept {
     int32_t cost     = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
     bool sac_is_book = (sacrifice.type == ItemType::Book);
-    for (const auto &e : sacrifice.enchs) {
-        int32_t mult = sac_is_book ? reg[e.id].mul_b : reg[e.id].mul;
-        cost += e.level * mult;
+    for (sbit_iterator<EnchSet::mask_type, uint8_t> it(sacrifice.enchs.get_mask()); it; ++it) {
+        int32_t mult = sac_is_book ? reg[*it].mul_b : reg[*it].mul;
+        cost += sacrifice.enchs[*it] * mult;
     }
     return cost;
 }
@@ -53,49 +54,32 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
 
     auto plat        = _config.platform;
     bool sac_is_book = (sacrifice.type == ItemType::Book);
-
-    for (const auto &se : sacrifice.enchs) {
-        if (target.type == ItemType::Equip && !reg.is_applicable(se.id))
-            continue;
-
-        bool conflict = false;
-        for (const auto &te : target.enchs) {
-            if (reg.is_conflict(te.id, se.id)) {
-                conflict = true;
-                break;
-            }
-        }
-
-        if (conflict) {
-            if (plat == MCE::Java)
-                cost += 1;
-            continue;
-        }
-
-        int32_t mult = sac_is_book ? reg[se.id].mul_b : reg[se.id].mul;
-
-        auto it = target.enchs.find(se.id);
-        if (it != target.enchs.end()) {
-            int16_t old_level = it->level;
-            int16_t new_level;
-            if (old_level == se.level)
-                new_level = std::min<int16_t>(old_level + 1, reg[se.id].max_lvl);
-            else
-                new_level = std::max<int16_t>(old_level, se.level);
-
-            it->level = new_level;
-
-            if (mult > 0) {
+    auto same        = target.enchs & sacrifice.enchs;
+    auto diff        = sacrifice.enchs - target.enchs;
+    bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
+    for (auto i = it.next(); i != it.npos; i = it.next()) {
+        if (reg.is_applicable(i)) {
+            auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
+            if (conflict_mask) {
                 if (plat == MCE::Java)
-                    cost += mult * new_level;
-                else
-                    cost += mult * (new_level - old_level);
+                    cost += std::popcount(conflict_mask);
+                continue;
             }
-        } else {
-            target.enchs.insert(se);
-            if (mult > 0)
-                cost += mult * se.level;
+            auto lvl = sacrifice.enchs[i];
+            target.enchs.insert(i, lvl);
+            cost += lvl * (sac_is_book ? reg[i].mul_b : reg[i].mul);
         }
+    }
+    it.reset(same);
+    for (auto i = it.next(); i != it.npos; i = it.next()) {
+        auto lvl1 = target.enchs[i];
+        auto lvl2 = sacrifice.enchs[i];
+        if (lvl1 == lvl2)
+            lvl2 = std::min<uint8_t>(lvl2 + 1, reg[i].max_lvl);
+        else
+            lvl2 = std::max<uint8_t>(lvl1, lvl2);
+        target.enchs.insert(i, lvl2);
+        cost += (plat == MCE::Java ? lvl2 : lvl2 - lvl1) * (sac_is_book ? reg[i].mul_b : reg[i].mul);
     }
 
     target.ppn = static_cast<uint8_t>(1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
@@ -115,29 +99,27 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice, const Enc
     }
 
     // Enchantment merging (no cost arithmetic)
-    for (const auto &se : sacrifice.enchs) {
-        if (target.type == ItemType::Equip && !reg.is_applicable(se.id))
-            continue;
-
-        bool conflict = false;
-        for (const auto &te : target.enchs) {
-            if (reg.is_conflict(te.id, se.id)) {
-                conflict = true;
-                break;
-            }
+    auto same = target.enchs & sacrifice.enchs;
+    auto diff = sacrifice.enchs - target.enchs;
+    bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
+    for (auto i = it.next(); i < it.npos; i = it.next()) {
+        if (reg.is_applicable(i)) {
+            auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
+            if (conflict_mask)
+                continue;
+            auto lvl = sacrifice.enchs[i];
+            target.enchs.insert(i, lvl);
         }
-        if (conflict)
-            continue;
-
-        auto it = target.enchs.find(se.id);
-        if (it != target.enchs.end()) {
-            if (it->level == se.level)
-                it->level = std::min<int16_t>(it->level + 1, reg[se.id].max_lvl);
-            else
-                it->level = std::max<int16_t>(it->level, se.level);
-        } else {
-            target.enchs.insert(se);
-        }
+    }
+    it.reset(same);
+    for (auto i = it.next(); i < it.npos; i = it.next()) {
+        auto lvl1 = target.enchs[i];
+        auto lvl2 = sacrifice.enchs[i];
+        if (lvl1 == lvl2)
+            lvl2 = std::min<uint8_t>(lvl2 + 1, reg[i].max_lvl);
+        else
+            lvl2 = std::max<uint8_t>(lvl1, lvl2);
+        target.enchs.insert(i, lvl2);
     }
 
     // PPN update

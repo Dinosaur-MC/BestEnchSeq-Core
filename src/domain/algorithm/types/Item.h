@@ -1,5 +1,5 @@
 #pragma once
-#include "Enchantment.h"
+#include "EnchSet.h"
 #include "common/utils/HashUtils.hpp"
 
 namespace algorithm {
