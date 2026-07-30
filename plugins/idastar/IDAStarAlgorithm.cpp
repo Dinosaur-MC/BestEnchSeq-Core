@@ -25,13 +25,24 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
     ctx.incr_nodes_visited();
     ++_nodes_visited;
 
-    if (_nodes_visited % 512 == 0) {
-        if (ctx.is_cancelled()) return;
+    if (ctx.is_cancelled()) return;
+
+    if (_nodes_visited % 256 == 0) {
         ctx.wait_if_paused();
+
+        // Hard node budget — prevents indefinite hangs when the heuristic
+        // doesn't prune effectively (large problems with conflicts).
+        if (_nodes_visited > 2'000'000) {
+            ctx.cancel();
+            return;
+        }
 
         if (_max_search_time.count() > 0) {
             auto elapsed = std::chrono::steady_clock::now() - _start_time;
-            if (elapsed > _max_search_time) return;
+            if (elapsed > _max_search_time) {
+                ctx.cancel();   // signal cancellation so parent loops exit too
+                return;
+            }
         }
     }
 
@@ -49,14 +60,8 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
         return;
     }
 
-    // Heuristic pruning (_h_max was precomputed by caller or root)
-    int32_t h_val = _compute_h();
-    if (g + h_val >= best_cost) {
-        ctx.incr_nodes_pruned();
-        return;
-    }
-
-    // TT: global best_g
+    // TT: global best_g — check BEFORE heuristic so that states already
+    // explored with an equal-or-better g skip the heuristic computation.
     size_t h = StateHash::ids(ids, _pool);
     ++_diag.tt_lookups;
     if (const int32_t* tt_g = _tt.lookup(h)) {
@@ -65,6 +70,14 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
             return;
         }
     }
+
+    // Heuristic pruning (_h_max was precomputed by caller or root)
+    int32_t h_val = _compute_h();
+    if (g + h_val >= best_cost) {
+        ctx.incr_nodes_pruned();
+        return;
+    }
+
     _tt.store(h, g);
     ++_diag.tt_stores;
 
@@ -88,6 +101,10 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 
     std::sort(candidates.begin(), candidates.end(),
               [](const Candidate& a, const Candidate& b) {
+                  // Equipment-base (i==0) first — builds complete solutions
+                  // fast and tightens best_cost early.
+                  if ((a.i == 0) != (b.i == 0))
+                      return a.i == 0;
                   return a.est_cost < b.est_cost;
               });
 
@@ -128,16 +145,22 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 
         _current_path.push_back(IDALightStep{old_base_id, old_sac_id, real_cost});
 
-        // Delta heuristic: update _h_max for child, recurse, restore
+        // Delta heuristic: update _h_max for child, recurse, restore.
+        // Stack-allocated delta array avoids the heap allocation + memcpy of
+        // a full vector copy (~10M× for large searches).
         {
-            auto saved_h_max = _h_max;
+            struct { int16_t id; int16_t old_level; } deltas[64];
+            size_t nd = 0;
             const auto& forged_enchs = _pool[new_base_id].enchs;
             for (const auto& e : forged_enchs) {
-                if (e.level() > _h_max[e.id()])
+                if (e.level() > _h_max[e.id()]) {
+                    deltas[nd++] = {e.id(), _h_max[e.id()]};
                     _h_max[e.id()] = e.level();
+                }
             }
             _dfs(child_buf, child_g, best_cost, ctx);
-            _h_max = std::move(saved_h_max);
+            for (size_t d = 0; d < nd; ++d)
+                _h_max[deltas[d].id] = deltas[d].old_level;
         }
 
         _current_path.pop_back();
@@ -205,6 +228,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
     // Upper bound: greedy + limited DFS
     int32_t best_cost = INT32_MAX;
+    bool has_realistic_bound = false;
     if (items.size() > 1) {
         Item equip = items[0];
         int32_t greedy_cost = 0;
@@ -212,11 +236,21 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
             if (_forge_engine.is_forgeable(equip, items[k]))
                 greedy_cost += _forge_engine.forge_into(equip, items[k], reg);
         }
-        if (greedy_cost > 0) best_cost = greedy_cost;
+        // Only use greedy cost as a bound if it produced a VALID solution.
+        // When enchantment conflicts exist (common with modded profiles),
+        // forge_into silently skips conflicting enchants, making the greedy
+        // cost unrealistic — using it as a bound would prune paths that
+        // spend extra levels to resolve conflicts, preventing the DFS from
+        // ever finding a valid solution.
+        if (greedy_cost > 0 && meets_target(equip, _target)) {
+            best_cost = greedy_cost;
+            has_realistic_bound = true;
+        }
 
-        // External warm-start bound skips internal dfs_bound (~25M Ir)
+        // External warm-start bound
         if (input.initial_bound < best_cost) {
             best_cost = input.initial_bound;
+            has_realistic_bound = true;
         } else {
             int64_t node_limit = 50'000;
             int32_t dfs_cost = search_utils::dfs_bound(
@@ -224,14 +258,31 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
                 0, best_cost, node_limit,
                 _forge_engine, *_ench_reg, _target,
                 _h_buf, _h_dirty);
-            if (dfs_cost < best_cost)
+            if (dfs_cost < best_cost) {
                 best_cost = dfs_cost;
+                has_realistic_bound = true;
+            }
         }
     }
 
-    // Warm-start bound (fallback: already handled for items.size() > 1)
-    if (input.initial_bound < best_cost)
-        best_cost = input.initial_bound;
+    // If neither greedy nor dfs_bound found a valid bound (should be rare),
+    // fall back to a loose bound estimate: minimum possible forge count ×
+    // the smallest multiplier, plus level-based heuristic.  Still admissible
+    // and prevents the unbounded DFS that would make large problems hang.
+    if (!has_realistic_bound && items.size() > 1) {
+        // Conservative heuristic base: each forge costs at least the minimum
+        // enchantment cost (penalty_cost for ppn=0 + ppn=0 = 0, plus at least
+        // 1 level per sacrifice enchantment × min multiplier).
+        int32_t min_cost_per_forge = 1;
+        best_cost = static_cast<int32_t>(items.size() - 1) * min_cost_per_forge;
+        // Add the greedy cost (even if it didn't meet target, it's a data point)
+        for (size_t k = 1; k < items.size(); ++k) {
+            Item equip_tmp = items[0];
+            if (_forge_engine.is_forgeable(equip_tmp, items[k]))
+                best_cost += _forge_engine.forge_into(equip_tmp, items[k], reg);
+        }
+        has_realistic_bound = true;
+    }
 
     // Exhaustive DFS branch-and-bound
     search_utils::precompute_max(initial_ids, _pool, *_ench_reg,
