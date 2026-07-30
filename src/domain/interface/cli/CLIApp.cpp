@@ -169,6 +169,8 @@ int CLIApp::run(int argc, char* argv[]) {
         request.search_config.max_solutions = config.solutions;
         request.algorithm = config.algorithm;
         request.search_config.max_threads = static_cast<uint32_t>(config.max_threads);
+        if (config.max_time > 0)
+            request.search_config.max_search_time = std::chrono::seconds(config.max_time);
         CLIApp::apply_config_pairs(config.config_pairs, request.forge_config);
 
         OutputFormatter::set_show_nsid(config.verbose);
@@ -362,6 +364,8 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr("cli.err.solutions_not_positive"));
     if (cfg.solutions > static_cast<int>(BESQ_MAX_SOLUTIONS))
         throw std::runtime_error(tr_fmt("cli.err.solutions_out_of_range", BESQ_MAX_SOLUTIONS));
+    if (cfg.max_time < 0)
+        throw std::runtime_error(tr("cli.err.max_time_negative"));
 
     // --source requires --target
     if (!cfg.source.empty() && cfg.target.empty())

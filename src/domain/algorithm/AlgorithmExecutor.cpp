@@ -27,7 +27,14 @@ void AlgorithmExecutor::_start_timeout_watcher(std::chrono::milliseconds max_tim
     _timeout_alive = std::make_shared<std::atomic<bool>>(true);
     auto alive = _timeout_alive;
     _timeout_watcher.emplace([this, max_time, alive] {
-        std::this_thread::sleep_for(max_time);
+        // Poll in small increments so the thread can be joined early
+        // when the algorithm finishes before the timeout expires.
+        auto deadline = std::chrono::steady_clock::now() + max_time;
+        while (std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (!alive->load(std::memory_order_acquire))
+                return;     // early exit: algorithm already finished
+        }
         if (alive->load(std::memory_order_acquire)) {
             if (_ctx) _ctx->cancel();
         }
@@ -219,7 +226,6 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
     _start_timeout_watcher(_algorithm_input.s_config.max_search_time);
-
     _worker.emplace([this]() mutable {
         try {
             _ctx->set_restored(true);

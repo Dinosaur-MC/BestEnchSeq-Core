@@ -12,7 +12,7 @@ struct SearchConfig : IBinarySerializable {
     int32_t max_depth     = 0;
     int32_t memory_mb     = 0;
     uint32_t max_threads  = 0;             // 0 = hardware_concurrency
-    std::chrono::milliseconds max_search_time{0};
+    std::chrono::milliseconds max_search_time{180'000}; // default 3 min
 
     void serialize(ByteStreamWriter &w) const noexcept override {
         w << max_solutions << max_depth << memory_mb << max_threads

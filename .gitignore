@@ -314,3 +314,4 @@ logs/
 *.local.*
 tmp*
 data/tests/benchmark_plus.json
+*.bak

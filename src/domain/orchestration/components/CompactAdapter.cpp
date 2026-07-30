@@ -1,5 +1,6 @@
 #include "CompactAdapter.h"
 #include "common/CommonTypes.h"
+#include "common/i18n/Language.h"
 #include "common/utils/ExpCalculator.hpp"
 
 #include <algorithm>
@@ -106,6 +107,13 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     input.mode     = request.mode;
 
     // Convert target_item (domain -> algorithm)
+    // Direct mode: target_item.enchantments = desired enchants (must be non-empty)
+    if (request.mode == AlgorithmMode::direct &&
+        request.target_item.enchantments.empty())
+    {
+        throw std::runtime_error(
+            tr("main.err.target_no_enchants"));
+    }
     algorithm::Item algo_target;
     algo_target.type  = is_book ? algorithm::ItemType::Book : algorithm::ItemType::Equip;
     algo_target.ppn   = static_cast<uint8_t>(request.target_item.prior_penalty);
