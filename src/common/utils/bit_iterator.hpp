@@ -34,7 +34,13 @@ class bit_iterator {
         // 计算当前剩余部分中最低位 1 的相对偏移
         const U rel = static_cast<U>(std::countr_zero(remaining_));
         // 将当前 1 及其右侧所有 0 移出
-        remaining_ >>= (rel + 1);
+        // 注意：当 rel+1 == 位数宽度时（最高位 1），右移整个宽度是 UB，需特殊处理
+        constexpr U kBits = static_cast<U>(sizeof(unsigned_type) * 8);
+        if (rel + 1 >= kBits) {
+            remaining_ = 0;
+        } else {
+            remaining_ >>= (rel + 1);
+        }
         // 更新基址
         base_ += rel;
         return base_++;
@@ -42,8 +48,8 @@ class bit_iterator {
     [[nodiscard]] constexpr operator bool() const noexcept { return remaining_ < npos; }
 
   private:
-    unsigned_type remaining_; // 尚未扫描的低位部分（已被右移压缩）
-    U base_;                  // 已移出的总位数，用于恢复绝对位置
+    unsigned_type remaining_{0};
+    U base_{0};
 };
 
 template <std::integral T, std::integral U = size_t>
@@ -81,7 +87,12 @@ class sbit_iterator {
         const U rel = static_cast<U>(std::countr_zero(remaining_));
         cur_        = base_ + rel;
         // 将当前 1 及其右侧所有 0 移出，并更新基址
-        remaining_ >>= (rel + 1);
+        constexpr U kBits = static_cast<U>(sizeof(unsigned_type) * 8);
+        if (rel + 1 >= kBits) {
+            remaining_ = 0;
+        } else {
+            remaining_ >>= (rel + 1);
+        }
         base_ += rel + 1;
         return cur_;
     }
@@ -95,9 +106,14 @@ class sbit_iterator {
         (void)next();
         return ret;
     }
+    struct Sentinel {};
+    constexpr sbit_iterator &begin() noexcept { return *this; }
+    constexpr const sbit_iterator &begin() const noexcept { return *this; }
+    constexpr static Sentinel end() noexcept { return {}; }
+    constexpr bool operator!=(const Sentinel &sentinel) noexcept { return cur_ != npos; }
 
   private:
-    unsigned_type remaining_; // 尚未扫描的低位部分（已被右移压缩）
-    U base_;                  // 已移出的总位数，用于恢复绝对位置
-    U cur_{npos};             // 当前遍历到的位数
+    unsigned_type remaining_{0};
+    U base_{0};
+    U cur_{npos};
 };

@@ -64,6 +64,12 @@ target_include_directories(test_object_pool PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_object_pool COMMAND test_object_pool)
 set_tests_properties(test_object_pool PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# bit_iterator (header-only utility)
+add_executable(test_bit_iterator utils/test_bit_iterator.cpp)
+target_include_directories(test_bit_iterator PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_bit_iterator COMMAND test_bit_iterator)
+set_tests_properties(test_bit_iterator PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
 # Environment / Config
 add_executable(test_env_util utils/test_env_util.cpp)
 target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})

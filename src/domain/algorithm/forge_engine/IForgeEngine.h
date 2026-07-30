@@ -1,5 +1,5 @@
 #pragma once
-#include "common/utils/bit_iterator.h"
+#include "common/utils/bit_iterator.hpp"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
