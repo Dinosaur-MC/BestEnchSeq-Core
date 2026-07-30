@@ -1,5 +1,6 @@
 #include "EnchReg.h"
 #include <cassert>
+#include <stdexcept>
 
 namespace algorithm {
 
@@ -8,8 +9,8 @@ void EnchReg::_build_conflict_matrix() {
     _conflict_matrix.assign(N * N, 0);
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = i + 1; j < N; ++j) {
-            bool conflict = _ench_infos[i].is_conflict(_ench_infos[j]) ||
-                            _ench_infos[j].is_conflict(_ench_infos[i]);
+            bool conflict =
+                _ench_infos[i].is_conflict(_ench_infos[j]) || _ench_infos[j].is_conflict(_ench_infos[i]);
             _conflict_matrix[i * N + j] = conflict ? 1 : 0;
             _conflict_matrix[j * N + i] = conflict ? 1 : 0;
         }
@@ -35,12 +36,12 @@ void EnchReg::init(
     _build_mask_cache();
 }
 
-int16_t EnchReg::to_local_id(NSID global_id) const {
+EnchReg::id_type EnchReg::to_local_id(NSID global_id) const {
     for (size_t i = 0; i < _global_ids.size(); ++i) {
         if (_global_ids[i] == global_id)
-            return static_cast<int16_t>(i);
+            return static_cast<id_type>(i);
     }
-    return -1;
+    throw std::out_of_range("No local id found for global id");
 }
 
 // ── Serialization ──
@@ -57,13 +58,12 @@ void EnchReg::deserialize(ByteStreamReader &r) noexcept {
     // when the id string is empty.
     {
         std::string id_str;
-        std::vector<int16_t> enchs_vec;
+        std::vector<uint8_t> enchs_vec;
         int32_t dur = 0;
         r >> id_str >> dur >> enchs_vec;
-        _target_equip.id             = id_str.empty() ? NSID() : NSID(id_str);
-        _target_equip.max_durability = dur;
-        _target_equip.applicable_enchs = std::unordered_set<int16_t>(
-            enchs_vec.begin(), enchs_vec.end());
+        _target_equip.id               = id_str.empty() ? NSID() : NSID(id_str);
+        _target_equip.max_durability   = dur;
+        _target_equip.applicable_enchs = std::unordered_set<uint8_t>(enchs_vec.begin(), enchs_vec.end());
     }
     // Deserialize _global_ids manually — same NSID("") guard.
     size_t n = 0;

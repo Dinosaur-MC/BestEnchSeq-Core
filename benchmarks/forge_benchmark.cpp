@@ -476,7 +476,7 @@ void run_case(const TestCase& tc, const Profile& profile,
             ai.exc_mask = 0;
             for (size_t li = 0; li < algo_infos.size(); ++li) {
                 if (biz.exclusive_set.count(global_ids[li])) {
-                    ai.exc_mask |= (algorithm::MaskType(1) << li);
+                    ai.exc_mask |= (algorithm::mask_type(1) << li);
                 }
             }
 
@@ -505,10 +505,13 @@ void run_case(const TestCase& tc, const Profile& profile,
     {
         algorithm::EnchSet target_enchs;
         for (const auto& e : wanted_set) {
-            int16_t lid = algo_input.ench_reg.to_local_id(e.id);
-            if (lid >= 0)
-                target_enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(lid),
+            try {
+                auto lid = algo_input.ench_reg.to_local_id(e.id);
+                target_enchs.insert(algorithm::Ench{lid,
                                                      static_cast<algorithm::Ench::value_type>(e.level)});
+            } catch (const std::out_of_range &) {
+                // enchantment not applicable — skip
+            }
         }
         algo_input.target.enchs = std::move(target_enchs);
         algo_input.target.type  = algorithm::ItemType::Equip;

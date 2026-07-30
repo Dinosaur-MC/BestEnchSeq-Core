@@ -93,7 +93,7 @@ struct TestContext {
             ai.exc_mask = 0;
             for (size_t j = 0; j < compact_infos.size(); ++j) {
                 if (biz.exclusive_set.count(global_ids[j])) {
-                    algorithm::MaskType bit = (algorithm::MaskType(1) << j);
+                    algorithm::mask_type bit = (algorithm::mask_type(1) << j);
                     ai.exc_mask |= bit;
                     compact_infos[j].exc_mask |= bit;
                 }

@@ -7,24 +7,24 @@
 
 namespace algorithm {
 
-using MaskType                         = uint64_t;
+using mask_type = uint64_t;
 
 struct EnchInfo : IBinarySerializable {
-    uint8_t id;        // 附魔ID
-    uint8_t mul;       // 经验乘数
-    uint8_t mul_b;     // 书本经验乘数
-    uint8_t max_lvl;   // 最大等级
-    MaskType exc_mask; // 互斥附魔位掩码
-    bool applicable;   // 是否适用目标装备类别
+    uint8_t id;         // 附魔ID
+    uint8_t mul;        // 经验乘数
+    uint8_t mul_b;      // 书本经验乘数
+    uint8_t max_lvl;    // 最大等级
+    mask_type exc_mask; // 互斥附魔位掩码
+    bool applicable;    // 是否适用目标装备类别
 
     [[nodiscard]] bool is_conflict(const EnchInfo &other) const noexcept;
 
     void serialize(ByteStreamWriter &w) const noexcept override {
-        w << mul << mul_b << max_lvl << exc_mask << static_cast<uint8_t>(applicable);
+        w << id << mul << mul_b << max_lvl << exc_mask << static_cast<uint8_t>(applicable);
     }
     void deserialize(ByteStreamReader &r) noexcept override {
         uint8_t app;
-        r >> mul >> mul_b >> max_lvl >> exc_mask >> app;
+        r >> id >> mul >> mul_b >> max_lvl >> exc_mask >> app;
         applicable = app != 0;
     }
 };

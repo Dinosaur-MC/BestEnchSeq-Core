@@ -81,7 +81,7 @@ struct TestFixture {
 
         // Build exc_mask (ID-based): for each pair (i,j) where i's
         // exclusive_set contains j, set bit j in exc_masks[i] and vice versa.
-        std::vector<algorithm::MaskType> exc_masks(sorted.size(), 0);
+        std::vector<algorithm::mask_type> exc_masks(sorted.size(), 0);
         for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
             for (int32_t j = i + 1; j < static_cast<int32_t>(sorted.size()); ++j) {
                 auto id_i = NSID(sorted[i].first);
@@ -89,8 +89,8 @@ struct TestFixture {
                 bool conflict = sorted[i].second.exclusive_set.count(id_j) ||
                                 sorted[j].second.exclusive_set.count(id_i);
                 if (conflict) {
-                    exc_masks[i] |= (algorithm::MaskType(1) << j);
-                    exc_masks[j] |= (algorithm::MaskType(1) << i);
+                    exc_masks[i] |= (algorithm::mask_type(1) << j);
+                    exc_masks[j] |= (algorithm::mask_type(1) << i);
                 }
             }
         }

@@ -66,7 +66,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
         ai.max_lvl = static_cast<uint8_t>(biz.max_level);
         for (size_t local_idx = 0; local_idx < algo_infos.size() && local_idx < 64; ++local_idx) {
             if (biz.exclusive_set.contains(applicable_global_nsids[local_idx])) {
-                ai.exc_mask |= (algorithm::MaskType(1) << local_idx);
+                ai.exc_mask |= (algorithm::mask_type(1) << local_idx);
             }
         }
         ai.applicable = true;
@@ -80,7 +80,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     // ── 5. Init compact registry ───────────────────────────────────────
     // Populate applicable local enchantment IDs on the equipment.
     algo_equip.applicable_enchs.reserve(algo_infos.size());
-    for (int16_t i = 0; i < static_cast<int16_t>(algo_infos.size()); ++i)
+    for (uint8_t i = 0; i < algo_infos.size(); ++i)
         algo_equip.applicable_enchs.insert(i);
 
     algorithm::EnchReg ench_reg;
@@ -250,10 +250,13 @@ algorithm::Item CompactAdapter::from_domain(const Item &item, const algorithm::E
     citem.dur  = static_cast<int16_t>(item.durability);
 
     for (const auto &ench : item.enchantments) {
-        int16_t local_id = reg.to_local_id(ench.id);
-        if (local_id >= 0)
-            citem.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(local_id),
+        try {
+            auto local_id = reg.to_local_id(ench.id);
+            citem.enchs.insert(algorithm::Ench{local_id,
                                                static_cast<algorithm::Ench::value_type>(ench.level)});
+        } catch (const std::out_of_range &) {
+            // enchantment not applicable to target — skip
+        }
     }
     return citem;
 }

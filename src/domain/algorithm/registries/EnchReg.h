@@ -1,6 +1,4 @@
 #pragma once
-#include "CommonTypes.h"
-#include "common/serialization/IBinarySerializable.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
 #include <vector>
@@ -14,6 +12,9 @@ namespace algorithm {
 /// Compacted registry — precomputes EnchInfo for all enchantments against
 /// a specific target equipment. Provides O(1) lookup and conflict checking.
 class EnchReg : public IBinarySerializable {
+  public:
+    using id_type = Ench::value_type; // uint8_t
+
   private:
     std::vector<EnchInfo> _ench_infos; // compacted info, indexed by local ench id
     std::vector<NSID> _global_ids;     // local → business global ID (for round-trip)
@@ -22,7 +23,7 @@ class EnchReg : public IBinarySerializable {
     std::vector<char> _conflict_matrix; // flat N×N, row-major
     void _build_conflict_matrix();
 
-    std::vector<MaskType> _mask_cache;
+    std::vector<mask_type> _mask_cache; // precomputed conflict masks
     void _build_mask_cache();
 
   public:
@@ -38,22 +39,22 @@ class EnchReg : public IBinarySerializable {
     [[nodiscard]] const std::vector<EnchInfo> &get_ench_infos() const noexcept { return _ench_infos; }
     [[nodiscard]] const std::vector<NSID> &get_global_ids() const noexcept { return _global_ids; }
 
-    [[nodiscard]] const EnchInfo &get(int16_t id) const { return _ench_infos.at(id); }
+    [[nodiscard]] const EnchInfo &get(id_type id) const { return _ench_infos.at(id); }
     /// Bounds-unchecked access — hot-path design.
-    [[nodiscard]] const EnchInfo &operator[](int16_t id) const noexcept { return _ench_infos[id]; }
+    [[nodiscard]] const EnchInfo &operator[](id_type id) const noexcept { return _ench_infos[id]; }
 
-    [[nodiscard]] bool is_applicable(int16_t id) const noexcept {
+    [[nodiscard]] bool is_applicable(id_type id) const noexcept {
         return _target_equip.applicable_enchs.contains(id);
     }
-    [[nodiscard]] bool is_conflict(int16_t id1, int16_t id2) const noexcept {
+    [[nodiscard]] bool is_conflict(id_type id1, id_type id2) const noexcept {
         return _conflict_matrix[id1 * _ench_infos.size() + id2];
     }
-    [[nodiscard]] MaskType get_conflict_mask(int16_t id) const noexcept { return _mask_cache[id]; }
+    [[nodiscard]] mask_type get_conflict_mask(id_type id) const noexcept { return _mask_cache[id]; }
     [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }
 
     /// Convert between local (compact) and global (business) enchantment IDs.
-    [[nodiscard]] NSID to_global_id(int16_t local_id) const { return _global_ids.at(local_id); }
-    [[nodiscard]] int16_t to_local_id(NSID global_id) const; // -1 if not found
+    [[nodiscard]] NSID to_global_id(id_type local_id) const { return _global_ids.at(local_id); }
+    [[nodiscard]] id_type to_local_id(NSID global_id) const; // throw out_of_range if not found
 
     // ── Serialization ──
     void serialize(ByteStreamWriter &w) const noexcept override;

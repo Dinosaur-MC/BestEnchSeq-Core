@@ -66,14 +66,14 @@ struct TestFixture {
 
         // Build exc_mask (ID-based): for each pair (i,j) where i's
         // exclusive_set contains j, set bit j in exc_masks[i] and vice versa.
-        std::vector<algorithm::MaskType> exc_masks(sorted_enchs.size(), 0);
+        std::vector<algorithm::mask_type> exc_masks(sorted_enchs.size(), 0);
         for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
             for (int32_t j = i + 1; j < static_cast<int32_t>(sorted_enchs.size()); ++j) {
                 bool conflict = sorted_enchs[i].second.exclusive_set.count(sorted_enchs[j].first) ||
                                 sorted_enchs[j].second.exclusive_set.count(sorted_enchs[i].first);
                 if (conflict) {
-                    exc_masks[i] |= (algorithm::MaskType(1) << j);
-                    exc_masks[j] |= (algorithm::MaskType(1) << i);
+                    exc_masks[i] |= (algorithm::mask_type(1) << j);
+                    exc_masks[j] |= (algorithm::mask_type(1) << i);
                 }
             }
         }

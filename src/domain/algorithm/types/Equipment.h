@@ -11,7 +11,7 @@ namespace algorithm {
 struct Equipment : IBinarySerializable {
     NSID id;
     int32_t max_durability;
-    std::unordered_set<int16_t> applicable_enchs;
+    std::unordered_set<uint8_t> applicable_enchs;
 
     bool operator==(const Equipment &other) const {
         return id == other.id && max_durability == other.max_durability &&
@@ -19,16 +19,16 @@ struct Equipment : IBinarySerializable {
     }
 
     void serialize(ByteStreamWriter &w) const noexcept override {
-        std::vector<int16_t> enchs_vec(applicable_enchs.begin(), applicable_enchs.end());
+        std::vector<uint8_t> enchs_vec(applicable_enchs.begin(), applicable_enchs.end());
         std::sort(enchs_vec.begin(), enchs_vec.end());
         w << id.str() << max_durability << enchs_vec;
     }
     void deserialize(ByteStreamReader &r) noexcept override {
         std::string id_str;
-        std::vector<int16_t> enchs_vec;
+        std::vector<uint8_t> enchs_vec;
         r >> id_str >> max_durability >> enchs_vec;
         id               = NSID(id_str);
-        applicable_enchs = std::unordered_set<int16_t>(enchs_vec.begin(), enchs_vec.end());
+        applicable_enchs = std::unordered_set<uint8_t>(enchs_vec.begin(), enchs_vec.end());
     }
 };
 
