@@ -1,6 +1,9 @@
 #!/bin/bash
 # scripts/evaluate.sh
 
+# exit on fail
+set -e
+
 # locate script directory
 script_dir=$(cd "$(dirname "$0")" && pwd)
 
