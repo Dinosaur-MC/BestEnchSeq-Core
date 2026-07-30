@@ -167,8 +167,8 @@ def pick_best(rec1, rec2):
     if rec2 is None:
         return rec1
 
-    valid1 = rec1.get("status") == "✅"
-    valid2 = rec2.get("status") == "✅"
+    valid1 = rec1.get("status") == "✅" and rec1["L"] > 0
+    valid2 = rec2.get("status") == "✅" and rec2["L"] > 0
 
     if valid1 and not valid2:
         return rec1
