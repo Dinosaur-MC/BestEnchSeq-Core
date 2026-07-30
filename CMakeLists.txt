@@ -246,18 +246,17 @@ target_compile_definitions(besq-minimal PUBLIC
 # CLI executable (guarded by BESQ_BUILD_CLI)
 # ═══════════════════════════════════════════════════════════════════════════════
 if(BESQ_BUILD_CLI)
-    add_executable(${PROJECT_NAME}
+    add_executable(besq
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     )
-    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "besq")
-    target_link_libraries(${PROJECT_NAME} PRIVATE besq-core)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${BESQ_GENERATED_DIR})
+    target_link_libraries(besq PRIVATE besq-core)
+    target_include_directories(besq PRIVATE ${BESQ_GENERATED_DIR})
 
     if(UNIX)
-        target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
+        target_link_options(besq PRIVATE -rdynamic)
     endif()
 
-    target_compile_definitions(${PROJECT_NAME} PRIVATE
+    target_compile_definitions(besq PRIVATE
         $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
     )
 endif()
@@ -269,7 +268,7 @@ include(GNUInstallDirs)
 install(TARGETS besq-core ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(BESQ_BUILD_CLI)
-    install(TARGETS ${PROJECT_NAME}
+    install(TARGETS besq
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 endif()
