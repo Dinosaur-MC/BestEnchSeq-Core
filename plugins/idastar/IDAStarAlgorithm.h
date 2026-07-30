@@ -5,7 +5,6 @@
 #include "TTTable.h"
 #include "IDAStarDiagnostics.h"
 #include "domain/algorithm/registries/EnchReg.h"
-#include <chrono>
 #include <cstdint>
 #include <vector>
 
@@ -73,9 +72,6 @@ private:
     int64_t _nodes_visited{0};
     int32_t _solutions_found{0};
     int32_t _max_solutions{0};
-    std::chrono::milliseconds _max_search_time{0};
-    std::chrono::steady_clock::time_point _start_time;
-
     IDAStarDiagnostics _diag;
 };
 

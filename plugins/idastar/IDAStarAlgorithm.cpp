@@ -30,20 +30,14 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
     if (_nodes_visited % 256 == 0) {
         ctx.wait_if_paused();
 
-        // Hard node budget — prevents indefinite hangs when the heuristic
-        // doesn't prune effectively (large problems with conflicts).
-        if (_nodes_visited > 2'000'000) {
-            ctx.cancel();
-            return;
-        }
+        // Guard: executor's timeout watcher may have cancelled ctx.
+        if (ctx.is_cancelled()) return;
 
-        if (_max_search_time.count() > 0) {
-            auto elapsed = std::chrono::steady_clock::now() - _start_time;
-            if (elapsed > _max_search_time) {
-                ctx.cancel();   // signal cancellation so parent loops exit too
-                return;
-            }
-        }
+        // Hard node budget — prevents indefinite hangs on large problems
+        // where the heuristic doesn't prune effectively.
+        // NOTE: just returns without cancelling ctx — if a solution was
+        // already found it will still be reported by execute() below.
+        if (_nodes_visited > 40'000'000) return;
     }
 
     // Goal check BEFORE pruning — never prune a solution
@@ -101,10 +95,9 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 
     std::sort(candidates.begin(), candidates.end(),
               [](const Candidate& a, const Candidate& b) {
-                  // Equipment-base (i==0) first — builds complete solutions
-                  // fast and tightens best_cost early.
-                  if ((a.i == 0) != (b.i == 0))
-                      return a.i == 0;
+                  // Cost-first ordering: explore cheapest pairs first.
+                  // Equipment-first converges fast but may miss solutions
+                  // that require intermediate book-book merges.
                   return a.est_cost < b.est_cost;
               });
 
@@ -205,11 +198,9 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         _target_level_map[t.id] = t.level;
     _nodes_visited = 0;
     _solutions_found = 0;
-    _start_time = std::chrono::steady_clock::now();
 
     // Cache config from AlgorithmInput
     _max_solutions = input.s_config.max_solutions;
-    _max_search_time = input.s_config.max_search_time;
 
     std::vector<ItemID> initial_ids;
     initial_ids.reserve(items.size());
