@@ -52,7 +52,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     std::vector<NSID> applicable_global_nsids;
     std::unordered_map<NSID, int16_t> nsid_to_local;
 
-    for (int32_t gid = 0; gid < static_cast<int32_t>(sorted_infos.size()); ++gid) {
+    for (size_t gid = 0; gid < sorted_infos.size() && gid < 64; ++gid) {
         const auto &biz = sorted_infos[gid].second;
         bool applicable = biz.applicable_equipments.count(target_eq.category) > 0 ||
                           biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
@@ -60,18 +60,13 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
             continue;
 
         algorithm::EnchInfo ai;
-        ai.mul     = static_cast<uint16_t>(biz.multiplier);
-        ai.mul_b   = static_cast<uint16_t>(std::max(1, biz.multiplier >> 1));
-        ai.max_lvl = static_cast<uint16_t>(biz.max_level);
-        ai.exc_mask.resize(algo_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
-        for (size_t local_idx = 0; local_idx < algo_infos.size(); ++local_idx) {
-            const NSID &existing_nsid = applicable_global_nsids[local_idx];
-            if (biz.exclusive_set.count(existing_nsid)) {
-                size_t word = local_idx / algorithm::MASK_ELEM_SIZE;
-                size_t bit  = local_idx % algorithm::MASK_ELEM_SIZE;
-                ai.exc_mask[word] |= (algorithm::MaskType(1) << bit);
-                if (word < algo_infos[local_idx].exc_mask.size())
-                    algo_infos[local_idx].exc_mask[word] |= (algorithm::MaskType(1) << bit);
+        ai.id      = static_cast<uint8_t>(algo_infos.size());
+        ai.mul     = static_cast<uint8_t>(biz.multiplier);
+        ai.mul_b   = static_cast<uint8_t>(std::max(1, biz.multiplier >> 1));
+        ai.max_lvl = static_cast<uint8_t>(biz.max_level);
+        for (size_t local_idx = 0; local_idx < algo_infos.size() && local_idx < 64; ++local_idx) {
+            if (biz.exclusive_set.contains(applicable_global_nsids[local_idx])) {
+                ai.exc_mask |= (algorithm::MaskType(1) << local_idx);
             }
         }
         ai.applicable = true;
@@ -97,7 +92,8 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
         for (const auto &e : src) {
             auto it = nsid_to_local.find(e.id);
             if (it != nsid_to_local.end())
-                dst.insert(algorithm::Ench{it->second, static_cast<int16_t>(e.level)});
+                dst.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(it->second),
+                                           static_cast<algorithm::Ench::value_type>(e.level)});
         }
         return dst;
     };
@@ -256,7 +252,8 @@ algorithm::Item CompactAdapter::from_domain(const Item &item, const algorithm::E
     for (const auto &ench : item.enchantments) {
         int16_t local_id = reg.to_local_id(ench.id);
         if (local_id >= 0)
-            citem.enchs.insert(algorithm::Ench{local_id, static_cast<int16_t>(ench.level)});
+            citem.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(local_id),
+                                               static_cast<algorithm::Ench::value_type>(ench.level)});
     }
     return citem;
 }
@@ -268,8 +265,8 @@ algorithm::Item CompactAdapter::from_domain(const Item &item, const algorithm::E
 Item CompactAdapter::to_domain(const algorithm::Item &item, const algorithm::EnchReg &reg) {
     EnchSet ench_set;
     for (const auto &e : item.enchs) {
-        NSID nsid = reg.to_global_id(e.id);
-        ench_set.emplace(nsid, std::string{}, e.level);
+        NSID nsid = reg.to_global_id(e.id());
+        ench_set.emplace(nsid, std::string{}, e.level());
     }
 
     if (item.type == algorithm::ItemType::Book) {

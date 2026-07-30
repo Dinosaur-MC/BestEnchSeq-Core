@@ -68,7 +68,7 @@ void test_apply_with_target() {
     auto input = CompactAdapter::apply(profile, request);
 
     expect(input.target.enchs.size() == 1, "target should have 1 enchantment");
-    expect((*input.target.enchs.begin()).level == 5, "target enchantment level should be 5");
+    expect((*input.target.enchs.begin()).level() == 5, "target enchantment level should be 5");
 
     TEST_PASS("test_apply_with_target");
 }
@@ -99,7 +99,7 @@ void test_apply_invalid_level() {
     auto input = CompactAdapter::apply(profile, request);
 
     expect(input.target.enchs.size() == 1, "target should have 1 enchantment");
-    expect((*input.target.enchs.begin()).level == 99,
+    expect((*input.target.enchs.begin()).level() == 99,
            "target enchantment level forwarded as-is (no validation)");
 
     TEST_PASS("test_apply_invalid_level");

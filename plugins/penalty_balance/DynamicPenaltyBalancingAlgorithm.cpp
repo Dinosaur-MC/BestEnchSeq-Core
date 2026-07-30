@@ -26,8 +26,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, Exec
     {
         bool met = true;
         for (const auto& t : target.enchs) {
-            auto it = mut_items[0].enchs.find(t.id);
-            if (it == mut_items[0].enchs.end() || it->level < t.level) {
+            if (!mut_items[0].enchs.contains(t.id()) || mut_items[0].enchs[t.id()] < t.level()) {
                 met = false;
                 break;
             }
@@ -116,8 +115,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, Exec
     {
         bool met = true;
         for (const auto& t : target.enchs) {
-            auto it = mut_items[0].enchs.find(t.id);
-            if (it == mut_items[0].enchs.end() || it->level < t.level) {
+            if (!mut_items[0].enchs.contains(t.id()) || mut_items[0].enchs[t.id()] < t.level()) {
                 met = false;
                 break;
             }

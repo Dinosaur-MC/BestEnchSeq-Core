@@ -1,8 +1,8 @@
 #pragma once
+#include "ItemPool.h"
 #include "domain/algorithm/forge_engine/IForgeEngine.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
-#include "ItemPool.h"
 #include <algorithm>
 #include <cstdint>
 #include <vector>
@@ -18,8 +18,8 @@ namespace algorithm {
 template <typename EnchRange>
 inline bool meets_target(const Item &equipment, const EnchRange &target) noexcept {
     for (const auto &t : target) {
-        auto it = equipment.enchs.find(t.id);
-        if (it == equipment.enchs.end() || it->level < t.level)
+        Ench ench = static_cast<Ench>(t);
+        if (equipment.enchs[ench.id] < ench.level)
             return false;
     }
     return true;
@@ -27,8 +27,7 @@ inline bool meets_target(const Item &equipment, const EnchRange &target) noexcep
 
 /// Pool-based overload: resolves \p equip_id through \p pool.
 template <typename EnchRange>
-inline bool
-meets_target(ItemPool::ItemID equip_id, const ItemPool &pool, const EnchRange &target) noexcept {
+inline bool meets_target(ItemPool::ItemID equip_id, const ItemPool &pool, const EnchRange &target) noexcept {
     return meets_target(pool[equip_id], target);
 }
 
@@ -72,7 +71,7 @@ inline void precompute_max(
         [&](auto &&yield) {
             for (auto id : ids)
                 for (const auto &e : pool[id].enchs)
-                    yield(e.id, e.level);
+                    yield(e.id(), e.level());
         },
         reg, h_max, h_dirty
     );
@@ -114,8 +113,8 @@ inline int32_t dfs_bound(
         [&](auto &&yield) {
             for (const auto &item : items)
                 for (const auto &e : item.enchs)
-                    if (e.id >= 0)
-                        yield(e.id, e.level);
+                    if (e.id() >= 0)
+                        yield(e.id(), e.level());
         },
         reg, h_buf, h_dirty
     );

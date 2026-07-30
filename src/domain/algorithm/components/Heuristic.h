@@ -27,8 +27,8 @@ inline int32_t compute(
         [&](auto &&yield) {
             for (const auto &item : items)
                 for (const auto &e : item.enchs)
-                    if (e.id >= 0)
-                        yield(e.id, e.level);
+                    if (e.id() >= 0)
+                        yield(e.id(), e.level());
         },
         reg, buf, dirty
     );
@@ -67,8 +67,8 @@ inline int32_t compute(
         [&](auto &&yield) {
             for (auto id : ids)
                 for (const auto &e : pool[id].enchs)
-                    if (e.id >= 0)
-                        yield(e.id, e.level);
+                    if (e.id() >= 0)
+                        yield(e.id(), e.level());
         },
         reg, buf, dirty
     );

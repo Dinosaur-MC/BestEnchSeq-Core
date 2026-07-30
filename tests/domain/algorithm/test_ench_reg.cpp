@@ -3,6 +3,7 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentTagRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "domain/algorithm/types/EnchSet.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include <algorithm>
 #include <stdexcept>
@@ -48,42 +49,31 @@ struct TestFixture {
         target_equip.id = "test";
         target_equip.max_durability = 1561;
         // Sort by NSID for deterministic local ID assignment
-        std::vector<std::pair<std::string, EnchInfo>> sorted_enchs;
+        // Keep original NSID objects to ensure correct conflict matching.
+        std::vector<std::pair<NSID, EnchInfo>> sorted_enchs;
         sorted_enchs.reserve(enchants.size());
         for (const auto& [nsid, info] : enchants.data())
-            sorted_enchs.emplace_back(nsid.str(), info);
+            sorted_enchs.emplace_back(nsid, info);
         std::sort(sorted_enchs.begin(), sorted_enchs.end(),
-            [](const auto& a, const auto& b) { return a.first < b.first; });
+            [](const auto& a, const auto& b) { return a.first.str() < b.first.str(); });
 
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<NSID> global_ids;
-        // Map enchantment name → local id for conflict resolution
-        std::unordered_map<std::string, int32_t> name_to_local;
 
         for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
-            NSID nsid(sorted_enchs[i].first);
-            global_ids.push_back(nsid);
-            name_to_local[sorted_enchs[i].first] = i;
+            global_ids.push_back(sorted_enchs[i].first);
         }
 
-        size_t mask_size = (enchants.size() + 63) / 64;
-        std::vector<std::vector<algorithm::MaskType>> exc_masks(enchants.size(),
-            std::vector<algorithm::MaskType>(mask_size, 0));
-        // Build conflict masks using shared group bits.
-        uint64_t next_group = 0;
-        std::vector<bool> visited(enchants.size(), false);
+        // Build exc_mask (ID-based): for each pair (i,j) where i's
+        // exclusive_set contains j, set bit j in exc_masks[i] and vice versa.
+        std::vector<algorithm::MaskType> exc_masks(sorted_enchs.size(), 0);
         for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
-            if (visited[i] || sorted_enchs[i].second.exclusive_set.empty()) continue;
-            uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
-            next_group++;
-            visited[i] = true;
-            exc_masks[i][0] |= group_bit;
-            for (const auto& ex_nsid : sorted_enchs[i].second.exclusive_set) {
-                auto it = name_to_local.find(ex_nsid.str());
-                if (it != name_to_local.end()) {
-                    int32_t j = it->second;
-                    visited[j] = true;
-                    exc_masks[j][0] |= group_bit;
+            for (int32_t j = i + 1; j < static_cast<int32_t>(sorted_enchs.size()); ++j) {
+                bool conflict = sorted_enchs[i].second.exclusive_set.count(sorted_enchs[j].first) ||
+                                sorted_enchs[j].second.exclusive_set.count(sorted_enchs[i].first);
+                if (conflict) {
+                    exc_masks[i] |= (algorithm::MaskType(1) << j);
+                    exc_masks[j] |= (algorithm::MaskType(1) << i);
                 }
             }
         }
@@ -91,9 +81,10 @@ struct TestFixture {
             const auto& ei = sorted_enchs[i].second;
             bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
-            info.mul = static_cast<uint16_t>(ei.multiplier);
-            info.mul_b = static_cast<uint16_t>(std::max(1, ei.multiplier >> 1));
-            info.max_lvl = static_cast<uint16_t>(ei.max_level);
+            info.id = static_cast<uint8_t>(i);
+            info.mul = static_cast<uint8_t>(ei.multiplier);
+            info.mul_b = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
+            info.max_lvl = static_cast<uint8_t>(ei.max_level);
             info.exc_mask = exc_masks[i];
             info.applicable = applicable;
             compact_infos.push_back(std::move(info));
@@ -195,33 +186,42 @@ void test_enchset_hash_consistency() {
     std::cout << "PASS: test_enchset_hash_consistency" << std::endl;
 }
 
-void test_enchset_sort_restores_invariant() {
+void test_enchset_mutable_iterator_write() {
     algorithm::EnchSet set;
     set.insert({0, 5});
     set.insert({2, 3});
 
-    // Mutate through mutable iterator to break sorting
+    // Mutate level through mutable proxy
     auto it = set.begin();
-    std::swap(*it, *(it + 1));
+    expect(it != set.end() && it->level() == 5, "first ench: id=0 level=5");
 
-    (void)set.find(2);
-    set.sort();
+    ++it;
+    expect(it != set.end() && it->id() == 2, "second ench: id=2");
+    expect(it->level() == 3, "second ench: level=3");
 
-    auto after = set.find(2);
-    expect(after != set.end() && after->level == 3,
-           "enchset sort: find(2) should work after sort");
-    auto after0 = set.find(0);
-    expect(after0 != set.end() && after0->level == 5,
-           "enchset sort: find(0) should work after sort");
+    // Write through EnchRef::level() (mutable proxy)
+    (*it).level() = 4;
+    expect(it->level() == 4, "after write: level should be 4");
 
-    std::cout << "PASS: test_enchset_sort_restores_invariant" << std::endl;
+    // Verify hash is consistent after mutation
+    auto h1 = set.hash();
+    auto h2 = set.hash();
+    expect(h1 == h2, "hash should be consistent after mutation");
+
+    // Verify find still works after mutation
+    expect(set.contains(2) && set[2] == 4,
+           "find(2) should return updated level 4");
+    expect(set.contains(0) && set[0] == 5,
+           "find(0) should return unchanged level 5");
+
+    std::cout << "PASS: test_enchset_mutable_iterator_write" << std::endl;
 }
 
 void test_enchset_empty_and_single() {
     algorithm::EnchSet empty;
     expect(empty.size() == 0, "enchset empty: size 0");
     expect(empty.empty(), "enchset empty: empty() true");
-    expect(empty.find(0) == empty.end(), "enchset empty: find returns end");
+    expect(!empty.contains(0), "enchset empty: contains returns false for missing id");
 
     algorithm::EnchSet single;
     single.insert({3, 1});
@@ -231,8 +231,7 @@ void test_enchset_empty_and_single() {
 
     single.insert({3, 2});
     expect(single.size() == 1, "enchset single: update same id, size still 1");
-    auto it = single.find(3);
-    expect(it != single.end() && it->level == 2,
+    expect(single.contains(3) && single[3] == 2,
            "enchset single: find(3) level updated to 2");
 
     std::cout << "PASS: test_enchset_empty_and_single" << std::endl;
@@ -247,7 +246,7 @@ int main() {
         test_conflict_detection();
         test_multiplier_and_max_level();
         test_enchset_hash_consistency();
-        test_enchset_sort_restores_invariant();
+        test_enchset_mutable_iterator_write();
         test_enchset_empty_and_single();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

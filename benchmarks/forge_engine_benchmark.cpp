@@ -62,24 +62,19 @@ TestRegistry make_test_registry(int16_t ench_count) {
 
     for (int16_t i = 0; i < n; ++i) {
         EnchInfo ei;
-        // mul cycles 1,2,1,2,...; mul_b is max(1, mul>>1)
-        ei.mul     = static_cast<uint16_t>((i % 2 == 0) ? 1 : 2);
-        ei.mul_b   = static_cast<uint16_t>(std::max(1, ei.mul >> 1));
-        ei.max_lvl = static_cast<uint16_t>(3 + (i % 3)); // 3,4,5 cycling
+        ei.id      = static_cast<uint8_t>(i);
+        ei.mul     = static_cast<uint8_t>((i % 2 == 0) ? 1 : 2);
+        ei.mul_b   = static_cast<uint8_t>(std::max(1, ei.mul >> 1));
+        ei.max_lvl = static_cast<uint8_t>(3 + (i % 3)); // 3,4,5 cycling
         ei.applicable = true;
 
         // Conflicts: even IDs conflict with (even+2) mod n
         if (i % 2 == 0) {
             int16_t foe = (i + 2) % n;
-            ei.exc_mask.resize(infos.size() / MASK_ELEM_SIZE + 1, 0);
             // Pre-conflict with all previously added enchants
             for (size_t j = 0; j < infos.size(); ++j) {
                 if (j == static_cast<size_t>(foe) || j == static_cast<size_t>((i > 1) ? i - 2 : n - 2)) {
-                    size_t w = j / MASK_ELEM_SIZE;
-                    size_t b = j % MASK_ELEM_SIZE;
-                    ei.exc_mask[w] |= (MaskType(1) << b);
-                    if (w < infos[j].exc_mask.size())
-                        infos[j].exc_mask[w] |= (MaskType(1) << b);
+                    ei.exc_mask |= 1ULL << j;
                 }
             }
         }
@@ -126,7 +121,7 @@ Item make_book(EnchSet enchs) {
 EnchSet generate_enchants(int16_t base, int16_t count, int16_t max_level = 3) {
     EnchSet s;
     for (int16_t i = 0; i < count; ++i)
-        s.insert(Ench{static_cast<int16_t>(base + i), static_cast<int16_t>(1 + (i % max_level))});
+        s.insert(Ench{static_cast<Ench::value_type>(base + i), static_cast<Ench::value_type>(1 + (i %max_level))});
     return s;
 }
 
@@ -274,7 +269,7 @@ TestPair make_pair(OpType op, const SizeSpec& size, int16_t reg_n, ItemPair pair
         for (int16_t i = 0; i < sac_n; ++i) {
             int16_t eid = i % tgt_n;
             int16_t lvl = 2 + (i % 2);
-            sac_enchs.insert(Ench{eid, lvl});
+            sac_enchs.insert(Ench{static_cast<Ench::value_type>(eid), static_cast<Ench::value_type>(lvl)});
         }
         Item target = make_item(pair_type, true, 500, 1, std::move(target_enchs));
         Item sac    = make_item(pair_type, false, 500, 1, std::move(sac_enchs));
@@ -286,11 +281,11 @@ TestPair make_pair(OpType op, const SizeSpec& size, int16_t reg_n, ItemPair pair
         int16_t half = sac_n / 2;
         for (int16_t i = 0; i < half; ++i) {
             int16_t eid = static_cast<int16_t>(((i * 2) + 2) % reg_n);
-            sac_enchs.insert(Ench{eid, static_cast<int16_t>(1 + (i % 3))});
+            sac_enchs.insert(Ench{static_cast<Ench::value_type>(eid), static_cast<Ench::value_type>(1 + (i %3))});
         }
         for (int16_t i = half; i < sac_n; ++i) {
             int16_t eid = static_cast<int16_t>((i * 2 + 1) % reg_n);
-            sac_enchs.insert(Ench{eid, static_cast<int16_t>(1 + (i % 3))});
+            sac_enchs.insert(Ench{static_cast<Ench::value_type>(eid), static_cast<Ench::value_type>(1 + (i %3))});
         }
         Item target = make_item(pair_type, true, 500, 0, std::move(target_enchs));
         Item sac    = make_item(pair_type, false, 500, 0, std::move(sac_enchs));
@@ -304,13 +299,13 @@ TestPair make_pair(OpType op, const SizeSpec& size, int16_t reg_n, ItemPair pair
         int16_t merge_n = sac_n - upgrade_n - conflict_n;
         int16_t pos = 0;
         for (int16_t i = 0; i < upgrade_n && pos < tgt_n; ++i, ++pos)
-            sac_enchs.insert(Ench{static_cast<int16_t>(pos), 5});
+            sac_enchs.insert(Ench{static_cast<Ench::value_type>(pos), 5});
         for (int16_t i = 0; i < conflict_n; ++i, ++pos)
-            sac_enchs.insert(Ench{static_cast<int16_t>(((pos * 2) + 2) % reg_n),
-                                  static_cast<int16_t>(1 + (i % 3))});
+            sac_enchs.insert(Ench{static_cast<Ench::value_type>(((pos * 2) + 2) % reg_n),
+                                  static_cast<Ench::value_type>(1 + (i %3))});
         for (int16_t i = 0; i < merge_n; ++i, ++pos)
-            sac_enchs.insert(Ench{static_cast<int16_t>(tgt_n + (pos % (reg_n - tgt_n))),
-                                  static_cast<int16_t>(1 + (i % 3))});
+            sac_enchs.insert(Ench{static_cast<Ench::value_type>(tgt_n + (pos % (reg_n - tgt_n))),
+                                  static_cast<Ench::value_type>(1 + (i %3))});
         Item target = make_item(pair_type, true, 500, 1, std::move(target_enchs));
         Item sac    = make_item(pair_type, false, 500, 1, std::move(sac_enchs));
         return {std::move(target), std::move(sac), label};
@@ -369,8 +364,8 @@ void print_header(const std::string& config_label) {
               << std::right << std::setw(8) << "Iters"
               << std::setw(12) << "ns/op"
               << std::setw(14) << "M ops/s"
-              << std::setw(10) << "CV%" << "\n";
-    std::cout << std::string(66, '-') << "\n";
+              << std::setw(10) << "CV%" << std::endl;
+    std::cout << std::string(66, '-') << std::endl;
 }
 
 std::string format_iters(int n) {
@@ -389,7 +384,7 @@ void print_result(const BenchResult& r) {
               << std::setw(12) << r.ns_per_op
               << std::setw(14) << std::fixed << std::setprecision(2) << r.ops_per_sec
               << std::setw(10) << std::fixed << std::setprecision(2) << r.rel_stddev
-              << "\n";
+              << std::endl;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -453,7 +448,7 @@ int main(int argc, char* argv[]) {
               << (cfg.run_book_book ? "book+book " : "")
               << (cfg.run_book_eq ? "equip+book " : "")
               << (cfg.run_eq_eq ? "equip+equip " : "")
-              << "\n";
+              << std::endl;
 
     // ── Configurations to run ──────────────────────────────────────────
     struct RunConfig {
@@ -559,7 +554,7 @@ int main(int argc, char* argv[]) {
             std::cout << std::left << std::setw(22) << "  copy overhead"
                       << std::right << std::setw(20)
                       << "+" + std::to_string(static_cast<int>(copy_overhead)) + "%"
-                      << "\n";
+                      << std::endl;
         }
 
         perf_rows.push_back(std::move(pr));
@@ -567,7 +562,7 @@ int main(int argc, char* argv[]) {
 
     // ── Summary table ─────────────────────────────────────────────────
     if (cfg.show_summary && perf_rows.size() >= 4) {
-        std::cout << "\n";
+        std::cout << std::endl;
         std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
         std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  | pure_forge (ns/op)  | Overhead vs Merge (/M) |\n";
         std::cout << "| Config                    |    S     M     L     |    S     M     L    | upgr  cnfl  mix  copy  |\n";
@@ -589,7 +584,7 @@ int main(int argc, char* argv[]) {
                      cf_penalty * 100.0 - 100.0,
                      mx_penalty * 100.0 - 100.0,
                      copy_ov * 100.0);
-            std::cout << buf << "\n";
+            std::cout << buf << std::endl;
         }
 
         std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";

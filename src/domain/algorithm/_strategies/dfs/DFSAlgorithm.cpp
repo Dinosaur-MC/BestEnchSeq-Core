@@ -42,8 +42,7 @@ int32_t DFSAlgorithm::_greedy_bound(
     }
 
     for (const auto& t : _target) {
-        auto it = equip.enchs.find(t.id);
-        if (it == equip.enchs.end() || it->level < t.level)
+        if (!equip.enchs.contains(t.id) || equip.enchs[t.id] < t.level)
             return INT32_MAX;
     }
     return total_cost;

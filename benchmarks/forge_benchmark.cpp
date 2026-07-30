@@ -469,17 +469,14 @@ void run_case(const TestCase& tc, const Profile& profile,
             if (!applicable) continue;
 
             algorithm::EnchInfo ai;
-            ai.mul     = static_cast<uint16_t>(biz.multiplier);
-            ai.mul_b   = static_cast<uint16_t>(std::max(1, biz.multiplier >> 1));
-            ai.max_lvl = static_cast<uint16_t>(biz.max_level);
-            ai.exc_mask.resize(algo_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
+            ai.id      = static_cast<uint8_t>(algo_infos.size());
+            ai.mul     = static_cast<uint8_t>(biz.multiplier);
+            ai.mul_b   = static_cast<uint8_t>(std::max(1, biz.multiplier >> 1));
+            ai.max_lvl = static_cast<uint8_t>(biz.max_level);
+            ai.exc_mask = 0;
             for (size_t li = 0; li < algo_infos.size(); ++li) {
                 if (biz.exclusive_set.count(global_ids[li])) {
-                    size_t word = li / algorithm::MASK_ELEM_SIZE;
-                    size_t bit  = li % algorithm::MASK_ELEM_SIZE;
-                    ai.exc_mask[word] |= (algorithm::MaskType(1) << bit);
-                    if (word < algo_infos[li].exc_mask.size())
-                        algo_infos[li].exc_mask[word] |= (algorithm::MaskType(1) << bit);
+                    ai.exc_mask |= (algorithm::MaskType(1) << li);
                 }
             }
 
@@ -510,7 +507,8 @@ void run_case(const TestCase& tc, const Profile& profile,
         for (const auto& e : wanted_set) {
             int16_t lid = algo_input.ench_reg.to_local_id(e.id);
             if (lid >= 0)
-                target_enchs.insert(algorithm::Ench{lid, static_cast<int16_t>(e.level)});
+                target_enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(lid),
+                                                     static_cast<algorithm::Ench::value_type>(e.level)});
         }
         algo_input.target.enchs = std::move(target_enchs);
         algo_input.target.type  = algorithm::ItemType::Equip;

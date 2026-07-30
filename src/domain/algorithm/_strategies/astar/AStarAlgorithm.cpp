@@ -44,10 +44,10 @@ int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID> &ids) const {
 
     for (auto id : ids) {
         for (const auto &e : _pool[id].enchs) {
-            if (e.level > _h_buf[e.id]) {
-                if (_h_buf[e.id] == 0)
-                    _h_dirty.push_back(e.id);
-                _h_buf[e.id] = e.level;
+            if (e.level() > _h_buf[e.id()]) {
+                if (_h_buf[e.id()] == 0)
+                    _h_dirty.push_back(e.id());
+                _h_buf[e.id()] = e.level();
             }
         }
     }
@@ -92,8 +92,7 @@ int32_t AStarAlgorithm::_greedy_bound(const std::vector<Item> &items, const Ench
     }
 
     for (const auto &t : _target) {
-        auto it = equip.enchs.find(t.id);
-        if (it == equip.enchs.end() || it->level < t.level)
+        if (!equip.enchs.contains(t.id) || equip.enchs[t.id] < t.level)
             return INT32_MAX;
     }
     return total_cost;
@@ -106,15 +105,15 @@ int32_t AStarAlgorithm::_delta_h(int32_t parent_h, const Item &forged, const Ite
 
     // Gains: target enchants that forged improved vs parent's global max
     for (const auto &e : forged.enchs) {
-        if (e.id < 0)
+        if (e.id() < 0)
             continue;
-        int16_t target_level = _target_level_map[e.id];
+        int16_t target_level = _target_level_map[e.id()];
         if (target_level == 0)
             continue;
-        int16_t old_max = _h_max[e.id];
-        if (e.level > old_max && old_max < target_level) {
-            int16_t gain = (std::min)(e.level, target_level) - old_max;
-            h -= static_cast<int32_t>(gain) * (*_ench_reg)[e.id].mul_b;
+        int16_t old_max = _h_max[e.id()];
+        if (e.level() > old_max && old_max < target_level) {
+            int16_t gain = (std::min<int16_t>)(e.level(), target_level) - old_max;
+            h -= static_cast<int32_t>(gain) * (*_ench_reg)[e.id()].mul_b;
         }
     }
 

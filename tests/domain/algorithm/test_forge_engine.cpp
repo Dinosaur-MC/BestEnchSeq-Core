@@ -79,29 +79,18 @@ struct TestFixture {
             name_to_local[sorted[i].first] = i;
         }
 
-        size_t mask_size = (sorted.size() + 63) / 64;
-        std::vector<std::vector<algorithm::MaskType>> exc_masks(
-            sorted.size(), std::vector<algorithm::MaskType>(mask_size, 0)
-        );
-
-        uint64_t next_group = 0;
-        std::vector<bool> visited(sorted.size(), false);
+        // Build exc_mask (ID-based): for each pair (i,j) where i's
+        // exclusive_set contains j, set bit j in exc_masks[i] and vice versa.
+        std::vector<algorithm::MaskType> exc_masks(sorted.size(), 0);
         for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
-            if (visited[i] || sorted[i].second.exclusive_set.empty())
-                continue;
-            uint64_t group_bit = algorithm::MaskType(1) << (next_group % 64);
-            next_group++;
-            visited[i] = true;
-            exc_masks[i][0] |= group_bit;
-            for (const auto &ex_nsid : sorted[i].second.exclusive_set) {
-                // ex_nsid.str() returns "minecraft:sharpness" — extract bare id
-                auto s    = ex_nsid.str();
-                auto p    = s.find(':');
-                auto bare = (p != std::string::npos) ? s.substr(p + 1) : s;
-                auto it   = name_to_local.find(bare);
-                if (it != name_to_local.end()) {
-                    visited[it->second] = true;
-                    exc_masks[it->second][0] |= group_bit;
+            for (int32_t j = i + 1; j < static_cast<int32_t>(sorted.size()); ++j) {
+                auto id_i = NSID(sorted[i].first);
+                auto id_j = NSID(sorted[j].first);
+                bool conflict = sorted[i].second.exclusive_set.count(id_j) ||
+                                sorted[j].second.exclusive_set.count(id_i);
+                if (conflict) {
+                    exc_masks[i] |= (algorithm::MaskType(1) << j);
+                    exc_masks[j] |= (algorithm::MaskType(1) << i);
                 }
             }
         }
@@ -110,9 +99,10 @@ struct TestFixture {
             const auto &ei  = sorted[i].second;
             bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
-            info.mul        = static_cast<uint16_t>(ei.multiplier);
-            info.mul_b      = static_cast<uint16_t>(std::max(1, ei.multiplier >> 1));
-            info.max_lvl    = static_cast<uint16_t>(ei.max_level);
+            info.id         = static_cast<uint8_t>(i);
+            info.mul        = static_cast<uint8_t>(ei.multiplier);
+            info.mul_b      = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
+            info.max_lvl    = static_cast<uint8_t>(ei.max_level);
             info.exc_mask   = exc_masks[i];
             info.applicable = applicable;
             compact_infos.push_back(std::move(info));
@@ -127,13 +117,15 @@ struct TestFixture {
 
     algorithm::Item make_book(int16_t ench_id, int16_t level) const {
         algorithm::Item book{algorithm::ItemType::Book, 0, 0, {}};
-        book.enchs.insert({ench_id, level});
+        book.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(ench_id),
+                                          static_cast<algorithm::Ench::value_type>(level)});
         return book;
     }
 
     algorithm::Item make_equip(int16_t ench_id, int16_t level) const {
         algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
-        eq.enchs.insert({ench_id, level});
+        eq.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(ench_id),
+                                        static_cast<algorithm::Ench::value_type>(level)});
         return eq;
     }
 };
@@ -147,8 +139,8 @@ void test_forge_books() {
     algorithm::ForgeEngine engine;
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
     expect(result.type == algorithm::ItemType::Book, "result should be book");
-    auto it = result.enchs.find(fx.id("sharpness"));
-    expect(it != result.enchs.end() && it->level == 4, "book+book: should keep max level (4)");
+    auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+    expect(result.enchs.contains(sid) && result.enchs[sid] == 4, "book+book: should keep max level (4)");
     expect(cost == 4, "book+book cost should be 4");
     std::cout << "PASS: test_forge_books (cost=" << cost << ")" << std::endl;
 }
@@ -160,8 +152,8 @@ void test_forge_equipment_with_book() {
     algorithm::ForgeEngine engine;
     auto [result, cost] = engine.forge(eq, book, fx.reg);
     expect(result.type == algorithm::ItemType::Equip, "result should be equipment");
-    auto it = result.enchs.find(fx.id("sharpness"));
-    expect(it != result.enchs.end() && it->level == 5, "result should have sharpness 5");
+    auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+    expect(result.enchs.contains(sid) && result.enchs[sid] == 5, "result should have sharpness 5");
     expect(cost == 5, "forge cost for sharpness 5 to empty sword should be 5");
     std::cout << "PASS: test_forge_equipment_with_book (cost=" << cost << ")" << std::endl;
 }
@@ -172,13 +164,17 @@ void test_forge_incompatible_rejected() {
     auto eq             = fx.make_equip(fx.id("sharpness"), 5);
     auto book           = fx.make_book(fx.id("bane_of_arthropods"), 4);
     auto [result, cost] = engine.forge(eq, book, fx.reg);
-    auto it             = result.enchs.find(fx.id("bane_of_arthropods"));
-    expect(it == result.enchs.end(), "incompatible enchant should not be applied");
-    auto sharp_it = result.enchs.find(fx.id("sharpness"));
-    expect(
-        sharp_it != result.enchs.end() && sharp_it->level == 5,
-        "non-conflicting sharpness 5 should be preserved after incompatible forge"
-    );
+    {
+        auto bid = static_cast<algorithm::Ench::value_type>(fx.id("bane_of_arthropods"));
+        expect(!result.enchs.contains(bid), "incompatible enchant should not be applied");
+    }
+    {
+        auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+        expect(
+            result.enchs.contains(sid) && result.enchs[sid] == 5,
+            "non-conflicting sharpness 5 should be preserved after incompatible forge"
+        );
+    }
     expect(cost == 1, "incompatible penalty cost should be 1 (JE)");
     std::cout << "PASS: test_forge_incompatible_rejected (cost=" << cost << ")" << std::endl;
 }
@@ -300,16 +296,20 @@ void test_same_level_upgrade() {
     auto book_a         = fx.make_book(fx.id("sharpness"), 4);
     auto book_b         = fx.make_book(fx.id("sharpness"), 4);
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
-    auto it             = result.enchs.find(fx.id("sharpness"));
-    expect(
-        it != result.enchs.end() && it->level == 5,
-        "same level combine: 4+4 should become 5 (max_level of sharpness)"
-    );
+    {
+        auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+        expect(
+            result.enchs.contains(sid) && result.enchs[sid] == 5,
+            "same level combine: 4+4 should become 5 (max_level of sharpness)"
+        );
+    }
     auto book_c           = fx.make_book(fx.id("sharpness"), 5);
     auto book_d           = fx.make_book(fx.id("sharpness"), 5);
     auto [result2, cost2] = engine.forge(book_c, book_d, fx.reg);
-    auto it2              = result2.enchs.find(fx.id("sharpness"));
-    expect(it2 != result2.enchs.end() && it2->level == 5, "max level combine: 5+5 should stay 5");
+    {
+        auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+        expect(result2.enchs.contains(sid) && result2.enchs[sid] == 5, "max level combine: 5+5 should stay 5");
+    }
     std::cout << "PASS: test_same_level_upgrade" << std::endl;
 }
 
@@ -319,37 +319,54 @@ void test_different_level_max() {
     auto book_a         = fx.make_book(fx.id("sharpness"), 5);
     auto book_b         = fx.make_book(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
-    auto it             = result.enchs.find(fx.id("sharpness"));
-    expect(it != result.enchs.end() && it->level == 5, "different level combine: 5+3 should stay 5");
+    {
+        auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+        expect(result.enchs.contains(sid) && result.enchs[sid] == 5, "different level combine: 5+3 should stay 5");
+    }
     std::cout << "PASS: test_different_level_max" << std::endl;
 }
 
 // ─── Malformed item / error path tests ─────────────────────────────
 
-void test_negative_enchant_level() {
+void test_invalid_enchant_level_rejected() {
     TestFixture fx;
-    algorithm::ForgeEngine engine;
+    // level <= 0 is rejected by the new EnchSet (uint8_t storage)
     algorithm::Item book{algorithm::ItemType::Book, 0, 0, {}};
-    book.enchs.insert({fx.id("sharpness"), -5});
+    bool inserted = book.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(fx.id("sharpness")), 0});
+    expect(!inserted, "zero-level enchant should be rejected by EnchSet");
+
+    // Forging with an empty book leaves the equipment unchanged
+    algorithm::ForgeEngine engine;
     auto eq             = fx.make_equip(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(eq, book, fx.reg);
-    auto it             = result.enchs.find(fx.id("sharpness"));
-    expect(
-        it != result.enchs.end() && it->level == 3,
-        "negative level book should not reduce equipment's enchantment level"
-    );
-    std::cout << "PASS: test_negative_enchant_level (cost=" << cost << ")" << std::endl;
+    {
+        auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+        expect(
+            result.enchs.contains(sid) && result.enchs[sid] == 3,
+            "book with rejected enchant should not reduce equipment's level"
+        );
+    }
+    std::cout << "PASS: test_invalid_enchant_level_rejected (cost=" << cost << ")" << std::endl;
 }
 
-void test_zero_level_enchant() {
+void test_zero_level_enchant_rejected() {
     TestFixture fx;
+    // make_book with level 0 → insert() returns false, book stays empty
+    auto book = fx.make_book(fx.id("sharpness"), 0);
+    expect(book.enchs.empty(), "zero-level enchant should not be stored in EnchSet");
+
+    // Forge book (empty) onto equipment → equipment unchanged
     algorithm::ForgeEngine engine;
-    auto book           = fx.make_book(fx.id("sharpness"), 0);
-    auto eq             = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
+    auto eq             = fx.make_equip(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(eq, book, fx.reg);
-    auto it             = result.enchs.find(fx.id("sharpness"));
-    expect(it != result.enchs.end() && it->level == 0, "zero-level enchant should be applied with level 0");
-    std::cout << "PASS: test_zero_level_enchant (cost=" << cost << ")" << std::endl;
+    {
+        auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+        expect(
+            result.enchs.contains(sid) && result.enchs[sid] == 3,
+            "book with zero-level enchant should not affect equipment"
+        );
+    }
+    std::cout << "PASS: test_zero_level_enchant_rejected (cost=" << cost << ")" << std::endl;
 }
 
 } // anonymous namespace
@@ -367,8 +384,8 @@ int main() {
         test_ppn_recalculation();
         test_same_level_upgrade();
         test_different_level_max();
-        test_negative_enchant_level();
-        test_zero_level_enchant();
+        test_invalid_enchant_level_rejected();
+        test_zero_level_enchant_rejected();
     } catch (const test_error &e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception &e) {

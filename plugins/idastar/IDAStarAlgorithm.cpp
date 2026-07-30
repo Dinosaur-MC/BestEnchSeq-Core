@@ -13,8 +13,7 @@ bool IDAStarAlgorithm::_meets_target(const std::vector<ItemID>& ids) const {
     if (ids.empty()) return false;
     const auto& equip = _pool[ids[0]];
     for (const auto& t : _target) {
-        auto it = equip.enchs.find(t.id);
-        if (it == equip.enchs.end() || it->level < t.level)
+        if (equip.enchs[t.id] < t.level)
             return false;
     }
     return true;
@@ -134,8 +133,8 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
             auto saved_h_max = _h_max;
             const auto& forged_enchs = _pool[new_base_id].enchs;
             for (const auto& e : forged_enchs) {
-                if (e.level > _h_max[e.id])
-                    _h_max[e.id] = e.level;
+                if (e.level() > _h_max[e.id()])
+                    _h_max[e.id()] = e.level();
             }
             _dfs(child_buf, child_g, best_cost, ctx);
             _h_max = std::move(saved_h_max);

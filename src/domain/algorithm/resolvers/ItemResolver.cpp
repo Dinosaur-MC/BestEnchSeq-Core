@@ -1,5 +1,4 @@
 #include "ItemResolver.h"
-#include <cstdint>
 
 namespace algorithm {
 
@@ -8,13 +7,14 @@ ResolverOutput ItemResolver::resolve(const Item &target_item, const EnchSet &sou
 
     // Step 1: Compute diff = target_ench - source_ench
     EnchSet diff;
-    for (const Ench &wanted : target_ench) {
-        auto it = source_ench.find(wanted.id);
-        if (it == source_ench.end()) {
-            diff.insert(wanted);
-        } else if (it->level < wanted.level) {
-            int16_t level = it->level + 1 == wanted.level ? it->level : wanted.level;
-            diff.insert(Ench{wanted.id, level});
+    for (const auto &wanted : target_ench) {
+        auto id = wanted.id();
+        if (!source_ench.contains(id)) {
+            diff.insert(Ench{id, wanted.level()});
+        } else if (source_ench[id] < wanted.level()) {
+            auto lvl = static_cast<Ench::value_type>(
+                source_ench[id] + 1 == wanted.level() ? source_ench[id] : wanted.level());
+            diff.insert(Ench{id, lvl});
         }
     }
 

@@ -83,20 +83,19 @@ struct TestContext {
             bool applicable = biz.applicable_equipments.count(EquipmentTag::sword()) > 0;
 
             algorithm::EnchInfo ai;
-            ai.mul = static_cast<uint16_t>(biz.multiplier);
-            ai.mul_b = static_cast<uint16_t>(std::max(1, biz.multiplier >> 1));
-            ai.max_lvl = static_cast<uint16_t>(biz.max_level);
+            ai.id = static_cast<uint8_t>(compact_infos.size());
+            ai.mul = static_cast<uint8_t>(biz.multiplier);
+            ai.mul_b = static_cast<uint8_t>(std::max(1, biz.multiplier >> 1));
+            ai.max_lvl = static_cast<uint8_t>(biz.max_level);
             ai.applicable = applicable;
 
             // Build exc_mask: check against previously-added enchantments
-            ai.exc_mask.resize(compact_infos.size() / algorithm::MASK_ELEM_SIZE + 1, 0);
+            ai.exc_mask = 0;
             for (size_t j = 0; j < compact_infos.size(); ++j) {
                 if (biz.exclusive_set.count(global_ids[j])) {
-                    size_t word = j / algorithm::MASK_ELEM_SIZE;
-                    size_t bit = j % algorithm::MASK_ELEM_SIZE;
-                    ai.exc_mask[word] |= (algorithm::MaskType(1) << bit);
-                    if (word < compact_infos[j].exc_mask.size())
-                        compact_infos[j].exc_mask[word] |= (algorithm::MaskType(1) << bit);
+                    algorithm::MaskType bit = (algorithm::MaskType(1) << j);
+                    ai.exc_mask |= bit;
+                    compact_infos[j].exc_mask |= bit;
                 }
             }
 
@@ -123,7 +122,7 @@ struct TestContext {
 
 algorithm::Item book(int16_t id, int16_t level) {
     algorithm::Item b{algorithm::ItemType::Book, 0, 0, {}};
-    b.enchs.insert({id, level});
+    b.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(id), static_cast<algorithm::Ench::value_type>(level)});
     return b;
 }
 

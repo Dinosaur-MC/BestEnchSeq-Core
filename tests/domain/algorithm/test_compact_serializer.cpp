@@ -42,14 +42,7 @@ void test_ench_set_roundtrip() {
     r >> result;
 
     expect(r.ok(), "deserialize should succeed");
-    expect(original.size() == result.size(),
-           "EnchSet size should match after round-trip");
-    for (size_t i = 0; i < original.size(); ++i) {
-        auto o = original.begin()[i];
-        auto r2 = result.begin()[i];
-        expect(o.id == r2.id && o.level == r2.level,
-               "EnchSet element should match after round-trip");
-    }
+    expect(original == result, "EnchSet should be equal after round-trip");
     TEST_PASS("test_ench_set_roundtrip");
 }
 
@@ -188,24 +181,21 @@ void test_set_fail_rejection() {
     TEST_PASS("test_set_fail_rejection");
 }
 
-// ─── Security boundary: overflow count in EnchSet ─────────────────────
+// ─── Security boundary: truncated EnchSet data rejected ───────────────
 
-void test_overflow_count_ench_set() {
-    // EnchSet::deserialize reads u64 count. Write a huge count and verify.
-    algorithm::EnchSet original;
-    original.insert({1, 3});
+void test_truncated_ench_set_rejected() {
+    // New EnchSet format: u64 mask (8 bytes) + u8 lvls[64] (64 bytes) = 72 bytes.
+    // Write valid mask but incomplete level data to trigger read failure.
     ByteStreamWriter w;
-    // Write a large u64 count manually, then a valid Ench, then attempt deserialize
-    w.u64(UINT64_MAX);
-    w << algorithm::Ench{1, 3};
+    w.u64(1);             // mask: bit 0 set → id=0 present
+    uint8_t partial[] = {1, 2, 3};
+    w.bytes(partial, 3);  // only 3 level bytes out of 64 needed
     ByteStreamReader r(w.data());
     algorithm::EnchSet result;
     r >> result;
-    // Overflow count may set reader to failed or truncate.
-    // Either way the system should not crash.
-    expect(r.fail() || result.size() < 17,
-           "overflow count should set fail or limit size");
-    TEST_PASS("test_overflow_count_ench_set");
+    // Reader should fail on incomplete data
+    expect(r.fail(), "truncated EnchSet should set reader fail");
+    TEST_PASS("test_truncated_ench_set_rejected");
 }
 
 // ─── Security boundary: overflow count in Solution ────────────────────────
@@ -224,21 +214,6 @@ void test_overflow_count_solution() {
     expect(r.fail() || true,
            "overflow count should not crash");
     TEST_PASS("test_overflow_count_solution");
-}
-
-// ─── Security boundary: incomplete data rejected ──────────────────────
-
-void test_incomplete_data_rejected() {
-    // EnchSet expects u64 count first, then Ench entries.
-    ByteStreamWriter w;
-    w.u64(5); // Claims 5 entries but writes only 1
-    w << algorithm::Ench{1, 3};
-    ByteStreamReader r(w.data());
-    algorithm::EnchSet result;
-    r >> result;
-    // After reading 5 entries fails at entry 2, reader should be in fail state
-    expect(r.fail(), "truncated EnchSet should set reader fail");
-    TEST_PASS("test_incomplete_data_rejected");
 }
 
 void test_forge_config_roundtrip() {
@@ -285,10 +260,11 @@ void test_search_config_roundtrip() {
 
 void test_compact_ench_info_roundtrip() {
     algorithm::EnchInfo original;
+    original.id = 3;
     original.mul = 1;
     original.mul_b = 1;
     original.max_lvl = 5;
-    original.exc_mask = {1, 2, 3};
+    original.exc_mask = 0b111;
     original.applicable = true;
 
     ByteStreamWriter w;
@@ -316,9 +292,8 @@ int main() {
         test_step_roundtrip();
         test_solution_roundtrip();
         test_set_fail_rejection();
-        test_overflow_count_ench_set();
+        test_truncated_ench_set_rejected();
         test_overflow_count_solution();
-        test_incomplete_data_rejected();
         test_forge_config_roundtrip();
         test_search_config_roundtrip();
         test_compact_ench_info_roundtrip();
