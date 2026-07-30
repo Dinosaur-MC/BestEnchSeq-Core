@@ -1,6 +1,8 @@
 #pragma once
+#include "domain/algorithm/types/EnchSet.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
+#include <array>
 #include <vector>
 
 namespace algorithm {
@@ -20,11 +22,11 @@ class EnchReg : public IBinarySerializable {
     std::vector<NSID> _global_ids;     // local → business global ID (for round-trip)
     Equipment _target_equip;
 
-    std::vector<char> _conflict_matrix; // flat N×N, row-major
-    void _build_conflict_matrix();
-
-    std::vector<mask_type> _mask_cache; // precomputed conflict masks
+    std::array<mask_type, EnchSet::MAX_SIZE> _mask_cache; // precomputed conflict masks
     void _build_mask_cache();
+    
+    std::array<char, EnchSet::MAX_SIZE * EnchSet::MAX_SIZE> _conflict_matrix; // flat N×N, row-major
+    void _build_conflict_matrix();
 
   public:
     EnchReg() = default;
@@ -47,7 +49,7 @@ class EnchReg : public IBinarySerializable {
         return _target_equip.applicable_enchs.contains(id);
     }
     [[nodiscard]] bool is_conflict(id_type id1, id_type id2) const noexcept {
-        return _conflict_matrix[id1 * _ench_infos.size() + id2];
+        return _conflict_matrix[static_cast<size_t>(id1) * EnchSet::MAX_SIZE + id2];
     }
     [[nodiscard]] mask_type get_conflict_mask(id_type id) const noexcept { return _mask_cache[id]; }
     [[nodiscard]] const Equipment &get_target_equip() const noexcept { return _target_equip; }

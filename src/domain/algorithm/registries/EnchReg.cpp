@@ -5,21 +5,22 @@
 namespace algorithm {
 
 void EnchReg::_build_conflict_matrix() {
+    _conflict_matrix.fill(0);
     const size_t N = _ench_infos.size();
-    _conflict_matrix.assign(N * N, 0);
+    constexpr size_t Stride = EnchSet::MAX_SIZE;
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = i + 1; j < N; ++j) {
             bool conflict =
                 _ench_infos[i].is_conflict(_ench_infos[j]) || _ench_infos[j].is_conflict(_ench_infos[i]);
-            _conflict_matrix[i * N + j] = conflict ? 1 : 0;
-            _conflict_matrix[j * N + i] = conflict ? 1 : 0;
+            _conflict_matrix[i * Stride + j] = conflict ? 1 : 0;
+            _conflict_matrix[j * Stride + i] = conflict ? 1 : 0;
         }
     }
 }
 
 void EnchReg::_build_mask_cache() {
+    _mask_cache.fill(0);
     const size_t N = _ench_infos.size();
-    _mask_cache.assign(N, 0);
     for (size_t i = 0; i < N; ++i) {
         _mask_cache[i] = _ench_infos[i].exc_mask;
     }
@@ -29,6 +30,7 @@ void EnchReg::init(
     std::vector<EnchInfo> ench_infos, std::vector<NSID> global_ids, const Equipment &target_equip
 ) {
     assert(ench_infos.size() == global_ids.size());
+    assert(ench_infos.size() <= EnchSet::MAX_SIZE);
     _ench_infos   = std::move(ench_infos);
     _global_ids   = std::move(global_ids);
     _target_equip = target_equip;
@@ -54,6 +56,7 @@ void EnchReg::serialize(ByteStreamWriter &w) const noexcept {
 }
 void EnchReg::deserialize(ByteStreamReader &r) noexcept {
     r >> _ench_infos;
+    assert(_ench_infos.size() <= EnchSet::MAX_SIZE);
     // Manual Equipment deserialize — NSID("") would throw, so use default ctor
     // when the id string is empty.
     {
@@ -75,6 +78,7 @@ void EnchReg::deserialize(ByteStreamReader &r) noexcept {
         _global_ids[i] = s.empty() ? NSID() : NSID(s);
     }
     _build_conflict_matrix();
+    _build_mask_cache();
 }
 
 } // namespace algorithm
