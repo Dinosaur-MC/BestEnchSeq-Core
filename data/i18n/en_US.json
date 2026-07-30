@@ -65,6 +65,7 @@
     "cli.err.source_without_target": "--source requires --target to be specified",
     "cli.err.memory_not_positive": "Memory value must be positive",
     "cli.err.max_time_negative": "Max time must be >= 0",
+    "cli.err.unreachable_target": "Target unreachable: the requested enchantments cannot be applied to the selected item (e.g. due to conflicts or missing prerequisites)",
     "cli.err.empty_lang": "Empty --lang value. Expected 'zh_CN' or 'en_US'.",
     "cli.err.double_comma": "Empty enchantment spec in list (double comma near position {0})",
     "cli.err.trailing_comma": "Trailing comma in enchantment list",

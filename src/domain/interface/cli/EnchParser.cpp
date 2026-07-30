@@ -51,7 +51,14 @@ EnchSet EnchParser::parse(const std::string& input,
 
     auto tokens = string_utils::split(input, ',');
 
-    for (const auto& token : tokens) {
+    for (auto token : tokens) {
+        // Trim leading/trailing whitespace from each token to tolerate
+        // spaces after commas (e.g. "sharpness=5, unbreaking=3").
+        auto trim_start = token.find_first_not_of(" \t\r\n");
+        if (trim_start == std::string::npos) continue;  // whitespace-only token
+        if (trim_start > 0) token.erase(0, trim_start);
+        auto trim_end = token.find_last_not_of(" \t\r\n");
+        if (trim_end + 1 < token.size()) token.erase(trim_end + 1);
         std::string ns, id;
         int level = 1;
 

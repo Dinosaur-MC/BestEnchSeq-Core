@@ -65,6 +65,7 @@
     "cli.err.source_without_target": "使用 --source 时，需要同时指定 --target",
     "cli.err.memory_not_positive": "内存值必须为正数",
     "cli.err.max_time_negative": "最大时间必须 >= 0",
+    "cli.err.unreachable_target": "目标不可达：请求的附魔无法应用于所选物品（例如存在冲突附魔或缺少前置条件）",
     "cli.err.empty_lang": "空的 --lang 值。请使用 'zh_CN' 或 'en_US'。",
     "cli.err.double_comma": "附魔列表中存在空附魔项（位置 {0} 附近有双逗号）",
     "cli.err.trailing_comma": "附魔列表末尾存在多余的逗号",

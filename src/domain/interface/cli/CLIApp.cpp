@@ -175,6 +175,14 @@ int CLIApp::run(int argc, char* argv[]) {
 
         OutputFormatter::set_show_nsid(config.verbose);
         auto result = _ctx.solve(request);
+
+        // When the pipeline determines the target is unreachable (conflicting
+        // enchantments, missing prerequisites, etc.), it returns an empty
+        // solution set.  Surface this to the user instead of printing nothing.
+        if (!result.success && result.solutions.empty()) {
+            throw std::runtime_error(tr("cli.err.unreachable_target"));
+        }
+
         auto output = _ctx.format(result, mode, config.format);
 
         if (config.output) {
