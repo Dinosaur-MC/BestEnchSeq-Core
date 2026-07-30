@@ -175,6 +175,15 @@ void ThreadPool::_worker_main(std::size_t /*id*/, std::stop_token st) {
             }
 
             auto w = _wake_counter.load(std::memory_order_acquire);
+            // Re-check _pending and stop_requested after snapshotting
+            // _wake_counter.  Without these a concurrent enqueue() or
+            // stop() can fire its notify_all between the last _pending
+            // /stop check and here — the notification is lost because
+            // we aren't waiting yet, while _wake_counter is already
+            // updated so wait(w) would see counter == w and block
+            // forever even though work (or a shutdown signal) arrived.
+            if (_pending.load(std::memory_order_acquire) > 0) continue;
+            if (st.stop_requested()) break;
             _wake_counter.wait(w);
         }
     }
