@@ -31,6 +31,20 @@ inline bool meets_target(ItemPool::ItemID equip_id, const ItemPool &pool, const 
     return meets_target(pool[equip_id], target);
 }
 
+/// Move the first equipment item to the front of a working item set, so
+/// items[0] is a sane base for strategies that rely on index-0-as-equipment.
+/// No-op when there is no equipment (direct mode already places it first;
+/// a book-only pool stays in priority order).
+inline void normalize_base_equipment(ItemCollection &items) noexcept {
+    for (size_t i = 0; i < items.size(); ++i) {
+        if (items[i].type == ItemType::Equip) {
+            if (i != 0)
+                std::rotate(items.begin(), items.begin() + i, items.begin() + i + 1);
+            return;
+        }
+    }
+}
+
 /// Shared search utilities extracted from AStarAlgorithm / IDAStarAlgorithm.
 /// Keeps the duplicate-free implementations in one place.
 namespace search_utils {

@@ -1,6 +1,7 @@
 #include "HammingAlgorithm.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
 #include <cstdint>
 #include <numeric>
@@ -61,33 +62,35 @@ void HammingAlgorithm::arrange_by_popcount(
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.f_config);
-    _ench_reg = &input.ench_reg;
-    const auto& reg = input.ench_reg;
+    _forge_engine.set_config(input.config.forge);
+    _ench_reg = &input.registry;
+    const auto& reg = input.registry;
     const auto& target = input.target;
     ctx.report_progress(0, ProgressStatus::Starting);
 
+    // Working item set comes from the algorithm's resolver.
+    auto items = get_resolver()->resolve(input);
+    normalize_base_equipment(items);
+
     // ── Quick exit checks ──────────────────────────────────────────────
 
-    if (input.items.empty()) {
+    if (items.empty()) {
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
-    if (meets_target(input.items[0], target.enchs)) {
+    if (meets_target(items[0], target.enchs)) {
         ctx.report_solution({});
         ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
     }
 
-    if (input.items.size() <= 1) {
+    if (items.size() <= 1) {
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
     // ── Phase 1: Seed the PPN-tiered work queue ──────────────────────────
-
-    std::vector<Item> items(input.items.begin(), input.items.end());
 
     int max_ppn = 0;
     for (const auto& item : items)
@@ -98,7 +101,7 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         tiers[item.ppn].push_back(std::move(item));
 
     std::vector<EnchStep> steps;
-    steps.reserve(input.items.size() - 1);
+    steps.reserve(items.size() - 1);
 
     bool cancelled = false;
 
@@ -227,15 +230,6 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         cancelled ? ProgressStatus::Cancelled
                   : ProgressStatus::CompleteNoSolution);
 }
-
-// ─── simulate (optimistic) ──────────────────────────────────────────────────
-
-bool HammingAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
-    if (input.items.empty()) return false;
-    if (meets_target(input.items[0], input.target.enchs)) return true;
-    return input.items.size() > 1;
-}
-
 
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 

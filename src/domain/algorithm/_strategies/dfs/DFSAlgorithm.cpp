@@ -3,6 +3,7 @@
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/components/Heuristic.h"
+#include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>
@@ -104,8 +105,8 @@ const IAlgorithmSerializer *DFSAlgorithm::get_serializer() const noexcept {
 // ─── init ─────────────────────────────────────────────────────────────────
 
 void DFSAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
-    _ench_reg = &input.ench_reg;
-    _search_config = input.s_config;
+    _ench_reg = &input.registry;
+    _search_config = input.config.search;
     _target.clear();
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
@@ -127,9 +128,10 @@ void DFSAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void DFSAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.f_config);
-    const auto& items = input.items;
-    const auto& reg = input.ench_reg;
+    _forge_engine.set_config(input.config.forge);
+    auto items = get_resolver()->resolve(input);
+    normalize_base_equipment(items);
+    const auto& reg = input.registry;
     ctx.report_progress(0, ProgressStatus::Starting);
     _start_time = std::chrono::steady_clock::now();
 
@@ -138,8 +140,8 @@ void DFSAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
             _best_cost = _greedy_bound(items, reg);
 
         // Warm-start bound from executor chain (tighter than our own)
-        if (input.initial_bound < _best_cost)
-            _best_cost = input.initial_bound;
+        if (input.config.search.initial_bound < _best_cost)
+            _best_cost = input.config.search.initial_bound;
 
         _stack.push_back({items, 0, 0, 0, {}, {}, 0, 0, false});
         _frame_pairs.emplace_back();

@@ -67,29 +67,15 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(
     }
 
     // Check mode support
-    if (!(algo->supported_mode() & algo_input.mode)) {
-        std::string mode_str = (algo_input.mode == AlgorithmMode::inventory)
+    if (!(algo->supported_mode() & algo_input.config.mode)) {
+        std::string mode_str = (algo_input.config.mode == AlgorithmMode::inventory)
             ? "inventory" : "direct";
         throw std::runtime_error(tr_fmt("pipeline.err.unsupported_mode", algorithm, mode_str));
     }
 
-    // Resolve: generate books or filter inventory
-    auto resolved = algo->resolve(algo_input);
+    // Feasibility gate (cheap).  The resolver (which produces the strategy's
+    // working item set) is called by the strategy itself inside execute().
     result.algorithm_name = algorithm;
-
-    if (resolved.empty()) {
-        LOG_INFO("resolve: %s",
-            (algo_input.mode == AlgorithmMode::inventory)
-                ? "inventory unreachable" : "target already satisfied");
-        return result;
-    }
-
-    size_t old_size = algo_input.items.size();
-    algo_input.items.resize(old_size + resolved.size());
-    for (size_t i = 0; i < resolved.size(); ++i)
-        algo_input.items[old_size + i] = std::move(resolved[i]);
-
-    // Feasibility check
     if (!algo->simulate(algo_input)) {
         LOG_INFO("simulate: target not reachable");
         return result;

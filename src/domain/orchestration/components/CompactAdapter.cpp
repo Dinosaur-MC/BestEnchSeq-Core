@@ -126,10 +126,10 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
 
     // ── 7. Build AlgorithmInput skeleton ───────────────────────────────
     algorithm::AlgorithmInput input;
-    input.ench_reg = std::move(ench_reg);
-    input.f_config = request.forge_config;
-    input.s_config = request.search_config;
-    input.mode     = request.mode;
+    input.registry      = std::move(ench_reg);
+    input.config.mode   = request.mode;
+    input.config.forge  = request.forge_config;
+    input.config.search = request.search_config;
 
     // Convert target_item (domain -> algorithm)
     // Direct mode: target_item.enchantments = desired enchants (must be non-empty)
@@ -152,84 +152,38 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
         [&](const auto &payload) {
             using T = std::decay_t<decltype(payload)>;
             if constexpr (std::is_same_v<T, DirectPayload>) {
-                // Direct mode: items[0] = equipment with CURRENT (source) enchants
+                // Direct mode: data = the equipment's current enchantments.
+                // (The base equipment itself is assembled by the resolver
+                // from input.target + this source.)
                 validate_enchants(payload.source_enchantments);
-                algorithm::Item equip_item = input.target;
-                equip_item.enchs           = remap_nsid_to_local(payload.source_enchantments);
-                input.items.push_back(std::move(equip_item));
-
-                // Data union: source enchantments as EnchCollection
                 algorithm::EnchCollection src_vec;
-                for (const auto &e : input.items[0].enchs)
+                for (const auto &e : remap_nsid_to_local(payload.source_enchantments))
                     src_vec.push_back(e);
-                input.data = std::move(src_vec);
+                input.data = algorithm::DirectPayload{std::move(src_vec)};
             } else if constexpr (std::is_same_v<T, InventoryPayload>) {
-                // Inventory mode: items[0] = the equipment being forged (its
-                // current state), items[1..] = available sacrifice items.
-                // The goal (desired enchants) stays in input.target.
-                //
-                // The equipment's current enchants come from the matching
-                // equipment entry in the payload; if the payload has no entry
-                // for the target equipment, start from a clean (no-enchant)
-                // item.  Eligible pool rule: keep enchanted books and the
-                // target equipment; exclude any other item (non-book with a
-                // different id).  Note: this eligibility filter needs NSID
-                // item identities, so it must live here rather than in the
-                // compact (id-less) algorithm resolver.
-                const auto &extra    = payload.extra_items;
-                const auto &prios    = payload.extra_item_priorities;
-                const NSID target_id = request.target_item.id;
-
-                // Locate the equipment entry matching the target item.
-                size_t equip_index = extra.size();
-                for (size_t i = 0; i < extra.size(); ++i) {
-                    if (!extra[i].is_book() && extra[i].id == target_id) {
-                        equip_index = i;
-                        break;
-                    }
-                }
-
-                // items[0] = the equipment being forged.
-                if (equip_index != extra.size()) {
-                    const auto &item = extra[equip_index];
-                    algorithm::Item eq = input.target;
-                    eq.type  = algorithm::ItemType::Equip;
-                    eq.ppn   = static_cast<uint8_t>(item.prior_penalty);
-                    eq.dur   = static_cast<int16_t>(item.durability);
-                    eq.enchs = remap_nsid_to_local(item.enchantments);
-                    input.items.push_back(std::move(eq));
-                } else {
-                    algorithm::Item clean = input.target;
-                    clean.enchs.clear();
-                    input.items.push_back(std::move(clean));
-                }
-
-                // Eligible sacrifice pool → input.data (SourceData), NOT
-                // input.items — the pipeline appends the resolver's selection
-                // to input.items, so putting the pool there too would
-                // duplicate it.  items[1..] is populated by the resolver
-                // (InventoryResolver::resolve) during stage_execute.
-                algorithm::ItemCollection inv_items;
-                inv_items.reserve(extra.size());
-                input.priorities.reserve(extra.size());
+                // Inventory mode: available = all enchanted books + all
+                // equipment items from the input (empty books dropped).
+                // No equipment-first guarantee — the resolver/strategy
+                // selects its own base equipment via Item::type.
+                const auto &extra = payload.extra_items;
+                const auto &prios = payload.extra_item_priorities;
+                algorithm::ItemCollection avail;
+                std::vector<int32_t> inv_prios;
+                avail.reserve(extra.size());
+                inv_prios.reserve(extra.size());
                 for (size_t i = 0; i < extra.size(); ++i) {
                     const auto &item = extra[i];
-                    if (i == equip_index)
-                        continue;
-                    if (!item.is_book() && item.id != target_id)
-                        continue;  // exclude: not an enchanted book, not target
+                    if (item.is_book() && item.enchantments.empty())
+                        continue;  // drop empty books (no forge value)
                     algorithm::Item algo_item;
                     algo_item.type  = item.is_book() ? algorithm::ItemType::Book : algorithm::ItemType::Equip;
                     algo_item.ppn   = static_cast<uint8_t>(item.prior_penalty);
                     algo_item.dur   = static_cast<int16_t>(item.durability);
                     algo_item.enchs = remap_nsid_to_local(item.enchantments);
-                    inv_items.push_back(std::move(algo_item));
-                    input.priorities.push_back(
-                        i < prios.size() ? prios[i] : 99);
+                    avail.push_back(std::move(algo_item));
+                    inv_prios.push_back(i < prios.size() ? prios[i] : 99);
                 }
-
-                // Data union: sacrifice items as ItemCollection.
-                input.data = std::move(inv_items);
+                input.data = algorithm::InventoryPayload{std::move(avail), std::move(inv_prios)};
             }
         },
         request.payload
@@ -253,19 +207,19 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
     EnchSet original_ench;
     if (input.is_direct()) {
         for (const auto &e : input.source()) {
-            NSID nsid = input.ench_reg.to_global_id(e.id);
+            NSID nsid = input.registry.to_global_id(e.id);
             original_ench.emplace(nsid, std::string{}, e.level);
         }
     }
 
     // target_item: from input.target via to_domain() with equipment NSID
-    Item target_item = to_domain(input.target, input.ench_reg);
+    Item target_item = to_domain(input.target, input.registry);
 
     // available_items: from inventory items or extracted from steps
     ItemCollection available_items;
     if (input.is_inventory()) {
-        for (const auto &item : input.inventory_items())
-            available_items.push_back(to_domain(item, input.ench_reg));
+        for (const auto &item : input.available())
+            available_items.push_back(to_domain(item, input.registry));
     }
     // Note: direct mode has no available_items — source enchantments are
     // shown in the Forge Plan header via original_ench.
@@ -278,7 +232,7 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
     std::optional<Item> domain_final_item;
     if (output.final_item.type != algorithm::ItemType::Book ||
         !output.final_item.enchs.empty() || output.final_item.ppn != 0) {
-        domain_final_item = to_domain(output.final_item, input.ench_reg);
+        domain_final_item = to_domain(output.final_item, input.registry);
     }
 
     for (const auto &csol : output.solutions) {
@@ -286,8 +240,8 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
         domain_steps.reserve(csol.steps.size());
 
         for (const auto &s : csol.steps) {
-            auto base = to_domain(s.base, input.ench_reg);
-            auto sac  = to_domain(s.sacrifice, input.ench_reg);
+            auto base = to_domain(s.base, input.registry);
+            auto sac  = to_domain(s.sacrifice, input.registry);
 
             domain_steps.push_back(
                 Solution::EnchStep{
@@ -298,9 +252,9 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
 
         // Determine platform from forge config
         MCE plat = MCE::Java;
-        if (input.f_config.platform == MCE::Java)
+        if (input.config.forge.platform == MCE::Java)
             plat = MCE::Java;
-        else if (input.f_config.platform == MCE::Bedrock)
+        else if (input.config.forge.platform == MCE::Bedrock)
             plat = MCE::Bedrock;
         else
             plat = MCE::Java;

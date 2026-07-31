@@ -1,6 +1,7 @@
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/components/StateHash.h"
+#include "domain/algorithm/resolvers/IResolver.h"
 #include "AStarAlgorithm.h"
 #include "AStarStateSerializer.h"
 #include "common/utils/FlatHashMap.hpp"
@@ -128,7 +129,7 @@ int32_t AStarAlgorithm::_delta_h(int32_t parent_h, const Item &forged, const Ite
 // ─── init ───────────────────────────────────────────────────────────────
 
 void AStarAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
-    _ench_reg = &input.ench_reg;
+    _ench_reg = &input.registry;
     _target.clear();
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
@@ -136,8 +137,8 @@ void AStarAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &c
     for (const auto &t : _target)
         _target_level_map[t.id] = t.level;
 
-    _max_solutions   = input.s_config.max_solutions;
-    _max_search_time = input.s_config.max_search_time;
+    _max_solutions   = input.config.search.max_solutions;
+    _max_search_time = input.config.search.max_search_time;
 
     if (ctx.is_restored())
         return;  // pool/step_pool/open_heap/best_g already restored by serializer
@@ -153,9 +154,10 @@ void AStarAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &c
 // ─── Execute ────────────────────────────────────────────────────────────
 
 void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
-    _forge_engine.set_config(input.f_config);
-    const auto &items  = input.items;
-    const auto &reg    = input.ench_reg;
+    _forge_engine.set_config(input.config.forge);
+    auto items = get_resolver()->resolve(input);
+    normalize_base_equipment(items);
+    const auto &reg = input.registry;
 
     ctx.report_progress(0, ProgressStatus::Starting);
     auto t0 = std::chrono::steady_clock::now();
@@ -177,7 +179,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
         _explored = 0;
         _diag     = AStarDiagnostics{};
         _budget   = AStarMemoryBudget::from_memory_mb(
-            input.s_config.memory_mb > 0 ? input.s_config.memory_mb : 2048,
+            input.config.search.memory_mb > 0 ? input.config.search.memory_mb : 2048,
             static_cast<int32_t>(items.size())
         );
         _pool.set_max(_budget.max_items_pool);
@@ -208,8 +210,8 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
 
         // External warm-start bound (hamming, dfs chain) is typically already
         // tighter than our internal dfs_bound — skip to save ~25M Ir.
-        if (input.initial_bound < _best_solution_cost) {
-            _best_solution_cost = input.initial_bound;
+        if (input.config.search.initial_bound < _best_solution_cost) {
+            _best_solution_cost = input.config.search.initial_bound;
         } else {
             int64_t node_limit = 50'000;
             int32_t dfs_cost   = search_utils::dfs_bound(
@@ -222,8 +224,8 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
     }
 
     // Warm-start bound (fallback: already checked above, but also covers items.size() <= 1)
-    if (input.initial_bound < _best_solution_cost)
-        _best_solution_cost = input.initial_bound;
+    if (input.config.search.initial_bound < _best_solution_cost)
+        _best_solution_cost = input.config.search.initial_bound;
     _diag.initial_bound = _best_solution_cost;
 
     if (_meets_target(initial_ids[0])) {

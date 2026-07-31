@@ -3,6 +3,7 @@
 #include "common/utils/thread/ThreadPool.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -253,7 +254,7 @@ const IAlgorithmSerializer *DPMergeAlgorithm::get_serializer() const noexcept {
 // ─── init ─────────────────────────────────────────────────────────────────
 
 void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
-    _ench_reg  = &input.ench_reg;
+    _ench_reg  = &input.registry;
     _target.clear();
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
@@ -269,11 +270,11 @@ void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext 
 // ─── execute ──────────────────────────────────────────────────────────────
 
 void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.f_config);
+    _forge_engine.set_config(input.config.forge);
 
     // Configure thread pool concurrency from search config
-    if (input.s_config.max_threads > 0)
-        besq::ThreadPool::set_concurrency(input.s_config.max_threads);
+    if (input.config.search.max_threads > 0)
+        besq::ThreadPool::set_concurrency(input.config.search.max_threads);
 
     if (!ctx.is_restored()) {
         _cache.clear();
@@ -282,7 +283,8 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
     ctx.report_progress(0, ProgressStatus::Starting);
 
-    const auto& items = input.items;
+    auto items = get_resolver()->resolve(input);
+    normalize_base_equipment(items);
 
     if (items.empty()) {
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);

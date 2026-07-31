@@ -87,8 +87,8 @@ void AlgorithmExecutor::_run_warmup(AlgorithmInput& input, IAlgorithm& warmup_al
         int32_t bound = solutions[0].total_cost;
         for (const auto& sol : solutions)
             if (sol.total_cost < bound) bound = sol.total_cost;
-        if (bound < input.initial_bound)
-            input.initial_bound = bound;
+        if (bound < input.config.search.initial_bound)
+            input.config.search.initial_bound = bound;
     }
 }
 
@@ -155,22 +155,22 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     _start_time = std::chrono::steady_clock::now();
 
     // Verify the algorithm supports the requested mode
-    if (!(_algorithm->supported_mode() & input.mode)) {
+    if (!(_algorithm->supported_mode() & input.config.mode)) {
         std::string mode_str =
-            (input.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
+            (input.config.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
         throw std::runtime_error(std::string(_algorithm->name()) +
             " does not support '" + mode_str + "' mode");
     }
 
     // Start timeout watcher if max_search_time > 0
-    _start_timeout_watcher(input.s_config.max_search_time);
+    _start_timeout_watcher(input.config.search.max_search_time);
 
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
     if (warmup) {
-        if (!(warmup->supported_mode() & input.mode))
+        if (!(warmup->supported_mode() & input.config.mode))
             throw std::runtime_error(std::string(warmup->name()) +
                 " (warmup) does not support '" +
-                (input.mode == AlgorithmMode::inventory ? "inventory" : "direct") +
+                (input.config.mode == AlgorithmMode::inventory ? "inventory" : "direct") +
                 "' mode");
         _run_warmup(input, *warmup);
     }
@@ -225,7 +225,7 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
     _algo_name_cache = std::string(_algorithm->name());
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
-    _start_timeout_watcher(_algorithm_input.s_config.max_search_time);
+    _start_timeout_watcher(_algorithm_input.config.search.max_search_time);
     _worker.emplace([this]() mutable {
         try {
             _ctx->set_restored(true);
@@ -335,7 +335,7 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     // Delegates to each strategy's own forge replay (handles level merging,
     // conflict resolution, PPN tracking correctly).
     if (!out.solutions.empty()) {
-        auto final = _algorithm->process(out.solutions[0], _algorithm_input.f_config, _algorithm_input.ench_reg);
+        auto final = _algorithm->process(out.solutions[0], _algorithm_input.config.forge, _algorithm_input.registry);
         if (final.has_value())
             out.final_item = std::move(*final);
     }

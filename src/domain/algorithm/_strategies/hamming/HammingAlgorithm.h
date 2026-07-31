@@ -44,10 +44,6 @@ public:
         return AlgorithmMode::direct | AlgorithmMode::inventory;
     }
 
-    /// Optimistic feasibility — the balanced merge tree is robust and the
-    /// execute() path validates the result correctly on all inputs.
-    bool simulate(const AlgorithmInput& input) const noexcept override;
-
 private:
     // ── Popcount helpers ────────────────────────────────────────────────
 
