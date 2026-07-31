@@ -1,5 +1,6 @@
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/business/loaders/ProfileLoader.h"
@@ -416,6 +417,26 @@ resolve_algos(const BenchConfig& cfg, const algorithm::AlgorithmLoader& loader) 
 
 // ─── Run a single test case against every <algos> entry ───────────────
 
+/// Print a benchmark result row, verifying the final item meets the target
+/// enchantments (empty steps = GoalAlreadyMet, trivially met).
+void print_result(const algorithm::AlgorithmOutput& out,
+                  const algorithm::EnchSet& target, int32_t max_cost) {
+    if (out.solutions.empty()) {
+        std::cout << "no solution" << std::endl;
+        return;
+    }
+    int32_t total = out.solutions[0].total_cost;
+    bool meets = out.solutions[0].steps.empty()
+        || meets_target(out.final_item, target);
+    bool ok = total <= max_cost && meets;
+    if (!meets)
+        std::cout << "  !! MISSING TARGET ENCHANTMENTS" << std::endl;
+    std::cout << std::right << std::setw(4) << total << "L"
+              << (ok ? "  \xe2\x9c\x85" : "  \xe2\x9a\xa0")
+              << "  " << std::setw(4) << out.computation_time.count()
+              << "ms" << std::endl;
+}
+
 void run_case(const TestCase& tc, const Profile& profile,
               const std::vector<std::string>& algos,
               const algorithm::AlgorithmLoader& loader,
@@ -547,12 +568,7 @@ void run_case(const TestCase& tc, const Profile& profile,
                 if (out.solutions.empty()) {
                     std::cout << "no solution" << std::endl; continue;
                 }
-                int32_t total = out.solutions[0].total_cost;
-                bool ok = total <= tc.max_cost;
-                std::cout << std::right << std::setw(4) << total << "L"
-                          << (ok ? "  \xe2\x9c\x85" : "  \xe2\x9a\xa0")
-                          << "  " << std::setw(4) << out.computation_time.count()
-                          << "ms" << std::endl;
+                print_result(out, algo_input.target.enchs, tc.max_cost);
             } catch (const std::exception& e) {
                 std::cout << "ERROR: " << e.what() << std::endl;
             }
@@ -577,12 +593,7 @@ void run_case(const TestCase& tc, const Profile& profile,
             if (out.solutions.empty()) {
                 std::cout << "no solution" << std::endl; continue;
             }
-            int32_t total = out.solutions[0].total_cost;
-            bool ok = total <= tc.max_cost;
-            std::cout << std::right << std::setw(4) << total << "L"
-                      << (ok ? "  \xe2\x9c\x85" : "  \xe2\x9a\xa0")
-                      << "  " << std::setw(4) << out.computation_time.count()
-                      << "ms" << std::endl;
+            print_result(out, algo_input.target.enchs, tc.max_cost);
         } catch (const std::exception& e) {
             std::cout << "ERROR: " << e.what() << std::endl;
         }
