@@ -61,12 +61,12 @@ EnchSet::value_type EnchSet::operator[](value_type id) const noexcept {
 bool EnchSet::contains(value_type id) const noexcept { return _lvls[id] > 0; }
 EnchSet::value_type EnchSet::first() const noexcept { return _mask ? std::countr_zero(_mask) : npos; }
 EnchSet::value_type EnchSet::next(EnchSet::value_type id) const noexcept {
-    auto dis = std::countr_zero(_mask >> (id + value_type{1}));
-    return dis < npos ? dis + id + 1 : npos;
+    auto dis = _mask ? std::countr_zero(_mask >> (id + value_type{1})) : npos;
+    return dis != npos ? dis + id + 1 : npos;
 }
 EnchSet::value_type EnchSet::next_level(EnchSet::value_type id) const noexcept {
     auto next_id = next(id);
-    return next_id < npos ? _lvls[next_id] : value_type{};
+    return next_id != npos ? _lvls[next_id] : value_type{};
 }
 std::span<const EnchSet::value_type, EnchSet::MAX_SIZE> EnchSet::data() const noexcept {
     return std::span<const EnchSet::value_type, EnchSet::MAX_SIZE>(_lvls, MAX_SIZE);
