@@ -8,61 +8,64 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
 namespace algorithm {
 
-// ─── Source data — tagged by AlgorithmMode ───────────────────────────────
-// Direct mode: EnchCollection = current enchantments on the equipment.
-// Inventory mode: ItemCollection = available items pool.
-using SourceData = std::variant<EnchCollection, ItemCollection>;
+// ─── Input payload — tagged by AlgorithmMode (target design, .temp/draft.md) ──
+// Direct mode: current enchantments on the equipment.
+// Inventory mode: the full available item set (books + equipment, any order —
+//   the algorithm selects its own base equipment via Item::type) + priorities.
+struct DirectPayload {
+    EnchCollection source;
+};
+struct InventoryPayload {
+    ItemCollection available;
+    std::vector<int32_t> priorities;  // priority per item (lower = preferred)
+};
+using Payload = std::variant<DirectPayload, InventoryPayload>;
 
 // ─── Algorithm input ───
 struct AlgorithmInput : IBinarySerializable {
-    ForgeConfig f_config;  // forge configuration (platform, flags)
-    SearchConfig s_config; // search configuration (solutions, mode)
-    EnchReg ench_reg;      // compact registry (must be initialized)
-    Item target;           // target item with wanted enchantments
-    AlgorithmMode mode = AlgorithmMode::direct;
-    SourceData data;                 // source (direct) or available items (inventory)
-    std::vector<int32_t> priorities; // priority per item (inventory mode)
+    EnchReg registry;          // compact registry (must be initialized)
+    Payload data;              // input payload (direct / inventory)
+    Item target;               // target item with wanted enchantments
+    AlgorithmConfig config;    // mode + forge + search configuration
 
-    // Flattened execution view — populated by pipeline before execute().
-    // items[0] = equipment (target with source enchants), rest = books/extra.
-    ItemCollection items;
-    int32_t initial_bound = INT32_MAX; // warm-start bound
+    bool is_direct() const noexcept { return config.mode == AlgorithmMode::direct; }
+    bool is_inventory() const noexcept { return config.mode == AlgorithmMode::inventory; }
 
-    bool is_direct() const noexcept { return mode == AlgorithmMode::direct; }
-    bool is_inventory() const noexcept { return mode == AlgorithmMode::inventory; }
-
-    const EnchCollection &source() const noexcept { return std::get<EnchCollection>(data); }
-    EnchCollection &source() noexcept { return std::get<EnchCollection>(data); }
-    const ItemCollection &inventory_items() const noexcept { return std::get<ItemCollection>(data); }
-    ItemCollection &inventory_items() noexcept { return std::get<ItemCollection>(data); }
+    const DirectPayload &direct() const noexcept { return std::get<DirectPayload>(data); }
+    const InventoryPayload &inventory() const noexcept { return std::get<InventoryPayload>(data); }
+    const EnchCollection &source() const noexcept { return std::get<DirectPayload>(data).source; }
+    EnchCollection &source() noexcept { return std::get<DirectPayload>(data).source; }
+    const ItemCollection &available() const noexcept { return std::get<InventoryPayload>(data).available; }
+    ItemCollection &available() noexcept { return std::get<InventoryPayload>(data).available; }
 
     void serialize(ByteStreamWriter &w) const noexcept override {
-        w << f_config << s_config << ench_reg << target << static_cast<uint8_t>(mode);
-        if (is_direct())
-            w << source();
-        else
-            w << inventory_items();
-        w << priorities << items << initial_bound;
+        w << registry << config << target;
+        std::visit([&](const auto &p) {
+            using T = std::decay_t<decltype(p)>;
+            if constexpr (std::is_same_v<T, DirectPayload>)
+                w << static_cast<uint8_t>(0) << p.source;
+            else
+                w << static_cast<uint8_t>(1) << p.available << p.priorities;
+        }, data);
     }
     void deserialize(ByteStreamReader &r) noexcept override {
-        uint8_t m;
-        r >> f_config >> s_config >> ench_reg >> target >> m;
-        mode = static_cast<AlgorithmMode>(m);
-        if (is_direct()) {
-            EnchCollection src;
-            r >> src;
-            data = std::move(src);
+        uint8_t disc;
+        r >> registry >> config >> target >> disc;
+        if (disc == 0) {
+            DirectPayload p;
+            r >> p.source;
+            data = std::move(p);
         } else {
-            ItemCollection its;
-            r >> its;
-            data = std::move(its);
+            InventoryPayload p;
+            r >> p.available >> p.priorities;
+            data = std::move(p);
         }
-        r >> priorities >> items >> initial_bound;
     }
 };
 

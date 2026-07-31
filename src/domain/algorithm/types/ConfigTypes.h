@@ -12,15 +12,18 @@ struct SearchConfig : IBinarySerializable {
     int32_t max_depth     = 0;
     int32_t memory_mb     = 0;
     uint32_t max_threads  = 0;             // 0 = hardware_concurrency
+    int32_t initial_bound = INT32_MAX;     // warm-start bound
     std::chrono::milliseconds max_search_time{180'000}; // default 3 min
 
     void serialize(ByteStreamWriter &w) const noexcept override {
         w << max_solutions << max_depth << memory_mb << max_threads
+          << initial_bound
           << static_cast<int64_t>(max_search_time.count());
     }
     void deserialize(ByteStreamReader &r) noexcept override {
         int64_t t;
-        r >> max_solutions >> max_depth >> memory_mb >> max_threads >> t;
+        r >> max_solutions >> max_depth >> memory_mb >> max_threads
+          >> initial_bound >> t;
         max_search_time = std::chrono::milliseconds(t);
     }
 };
@@ -42,6 +45,22 @@ struct ForgeConfig : IBinarySerializable {
         platform            = static_cast<MCE>(p);
         ignore_penalty_cost = ipc != 0;
         ignore_repair_cost  = irc != 0;
+    }
+};
+
+// ─── Algorithm configuration — bundles mode + forge + search ──────────────
+struct AlgorithmConfig : IBinarySerializable {
+    AlgorithmMode mode  = AlgorithmMode::direct;
+    ForgeConfig forge;
+    SearchConfig search;
+
+    void serialize(ByteStreamWriter &w) const noexcept override {
+        w << static_cast<uint8_t>(mode) << forge << search;
+    }
+    void deserialize(ByteStreamReader &r) noexcept override {
+        uint8_t m;
+        r >> m >> forge >> search;
+        mode = static_cast<AlgorithmMode>(m);
     }
 };
 
