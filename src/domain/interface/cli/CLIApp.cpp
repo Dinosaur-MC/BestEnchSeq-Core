@@ -1,5 +1,6 @@
 #include "domain/interface/cli/CLIApp.h"
 #include "domain/interface/cli/EnchParser.h"
+#include "domain/interface/cli/InventoryParser.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/business/types/EnchInfo.h"
@@ -158,16 +159,34 @@ int CLIApp::run(int argc, char* argv[]) {
         request.target_item = ItemParser::parse(
             config.target, _ctx.enchantments(), _ctx.equipment());
         request.mode = mode;
-        request.payload = DirectPayload{};
-        if (!config.source.empty()) {
-            request.payload = DirectPayload{
-                EnchParser::parse(config.source, _ctx.enchantments())
-            };
+        if (mode == AlgorithmMode::inventory) {
+            // Inventory mode: the desired enchantments come from the --target
+            // brackets; the equipment's current state and the available
+            // sacrifice items come from the --input inventory file.
+            if (!config.input)
+                throw std::runtime_error(tr("cli.err.inventory_requires_input"));
+            if (!config.source.empty())
+                throw std::runtime_error(tr("cli.err.inventory_rejects_source"));
+            auto inv = InventoryParser::parse_file(
+                *config.input, _ctx.enchantments(), _ctx.equipment());
+            request.payload = InventoryPayload{
+                std::move(inv.items), std::move(inv.priorities)};
+        } else {
+            request.payload = DirectPayload{};
+            if (!config.source.empty()) {
+                request.payload = DirectPayload{
+                    EnchParser::parse(config.source, _ctx.enchantments())
+                };
+            }
         }
         request.forge_config.platform = (config.platform == "bedrock")
             ? MCE::Bedrock : MCE::Java;
         request.search_config.max_solutions = config.solutions;
-        request.algorithm = config.algorithm;
+        // Inventory mode needs an inventory-capable algorithm; when the user
+        // did not pick one explicitly, fall back to the default inventory
+        // strategy (hamming).
+        request.algorithm = (mode == AlgorithmMode::inventory && !config.algorithm_explicit)
+            ? "hamming" : config.algorithm;
         request.search_config.max_threads = static_cast<uint32_t>(config.max_threads);
         if (config.max_time > 0)
             request.search_config.max_search_time = std::chrono::seconds(config.max_time);
@@ -211,7 +230,7 @@ const auto BESQ_OPTIONS = OptionTable{
     Flag    {.long_name = "verbose",           .short_name = 'v', .help_key = "cli.help.verbose_desc",         .help_group = "cli.help.group_output"},
     Flag    {.long_name = "version",           .short_name = 'V', .help_key = "cli.help.version_desc",         .help_group = "cli.help.group_info"},
     Flag    {.long_name = "list-algorithms",                            .help_key = "List available algorithms", .help_group = "cli.help.group_info"},
-    Option<std::string>{.long_name = "algorithm",                       .help_key = "cli.help.algorithm_desc",  .help_group = "cli.help.group_basic",  .default_v = std::string("dp_merge")},
+    Option<std::string>{.long_name = "algorithm",                       .help_key = "cli.help.algorithm_desc",  .help_group = "cli.help.group_basic"},
     Option<std::string>{.long_name = "target",                          .help_key = "cli.help.target_desc",     .help_group = "cli.help.group_basic"},
     Option<std::string>{.long_name = "source",                          .help_key = "cli.help.source_desc",     .help_group = "cli.help.group_basic"},
     Option<std::string>{.long_name = "mode",                            .help_key = "cli.help.mode_desc",       .help_group = "cli.help.group_basic",  .default_v = std::string("direct")},

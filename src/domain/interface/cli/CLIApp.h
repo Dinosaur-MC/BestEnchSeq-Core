@@ -21,6 +21,7 @@ public:
     // ── Parser types ──
     struct Config {
         std::string algorithm = "dp_merge";
+        bool algorithm_explicit = false;  // true when --algorithm was given
         std::string mode      = "direct";
         std::string target;
         std::string source;
@@ -71,6 +72,7 @@ private:
         cfg.version         = std::get<2>(v);
         cfg.list_algorithms = std::get<3>(v);
         cfg.algorithm       = std::get<4>(v).value_or(Config{}.algorithm);
+        cfg.algorithm_explicit = std::get<4>(v).has_value();
         cfg.target          = std::get<5>(v).value_or(Config{}.target);
         cfg.source          = std::get<6>(v).value_or(Config{}.source);
         cfg.mode            = std::get<7>(v).value_or(Config{}.mode);

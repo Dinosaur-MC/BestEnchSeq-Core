@@ -41,7 +41,7 @@ public:
         return std::make_unique<ForgeEngine>(_forge_engine);
     }
     AlgorithmMode supported_mode() const noexcept override {
-        return AlgorithmMode::direct;
+        return AlgorithmMode::direct | AlgorithmMode::inventory;
     }
 
     /// Optimistic feasibility — the balanced merge tree is robust and the

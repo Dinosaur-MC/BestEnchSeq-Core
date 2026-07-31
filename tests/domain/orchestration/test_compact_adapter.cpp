@@ -317,6 +317,49 @@ void test_apply_inventory_extra_over_level_ok() {
     TEST_PASS("test_apply_inventory_extra_over_level_ok");
 }
 
+// ─── Test 16: inventory mode splits current equipment (items[0]) from pool ───
+void test_apply_inventory_equipment_split() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);  // goal
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    // Sacrifice book: sharpness III
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("sharpness"), "Sharpness", 3);
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"),
+                                     book_enchs, 0);
+    // Current equipment entry: diamond_sword with sharpness II, ppn 3, dur 1000
+    EnchSet cur_enchs;
+    cur_enchs.emplace(NSID("sharpness"), "Sharpness", 2);
+    payload.extra_items.emplace_back(NSID("minecraft:diamond_sword"),
+                                     cur_enchs, 3, 1000);
+    std::vector<int32_t> prios = {1, 2};
+    request.payload = InventoryPayload{payload.extra_items, prios};
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = CompactAdapter::apply(profile, request);
+
+    // items[0] = the equipment carrying its CURRENT state.
+    expect(input.items.size() == 1, "items holds only the equipment");
+    auto sid = input.ench_reg.to_local_id(NSID("minecraft:sharpness"));
+    expect(input.items[0].enchs[sid] == 2, "items[0] carries current sharpness 2");
+    expect(input.items[0].ppn == 3, "items[0] carries the equipment ppn");
+    expect(input.items[0].dur == 1000, "items[0] carries the equipment durability");
+
+    // Pool (SourceData) = the sacrifice book only.
+    expect(input.inventory_items().size() == 1,
+           "data pool holds the book only");
+    expect(input.priorities.size() == 1 && input.priorities[0] == 1,
+           "pool priority forwarded");
+    TEST_PASS("test_apply_inventory_equipment_split");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -336,6 +379,7 @@ int main() {
         test_apply_inventory_inapplicable_extra_ok();
         test_apply_source_level_exceeds_max_throws();
         test_apply_inventory_extra_over_level_ok();
+        test_apply_inventory_equipment_split();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

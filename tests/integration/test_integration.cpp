@@ -115,6 +115,29 @@ void test_full_pipeline_inventory() {
     expect(!target_item.id.empty(),
            "full_pipeline_inventory: target should have equipment");
 
+    // Run the inventory solve end-to-end: the clean diamond_sword in the
+    // payload becomes items[0]; the books form the sacrifice pool.
+    std::vector<int32_t> priorities = {1, 2, 10};
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    request.payload = InventoryPayload{available_items, priorities};
+    request.forge_config.platform = MCE::Java;
+    request.search_config.max_solutions = 1;
+    request.algorithm = "hamming";
+
+    algorithm::AlgorithmLoader loader;
+    loader.load_builtin();
+    auto result = SolvePipeline::run(profile, request, loader);
+
+    expect(result.success, "full_pipeline_inventory: solve should succeed");
+    expect(!result.solutions.empty(),
+           "full_pipeline_inventory: should have solutions");
+    expect(result.solutions[0].is_success,
+           "full_pipeline_inventory: first solution should succeed");
+    expect(!result.solutions[0].steps.empty(),
+           "full_pipeline_inventory: should have forge steps");
+
     TEST_PASS("test_full_pipeline_inventory");
 }
 

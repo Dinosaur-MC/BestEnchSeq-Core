@@ -20,14 +20,11 @@ ResolverOutput IAlgorithm::resolve(const AlgorithmInput &input) const {
         return ItemResolver::resolve(desired, input.items[0].enchs);
     }
     case AlgorithmMode::inventory: {
-        // items[0] = equipment; items[1..] = available pool.
-        ItemCollection extra;
-        if (input.items.size() > 1) {
-            extra.reserve(input.items.size() - 1);
-            for (size_t i = 1; i < input.items.size(); ++i)
-                extra.push_back(input.items[i]);
-        }
-        return InventoryResolver::resolve(input.items[0], extra, input.priorities);
+        // items[0] = equipment; the available pool lives in SourceData
+        // (inventory_items), populated by CompactAdapter::apply.
+        return InventoryResolver::resolve(input.items[0],
+                                          input.inventory_items(),
+                                          input.priorities);
     }
     }
 

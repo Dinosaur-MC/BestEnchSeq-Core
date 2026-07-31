@@ -164,26 +164,72 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
                     src_vec.push_back(e);
                 input.data = std::move(src_vec);
             } else if constexpr (std::is_same_v<T, InventoryPayload>) {
-                // Inventory mode: items[0] = equipment with its current enchants
-                // (target_item.enchantments ARE the current state in inventory mode)
-                algorithm::Item equip_item = input.target;
-                input.items.push_back(std::move(equip_item));
+                // Inventory mode: items[0] = the equipment being forged (its
+                // current state), items[1..] = available sacrifice items.
+                // The goal (desired enchants) stays in input.target.
+                //
+                // The equipment's current enchants come from the matching
+                // equipment entry in the payload; if the payload has no entry
+                // for the target equipment, start from a clean (no-enchant)
+                // item.  Eligible pool rule: keep enchanted books and the
+                // target equipment; exclude any other item (non-book with a
+                // different id).  Note: this eligibility filter needs NSID
+                // item identities, so it must live here rather than in the
+                // compact (id-less) algorithm resolver.
+                const auto &extra    = payload.extra_items;
+                const auto &prios    = payload.extra_item_priorities;
+                const NSID target_id = request.target_item.id;
 
-                // Convert extra_items
+                // Locate the equipment entry matching the target item.
+                size_t equip_index = extra.size();
+                for (size_t i = 0; i < extra.size(); ++i) {
+                    if (!extra[i].is_book() && extra[i].id == target_id) {
+                        equip_index = i;
+                        break;
+                    }
+                }
+
+                // items[0] = the equipment being forged.
+                if (equip_index != extra.size()) {
+                    const auto &item = extra[equip_index];
+                    algorithm::Item eq = input.target;
+                    eq.type  = algorithm::ItemType::Equip;
+                    eq.ppn   = static_cast<uint8_t>(item.prior_penalty);
+                    eq.dur   = static_cast<int16_t>(item.durability);
+                    eq.enchs = remap_nsid_to_local(item.enchantments);
+                    input.items.push_back(std::move(eq));
+                } else {
+                    algorithm::Item clean = input.target;
+                    clean.enchs.clear();
+                    input.items.push_back(std::move(clean));
+                }
+
+                // Eligible sacrifice pool → input.data (SourceData), NOT
+                // input.items — the pipeline appends the resolver's selection
+                // to input.items, so putting the pool there too would
+                // duplicate it.  items[1..] is populated by the resolver
+                // (InventoryResolver::resolve) during stage_execute.
                 algorithm::ItemCollection inv_items;
-                for (const auto &item : payload.extra_items) {
+                inv_items.reserve(extra.size());
+                input.priorities.reserve(extra.size());
+                for (size_t i = 0; i < extra.size(); ++i) {
+                    const auto &item = extra[i];
+                    if (i == equip_index)
+                        continue;
+                    if (!item.is_book() && item.id != target_id)
+                        continue;  // exclude: not an enchanted book, not target
                     algorithm::Item algo_item;
                     algo_item.type  = item.is_book() ? algorithm::ItemType::Book : algorithm::ItemType::Equip;
                     algo_item.ppn   = static_cast<uint8_t>(item.prior_penalty);
                     algo_item.dur   = static_cast<int16_t>(item.durability);
                     algo_item.enchs = remap_nsid_to_local(item.enchantments);
-                    input.items.push_back(algo_item);
                     inv_items.push_back(std::move(algo_item));
+                    input.priorities.push_back(
+                        i < prios.size() ? prios[i] : 99);
                 }
 
-                // Data union: extra items as ItemCollection
-                input.data       = std::move(inv_items);
-                input.priorities = payload.extra_item_priorities;
+                // Data union: sacrifice items as ItemCollection.
+                input.data = std::move(inv_items);
             }
         },
         request.payload
