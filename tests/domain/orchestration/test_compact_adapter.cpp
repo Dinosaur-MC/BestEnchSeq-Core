@@ -53,9 +53,8 @@ void test_apply_valid_input() {
     auto input = CompactAdapter::apply(profile, request);
 
     expect(input.target.enchs.size() == 1, "target should have 1 enchantment");
-    expect(input.items.size() == 1,
-           "items should have 1 entry (equipment)");
-    expect(input.ench_reg.get_target_equip().max_durability == 1561,
+    expect(input.is_direct(), "direct mode input");
+    expect(input.registry.get_target_equip().max_durability == 1561,
            "equipment durability should be 1561");
 
     TEST_PASS("test_apply_valid_input");
@@ -118,7 +117,7 @@ void test_apply_inapplicable_enchant() {
 
     // Global registry has 3 enchants; only 2 (sharpness, knockback) are
     // sword-applicable. protection is chestplate-only.
-    expect(input.ench_reg.size() == 2,
+    expect(input.registry.size() == 2,
            "ench_reg should only have sword-applicable enchantments (2, not 3)");
 
     TEST_PASS("test_apply_inapplicable_enchant");
@@ -133,7 +132,7 @@ void test_apply_penalty_forward() {
     auto request = make_request(target_item);
     auto input = CompactAdapter::apply(profile, request);
 
-    expect(input.items[0].ppn == 32,
+    expect(input.target.ppn == 32,
            "prior_penalty forwarded as-is (no overflow check)");
 
     TEST_PASS("test_apply_penalty_forward");
@@ -149,7 +148,7 @@ void test_pruning_only_applicable() {
     auto input = CompactAdapter::apply(profile, request);
 
     // Global registry has 3 enchants; only 2 (sharpness, knockback) are sword-applicable
-    expect(input.ench_reg.size() == 2,
+    expect(input.registry.size() == 2,
            "ench_reg should only have sword-applicable enchantments (2, not 3)");
 
     TEST_PASS("test_pruning_only_applicable");
@@ -163,7 +162,7 @@ void test_from_domain() {
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
     auto input = CompactAdapter::apply(profile, request);
-    const auto& reg = input.ench_reg;
+    const auto& reg = input.registry;
 
     // Create a business Item with sharpness 5, prior_penalty 3
     EnchSet business_enchs;
@@ -188,7 +187,7 @@ void test_recall_empty_output() {
     output.is_valid = false;
 
     algorithm::AlgorithmInput input;
-    input.f_config.platform = MCE::Java;
+    input.config.forge.platform = MCE::Java;
 
     auto solutions = CompactAdapter::recall(output, input);
     expect(solutions.empty(),
@@ -267,7 +266,7 @@ void test_apply_inventory_inapplicable_extra_ok() {
     request.search_config = algorithm::SearchConfig{};
 
     auto input = CompactAdapter::apply(profile, request);  // must not throw
-    expect(!input.inventory_items().empty(),
+    expect(!input.available().empty(),
            "inventory items should be present");
 
     TEST_PASS("test_apply_inventory_inapplicable_extra_ok");
@@ -311,13 +310,13 @@ void test_apply_inventory_extra_over_level_ok() {
     request.search_config = algorithm::SearchConfig{};
 
     auto input = CompactAdapter::apply(profile, request);  // must not throw
-    expect(!input.inventory_items().empty(),
+    expect(!input.available().empty(),
            "inventory items should be present");
 
     TEST_PASS("test_apply_inventory_extra_over_level_ok");
 }
 
-// ─── Test 16: inventory mode splits current equipment (items[0]) from pool ───
+// ─── Test 16: inventory mode forwards all items into available ───
 void test_apply_inventory_equipment_split() {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
@@ -333,7 +332,7 @@ void test_apply_inventory_equipment_split() {
     book_enchs.emplace(NSID("sharpness"), "Sharpness", 3);
     payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"),
                                      book_enchs, 0);
-    // Current equipment entry: diamond_sword with sharpness II, ppn 3, dur 1000
+    // Another equipment entry: diamond_sword with sharpness II, ppn 3, dur 1000
     EnchSet cur_enchs;
     cur_enchs.emplace(NSID("sharpness"), "Sharpness", 2);
     payload.extra_items.emplace_back(NSID("minecraft:diamond_sword"),
@@ -345,18 +344,13 @@ void test_apply_inventory_equipment_split() {
 
     auto input = CompactAdapter::apply(profile, request);
 
-    // items[0] = the equipment carrying its CURRENT state.
-    expect(input.items.size() == 1, "items holds only the equipment");
-    auto sid = input.ench_reg.to_local_id(NSID("minecraft:sharpness"));
-    expect(input.items[0].enchs[sid] == 2, "items[0] carries current sharpness 2");
-    expect(input.items[0].ppn == 3, "items[0] carries the equipment ppn");
-    expect(input.items[0].dur == 1000, "items[0] carries the equipment durability");
-
-    // Pool (SourceData) = the sacrifice book only.
-    expect(input.inventory_items().size() == 1,
-           "data pool holds the book only");
-    expect(input.priorities.size() == 1 && input.priorities[0] == 1,
-           "pool priority forwarded");
+    // Inventory mode: available holds ALL items (book + equipment).  There is
+    // no "current equipment" concept — the algorithm selects its own base.
+    expect(input.is_inventory(), "inventory mode input");
+    expect(input.available().size() == 2, "available holds both items");
+    expect(input.inventory().priorities.size() == 2,
+           "priorities parallel to available");
+    expect(input.inventory().priorities[0] == 1, "book priority forwarded");
     TEST_PASS("test_apply_inventory_equipment_split");
 }
 

@@ -71,7 +71,7 @@ void test_crc_roundtrip() {
     EnchSet target_set;
     target_set.insert(Ench{0, 1});
     input.target.enchs = target_set;
-    input.ench_reg.init({}, {}, Equipment{});
+    input.registry.init({}, {}, Equipment{});
 
     auto blob = ser.serialize(algo, input);
     expect(!blob.empty(), "serialize should produce bytes");

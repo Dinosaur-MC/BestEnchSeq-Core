@@ -1,7 +1,6 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/_strategies/dfs/DFSStateSerializer.h"
 #include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
-#include "domain/algorithm/serialization/Checkpoint.h"
 #include <memory>
 #include <span>
 using namespace algorithm;
@@ -29,7 +28,7 @@ void test_dfs_roundtrip() {
     EnchSet target_set;
     target_set.insert(Ench{0, 1});
     input.target.enchs = target_set;
-    input.ench_reg.init({}, {}, Equipment{});
+    input.registry.init({}, {}, Equipment{});
 
     auto blob = ser.serialize(algo, input);
     expect(!blob.empty(), "serialize should produce bytes");
@@ -48,7 +47,7 @@ void test_dfs_tamper_detected() {
 
     AlgorithmInput input;
     input.target.type = ItemType::Equip;
-    input.ench_reg.init({}, {}, Equipment{});
+    input.registry.init({}, {}, Equipment{});
     auto blob = ser.serialize(algo, input);
     expect(!blob.empty(), "serialize should produce bytes");
 

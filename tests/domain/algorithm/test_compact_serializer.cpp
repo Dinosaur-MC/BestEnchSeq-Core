@@ -241,6 +241,7 @@ void test_search_config_roundtrip() {
     original.max_solutions = 10;
     original.max_depth = 20;
     original.memory_mb = 512;
+    original.initial_bound = 1234;
     original.max_search_time = std::chrono::milliseconds(5000);
 
     ByteStreamWriter w;
@@ -254,6 +255,7 @@ void test_search_config_roundtrip() {
     expect_eq(result.max_solutions, 10, "max_solutions");
     expect_eq(result.max_depth, 20, "max_depth");
     expect_eq(result.memory_mb, 512, "memory_mb");
+    expect_eq(result.initial_bound, 1234, "initial_bound");
     expect_eq(result.max_search_time.count(), 5000LL, "max_search_time");
     TEST_PASS("test_search_config_roundtrip");
 }

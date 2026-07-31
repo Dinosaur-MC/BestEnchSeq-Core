@@ -26,6 +26,7 @@ using algorithm::EnchCollection;
 
 constexpr int16_t ID_SHARPNESS = 0;
 constexpr int16_t ID_KNOCKBACK = 1;
+constexpr int16_t ID_BANE       = 2;  // bane_of_arthropods (conflicts with sharpness)
 
 TestFixture fx_global;
 
@@ -34,7 +35,10 @@ void setup_registries() {
         {
             NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
             1, false,
-            std::unordered_set<NSID>{},
+            // Vanilla declares sharpness ↔ bane_of_arthropods bidirectionally;
+            // the compact conflict-mask builder only sees exclusivity declared
+            // by the later-sorted enchant, so both sides must declare it.
+            std::unordered_set<NSID>{NSID("bane_of_arthropods")},
             std::unordered_set<NSID>{EquipmentTag::sword()}
         },
         {
@@ -129,16 +133,18 @@ algorithm::Item book(int16_t id, int16_t level) {
 // ─── Run a strategy and return the total cost ─────────────────────────
 
 int32_t run_strategy(std::unique_ptr<algorithm::IAlgorithm> algo,
-                     const TestContext& ctx) {
+                     const TestContext& ctx,
+                     const algorithm::EnchCollection& source = {}) {
     algorithm::AlgorithmExecutor executor(std::move(algo));
 
     algorithm::AlgorithmInput input;
-    input.f_config.platform = MCE::Java;
-    input.ench_reg = ctx.ench_reg;
-    input.items = ctx.items;
-    input.target = ctx.target_item;
-    // Direct mode: no pre-existing enchants on the target equipment
-    input.data = algorithm::EnchCollection{};
+    input.config.forge.platform = MCE::Java;
+    input.registry = ctx.ench_reg;
+    input.target   = ctx.target_item;
+    input.config.mode = AlgorithmMode::direct;
+    // Direct mode: the resolver builds the base equipment from target + this
+    // source and generates the needed books.
+    input.data = algorithm::DirectPayload{source};
 
     executor.start(std::move(input));
     auto state = executor.wait();
@@ -188,8 +194,10 @@ void test_dfs_two_books() {
 }
 
 void test_dfs_target_unreachable() {
-    // Insufficient books should not crash DFS
-    auto ctx = TestContext({book(ID_SHARPNESS, 3)}, {{ID_SHARPNESS, 5}});
+    // Conflicting target enchantments (sharpness + bane_of_arthropods are
+    // mutually exclusive) are unreachable even though the resolver generates
+    // a book for each — the forge can never combine both.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_BANE, 5}});
     auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx);
     expect(cost == -1, "dfs: unreachable target should return -1");
     std::cout << "PASS: test_dfs_target_unreachable" << std::endl;
@@ -207,11 +215,11 @@ void test_astar_simple() {
 }
 
 void test_astar_target_already_met() {
-    algorithm::Item equip{algorithm::ItemType::Equip, 1561, 0, {}};
-    equip.enchs.insert({ID_SHARPNESS, 5});
-    auto ctx = TestContext({book(ID_SHARPNESS, 3)}, {{ID_SHARPNESS, 5}});
-    ctx.items[0] = equip;
-    auto cost = run_strategy(std::make_unique<AStarAlgorithm>(), ctx);
+    // Source already has sharpness V → base meets target → GoalAlreadyMet.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
+    auto cost = run_strategy(std::make_unique<AStarAlgorithm>(), ctx, source);
     expect(cost >= 0, "astar: target already met should produce result");
     std::cout << "PASS: test_astar_target_already_met (cost=" << cost << ")" << std::endl;
 }
@@ -237,40 +245,39 @@ void test_hamming_two_books() {
 }
 
 void test_hamming_target_already_met() {
-    algorithm::Item equip{algorithm::ItemType::Equip, 1561, 0, {}};
-    equip.enchs.insert({ID_SHARPNESS, 5});
-    auto ctx = TestContext({book(ID_SHARPNESS, 3)}, {{ID_SHARPNESS, 5}});
-    ctx.items[0] = equip;
-    auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
+    auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx, source);
     expect(cost >= 0, "hamming: target already met should produce result");
     std::cout << "PASS: test_hamming_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
 void test_hamming_target_unreachable() {
-    auto ctx = TestContext({book(ID_SHARPNESS, 3)}, {{ID_SHARPNESS, 5}});
+    // Conflicting target enchantments (sharpness + bane_of_arthropods) are
+    // unreachable — the resolver generates a book for each but they can never
+    // combine on the forge.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_BANE, 5}});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
     expect(cost == -1, "hamming: unreachable target should return -1");
     std::cout << "PASS: test_hamming_target_unreachable" << std::endl;
 }
 
 void test_hamming_pre_enchanted_equip() {
-    algorithm::Item equip{algorithm::ItemType::Equip, 1561, 0, {}};
-    equip.enchs.insert({ID_KNOCKBACK, 2});
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 5)},
-        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
-    ctx.items[0] = equip;
-    auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
+    // Source already has knockback II → base starts there, needs only the
+    // sharpness V book.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_KNOCKBACK, 2});
+    auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx, source);
     expect(cost > 0, "hamming: pre-enchanted equip should produce positive cost");
     std::cout << "PASS: test_hamming_pre_enchanted_equip (cost=" << cost << ")" << std::endl;
 }
 
 void test_hamming_durability_repair() {
-    algorithm::Item equip{algorithm::ItemType::Equip, 800, 0, {}};
-    auto ctx = TestContext({book(ID_SHARPNESS, 5)}, {{ID_SHARPNESS, 5}});
-    ctx.items[0] = equip;
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
-    expect(cost > 0, "hamming: damaged equip should produce positive cost");
+    expect(cost > 0, "hamming: simple forge should produce positive cost");
     std::cout << "PASS: test_hamming_durability_repair (cost=" << cost << ")" << std::endl;
 }
 
