@@ -1,6 +1,9 @@
 #include "framework/test_utils.h"
+#include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/components/TagResolver.h"
+#include <filesystem>
+#include <fstream>
 #include "domain/business/components/Serializer.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
@@ -396,6 +399,117 @@ void test_loader_resolve_full() {
     std::cout << "PASS: test_loader_resolve_full" << std::endl;
 }
 
+// ---------------------------------------------------------------------------
+// 6. Vanilla fallback: an enchant's applicable_to resolves against the base
+//    tag registry even when the profile defines no equipment categories.
+// ---------------------------------------------------------------------------
+void test_loader_resolve_vanilla_fallback() {
+    // A mod profile with NO equipment data: its enchant targets the vanilla
+    // "sword" category and references a vanilla enchant ("sharpness") in
+    // exclusive_with.
+    std::vector<business::loader::EquipmentData> no_eq;
+    std::vector<business::loader::EnchantmentData> ench_data;
+    ench_data.push_back({
+        "minecraft:leeching", "Leeching", 1, 2, 2,
+        {"sharpness"}, {"sword"}   // exclusive_with → vanilla sharpness
+    });
+
+    RegistryLoader loader;
+
+    // Without a base tag registry, the vanilla "sword" category cannot
+    // resolve (no equipment in the profile to create it) → inapplicable.
+    {
+        EquipmentTagRegistry tag_reg;
+        EquipmentRegistry eq_reg;
+        EnchantmentRegistry ench_reg;
+        loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg);
+        const auto& e = ench_reg.at(NSID("minecraft:leeching"));
+        expect(e.applicable_equipments.empty(),
+               "without fallback, leeching has no applicable equipment");
+        expect(e.exclusive_set.contains(NSID("minecraft:sharpness")),
+               "exclusive_with resolves by name regardless of fallback");
+    }
+
+    // With a base registry carrying the vanilla "sword" category, the enchant
+    // becomes applicable; exclusive_with to a vanilla enchant is preserved.
+    {
+        EquipmentTagRegistry base_tags;
+        base_tags.insert({NSID("#minecraft:sword"), "sword"});
+        EquipmentTagRegistry tag_reg;
+        EquipmentRegistry eq_reg;
+        EnchantmentRegistry ench_reg;
+        loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg, &base_tags);
+
+        const auto& e = ench_reg.at(NSID("minecraft:leeching"));
+        expect(e.applicable_equipments.contains(NSID("#minecraft:sword")),
+               "with vanilla fallback, leeching is applicable to sword");
+        expect(e.exclusive_set.contains(NSID("minecraft:sharpness")),
+               "exclusive_with to vanilla sharpness preserved");
+    }
+
+    // Equipment category also resolves via the vanilla fallback when the
+    // profile defines an equipment using a vanilla category.
+    {
+        std::vector<business::loader::EquipmentData> eq_data;
+        eq_data.push_back({"minecraft:mod_sword", "Mod Sword", "sword", 2000});
+        EquipmentTagRegistry base_tags;
+        base_tags.insert({NSID("#minecraft:sword"), "sword"});
+        EquipmentTagRegistry tag_reg;
+        EquipmentRegistry eq_reg;
+        EnchantmentRegistry ench_reg;
+        loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg, &base_tags);
+        const auto& eq = eq_reg.at(NSID("minecraft:mod_sword"));
+        expect(eq.category == NSID("#minecraft:sword"),
+               "mod equipment category resolves via vanilla fallback");
+    }
+
+    std::cout << "PASS: test_loader_resolve_vanilla_fallback" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// 7. Parser-level vanilla tag fallback: a mod profile referencing a VANILLA
+//    tag (`#minecraft:...`) resolves even though the profile defines no tags.
+// ---------------------------------------------------------------------------
+void test_loader_vanilla_tag_fallback() {
+    // Native-JSON profile whose enchant references the vanilla curse tag and
+    // the vanilla "sword" category, with no equipments/tags of its own.
+    const std::string content = R"({
+        "name": "tagfallback",
+        "enchantments": [
+            { "id": "mod_cursed", "name": "Mod Cursed", "platform": "java",
+              "max_level": 1, "limited_level": 1, "multiplier": 8,
+              "exclusive_set": ["#minecraft:enchantment/curse"],
+              "applicable_equipment": ["sword"], "is_treasure": true }
+        ],
+        "equipments": [],
+        "categories": [],
+        "tags": {}
+    })";
+
+    static int counter = 0;
+    auto path = std::filesystem::temp_directory_path() /
+                ("besq_tag_test_" + std::to_string(++counter) + ".json");
+    {
+        std::ofstream f(path);
+        f << content;
+    }
+
+    ProfileLoader loader;
+    Profile p = loader.load(path);
+    const auto& e = p.ench().at(NSID("minecraft:mod_cursed"));
+
+    // The vanilla curse tag expands to binding_curse + vanishing_curse.
+    expect(e.exclusive_set.contains(NSID("minecraft:binding_curse")),
+           "vanilla curse tag expanded to binding_curse");
+    expect(e.exclusive_set.contains(NSID("minecraft:vanishing_curse")),
+           "vanilla curse tag expanded to vanishing_curse");
+    // The vanilla sword category resolves via the category fallback.
+    expect(e.applicable_equipments.contains(NSID("#minecraft:sword")),
+           "vanilla sword category resolves");
+
+    std::cout << "PASS: test_loader_vanilla_tag_fallback" << std::endl;
+}
+
 // =============================================================================
 // Section B -- TagResolver
 // =============================================================================
@@ -668,6 +782,8 @@ int main() {
         test_loader_eq_dto_to_reg();
         test_loader_json_roundtrip();
         test_loader_resolve_full();
+        test_loader_resolve_vanilla_fallback();
+        test_loader_vanilla_tag_fallback();
 
         // Section B -- TagResolver
         test_tag_resolve_basic();
