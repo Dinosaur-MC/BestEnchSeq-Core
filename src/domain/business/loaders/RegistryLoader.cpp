@@ -210,9 +210,16 @@ void RegistryLoader::resolve(
     const std::vector<business::loader::EquipmentData>& equipments,
     EquipmentTagRegistry& tag_reg,
     EquipmentRegistry& eq_reg,
-    EnchantmentRegistry& ench_reg)
+    EnchantmentRegistry& ench_reg,
+    const EquipmentTagRegistry* base_tags)
 {
-    // Step 1: Build EquipmentTagRegistry from unique category names
+    // Step 1: Build EquipmentTagRegistry.  Seed with the base tags (vanilla
+    // fallback) first, then the profile's own unique equipment categories.
+    tag_reg.clear();
+    if (base_tags) {
+        for (const auto& [id, tag] : base_tags->data())
+            tag_reg.insert(tag);
+    }
     {
         std::unordered_set<std::string> seen;
         std::vector<std::string> categories;
@@ -220,7 +227,6 @@ void RegistryLoader::resolve(
             if (seen.insert(eq.category).second)
                 categories.push_back(eq.category);
         }
-        tag_reg.clear();
         for (const auto& name : categories)
             tag_reg.insert({NSID("#minecraft:" + name), name});
     }

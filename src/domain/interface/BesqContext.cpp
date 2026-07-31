@@ -59,7 +59,9 @@ void BesqContext::load_file(const std::string& path) {
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
     RegistryLoader reg_loader;
-    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
+    // Seed tag resolution with the active profile's tags (vanilla fallback).
+    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
+                       &profile.tags());
 
     // Merge into active profile via proxy methods
     for (const auto& [nsid, tag] : tag_reg.data())

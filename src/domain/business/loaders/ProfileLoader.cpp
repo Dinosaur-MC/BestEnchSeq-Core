@@ -28,7 +28,20 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
 
-        // Step 1: Build tag registry from equipment categories
+        // Step 1: Build tag registry.  Seed with the builtin vanilla
+        // categories first (vanilla fallback) so a mod profile's
+        // `applicable_equipment` references resolve against vanilla
+        // categories even when the profile itself does not define them
+        // (e.g. a mod enchant targeting "sword"), then overlay the
+        // profile's own equipment categories.
+        {
+            EquipmentTagRegistry builtin_tags;
+            EnchantmentRegistry builtin_ench;
+            EquipmentRegistry builtin_eq;
+            besq::data::load_builtin_data(builtin_tags, builtin_ench, builtin_eq);
+            for (const auto& [id, tag] : builtin_tags.data())
+                tag_reg.insert(tag);
+        }
         {
             std::unordered_set<std::string> seen;
             for (const auto& eq : eq_data) {

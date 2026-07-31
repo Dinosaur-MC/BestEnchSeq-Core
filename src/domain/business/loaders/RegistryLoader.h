@@ -58,10 +58,16 @@ public:
 
     /// Three-step resolve: build tag_reg from equipment data, then
     /// populate eq_reg and ench_reg with resolved IDs.
+    ///
+    /// \p base_tags (optional) seeds the tag registry first — used as a
+    /// vanilla fallback so a mod profile's `applicable_equipment` references
+    /// resolve against categories the profile itself does not define.  Pass
+    /// nullptr to build the registry from scratch.
     void resolve(
         const std::vector<business::loader::EnchantmentData>& enchants,
         const std::vector<business::loader::EquipmentData>& equipments,
         EquipmentTagRegistry& tag_reg,
         EquipmentRegistry& eq_reg,
-        EnchantmentRegistry& ench_reg);
+        EnchantmentRegistry& ench_reg,
+        const EquipmentTagRegistry* base_tags = nullptr);
 };

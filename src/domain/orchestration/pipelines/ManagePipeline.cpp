@@ -31,7 +31,9 @@ ManageResult ManagePipeline::run(
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
         RegistryLoader reg_loader;
-        reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
+        // Seed tag resolution with the active profile's tags (vanilla fallback).
+        reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
+                           &profile.tags());
         for (const auto& [nsid, tag] : tag_reg.data())
             profile.add_tag(tag);
         for (const auto& [nsid, eq] : eq_reg.data())
