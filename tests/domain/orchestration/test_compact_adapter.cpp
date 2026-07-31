@@ -45,11 +45,14 @@ SolveRequest make_request(const Item& target_item, EnchSet source_enchs = {}) {
 // ─── Test 1: minimal valid input produces correct AlgorithmInput ───
 void test_apply_valid_input() {
     auto profile = make_sword_profile();
-    Item target_item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    // Direct mode requires a non-empty target enchant set.
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
     auto input = CompactAdapter::apply(profile, request);
 
-    expect(input.target.enchs.empty(), "target should be empty");
+    expect(input.target.enchs.size() == 1, "target should have 1 enchantment");
     expect(input.items.size() == 1,
            "items should have 1 entry (equipment)");
     expect(input.ench_reg.get_target_equip().max_durability == 1561,
@@ -88,27 +91,28 @@ void test_apply_invalid_enchant_id() {
     TEST_PASS("test_apply_invalid_enchant_id");
 }
 
-// ─── Test 4: level exceeding max_level is still forwarded ───
-//     (current CompactAdapter::apply does not validate levels)
-void test_apply_invalid_level() {
+// ─── Test 4: target level exceeding max_level throws ───
+//     (sharpness max_level is 5 in make_sword_registry)
+void test_apply_level_exceeds_max_throws() {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 99);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
 
-    expect(input.target.enchs.size() == 1, "target should have 1 enchantment");
-    expect((*input.target.enchs.begin()).level() == 99,
-           "target enchantment level forwarded as-is (no validation)");
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "over-level target enchant should throw");
 
-    TEST_PASS("test_apply_invalid_level");
+    TEST_PASS("test_apply_level_exceeds_max_throws");
 }
 
 // ─── Test 5: inapplicable enchant is excluded from EnchReg ───
 void test_apply_inapplicable_enchant() {
     auto profile = make_sword_profile();
-    Item target_item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
     auto input = CompactAdapter::apply(profile, request);
 
@@ -123,7 +127,9 @@ void test_apply_inapplicable_enchant() {
 // ─── Test 6: prior_penalty is forwarded as-is ───
 void test_apply_penalty_forward() {
     auto profile = make_sword_profile();
-    Item target_item(NSID("minecraft:diamond_sword"), EnchSet{}, 32, 1561);
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 32, 1561);
     auto request = make_request(target_item);
     auto input = CompactAdapter::apply(profile, request);
 
@@ -136,7 +142,9 @@ void test_apply_penalty_forward() {
 // ─── Test 7: ench_reg is pruned to only applicable enchantments ───
 void test_pruning_only_applicable() {
     auto profile = make_sword_profile();
-    Item target_item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
     auto input = CompactAdapter::apply(profile, request);
 
@@ -150,7 +158,9 @@ void test_pruning_only_applicable() {
 // ─── Test 8: domain → compact preserves data ───
 void test_from_domain() {
     auto profile = make_sword_profile();
-    Item target_item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
     auto input = CompactAdapter::apply(profile, request);
     const auto& reg = input.ench_reg;
@@ -187,6 +197,126 @@ void test_recall_empty_output() {
     TEST_PASS("test_recall_empty_output");
 }
 
+// ─── Test 10: inapplicable target enchant throws (was silently dropped) ───
+void test_apply_inapplicable_target_throws() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("protection"), "Protection", 4);  // chestplate-only
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+    auto request = make_request(target_item);
+
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "inapplicable target enchant should throw");
+
+    TEST_PASS("test_apply_inapplicable_target_throws");
+}
+
+// ─── Test 11: mixed applicable + inapplicable target enchants throw ───
+void test_apply_mixed_target_throws() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);   // applicable
+    target_enchs.emplace(NSID("protection"), "Protection", 4); // chestplate-only
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+    auto request = make_request(target_item);
+
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "mixed inapplicable target enchant should throw");
+
+    TEST_PASS("test_apply_mixed_target_throws");
+}
+
+// ─── Test 12: inapplicable source enchant throws (direct mode) ───
+void test_apply_inapplicable_source_throws() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    EnchSet source_enchs;
+    source_enchs.emplace(NSID("protection"), "Protection", 4);  // chestplate-only
+    auto request = make_request(target_item, source_enchs);
+
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "inapplicable source enchant should throw");
+
+    TEST_PASS("test_apply_inapplicable_source_throws");
+}
+
+// ─── Test 13: inapplicable enchants on inventory extra items are NOT errors ───
+//     (a protection book in the inventory is legitimately unusable for a sword)
+void test_apply_inventory_inapplicable_extra_ok() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("protection"), "Protection", 4);  // chestplate-only
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"),
+                                     book_enchs, 0);
+    request.payload = std::move(payload);
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = CompactAdapter::apply(profile, request);  // must not throw
+    expect(!input.inventory_items().empty(),
+           "inventory items should be present");
+
+    TEST_PASS("test_apply_inventory_inapplicable_extra_ok");
+}
+
+// ─── Test 14: over-level source enchant throws (direct mode) ───
+void test_apply_source_level_exceeds_max_throws() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    EnchSet source_enchs;
+    source_enchs.emplace(NSID("sharpness"), "Sharpness", 99);  // max_level is 5
+    auto request = make_request(target_item, source_enchs);
+
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "over-level source enchant should throw");
+
+    TEST_PASS("test_apply_source_level_exceeds_max_throws");
+}
+
+// ─── Test 15: over-level enchant on inventory extra book is NOT an error ───
+void test_apply_inventory_extra_over_level_ok() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("sharpness"), "Sharpness", 99);
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"),
+                                     book_enchs, 0);
+    request.payload = std::move(payload);
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = CompactAdapter::apply(profile, request);  // must not throw
+    expect(!input.inventory_items().empty(),
+           "inventory items should be present");
+
+    TEST_PASS("test_apply_inventory_extra_over_level_ok");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -194,12 +324,18 @@ int main() {
         test_apply_valid_input();
         test_apply_with_target();
         test_apply_invalid_enchant_id();
-        test_apply_invalid_level();
+        test_apply_level_exceeds_max_throws();
         test_apply_inapplicable_enchant();
         test_apply_penalty_forward();
         test_pruning_only_applicable();
         test_from_domain();
         test_recall_empty_output();
+        test_apply_inapplicable_target_throws();
+        test_apply_mixed_target_throws();
+        test_apply_inapplicable_source_throws();
+        test_apply_inventory_inapplicable_extra_ok();
+        test_apply_source_level_exceeds_max_throws();
+        test_apply_inventory_extra_over_level_ok();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

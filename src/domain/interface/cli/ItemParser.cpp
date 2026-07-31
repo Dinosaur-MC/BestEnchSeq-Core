@@ -74,6 +74,16 @@ static void validate_durability(int32_t durability, int32_t max_durability,
             " for '" + item_id + "'");
 }
 
+/// Validate prior_penalty fits the compact representation (uint8_t).
+/// Larger values would silently wrap (e.g. 999 → 231) downstream.
+static void validate_prior_penalty(int32_t prior_penalty)
+{
+    if (prior_penalty > std::numeric_limits<uint8_t>::max())
+        throw std::runtime_error(
+            tr_fmt("cli.err.prior_penalty_exceeds_max",
+                   prior_penalty, std::numeric_limits<uint8_t>::max()));
+}
+
 // ============================================================================
 // ItemParser::parse
 // ============================================================================
@@ -130,6 +140,7 @@ Item ItemParser::parse(const std::string &input,
 
     // ── Post-parse validation ──
     validate_durability(durability, eq_it->max_durability, item_id);
+    validate_prior_penalty(prior_penalty);
 
     return Item(eq_it->id, ench_set, prior_penalty, durability);
 }

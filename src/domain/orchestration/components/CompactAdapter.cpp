@@ -99,6 +99,31 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
         return dst;
     };
 
+    // ── 6b. Requested-enchantment validation ─────────────────────────
+    // Enchantments requested for the target equipment (desired enchants in
+    // direct mode, current state in inventory mode) must be applicable to
+    // it and must not exceed the registry's max level.  Both were previously
+    // accepted silently (inapplicable ones dropped by remap_nsid_to_local,
+    // over-level ones forwarded unchanged), producing impossible plans;
+    // report them instead of hiding the data loss.  IDs absent from the
+    // global registry are ignored for backward compatibility (legacy
+    // behavior).
+    auto validate_enchants = [&](const EnchSet &src) {
+        for (const auto &e : src) {
+            auto it = all_infos_map.find(e.id);
+            if (it == all_infos_map.end())
+                continue;  // unknown id → ignore
+            if (nsid_to_local.find(e.id) == nsid_to_local.end())
+                throw std::runtime_error(tr_fmt("main.err.ench_not_applicable",
+                                                e.id.str(),
+                                                request.target_item.id.str()));
+            if (e.level > it->second.max_level)
+                throw std::runtime_error(tr_fmt("main.err.ench_level_exceeds_max",
+                                                e.id.str(), e.level,
+                                                it->second.max_level));
+        }
+    };
+
     // ── 7. Build AlgorithmInput skeleton ───────────────────────────────
     algorithm::AlgorithmInput input;
     input.ench_reg = std::move(ench_reg);
@@ -114,6 +139,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
         throw std::runtime_error(
             tr("main.err.target_no_enchants"));
     }
+    validate_enchants(request.target_item.enchantments);
     algorithm::Item algo_target;
     algo_target.type  = is_book ? algorithm::ItemType::Book : algorithm::ItemType::Equip;
     algo_target.ppn   = static_cast<uint8_t>(request.target_item.prior_penalty);
@@ -127,6 +153,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
             using T = std::decay_t<decltype(payload)>;
             if constexpr (std::is_same_v<T, DirectPayload>) {
                 // Direct mode: items[0] = equipment with CURRENT (source) enchants
+                validate_enchants(payload.source_enchantments);
                 algorithm::Item equip_item = input.target;
                 equip_item.enchs           = remap_nsid_to_local(payload.source_enchantments);
                 input.items.push_back(std::move(equip_item));

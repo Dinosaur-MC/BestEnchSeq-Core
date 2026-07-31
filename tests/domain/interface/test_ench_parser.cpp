@@ -150,6 +150,18 @@ void test_ench_parser_unknown_throws() {
     TEST_PASS("test_ench_parser_unknown_throws");
 }
 
+void test_ench_parser_duplicate_rejected() {
+    auto reg = make_test_registry();
+    bool threw = false;
+    try {
+        EnchParser::parse("sharpness=5,sharpness=3", reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "duplicate enchantment should throw");
+    TEST_PASS("test_ench_parser_duplicate_rejected");
+}
+
 // ============================================================================
 // main
 // ============================================================================
@@ -165,6 +177,7 @@ int main() {
         test_ench_parser_unknown_throws();
         test_ench_parser_blank_input_rejected();
         test_ench_parser_trailing_comma_rejected();
+        test_ench_parser_duplicate_rejected();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

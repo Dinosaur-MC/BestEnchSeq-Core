@@ -139,6 +139,11 @@ EnchSet EnchParser::parse(const std::string& input,
             if (it == ench_reg.end())
                 throw std::runtime_error(tr_fmt("cli.err.unknown_ench", key));
         }
+        // Duplicate IDs (regardless of level) are invalid — an item has at
+        // most one level per enchantment.  Reject instead of silently
+        // keeping an arbitrary one of the two entries.
+        if (result.find(it->id) != result.end())
+            throw std::runtime_error(tr_fmt("cli.err.duplicate_ench", it->id.str()));
         result.emplace(it->id, it->name, level);
     }
 

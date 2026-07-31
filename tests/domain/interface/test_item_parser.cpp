@@ -260,6 +260,29 @@ void test_item_parser_durability_overflow_throws() {
     TEST_PASS("test_item_parser_durability_overflow_throws");
 }
 
+void test_item_parser_prior_penalty_overflow_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        // 999 does not fit the compact uint8_t ppn; previously truncated to 231.
+        ItemParser::parse("diamond_sword{prior_penalty:999}", ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "prior_penalty > 255 should throw");
+    TEST_PASS("test_item_parser_prior_penalty_overflow_throws");
+}
+
+void test_item_parser_prior_penalty_at_max_ok() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("diamond_sword{prior_penalty:255}",
+                                    ench_reg, eq_reg);
+    expect(result.prior_penalty == 255, "prior_penalty at max 255 is allowed");
+    TEST_PASS("test_item_parser_prior_penalty_at_max_ok");
+}
+
 int main() {
     try {
         test_item_parser_bare();
@@ -283,6 +306,8 @@ int main() {
         test_item_parser_trailing_after_brace_throws();
         test_item_parser_negative_prior_penalty_throws();
         test_item_parser_durability_overflow_throws();
+        test_item_parser_prior_penalty_overflow_throws();
+        test_item_parser_prior_penalty_at_max_ok();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
