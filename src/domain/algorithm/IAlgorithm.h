@@ -1,6 +1,5 @@
 #pragma once
 #include "domain/algorithm/types/AlgorithmTypes.h"
-#include "domain/algorithm/types/ResolverTypes.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "forge_engine/IForgeEngine.h"
@@ -10,6 +9,7 @@
 namespace algorithm {
 class ExecutionContext;
 class IAlgorithmSerializer;
+class IResolver;
 
 // ─── IAlgorithm (pure interface, compact-only) ───
 //
@@ -110,22 +110,11 @@ class IAlgorithm {
     /// prevent external modification during long-running search).
     virtual void execute(const AlgorithmInput &input, ExecutionContext &ctx) = 0;
 
-    /// Pre-process input before execution.
-    ///
-    /// Direct mode: reads source enchants from items[0].enchs and desired
-    /// from target, computes diff, generates graduated books.
-    /// Inventory mode: reads items[1..] as available pool, sorts by
-    /// priorities, filters by reachability.
-    ///
-    /// Returns generated/filtered items.  Empty = unreachable / no work
-    /// needed.  The caller appends the result to input.items.
-    virtual ResolverOutput resolve(const AlgorithmInput &input) const;
-
     /// Quick feasibility check: returns true if the target is reachable
-    /// from the given items without computing exact costs.
-    /// Default: pessimistic but catches trivial cases (empty items, target
+    /// from the given input without computing exact costs.
+    /// Default: pessimistic but catches trivial cases (empty pool, target
     /// already met, no books to work with).  Strategies may override for
-    /// tighter checks (e.g., greedy pure-forge in GreedyAlgorithm).
+    /// tighter checks.  Must agree with DefaultResolver's reachability rules.
     virtual bool simulate(const AlgorithmInput &input) const noexcept;
 
     /// Process the solution. Returns the final item if successful.
@@ -135,6 +124,11 @@ class IAlgorithm {
 
     /// Returns the associated forge engine for this algorithm.
     virtual std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept = 0;
+
+    /// Returns the resolver that turns an AlgorithmInput into the strategy's
+    /// working item set.  Default: DefaultResolver.  Strategies call this
+    /// inside execute()/simulate().
+    virtual std::unique_ptr<IResolver> get_resolver() const noexcept;
 
     /// Returns the associated serializer for this algorithm's state.
     /// Returns nullptr if the algorithm does not support serialization.
