@@ -29,7 +29,6 @@ public:
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<ForgeEngine>(_forge_engine);
     }
-    bool simulate(const AlgorithmInput& input) const noexcept override;
     AlgorithmMode supported_mode() const noexcept override {
         return AlgorithmMode::direct;
     }

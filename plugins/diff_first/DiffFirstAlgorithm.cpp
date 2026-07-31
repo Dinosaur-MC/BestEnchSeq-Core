@@ -1,6 +1,7 @@
 #include "DiffFirstAlgorithm.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
 #include <cstdint>
 #include <numeric>
@@ -11,30 +12,31 @@ namespace algorithm {
 using namespace algorithm;
 
 void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.f_config);
-    _ench_reg = &input.ench_reg;
-    const auto& reg = input.ench_reg;
+    _forge_engine.set_config(input.config.forge);
+    _ench_reg = &input.registry;
+    auto items = get_resolver()->resolve(input);
+    normalize_base_equipment(items);
+    const size_t initial_items = items.size();
+    const auto& reg = input.registry;
     const auto& target = input.target;
     ctx.report_progress(0, ProgressStatus::Starting);
 
     // ── Quick exits ─────────────────────────────────────────────────────
 
-    if (input.items.empty()) {
+    if (items.empty()) {
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
-    if (meets_target(input.items[0], target.enchs)) {
+    if (meets_target(items[0], target.enchs)) {
         ctx.report_solution({});
         ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
     }
-    if (input.items.size() <= 1) {
+    if (items.size() <= 1) {
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
 
-    // Copy mutable working set
-    std::vector<Item> items(input.items.begin(), input.items.end());
     std::vector<EnchStep> steps;
     steps.reserve(items.size() - 1);
 
@@ -87,9 +89,9 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
     while (items.size() > 1 && !cancelled) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) { cancelled = true; break; }
-        if (input.s_config.max_search_time.count() > 0) {
+        if (input.config.search.max_search_time.count() > 0) {
             auto elapsed = std::chrono::steady_clock::now() - diff_start;
-            if (elapsed > input.s_config.max_search_time) { cancelled = true; break; }
+            if (elapsed > input.config.search.max_search_time) { cancelled = true; break; }
         }
 
         sort_items(items);
@@ -173,7 +175,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
             }
         }
 
-        uint8_t p = 100 - static_cast<uint8_t>(items.size()) * 100 / static_cast<uint8_t>(input.items.size());
+        uint8_t p = 100 - static_cast<uint8_t>(items.size()) * 100 / static_cast<uint8_t>(initial_items);
         ctx.report_progress(p < 95 ? p : 95, ProgressStatus::MergingGroups);
     }
 
@@ -202,13 +204,6 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
     ctx.report_progress(100,
         cancelled ? ProgressStatus::Cancelled : ProgressStatus::CompleteNoSolution);
 }
-
-bool DiffFirstAlgorithm::simulate(const AlgorithmInput& input) const noexcept {
-    if (input.items.empty()) return false;
-    if (meets_target(input.items[0], input.target.enchs)) return true;
-    return input.items.size() > 1;
-}
-
 
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 

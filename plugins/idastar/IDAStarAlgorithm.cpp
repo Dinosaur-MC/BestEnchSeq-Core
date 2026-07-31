@@ -2,6 +2,7 @@
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/components/StateHash.h"
+#include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
 #include <cmath>
 
@@ -167,9 +168,10 @@ int32_t IDAStarAlgorithm::_compute_h() const {
 }
 
 void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
-    _forge_engine.set_config(input.f_config);
-    const auto& items = input.items;
-    const auto& reg = input.ench_reg;
+    _forge_engine.set_config(input.config.forge);
+    auto items = get_resolver()->resolve(input);
+    normalize_base_equipment(items);
+    const auto& reg = input.registry;
     const auto& target = input.target;
     ctx.report_progress(0, ProgressStatus::Starting);
 
@@ -200,7 +202,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     _solutions_found = 0;
 
     // Cache config from AlgorithmInput
-    _max_solutions = input.s_config.max_solutions;
+    _max_solutions = input.config.search.max_solutions;
 
     std::vector<ItemID> initial_ids;
     initial_ids.reserve(items.size());
@@ -239,8 +241,8 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         }
 
         // External warm-start bound
-        if (input.initial_bound < best_cost) {
-            best_cost = input.initial_bound;
+        if (input.config.search.initial_bound < best_cost) {
+            best_cost = input.config.search.initial_bound;
             has_realistic_bound = true;
         } else {
             int64_t node_limit = 50'000;

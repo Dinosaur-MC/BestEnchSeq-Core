@@ -1,5 +1,7 @@
 #include "DynamicPenaltyBalancingAlgorithm.h"
 #include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/resolvers/IResolver.h"
 #include <chrono>
 #include <cstdint>
 #include <vector>
@@ -10,10 +12,11 @@ using namespace algorithm;
 
 void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx)
 {
-    _forge_engine.set_config(input.f_config);
-    _ench_reg = &input.ench_reg;
-    const auto& items = input.items;
-    const auto& reg = input.ench_reg;
+    _forge_engine.set_config(input.config.forge);
+    _ench_reg = &input.registry;
+    auto items = get_resolver()->resolve(input);
+    normalize_base_equipment(items);
+    const auto& reg = input.registry;
     const auto& target = input.target;
     ctx.report_progress(0, ProgressStatus::Starting);
 
@@ -97,7 +100,7 @@ void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, Exec
         ++steps_performed;
 
         {
-            const auto& sc = input.s_config;
+            const auto& sc = input.config.search;
             if (sc.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - start;
                 if (elapsed > sc.max_search_time) break;
