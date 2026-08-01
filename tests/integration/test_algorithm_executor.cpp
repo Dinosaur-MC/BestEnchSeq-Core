@@ -185,6 +185,39 @@ void test_executor_pause_resume() {
     std::cout << "PASS: test_executor_pause_resume" << std::endl;
 }
 
+void test_cancel_before_start_noop() {
+    auto algo = std::make_unique<SlowAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+
+    // cancel() before start() must not brick the executor — stays Idle
+    executor.cancel();
+    expect(executor.state() == AlgorithmState::Idle,
+           "state should stay Idle after pre-start cancel()");
+
+    executor.start(g_test_input);
+    executor.wait();
+    expect(executor.state() == AlgorithmState::Completed,
+           "executor should still run after pre-start cancel()");
+    std::cout << "PASS: test_cancel_before_start_noop" << std::endl;
+}
+
+void test_pause_resume_before_start_noop() {
+    auto algo = std::make_unique<SlowAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+
+    // pause()/resume() before start() must be safe no-ops (no null deref)
+    executor.pause();
+    executor.resume();
+    expect(executor.state() == AlgorithmState::Idle,
+           "state should stay Idle after pre-start pause/resume");
+
+    executor.start(g_test_input);
+    executor.wait();
+    expect(executor.state() == AlgorithmState::Completed,
+           "executor should still run after pre-start pause/resume");
+    std::cout << "PASS: test_pause_resume_before_start_noop" << std::endl;
+}
+
 void test_executor_progress() {
     auto algo = std::make_unique<TestAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
@@ -261,6 +294,8 @@ int main() {
         test_double_start();
         test_executor_cancel();
         test_executor_pause_resume();
+        test_cancel_before_start_noop();
+        test_pause_resume_before_start_noop();
         test_executor_progress();
         test_output_not_valid_before_completion();
         test_output_has_steps_after_completion();

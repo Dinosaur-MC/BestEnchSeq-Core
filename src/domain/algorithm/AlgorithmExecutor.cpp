@@ -256,19 +256,25 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 }
 
 void AlgorithmExecutor::pause() {
+    if (!_ctx)
+        return;  // not started — nothing to pause
     if (_set_state(AlgorithmState::Paused))
         _ctx->pause();
 }
 
 void AlgorithmExecutor::resume() {
+    if (!_ctx)
+        return;  // not started — nothing to resume
     if (_set_state(AlgorithmState::Running))
         _ctx->resume();
 }
 
 void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
-    // Don't clobber Completed or Failed — results/loss would be lost/mislabeled
-    if (prev == AlgorithmState::Completed || prev == AlgorithmState::Failed) {
+    // Don't clobber Completed or Failed — results/loss would be lost/mislabeled.
+    // Idle is restored too so a pre-start cancel() cannot brick later start()s.
+    if (prev == AlgorithmState::Completed || prev == AlgorithmState::Failed ||
+        prev == AlgorithmState::Idle) {
         _state.store(prev, std::memory_order_release);
         return;
     }

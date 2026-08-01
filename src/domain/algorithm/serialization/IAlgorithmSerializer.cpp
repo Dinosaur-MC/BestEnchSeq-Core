@@ -55,6 +55,12 @@ bool IAlgorithmSerializer::deserialize(
     if (!r.ok()) return false;
     if (!cp.verify()) return false;
 
+    // Reject checkpoints written by a different algorithm.  Without this a
+    // foreign checkpoint's algorithm sections would all be skipped by
+    // _deserialize_state and silently "restore" empty/corrupt state.
+    if (!cp.meta.algorithm_tag.empty() && cp.meta.algorithm_tag != algo.name())
+        return false;
+
     // Extract input section and collect algorithm-specific sections
     std::vector<checkpoint::Section> algo_sections;
     for (auto& sec : cp.sections) {

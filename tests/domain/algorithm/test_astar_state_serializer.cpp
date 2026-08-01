@@ -1,6 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/_strategies/astar/AStarStateSerializer.h"
 #include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
+#include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
 #include "domain/algorithm/serialization/Checkpoint.h"
 #include <memory>
 #include <span>
@@ -57,8 +58,30 @@ void test_astar_state_bad_tag() {
 
     AlgorithmInput out;
     bool ok = ser.deserialize(algo, out, std::span<const uint8_t>(buf.data(), buf.size()));
-    expect(ok, "wrong algorithm tag with empty sections should still succeed (tag is metadata)");
+    expect(!ok, "checkpoint with a foreign algorithm tag must be rejected");
     TEST_PASS("test_astar_state_bad_tag");
+}
+
+void test_cross_algorithm_checkpoint_rejected() {
+    AStarStateSerializer ser;
+    AStarAlgorithm astar;
+
+    // Serialize a valid astar checkpoint (tag = "astar")
+    AlgorithmInput input;
+    input.target.type = ItemType::Equip;
+    EnchSet target_set;
+    target_set.insert(Ench{0, 1});
+    input.target.enchs = target_set;
+    input.registry.init({}, {}, Equipment{});
+    auto blob = ser.serialize(astar, input);
+    expect(!blob.empty(), "serialize should produce bytes");
+
+    // Deserialize the astar checkpoint into a DIFFERENT algorithm → rejected
+    DFSAlgorithm dfs;
+    AlgorithmInput out;
+    bool ok = ser.deserialize(dfs, out, std::span<const uint8_t>(blob.data(), blob.size()));
+    expect(!ok, "cross-algorithm checkpoint must be rejected");
+    TEST_PASS("test_cross_algorithm_checkpoint_rejected");
 }
 
 void test_crc_roundtrip() {
@@ -124,6 +147,7 @@ int main() {
         test_astar_state_empty_rejected();
         test_astar_state_bad_magic_rejected();
         test_astar_state_bad_tag();
+        test_cross_algorithm_checkpoint_rejected();
         test_crc_roundtrip();
         test_crc_tamper_detected();
         test_checkpoint_min_size_rejected();
