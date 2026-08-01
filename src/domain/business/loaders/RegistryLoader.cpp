@@ -1,6 +1,7 @@
 #include "RegistryLoader.h"
 #include "domain/business/components/Serializer.h"
 #include "common/CommonTypes.h"
+#include "common/log/log.hpp"
 
 #include <string>
 #include <unordered_set>
@@ -14,19 +15,29 @@
 void RegistryLoader::from_dto(
     EnchantmentRegistry& reg,
     const TagRegistry& tag_reg,
+    const EquipmentRegistry& eq_reg,
     const std::vector<business::loader::EnchantmentData>& data)
 {
     for (const auto& d : data) {
-        // Resolve applicable_to strings → NSID equipment tag references
-        std::unordered_set<NSID> applicable_eq;
-        for (const auto& item_str : d.applicable_to) {
-            NSID nsid("#minecraft:" + item_str);
-            auto it = tag_reg.find(nsid);
-            if (it != tag_reg.end())
-                applicable_eq.insert(it->id);
+        // supported_items: 原始引用交叉验证（#tag 需定义，具体 ID 需存在）
+        std::unordered_set<NSID> supported;
+        for (const auto& ref : d.applicable_to) {
+            if (!ref.empty() && ref[0] == '#') {
+                NSID tag_nsid(ref);
+                if (tag_reg.contains(tag_nsid))
+                    supported.insert(tag_nsid);          // 保留
+            } else {
+                NSID item_nsid = (ref.find(':') == std::string::npos) ? NSID("minecraft:" + ref) : NSID(ref);
+                if (eq_reg.contains(item_nsid))
+                    supported.insert(item_nsid);          // 保留
+            }
+        }
+        if (supported.empty()) {
+            LOG_WARN("Skipping enchantment '%s': no resolvable supported_items", d.id.c_str());
+            continue;   // 空 supported_items 的魔咒移除
         }
 
-        // Namespace-qualify exclusive_with entries
+        // exclusive_with 命名空间化（不变）
         std::unordered_set<NSID> exclusive_nsid;
         for (const auto& excl : d.exclusive_with) {
             if (excl.find(':') == std::string::npos)
@@ -36,16 +47,15 @@ void RegistryLoader::from_dto(
         }
 
         EnchInfo info;
-        info.id                     = NSID(d.id);
-        info.name                   = d.display_name;
-        info.supported_platform     = MCE::All;
-        info.max_level              = d.max_level;
-        info.limited_level          = d.limited_level;
-        info.multiplier             = d.multiplier;
-        info.is_treasure            = (d.limited_level == 0);
-        info.exclusive_set          = std::move(exclusive_nsid);
-        info.supported_items        = std::move(applicable_eq);
-
+        info.id                = NSID(d.id);
+        info.name              = d.display_name;
+        info.supported_platform = MCE::All;
+        info.max_level         = d.max_level;
+        info.limited_level     = d.limited_level;
+        info.multiplier        = d.multiplier;
+        info.is_treasure       = (d.limited_level == 0);
+        info.exclusive_set     = std::move(exclusive_nsid);
+        info.supported_items   = std::move(supported);
         reg.insert(std::move(info));
     }
 }
@@ -213,22 +223,14 @@ void RegistryLoader::resolve(
     EnchantmentRegistry& ench_reg,
     const TagRegistry* base_tags)
 {
-    // Step 1: Build TagRegistry.  Seed with the base tags (vanilla
-    // fallback) first, then the profile's own unique equipment categories.
+    // Step 1: Build TagRegistry.  Seeded ONLY from the base tags (vanilla
+    // fallback) — no synthetic `#minecraft:<category>` tags are derived from
+    // the equipment data anymore.  A `#tag` supported_items reference only
+    // resolves if it is defined here.
     tag_reg.clear();
     if (base_tags) {
         for (const auto& [id, tag] : base_tags->data())
             tag_reg.insert(tag);
-    }
-    {
-        std::unordered_set<std::string> seen;
-        std::vector<std::string> categories;
-        for (const auto& eq : equipments) {
-            if (seen.insert(eq.category).second)
-                categories.push_back(eq.category);
-        }
-        for (const auto& name : categories)
-            tag_reg.insert({NSID("#minecraft:" + name), name});
     }
 
     // Step 2: Build EquipmentRegistry
@@ -238,6 +240,6 @@ void RegistryLoader::resolve(
 
     // Step 3: Build EnchantmentRegistry
     {
-        from_dto(ench_reg, tag_reg, enchants);
+        from_dto(ench_reg, tag_reg, eq_reg, enchants);
     }
 }

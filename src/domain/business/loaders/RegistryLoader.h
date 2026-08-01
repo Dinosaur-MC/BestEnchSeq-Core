@@ -20,10 +20,14 @@ public:
     // ── DTO → Registry ────────────────────────────────────────────────
 
     /// Convert EnchantmentData[] → EnchantmentRegistry.
-    /// Resolves category name strings to NSID tag references.
-    /// Resolves exclusive_with strings to namespaced NSIDs.
+    /// Cross-validates each raw `supported_items` reference against the
+    /// tag/equipment universe: a `#tag` reference must resolve in \p tag_reg,
+    /// a concrete item ID must exist in \p eq_reg.  Entries with no
+    /// resolvable references are dropped.  Resolves exclusive_with strings
+    /// to namespaced NSIDs.
     void from_dto(EnchantmentRegistry& reg,
                   const TagRegistry& tag_reg,
+                  const EquipmentRegistry& eq_reg,
                   const std::vector<business::loader::EnchantmentData>& data);
 
     /// Convert EquipmentData[] → EquipmentRegistry.

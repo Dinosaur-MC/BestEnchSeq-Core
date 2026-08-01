@@ -43,7 +43,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "helmet"
+        "#minecraft:helmet"
       ],
       "is_treasure": false
     },
@@ -62,10 +62,10 @@
         "smite"
       ],
       "applicable_equipment": [
-        "axe",
-        "mace",
-        "spear",
-        "sword"
+        "#minecraft:axe",
+        "#minecraft:mace",
+        "#minecraft:spear",
+        "#minecraft:sword"
       ],
       "is_treasure": false
     },
@@ -78,14 +78,14 @@
       "multiplier": 8,
       "exclusive_set": [],
       "applicable_equipment": [
-        "boots",
-        "chestplate",
-        "elytra",
-        "head",
-        "helmet",
-        "leggings",
-        "pumpkin",
-        "skull"
+        "#minecraft:boots",
+        "#minecraft:chestplate",
+        "#minecraft:elytra",
+        "#minecraft:head",
+        "#minecraft:helmet",
+        "#minecraft:leggings",
+        "#minecraft:pumpkin",
+        "#minecraft:skull"
       ],
       "is_treasure": true
     },
@@ -102,10 +102,10 @@
         "protection"
       ],
       "applicable_equipment": [
-        "boots",
-        "chestplate",
-        "helmet",
-        "leggings"
+        "#minecraft:boots",
+        "#minecraft:chestplate",
+        "#minecraft:helmet",
+        "#minecraft:leggings"
       ],
       "is_treasure": false
     },
@@ -124,7 +124,7 @@
         "smite"
       ],
       "applicable_equipment": [
-        "mace"
+        "#minecraft:mace"
       ],
       "is_treasure": false
     },
@@ -139,7 +139,7 @@
         "riptide"
       ],
       "applicable_equipment": [
-        "trident"
+        "#minecraft:trident"
       ],
       "is_treasure": false
     },
@@ -158,7 +158,7 @@
         "smite"
       ],
       "applicable_equipment": [
-        "mace"
+        "#minecraft:mace"
       ],
       "is_treasure": false
     },
@@ -173,7 +173,7 @@
         "frost_walker"
       ],
       "applicable_equipment": [
-        "boots"
+        "#minecraft:boots"
       ],
       "is_treasure": false
     },
@@ -186,11 +186,11 @@
       "multiplier": 1,
       "exclusive_set": [],
       "applicable_equipment": [
-        "axe",
-        "hoe",
-        "pickaxe",
-        "shears",
-        "shovel"
+        "#minecraft:axe",
+        "#minecraft:hoe",
+        "#minecraft:pickaxe",
+        "#minecraft:shears",
+        "#minecraft:shovel"
       ],
       "is_treasure": false
     },
@@ -203,7 +203,7 @@
       "multiplier": 2,
       "exclusive_set": [],
       "applicable_equipment": [
-        "boots"
+        "#minecraft:boots"
       ],
       "is_treasure": false
     },
@@ -216,9 +216,9 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "mace",
-        "spear",
-        "sword"
+        "#minecraft:mace",
+        "#minecraft:spear",
+        "#minecraft:sword"
       ],
       "is_treasure": false
     },
@@ -235,10 +235,10 @@
         "protection"
       ],
       "applicable_equipment": [
-        "boots",
-        "chestplate",
-        "helmet",
-        "leggings"
+        "#minecraft:boots",
+        "#minecraft:chestplate",
+        "#minecraft:helmet",
+        "#minecraft:leggings"
       ],
       "is_treasure": false
     },
@@ -251,7 +251,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "bow"
+        "#minecraft:bow"
       ],
       "is_treasure": false
     },
@@ -266,10 +266,10 @@
         "silk_touch"
       ],
       "applicable_equipment": [
-        "axe",
-        "hoe",
-        "pickaxe",
-        "shovel"
+        "#minecraft:axe",
+        "#minecraft:hoe",
+        "#minecraft:pickaxe",
+        "#minecraft:shovel"
       ],
       "is_treasure": false
     },
@@ -284,7 +284,7 @@
         "depth_strider"
       ],
       "applicable_equipment": [
-        "boots"
+        "#minecraft:boots"
       ],
       "is_treasure": true
     },
@@ -303,7 +303,7 @@
         "smite"
       ],
       "applicable_equipment": [
-        "trident"
+        "#minecraft:trident"
       ],
       "is_treasure": false
     },
@@ -318,7 +318,7 @@
         "mending"
       ],
       "applicable_equipment": [
-        "bow"
+        "#minecraft:bow"
       ],
       "is_treasure": false
     },
@@ -331,8 +331,8 @@
       "multiplier": 2,
       "exclusive_set": [],
       "applicable_equipment": [
-        "spear",
-        "sword"
+        "#minecraft:spear",
+        "#minecraft:sword"
       ],
       "is_treasure": false
     },
@@ -345,8 +345,8 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "spear",
-        "sword"
+        "#minecraft:spear",
+        "#minecraft:sword"
       ],
       "is_treasure": false
     },
@@ -361,7 +361,7 @@
         "riptide"
       ],
       "applicable_equipment": [
-        "trident"
+        "#minecraft:trident"
       ],
       "is_treasure": false
     },
@@ -374,7 +374,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "rod"
+        "#minecraft:rod"
       ],
       "is_treasure": false
     },
@@ -387,7 +387,7 @@
       "multiplier": 2,
       "exclusive_set": [],
       "applicable_equipment": [
-        "spear"
+        "#minecraft:spear"
       ],
       "is_treasure": false
     },
@@ -400,7 +400,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "rod"
+        "#minecraft:rod"
       ],
       "is_treasure": false
     },
@@ -415,27 +415,27 @@
         "infinity"
       ],
       "applicable_equipment": [
-        "axe",
-        "boots",
-        "bow",
-        "brush",
-        "chestplate",
-        "crossbow",
-        "elytra",
-        "helmet",
-        "hoe",
-        "leggings",
-        "mace",
-        "pickaxe",
-        "rod",
-        "shears",
-        "shield",
-        "shovel",
-        "spear",
-        "steel",
-        "stick",
-        "sword",
-        "trident"
+        "#minecraft:axe",
+        "#minecraft:boots",
+        "#minecraft:bow",
+        "#minecraft:brush",
+        "#minecraft:chestplate",
+        "#minecraft:crossbow",
+        "#minecraft:elytra",
+        "#minecraft:helmet",
+        "#minecraft:hoe",
+        "#minecraft:leggings",
+        "#minecraft:mace",
+        "#minecraft:pickaxe",
+        "#minecraft:rod",
+        "#minecraft:shears",
+        "#minecraft:shield",
+        "#minecraft:shovel",
+        "#minecraft:spear",
+        "#minecraft:steel",
+        "#minecraft:stick",
+        "#minecraft:sword",
+        "#minecraft:trident"
       ],
       "is_treasure": true
     },
@@ -450,7 +450,7 @@
         "piercing"
       ],
       "applicable_equipment": [
-        "crossbow"
+        "#minecraft:crossbow"
       ],
       "is_treasure": false
     },
@@ -465,7 +465,7 @@
         "multishot"
       ],
       "applicable_equipment": [
-        "crossbow"
+        "#minecraft:crossbow"
       ],
       "is_treasure": false
     },
@@ -478,7 +478,7 @@
       "multiplier": 1,
       "exclusive_set": [],
       "applicable_equipment": [
-        "bow"
+        "#minecraft:bow"
       ],
       "is_treasure": false
     },
@@ -495,10 +495,10 @@
         "protection"
       ],
       "applicable_equipment": [
-        "boots",
-        "chestplate",
-        "helmet",
-        "leggings"
+        "#minecraft:boots",
+        "#minecraft:chestplate",
+        "#minecraft:helmet",
+        "#minecraft:leggings"
       ],
       "is_treasure": false
     },
@@ -515,10 +515,10 @@
         "projectile_protection"
       ],
       "applicable_equipment": [
-        "boots",
-        "chestplate",
-        "helmet",
-        "leggings"
+        "#minecraft:boots",
+        "#minecraft:chestplate",
+        "#minecraft:helmet",
+        "#minecraft:leggings"
       ],
       "is_treasure": false
     },
@@ -531,7 +531,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "bow"
+        "#minecraft:bow"
       ],
       "is_treasure": false
     },
@@ -544,7 +544,7 @@
       "multiplier": 2,
       "exclusive_set": [],
       "applicable_equipment": [
-        "crossbow"
+        "#minecraft:crossbow"
       ],
       "is_treasure": false
     },
@@ -557,7 +557,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "helmet"
+        "#minecraft:helmet"
       ],
       "is_treasure": false
     },
@@ -573,7 +573,7 @@
         "loyalty"
       ],
       "applicable_equipment": [
-        "trident"
+        "#minecraft:trident"
       ],
       "is_treasure": false
     },
@@ -592,9 +592,9 @@
         "smite"
       ],
       "applicable_equipment": [
-        "axe",
-        "spear",
-        "sword"
+        "#minecraft:axe",
+        "#minecraft:spear",
+        "#minecraft:sword"
       ],
       "is_treasure": false
     },
@@ -609,10 +609,10 @@
         "fortune"
       ],
       "applicable_equipment": [
-        "axe",
-        "hoe",
-        "pickaxe",
-        "shovel"
+        "#minecraft:axe",
+        "#minecraft:hoe",
+        "#minecraft:pickaxe",
+        "#minecraft:shovel"
       ],
       "is_treasure": false
     },
@@ -631,10 +631,10 @@
         "sharpness"
       ],
       "applicable_equipment": [
-        "axe",
-        "mace",
-        "spear",
-        "sword"
+        "#minecraft:axe",
+        "#minecraft:mace",
+        "#minecraft:spear",
+        "#minecraft:sword"
       ],
       "is_treasure": false
     },
@@ -647,7 +647,7 @@
       "multiplier": 8,
       "exclusive_set": [],
       "applicable_equipment": [
-        "boots"
+        "#minecraft:boots"
       ],
       "is_treasure": true
     },
@@ -660,7 +660,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "sword"
+        "#minecraft:sword"
       ],
       "is_treasure": false
     },
@@ -673,7 +673,7 @@
       "multiplier": 8,
       "exclusive_set": [],
       "applicable_equipment": [
-        "leggings"
+        "#minecraft:leggings"
       ],
       "is_treasure": true
     },
@@ -686,10 +686,10 @@
       "multiplier": 8,
       "exclusive_set": [],
       "applicable_equipment": [
-        "boots",
-        "chestplate",
-        "helmet",
-        "leggings"
+        "#minecraft:boots",
+        "#minecraft:chestplate",
+        "#minecraft:helmet",
+        "#minecraft:leggings"
       ],
       "is_treasure": false
     },
@@ -702,27 +702,27 @@
       "multiplier": 2,
       "exclusive_set": [],
       "applicable_equipment": [
-        "axe",
-        "boots",
-        "bow",
-        "brush",
-        "chestplate",
-        "crossbow",
-        "elytra",
-        "helmet",
-        "hoe",
-        "leggings",
-        "mace",
-        "pickaxe",
-        "rod",
-        "shears",
-        "shield",
-        "shovel",
-        "spear",
-        "steel",
-        "stick",
-        "sword",
-        "trident"
+        "#minecraft:axe",
+        "#minecraft:boots",
+        "#minecraft:bow",
+        "#minecraft:brush",
+        "#minecraft:chestplate",
+        "#minecraft:crossbow",
+        "#minecraft:elytra",
+        "#minecraft:helmet",
+        "#minecraft:hoe",
+        "#minecraft:leggings",
+        "#minecraft:mace",
+        "#minecraft:pickaxe",
+        "#minecraft:rod",
+        "#minecraft:shears",
+        "#minecraft:shield",
+        "#minecraft:shovel",
+        "#minecraft:spear",
+        "#minecraft:steel",
+        "#minecraft:stick",
+        "#minecraft:sword",
+        "#minecraft:trident"
       ],
       "is_treasure": false
     },
@@ -735,31 +735,31 @@
       "multiplier": 8,
       "exclusive_set": [],
       "applicable_equipment": [
-        "axe",
-        "boots",
-        "bow",
-        "brush",
-        "chestplate",
-        "compass",
-        "crossbow",
-        "elytra",
-        "head",
-        "helmet",
-        "hoe",
-        "leggings",
-        "mace",
-        "pickaxe",
-        "pumpkin",
-        "rod",
-        "shears",
-        "shield",
-        "shovel",
-        "skull",
-        "spear",
-        "steel",
-        "stick",
-        "sword",
-        "trident"
+        "#minecraft:axe",
+        "#minecraft:boots",
+        "#minecraft:bow",
+        "#minecraft:brush",
+        "#minecraft:chestplate",
+        "#minecraft:compass",
+        "#minecraft:crossbow",
+        "#minecraft:elytra",
+        "#minecraft:head",
+        "#minecraft:helmet",
+        "#minecraft:hoe",
+        "#minecraft:leggings",
+        "#minecraft:mace",
+        "#minecraft:pickaxe",
+        "#minecraft:pumpkin",
+        "#minecraft:rod",
+        "#minecraft:shears",
+        "#minecraft:shield",
+        "#minecraft:shovel",
+        "#minecraft:skull",
+        "#minecraft:spear",
+        "#minecraft:steel",
+        "#minecraft:stick",
+        "#minecraft:sword",
+        "#minecraft:trident"
       ],
       "is_treasure": true
     },
@@ -772,7 +772,7 @@
       "multiplier": 4,
       "exclusive_set": [],
       "applicable_equipment": [
-        "mace"
+        "#minecraft:mace"
       ],
       "is_treasure": true
     }

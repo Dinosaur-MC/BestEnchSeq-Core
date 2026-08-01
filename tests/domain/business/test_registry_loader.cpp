@@ -49,7 +49,7 @@ void test_loader_ench_dto_to_reg() {
         5,                                   // max_level
         5,                                   // limited_level (non-zero => not treasure)
         {"smite"},                           // exclusive_with (bare name, no namespace)
-        {"sword"}                            // applicable_to (category string)
+        {"#minecraft:sword"}                 // applicable_to (raw tag reference)
     });
 
     data.push_back({
@@ -59,7 +59,7 @@ void test_loader_ench_dto_to_reg() {
         5,
         5,
         {"sharpness"},
-        {"sword"}
+        {"#minecraft:sword"}
     });
 
     data.push_back({
@@ -69,13 +69,14 @@ void test_loader_ench_dto_to_reg() {
         4,
         4,
         {},
-        {"helmet"}
+        {"#minecraft:helmet"}
     });
 
     // -- Convert via RegistryLoader ---------------------------------------
     RegistryLoader loader;
     EnchantmentRegistry ench_reg;
-    loader.from_dto(ench_reg, tag_reg, data);
+    EquipmentRegistry eq_reg;   // empty: only #tag references are used here
+    loader.from_dto(ench_reg, tag_reg, eq_reg, data);
 
     // -- Verify basic structure -------------------------------------------
     expect(ench_reg.size() == 3, "ench_reg should have 3 enchantments");
@@ -294,19 +295,19 @@ void test_loader_resolve_full() {
     std::vector<business::loader::EnchantmentData> ench_data;
     ench_data.push_back({
         "minecraft:sharpness", "Sharpness", 1, 5, 5,
-        {"smite"}, {"sword"}
+        {"smite"}, {"#minecraft:sword"}
     });
     ench_data.push_back({
         "minecraft:smite", "Smite", 1, 5, 5,
-        {"sharpness"}, {"sword"}
+        {"sharpness"}, {"#minecraft:sword"}
     });
     ench_data.push_back({
         "minecraft:protection", "Protection", 1, 4, 4,
-        {}, {"helmet"}
+        {}, {"#minecraft:helmet"}
     });
     ench_data.push_back({
         "minecraft:unbreaking", "Unbreaking", 1, 3, 3,
-        {}, {"sword", "helmet"}
+        {}, {"#minecraft:sword", "#minecraft:helmet"}
     });
 
     // -- Resolve via RegistryLoader ---------------------------------------
@@ -315,10 +316,16 @@ void test_loader_resolve_full() {
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
 
-    loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
+    // The tag universe is provided as base_tags (vanilla fallback); resolve()
+    // no longer synthesizes tags from the equipment data.
+    TagRegistry base_tags;
+    base_tags.insert({NSID("#minecraft:sword"), "sword"});
+    base_tags.insert({NSID("#minecraft:helmet"), "helmet"});
+
+    loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg, &base_tags);
 
     // ---- Step 1: TagRegistry ----------------------------------
-    // Should have 2 tags: sword, helmet (from unique EquipmentData categories)
+    // Seeded from base_tags only: 2 tags, sword + helmet.
     expect(tag_reg.size() == 2, "tag_reg should have 2 tags (sword, helmet)");
     expect(tag_reg.contains(NSID("#minecraft:sword")),
            "tag_reg has #minecraft:sword");
@@ -400,70 +407,77 @@ void test_loader_resolve_full() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Vanilla fallback: an enchant's applicable_to resolves against the base
-//    tag registry even when the profile defines no equipment categories.
+// 6. supported_items cross-validation: the enchant keeps a raw `#tag`
+//    reference when the tag is defined in the base tag registry, and drops
+//    references that cannot resolve.
 // ---------------------------------------------------------------------------
-void test_loader_resolve_vanilla_fallback() {
-    // A mod profile with NO equipment data: its enchant targets the vanilla
-    // "sword" category and references a vanilla enchant ("sharpness") in
-    // exclusive_with.
+void test_loader_supported_items_resolution() {
+    // Mod enchant references vanilla item tag `#minecraft:swords` — base_tags
+    // provides the definition.
     std::vector<business::loader::EquipmentData> no_eq;
     std::vector<business::loader::EnchantmentData> ench_data;
     ench_data.push_back({
         "minecraft:leeching", "Leeching", 1, 2, 2,
-        {"sharpness"}, {"sword"}   // exclusive_with → vanilla sharpness
+        {"sharpness"}, {"#minecraft:swords"}
+    });
+    RegistryLoader loader;
+
+    TagRegistry base_tags;
+    base_tags.insert({NSID("#minecraft:swords"), "swords"});
+
+    TagRegistry tag_reg;
+    EquipmentRegistry eq_reg;
+    EnchantmentRegistry ench_reg;
+    loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg, &base_tags);
+    const auto& e = ench_reg.at(NSID("minecraft:leeching"));
+    expect(e.supported_items.contains(NSID("#minecraft:swords")),
+           "supported_items keeps #tag reference");
+    std::cout << "PASS: test_loader_supported_items_resolution" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// 6b. Concrete item-ID references resolve against the profile's own equipment
+//     registry; references that cannot resolve are dropped entirely.
+// ---------------------------------------------------------------------------
+void test_loader_supported_items_concrete_and_drop() {
+    std::vector<business::loader::EquipmentData> eq_data;
+    eq_data.push_back({"minecraft:diamond_sword", "Diamond Sword", "sword", 1561});
+
+    std::vector<business::loader::EnchantmentData> ench_data;
+    // Concrete ID that exists in eq_reg → kept with the reference preserved.
+    ench_data.push_back({
+        "minecraft:test_concrete", "Test Concrete", 1, 1, 1,
+        {}, {"minecraft:diamond_sword"}
+    });
+    // Concrete ID that does NOT exist → no resolvable supported_items → dropped.
+    ench_data.push_back({
+        "minecraft:test_bad_ref", "Test Bad Ref", 1, 1, 1,
+        {}, {"minecraft:not_a_real_item"}
+    });
+    // #tag that is not defined → dropped.
+    ench_data.push_back({
+        "minecraft:test_bad_tag", "Test Bad Tag", 1, 1, 1,
+        {}, {"#minecraft:undefined_tag"}
     });
 
     RegistryLoader loader;
+    TagRegistry tag_reg;
+    EquipmentRegistry eq_reg;
+    EnchantmentRegistry ench_reg;
+    loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
 
-    // Without a base tag registry, the vanilla "sword" category cannot
-    // resolve (no equipment in the profile to create it) → inapplicable.
-    {
-        TagRegistry tag_reg;
-        EquipmentRegistry eq_reg;
-        EnchantmentRegistry ench_reg;
-        loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg);
-        const auto& e = ench_reg.at(NSID("minecraft:leeching"));
-        expect(e.supported_items.empty(),
-               "without fallback, leeching has no applicable equipment");
-        expect(e.exclusive_set.contains(NSID("minecraft:sharpness")),
-               "exclusive_with resolves by name regardless of fallback");
-    }
+    expect(ench_reg.size() == 1, "only the resolvable enchantment survives");
+    expect(ench_reg.contains(NSID("minecraft:test_concrete")),
+           "concrete ID enchantment kept");
+    expect(ench_reg.at(NSID("minecraft:test_concrete")).supported_items.contains(
+               NSID("minecraft:diamond_sword")),
+           "concrete ID reference preserved in supported_items");
+    expect(!ench_reg.contains(NSID("minecraft:test_bad_ref")),
+           "unresolvable concrete ID enchantment dropped");
+    expect(!ench_reg.contains(NSID("minecraft:test_bad_tag")),
+           "undefined #tag enchantment dropped");
 
-    // With a base registry carrying the vanilla "sword" category, the enchant
-    // becomes applicable; exclusive_with to a vanilla enchant is preserved.
-    {
-        TagRegistry base_tags;
-        base_tags.insert({NSID("#minecraft:sword"), "sword"});
-        TagRegistry tag_reg;
-        EquipmentRegistry eq_reg;
-        EnchantmentRegistry ench_reg;
-        loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg, &base_tags);
-
-        const auto& e = ench_reg.at(NSID("minecraft:leeching"));
-        expect(e.supported_items.contains(NSID("#minecraft:sword")),
-               "with vanilla fallback, leeching is applicable to sword");
-        expect(e.exclusive_set.contains(NSID("minecraft:sharpness")),
-               "exclusive_with to vanilla sharpness preserved");
-    }
-
-    // Equipment category also resolves via the vanilla fallback when the
-    // profile defines an equipment using a vanilla category.
-    {
-        std::vector<business::loader::EquipmentData> eq_data;
-        eq_data.push_back({"minecraft:mod_sword", "Mod Sword", "sword", 2000});
-        TagRegistry base_tags;
-        base_tags.insert({NSID("#minecraft:sword"), "sword"});
-        TagRegistry tag_reg;
-        EquipmentRegistry eq_reg;
-        EnchantmentRegistry ench_reg;
-        loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg, &base_tags);
-        const auto& eq = eq_reg.at(NSID("minecraft:mod_sword"));
-        expect(eq.category == NSID("#minecraft:sword"),
-               "mod equipment category resolves via vanilla fallback");
-    }
-
-    std::cout << "PASS: test_loader_resolve_vanilla_fallback" << std::endl;
+    std::cout << "PASS: test_loader_supported_items_concrete_and_drop" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -479,7 +493,7 @@ void test_loader_vanilla_tag_fallback() {
             { "id": "mod_cursed", "name": "Mod Cursed", "platform": "java",
               "max_level": 1, "limited_level": 1, "multiplier": 8,
               "exclusive_set": ["#minecraft:enchantment/curse"],
-              "applicable_equipment": ["sword"], "is_treasure": true }
+              "applicable_equipment": ["#minecraft:sword"], "is_treasure": true }
         ],
         "equipments": [],
         "categories": [],
@@ -503,9 +517,10 @@ void test_loader_vanilla_tag_fallback() {
            "vanilla curse tag expanded to binding_curse");
     expect(e.exclusive_set.contains(NSID("minecraft:vanishing_curse")),
            "vanilla curse tag expanded to vanishing_curse");
-    // The vanilla sword category resolves via the category fallback.
+    // The raw #minecraft:sword tag reference resolves via the vanilla
+    // fallback (builtin tag registry).
     expect(e.supported_items.contains(NSID("#minecraft:sword")),
-           "vanilla sword category resolves");
+           "vanilla sword tag resolves");
 
     std::cout << "PASS: test_loader_vanilla_tag_fallback" << std::endl;
 }
@@ -805,7 +820,8 @@ int main() {
         test_loader_eq_dto_to_reg();
         test_loader_json_roundtrip();
         test_loader_resolve_full();
-        test_loader_resolve_vanilla_fallback();
+        test_loader_supported_items_resolution();
+        test_loader_supported_items_concrete_and_drop();
         test_loader_vanilla_tag_fallback();
 
         // Section B -- TagResolver

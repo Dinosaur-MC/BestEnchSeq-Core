@@ -28,12 +28,11 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
 
-        // Step 1: Build tag registry.  Seed with the builtin vanilla
-        // categories first (vanilla fallback) so a mod profile's
-        // `applicable_equipment` references resolve against vanilla
-        // categories even when the profile itself does not define them
-        // (e.g. a mod enchant targeting "sword"), then overlay the
-        // profile's own equipment categories.
+        // Step 1: Build tag registry.  Seeded ONLY from the builtin vanilla
+        // tags (vanilla fallback) — no synthetic `#minecraft:<category>` tags
+        // are derived from the profile's own equipment categories.  A `#tag`
+        // supported_items reference only resolves if it is defined in the
+        // vanilla fallback.
         {
             TagRegistry builtin_tags;
             EnchantmentRegistry builtin_ench;
@@ -42,17 +41,10 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
             for (const auto& [id, tag] : builtin_tags.data())
                 tag_reg.insert(tag);
         }
-        {
-            std::unordered_set<std::string> seen;
-            for (const auto& eq : eq_data) {
-                if (seen.insert(eq.category).second)
-                    tag_reg.insert({NSID("#minecraft:" + eq.category), eq.category});
-            }
-        }
 
         // Step 2: Populate registries into temporary containers
         loader.from_dto(eq_reg, tag_reg, eq_data);
-        loader.from_dto(ench_reg, tag_reg, ench_data);
+        loader.from_dto(ench_reg, tag_reg, eq_reg, ench_data);
 
         // Step 3: Construct Profile via full-parameter constructor
         std::string stem = path.stem().string();
