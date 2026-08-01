@@ -346,3 +346,34 @@ NativeJsonParser::Result NativeJsonParser::parse(const Json& json) {
 NativeJsonParser::Result NativeJsonParser::parse_string(const std::string& content) {
     return parse(Json::parse(content));
 }
+
+std::vector<std::string> NativeJsonParser::parse_categories(const Json& json) {
+    std::vector<std::string> result;
+    auto root_var = json.get_value();
+    if (!std::holds_alternative<Json::Object>(root_var)) return result;
+    const auto& root_obj = std::get<Json::Object>(root_var);
+
+    auto it = root_obj.find("categories");
+    if (it == root_obj.end()) return result;
+
+    auto cat_val = it->second.get_value();
+    if (!std::holds_alternative<Json::Array>(cat_val)) return result;
+    const auto& cat_arr = std::get<Json::Array>(cat_val);
+
+    for (const auto& elem : cat_arr) {
+        auto e = elem.get_value();
+        if (auto* s = std::get_if<Json::String>(&e))
+            result.push_back(*s);
+    }
+    return result;
+}
+
+std::vector<std::string> NativeJsonParser::parse_categories_string(const std::string& content) {
+    try {
+        return parse_categories(Json::parse(content));
+    } catch (...) {
+        // Non-JSON content (e.g. a CSV builtin override) has no declared
+        // categories — return empty and let the DTO parse handle the format.
+        return {};
+    }
+}

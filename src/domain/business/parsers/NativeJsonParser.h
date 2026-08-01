@@ -20,4 +20,11 @@ public:
 
     static Result parse(const Json& json);
     static Result parse_string(const std::string& content);
+
+    /// Parse the top-level "categories" array (the dataset's declared
+    /// equipment categories).  These may include categories with no concrete
+    /// equipment entry (e.g. "spear", "head"), which are still needed so
+    /// `supported_items` references to them can resolve.
+    static std::vector<std::string> parse_categories(const Json& json);
+    static std::vector<std::string> parse_categories_string(const std::string& content);
 };

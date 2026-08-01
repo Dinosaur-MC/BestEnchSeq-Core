@@ -21,19 +21,29 @@ void RegistryLoader::from_dto(
     for (const auto& d : data) {
         // supported_items: 原始引用交叉验证（#tag 需定义，具体 ID 需存在）
         std::unordered_set<NSID> supported;
+        size_t dropped = 0;
         for (const auto& ref : d.applicable_to) {
-            if (!ref.empty() && ref[0] == '#') {
+            if (ref.empty()) {          // 空引用不能构成 NSID —— 跳过
+                ++dropped;
+                continue;
+            }
+            if (ref[0] == '#') {
                 NSID tag_nsid(ref);
                 if (tag_reg.contains(tag_nsid))
                     supported.insert(tag_nsid);          // 保留
+                else
+                    ++dropped;
             } else {
                 NSID item_nsid = (ref.find(':') == std::string::npos) ? NSID("minecraft:" + ref) : NSID(ref);
                 if (eq_reg.contains(item_nsid))
                     supported.insert(item_nsid);          // 保留
+                else
+                    ++dropped;
             }
         }
         if (supported.empty()) {
-            LOG_WARN("Skipping enchantment '%s': no resolvable supported_items", d.id.c_str());
+            LOG_WARN("Skipping enchantment '%s': no resolvable supported_items (dropped refs: %zu/%zu)",
+                     d.id.c_str(), dropped, d.applicable_to.size());
             continue;   // 空 supported_items 的魔咒移除
         }
 
@@ -150,15 +160,14 @@ std::vector<business::loader::EnchantmentData> RegistryLoader::to_dto(
     result.reserve(reg.size());
 
     for (const auto& [nsid, info] : reg.data()) {
-        // Equipment NSIDs → category name strings
+        // supported_items references are emitted RAW (`#tag` or concrete id)
+        // so a to_dto → from_dto round-trip preserves reference semantics
+        // under cross-validation (a bare category name would be re-interpreted
+        // as a concrete item id).
+        (void)tag_reg;
         std::vector<std::string> applicable;
-        for (const auto& eq_nsid : info.supported_items) {
-            auto tag_it = tag_reg.find(eq_nsid);
-            if (tag_it != tag_reg.end())
-                applicable.push_back(tag_it->name);
-            else
-                applicable.push_back(eq_nsid.str());
-        }
+        for (const auto& eq_nsid : info.supported_items)
+            applicable.push_back(eq_nsid.str());
 
         // Strip "minecraft:" prefix from exclusive_set NSIDs
         std::vector<std::string> exclusive_bare;

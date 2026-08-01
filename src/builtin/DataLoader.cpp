@@ -3,10 +3,10 @@
 #include "domain/business/components/FormatDetector.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/parsers/NativeJsonParser.h"
+#include "common/io/FileUtils.hpp"
 
 #include <filesystem>
 #include <string>
-#include <unordered_set>
 
 namespace besq::data {
 
@@ -19,32 +19,36 @@ void load_builtin_data(
     auto vanilla_path = data_dir / "vanilla.json";
     RegistryLoader loader;
 
-    std::vector<business::loader::EnchantmentData> ench_data;
-    std::vector<business::loader::EquipmentData> eq_data;
-    if (std::filesystem::exists(vanilla_path)) {
-        // Filesystem path: allows user to replace builtin data
-        auto parsed = FormatDetector::parse(vanilla_path);
-        ench_data = std::move(parsed.first);
-        eq_data   = std::move(parsed.second);
-    } else {
-        // Embedded fallback: zero I/O, always available
-        auto json_str = std::string{vanilla_json()};
-        auto parsed = NativeJsonParser::parse_string(json_str);
-        ench_data = std::move(parsed.first);
-        eq_data   = std::move(parsed.second);
-    }
+    // Read the raw content once so the declared categories can seed the
+    // vanilla fallback tag universe.
+    std::string content;
+    const bool from_fs = std::filesystem::exists(vanilla_path);
+    if (from_fs)
+        content = file_utils::read_file(vanilla_path);
+    else
+        content = std::string{vanilla_json()};
 
-    // Seed the tag registry from the builtin dataset's own equipment
-    // categories — the vanilla fallback universe.  This is real vanilla
-    // data, not synthetic: RegistryLoader::resolve no longer derives
-    // `#minecraft:<category>` tags from arbitrary equipment data.
+    // Seed the tag registry from the dataset's FULL declared `categories`
+    // array (all entries, including categories with no concrete equipment
+    // like "spear"/"head").  This is the vanilla fallback universe; the
+    // enchantments' `#minecraft:<category>` supported_items references are
+    // cross-validated against it in RegistryLoader::from_dto.
+    // TODO(T10): this is a stopgap — once vanilla.json is regenerated with
+    // real MC item-tag definitions, seed base_tags from those tags instead.
     TagRegistry base_tags;
-    std::unordered_set<std::string> seen;
-    for (const auto& eq : eq_data) {
-        if (seen.insert(eq.category).second)
-            base_tags.insert({NSID("#minecraft:" + eq.category), eq.category});
+    for (const auto& cat : NativeJsonParser::parse_categories_string(content))
+        base_tags.insert({NSID("#minecraft:" + cat), cat});
+
+    if (from_fs) {
+        // Filesystem path: allows user to replace builtin data (any supported
+        // format; for non-JSON overrides the categories array is simply empty).
+        auto parsed = FormatDetector::parse(vanilla_path);
+        loader.resolve(parsed.first, parsed.second, tag_reg, eq_reg, ench_reg, &base_tags);
+    } else {
+        // Embedded fallback: zero I/O, always available (native JSON).
+        auto parsed = NativeJsonParser::parse_string(content);
+        loader.resolve(parsed.first, parsed.second, tag_reg, eq_reg, ench_reg, &base_tags);
     }
-    loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg, &base_tags);
 }
 
 } // namespace besq::data
