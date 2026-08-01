@@ -9,7 +9,7 @@
 #include "domain/business/types/Profile.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "common/io/json.h"
 
 #include <string>
@@ -74,9 +74,9 @@ const Json& operator>>(const Json& json, EnchantmentRegistry& reg);
 Json& operator<<(Json& json, const EquipmentRegistry& reg);
 const Json& operator>>(const Json& json, EquipmentRegistry& reg);
 
-// ── EquipmentTagRegistry ──
-Json& operator<<(Json& json, const EquipmentTagRegistry& reg);
-const Json& operator>>(const Json& json, EquipmentTagRegistry& reg);
+// ── TagRegistry ──
+Json& operator<<(Json& json, const TagRegistry& reg);
+const Json& operator>>(const Json& json, TagRegistry& reg);
 
 // ── ProfileMetadata ──
 Json& operator<<(Json& json, const ProfileMetadata& meta);

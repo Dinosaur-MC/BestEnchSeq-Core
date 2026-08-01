@@ -1,13 +1,13 @@
-#include "EquipmentTagRegistry.h"
+#include "TagRegistry.h"
 #include <stdexcept>
 
-EquipmentTagRegistry::EquipmentTagRegistry(const std::vector<EquipmentTag>& tags) {
+TagRegistry::TagRegistry(const std::vector<EquipmentTag>& tags) {
     _data.reserve(tags.size());
     for (const auto& tag : tags)
         _data.emplace(tag.id, tag);
 }
 
-const EquipmentTag& EquipmentTagRegistry::get(const std::string& name) const {
+const EquipmentTag& TagRegistry::get(const std::string& name) const {
     auto it = _data.find(NSID("#minecraft:" + name));
     if (it == _data.end()) {
         auto msg = std::string("EquipmentTag not found: ") + name;

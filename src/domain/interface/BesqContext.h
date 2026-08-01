@@ -51,7 +51,7 @@ public:
     // ── Registry access (active profile, read-only) ──
     const EnchantmentRegistry& enchantments() const noexcept;
     const EquipmentRegistry& equipment() const noexcept;
-    const EquipmentTagRegistry& categories() const noexcept;
+    const TagRegistry& categories() const noexcept;
 
     // ── Solve ──
     SolveResult solve(const SolveRequest& request);

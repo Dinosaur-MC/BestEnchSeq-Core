@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/types/EnchSet.h"
 #include "domain/algorithm/types/Enchantment.h"
@@ -14,7 +14,7 @@ namespace {
 
 struct TestFixture {
     EnchantmentRegistry enchants;
-    EquipmentTagRegistry categories;
+    TagRegistry categories;
     algorithm::EnchReg reg;
 
     TestFixture() {

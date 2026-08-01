@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "domain/business/types/Enchantment.h"
 
 #include <stdexcept>
@@ -24,10 +24,10 @@ static_assert(std::is_copy_constructible_v<EquipmentRegistry>,
 static_assert(std::is_move_constructible_v<EquipmentRegistry>,
     "EquipmentRegistry must be move constructible");
 
-static_assert(std::is_copy_constructible_v<EquipmentTagRegistry>,
-    "EquipmentTagRegistry must be copy constructible");
-static_assert(std::is_move_constructible_v<EquipmentTagRegistry>,
-    "EquipmentTagRegistry must be move constructible");
+static_assert(std::is_copy_constructible_v<TagRegistry>,
+    "TagRegistry must be copy constructible");
+static_assert(std::is_move_constructible_v<TagRegistry>,
+    "TagRegistry must be move constructible");
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Copy and move semantics tests for all three business-domain registries
@@ -314,15 +314,15 @@ void test_eq_move_construction() {
 }
 
 // ============================================================================
-// EquipmentTagRegistry
+// TagRegistry
 // ============================================================================
 
 void test_tag_copy() {
     auto tags = make_tag_list();
-    EquipmentTagRegistry reg1(tags);
+    TagRegistry reg1(tags);
 
     // Copy construct
-    EquipmentTagRegistry reg2(reg1);
+    TagRegistry reg2(reg1);
 
     expect(reg1.size() == 4, "tag copy: source size == 4");
     expect(reg2.size() == 4, "tag copy: dest size == 4");
@@ -366,10 +366,10 @@ void test_tag_copy() {
 
 void test_tag_move() {
     auto tags = make_tag_list();
-    EquipmentTagRegistry reg1(tags);
+    TagRegistry reg1(tags);
 
     // Move construct
-    EquipmentTagRegistry reg2(std::move(reg1));
+    TagRegistry reg2(std::move(reg1));
 
     expect(reg1.size() == 0, "tag move: moved-from source size == 0");
     expect(reg2.size() == 4, "tag move: dest size == 4");

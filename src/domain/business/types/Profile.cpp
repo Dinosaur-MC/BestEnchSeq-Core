@@ -12,7 +12,7 @@
 Profile::Profile(NSID name) : _meta(ProfileMetadata(std::move(name))) {}
 
 Profile::Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq,
-                 EquipmentTagRegistry tags)
+                 TagRegistry tags)
     : _meta(std::move(meta))
     , _ench(std::move(ench))
     , _eq(std::move(eq))

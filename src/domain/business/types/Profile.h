@@ -1,7 +1,7 @@
 #pragma once
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
 #include "common/serialization/IJsonSerializable.h"
@@ -67,7 +67,7 @@ public:
     /// Full-parameter constructor: construct with all data upfront.
     /// Takes ownership of metadata (by move) and three registries.
     Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq,
-            EquipmentTagRegistry tags);
+            TagRegistry tags);
 
     // -- Metadata -------------------------------------------------------
 
@@ -83,7 +83,7 @@ public:
     /// Equipment registry
     const EquipmentRegistry& eq() const noexcept { return _eq; }
     /// Equipment tag registry
-    const EquipmentTagRegistry& tags() const noexcept { return _tags; }
+    const TagRegistry& tags() const noexcept { return _tags; }
 
     // -- Profile proxy queries (preferred over manual registry access) --
 
@@ -128,5 +128,5 @@ private:
     ProfileMetadata _meta;
     EnchantmentRegistry _ench;
     EquipmentRegistry _eq;
-    EquipmentTagRegistry _tags;
+    TagRegistry _tags;
 };

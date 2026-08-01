@@ -7,13 +7,13 @@
 #include <unordered_map>
 #include <vector>
 
-class EquipmentTagRegistry;
+class TagRegistry;
 
 #include "domain/business/types/EnchantmentDataPack.h"
 #include "domain/business/types/Profile.h"
 
 /// Serialization of domain EnchInfo / Equipment to JSON, CSV, or MC official
-/// data-driven format.  Requires an EquipmentTagRegistry for ID-to-name
+/// data-driven format.  Requires an TagRegistry for ID-to-name
 /// resolution during serialization.
 ///
 /// Extracted from EnchInfoParser and EquipmentParser to keep parse functions
@@ -23,18 +23,18 @@ struct EnchSerializer {
 
     static std::string to_json(
         const std::vector<EnchInfo> &infos,
-        const EquipmentTagRegistry &cat_reg,
+        const TagRegistry &cat_reg,
         const EnchantmentDataPack *metadata = nullptr
     );
 
     static std::string to_csv(
         const std::vector<EnchInfo> &infos,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
 
     static void export_to_mc_official(
         const std::vector<EnchInfo> &infos,
-        const EquipmentTagRegistry &cat_reg,
+        const TagRegistry &cat_reg,
         const std::filesystem::path &output_dir
     );
 
@@ -42,19 +42,19 @@ struct EnchSerializer {
     /// Returns map of relative data-pack path → JSON content string.
     static std::unordered_map<std::string, std::string> to_mc_official_strings(
         const std::vector<EnchInfo> &infos,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
 
     // ── Equipment serialization ──────────────────────────────────────────
 
     static std::string to_json(
         const std::vector<Equipment> &equipments,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
 
     static std::string to_csv(
         const std::vector<Equipment> &equipments,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
 
     // ── Profile-aware export ──────────────────────────────────────────

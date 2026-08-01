@@ -245,10 +245,10 @@ const Json& operator>>(const Json& json, EquipmentRegistry& reg) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// EquipmentTagRegistry
+// TagRegistry
 // ══════════════════════════════════════════════════════════════════════════
 
-Json& operator<<(Json& json, const EquipmentTagRegistry& reg) {
+Json& operator<<(Json& json, const TagRegistry& reg) {
     Json::Array arr;
     arr.reserve(reg.size());
     for (const auto& [id, tag] : reg.data()) {
@@ -260,7 +260,7 @@ Json& operator<<(Json& json, const EquipmentTagRegistry& reg) {
     return json;
 }
 
-const Json& operator>>(const Json& json, EquipmentTagRegistry& reg) {
+const Json& operator>>(const Json& json, TagRegistry& reg) {
     auto arr = json_arr(json);
     std::vector<std::string> names;
     names.reserve(arr.size());
@@ -281,7 +281,7 @@ const Json& operator>>(const Json& json, EquipmentTagRegistry& reg) {
         tag.name = name;
         tags.push_back(std::move(tag));
     }
-    reg = EquipmentTagRegistry(std::move(tags));
+    reg = TagRegistry(std::move(tags));
     return json;
 }
 

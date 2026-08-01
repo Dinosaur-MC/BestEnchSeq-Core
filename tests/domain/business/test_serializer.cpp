@@ -319,24 +319,24 @@ void test_serialize_equipment_registry() {
 }
 
 // ─── test_serialize_equipment_tag_registry ─────────────────────────────
-// Round-trip EquipmentTagRegistry with 2 tags.
+// Round-trip TagRegistry with 2 tags.
 
 void test_serialize_equipment_tag_registry() {
     std::vector<EquipmentTag> tags = {
         {NSID("#minecraft:sword"), "sword"},
         {NSID("#minecraft:axe"), "axe"}
     };
-    EquipmentTagRegistry reg(tags);
+    TagRegistry reg(tags);
 
     Json j;
     j << reg;
 
-    EquipmentTagRegistry reg2;
+    TagRegistry reg2;
     j >> reg2;
 
     expect(reg2.size() == 2,
            "equipment tag registry round-trip: size 2");
-    // EquipmentTagRegistry deserialization reconstructs tags from name:
+    // TagRegistry deserialization reconstructs tags from name:
     //   id = "#minecraft:<name>"
     expect(reg2.contains(NSID("#minecraft:sword")),
            "equipment tag registry round-trip: contains sword");
@@ -447,8 +447,8 @@ void test_serializer_to_from_string() {
 // Serialize EnchInfo vector to MC official format strings and verify keys/content.
 
 void test_to_mc_official_strings() {
-    // Create EquipmentTagRegistry with sword tag
-    EquipmentTagRegistry tag_reg;
+    // Create TagRegistry with sword tag
+    TagRegistry tag_reg;
     tag_reg.insert({NSID("#minecraft:sword"), "sword"});
 
     // Create EnchInfo vector with 2 enchants applicable to sword

@@ -11,7 +11,7 @@
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "builtin/DataLoader.h"
@@ -25,7 +25,7 @@ namespace {
 // Helper: build a test Profile loaded with builtin vanilla data
 // ---------------------------------------------------------------------------
 Profile make_builtin_profile() {
-    EquipmentTagRegistry cat_reg;
+    TagRegistry cat_reg;
     EnchantmentRegistry ench_reg;
     EquipmentRegistry eq_reg;
     besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);

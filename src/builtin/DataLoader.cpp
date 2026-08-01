@@ -8,7 +8,7 @@
 namespace besq::data {
 
 void load_builtin_data(
-    EquipmentTagRegistry& tag_reg,
+    TagRegistry& tag_reg,
     EnchantmentRegistry& ench_reg,
     EquipmentRegistry& eq_reg,
     const std::filesystem::path& data_dir

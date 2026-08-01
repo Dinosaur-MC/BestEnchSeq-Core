@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include <stdexcept>
 
 // All 14 vanilla equipment tags for testing
@@ -23,7 +23,7 @@ static std::vector<EquipmentTag> all_builtin_tags() {
 }
 
 void test_builtins_present() {
-    EquipmentTagRegistry categories(all_builtin_tags());
+    TagRegistry categories(all_builtin_tags());
 
     expect(categories.size() == 14,
            "builtins: should have 14 builtin tags");
@@ -36,7 +36,7 @@ void test_builtins_present() {
 }
 
 void test_lookup_throwing() {
-    EquipmentTagRegistry categories(all_builtin_tags());
+    TagRegistry categories(all_builtin_tags());
 
     bool threw = false;
     try {
@@ -64,7 +64,7 @@ void test_custom_categories() {
     auto base = all_builtin_tags();
     base.push_back({NSID("#minecraft:mace"), "mace"});
     base.push_back({NSID("#minecraft:wand"), "wand"});
-    EquipmentTagRegistry categories(base);
+    TagRegistry categories(base);
 
     expect(categories.size() == 16,
            "custom: size should be 16 (14 builtin + 2 custom)");
@@ -81,7 +81,7 @@ void test_duplicate_custom_skipped() {
     auto base = all_builtin_tags();
     base.push_back({NSID("#minecraft:custom_item"), "custom_item"});
     // boots already exists in builtins, but insert() will reject duplicates
-    EquipmentTagRegistry categories(base);
+    TagRegistry categories(base);
     categories.insert({EquipmentTag::boots(), "boots"});
 
     expect(categories.size() == 15,

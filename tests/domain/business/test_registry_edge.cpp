@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 
 namespace {
 
@@ -187,7 +187,7 @@ void test_insert_or_assign_equipment() {
 }
 
 void test_insert_or_assign_tag() {
-    EquipmentTagRegistry reg;
+    TagRegistry reg;
 
     EquipmentTag tag{EquipmentTag::sword(), "sword"};
     auto [it, inserted] = reg.insert_or_assign(tag);
@@ -365,11 +365,11 @@ void test_eq_iterator() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Section E — EquipmentTagRegistry gaps
+// Section E — TagRegistry gaps
 // ══════════════════════════════════════════════════════════════════════════
 
 void test_tag_erase() {
-    EquipmentTagRegistry reg;
+    TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
     reg.insert(EquipmentTag{EquipmentTag::pickaxe(), "pickaxe"});
@@ -384,7 +384,7 @@ void test_tag_erase() {
 }
 
 void test_tag_update() {
-    EquipmentTagRegistry reg;
+    TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
 
@@ -397,7 +397,7 @@ void test_tag_update() {
 }
 
 void test_tag_create_subset() {
-    EquipmentTagRegistry reg;
+    TagRegistry reg;
 
     reg.insert(EquipmentTag{NSID("#minecraft:sword"), "sword"});
     reg.insert(EquipmentTag{NSID("#minecraft:diamond_sword"), "diamond_sword"});
@@ -415,7 +415,7 @@ void test_tag_create_subset() {
 }
 
 void test_tag_clear() {
-    EquipmentTagRegistry reg;
+    TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
     reg.insert(EquipmentTag{EquipmentTag::pickaxe(), "pickaxe"});
@@ -429,7 +429,7 @@ void test_tag_clear() {
 }
 
 void test_tag_data() {
-    EquipmentTagRegistry reg;
+    TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
     reg.insert(EquipmentTag{EquipmentTag::pickaxe(), "pickaxe"});
@@ -444,7 +444,7 @@ void test_tag_data() {
 }
 
 void test_tag_iterator() {
-    EquipmentTagRegistry reg;
+    TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::dummy(), "dummy"});
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
@@ -500,7 +500,7 @@ int main() {
         test_eq_data_access();
         test_eq_iterator();
 
-        // Section E — EquipmentTagRegistry gaps
+        // Section E — TagRegistry gaps
         test_tag_erase();
         test_tag_update();
         test_tag_create_subset();

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/registries/AlgorithmRegistry.h"
@@ -21,7 +21,7 @@ using algorithm::AlgorithmRegistry;
 
 struct TestFixture {
     EnchantmentRegistry enchants;
-    EquipmentTagRegistry categories;
+    TagRegistry categories;
     EquipmentRegistry equipment;
     AlgorithmRegistry algorithms;
 
@@ -34,7 +34,7 @@ struct TestFixture {
 };
 
 inline void TestFixture::init_sword_set() {
-    categories = EquipmentTagRegistry({
+    categories = TagRegistry({
         {EquipmentTag::sword(), "sword"},
         {EquipmentTag::chestplate(), "chestplate"},
     });
@@ -56,7 +56,7 @@ inline void TestFixture::init_sword_set() {
 }
 
 inline void TestFixture::init_chestplate_set() {
-    categories = EquipmentTagRegistry({
+    categories = TagRegistry({
         {EquipmentTag::chestplate(), "chestplate"},
     });
     enchants = EnchantmentRegistry({

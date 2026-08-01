@@ -7,7 +7,7 @@
 #include "domain/business/components/Serializer.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
 #include "domain/business/types/EnchInfo.h"
@@ -32,8 +32,8 @@ namespace {
 //    exclusive_set, applicable_to, and field mapping.
 // ---------------------------------------------------------------------------
 void test_loader_ench_dto_to_reg() {
-    // -- Prepare EquipmentTagRegistry with known categories ---------------
-    EquipmentTagRegistry tag_reg;
+    // -- Prepare TagRegistry with known categories ---------------
+    TagRegistry tag_reg;
     tag_reg.insert({NSID("#minecraft:sword"), "sword"});
     tag_reg.insert({NSID("#minecraft:helmet"), "helmet"});
 
@@ -143,8 +143,8 @@ void test_loader_ench_dto_to_reg() {
 // 2. DTO to EquipmentRegistry: verify size, contains, category resolution.
 // ---------------------------------------------------------------------------
 void test_loader_eq_dto_to_reg() {
-    // -- Prepare EquipmentTagRegistry -------------------------------------
-    EquipmentTagRegistry tag_reg;
+    // -- Prepare TagRegistry -------------------------------------
+    TagRegistry tag_reg;
     tag_reg.insert({NSID("#minecraft:sword"),    "sword"});
     tag_reg.insert({NSID("#minecraft:pickaxe"),  "pickaxe"});
     tag_reg.insert({NSID("#minecraft:helmet"),   "helmet"});
@@ -220,7 +220,7 @@ void test_loader_json_roundtrip() {
         NSID("#minecraft:sword"), 1561
     });
 
-    EquipmentTagRegistry orig_tags;
+    TagRegistry orig_tags;
     orig_tags.insert({NSID("#minecraft:sword"), "sword"});
 
     // -- to_json (registry -> Json) ---------------------------------------
@@ -236,7 +236,7 @@ void test_loader_json_roundtrip() {
     // -- from_json (Json -> new registry) ---------------------------------
     EnchantmentRegistry new_ench;
     EquipmentRegistry new_eq;
-    EquipmentTagRegistry new_tags;
+    TagRegistry new_tags;
 
     expect(loader.from_json(new_ench, ench_json), "from_json(ench) returns true");
     expect(loader.from_json(new_eq,   eq_json),   "from_json(eq) returns true");
@@ -267,7 +267,7 @@ void test_loader_json_roundtrip() {
     expect(restored_eq.category == NSID("#minecraft:sword"),
            "roundtrip eq category");
 
-    // -- Verify EquipmentTagRegistry contents -----------------------------
+    // -- Verify TagRegistry contents -----------------------------
     expect(new_tags.size() == orig_tags.size(), "tag sizes match after roundtrip");
     expect(new_tags.contains(NSID("#minecraft:sword")), "new tags has sword tag");
 
@@ -311,13 +311,13 @@ void test_loader_resolve_full() {
 
     // -- Resolve via RegistryLoader ---------------------------------------
     RegistryLoader loader;
-    EquipmentTagRegistry tag_reg;
+    TagRegistry tag_reg;
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
 
     loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
 
-    // ---- Step 1: EquipmentTagRegistry ----------------------------------
+    // ---- Step 1: TagRegistry ----------------------------------
     // Should have 2 tags: sword, helmet (from unique EquipmentData categories)
     expect(tag_reg.size() == 2, "tag_reg should have 2 tags (sword, helmet)");
     expect(tag_reg.contains(NSID("#minecraft:sword")),
@@ -419,7 +419,7 @@ void test_loader_resolve_vanilla_fallback() {
     // Without a base tag registry, the vanilla "sword" category cannot
     // resolve (no equipment in the profile to create it) → inapplicable.
     {
-        EquipmentTagRegistry tag_reg;
+        TagRegistry tag_reg;
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
         loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg);
@@ -433,9 +433,9 @@ void test_loader_resolve_vanilla_fallback() {
     // With a base registry carrying the vanilla "sword" category, the enchant
     // becomes applicable; exclusive_with to a vanilla enchant is preserved.
     {
-        EquipmentTagRegistry base_tags;
+        TagRegistry base_tags;
         base_tags.insert({NSID("#minecraft:sword"), "sword"});
-        EquipmentTagRegistry tag_reg;
+        TagRegistry tag_reg;
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
         loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg, &base_tags);
@@ -452,9 +452,9 @@ void test_loader_resolve_vanilla_fallback() {
     {
         std::vector<business::loader::EquipmentData> eq_data;
         eq_data.push_back({"minecraft:mod_sword", "Mod Sword", "sword", 2000});
-        EquipmentTagRegistry base_tags;
+        TagRegistry base_tags;
         base_tags.insert({NSID("#minecraft:sword"), "sword"});
-        EquipmentTagRegistry tag_reg;
+        TagRegistry tag_reg;
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
         loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg, &base_tags);

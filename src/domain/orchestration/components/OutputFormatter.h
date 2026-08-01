@@ -11,7 +11,7 @@
 #include <vector>
 
 class EnchantmentRegistry;
-class EquipmentTagRegistry;
+class TagRegistry;
 
 class OutputFormatter {
   public:
@@ -64,23 +64,23 @@ class OutputFormatter {
     static Json item_to_json(
         const Item &item,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
     static Item item_from_json(
         const Json &j,
         std::vector<Equipment> &equipment_cache,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
     static Json step_to_json(
         const Solution::EnchStep &step,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
     static Solution::EnchStep step_from_json(
         const Json &j,
         std::vector<Equipment> &equipment_cache,
         const EnchantmentRegistry &ench_reg,
-        const EquipmentTagRegistry &cat_reg
+        const TagRegistry &cat_reg
     );
 };

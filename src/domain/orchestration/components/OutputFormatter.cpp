@@ -512,7 +512,7 @@ std::vector<Solution> OutputFormatter::parse_json(
 Json OutputFormatter::item_to_json(
     const Item &item,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg
+    const TagRegistry &cat_reg
 ) {
     Json::Object obj;
 
@@ -553,7 +553,7 @@ Item OutputFormatter::item_from_json(
     const Json &j,
     std::vector<Equipment> &equipment_cache,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg
+    const TagRegistry &cat_reg
 ) {
     // Equipment (may be null for books)
     const Equipment *eq_ptr = nullptr;
@@ -607,7 +607,7 @@ Item OutputFormatter::item_from_json(
 Json OutputFormatter::step_to_json(
     const Solution::EnchStep &step,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg
+    const TagRegistry &cat_reg
 ) {
     Json::Object obj;
     obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg);
@@ -624,7 +624,7 @@ Solution::EnchStep OutputFormatter::step_from_json(
     const Json &j,
     std::vector<Equipment> &equipment_cache,
     const EnchantmentRegistry &ench_reg,
-    const EquipmentTagRegistry &cat_reg
+    const TagRegistry &cat_reg
 ) {
     Solution::EnchStep step;
     step.item_a         = item_from_json(j["item_a"], equipment_cache, ench_reg, cat_reg);

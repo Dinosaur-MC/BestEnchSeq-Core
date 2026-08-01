@@ -24,7 +24,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         auto [ench_data, eq_data] = FormatDetector::parse(path);
 
         RegistryLoader loader;
-        EquipmentTagRegistry tag_reg;
+        TagRegistry tag_reg;
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
 
@@ -35,7 +35,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // (e.g. a mod enchant targeting "sword"), then overlay the
         // profile's own equipment categories.
         {
-            EquipmentTagRegistry builtin_tags;
+            TagRegistry builtin_tags;
             EnchantmentRegistry builtin_ench;
             EquipmentRegistry builtin_eq;
             besq::data::load_builtin_data(builtin_tags, builtin_ench, builtin_eq);
@@ -89,7 +89,7 @@ Profile ProfileLoader::load_builtin() {
 
 bool ProfileLoader::load_builtin(Profile& profile) {
     try {
-        EquipmentTagRegistry tag_reg;
+        TagRegistry tag_reg;
         EnchantmentRegistry ench_reg;
         EquipmentRegistry eq_reg;
         besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);

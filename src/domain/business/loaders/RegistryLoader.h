@@ -1,7 +1,7 @@
 #pragma once
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
 #include "common/io/json.h"
@@ -23,36 +23,36 @@ public:
     /// Resolves category name strings to NSID tag references.
     /// Resolves exclusive_with strings to namespaced NSIDs.
     void from_dto(EnchantmentRegistry& reg,
-                  const EquipmentTagRegistry& tag_reg,
+                  const TagRegistry& tag_reg,
                   const std::vector<business::loader::EnchantmentData>& data);
 
     /// Convert EquipmentData[] → EquipmentRegistry.
     /// Resolves category strings to NSID tag references.
     void from_dto(EquipmentRegistry& reg,
-                  const EquipmentTagRegistry& tag_reg,
+                  const TagRegistry& tag_reg,
                   const std::vector<business::loader::EquipmentData>& data);
 
     // ── Json → Registry ───────────────────────────────────────────────
 
     bool from_json(EnchantmentRegistry& reg, const Json& json);
     bool from_json(EquipmentRegistry& reg, const Json& json);
-    bool from_json(EquipmentTagRegistry& reg, const Json& json);
+    bool from_json(TagRegistry& reg, const Json& json);
 
     // ── Registry → Json ───────────────────────────────────────────────
 
     Json to_json(const EnchantmentRegistry& reg);
     Json to_json(const EquipmentRegistry& reg);
-    Json to_json(const EquipmentTagRegistry& reg);
+    Json to_json(const TagRegistry& reg);
 
     // ── Registry → DTO ────────────────────────────────────────────────
 
     std::vector<business::loader::EnchantmentData> to_dto(
         const EnchantmentRegistry& reg,
-        const EquipmentTagRegistry& tag_reg);
+        const TagRegistry& tag_reg);
 
     std::vector<business::loader::EquipmentData> to_dto(
         const EquipmentRegistry& reg,
-        const EquipmentTagRegistry& tag_reg);
+        const TagRegistry& tag_reg);
 
     // ── Full pipeline (tag_reg → eq_reg → ench_reg) ───────────────────
 
@@ -66,8 +66,8 @@ public:
     void resolve(
         const std::vector<business::loader::EnchantmentData>& enchants,
         const std::vector<business::loader::EquipmentData>& equipments,
-        EquipmentTagRegistry& tag_reg,
+        TagRegistry& tag_reg,
         EquipmentRegistry& eq_reg,
         EnchantmentRegistry& ench_reg,
-        const EquipmentTagRegistry* base_tags = nullptr);
+        const TagRegistry* base_tags = nullptr);
 };

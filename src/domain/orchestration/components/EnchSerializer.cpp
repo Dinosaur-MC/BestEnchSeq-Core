@@ -45,7 +45,7 @@ static std::string qualify_id(const std::string& id, const std::string& default_
 /// Returns a pair: {relative_path, json_object_string}
 ///   relative_path: "data/<ns>/enchantment/<id>.json"
 static std::pair<std::string, std::string> build_mc_official_entry(
-    const EnchInfo &info, const EquipmentTagRegistry &cat_reg)
+    const EnchInfo &info, const TagRegistry &cat_reg)
 {
     auto [ns, id] = split_namespace(info.id.str());
 
@@ -84,7 +84,7 @@ static std::pair<std::string, std::string> build_mc_official_entry(
 // ============================================================================
 
 std::string EnchSerializer::to_json(
-    const std::vector<EnchInfo> &infos, const EquipmentTagRegistry &cat_reg,
+    const std::vector<EnchInfo> &infos, const TagRegistry &cat_reg,
     const EnchantmentDataPack *metadata
 ) {
     Json::Object root;
@@ -135,7 +135,7 @@ std::string EnchSerializer::to_json(
 // ============================================================================
 
 std::string
-EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const EquipmentTagRegistry &cat_reg) {
+EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const TagRegistry &cat_reg) {
     csv::CsvTable table;
 
     // Header row
@@ -186,7 +186,7 @@ EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const EquipmentTagReg
 // ============================================================================
 
 void EnchSerializer::export_to_mc_official(
-    const std::vector<EnchInfo> &infos, const EquipmentTagRegistry &cat_reg,
+    const std::vector<EnchInfo> &infos, const TagRegistry &cat_reg,
     const std::filesystem::path &output_dir
 ) {
     auto entries = to_mc_official_strings(infos, cat_reg);
@@ -212,7 +212,7 @@ void EnchSerializer::export_to_mc_official(
 
 std::unordered_map<std::string, std::string>
 EnchSerializer::to_mc_official_strings(
-    const std::vector<EnchInfo> &infos, const EquipmentTagRegistry &cat_reg)
+    const std::vector<EnchInfo> &infos, const TagRegistry &cat_reg)
 {
     std::unordered_map<std::string, std::string> result;
     result.reserve(infos.size());
@@ -228,7 +228,7 @@ EnchSerializer::to_mc_official_strings(
 // ============================================================================
 
 std::string
-EnchSerializer::to_json(const std::vector<Equipment> &equipments, const EquipmentTagRegistry &cat_reg) {
+EnchSerializer::to_json(const std::vector<Equipment> &equipments, const TagRegistry &cat_reg) {
     Json::Array eq_arr;
     for (const auto &eq : equipments) {
         auto cat_it = cat_reg.find(eq.category);
@@ -249,7 +249,7 @@ EnchSerializer::to_json(const std::vector<Equipment> &equipments, const Equipmen
 // ============================================================================
 
 std::string
-EnchSerializer::to_csv(const std::vector<Equipment> &equipments, const EquipmentTagRegistry &cat_reg) {
+EnchSerializer::to_csv(const std::vector<Equipment> &equipments, const TagRegistry &cat_reg) {
     csv::CsvTable table;
     table.push_back({"id", "name", "category", "max_durability"});
 

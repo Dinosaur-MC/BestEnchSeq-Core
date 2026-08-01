@@ -84,7 +84,7 @@ RegistryManager& RegistryManager::intersect(const Profile& other) {
     }
 
     if (_tags) {
-        EquipmentTagRegistry result;
+        TagRegistry result;
         for (const auto& [id, tag] : _tags->data()) {
             if (other.tags().contains(id))
                 result.insert(tag);
@@ -100,7 +100,7 @@ Profile RegistryManager::build(const NSID& result_name) const {
         ProfileMetadata(result_name),
         _ench.value_or(EnchantmentRegistry{}),
         _eq.value_or(EquipmentRegistry{}),
-        _tags.value_or(EquipmentTagRegistry{})
+        _tags.value_or(TagRegistry{})
     );
 }
 
@@ -142,7 +142,7 @@ Profile RegistryManager::subtract(
     }
 
     // Tags: keep those NOT in other
-    EquipmentTagRegistry tag_result;
+    TagRegistry tag_result;
     for (const auto& [id, tag] : base.tags().data()) {
         if (!other.tags().contains(id))
             tag_result.insert(tag);

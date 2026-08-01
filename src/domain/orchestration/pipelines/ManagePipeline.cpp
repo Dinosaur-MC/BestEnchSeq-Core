@@ -27,7 +27,7 @@ ManageResult ManagePipeline::run(
     case ManageRequest::Action::LoadFile: {
         auto& profile = profiles.active();
         auto [ench_data, eq_data] = FormatDetector::parse(request.file_path);
-        EquipmentTagRegistry tag_reg;
+        TagRegistry tag_reg;
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
         RegistryLoader reg_loader;

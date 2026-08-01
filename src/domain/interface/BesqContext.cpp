@@ -55,7 +55,7 @@ void BesqContext::load_file(const std::string& path) {
     auto [ench_data, eq_data] = FormatDetector::parse(path);
 
     // Build temporary registries then merge into profile
-    EquipmentTagRegistry tag_reg;
+    TagRegistry tag_reg;
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
     RegistryLoader reg_loader;
@@ -171,7 +171,7 @@ const EquipmentRegistry& BesqContext::equipment() const noexcept {
     return _impl->profiles.active().eq();
 }
 
-const EquipmentTagRegistry& BesqContext::categories() const noexcept {
+const TagRegistry& BesqContext::categories() const noexcept {
     return _impl->profiles.active().tags();
 }
 
@@ -197,7 +197,7 @@ void BesqContext::import_registry(const std::string& path) {
     auto& profile = _impl->profiles.active();
     auto [ench_data, eq_data] = FormatDetector::parse(path);
 
-    EquipmentTagRegistry tag_reg;
+    TagRegistry tag_reg;
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
     RegistryLoader reg_loader;

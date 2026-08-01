@@ -58,7 +58,7 @@ public:
 private:
     std::optional<EnchantmentRegistry> _ench;
     std::optional<EquipmentRegistry> _eq;
-    std::optional<EquipmentTagRegistry> _tags;
+    std::optional<TagRegistry> _tags;
 };
 
 // ── Operator overloads ────────────────────────────────────────────────

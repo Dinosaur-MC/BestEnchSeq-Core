@@ -7,7 +7,7 @@
 ```
 types/          ← 值类型（Ench, EnchInfo, EnchSet, Item, Equipment, etc.）
   dto/          ← 数据传输对象（EnchantmentData, EquipmentData）
-registries/     ← 纯数据容器（EnchantmentRegistry, EquipmentRegistry, EquipmentTagRegistry）
+registries/     ← 纯数据容器（EnchantmentRegistry, EquipmentRegistry, TagRegistry）
 parsers/        ← 文件格式 → DTO（NativeJsonParser, NativeCsvParser, McOfficialParser）
 loaders/        ← DTO ↔ Registry/Profile（RegistryLoader, ProfileLoader）
 managers/       ← 集合运算 + 生命周期（RegistryManager, ProfileManager）
@@ -16,7 +16,7 @@ components/     ← FormatDetector, Serializer, TagResolver
 
 ## 关键设计
 
-- **Profile 是一等公民**：同时持有 EnchantmentRegistry + EquipmentRegistry + EquipmentTagRegistry
+- **Profile 是一等公民**：同时持有 EnchantmentRegistry + EquipmentRegistry + TagRegistry
 - **数据流**：File → FormatDetector → Parser → DTO → RegistryLoader → Profile
 - **序列化**：类型实现 `IJsonSerializable`，`Serializer.h` 提供 ADL 兼容的自由函数委托
 

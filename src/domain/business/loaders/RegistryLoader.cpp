@@ -13,7 +13,7 @@
 
 void RegistryLoader::from_dto(
     EnchantmentRegistry& reg,
-    const EquipmentTagRegistry& tag_reg,
+    const TagRegistry& tag_reg,
     const std::vector<business::loader::EnchantmentData>& data)
 {
     for (const auto& d : data) {
@@ -52,7 +52,7 @@ void RegistryLoader::from_dto(
 
 void RegistryLoader::from_dto(
     EquipmentRegistry& reg,
-    const EquipmentTagRegistry& tag_reg,
+    const TagRegistry& tag_reg,
     const std::vector<business::loader::EquipmentData>& data)
 {
     for (const auto& d : data) {
@@ -95,7 +95,7 @@ bool RegistryLoader::from_json(EquipmentRegistry& reg, const Json& json) {
     }
 }
 
-bool RegistryLoader::from_json(EquipmentTagRegistry& reg, const Json& json) {
+bool RegistryLoader::from_json(TagRegistry& reg, const Json& json) {
     if (json.type() == JsonType::Null || json.type() == JsonType::Empty)
         return false;
     try {
@@ -122,7 +122,7 @@ Json RegistryLoader::to_json(const EquipmentRegistry& reg) {
     return j;
 }
 
-Json RegistryLoader::to_json(const EquipmentTagRegistry& reg) {
+Json RegistryLoader::to_json(const TagRegistry& reg) {
     Json j;
     j << reg;
     return j;
@@ -134,7 +134,7 @@ Json RegistryLoader::to_json(const EquipmentTagRegistry& reg) {
 
 std::vector<business::loader::EnchantmentData> RegistryLoader::to_dto(
     const EnchantmentRegistry& reg,
-    const EquipmentTagRegistry& tag_reg)
+    const TagRegistry& tag_reg)
 {
     std::vector<business::loader::EnchantmentData> result;
     result.reserve(reg.size());
@@ -177,7 +177,7 @@ std::vector<business::loader::EnchantmentData> RegistryLoader::to_dto(
 
 std::vector<business::loader::EquipmentData> RegistryLoader::to_dto(
     const EquipmentRegistry& reg,
-    const EquipmentTagRegistry& tag_reg)
+    const TagRegistry& tag_reg)
 {
     std::vector<business::loader::EquipmentData> result;
     result.reserve(reg.size());
@@ -208,12 +208,12 @@ std::vector<business::loader::EquipmentData> RegistryLoader::to_dto(
 void RegistryLoader::resolve(
     const std::vector<business::loader::EnchantmentData>& enchants,
     const std::vector<business::loader::EquipmentData>& equipments,
-    EquipmentTagRegistry& tag_reg,
+    TagRegistry& tag_reg,
     EquipmentRegistry& eq_reg,
     EnchantmentRegistry& ench_reg,
-    const EquipmentTagRegistry* base_tags)
+    const TagRegistry* base_tags)
 {
-    // Step 1: Build EquipmentTagRegistry.  Seed with the base tags (vanilla
+    // Step 1: Build TagRegistry.  Seed with the base tags (vanilla
     // fallback) first, then the profile's own unique equipment categories.
     tag_reg.clear();
     if (base_tags) {
