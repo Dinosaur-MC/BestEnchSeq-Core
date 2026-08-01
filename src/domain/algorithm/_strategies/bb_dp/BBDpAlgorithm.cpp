@@ -48,6 +48,15 @@ void BBDpAlgorithm::Frontier::insert(ParetoEntry entry, int32_t beam_width) {
 }
 
 // ─── canonicalize ─────────────────────────────────────────────────────────
+//
+// NOTE (review M2): the sort key uses `enchs.hash()` (a 64-bit hash) rather
+// than full content.  With the bitmask memo key, a hash collision between two
+// DISTINCT items would (a) make this comparator a non-strict-weak-ordering
+// (std::sort UB) and (b) conflate two distinct subproblems in the memo cache.
+// The old vector<Item> memo key compared full content and was immune to (b).
+// A 64-bit EnchSet hash collision with real data is astronomically unlikely
+// (the previous code had the same (a) exposure).  Left as-is; revisit if the
+// registry ever exceeds ~2^32 enchant combinations.
 
 void BBDpAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
     std::sort(items.begin(), items.end(),
@@ -188,25 +197,99 @@ int32_t BBDpAlgorithm::compute_ub(std::vector<Item> items) {
     return static_cast<int32_t>(total);
 }
 
+// ─── cache_get / cache_put / _prepare_cache ───────────────────────────────
+
+void BBDpAlgorithm::_prepare_cache(size_t n) {
+    _using_flat = (n <= FLAT_CACHE_MAX_BITS);
+    _owners.clear();
+    if (_using_flat) {
+        const size_t slots = size_t{1} << n;  // n ≤ 20 → ≤ 1M slots
+        if (!_flat_cache || _flat_capacity != slots) {
+            _flat_cache = std::make_unique<std::atomic<Frontier*>[]>(slots);
+            _flat_capacity = slots;
+        }
+        // Reinitialize every slot to nullptr (atomic, single-threaded here).
+        for (size_t i = 0; i < slots; ++i)
+            _flat_cache[i].store(nullptr, std::memory_order_relaxed);
+    }
+}
+
+const BBDpAlgorithm::Frontier* BBDpAlgorithm::cache_get(uint64_t mask) const noexcept {
+    if (_using_flat) {
+        // Lock-free: single atomic load.  `mask` < 2^n by construction.
+        return _flat_cache[mask].load(std::memory_order_acquire);
+    }
+    std::shared_lock lock(_cache_mutex);
+    auto it = _cache.find(mask);
+    return (it != _cache.end()) ? it->second.get() : nullptr;
+}
+
+const BBDpAlgorithm::Frontier& BBDpAlgorithm::cache_put(uint64_t mask, std::unique_ptr<Frontier> f) {
+    if (_using_flat) {
+        // Keep the frontier alive BEFORE publishing, so the published pointer
+        // can never dangle (even if push_back throws): ownership lives in
+        // _owners for the whole pass.  A wasted owner entry on a lost CAS is
+        // harmless (freed at pass end).
+        Frontier* mine;
+        {
+            std::lock_guard<std::mutex> lk(_owners_mutex);
+            _owners.push_back(std::move(f));
+            mine = _owners.back().get();
+        }
+        Frontier* expected = nullptr;
+        if (_flat_cache[mask].compare_exchange_strong(expected, mine,
+                                                      std::memory_order_acq_rel,
+                                                      std::memory_order_acquire))
+            return *mine;
+        return *expected;  // lost the race: a concurrent equivalent frontier wins
+    }
+    std::unique_lock lock(_cache_mutex);
+    auto it = _cache.find(mask);
+    if (it != _cache.end())
+        return *it->second;  // concurrent insert won — equivalent
+
+    // Only grow the map while under the cap (the old `operator[]` grew it past
+    // MAX_CACHE_ENTRIES unconditionally, unbounded).  Past the cap, hold the
+    // frontier in the pass-lifetime overflow arena — memory stays bounded for
+    // the flat-cache range (n ≤ 20) and the map only grows to its cap for the
+    // rare n > 20 fallback, where the search degrades to recomputation on
+    // overflow-arena hits instead of caching.
+    if (_cache.size() < MAX_CACHE_ENTRIES) {
+        auto [slot, inserted] = _cache.emplace(mask, std::move(f));
+        return *slot->second;
+    }
+    _overflow.push_back(std::move(f));
+    return *_overflow.back();
+}
+
 // ─── solve: recursive partition DP with B&B + cap + Pareto ───────────────
 
-BBDpAlgorithm::Frontier BBDpAlgorithm::solve(std::vector<Item> items,
-                                             int32_t max_step_cost,
-                                             int32_t bound,
-                                             int32_t beam_width,
-                                             bool parallelize,
-                                             bool final_level,
-                                             ExecutionContext &ctx) {
-    if (items.size() == 1) {
-        Frontier f;
-        f.entries.push_back(ParetoEntry{0, items[0].ppn, 0, std::move(items[0]), StepTree{}});
-        return f;
+const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
+                                                    int32_t max_step_cost,
+                                                    int32_t beam_width,
+                                                    bool parallelize,
+                                                    bool final_level,
+                                                    ExecutionContext &ctx) {
+    // Memoisation (frontiers pruned at this run's dynamic `_best_cost`).
+    if (const Frontier* hit = cache_get(mask))
+        return *hit;
+
+    const size_t n = static_cast<size_t>(__builtin_popcountll(mask));
+
+    if (n == 1) {
+        auto f = std::make_unique<Frontier>();
+        const Item& it = _base_items[static_cast<size_t>(__builtin_ctzll(mask))];
+        f->entries.push_back(ParetoEntry{0, it.ppn, 0, it, StepTree{}});
+        return cache_put(mask, std::move(f));
     }
 
-    if (items.size() == 2) {
-        Frontier f;
-        const Item& a = items[0];
-        const Item& b = items[1];
+    if (n == 2) {
+        auto f = std::make_unique<Frontier>();
+        uint64_t m = mask;
+        const size_t i0 = static_cast<size_t>(__builtin_ctzll(m)); m &= m - 1;
+        const size_t i1 = static_cast<size_t>(__builtin_ctzll(m));
+        const Item& a = _base_items[i0];
+        const Item& b = _base_items[i1];
         auto make_leaf = [&](const Item& base, const Item& sac,
                              const Item& result, int32_t cost) -> StepTree {
             auto node = std::make_shared<StepTree::Node>(
@@ -219,32 +302,35 @@ BBDpAlgorithm::Frontier BBDpAlgorithm::solve(std::vector<Item> items,
             ctx.incr_steps_forged();
             if (cost == INT32_MAX) return;
             if (max_step_cost > 0 && cost > max_step_cost) return;
-            if (static_cast<int64_t>(cost) > bound) return;  // keep == bound (may be optimal)
+            int32_t cur = _best_cost.load(std::memory_order_relaxed);
+            if (static_cast<int64_t>(cost) > cur) return;  // keep == bound (may be optimal)
+            // Only a genuine full-set solution may tighten the anytime bound.
+            // A proper-subset "complete" item (redundant books) must not prune
+            // the top-level frontier (see review finding I2).
+            if (final_level && result.type == ItemType::Equip && meets_target(result, _target)) {
+                int32_t seen = _best_cost.load(std::memory_order_relaxed);
+                while (cost < seen &&
+                       !_best_cost.compare_exchange_weak(seen, cost, std::memory_order_relaxed)) {}
+            }
             auto tree = make_leaf(base, sac, result, cost);
-            f.insert(ParetoEntry{cost, result.ppn, cost,
-                                 std::move(result), std::move(tree)}, beam_width);
+            f->insert(ParetoEntry{cost, result.ppn, cost,
+                                  std::move(result), std::move(tree)}, beam_width);
         };
         try_forge(a, b);
         try_forge(b, a);
-        return f;
+        return cache_put(mask, std::move(f));
     }
 
-    // Memoisation (frontiers pruned at this run's constant `bound`).
-    {
-        std::shared_lock lock(_cache_mutex);
-        auto it = _cache.find(items);
-        if (it != _cache.end())
-            return it->second;
-    }
-
-    const size_t n = items.size();
-    if (n > 28) return {};
-    if (ctx.is_cancelled()) return {};
+    if (n > 28)
+        return cache_put(mask, std::make_unique<Frontier>());
+    if (ctx.is_cancelled())
+        return cache_put(mask, std::make_unique<Frontier>());
 
     Frontier result;
 
     auto combine = [&](Frontier& local, const ParetoEntry& a, const ParetoEntry& b) {
-        if (a.cost + b.cost > bound) return;  // any completion > bound can't improve
+        int32_t cur = _best_cost.load(std::memory_order_relaxed);
+        if (a.cost + b.cost > cur) return;  // any completion > bound can't improve
         auto make_tree = [&](const std::shared_ptr<StepTree::Node>& base_tree,
                              const std::shared_ptr<StepTree::Node>& sac_tree,
                              const Item& base, const Item& sac,
@@ -263,7 +349,15 @@ BBDpAlgorithm::Frontier BBDpAlgorithm::solve(std::vector<Item> items,
             if (cost == INT32_MAX) return;
             if (max_step_cost > 0 && cost > max_step_cost) return;
             int64_t total = a.cost + b.cost + cost;
-            if (total > bound) return;  // keep == bound (may be optimal)
+            if (total > cur) return;  // keep == bound (may be optimal)
+            // Only a genuine full-set solution may tighten the anytime bound
+            // (see review finding I2).
+            if (final_level && new_item.type == ItemType::Equip && meets_target(new_item, _target)) {
+                int32_t seen = _best_cost.load(std::memory_order_relaxed);
+                while (total < seen &&
+                       !_best_cost.compare_exchange_weak(seen, static_cast<int32_t>(total),
+                                                         std::memory_order_relaxed)) {}
+            }
             int32_t max_step = std::max(a.max_step, b.max_step);
             max_step = std::max(max_step, cost);
             auto tree = make_tree(base_tree, sac_tree, base, sac, new_item, cost);
@@ -275,36 +369,25 @@ BBDpAlgorithm::Frontier BBDpAlgorithm::solve(std::vector<Item> items,
         try_forge(b.item, a.item, b.step_tree.root_ptr(), a.step_tree.root_ptr());
     };
 
-    // Partition enumeration over all masks (each unordered 2-partition appears
-    // once: keep masks with |left| ≤ n/2; for even n + equal halves require
-    // bit 0 set).  The top level (n ≥ threshold) is parallelised over the mask
-    // range; the recursion is always sequential.
-    const uint64_t limit = 1ULL << n;
+    // Partition enumeration over the set bits of `mask`.  Each unordered
+    // 2-partition appears once: keep subsets with |left| ≤ n/2; for even n +
+    // equal halves require the lowest set bit to be in `left` (canonical order
+    // of `_base_items` is fixed, so bit 0 of the full set is a stable anchor).
+    const uint64_t low_bit = mask & (~mask + 1);
 
-    auto process_mask = [&](Frontier& out, uint64_t mask) {
+    auto process_subset = [&](Frontier& out, uint64_t left) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) return;
-        const size_t k = __builtin_popcountll(mask);
+        const size_t k = __builtin_popcountll(left);
         if (k * 2 > n) return;
-        if ((n & 1) == 0 && k * 2 == n && !(mask & 1)) return;
+        if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
 
-        std::vector<Item> left, right;
-        left.reserve(n);
-        right.reserve(n);
-        for (size_t i = 0; i < n; ++i) {
-            if (mask & (1ULL << i))
-                left.push_back(items[i]);
-            else
-                right.push_back(items[i]);
-        }
-        canonicalize(left);
-        canonicalize(right);
-
-        Frontier left_f = solve(std::move(left), max_step_cost, bound, beam_width,
-                                /*parallelize=*/false, /*final_level=*/false, ctx);
+        const uint64_t right = mask & ~left;
+        const Frontier& left_f  = solve(left,  max_step_cost, beam_width,
+                                        /*parallelize=*/false, /*final_level=*/false, ctx);
         if (!left_f.empty()) {
-            Frontier right_f = solve(std::move(right), max_step_cost, bound, beam_width,
-                                     /*parallelize=*/false, /*final_level=*/false, ctx);
+            const Frontier& right_f = solve(right, max_step_cost, beam_width,
+                                            /*parallelize=*/false, /*final_level=*/false, ctx);
             if (!right_f.empty()) {
                 for (const auto& ea : left_f.entries)
                     for (const auto& eb : right_f.entries)
@@ -317,9 +400,10 @@ BBDpAlgorithm::Frontier BBDpAlgorithm::solve(std::vector<Item> items,
         auto& pool = besq::ThreadPool::shared();
         std::mutex result_mutex;
         ctx.report_progress(20, ProgressStatus::Exploring);
-        parallel_for(pool, uint64_t{1}, limit, [&](uint64_t mask) {
+        parallel_for(pool, uint64_t{1}, mask, [&](uint64_t left) {
+            if ((left & ~mask) != 0) return;      // not a subset of `mask`
             Frontier local;
-            process_mask(local, mask);
+            process_subset(local, left);
             if (!local.empty()) {
                 std::lock_guard<std::mutex> lk(result_mutex);
                 for (auto& e : local.entries)
@@ -327,41 +411,43 @@ BBDpAlgorithm::Frontier BBDpAlgorithm::solve(std::vector<Item> items,
             }
         });
     } else {
-        for (uint64_t mask = 1; mask < limit; ++mask) {
-            process_mask(result, mask);
-            if ((mask & 0xFF) == 0)
-                ctx.report_progress(5 + static_cast<uint8_t>(90 * mask / limit),
+        // Enumerate all proper non-empty subsets of `mask` (skip 0 and mask).
+        uint64_t left = (mask - 1) & mask;  // largest proper subset
+        uint64_t count = 0;
+        const uint64_t total = static_cast<uint64_t>(1) << n;
+        while (left != 0) {
+            process_subset(result, left);
+            ++count;
+            if ((count & 0xFF) == 0)
+                ctx.report_progress(5 + static_cast<uint8_t>(90 * count / total),
                                     ProgressStatus::Exploring);
+            left = (left - 1) & mask;
         }
     }
 
     // Drop complete entries that cannot beat the bound (keep those equal to it).
-    if (bound < INT32_MAX) {
+    const int32_t dyn_bound = _best_cost.load(std::memory_order_relaxed);
+    if (dyn_bound < INT32_MAX) {
         result.entries.erase(
             std::remove_if(result.entries.begin(), result.entries.end(),
-                [bound](const ParetoEntry& e) { return e.cost > bound; }),
+                [dyn_bound](const ParetoEntry& e) { return e.cost > dyn_bound; }),
             result.entries.end());
     }
 
     // Admissible PPN lower-bound: a non-final entry must be merged at least
     // once more, and that next merge pays ≥ penalty(ppn), so an entry with
     // cost + penalty(ppn) > bound can never reach a solution ≤ bound.
-    if (!final_level && bound < INT32_MAX) {
+    if (!final_level && dyn_bound < INT32_MAX) {
         result.entries.erase(
             std::remove_if(result.entries.begin(), result.entries.end(),
                 [&](const ParetoEntry& e) {
                     int64_t forced = e.cost + _forge_engine.penalty_cost(e.item.ppn);
-                    return forced > bound;
+                    return forced > dyn_bound;
                 }),
             result.entries.end());
     }
 
-    {
-        std::unique_lock lock(_cache_mutex);
-        if (_cache.find(items) == _cache.end() && _cache.size() < MAX_CACHE_ENTRIES)
-            _cache[std::move(items)] = result;
-    }
-    return result;
+    return cache_put(mask, std::make_unique<Frontier>(std::move(result)));
 }
 
 // ─── evaluate ─────────────────────────────────────────────────────────────
@@ -436,6 +522,9 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
     }
 
     canonicalize(items);
+    _base_items = items;
+    const uint64_t full_mask = (items.size() >= 64)
+        ? UINT64_MAX : ((static_cast<uint64_t>(1) << items.size()) - 1);
 
     auto find_best = [&](const Frontier& f) -> const ParetoEntry* {
         const ParetoEntry* best = nullptr;
@@ -446,43 +535,58 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
         return best;
     };
 
-    // ── Fast path: unconstrained search with the (tight) upper bound ──────
-    _cache.clear();
-    Frontier frontier = solve(items, 0, bound, beam_width,
-                              /*parallelize=*/true, /*final_level=*/true, ctx);
-    if (ctx.is_cancelled()) {
-        _diag.status = "Cancelled";
-        ctx.set_exit_diagnostics(_diag);
-        ctx.report_progress(100, ProgressStatus::Cancelled);
-        return;
-    }
-    const ParetoEntry* best = find_best(frontier);
+    // ── Pass A (strict): constrained search with the strongest prune ─────
+    // ≤cap is a SOFT constraint but its structural prune is the strongest
+    // (§3.5: penalty(6)=63>39 ⇒ ppn≤5 ⇒ tree height ≤~6).  Run it FIRST
+    // (design doc §5.2): when a fully-≤cap solution exists it is both the
+    // fastest to find and the preferred answer.  The unconstrained search
+    // (Pass B) only runs when no ≤cap solution exists.
+    const ParetoEntry* best = nullptr;
 
-    if (cap > 0 && best && best->max_step > cap) {
-        // The pure optimum violates the per-step cap: find the best fully
-        // ≤cap solution.  Seed the B&B bound with the cheapest ≤cap entry the
-        // unconstrained search already saw (sound: that cost is achievable and
-        // feasible); fall back to unbound if none was seen.
-        const ParetoEntry* feasible_ub = nullptr;
-        for (const auto& e : frontier.entries)
-            if (e.item.type == ItemType::Equip && meets_target(e.item, _target)
-                && e.max_step <= cap)
-                if (!feasible_ub || e.cost < feasible_ub->cost)
-                    feasible_ub = &e;
-        int32_t feas_bound = feasible_ub ? static_cast<int32_t>(feasible_ub->cost) : INT32_MAX;
+    if (cap > 0) {
+        // Seed the B&B bound only if the hamming construction is itself fully
+        // ≤cap (an infeasible construction's cost is not an achievable bound
+        // inside the constrained space).  Otherwise start unbound — the cap
+        // structural prune carries the search.
+        int32_t feas_bound = INT32_MAX;
+        if (ub_ok && !_ub_steps.empty()) {
+            bool hamming_feasible = true;
+            for (const auto& s : _ub_steps)
+                if (s.cost > cap) { hamming_feasible = false; break; }
+            if (hamming_feasible)
+                feas_bound = internal;
+        }
 
         _cache.clear();
-        Frontier feas_frontier = solve(items, cap, feas_bound, beam_width,
-                                       /*parallelize=*/true, /*final_level=*/true, ctx);
+        _overflow.clear();
+        _prepare_cache(items.size());
+        _best_cost.store(feas_bound, std::memory_order_relaxed);
+        const Frontier& feas_frontier = solve(full_mask, cap, beam_width,
+                                              /*parallelize=*/true, /*final_level=*/true, ctx);
         if (ctx.is_cancelled()) {
             _diag.status = "Cancelled";
             ctx.set_exit_diagnostics(_diag);
             ctx.report_progress(100, ProgressStatus::Cancelled);
             return;
         }
-        const ParetoEntry* feas_best = find_best(feas_frontier);
-        if (feas_best)
-            best = feas_best;  // prefer the fully-feasible solution
+        best = find_best(feas_frontier);
+    }
+
+    // ── Pass B (relax): unconstrained optimum — only when no ≤cap solution ─
+    if (!best) {
+        _cache.clear();
+        _overflow.clear();
+        _prepare_cache(items.size());
+        _best_cost.store(bound, std::memory_order_relaxed);
+        const Frontier& frontier = solve(full_mask, 0, beam_width,
+                                         /*parallelize=*/true, /*final_level=*/true, ctx);
+        if (ctx.is_cancelled()) {
+            _diag.status = "Cancelled";
+            ctx.set_exit_diagnostics(_diag);
+            ctx.report_progress(100, ProgressStatus::Cancelled);
+            return;
+        }
+        best = find_best(frontier);
     }
 
     if (best) {
