@@ -72,6 +72,10 @@ public:
     /// 传递解析依赖链（拓扑序：依赖在前，不含目标自身）。环 → 返回空。
     std::vector<NSID> resolve_dependencies(const NSID& profile) const;
 
+    /// 拓扑合并依赖链 + 自身 → 有效视图 Profile（缓存；上层覆盖下层）。
+    /// 任何 profile 变更（manager 级 mutation）都会使缓存失效。
+    const Profile& resolve_effective(const NSID& profile);
+
     /// 从目录加载全部 profile（native JSON/CSV），构建依赖图。datapack 目录留待 T11。
     void load_directory(const std::filesystem::path& dir);
 
@@ -88,5 +92,6 @@ private:
 
     std::unordered_map<NSID, std::unique_ptr<Profile>> _profiles;
     mutable std::unordered_map<NSID, std::vector<NSID>> _dep_graph;  // 邻接表
+    std::unordered_map<NSID, std::unique_ptr<Profile>> _effective_cache;
     NSID _active;
 };

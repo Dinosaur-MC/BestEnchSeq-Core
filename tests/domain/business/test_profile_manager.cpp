@@ -384,6 +384,27 @@ void test_pm_load_directory() {
     TEST_PASS("test_pm_load_directory");
 }
 
+// ─── Test: Effective View (topological merge + TagResolver + cache) ────
+
+void test_pm_effective_view() {
+    ProfileManager pm;
+    pm.create(NSID("vanilla"));
+    auto& mod = pm.create(NSID("enchantencore"));
+    mod.set_dependencies({NSID("vanilla")});
+    mod.add_enchantment({NSID("mod:leeching"), "Leeching", MCE::All, 2, 2, 1, false, {}, {NSID("#minecraft:swords")}});
+    mod.add_tag({NSID("#minecraft:swords"), "swords"});
+    auto& pack = pm.create(NSID("mypack"));
+    pack.set_dependencies({NSID("enchantencore")});
+    // pack overrides leeching's max_level
+    pack.add_enchantment({NSID("mod:leeching"), "Leeching", MCE::All, 3, 3, 1, false, {}, {NSID("#minecraft:swords")}});
+
+    auto& eff = pm.resolve_effective(NSID("mypack"));
+    expect(eff.ench().contains(NSID("mod:leeching")), "effective view contains dep enchant");
+    expect(eff.ench().at(NSID("mod:leeching")).max_level == 3, "pack overrides dep");
+    expect(eff.tag_resolver() != nullptr, "effective view carries TagResolver");
+    TEST_PASS("test_pm_effective_view");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -405,6 +426,7 @@ int main() {
         test_pm_dependency_cycle();
         test_pm_cross_validate();
         test_pm_load_directory();
+        test_pm_effective_view();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

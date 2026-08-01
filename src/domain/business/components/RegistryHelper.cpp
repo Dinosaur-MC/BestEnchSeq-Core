@@ -1,4 +1,5 @@
 #include "RegistryHelper.h"
+#include "domain/business/components/TagResolver.h"
 
 #include <unordered_set>
 
@@ -182,6 +183,44 @@ Profile RegistryHelper::merge(
     Profile p = base.clone(name);
     merge(p, other);  // other wins on conflict
     return p;
+}
+
+std::shared_ptr<TagResolver> RegistryHelper::build_tag_resolver(
+    const Profile& eff, const std::vector<const Profile*>& sources)
+{
+    auto resolver = std::make_shared<TagResolver>();
+    for (const auto& [tag_nsid, tag] : eff.tags().data()) {
+        const std::string key = tag_nsid.str();
+        if (key.empty() || key[0] != '#')
+            continue;  // only `#tag` refs live in the resolver
+
+        const std::string tag_key = key.substr(1);
+
+        // Member data: pull from the first source whose attached resolver
+        // defines the tag.  Sources are ordered lowest-priority-first, which
+        // mirrors the "tags: add if absent" semantics of merge().  Sources
+        // without a resolver (e.g. manually-built test profiles) yield an
+        // empty member set — the tag key stays registered and queryable.
+        std::unordered_set<std::string> members;
+        for (const Profile* src : sources) {
+            if (!src)
+                continue;
+            const TagResolver* tr = src->tag_resolver();
+            if (!tr)
+                continue;
+            const auto pos = tag_key.find(':');
+            if (pos == std::string::npos)
+                continue;  // unnamespaced key: no ns/name member lookup
+            const std::string ns   = tag_key.substr(0, pos);
+            const std::string name = tag_key.substr(pos + 1);
+            if (const auto* m = tr->get_tag(ns, name)) {
+                members = *m;
+                break;
+            }
+        }
+        resolver->add_tag(tag_key, std::move(members));
+    }
+    return resolver;
 }
 
 // ============================================================================

@@ -28,6 +28,7 @@ Profile& ProfileManager::create(const NSID& name) {
     auto p = std::make_unique<Profile>(name);
     Profile& ref = *p;
     _profiles[name] = std::move(p);
+    _effective_cache.clear();
     return ref;
 }
 
@@ -41,6 +42,7 @@ Profile& ProfileManager::create_from(const NSID& source, const NSID& dest) {
     auto p = std::make_unique<Profile>(src.clone(dest));
     Profile& ref = *p;
     _profiles[dest] = std::move(p);
+    _effective_cache.clear();
     return ref;
 }
 
@@ -56,6 +58,7 @@ bool ProfileManager::remove(const NSID& name) {
     } else if (_active == name) {
         _active = _profiles.begin()->first;
     }
+    _effective_cache.clear();
     return true;
 }
 
@@ -112,6 +115,7 @@ Profile& ProfileManager::snapshot(const NSID& source, const NSID& snapshot_name)
     p->set_version("snapshot");  // mark as snapshot
     Profile& ref = *p;
     _profiles[snapshot_name] = std::move(p);
+    _effective_cache.clear();
     return ref;
 }
 
@@ -127,6 +131,7 @@ Profile& ProfileManager::branch(const NSID& source, const NSID& branch_name) {
     auto p = std::make_unique<Profile>(src.clone(branch_name));
     Profile& ref = *p;
     _profiles[branch_name] = std::move(p);
+    _effective_cache.clear();
     return ref;
 }
 
@@ -138,6 +143,7 @@ void ProfileManager::merge(const NSID& source, const NSID& dest) {
     Profile& dst = *find(dest);
     // Source wins on conflict, merged in place (dest metadata preserved).
     RegistryHelper::merge(dst, src);
+    _effective_cache.clear();
 }
 
 // ── Dependency graph ──────────────────────────────────────────────────
@@ -174,6 +180,36 @@ std::vector<NSID> ProfileManager::resolve_dependencies(const NSID& profile) cons
     return order;
 }
 
+// ── Effective view (topological merge + TagResolver + cache) ──────────
+
+const Profile& ProfileManager::resolve_effective(const NSID& profile) {
+    auto cache_it = _effective_cache.find(profile);
+    if (cache_it != _effective_cache.end())
+        return *cache_it->second;
+
+    auto chain = resolve_dependencies(profile);   // 依赖在前，自身排除
+    auto eff = std::make_unique<Profile>(profile); // 空 Profile 起步
+
+    // 收集参与合并的源：依赖按拓扑序（下层在前），目标自身最后。
+    std::vector<const Profile*> sources;
+    for (const auto& dep : chain)
+        if (const Profile* d = _find(dep))
+            sources.push_back(d);
+    if (const Profile* self = _find(profile))
+        sources.push_back(self);
+
+    // 依赖按拓扑序 merge（上层覆盖下层）；最后 merge 目标自身。
+    for (const Profile* src : sources)
+        RegistryHelper::merge(*eff, *src);
+
+    // 构建合并后 tag 宇宙的 TagResolver 并挂到 eff。
+    eff->set_tag_resolver(RegistryHelper::build_tag_resolver(*eff, sources));
+
+    Profile& out = *eff;
+    _effective_cache[profile] = std::move(eff);
+    return out;
+}
+
 // ── Load directory ────────────────────────────────────────────────────
 
 void ProfileManager::load_directory(const std::filesystem::path& dir) {
@@ -201,6 +237,7 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
         create(NSID("vanilla"));
 
     _build_graph();
+    _effective_cache.clear();
 }
 
 // ── Cross-validate supported_items against the dependency universe ────
@@ -259,5 +296,6 @@ size_t ProfileManager::cross_validate(const NSID& profile) {
     for (const auto& info : to_update)
         target->update_enchantment(info);
 
+    _effective_cache.clear();
     return removed;
 }
