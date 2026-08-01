@@ -17,7 +17,7 @@
 8. [步骤 4：装备数据提取](#8-步骤-4装备数据提取)
 9. [步骤 5：物品附魔值](#9-步骤-5物品附魔值)
 10. [步骤 6：Limited_Level 计算](#10-步骤-6limited_level-计算)
-11. [步骤 7：装备类别推导](#11-步骤-7装备类别推导)
+11. [步骤 7：适用性模型（supported_items ∩ 物品 tag）](#11-步骤-7适用性模型supported_items-物品-tag)
 12. [语言资源提取](#12-语言资源提取)
 13. [输出格式](#13-输出格式)
 14. [C++ 侧解析与 i18n](#14-c-侧解析与-i18n)
@@ -76,7 +76,7 @@ Mojang 版本清单 (version_manifest.json)
     │  5. 字节码分析 → 耐久度值            │
     │  6. 源码常量    → 物品附魔值         │
     │  7. 成本模拟    → limited_level      │
-    │  8. 物品分组    → 装备类别           │
+    │  8. 物品分组    → 装备显示类别（短名，不参与适用性判定）│
     └──────────────────────────────────────┘
         │
         ▼
@@ -253,7 +253,7 @@ res/vanilla/
 | `limited_level` | **计算所得** | 见第 10 节 |
 | `multiplier` | `anvil_cost` | MC 1.21+ 改名，含义相同 |
 | `exclusive_set` | `exclusive_set` / `exclusiveSet` | 冲突魔咒 ID 列表，展开 `#` 标签引用 |
-| `applicable_equipment` | `supported_items` → 类别推导 | 见第 11 节 |
+| `supported_items` | `supported_items` / `supportedItems` | 适用物品原始引用（`#tag` 或具体物品 ID），**透传不展开**，见第 11 节 |
 
 ### 兼容性处理
 
@@ -278,7 +278,7 @@ MC 1.21+ 没有独立的"装备注册表"。可附魔的物品通过 `enchantabl
 2. 展开标签引用，收集所有引用的物品 ID
 3. 从 `load_durability_from_source()` 获取耐久度值
 4. 过滤掉无耐久度的物品（耐久度 ≤ 0 时跳过）
-5. 通过物品 ID 后缀推导装备类别
+5. 通过物品 ID 后缀推导装备**显示**类别（短名，不参与适用性判定，见第 11 节）
 
 ### 耐久度获取
 
@@ -440,37 +440,35 @@ minCost(level) = min_cost.base + min_cost.per_level_above_first × (level - 1)
 
 ---
 
-## 11. 步骤 7：装备类别推导
+## 11. 步骤 7：适用性模型（supported_items ∩ 物品 tag）
 
-### 问题
+### 模型
 
-MC 1.21+ 的 `supported_items` 标签引用的是具体物品 ID（如 `minecraft:diamond_sword`），
-但 BestEnchSeq 的装备类别系统需要的是类别名称（如 `"sword"`）。
+T10/T11 之后，适用性判定完全对齐真实 MC 的 tag 成员模型，**不再做类别推导**：
 
-### 推导方法
+- 每个魔咒携带原始 `supported_items`（`#tag` 引用或具体物品 ID），脚本**透传不展开**——
+  `#minecraft:enchantable/sharp_weapon` 这样的引用原样写入 vanilla.json。
+- 装备的 `category` 只是**显示短名**（如 `"sword"`），从物品分组 tag / ID 后缀派生，
+  仅供显示与导出，**不参与适用性判定**。
+- 装备数据本身从 `enchantable/*` 物品 tag 成员派生物品列表（见第 8 节）。
 
-**方法 A — 物品分组标签（优先）**
+### 适用性判定
 
-1. 扫描 `tags/item/*` 下的所有标签（排除 `enchantable/*`）
-2. 对每个标签，解析其包含的物品 ID 列表
-3. 提取物品 ID 的**共同后缀**（通过 `Counter` 取众数）
-4. 建立 `标签键 → 类别名` 映射
-
-举例：
 ```
-minecraft:foot_armor  → ["minecraft:diamond_boots", "minecraft:iron_boots", ...]
-                        → 共同后缀 "boots"
-                        → 类别 "boots"
+enchantment 适用于 item  ⟺  supported_items ∩ tags_of(item) ≠ ∅
 ```
 
-**方法 B — ID 后缀回退（当无匹配标签时）**
+`tags_of(item)` 由 `TagResolver` 反查 item 所属的全部 `#tag`（含 `enchantable/*`、
+`minecraft:swords` 等物品 tag，嵌套 tag 惰性 BFS 展开）。业务→算法边界
+（`CompactAdapter::is_supported`）用该谓词过滤目标装备可用的魔咒。
 
-- `diamond_sword` → 取最后一段 `sword` → 类别 `"sword"`
-- `bow` → 无下划线 → 整体 `bow` → 类别 `"bow"`
+### vanilla fallback 与交叉验证
 
-### 类别约束
-
-魔咒的 `applicable_equipment` 是其所有适用装备类别的并集。
+- vanilla profile 是**内置根**（`builtin:vanilla`）；自定义 profile 加载时以 vanilla
+  tag/装备全宇宙为基准（T7 两阶段加载），profile 自身的 DTO 在并集上做**惰性交叉验证**：
+  `#tag` 引用需在 tag 定义中存在、具体物品 ID 需在装备注册表中存在，否则**丢弃**；
+  引用全部丢弃则整条魔咒被跳过（T6）。
+- `#tag` 引用在解析期不展开、在加载期也不二次包裹——单解析路径，避免旧的"双层 tag 解析"冲突。
 
 ---
 
@@ -551,7 +549,9 @@ python scripts/vanilla/cli.py --lang-only --locales all
       "limited_level": 5,
       "multiplier": 1,
       "exclusive_set": ["breach", "density", "impaling", "smite"],
-      "applicable_equipment": ["axe", "spear", "sword"]
+      "supported_items": [
+        "#minecraft:enchantable/weapon"
+      ]
     }
   ],
   "equipments": [
@@ -606,8 +606,8 @@ C++ 代码通过 `besq::data::load_builtin_data()` 从 `vanilla.json` 加载注�
 ```
 FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
   → EnchantmentData / EquipmentData DTO
-  → RegistryLoader::from_dto()
-  → EnchantmentRegistry / EquipmentRegistry / EquipmentTagRegistry
+  → RegistryLoader::from_dto()  (两阶段：vanilla 基准 + profile 交叉验证)
+  → EnchantmentRegistry / EquipmentRegistry / TagRegistry
 ```
 
 | JSON 字段 | EnchInfo 字段 | 说明 |
@@ -618,7 +618,7 @@ FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
 | `limited_level` | `limited_level` | 0 或缺失时 = max_level |
 | `multiplier` | `multiplier` | 费用倍率 |
 | `exclusive_set` | `exclusive_with` → `exclusive_set` | 冲突魔咒 |
-| `applicable_equipment` | `applicable_to` → `applicable_equipments` | 适用装备 |
+| `supported_items` | `applicable_to` → `supported_items`（透传不展开） | 适用物品（`#tag` 或具体 ID） |
 
 ### 14.2 国际化（i18n）系统
 
@@ -690,7 +690,7 @@ OutputFormatter 不再使用 `EnchInfo::name` 或 `NSID::str()`，而是统一�
 | `limited_level` | — | **成本模拟计算** | 中（保守估算） |
 | `multiplier` | 魔咒 JSON | `anvil_cost` | 高 |
 | `exclusive_set` | 魔咒 JSON | `exclusive_set` | 高 |
-| `applicable_equipment` | 物品标签 + 类别推导 | 见第 11 节 | 中（启发式） |
+| `supported_items` | 魔咒 JSON | `supported_items`（`#tag` 引用透传） | 见第 11 节 | 高 |
 
 ### 装备数据字段
 
@@ -698,7 +698,7 @@ OutputFormatter 不再使用 `EnchInfo::name` 或 `NSID::str()`，而是统一�
 |------|------|------|
 | `id` | `enchantable/*` 标签成员物品 | 标签展开 |
 | `name` | `en_us.json` → Language 系统 | `item.minecraft.<id>` 查表（运行时重写） |
-| `category` | 物品分组标签 / ID 后缀启发式 | 见第 11 节 |
+| `category` | 物品分组标签 / ID 后缀启发式 | 显示短名，见第 11 节 |
 | `max_durability` | `Items.class` 字节码 + 材料常量 | 见第 7 节 |
 
 ---
@@ -769,8 +769,9 @@ python scripts/get_vanilla_data.py         # 薄封装，同上
 
 ### Q: 装备类别推导会出错吗？
 
-对于原版物品，类别推导通常准确。模组物品的非标准命名模式可能导致误分类，
-但可以通过自定义数据包中的标签覆盖。
+不会影响正确性。装备 `category` 只是**显示短名**，**不参与适用性判定**。适用性完全由真实 MC
+物品 tag（`enchantable/*` 等）决定，因此模组物品即使命名不规范，只要其 tag 定义正确，
+适用性判定就不会出错（见第 11 节）。
 
 ### Q: 实体显示名从哪里来？
 

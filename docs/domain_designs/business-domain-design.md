@@ -74,7 +74,7 @@ src/domain/business/
 │   ├── IRegistry.h                             Generic registry template
 │   ├── EnchantmentRegistry.h/cpp
 │   ├── EquipmentRegistry.h/cpp
-│   └── EquipmentTagRegistry.h/cpp
+│   └── TagRegistry.h/cpp
 │
 ├── parsers/                                    ← File format → DTO
 │   ├── NativeJsonParser.h/cpp                  vanilla.json format parser
@@ -105,10 +105,10 @@ Existing value types remain unchanged in their data layout. Only namespace/heade
 | Type | File | Description |
 |------|------|-------------|
 | `Ench` | `Ench.h` | Enchantment value object: `NSID id` + `name` + `level` |
-| `EnchInfo` | `EnchInfo.h` | Enchantment definition: `max_level`, `multiplier`, `exclusive_set`, `applicable_equipments` |
+| `EnchInfo` | `EnchInfo.h` | Enchantment definition: `max_level`, `multiplier`, `exclusive_set`, `supported_items`（原始 `#tag` 引用或具体物品 NSID） |
 | `EnchSet` | `EnchSet.h` | `unordered_set<Ench>` with `NSID` find helper |
-| `Equipment` | `Equipment.h` | Equipment definition: `NSID id` + `name` + `category` + `max_durability` |
-| `EquipmentTag` | `EquipmentTag.h` | Equipment category tag: `NSID` (e.g. `#minecraft:sword`) + `name` |
+| `Equipment` | `Equipment.h` | Equipment definition: `NSID id` + `name` + `category`（显示短名）+ `max_durability` |
+| `EquipmentTag` | `EquipmentTag.h` | MC tag 定义: `NSID`（真实 MC 物品/附魔 tag，如 `#minecraft:swords`、`#minecraft:enchantable/sharp_weapon`）+ `name` |
 | `Item` | `Item.h` | Forgeable item stack: `NSID id` + `EnchSet` + `prior_penalty` + `durability` |
 | `Solution` | `Solution.h` | Forge solution: `EnchStep[]` + `MetaData` + costs |
 | `Enchantment` | `Enchantment.h` | Transitional backward‑compat header including `Ench.h` + `EnchInfo.h` + `EnchSet.h` |
@@ -128,7 +128,7 @@ struct EnchantmentData {
     int32_t max_level;
     int32_t limited_level;                   // 0 = treasure
     std::vector<std::string> exclusive_with; // conflicting enchantment IDs
-    std::vector<std::string> applicable_to;  // applicable equipment category names
+    std::vector<std::string> applicable_to;  // 原始 supported_items 引用（`#tag` 或具体物品 ID，透传不展开）
 };
 
 } // namespace business::loader
@@ -162,10 +162,13 @@ Profile is the **primary unit of business logic**. All normal operations take an
 #pragma once
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/EquipmentTagRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include "common/CommonTypes.h"
 #include <chrono>
+#include <memory>
 #include <string>
+
+class TagResolver;  // fwd — Profile stores a shared_ptr; complete type only needed at call sites
 
 // ── Profile Metadata ───────────────────────────────────────────────────
 
@@ -208,15 +211,25 @@ public:
     const EnchantmentRegistry& ench() const noexcept;
     /// Equipment registry
     const EquipmentRegistry& eq() const noexcept;
-    /// Equipment tag registry
-    const EquipmentTagRegistry& tags() const noexcept;
+    /// Tag registry (real MC item/enchantment tag definitions)
+    const TagRegistry& tags() const noexcept;
+
+    // -- Tag resolver (runtime-derived; not serialized) ------------------
+
+    /// Attach the TagResolver used at the business→algorithm boundary to
+    /// compute an item's tag membership for enchantment applicability
+    /// (`supported_items` ∩ `tags_of(item)`).  Populated during load; the
+    /// profile JSON does not serialize it.
+    void set_tag_resolver(std::shared_ptr<TagResolver> r);
+
+    /// Accessor — returns nullptr when no resolver has been attached.
+    const TagResolver* tag_resolver() const noexcept;
 
     // -- Profile proxy queries (preferred over manual registry access) ---
 
     /// Are two enchantments mutually exclusive?
     bool is_compatible(const NSID& a, const NSID& b) const;
-    /// Which equipment does this enchantment apply to?
-    std::vector<Equipment> applicable_equipment(const NSID& ench_id) const;
+
     /// Does this enchantment exist in the profile?
     bool has_enchantment(const NSID& id) const;
     /// Does this equipment exist in the profile?
@@ -253,13 +266,14 @@ private:
     ProfileMetadata _meta;
     EnchantmentRegistry _ench;
     EquipmentRegistry _eq;
-    EquipmentTagRegistry _tags;
+    TagRegistry _tags;
+    std::shared_ptr<TagResolver> _tag_resolver;  // runtime-derived, not serialized
 };
 ```
 
 **Design notes**:
 - `name` uses `NSID` — profiles are identified by namespaced identifiers like `"builtin:vanilla"`, `"profile:experimental"`, `"backup:pre_test_0725"`.
-- `tags` in `ProfileMetadata` is **not present** — the `tags` field in `vanilla.json` maps to `EquipmentTagRegistry`, not metadata.
+- `tags` in `ProfileMetadata` is **not present** — the `tags` field in `vanilla.json` maps to `TagRegistry`, not metadata.
 - Profile exposes `const&` access to registries for trusted downstream (e.g., `CompactAdapter` needs raw `EnchantmentRegistry` to build `EnchReg`). Normal business logic uses proxy methods instead.
 
 ---
@@ -272,7 +286,7 @@ Pure data containers. Unchanged except for directory rename (`registries/` remai
 |----------|-----|-------|
 | `EnchantmentRegistry` | `NSID` | `EnchInfo` |
 | `EquipmentRegistry` | `NSID` | `Equipment` |
-| `EquipmentTagRegistry` | `NSID` | `EquipmentTag` |
+| `TagRegistry` | `NSID` | `EquipmentTag` |
 
 All inherit from `IRegistry<T>` which provides: `insert`, `erase`, `update`, `find`, `at`, `contains`, `create_subset`, value iteration.
 
@@ -358,13 +372,13 @@ public:
 
     bool from_json(EnchantmentRegistry& reg, const Json& json);
     bool from_json(EquipmentRegistry& reg, const Json& json);
-    bool from_json(EquipmentTagRegistry& reg, const Json& json);
+    bool from_json(TagRegistry& reg, const Json& json);
 
     // ── Registry → Json ───────────────────────────────────────────────
 
     Json to_json(const EnchantmentRegistry& reg);
     Json to_json(const EquipmentRegistry& reg);
-    Json to_json(const EquipmentTagRegistry& reg);
+    Json to_json(const TagRegistry& reg);
 
     // ── Registry → DTO (for export pipeline) ──────────────────────────
 
@@ -374,10 +388,9 @@ public:
 ```
 
 **Resolution logic (in `from_dto`)**:
-- Category name strings → `NSID("#minecraft:" + name)` for `EquipmentTagRegistry`
-- Equipment category strings → resolve against `EquipmentTagRegistry` IDs
-- Enchantment `exclusive_with` strings → `NSID` set lookup (with `"minecraft:"` namespace fallback)
-- Enchantment `applicable_to` strings → resolved to `NSID` equipment category references
+- 装备 `category` 只是**显示短名**（如 `"sword"`），不再从中推导合成 tag（T10）——真实 MC 物品 tag（`#minecraft:swords`、`#minecraft:enchantable/*`）才是适用性判定来源
+- 魔咒 `applicable_to`（原始 `supported_items` 引用）**透传不展开**，交叉验证：`#tag` 引用需在 tag 定义中存在、具体物品 ID 需在装备注册表中存在，否则丢弃；引用全部丢弃则整条魔咒被跳过（T6）
+- 魔咒 `exclusive_with` 字符串 → `NSID` set lookup（带 `"minecraft:"` 命名空间回退）
 
 ### 6.2 ProfileLoader
 
@@ -417,9 +430,9 @@ public:
 ```
 File → FormatDetector::detect(path) → [NativeJsonParser | NativeCsvParser | McOfficialParser]
      → {EnchantmentData[], EquipmentData[]}
-     → RegistryLoader::from_dto()
-     → EnchantmentRegistry + EquipmentRegistry + EquipmentTagRegistry
-     → Profile
+     → RegistryLoader::resolve_with_base()    (两阶段：以 vanilla tag/装备为基准做交叉验证，T7)
+     → EnchantmentRegistry + EquipmentRegistry + TagRegistry
+     → Profile + set_tag_resolver(内置 vanilla tag resolver)
 ```
 
 **Builtin pipeline**:
@@ -427,8 +440,10 @@ File → FormatDetector::detect(path) → [NativeJsonParser | NativeCsvParser | 
 ProfileLoader::load_builtin()
   → besq::data::load_builtin_data()          (project-level resource tool, stays in src/builtin/)
   → RegistryLoader::from_dto()
-  → Profile
+  → Profile + set_tag_resolver(内置 vanilla tag resolver)
 ```
+
+**两阶段加载（vanilla fallback）**：`ProfileLoader::load_into` 先把 vanilla 全宇宙（tags + equipments + enchantments）装进临时注册表，再把 profile 自身的 DTO 在并集上交叉验证。Profile 只保留自己的 enchantments/equipments；vanilla tag 宇宙保留，使 profile 的 `#tag` supported_items 引用在业务→算法边界仍可解析。vanilla profile 本身是内置根（`builtin:vanilla`）。
 
 ---
 
@@ -498,7 +513,7 @@ public:
 private:
     std::optional<EnchantmentRegistry> _ench;
     std::optional<EquipmentRegistry> _eq;
-    std::optional<EquipmentTagRegistry> _tags;
+    std::optional<TagRegistry> _tags;
 };
 
 // ── Operator Overloads ────────────────────────────────────────────────
@@ -650,7 +665,7 @@ json::deserialize(existing_obj, json);                       // → existing.fro
 auto arr = json::serialize_vector(vec);                      // → array of to_json()
 ```
 
-Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `EquipmentTagRegistry`) keep their operator pairs in Serializer.cpp, as they iterate and delegate to element serialization.
+Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `TagRegistry`) keep their operator pairs in Serializer.cpp, as they iterate and delegate to element serialization.
 
 ---
 
@@ -675,7 +690,7 @@ Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `EquipmentTagRegistr
 | `business/registries/IRegistry.h` | Core registry template — unchanged |
 | `business/registries/EnchantmentRegistry.h/cpp` | Core registry — unchanged |
 | `business/registries/EquipmentRegistry.h/cpp` | Core registry — unchanged |
-| `business/registries/EquipmentTagRegistry.h/cpp` | Core registry — unchanged |
+| `business/registries/TagRegistry.h/cpp` | Core registry — unchanged |
 | `business/components/Serializer.h/cpp` | JSON serialization — extended for Profile but otherwise unchanged |
 | `business/types/*` | Core value types — unchanged |
 

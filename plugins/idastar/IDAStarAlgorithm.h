@@ -45,6 +45,7 @@ private:
     struct IDALightStep {
         ItemID base_id;
         ItemID sac_id;
+        ItemID result_id;  // forged result (new pool id produced by this step)
         int32_t cost;
     };
 

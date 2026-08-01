@@ -137,7 +137,7 @@ flowchart TB
     %% ── Business domain ──
     subgraph Business["domain/business/ — Business Domain"]
         direction TB
-        Profile["Profile<br/>EnchantmentRegistry / EquipmentRegistry<br/>EquipmentTagRegistry"]
+        Profile["Profile<br/>EnchantmentRegistry / EquipmentRegistry<br/>TagRegistry"]
         Types["types/<br/>Ench / EnchInfo / Item / Solution / DTOs"]
         Registries["registries/<br/>IRegistry / EnchantmentRegistry<br/>EquipmentRegistry / TagRegistry"]
         Parsers["parsers/<br/>NativeJsonParser / NativeCsvParser<br/>McOfficialParser"]
@@ -264,7 +264,7 @@ All algorithms share `IForgeEngine` and compact types. New algorithms only need 
 
 **AlgorithmInput owns data**: `algorithm::EnchReg`, `algorithm::Item` vector, and target collection are stored by value — no pointers, no external lifetime dependencies. The struct owns two config sub-objects: `f_config` (forge config, `ForgeConfig`) and `s_config` (search config, `SearchConfig`).
 
-**Profile as first-class citizen**: All pipelines receive `Profile` (or `ProfileManager`), never raw registries extracted from Profile. `Profile` owns `EnchantmentRegistry`, `EquipmentRegistry`, and `EquipmentTagRegistry` as a unit.
+**Profile as first-class citizen**: All pipelines receive `Profile` (or `ProfileManager`), never raw registries extracted from Profile. `Profile` owns `EnchantmentRegistry`, `EquipmentRegistry`, and `TagRegistry` as a unit. Enchantment applicability is `supported_items ∩ tags_of(item)` (real-MC item tags), resolved via the profile's attached `TagResolver`.
 
 **Pipeline pattern**: Every pipeline is a standalone struct with a single `run()` method. No polymorphism, no registration — dispatch by switch at `BesqContext` or `main.cpp`.
 

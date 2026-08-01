@@ -491,7 +491,7 @@ struct OutputFormatter {
 ```
 
 **Key changes**:
-- Receive `const Profile&` instead of `const EnchantmentRegistry&` + `const EquipmentTagRegistry&`
+- Receive `const Profile&` instead of `const EnchantmentRegistry&` + `const TagRegistry&`
 - Retrieve registries internally via `profile.ench()` / `profile.tags()`
 - Remove `clear_cache()` and the anonymous-namespace `_json_eq_cache`
 - JSON deserialization builds Equipment objects locally (owned by the parse call)

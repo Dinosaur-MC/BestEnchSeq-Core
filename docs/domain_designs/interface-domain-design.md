@@ -123,7 +123,7 @@ public:
     // ── Registry access (read-only) ──
     const EnchantmentRegistry& enchantments() const noexcept;
     const EquipmentRegistry& equipment() const noexcept;
-    const EquipmentTagRegistry& categories() const noexcept;
+    const TagRegistry& categories() const noexcept;
 
     // ── Persistence ──
     bool export_registry(const std::string& path) const;

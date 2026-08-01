@@ -123,7 +123,8 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
                 Item saved_sac  = items[sac_idx];
                 int32_t cost = _forge_engine.forge_into(items[eq], items[sac_idx], reg);
                 ctx.incr_steps_forged();
-                steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
+                Item result = items[eq];  // forge_into mutates the target in place
+                steps.push_back({std::move(saved_base), std::move(saved_sac), std::move(result), cost});
 
                 items.erase(items.begin() + sac_idx);
             } else {
@@ -136,7 +137,8 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
                 Item saved_sac  = items[b + 1];
                 int32_t cost = _forge_engine.forge_into(items[b], items[b + 1], reg);
                 ctx.incr_steps_forged();
-                steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
+                Item result = items[b];  // forge_into mutates the target in place
+                steps.push_back({std::move(saved_base), std::move(saved_sac), std::move(result), cost});
 
                 items.erase(items.begin() + b + 1);
                 // items[b] (forged result) stays — may have higher PPN now
@@ -158,7 +160,8 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
             Item saved_sac  = items[sac_idx];
             int32_t cost = _forge_engine.forge_into(items[base_idx], items[sac_idx], reg);
             ctx.incr_steps_forged();
-            steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
+            Item result = items[base_idx];  // forge_into mutates the target in place
+            steps.push_back({std::move(saved_base), std::move(saved_sac), std::move(result), cost});
 
             items.erase(items.begin() + sac_idx);
 

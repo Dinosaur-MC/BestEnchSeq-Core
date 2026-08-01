@@ -137,7 +137,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
         if (child_buf.size() > 2)
             std::sort(child_buf.begin() + 1, child_buf.end());
 
-        _current_path.push_back(IDALightStep{old_base_id, old_sac_id, real_cost});
+        _current_path.push_back(IDALightStep{old_base_id, old_sac_id, new_base_id, real_cost});
 
         // Delta heuristic: update _h_max for child, recurse, restore.
         // Stack-allocated delta array avoids the heap allocation + memcpy of
@@ -295,7 +295,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         std::vector<EnchStep> steps;
         steps.reserve(_solution_path.size());
         for (const auto& s : _solution_path)
-            steps.push_back({_pool[s.base_id], _pool[s.sac_id], s.cost});
+            steps.push_back({_pool[s.base_id], _pool[s.sac_id], _pool[s.result_id], s.cost});
 
         ctx.report_solution(steps);
         ctx.report_progress(100, ProgressStatus::Complete);

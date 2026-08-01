@@ -87,7 +87,7 @@ class ModForgeEngine : public IForgeEngine {
 
 `Profile` 是**所有正常业务操作的基本单位**：
 
-- Profile 同时持有 `EnchantmentRegistry`、`EquipmentRegistry`、`EquipmentTagRegistry`
+- Profile 同时持有 `EnchantmentRegistry`、`EquipmentRegistry`、`TagRegistry`
 - 所有 Pipeline 接收 Profile 或 ProfileManager，不接收裸注册表
 - 支持快照、分支、合并、集合运算（`| & + -`）
 - JSON 序列化格式与 vanilla.json 兼容
@@ -163,9 +163,9 @@ EnchantmentData[] + EquipmentData[] DTO 流
      ▼
 RegistryLoader::from_dto()
      │
-     ├── EquipmentTagRegistry   (category string → NSID)
-     ├── EquipmentRegistry      (category NSID resolved)
-     └── EnchantmentRegistry    (exclusive/applicable resolved)
+     ├── TagRegistry            (真实 MC tag 定义：物品/enchantable/* / 附魔 tag)
+     ├── EquipmentRegistry      (category 显示短名)
+     └── EnchantmentRegistry    (exclusive / supported_items 交叉验证)
      │
      ▼
 Profile (ench() + eq() + tags() 三元组)
@@ -182,7 +182,7 @@ Profile (ench() + eq() + tags() 三元组)
 Business domain (src/domain/business/registries/):
   EnchantmentRegistry (NSID keyed, full metadata, mutable)
   EquipmentRegistry (NSID keyed)
-  EquipmentTagRegistry (tag-based equipment classification)
+  TagRegistry (real MC item/enchantment tag definitions)
        │
        │ CompactAdapter::apply()
        ▼
@@ -303,7 +303,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 自包含的核心域，以 **Profile** 为操作的一等公民。
 
 **types/**：值类型（`Ench`、`EnchInfo`、`EnchSet`、`Item`、`Equipment`、`EquipmentTag`、`Solution`、`Profile`）+ DTO（`EnchantmentData`、`EquipmentData`）
-**registries/**：纯数据容器（`EnchantmentRegistry`、`EquipmentRegistry`、`EquipmentTagRegistry`，均继承自 `IRegistry`）
+**registries/**：纯数据容器（`EnchantmentRegistry`、`EquipmentRegistry`、`TagRegistry`，均继承自 `IRegistry`）
 **parsers/**：格式解析器（`NativeJsonParser`、`NativeCsvParser`、`McOfficialParser`，共享 `ParserShared`）
 **loaders/**：DTO ↔ 注册表/Profile 转换（`RegistryLoader`、`ProfileLoader`）
 **managers/**：Profile 生命周期（`ProfileManager`）+ 集合运算（`RegistryManager`，含 `| & + -` 运算符）
