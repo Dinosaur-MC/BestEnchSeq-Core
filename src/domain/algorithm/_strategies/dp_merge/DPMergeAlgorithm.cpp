@@ -5,33 +5,45 @@
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace algorithm {
 
 using namespace algorithm;
 
-// ─── Frontier::insert ──────────────────────────────────────────────────────
+// ─── Frontier::insert (Pareto domination) ─────────────────────────────────
 
 void DPMergeAlgorithm::Frontier::insert(ParetoEntry entry) {
-    for (auto& existing : entries) {
-        if (existing.ppn == entry.ppn &&
-            existing.item.type == entry.item.type &&
-            existing.item.enchs == entry.item.enchs) {
-            if (entry.cost < existing.cost) {
-                existing = std::move(entry);
+    const Item& item = entry.item;
+
+    // Cross-ppn Pareto domination over the same (type, enchset):
+    //   - an existing entry with ≤ ppn and ≤ cost dominates `entry` → drop it;
+    //   - `entry` with ≤ ppn and ≤ cost dominates an existing entry → remove it.
+    // Future merge cost depends only on (type, enchset, ppn), so the dominated
+    // entry can never lead to a strictly better result.  (Ported from bb_dp —
+    // the previous insert only replaced an exact (ppn, type, enchset) match,
+    // keeping dominated entries and bloating the frontier.)
+    for (auto it = entries.begin(); it != entries.end();) {
+        if (it->item.type == item.type && it->item.enchs == item.enchs) {
+            if (it->ppn <= entry.ppn && it->cost <= entry.cost)
+                return;  // entry is dominated
+            if (entry.ppn <= it->ppn && entry.cost <= it->cost) {
+                it = entries.erase(it);  // entry dominates existing
+                continue;
             }
-            return;
         }
+        ++it;
     }
     entries.push_back(std::move(entry));
 }
 
-// ─── canonicalize ──────────────────────────────────────────────────────────
+// ─── canonicalize ─────────────────────────────────────────────────────────
 
 void DPMergeAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
     std::sort(items.begin(), items.end(),
@@ -51,24 +63,99 @@ void DPMergeAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
         });
 }
 
+// ─── cache_get / cache_put / _prepare_cache ───────────────────────────────
+//
+// n ≤ 20: flat lock-free cache — a single atomic load on the read path, no
+// shared_mutex contention even under the top-level parallel_for.  n > 20 (rare,
+// dp_merge bails there anyway) uses the mutex-protected map fallback.
+
+void DPMergeAlgorithm::_prepare_cache(size_t n) {
+    _using_flat = (n <= FLAT_CACHE_MAX_BITS);
+    _owners.clear();
+    if (_using_flat) {
+        const size_t slots = size_t{1} << n;  // n ≤ 20 → ≤ 1M slots
+        if (!_flat_cache || _flat_capacity != slots) {
+            _flat_cache = std::make_unique<std::atomic<Frontier*>[]>(slots);
+            _flat_capacity = slots;
+        }
+        // Reinitialise every slot to nullptr (atomic, single-threaded here).
+        for (size_t i = 0; i < slots; ++i)
+            _flat_cache[i].store(nullptr, std::memory_order_relaxed);
+    }
+}
+
+const DPMergeAlgorithm::Frontier* DPMergeAlgorithm::cache_get(uint64_t mask) const noexcept {
+    if (_using_flat) {
+        // Lock-free: single atomic load.  `mask` < 2^n by construction.
+        return _flat_cache[mask].load(std::memory_order_acquire);
+    }
+    std::shared_lock lock(_cache_mutex);
+    auto it = _cache.find(mask);
+    return (it != _cache.end()) ? it->second.get() : nullptr;
+}
+
+const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::cache_put(uint64_t mask, std::unique_ptr<Frontier> f) {
+    if (_using_flat) {
+        // Keep the frontier alive BEFORE publishing, so the published pointer
+        // can never dangle (even if push_back throws): ownership lives in
+        // _owners for the whole pass.  A wasted owner entry on a lost CAS is
+        // harmless (freed at pass end).
+        Frontier* mine;
+        {
+            std::lock_guard<std::mutex> lk(_owners_mutex);
+            _owners.push_back(std::move(f));
+            mine = _owners.back().get();
+        }
+        Frontier* expected = nullptr;
+        if (_flat_cache[mask].compare_exchange_strong(expected, mine,
+                                                      std::memory_order_acq_rel,
+                                                      std::memory_order_acquire))
+            return *mine;
+        return *expected;  // lost the race: a concurrent equivalent frontier wins
+    }
+    std::unique_lock lock(_cache_mutex);
+    auto it = _cache.find(mask);
+    if (it != _cache.end())
+        return *it->second;  // concurrent insert won — equivalent
+
+    if (_cache.size() < MAX_CACHE_ENTRIES) {
+        auto [slot, inserted] = _cache.emplace(mask, std::move(f));
+        return *slot->second;
+    }
+    // Past the cap: hold the frontier in the pass-lifetime overflow arena.
+    _owners.push_back(std::move(f));
+    return *_owners.back();
+}
+
 // ─── solve (recursive DP with memoization) ─────────────────────────────────
 //
-// For large N (≥ 12) the outer partition-mask loop is parallelised via
-// ThreadPool::shared() — each chunk processes its masks independently,
-// using thread-safe cache access (shared_mutex) for the recursive solve()
-// calls.  Small N uses the original sequential path.
+// `mask` identifies the current subset of `_base_items`; each unordered
+// 2-partition appears once (the canonical-order anchor from `low_bit`).  For
+// large N (≥ 14) the outer partition-mask loop is parallelised via
+// ThreadPool::shared() — each chunk processes its masks independently and
+// publishes results through the lock-free cache.
 
-DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool parallelize) {
-    if (items.size() == 1) {
-        Frontier f;
-        f.entries.push_back(ParetoEntry{0, items[0].ppn, std::move(items[0]), StepTree{}});
-        return f;
+const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool parallelize) {
+    // Memoisation (lock-free hit on the flat path).
+    if (const Frontier* hit = cache_get(mask))
+        return *hit;
+
+    const size_t n = static_cast<size_t>(__builtin_popcountll(mask));
+
+    if (n == 1) {
+        auto f = std::make_unique<Frontier>();
+        const Item& it = _base_items[static_cast<size_t>(__builtin_ctzll(mask))];
+        f->entries.push_back(ParetoEntry{0, it.ppn, it, StepTree{}});
+        return cache_put(mask, std::move(f));
     }
 
-    if (items.size() == 2) {
-        Frontier f;
-        const Item& a = items[0];
-        const Item& b = items[1];
+    if (n == 2) {
+        auto f = std::make_unique<Frontier>();
+        uint64_t m = mask;
+        const size_t i0 = static_cast<size_t>(__builtin_ctzll(m)); m &= m - 1;
+        const size_t i1 = static_cast<size_t>(__builtin_ctzll(m));
+        const Item& a = _base_items[i0];
+        const Item& b = _base_items[i1];
 
         auto make_leaf = [&](const Item& base, const Item& sac,
                              const Item& result, int32_t cost) -> StepTree {
@@ -80,35 +167,20 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
         if (_forge_engine.is_forgeable(a, b)) {
             auto [result, cost] = _forge_engine.forge(a, b, *_ench_reg);
             auto tree = make_leaf(a, b, result, cost);
-            f.insert(ParetoEntry{cost, result.ppn, std::move(result), std::move(tree)});
+            f->insert(ParetoEntry{cost, result.ppn, std::move(result), std::move(tree)});
         }
         if (_forge_engine.is_forgeable(b, a)) {
             auto [result, cost] = _forge_engine.forge(b, a, *_ench_reg);
             auto tree = make_leaf(b, a, result, cost);
-            f.insert(ParetoEntry{cost, result.ppn, std::move(result), std::move(tree)});
+            f->insert(ParetoEntry{cost, result.ppn, std::move(result), std::move(tree)});
         }
-        return f;
+        return cache_put(mask, std::move(f));
     }
 
-    // ── Check memoisation cache (thread-safe) ──────────────────────
-    {
-        std::shared_lock lock(_cache_mutex);
-        auto it = _cache.find(items);
-        if (it != _cache.end())
-            return it->second;
-    }
-
-    const size_t n = items.size();
-
-    if (n >= 64) return {};
-    if (n > 20) {
-        std::unique_lock lock(_cache_mutex);
-        _cache[std::move(items)] = Frontier{};
-        return {};
-    }
+    if (n > 20)  // dp_merge only enumerates ≤20 items (large N bails to no solution)
+        return cache_put(mask, std::make_unique<Frontier>());
 
     Frontier result;
-    const uint64_t limit = 1ULL << n;
 
     // ─── forge_pair lambda (shared by both paths) ──────────────────
     // Creates a StepTree node linking to the parents' trees instead of
@@ -152,6 +224,27 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
         }
     };
 
+    // Canonical order anchor: the lowest set bit of the current subset decides
+    // which half a 2-partition belongs to (only one orientation is enumerated).
+    const uint64_t low_bit = mask & (~mask + 1);
+
+    auto process_subset = [&](Frontier& out, uint64_t left) {
+        const size_t k = __builtin_popcountll(left);
+        if (k * 2 > n) return;
+        if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
+
+        const uint64_t right = mask & ~left;
+        const Frontier& left_f  = solve(left,  /*parallelize=*/false);
+        if (!left_f.empty()) {
+            const Frontier& right_f = solve(right, /*parallelize=*/false);
+            if (!right_f.empty()) {
+                for (const auto& ea : left_f.entries)
+                    for (const auto& eb : right_f.entries)
+                        forge_pair(out, ea, eb);
+            }
+        }
+    };
+
     // ─── Parallel mask loop (top-level only, via parallel_for) ─────────
     // For N < 14 the parallel overhead can exceed the benefit on 32-way
     // systems, so we keep those sequential.
@@ -159,37 +252,11 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
         auto& pool = besq::ThreadPool::shared();
         std::mutex result_mutex;
 
-        parallel_for(pool, uint64_t{1}, limit - 1,
-            [&](uint64_t mask) {
-                size_t k = __builtin_popcountll(mask);
-                if (k * 2 > n) return;
-                if ((n & 1) == 0 && k * 2 == n && !(mask & 1)) return;
-
-                // Build left/right partition (thread-local)
-                std::vector<Item> left, right;
-                left.reserve(n);
-                right.reserve(n);
-                for (size_t i = 0; i < n; ++i) {
-                    if (mask & (1ULL << i))
-                        left.push_back(items[i]);
-                    else
-                        right.push_back(items[i]);
-                }
-                canonicalize(left);
-                canonicalize(right);
-
-                // Recursive solve — sequential only (avoids nested parallel_for)
-                Frontier left_f  = solve(std::move(left), false);
-                Frontier right_f = solve(std::move(right), false);
-                if (left_f.empty() || right_f.empty()) return;
-
-                // Cartesian product (sequential — frontiers are small)
+        parallel_for(pool, uint64_t{1}, mask,
+            [&](uint64_t left) {
+                if ((left & ~mask) != 0) return;  // not a subset of `mask`
                 Frontier local;
-                for (const auto& entry_a : left_f.entries)
-                    for (const auto& entry_b : right_f.entries)
-                        forge_pair(local, entry_a, entry_b);
-
-                // Merge into global result (mutex-protected)
+                process_subset(local, left);
                 if (!local.empty()) {
                     std::lock_guard<std::mutex> lk(result_mutex);
                     for (auto& e : local.entries)
@@ -198,48 +265,14 @@ DPMergeAlgorithm::Frontier DPMergeAlgorithm::solve(std::vector<Item> items, bool
             });
     } else {
         // ─── Sequential mask loop (original path for N < 12) ────────
-        std::vector<Item> left_buf, right_buf;
-        left_buf.reserve(n);
-        right_buf.reserve(n);
-
-        for (uint64_t mask = 1; mask + 1 < limit; ++mask) {
-            size_t k = __builtin_popcountll(mask);
-
-            if (k * 2 > n) continue;
-            if ((n & 1) == 0 && k * 2 == n && !(mask & 1)) continue;
-
-            left_buf.clear();
-            right_buf.clear();
-
-            for (size_t i = 0; i < n; ++i) {
-                if (mask & (1ULL << i))
-                    left_buf.push_back(items[i]);
-                else
-                    right_buf.push_back(items[i]);
-            }
-
-            canonicalize(left_buf);
-            canonicalize(right_buf);
-
-            Frontier left_f  = solve(std::move(left_buf));
-            Frontier right_f = solve(std::move(right_buf));
-
-            if (left_f.empty() || right_f.empty())
-                continue;
-
-            for (const auto& entry_a : left_f.entries)
-                for (const auto& entry_b : right_f.entries)
-                    forge_pair(result, entry_a, entry_b);
+        uint64_t left = (mask - 1) & mask;  // largest proper submask of `mask`
+        while (left != 0) {
+            process_subset(result, left);
+            left = (left - 1) & mask;
         }
     }
 
-    // ── Store in cache (thread-safe) ───────────────────────────────
-    {
-        std::unique_lock lock(_cache_mutex);
-        if (_cache.find(items) == _cache.end() && _cache.size() < MAX_CACHE_ENTRIES)
-            _cache[std::move(items)] = result;
-    }
-    return result;
+    return cache_put(mask, std::make_unique<Frontier>(std::move(result)));
 }
 
 // ─── Serialization support ─────────────────────────────────────────────────
@@ -313,7 +346,28 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     std::vector<Item> mutable_items = items;
     canonicalize(mutable_items);
 
-    Frontier frontier = solve(std::move(mutable_items), true);
+    // The mask-keyed cache is only valid when the freshly resolved base set is
+    // identical to the base set the cache was built for (checkpoint/resume
+    // assumes the same input).  Any mismatch — a changed input between save and
+    // resume, or a checkpoint carrying no solve state — must recompute: the
+    // flat cache is sized by the serialized base set, so a mismatched item
+    // count would index past `_flat_capacity`, and same-count-but-different
+    // items would return frontiers computed for another item order.
+    if (!ctx.is_restored()) {
+        _prepare_cache(mutable_items.size());
+    } else if (mutable_items.size() != _base_items.size() ||
+               mutable_items != _base_items) {
+        _cache.clear();
+        _prepare_cache(mutable_items.size());
+    }
+
+    // Base items + full-set mask: every subproblem is a subset of this mask,
+    // so the flat cache (1 << n slots) covers all of them.
+    _base_items = mutable_items;
+    const uint64_t full_mask = (mutable_items.size() >= 64)
+        ? UINT64_MAX : ((static_cast<uint64_t>(1) << mutable_items.size()) - 1);
+
+    const Frontier& frontier = solve(full_mask, true);
 
     const ParetoEntry* best = nullptr;
     for (const auto& entry : frontier.entries) {
