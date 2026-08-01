@@ -463,6 +463,36 @@ void test_apply_supported_items_tag_intersection() {
     TEST_PASS("test_apply_supported_items_tag_intersection");
 }
 
+// ─── Test 19b: platform filter ───
+// An enchantment restricted to one platform is excluded from a solve targeting
+// the other, even when the tag intersection would admit it.
+void test_apply_platform_filter() {
+    Profile p(NSID("test:plat"));
+    p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
+                     NSID("#minecraft:sword"), 1561});
+    // sharpness is Java-only; a Bedrock solve must exclude it despite being
+    // tag-applicable (diamond_sword ∈ #minecraft:swords).
+    p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::Java, 5, 5,
+                       1, false, {}, {NSID("#minecraft:swords")}});
+
+    TagResolver tr;
+    tr.add_tag("minecraft:swords", {"minecraft:diamond_sword"});
+    p.set_tag_resolver(std::make_shared<TagResolver>(tr));
+
+    SolveRequest req;
+    req.mode = AlgorithmMode::inventory;
+    req.target_item = Item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    req.payload = InventoryPayload{};
+    req.forge_config = algorithm::ForgeConfig{};
+    req.forge_config.platform = MCE::Bedrock;
+
+    auto input = CompactAdapter::apply(p, req, *p.tag_resolver());
+    for (const auto& gid : input.registry.get_global_ids())
+        expect(gid != NSID("minecraft:sharpness"),
+               "Java-only sharpness excluded from Bedrock solve");
+    TEST_PASS("test_apply_platform_filter");
+}
+
 // ─── Test 20: inventory equipment carrying an enchant inapplicable to ITSELF
 //     throws.  The validation must use the ITEM's own tag set, not the target's:
 //     here the target is a chestplate (protection IS applicable there) while the
@@ -527,6 +557,7 @@ int main() {
         test_apply_inventory_equipment_inapplicable_throws();
         test_apply_inventory_equipment_over_level_throws();
         test_apply_supported_items_tag_intersection();
+        test_apply_platform_filter();
         test_apply_inventory_equipment_inapplicable_ench();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

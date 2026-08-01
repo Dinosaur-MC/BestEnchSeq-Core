@@ -78,6 +78,16 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
 
     for (size_t gid = 0; gid < sorted_infos.size() && gid < 64; ++gid) {
         const auto &biz = sorted_infos[gid].second;
+
+        // Platform availability: an enchantment restricted to one platform is
+        // excluded from a solve targeting the other.  None/All = everywhere.
+        // (Requested platform-incompatible enchants are then caught by the
+        // validate_enchants -> nsid_to_local lookup below.)
+        if (!(biz.supported_platform == MCE::None ||
+              biz.supported_platform == MCE::All ||
+              biz.supported_platform == request.forge_config.platform))
+            continue;
+
         if (!is_supported(biz, request.target_item.id, target_tags))
             continue;
 
