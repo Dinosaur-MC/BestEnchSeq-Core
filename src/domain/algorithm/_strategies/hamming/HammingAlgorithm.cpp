@@ -165,7 +165,7 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
             int32_t cost = _forge_engine.forge_into(base, sac, reg);
             ctx.incr_steps_forged();
 
-            steps.push_back({std::move(saved_base), std::move(saved_sac), cost});
+            steps.push_back({std::move(saved_base), std::move(saved_sac), base, cost});
 
             // Collect into local buffer
             next_items.push_back(std::move(base));

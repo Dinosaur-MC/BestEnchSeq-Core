@@ -210,6 +210,9 @@ static constexpr AlgoLimit ALGO_LIMITS[] = {
     {"penalty_balance",  {-1, -1, -1, -1, -1, -1, -1, -1, -1}},
     // Medium: near-optimal, moderate speed
     {"dp_merge",         { 8,  10,  12,14, 16, 16, 16, 16, 16}},
+    // Exact DP with B&B bound + Pareto + optional per-step cap: faster than
+    // dp_merge, handles more enchantments (direct mode).
+    {"bb_dp",            {10,  12,  14,16, 18, 20, 24, 24, 28}},
     // Slow: exact search, practical up to 9 enchants
     {"astar",            { 7,  9,  10,  10, 11, 12, 13, 14, 15}},
     {"idastar",          { 7,  9,  9,  9, 10, 10, 12, 12, 14}},

@@ -1,5 +1,6 @@
 #include "framework/test_utils.h"
 #include "common/io/ByteStream.h"
+#include "domain/algorithm/components/StepTree.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
@@ -87,7 +88,7 @@ void test_step_roundtrip() {
     sacrifice.ppn = 0;
     sacrifice.enchs.insert({1, 5});
 
-    algorithm::EnchStep original{base, sacrifice, 7};
+    algorithm::EnchStep original{base, sacrifice, {}, 7};
 
     ByteStreamWriter w;
     w << original;
@@ -129,7 +130,7 @@ void test_solution_roundtrip() {
     sac1.ppn = 0;
     sac1.enchs.insert({1, 5});
 
-    original.steps.push_back({base1, sac1, 7});
+    original.steps.push_back({base1, sac1, {}, 7});
 
     algorithm::Item base2;
     base2.type = algorithm::ItemType::Equip;
@@ -144,7 +145,7 @@ void test_solution_roundtrip() {
     sac2.ppn = 0;
     sac2.enchs.insert({3, 1});
 
-    original.steps.push_back({base2, sac2, 5});
+    original.steps.push_back({base2, sac2, {}, 5});
 
     ByteStreamWriter w;
     w << original;
@@ -286,6 +287,46 @@ void test_compact_ench_info_roundtrip() {
 
 } // anonymous namespace
 
+// ─── StepTree ↔ flat-steps lossless round-trip ───────────────────────────
+
+void test_step_tree_roundtrip() {
+    using algorithm::Item;
+    using algorithm::ItemType;
+    using algorithm::EnchStep;
+
+    // Balanced merge tree materialized in post-order (book+book merges
+    // interleaved with equipment merges):
+    //   S1: eq + b1 → eq1 ;  S2: b2 + b3 → b23 ;  S3: eq1 + b23 → fin
+    Item eq{ItemType::Equip, 1561, 0, {}};
+    Item b1{ItemType::Book, 0, 0, {}};  b1.enchs.insert({0, 5});
+    Item b2{ItemType::Book, 0, 0, {}};  b2.enchs.insert({1, 2});
+    Item b3{ItemType::Book, 0, 0, {}};  b3.enchs.insert({2, 3});
+    Item eq1{ItemType::Equip, 1561, 0, {}}; eq1.enchs.insert({0, 5});
+    Item b23{ItemType::Book, 0, 0, {}}; b23.enchs.insert({1, 2}); b23.enchs.insert({2, 3});
+    Item fin{ItemType::Equip, 1561, 0, {}};
+    fin.enchs.insert({0, 5}); fin.enchs.insert({1, 2}); fin.enchs.insert({2, 3});
+
+    std::vector<EnchStep> flat = {
+        {eq,  b1,  eq1, 3},
+        {b2,  b3,  b23, 4},
+        {eq1, b23, fin, 5},
+    };
+
+    algorithm::StepTree tree = algorithm::StepTree::from_steps(flat);
+    expect(!tree.empty(), "from_steps should rebuild a non-empty tree");
+
+    auto back = tree.materialize();
+    expect(back.size() == flat.size(), "round-trip should preserve step count");
+    bool same = back.size() == flat.size();
+    for (size_t i = 0; same && i < back.size(); ++i) {
+        if (!(back[i].base == flat[i].base) || !(back[i].sacrifice == flat[i].sacrifice)
+            || !(back[i].result == flat[i].result) || back[i].cost != flat[i].cost)
+            same = false;
+    }
+    expect(same, "materialize(from_steps(flat)) should equal flat (lossless)");
+    TEST_PASS("test_step_tree_roundtrip");
+}
+
 int main() {
     try {
         test_ench_roundtrip();
@@ -293,6 +334,7 @@ int main() {
         test_item_roundtrip();
         test_step_roundtrip();
         test_solution_roundtrip();
+        test_step_tree_roundtrip();
         test_set_fail_rejection();
         test_truncated_ench_set_rejected();
         test_overflow_count_solution();

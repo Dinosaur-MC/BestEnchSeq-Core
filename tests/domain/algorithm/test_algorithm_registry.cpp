@@ -26,7 +26,6 @@ public:
     std::string_view name() const noexcept override { return "test_algo"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0; }
-    std::optional<Item> process(const EnchSolution &, const ForgeConfig &, const EnchReg &) const override { return std::nullopt; }
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<TestForgeEngine>();
     }

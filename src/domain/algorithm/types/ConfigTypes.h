@@ -15,15 +15,23 @@ struct SearchConfig : IBinarySerializable {
     int32_t initial_bound = INT32_MAX;     // warm-start bound
     std::chrono::milliseconds max_search_time{180'000}; // default 3 min
 
+    /// Per-step anvil cost cap (vanilla Too-Expensive threshold = 39). 0 = disabled.
+    /// SOFT constraint: strategies that honor it first try for a solution where
+    /// every step ≤ max_step_cost, then relax if none exists (see bb_dp).
+    int32_t max_step_cost = 39;
+    /// Beam width for beam-search strategies. 0 = exact (unlimited frontier).
+    int32_t beam_width    = 0;
+
     void serialize(ByteStreamWriter &w) const noexcept override {
         w << max_solutions << max_depth << memory_mb << max_threads
           << initial_bound
-          << static_cast<int64_t>(max_search_time.count());
+          << static_cast<int64_t>(max_search_time.count())
+          << max_step_cost << beam_width;
     }
     void deserialize(ByteStreamReader &r) noexcept override {
         int64_t t;
         r >> max_solutions >> max_depth >> memory_mb >> max_threads
-          >> initial_bound >> t;
+          >> initial_bound >> t >> max_step_cost >> beam_width;
         max_search_time = std::chrono::milliseconds(t);
     }
 };

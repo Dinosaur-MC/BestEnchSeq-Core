@@ -33,9 +33,10 @@ namespace algorithm {
 ///       left_tree.size() + right_tree.size() + 1);
 ///   StepTree tree{std::move(node)};
 ///
-/// Serialisation helpers:
-///   auto flat = tree.materialize();       // → std::vector<EnchStep>
-///   auto tree = StepTree::from_flat(vec); // ← rebuild linear chain
+/// Serialisation helpers (lossless inverse pair):
+///   auto flat = tree.materialize();       // StepTree → std::vector<EnchStep>
+///   auto tree = StepTree::from_steps(flat); // flat → StepTree (reconstructs
+///                                            the merge tree, not a chain)
 
 class StepTree {
 public:
@@ -71,14 +72,42 @@ public:
     /// Shared pointer to the root node (for constructing child trees).
     std::shared_ptr<Node> root_ptr() const noexcept { return _root; }
 
-    /// Build a linear chain from a flat step vector (deserialisation).
-    static StepTree from_flat(const std::vector<EnchStep>& flat) {
-        std::shared_ptr<Node> cur;
-        for (auto it = flat.rbegin(); it != flat.rend(); ++it) {
-            cur = std::make_shared<Node>(
-                *it, std::move(cur), nullptr, flat.size());
+    /// Rebuild the merge tree from a flat post-order step list — the inverse
+    /// of materialize().  Each step carries its own result, so a step's
+    /// base/sacrifice is matched by value against the results of prior steps:
+    /// a value produced by a prior step becomes that producing sub-tree, a
+    /// value never produced is a leaf.  Lossless for trees whose intermediate
+    /// results have distinct item values (duplicate-value results resolve to
+    /// the first matching producer).  Returns an empty tree on malformed input.
+    static StepTree from_steps(const std::vector<EnchStep>& flat) {
+        struct Avail {
+            Item item;
+            std::shared_ptr<Node> tree;
+        };
+        std::vector<Avail> pool;
+        pool.reserve(flat.size() + 1);
+        for (const auto& step : flat) {
+            auto take = [&](const Item& want) -> std::shared_ptr<Node> {
+                for (auto it = pool.begin(); it != pool.end(); ++it) {
+                    if (it->item == want) {
+                        auto t = std::move(it->tree);
+                        pool.erase(it);
+                        return t;
+                    }
+                }
+                return nullptr;  // leaf — not produced by any prior step
+            };
+            auto left  = take(step.base);
+            auto right = take(step.sacrifice);
+            size_t depth = (left ? left->depth : 0)
+                         + (right ? right->depth : 0) + 1;
+            pool.push_back({step.result,
+                std::make_shared<Node>(step, std::move(left),
+                                       std::move(right), depth)});
         }
-        return StepTree{std::move(cur)};
+        if (pool.size() != 1)
+            return StepTree{};
+        return StepTree{std::move(pool[0].tree)};
     }
 
 private:

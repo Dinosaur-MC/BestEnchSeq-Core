@@ -131,7 +131,7 @@ checkpoint::Section DFSStateSerializer::_write_best_steps(const DFSAlgorithm& df
     uint32_t count = static_cast<uint32_t>(dfs._best_steps.size());
     payload.u32(count);
     for (const auto& step : dfs._best_steps) {
-        payload << step.base << step.sacrifice;
+        payload << step.base << step.sacrifice << step.result;
         payload.i32(step.cost);
     }
     checkpoint::Section sect;
@@ -146,7 +146,7 @@ checkpoint::Section DFSStateSerializer::_write_current_steps(const DFSAlgorithm&
     uint32_t count = static_cast<uint32_t>(dfs._current_steps.size());
     payload.u32(count);
     for (const auto& step : dfs._current_steps) {
-        payload << step.base << step.sacrifice;
+        payload << step.base << step.sacrifice << step.result;
         payload.i32(step.cost);
     }
     checkpoint::Section sect;
@@ -247,7 +247,7 @@ void DFSStateSerializer::_read_best_steps(ByteStreamReader& r, DFSAlgorithm& dfs
     dfs._best_steps.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         EnchStep step;
-        r >> step.base >> step.sacrifice;
+        r >> step.base >> step.sacrifice >> step.result;
         step.cost = r.i32();
         if (!r.ok()) break;
         dfs._best_steps.push_back(std::move(step));
@@ -261,7 +261,7 @@ void DFSStateSerializer::_read_current_steps(ByteStreamReader& r, DFSAlgorithm& 
     dfs._current_steps.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         EnchStep step;
-        r >> step.base >> step.sacrifice;
+        r >> step.base >> step.sacrifice >> step.result;
         step.cost = r.i32();
         if (!r.ok()) break;
         dfs._current_steps.push_back(std::move(step));
