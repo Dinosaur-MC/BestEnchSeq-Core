@@ -28,12 +28,14 @@ void AlgorithmExecutor::_start_timeout_watcher(std::chrono::milliseconds max_tim
     auto alive = _timeout_alive;
     _timeout_watcher.emplace([this, max_time, alive] {
         // Poll in small increments so the thread can be joined early
-        // when the algorithm finishes before the timeout expires.
+        // when the algorithm finishes before the timeout expires.  The
+        // condition variable wakes immediately on _stop_timeout_watcher(),
+        // so a join does not wait out the full 10ms poll interval.
         auto deadline = std::chrono::steady_clock::now() + max_time;
-        while (std::chrono::steady_clock::now() < deadline) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            if (!alive->load(std::memory_order_acquire))
-                return;     // early exit: algorithm already finished
+        std::unique_lock lock(_timeout_mtx);
+        while (std::chrono::steady_clock::now() < deadline &&
+               alive->load(std::memory_order_acquire)) {
+            _timeout_cv.wait_for(lock, std::chrono::milliseconds(10));
         }
         if (alive->load(std::memory_order_acquire)) {
             if (_ctx) _ctx->cancel();
@@ -44,6 +46,7 @@ void AlgorithmExecutor::_start_timeout_watcher(std::chrono::milliseconds max_tim
 void AlgorithmExecutor::_stop_timeout_watcher() noexcept {
     if (_timeout_alive) {
         _timeout_alive->store(false, std::memory_order_release);
+        _timeout_cv.notify_all();
     }
     if (_timeout_watcher && _timeout_watcher->joinable()) {
         _timeout_watcher->join();
@@ -92,14 +95,23 @@ void AlgorithmExecutor::_run_warmup(AlgorithmInput& input, IAlgorithm& warmup_al
     }
 }
 
+void AlgorithmExecutor::_record_computation_time() noexcept {
+    _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - _start_time);
+    _computation_time_recorded = true;
+}
+
 void AlgorithmExecutor::_finalize() {
     if (_finalized) return;
     _finalized = true;
     // Stop timeout watcher so it doesn't access _ctx after finalization
     _stop_timeout_watcher();
 
-    _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - _start_time);
+    // Preserve the worker's measurement taken immediately after execute().
+    // Re-measuring here would add the timeout-watcher teardown latency to the
+    // reported computation time and inflate every benchmark run.
+    if (!_computation_time_recorded)
+        _record_computation_time();
 
     auto atoms = _ctx->get_diagnostics(_computation_time.count());
     auto diag = _ctx->consume_exit_diagnostics();
@@ -183,21 +195,18 @@ void AlgorithmExecutor::start(AlgorithmInput input,
             _algorithm->init(_algorithm_input, *_ctx);
             _algorithm->execute(_algorithm_input, *_ctx);
 
-            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - _start_time);
+            _record_computation_time();
 
             // Always attempt Completed; if cancel() already exchanged to
             // Cancelled, _set_state is a no-op — no TOCTOU race.
             _set_state(AlgorithmState::Completed);
         } catch (const std::exception& e) {
             _error_message = e.what();
-            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - _start_time);
+            _record_computation_time();
             _set_state(AlgorithmState::Failed);
         } catch (...) {
             _error_message = "Unknown (non-std) exception";
-            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - _start_time);
+            _record_computation_time();
             _set_state(AlgorithmState::Failed);
         }
     });
@@ -232,18 +241,15 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
             _algorithm->init(_algorithm_input, *_ctx);
             _algorithm->execute(_algorithm_input, *_ctx);
 
-            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - _start_time);
+            _record_computation_time();
             _set_state(AlgorithmState::Completed);
         } catch (const std::exception& e) {
             _error_message = e.what();
-            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - _start_time);
+            _record_computation_time();
             _set_state(AlgorithmState::Failed);
         } catch (...) {
             _error_message = "Unknown (non-std) exception";
-            _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - _start_time);
+            _record_computation_time();
             _set_state(AlgorithmState::Failed);
         }
     });

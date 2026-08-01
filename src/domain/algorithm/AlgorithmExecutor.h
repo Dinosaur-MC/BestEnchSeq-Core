@@ -4,6 +4,7 @@
 #include "domain/algorithm/IAlgorithm.h"
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -66,6 +67,10 @@ class AlgorithmExecutor {
     void _finalize();
     void _start_timeout_watcher(std::chrono::milliseconds max_time);
     void _stop_timeout_watcher() noexcept;
+    /// Record elapsed time since _start_time.  Set from the worker thread
+    /// immediately after execute(); _finalize() preserves this value instead
+    /// of re-measuring, so reported times exclude teardown overhead.
+    void _record_computation_time() noexcept;
 
     std::unique_ptr<IAlgorithm> _algorithm;
     std::unique_ptr<ExecutionContext> _ctx;
@@ -77,13 +82,20 @@ class AlgorithmExecutor {
     std::condition_variable _state_cv;
     std::chrono::steady_clock::time_point _start_time;
     std::chrono::milliseconds _computation_time{0};
+    /// True once the worker thread has recorded _computation_time.  A plain
+    /// bool is safe: the write happens-before _finalize() via the thread join.
+    bool _computation_time_recorded = false;
     static inline std::atomic<size_t> _next_task_id{1}; // 0 = invalid
     size_t _task_id{0};
     std::string _algo_name_cache;
     std::string _error_message; // captured from worker thread exception
 
-    // Timeout watcher: background thread that cancels context when time is up
+    // Timeout watcher: background thread that cancels context when time is up.
+    // The condition variable lets _stop_timeout_watcher() wake it immediately
+    // instead of waiting out a 10ms poll interval on join.
     std::shared_ptr<std::atomic<bool>> _timeout_alive;
     std::optional<std::thread> _timeout_watcher;
+    std::mutex _timeout_mtx;
+    std::condition_variable _timeout_cv;
 };
 } // namespace algorithm
