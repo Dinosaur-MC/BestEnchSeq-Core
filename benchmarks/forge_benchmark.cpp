@@ -518,6 +518,7 @@ void run_case(const TestCase& tc, const Profile& profile,
     // ── Build AlgorithmInput via from_domain ───────────────────────────
     algorithm::AlgorithmInput algo_input;
     algo_input.config.forge.platform = MCE::Java;
+    algo_input.config.search.max_search_time = std::chrono::seconds(60 * 10);
     algo_input.registry = std::move(ench_reg);
 
     {
