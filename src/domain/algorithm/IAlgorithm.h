@@ -1,7 +1,5 @@
 #pragma once
 #include "domain/algorithm/types/AlgorithmTypes.h"
-#include "domain/algorithm/types/ConfigTypes.h"
-#include "domain/algorithm/registries/EnchReg.h"
 #include "forge_engine/IForgeEngine.h"
 #include <memory>
 
