@@ -5,11 +5,21 @@
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
 #include "domain/orchestration/types/SolveRequest.h"
+#include <unordered_set>
 #include <vector>
 
 class TagResolver;
 
 struct CompactAdapter {
+  private:
+    /// Enchantment E applies to item I iff I.id ∈ E.supported_items (concrete)
+    /// OR some `#tag` t ∈ E.supported_items is a member of I's tag set
+    /// (tag intersection via TagResolver).  Shared by the target filter and
+    /// the per-item inventory validation.
+    static bool is_supported(const EnchInfo& info, const NSID& item_id,
+                             const std::unordered_set<NSID>& item_tags);
+
+  public:
     /// Build AlgorithmInput from Profile + SolveRequest.
     /// Internally builds EnchReg with correct NSID -> local_id mapping,
     /// eliminating the previous ench.id = 0 TEMP workaround.

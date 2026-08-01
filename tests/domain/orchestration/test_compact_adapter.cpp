@@ -463,6 +463,47 @@ void test_apply_supported_items_tag_intersection() {
     TEST_PASS("test_apply_supported_items_tag_intersection");
 }
 
+// ─── Test 20: inventory equipment carrying an enchant inapplicable to ITSELF
+//     throws.  The validation must use the ITEM's own tag set, not the target's:
+//     here the target is a chestplate (protection IS applicable there) while the
+//     inventory equipment item is a sword (protection is NOT applicable).  If the
+//     applicability were (wrongly) evaluated against the target's tags, this
+//     would NOT throw — the test would fail. ───
+void test_apply_inventory_equipment_inapplicable_ench() {
+    Profile p(NSID("test:invbad"));
+    p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
+                     NSID("#minecraft:sword"), 1561});
+    p.add_equipment({NSID("minecraft:diamond_chestplate"), "Diamond Chestplate",
+                     NSID("#minecraft:chestplate"), 528});
+    // protection supports #minecraft:chestplate (NOT swords)
+    p.add_enchantment({NSID("minecraft:protection"), "Protection", MCE::All, 4, 4,
+                       1, false, {}, {NSID("#minecraft:chestplate")}});
+
+    TagResolver tr;
+    tr.add_tag("minecraft:sword", {"minecraft:diamond_sword"});
+    tr.add_tag("minecraft:chestplate", {"minecraft:diamond_chestplate"});
+    p.set_tag_resolver(std::make_shared<TagResolver>(tr));
+
+    SolveRequest req;
+    req.mode = AlgorithmMode::inventory;
+    req.target_item = Item(NSID("minecraft:diamond_chestplate"), EnchSet{}, 0, 528);
+    req.target_item.enchantments.emplace(NSID("minecraft:protection"), "Protection", 4);
+    req.forge_config = algorithm::ForgeConfig{};
+
+    // inventory: a diamond_sword EQUIPMENT item carrying protection (inapplicable to itself)
+    std::vector<Item> items;
+    EnchSet esc;
+    esc.emplace(NSID("minecraft:protection"), "Protection", 4);
+    items.push_back(Item(NSID("minecraft:diamond_sword"), esc, 0, 1561));
+    req.payload = InventoryPayload{items, {}};
+
+    bool threw = false;
+    try { CompactAdapter::apply(p, req, *p.tag_resolver()); }
+    catch (const std::runtime_error&) { threw = true; }
+    expect(threw, "inventory equipment item with inapplicable enchant must throw");
+    TEST_PASS("test_apply_inventory_equipment_inapplicable_ench");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -486,6 +527,7 @@ int main() {
         test_apply_inventory_equipment_inapplicable_throws();
         test_apply_inventory_equipment_over_level_throws();
         test_apply_supported_items_tag_intersection();
+        test_apply_inventory_equipment_inapplicable_ench();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

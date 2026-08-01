@@ -12,6 +12,21 @@
 #include <vector>
 
 // ============================================================================
+// is_supported — shared tag-membership applicability predicate
+// ============================================================================
+
+bool CompactAdapter::is_supported(const EnchInfo &info, const NSID &item_id,
+                                  const std::unordered_set<NSID> &item_tags) {
+    if (info.supported_items.contains(item_id))
+        return true;
+    for (const auto &t : info.supported_items) {
+        if (!t.str().empty() && t.str()[0] == '#' && item_tags.contains(t))
+            return true;
+    }
+    return false;
+}
+
+// ============================================================================
 // apply — Profile + SolveRequest -> AlgorithmInput
 // ============================================================================
 
@@ -55,24 +70,15 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     std::vector<NSID> applicable_global_nsids;
     std::unordered_map<NSID, int16_t> nsid_to_local;
 
-    // MC tag-membership model: an enchantment E is applicable to the target
-    // item I iff I.id ∈ E.supported_items (concrete item hit) or some `#tag`
-    // in E.supported_items contains I (tag intersection via TagResolver).
+    // Applicability of each enchantment to the target is decided by the shared
+    // is_supported predicate (concrete id hit OR `#tag` ∩ tags_of).  Hoist the
+    // target's tag set once — it is target-wide, not per-enchantment.
     const std::unordered_set<NSID> target_tags =
         tag_resolver.tags_of(request.target_item.id.str());
 
     for (size_t gid = 0; gid < sorted_infos.size() && gid < 64; ++gid) {
         const auto &biz = sorted_infos[gid].second;
-        bool applicable = biz.supported_items.contains(request.target_item.id);
-        if (!applicable) {
-            for (const auto &t : biz.supported_items) {
-                if (t.is_tag() && target_tags.contains(t)) {
-                    applicable = true;
-                    break;
-                }
-            }
-        }
-        if (!applicable)
+        if (!is_supported(biz, request.target_item.id, target_tags))
             continue;
 
         algorithm::EnchInfo ai;
@@ -142,9 +148,9 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     // ── 6c. Inventory-item validation ─────────────────────────────────
     // Each inventory item's enchantments must not exceed the registry max
     // level; an enchantment carried by an equipment item must additionally
-    // be applicable to that item (same tag-membership model as the target
-    // filter above).  Books accept any enchantment, so they skip the
-    // applicability check.
+    // be applicable to that item via the same is_supported predicate used by
+    // the target filter above.  Books accept any enchantment, so they skip
+    // the applicability check.
     auto validate_inventory_item = [&](const Item &item) {
         // Tag membership is per-item, not per-enchantment — hoist out of the loop.
         const auto item_tags = tag_resolver.tags_of(item.id.str());
@@ -160,16 +166,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
                 continue;  // books accept any enchantment
             if (!eq_registry.contains(item.id))
                 continue;  // unknown equipment → skip applicability check
-            bool applicable = it->second.supported_items.contains(item.id);
-            if (!applicable) {
-                for (const auto &t : it->second.supported_items) {
-                    if (t.is_tag() && item_tags.contains(t)) {
-                        applicable = true;
-                        break;
-                    }
-                }
-            }
-            if (!applicable)
+            if (!is_supported(it->second, item.id, item_tags))
                 throw std::runtime_error(tr_fmt("main.err.ench_not_applicable",
                                                 e.id.str(), item.id.str()));
         }
