@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/CommonTypes.h"
 #include "common/io/json.h"
 
 #include <filesystem>
@@ -53,6 +54,11 @@ class TagResolver {
     /// Otherwise, the reference is returned as-is (it is already a concrete ID).
     std::unordered_set<std::string> resolve(const std::string &reference) const;
     std::unordered_set<std::string> resolve(const std::vector<std::string> &references) const;
+
+    /// Return the set of `#`-prefixed tag NSIDs whose raw values contain
+    /// `concrete_id`. Used at the business→algorithm boundary to compute an
+    /// item's tag membership for applicability.
+    std::unordered_set<NSID> tags_of(const std::string &concrete_id) const;
 
     /// Direct tag access. Returns nullptr if the tag does not exist.
     /// Resolves on-the-fly; threads through the mutable cache.

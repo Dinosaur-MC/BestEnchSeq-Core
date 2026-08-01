@@ -652,6 +652,34 @@ void test_tag_resolver_no_hash() {
     TEST_PASS("test_tag_resolver_no_hash");
 }
 
+// ---------------------------------------------------------------------------
+// 12. Reverse lookup: given a concrete item ID, return the set of tags that
+//     contain it, as `#`-prefixed NSIDs (matches supported_items form).
+// ---------------------------------------------------------------------------
+void test_tag_tags_of() {
+    TagResolver resolver;
+    resolver.add_tag("minecraft:swords",
+        {"minecraft:diamond_sword", "minecraft:iron_sword"});
+    // NOTE: tag keys must be slash-free here. NSID rejects '/' in the id
+    // portion (see CommonTypes::validate_id), so a key such as the real
+    // "minecraft:enchantable/durability" cannot be represented as a
+    // `#`-prefixed NSID -- and, being outside the NSID domain, such tags
+    // can never appear in EnchInfo::supported_items either.
+    resolver.add_tag("minecraft:durability",
+        {"minecraft:diamond_sword"});
+
+    auto tags = resolver.tags_of("minecraft:diamond_sword");
+    expect(tags.size() == 2, "diamond_sword belongs to 2 tags");
+    expect(tags.contains(NSID("#minecraft:swords")),
+           "tags_of returns #-prefixed swords tag");
+    expect(tags.contains(NSID("#minecraft:durability")),
+           "tags_of returns durability tag");
+
+    auto none = resolver.tags_of("minecraft:nonexistent");
+    expect(none.empty(), "unknown item has no tags");
+    TEST_PASS("test_tag_tags_of");
+}
+
 // =============================================================================
 // Section C -- Serializer tests
 // =============================================================================
@@ -795,6 +823,7 @@ int main() {
         test_tag_resolver_nested();
         test_tag_resolver_unknown();
         test_tag_resolver_no_hash();
+        test_tag_tags_of();
 
         // Section C -- Serializer
         test_serialize_profile();

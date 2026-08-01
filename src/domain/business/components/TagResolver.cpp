@@ -236,6 +236,24 @@ std::unordered_set<std::string> TagResolver::resolve(
 }
 
 // ---------------------------------------------------------------------------
+// tags_of  --  reverse lookup: concrete ID -> set of `#`-prefixed tag NSIDs
+// ---------------------------------------------------------------------------
+std::unordered_set<NSID> TagResolver::tags_of(const std::string &concrete_id) const {
+    std::unordered_set<NSID> result;
+    for (const auto &[key, values] : _raw_tags) {
+        for (const auto &v : values) {
+            if (auto *entry = std::get_if<EntryRef>(&v)) {
+                if (entry->id == concrete_id) {
+                    result.insert(NSID("#" + key));
+                    break;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
 // get_tag  --  on-the-fly resolution, returns nullptr for undefined tags
 // ---------------------------------------------------------------------------
 const std::unordered_set<std::string> *TagResolver::get_tag(
