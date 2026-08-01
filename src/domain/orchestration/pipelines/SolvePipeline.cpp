@@ -37,7 +37,7 @@ TagResolver fallback_tag_resolver(const Profile &profile) {
 } // namespace
 
 SolveResult SolvePipeline::run(
-    Profile& profile,
+    const Profile& profile,
     const SolveRequest& request,
     algorithm::AlgorithmLoader& loader,
     algorithm::AlgorithmExecutor** out_executor)

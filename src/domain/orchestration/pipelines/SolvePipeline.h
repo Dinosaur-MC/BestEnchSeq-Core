@@ -12,7 +12,7 @@ struct SolvePipeline {
     ///                      stage_execute; cleared after stage_execute returns.
     ///                      Use for cross-thread cancellation (besq_abort_solve).
     static SolveResult run(
-        Profile& profile,
+        const Profile& profile,
         const SolveRequest& request,
         algorithm::AlgorithmLoader& loader,
         algorithm::AlgorithmExecutor** out_executor = nullptr

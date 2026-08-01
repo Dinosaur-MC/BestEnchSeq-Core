@@ -15,6 +15,7 @@
 
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -186,6 +187,31 @@ void test_besq_registry_edit() {
     expect(!removed, "remove non-existent should return false");
 
     TEST_PASS("BesqContext registry editing");
+}
+
+// ---------------------------------------------------------------------------
+// Test: default profiles-dir scan + activate → effective view
+// ---------------------------------------------------------------------------
+
+void test_besq_default_profiles_scan() {
+    // Temporary directory containing a single profile that depends on vanilla.
+    auto tmp = std::filesystem::temp_directory_path() / "besq_profiles_scan";
+    std::filesystem::remove_all(tmp);
+    std::filesystem::create_directories(tmp);
+    {
+        std::ofstream f(tmp / "moda.json");
+        f << R"({"name":"moda","dependencies":["vanilla"],"enchantments":[{"id":"mod:x","name":"X","platform":"java","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]}]})";
+    }
+
+    BesqContext ctx;
+    ctx.set_profiles_dir(tmp.string());
+    ctx.load_profiles();
+    ctx.activate_profile("moda");
+    expect(ctx.enchantments().contains(NSID("mod:x")),
+           "active profile effective view loaded");
+
+    std::filesystem::remove_all(tmp);
+    TEST_PASS("BesqContext default profiles scan");
 }
 
 // ---------------------------------------------------------------------------
@@ -399,6 +425,7 @@ int main() {
         test_fork_merge();
         test_besq_solve();
         test_besq_registry_edit();
+        test_besq_default_profiles_scan();
         test_besq_export();
         test_c_abi();
         test_c_abi_solve_default_algo();

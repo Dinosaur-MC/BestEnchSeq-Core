@@ -265,7 +265,7 @@ std::vector<NSID> ProfileManager::resolve_dependencies(const NSID& profile) cons
 
 // ── Effective view (topological merge + TagResolver + cache) ──────────
 
-const Profile& ProfileManager::resolve_effective(const NSID& profile) {
+const Profile& ProfileManager::resolve_effective(const NSID& profile) const {
     auto cache_it = _effective_cache.find(profile);
     if (cache_it != _effective_cache.end())
         return *cache_it->second;

@@ -93,7 +93,7 @@ public:
 
     /// 拓扑合并依赖链 + 自身 → 有效视图 Profile（缓存；上层覆盖下层）。
     /// 任何 profile 变更（manager 级 mutation）都会使缓存失效。
-    const Profile& resolve_effective(const NSID& profile);
+    const Profile& resolve_effective(const NSID& profile) const;
 
     /// 从目录加载全部 profile（native JSON/CSV），构建依赖图。datapack 目录留待 T11。
     void load_directory(const std::filesystem::path& dir);
@@ -127,6 +127,6 @@ private:
 
     std::unordered_map<NSID, std::unique_ptr<Profile>> _profiles;
     mutable std::unordered_map<NSID, std::vector<NSID>> _dep_graph;  // 邻接表
-    std::unordered_map<NSID, std::unique_ptr<Profile>> _effective_cache;
+    mutable std::unordered_map<NSID, std::unique_ptr<Profile>> _effective_cache;
     NSID _active;
 };

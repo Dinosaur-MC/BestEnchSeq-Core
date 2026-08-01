@@ -27,6 +27,14 @@ public:
     void load_file(const std::string& path);
     void load_data(const std::vector<std::string>& filters);
 
+    /// Override the default profiles directory (default: `<cwd>/profiles`).
+    void set_profiles_dir(const std::string& dir);
+
+    /// Scan the profiles directory (set_profiles_dir, or `<cwd>/profiles`) and
+    /// load every native JSON/CSV profile into the manager.  No-op if the
+    /// directory does not exist.
+    void load_profiles();
+
     // ── Profile management ──
     const std::string& active_profile() const noexcept;
     std::vector<std::string> list_profiles() const;
@@ -34,6 +42,13 @@ public:
     void fork_profile(const std::string& source, const std::string& dest);
     void merge_profile(const std::string& source, const std::string& dest);
     void remove_profile(const std::string& name);
+
+    /// Versioned publish: flatten the profile's effective view (incl. deps)
+    /// into a self-contained profile file (embeds version/tag).  Delegates to
+    /// ProfileManager::publish.  Returns false if the profile is unknown or the
+    /// file cannot be written.
+    bool publish_profile(const std::string& nsid, const std::string& version,
+                         const std::string& tag, const std::string& out_path);
 
     // ── Registry editing (active profile) ──
     bool add_enchantment(const EnchInfo& info);

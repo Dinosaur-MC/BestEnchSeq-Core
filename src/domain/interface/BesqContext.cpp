@@ -20,6 +20,7 @@ struct BesqContext::Impl {
     ProfileLoader loader;
     algorithm::AlgorithmLoader algo_loader;
     algorithm::AlgorithmExecutor* active_executor{nullptr};
+    std::string profiles_dir;   ///< overridden profiles dir ("" → default `<cwd>/profiles`)
 };
 
 // ====================================================================
@@ -80,6 +81,19 @@ void BesqContext::load_data(const std::vector<std::string>& filters) {
     }
 }
 
+void BesqContext::set_profiles_dir(const std::string& dir) {
+    _impl->profiles_dir = dir;
+}
+
+void BesqContext::load_profiles() {
+    // Default directory is `<cwd>/profiles` (no argv available at this layer;
+    // the CLI `--profile-dir` in T9 overrides via set_profiles_dir).
+    std::filesystem::path dir = _impl->profiles_dir.empty()
+        ? (std::filesystem::current_path() / "profiles")
+        : std::filesystem::path(_impl->profiles_dir);
+    _impl->profiles.load_directory(dir);
+}
+
 // ====================================================================
 // Profile management
 // ====================================================================
@@ -115,6 +129,13 @@ void BesqContext::merge_profile(const std::string& source,
 
 void BesqContext::remove_profile(const std::string& name) {
     _impl->profiles.remove(NSID(name));
+}
+
+bool BesqContext::publish_profile(const std::string& nsid,
+                                  const std::string& version,
+                                  const std::string& tag,
+                                  const std::string& out_path) {
+    return _impl->profiles.publish(NSID(nsid), version, tag, out_path);
 }
 
 // ====================================================================
@@ -164,15 +185,15 @@ bool BesqContext::add_category(const std::string& name) {
 // ====================================================================
 
 const EnchantmentRegistry& BesqContext::enchantments() const noexcept {
-    return _impl->profiles.active().ench();
+    return _impl->profiles.resolve_effective(_impl->profiles.active_name()).ench();
 }
 
 const EquipmentRegistry& BesqContext::equipment() const noexcept {
-    return _impl->profiles.active().eq();
+    return _impl->profiles.resolve_effective(_impl->profiles.active_name()).eq();
 }
 
 const TagRegistry& BesqContext::categories() const noexcept {
-    return _impl->profiles.active().tags();
+    return _impl->profiles.resolve_effective(_impl->profiles.active_name()).tags();
 }
 
 // ====================================================================
@@ -180,7 +201,7 @@ const TagRegistry& BesqContext::categories() const noexcept {
 // ====================================================================
 
 bool BesqContext::export_registry(const std::string& path) const {
-    auto& profile = _impl->profiles.active();
+    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
     auto ext = std::filesystem::path(path).extension().string();
 
     if (ext == ".csv" || ext == ".CSV") {
@@ -225,7 +246,7 @@ void BesqContext::import_registries(const std::vector<std::string>& paths) {
 
 std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode,
                                 std::string_view fmt) const {
-    auto& profile = _impl->profiles.active();
+    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
     if (fmt == "json")
         return OutputFormatter::format_json(result.solutions, profile, mode);
     if (fmt == "compact")
@@ -235,17 +256,17 @@ std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode,
 
 std::string BesqContext::format_verbose(const SolveResult& result, AlgorithmMode mode) const {
     return OutputFormatter::format_verbose(
-        result.solutions, _impl->profiles.active(), mode);
+        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()), mode);
 }
 
 std::string BesqContext::format_compact(const SolveResult& result, AlgorithmMode mode) const {
     return OutputFormatter::format_compact(
-        result.solutions, _impl->profiles.active(), mode);
+        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()), mode);
 }
 
 std::string BesqContext::format_json(const SolveResult& result, AlgorithmMode mode) const {
     return OutputFormatter::format_json(
-        result.solutions, _impl->profiles.active(), mode);
+        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()), mode);
 }
 
 // ====================================================================
@@ -261,7 +282,7 @@ std::vector<std::string> BesqContext::list_algorithms() const {
 }
 
 SolveResult BesqContext::solve(const SolveRequest& request) {
-    auto& profile = _impl->profiles.active();
+    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
     _impl->active_executor = nullptr;
     auto result = SolvePipeline::run(profile, request, _impl->algo_loader,
                                      &_impl->active_executor);
