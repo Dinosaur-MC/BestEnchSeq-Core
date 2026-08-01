@@ -100,12 +100,12 @@ ManageResult ManagePipeline::run(
     }
 
     case ManageRequest::Action::AddEnchantment: {
-        result.success = profiles.active().add_enchantment(request.ench_info);
+        result.success = profiles.add_enchantment(profiles.active_name(), request.ench_info);
         break;
     }
 
     case ManageRequest::Action::RemoveEnchantment: {
-        result.success = profiles.active().remove_enchantment(request.profile_name);
+        result.success = profiles.remove_enchantment(profiles.active_name(), request.profile_name);
         break;
     }
 
@@ -119,7 +119,7 @@ ManageResult ManagePipeline::run(
                 current.max_level = request.ench_info.max_level;
             if (request.ench_info.limited_level >= 0)
                 current.limited_level = request.ench_info.limited_level;
-            result.success = active.update_enchantment(current);
+            result.success = profiles.update_enchantment(profiles.active_name(), current);
         } catch (const std::out_of_range&) {
             result.success = false;
             result.message = "Enchantment not found";
@@ -128,12 +128,12 @@ ManageResult ManagePipeline::run(
     }
 
     case ManageRequest::Action::AddEquipment: {
-        result.success = profiles.active().add_equipment(request.equip);
+        result.success = profiles.add_equipment(profiles.active_name(), request.equip);
         break;
     }
 
     case ManageRequest::Action::RemoveEquipment: {
-        result.success = profiles.active().remove_equipment(request.profile_name);
+        result.success = profiles.remove_equipment(profiles.active_name(), request.profile_name);
         break;
     }
 
@@ -143,7 +143,7 @@ ManageResult ManagePipeline::run(
             result.success = false;
             result.message = "Category already exists";
         } else {
-            result.success = profiles.active().add_tag({cat_nsid, request.category_name});
+            result.success = profiles.add_tag(profiles.active_name(), {cat_nsid, request.category_name});
         }
         break;
     }

@@ -122,11 +122,11 @@ void BesqContext::remove_profile(const std::string& name) {
 // ====================================================================
 
 bool BesqContext::add_enchantment(const EnchInfo& info) {
-    return _impl->profiles.active().add_enchantment(info);
+    return _impl->profiles.add_enchantment(_impl->profiles.active_name(), info);
 }
 
 bool BesqContext::remove_enchantment(const std::string& name_id) {
-    return _impl->profiles.active().remove_enchantment(NSID(name_id));
+    return _impl->profiles.remove_enchantment(_impl->profiles.active_name(), NSID(name_id));
 }
 
 bool BesqContext::modify_enchantment(const std::string& name_id,
@@ -137,18 +137,18 @@ bool BesqContext::modify_enchantment(const std::string& name_id,
         if (patch.multiplier > 0)      current.multiplier = patch.multiplier;
         if (patch.max_level > 0)       current.max_level = patch.max_level;
         if (patch.limited_level >= 0)  current.limited_level = patch.limited_level;
-        return active.update_enchantment(current);
+        return _impl->profiles.update_enchantment(_impl->profiles.active_name(), current);
     } catch (const std::out_of_range&) {
         return false;
     }
 }
 
 bool BesqContext::add_equipment(const Equipment& eq) {
-    return _impl->profiles.active().add_equipment(eq);
+    return _impl->profiles.add_equipment(_impl->profiles.active_name(), eq);
 }
 
 bool BesqContext::remove_equipment(const std::string& name_id) {
-    return _impl->profiles.active().remove_equipment(NSID(name_id));
+    return _impl->profiles.remove_equipment(_impl->profiles.active_name(), NSID(name_id));
 }
 
 bool BesqContext::add_category(const std::string& name) {
@@ -156,7 +156,7 @@ bool BesqContext::add_category(const std::string& name) {
     NSID cat_nsid("#minecraft:" + name);
     if (active.tags().contains(cat_nsid))
         return false;
-    return active.add_tag({cat_nsid, name});
+    return _impl->profiles.add_tag(_impl->profiles.active_name(), EquipmentTag{cat_nsid, name});
 }
 
 // ====================================================================

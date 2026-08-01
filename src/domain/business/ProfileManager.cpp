@@ -1,5 +1,6 @@
 #include "ProfileManager.h"
 #include "domain/business/components/RegistryHelper.h"
+#include "domain/business/components/Serializer.h"  // Profile << Json (snapshot)
 #include "domain/business/loaders/ProfileLoader.h"
 
 #include <cstdint>
@@ -51,6 +52,7 @@ bool ProfileManager::remove(const NSID& name) {
     if (it == _profiles.end()) return false;
 
     _profiles.erase(it);
+    _undo_log.erase(name);  // 清理该 profile 的 undo 历史
 
     // Adjust active if needed
     if (_profiles.empty()) {
@@ -80,6 +82,81 @@ std::vector<NSID> ProfileManager::list() const {
     for (const auto& [nsid, _] : _profiles)
         names.push_back(nsid);
     return names;
+}
+
+// ── Stable CRUD (real-time validation + snapshot/undo) ────────────────
+
+bool ProfileManager::_mutate(const NSID& profile, std::function<bool(Profile&)> op) {
+    Profile* p = _find(profile);
+    if (!p) return false;
+
+    // 应用前校验（实时）：数据本身已有效才允许编辑。
+    if (!RegistryHelper::validate(*p)) return false;
+
+    // 快照（变更前状态）。
+    Json before;
+    before << *p;
+    _undo_log[profile].push_back(Snapshot{std::move(before)});
+
+    // 应用。
+    if (!op(*p)) {
+        _undo_log[profile].pop_back();
+        return false;
+    }
+
+    // 事后校验：失败则回滚到快照，不留脏状态。
+    if (!RegistryHelper::validate(*p)) {
+        p->from_json(_undo_log[profile].back().before);
+        _undo_log[profile].pop_back();
+        return false;
+    }
+
+    _effective_cache.clear();
+    return true;
+}
+
+bool ProfileManager::add_enchantment(const NSID& profile, const EnchInfo& info) {
+    return _mutate(profile, [&](Profile& p) { return p.add_enchantment(info); });
+}
+
+bool ProfileManager::update_enchantment(const NSID& profile, const EnchInfo& patch) {
+    return _mutate(profile, [&](Profile& p) { return p.update_enchantment(patch); });
+}
+
+bool ProfileManager::remove_enchantment(const NSID& profile, const NSID& id) {
+    return _mutate(profile, [&](Profile& p) { return p.remove_enchantment(id); });
+}
+
+bool ProfileManager::add_equipment(const NSID& profile, const Equipment& eq) {
+    return _mutate(profile, [&](Profile& p) { return p.add_equipment(eq); });
+}
+
+bool ProfileManager::remove_equipment(const NSID& profile, const NSID& id) {
+    return _mutate(profile, [&](Profile& p) { return p.remove_equipment(id); });
+}
+
+bool ProfileManager::add_tag(const NSID& profile, const EquipmentTag& tag) {
+    return _mutate(profile, [&](Profile& p) { return p.add_tag(tag); });
+}
+
+bool ProfileManager::remove_tag(const NSID& profile, const NSID& id) {
+    return _mutate(profile, [&](Profile& p) { return p.remove_tag(id); });
+}
+
+bool ProfileManager::undo(const NSID& profile) {
+    auto it = _undo_log.find(profile);
+    if (it == _undo_log.end() || it->second.empty())
+        return false;
+
+    auto before = std::move(it->second.back().before);
+    it->second.pop_back();
+
+    Profile* p = _find(profile);
+    if (!p) return false;
+
+    p->from_json(before);
+    _effective_cache.clear();
+    return true;
 }
 
 // ── Activation ────────────────────────────────────────────────────────

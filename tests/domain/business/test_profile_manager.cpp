@@ -405,6 +405,36 @@ void test_pm_effective_view() {
     TEST_PASS("test_pm_effective_view");
 }
 
+// ─── Test: Manager-level edit (real-time validation) + snapshot/undo ────
+
+void test_pm_edit_snapshot_undo() {
+    ProfileManager pm;
+    auto& p = pm.create(NSID("test:edit"));
+    p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
+    p.add_enchantment({NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false, {NSID("minecraft:sharpness")}, {NSID("#minecraft:swords")}});
+
+    // 实时校验：给 smite 加不存在的 exclusive 引用 → 拒绝（不应用、无快照）
+    EnchInfo bad = p.ench().at(NSID("minecraft:smite"));
+    bad.exclusive_set.insert(NSID("nonexistent:ench"));
+    expect(!pm.update_enchantment(NSID("test:edit"), bad), "invalid exclusive ref rejected");
+    // 拒绝的变更未应用
+    expect(p.ench().at(NSID("minecraft:smite")).exclusive_set.count(NSID("nonexistent:ench")) == 0,
+           "rejected edit leaves profile untouched");
+
+    // 合法编辑 → 应用；undo 回滚
+    EnchInfo patch = p.ench().at(NSID("minecraft:sharpness"));
+    patch.max_level = 6;
+    expect(pm.update_enchantment(NSID("test:edit"), patch), "valid edit applied");
+    expect(p.ench().at(NSID("minecraft:sharpness")).max_level == 6, "max_level updated");
+    expect(pm.undo(NSID("test:edit")), "undo succeeds");
+    expect(p.ench().at(NSID("minecraft:sharpness")).max_level == 5, "undo reverts max_level");
+
+    // 连续两次 undo：第二次应失败（仅回滚最近一次）
+    expect(!pm.undo(NSID("test:edit")), "second undo fails (log exhausted)");
+
+    TEST_PASS("test_pm_edit_snapshot_undo");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -427,6 +457,7 @@ int main() {
         test_pm_cross_validate();
         test_pm_load_directory();
         test_pm_effective_view();
+        test_pm_edit_snapshot_undo();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

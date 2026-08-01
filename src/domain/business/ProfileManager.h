@@ -2,6 +2,7 @@
 #include "domain/business/types/Profile.h"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -37,6 +38,24 @@ public:
 
     /// Number of managed profiles.
     size_t size() const noexcept { return _profiles.size(); }
+
+    // ── Stable CRUD (real-time validation + auto snapshot/undo) ────────
+
+    /// Add an enchantment to a profile.  Real-time validation: the profile must
+    /// be valid before the change and stay valid after; a failing edit leaves
+    /// the profile untouched and records no snapshot.  Successful changes are
+    /// rolled back by undo().
+    bool add_enchantment(const NSID& profile, const EnchInfo& info);
+    bool update_enchantment(const NSID& profile, const EnchInfo& patch);
+    bool remove_enchantment(const NSID& profile, const NSID& id);
+    bool add_equipment(const NSID& profile, const Equipment& eq);
+    bool remove_equipment(const NSID& profile, const NSID& id);
+    bool add_tag(const NSID& profile, const EquipmentTag& tag);
+    bool remove_tag(const NSID& profile, const NSID& id);
+
+    /// Roll back the most recent successful manager-level change to a profile.
+    /// Returns false if there is nothing to undo for the profile.
+    bool undo(const NSID& profile);
 
     // ── Activation ────────────────────────────────────────────────────
 
@@ -86,9 +105,19 @@ private:
     Profile* _find(const NSID& name);
     const Profile* _find(const NSID& name) const;
 
+    /// Apply `op` to a profile under real-time validation + snapshot.
+    /// Steps: validate-before → snapshot → apply → validate-after (rollback on
+    /// failure).  Returns true only when the change is applied and valid.
+    bool _mutate(const NSID& profile, std::function<bool(Profile&)> op);
+
     /// Rebuild the adjacency list from the current profiles. `mutable` so a
     /// const resolve_dependencies() can honor direct set_dependencies() calls.
     void _build_graph() const;
+
+    struct Snapshot {
+        Json before;  // pre-change profile state (Json round-trip)
+    };
+    std::unordered_map<NSID, std::vector<Snapshot>> _undo_log;  // 每个 profile 的变更历史
 
     std::unordered_map<NSID, std::unique_ptr<Profile>> _profiles;
     mutable std::unordered_map<NSID, std::vector<NSID>> _dep_graph;  // 邻接表
