@@ -283,6 +283,21 @@ void test_executor_throwing_algorithm() {
     std::cout << "PASS: test_executor_throwing_algorithm" << std::endl;
 }
 
+void test_timeout_with_slow_algorithm() {
+    // A cooperative algorithm (polls is_cancelled) must surface a timeout as
+    // Cancelled.  Guards the Executor's timeout watcher: it must transition
+    // the executor state to Cancelled, not just set the ctx flag.
+    auto algo = std::make_unique<SlowAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+    AlgorithmInput input = g_test_input;
+    input.config.search.max_search_time = std::chrono::milliseconds(50);
+    executor.start(std::move(input));
+    auto final_state = executor.wait();
+    expect(final_state == AlgorithmState::Cancelled,
+           "executor timeout should surface as Cancelled for a cooperative algorithm");
+    std::cout << "PASS: test_timeout_with_slow_algorithm" << std::endl;
+}
+
 int main() {
     try {
         test_constructor_null();
@@ -298,6 +313,7 @@ int main() {
         test_output_has_steps_after_completion();
         test_serialization_stubs();
         test_executor_throwing_algorithm();
+        test_timeout_with_slow_algorithm();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
