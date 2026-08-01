@@ -185,7 +185,8 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
         if (!entry.is_regular_file())
             continue;
         const auto& path = entry.path();
-        if (path.extension() != ".json")
+        const auto ext = path.extension();
+        if (ext != ".json" && ext != ".csv")
             continue;
 
         Profile loaded = loader.load(path);

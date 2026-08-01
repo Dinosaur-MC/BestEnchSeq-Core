@@ -357,6 +357,7 @@ void test_pm_load_directory() {
         std::ofstream f(path);
         f << R"({
             "name": "bare_mod",
+            "dependencies": ["vanilla"],
             "enchantments": [],
             "equipments": [],
             "categories": [],
@@ -367,6 +368,15 @@ void test_pm_load_directory() {
     pm.load_directory(dir);
     expect(pm.exists(NSID("bare_mod")), "bare_mod loaded by file stem");
     expect(pm.exists(NSID("vanilla")), "vanilla base auto-created");
+
+    // The JSON `dependencies` array must be parsed into the loaded profile.
+    Profile* loaded_mod = pm.find(NSID("bare_mod"));
+    expect(loaded_mod != nullptr, "loaded bare_mod findable");
+    if (loaded_mod) {
+        const auto& deps = loaded_mod->dependencies();
+        expect(deps.size() == 1 && deps[0] == NSID("vanilla"),
+               "dependencies parsed from JSON root");
+    }
 
     // Cleanup temp files.
     std::filesystem::remove(path);

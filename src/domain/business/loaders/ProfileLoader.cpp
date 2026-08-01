@@ -2,6 +2,7 @@
 #include "domain/business/components/FormatDetector.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "builtin/DataLoader.h"
+#include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 // ============================================================================
 // Load
@@ -25,6 +27,23 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // Phase 1: parse the profile's own DTOs.  The vanilla universe is
         // loaded separately below as the cross-validation fallback.
         auto [ench_data, eq_data] = FormatDetector::parse(path);
+
+        // Phase 1b: parse the profile's declared dependencies from the raw
+        // JSON root. FormatDetector::Result only carries enchantments and
+        // equipments, so re-read the top-level `dependencies` array here.
+        // (CSV / MC-official formats have no JSON dependencies array.)
+        std::vector<NSID> dependencies;
+        const auto format = FormatDetector::detect(path);
+        if (format == DataFormat::NativeJson || format == DataFormat::Unknown) {
+            auto root = Json::parse(file_utils::read_file(path));
+            if (root.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
+                Json dep_val = root[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
+                if (dep_val.type() == JsonType::Array) {
+                    for (const auto& e : dep_val.as_array())
+                        dependencies.push_back(NSID(e.as<std::string>()));
+                }
+            }
+        }
 
         // Phase 2: two-phase loading — build the vanilla universe into
         // TEMPORARY registries (tags + equipment + enchantments), then
@@ -62,6 +81,8 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         std::string stem = path.stem().string();
         profile = Profile(ProfileMetadata(NSID(stem)), std::move(profile_ench),
                           std::move(profile_eq), std::move(tag_reg));
+        // Restore the declared dependencies parsed in Phase 1b.
+        profile.set_dependencies(std::move(dependencies));
         // Attach the vanilla tag universe resolver so the profile's `#tag`
         // supported_items references resolve at the business→algorithm boundary
         // (T7/T10: real MC item tags are the applicability source of truth).
