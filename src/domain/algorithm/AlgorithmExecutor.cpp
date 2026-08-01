@@ -337,14 +337,11 @@ AlgorithmOutput AlgorithmExecutor::output() const {
     out.solutions = _ctx->get_solutions();
     out.is_valid = true;
 
-    // ── Derive final_item from first solution via algorithm's process() ──
-    // Delegates to each strategy's own forge replay (handles level merging,
-    // conflict resolution, PPN tracking correctly).
-    if (!out.solutions.empty()) {
-        auto final = _algorithm->process(out.solutions[0], _algorithm_input.config.forge, _algorithm_input.registry);
-        if (final.has_value())
-            out.final_item = std::move(*final);
-    }
+    // ── Derive final_item from the first solution ────────────────────────
+    // Each step records its own result (computed by the actual forge when the
+    // solution was built), so the final item is simply the LAST step's result.
+    if (!out.solutions.empty() && !out.solutions[0].steps.empty())
+        out.final_item = out.solutions[0].steps.back().result;
 
     return out;
 }
