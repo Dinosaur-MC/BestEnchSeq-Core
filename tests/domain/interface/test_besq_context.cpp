@@ -65,7 +65,7 @@ void test_fork_merge() {
     custom.name = "Test Enchantment";
     custom.max_level = 3;
     custom.multiplier = 2;
-    custom.supported_items.insert(NSID("#minecraft:any"));
+    custom.supported_items.insert(NSID("#minecraft:enchantable/equippable"));
     bool added = ctx.add_enchantment(custom);
     expect(added, "add custom enchantment to modded profile");
 
@@ -152,7 +152,7 @@ void test_besq_registry_edit() {
     custom.name = "Test Enchantment";
     custom.max_level = 3;
     custom.multiplier = 2;
-    custom.supported_items.insert(NSID("#minecraft:any"));
+    custom.supported_items.insert(NSID("#minecraft:enchantable/equippable"));
     bool added = ctx.add_enchantment(custom);
     expect(added, "add custom enchantment");
 

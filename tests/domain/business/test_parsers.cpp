@@ -232,7 +232,7 @@ void test_json_parse_via_Json() {
 // ============================================================================
 
 // ─── test_csv_parse_basic ──────────────────────────────────────────────
-// Simple CSV with one data row. exclusive_set empty, applicable_equipment
+// Simple CSV with one data row. exclusive_set empty, supported_items
 // quoted (contains comma-safe characters, but demonstrates quoting).
 
 void test_csv_parse_basic() {

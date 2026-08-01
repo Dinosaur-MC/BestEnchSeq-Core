@@ -318,10 +318,10 @@ void test_serialize_equipment_registry() {
     std::cout << "PASS: test_serialize_equipment_registry" << std::endl;
 }
 
-// ─── test_serialize_equipment_tag_registry ─────────────────────────────
+// ─── test_serialize_tag_registry ─────────────────────────────
 // Round-trip TagRegistry with 2 tags.
 
-void test_serialize_equipment_tag_registry() {
+void test_serialize_tag_registry() {
     std::vector<EquipmentTag> tags = {
         {NSID("#minecraft:sword"), "sword"},
         {NSID("#minecraft:axe"), "axe"}
@@ -343,7 +343,7 @@ void test_serialize_equipment_tag_registry() {
     expect(reg2.contains(NSID("#minecraft:axe")),
            "equipment tag registry round-trip: contains axe");
 
-    std::cout << "PASS: test_serialize_equipment_tag_registry" << std::endl;
+    std::cout << "PASS: test_serialize_tag_registry" << std::endl;
 }
 
 // ─── test_serialize_ench_registry ──────────────────────────────────────
@@ -518,7 +518,7 @@ int main() {
         test_serialize_solution_step();
         test_serialize_solution();
         test_serialize_equipment_registry();
-        test_serialize_equipment_tag_registry();
+        test_serialize_tag_registry();
         test_serialize_ench_registry();
         test_serializer_mce_helpers();
         test_serializer_to_from_string();

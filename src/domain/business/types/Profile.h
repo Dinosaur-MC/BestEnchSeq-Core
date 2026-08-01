@@ -104,9 +104,6 @@ public:
     /// Are two enchantments mutually exclusive?
     bool is_compatible(const NSID& a, const NSID& b) const;
 
-    /// Find equipment applicable for this enchantment.
-    std::vector<Equipment> applicable_equipment(const NSID& ench_id) const;
-
     /// Does this enchantment exist in the profile?
     bool has_enchantment(const NSID& id) const;
 

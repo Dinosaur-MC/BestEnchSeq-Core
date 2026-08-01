@@ -191,13 +191,20 @@ void test_key_value_equals_form() {
 }
 
 // ---------------------------------------------------------------------------
-// Empty list returns empty set
+// Empty source is a user error — EnchParser::parse must throw
 // ---------------------------------------------------------------------------
 
 void test_empty_enchantment_list() {
     EnchantmentRegistry empty_reg;
-    auto ench_set = EnchParser::parse("", empty_reg);
-    expect(ench_set.empty(), "empty string should return empty set");
+    // Empty/whitespace-only source is rejected with cli.err.empty_source;
+    // there is no "empty list means empty EnchSet" path.
+    bool threw = false;
+    try {
+        EnchParser::parse("", empty_reg);
+    } catch (const std::runtime_error &) {
+        threw = true;
+    }
+    expect(threw, "empty source string should throw cli.err.empty_source");
     std::cout << "  PASS: test_empty_enchantment_list" << std::endl;
 }
 
