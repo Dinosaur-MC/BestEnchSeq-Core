@@ -505,6 +505,22 @@ void test_to_mc_official_strings() {
     std::cout << "PASS: test_to_mc_official_strings" << std::endl;
 }
 
+// ─── test_profile_dependencies_roundtrip ───────────────────────────────
+// Round-trip ProfileMetadata.dependencies through Profile JSON.
+
+void test_profile_dependencies_roundtrip() {
+    Profile p(NSID("test:pack"));
+    p.set_dependencies({NSID("vanilla"), NSID("enchantencore")});
+    Json json;
+    json << p;
+    Profile restored;
+    json >> restored;
+    expect(restored.dependencies().size() == 2, "dependencies preserved");
+    expect(restored.dependencies()[0] == NSID("vanilla"), "dep 0");
+    expect(restored.dependencies()[1] == NSID("enchantencore"), "dep 1");
+    TEST_PASS("test_profile_dependencies_roundtrip");
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────
 
 int main() {
@@ -523,6 +539,7 @@ int main() {
         test_serializer_mce_helpers();
         test_serializer_to_from_string();
         test_to_mc_official_strings();
+        test_profile_dependencies_roundtrip();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

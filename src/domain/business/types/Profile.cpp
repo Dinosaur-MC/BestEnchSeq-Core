@@ -155,6 +155,14 @@ Json Profile::to_json() const {
         .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(_meta.author))
         .set(std::string(ProfileMetadata::KEY_VERSION),     Json(_meta.version));
 
+    // Dependencies — declared direct profile dependencies (transitively resolved)
+    if (!_meta.dependencies.empty()) {
+        Json::Array deps_arr;
+        for (const auto& d : _meta.dependencies)
+            deps_arr.push_back(Json(d.str()));
+        obj.set(std::string(ProfileMetadata::KEY_DEPENDENCIES), Json(std::move(deps_arr)));
+    }
+
     // Enchantments
     Json ej;
     ej << _ench;
@@ -190,6 +198,16 @@ Profile Profile::from_json_static(const Json& json) {
     p._meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
     p._meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
     p._meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";
+
+    // Dependencies — declared direct profile dependencies
+    if (json.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
+        Json dep_val = json[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
+        if (dep_val.type() == JsonType::Array) {
+            for (const auto& e : dep_val.as_array())
+                p._meta.dependencies.push_back(NSID(e.as<std::string>()));
+        }
+    }
+
     p._meta.created_at  = std::chrono::system_clock::now();
     p._meta.updated_at  = p._meta.created_at;
 
@@ -245,6 +263,12 @@ Json& operator<<(Json& json, const ProfileMetadata& meta) {
         .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(meta.description))
         .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(meta.author))
         .set(std::string(ProfileMetadata::KEY_VERSION),     Json(meta.version));
+    if (!meta.dependencies.empty()) {
+        Json::Array deps_arr;
+        for (const auto& d : meta.dependencies)
+            deps_arr.push_back(Json(d.str()));
+        json.set(std::string(ProfileMetadata::KEY_DEPENDENCIES), Json(std::move(deps_arr)));
+    }
     return json;
 }
 
@@ -256,5 +280,12 @@ const Json& operator>>(const Json& json, ProfileMetadata& meta) {
     meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
     meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
     meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";
+    if (json.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
+        Json dep_val = json[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
+        if (dep_val.type() == JsonType::Array) {
+            for (const auto& e : dep_val.as_array())
+                meta.dependencies.push_back(NSID(e.as<std::string>()));
+        }
+    }
     return json;
 }

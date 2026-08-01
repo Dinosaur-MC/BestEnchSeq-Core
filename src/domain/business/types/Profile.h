@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 class TagResolver;  // fwd — Profile stores a shared_ptr; complete type only needed at call sites
 
@@ -20,6 +21,7 @@ struct ProfileMetadata {
     std::string author;
     std::string version;
     std::string parent;                          ///< Branch source profile name
+    std::vector<NSID> dependencies;              ///< 声明的直接依赖（传递解析）
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point updated_at;
 
@@ -48,6 +50,7 @@ struct ProfileMetadata {
     static constexpr std::string_view KEY_DESCRIPTION = "description";
     static constexpr std::string_view KEY_AUTHOR      = "author";
     static constexpr std::string_view KEY_VERSION     = "version";
+    static constexpr std::string_view KEY_DEPENDENCIES = "dependencies";
     static constexpr std::string_view KEY_ENCHANTMENTS = "enchantments";
     static constexpr std::string_view KEY_EQUIPMENTS   = "equipments";
     static constexpr std::string_view KEY_TAGS         = "tags";
@@ -78,6 +81,10 @@ public:
     const NSID& name() const noexcept { return _meta.name; }
     void set_description(std::string desc) { _meta.description = std::move(desc); }
     void set_version(std::string version) { _meta.version = std::move(version); }
+
+    /// Declared direct dependencies (transitively resolved at load).
+    const std::vector<NSID>& dependencies() const noexcept { return _meta.dependencies; }
+    void set_dependencies(std::vector<NSID> deps) { _meta.dependencies = std::move(deps); }
 
     // -- Registry read access (lenient, for trusted downstream) ---------
 
