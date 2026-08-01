@@ -1,15 +1,18 @@
 #include "framework/test_utils.h"
 #include "framework/test_fixture.h"
+#include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
+#include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
 #include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
 #include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -19,6 +22,7 @@ namespace {
 using algorithm::DFSAlgorithm;
 using algorithm::AStarAlgorithm;
 using algorithm::HammingAlgorithm;
+using algorithm::BBDpAlgorithm;
 using algorithm::AlgorithmLoader;
 using algorithm::EnchCollection;
 
@@ -161,6 +165,36 @@ int32_t run_strategy(std::unique_ptr<algorithm::IAlgorithm> algo,
     return out.solutions[0].total_cost;
 }
 
+/// Like run_strategy, but lets a test tweak the AlgorithmConfig first.
+int32_t run_strategy_cfg(std::unique_ptr<algorithm::IAlgorithm> algo,
+                         const TestContext &ctx,
+                         const std::function<void(algorithm::AlgorithmConfig &)> &cfg_fn,
+                         const algorithm::EnchCollection &source = {}) {
+    algorithm::AlgorithmExecutor executor(std::move(algo));
+
+    algorithm::AlgorithmInput input;
+    input.config.forge.platform = MCE::Java;
+    input.registry = ctx.ench_reg;
+    input.target   = ctx.target_item;
+    input.config.mode = AlgorithmMode::direct;
+    if (cfg_fn) cfg_fn(input.config);
+    input.data = algorithm::DirectPayload{source};
+
+    executor.start(std::move(input));
+    auto state = executor.wait();
+
+    if (state != algorithm::AlgorithmState::Completed)
+        return -1;
+
+    auto out = executor.output();
+    if (out.solutions.empty())
+        return -1;
+    if (out.solutions[0].steps.empty())
+        return 0;
+
+    return out.solutions[0].total_cost;
+}
+
 } // anonymous namespace
 
 // ========================================================================
@@ -282,6 +316,143 @@ void test_hamming_durability_repair() {
 }
 
 // ========================================================================
+// BBDpAlgorithm tests
+// ========================================================================
+
+void test_bbdp_simple() {
+    auto ctx = TestContext({book(ID_SHARPNESS, 5)}, {{ID_SHARPNESS, 5}});
+    auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
+    expect(cost > 0, "bb_dp: simple forge should produce positive cost");
+    std::cout << "PASS: test_bbdp_simple (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_two_books() {
+    auto ctx = TestContext(
+        {book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)},
+        {{ID_SHARPNESS, 4}});
+    auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
+    expect(cost > 0, "bb_dp: two books should produce positive cost");
+    std::cout << "PASS: test_bbdp_two_books (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_target_already_met() {
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
+    auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx, source);
+    expect(cost >= 0, "bb_dp: target already met should produce result");
+    std::cout << "PASS: test_bbdp_target_already_met (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_target_unreachable() {
+    // Conflicting target enchantments (sharpness + bane_of_arthropods) are
+    // unreachable — the resolver generates a book for each but they can never
+    // combine on the forge.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_BANE, 5}});
+    auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
+    expect(cost == -1, "bb_dp: unreachable target should return -1");
+    std::cout << "PASS: test_bbdp_target_unreachable" << std::endl;
+}
+
+void test_bbdp_pre_enchanted_equip() {
+    // Source already has knockback II → base starts there, needs only the
+    // sharpness V book.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_KNOCKBACK, 2});
+    auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx, source);
+    expect(cost > 0, "bb_dp: pre-enchanted equip should produce positive cost");
+    std::cout << "PASS: test_bbdp_pre_enchanted_equip (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_matches_astar() {
+    // Two distinct books: both exact solvers must agree on the optimal cost.
+    auto ctx = TestContext(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto astar_cost = run_strategy(std::make_unique<AStarAlgorithm>(), ctx);
+    auto bbdp_cost  = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
+    expect(astar_cost > 0 && bbdp_cost == astar_cost,
+           "bb_dp: optimal cost should match astar");
+    std::cout << "PASS: test_bbdp_matches_astar (cost=" << bbdp_cost
+              << ", astar=" << astar_cost << ")" << std::endl;
+}
+
+void test_bbdp_max_step_cost() {
+    // Default (max_step_cost=39): the solver must still produce a valid
+    // result — the feasible optimum if one exists, else the relaxed optimum
+    // via the Pass B fallback.
+    auto ctx = TestContext(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
+    expect(cost > 0, "bb_dp: default max_step_cost should still solve");
+    std::cout << "PASS: test_bbdp_max_step_cost (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_max_step_cost_disabled() {
+    // max_step_cost=0 → pure total-cost optimization, no feasibility preference.
+    auto ctx = TestContext(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
+        [](algorithm::AlgorithmConfig &c) { c.search.max_step_cost = 0; });
+    expect(cost > 0, "bb_dp: max_step_cost=0 should still solve");
+    std::cout << "PASS: test_bbdp_max_step_cost_disabled (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_beam_width() {
+    // Beam-width 4 keeps only the 4 cheapest frontier entries per subset.
+    // Result may be sub-optimal but must still meet the target.
+    auto ctx = TestContext(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
+        [](algorithm::AlgorithmConfig &c) { c.search.beam_width = 4; });
+    expect(cost > 0, "bb_dp: beam_width=4 should produce a valid solution");
+    std::cout << "PASS: test_bbdp_beam_width (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_cap_infeasible_fallback() {
+    // max_step_cost=1 is stricter than any real step (a sharpness V book costs 5),
+    // so no fully ≤cap solution exists.  The solver must fall back to the
+    // unconstrained optimum instead of reporting "no solution" (cap is SOFT).
+    auto ctx = TestContext(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
+        [](algorithm::AlgorithmConfig &c) { c.search.max_step_cost = 1; });
+    expect(cost > 0, "bb_dp: infeasible cap should fall back to the optimum");
+    std::cout << "PASS: test_bbdp_cap_infeasible_fallback (cost=" << cost << ")" << std::endl;
+}
+
+void test_bbdp_final_item_meets_target() {
+    // A multi-book solution (equipment + 2 distinct books) must replay through
+    // IAlgorithm::process() to a final_item that meets the target — guards the
+    // balanced-tree replay path used for AlgorithmOutput::final_item.
+    auto ctx = TestContext(
+        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
+        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    algorithm::AlgorithmExecutor executor(std::make_unique<BBDpAlgorithm>());
+    algorithm::AlgorithmInput input;
+    input.config.forge.platform = MCE::Java;
+    input.registry = ctx.ench_reg;
+    input.target   = ctx.target_item;
+    input.config.mode = AlgorithmMode::direct;
+    input.data = algorithm::DirectPayload{};
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    auto out = executor.output();
+    const bool meets = state == algorithm::AlgorithmState::Completed
+        && !out.solutions.empty()
+        && meets_target(out.final_item, ctx.target_item.enchs);
+    expect(meets, "bb_dp: final_item should meet the target");
+    std::cout << "PASS: test_bbdp_final_item_meets_target (cost="
+              << (out.solutions.empty() ? -1 : out.solutions[0].total_cost) << ")"
+              << std::endl;
+}
+
+// ========================================================================
 // AlgorithmLoader validation test
 // ========================================================================
 
@@ -294,7 +465,8 @@ void test_loader_registration() {
     expect(loader.contains("astar"), "astar should be registered");
     expect(loader.contains("dfs"), "dfs should be registered");
     expect(loader.contains("hamming"), "hamming should be registered");
-    expect(loader.size() >= 3, "at least 3 built-in strategies");
+    expect(loader.contains("bb_dp"), "bb_dp should be registered");
+    expect(loader.size() >= 4, "at least 4 built-in strategies");
 
     for (const auto& name : names) {
         auto algo = loader.create(name);
@@ -334,6 +506,19 @@ int main() {
     RUN_TEST(test_hamming_target_unreachable);
     RUN_TEST(test_hamming_pre_enchanted_equip);
     RUN_TEST(test_hamming_durability_repair);
+
+    // BBDpAlgorithm tests
+    RUN_TEST(test_bbdp_simple);
+    RUN_TEST(test_bbdp_two_books);
+    RUN_TEST(test_bbdp_target_already_met);
+    RUN_TEST(test_bbdp_target_unreachable);
+    RUN_TEST(test_bbdp_pre_enchanted_equip);
+    RUN_TEST(test_bbdp_matches_astar);
+    RUN_TEST(test_bbdp_max_step_cost);
+    RUN_TEST(test_bbdp_max_step_cost_disabled);
+    RUN_TEST(test_bbdp_beam_width);
+    RUN_TEST(test_bbdp_cap_infeasible_fallback);
+    RUN_TEST(test_bbdp_final_item_meets_target);
 
     // AlgorithmLoader validation
     RUN_TEST(test_loader_registration);
