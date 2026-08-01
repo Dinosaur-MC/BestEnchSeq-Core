@@ -106,6 +106,11 @@ public:
     /// Accessor — returns nullptr when no resolver has been attached.
     const TagResolver* tag_resolver() const noexcept { return _tag_resolver.get(); }
 
+    /// Shared-ownership accessor — lets callers preserve the resolver across a
+    /// JSON round-trip (from_json reconstructs a fresh Profile and would
+    /// otherwise drop it).
+    std::shared_ptr<TagResolver> tag_resolver_ptr() const noexcept { return _tag_resolver; }
+
     // -- Profile proxy queries (preferred over manual registry access) --
 
     /// Are two enchantments mutually exclusive?

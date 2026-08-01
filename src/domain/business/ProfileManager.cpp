@@ -106,7 +106,9 @@ bool ProfileManager::_mutate(const NSID& profile, std::function<bool(Profile&)> 
 
     // 事后校验：失败则回滚到快照，不留脏状态。
     if (!RegistryHelper::validate(*p)) {
+        auto keep_resolver = p->tag_resolver_ptr();  // from_json 会重建 Profile，需保留 resolver
         p->from_json(_undo_log[profile].back().before);
+        p->set_tag_resolver(std::move(keep_resolver));
         _undo_log[profile].pop_back();
         return false;
     }
@@ -144,6 +146,10 @@ bool ProfileManager::remove_tag(const NSID& profile, const NSID& id) {
 }
 
 bool ProfileManager::undo(const NSID& profile) {
+    // 防御性顺序：先确认 profile 存在，再消费快照。
+    Profile* p = _find(profile);
+    if (!p) return false;
+
     auto it = _undo_log.find(profile);
     if (it == _undo_log.end() || it->second.empty())
         return false;
@@ -151,10 +157,9 @@ bool ProfileManager::undo(const NSID& profile) {
     auto before = std::move(it->second.back().before);
     it->second.pop_back();
 
-    Profile* p = _find(profile);
-    if (!p) return false;
-
+    auto keep_resolver = p->tag_resolver_ptr();  // from_json 会重建 Profile，需保留 resolver
     p->from_json(before);
+    p->set_tag_resolver(std::move(keep_resolver));
     _effective_cache.clear();
     return true;
 }

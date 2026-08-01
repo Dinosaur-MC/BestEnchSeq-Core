@@ -4,6 +4,7 @@
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/components/TagResolver.h"
 
 #include <filesystem>
 #include <fstream>
@@ -435,6 +436,31 @@ void test_pm_edit_snapshot_undo() {
     TEST_PASS("test_pm_edit_snapshot_undo");
 }
 
+// ─── Test: rejected edit / undo preserve the attached TagResolver ──────
+
+void test_pm_edit_preserves_tag_resolver() {
+    ProfileManager pm;
+    auto& p = pm.create(NSID("test:resolver"));
+    p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
+    p.set_tag_resolver(std::make_shared<TagResolver>());
+    expect(p.tag_resolver() != nullptr, "resolver attached before edits");
+
+    // 被拒绝的编辑（max_level < 1 → 事后校验失败）：resolver 不应丢失
+    EnchInfo bad = p.ench().at(NSID("minecraft:sharpness"));
+    bad.max_level = 0;
+    expect(!pm.update_enchantment(NSID("test:resolver"), bad), "invalid edit rejected");
+    expect(p.tag_resolver() != nullptr, "resolver survives rejected edit");
+
+    // 合法编辑 + undo：resolver 不应丢失
+    EnchInfo patch = p.ench().at(NSID("minecraft:sharpness"));
+    patch.max_level = 6;
+    expect(pm.update_enchantment(NSID("test:resolver"), patch), "valid edit applied");
+    expect(pm.undo(NSID("test:resolver")), "undo succeeds");
+    expect(p.tag_resolver() != nullptr, "resolver survives undo");
+
+    TEST_PASS("test_pm_edit_preserves_tag_resolver");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -458,6 +484,7 @@ int main() {
         test_pm_load_directory();
         test_pm_effective_view();
         test_pm_edit_snapshot_undo();
+        test_pm_edit_preserves_tag_resolver();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
