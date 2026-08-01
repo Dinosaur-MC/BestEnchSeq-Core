@@ -110,10 +110,10 @@ bool LanguageManager::select(std::string_view code) {
         }
     }
 
-    // 3. Fallback to en_US
+    // 3. Fallback to en_US (only when no base language is active yet).
     auto fb = _langs.find(kDefaultLang);
     if (fb != _langs.end()) {
-        _active = &fb->second;
+        if (!_active) _active = &fb->second;
         return false;
     }
     return false;
@@ -125,7 +125,8 @@ const Language &LanguageManager::active() const noexcept {
 }
 
 std::vector<std::string> LanguageManager::available() const {
-    std::vector<std::string> codes{_langs.size()};
+    std::vector<std::string> codes;
+    codes.reserve(_langs.size());
     for (const auto &[code, _] : _langs)
         codes.push_back(code);
     return codes;

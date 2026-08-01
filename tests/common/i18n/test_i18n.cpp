@@ -132,6 +132,73 @@ void test_language_manager_available() {
     std::cout << "PASS: test_language_manager_available" << std::endl;
 }
 
+// Register the two well-known test languages if not already present.
+// Registration is idempotent (missing keys are added, existing keys merge),
+// so calling this from multiple tests is safe.
+void ensure_test_languages() {
+    auto& lm = LanguageManager::instance();
+    bool has_en = false, has_cn = false;
+    for (const auto& code : lm.available()) {
+        if (code == "en_US") has_en = true;
+        if (code == "zh_CN") has_cn = true;
+    }
+    if (!has_en) {
+        Language::Table en_table;
+        en_table["greeting"] = "Hello";
+        lm.register_language(Language("en_US", std::move(en_table)));
+    }
+    if (!has_cn) {
+        Language::Table cn_table;
+        cn_table["greeting"] = "你好";
+        lm.register_language(Language("zh_CN", std::move(cn_table)));
+    }
+}
+
+void test_language_manager_available_no_padding() {
+    auto& lm = LanguageManager::instance();
+    ensure_test_languages();
+
+    auto avail = lm.available();
+    expect_eq(avail.size(), size_t(2),
+        "available() should return exactly the 2 registered codes, no empty padding");
+    bool has_en = false, has_cn = false;
+    for (const auto& code : avail) {
+        expect(!code.empty(), "available() should not contain empty codes");
+        if (code == "en_US") has_en = true;
+        if (code == "zh_CN") has_cn = true;
+    }
+    expect(has_en && has_cn,
+        "available() should contain both registered languages");
+    std::cout << "PASS: test_language_manager_available_no_padding" << std::endl;
+}
+
+void test_language_manager_select_nonexistent_keeps_base() {
+    auto& lm = LanguageManager::instance();
+    ensure_test_languages();
+
+    lm.select("zh_CN");  // select a base language explicitly
+    bool result = lm.select("nonexistent");
+    expect(!result, "select('nonexistent') after selecting a base should return false");
+    expect_eq(std::string(tr("greeting")), std::string("你好"),
+        "select('nonexistent') should keep the base language (zh_CN) active");
+    std::cout << "PASS: test_language_manager_select_nonexistent_keeps_base" << std::endl;
+}
+
+void test_language_manager_select_nonexistent_no_base() {
+    auto& lm = LanguageManager::instance();
+    ensure_test_languages();
+
+    // No explicit base selection: the active language is the default
+    // fallback (en_US). An unknown code must keep returning false while
+    // leaving the fallback default active.
+    lm.select("en_US");
+    bool result = lm.select("nonexistent");
+    expect(!result, "select('nonexistent') with no prior selection should return false");
+    expect_eq(std::string(tr("greeting")), std::string("Hello"),
+        "with no prior selection, the fallback default (en_US) remains active");
+    std::cout << "PASS: test_language_manager_select_nonexistent_no_base" << std::endl;
+}
+
 void test_active_fallback_when_no_languages() {
     // Fresh singleton access test: active() should not crash
     // even before any language is registered
@@ -157,6 +224,9 @@ int main() {
         test_language_manager_select();
         test_language_manager_resolve_locale();
         test_language_manager_available();
+        test_language_manager_available_no_padding();
+        test_language_manager_select_nonexistent_keeps_base();
+        test_language_manager_select_nonexistent_no_base();
         test_active_fallback_when_no_languages();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
