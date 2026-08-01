@@ -2,10 +2,12 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
+#include "domain/business/components/TagResolver.h"
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
 #include "common/serialization/IJsonSerializable.h"
 #include <chrono>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -85,6 +87,17 @@ public:
     /// Equipment tag registry
     const TagRegistry& tags() const noexcept { return _tags; }
 
+    // -- Tag resolver (runtime-derived; not serialized) ------------------
+
+    /// Attach the TagResolver used at the business→algorithm boundary to
+    /// compute an item's tag membership for enchantment applicability
+    /// (`supported_items` ∩ `tags_of(item)`).  Populated during load; the
+    /// profile JSON does not serialize it.
+    void set_tag_resolver(std::shared_ptr<TagResolver> r) { _tag_resolver = std::move(r); }
+
+    /// Accessor — returns nullptr when no resolver has been attached.
+    const TagResolver* tag_resolver() const noexcept { return _tag_resolver.get(); }
+
     // -- Profile proxy queries (preferred over manual registry access) --
 
     /// Are two enchantments mutually exclusive?
@@ -129,4 +142,5 @@ private:
     EnchantmentRegistry _ench;
     EquipmentRegistry _eq;
     TagRegistry _tags;
+    std::shared_ptr<TagResolver> _tag_resolver;
 };

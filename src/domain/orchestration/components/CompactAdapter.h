@@ -7,13 +7,22 @@
 #include "domain/orchestration/types/SolveRequest.h"
 #include <vector>
 
+class TagResolver;
+
 struct CompactAdapter {
     /// Build AlgorithmInput from Profile + SolveRequest.
     /// Internally builds EnchReg with correct NSID -> local_id mapping,
     /// eliminating the previous ench.id = 0 TEMP workaround.
+    ///
+    /// Applicability uses the MC tag-membership model: an enchantment E is
+    /// applicable to target I iff
+    ///   I.id ∈ E.supported_items                       (concrete item hit)
+    ///   ∨ ∃ t ∈ E.supported_items: t is #tag ∧ t ∈ tag_resolver.tags_of(I.id)
+    ///                                          (tag intersection)
     static algorithm::AlgorithmInput apply(
         const Profile& profile,
-        const SolveRequest& request
+        const SolveRequest& request,
+        const TagResolver& tag_resolver
     );
 
     /// Convert compact algorithm output back to domain Solution list.

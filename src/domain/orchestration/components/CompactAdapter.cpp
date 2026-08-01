@@ -1,4 +1,5 @@
 #include "CompactAdapter.h"
+#include "domain/business/components/TagResolver.h"
 #include "common/CommonTypes.h"
 #include "common/i18n/Language.h"
 #include "common/utils/ExpCalculator.hpp"
@@ -14,7 +15,8 @@
 // apply — Profile + SolveRequest -> AlgorithmInput
 // ============================================================================
 
-algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const SolveRequest &request) {
+algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const SolveRequest &request,
+                                                const TagResolver &tag_resolver) {
     // ── 1. Resolve registries and equipment ─────────────────────────────
     const auto &ench_registry = profile.ench();
     const auto &eq_registry   = profile.eq();
@@ -53,10 +55,23 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     std::vector<NSID> applicable_global_nsids;
     std::unordered_map<NSID, int16_t> nsid_to_local;
 
+    // MC tag-membership model: an enchantment E is applicable to the target
+    // item I iff I.id ∈ E.supported_items (concrete item hit) or some `#tag`
+    // in E.supported_items contains I (tag intersection via TagResolver).
+    const std::unordered_set<NSID> target_tags =
+        tag_resolver.tags_of(request.target_item.id.str());
+
     for (size_t gid = 0; gid < sorted_infos.size() && gid < 64; ++gid) {
         const auto &biz = sorted_infos[gid].second;
-        bool applicable = biz.supported_items.count(target_eq.category) > 0 ||
-                          biz.supported_items.count(NSID("#minecraft:any")) > 0;
+        bool applicable = biz.supported_items.contains(request.target_item.id);
+        if (!applicable) {
+            for (const auto &t : biz.supported_items) {
+                if (t.is_tag() && target_tags.contains(t)) {
+                    applicable = true;
+                    break;
+                }
+            }
+        }
         if (!applicable)
             continue;
 
@@ -127,8 +142,9 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     // ── 6c. Inventory-item validation ─────────────────────────────────
     // Each inventory item's enchantments must not exceed the registry max
     // level; an enchantment carried by an equipment item must additionally
-    // be applicable to that item's own equipment category.  Books accept
-    // any enchantment, so they skip the applicability check.
+    // be applicable to that item (same tag-membership model as the target
+    // filter above).  Books accept any enchantment, so they skip the
+    // applicability check.
     auto validate_inventory_item = [&](const Item &item) {
         for (const auto &e : item.enchantments) {
             auto it = all_infos_map.find(e.id);
@@ -140,14 +156,18 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
                                                 it->second.max_level));
             if (item.is_book())
                 continue;  // books accept any enchantment
-            ::Equipment eq;
-            try {
-                eq = eq_registry.at(item.id);
-            } catch (const std::out_of_range &) {
+            if (!eq_registry.contains(item.id))
                 continue;  // unknown equipment → skip applicability check
+            bool applicable = it->second.supported_items.contains(item.id);
+            if (!applicable) {
+                const auto item_tags = tag_resolver.tags_of(item.id.str());
+                for (const auto &t : it->second.supported_items) {
+                    if (t.is_tag() && item_tags.contains(t)) {
+                        applicable = true;
+                        break;
+                    }
+                }
             }
-            bool applicable = it->second.supported_items.count(eq.category) > 0 ||
-                              it->second.supported_items.count(NSID("#minecraft:any")) > 0;
             if (!applicable)
                 throw std::runtime_error(tr_fmt("main.err.ench_not_applicable",
                                                 e.id.str(), item.id.str()));

@@ -152,6 +152,7 @@ Profile Profile::clone(const NSID& new_name) const {
     p._ench            = _ench;  // value-type deep copy
     p._eq              = _eq;
     p._tags            = _tags;
+    p._tag_resolver    = _tag_resolver;  // shared TagResolver carried across clone
     return p;
 }
 

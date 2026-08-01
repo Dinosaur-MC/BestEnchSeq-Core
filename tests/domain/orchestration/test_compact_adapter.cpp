@@ -2,7 +2,11 @@
 #include "domain/orchestration/orchestration.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "domain/business/components/TagResolver.h"
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <unordered_set>
 
 namespace {
 
@@ -18,7 +22,9 @@ EnchantmentRegistry make_sword_registry() {
     });
 }
 
-// Helper: build a test Profile with sword data
+// Helper: build a test Profile with sword data.
+// Attaches a TagResolver so tag membership (diamond_sword ∈ #minecraft:sword)
+// is known at the compact boundary.
 Profile make_sword_profile() {
     Profile profile(NSID("test:compact"));
     profile.add_tag({EquipmentTag::sword(), "sword"});
@@ -27,7 +33,17 @@ Profile make_sword_profile() {
                            EquipmentTag::sword(), 1561});
     for (const auto& ench : make_sword_registry())
         profile.add_enchantment(ench);
+
+    auto tr = std::make_shared<TagResolver>();
+    tr->add_tag("minecraft:sword", {NSID("minecraft:diamond_sword").str()});
+    profile.set_tag_resolver(std::move(tr));
     return profile;
+}
+
+// Helper: apply with the profile's attached TagResolver (all profiles in this
+// test file attach one).
+algorithm::AlgorithmInput apply_for(const Profile& profile, const SolveRequest& request) {
+    return CompactAdapter::apply(profile, request, *profile.tag_resolver());
 }
 
 // Helper: create a SolveRequest for simple direct-mode tests
@@ -50,7 +66,7 @@ void test_apply_valid_input() {
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
 
     expect(input.target.enchs.size() == 1, "target should have 1 enchantment");
     expect(input.is_direct(), "direct mode input");
@@ -67,7 +83,7 @@ void test_apply_with_target() {
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
 
     expect(input.target.enchs.size() == 1, "target should have 1 enchantment");
     expect((*input.target.enchs.begin()).level() == 5, "target enchantment level should be 5");
@@ -82,7 +98,7 @@ void test_apply_invalid_enchant_id() {
     target_enchs.emplace(NSID("minecraft:nonexistent"), "Nonexistent", 1);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
 
     expect(input.target.enchs.empty(),
            "target should be empty (invalid ID silently dropped)");
@@ -100,7 +116,7 @@ void test_apply_level_exceeds_max_throws() {
     auto request = make_request(target_item);
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "over-level target enchant should throw");
 
     TEST_PASS("test_apply_level_exceeds_max_throws");
@@ -113,7 +129,7 @@ void test_apply_inapplicable_enchant() {
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
 
     // Global registry has 3 enchants; only 2 (sharpness, knockback) are
     // sword-applicable. protection is chestplate-only.
@@ -130,7 +146,7 @@ void test_apply_penalty_forward() {
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 32, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
 
     expect(input.target.ppn == 32,
            "prior_penalty forwarded as-is (no overflow check)");
@@ -145,7 +161,7 @@ void test_pruning_only_applicable() {
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
 
     // Global registry has 3 enchants; only 2 (sharpness, knockback) are sword-applicable
     expect(input.registry.size() == 2,
@@ -161,7 +177,7 @@ void test_from_domain() {
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
     const auto& reg = input.registry;
 
     // Create a business Item with sharpness 5, prior_penalty 3
@@ -205,7 +221,7 @@ void test_apply_inapplicable_target_throws() {
     auto request = make_request(target_item);
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "inapplicable target enchant should throw");
 
     TEST_PASS("test_apply_inapplicable_target_throws");
@@ -221,7 +237,7 @@ void test_apply_mixed_target_throws() {
     auto request = make_request(target_item);
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "mixed inapplicable target enchant should throw");
 
     TEST_PASS("test_apply_mixed_target_throws");
@@ -239,7 +255,7 @@ void test_apply_inapplicable_source_throws() {
     auto request = make_request(target_item, source_enchs);
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "inapplicable source enchant should throw");
 
     TEST_PASS("test_apply_inapplicable_source_throws");
@@ -265,7 +281,7 @@ void test_apply_inventory_inapplicable_extra_ok() {
     request.forge_config.platform = MCE::Java;
     request.search_config = algorithm::SearchConfig{};
 
-    auto input = CompactAdapter::apply(profile, request);  // must not throw
+    auto input = apply_for(profile, request);  // must not throw
     expect(!input.available().empty(),
            "inventory items should be present");
 
@@ -284,7 +300,7 @@ void test_apply_source_level_exceeds_max_throws() {
     auto request = make_request(target_item, source_enchs);
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "over-level source enchant should throw");
 
     TEST_PASS("test_apply_source_level_exceeds_max_throws");
@@ -311,7 +327,7 @@ void test_apply_inventory_extra_over_level_throws() {
     request.search_config = algorithm::SearchConfig{};
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "over-level inventory book should throw");
 
     TEST_PASS("test_apply_inventory_extra_over_level_throws");
@@ -343,7 +359,7 @@ void test_apply_inventory_equipment_split() {
     request.forge_config.platform = MCE::Java;
     request.search_config = algorithm::SearchConfig{};
 
-    auto input = CompactAdapter::apply(profile, request);
+    auto input = apply_for(profile, request);
 
     // Inventory mode: available holds ALL items (book + equipment).  There is
     // no "current equipment" concept — the algorithm selects its own base.
@@ -376,7 +392,7 @@ void test_apply_inventory_equipment_inapplicable_throws() {
     request.search_config = algorithm::SearchConfig{};
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "inventory equipment with inapplicable enchant should throw");
 
     TEST_PASS("test_apply_inventory_equipment_inapplicable_throws");
@@ -402,10 +418,49 @@ void test_apply_inventory_equipment_over_level_throws() {
     request.search_config = algorithm::SearchConfig{};
 
     expect_throws_as<std::runtime_error>(
-        [&] { CompactAdapter::apply(profile, request); },
+        [&] { apply_for(profile, request); },
         "inventory equipment with over-level enchant should throw");
 
     TEST_PASS("test_apply_inventory_equipment_over_level_throws");
+}
+
+// ─── Test 19: tag-intersection applicability ───
+// The enchant supports the #minecraft:swords tag while the equipment's display
+// category is #minecraft:sword.  Applicability is proven ONLY by the tag
+// intersection: diamond_sword ∈ #minecraft:swords per the TagResolver — not by
+// any category match.  Inventory mode (empty target enchants, book sacrifice)
+// lets the assertion reach the registry content directly — direct mode would
+// throw "ench_not_applicable" from the old logic before the assertion runs.
+void test_apply_supported_items_tag_intersection() {
+    Profile p(NSID("test:tagapp"));
+    p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
+                     NSID("#minecraft:sword"), 1561});
+    p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5,
+                       1, false, {}, {NSID("#minecraft:swords")}});
+
+    TagResolver tr;
+    tr.add_tag("minecraft:swords", {"minecraft:diamond_sword"});
+    p.set_tag_resolver(std::make_shared<TagResolver>(tr));
+
+    SolveRequest req;
+    req.mode = AlgorithmMode::inventory;
+    req.target_item = Item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("minecraft:sharpness"), "Sharpness", 5);
+    InventoryPayload payload;
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);
+    req.payload = std::move(payload);
+    req.forge_config = algorithm::ForgeConfig{};
+
+    auto input = CompactAdapter::apply(p, req, *p.tag_resolver());
+
+    bool sharpness_present = false;
+    for (const auto& gid : input.registry.get_global_ids())
+        if (gid == NSID("minecraft:sharpness")) sharpness_present = true;
+    expect(sharpness_present,
+           "sharpness applicable to diamond_sword via swords tag intersection");
+
+    TEST_PASS("test_apply_supported_items_tag_intersection");
 }
 
 } // anonymous namespace
@@ -430,6 +485,7 @@ int main() {
         test_apply_inventory_equipment_split();
         test_apply_inventory_equipment_inapplicable_throws();
         test_apply_inventory_equipment_over_level_throws();
+        test_apply_supported_items_tag_intersection();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

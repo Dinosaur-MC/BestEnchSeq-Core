@@ -1,5 +1,6 @@
 #include "SolvePipeline.h"
 #include "domain/business/types/Profile.h"
+#include "domain/business/components/TagResolver.h"
 #include "domain/orchestration/components/CompactAdapter.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/IAlgorithm.h"
@@ -7,6 +8,30 @@
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
 #include <chrono>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+
+namespace {
+
+/// Build a TagResolver from the profile's equipment → category mapping when
+/// the profile does not carry an explicit resolver.  Each equipment id is
+/// recorded as a member of its `#tag` category, reproducing the legacy
+/// category-match semantics for profiles loaded without tag membership data.
+TagResolver fallback_tag_resolver(const Profile &profile) {
+    TagResolver tr;
+    std::unordered_map<std::string, std::unordered_set<std::string>> members;
+    for (const auto &[id, eq] : profile.eq().data()) {
+        if (!eq.category.is_tag())
+            continue;
+        members[eq.category.str().substr(1)].insert(id.str());
+    }
+    for (const auto &[key, vals] : members)
+        tr.add_tag(key, vals);
+    return tr;
+}
+
+} // namespace
 
 SolveResult SolvePipeline::run(
     Profile& profile,
@@ -40,7 +65,13 @@ SolvePipeline::Stage1Result SolvePipeline::stage_apply(
     const SolveRequest& request)
 {
     Stage1Result result;
-    result.algo_input = CompactAdapter::apply(profile, request);
+    const TagResolver *tr = profile.tag_resolver();
+    TagResolver fallback;
+    if (!tr) {
+        fallback = fallback_tag_resolver(profile);
+        tr       = &fallback;
+    }
+    result.algo_input = CompactAdapter::apply(profile, request, *tr);
     result.target_eq_nsid = request.target_item.id;
     return result;
 }
