@@ -17,7 +17,7 @@ struct EnchantmentData {
     int32_t max_level        = 0;
     int32_t limited_level    = 0;            ///< 0 = treasure
     std::vector<std::string> exclusive_with; ///< Conflicting enchantment IDs
-    std::vector<std::string> applicable_to;  ///< Applicable equipment category names
+    std::vector<std::string> applicable_to;  ///< 原始 supported_items 引用（`#tag` 或具体物品 ID，透传不展开）
 };
 
 } // namespace business::loader

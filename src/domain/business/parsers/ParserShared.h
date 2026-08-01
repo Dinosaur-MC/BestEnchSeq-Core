@@ -27,6 +27,10 @@ inline NSID make_id(const std::string& id_str, const std::string& default_ns = "
 
 // ── Reference resolution ───────────────────────────────────────────────
 // Resolve a list of mixed concrete IDs and #tag references via TagResolver.
+// This expansion helper is used only for `exclusive_set`. In contrast,
+// `supported_items` / `applicable_equipment` references are passed through
+// RAW (not expanded) by the parsers (T5); the loader performs
+// cross-validation against them (T6).
 
 inline std::unordered_set<std::string>
 resolve_references(const std::vector<std::string>& items, TagResolver& tag_resolver) {
