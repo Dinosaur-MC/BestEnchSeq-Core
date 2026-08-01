@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <stdexcept>
 #include <unordered_set>
@@ -380,4 +381,20 @@ size_t ProfileManager::cross_validate(const NSID& profile) {
 
     _effective_cache.clear();
     return removed;
+}
+
+// ── Publish (flatten effective view + version/tag) ──────────────────────
+
+bool ProfileManager::publish(const NSID& profile, const std::string& version,
+                             const std::string& tag, const std::filesystem::path& out) {
+    if (_find(profile) == nullptr) return false;
+    const Profile& eff = resolve_effective(profile);
+    Json json = eff.to_json();
+    json.set("version", Json(version));
+    if (!tag.empty())
+        json.set("release_tag", Json(tag));
+    std::ofstream f(out);
+    if (!f) return false;
+    f << json.to_string(Json::Pretty);
+    return true;
 }

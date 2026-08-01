@@ -101,6 +101,12 @@ public:
     /// 对目标 profile 的 supported_items 引用按 (vanilla ∪ 依赖链) 交叉验证，返回移除数。
     size_t cross_validate(const NSID& profile);
 
+    // ── Publish ────────────────────────────────────────────────────────
+
+    /// 版本化发布：拍平有效视图为自包含 profile 文件（内嵌 version/tag）。
+    bool publish(const NSID& profile, const std::string& version,
+                 const std::string& tag, const std::filesystem::path& out);
+
 private:
     Profile* _find(const NSID& name);
     const Profile* _find(const NSID& name) const;

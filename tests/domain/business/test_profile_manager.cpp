@@ -5,6 +5,8 @@
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/components/TagResolver.h"
+#include "common/io/json.h"
+#include "common/io/FileUtils.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -461,6 +463,31 @@ void test_pm_edit_preserves_tag_resolver() {
     TEST_PASS("test_pm_edit_preserves_tag_resolver");
 }
 
+// ─── Test: Versioned publish (flatten effective view + version/tag) ──────
+
+void test_pm_publish() {
+    ProfileManager pm;
+    pm.create(NSID("vanilla"));
+    auto& pack = pm.create(NSID("mypack"));
+    pack.set_dependencies({NSID("vanilla")});
+    pack.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
+
+    auto tmp = std::filesystem::temp_directory_path() / "besq_publish_test.json";
+    bool ok = pm.publish(NSID("mypack"), "1.0.0", "stable", tmp);
+    expect(ok, "publish succeeds");
+    // 自包含：有效视图（依赖链合并）的 sharpness 存在 + version 内嵌
+    auto json = Json::parse(file_utils::read_file(tmp));
+    expect(json.has("enchantments"), "published file has enchantments");
+    bool sharp = false;
+    for (const auto& e : json["enchantments"].as_array())
+        if (e.as<Json::Object>().at("id").as<std::string>() == "minecraft:sharpness") sharp = true;
+    expect(sharp, "published file contains merged dep enchantment");
+    expect(json.has("version") && json["version"].as<std::string>() == "1.0.0", "version embedded");
+    expect(json.has("release_tag") && json["release_tag"].as<std::string>() == "stable", "tag embedded");
+    std::filesystem::remove(tmp);
+    TEST_PASS("test_pm_publish");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -485,6 +512,7 @@ int main() {
         test_pm_effective_view();
         test_pm_edit_snapshot_undo();
         test_pm_edit_preserves_tag_resolver();
+        test_pm_publish();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
