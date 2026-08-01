@@ -135,7 +135,8 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::cache_put(uint64_t mask, std
 // ThreadPool::shared() — each chunk processes its masks independently and
 // publishes results through the lock-free cache.
 
-const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool parallelize) {
+const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool parallelize,
+                                                          ExecutionContext& ctx) {
     // Memoisation (lock-free hit on the flat path).
     if (const Frontier* hit = cache_get(mask))
         return *hit;
@@ -177,7 +178,9 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
         return cache_put(mask, std::move(f));
     }
 
-    if (n > 20)  // dp_merge only enumerates ≤20 items (large N bails to no solution)
+    // No hard n cap: the Executor's max_search_time timeout bounds the search
+    // (a cancelled subproblem returns an empty frontier below).
+    if (ctx.is_cancelled())
         return cache_put(mask, std::make_unique<Frontier>());
 
     Frontier result;
@@ -229,14 +232,16 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
     const uint64_t low_bit = mask & (~mask + 1);
 
     auto process_subset = [&](Frontier& out, uint64_t left) {
+        ctx.wait_if_paused();
+        if (ctx.is_cancelled()) return;
         const size_t k = __builtin_popcountll(left);
         if (k * 2 > n) return;
         if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
 
         const uint64_t right = mask & ~left;
-        const Frontier& left_f  = solve(left,  /*parallelize=*/false);
+        const Frontier& left_f  = solve(left,  /*parallelize=*/false, ctx);
         if (!left_f.empty()) {
-            const Frontier& right_f = solve(right, /*parallelize=*/false);
+            const Frontier& right_f = solve(right, /*parallelize=*/false, ctx);
             if (!right_f.empty()) {
                 for (const auto& ea : left_f.entries)
                     for (const auto& eb : right_f.entries)
@@ -367,7 +372,14 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     const uint64_t full_mask = (mutable_items.size() >= 64)
         ? UINT64_MAX : ((static_cast<uint64_t>(1) << mutable_items.size()) - 1);
 
-    const Frontier& frontier = solve(full_mask, true);
+    const Frontier& frontier = solve(full_mask, true, ctx);
+
+    if (ctx.is_cancelled()) {
+        _diag.status = "Cancelled";
+        ctx.set_exit_diagnostics(_diag);
+        ctx.report_progress(100, ProgressStatus::Cancelled);
+        return;
+    }
 
     const ParetoEntry* best = nullptr;
     for (const auto& entry : frontier.entries) {

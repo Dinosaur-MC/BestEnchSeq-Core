@@ -276,6 +276,13 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
 
     const size_t n = static_cast<size_t>(__builtin_popcountll(mask));
 
+    // Snapshot of the dynamic B&B bound at this subproblem's entry.  The bound
+    // is only ever tightened by a genuine full-set solution (final_level), so
+    // it is constant throughout a non-final solve; for the top-level solve the
+    // post-loop re-prune below corrects any mid-loop tightening.  Hoisting the
+    // load here removes ~one atomic load per forged pair from the hot path.
+    const int32_t bound_snapshot = _best_cost.load(std::memory_order_relaxed);
+
     if (n == 1) {
         auto f = std::make_unique<Frontier>();
         const Item& it = _base_items[static_cast<size_t>(__builtin_ctzll(mask))];
@@ -299,11 +306,9 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         auto try_forge = [&](const Item& base, const Item& sac) {
             if (!_forge_engine.is_forgeable(base, sac)) return;
             auto [result, cost] = _forge_engine.forge(base, sac, *_ench_reg);
-            ctx.incr_steps_forged();
             if (cost == INT32_MAX) return;
             if (max_step_cost > 0 && cost > max_step_cost) return;
-            int32_t cur = _best_cost.load(std::memory_order_relaxed);
-            if (static_cast<int64_t>(cost) > cur) return;  // keep == bound (may be optimal)
+            if (static_cast<int64_t>(cost) > bound_snapshot) return;  // keep == bound (may be optimal)
             // Only a genuine full-set solution may tighten the anytime bound.
             // A proper-subset "complete" item (redundant books) must not prune
             // the top-level frontier (see review finding I2).
@@ -321,16 +326,15 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         return cache_put(mask, std::move(f));
     }
 
-    if (n > 28)
-        return cache_put(mask, std::make_unique<Frontier>());
+    // No hard n cap: the Executor's max_search_time timeout bounds the search
+    // (a cancelled subproblem returns an empty frontier below).
     if (ctx.is_cancelled())
         return cache_put(mask, std::make_unique<Frontier>());
 
     Frontier result;
 
     auto combine = [&](Frontier& local, const ParetoEntry& a, const ParetoEntry& b) {
-        int32_t cur = _best_cost.load(std::memory_order_relaxed);
-        if (a.cost + b.cost > cur) return;  // any completion > bound can't improve
+        if (a.cost + b.cost > bound_snapshot) return;  // any completion > bound can't improve
         auto make_tree = [&](const std::shared_ptr<StepTree::Node>& base_tree,
                              const std::shared_ptr<StepTree::Node>& sac_tree,
                              const Item& base, const Item& sac,
@@ -345,11 +349,10 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
                              const std::shared_ptr<StepTree::Node>& sac_tree) {
             if (!_forge_engine.is_forgeable(base, sac)) return;
             auto [new_item, cost] = _forge_engine.forge(base, sac, *_ench_reg);
-            ctx.incr_steps_forged();
             if (cost == INT32_MAX) return;
             if (max_step_cost > 0 && cost > max_step_cost) return;
             int64_t total = a.cost + b.cost + cost;
-            if (total > cur) return;  // keep == bound (may be optimal)
+            if (total > bound_snapshot) return;  // keep == bound (may be optimal)
             // Only a genuine full-set solution may tighten the anytime bound
             // (see review finding I2).
             if (final_level && new_item.type == ItemType::Equip && meets_target(new_item, _target)) {

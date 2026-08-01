@@ -104,7 +104,7 @@ private:
 
     AlgorithmDiagnostics _diag;
 
-    const Frontier& solve(uint64_t mask, bool parallelize);
+    const Frontier& solve(uint64_t mask, bool parallelize, ExecutionContext& ctx);
     const Frontier* cache_get(uint64_t mask) const noexcept;
     const Frontier& cache_put(uint64_t mask, std::unique_ptr<Frontier> f);
     void _prepare_cache(size_t n);

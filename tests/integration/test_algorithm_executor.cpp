@@ -1,7 +1,12 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/types/Item.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Equipment.h"
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include <chrono>
 #include <stdexcept>
@@ -283,6 +288,92 @@ void test_executor_throwing_algorithm() {
     std::cout << "PASS: test_executor_throwing_algorithm" << std::endl;
 }
 
+// ─── dp_merge large-N + timeout cancellation ────────────────────────────
+//
+// The hard n caps were removed from dp_merge (n > 20) and bb_dp (n > 28): a
+// large input must now be bounded by the Executor's max_search_time timeout
+// rather than bailing to "no solution" instantly.
+
+namespace {
+AlgorithmInput make_direct_input(int n, uint8_t max_lvl, uint8_t level,
+                                 std::chrono::milliseconds timeout) {
+    std::vector<EnchInfo> infos(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        infos[static_cast<size_t>(i)].id         = static_cast<uint8_t>(i);
+        infos[static_cast<size_t>(i)].mul        = 1;
+        infos[static_cast<size_t>(i)].mul_b      = 1;
+        infos[static_cast<size_t>(i)].max_lvl    = max_lvl;
+        infos[static_cast<size_t>(i)].exc_mask   = 0;
+        infos[static_cast<size_t>(i)].applicable = true;
+    }
+
+    Equipment eq;
+    eq.id             = NSID("test");
+    eq.max_durability = 1561;
+    for (int i = 0; i < n; ++i)
+        eq.applicable_enchs.insert(static_cast<uint8_t>(i));
+
+    std::vector<NSID> global_ids;
+    global_ids.reserve(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i)
+        global_ids.emplace_back(std::string("ench_") + std::to_string(i));
+
+    AlgorithmInput input;
+    input.config.forge.platform         = MCE::Java;
+    input.config.mode                   = AlgorithmMode::direct;
+    input.config.search.max_search_time = timeout;
+    input.registry.init(std::move(infos), std::move(global_ids), eq);
+    input.data = DirectPayload{};
+    input.target.type = ItemType::Equip;
+    for (int i = 0; i < n; ++i)
+        input.target.enchs.insert(Ench{static_cast<uint8_t>(i), level});
+    return input;
+}
+
+AlgorithmInput make_large_direct_input() {
+    // 26 distinct level-5 enchants → 27 items (n > 20): the removed `n > 20`
+    // bail would have returned "no solution" instantly; now the map-backed
+    // search runs until the 200ms Executor timeout cancels it.
+    return make_direct_input(26, /*max_lvl=*/5, /*level=*/5,
+                             std::chrono::milliseconds(200));
+}
+
+// A REACHABLE input (15 level-1 enchants → 16 items) that completes quickly,
+// proving dp_merge still finds real solutions after the n-cap removal / ctx
+// threading.  (A reachable n > 20 case is impractical: the map-backed search
+// is exponential, so "completes" would take minutes.)
+AlgorithmInput make_reachable_large_input() {
+    return make_direct_input(15, /*max_lvl=*/1, /*level=*/1,
+                             std::chrono::milliseconds(0));  // unlimited
+}
+} // anonymous namespace
+
+void test_dp_merge_large_n_timeout_cancel() {
+    AlgorithmExecutor executor(std::make_unique<DPMergeAlgorithm>());
+    executor.start(make_large_direct_input());
+
+    auto final_state = executor.wait();
+    auto out = executor.output();
+    expect(final_state == AlgorithmState::Cancelled,
+           "dp_merge with >20 items should be cancellable mid-search");
+    expect(executor.output().solutions.empty(),
+           "a cancelled dp_merge search should not produce a fake solution");
+    std::cout << "PASS: test_dp_merge_large_n_timeout_cancel" << std::endl;
+}
+
+void test_dp_merge_large_n_completes() {
+    AlgorithmExecutor executor(std::make_unique<DPMergeAlgorithm>());
+    executor.start(make_reachable_large_input());
+
+    auto final_state = executor.wait();
+    auto out = executor.output();
+    expect(final_state == AlgorithmState::Completed,
+           "dp_merge with a reachable input should complete with a solution");
+    expect(!out.solutions.empty(),
+           "dp_merge large-N solution should be non-empty");
+    std::cout << "PASS: test_dp_merge_large_n_completes" << std::endl;
+}
+
 void test_timeout_with_slow_algorithm() {
     // A cooperative algorithm (polls is_cancelled) must surface a timeout as
     // Cancelled.  Guards the Executor's timeout watcher: it must transition
@@ -314,6 +405,8 @@ int main() {
         test_serialization_stubs();
         test_executor_throwing_algorithm();
         test_timeout_with_slow_algorithm();
+        test_dp_merge_large_n_completes();
+        test_dp_merge_large_n_timeout_cancel();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
