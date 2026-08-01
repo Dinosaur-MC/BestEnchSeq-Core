@@ -35,7 +35,14 @@ public:
     static Profile subtract(const NSID& name, const Profile& base, const Profile& other);
 
     /// Merge: insert_or_assign from other into base (overwrite semantics).
+    /// Returns a NEW profile named `name` (base metadata preserved, other wins
+    /// on enchantment conflicts; equipment/tags added if absent).
     static Profile merge(const NSID& name, const Profile& base, const Profile& other);
+
+    /// Merge `src` into `dest` IN PLACE (overwrite semantics: src wins on
+    /// enchantment conflict; equipment/tags added if absent).  Dest metadata is
+    /// preserved.  Used by ProfileManager::merge.
+    static void merge(Profile& dest, const Profile& src);
 
     // ── Diff ──────────────────────────────────────────────────────────
 

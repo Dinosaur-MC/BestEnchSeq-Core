@@ -1,4 +1,5 @@
 #include "ProfileManager.h"
+#include "domain/business/components/RegistryHelper.h"
 
 #include <stdexcept>
 
@@ -130,24 +131,6 @@ void ProfileManager::merge(const NSID& source, const NSID& dest) {
     if (source == dest) return;  // self-merge is no-op
     const Profile& src = *find(source);
     Profile& dst = *find(dest);
-
-    // Enchantments: overwrite existing, add new
-    for (const auto& [nsid, ench] : src.ench().data()) {
-        if (dst.ench().contains(nsid))
-            dst.update_enchantment(ench);  // overwrite
-        else
-            dst.add_enchantment(ench);     // insert new
-    }
-
-    // Equipment: add if not already present
-    for (const auto& [id, eq] : src.eq().data()) {
-        if (!dst.eq().contains(id))
-            dst.add_equipment(eq);
-    }
-
-    // Tags: ensure present
-    for (const auto& [nsid, tag] : src.tags().data()) {
-        if (!dst.tags().contains(nsid))
-            dst.add_tag(tag);
-    }
+    // Source wins on conflict, merged in place (dest metadata preserved).
+    RegistryHelper::merge(dst, src);
 }

@@ -152,23 +152,35 @@ Profile RegistryHelper::subtract(
                    std::move(eq_result), std::move(tag_result));
 }
 
+void RegistryHelper::merge(Profile& dest, const Profile& src) {
+    // Enchantments: src wins on conflict (insert_or_assign semantics).
+    // `update_enchantment` overwrites an existing entry; `add_enchantment`
+    // inserts a new one.
+    for (const auto& [id, info] : src.ench().data()) {
+        if (dest.ench().contains(id))
+            dest.update_enchantment(info);
+        else
+            dest.add_enchantment(info);
+    }
+
+    // Equipment: add if absent (do not clobber dest's definition)
+    for (const auto& [id, eq] : src.eq().data()) {
+        if (!dest.eq().contains(id))
+            dest.add_equipment(eq);
+    }
+
+    // Tags: add if absent
+    for (const auto& [id, tag] : src.tags().data()) {
+        if (!dest.tags().contains(id))
+            dest.add_tag(tag);
+    }
+}
+
 Profile RegistryHelper::merge(
     const NSID& name, const Profile& base, const Profile& other)
 {
     Profile p = base.clone(name);
-
-    // Merge enchantments (other overwrites base)
-    for (const auto& [id, info] : other.ench().data())
-        p.add_enchantment(info);
-
-    // Merge equipment
-    for (const auto& [id, eq] : other.eq().data())
-        p.add_equipment(eq);
-
-    // Merge tags
-    for (const auto& [id, tag] : other.tags().data())
-        p.add_tag(tag);
-
+    merge(p, other);  // other wins on conflict
     return p;
 }
 
@@ -215,7 +227,17 @@ RegistryHelper::DiffResult RegistryHelper::diff(
 // ============================================================================
 
 bool RegistryHelper::validate(const Profile& profile) {
-    return profile.validate();
+    // Cross-check exclusive_set references (mirrors Profile::validate, which
+    // intentionally does NOT hard-fail on the display-only `eq.category`).
+    if (!profile.validate())
+        return false;
+
+    // Every enchantment must have a sane max level.
+    for (const auto& [id, info] : profile.ench().data()) {
+        if (info.max_level < 1)
+            return false;
+    }
+    return true;
 }
 
 // ============================================================================
