@@ -279,6 +279,117 @@ void test_c_abi() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: C ABI solve — omitted algorithm must resolve to a real strategy
+// ---------------------------------------------------------------------------
+
+void test_c_abi_solve_default_algo() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    int rc = besq_load_builtin(ctx);
+    expect(rc == 0, "c abi load_builtin");
+
+    // Omit "algorithm" entirely → default "dp_merge" must be a registered
+    // strategy (the old "greedy" fallback errored with unknown_algo).
+    const char* json_input =
+        "{\"target\":{\"equipment\":\"diamond_sword\",\"enchantments\":[{\"id\":\"sharpness\",\"level\":3}]},"
+        "\"max_solutions\":1}";
+    char* json_result = besq_solve(ctx, json_input);
+    if (!json_result) {
+        const char* err = besq_last_error(ctx);
+        std::cerr << "C ABI solve (default algo) error: " << (err ? err : "null") << std::endl;
+    }
+    expect(json_result != nullptr, "c abi solve with omitted algorithm should succeed");
+    if (json_result) {
+        std::string result(json_result);
+        expect(result.find("\"success\": true") != std::string::npos,
+               "c abi solve (default algo) should report success");
+        expect(result.find("\"algorithm\": \"dp_merge\"") != std::string::npos,
+               "c abi solve (default algo) should use dp_merge");
+        expect(result.find("\"solutions\"") != std::string::npos,
+               "c abi solve (default algo) returns solutions");
+        besq_free_string(json_result);
+    }
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI solve default algorithm");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI solve — inventory mode parses the "items" array
+// ---------------------------------------------------------------------------
+
+void test_c_abi_solve_inventory() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    int rc = besq_load_builtin(ctx);
+    expect(rc == 0, "c abi load_builtin");
+
+    // Inventory mode with a real items array.  "algorithm" is omitted so the
+    // mode-dependent default (hamming) is exercised, and the items are parsed
+    // and fed to the solver (previously the payload was always empty).
+    const char* json_input =
+        "{\"target\":{\"equipment\":\"diamond_sword\",\"enchantments\":[{\"id\":\"sharpness\",\"level\":5}]},"
+        "\"mode\":\"inventory\","
+        "\"items\":["
+        "{\"type\":\"book\",\"enchants\":[{\"id\":\"sharpness\",\"level\":5}],\"prior_penalty\":0,\"priority\":1},"
+        "{\"type\":\"book\",\"enchants\":[{\"id\":\"knockback\",\"level\":2}],\"prior_penalty\":0,\"priority\":2},"
+        "{\"type\":\"equipment\",\"id\":\"diamond_sword\"}"
+        "],"
+        "\"max_solutions\":1}";
+    char* json_result = besq_solve(ctx, json_input);
+    if (!json_result) {
+        const char* err = besq_last_error(ctx);
+        std::cerr << "C ABI solve (inventory) error: " << (err ? err : "null") << std::endl;
+    }
+    expect(json_result != nullptr, "c abi solve inventory mode should succeed");
+    if (json_result) {
+        std::string result(json_result);
+        expect(result.find("\"success\": true") != std::string::npos,
+               "c abi inventory solve should report success");
+        expect(result.find("\"algorithm\": \"hamming\"") != std::string::npos,
+               "c abi inventory solve should default to hamming");
+        expect(result.find("\"solutions\"") != std::string::npos,
+               "c abi inventory solve returns solutions");
+        besq_free_string(json_result);
+    }
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI solve inventory mode");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI solve — unknown enchantment id must error (not silently drop)
+// ---------------------------------------------------------------------------
+
+void test_c_abi_solve_unknown_ench() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    int rc = besq_load_builtin(ctx);
+    expect(rc == 0, "c abi load_builtin");
+
+    // Unknown enchant id in the source → parse_ench_set must throw instead of
+    // silently dropping the enchantment.
+    const char* json_input =
+        "{\"target\":{\"equipment\":\"diamond_sword\",\"enchantments\":[{\"id\":\"sharpness\",\"level\":3}]},"
+        "\"source\":[{\"id\":\"nonexistent_ench\",\"level\":1}],"
+        "\"max_solutions\":1}";
+    char* json_result = besq_solve(ctx, json_input);
+    expect(json_result == nullptr, "c abi solve with unknown enchant id should error");
+    if (json_result) besq_free_string(json_result);
+    const char* err = besq_last_error(ctx);
+    expect(err != nullptr, "c abi solve unknown ench should set last_error");
+    if (err) {
+        std::string msg(err);
+        expect(msg.find("unknown") != std::string::npos ||
+                   msg.find("cli.err.unknown_ench") != std::string::npos,
+               "c abi solve unknown ench error mentions unknown enchant");
+    }
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI solve unknown enchant");
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -290,6 +401,9 @@ int main() {
         test_besq_registry_edit();
         test_besq_export();
         test_c_abi();
+        test_c_abi_solve_default_algo();
+        test_c_abi_solve_inventory();
+        test_c_abi_solve_unknown_ench();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

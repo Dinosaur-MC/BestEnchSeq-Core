@@ -7,6 +7,7 @@
 #include "domain/interface/abi/abi.h"
 #include "domain/interface/BesqContext.h"
 #include "common/io/json.h"
+#include "common/i18n/Language.h"
 #include "common/CommonTypes.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
@@ -206,12 +207,81 @@ static EnchSet parse_ench_set(const Json::Array& arr,
         }
         if (lvl < 1) lvl = 1;
 
+        // Validate against the registry instead of silently dropping
+        // unknown/empty ids (mirrors EnchParser / InventoryParser).
+        if (eid.empty())
+            throw std::runtime_error(tr_fmt("cli.err.empty_ench_id", eid));
         auto ench_it = ench_reg.find(NSID(eid));
-        if (ench_it != ench_reg.end()) {
-            result.emplace(ench_it->id, ench_it->name, lvl);
-        }
+        if (ench_it == ench_reg.end())
+            throw std::runtime_error(tr_fmt("cli.err.unknown_ench", eid));
+        result.emplace(ench_it->id, ench_it->name, lvl);
     }
     return result;
+}
+
+/// Parse the "items" array of an inventory-mode solve request into an
+/// orchestration InventoryPayload.  Mirrors InventoryParser::parse_file:
+/// same field names, same validation, same i18n error keys.
+static InventoryPayload parse_inventory_payload(
+    const Json::Array& arr,
+    const EnchantmentRegistry& ench_reg,
+    const EquipmentRegistry& eq_reg)
+{
+    InventoryPayload payload;
+    for (const auto& elem : arr) {
+        auto obj = elem.as<Json::Object>();
+
+        std::string type;
+        {
+            auto it = obj.find("type");
+            if (it != obj.end()) type = it->second.as<std::string>();
+        }
+        if (type != "book" && type != "equipment")
+            throw std::runtime_error(tr_fmt("cli.err.inventory_bad_type", type));
+
+        EnchSet ench_set;
+        {
+            auto it = obj.find("enchants");
+            if (it != obj.end())
+                ench_set = parse_ench_set(it->second.as<Json::Array>(), ench_reg);
+        }
+
+        int32_t ppn = int_field(obj, "prior_penalty");
+
+        int32_t priority = 99;
+        {
+            auto it = obj.find("priority");
+            if (it != obj.end()) priority = it->second.as<int32_t>();
+        }
+
+        if (type == "book") {
+            payload.extra_items.emplace_back(
+                NSID("minecraft:enchanted_book"), ench_set, ppn);
+        } else {
+            std::string eid;
+            {
+                auto it = obj.find("id");
+                if (it != obj.end()) eid = it->second.as<std::string>();
+            }
+            if (eid.empty())
+                throw std::runtime_error(tr("cli.err.inventory_missing_id"));
+            auto eq_it = eq_reg.find(NSID(eid));
+            if (eq_it == eq_reg.end())
+                throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", eid));
+            int32_t dur = eq_it->max_durability;
+            if (auto it = obj.find("durability"); it != obj.end()) {
+                int64_t v = it->second.as<int64_t>();
+                if (v > 0) dur = static_cast<int32_t>(v);
+            }
+            if (dur > eq_it->max_durability)
+                throw std::runtime_error(
+                    "durability " + std::to_string(dur) + " exceeds max_durability " +
+                    std::to_string(eq_it->max_durability) + " for '" + eid + "'");
+            payload.extra_items.emplace_back(eq_it->id, ench_set, ppn, dur);
+        }
+        payload.extra_item_priorities.push_back(priority);
+    }
+    return payload;
 }
 
 // ====================================================================
@@ -394,10 +464,12 @@ int besq_add_category(BesqContext* ctx, const char* name) {
 ///     "enchantments": [ {"id":"sharpness","level":5}, ... ]
 ///   },
 ///   "source": [ {"id":"sharpness","level":3}, ... ],
-///   "algorithm": "greedy",
+///   "algorithm": "dp_merge",       // optional, default "dp_merge" / "hamming" (inventory)
 ///   "platform": "java",
 ///   "max_solutions": 1,
-///   "mode": "direct"
+///   "mode": "direct",              // or "inventory" (parses "items" array)
+///   "items": [ {"type":"book", "enchants":[{"id":"sharpness","level":3}],
+///               "prior_penalty":0, "priority":1}, ... ]  // only for mode="inventory"
 /// }
 char* besq_solve(BesqContext* ctx, const char* json_input) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
@@ -453,7 +525,14 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         }
         if (mode_str == "inventory") {
             request.mode = AlgorithmMode::inventory;
-            request.payload = InventoryPayload{};
+            InventoryPayload inv;
+            auto items_it = root.find("items");
+            if (items_it != root.end()) {
+                inv = parse_inventory_payload(items_it->second.as<Json::Array>(),
+                                              c->impl.enchantments(),
+                                              c->impl.equipment());
+            }
+            request.payload = std::move(inv);
         } else {
             request.mode = AlgorithmMode::direct;
             request.payload = DirectPayload{source_enchants};
@@ -461,12 +540,17 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         std::string mode_json = (request.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
 
         // ── Algorithm ─────────────────────────────────────────────────────
-        {
-            auto it = root.find("algorithm");
-            if (it != root.end()) request.algorithm = it->second.as<std::string>();
-        }
+        // Canonical default mirrors the CLI: direct → "dp_merge",
+        // inventory → "hamming" (an inventory-capable strategy).  An omitted
+        // or empty "algorithm" field must never resolve to an unregistered
+        // strategy.
+        request.algorithm = (request.mode == AlgorithmMode::inventory)
+            ? "hamming" : "dp_merge";
+        if (auto it = root.find("algorithm"); it != root.end())
+            request.algorithm = it->second.as<std::string>();
         if (request.algorithm.empty())
-            request.algorithm = "greedy";
+            request.algorithm = (request.mode == AlgorithmMode::inventory)
+                ? "hamming" : "dp_merge";
 
         // ── Platform ──────────────────────────────────────────────────────
         std::string plat;

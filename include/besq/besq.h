@@ -139,7 +139,7 @@ int besq_add_category(BesqContext* ctx, const char* name);
 ///   {
 ///     "target": {"equipment":"...", "enchantments":[...]},
 ///     "source": [{"id":"...","level":N}, ...],
-///     "algorithm": "...",       // optional, default "dp_merge"
+///     "algorithm": "...",       // optional, default "dp_merge" (direct) / "hamming" (inventory)
 ///     "platform": "java|bedrock", // optional, default "java"
 ///     "max_solutions": N,        // optional
 ///     "mode": "direct|inventory"  // optional, default "direct"
