@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/business/types/Profile.h"
 
+#include <filesystem>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -66,10 +67,26 @@ public:
     /// Source entries overwrite dest entries on conflict.
     void merge(const NSID& source, const NSID& dest);
 
+    // ── Dependency graph ──────────────────────────────────────────────
+
+    /// 传递解析依赖链（拓扑序：依赖在前，不含目标自身）。环 → 返回空。
+    std::vector<NSID> resolve_dependencies(const NSID& profile) const;
+
+    /// 从目录加载全部 profile（native JSON/CSV），构建依赖图。datapack 目录留待 T11。
+    void load_directory(const std::filesystem::path& dir);
+
+    /// 对目标 profile 的 supported_items 引用按 (vanilla ∪ 依赖链) 交叉验证，返回移除数。
+    size_t cross_validate(const NSID& profile);
+
 private:
     Profile* _find(const NSID& name);
     const Profile* _find(const NSID& name) const;
 
+    /// Rebuild the adjacency list from the current profiles. `mutable` so a
+    /// const resolve_dependencies() can honor direct set_dependencies() calls.
+    void _build_graph() const;
+
     std::unordered_map<NSID, std::unique_ptr<Profile>> _profiles;
+    mutable std::unordered_map<NSID, std::vector<NSID>> _dep_graph;  // 邻接表
     NSID _active;
 };

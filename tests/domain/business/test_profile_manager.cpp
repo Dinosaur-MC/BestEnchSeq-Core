@@ -1,8 +1,12 @@
 #include "framework/test_utils.h"
 #include "domain/business/ProfileManager.h"
 #include "domain/business/types/Profile.h"
+#include "domain/business/types/Equipment.h"
+#include "domain/business/types/EquipmentTag.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 // ─── Helper: create an enchantment info for testing ─────────────────────
@@ -265,6 +269,111 @@ void test_create_empty_profile_structure() {
     std::cout << "PASS: test_create_empty_profile_structure" << std::endl;
 }
 
+// ─── Test: Dependency Chain (transitive topological resolution) ──────
+
+void test_pm_dependency_chain() {
+    ProfileManager pm;
+    pm.create(NSID("vanilla"));
+    auto& mod = pm.create(NSID("enchantencore"));
+    mod.set_dependencies({NSID("vanilla")});
+    auto& pack = pm.create(NSID("mypack"));
+    pack.set_dependencies({NSID("enchantencore")});
+
+    auto chain = pm.resolve_dependencies(NSID("mypack"));
+    // transitive: mypack -> enchantencore -> vanilla; deps before self, self excluded
+    expect(chain.size() == 2, "mypack has 2 deps (enchantencore + vanilla)");
+    expect(chain[0] == NSID("vanilla"), "vanilla first (leaf dep)");
+    expect(chain[1] == NSID("enchantencore"), "enchantencore second");
+
+    TEST_PASS("test_pm_dependency_chain");
+}
+
+// ─── Test: Dependency Cycle Detection ────────────────────────────────
+
+void test_pm_dependency_cycle() {
+    ProfileManager pm;
+    auto& a = pm.create(NSID("a"));
+    auto& b = pm.create(NSID("b"));
+    a.set_dependencies({NSID("b")});
+    b.set_dependencies({NSID("a")});
+
+    auto chain = pm.resolve_dependencies(NSID("a"));
+    expect(chain.empty(), "cycle detected → empty chain");
+
+    TEST_PASS("test_pm_dependency_cycle");
+}
+
+// ─── Test: Cross-validate supported_items against dependency universe ─
+
+void test_pm_cross_validate() {
+    ProfileManager pm;
+    auto& vanilla = pm.create(NSID("vanilla"));
+    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
+                                    NSID("#minecraft:sword"), 1561});
+    vanilla.add_tag(EquipmentTag{NSID("#minecraft:sword"), "sword"});
+
+    auto& mod = pm.create(NSID("mod"));
+    mod.set_dependencies({NSID("vanilla")});
+
+    // Valid refs (tag + concrete item from vanilla) plus one unknown item.
+    EnchInfo sharp = make_ench("minecraft:sharpness", "Sharpness", 5);
+    sharp.supported_items = {NSID("#minecraft:sword"), NSID("minecraft:diamond_sword"),
+                             NSID("minecraft:stone")};
+    mod.add_enchantment(sharp);
+
+    // All refs unknown → enchantment must be removed entirely.
+    EnchInfo mending = make_ench("minecraft:mending", "Mending", 1);
+    mending.supported_items = {NSID("minecraft:netherite_ingot")};
+    mod.add_enchantment(mending);
+
+    size_t removed = pm.cross_validate(NSID("mod"));
+    expect(removed == 2, "two dangling refs removed");
+
+    expect(mod.has_enchantment(NSID("minecraft:sharpness")), "sharpness survives cross-validate");
+    const auto& kept = mod.ench().at(NSID("minecraft:sharpness")).supported_items;
+    expect(kept.size() == 2, "sharpness keeps the two valid refs");
+    expect(kept.count(NSID("#minecraft:sword")) == 1, "tag ref kept");
+    expect(kept.count(NSID("minecraft:diamond_sword")) == 1, "concrete item ref kept");
+    expect(!mod.has_enchantment(NSID("minecraft:mending")), "mending dropped (no valid refs)");
+
+    TEST_PASS("test_pm_cross_validate");
+}
+
+// ─── Test: Load Directory ────────────────────────────────────────────
+
+void test_pm_load_directory() {
+    // Nonexistent directory is a safe no-op.
+    ProfileManager pm;
+    pm.load_directory(std::filesystem::temp_directory_path() / "besq_no_such_dir_xyz");
+    expect(pm.size() == 0, "no profiles loaded from missing directory");
+
+    // Temp directory with one native-JSON profile.
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_dir_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+    auto path = dir / "bare_mod.json";
+    {
+        std::ofstream f(path);
+        f << R"({
+            "name": "bare_mod",
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+    }
+
+    pm.load_directory(dir);
+    expect(pm.exists(NSID("bare_mod")), "bare_mod loaded by file stem");
+    expect(pm.exists(NSID("vanilla")), "vanilla base auto-created");
+
+    // Cleanup temp files.
+    std::filesystem::remove(path);
+    std::filesystem::remove(dir);
+    TEST_PASS("test_pm_load_directory");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -282,6 +391,10 @@ int main() {
         test_branch();
         test_merge();
         test_create_empty_profile_structure();
+        test_pm_dependency_chain();
+        test_pm_dependency_cycle();
+        test_pm_cross_validate();
+        test_pm_load_directory();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
