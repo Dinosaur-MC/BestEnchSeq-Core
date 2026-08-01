@@ -146,6 +146,8 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     // filter above).  Books accept any enchantment, so they skip the
     // applicability check.
     auto validate_inventory_item = [&](const Item &item) {
+        // Tag membership is per-item, not per-enchantment — hoist out of the loop.
+        const auto item_tags = tag_resolver.tags_of(item.id.str());
         for (const auto &e : item.enchantments) {
             auto it = all_infos_map.find(e.id);
             if (it == all_infos_map.end())
@@ -160,7 +162,6 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
                 continue;  // unknown equipment → skip applicability check
             bool applicable = it->second.supported_items.contains(item.id);
             if (!applicable) {
-                const auto item_tags = tag_resolver.tags_of(item.id.str());
                 for (const auto &t : it->second.supported_items) {
                     if (t.is_tag() && item_tags.contains(t)) {
                         applicable = true;

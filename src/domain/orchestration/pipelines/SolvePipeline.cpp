@@ -18,6 +18,9 @@ namespace {
 /// the profile does not carry an explicit resolver.  Each equipment id is
 /// recorded as a member of its `#tag` category, reproducing the legacy
 /// category-match semantics for profiles loaded without tag membership data.
+/// TODO(T7/T10): attach a real TagResolver at profile load time (ProfileLoader
+/// already builds the tag universe) so mod profiles with real-MC-tag
+/// supported_items don't lose applicability via this category-derived fallback.
 TagResolver fallback_tag_resolver(const Profile &profile) {
     TagResolver tr;
     std::unordered_map<std::string, std::unordered_set<std::string>> members;

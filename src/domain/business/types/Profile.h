@@ -2,7 +2,6 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
-#include "domain/business/components/TagResolver.h"
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
 #include "common/serialization/IJsonSerializable.h"
@@ -10,6 +9,8 @@
 #include <memory>
 #include <string>
 #include <string_view>
+
+class TagResolver;  // fwd — Profile stores a shared_ptr; complete type only needed at call sites
 
 // ── Profile Metadata ──────────────────────────────────────────────────
 
