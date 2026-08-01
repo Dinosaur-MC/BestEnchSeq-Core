@@ -4,7 +4,6 @@
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/business/types/EnchInfo.h"
-#include "domain/business/types/Equipment.h"
 #include "common/CommonTypes.h"
 #include "common/i18n/Language.h"
 #include "common/i18n/LocaleDetector.h"
@@ -518,10 +517,9 @@ void CLIApp::apply_registry_edits(const std::string& ops, BesqContext& ctx) {
         if (action == "add") {
             if (target == "cat") { ctx.add_category(id); continue; }
 
-            if (target == "eq") {
-                ctx.add_equipment(Equipment{NSID(id), id, NSID(), 0});
-                continue;
-            }
+            // eq:add removed — an equipment added in isolation has no tag
+            // membership (applicability is supported_items ∩ tags_of), so it
+            // would be applicable to nothing. Equipment comes from data/profiles.
 
             if (target == "ench") {
                 int32_t multiplier = 1, max_level = 1, limited_level = 0;
