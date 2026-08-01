@@ -108,14 +108,13 @@ void test_json_parse_with_exclusive() {
 }
 
 // ─── test_json_parse_with_applicable ───────────────────────────────────
-// Include applicable_equipment. The value "#minecraft:sword" is a tag
-// reference that resolves to empty via TagResolver when no tags are
-// loaded. Verify parsing completes without error.
+// Include supported_items (the T2/T10 field name). The value "#minecraft:sword"
+// is a tag reference passed through raw. Verify parsing completes without error.
 
 void test_json_parse_with_applicable() {
     std::string json_str = R"({
         "enchantments": [
-            {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "limited_level": 5, "multiplier": 1, "applicable_equipment": ["#minecraft:sword"]}
+            {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "limited_level": 5, "multiplier": 1, "supported_items": ["#minecraft:sword"]}
         ],
         "equipments": [
             {"id": "minecraft:diamond_sword", "name": "Diamond Sword", "category": "sword", "max_durability": 1561}
@@ -131,7 +130,7 @@ void test_json_parse_with_applicable() {
               std::string("minecraft:sharpness"),
               "json_applicable: ench id");
 
-    // The applicable_equipment field is passed through RAW (T5): the
+    // The supported_items field is passed through RAW (T5/T10): the
     // "#minecraft:sword" tag reference is preserved verbatim, not expanded by
     // the parser. The loader (T6) performs the cross-validation later.
     bool has_tag = false;

@@ -237,18 +237,20 @@ std::unordered_set<std::string> TagResolver::resolve(
 
 // ---------------------------------------------------------------------------
 // tags_of  --  reverse lookup: concrete ID -> set of `#`-prefixed tag NSIDs
+//
+// Traverses nested tags: real MC tags nest (e.g. `enchantable/sharp_weapon`
+// → `enchantable/melee_weapon` → `swords` → diamond_sword), so an item's tag
+// membership is the set of ALL tags whose resolved member set contains it —
+// not just the tags that list it as a direct entry.  Each tag is resolved
+// once (cached), then membership is checked against the resolved set.
 // ---------------------------------------------------------------------------
 std::unordered_set<NSID> TagResolver::tags_of(const std::string &concrete_id) const {
     std::unordered_set<NSID> result;
     for (const auto &[key, values] : _raw_tags) {
-        for (const auto &v : values) {
-            if (auto *entry = std::get_if<EntryRef>(&v)) {
-                if (entry->id == concrete_id) {
-                    result.insert(NSID("#" + key));
-                    break;
-                }
-            }
-        }
+        (void)values;
+        auto resolved = resolve("#" + key);
+        if (resolved.count(concrete_id))
+            result.insert(NSID("#" + key));
     }
     return result;
 }

@@ -1,20 +1,25 @@
 #include "DataLoader.h"
 #include "EmbeddedData.h"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/components/TagResolver.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/parsers/NativeJsonParser.h"
 #include "common/io/FileUtils.hpp"
+#include "common/io/json.h"
 
 #include <filesystem>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace besq::data {
 
 namespace {
 
 /// Read the builtin vanilla.json raw content once (filesystem override or
-/// embedded), so the categories seed and the DTO parse come from the same
-/// single read.
+/// embedded), so the tag seed and the DTO parse come from the same single
+/// read.
 std::string read_builtin_content(const std::filesystem::path& data_dir) {
     auto vanilla_path = data_dir / "vanilla.json";
     if (std::filesystem::exists(vanilla_path))
@@ -22,21 +27,69 @@ std::string read_builtin_content(const std::filesystem::path& data_dir) {
     return std::string{vanilla_json()};
 }
 
-/// Seed a TagRegistry from the dataset's FULL declared `categories` array
-/// (all entries, including categories with no concrete equipment like
-/// "spear"/"head").  This is the vanilla fallback tag universe; the
-/// enchantments' `#minecraft:<category>` supported_items references are
-/// cross-validated against it in RegistryLoader::from_dto.
-/// TODO(T10): this is a stopgap — once vanilla.json is regenerated with
-/// real MC item-tag definitions, seed base_tags from those tags instead.
+/// Parse the builtin vanilla.json `tags` object into {key, values} pairs.
+/// Tag keys follow the "<ns>:<tagpath>" convention — e.g. "minecraft:swords",
+/// "minecraft:enchantable/sharp_weapon" — and values are the raw array
+/// entries (concrete IDs or `#`-references), preserved verbatim so nested
+/// tag expansion happens lazily at resolution time.
+std::vector<std::pair<std::string, std::vector<std::string>>>
+load_builtin_tag_entries(const std::string& content) {
+    std::vector<std::pair<std::string, std::vector<std::string>>> out;
+    try {
+        Json root = Json::parse(content);
+        auto root_var = root.get_value();
+        if (!std::holds_alternative<Json::Object>(root_var))
+            return out;
+        const auto& root_obj = std::get<Json::Object>(root_var);
+        auto tags_it = root_obj.find("tags");
+        if (tags_it == root_obj.end())
+            return out;
+        auto tags_var = tags_it->second.get_value();
+        if (!std::holds_alternative<Json::Object>(tags_var))
+            return out;
+        for (const auto& [key, val] : std::get<Json::Object>(tags_var)) {
+            auto val_var = val.get_value();
+            if (!std::holds_alternative<Json::Array>(val_var))
+                continue;
+            std::vector<std::string> values;
+            for (const auto& elem : std::get<Json::Array>(val_var)) {
+                auto e = elem.get_value();
+                if (auto* s = std::get_if<Json::String>(&e))
+                    values.push_back(*s);
+            }
+            out.emplace_back(key, std::move(values));
+        }
+    } catch (...) {
+        // best-effort — a malformed override yields no tags
+    }
+    return out;
+}
+
+/// Seed a TagRegistry from the dataset's REAL tag definitions (the `tags`
+/// object of vanilla.json — real MC item + enchantment tags).  This is the
+/// vanilla fallback tag universe: a `#tag` supported_items reference only
+/// survives cross-validation when it is defined here.
+/// TODO(T10): replaces the T6 stopgap that derived synthetic
+/// `#minecraft:<category>` tags from the equipment categories array.
 TagRegistry parse_base_tags(const std::string& content) {
     TagRegistry base_tags;
-    for (const auto& cat : NativeJsonParser::parse_categories_string(content))
-        base_tags.insert({NSID("#minecraft:" + cat), cat});
+    for (const auto& [key, values] : load_builtin_tag_entries(content)) {
+        (void)values;
+        base_tags.insert({NSID("#" + key), key});
+    }
     return base_tags;
 }
 
 } // namespace
+
+std::shared_ptr<TagResolver> make_builtin_tag_resolver(
+    const std::filesystem::path& data_dir) {
+    auto resolver = std::make_shared<TagResolver>();
+    for (const auto& [key, values] : load_builtin_tag_entries(read_builtin_content(data_dir)))
+        resolver->add_tag(key,
+                          std::unordered_set<std::string>(values.begin(), values.end()));
+    return resolver;
+}
 
 void load_builtin_data(
     TagRegistry& tag_reg,

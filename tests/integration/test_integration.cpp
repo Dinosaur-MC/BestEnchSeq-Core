@@ -31,8 +31,12 @@ Profile make_builtin_profile() {
     besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
 
     ProfileMetadata meta(NSID("test:integration"));
-    return Profile(std::move(meta), std::move(ench_reg),
-                   std::move(eq_reg), std::move(cat_reg));
+    Profile profile(std::move(meta), std::move(ench_reg),
+                    std::move(eq_reg), std::move(cat_reg));
+    // Attach the real vanilla tag-universe resolver (T10: real MC item tags
+    // are the applicability source of truth, not the category-derived fallback).
+    profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
+    return profile;
 }
 
 // ---------------------------------------------------------------------------

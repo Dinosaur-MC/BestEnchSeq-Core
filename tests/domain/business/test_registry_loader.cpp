@@ -493,7 +493,7 @@ void test_loader_vanilla_tag_fallback() {
             { "id": "mod_cursed", "name": "Mod Cursed", "platform": "java",
               "max_level": 1, "limited_level": 1, "multiplier": 8,
               "exclusive_set": ["#minecraft:enchantment/curse"],
-              "applicable_equipment": ["#minecraft:sword"], "is_treasure": true }
+              "supported_items": ["#minecraft:swords"], "is_treasure": true }
         ],
         "equipments": [],
         "categories": [],
@@ -517,10 +517,10 @@ void test_loader_vanilla_tag_fallback() {
            "vanilla curse tag expanded to binding_curse");
     expect(e.exclusive_set.contains(NSID("minecraft:vanishing_curse")),
            "vanilla curse tag expanded to vanishing_curse");
-    // The raw #minecraft:sword tag reference resolves via the vanilla
-    // fallback (builtin tag registry).
-    expect(e.supported_items.contains(NSID("#minecraft:sword")),
-           "vanilla sword tag resolves");
+    // The raw #minecraft:swords (real MC item tag) reference resolves via the
+    // vanilla fallback (builtin tag registry).
+    expect(e.supported_items.contains(NSID("#minecraft:swords")),
+           "vanilla swords tag resolves");
 
     std::cout << "PASS: test_loader_vanilla_tag_fallback" << std::endl;
 }
@@ -568,7 +568,7 @@ void test_loader_concrete_item_vanilla_universe() {
             { "id": "mod:glide", "name": "Glide", "platform": "java",
               "max_level": 2, "limited_level": 3, "multiplier": 3,
               "exclusive_set": [],
-              "applicable_equipment": ["minecraft:elytra"], "is_treasure": true }
+              "supported_items": ["minecraft:elytra"], "is_treasure": true }
         ],
         "equipments": [],
         "categories": [],

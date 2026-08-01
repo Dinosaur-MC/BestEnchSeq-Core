@@ -71,9 +71,9 @@ def run_enchantment_pipeline(release: str) -> None:
     cats = enchantment.collect_categories(ench, eq)
 
     # Validate
-    no_eq = [e["id"] for e in ench if not e["applicable_equipment"]]
+    no_eq = [e["id"] for e in ench if not e["supported_items"]]
     if no_eq:
-        print(f"  WARNING: enchantments without applicable_equipment: {no_eq}")
+        print(f"  WARNING: enchantments without supported_items: {no_eq}")
     no_excl = [e["id"] for e in ench if not e["exclusive_set"]]
     print(f"  Enchantments with empty exclusive_set: {len(no_excl)}")
 

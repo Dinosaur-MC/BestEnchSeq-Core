@@ -84,7 +84,12 @@ void RegistryLoader::from_dto(
         Equipment eq;
         eq.id             = NSID(d.id);
         eq.name           = d.display_name;
-        eq.category       = (cat_it != tag_reg.end()) ? cat_it->id : NSID();
+        // `category` is a display short name (e.g. "sword" → `#minecraft:sword`).
+        // It is NOT a registered tag — the real MC item tags (`#minecraft:swords`,
+        // `#minecraft:enchantable/sharp_weapon`) are the applicability source of
+        // truth.  Keep the NSID as the informational label when the tag is not
+        // defined so display/serialization don't lose the category (T10).
+        eq.category       = (cat_it != tag_reg.end()) ? cat_it->id : cat_nsid;
         eq.max_durability = d.max_durability;
 
         if (!reg.insert(std::move(eq)).second)

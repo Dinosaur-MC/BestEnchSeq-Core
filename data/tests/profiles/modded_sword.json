@@ -13,10 +13,10 @@
       "limited_level": 2,
       "multiplier": 4,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "brutality",
@@ -26,10 +26,10 @@
       "limited_level": 3,
       "multiplier": 3,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "dexterity",
@@ -39,10 +39,10 @@
       "limited_level": 3,
       "multiplier": 2,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "gnashing",
@@ -52,10 +52,10 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "shattering",
@@ -65,10 +65,10 @@
       "limited_level": 2,
       "multiplier": 3,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "subjugation",
@@ -78,10 +78,10 @@
       "limited_level": 3,
       "multiplier": 4,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "thunderbolting",
@@ -91,10 +91,10 @@
       "limited_level": 1,
       "multiplier": 6,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "poison_aspect",
@@ -104,10 +104,10 @@
       "limited_level": 2,
       "multiplier": 3,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "wither_aspect",
@@ -117,10 +117,10 @@
       "limited_level": 2,
       "multiplier": 4,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "swift_slash",
@@ -130,10 +130,10 @@
       "limited_level": 3,
       "multiplier": 2,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "velocity",
@@ -143,10 +143,10 @@
       "limited_level": 3,
       "multiplier": 2,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "explosive",
@@ -156,10 +156,10 @@
       "limited_level": 2,
       "multiplier": 5,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "windshear",
@@ -169,10 +169,10 @@
       "limited_level": 2,
       "multiplier": 3,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     },
     {
       "id": "immolation",
@@ -182,10 +182,10 @@
       "limited_level": 2,
       "multiplier": 3,
       "exclusive_set": [],
-      "applicable_equipment": [
-        "sword"
-      ],
-      "is_treasure": true
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     }
   ],
   "equipments": [],

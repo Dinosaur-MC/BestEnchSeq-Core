@@ -42,6 +42,25 @@ def _item_short(item_id: str) -> str:
     return item_id.split(":", 1)[-1] if ":" in item_id else item_id
 
 
+def normalize_refs(refs: list[str]) -> list[str]:
+    """Normalize raw supported_items references to fully-qualified form.
+
+    ``#tag`` references keep the leading ``#`` (namespaced to ``minecraft:``
+    when bare); concrete item IDs are namespaced to ``minecraft:`` when bare.
+    The references are passed through verbatim otherwise — the design requires
+    the real MC references to be preserved so the C++ loader can cross-validate
+    against the real item tags.
+    """
+    out: list[str] = []
+    for r in refs:
+        if r.startswith("#"):
+            bare = r[1:]
+            out.append("#" + (bare if ":" in bare else "minecraft:" + bare))
+        else:
+            out.append(r if ":" in r else "minecraft:" + r)
+    return out
+
+
 def _tag_key_from_path(path: Path, base: Path) -> str | None:
     """Given a tag JSON file path, return its qualified key.
 
@@ -153,12 +172,13 @@ def load_enchantments(base: Path, lang: dict[str, str],
             for x in excl if x.split(":", 1)[-1] != eid
         })
 
-        # supported_items → categories
+        # supported_items → 原始引用透传（#tag 或具体物品 ID，不做类别推导）
         raw_sup = data.get("supported_items") or data.get("supportedItems") or []
         if isinstance(raw_sup, str):
             raw_sup = [raw_sup]
+        # sup_ids 仍用于 limited_level 计算（已解析为具体物品 ID）
         sup_ids = resolve_ref(raw_sup, "supported_items", tags, prefixes)
-        eq_cats = items_to_categories(sup_ids, tags, prefixes, base)
+        supported_items = normalize_refs(raw_sup)
 
         # limited level
         min_cost_data = data.get("min_cost", {"base": 1, "per_level_above_first": 10})
@@ -175,7 +195,7 @@ def load_enchantments(base: Path, lang: dict[str, str],
             "limited_level": limited_level,
             "multiplier": multiplier,
             "exclusive_set": excl,
-            "applicable_equipment": eq_cats,
+            "supported_items": supported_items,
         })
     return ench
 
@@ -364,7 +384,7 @@ def _extract_ldc_string(line: str) -> str | None:
 
 # ── javap class parsers ───────────────────────────────────────────────────
 
-_TOOL_SUFFIXES = ("sword", "pickaxe", "axe", "shovel", "hoe")
+_TOOL_SUFFIXES = ("sword", "pickaxe", "axe", "shovel", "hoe", "spear")
 _ARMOR_SLOTS = ("helmet", "chestplate", "leggings", "boots")
 
 _TOOL_PREFIX = {
@@ -617,11 +637,13 @@ def load_durability_from_source(res_dir: Path) -> dict[str, int]:
     else:
         dur.update(special_item_fallback)
 
-    # Tool material durabilities
+    # Tool material durabilities (incl. the 1.21.5+ spear — a forgeable weapon
+    # in the `minecraft:spears` tag; without it the spear enchantments like
+    # lunge are unresolvable against a real target).
     for pfx in ("wooden", "stone", "copper", "iron", "diamond", "golden", "netherite"):
         td = {"wooden": 59, "stone": 131, "copper": 190,
               "iron": 250, "diamond": 1561, "golden": 32, "netherite": 2031}[pfx]
-        for suf in ("sword", "pickaxe", "axe", "shovel", "hoe"):
+        for suf in _TOOL_SUFFIXES:
             dur[f"{pfx}_{suf}"] = td
 
     # Armor durabilities
@@ -712,11 +734,13 @@ def post_process_enchantments(ench: list[dict],
 # ── collect categories ────────────────────────────────────────────────────
 
 def collect_categories(ench: list[dict], eq: list[dict]) -> list[str]:
-    """Collect all unique equipment category names."""
+    """Collect all unique equipment category (display short name) values.
+
+    Enchantments no longer carry a derived category list (their supported_items
+    are raw MC references), so the categories universe comes from the
+    equipment entries' display categories only.
+    """
     cats: set[str] = set()
-    for e in ench:
-        for cat in e.get("applicable_equipment", []):
-            cats.add(cat)
     for e in eq:
         cat = e.get("category")
         if cat:
@@ -737,9 +761,20 @@ def write_output(version: str, ench: list[dict], eq: list[dict],
     # vanilla.json
     kept: dict[str, list[str]] = {}
     for k, v in tags.items():
-        if "/enchantment/" in k.replace(":", "/") or \
-           "/exclusive_set/" in k.replace(":", "/"):
+        ns, sep, tail = k.partition(":")
+        if not sep:
+            continue
+        first_seg = tail.split("/", 1)[0]
+        if first_seg == "enchantment":
+            # 保留现有魔咒 tag（curse / exclusive_set / tooltip_order …），
+            # 供 C++ exclusive_set 解析 / 交叉验证继续依赖。
             kept[k] = v
+        elif first_seg == "item":
+            # 真实 item tag：剥离类型前缀 `item/` →
+            #   minecraft:swords / minecraft:enchantable/sharp_weapon
+            # 与 C++ `seed_vanilla_tags` / DataLoader base_tags 的 key 约定一致。
+            kept[f"{ns}:" + tail[len("item/"):]] = v
+        # 其余（block / worldgen / 内嵌 datapack 的 trade_rebalance 等）丢弃
     doc = {
         "name": "Vanilla",
         "description": f"Built-in vanilla Minecraft data pack (Java Edition {version})",

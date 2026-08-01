@@ -205,7 +205,7 @@ business::loader::EnchantmentData parse_ench_entry(
     auto exclusive_set = resolve_references(exclusive_set_items, tag_resolver);
 
     {
-        auto it = elem_obj.find("applicable_equipment");
+        auto it = elem_obj.find("supported_items");
         if (it != elem_obj.end()) {
             Json::Array arr = it->second.as<Json::Array>();
             for (const auto& elem : arr)

@@ -62,6 +62,10 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         std::string stem = path.stem().string();
         profile = Profile(ProfileMetadata(NSID(stem)), std::move(profile_ench),
                           std::move(profile_eq), std::move(tag_reg));
+        // Attach the vanilla tag universe resolver so the profile's `#tag`
+        // supported_items references resolve at the business→algorithm boundary
+        // (T7/T10: real MC item tags are the applicability source of truth).
+        profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
 
         return true;
     } catch (const std::exception& e) {
@@ -100,6 +104,7 @@ bool ProfileLoader::load_builtin(Profile& profile) {
         besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
         profile = Profile(ProfileMetadata(NSID("builtin:vanilla")), std::move(ench_reg),
                           std::move(eq_reg), std::move(tag_reg));
+        profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to load built-in data: %s", e.what());

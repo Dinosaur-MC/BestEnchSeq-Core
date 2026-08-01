@@ -27,7 +27,7 @@ MOD_ENCHANTS = [
         "limited_level": 2,
         "multiplier": 4,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -38,7 +38,7 @@ MOD_ENCHANTS = [
         "limited_level": 3,
         "multiplier": 3,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -49,7 +49,7 @@ MOD_ENCHANTS = [
         "limited_level": 3,
         "multiplier": 2,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -60,7 +60,7 @@ MOD_ENCHANTS = [
         "limited_level": 3,
         "multiplier": 4,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -71,7 +71,7 @@ MOD_ENCHANTS = [
         "limited_level": 2,
         "multiplier": 3,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -82,7 +82,7 @@ MOD_ENCHANTS = [
         "limited_level": 3,
         "multiplier": 4,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -93,7 +93,7 @@ MOD_ENCHANTS = [
         "limited_level": 1,
         "multiplier": 6,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -104,7 +104,7 @@ MOD_ENCHANTS = [
         "limited_level": 2,
         "multiplier": 3,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -115,7 +115,7 @@ MOD_ENCHANTS = [
         "limited_level": 2,
         "multiplier": 4,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -126,7 +126,7 @@ MOD_ENCHANTS = [
         "limited_level": 3,
         "multiplier": 2,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -137,7 +137,7 @@ MOD_ENCHANTS = [
         "limited_level": 3,
         "multiplier": 2,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -148,7 +148,7 @@ MOD_ENCHANTS = [
         "limited_level": 2,
         "multiplier": 5,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -159,7 +159,7 @@ MOD_ENCHANTS = [
         "limited_level": 2,
         "multiplier": 3,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
     {
@@ -170,7 +170,7 @@ MOD_ENCHANTS = [
         "limited_level": 2,
         "multiplier": 3,
         "exclusive_set": [],
-        "applicable_equipment": ["sword"],
+        "supported_items": ["#minecraft:swords"],
         "is_treasure": True
     },
 ]

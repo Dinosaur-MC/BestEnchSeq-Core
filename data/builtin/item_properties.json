@@ -81,6 +81,11 @@
       "enchantability": 13,
       "category": "shovel"
     },
+    "copper_spear": {
+      "durability": 190,
+      "enchantability": 13,
+      "category": "spear"
+    },
     "copper_sword": {
       "durability": 190,
       "enchantability": 13,
@@ -130,6 +135,11 @@
       "durability": 1561,
       "enchantability": 10,
       "category": "shovel"
+    },
+    "diamond_spear": {
+      "durability": 1561,
+      "enchantability": 10,
+      "category": "spear"
     },
     "diamond_sword": {
       "durability": 1561,
@@ -191,6 +201,11 @@
       "enchantability": 22,
       "category": "shovel"
     },
+    "golden_spear": {
+      "durability": 32,
+      "enchantability": 22,
+      "category": "spear"
+    },
     "golden_sword": {
       "durability": 32,
       "enchantability": 22,
@@ -235,6 +250,11 @@
       "durability": 250,
       "enchantability": 14,
       "category": "shovel"
+    },
+    "iron_spear": {
+      "durability": 250,
+      "enchantability": 14,
+      "category": "spear"
     },
     "iron_sword": {
       "durability": 250,
@@ -311,6 +331,11 @@
       "enchantability": 15,
       "category": "shovel"
     },
+    "netherite_spear": {
+      "durability": 2031,
+      "enchantability": 15,
+      "category": "spear"
+    },
     "netherite_sword": {
       "durability": 2031,
       "enchantability": 15,
@@ -345,6 +370,11 @@
       "durability": 131,
       "enchantability": 5,
       "category": "shovel"
+    },
+    "stone_spear": {
+      "durability": 131,
+      "enchantability": 5,
+      "category": "spear"
     },
     "stone_sword": {
       "durability": 131,
@@ -390,6 +420,11 @@
       "durability": 59,
       "enchantability": 15,
       "category": "shovel"
+    },
+    "wooden_spear": {
+      "durability": 59,
+      "enchantability": 15,
+      "category": "spear"
     },
     "wooden_sword": {
       "durability": 59,

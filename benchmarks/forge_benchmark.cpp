@@ -4,6 +4,7 @@
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/business/loaders/ProfileLoader.h"
+#include "domain/business/components/TagResolver.h"
 #include "domain/business/types/Enchantment.h"
 #include "common/io/json.h"
 
@@ -454,6 +455,24 @@ void run_case(const TestCase& tc, const Profile& profile,
     }
     const Equipment& eq = *eq_it;
 
+    // Applicability uses the real MC tag-membership model (T10): an enchant
+    // applies to the equipment iff the equipment's tag set intersects the
+    // enchant's `#tag` supported_items refs, or the equipment id is itself a
+    // concrete supported item.  Prefer the profile's attached resolver; fall
+    // back to a category-derived resolver for resolver-less profiles.
+    const TagResolver* tag_resolver = profile.tag_resolver();
+    TagResolver category_fallback;
+    if (!tag_resolver) {
+        std::unordered_map<std::string, std::unordered_set<std::string>> members;
+        for (const auto& [id, e] : profile.eq().data())
+            if (e.category.is_tag())
+                members[e.category.str().substr(1)].insert(id.str());
+        for (const auto& [k, v] : members)
+            category_fallback.add_tag(k, v);
+        tag_resolver = &category_fallback;
+    }
+    const std::unordered_set<NSID> eq_tags = tag_resolver->tags_of(eq.id.str());
+
     // ── Parse wanted enchants + build business items ───────────────────
     ::EnchSet wanted_set;
     for (const auto& spec : tc.wanted) {
@@ -482,8 +501,13 @@ void run_case(const TestCase& tc, const Profile& profile,
 
         for (int32_t gid = 0; gid < static_cast<int32_t>(sorted.size()); ++gid) {
             const auto& biz = sorted[gid].second;
-            bool applicable = biz.supported_items.count(eq.category) > 0
-                           || biz.supported_items.count(NSID("#minecraft:any")) > 0;
+            bool applicable = biz.supported_items.contains(eq.id)
+                           || std::any_of(
+                                  biz.supported_items.begin(),
+                                  biz.supported_items.end(),
+                                  [&](const NSID& t) {
+                                      return t.is_tag() && eq_tags.contains(t);
+                                  });
             if (!applicable) continue;
 
             algorithm::EnchInfo ai;
