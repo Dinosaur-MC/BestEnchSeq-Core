@@ -1,4 +1,4 @@
-#include "RegistryManager.h"
+#include "RegistryHelper.h"
 
 #include <unordered_set>
 
@@ -6,7 +6,7 @@
 // Builder
 // ============================================================================
 
-RegistryManager& RegistryManager::load(const Profile& from) {
+RegistryHelper& RegistryHelper::load(const Profile& from) {
     // Deep-copy registries via Json serialization (no friend access needed)
     auto copy_reg = [](const auto& src) -> std::decay_t<decltype(src)> {
         std::decay_t<decltype(src)> dst;
@@ -20,7 +20,7 @@ RegistryManager& RegistryManager::load(const Profile& from) {
     return *this;
 }
 
-RegistryManager& RegistryManager::filter(std::function<bool(const EnchInfo&)> pred) {
+RegistryHelper& RegistryHelper::filter(std::function<bool(const EnchInfo&)> pred) {
     if (_ench) {
         EnchantmentRegistry filtered;
         for (const auto& [id, info] : _ench->data()) {
@@ -32,21 +32,21 @@ RegistryManager& RegistryManager::filter(std::function<bool(const EnchInfo&)> pr
     return *this;
 }
 
-RegistryManager& RegistryManager::filter_platform(MCE platform) {
+RegistryHelper& RegistryHelper::filter_platform(MCE platform) {
     return filter([platform](const EnchInfo& info) {
         return info.supported_platform == MCE::All ||
                info.supported_platform == platform;
     });
 }
 
-RegistryManager& RegistryManager::filter_equipment(const NSID& category) {
+RegistryHelper& RegistryHelper::filter_equipment(const NSID& category) {
     return filter([&category](const EnchInfo& info) {
         return info.supported_items.find(category) !=
                info.supported_items.end();
     });
 }
 
-RegistryManager& RegistryManager::unite(const Profile& other) {
+RegistryHelper& RegistryHelper::unite(const Profile& other) {
     auto unite_reg = [](auto& opt, const auto& src) {
         if (opt && src.size() > 0) {
             for (const auto& [id, entry] : src.data())
@@ -64,7 +64,7 @@ RegistryManager& RegistryManager::unite(const Profile& other) {
     return *this;
 }
 
-RegistryManager& RegistryManager::intersect(const Profile& other) {
+RegistryHelper& RegistryHelper::intersect(const Profile& other) {
     if (_ench) {
         EnchantmentRegistry result;
         for (const auto& [id, info] : _ench->data()) {
@@ -95,7 +95,7 @@ RegistryManager& RegistryManager::intersect(const Profile& other) {
     return *this;
 }
 
-Profile RegistryManager::build(const NSID& result_name) const {
+Profile RegistryHelper::build(const NSID& result_name) const {
     return Profile(
         ProfileMetadata(result_name),
         _ench.value_or(EnchantmentRegistry{}),
@@ -108,23 +108,23 @@ Profile RegistryManager::build(const NSID& result_name) const {
 // Static operations
 // ============================================================================
 
-Profile RegistryManager::unite(
+Profile RegistryHelper::unite(
     const NSID& name, const Profile& a, const Profile& b)
 {
-    RegistryManager builder;
+    RegistryHelper builder;
     builder.load(a).unite(b);
     return builder.build(name);
 }
 
-Profile RegistryManager::intersect(
+Profile RegistryHelper::intersect(
     const NSID& name, const Profile& a, const Profile& b)
 {
-    RegistryManager builder;
+    RegistryHelper builder;
     builder.load(a).intersect(b);
     return builder.build(name);
 }
 
-Profile RegistryManager::subtract(
+Profile RegistryHelper::subtract(
     const NSID& name, const Profile& base, const Profile& other)
 {
     // Enchantments: keep those NOT in other
@@ -152,7 +152,7 @@ Profile RegistryManager::subtract(
                    std::move(eq_result), std::move(tag_result));
 }
 
-Profile RegistryManager::merge(
+Profile RegistryHelper::merge(
     const NSID& name, const Profile& base, const Profile& other)
 {
     Profile p = base.clone(name);
@@ -176,7 +176,7 @@ Profile RegistryManager::merge(
 // Diff
 // ============================================================================
 
-RegistryManager::DiffResult RegistryManager::diff(
+RegistryHelper::DiffResult RegistryHelper::diff(
     const Profile& a, const Profile& b)
 {
     DiffResult result;
@@ -214,7 +214,7 @@ RegistryManager::DiffResult RegistryManager::diff(
 // Validation
 // ============================================================================
 
-bool RegistryManager::validate(const Profile& profile) {
+bool RegistryHelper::validate(const Profile& profile) {
     return profile.validate();
 }
 
@@ -223,17 +223,17 @@ bool RegistryManager::validate(const Profile& profile) {
 // ============================================================================
 
 Profile operator|(const Profile& a, const Profile& b) {
-    return RegistryManager::unite(NSID(), a, b);
+    return RegistryHelper::unite(NSID(), a, b);
 }
 
 Profile operator&(const Profile& a, const Profile& b) {
-    return RegistryManager::intersect(NSID(), a, b);
+    return RegistryHelper::intersect(NSID(), a, b);
 }
 
 Profile operator+(const Profile& a, const Profile& b) {
-    return RegistryManager::merge(NSID(), a, b);
+    return RegistryHelper::merge(NSID(), a, b);
 }
 
 Profile operator-(const Profile& a, const Profile& b) {
-    return RegistryManager::subtract(NSID(), a, b);
+    return RegistryHelper::subtract(NSID(), a, b);
 }

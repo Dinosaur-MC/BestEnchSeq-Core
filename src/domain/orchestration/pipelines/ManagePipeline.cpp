@@ -1,5 +1,5 @@
 #include "ManagePipeline.h"
-#include "domain/business/managers/ProfileManager.h"
+#include "domain/business/ProfileManager.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/components/FormatDetector.h"

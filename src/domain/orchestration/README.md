@@ -15,7 +15,7 @@ components/     ← 共享适配器和格式化器（CompactAdapter, OutputForma
 | Pipeline | 职责 | 阶段 |
 |----------|------|------|
 | SolvePipeline | 锻造求解 | stage_apply() → stage_execute() → stage_recall() |
-| ManagePipeline | Profile/注册表管理 | 按 Action 分派到 ProfileManager/RegistryManager |
+| ManagePipeline | Profile/注册表管理 | 按 Action 分派到 ProfileManager/RegistryHelper |
 | ExportPipeline | 数据导出 | 按 TargetType+Format 分派到 EnchSerializer/OutputFormatter |
 
 ## 关键设计

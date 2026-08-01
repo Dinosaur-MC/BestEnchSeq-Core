@@ -9,16 +9,16 @@
 ///
 /// Supports both chainable Builder (multi-round operations) and
 /// single-shot static methods.
-class RegistryManager {
+class RegistryHelper {
 public:
     // ── Builder ───────────────────────────────────────────────────────
 
-    RegistryManager& load(const Profile& from);
-    RegistryManager& filter(std::function<bool(const EnchInfo&)> pred);
-    RegistryManager& filter_platform(MCE platform);
-    RegistryManager& filter_equipment(const NSID& category);
-    RegistryManager& unite(const Profile& other);
-    RegistryManager& intersect(const Profile& other);
+    RegistryHelper& load(const Profile& from);
+    RegistryHelper& filter(std::function<bool(const EnchInfo&)> pred);
+    RegistryHelper& filter_platform(MCE platform);
+    RegistryHelper& filter_equipment(const NSID& category);
+    RegistryHelper& unite(const Profile& other);
+    RegistryHelper& intersect(const Profile& other);
 
     /// Finalise and produce the result Profile.
     Profile build(const NSID& result_name) const;

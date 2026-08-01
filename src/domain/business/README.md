@@ -10,8 +10,8 @@ types/          ← 值类型（Ench, EnchInfo, EnchSet, Item, Equipment, etc.�
 registries/     ← 纯数据容器（EnchantmentRegistry, EquipmentRegistry, TagRegistry）
 parsers/        ← 文件格式 → DTO（NativeJsonParser, NativeCsvParser, McOfficialParser）
 loaders/        ← DTO ↔ Registry/Profile（RegistryLoader, ProfileLoader）
-managers/       ← 集合运算 + 生命周期（RegistryManager, ProfileManager）
-components/     ← FormatDetector, Serializer, TagResolver
+ProfileManager.h ← 生命周期（Profile 管理，业务域顶层）
+components/     ← FormatDetector, Serializer, TagResolver, RegistryHelper（集合运算）
 ```
 
 ## 关键设计

@@ -60,7 +60,7 @@ struct ProfileMetadata {
 // must be done through Profile proxy methods.
 
 class ProfileManager;
-class RegistryManager;
+class RegistryHelper;
 
 class Profile : IJsonSerializable {
 public:

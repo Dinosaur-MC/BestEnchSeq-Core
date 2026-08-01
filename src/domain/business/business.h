@@ -32,9 +32,9 @@
 #include "domain/business/loaders/RegistryLoader.h"  // IWYU pragma: export
 #include "domain/business/loaders/ProfileLoader.h"   // IWYU pragma: export
 
-// ── Managers ──
-#include "domain/business/managers/RegistryManager.h"  // IWYU pragma: export
-#include "domain/business/managers/ProfileManager.h"   // IWYU pragma: export
+// ── Profile / Registry 管理 ──
+#include "domain/business/ProfileManager.h"             // IWYU pragma: export
+#include "domain/business/components/RegistryHelper.h"  // IWYU pragma: export
 
 // ── Components ──
 #include "domain/business/components/Serializer.h"    // IWYU pragma: export

@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "domain/business/managers/ProfileManager.h"
+#include "domain/business/ProfileManager.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 
