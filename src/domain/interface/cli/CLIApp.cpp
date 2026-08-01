@@ -125,7 +125,20 @@ int CLIApp::run(int argc, char* argv[]) {
         }
     }
 
-    // 4. Registry operations
+    // 4. Profile selection
+    //    load_profiles() scans `<cwd>/profiles` (or --profile-dir).  It is a
+    //    safe no-op when the directory does not exist and never changes the
+    //    active profile, so the default flow (builtin:vanilla active via
+    //    load_builtin) stays intact.  activate_profile must run before any
+    //    --registry-dir/--registry-edit so those edits land in the chosen
+    //    profile.
+    if (config.profile_dir)
+        _ctx.set_profiles_dir(*config.profile_dir);
+    _ctx.load_profiles();
+    if (config.profile)
+        _ctx.activate_profile(*config.profile);
+
+    // 5. Registry operations
     if (config.registry_dir)
         _ctx.import_registry(*config.registry_dir);
 
@@ -139,7 +152,7 @@ int CLIApp::run(int argc, char* argv[]) {
     if (config.registry_edit)
         CLIApp::apply_registry_edits(*config.registry_edit, _ctx);
 
-    // 5. Registry export
+    // 6. Registry export
     if (config.export_registry) {
         bool ok = _ctx.export_registry(*config.export_registry);
         if (!ok) throw std::runtime_error(
@@ -149,7 +162,19 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
-    // 6. Solve
+    // 7. Publish profile as self-contained file
+    if (config.publish) {
+        std::string version = config.publish_version.value_or("dev");
+        std::string tag     = config.publish_tag.value_or("");
+        std::string out     = config.output.value_or(*config.publish + ".json");
+        bool ok = _ctx.publish_profile(*config.publish, version, tag, out);
+        if (!ok)
+            throw std::runtime_error(tr_fmt("main.err.publish_failed", *config.publish));
+        LOG_INFO("%s", tr_fmt("main.msg.published", out).c_str());
+        return 0;
+    }
+
+    // 8. Solve
     if (!config.target.empty()) {
         SolveRequest request = CLIApp::build_solve_request(config, _ctx);
 
@@ -210,6 +235,11 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<std::string>{.long_name = "memory",                           .help_key = "cli.help.memory_desc",    .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-time",                         .help_key = "cli.help.max_time_desc",  .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-threads",      .short_name = 'j', .help_key = "Maximum thread pool size (0 = auto)", .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "profile",          .help_key = "cli.help.profile_desc",       .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "profile-dir",      .help_key = "cli.help.profile_dir_desc",   .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "publish",          .help_key = "cli.help.publish_desc",       .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "publish-version",  .help_key = "cli.help.publish_version_desc", .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "publish-tag",      .help_key = "cli.help.publish_tag_desc",   .help_group = "cli.help.group_registry"},
 };
 
 } // anonymous namespace
@@ -394,7 +424,8 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr_fmt("cli.err.empty_export_registry"));
 
     if (!cfg.help && !cfg.version && !cfg.list_algorithms) {
-        if (cfg.target.empty() && !cfg.export_registry.has_value()) {
+        if (cfg.target.empty() && !cfg.export_registry.has_value()
+            && !cfg.publish.has_value()) {
             if (argc <= 1) {
                 // Pure no-args: show brief usage + hint, then exit cleanly
                 std::cout << tr_fmt("cli.help.usage", prog) << "\n";

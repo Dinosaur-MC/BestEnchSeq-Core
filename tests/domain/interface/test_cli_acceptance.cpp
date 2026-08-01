@@ -308,6 +308,39 @@ void test_memory_parsing() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: --profile / --profile-dir / --publish parsing
+// ---------------------------------------------------------------------------
+
+void test_profile_publish_parsing() {
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--profile", "modpack"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(config.profile.has_value() && *config.profile == "modpack",
+               "profile should be 'modpack'");
+        TEST_PASS("--profile modpack");
+    }
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--profile-dir", "/tmp/p"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
+        expect(config.profile_dir.has_value() && *config.profile_dir == "/tmp/p",
+               "profile_dir should be '/tmp/p'");
+        TEST_PASS("--profile-dir /tmp/p");
+    }
+    {
+        const char* argv[] = {"besq", "--publish", "mypack",
+                              "--publish-version", "1.0", "--publish-tag", "stable"};
+        auto config = CLIApp::parse(7, const_cast<char**>(argv));
+        expect(config.publish.has_value() && *config.publish == "mypack",
+               "publish should be 'mypack'");
+        expect(config.publish_version.has_value() && *config.publish_version == "1.0",
+               "publish_version should be '1.0'");
+        expect(config.publish_tag.has_value() && *config.publish_tag == "stable",
+               "publish_tag should be 'stable'");
+        TEST_PASS("--publish mypack --publish-version 1.0 --publish-tag stable");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Test: --CLIApp::apply_config_pairs functional test
 // ---------------------------------------------------------------------------
 
@@ -342,6 +375,7 @@ int main() {
         test_algorithm_name();
         test_memory_parsing();
         test_apply_config_pairs();
+        test_profile_publish_parsing();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

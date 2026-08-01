@@ -32,6 +32,11 @@ public:
         std::optional<std::string> registries;
         std::optional<std::string> registry_edit;
         std::optional<std::string> export_registry;
+        std::optional<std::string> profile;
+        std::optional<std::string> profile_dir;
+        std::optional<std::string> publish;
+        std::optional<std::string> publish_version;
+        std::optional<std::string> publish_tag;
         std::optional<std::string> algo_dir;
         std::string platform = "auto";
         std::optional<std::string> output;
@@ -96,6 +101,11 @@ private:
         cfg.memory_mb       = 0;
         cfg.max_time        = std::get<21>(v);  // nullopt when not provided
         cfg.max_threads     = std::get<22>(v).value_or(Config{}.max_threads);
+        cfg.profile         = std::get<23>(v);
+        cfg.profile_dir     = std::get<24>(v);
+        cfg.publish         = std::get<25>(v);
+        cfg.publish_version = std::get<26>(v);
+        cfg.publish_tag     = std::get<27>(v);
         return cfg;
     }
 };
