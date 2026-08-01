@@ -4,6 +4,7 @@
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/registries/EnchReg.h"
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <shared_mutex>
@@ -82,19 +83,55 @@ private:
     const EnchReg *_ench_reg{nullptr};
     std::vector<Ench> _target;
 
-    // Memoisation cache: item-set → Pareto frontier (pruned at the run's bound).
-    std::unordered_map<ItemCollection, Frontier> _cache;
+    // Base items in canonical order — every recursive subproblem is a subset
+    // of this array, identified by a bitmask (see `_cache` key).
+    std::vector<Item> _base_items;
+
+    // Memoisation cache: subset bitmask → Pareto frontier (pruned at the run's
+    // bound).  Direct mode has no duplicate books, so a bitmask over
+    // `_base_items` uniquely identifies each subproblem — O(1) hash of a
+    // uint64_t instead of hashing the whole vector<Item>.  Frontiers are owned
+    // by unique_ptr so their addresses are stable — solve() returns const& into
+    // the cache, eliminating per-hit copies.
+    //
+    // For n ≤ FLAT_CACHE_MAX_BITS the cache is a flat array indexed by the
+    // mask: reads are a single atomic load (lock-free, no contention).  Larger
+    // n falls back to the unordered_map + mutex.
+    static constexpr size_t FLAT_CACHE_MAX_BITS = 20;
+    bool _using_flat = false;                              // set per pass
+    std::unique_ptr<std::atomic<Frontier*>[]> _flat_cache; // lock-free slots (2^n)
+    size_t _flat_capacity = 0;                             // slots currently allocated
+    std::vector<std::unique_ptr<Frontier>> _owners;        // stable storage (pass lifetime)
+    std::mutex _owners_mutex;                              // guards _owners push (flat path)
+    std::unordered_map<uint64_t, std::unique_ptr<Frontier>> _cache;  // fallback (n > 20)
+    /// Stable-address arena for frontiers when _cache hits MAX_CACHE_ENTRIES.
+    /// Entries are never freed during a solve (lifetime = the pass).
+    std::vector<std::unique_ptr<Frontier>> _overflow;
     mutable std::shared_mutex _cache_mutex;
 
     // Steps of the deterministic hamming-style construction (filled by
     // compute_ub); used as an anytime fallback when the exact search gives up.
     std::vector<EnchStep> _ub_steps;
 
+    /// Best complete-solution cost found so far (anytime bound).  Shared
+    /// across the parallel top-level; read as the B&B bound by all prunes.
+    std::atomic<int32_t> _best_cost{INT32_MAX};
+
     AlgorithmDiagnostics _diag;
 
-    Frontier solve(std::vector<Item> items, int32_t max_step_cost,
-                   int32_t bound, int32_t beam_width, bool parallelize,
-                   bool final_level, ExecutionContext &ctx);
+    const Frontier& solve(uint64_t mask, int32_t max_step_cost,
+                          int32_t beam_width, bool parallelize,
+                          bool final_level, ExecutionContext &ctx);
+    /// Lock-free lookup for the flat cache (n ≤ FLAT_CACHE_MAX_BITS).
+    /// Returns nullptr on miss.  Falls back to the mutex map for large n.
+    const Frontier* cache_get(uint64_t mask) const noexcept;
+    /// Publish \p f for \p mask (flat: CAS; map: insert under mutex).  Returns
+    /// a reference to the stored frontier — ours, or a concurrent winner's
+    /// (equivalent).  Storage lives for the whole pass.
+    const Frontier& cache_put(uint64_t mask, std::unique_ptr<Frontier> f);
+    /// (Re)build the memo cache for a problem of \p n items: use the lock-free
+    /// flat array when n ≤ FLAT_CACHE_MAX_BITS, else the mutex map.
+    void _prepare_cache(size_t n);
     /// Deterministic balanced-merge upper bound (hamming-style construction).
     /// Records the merge steps into _ub_steps.  Returns INT32_MAX when no
     /// complete solution can be built.
