@@ -38,7 +38,9 @@ public:
         std::string format   = "text";
         int solutions        = 1;
         int memory_mb        = 0;
-        int max_time         = 0;
+        // nullopt = --max-time not provided (SearchConfig default 180s);
+        //          0 = unlimited; >0 = seconds.
+        std::optional<int> max_time;
         int max_threads      = 0;
         bool verbose         = false;
         bool help            = false;
@@ -51,6 +53,9 @@ public:
     static Config parse(int argc, char* argv[]);
     static std::string help_text(std::string_view program_name = "besq");
     static void apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg);
+
+    /// Build a SolveRequest from a parsed Config (used by run() and tests).
+    static SolveRequest build_solve_request(const Config& config, BesqContext& ctx);
 
     /// Select language from BESQ_LANG env var / system locale / --lang CLI flag.
     /// Call early (before parse) so errors use the correct language.
@@ -89,7 +94,7 @@ private:
         cfg.config_pairs    = std::get<18>(v).value_or(Config{}.config_pairs);
         cfg.solutions       = std::get<19>(v).value_or(Config{}.solutions);
         cfg.memory_mb       = 0;
-        cfg.max_time        = std::get<21>(v).value_or(Config{}.max_time);
+        cfg.max_time        = std::get<21>(v);  // nullopt when not provided
         cfg.max_threads     = std::get<22>(v).value_or(Config{}.max_threads);
         return cfg;
     }

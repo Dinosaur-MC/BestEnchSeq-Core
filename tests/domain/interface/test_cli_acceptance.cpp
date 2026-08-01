@@ -7,6 +7,7 @@
 // =============================================================================
 
 #include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/BesqContext.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "framework/test_utils.h"
 
@@ -63,14 +64,23 @@ void test_max_time_parsing() {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "30"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.max_time == 30, "max_time should be 30");
+        expect(config.max_time.has_value() && *config.max_time == 30,
+               "max_time should be 30 when provided");
         TEST_PASS("--max-time 30");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "0"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.max_time == 0, "max_time should be 0 (unlimited)");
+        expect(config.max_time.has_value() && *config.max_time == 0,
+               "max_time should be 0 (unlimited)");
         TEST_PASS("--max-time 0");
+    }
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(!config.max_time.has_value(),
+               "max_time should be unset when --max-time omitted");
+        TEST_PASS("--max-time omitted (SearchConfig keeps 180s default)");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "-1"};
@@ -83,6 +93,67 @@ void test_max_time_parsing() {
         expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
                       "Non-numeric --max-time should throw");
         TEST_PASS("--max-time non-numeric throws");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Test: CLI option → SolveRequest.search_config wiring
+// ---------------------------------------------------------------------------
+
+void test_solve_request_config_wiring() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // --max-time 0 → unlimited (max_search_time == 0 ms)
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--source", "sharpness=2", "--max-time", "0"};
+        auto config = CLIApp::parse(7, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.search_config.max_search_time.count() == 0,
+               "--max-time 0 should set max_search_time to 0 (unlimited)");
+        TEST_PASS("wiring: --max-time 0 = unlimited");
+    }
+    // --max-time omitted → SearchConfig default 180s untouched
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--source", "sharpness=2"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.search_config.max_search_time.count() == 180'000,
+               "omitted --max-time should keep 180s default");
+        TEST_PASS("wiring: omitted --max-time keeps 180s default");
+    }
+    // --max-time 5 → 5000 ms
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--source", "sharpness=2", "--max-time", "5"};
+        auto config = CLIApp::parse(7, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.search_config.max_search_time.count() == 5000,
+               "--max-time 5 should set max_search_time to 5000 ms");
+        TEST_PASS("wiring: --max-time 5 = 5000 ms");
+    }
+    // --memory 2048 → memory_mb == 2048
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--source", "sharpness=2", "--memory", "2048"};
+        auto config = CLIApp::parse(7, const_cast<char**>(argv));
+        expect(config.memory_mb == 2048, "--memory 2048 parsed");
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.search_config.memory_mb == 2048,
+               "--memory 2048 should be wired to search_config.memory_mb");
+        TEST_PASS("wiring: --memory 2048");
+    }
+    // --memory omitted → memory_mb stays 0 (A* uses its own 2048 fallback)
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--source", "sharpness=2"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.search_config.memory_mb == 0,
+               "omitted --memory should leave memory_mb 0");
+        TEST_PASS("wiring: omitted --memory stays 0");
     }
 }
 
@@ -265,6 +336,7 @@ int main() {
         test_export_only_valid();
         test_missing_target_and_export_errors();
         test_max_time_parsing();
+        test_solve_request_config_wiring();
         test_config_parsing();
         test_registry_edit_parsing();
         test_algorithm_name();

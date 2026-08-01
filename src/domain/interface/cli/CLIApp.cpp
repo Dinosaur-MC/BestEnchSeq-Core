@@ -152,45 +152,7 @@ int CLIApp::run(int argc, char* argv[]) {
 
     // 6. Solve
     if (!config.target.empty()) {
-        auto mode = (config.mode == "inventory")
-            ? AlgorithmMode::inventory : AlgorithmMode::direct;
-
-        SolveRequest request;
-        request.target_item = ItemParser::parse(
-            config.target, _ctx.enchantments(), _ctx.equipment());
-        request.mode = mode;
-        if (mode == AlgorithmMode::inventory) {
-            // Inventory mode: the desired enchantments come from the --target
-            // brackets; the equipment's current state and the available
-            // sacrifice items come from the --input inventory file.
-            if (!config.input)
-                throw std::runtime_error(tr("cli.err.inventory_requires_input"));
-            if (!config.source.empty())
-                throw std::runtime_error(tr("cli.err.inventory_rejects_source"));
-            auto inv = InventoryParser::parse_file(
-                *config.input, _ctx.enchantments(), _ctx.equipment());
-            request.payload = InventoryPayload{
-                std::move(inv.items), std::move(inv.priorities)};
-        } else {
-            request.payload = DirectPayload{};
-            if (!config.source.empty()) {
-                request.payload = DirectPayload{
-                    EnchParser::parse(config.source, _ctx.enchantments())
-                };
-            }
-        }
-        request.forge_config.platform = (config.platform == "bedrock")
-            ? MCE::Bedrock : MCE::Java;
-        request.search_config.max_solutions = config.solutions;
-        // Inventory mode needs an inventory-capable algorithm; when the user
-        // did not pick one explicitly, fall back to the default inventory
-        // strategy (hamming).
-        request.algorithm = (mode == AlgorithmMode::inventory && !config.algorithm_explicit)
-            ? "hamming" : config.algorithm;
-        request.search_config.max_threads = static_cast<uint32_t>(config.max_threads);
-        if (config.max_time > 0)
-            request.search_config.max_search_time = std::chrono::seconds(config.max_time);
-        CLIApp::apply_config_pairs(config.config_pairs, request.forge_config);
+        SolveRequest request = CLIApp::build_solve_request(config, _ctx);
 
         OutputFormatter::set_show_nsid(config.verbose);
         auto result = _ctx.solve(request);
@@ -202,7 +164,7 @@ int CLIApp::run(int argc, char* argv[]) {
             throw std::runtime_error(tr("cli.err.unreachable_target"));
         }
 
-        auto output = _ctx.format(result, mode, config.format);
+        auto output = _ctx.format(result, request.mode, config.format);
 
         if (config.output) {
             std::ofstream out(*config.output);
@@ -391,7 +353,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr("cli.err.solutions_not_positive"));
     if (cfg.solutions > static_cast<int>(BESQ_MAX_SOLUTIONS))
         throw std::runtime_error(tr_fmt("cli.err.solutions_out_of_range", BESQ_MAX_SOLUTIONS));
-    if (cfg.max_time < 0)
+    if (cfg.max_time.has_value() && *cfg.max_time < 0)
         throw std::runtime_error(tr("cli.err.max_time_negative"));
 
     // --source requires --target
@@ -466,6 +428,60 @@ void CLIApp::apply_config_pairs(const std::string& config_pairs, algorithm::Forg
         if (k == "ignore-penalty-cost")  cfg.ignore_penalty_cost = val;
         else if (k == "ignore-repair-cost")  cfg.ignore_repair_cost = val;
     }
+}
+
+// ====================================================================
+// build_solve_request — assemble a SolveRequest from a parsed Config
+// ====================================================================
+// Shared by CLIApp::run() and the CLI tests.  This is where CLI options
+// are wired into algorithm::SearchConfig (max_search_time, memory_mb, ...).
+
+SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx) {
+    auto mode = (config.mode == "inventory")
+        ? AlgorithmMode::inventory : AlgorithmMode::direct;
+
+    SolveRequest request;
+    request.target_item = ItemParser::parse(
+        config.target, ctx.enchantments(), ctx.equipment());
+    request.mode = mode;
+    if (mode == AlgorithmMode::inventory) {
+        // Inventory mode: the desired enchantments come from the --target
+        // brackets; the equipment's current state and the available
+        // sacrifice items come from the --input inventory file.
+        if (!config.input)
+            throw std::runtime_error(tr("cli.err.inventory_requires_input"));
+        if (!config.source.empty())
+            throw std::runtime_error(tr("cli.err.inventory_rejects_source"));
+        auto inv = InventoryParser::parse_file(
+            *config.input, ctx.enchantments(), ctx.equipment());
+        request.payload = InventoryPayload{
+            std::move(inv.items), std::move(inv.priorities)};
+    } else {
+        request.payload = DirectPayload{};
+        if (!config.source.empty()) {
+            request.payload = DirectPayload{
+                EnchParser::parse(config.source, ctx.enchantments())
+            };
+        }
+    }
+    request.forge_config.platform = (config.platform == "bedrock")
+        ? MCE::Bedrock : MCE::Java;
+    request.search_config.max_solutions = config.solutions;
+    // Inventory mode needs an inventory-capable algorithm; when the user
+    // did not pick one explicitly, fall back to the default inventory
+    // strategy (hamming).
+    request.algorithm = (mode == AlgorithmMode::inventory && !config.algorithm_explicit)
+        ? "hamming" : config.algorithm;
+    request.search_config.max_threads = static_cast<uint32_t>(config.max_threads);
+    // --max-time: only override when explicitly provided. 0 = unlimited
+    // (strategies/executor treat 0 as "no timeout"). When omitted, the
+    // SearchConfig default (180s) is left untouched.
+    if (config.max_time.has_value())
+        request.search_config.max_search_time = std::chrono::seconds(*config.max_time);
+    // --memory: forward when set; 0 lets A* fall back to its own 2048 MB.
+    request.search_config.memory_mb = config.memory_mb;
+    CLIApp::apply_config_pairs(config.config_pairs, request.forge_config);
+    return request;
 }
 
 // ====================================================================
