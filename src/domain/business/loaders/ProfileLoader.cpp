@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <unordered_set>
 
 // ============================================================================
 // Load
@@ -21,34 +22,46 @@ Profile ProfileLoader::load(const std::filesystem::path& path) {
 
 bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& path) {
     try {
+        // Phase 1: parse the profile's own DTOs.  The vanilla universe is
+        // loaded separately below as the cross-validation fallback.
         auto [ench_data, eq_data] = FormatDetector::parse(path);
 
+        // Phase 2: two-phase loading — build the vanilla universe into
+        // TEMPORARY registries (tags + equipment + enchantments), then
+        // cross-validate the profile's DTOs on top of the union.  A user
+        // Profile must NOT contain vanilla's registries as its own, so after
+        // validation the Profile keeps ONLY its own enchantments/equipments;
+        // the vanilla tag universe is retained so the profile's `#tag`
+        // supported_items references stay interpretable downstream.
         RegistryLoader loader;
-        TagRegistry tag_reg;
-        EquipmentRegistry eq_reg;
-        EnchantmentRegistry ench_reg;
+        TagRegistry tag_reg;          // vanilla universe: tags
+        EquipmentRegistry eq_reg;     // vanilla universe: equipment
+        EnchantmentRegistry ench_reg; // vanilla universe + profile content
+        besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
+        loader.resolve_with_base(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
 
-        // Step 1: Build tag registry.  Seeded ONLY from the builtin vanilla
-        // tags (vanilla fallback) — no synthetic `#minecraft:<category>` tags
-        // are derived from the profile's own equipment categories.  A `#tag`
-        // supported_items reference only resolves if it is defined in the
-        // vanilla fallback.
-        {
-            TagRegistry builtin_tags;
-            EnchantmentRegistry builtin_ench;
-            EquipmentRegistry builtin_eq;
-            besq::data::load_builtin_data(builtin_tags, builtin_ench, builtin_eq);
-            for (const auto& [id, tag] : builtin_tags.data())
-                tag_reg.insert(tag);
-        }
+        // Filter the union back to the profile's own content (ids come from
+        // the profile's raw DTOs; NSID() normalization matches from_dto).
+        std::unordered_set<NSID> profile_ench_ids;
+        for (const auto& d : ench_data)
+            profile_ench_ids.insert(NSID(d.id));
+        std::unordered_set<NSID> profile_eq_ids;
+        for (const auto& d : eq_data)
+            profile_eq_ids.insert(NSID(d.id));
 
-        // Step 2: Populate registries into temporary containers
-        loader.from_dto(eq_reg, tag_reg, eq_data);
-        loader.from_dto(ench_reg, tag_reg, eq_reg, ench_data);
+        EnchantmentRegistry profile_ench;
+        for (const auto& [id, info] : ench_reg.data())
+            if (profile_ench_ids.count(id) != 0)
+                profile_ench.insert(info);
+        EquipmentRegistry profile_eq;
+        for (const auto& [id, eq] : eq_reg.data())
+            if (profile_eq_ids.count(id) != 0)
+                profile_eq.insert(eq);
 
-        // Step 3: Construct Profile via full-parameter constructor
+        // Construct Profile via full-parameter constructor.
         std::string stem = path.stem().string();
-        profile = Profile(ProfileMetadata(NSID(stem)), std::move(ench_reg), std::move(eq_reg), std::move(tag_reg));
+        profile = Profile(ProfileMetadata(NSID(stem)), std::move(profile_ench),
+                          std::move(profile_eq), std::move(tag_reg));
 
         return true;
     } catch (const std::exception& e) {

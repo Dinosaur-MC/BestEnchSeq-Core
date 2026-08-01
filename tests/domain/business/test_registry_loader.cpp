@@ -525,6 +525,73 @@ void test_loader_vanilla_tag_fallback() {
     std::cout << "PASS: test_loader_vanilla_tag_fallback" << std::endl;
 }
 
+// ---------------------------------------------------------------------------
+// 7b. resolve_with_base: profile DTOs merge on top of an already-populated
+//     universe (vanilla tags/equipment). A concrete vanilla item reference
+//     resolves even though the profile defines no equipment of its own.
+// ---------------------------------------------------------------------------
+void test_loader_resolve_with_base() {
+    // Universe (vanilla): elytra equipment + its category tag.
+    std::vector<business::loader::EquipmentData> vanilla_eq;
+    vanilla_eq.push_back({"minecraft:elytra", "Elytra", "elytra", 432});
+
+    // Profile: a mod enchant referencing the concrete vanilla item.
+    std::vector<business::loader::EnchantmentData> profile_ench;
+    profile_ench.push_back({"mod:glide", "Glide", 2, 3, 3, {}, {"minecraft:elytra"}});
+
+    RegistryLoader loader;
+    TagRegistry tag_reg;
+    tag_reg.insert({NSID("#minecraft:elytra"), "elytra"});
+    EquipmentRegistry eq_reg;       // universe first (vanilla)
+    EnchantmentRegistry ench_reg;
+
+    loader.from_dto(eq_reg, tag_reg, vanilla_eq);
+    loader.resolve_with_base(profile_ench, {}, tag_reg, eq_reg, ench_reg);
+
+    expect(ench_reg.contains(NSID("mod:glide")),
+           "concrete vanilla item ref resolves");
+    expect(ench_reg.at(NSID("mod:glide")).supported_items.contains(NSID("minecraft:elytra")),
+           "supported_items keeps the concrete item NSID");
+    TEST_PASS("test_loader_resolve_with_base");
+}
+
+// ---------------------------------------------------------------------------
+// 7c. Concrete vanilla item resolves cross-profile through the ProfileLoader:
+//     a mod profile referencing `minecraft:elytra` loads successfully even
+//     though the profile defines no equipment; the vanilla universe provides
+//     the validation fallback.
+// ---------------------------------------------------------------------------
+void test_loader_concrete_item_vanilla_universe() {
+    const std::string content = R"({
+        "name": "glide_mod",
+        "enchantments": [
+            { "id": "mod:glide", "name": "Glide", "platform": "java",
+              "max_level": 2, "limited_level": 3, "multiplier": 3,
+              "exclusive_set": [],
+              "applicable_equipment": ["minecraft:elytra"], "is_treasure": true }
+        ],
+        "equipments": [],
+        "categories": [],
+        "tags": {}
+    })";
+
+    static int counter = 0;
+    auto path = std::filesystem::temp_directory_path() /
+                ("besq_glide_test_" + std::to_string(++counter) + ".json");
+    {
+        std::ofstream f(path);
+        f << content;
+    }
+
+    ProfileLoader loader;
+    Profile p = loader.load(path);
+    expect(p.ench().contains(NSID("mod:glide")),
+           "concrete vanilla item ref resolves via vanilla universe");
+    expect(p.ench().at(NSID("mod:glide")).supported_items.contains(NSID("minecraft:elytra")),
+           "supported_items keeps the concrete item NSID");
+    TEST_PASS("test_loader_concrete_item_vanilla_universe");
+}
+
 // =============================================================================
 // Section B -- TagResolver
 // =============================================================================
@@ -823,6 +890,8 @@ int main() {
         test_loader_supported_items_resolution();
         test_loader_supported_items_concrete_and_drop();
         test_loader_vanilla_tag_fallback();
+        test_loader_resolve_with_base();
+        test_loader_concrete_item_vanilla_universe();
 
         // Section B -- TagResolver
         test_tag_resolve_basic();

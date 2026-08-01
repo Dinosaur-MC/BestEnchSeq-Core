@@ -2,7 +2,10 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/types/dto/EnchantmentData.h"
+#include "domain/business/types/dto/EquipmentData.h"
 #include <filesystem>
+#include <vector>
 
 namespace besq::data {
 
@@ -17,5 +20,11 @@ void load_builtin_data(
     EquipmentRegistry& eq_reg,
     const std::filesystem::path& data_dir = "data/builtin"
 );
+
+/// Parse the builtin vanilla data into raw DTOs (ench/eq). Used as the
+/// validation universe (fallback) when cross-validating other profiles.
+void load_builtin_dtos(
+    std::vector<business::loader::EnchantmentData>& ench,
+    std::vector<business::loader::EquipmentData>& eq);
 
 } // namespace besq::data

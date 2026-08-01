@@ -252,3 +252,17 @@ void RegistryLoader::resolve(
         from_dto(ench_reg, tag_reg, eq_reg, enchants);
     }
 }
+
+void RegistryLoader::resolve_with_base(
+    const std::vector<business::loader::EnchantmentData>& enchants,
+    const std::vector<business::loader::EquipmentData>& equipments,
+    TagRegistry& tag_reg,
+    EquipmentRegistry& eq_reg,
+    EnchantmentRegistry& ench_reg)
+{
+    // Equipments merge in first so their categories resolve against the
+    // existing (vanilla) tag universe, then enchantments are cross-validated
+    // against the union of vanilla + profile equipment and tags.
+    from_dto(eq_reg, tag_reg, equipments);
+    from_dto(ench_reg, tag_reg, eq_reg, enchants);
+}

@@ -74,4 +74,15 @@ public:
         EquipmentRegistry& eq_reg,
         EnchantmentRegistry& ench_reg,
         const TagRegistry* base_tags = nullptr);
+
+    /// Validate profile DTOs against an already-populated universe (tag_reg /
+    /// eq_reg hold vanilla content).  Equipments merge in first, then
+    /// enchantments are cross-validated and merged.  Non-passing entries are
+    /// dropped.  Unlike resolve(), the registries are NOT cleared.
+    void resolve_with_base(
+        const std::vector<business::loader::EnchantmentData>& enchants,
+        const std::vector<business::loader::EquipmentData>& equipments,
+        TagRegistry& tag_reg,
+        EquipmentRegistry& eq_reg,
+        EnchantmentRegistry& ench_reg);
 };
