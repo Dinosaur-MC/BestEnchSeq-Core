@@ -69,8 +69,8 @@ void test_solution_accumulation() {
     algorithm::ExecutionContext ctx(1, "test");
 
     std::vector<algorithm::EnchStep> steps;
-    steps.push_back(algorithm::EnchStep{{}, {}, 5});
-    steps.push_back(algorithm::EnchStep{{}, {}, 3});
+    steps.push_back(algorithm::EnchStep{{}, {}, {}, 5});
+    steps.push_back(algorithm::EnchStep{{}, {}, {}, 3});
     ctx.report_solution(steps);
 
     auto solutions = ctx.get_solutions();
@@ -181,8 +181,8 @@ void test_observer_solution_rvalue() {
 
     algorithm::ExecutionContext ctx(8, "test_sol_rv");
     std::vector<algorithm::EnchStep> steps;
-    steps.push_back({{}, {}, 3});
-    steps.push_back({{}, {}, 7});
+    steps.push_back({{}, {}, {}, 3});
+    steps.push_back({{}, {}, {}, 7});
     ctx.report_solution(std::move(steps));
     drain_events();
 

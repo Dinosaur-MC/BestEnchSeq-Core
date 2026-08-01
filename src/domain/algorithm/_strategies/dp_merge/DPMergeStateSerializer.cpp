@@ -74,7 +74,7 @@ checkpoint::Section DPMergeStateSerializer::_write_cache(const DPMergeAlgorithm&
             uint32_t steps_n = static_cast<uint32_t>(flat.size());
             payload.u32(steps_n);
             for (const auto& step : flat) {
-                payload << step.base << step.sacrifice;
+                payload << step.base << step.sacrifice << step.result;
                 payload.i32(step.cost);
             }
         }
@@ -137,12 +137,12 @@ void DPMergeStateSerializer::_read_cache(ByteStreamReader& r, DPMergeAlgorithm& 
             if (steps_n > MAX_SERIAL_STEPS_PER_ENTRY) { r.set_fail(); return; }
             std::vector<EnchStep> flat(steps_n);
             for (auto& step : flat) {
-                r >> step.base >> step.sacrifice;
+                r >> step.base >> step.sacrifice >> step.result;
                 step.cost = r.i32();
                 if (!r.ok()) break;
             }
             if (!r.ok()) break;
-            entry.step_tree = StepTree::from_flat(flat);
+            entry.step_tree = StepTree::from_steps(flat);
 
             frontier.entries.push_back(std::move(entry));
         }

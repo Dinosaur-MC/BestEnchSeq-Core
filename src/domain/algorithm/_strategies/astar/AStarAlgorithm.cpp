@@ -329,7 +329,10 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
                 steps.reserve(indices.size());
                 for (auto it = indices.rbegin(); it != indices.rend(); ++it) {
                     const auto &sn = _step_pool[*it];
-                    steps.push_back({_pool[sn.base_id], _pool[sn.sac_id], sn.cost});
+                    // Recompute the merge result (StepNode stores only base/sac/cost).
+                    Item r = _pool[sn.base_id];
+                    _forge_engine.forge_into(r, _pool[sn.sac_id], *_ench_reg);
+                    steps.push_back({_pool[sn.base_id], _pool[sn.sac_id], std::move(r), sn.cost});
                 }
             }
             ctx.report_solution(steps);

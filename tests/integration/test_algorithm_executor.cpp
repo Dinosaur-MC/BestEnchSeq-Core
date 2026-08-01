@@ -32,7 +32,6 @@ public:
     std::string_view name() const noexcept override { return "test"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0; }
-    std::optional<Item> process(const EnchSolution &, const ForgeConfig &, const EnchReg &) const override { return std::nullopt; }
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<TestForgeEngine>();
     }
@@ -45,7 +44,7 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
         std::vector<algorithm::EnchStep> solution;
-        solution.push_back(algorithm::EnchStep{{}, {}, 4});
+        solution.push_back(algorithm::EnchStep{{}, {}, {}, 4});
         ctx.report_solution(solution);
     }
 };
@@ -55,7 +54,6 @@ public:
     std::string_view name() const noexcept override { return "slow"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0; }
-    std::optional<Item> process(const EnchSolution &, const ForgeConfig &, const EnchReg &) const override { return std::nullopt; }
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<TestForgeEngine>();
     }
@@ -76,7 +74,6 @@ public:
     std::string_view name() const noexcept override { return "throwing"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0; }
-    std::optional<Item> process(const EnchSolution &, const ForgeConfig &, const EnchReg &) const override { return std::nullopt; }
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<TestForgeEngine>();
     }

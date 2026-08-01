@@ -279,7 +279,8 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
         ctx.incr_steps_forged();
 
         _current_steps.push_back({
-            _stack[frame_idx].saved_base, _stack[frame_idx].saved_sac, step_cost
+            _stack[frame_idx].saved_base, _stack[frame_idx].saved_sac,
+            _stack[frame_idx].items[p.i], step_cost
         });
 
         _stack[frame_idx].items.erase(_stack[frame_idx].items.begin() + p.j);
