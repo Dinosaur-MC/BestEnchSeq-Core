@@ -79,7 +79,7 @@ struct TestFixture {
         }
         for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
             const auto& ei = sorted_enchs[i].second;
-            bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
+            bool applicable = ei.supported_items.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.id = static_cast<uint8_t>(i);
             info.mul = static_cast<uint8_t>(ei.multiplier);

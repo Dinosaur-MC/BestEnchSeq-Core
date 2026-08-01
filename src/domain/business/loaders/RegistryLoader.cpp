@@ -44,7 +44,7 @@ void RegistryLoader::from_dto(
         info.multiplier             = d.multiplier;
         info.is_treasure            = (d.limited_level == 0);
         info.exclusive_set          = std::move(exclusive_nsid);
-        info.applicable_equipments  = std::move(applicable_eq);
+        info.supported_items        = std::move(applicable_eq);
 
         reg.insert(std::move(info));
     }
@@ -142,7 +142,7 @@ std::vector<business::loader::EnchantmentData> RegistryLoader::to_dto(
     for (const auto& [nsid, info] : reg.data()) {
         // Equipment NSIDs → category name strings
         std::vector<std::string> applicable;
-        for (const auto& eq_nsid : info.applicable_equipments) {
+        for (const auto& eq_nsid : info.supported_items) {
             auto tag_it = tag_reg.find(eq_nsid);
             if (tag_it != tag_reg.end())
                 applicable.push_back(tag_it->name);

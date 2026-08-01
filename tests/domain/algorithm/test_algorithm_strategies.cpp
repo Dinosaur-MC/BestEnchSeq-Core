@@ -88,7 +88,7 @@ struct TestContext {
         // Build compact EnchInfos with pair-wise exclusive_set matching
         for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
             const auto& biz = sorted_enchs[i].second;
-            bool applicable = biz.applicable_equipments.count(EquipmentTag::sword()) > 0;
+            bool applicable = biz.supported_items.count(EquipmentTag::sword()) > 0;
 
             algorithm::EnchInfo ai;
             ai.id = static_cast<uint8_t>(compact_infos.size());
@@ -111,7 +111,7 @@ struct TestContext {
         }
         // Populate applicable_enchs on the target equipment before init.
         for (int32_t i = 0; i < static_cast<int32_t>(sorted_enchs.size()); ++i) {
-            if (sorted_enchs[i].second.applicable_equipments.count(EquipmentTag::sword()) > 0)
+            if (sorted_enchs[i].second.supported_items.count(EquipmentTag::sword()) > 0)
                 eq.applicable_enchs.insert(static_cast<int16_t>(i));
         }
         ench_reg.init(std::move(compact_infos), std::move(global_ids), eq);

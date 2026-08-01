@@ -107,14 +107,14 @@ static EnchInfo parse_ench_info_json(const Json::Object& obj) {
         }
     }
 
-    // applicable_equipments: optional array of NSID strings (formerly applicable_category_ids)
+    // supported_items: optional array of NSID strings (formerly applicable_category_ids)
     {
-        auto it = obj.find("applicable_equipments");
+        auto it = obj.find("supported_items");
         if (it != obj.end()) {
             Json::Array arr = it->second.as<Json::Array>();
             for (const auto& elem : arr) {
                 std::string s = elem.as<std::string>();
-                info.applicable_equipments.insert(NSID(std::move(s)));
+                info.supported_items.insert(NSID(std::move(s)));
             }
         }
     }

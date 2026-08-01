@@ -38,7 +38,7 @@ std::vector<Equipment> Profile::applicable_equipment(const NSID& ench_id) const 
     std::vector<Equipment> result;
     try {
         const auto& info = _ench.at(ench_id);
-        for (const auto& cat_nsid : info.applicable_equipments) {
+        for (const auto& cat_nsid : info.supported_items) {
             auto eq_list = _eq.get_by_category(cat_nsid);
             result.insert(result.end(), eq_list.begin(), eq_list.end());
         }

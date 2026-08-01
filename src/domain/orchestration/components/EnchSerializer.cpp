@@ -63,7 +63,7 @@ static std::pair<std::string, std::string> build_mc_official_entry(
 
     // supported_items — convert category NSIDs back to item IDs
     Json::Array supp;
-    for (const auto &cat_nsid : info.applicable_equipments) {
+    for (const auto &cat_nsid : info.supported_items) {
         auto cat_it = cat_reg.find(cat_nsid);
         std::string cat_str = cat_it != cat_reg.end() ? cat_it->name : "unknown";
         if (cat_str.find(':') != std::string::npos) {
@@ -118,7 +118,7 @@ std::string EnchSerializer::to_json(
 
         // applicable_equipment array
         Json::Array eq;
-        for (const auto &cat_nsid : info.applicable_equipments) {
+        for (const auto &cat_nsid : info.supported_items) {
             auto cat_it = cat_reg.find(cat_nsid);
             std::string cat_name = cat_it != cat_reg.end() ? cat_it->name : "unknown";
             eq.push_back(Json(cat_name));
@@ -158,7 +158,7 @@ EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const TagRegistry &ca
         // applicable_equipment: join with ;
         std::string app_eq;
         first = true;
-        for (const auto &cat_nsid : info.applicable_equipments) {
+        for (const auto &cat_nsid : info.supported_items) {
             if (!first)
                 app_eq += ";";
             first = false;

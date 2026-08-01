@@ -13,7 +13,7 @@ class TagRegistry;
 #include "domain/business/types/Profile.h"
 
 /// Serialization of domain EnchInfo / Equipment to JSON, CSV, or MC official
-/// data-driven format.  Requires an TagRegistry for ID-to-name
+/// data-driven format.  Requires a TagRegistry for ID-to-name
 /// resolution during serialization.
 ///
 /// Extracted from EnchInfoParser and EquipmentParser to keep parse functions

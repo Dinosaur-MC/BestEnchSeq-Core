@@ -55,8 +55,8 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
 
     for (size_t gid = 0; gid < sorted_infos.size() && gid < 64; ++gid) {
         const auto &biz = sorted_infos[gid].second;
-        bool applicable = biz.applicable_equipments.count(target_eq.category) > 0 ||
-                          biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
+        bool applicable = biz.supported_items.count(target_eq.category) > 0 ||
+                          biz.supported_items.count(NSID("#minecraft:any")) > 0;
         if (!applicable)
             continue;
 
@@ -146,8 +146,8 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
             } catch (const std::out_of_range &) {
                 continue;  // unknown equipment → skip applicability check
             }
-            bool applicable = it->second.applicable_equipments.count(eq.category) > 0 ||
-                              it->second.applicable_equipments.count(NSID("#minecraft:any")) > 0;
+            bool applicable = it->second.supported_items.count(eq.category) > 0 ||
+                              it->second.supported_items.count(NSID("#minecraft:any")) > 0;
             if (!applicable)
                 throw std::runtime_error(tr_fmt("main.err.ench_not_applicable",
                                                 e.id.str(), item.id.str()));

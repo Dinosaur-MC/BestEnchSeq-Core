@@ -19,12 +19,12 @@ Json EnchInfo::to_json() const {
         obj.set("exclusive_set", std::move(arr));
     }
 
-    // applicable_equipments -> array of NSID strings
+    // supported_items -> array of NSID strings
     {
         Json arr = Json::array();
-        for (const auto& eq : applicable_equipments)
+        for (const auto& eq : supported_items)
             arr.push_back(Json(eq.str()));
-        obj.set("applicable_equipments", std::move(arr));
+        obj.set("supported_items", std::move(arr));
     }
 
     return obj;
@@ -55,12 +55,12 @@ void EnchInfo::from_json(const Json& json) {
         }
     }
 
-    // applicable_equipments
-    if (json.has("applicable_equipments")) {
-        auto arr = json["applicable_equipments"].as_array();
+    // supported_items
+    if (json.has("supported_items")) {
+        auto arr = json["supported_items"].as_array();
         for (const auto& elem : arr) {
             auto s = elem.as<std::string>();
-            if (!s.empty()) applicable_equipments.insert(NSID(std::move(s)));
+            if (!s.empty()) supported_items.insert(NSID(std::move(s)));
         }
     }
 }

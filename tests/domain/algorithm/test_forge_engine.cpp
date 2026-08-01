@@ -66,7 +66,7 @@ struct TestFixture {
         target_equip.max_durability = 1561;
         // Populate applicable_enchs BEFORE reg.init() — sorted is ready now.
         for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
-            if (sorted[i].second.applicable_equipments.count(EquipmentTag::sword()) > 0)
+            if (sorted[i].second.supported_items.count(EquipmentTag::sword()) > 0)
                 target_equip.applicable_enchs.insert(static_cast<int16_t>(i));
         }
 
@@ -97,7 +97,7 @@ struct TestFixture {
 
         for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
             const auto &ei  = sorted[i].second;
-            bool applicable = ei.applicable_equipments.count(EquipmentTag::sword()) > 0;
+            bool applicable = ei.supported_items.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
             info.id         = static_cast<uint8_t>(i);
             info.mul        = static_cast<uint8_t>(ei.multiplier);

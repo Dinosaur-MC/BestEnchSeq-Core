@@ -41,8 +41,8 @@ RegistryManager& RegistryManager::filter_platform(MCE platform) {
 
 RegistryManager& RegistryManager::filter_equipment(const NSID& category) {
     return filter([&category](const EnchInfo& info) {
-        return info.applicable_equipments.find(category) !=
-               info.applicable_equipments.end();
+        return info.supported_items.find(category) !=
+               info.supported_items.end();
     });
 }
 

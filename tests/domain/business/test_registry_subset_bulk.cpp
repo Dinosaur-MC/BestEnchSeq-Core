@@ -97,7 +97,7 @@ void test_subset_by_applicable() {
     EnchantmentRegistry reg(infos);
 
     auto subset = reg.create_subset(
-        [](const EnchInfo& e) { return e.applicable_equipments.contains(EquipmentTag::sword()); });
+        [](const EnchInfo& e) { return e.supported_items.contains(EquipmentTag::sword()); });
 
     expect(subset.size() == 1, "subset(sword-applicable) size == 1");
     expect(subset.contains(NSID("minecraft:sharpness")), "subset contains sharpness (applies to sword)");

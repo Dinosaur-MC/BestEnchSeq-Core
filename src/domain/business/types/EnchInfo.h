@@ -14,17 +14,17 @@ struct EnchInfo : IJsonSerializable {
     int32_t multiplier     = 0;
     bool is_treasure       = false;
     std::unordered_set<NSID> exclusive_set;
-    std::unordered_set<NSID> applicable_equipments;
+    std::unordered_set<NSID> supported_items;   // MC 原生：`#tag` 引用或具体物品 NSID
 
     EnchInfo() = default;
     EnchInfo(NSID id_, std::string name_, MCE platform_, int32_t max_level_,
              int32_t limited_level_, int32_t multiplier_, bool is_treasure_,
              std::unordered_set<NSID> exclusive_set_,
-             std::unordered_set<NSID> applicable_equipments_)
+             std::unordered_set<NSID> supported_items_)
         : id(std::move(id_)), name(std::move(name_)), supported_platform(platform_),
           max_level(max_level_), limited_level(limited_level_), multiplier(multiplier_),
           is_treasure(is_treasure_), exclusive_set(std::move(exclusive_set_)),
-          applicable_equipments(std::move(applicable_equipments_)) {}
+          supported_items(std::move(supported_items_)) {}
 
     bool operator==(const EnchInfo &o) const { return id == o.id; }
     auto operator<=>(const EnchInfo &o) const { return id <=> o.id; }

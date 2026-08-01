@@ -23,7 +23,7 @@ void test_serialize_ench() {
 }
 
 // ─── test_serialize_enchinfo ───────────────────────────────────────────
-// Round-trip EnchInfo with exclusive_set and applicable_equipments.
+// Round-trip EnchInfo with exclusive_set and supported_items.
 
 void test_serialize_enchinfo() {
     std::unordered_set<NSID> exclusive_set = {
@@ -58,11 +58,11 @@ void test_serialize_enchinfo() {
            "enchinfo round-trip: exclusive_set contains smite");
     expect(i2.exclusive_set.count(NSID("minecraft:bane_of_arthropods")) == 1,
            "enchinfo round-trip: exclusive_set contains bane");
-    expect(i2.applicable_equipments.size() == 2,
-           "enchinfo round-trip: applicable_equipments size");
-    expect(i2.applicable_equipments.count(NSID("#minecraft:sword")) == 1,
+    expect(i2.supported_items.size() == 2,
+           "enchinfo round-trip: supported_items size");
+    expect(i2.supported_items.count(NSID("#minecraft:sword")) == 1,
            "enchinfo round-trip: applicable contains sword");
-    expect(i2.applicable_equipments.count(NSID("#minecraft:axe")) == 1,
+    expect(i2.supported_items.count(NSID("#minecraft:axe")) == 1,
            "enchinfo round-trip: applicable contains axe");
 
     std::cout << "PASS: test_serialize_enchinfo" << std::endl;

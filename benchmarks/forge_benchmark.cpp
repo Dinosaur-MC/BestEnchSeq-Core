@@ -482,8 +482,8 @@ void run_case(const TestCase& tc, const Profile& profile,
 
         for (int32_t gid = 0; gid < static_cast<int32_t>(sorted.size()); ++gid) {
             const auto& biz = sorted[gid].second;
-            bool applicable = biz.applicable_equipments.count(eq.category) > 0
-                           || biz.applicable_equipments.count(NSID("#minecraft:any")) > 0;
+            bool applicable = biz.supported_items.count(eq.category) > 0
+                           || biz.supported_items.count(NSID("#minecraft:any")) > 0;
             if (!applicable) continue;
 
             algorithm::EnchInfo ai;

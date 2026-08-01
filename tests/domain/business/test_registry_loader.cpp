@@ -125,15 +125,15 @@ void test_loader_ench_dto_to_reg() {
     }
 
     // -- Verify applicable_to resolution (tag NSIDs) ----------------------
-    expect(sharp.applicable_equipments.size() == 1,
+    expect(sharp.supported_items.size() == 1,
            "sharpness applicable to 1 category");
-    expect(sharp.applicable_equipments.contains(NSID("#minecraft:sword")),
+    expect(sharp.supported_items.contains(NSID("#minecraft:sword")),
            "sharpness applicable to #minecraft:sword");
 
     const auto& prot = ench_reg.at(NSID("minecraft:protection"));
-    expect(prot.applicable_equipments.size() == 1,
+    expect(prot.supported_items.size() == 1,
            "protection applicable to 1 category");
-    expect(prot.applicable_equipments.contains(NSID("#minecraft:helmet")),
+    expect(prot.supported_items.contains(NSID("#minecraft:helmet")),
            "protection applicable to #minecraft:helmet");
 
     std::cout << "PASS: test_loader_ench_dto_to_reg" << std::endl;
@@ -365,25 +365,25 @@ void test_loader_resolve_full() {
     // ---- Verify applicable_to resolution --------------------------------
     {
         const auto& si = ench_reg.at(NSID("minecraft:sharpness"));
-        expect(si.applicable_equipments.size() == 1,
+        expect(si.supported_items.size() == 1,
                "sharpness applicable to 1 category");
-        expect(si.applicable_equipments.contains(NSID("#minecraft:sword")),
+        expect(si.supported_items.contains(NSID("#minecraft:sword")),
                "sharpness applicable to sword tag");
     }
     {
         const auto& pi = ench_reg.at(NSID("minecraft:protection"));
-        expect(pi.applicable_equipments.size() == 1,
+        expect(pi.supported_items.size() == 1,
                "protection applicable to 1 category");
-        expect(pi.applicable_equipments.contains(NSID("#minecraft:helmet")),
+        expect(pi.supported_items.contains(NSID("#minecraft:helmet")),
                "protection applicable to helmet tag");
     }
     {
         const auto& ui = ench_reg.at(NSID("minecraft:unbreaking"));
-        expect(ui.applicable_equipments.size() == 2,
+        expect(ui.supported_items.size() == 2,
                "unbreaking applicable to 2 categories");
-        expect(ui.applicable_equipments.contains(NSID("#minecraft:sword")),
+        expect(ui.supported_items.contains(NSID("#minecraft:sword")),
                "unbreaking applicable to sword tag");
-        expect(ui.applicable_equipments.contains(NSID("#minecraft:helmet")),
+        expect(ui.supported_items.contains(NSID("#minecraft:helmet")),
                "unbreaking applicable to helmet tag");
     }
 
@@ -424,7 +424,7 @@ void test_loader_resolve_vanilla_fallback() {
         EnchantmentRegistry ench_reg;
         loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg);
         const auto& e = ench_reg.at(NSID("minecraft:leeching"));
-        expect(e.applicable_equipments.empty(),
+        expect(e.supported_items.empty(),
                "without fallback, leeching has no applicable equipment");
         expect(e.exclusive_set.contains(NSID("minecraft:sharpness")),
                "exclusive_with resolves by name regardless of fallback");
@@ -441,7 +441,7 @@ void test_loader_resolve_vanilla_fallback() {
         loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg, &base_tags);
 
         const auto& e = ench_reg.at(NSID("minecraft:leeching"));
-        expect(e.applicable_equipments.contains(NSID("#minecraft:sword")),
+        expect(e.supported_items.contains(NSID("#minecraft:sword")),
                "with vanilla fallback, leeching is applicable to sword");
         expect(e.exclusive_set.contains(NSID("minecraft:sharpness")),
                "exclusive_with to vanilla sharpness preserved");
@@ -504,7 +504,7 @@ void test_loader_vanilla_tag_fallback() {
     expect(e.exclusive_set.contains(NSID("minecraft:vanishing_curse")),
            "vanilla curse tag expanded to vanishing_curse");
     // The vanilla sword category resolves via the category fallback.
-    expect(e.applicable_equipments.contains(NSID("#minecraft:sword")),
+    expect(e.supported_items.contains(NSID("#minecraft:sword")),
            "vanilla sword category resolves");
 
     std::cout << "PASS: test_loader_vanilla_tag_fallback" << std::endl;
