@@ -66,7 +66,9 @@ void RegistryLoader::from_dto(
         info.is_treasure       = (d.limited_level == 0);
         info.exclusive_set     = std::move(exclusive_nsid);
         info.supported_items   = std::move(supported);
-        reg.insert(std::move(info));
+        if (!reg.insert(std::move(info)).second)
+            LOG_WARN("Keeping existing enchantment '%s': duplicate NSID, new entry dropped",
+                     d.id.c_str());
     }
 }
 
@@ -85,7 +87,9 @@ void RegistryLoader::from_dto(
         eq.category       = (cat_it != tag_reg.end()) ? cat_it->id : NSID();
         eq.max_durability = d.max_durability;
 
-        reg.insert(std::move(eq));
+        if (!reg.insert(std::move(eq)).second)
+            LOG_WARN("Keeping existing equipment '%s': duplicate NSID, new entry dropped",
+                     d.id.c_str());
     }
 }
 
@@ -242,15 +246,8 @@ void RegistryLoader::resolve(
             tag_reg.insert(tag);
     }
 
-    // Step 2: Build EquipmentRegistry
-    {
-        from_dto(eq_reg, tag_reg, equipments);
-    }
-
-    // Step 3: Build EnchantmentRegistry
-    {
-        from_dto(ench_reg, tag_reg, eq_reg, enchants);
-    }
+    // Step 2+3: Build EquipmentRegistry, then EnchantmentRegistry
+    populate(eq_reg, ench_reg, tag_reg, equipments, enchants);
 }
 
 void RegistryLoader::resolve_with_base(
@@ -263,6 +260,16 @@ void RegistryLoader::resolve_with_base(
     // Equipments merge in first so their categories resolve against the
     // existing (vanilla) tag universe, then enchantments are cross-validated
     // against the union of vanilla + profile equipment and tags.
+    populate(eq_reg, ench_reg, tag_reg, equipments, enchants);
+}
+
+void RegistryLoader::populate(
+    EquipmentRegistry& eq_reg,
+    EnchantmentRegistry& ench_reg,
+    const TagRegistry& tag_reg,
+    const std::vector<business::loader::EquipmentData>& equipments,
+    const std::vector<business::loader::EnchantmentData>& enchants)
+{
     from_dto(eq_reg, tag_reg, equipments);
     from_dto(ench_reg, tag_reg, eq_reg, enchants);
 }

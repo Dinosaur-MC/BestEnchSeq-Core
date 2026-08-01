@@ -7,15 +7,14 @@
 
 #include <filesystem>
 #include <string>
-#include <utility>
 
 namespace besq::data {
 
 namespace {
 
 /// Read the builtin vanilla.json raw content once (filesystem override or
-/// embedded).  Shared by load_builtin_data and load_builtin_dtos so the
-/// categories seed and the DTO parse come from the same single read.
+/// embedded), so the categories seed and the DTO parse come from the same
+/// single read.
 std::string read_builtin_content(const std::filesystem::path& data_dir) {
     auto vanilla_path = data_dir / "vanilla.json";
     if (std::filesystem::exists(vanilla_path))
@@ -38,18 +37,6 @@ TagRegistry parse_base_tags(const std::string& content) {
 }
 
 } // namespace
-
-void load_builtin_dtos(
-    std::vector<business::loader::EnchantmentData>& ench,
-    std::vector<business::loader::EquipmentData>& eq)
-{
-    // Same single raw-content read as load_builtin_data (filesystem override
-    // or embedded), so the validation universe matches the builtin registries.
-    std::string content = read_builtin_content("data/builtin");
-    auto parsed = NativeJsonParser::parse_string(content);
-    ench = std::move(parsed.first);
-    eq = std::move(parsed.second);
-}
 
 void load_builtin_data(
     TagRegistry& tag_reg,

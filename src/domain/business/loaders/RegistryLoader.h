@@ -85,4 +85,13 @@ public:
         TagRegistry& tag_reg,
         EquipmentRegistry& eq_reg,
         EnchantmentRegistry& ench_reg);
+
+private:
+    /// Shared equipment-then-enchantment populate step used by both resolve()
+    /// and resolve_with_base().
+    void populate(EquipmentRegistry& eq_reg,
+                  EnchantmentRegistry& ench_reg,
+                  const TagRegistry& tag_reg,
+                  const std::vector<business::loader::EquipmentData>& equipments,
+                  const std::vector<business::loader::EnchantmentData>& enchants);
 };

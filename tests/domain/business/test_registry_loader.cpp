@@ -589,6 +589,11 @@ void test_loader_concrete_item_vanilla_universe() {
            "concrete vanilla item ref resolves via vanilla universe");
     expect(p.ench().at(NSID("mod:glide")).supported_items.contains(NSID("minecraft:elytra")),
            "supported_items keeps the concrete item NSID");
+    // The profile-only filter must keep vanilla content OUT of the profile:
+    // the vanilla universe is only the validation fallback, not content.
+    expect(p.eq().size() == 0, "profile has no equipment of its own");
+    expect(!p.ench().contains(NSID("minecraft:sharpness")),
+           "vanilla enchantment excluded from profile");
     TEST_PASS("test_loader_concrete_item_vanilla_universe");
 }
 
