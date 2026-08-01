@@ -20,7 +20,7 @@ bool CompactAdapter::is_supported(const EnchInfo &info, const NSID &item_id,
     if (info.supported_items.contains(item_id))
         return true;
     for (const auto &t : info.supported_items) {
-        if (!t.str().empty() && t.str()[0] == '#' && item_tags.contains(t))
+        if (t.is_tag() && item_tags.contains(t))
             return true;
     }
     return false;
