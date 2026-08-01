@@ -245,8 +245,8 @@ void test_apply_inapplicable_source_throws() {
     TEST_PASS("test_apply_inapplicable_source_throws");
 }
 
-// ─── Test 13: inapplicable enchants on inventory extra items are NOT errors ───
-//     (a protection book in the inventory is legitimately unusable for a sword)
+// ─── Test 13: a book carrying an enchant inapplicable to the target still
+//     works — books accept any enchantment (no applicability check) ───
 void test_apply_inventory_inapplicable_extra_ok() {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
@@ -290,8 +290,9 @@ void test_apply_source_level_exceeds_max_throws() {
     TEST_PASS("test_apply_source_level_exceeds_max_throws");
 }
 
-// ─── Test 15: over-level enchant on inventory extra book is NOT an error ───
-void test_apply_inventory_extra_over_level_ok() {
+// ─── Test 15: over-level enchant on inventory extra book throws ───
+//     (inventory items are validated like direct mode: level ≤ max_level)
+void test_apply_inventory_extra_over_level_throws() {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -302,18 +303,18 @@ void test_apply_inventory_extra_over_level_ok() {
     request.mode = AlgorithmMode::inventory;
     InventoryPayload payload;
     EnchSet book_enchs;
-    book_enchs.emplace(NSID("sharpness"), "Sharpness", 99);
+    book_enchs.emplace(NSID("sharpness"), "Sharpness", 99);  // max_level is 5
     payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"),
                                      book_enchs, 0);
     request.payload = std::move(payload);
     request.forge_config.platform = MCE::Java;
     request.search_config = algorithm::SearchConfig{};
 
-    auto input = CompactAdapter::apply(profile, request);  // must not throw
-    expect(!input.available().empty(),
-           "inventory items should be present");
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "over-level inventory book should throw");
 
-    TEST_PASS("test_apply_inventory_extra_over_level_ok");
+    TEST_PASS("test_apply_inventory_extra_over_level_throws");
 }
 
 // ─── Test 16: inventory mode forwards all items into available ───
@@ -354,6 +355,59 @@ void test_apply_inventory_equipment_split() {
     TEST_PASS("test_apply_inventory_equipment_split");
 }
 
+// ─── Test 17: inventory equipment carrying an inapplicable enchant throws ───
+void test_apply_inventory_equipment_inapplicable_throws() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    EnchSet eq_enchs;
+    eq_enchs.emplace(NSID("protection"), "Protection", 4);  // chestplate-only
+    // An inventory diamond_sword cannot carry protection.
+    payload.extra_items.emplace_back(NSID("minecraft:diamond_sword"),
+                                     eq_enchs, 0, 1561);
+    request.payload = std::move(payload);
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "inventory equipment with inapplicable enchant should throw");
+
+    TEST_PASS("test_apply_inventory_equipment_inapplicable_throws");
+}
+
+// ─── Test 18: inventory equipment with over-level enchant throws ───
+void test_apply_inventory_equipment_over_level_throws() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    EnchSet eq_enchs;
+    eq_enchs.emplace(NSID("sharpness"), "Sharpness", 99);  // max_level is 5
+    payload.extra_items.emplace_back(NSID("minecraft:diamond_sword"),
+                                     eq_enchs, 0, 1561);
+    request.payload = std::move(payload);
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    expect_throws_as<std::runtime_error>(
+        [&] { CompactAdapter::apply(profile, request); },
+        "inventory equipment with over-level enchant should throw");
+
+    TEST_PASS("test_apply_inventory_equipment_over_level_throws");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -372,8 +426,10 @@ int main() {
         test_apply_inapplicable_source_throws();
         test_apply_inventory_inapplicable_extra_ok();
         test_apply_source_level_exceeds_max_throws();
-        test_apply_inventory_extra_over_level_ok();
+        test_apply_inventory_extra_over_level_throws();
         test_apply_inventory_equipment_split();
+        test_apply_inventory_equipment_inapplicable_throws();
+        test_apply_inventory_equipment_over_level_throws();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

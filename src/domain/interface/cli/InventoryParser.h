@@ -21,7 +21,8 @@ struct InventoryParser {
     ///                  "prior_penalty": N, "durability": N, "priority": N },
     ///                ... ] }
     /// Throws std::runtime_error on file read / parse errors, unknown
-    /// enchantments, unknown equipment, or malformed item entries.
+    /// enchantments, enchantment levels exceeding the registry max level,
+    /// unknown equipment, or malformed item entries.
     static InventoryInput parse_file(const std::string &path,
                                      const EnchantmentRegistry &ench_reg,
                                      const EquipmentRegistry &eq_reg);

@@ -30,6 +30,9 @@ EnchSet parse_ench_array(const Json::Array &arr,
         auto it = ench_reg.find(NSID(eid));
         if (it == ench_reg.end())
             throw std::runtime_error(tr_fmt("cli.err.unknown_ench", eid));
+        if (level > it->max_level)
+            throw std::runtime_error(tr_fmt("main.err.ench_level_exceeds_max",
+                                            it->id.str(), level, it->max_level));
         result.emplace(it->id, it->name, static_cast<int32_t>(level));
     }
     return result;

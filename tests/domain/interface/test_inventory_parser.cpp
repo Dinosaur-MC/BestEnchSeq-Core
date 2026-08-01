@@ -114,6 +114,39 @@ void test_unknown_ench_throws() {
     TEST_PASS("test_unknown_ench_throws");
 }
 
+void test_book_over_level_ench_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto path = write_temp(R"({ "items": [
+        { "type": "book", "enchants": [{"id":"sharpness","level":10}] }
+    ] })");  // sharpness max_level is 5
+    bool threw = false;
+    try {
+        InventoryParser::parse_file(path, ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "book enchantment level exceeding max should throw");
+    TEST_PASS("test_book_over_level_ench_throws");
+}
+
+void test_equipment_over_level_ench_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto path = write_temp(R"({ "items": [
+        { "type": "equipment", "id": "diamond_sword",
+          "enchants": [{"id":"knockback","level":9}] }
+    ] })");  // knockback max_level is 2
+    bool threw = false;
+    try {
+        InventoryParser::parse_file(path, ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "equipment enchantment level exceeding max should throw");
+    TEST_PASS("test_equipment_over_level_ench_throws");
+}
+
 void test_bad_type_throws() {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
@@ -152,6 +185,8 @@ int main() {
         test_parse_empty_items();
         test_unknown_equipment_throws();
         test_unknown_ench_throws();
+        test_book_over_level_ench_throws();
+        test_equipment_over_level_ench_throws();
         test_bad_type_throws();
         test_missing_file_throws();
     } catch (const test_error& e) {

@@ -124,6 +124,36 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
         }
     };
 
+    // ── 6c. Inventory-item validation ─────────────────────────────────
+    // Each inventory item's enchantments must not exceed the registry max
+    // level; an enchantment carried by an equipment item must additionally
+    // be applicable to that item's own equipment category.  Books accept
+    // any enchantment, so they skip the applicability check.
+    auto validate_inventory_item = [&](const Item &item) {
+        for (const auto &e : item.enchantments) {
+            auto it = all_infos_map.find(e.id);
+            if (it == all_infos_map.end())
+                continue;  // unknown id → ignore (legacy behavior)
+            if (e.level > it->second.max_level)
+                throw std::runtime_error(tr_fmt("main.err.ench_level_exceeds_max",
+                                                e.id.str(), e.level,
+                                                it->second.max_level));
+            if (item.is_book())
+                continue;  // books accept any enchantment
+            ::Equipment eq;
+            try {
+                eq = eq_registry.at(item.id);
+            } catch (const std::out_of_range &) {
+                continue;  // unknown equipment → skip applicability check
+            }
+            bool applicable = it->second.applicable_equipments.count(eq.category) > 0 ||
+                              it->second.applicable_equipments.count(NSID("#minecraft:any")) > 0;
+            if (!applicable)
+                throw std::runtime_error(tr_fmt("main.err.ench_not_applicable",
+                                                e.id.str(), item.id.str()));
+        }
+    };
+
     // ── 7. Build AlgorithmInput skeleton ───────────────────────────────
     algorithm::AlgorithmInput input;
     input.registry      = std::move(ench_reg);
@@ -175,6 +205,7 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
                     const auto &item = extra[i];
                     if (item.is_book() && item.enchantments.empty())
                         continue;  // drop empty books (no forge value)
+                    validate_inventory_item(item);
                     algorithm::Item algo_item;
                     algo_item.type  = item.is_book() ? algorithm::ItemType::Book : algorithm::ItemType::Equip;
                     algo_item.ppn   = static_cast<uint8_t>(item.prior_penalty);
