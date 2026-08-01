@@ -5,7 +5,7 @@
 namespace {
 inline bool validate_id(const std::string_view &id) {
     static constexpr std::string_view valid_chars =
-        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
+        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-/";
 
     if (id.empty())
         return false;

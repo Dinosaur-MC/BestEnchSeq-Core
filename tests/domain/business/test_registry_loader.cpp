@@ -660,19 +660,14 @@ void test_tag_tags_of() {
     TagResolver resolver;
     resolver.add_tag("minecraft:swords",
         {"minecraft:diamond_sword", "minecraft:iron_sword"});
-    // NOTE: tag keys must be slash-free here. NSID rejects '/' in the id
-    // portion (see CommonTypes::validate_id), so a key such as the real
-    // "minecraft:enchantable/durability" cannot be represented as a
-    // `#`-prefixed NSID -- and, being outside the NSID domain, such tags
-    // can never appear in EnchInfo::supported_items either.
-    resolver.add_tag("minecraft:durability",
+    resolver.add_tag("minecraft:enchantable/durability",
         {"minecraft:diamond_sword"});
 
     auto tags = resolver.tags_of("minecraft:diamond_sword");
     expect(tags.size() == 2, "diamond_sword belongs to 2 tags");
     expect(tags.contains(NSID("#minecraft:swords")),
            "tags_of returns #-prefixed swords tag");
-    expect(tags.contains(NSID("#minecraft:durability")),
+    expect(tags.contains(NSID("#minecraft:enchantable/durability")),
            "tags_of returns durability tag");
 
     auto none = resolver.tags_of("minecraft:nonexistent");
