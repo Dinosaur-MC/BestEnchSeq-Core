@@ -349,8 +349,6 @@ void test_csv_parse_multiple_rows() {
 
 void test_mc_single_enchantment_basic() {
     TagResolver tag_resolver;
-    tag_resolver.load_tag_content("minecraft:sword",
-        R"({"values": ["minecraft:diamond_sword"]})");
 
     std::string content = R"({
         "anvil_cost": 1,
@@ -431,6 +429,48 @@ void test_mc_single_enchantment_with_exclusive() {
     TEST_PASS("test_mc_single_enchantment_with_exclusive");
 }
 
+// ─── test_mc_limited_level_tag_resolved ────────────────────────────────
+// Regression (T5 review): supported_items is passed through RAW, but the
+// limited_level computation must resolve the tag to concrete items first.
+// With "#minecraft:sword" → {diamond_sword (enchant 10), iron_sword
+// (enchant 14)}, the max power is 44 (iron_sword):
+//   (44 - 10) / 5 + 1 = 7  → capped to max_level = 5.
+// If the raw "#minecraft:sword" string were fed to compute_limited_level it
+// matches no item_props key and limited_level collapses to max(1, 0) = 1.
+
+void test_mc_limited_level_tag_resolved() {
+    TagResolver tag_resolver;
+    tag_resolver.load_tag_content("minecraft:sword",
+        R"({"values": ["minecraft:diamond_sword", "minecraft:iron_sword"]})");
+
+    std::string content = R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "exclusive_set": [],
+        "supported_items": ["#minecraft:sword"],
+        "min_cost": {"base": 10, "per_level_above_first": 5}
+    })";
+
+    auto ench = McOfficialParser::parse_single_enchantment(
+        "minecraft", "sharpness", content, tag_resolver);
+
+    // applicable_to stays raw (pass-through, T5)
+    bool has_tag = false;
+    for (const auto& a : ench.applicable_to) {
+        if (a == "#minecraft:sword") { has_tag = true; break; }
+    }
+    expect(has_tag,
+           "mc_limited_tag: applicable_to raw #minecraft:sword");
+
+    // limited_level computed from the RESOLVED items, not collapsed to 1
+    expect(ench.limited_level > 1,
+           "mc_limited_tag: limited_level not collapsed to 1");
+    expect_eq(ench.limited_level, 5,
+              "mc_limited_tag: limited_level computed from resolved items");
+
+    TEST_PASS("test_mc_limited_level_tag_resolved");
+}
+
 // ─── test_mc_parse_files_basic ─────────────────────────────────────────
 // Use parse_files() with a map containing one enchantment file and one
 // item tag file. Verify the enchantment is parsed and equipment is derived
@@ -509,6 +549,7 @@ int main() {
         // Section C — McOfficialParser
         test_mc_single_enchantment_basic();
         test_mc_single_enchantment_with_exclusive();
+        test_mc_limited_level_tag_resolved();
         test_mc_parse_files_basic();
         test_mc_parse_files_empty();
     } catch (const test_error& e) {
