@@ -101,6 +101,11 @@ public:
     /// 对目标 profile 的 supported_items 引用按 (vanilla ∪ 依赖链) 交叉验证，返回移除数。
     size_t cross_validate(const NSID& profile);
 
+    /// 显式使有效视图缓存失效。直接修改 Profile（绕过 manager 级 mutation，
+    /// 如 BesqContext::load_file/import_registry 的批量合并）后必须调用，否则
+    /// resolve_effective 会返回陈旧视图。
+    void notify_mutated() const { _effective_cache.clear(); }
+
     // ── Publish ────────────────────────────────────────────────────────
 
     /// 版本化发布：拍平有效视图为自包含 profile 文件（内嵌 version/tag）。

@@ -71,6 +71,10 @@ void BesqContext::load_file(const std::string& path) {
         profile.add_equipment(eq);
     for (const auto& [nsid, info] : ench_reg.data())
         profile.add_enchantment(info);
+
+    // Profile was mutated directly (bypassing manager _mutate) — the cached
+    // effective view must be invalidated or a later read would be stale.
+    _impl->profiles.notify_mutated();
 }
 
 void BesqContext::load_data(const std::vector<std::string>& filters) {
@@ -233,6 +237,10 @@ void BesqContext::import_registry(const std::string& path) {
         profile.add_equipment(eq);
     for (const auto& [nsid, info] : ench_reg.data())
         profile.add_enchantment(info);
+
+    // Direct profile mutation bypasses manager _mutate — invalidate the
+    // effective-view cache so the next read reflects the imported content.
+    _impl->profiles.notify_mutated();
 }
 
 void BesqContext::import_registries(const std::vector<std::string>& paths) {

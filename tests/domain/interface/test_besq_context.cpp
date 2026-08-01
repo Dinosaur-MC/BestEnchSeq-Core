@@ -235,6 +235,35 @@ void test_besq_export() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: import_registry invalidates the effective-view cache
+// ---------------------------------------------------------------------------
+
+void test_besq_import_invalidates_effective_cache() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // Prime the effective-view cache.
+    expect(ctx.enchantments().contains(NSID("minecraft:sharpness")),
+           "effective cache primed");
+
+    // import_registry mutates the active profile directly (bypassing manager
+    // _mutate); the effective-view cache must be invalidated so the imported
+    // enchantment is visible on the next read.
+    auto tmp = std::filesystem::temp_directory_path() / "besq_import_cache.json";
+    {
+        std::ofstream f(tmp);
+        f << R"({"name":"extra","enchantments":[{"id":"extra:y","name":"Y","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})";
+    }
+    ctx.import_registry(tmp.string());
+    std::filesystem::remove(tmp);
+
+    expect(ctx.enchantments().contains(NSID("extra:y")),
+           "imported enchantment visible via effective view");
+
+    TEST_PASS("BesqContext import invalidates effective cache");
+}
+
+// ---------------------------------------------------------------------------
 // Test: C ABI bindings
 // ---------------------------------------------------------------------------
 
@@ -427,6 +456,7 @@ int main() {
         test_besq_registry_edit();
         test_besq_default_profiles_scan();
         test_besq_export();
+        test_besq_import_invalidates_effective_cache();
         test_c_abi();
         test_c_abi_solve_default_algo();
         test_c_abi_solve_inventory();
