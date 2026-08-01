@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -33,7 +34,7 @@ std::string read_builtin_content(const std::filesystem::path& data_dir) {
 /// entries (concrete IDs or `#`-references), preserved verbatim so nested
 /// tag expansion happens lazily at resolution time.
 std::vector<std::pair<std::string, std::vector<std::string>>>
-load_builtin_tag_entries(const std::string& content) {
+parse_tag_entries(const std::string& content) {
     std::vector<std::pair<std::string, std::vector<std::string>>> out;
     try {
         Json root = Json::parse(content);
@@ -73,7 +74,7 @@ load_builtin_tag_entries(const std::string& content) {
 /// `#minecraft:<category>` tags from the equipment categories array.
 TagRegistry parse_base_tags(const std::string& content) {
     TagRegistry base_tags;
-    for (const auto& [key, values] : load_builtin_tag_entries(content)) {
+    for (const auto& [key, values] : parse_tag_entries(content)) {
         (void)values;
         base_tags.insert({NSID("#" + key), key});
     }
@@ -82,10 +83,28 @@ TagRegistry parse_base_tags(const std::string& content) {
 
 } // namespace
 
+std::vector<std::pair<std::string, std::vector<std::string>>>
+load_builtin_tag_entries(const std::filesystem::path& data_dir) {
+    // Process-lifetime cache: the builtin vanilla.json is static for a given
+    // data_dir, so parse it once and reuse — avoids re-parsing ~92 KB on every
+    // profile load and keeps the parser seed / DataLoader seed consistent.
+    // Profile loading is single-threaded in this codebase.
+    static std::unordered_map<
+        std::string, std::vector<std::pair<std::string, std::vector<std::string>>>>
+        cache;
+    const std::string key = data_dir.string();
+    auto it = cache.find(key);
+    if (it != cache.end())
+        return it->second;
+    auto entries = parse_tag_entries(read_builtin_content(data_dir));
+    cache.emplace(key, entries);
+    return entries;
+}
+
 std::shared_ptr<TagResolver> make_builtin_tag_resolver(
     const std::filesystem::path& data_dir) {
     auto resolver = std::make_shared<TagResolver>();
-    for (const auto& [key, values] : load_builtin_tag_entries(read_builtin_content(data_dir)))
+    for (const auto& [key, values] : load_builtin_tag_entries(data_dir))
         resolver->add_tag(key,
                           std::unordered_set<std::string>(values.begin(), values.end()));
     return resolver;

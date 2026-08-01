@@ -227,7 +227,7 @@ void test_json_parse_via_Json() {
 // Section B — NativeCsvParser
 //
 // NativeCsvParser reads CSV content with columns:
-//   id,name,max_level,limited_level,multiplier,exclusive_set,applicable_equipment
+//   id,name,max_level,limited_level,multiplier,exclusive_set,supported_items
 // exclusive_set is semicolon-separated. Returns vector<EnchantmentData> only.
 // ============================================================================
 
@@ -237,7 +237,7 @@ void test_json_parse_via_Json() {
 
 void test_csv_parse_basic() {
     std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,applicable_equipment\n"
+        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
         "minecraft:sharpness,Sharpness,5,5,1,,\"#minecraft:sword\"\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
@@ -265,7 +265,7 @@ void test_csv_parse_basic() {
 
 void test_csv_parse_with_exclusive() {
     std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,applicable_equipment\n"
+        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
         "minecraft:sharpness,Sharpness,5,5,1,minecraft:smite,#minecraft:sword\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
@@ -290,7 +290,7 @@ void test_csv_parse_with_exclusive() {
 
 void test_csv_parse_empty_header_only() {
     std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,applicable_equipment\n";
+        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
 
@@ -304,7 +304,7 @@ void test_csv_parse_empty_header_only() {
 
 void test_csv_parse_multiple_rows() {
     std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,applicable_equipment\n"
+        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
         "minecraft:sharpness,Sharpness,5,5,1,,\n"
         "minecraft:smite,Smite,5,5,1,,\n"
         "minecraft:unbreaking,Unbreaking,3,3,1,,\n";

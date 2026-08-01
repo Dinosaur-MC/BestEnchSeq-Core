@@ -3,6 +3,7 @@
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 #include "domain/business/business.h"
+#include "domain/business/parsers/ParserShared.h"
 #include "domain/business/types/EnchantmentDataPack.h"
 #include "domain/business/types/EnchInfo.h"
 
@@ -87,6 +88,9 @@ std::string EnchSerializer::to_json(
     const std::vector<EnchInfo> &infos, const TagRegistry &cat_reg,
     const EnchantmentDataPack *metadata
 ) {
+    // supported_items are emitted as raw references (T10); the category registry
+    // is not needed for that (kept for the public API / callers).
+    (void)cat_reg;
     Json::Object root;
 
     // Add metadata if provided
@@ -116,14 +120,14 @@ std::string EnchSerializer::to_json(
         }
         obj["exclusive_set"] = Json(excl);
 
-        // applicable_equipment array
-        Json::Array eq;
+        // supported_items array — raw references preserved (T10): `#tag` or
+        // concrete item id, so an export → import round-trip keeps reference
+        // semantics for cross-validation.
+        Json::Array sup;
         for (const auto &cat_nsid : info.supported_items) {
-            auto cat_it = cat_reg.find(cat_nsid);
-            std::string cat_name = cat_it != cat_reg.end() ? cat_it->name : "unknown";
-            eq.push_back(Json(cat_name));
+            sup.push_back(Json(cat_nsid.str()));
         }
-        obj["applicable_equipment"] = Json(eq);
+        obj["supported_items"] = Json(sup);
 
         enchants.push_back(Json(obj));
     }
@@ -136,12 +140,14 @@ std::string EnchSerializer::to_json(
 
 std::string
 EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const TagRegistry &cat_reg) {
+    // supported_items are emitted as raw references (T10).
+    (void)cat_reg;
     csv::CsvTable table;
 
     // Header row
     table.push_back(
         {"id", "name", "platform", "max_level", "limited_level", "multiplier", "is_treasure", "exclusive_set",
-         "applicable_equipment"}
+         "supported_items"}
     );
 
     for (const auto &info : infos) {
@@ -155,16 +161,14 @@ EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const TagRegistry &ca
             excl_set += e.str();
         }
 
-        // applicable_equipment: join with ;
+        // supported_items: join with ; (raw references preserved)
         std::string app_eq;
         first = true;
         for (const auto &cat_nsid : info.supported_items) {
             if (!first)
                 app_eq += ";";
             first = false;
-            auto cat_it = cat_reg.find(cat_nsid);
-            std::string cat_name = cat_it != cat_reg.end() ? cat_it->name : "unknown";
-            app_eq += cat_name;
+            app_eq += cat_nsid.str();
         }
 
         table.push_back({
@@ -232,7 +236,11 @@ EnchSerializer::to_json(const std::vector<Equipment> &equipments, const TagRegis
     Json::Array eq_arr;
     for (const auto &eq : equipments) {
         auto cat_it = cat_reg.find(eq.category);
-        std::string cat_name = cat_it != cat_reg.end() ? cat_it->name : "unknown";
+        // Category is a display-only short name under the real-MC-tag model:
+        // fall back to the NSID's short form when it is not a *defined* tag.
+        std::string cat_name = cat_it != cat_reg.end()
+                                   ? cat_it->name
+                                   : business::parser_detail::category_short_name(eq.category);
         Json::Object obj;
         obj["id"]             = Json(eq.id.str());
         obj["name"]           = Json(eq.name);
@@ -255,7 +263,9 @@ EnchSerializer::to_csv(const std::vector<Equipment> &equipments, const TagRegist
 
     for (const auto &eq : equipments) {
         auto cat_it = cat_reg.find(eq.category);
-        std::string cat_name2 = cat_it != cat_reg.end() ? cat_it->name : "unknown";
+        std::string cat_name2 = cat_it != cat_reg.end()
+                                    ? cat_it->name
+                                    : business::parser_detail::category_short_name(eq.category);
         table.push_back({
             eq.id.str(),
             eq.name,

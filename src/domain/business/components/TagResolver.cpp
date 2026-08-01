@@ -246,8 +246,8 @@ std::unordered_set<std::string> TagResolver::resolve(
 // ---------------------------------------------------------------------------
 std::unordered_set<NSID> TagResolver::tags_of(const std::string &concrete_id) const {
     std::unordered_set<NSID> result;
-    for (const auto &[key, values] : _raw_tags) {
-        (void)values;
+    for (const auto &entry : _raw_tags) {
+        const auto &key = entry.first;
         auto resolved = resolve("#" + key);
         if (resolved.count(concrete_id))
             result.insert(NSID("#" + key));

@@ -1,5 +1,6 @@
 #include "RegistryLoader.h"
 #include "domain/business/components/Serializer.h"
+#include "domain/business/parsers/ParserShared.h"
 #include "common/CommonTypes.h"
 #include "common/log/log.hpp"
 
@@ -215,8 +216,14 @@ std::vector<business::loader::EquipmentData> RegistryLoader::to_dto(
         auto tag_it = tag_reg.find(eq.category);
         if (tag_it != tag_reg.end())
             category_name = tag_it->name;
-        else
-            category_name = "any";
+        else {
+            // Category is a display-only short name under the real-MC-tag model
+            // (T10): fall back to the NSID's short form so a to_dto → from_dto
+            // round-trip keeps the display category.
+            category_name = business::parser_detail::category_short_name(eq.category);
+            if (category_name.empty())
+                category_name = "any";
+        }
 
         business::loader::EquipmentData d;
         d.id             = eq_nsid.str();

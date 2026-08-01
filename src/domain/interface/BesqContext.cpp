@@ -201,7 +201,10 @@ void BesqContext::import_registry(const std::string& path) {
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
     RegistryLoader reg_loader;
-    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
+    // Seed with the active profile's tag universe (vanilla fallback) so the
+    // imported file's `#tag` supported_items references cross-validate (T10).
+    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
+                       &profile.tags());
 
     for (const auto& [nsid, tag] : tag_reg.data())
         profile.add_tag(tag);

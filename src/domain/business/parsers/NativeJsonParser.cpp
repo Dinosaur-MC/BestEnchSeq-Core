@@ -1,5 +1,6 @@
 #include "NativeJsonParser.h"
 #include "ParserShared.h"
+#include "builtin/DataLoader.h"
 #include "builtin/EmbeddedData.h"
 #include "domain/business/components/TagResolver.h"
 #include "common/log/log.hpp"
@@ -11,35 +12,18 @@ namespace {
 
 // ── Vanilla tag fallback ─────────────────────────────────────────────
 // Seed the tag resolver with the builtin vanilla tags so a mod profile's
-// `#minecraft:...` references (exclusive_set / applicable_equipment) resolve
+// `#minecraft:...` references (exclusive_set / supported_items) resolve
 // against vanilla tags even when the profile does not define them.  The raw
-// tags are extracted from the embedded data once and cached per process.
+// tags come from the single canonical extractor (override-aware) and are
+// cached per process.
 const std::unordered_map<std::string, std::vector<std::string>>& vanilla_raw_tags() {
     static const auto tags = [] {
         std::unordered_map<std::string, std::vector<std::string>> out;
-        try {
-            Json root = Json::parse(std::string{besq::data::vanilla_json()});
-            auto root_var = root.get_value();
-            if (!std::holds_alternative<Json::Object>(root_var)) return out;
-            const auto& root_obj = std::get<Json::Object>(root_var);
-            auto tags_it = root_obj.find("tags");
-            if (tags_it == root_obj.end()) return out;
-            auto tags_var = tags_it->second.get_value();
-            if (!std::holds_alternative<Json::Object>(tags_var)) return out;
-            for (const auto& [key, val] : std::get<Json::Object>(tags_var)) {
-                auto val_var = val.get_value();
-                if (!std::holds_alternative<Json::Array>(val_var)) continue;
-                std::vector<std::string> values;
-                for (const auto& elem : std::get<Json::Array>(val_var)) {
-                    auto e = elem.get_value();
-                    if (auto* s = std::get_if<Json::String>(&e))
-                        values.push_back(*s);
-                }
-                out[key] = std::move(values);
-            }
-        } catch (...) {
-            // best-effort fallback — ignore parse errors
-        }
+        // Single canonical extraction (override-aware) — keeps the parser seed
+        // consistent with DataLoader's base_tags / resolver seeding even when
+        // data/builtin/vanilla.json is overridden on disk (T10).
+        for (const auto& [key, values] : besq::data::load_builtin_tag_entries())
+            out[key] = values;
         return out;
     }();
     return tags;

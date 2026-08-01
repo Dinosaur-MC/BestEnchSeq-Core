@@ -129,12 +129,10 @@ bool Profile::validate() const {
             }
         }
     }
-    // Verify all equipment categories reference known tags
-    for (const auto& [nsid, eq] : _eq.data()) {
-        if (!eq.category.empty() && !_tags.contains(eq.category)) {
-            return false; // references unknown tag
-        }
-    }
+    // NOTE(T10): equipment `category` is a display-only short name (e.g.
+    // `#minecraft:sword`) and is intentionally NOT required to be a defined
+    // tag — the real MC item tags are the applicability source of truth.  It
+    // is therefore not cross-validated here.
     return true;
 }
 

@@ -28,7 +28,7 @@ inline NSID make_id(const std::string& id_str, const std::string& default_ns = "
 // ── Reference resolution ───────────────────────────────────────────────
 // Resolve a list of mixed concrete IDs and #tag references via TagResolver.
 // This expansion helper is used only for `exclusive_set`. In contrast,
-// `supported_items` / `applicable_equipment` references are passed through
+// `supported_items` references are passed through
 // RAW (not expanded) by the parsers (T5); the loader performs
 // cross-validation against them (T6).
 
@@ -60,6 +60,20 @@ inline std::string derive_display_name(const std::string& item_id) {
         }
     }
     return key;
+}
+
+/// Derive the display short name of a category NSID (e.g. `#minecraft:sword`
+/// → "sword").  Under the real-MC-tag model (T10) an equipment's category is a
+/// display-only label that may NOT be a *defined* tag, so serializers fall
+/// back to this short form instead of emitting "unknown"/"any".
+inline std::string category_short_name(const NSID& category) {
+    std::string s = category.str();
+    if (!s.empty() && s[0] == '#')
+        s = s.substr(1);
+    auto colon = s.find(':');
+    if (colon != std::string::npos)
+        s = s.substr(colon + 1);
+    return s;
 }
 
 // ── Category derivation by suffix ──────────────────────────────────────

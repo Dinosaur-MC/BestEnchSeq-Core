@@ -110,7 +110,7 @@ parse_csv_rows(const csv::CsvTable& rows) {
         }
 
         std::vector<std::string> applicable_items;
-        std::string eq_str = get_field(fields, "applicable_equipment");
+        std::string eq_str = get_field(fields, "supported_items");
         if (!eq_str.empty()) {
             auto items = string_utils::split(eq_str, ';');
             applicable_items.assign(items.begin(), items.end());  // 透传，不展开

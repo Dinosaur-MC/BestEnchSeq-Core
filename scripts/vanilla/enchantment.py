@@ -232,54 +232,6 @@ def _build_group2cat(base: Path, tags: dict[str, list[str]],
     return group2cat
 
 
-def items_to_categories(item_ids: set[str],
-                        tags: dict[str, list[str]],
-                        prefixes: list[str],
-                        base: Path) -> list[str]:
-    """Map item IDs to equipment categories using item-group tag membership."""
-    item2cat: dict[str, str] = {}
-
-    group_tags: dict[str, list[str]] = {}
-    for key in tags:
-        if ":" not in key:
-            continue
-        ns, tail = key.split(":", 1)
-        if "/" in tail:
-            continue
-        resolved = resolve_ref(tags[key], "item", tags, prefixes)
-        group_tags[key] = sorted(resolved)
-
-    group2cat = _build_group2cat(base, tags, prefixes)
-
-    for item_id in sorted(item_ids):
-        short = _item_short(item_id)
-        best_group = None
-        for gkey, members in group_tags.items():
-            if item_id in members:
-                best_group = gkey
-                break
-        if best_group and best_group in group2cat:
-            item2cat[item_id] = group2cat[best_group]
-
-    for item_id in sorted(item_ids):
-        if item_id not in item2cat:
-            short = _item_short(item_id)
-            parts = short.split("_")
-            if len(parts) > 1:
-                item2cat[item_id] = parts[-1]
-            else:
-                item2cat[item_id] = short
-
-    cats: set[str] = set()
-    for iid in item_ids:
-        cat = item2cat.get(iid)
-        if cat:
-            if cat == "any":
-                return ["any"]
-            cats.add(cat)
-    return sorted(cats) if cats else []
-
-
 # ── step 4: equipment ─────────────────────────────────────────────────────
 
 def load_equipments(base: Path, lang: dict[str, str],

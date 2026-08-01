@@ -8,7 +8,7 @@
 ///
 /// CSV format supports enchantment data only (no equipment).
 /// Columns: id, name, max_level, limited_level, multiplier,
-///          exclusive_set (semicolon-separated), applicable_equipment.
+///          exclusive_set (semicolon-separated), supported_items.
 class NativeCsvParser {
 public:
     /// Parse from a CSV file.

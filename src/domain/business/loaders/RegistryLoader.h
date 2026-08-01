@@ -64,8 +64,8 @@ public:
     /// populate eq_reg and ench_reg with resolved IDs.
     ///
     /// \p base_tags (optional) seeds the tag registry first — used as a
-    /// vanilla fallback so a mod profile's `applicable_equipment` references
-    /// resolve against categories the profile itself does not define.  Pass
+    /// vanilla fallback so a mod profile's `supported_items` references
+    /// resolve against tags the profile itself does not define.  Pass
     /// nullptr to build the registry from scratch.
     void resolve(
         const std::vector<business::loader::EnchantmentData>& enchants,
