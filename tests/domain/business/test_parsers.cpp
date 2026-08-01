@@ -131,11 +131,15 @@ void test_json_parse_with_applicable() {
               std::string("minecraft:sharpness"),
               "json_applicable: ench id");
 
-    // The applicable_equipment field is read from JSON and passed through
-    // resolve_references. Without a tag definition for "#minecraft:sword",
-    // it resolves to an empty set. Verify no crash.
-    expect(enchantments[0].applicable_to.empty(),
-           "json_applicable: applicable_to empty (tag unresolved)");
+    // The applicable_equipment field is passed through RAW (T5): the
+    // "#minecraft:sword" tag reference is preserved verbatim, not expanded by
+    // the parser. The loader (T6) performs the cross-validation later.
+    bool has_tag = false;
+    for (const auto& a : enchantments[0].applicable_to) {
+        if (a == "#minecraft:sword") { has_tag = true; break; }
+    }
+    expect(has_tag,
+           "json_applicable: applicable_to contains raw #minecraft:sword");
 
     std::cout << "PASS: test_json_parse_with_applicable" << std::endl;
 }
@@ -339,9 +343,9 @@ void test_csv_parse_multiple_rows() {
 
 // ─── test_mc_single_enchantment_basic ──────────────────────────────────
 // Parse a minimal enchantment JSON via parse_single_enchantment().
-// Load a tag for "#minecraft:sword" into the TagResolver so that
-// supported_items resolves to concrete equipment IDs.
-// Verify id, max_level, display_name, resolved applicable_to.
+// supported_items "#minecraft:sword" is passed through RAW (T5) — it stays
+// a tag reference and is not expanded by the parser.
+// Verify id, max_level, display_name, raw applicable_to.
 
 void test_mc_single_enchantment_basic() {
     TagResolver tag_resolver;
@@ -367,13 +371,14 @@ void test_mc_single_enchantment_basic() {
     expect(ench.multiplier > 0,
            "mc_single_basic: multiplier > 0");
 
-    // applicable_to should contain the resolved item from the tag
-    bool has_sword = false;
+    // applicable_to is passed through RAW (T5): the "#minecraft:sword" tag
+    // reference survives verbatim for the loader to resolve later.
+    bool has_tag = false;
     for (const auto& a : ench.applicable_to) {
-        if (a == "minecraft:diamond_sword") { has_sword = true; break; }
+        if (a == "#minecraft:sword") { has_tag = true; break; }
     }
-    expect(has_sword,
-           "mc_single_basic: applicable_to contains diamond_sword");
+    expect(has_tag,
+           "mc_single_basic: applicable_to contains raw #minecraft:sword");
 
     // exclusive_set should be empty
     expect(ench.exclusive_with.empty(),

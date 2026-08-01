@@ -212,8 +212,6 @@ business::loader::EnchantmentData parse_ench_entry(
                 app_items.push_back(elem.as<std::string>());
         }
     }
-    auto applicable_items = resolve_references(app_items, tag_resolver);
-
     business::loader::EnchantmentData ench;
     ench.id               = id_str;
     ench.display_name     = std::move(display_name);
@@ -221,7 +219,8 @@ business::loader::EnchantmentData parse_ench_entry(
     ench.max_level        = max_level;
     ench.limited_level    = limited_level;
     ench.exclusive_with   = std::vector<std::string>(exclusive_set.begin(), exclusive_set.end());
-    ench.applicable_to    = std::vector<std::string>(applicable_items.begin(), applicable_items.end());
+    // supported_items: 原始引用透传（`#tag` 或具体 ID），不展开；加载期交叉验证
+    ench.applicable_to    = std::move(app_items);
     return ench;
 }
 

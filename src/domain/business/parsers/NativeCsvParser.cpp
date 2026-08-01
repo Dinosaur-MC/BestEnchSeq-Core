@@ -113,8 +113,7 @@ parse_csv_rows(const csv::CsvTable& rows) {
         std::string eq_str = get_field(fields, "applicable_equipment");
         if (!eq_str.empty()) {
             auto items = string_utils::split(eq_str, ';');
-            auto resolved = resolve_references(items, tag_resolver);
-            applicable_items.assign(resolved.begin(), resolved.end());
+            applicable_items.assign(items.begin(), items.end());  // 透传，不展开
         }
 
         EnchantmentData ench;

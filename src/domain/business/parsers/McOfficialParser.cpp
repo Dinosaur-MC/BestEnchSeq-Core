@@ -202,7 +202,8 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
                 supp_items.push_back(elem.as<std::string>());
         }
     }
-    auto applicable_items = business::parser_detail::resolve_references(supp_items, tag_resolver);
+    // supported_items 透传（真实 MC 格式：单字符串或数组、#tag 或具体 ID）
+    std::vector<std::string> applicable_items = supp_items;
 
     // Compute limited_level from cost formula
     int32_t limited_level = max_level;
@@ -221,8 +222,10 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
                 if (it != mc_obj->end()) min_per_level = it->second.as<int32_t>();
             }
             if (min_base > 0 && min_per_level >= 0) {
+                std::unordered_set<std::string> applicable_set(applicable_items.begin(),
+                                                               applicable_items.end());
                 limited_level = business::parser_detail::compute_limited_level(
-                    max_level, min_base, min_per_level, applicable_items, item_props
+                    max_level, min_base, min_per_level, applicable_set, item_props
                 );
             }
         }
