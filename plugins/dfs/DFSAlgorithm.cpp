@@ -5,6 +5,7 @@
 #include "domain/algorithm/components/Heuristic.h"
 #include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <chrono>
 #include <memory>
