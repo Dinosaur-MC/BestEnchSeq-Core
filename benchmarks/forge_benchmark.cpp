@@ -424,7 +424,7 @@ resolve_algos(const BenchConfig& cfg, const algorithm::AlgorithmLoader& loader) 
 /// Print a benchmark result row, verifying the final item meets the target
 /// enchantments (empty steps = GoalAlreadyMet, trivially met).
 void print_result(const algorithm::AlgorithmOutput& out,
-                  const algorithm::EnchSet& target, int32_t max_cost) {
+                  const algorithm::Item& target, int32_t max_cost) {
     if (out.solutions.empty()) {
         std::cout << "no solution" << std::endl;
         return;
@@ -596,7 +596,7 @@ void run_case(const TestCase& tc, const Profile& profile,
                 if (out.solutions.empty()) {
                     std::cout << "no solution" << std::endl; continue;
                 }
-                print_result(out, algo_input.target.enchs, tc.max_cost);
+                print_result(out, algo_input.target, tc.max_cost);
             } catch (const std::exception& e) {
                 std::cout << "ERROR: " << e.what() << std::endl;
             }
@@ -621,7 +621,7 @@ void run_case(const TestCase& tc, const Profile& profile,
             if (out.solutions.empty()) {
                 std::cout << "no solution" << std::endl; continue;
             }
-            print_result(out, algo_input.target.enchs, tc.max_cost);
+            print_result(out, algo_input.target, tc.max_cost);
         } catch (const std::exception& e) {
             std::cout << "ERROR: " << e.what() << std::endl;
         }
