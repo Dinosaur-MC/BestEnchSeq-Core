@@ -31,9 +31,12 @@ void DPMergeAlgorithm::Frontier::insert(ParetoEntry entry) {
     // keeping dominated entries and bloating the frontier.)
     for (auto it = entries.begin(); it != entries.end();) {
         if (it->item.type == item.type && it->item.enchs == item.enchs) {
-            if (it->ppn <= entry.ppn && it->cost <= entry.cost)
-                return;  // entry is dominated
+            if (it->ppn <= entry.ppn && it->cost <= entry.cost) {
+                ++dropped;  // candidate eliminated by Pareto domination
+                return;     // entry is dominated
+            }
             if (entry.ppn <= it->ppn && entry.cost <= it->cost) {
+                ++dropped;  // existing entry pruned (replaced by a dominant one)
                 it = entries.erase(it);  // entry dominates existing
                 continue;
             }
@@ -95,6 +98,9 @@ const DPMergeAlgorithm::Frontier* DPMergeAlgorithm::cache_get(uint64_t mask) con
 }
 
 const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::cache_put(uint64_t mask, std::unique_ptr<Frontier> f) {
+    // Aggregate this subproblem's Pareto drops into the global counter (one
+    // relaxed atomic per subproblem — spec Tier 1).  `f` is not yet moved.
+    _dp_pareto_dropped.fetch_add(f->dropped, std::memory_order_relaxed);
     if (_using_flat) {
         // Keep the frontier alive BEFORE publishing, so the published pointer
         // can never dangle (even if push_back throws): ownership lives in
@@ -304,7 +310,8 @@ void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext 
 
     // Fresh start: clear memoisation cache
     _cache.clear();
-    _diag = AlgorithmDiagnostics{};
+    _diag = PartitionDpDiagnostics{};
+    _dp_pareto_dropped.store(0, std::memory_order_relaxed);
 }
 
 // ─── execute ──────────────────────────────────────────────────────────────
@@ -318,7 +325,8 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
     if (!ctx.is_restored()) {
         _cache.clear();
-        _diag = AlgorithmDiagnostics{};
+        _diag = PartitionDpDiagnostics{};
+        _dp_pareto_dropped.store(0, std::memory_order_relaxed);
     }
 
     ctx.report_progress(0, ProgressStatus::Starting);
@@ -373,6 +381,27 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         ? UINT64_MAX : ((static_cast<uint64_t>(1) << mutable_items.size()) - 1);
 
     const Frontier& frontier = solve(full_mask, true, ctx);
+
+    // Tier-0 diagnostics: derive state-space metrics from the memo cache
+    // (zero hot-path cost — spec §5).
+    _diag.dp_pareto_dropped = _dp_pareto_dropped.load(std::memory_order_relaxed);
+    if (_using_flat && _flat_cache) {
+        uint64_t solved = 0, max_f = 0;
+        for (size_t i = 0; i < _flat_capacity; ++i)
+            if (auto* fp = _flat_cache[i].load(std::memory_order_relaxed)) {
+                ++solved;
+                if (fp->entries.size() > max_f) max_f = fp->entries.size();
+            }
+        _diag.dp_subproblems_solved    = solved;
+        _diag.dp_cache_slots           = _flat_capacity;
+        _diag.dp_cache_hits            = _flat_capacity - solved;
+        _diag.dp_max_frontier_size     = static_cast<uint32_t>(max_f);
+        _diag.normalized_explored_states = static_cast<int64_t>(solved);
+    } else {
+        _diag.dp_subproblems_solved = _cache.size();
+        _diag.dp_cache_slots        = _cache.size();
+        _diag.normalized_explored_states = static_cast<int64_t>(_cache.size());
+    }
 
     if (ctx.is_cancelled()) {
         _diag.status = "Cancelled";

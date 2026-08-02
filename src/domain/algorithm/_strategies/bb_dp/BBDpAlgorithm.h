@@ -74,6 +74,10 @@ private:
 
     struct Frontier {
         std::vector<ParetoEntry> entries;
+        /// Pareto-domination drops during this frontier's construction
+        /// (single-threaded per frontier; aggregated into the global counter
+        /// at cache_put — spec Tier 1).
+        uint64_t dropped{0};
 
         void insert(ParetoEntry entry, int32_t beam_width);
         bool empty() const { return entries.empty(); }
@@ -117,7 +121,14 @@ private:
     /// across the parallel top-level; read as the B&B bound by all prunes.
     std::atomic<int32_t> _best_cost{INT32_MAX};
 
-    AlgorithmDiagnostics _diag;
+    // ── Diagnostics (PartitionDpDiagnostics, spec Tier 0/1) ─────────────
+    // Per-pass aggregates; flushed into _diag at pass end.  Tier 1 counters
+    // are incremented once per subproblem (≤ 2^n), never per operation.
+    std::atomic<uint64_t> _dp_cap_pruned{0};
+    std::atomic<uint64_t> _dp_bound_pruned{0};
+    std::atomic<uint64_t> _dp_pareto_dropped{0};
+
+    PartitionDpDiagnostics _diag;
 
     const Frontier& solve(uint64_t mask, int32_t max_step_cost,
                           int32_t beam_width, bool parallelize,

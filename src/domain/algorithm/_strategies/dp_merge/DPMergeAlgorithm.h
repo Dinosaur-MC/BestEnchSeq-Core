@@ -74,6 +74,10 @@ private:
 
     struct Frontier {
         std::vector<ParetoEntry> entries;
+        /// Pareto-domination drops during this frontier's construction
+        /// (single-threaded per frontier; aggregated into the global counter
+        /// at cache_put — spec Tier 1).
+        uint64_t dropped{0};
 
         void insert(ParetoEntry entry);
         bool empty() const { return entries.empty(); }
@@ -102,7 +106,10 @@ private:
     std::vector<Ench> _target;
     std::vector<Item> _base_items;  // canonicalised input; masks index into this
 
-    AlgorithmDiagnostics _diag;
+    // ── Diagnostics (PartitionDpDiagnostics, spec Tier 0/1) ─────────────
+    std::atomic<uint64_t> _dp_pareto_dropped{0};  // aggregated at cache_put
+
+    PartitionDpDiagnostics _diag;
 
     const Frontier& solve(uint64_t mask, bool parallelize, ExecutionContext& ctx);
     const Frontier* cache_get(uint64_t mask) const noexcept;

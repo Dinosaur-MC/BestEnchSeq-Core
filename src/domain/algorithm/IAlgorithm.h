@@ -15,6 +15,8 @@ class IResolver;
 // 所有内置策略和插件策略必须遵守以下规范。违反规范的策略可能在代码审查
 // 中被拒绝，或在运行时出现不可预期的行为。
 //
+// 诊断与性能规范的完整版见 docs/algotithm_designs/algorithm-diagnostics-spec.md。
+//
 // --- 1. 内存分配规则 ---------------------------------------------------
 //
 //   构造期不允许堆分配  所有预分配必须推迟到 execute() 中。
@@ -29,13 +31,17 @@ class IResolver;
 //   ItemPool 预分配      如果使用 ItemPool，在 execute() 中 reserve(est)。
 //                      估计值 = min(factorial_estimate, max_pool_cap)。
 //
-// --- 2. 热路径计数器 ---------------------------------------------------
+// --- 2. 热路径计数器（已修订，完整规范见算法诊断规范 §5）--------------
 //
-//   所有搜索策略必须在每次状态展开时调用 incr_nodes_visited()。
-//   每次剪枝必须调用 incr_nodes_pruned()。
-//   每次 forge() 必须调用 incr_steps_forged()。
-//   这三个计数器使用 memory_order_relaxed，零同步开销。
-//   确定性策略可以跳过 visited/pruned，但必须调用 incr_steps_forged()。
+//   ⚠ 已废弃"每操作必调计数器"的强制要求。relaxed 原子没有 fence，但
+//   有 cacheline 争抢：每 forge 一次的 incr_steps_forged() 在 sword_16 上
+//   实测 203M 次 ≈ 1.5s（见 issues/bbdp-turnaround.md E1）。
+//
+//   正确做法 —— 按性能分层（docs/.../algorithm-diagnostics-spec.md §5）：
+//     Tier 0  零成本：pass 结束时派生指标（扫描 memo cache 等），无条件用。
+//     Tier 1  可忽略：每状态/子问题一次原子（≤ 2^n），可无条件用。
+//     Tier 2  每操作计数器：禁止无条件使用；必须门控在编译期/运行时开关
+//             （默认关）并注明性能影响。
 //
 // --- 3. 流式通知 -------------------------------------------------------
 //
@@ -43,14 +49,17 @@ class IResolver;
 //   report_solution(steps)         自动推送到 observer + 累积到 output。
 //                                  提供 const&（1 次 copy）和 &&（0 copy）重载。
 //
-// --- 4. 退出诊断 -------------------------------------------------------
+// --- 4. 退出诊断（完整规范见 docs/.../algorithm-diagnostics-spec.md）-----
 //
 //   填充策略相关的 _diag 字段后调用 ctx.set_exit_diagnostics(_diag)。
-//   框架自动补充 algorithm_name、wall_ms、原子计数器。
-//   _diag 类型选择：
-//     AlgorithmDiagnostics   确定性合成算法（Hamming、dp_merge）
-//     SearchDiagnostics      搜索但无 ItemPool（DFS）
-//     PoolSearchDiagnostics  有 ItemPool 的搜索（A* → AStarDiagnostics）
+//   框架自动补充 algorithm_name、wall_ms。
+//   _diag 类型选择（按搜索范式，见规范 §3）：
+//     AlgorithmDiagnostics      确定性合成算法（Hamming、diff_first）
+//     SearchDiagnostics         展开式搜索，无 ItemPool（DFS）
+//     PoolSearchDiagnostics     有 ItemPool 的搜索（A*、IDA*）
+//     PartitionDpDiagnostics    Catalan/分治 DP（bb_dp、dp_merge）
+//   公共核心必填（规范 §4）：status / solution_cost / normalized_explored_states。
+//   字段命名带范式前缀（dp_ / search_ / 插件名_），见规范 §6。
 //
 // --- 5. 编译期检查 -----------------------------------------------------
 //
