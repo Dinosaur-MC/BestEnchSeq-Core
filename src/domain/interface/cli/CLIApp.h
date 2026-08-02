@@ -29,10 +29,9 @@ public:
         std::string config_pairs;
         std::string algo_opt_pairs;      // --algo-opt k=v,k=v → SearchConfig::extra
         std::optional<std::string> input;
-        std::optional<std::string> registry_dir;
-        std::optional<std::string> registries;
-        std::optional<std::string> registry_edit;
-        std::optional<std::string> export_registry;
+        std::optional<std::string> import_files;  // --import <path1,path2,...>
+        std::optional<std::string> edit_ops;      // --edit <ops>
+        std::optional<std::string> export_path;   // --export <path>
         std::optional<std::string> profile;
         std::optional<std::string> profile_dir;
         std::optional<std::string> publish;
@@ -72,7 +71,7 @@ public:
 private:
     struct UserI18nTranslator;
 
-    static void apply_registry_edits(const std::string& spec, BesqContext& ctx);
+    static void apply_edits(const std::string& spec, BesqContext& ctx);
 
     BesqContext _ctx;
 
@@ -94,22 +93,21 @@ private:
         cfg.lang            = std::get<10>(v).value_or(Config{}.lang);
         cfg.input           = std::get<11>(v);
         cfg.output          = std::get<12>(v);
-        cfg.registry_dir    = std::get<13>(v);
-        cfg.registries      = std::get<14>(v);
-        cfg.registry_edit   = std::get<15>(v);
-        cfg.export_registry = std::get<16>(v);
-        cfg.algo_dir        = std::get<17>(v);
-        cfg.config_pairs    = std::get<18>(v).value_or(Config{}.config_pairs);
-        cfg.solutions       = std::get<19>(v).value_or(Config{}.solutions);
-        cfg.memory_mb       = 0;
-        cfg.max_time        = std::get<21>(v);  // nullopt when not provided
-        cfg.max_threads     = std::get<22>(v).value_or(Config{}.max_threads);
-        cfg.profile         = std::get<23>(v);
-        cfg.profile_dir     = std::get<24>(v);
-        cfg.publish         = std::get<25>(v);
-        cfg.publish_version = std::get<26>(v);
-        cfg.publish_tag     = std::get<27>(v);
-        cfg.algo_opt_pairs  = std::get<28>(v).value_or(Config{}.algo_opt_pairs);
+        cfg.import_files   = std::get<13>(v);
+        cfg.edit_ops       = std::get<14>(v);
+        cfg.export_path    = std::get<15>(v);
+        cfg.algo_dir       = std::get<16>(v);
+        cfg.config_pairs   = std::get<17>(v).value_or(Config{}.config_pairs);
+        cfg.solutions      = std::get<18>(v).value_or(Config{}.solutions);
+        cfg.memory_mb      = 0;
+        cfg.max_time       = std::get<20>(v);  // nullopt when not provided
+        cfg.max_threads    = std::get<21>(v).value_or(Config{}.max_threads);
+        cfg.profile        = std::get<22>(v);
+        cfg.profile_dir    = std::get<23>(v);
+        cfg.publish        = std::get<24>(v);
+        cfg.publish_version = std::get<25>(v);
+        cfg.publish_tag     = std::get<26>(v);
+        cfg.algo_opt_pairs  = std::get<27>(v).value_or(Config{}.algo_opt_pairs);
         return cfg;
     }
 };

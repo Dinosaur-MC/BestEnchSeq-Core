@@ -130,35 +130,29 @@ int CLIApp::run(int argc, char* argv[]) {
     //    safe no-op when the directory does not exist and never changes the
     //    active profile, so the default flow (builtin:vanilla active via
     //    load_builtin) stays intact.  activate_profile must run before any
-    //    --registry-dir/--registry-edit so those edits land in the chosen
-    //    profile.
+    //    --import/--edit so those operations land in the chosen profile.
     if (config.profile_dir)
         _ctx.set_profiles_dir(*config.profile_dir);
     _ctx.load_profiles();
     if (config.profile)
         _ctx.activate_profile(*config.profile);
 
-    // 5. Registry operations
-    if (config.registry_dir)
-        _ctx.import_registry(*config.registry_dir);
-
-    if (config.registries) {
-        for (const auto& reg : string_utils::split(*config.registries, ',')) {
-            if (!reg.empty())
-                _ctx.import_registry(reg);
-        }
+    // 5. Profile data operations (target the active profile)
+    if (config.import_files) {
+        for (const auto& f : string_utils::split(*config.import_files, ','))
+            if (!f.empty())
+                _ctx.import_registry(f);
     }
 
-    if (config.registry_edit)
-        CLIApp::apply_registry_edits(*config.registry_edit, _ctx);
+    if (config.edit_ops)
+        CLIApp::apply_edits(*config.edit_ops, _ctx);
 
-    // 6. Registry export
-    if (config.export_registry) {
-        bool ok = _ctx.export_registry(*config.export_registry);
+    // 6. Profile export
+    if (config.export_path) {
+        bool ok = _ctx.export_registry(*config.export_path);
         if (!ok) throw std::runtime_error(
-            tr_fmt("main.err.export_failed", *config.export_registry));
-        LOG_INFO("%s", tr_fmt("main.msg.registry_exported",
-            *config.export_registry).c_str());
+            tr_fmt("main.err.export_failed", *config.export_path));
+        LOG_INFO("%s", tr_fmt("main.msg.profile_exported", *config.export_path).c_str());
         return 0;
     }
 
@@ -225,21 +219,20 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<std::string>{.long_name = "lang",                            .help_key = "cli.help.lang_desc",       .help_group = "cli.help.group_info"},
     Option<std::string>{.long_name = "input",                           .help_key = "cli.help.input_desc",      .help_group = "cli.help.group_advanced"},
     Option<std::string>{.long_name = "output",                          .help_key = "cli.help.output_desc",     .help_group = "cli.help.group_output"},
-    Option<std::string>{.long_name = "registry-dir",                    .help_key = "cli.help.registry_dir_desc", .help_group = "cli.help.group_registry"},
-    Option<std::string>{.long_name = "registries",                      .help_key = "cli.help.registries_desc", .help_group = "cli.help.group_registry"},
-    Option<std::string>{.long_name = "registry-edit",                   .help_key = "cli.help.registry_edit_desc", .help_group = "cli.help.group_registry"},
-    Option<std::string>{.long_name = "export-registry",                 .help_key = "cli.help.export_registry_desc", .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "import",                          .help_key = "cli.help.import_desc",     .help_group = "cli.help.group_profile"},
+    Option<std::string>{.long_name = "edit",                            .help_key = "cli.help.edit_desc",       .help_group = "cli.help.group_profile"},
+    Option<std::string>{.long_name = "export",                          .help_key = "cli.help.export_desc",     .help_group = "cli.help.group_profile"},
     Option<std::string>{.long_name = "algo-dir",                        .help_key = "cli.help.algo_dir_desc",   .help_group = "cli.help.group_advanced"},
     Option<std::string>{.long_name = "config",                          .help_key = "cli.help.config_desc",     .help_group = "cli.help.group_platform"},
     Option<int>        {.long_name = "solutions",          .short_name = 's', .help_key = "cli.help.solutions_desc", .help_group = "cli.help.group_basic", .default_v = 1},
     Option<std::string>{.long_name = "memory",                           .help_key = "cli.help.memory_desc",    .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-time",                         .help_key = "cli.help.max_time_desc",  .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-threads",      .short_name = 'j', .help_key = "cli.help.max_threads_desc", .help_group = "cli.help.group_advanced"},
-    Option<std::string>{.long_name = "profile",          .help_key = "cli.help.profile_desc",       .help_group = "cli.help.group_registry"},
-    Option<std::string>{.long_name = "profile-dir",      .help_key = "cli.help.profile_dir_desc",   .help_group = "cli.help.group_registry"},
-    Option<std::string>{.long_name = "publish",          .help_key = "cli.help.publish_desc",       .help_group = "cli.help.group_registry"},
-    Option<std::string>{.long_name = "publish-version",  .help_key = "cli.help.publish_version_desc", .help_group = "cli.help.group_registry"},
-    Option<std::string>{.long_name = "publish-tag",      .help_key = "cli.help.publish_tag_desc",   .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "profile",          .help_key = "cli.help.profile_desc",       .help_group = "cli.help.group_profile"},
+    Option<std::string>{.long_name = "profile-dir",      .help_key = "cli.help.profile_dir_desc",   .help_group = "cli.help.group_profile"},
+    Option<std::string>{.long_name = "publish",          .help_key = "cli.help.publish_desc",       .help_group = "cli.help.group_profile"},
+    Option<std::string>{.long_name = "publish-version",  .help_key = "cli.help.publish_version_desc", .help_group = "cli.help.group_profile"},
+    Option<std::string>{.long_name = "publish-tag",      .help_key = "cli.help.publish_tag_desc",   .help_group = "cli.help.group_profile"},
     Option<std::string>{.long_name = "algo-opt",         .help_key = "cli.help.algo_opt_desc",      .help_group = "cli.help.group_advanced"},
 };
 
@@ -286,7 +279,7 @@ std::string CLIApp::help_text(std::string_view program_name) {
     r += "\nExamples:\n";
     r += "  " + std::string(program_name) + " --target diamond_sword[sharpness=5,knockback=2]\n";
     r += "  " + std::string(program_name) + " --target diamond_chestplate --source \"protection=4,unbreaking=3\"\n";
-    r += "  " + std::string(program_name) + " --export-registry out.json\n\n";
+    r += "  " + std::string(program_name) + " --export out.json\n\n";
 
     // Enchantment format reference
     r += tr("cli.help.ench_format_header") + "\n";
@@ -345,7 +338,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
 
     // Post-bind: --memory (supports "auto")
     {
-        auto& raw_mem = std::get<20>(result.value);
+        auto& raw_mem = std::get<19>(result.value);
         if (raw_mem.has_value()) {
             if (*raw_mem == "auto") {
                 cfg.memory_mb = 0;
@@ -365,7 +358,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
 
     // Post-bind: --config (empty check)
     {
-        auto& raw_cfg = std::get<18>(result.value);
+        auto& raw_cfg = std::get<17>(result.value);
         if (raw_cfg.has_value() && raw_cfg->empty())
             throw std::runtime_error(tr("cli.err.empty_config"));
     }
@@ -373,7 +366,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
     // Post-bind: --algo-opt (empty + format check; values are arbitrary
     // strings, so only shape is validated — key ownership is strategy-defined)
     {
-        auto& raw_opt = std::get<28>(result.value);
+        auto& raw_opt = std::get<27>(result.value);
         if (raw_opt.has_value() && raw_opt->empty())
             throw std::runtime_error(tr("cli.err.empty_algo_opt"));
         if (!cfg.algo_opt_pairs.empty()) {
@@ -424,23 +417,23 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         }
     }
 
-    if (cfg.registry_edit.has_value()) {
-        if (cfg.registry_edit->empty())
-            throw std::runtime_error(tr("cli.err.empty_registry_edit"));
-        auto ops = string_utils::split(*cfg.registry_edit, ';');
+    if (cfg.edit_ops.has_value()) {
+        if (cfg.edit_ops->empty())
+            throw std::runtime_error(tr("cli.err.empty_edit"));
+        auto ops = string_utils::split(*cfg.edit_ops, ';');
         for (const auto& op : ops) {
             if (op.find(':') == std::string::npos)
-                throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit", op));
+                throw std::runtime_error(tr_fmt("cli.err.invalid_edit", op));
         }
     }
 
     if (cfg.algo_dir.has_value() && cfg.algo_dir->empty())
         throw std::runtime_error(tr_fmt("cli.err.empty_algo_dir"));
-    if (cfg.export_registry.has_value() && cfg.export_registry->empty())
-        throw std::runtime_error(tr_fmt("cli.err.empty_export_registry"));
+    if (cfg.export_path.has_value() && cfg.export_path->empty())
+        throw std::runtime_error(tr_fmt("cli.err.empty_export"));
 
     if (!cfg.help && !cfg.version && !cfg.list_algorithms) {
-        if (cfg.target.empty() && !cfg.export_registry.has_value()
+        if (cfg.target.empty() && !cfg.export_path.has_value()
             && !cfg.publish.has_value()) {
             if (argc <= 1) {
                 // Pure no-args: show brief usage + hint, then exit cleanly
@@ -545,10 +538,10 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
 }
 
 // ====================================================================
-// apply_registry_edits — parse --registry-edit format and dispatch
+// apply_edits — parse --edit format and dispatch
 // ====================================================================
 
-void CLIApp::apply_registry_edits(const std::string& ops, BesqContext& ctx) {
+void CLIApp::apply_edits(const std::string& ops, BesqContext& ctx) {
     auto op_list = string_utils::split(ops, ';');
     for (const auto& op : op_list) {
         if (op.empty())
@@ -556,18 +549,18 @@ void CLIApp::apply_registry_edits(const std::string& ops, BesqContext& ctx) {
 
         auto parts = string_utils::split(op, ',');
         if (parts.size() < 2)
-            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_op", op));
+            throw std::runtime_error(tr_fmt("cli.err.invalid_edit_op", op));
 
         auto& header = parts[0];
         auto colon   = header.find(':');
         if (colon == std::string::npos)
-            throw std::runtime_error(tr_fmt("cli.err.invalid_registry_edit_header", header));
+            throw std::runtime_error(tr_fmt("cli.err.invalid_edit_header", header));
 
         std::string target = header.substr(0, colon);
         std::string action = header.substr(colon + 1);
         std::string id     = parts[1];
         if (id.empty())
-            throw std::runtime_error(tr_fmt("cli.err.empty_registry_edit_id", op));
+            throw std::runtime_error(tr_fmt("cli.err.empty_edit_id", op));
 
         if (action == "rm") {
             if (target == "ench") { ctx.remove_enchantment(id); continue; }
@@ -603,7 +596,7 @@ void CLIApp::apply_registry_edits(const std::string& ops, BesqContext& ctx) {
                 continue;
             }
 
-            throw std::runtime_error(tr_fmt("cli.err.unknown_registry_target", target));
+            throw std::runtime_error(tr_fmt("cli.err.unknown_target", target));
         }
 
         if (action == "mod") {

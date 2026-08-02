@@ -2,8 +2,8 @@
 // CLI Acceptance Tests
 //
 // Tests CLI argument parsing for all parameter combinations, error handling,
-// and edge cases. Validates that new features (--export-registry without
-// --target, --max-time, --registry-edit, --config) parse correctly.
+// and edge cases. Validates that new features (--export without
+// --target, --max-time, --edit, --config) parse correctly.
 // =============================================================================
 
 #include "domain/interface/cli/CLIApp.h"
@@ -15,38 +15,38 @@
 #include <string>
 
 // ---------------------------------------------------------------------------
-// Test: --export-registry without --target is valid
+// Test: --export without --target is valid
 // ---------------------------------------------------------------------------
 
 void test_export_only_valid() {
     {
-        const char* argv[] = {"besq", "--export-registry", "out.json"};
+        const char* argv[] = {"besq", "--export", "out.json"};
         auto config = CLIApp::parse(3, const_cast<char**>(argv));
         expect(config.target.empty(), "target should be empty");
-        expect(config.export_registry.has_value(), "export_registry should be set");
-        expect(*config.export_registry == "out.json", "path should match");
-        TEST_PASS("--export-registry only (no --target)");
+        expect(config.export_path.has_value(), "export_path should be set");
+        expect(*config.export_path == "out.json", "path should match");
+        TEST_PASS("--export only (no --target)");
     }
     {
-        const char* argv[] = {"besq", "--export-registry", "out.csv", "--verbose"};
+        const char* argv[] = {"besq", "--export", "out.csv", "--verbose"};
         auto config = CLIApp::parse(4, const_cast<char**>(argv));
         expect(config.target.empty(), "target should be empty with --verbose");
         expect(config.verbose, "verbose should be set");
-        expect(config.export_registry.has_value(), "export_registry should be set");
-        TEST_PASS("--export-registry + --verbose (no --target)");
+        expect(config.export_path.has_value(), "export_path should be set");
+        TEST_PASS("--export + --verbose (no --target)");
     }
 }
 
 // ---------------------------------------------------------------------------
-// Test: Missing both --target and --export-registry is an error
+// Test: Missing both --target and --export is an error
 // ---------------------------------------------------------------------------
 
 void test_missing_target_and_export_errors() {
     {
         const char* argv[] = {"besq", "--algorithm", "greedy"};
         expect_throws([&] { CLIApp::parse(3, const_cast<char**>(argv)); },
-                      "Must throw when both --target and --export-registry missing");
-        TEST_PASS("no --target and no --export-registry throws");
+                      "Must throw when both --target and --export missing");
+        TEST_PASS("no --target and no --export throws");
     }
     {
         const char* argv[] = {"besq", "--verbose", "--format", "json"};
@@ -210,38 +210,38 @@ void test_config_parsing() {
 }
 
 // ---------------------------------------------------------------------------
-// Test: --registry-edit parsing
+// Test: --edit parsing
 // ---------------------------------------------------------------------------
 
 void test_registry_edit_parsing() {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--registry-edit", "ench:mod,sharpness,max_level=10"};
+                              "--edit", "ench:mod,sharpness,max_level=10"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.registry_edit.has_value(), "registry_edit should be set");
-        TEST_PASS("--registry-edit valid ench:mod");
+        expect(config.edit_ops.has_value(), "edit_ops should be set");
+        TEST_PASS("--edit valid ench:mod");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--registry-edit", "ench:add,custom:foo,multiplier=3,max_level=5;eq:rm,diamond_sword"};
+                              "--edit", "ench:add,custom:foo,multiplier=3,max_level=5;eq:rm,diamond_sword"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.registry_edit.has_value(), "multi-edit should be set");
-        TEST_PASS("--registry-edit multiple ops");
+        expect(config.edit_ops.has_value(), "multi-edit should be set");
+        TEST_PASS("--edit multiple ops");
     }
     {
         // Missing colon in operation header
         const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--registry-edit", "badformat"};
+                              "--edit", "badformat"};
         expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Invalid --registry-edit format should throw");
-        TEST_PASS("--registry-edit bad format throws");
+                      "Invalid --edit format should throw");
+        TEST_PASS("--edit bad format throws");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--registry-edit", ""};
+                              "--edit", ""};
         expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Empty --registry-edit should throw");
-        TEST_PASS("--registry-edit empty throws");
+                      "Empty --edit should throw");
+        TEST_PASS("--edit empty throws");
     }
 }
 

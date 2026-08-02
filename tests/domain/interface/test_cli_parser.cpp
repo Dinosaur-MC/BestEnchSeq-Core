@@ -371,9 +371,9 @@ void test_all_options() {
         "--mode", "inventory", "--platform", "bedrock",
         "--format", "json", "--solutions", "3",
         "--input", "in.json", "--output", "out.json",
-        "--registry-dir", "myreg", "--registries", "custom:v1"
+        "--import", "myreg,custom:v1"
     };
-    auto config = CLIApp::parse(21, const_cast<char **>(argv));
+    auto config = CLIApp::parse(19, const_cast<char **>(argv));
     expect(config.target == "sword", "target");
     expect(config.source == "sharp=5", "source");
     expect(config.mode == "inventory", "mode");
@@ -382,8 +382,7 @@ void test_all_options() {
     expect(config.solutions == 3, "solutions");
     expect(config.input.has_value() && config.input.value() == "in.json", "input");
     expect(config.output.has_value() && config.output.value() == "out.json", "output");
-    expect(config.registry_dir.has_value() && config.registry_dir.value() == "myreg", "registry-dir");
-    expect(config.registries.has_value() && config.registries.value() == "custom:v1", "registries");
+    expect(config.import_files.has_value() && config.import_files.value() == "myreg,custom:v1", "import");
     std::cout << "  PASS: test_all_options" << std::endl;
 }
 
@@ -400,15 +399,15 @@ void test_source_flag() {
 }
 
 // ---------------------------------------------------------------------------
-// --registries default (nullopt when not specified)
+// --import default (nullopt when not specified)
 // ---------------------------------------------------------------------------
 
-void test_registries_default_nullopt() {
+void test_import_default_nullopt() {
     const char *argv[] = {"besq", "--target", "sword"};
     auto config = CLIApp::parse(3, const_cast<char **>(argv));
-    expect(!config.registries.has_value(),
-           "--registries should be nullopt when not specified");
-    std::cout << "  PASS: test_registries_default_nullopt" << std::endl;
+    expect(!config.import_files.has_value(),
+           "--import should be nullopt when not specified");
+    std::cout << "  PASS: test_import_default_nullopt" << std::endl;
 }
 
 } // namespace
@@ -442,7 +441,7 @@ int main() {
         test_source_not_required();
         test_double_dash_stops_parsing();
         test_source_flag();
-        test_registries_default_nullopt();
+        test_import_default_nullopt();
         test_all_options();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
