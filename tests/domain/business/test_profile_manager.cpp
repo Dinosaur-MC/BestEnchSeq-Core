@@ -617,6 +617,79 @@ void test_pm_load_datapack_computes_limited_level() {
     TEST_PASS("test_pm_load_datapack_computes_limited_level");
 }
 
+// ─── Test: datapack treasure derivation via the treasure tag (B-T19) ────
+// MC datapack enchantment definitions carry no is_treasure field; the parser
+// derives it from `#minecraft:enchantment/treasure` (vanilla fallback) ∪ the
+// datapack's own treasure-tag override.  A treasure member gets limited_level 0
+// from the calculator; a non-member keeps its computed level.
+
+void test_pm_load_datapack_treasure_tag() {
+    auto dir = std::filesystem::temp_directory_path() / "Treasure Datapack";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
+    std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "enchantment");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        // Custom enchantment added to the treasure tag override below.
+        std::ofstream f(dir / "data" / "mytest" / "enchantment" / "wind_glide.json");
+        f << R"({
+            "description": "Wind Glide",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 3,
+            "max_level": 2,
+            "min_cost": {"base": 10, "per_level_above_first": 6}
+        })";
+    }
+    {
+        // Non-treasure control: no treasure-tag membership.
+        std::ofstream f(dir / "data" / "mytest" / "enchantment" / "plain_power.json");
+        f << R"({
+            "description": "Plain Power",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 2,
+            "max_level": 4,
+            "min_cost": {"base": 1, "per_level_above_first": 11}
+        })";
+    }
+    {
+        std::ofstream f(dir / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+    {
+        // Treasure-tag override (category-dropped key `minecraft:treasure`
+        // under parse_files derivation) adds the custom member.
+        std::ofstream f(dir / "data" / "minecraft" / "tags" / "enchantment" / "treasure.json");
+        f << R"({"values": ["mytest:wind_glide"]})";
+    }
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack succeeds");
+    const Profile* dp = pm.find("Treasure Datapack");
+    expect(dp != nullptr, "datapack profile findable");
+    if (dp) {
+        expect(dp->has_enchantment(NSID("mytest:wind_glide")), "wind_glide loaded");
+        const auto& glide = dp->ench().at(NSID("mytest:wind_glide"));
+        expect(glide.is_treasure,
+               "wind_glide: is_treasure derived from datapack treasure tag");
+        expect_eq(glide.limited_level, 0,
+                  "treasure member → limited_level 0");
+
+        expect(dp->has_enchantment(NSID("mytest:plain_power")), "plain_power loaded");
+        const auto& plain = dp->ench().at(NSID("mytest:plain_power"));
+        expect(!plain.is_treasure, "plain_power: not a treasure member");
+        expect(plain.limited_level > 0,
+               "non-treasure → computed limited_level > 0");
+    }
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_treasure_tag");
+}
+
 // ─── Test: Datapack-defined item tags survive load (B-T14 I-1) ───────────
 
 void test_pm_load_datapack_custom_tag() {
@@ -1121,6 +1194,7 @@ int main() {
         test_pm_publish();
         test_pm_load_datapack();
         test_pm_load_datapack_computes_limited_level();
+        test_pm_load_datapack_treasure_tag();
         test_pm_load_datapack_custom_tag();
         test_pm_load_datapack_vanilla_tag_override();
         test_pm_load_datapack_skips_invalid_tag_key();

@@ -92,7 +92,7 @@ void test_loader_ench_dto_to_reg() {
     expect(sharp.multiplier    == 1, "sharpness multiplier");
     expect(sharp.max_level     == 5, "sharpness max_level");
     expect(sharp.limited_level == 5, "sharpness limited_level");
-    expect(!sharp.is_treasure,       "sharpness is_treasure = false (limited_level != 0)");
+    expect(!sharp.is_treasure,       "sharpness is_treasure = false (DTO field, not limited_level heuristic)");
 
     // -- Verify incompatibility (bidirectional) ---------------------------
     // Sharpness <-> Smite are mutually exclusive
@@ -524,6 +524,9 @@ void test_loader_vanilla_tag_fallback() {
     // vanilla fallback (builtin tag registry).
     expect(e.supported_items.contains(NSID("#minecraft:swords")),
            "vanilla swords tag resolves");
+    // is_treasure flows from the parsed JSON field (B-T19), not the old
+    // `limited_level == 0` heuristic.
+    expect(e.is_treasure, "vanilla_tag: is_treasure carried from JSON field");
 
     std::cout << "PASS: test_loader_vanilla_tag_fallback" << std::endl;
 }
@@ -592,6 +595,8 @@ void test_loader_concrete_item_vanilla_universe() {
            "concrete vanilla item ref resolves via vanilla universe");
     expect(p.ench().at(NSID("mod:glide")).supported_items.contains(NSID("minecraft:elytra")),
            "supported_items keeps the concrete item NSID");
+    expect(p.ench().at(NSID("mod:glide")).is_treasure,
+           "glide: is_treasure carried from JSON field");
     // The profile-only filter must keep vanilla content OUT of the profile:
     // the vanilla universe is only the validation fallback, not content.
     expect(p.eq().size() == 0, "profile has no equipment of its own");
@@ -667,6 +672,8 @@ void test_loader_native_min_cost() {
     }
 
     // Neither min_cost nor limited_level → both default to 0, hint false.
+    // Not a treasure either (is_treasure is now data-driven, no longer the
+    // `limited_level == 0` heuristic), so T18 falls back to max_level (1).
     {
         const std::string absent = R"({
             "name": "no_mincost",
@@ -684,7 +691,8 @@ void test_loader_native_min_cost() {
         const auto& e = p.ench().at(NSID("minecraft:plain_ench"));
         expect(e.min_cost_base == 0, "absent: min_cost_base defaults to 0");
         expect(e.min_cost_per_level == 0, "absent: min_cost_per_level defaults to 0");
-        expect(e.limited_level == 0, "absent: limited_level defaults to 0");
+        expect(!e.is_treasure, "absent: not treasure (no is_treasure field)");
+        expect_eq(e.limited_level, 1, "absent: no min_cost/hint → T18 fallback max_level");
         expect(e.limited_level_provided == false,
                "absent: no hint (fallback → T18 uses max_level)");
     }

@@ -153,6 +153,7 @@ business::loader::EnchantmentData parse_ench_entry(
     std::string id_str, display_name;
     int32_t max_level = 0, multiplier = 0, limited_level = 0;
     bool limited_level_provided = false;
+    bool is_treasure = false;
     int32_t min_cost_base = 0, min_cost_per_level = 0;
     std::vector<std::string> exclusive_set_items, app_items;
 
@@ -182,6 +183,11 @@ business::loader::EnchantmentData parse_ench_entry(
         }
     }
     if (limited_level <= 0) limited_level = 0;
+
+    {
+        auto it = elem_obj.find("is_treasure");
+        if (it != elem_obj.end()) is_treasure = it->second.as<bool>();
+    }
 
     // min_cost 原始字段：接受两种形态 —— 扁平（min_cost_base / min_cost_per_level）
     // 或 MC 嵌套对象（min_cost: {base, per_level_above_first}）。嵌套形态优先
@@ -238,6 +244,7 @@ business::loader::EnchantmentData parse_ench_entry(
     ench.limited_level_provided = limited_level_provided;
     ench.min_cost_base      = min_cost_base;
     ench.min_cost_per_level = min_cost_per_level;
+    ench.is_treasure        = is_treasure;
     ench.exclusive_with   = std::vector<std::string>(exclusive_set.begin(), exclusive_set.end());
     // supported_items: 原始引用透传（`#tag` 或具体 ID），不展开；加载期交叉验证
     ench.applicable_to    = std::move(app_items);

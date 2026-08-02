@@ -584,6 +584,38 @@ void test_mc_limited_level_tag_resolved() {
     TEST_PASS("test_mc_limited_level_tag_resolved");
 }
 
+// ─── test_mc_single_enchantment_treasure_tag ───────────────────────────
+// B-T19: is_treasure is derived from `#minecraft:enchantment/treasure` tag
+// membership (the datapack parser seeds the vanilla tag universe, so the
+// canonical full-path key resolves).  A member gets is_treasure=true; a
+// non-member stays false.
+
+void test_mc_single_enchantment_treasure_tag() {
+    TagResolver tag_resolver;
+    tag_resolver.load_tag_content("minecraft:enchantment/treasure",
+        R"({"values": ["minecraft:mending"]})");
+
+    std::string mending = R"({
+        "anvil_cost": 4,
+        "max_level": 1,
+        "supported_items": "#minecraft:durability"
+    })";
+    auto ench = McOfficialParser::parse_single_enchantment(
+        "minecraft", "mending", mending, tag_resolver);
+    expect(ench.is_treasure, "mending: treasure member → is_treasure true");
+
+    std::string sharpness = R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "supported_items": "#minecraft:sharp_weapon"
+    })";
+    auto sharp = McOfficialParser::parse_single_enchantment(
+        "minecraft", "sharpness", sharpness, tag_resolver);
+    expect(!sharp.is_treasure, "sharpness: not a treasure member → is_treasure false");
+
+    TEST_PASS("test_mc_single_enchantment_treasure_tag");
+}
+
 // ─── test_mc_parse_files_basic ─────────────────────────────────────────
 // Use parse_files() with a map containing one enchantment file and one
 // item tag file. Verify the enchantment is parsed and equipment is derived
@@ -792,6 +824,7 @@ int main() {
         test_mc_single_enchantment_basic();
         test_mc_single_enchantment_with_exclusive();
         test_mc_limited_level_tag_resolved();
+        test_mc_single_enchantment_treasure_tag();
         test_mc_parse_files_basic();
         test_mc_parse_files_empty();
         test_mc_official_single_string_supported();

@@ -438,12 +438,6 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         auto own = RegistryLoader::resolve_own_content(
             result.enchantments, result.equipment, &datapack_tags);
 
-        const std::string name = derive_datapack_name(dir);
-
-        // Construct the Profile.  own.tags now = vanilla ∪ datapack item tags.
-        Profile profile(ProfileMetadata(name), std::move(own.ench),
-                        std::move(own.eq), std::move(own.tags));
-
         // Build the TagResolver as vanilla ∪ datapack item tags, honoring each
         // tag file's "replace" flag (MC semantics): a datapack may override a
         // vanilla tag (#minecraft:swords) via replace/merge, or define a
@@ -460,12 +454,17 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
             resolver->load_tag_json(tag.key, tag_json);
         }
 
-        // Compute limited_level uniformly (B-T18): the datapack's own registry
-        // with the vanilla∪datapack resolver, BEFORE the profile is constructed
-        // (Profile exposes only const registry access).  The datapack parser no
-        // longer computes limited_level inline.
+        // Compute limited_level uniformly (B-T18) on `own.ench` BEFORE it is
+        // moved into the Profile (Profile exposes only const registry access).
+        // Calling this after the move would compute on the moved-from (empty)
+        // registry — a no-op — leaving treasure limited_level at max_level.
         LimitedLevelCalculator::compute(own.ench, *resolver, load_item_properties());
 
+        const std::string name = derive_datapack_name(dir);
+
+        // Construct the Profile.  own.tags now = vanilla ∪ datapack item tags.
+        Profile profile(ProfileMetadata(name), std::move(own.ench),
+                        std::move(own.eq), std::move(own.tags));
         profile.set_tag_resolver(std::move(resolver));
 
         // ── COMMIT POINT ──  From here the manager is mutated; nothing below

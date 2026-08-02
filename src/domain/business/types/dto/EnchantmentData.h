@@ -21,6 +21,7 @@ struct EnchantmentData {
     std::vector<std::string> applicable_to;  ///< 原始 supported_items 引用（`#tag` 或具体物品 ID，透传不展开）
     int32_t min_cost_base      = 0;          ///< min_cost.base（附魔台成本公式）
     int32_t min_cost_per_level = 0;          ///< min_cost.per_level_above_first
+    bool is_treasure           = false;      ///< 宝藏魔咒（#minecraft:enchantment/treasure 成员）
 };
 
 } // namespace business::loader

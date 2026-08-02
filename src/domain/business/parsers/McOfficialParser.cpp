@@ -1,5 +1,6 @@
 #include "McOfficialParser.h"
 #include "ParserShared.h"
+#include "builtin/DataLoader.h"
 #include "domain/business/components/TagResolver.h"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
@@ -7,6 +8,7 @@
 
 #include <cctype>
 #include <filesystem>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -152,6 +154,32 @@ std::vector<std::string> collect_strings(const Json& v) {
     return out;
 }
 
+// ── Vanilla tag fallback ─────────────────────────────────────────────
+// Seed the resolver with the builtin vanilla tags (full-path keys, e.g.
+// `minecraft:enchantment/treasure`) so a datapack's canonical MC tag refs
+// (`#minecraft:enchantment/treasure`) resolve even when the datapack does not
+// define them.  The datapack's own tag files are loaded AFTER this seed, so a
+// datapack override (same key, `replace: true`) still wins (TagResolver
+// merge/replace semantics).
+void seed_vanilla_tags(TagResolver& resolver) {
+    for (const auto& [key, values] : besq::data::load_builtin_tag_entries())
+        resolver.add_tag(key,
+                         std::unordered_set<std::string>(values.begin(), values.end()));
+}
+
+/// Derive is_treasure from the `#minecraft:enchantment/treasure` tag.
+/// MC datapack enchantment definitions carry no `is_treasure` field; treasure
+/// membership is purely tag-driven.  Both the canonical vanilla key
+/// (`minecraft:enchantment/treasure`) and the datapack category-dropped key
+/// (`minecraft:treasure`, see parse_files key derivation) are checked so a
+/// datapack's own treasure-tag override (additions / replacements) is honored.
+bool is_treasure_member(const std::string& full_id, TagResolver& tag_resolver) {
+    auto treasure = tag_resolver.resolve("#minecraft:enchantment/treasure");
+    auto treasure_dp = tag_resolver.resolve("#minecraft:treasure");
+    treasure.insert(treasure_dp.begin(), treasure_dp.end());
+    return treasure.count(full_id) != 0;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -263,6 +291,7 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
     ench.limited_level_provided = limited_level_provided;
     ench.min_cost_base    = min_cost_base;
     ench.min_cost_per_level = min_cost_per_level;
+    ench.is_treasure      = is_treasure_member(ench.id, tag_resolver);
     ench.exclusive_with.assign(exclusive_set.begin(), exclusive_set.end());
     ench.applicable_to    = std::move(supp_items);
     return ench;
@@ -377,6 +406,12 @@ McOfficialParser::Result McOfficialParser::parse_files(
             tag_files[path] = content;
         }
     }
+
+    // Seed the vanilla tag universe FIRST so canonical MC tag refs
+    // (`#minecraft:enchantment/treasure`, `#minecraft:swords`, …) resolve even
+    // when the datapack does not define them.  The datapack's own tag files are
+    // loaded next and win on key collision (merge / `replace:true` semantics).
+    seed_vanilla_tags(tag_resolver);
 
     // Load all tag files into the TagResolver
     for (const auto& [path, content] : tag_files) {
