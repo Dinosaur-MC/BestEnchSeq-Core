@@ -413,9 +413,21 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // the validation universe so `#mypack:*` supported_items references
         // survive cross-validation, and must land in the profile's tag registry
         // so the profile owns them (B-T14 I-1).
+        // Filter out item tags whose ids fail NSID validation (spaces/dots/
+        // leading digits): they are unusable as `supported_items` refs, so skip
+        // them (with a warning) instead of aborting the whole datapack load.
         TagRegistry datapack_tags;
-        for (const auto& tag : result.item_tags)
-            datapack_tags.insert({NSID("#" + tag.key), tag.key});
+        std::vector<McOfficialParser::ItemTagDefinition> valid_item_tags;
+        valid_item_tags.reserve(result.item_tags.size());
+        for (auto& tag : result.item_tags) {
+            try {
+                datapack_tags.insert({NSID("#" + tag.key), tag.key});
+                valid_item_tags.push_back(std::move(tag));
+            } catch (const std::exception&) {
+                LOG_WARN("Skipping datapack item tag '%s': invalid tag id",
+                         tag.key.c_str());
+            }
+        }
 
         // Phase 2: two-phase loading — build the vanilla universe into
         // temporary registries, cross-validate the datapack's DTOs on top, then
@@ -436,7 +448,7 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // brand-new #mypack:* tag.  This drives `tags_of` applicability at
         // solve time (B-T14 I-1).
         auto resolver = besq::data::make_builtin_tag_resolver();
-        for (const auto& tag : result.item_tags) {
+        for (const auto& tag : valid_item_tags) {
             Json tag_json = Json::object();
             tag_json.set("replace", Json(tag.replace));
             Json values = Json::array();

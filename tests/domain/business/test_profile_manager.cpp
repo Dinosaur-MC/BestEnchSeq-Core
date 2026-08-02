@@ -258,6 +258,20 @@ void test_merge() {
     std::cout << "PASS: test_merge" << std::endl;
 }
 
+// ─── Test: Merge with missing source/dest throws (I-2 regression) ────────
+
+void test_pm_merge_missing_throws() {
+    ProfileManager pm;
+    pm.create("base");
+
+    expect_throws_as<std::runtime_error>([&]() { pm.merge("missing", "base"); },
+        "merge with missing source throws");
+    expect_throws_as<std::runtime_error>([&]() { pm.merge("base", "missing"); },
+        "merge with missing dest throws");
+
+    TEST_PASS("test_pm_merge_missing_throws");
+}
+
 // ─── Test: Create Empty Profile Structure ───────────────────────────────
 
 void test_create_empty_profile_structure() {
@@ -664,6 +678,63 @@ void test_pm_load_datapack_vanilla_tag_override() {
     TEST_PASS("test_pm_load_datapack_vanilla_tag_override");
 }
 
+// ─── Test: invalid tag key is skipped, not fatal (B-T14 follow-up) ───────
+
+void test_pm_load_datapack_skips_invalid_tag_key() {
+    // A tag file whose path contains a space → tag id "mypack:My Tag" is invalid
+    // (NSID rejects spaces/dots/leading digits).  It must be skipped, NOT abort
+    // the whole datapack load; valid tags are still processed.
+    auto dir = std::filesystem::temp_directory_path() / "Valid And Odd Tags";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "mypack" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    // Valid item tag.
+    {
+        std::ofstream f(dir / "data" / "mypack" / "tags" / "item" / "magic_staffs.json");
+        f << R"({"values": ["mypack:magic_staff"]})";
+    }
+    // Invalid-named tag file (space in the id) — must be skipped.
+    {
+        std::ofstream f(dir / "data" / "mypack" / "tags" / "item" / "My Tag.json");
+        f << R"({"values": ["mypack:whatever"]})";
+    }
+    // Enchantment referencing the valid tag.
+    {
+        std::ofstream f(dir / "data" / "mypack" / "enchantment" / "staff_power.json");
+        f << R"({
+            "description": "Staff Power",
+            "supported_items": "#mypack:magic_staffs",
+            "anvil_cost": 3,
+            "max_level": 4,
+            "min_cost": {"base": 8, "per_level_above_first": 6}
+        })";
+    }
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack succeeds despite an invalid tag key");
+    const Profile* dp = pm.find("Valid And Odd Tags");
+    expect(dp != nullptr, "datapack profile findable");
+    if (dp) {
+        expect(dp->has_enchantment(NSID("mypack:staff_power")),
+               "staff_power survives load");
+        expect(dp->tags().contains(NSID("#mypack:magic_staffs")),
+               "valid item tag present");
+        const TagResolver* tr = dp->tag_resolver();
+        expect(tr != nullptr, "resolver attached");
+        if (tr)
+            expect(tr->tags_of("mypack:magic_staff").count(NSID("#mypack:magic_staffs")) == 1,
+                   "valid tag drives tags_of");
+    }
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_skips_invalid_tag_key");
+}
+
 // ─── Test: direct Profile::set_dependencies invalidates effective view (M-1) ──
 
 void test_pm_direct_set_dependencies_invalidates_effective() {
@@ -989,6 +1060,7 @@ int main() {
         test_snapshot();
         test_branch();
         test_merge();
+        test_pm_merge_missing_throws();
         test_create_empty_profile_structure();
         test_pm_dependency_chain();
         test_pm_dependency_cycle();
@@ -1001,6 +1073,7 @@ int main() {
         test_pm_load_datapack();
         test_pm_load_datapack_custom_tag();
         test_pm_load_datapack_vanilla_tag_override();
+        test_pm_load_datapack_skips_invalid_tag_key();
         test_pm_direct_set_dependencies_invalidates_effective();
         test_pm_load_directory_with_datapack();
         test_pm_load_datapack_no_mcmeta();

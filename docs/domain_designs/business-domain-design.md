@@ -625,7 +625,7 @@ private:
 - **有效视图**：`resolve_effective` 按拓扑序 merge 依赖链 + 自身（上层覆盖下层），构造覆盖合并 tag 宇宙的 `TagResolver`，并缓存；任何 manager 级 mutation 使缓存失效，直接改 Profile 后须 `notify_mutated()`。
 - **稳定 CRUD**：`_mutate` 在应用前/后各校验一次，成功后记录变更前快照（`_undo_log`），失败回滚不留脏状态；`undo()` 回滚最近一次成功变更。回滚/撤销通过 JSON round-trip 恢复，同时保留 `TagResolver`。
 - **版本化发布**：`publish(profile, version, tag, out)` 拍平有效视图为自包含 profile JSON，内嵌 `version` / `release_tag`。
-- **datapack**：`load_datapack` 要求目录含 `pack.mcmeta`，用 `McOfficialParser` 解析真实 MC 1.21+ 格式（单字符串/数组 `supported_items`、`slots`、`tag replace`、`anvil_cost`），经与 `ProfileLoader` 相同的两阶段 `RegistryLoader` 路径构建，仅保留 datapack 自身内容；自动注入隐式依赖 `builtin:vanilla`。`load_directory` 加载目录下 native JSON/CSV 文件并把含 `pack.mcmeta` 的子目录当作 datapack 加载。datapack profile key = `pack.id`（否则文件夹名），verbatim 保留（可含空格/点）；命名为 `builtin:vanilla`/`vanilla` 时改写为 `vanilla_datapack` 防止覆盖根。
+- **datapack**：`load_datapack` 要求目录含 `pack.mcmeta`，用 `McOfficialParser` 解析真实 MC 1.21+ 格式（单字符串/数组 `supported_items`、`slots`、`tag replace`、`anvil_cost`），经与 `ProfileLoader` 相同的两阶段 `RegistryLoader` 路径构建，仅保留 datapack 自身内容（含自身 item tag 并入 tag 宇宙与 TagResolver，`replace` 语义覆盖 vanilla tag）。datapack `dependencies()` 保持为空：内置 `builtin:vanilla` 是 `cross_validate` 无条件收集的**隐式基座**，而非写入依赖链（B-T14 M-5）。`load_directory` 加载目录下 native JSON/CSV 文件并把含 `pack.mcmeta` 的子目录当作 datapack 加载。datapack profile key = **文件夹名 verbatim**（`pack.id` 仅回退，B-T14 M-4）；命名为 `builtin:vanilla`/`vanilla` 时改写为 `vanilla_datapack` 防止覆盖根。
 
 ---
 
