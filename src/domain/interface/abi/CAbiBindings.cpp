@@ -660,17 +660,17 @@ char* besq_list_categories(BesqContext* ctx) {
 
 // ── Persistence ────────────────────────────────────────────────────────────
 
-int besq_export_registry(BesqContext* ctx, const char* path) {
+int besq_export_profile(BesqContext* ctx, const char* path) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
     BESQ_CAPI_TRY(c,
-        if (!c->impl.export_registry(path))
+        if (!c->impl.export_profile(path))
             throw std::runtime_error(std::string("export failed: ") + path);
     );
 }
 
-int besq_import_registry(BesqContext* ctx, const char* path) {
+int besq_import_profile(BesqContext* ctx, const char* path) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
-    BESQ_CAPI_TRY(c, c->impl.import_registry(path));
+    BESQ_CAPI_TRY(c, c->impl.import_profile(path));
 }
 
 // ── Error handling ──────────────────────────────────────────────────────────

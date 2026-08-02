@@ -61,9 +61,9 @@ public:
     bool remove_equipment(const std::string& name_id);
     bool add_category(const std::string& name);
 
-    // ── Registry import / export ──
-    void import_registry(const std::string& path);
-    bool export_registry(const std::string& path) const;
+    // ── Profile data import / export ──
+    void import_profile(const std::string& path);
+    bool export_profile(const std::string& path) const;
 
     // ── Registry access (active profile, read-only) ──
     const EnchantmentRegistry& enchantments() const noexcept;

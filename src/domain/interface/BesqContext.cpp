@@ -201,17 +201,17 @@ bool BesqContext::add_category(const std::string& name) {
 }
 
 // ====================================================================
-// Registry import / export
+// Profile data import / export
 // ====================================================================
 
-void BesqContext::import_registry(const std::string& path) {
+void BesqContext::import_profile(const std::string& path) {
     ManageRequest req;
     req.action = ManageRequest::Action::ImportRegistry;
     req.file_path = path;
     ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
-bool BesqContext::export_registry(const std::string& path) const {
+bool BesqContext::export_profile(const std::string& path) const {
     auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
     ExportRequest req;
     req.target = ExportRequest::TargetType::Registry;

@@ -12,7 +12,7 @@ struct ExportPipeline {
 
     /// Infer the export format from a file path extension (`.csv`/`.CSV` →
     /// Csv, everything else → Json).  Shared single source of truth — the
-    /// CLI and C ABI reach it transitively via BesqContext::export_registry,
+    /// CLI and C ABI reach it transitively via BesqContext::export_profile,
     /// which calls this helper directly.
     static ExportRequest::Format format_for_path(const std::string& path);
 };

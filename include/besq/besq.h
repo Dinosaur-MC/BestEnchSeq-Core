@@ -94,7 +94,7 @@ int besq_remove_profile(BesqContext* ctx, const char* name);
 /// @returns  An array of C strings, or NULL on error.
 char** besq_list_algorithms(BesqContext* ctx, int* out_count);
 
-// ── Registry query ──────────────────────────────────────────────────────────
+// ── Profile query ───────────────────────────────────────────────────────────
 
 /// List all enchantments in the active profile as a JSON array.
 /// Each element has fields: id, name, max_level, multiplier, etc.
@@ -110,7 +110,7 @@ char* besq_list_equipment(BesqContext* ctx);
 /// Caller must free the returned string via besq_free_string().
 char* besq_list_categories(BesqContext* ctx);
 
-// ── Registry editing (JSON bridge) ──────────────────────────────────────────
+// ── Profile editing (JSON bridge) ───────────────────────────────────────────
 
 /// Add an enchantment from a JSON object.
 /// @p json_info  e.g. {"id":"my:custom","max_level":3,"multiplier":10}
@@ -151,10 +151,10 @@ char* besq_solve(BesqContext* ctx, const char* json_input);
 
 void besq_free_string(char* str);
 
-// ── Persistence ─────────────────────────────────────────────────────────────
+// ── Profile data import / export ────────────────────────────────────────────
 
-int besq_export_registry(BesqContext* ctx, const char* path);
-int besq_import_registry(BesqContext* ctx, const char* path);
+int besq_export_profile(BesqContext* ctx, const char* path);
+int besq_import_profile(BesqContext* ctx, const char* path);
 
 // ── Error handling ──────────────────────────────────────────────────────────
 

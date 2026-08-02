@@ -141,7 +141,7 @@ int CLIApp::run(int argc, char* argv[]) {
     if (config.import_files) {
         for (const auto& f : string_utils::split(*config.import_files, ','))
             if (!f.empty())
-                _ctx.import_registry(f);
+                _ctx.import_profile(f);
     }
 
     if (config.edit_ops)
@@ -149,7 +149,7 @@ int CLIApp::run(int argc, char* argv[]) {
 
     // 6. Profile export
     if (config.export_path) {
-        bool ok = _ctx.export_registry(*config.export_path);
+        bool ok = _ctx.export_profile(*config.export_path);
         if (!ok) throw std::runtime_error(
             tr_fmt("main.err.export_failed", *config.export_path));
         LOG_INFO("%s", tr_fmt("main.msg.profile_exported", *config.export_path).c_str());

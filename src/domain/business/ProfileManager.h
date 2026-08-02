@@ -125,7 +125,7 @@ public:
     size_t cross_validate(const std::string& profile);
 
     /// 显式使有效视图缓存失效。直接修改 Profile（绕过 manager 级 mutation，
-    /// 如 BesqContext::load_file/import_registry 的批量合并）后必须调用，否则
+    /// 如 BesqContext::load_file/import_profile 的批量合并）后必须调用，否则
     /// resolve_effective 会返回陈旧视图。
     void notify_mutated() const { _effective_cache.clear(); }
 

@@ -266,7 +266,7 @@ void test_besq_export() {
     ctx.load_builtin();
 
     const std::string test_path = "besq_ctx_test_export.json";
-    bool ok = ctx.export_registry(test_path);
+    bool ok = ctx.export_profile(test_path);
     expect(ok, "export should succeed");
 
     if (std::filesystem::exists(test_path)) {
@@ -278,10 +278,10 @@ void test_besq_export() {
 }
 
 // ---------------------------------------------------------------------------
-// Test: import_registry invalidates the effective-view cache
+// Test: import_profile invalidates the effective-view cache
 // ---------------------------------------------------------------------------
 
-void test_besq_import_invalidates_effective_cache() {
+void test_besq_import_profile_invalidates_effective_cache() {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -289,7 +289,7 @@ void test_besq_import_invalidates_effective_cache() {
     expect(ctx.enchantments().contains(NSID("minecraft:sharpness")),
            "effective cache primed");
 
-    // import_registry mutates the active profile directly (bypassing manager
+    // import_profile mutates the active profile directly (bypassing manager
     // _mutate); the effective-view cache must be invalidated so the imported
     // enchantment is visible on the next read.
     auto tmp = std::filesystem::temp_directory_path() / "besq_import_cache.json";
@@ -297,7 +297,7 @@ void test_besq_import_invalidates_effective_cache() {
         std::ofstream f(tmp);
         f << R"({"name":"extra","enchantments":[{"id":"extra:y","name":"Y","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})";
     }
-    ctx.import_registry(tmp.string());
+    ctx.import_profile(tmp.string());
     std::filesystem::remove(tmp);
 
     expect(ctx.enchantments().contains(NSID("extra:y")),
@@ -402,8 +402,8 @@ void test_c_abi() {
     }
 
     // Export test
-    rc = besq_export_registry(ctx, "besq_abi_test_export.json");
-    expect(rc == 0, "c abi export_registry");
+    rc = besq_export_profile(ctx, "besq_abi_test_export.json");
+    expect(rc == 0, "c abi export_profile");
     if (std::filesystem::exists("besq_abi_test_export.json")) {
         expect(std::filesystem::file_size("besq_abi_test_export.json") > 0,
                "c abi export file not empty");
@@ -623,7 +623,7 @@ int main() {
         test_besq_registry_edit();
         test_besq_default_profiles_scan();
         test_besq_export();
-        test_besq_import_invalidates_effective_cache();
+        test_besq_import_profile_invalidates_effective_cache();
         test_besq_load_file_datapack_keeps_tags();
         test_c_abi();
         test_c_abi_solve_default_algo();
