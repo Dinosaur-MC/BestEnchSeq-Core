@@ -31,9 +31,12 @@ void DPMergeAlgorithm::Frontier::insert(ParetoEntry entry) {
     // keeping dominated entries and bloating the frontier.)
     for (auto it = entries.begin(); it != entries.end();) {
         if (it->item.type == item.type && it->item.enchs == item.enchs) {
-            if (it->ppn <= entry.ppn && it->cost <= entry.cost)
-                return;  // entry is dominated
+            if (it->ppn <= entry.ppn && it->cost <= entry.cost) {
+                ++dropped;  // candidate eliminated by Pareto domination
+                return;     // entry is dominated
+            }
             if (entry.ppn <= it->ppn && entry.cost <= it->cost) {
+                ++dropped;  // existing entry pruned (replaced by a dominant one)
                 it = entries.erase(it);  // entry dominates existing
                 continue;
             }
@@ -95,6 +98,9 @@ const DPMergeAlgorithm::Frontier* DPMergeAlgorithm::cache_get(uint64_t mask) con
 }
 
 const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::cache_put(uint64_t mask, std::unique_ptr<Frontier> f) {
+    // Aggregate this subproblem's Pareto drops into the global counter (one
+    // relaxed atomic per subproblem — spec Tier 1).  `f` is not yet moved.
+    _dp_pareto_dropped.fetch_add(f->dropped, std::memory_order_relaxed);
     if (_using_flat) {
         // Keep the frontier alive BEFORE publishing, so the published pointer
         // can never dangle (even if push_back throws): ownership lives in
@@ -135,7 +141,8 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::cache_put(uint64_t mask, std
 // ThreadPool::shared() — each chunk processes its masks independently and
 // publishes results through the lock-free cache.
 
-const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool parallelize) {
+const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool parallelize,
+                                                          ExecutionContext& ctx) {
     // Memoisation (lock-free hit on the flat path).
     if (const Frontier* hit = cache_get(mask))
         return *hit;
@@ -177,7 +184,9 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
         return cache_put(mask, std::move(f));
     }
 
-    if (n > 20)  // dp_merge only enumerates ≤20 items (large N bails to no solution)
+    // No hard n cap: the Executor's max_search_time timeout bounds the search
+    // (a cancelled subproblem returns an empty frontier below).
+    if (ctx.is_cancelled())
         return cache_put(mask, std::make_unique<Frontier>());
 
     Frontier result;
@@ -229,14 +238,16 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
     const uint64_t low_bit = mask & (~mask + 1);
 
     auto process_subset = [&](Frontier& out, uint64_t left) {
+        ctx.wait_if_paused();
+        if (ctx.is_cancelled()) return;
         const size_t k = __builtin_popcountll(left);
         if (k * 2 > n) return;
         if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
 
         const uint64_t right = mask & ~left;
-        const Frontier& left_f  = solve(left,  /*parallelize=*/false);
+        const Frontier& left_f  = solve(left,  /*parallelize=*/false, ctx);
         if (!left_f.empty()) {
-            const Frontier& right_f = solve(right, /*parallelize=*/false);
+            const Frontier& right_f = solve(right, /*parallelize=*/false, ctx);
             if (!right_f.empty()) {
                 for (const auto& ea : left_f.entries)
                     for (const auto& eb : right_f.entries)
@@ -257,10 +268,14 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
                 if ((left & ~mask) != 0) return;  // not a subset of `mask`
                 Frontier local;
                 process_subset(local, left);
-                if (!local.empty()) {
+                {
                     std::lock_guard<std::mutex> lk(result_mutex);
-                    for (auto& e : local.entries)
-                        result.insert(std::move(e));
+                    // Carry this partition's Pareto drops into `result` so they
+                    // are aggregated at the top-level cache_put (review #2).
+                    result.dropped += local.dropped;
+                    if (!local.empty())
+                        for (auto& e : local.entries)
+                            result.insert(std::move(e));
                 }
             });
     } else {
@@ -299,7 +314,8 @@ void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext 
 
     // Fresh start: clear memoisation cache
     _cache.clear();
-    _diag = AlgorithmDiagnostics{};
+    _diag = PartitionDpDiagnostics{};
+    _dp_pareto_dropped.store(0, std::memory_order_relaxed);
 }
 
 // ─── execute ──────────────────────────────────────────────────────────────
@@ -313,7 +329,8 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
     if (!ctx.is_restored()) {
         _cache.clear();
-        _diag = AlgorithmDiagnostics{};
+        _diag = PartitionDpDiagnostics{};
+        _dp_pareto_dropped.store(0, std::memory_order_relaxed);
     }
 
     ctx.report_progress(0, ProgressStatus::Starting);
@@ -367,7 +384,38 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     const uint64_t full_mask = (mutable_items.size() >= 64)
         ? UINT64_MAX : ((static_cast<uint64_t>(1) << mutable_items.size()) - 1);
 
-    const Frontier& frontier = solve(full_mask, true);
+    const Frontier& frontier = solve(full_mask, true, ctx);
+
+    // Tier-0 diagnostics: derive state-space metrics from the memo cache
+    // (zero hot-path cost — spec §5).
+    _diag.dp_pareto_dropped = _dp_pareto_dropped.load(std::memory_order_relaxed);
+    if (_using_flat && _flat_cache) {
+        uint64_t solved = 0, max_f = 0;
+        for (size_t i = 0; i < _flat_capacity; ++i)
+            if (auto* fp = _flat_cache[i].load(std::memory_order_relaxed)) {
+                ++solved;
+                if (fp->entries.size() > max_f) max_f = fp->entries.size();
+            }
+        _diag.dp_subproblems_solved    = solved;
+        _diag.dp_cache_slots           = _flat_capacity;
+        _diag.dp_cache_hits            = _flat_capacity - solved;
+        _diag.dp_max_frontier_size     = static_cast<uint32_t>(max_f);
+        _diag.normalized_explored_states = static_cast<int64_t>(solved);
+    } else {
+        // Map path: count map entries + the pass-lifetime overflow arena
+        // (cache_put past MAX_CACHE_ENTRIES lands in `_owners`).
+        const size_t solved = _cache.size() + _owners.size();
+        _diag.dp_subproblems_solved = solved;
+        _diag.dp_cache_slots        = solved;
+        _diag.normalized_explored_states = static_cast<int64_t>(solved);
+    }
+
+    if (ctx.is_cancelled()) {
+        _diag.status = "Cancelled";
+        ctx.set_exit_diagnostics(_diag);
+        ctx.report_progress(100, ProgressStatus::Cancelled);
+        return;
+    }
 
     const ParetoEntry* best = nullptr;
     for (const auto& entry : frontier.entries) {

@@ -17,6 +17,11 @@ AlgorithmExecutor::AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm)
 AlgorithmExecutor::~AlgorithmExecutor() {
     cancel();
     _join_worker();
+    // Join the timeout watcher so it can never fire cancel() on a destroyed
+    // `this` when the executor is destroyed without wait()/wait_for() (review
+    // finding #3).  _stop_timeout_watcher() sets alive=false and joins the
+    // watcher thread; safe to call here since `this` is still alive.
+    _stop_timeout_watcher();
 }
 
 // ─── Internal helpers ───
@@ -38,7 +43,13 @@ void AlgorithmExecutor::_start_timeout_watcher(std::chrono::milliseconds max_tim
             _timeout_cv.wait_for(lock, std::chrono::milliseconds(10));
         }
         if (alive->load(std::memory_order_acquire)) {
-            if (_ctx) _ctx->cancel();
+            // Transition to Cancelled via the public cancel() (which also sets
+            // the ctx flag and resumes a paused run).  Calling _ctx->cancel()
+            // alone only set the flag: a cooperative algorithm would stop, but
+            // the executor state stayed Running and the worker's
+            // `_set_state(Completed)` then won — so a timeout never surfaced as
+            // Cancelled.
+            cancel();
         }
     });
 }

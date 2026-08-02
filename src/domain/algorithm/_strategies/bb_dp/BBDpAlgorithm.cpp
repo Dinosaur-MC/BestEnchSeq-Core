@@ -27,10 +27,13 @@ void BBDpAlgorithm::Frontier::insert(ParetoEntry entry, int32_t beam_width) {
     // entry can never lead to a strictly better result.
     for (auto it = entries.begin(); it != entries.end();) {
         if (it->item.type == item.type && it->item.enchs == item.enchs) {
-            if (it->ppn <= entry.ppn && it->cost <= entry.cost)
-                return;  // entry is dominated
+            if (it->ppn <= entry.ppn && it->cost <= entry.cost) {
+                ++dropped;  // candidate eliminated by Pareto domination
+                return;     // entry is dominated
+            }
             if (entry.ppn <= it->ppn && entry.cost <= it->cost) {
-                it = entries.erase(it);  // entry dominates existing
+                ++dropped;  // existing entry pruned (replaced by a dominant one)
+                it = entries.erase(it);
                 continue;
             }
         }
@@ -225,6 +228,9 @@ const BBDpAlgorithm::Frontier* BBDpAlgorithm::cache_get(uint64_t mask) const noe
 }
 
 const BBDpAlgorithm::Frontier& BBDpAlgorithm::cache_put(uint64_t mask, std::unique_ptr<Frontier> f) {
+    // Aggregate this subproblem's Pareto drops into the global counter (one
+    // relaxed atomic per subproblem — spec Tier 1).  `f` is not yet moved.
+    _dp_pareto_dropped.fetch_add(f->dropped, std::memory_order_relaxed);
     if (_using_flat) {
         // Keep the frontier alive BEFORE publishing, so the published pointer
         // can never dangle (even if push_back throws): ownership lives in
@@ -276,6 +282,17 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
 
     const size_t n = static_cast<size_t>(__builtin_popcountll(mask));
 
+    // Snapshot of the dynamic B&B bound at this subproblem's entry.  The bound
+    // is only ever tightened by a genuine full-set solution (final_level), so
+    // it is constant throughout a non-final solve; for the top-level solve the
+    // post-loop re-prune below corrects any mid-loop tightening.  Hoisting the
+    // load here removes ~one atomic load per forged pair from the hot path.
+    const int32_t bound_snapshot = _best_cost.load(std::memory_order_relaxed);
+
+    // Tier-1 prune counters (spec §5): accumulate locally in this subproblem,
+    // flush to the global once at the end.  Never a per-operation atomic.
+    uint64_t cap_pruned = 0, bound_pruned = 0;
+
     if (n == 1) {
         auto f = std::make_unique<Frontier>();
         const Item& it = _base_items[static_cast<size_t>(__builtin_ctzll(mask))];
@@ -299,11 +316,9 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         auto try_forge = [&](const Item& base, const Item& sac) {
             if (!_forge_engine.is_forgeable(base, sac)) return;
             auto [result, cost] = _forge_engine.forge(base, sac, *_ench_reg);
-            ctx.incr_steps_forged();
             if (cost == INT32_MAX) return;
-            if (max_step_cost > 0 && cost > max_step_cost) return;
-            int32_t cur = _best_cost.load(std::memory_order_relaxed);
-            if (static_cast<int64_t>(cost) > cur) return;  // keep == bound (may be optimal)
+            if (max_step_cost > 0 && cost > max_step_cost) { ++cap_pruned; return; }
+            if (static_cast<int64_t>(cost) > bound_snapshot) { ++bound_pruned; return; }  // keep == bound (may be optimal)
             // Only a genuine full-set solution may tighten the anytime bound.
             // A proper-subset "complete" item (redundant books) must not prune
             // the top-level frontier (see review finding I2).
@@ -318,19 +333,24 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         };
         try_forge(a, b);
         try_forge(b, a);
+        // Flush this n==2 subproblem's own prunes before the early return —
+        // n==2 leaves are the most numerous in the recursion, so their counts
+        // would otherwise be silently dropped (review finding #1).
+        _dp_cap_pruned.fetch_add(cap_pruned, std::memory_order_relaxed);
+        _dp_bound_pruned.fetch_add(bound_pruned, std::memory_order_relaxed);
         return cache_put(mask, std::move(f));
     }
 
-    if (n > 28)
-        return cache_put(mask, std::make_unique<Frontier>());
+    // No hard n cap: the Executor's max_search_time timeout bounds the search
+    // (a cancelled subproblem returns an empty frontier below).
     if (ctx.is_cancelled())
         return cache_put(mask, std::make_unique<Frontier>());
 
     Frontier result;
 
-    auto combine = [&](Frontier& local, const ParetoEntry& a, const ParetoEntry& b) {
-        int32_t cur = _best_cost.load(std::memory_order_relaxed);
-        if (a.cost + b.cost > cur) return;  // any completion > bound can't improve
+    auto combine = [&](Frontier& local, const ParetoEntry& a, const ParetoEntry& b,
+                       uint64_t& cap_cnt, uint64_t& bound_cnt) {
+        if (a.cost + b.cost > bound_snapshot) { ++bound_cnt; return; }  // any completion > bound can't improve
         auto make_tree = [&](const std::shared_ptr<StepTree::Node>& base_tree,
                              const std::shared_ptr<StepTree::Node>& sac_tree,
                              const Item& base, const Item& sac,
@@ -345,11 +365,10 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
                              const std::shared_ptr<StepTree::Node>& sac_tree) {
             if (!_forge_engine.is_forgeable(base, sac)) return;
             auto [new_item, cost] = _forge_engine.forge(base, sac, *_ench_reg);
-            ctx.incr_steps_forged();
             if (cost == INT32_MAX) return;
-            if (max_step_cost > 0 && cost > max_step_cost) return;
+            if (max_step_cost > 0 && cost > max_step_cost) { ++cap_cnt; return; }
             int64_t total = a.cost + b.cost + cost;
-            if (total > cur) return;  // keep == bound (may be optimal)
+            if (total > bound_snapshot) { ++bound_cnt; return; }  // keep == bound (may be optimal)
             // Only a genuine full-set solution may tighten the anytime bound
             // (see review finding I2).
             if (final_level && new_item.type == ItemType::Equip && meets_target(new_item, _target)) {
@@ -375,7 +394,8 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
     // of `_base_items` is fixed, so bit 0 of the full set is a stable anchor).
     const uint64_t low_bit = mask & (~mask + 1);
 
-    auto process_subset = [&](Frontier& out, uint64_t left) {
+    auto process_subset = [&](Frontier& out, uint64_t left,
+                              uint64_t& cap_cnt, uint64_t& bound_cnt) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) return;
         const size_t k = __builtin_popcountll(left);
@@ -391,7 +411,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
             if (!right_f.empty()) {
                 for (const auto& ea : left_f.entries)
                     for (const auto& eb : right_f.entries)
-                        combine(out, ea, eb);
+                        combine(out, ea, eb, cap_cnt, bound_cnt);
             }
         }
     };
@@ -402,13 +422,23 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         ctx.report_progress(20, ProgressStatus::Exploring);
         parallel_for(pool, uint64_t{1}, mask, [&](uint64_t left) {
             if ((left & ~mask) != 0) return;      // not a subset of `mask`
+            uint64_t p_cap = 0, p_bound = 0;
             Frontier local;
-            process_subset(local, left);
-            if (!local.empty()) {
+            process_subset(local, left, p_cap, p_bound);
+            {
                 std::lock_guard<std::mutex> lk(result_mutex);
-                for (auto& e : local.entries)
-                    result.insert(std::move(e), beam_width);
+                // Carry this partition's Pareto drops into `result` so they are
+                // aggregated at the top-level cache_put (review finding #2).
+                // local itself is never cache_put — only its entries are merged.
+                result.dropped += local.dropped;
+                if (!local.empty())
+                    for (auto& e : local.entries)
+                        result.insert(std::move(e), beam_width);
             }
+            // Flush per-mask prunes into the global counters (Tier 1: one
+            // relaxed atomic per partition, never per forge).
+            _dp_cap_pruned.fetch_add(p_cap, std::memory_order_relaxed);
+            _dp_bound_pruned.fetch_add(p_bound, std::memory_order_relaxed);
         });
     } else {
         // Enumerate all proper non-empty subsets of `mask` (skip 0 and mask).
@@ -416,7 +446,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         uint64_t count = 0;
         const uint64_t total = static_cast<uint64_t>(1) << n;
         while (left != 0) {
-            process_subset(result, left);
+            process_subset(result, left, cap_pruned, bound_pruned);
             ++count;
             if ((count & 0xFF) == 0)
                 ctx.report_progress(5 + static_cast<uint8_t>(90 * count / total),
@@ -424,6 +454,12 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
             left = (left - 1) & mask;
         }
     }
+
+    // Flush this subproblem's own (base-case + sequential-loop) prunes.  For
+    // the parallel top-level this is just the n==2 base counts (0 for n ≥ 14);
+    // the per-partition counts were already flushed inside the workers.
+    _dp_cap_pruned.fetch_add(cap_pruned, std::memory_order_relaxed);
+    _dp_bound_pruned.fetch_add(bound_pruned, std::memory_order_relaxed);
 
     // Drop complete entries that cannot beat the bound (keep those equal to it).
     const int32_t dyn_bound = _best_cost.load(std::memory_order_relaxed);
@@ -466,7 +502,11 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
     _target.clear();
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
-    _diag = AlgorithmDiagnostics{};
+    _diag = PartitionDpDiagnostics{};
+    // Reset per-pass diagnostic accumulators (execute() may be re-run).
+    _dp_cap_pruned.store(0, std::memory_order_relaxed);
+    _dp_bound_pruned.store(0, std::memory_order_relaxed);
+    _dp_pareto_dropped.store(0, std::memory_order_relaxed);
 
     // Configure thread-pool concurrency from search config.
     if (input.config.search.max_threads > 0)
@@ -526,6 +566,40 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
     const uint64_t full_mask = (items.size() >= 64)
         ? UINT64_MAX : ((static_cast<uint64_t>(1) << items.size()) - 1);
 
+    // Tier-0 diagnostics: initial bound / UB gap (spec §5).
+    _diag.dp_ub_cost    = (ub_ok ? internal : INT32_MAX);
+    _diag.initial_bound = bound;
+
+    // Tier-0 state-space metrics derived from the memo cache at pass end
+    // (zero hot-path cost).  Also snapshots the Tier-1 aggregates.
+    auto fill_cache_diag = [&]() {
+        _diag.dp_cap_pruned     = _dp_cap_pruned.load(std::memory_order_relaxed);
+        _diag.dp_bound_pruned   = _dp_bound_pruned.load(std::memory_order_relaxed);
+        _diag.dp_pareto_dropped = _dp_pareto_dropped.load(std::memory_order_relaxed);
+        _diag.final_bound       = _best_cost.load(std::memory_order_relaxed);
+        if (_using_flat && _flat_cache) {
+            uint64_t solved = 0, max_f = 0;
+            for (size_t i = 0; i < _flat_capacity; ++i)
+                if (auto* fp = _flat_cache[i].load(std::memory_order_relaxed)) {
+                    ++solved;
+                    if (fp->entries.size() > max_f) max_f = fp->entries.size();
+                }
+            _diag.dp_subproblems_solved    = solved;
+            _diag.dp_cache_slots           = _flat_capacity;
+            _diag.dp_cache_hits            = _flat_capacity - solved;
+            _diag.dp_max_frontier_size     = static_cast<uint32_t>(max_f);
+            _diag.normalized_explored_states = static_cast<int64_t>(solved);
+        } else {
+            // Map path: count map entries + the pass-lifetime overflow arena
+            // (cache_put past MAX_CACHE_ENTRIES lands there).
+            const size_t solved = _cache.size() + _overflow.size();
+            _diag.dp_subproblems_solved = solved;
+            _diag.dp_cache_slots        = solved;
+            _diag.dp_cache_hits         = 0;  // map path: hit rate not tracked
+            _diag.normalized_explored_states = static_cast<int64_t>(solved);
+        }
+    };
+
     auto find_best = [&](const Frontier& f) -> const ParetoEntry* {
         const ParetoEntry* best = nullptr;
         for (const auto& e : f.entries)
@@ -542,6 +616,7 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
     // fastest to find and the preferred answer.  The unconstrained search
     // (Pass B) only runs when no ≤cap solution exists.
     const ParetoEntry* best = nullptr;
+    _diag.dp_pass_b_ran = false;
 
     if (cap > 0) {
         // Seed the B&B bound only if the hamming construction is itself fully
@@ -563,6 +638,7 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
         _best_cost.store(feas_bound, std::memory_order_relaxed);
         const Frontier& feas_frontier = solve(full_mask, cap, beam_width,
                                               /*parallelize=*/true, /*final_level=*/true, ctx);
+        fill_cache_diag();  // Tier-0 state-space metrics from Pass A's cache
         if (ctx.is_cancelled()) {
             _diag.status = "Cancelled";
             ctx.set_exit_diagnostics(_diag);
@@ -578,8 +654,10 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
         _overflow.clear();
         _prepare_cache(items.size());
         _best_cost.store(bound, std::memory_order_relaxed);
+        _diag.dp_pass_b_ran = true;
         const Frontier& frontier = solve(full_mask, 0, beam_width,
                                          /*parallelize=*/true, /*final_level=*/true, ctx);
+        fill_cache_diag();  // Tier-0 state-space metrics from Pass B's cache
         if (ctx.is_cancelled()) {
             _diag.status = "Cancelled";
             ctx.set_exit_diagnostics(_diag);

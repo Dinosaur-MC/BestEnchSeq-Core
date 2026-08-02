@@ -22,8 +22,8 @@ void test_algorithm_diagnostics_flush() {
     std::vector<DiagnosticsWriter::Entry> entries;
     diag.flush(entries);
 
-    expect(entries.size() == 2,
-           "AlgorithmDiagnostics flush should produce 2 entries");
+    expect(entries.size() == 4,
+           "AlgorithmDiagnostics flush should produce 4 entries (status, solution_cost, diag_schema_version, normalized_explored_states)");
 
     // status is the first entry (base class)
     expect(std::string(entries[0].key) == "status",
@@ -40,6 +40,16 @@ void test_algorithm_diagnostics_flush() {
            "solution_cost value should hold int64_t");
     expect(std::get<int64_t>(entries[1].value) == 42,
            "solution_cost value should be 42");
+
+    // Common-core fields (spec §4): schema version + normalized explored states
+    expect(std::string(entries[2].key) == "diag_schema_version",
+           "third key should be 'diag_schema_version'");
+    expect(std::get<int64_t>(entries[2].value) == 1,
+           "diag_schema_version should default to 1");
+    expect(std::string(entries[3].key) == "normalized_explored_states",
+           "fourth key should be 'normalized_explored_states'");
+    expect(std::get<int64_t>(entries[3].value) == -1,
+           "normalized_explored_states should default to -1");
 
     std::cout << "PASS: test_algorithm_diagnostics_flush" << std::endl;
 }
@@ -61,9 +71,9 @@ void test_search_diagnostics_flush() {
     std::vector<DiagnosticsWriter::Entry> entries;
     diag.flush(entries);
 
-    // base (2) + search (4) = 6
-    expect(entries.size() == 6,
-           "SearchDiagnostics flush should produce 6 entries");
+    // base (4) + search (4) = 8
+    expect(entries.size() == 8,
+           "SearchDiagnostics flush should produce 8 entries");
 
     // Verify search-specific entry keys by name (order: parent then child)
     bool found_initial_bound = false;
@@ -121,9 +131,9 @@ void test_pool_search_diagnostics_flush() {
     std::vector<DiagnosticsWriter::Entry> entries;
     diag.flush(entries);
 
-    // base (2) + search (4) + pool (4) = 10
-    expect(entries.size() == 10,
-           "PoolSearchDiagnostics flush should produce 10 entries");
+    // base (4) + search (4) + pool (4) = 12
+    expect(entries.size() == 12,
+           "PoolSearchDiagnostics flush should produce 12 entries");
 
     // Verify pool-specific entry keys and values
     bool found_items_pool_used = false;
@@ -222,11 +232,62 @@ void test_diagnostics_writer_entry() {
     std::cout << "PASS: test_diagnostics_writer_entry" << std::endl;
 }
 
+// ─── PartitionDpDiagnostics::flush ───────────────────────────────────────
+//
+// Template for Catalan/partition DP algorithms (bb_dp / dp_merge / DP
+// plugins) — spec §8.  base (4) + search (4) + dp (9) = 17 entries, with the
+// `dp_` prefix per the naming convention (§6).
+
+void test_partition_dp_diagnostics_flush() {
+    PartitionDpDiagnostics diag;
+    diag.status               = "Complete";
+    diag.solution_cost        = 150;
+    diag.initial_bound        = 155;
+    diag.final_bound          = 150;
+    diag.dp_subproblems_solved = 131072;
+    diag.dp_cache_slots       = 131072;
+    diag.dp_cache_hits        = 0;
+    diag.dp_max_frontier_size = 2;
+    diag.dp_cap_pruned        = 12345;
+    diag.dp_bound_pruned      = 67890;
+    diag.dp_pareto_dropped    = 11111;
+    diag.dp_ub_cost           = 155;
+    diag.dp_pass_b_ran        = false;
+    diag.normalized_explored_states = 131072;
+
+    std::vector<DiagnosticsWriter::Entry> entries;
+    diag.flush(entries);
+
+    expect(entries.size() == 17,
+           "PartitionDpDiagnostics flush should produce 17 entries");
+
+    bool found_solved = false, found_slots = false, found_hits = false,
+         found_max_f = false, found_cap = false, found_bound = false,
+         found_pareto = false, found_ub = false, found_pass_b = false;
+    for (const auto& e : entries) {
+        std::string key(e.key ? e.key : "");
+        if (key == "dp_subproblems_solved") found_solved = true;
+        if (key == "dp_cache_slots")        found_slots = true;
+        if (key == "dp_cache_hits")         found_hits = true;
+        if (key == "dp_max_frontier_size")  found_max_f = true;
+        if (key == "dp_cap_pruned")         found_cap = true;
+        if (key == "dp_bound_pruned")       found_bound = true;
+        if (key == "dp_pareto_dropped")     found_pareto = true;
+        if (key == "dp_ub_cost")            found_ub = true;
+        if (key == "dp_pass_b_ran")         found_pass_b = true;
+    }
+    expect(found_solved && found_slots && found_hits && found_max_f &&
+           found_cap && found_bound && found_pareto && found_ub && found_pass_b,
+           "all dp_* keys should be flushed");
+    std::cout << "PASS: test_partition_dp_diagnostics_flush" << std::endl;
+}
+
 int main() {
     try {
         test_algorithm_diagnostics_flush();
         test_search_diagnostics_flush();
         test_pool_search_diagnostics_flush();
+        test_partition_dp_diagnostics_flush();
         test_diagnostics_writer_skip_short();
         test_diagnostics_writer_entry();
     } catch (const test_error& e) {

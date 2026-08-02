@@ -8,8 +8,10 @@ namespace algorithm {
 // NOT already covered by the generic write() signature.
 
 void AlgorithmDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const {
-    out.push_back({"status",        status});
-    out.push_back({"solution_cost", static_cast<int64_t>(solution_cost)});
+    out.push_back({"status",          status});
+    out.push_back({"solution_cost",   static_cast<int64_t>(solution_cost)});
+    out.push_back({"diag_schema_version", static_cast<int64_t>(diag_schema_version)});
+    out.push_back({"normalized_explored_states", normalized_explored_states});
 }
 
 // ─── SearchDiagnostics ────────────────────────────────────────────────
@@ -30,6 +32,23 @@ void PoolSearchDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) co
     out.push_back({"items_pool_capacity",  static_cast<int64_t>(items_pool_capacity)});
     out.push_back({"step_pool_used",       static_cast<int64_t>(step_pool_used)});
     out.push_back({"step_pool_capacity",   static_cast<int64_t>(step_pool_capacity)});
+}
+
+// ─── PartitionDpDiagnostics ─────────────────────────────────────────────
+// Template per docs/algotithm_designs/algorithm-diagnostics-spec.md §8.
+// Field names carry the `dp_` paradigm prefix (spec §6).
+
+void PartitionDpDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const {
+    SearchDiagnostics::flush(out);
+    out.push_back({"dp_subproblems_solved", static_cast<int64_t>(dp_subproblems_solved)});
+    out.push_back({"dp_cache_slots",        static_cast<int64_t>(dp_cache_slots)});
+    out.push_back({"dp_cache_hits",         static_cast<int64_t>(dp_cache_hits)});
+    out.push_back({"dp_max_frontier_size",  static_cast<int64_t>(dp_max_frontier_size)});
+    out.push_back({"dp_cap_pruned",         static_cast<int64_t>(dp_cap_pruned)});
+    out.push_back({"dp_bound_pruned",       static_cast<int64_t>(dp_bound_pruned)});
+    out.push_back({"dp_pareto_dropped",     static_cast<int64_t>(dp_pareto_dropped)});
+    out.push_back({"dp_ub_cost",            static_cast<int64_t>(dp_ub_cost)});
+    out.push_back({"dp_pass_b_ran",         dp_pass_b_ran ? 1 : 0});
 }
 
 } // namespace algorithm
