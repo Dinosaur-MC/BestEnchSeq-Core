@@ -2,12 +2,15 @@
 # Compact types, forge engine, strategies, diagnostics, serialization,
 # plugin loader.  Depends on besq-common-core + optional log.
 #
-# besq-algo-core is the ALGORITHM KERNEL — a STATIC library (算法内核).
-# It is linked into hosts (besq-core → besq CLI, and besq-worker), which
-# export its symbols (-rdynamic on Linux / ENABLE_EXPORTS on Windows).
-# Plugins are built bare (compile against these headers, symbols left
-# undefined) and resolve the kernel at dlopen against the host's single
-# copy — so DiagnosticsService / IAlgorithm vtables unify per process.
+# besq-algo-core is the ALGORITHM KERNEL — a SHARED library (算法内核).
+# The parent (besq via besq-core), the sandbox worker (besq-worker), and
+# plugins ALL link this same shared lib, so the kernel (DiagnosticsService,
+# IAlgorithm vtables, singletons) resolves to ONE instance per process.
+#
+# A bare-plugin + -rdynamic model was tried (static kernel, plugins resolve
+# against the host) but the large parent exe's -rdynamic export table caused
+# a dynamic-linker relocation crash (SEGV) when dlopening plugins — the
+# small worker was fine.  A shared kernel avoids -rdynamic entirely.
 
 file(GLOB_RECURSE BESQ_ALGORITHM_SRCS CONFIGURE_DEPENDS "*.cpp" "*.hpp")
 list(FILTER BESQ_ALGORITHM_SRCS EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/(plugin/|_strategies/)")
@@ -18,8 +21,8 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/plugin/CMakeLists.txt)
 # ── Strategies (auto-discovered + registration) ──
 include(${CMAKE_CURRENT_SOURCE_DIR}/_strategies/CMakeLists.txt)
 
-# ── besq-algo-core (STATIC) — the algorithm kernel ────────────────────
-add_library(besq-algo-core STATIC
+# ── besq-algo-core (SHARED) — the algorithm kernel ────────────────────
+add_library(besq-algo-core SHARED
     ${BESQ_ALGORITHM_SRCS}
     ${BESQ_PLUGIN_SRCS}
     ${BESQ_BUILTIN_STRATEGY_SRCS}
@@ -45,7 +48,14 @@ target_compile_definitions(besq-algo-core PUBLIC
 if(UNIX AND NOT APPLE)
     target_link_libraries(besq-algo-core PUBLIC ${CMAKE_DL_LIBS})
 endif()
-# Stable archive path (root build dir) so the plugin config can reference it.
+if(WIN32)
+    # Export the kernel symbols so plugins can resolve IAlgorithm vtables.
+    set_property(TARGET besq-algo-core PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+# Stable output paths so the plugin config can reference them on all platforms:
+#   Windows  DLL → build/bin/besq-algo-core.dll, import lib → build/besq-algo-core.lib
+#   Linux    .so → build/libbesq-algo-core.so
 set_target_properties(besq-algo-core PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )

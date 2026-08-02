@@ -66,6 +66,12 @@ endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
+if(UNIX)
+    # Shared libs (libbesq-algo-core.so) live in the build dir; give every
+    # executable a build-tree RPATH so it finds them without LD_LIBRARY_PATH.
+    set(CMAKE_BUILD_RPATH "${PROJECT_BINARY_DIR}")
+endif()
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Build type default
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -229,12 +235,6 @@ if(BESQ_BUILD_CLI)
         ${CMAKE_CURRENT_SOURCE_DIR}/include   # → #include "besq/besq.h"
     )
 
-    if(UNIX)
-        target_link_options(besq PRIVATE -rdynamic)
-    elseif(WIN32)
-        set_target_properties(besq PROPERTIES ENABLE_EXPORTS ON)
-    endif()
-
     target_compile_definitions(besq PRIVATE
         $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
         $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
@@ -244,23 +244,19 @@ endif()
 # ═══════════════════════════════════════════════════════════════════════════════
 # besq-worker (guarded by BESQ_BUILD_SANDBOX) — sandbox algorithm execution worker
 # ═══════════════════════════════════════════════════════════════════════════════
-# Links ONLY the algorithm kernel (besq-algo-core) + worker sources.  Exports
-# symbols so sandbox plugins resolve the kernel from this single copy.
+# Links ONLY the algorithm kernel (besq-algo-core) + worker sources.  The
+# kernel is SHARED — both the worker and plugins resolve it from the same
+# libbesq-algo-core.so, so no -rdynamic export is needed.
 if(BESQ_BUILD_SANDBOX)
     add_executable(besq-worker
         ${CMAKE_CURRENT_SOURCE_DIR}/src/worker/main.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/worker/sandbox_seccomp.cpp
     )
     target_link_libraries(besq-worker PRIVATE
         besq-algo-core
         besq-common-io    # ByteStream for the IPC wire format
     )
     target_include_directories(besq-worker PRIVATE ${BESQ_GENERATED_DIR})
-
-    if(UNIX)
-        target_link_options(besq-worker PRIVATE -rdynamic)
-    elseif(WIN32)
-        set_target_properties(besq-worker PROPERTIES ENABLE_EXPORTS ON)
-    endif()
 
     target_compile_definitions(besq-worker PRIVATE
         $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>

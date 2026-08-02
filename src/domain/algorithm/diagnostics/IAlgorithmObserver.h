@@ -44,7 +44,7 @@ class IAlgorithmObserver : public std::enable_shared_from_this<IAlgorithmObserve
     /// DiagnosticsService.
     bool is_attached() const noexcept { return _attached; }
 
-    ~IAlgorithmObserver();
+    virtual ~IAlgorithmObserver();
 
     IAlgorithmObserver(const IAlgorithmObserver &)            = delete;
     IAlgorithmObserver &operator=(const IAlgorithmObserver &) = delete;

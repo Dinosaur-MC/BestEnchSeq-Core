@@ -27,6 +27,24 @@ find_package(besq-core REQUIRED
     NO_DEFAULT_PATH
 )
 
+# ── Auto-detect host changes ──────────────────────────────────────────
+# 1. When the host regenerates besq-coreConfig.cmake (target structure /
+#    exported ABI changed), re-run this configure instead of silently
+#    linking against a stale config.
+set_property(DIRECTORY APPEND PROPERTY
+    CMAKE_CONFIGURE_DEPENDS "${besq-core_DIR}/besq-coreConfig.cmake"
+)
+
+# 2. Build type MUST match the host — on Windows a mismatch breaks the link
+#    (_ITERATOR_DEBUG_LEVEL); on Linux it prevents ABI drift.
+if(BESQ_HOST_BUILD_TYPE AND CMAKE_BUILD_TYPE
+   AND NOT CMAKE_BUILD_TYPE STREQUAL BESQ_HOST_BUILD_TYPE)
+    message(FATAL_ERROR
+        "Plugin build type '${CMAKE_BUILD_TYPE}' must match the host "
+        "'${BESQ_HOST_BUILD_TYPE}'. Reconfigure with "
+        "-DCMAKE_BUILD_TYPE=${BESQ_HOST_BUILD_TYPE}.")
+endif()
+
 # Strip include dirs from the imported target — they contain host-platform
 # absolute paths (e.g. Windows F:/... when building from WSL) that would
 # cause "non-existent path" errors.  Plugins add their own include dirs

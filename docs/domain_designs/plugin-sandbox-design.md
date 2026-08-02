@@ -85,37 +85,36 @@
 
 ```
 基础设施  besq-common / besq-common-*（STATIC/INTERFACE）
-算法内核  besq-algo-core（STATIC）—— 算法域 + 插件框架
-BESQ核心  besq-core（STATIC）—— 算法域 + 业务域 + 编排域 + 内嵌数据，排除接口域
+算法内核  besq-algo-core（SHARED）—— 算法域 + 插件框架
+BESQ核心  besq-core（INTERFACE）—— 算法域 + 业务域 + 编排域 + 内嵌数据，排除接口域
 CLI       besq（EXE）—— 链 besq-core + besq-domain-interface
 沙箱      besq-worker（EXE）—— 链 besq-algo-core + worker 源
-纯净扩展  algo_*（SHARED）—— 仅依赖算法内核符号
+纯净扩展  algo_*（SHARED）—— 链 besq-algo-core（同一份共享内核）
 （besq-minimal / besq-builtin 已删除——builtin 并入 besq-core）
 ```
 
-### 3.2 单例统一：宿主导出 + 插件裸解析
+### 3.2 单例统一：共享内核
 
-决策 B（诊断转发）依赖 `DiagnosticsService::instance()` 是**同一单例**。算法内核是 STATIC，链接进宿主（CLI/worker），宿主用 `-rdynamic`（Linux）/ `ENABLE_EXPORTS`（Windows）导出；插件为**裸扩展**，dlopen 时符号解析到宿主的唯一一份内核：
+决策 B（诊断转发）依赖 `DiagnosticsService::instance()` 是**同一单例**。算法内核是 **SHARED**，父进程（via besq-core）、沙箱 worker、插件**三方链同一份 `libbesq-algo-core.so`** → 符号从该共享库解析，单例统一：
 
 ```
-Linux   → 插件链 INTERFACE（headers only），符号 undefined，dlopen 时解析到宿主 -rdynamic 导出
-Windows → 插件链静态 besq-algo-core.lib（自带副本）——已知限制，待 M2 Windows 沙箱解决
+此前尝试：静态内核 + 插件裸 + 宿主 -rdynamic
+  → 小 worker（符号少）能 dlopen 裸插件
+  → 大父进程 besq 的 -rdynamic 导出表导致动态链接器重定位 SEGV（strace 实证）
+修正：内核 SHARED，三方共享 → 无 -rdynamic，父/worker 都能 dlopen 插件，单例统一 ✅
 ```
-
-CLI in-process 插件同样解析到 CLI 导出的内核 → 单例统一。
 
 ### 3.3 构建方式
 
 ```cmake
 # 算法域（src/domain/algorithm/CMakeLists.txt）
-add_library(besq-algo-core STATIC <算法域源文件 + 插件框架 + 策略>)
+add_library(besq-algo-core SHARED <算法域源文件 + 插件框架 + 策略>)
 # 核心（根 CMakeLists）——编译内嵌数据 + 链三域
-add_library(besq-core STATIC <builtin/*.cpp + embedded>)
+add_library(besq-core STATIC <builtin/*.cpp + embedded>)  # 现在是 INTERFACE 聚合
 target_link_libraries(besq-core PUBLIC orchestration business algo-core)
-# 宿主导出符号
+# 宿主无 -rdynamic（插件从 libbesq-algo-core.so 解析）
 add_executable(besq src/main.cpp)        # 链 besq-core + interface
-add_executable(besq-worker src/worker/main.cpp)  # 链 besq-algo-core
-# 宿主 -rdynamic / ENABLE_EXPORTS
+add_executable(besq-worker src/worker/main.cpp)  # 链 besq-algo-core（共享）
 # 注意：business ↔ builtin 是真实循环静态依赖，UNIX 链接必须用
 #   -Wl,--start-group besq-core besq-domain-business -Wl,--end-group
 # group 必须同时包住 core 与 business——只包 core（或单独的 builtin 库）
@@ -278,11 +277,18 @@ M0（已完成）构建基础：
   - 预设 full/debug/minimal/cli/sandbox
   - 65 测试全通过（Windows）
 
-M1 Linux 隔离 + IPC：
-  - socketpair + besq-worker 服务循环
-  - seccomp 白名单（dlopen 后安装）
-  - ByteStream wire format
-  - SandboxedAlgorithm（父进程 IAlgorithm 代理）
+M1 Linux 隔离 + IPC（已实现 + WSL 验证通过）：
+  - IpcProtocol（帧协议：len+type+payload）
+  - besq-worker 服务循环（stdin/stdout IPC，事件流 + 控制消息）
+  - seccomp 白名单（dlopen 后安装；EPERM 拦截文件/网络，KILL 拦截 mprotect(PROT_EXEC)）
+  - SandboxedAlgorithm（父进程代理：spawn worker + IPC + 事件注入父 ctx + 取消轮询）
+  - 集成：AlgorithmLoader.set_sandbox_enabled()（BESQ_SANDBOX=1 opt-in）
+  - ✅ WSL 验证：
+    * malicious 插件 in-process OPEN OK / sandboxed OPEN BLOCKED（EPERM）
+    * idastar 经沙箱 worker 完整求解（解法流回父进程，50ms）
+  - 关键修复：沙箱模式父进程不 dlopen 插件；seccomp BPF 两处 bug
+    （arch jt/jf 方向；bpf_ld_abs 丢弃 offset 导致全 KILL——真正根因）
+  - 测试插件 plugins/malicious/（open("/etc/passwd") 对照），可作 M3 自动化用例
 
 M2 Windows：
   - CreateProcess + Job Object + 双管道

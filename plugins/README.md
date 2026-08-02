@@ -46,7 +46,20 @@ cmake --build build/plugins
 
 ### 构建类型（Debug/Release）必须与主程序一致
 
-插件构建的 `CMAKE_BUILD_TYPE` **必须与主程序主机完全一致**。Windows 上两者不一致（如 Debug 主机 + Release 插件）会导致 `lld-link: /failifmismatch: _ITERATOR_DEBUG_LEVEL` 链接失败。请对照主程序的构建类型设置。
+插件构建的 `CMAKE_BUILD_TYPE` **必须与主程序主机完全一致**。Windows 上两者不一致（如 Debug 主机 + Release 插件）会导致 `lld-link: /failifmismatch: _ITERATOR_DEBUG_LEVEL` 链接失败。插件构建会**自动校验**：主机通过 `besq-coreConfig.cmake` 导出 `BESQ_HOST_BUILD_TYPE`，插件构建类型不匹配时直接报错并提示正确的构建类型。
+
+### 主程序变更的自动检测
+
+插件是独立的 CMake 项目，对主项目的变更检测分两类：
+
+- **头文件级改动**（如 `IAlgorithm.h`）→ ninja 的 `.d` 依赖文件自动触发插件 `.o` 重建
+- **导出 config / target 结构改动** → 插件 CMake 通过 `CMAKE_CONFIGURE_DEPENDS` 跟踪主机的 `besq-coreConfig.cmake`，主机重新 configure 后插件下次构建会自动重新配置
+
+若改了 `IAlgorithm` 接口或导出的库结构（ABI 级变更），插件需要一次干净的重新配置来保证 ABI 一致：
+```bash
+rm -rf build/plugins && cmake -S plugins -B build/plugins -DCMAKE_BUILD_TYPE=<主机类型> \
+  -DBESQ_CORE_DIR=$PWD/build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+```
 
 ### CMake 选项
 

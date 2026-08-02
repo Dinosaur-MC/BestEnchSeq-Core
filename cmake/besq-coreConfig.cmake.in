@@ -4,30 +4,26 @@
 get_filename_component(_besq_build "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
 get_filename_component(_besq_src "${_besq_build}/.." ABSOLUTE)
 
-# ── besq-algo-core — the STATIC algorithm kernel (纯净扩展) ──────────────
-# Plugins are PURE extensions: they depend on the algorithm kernel's symbols
-# but must NOT pull in business/orchestration/interface.  Hosts (CLI/worker)
-# statically link the kernel and export it (-rdynamic / ENABLE_EXPORTS), so
-# plugin symbols resolve to the host's single copy.
-#
-#   Linux   → INTERFACE imported: plugin links nothing, symbols left undefined,
-#             resolved at dlopen against the host's exports.  One copy.
-#   Windows → STATIC imported: plugin links the kernel archive (carries its
-#             own copy).  Known limitation until the Windows sandbox lands.
+# Host build type — plugins must match it (Windows _ITERATOR_DEBUG_LEVEL).
+set(BESQ_HOST_BUILD_TYPE "@CMAKE_BUILD_TYPE@")
+
+# ── besq-algo-core — the SHARED algorithm kernel (纯净扩展) ────────────
+# The parent (via besq-core), the sandbox worker, AND plugins all link this
+# same shared lib, so the algorithm domain (DiagnosticsService, IAlgorithm
+# vtables, singletons) resolves to ONE instance per process.
 if(WIN32)
-    add_library(besq-algo-core::besq-algo-core STATIC IMPORTED)
+    add_library(besq-algo-core::besq-algo-core SHARED IMPORTED)
     set_target_properties(besq-algo-core::besq-algo-core PROPERTIES
-        IMPORTED_LOCATION "${_besq_build}/besq-algo-core.lib"
-        # The kernel's own common deps — the plugin must link them too
-        # (static archive carries the Logger references from the kernel).
-        INTERFACE_LINK_LIBRARIES
-            "${_besq_build}/src/common/besq-common-core.lib;${_besq_build}/src/common/besq-common-thread.lib;${_besq_build}/src/common/besq-common-log.lib"
+        IMPORTED_LOCATION "${_besq_build}/bin/besq-algo-core.dll"
+        IMPORTED_IMPLIB   "${_besq_build}/besq-algo-core.lib"
         INTERFACE_INCLUDE_DIRECTORIES "${_besq_src}/src;${_besq_build}/generated;${_besq_src}/src/common"
         INTERFACE_COMPILE_DEFINITIONS "@BESQ_PLUGIN_DIAG_DEFS@"
     )
 else()
-    add_library(besq-algo-core::besq-algo-core INTERFACE IMPORTED)
+    add_library(besq-algo-core::besq-algo-core SHARED IMPORTED)
     set_target_properties(besq-algo-core::besq-algo-core PROPERTIES
+        IMPORTED_LOCATION "${_besq_build}/libbesq-algo-core.so"
+        IMPORTED_SONAME   "libbesq-algo-core.so"
         INTERFACE_INCLUDE_DIRECTORIES "${_besq_src}/src;${_besq_build}/generated;${_besq_src}/src/common"
         INTERFACE_COMPILE_DEFINITIONS "@BESQ_PLUGIN_DIAG_DEFS@"
     )

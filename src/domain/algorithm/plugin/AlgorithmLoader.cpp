@@ -1,6 +1,7 @@
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/_strategies/Registration.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/algorithm/sandbox/SandboxedAlgorithm.h"
 #include "AlgorithmLoader.h"
 #include "PluginAudit.h"
 #include "common/log/log.hpp"
@@ -185,7 +186,36 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
         LOG_INFO("[Audit] '%s' links: %s", so_path.c_str(), joined.c_str());
     }
 
-    // ── Step 2: dlopen ───────────────────────────────────────────────
+    // ── Sandbox mode: NEVER dlopen in the parent ─────────────────────
+    // The parent's in-process dlopen of a plugin (bare or shared) crashed
+    // the dynamic linker in the large exe.  Instead, probe by spawning a
+    // real worker — which loads the plugin in its own small process and
+    // returns the name — and register a sandboxed factory.  This both gets
+    // the name and validates the plugin loads under the sandbox.
+    if (_sandbox_enabled) {
+        std::string algo_name;
+        try {
+            auto probe = std::make_unique<SandboxedAlgorithm>(resolved, "", audit.capability);
+            algo_name = std::string(probe->name());
+        } catch (const std::exception &e) {
+            LOG_WARN("Plugin '%s' sandbox probe failed: %s", so_path.c_str(), e.what());
+            return false;
+        }
+        _registry.unregister_algorithm(algo_name);
+        _registry.register_algorithm(algo_name, [path = resolved, cap = audit.capability]() {
+            return std::make_unique<SandboxedAlgorithm>(path, "", cap);
+        });
+        LoadedPlugin plugin;
+        plugin.name  = algo_name;
+        plugin.path  = std::move(resolved);
+        plugin.audit = std::move(audit);
+        _plugins.push_back(std::move(plugin));
+        LOG_INFO("Loaded algorithm plugin (sandboxed): %s (from %s)",
+                 algo_name.c_str(), so_path.c_str());
+        return true;
+    }
+
+    // ── Step 2: dlopen (in-process mode only) ────────────────────────
     void *handle = dl_open(resolved);
     if (!handle) {
         LOG_WARN("Failed to load algorithm plugin '%s': %s",
@@ -233,7 +263,7 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     }
     std::string algo_name(probe->name());
 
-    // ── Step 6: Register ─────────────────────────────────────────────
+    // ── Step 6: Register (in-process mode only) ─────────────────────
     _registry.unregister_algorithm(algo_name);
     _registry.register_algorithm(algo_name, [create_fn]() -> std::unique_ptr<IAlgorithm> {
         void *raw = create_fn();

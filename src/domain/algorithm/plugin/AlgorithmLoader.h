@@ -25,6 +25,8 @@
 #include "PluginAPI.h"
 #include "PluginAudit.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
@@ -34,7 +36,13 @@ namespace algorithm {
 
 class AlgorithmLoader {
   public:
-    AlgorithmLoader() = default;
+    /// Sandbox is enabled when the BESQ_SANDBOX env var is "1" on Linux.
+    AlgorithmLoader() {
+#if defined(__linux__)
+        if (const char *s = std::getenv("BESQ_SANDBOX"); s && std::strcmp(s, "1") == 0)
+            _sandbox_enabled = true;
+#endif
+    }
     ~AlgorithmLoader();
 
     AlgorithmLoader(const AlgorithmLoader &)            = delete;
@@ -52,6 +60,13 @@ class AlgorithmLoader {
 
     /// Load a single plugin by full path. Returns true on success.
     bool load_plugin(const std::string &so_path);
+
+    // ── Sandbox ───────────────────────────────────────────────────────
+    /// When enabled, loaded plugins run in a sandboxed besq-worker
+    /// subprocess instead of in-process.  (Linux; the subprocess spawn is a
+    /// no-op-stub elsewhere.)
+    void set_sandbox_enabled(bool on) noexcept { _sandbox_enabled = on; }
+    bool sandbox_enabled() const noexcept { return _sandbox_enabled; }
 
     // ── Security audit ────────────────────────────────────────────────
     /// Standalone scanning: use audit_plugin_binary() from PluginAudit.h.
@@ -98,6 +113,7 @@ class AlgorithmLoader {
     AlgorithmRegistry _registry;
     std::vector<LoadedPlugin> _plugins;
     bool _builtin_loaded{false};
+    bool _sandbox_enabled{false};
 };
 
 } // namespace algorithm
