@@ -25,7 +25,13 @@ constexpr bool operator&(AlgorithmMode a, AlgorithmMode b) noexcept {
     return static_cast<uint8_t>(a) & static_cast<uint8_t>(b);
 }
 
-// Namespace ID
+// Namespace ID.
+//
+// Validation follows Minecraft Java identifier rules:
+//   - namespace: [a-z0-9_.-]  (no '/', no uppercase, not "." or "..")
+//   - path/id:   [a-z0-9/._-] (no uppercase, no "/"-delimited "." or ".." segment)
+// Dots and leading digits are allowed; uppercase is rejected. An empty namespace
+// defaults to "minecraft". A "#" prefix marks a tag id.
 class NSID {
   private:
     std::string _ns;      // namespace

@@ -209,17 +209,53 @@ void test_valid_ids() {
               "somerig:custom_enchant",
               "custom namespace");
 
+    // Dots are allowed (MC identifier charset includes '.')
+    expect_eq(NSID("minecraft:foo.bar").str(), "minecraft:foo.bar", "dot in id");
+    expect_eq(NSID("foo.bar:thing").str(), "foo.bar:thing", "dot in namespace");
+    expect_eq(NSID("custom:path/to/x.y").str(), "custom:path/to/x.y", "slash + dot in id");
+
+    // Leading digits are allowed (MC has no positional rule)
+    expect_eq(NSID("0abc:thing").str(), "0abc:thing", "leading digit in namespace");
+    expect_eq(NSID("9minecraft:sharpness").str(), "9minecraft:sharpness", "leading digit ns");
+    expect_eq(NSID("minecraft:1sharpness").str(), "minecraft:1sharpness", "leading digit id");
+    expect_eq(NSID("minecraft:1x").str(), "minecraft:1x", "leading digit id");
+
+    // '/' is allowed in the path (e.g. tag paths)
+    expect_eq(NSID("#minecraft:enchantable/sharp_weapon").str(),
+              "#minecraft:enchantable/sharp_weapon",
+              "slash in tag path");
+
     std::cout << "  PASS: test_valid_ids" << std::endl;
 }
 
 void test_invalid_ids() {
-    // Namespace starting with digit is invalid
-    expect_throws([] { NSID("0minecraft:sharpness"); }, "ns starting with digit should throw");
     // Invalid characters
     expect_throws([] { NSID("minecraft:sharpness!"); }, "id with special chars should throw");
     expect_throws([] { NSID("minecraft:sharp ness"); }, "id with spaces should throw");
 
     std::cout << "  PASS: test_invalid_ids" << std::endl;
+}
+
+void test_mc_identifier_rules() {
+    // Uppercase is rejected (MC identifiers are lowercase-only).
+    expect_throws([] { NSID("Minecraft:sharpness"); }, "uppercase namespace should throw");
+    expect_throws([] { NSID("minecraft:SharpNess"); }, "uppercase id should throw");
+
+    // '/' is a path-only character: namespace must reject it.
+    expect_throws([] { NSID("minecraft/enchantable:sharpness"); },
+                  "slash in namespace should throw");
+
+    // Filesystem-safety: '.' and '..' as whole segments are rejected.
+    expect_throws([] { NSID("minecraft:."); }, "'.' id should throw");
+    expect_throws([] { NSID("minecraft:.."); }, "'..' id should throw");
+    expect_throws([] { NSID("minecraft:a/../b"); }, "'..' path segment should throw");
+    expect_throws([] { NSID("minecraft:a/./b"); }, "'.' path segment should throw");
+
+    // Embedded dots are fine: 'a..b' is a single segment, not '.', '..', or a separator.
+    expect_eq(NSID("minecraft:a..b").str(), "minecraft:a..b", "embedded dots are allowed");
+    expect_eq(NSID("minecraft:a.b/c").str(), "minecraft:a.b/c", "dot inside path segment");
+
+    std::cout << "  PASS: test_mc_identifier_rules" << std::endl;
 }
 
 } // anonymous namespace
@@ -256,6 +292,7 @@ int main() {
         // Edge cases
         test_valid_ids();
         test_invalid_ids();
+        test_mc_identifier_rules();
     } catch (const test_error &e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return print_summary();

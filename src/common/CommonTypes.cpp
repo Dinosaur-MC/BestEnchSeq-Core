@@ -3,16 +3,37 @@
 #include <stdexcept>
 
 namespace {
-inline bool validate_id(const std::string_view &id) {
-    static constexpr std::string_view valid_chars =
-        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-/";
+// namespace: [a-z0-9_.-], no '/', no uppercase, non-empty, not "." or ".."
+inline bool validate_ns(const std::string_view &s) {
+    static constexpr std::string_view valid = "0123456789abcdefghijklmnopqrstuvwxyz_.-";
 
-    if (id.empty())
+    if (s.empty() || s == "." || s == "..")
         return false;
-    if (id.find_first_not_of(valid_chars) != std::string::npos)
+    if (s.find_first_not_of(valid) != std::string_view::npos)
         return false;
-    if (std::isdigit(id[0]))
+    return true;
+}
+
+// path: [a-z0-9/._-], no uppercase, non-empty, no "/"-delimited segment equal to "." or ".."
+inline bool validate_path(const std::string_view &s) {
+    static constexpr std::string_view valid = "0123456789abcdefghijklmnopqrstuvwxyz/._-";
+
+    if (s.empty())
         return false;
+    if (s.find_first_not_of(valid) != std::string_view::npos)
+        return false;
+    // no "." or ".." segment (split on '/'; a segment equal to '.' or '..' is rejected)
+    size_t start = 0;
+    for (;;) {
+        auto slash = s.find('/', start);
+        auto seg   = s.substr(start,
+                              slash == std::string_view::npos ? s.size() - start : slash - start);
+        if (seg == "." || seg == "..")
+            return false;
+        if (slash == std::string_view::npos)
+            break;
+        start = slash + 1;
+    }
     return true;
 }
 
@@ -26,7 +47,7 @@ NSID::NSID(const std::string_view &ns, const std::string_view &id) : _ns(ns), _i
         _ns     = _ns.substr(1);
         _is_tag = true;
     }
-    if (!validate_id(_ns) || !validate_id(_id)) {
+    if (!validate_ns(_ns) || !validate_path(_id)) {
         throw std::runtime_error("The NSID '" + str() + "' is invalid");
     }
 }
