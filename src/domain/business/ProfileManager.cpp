@@ -417,6 +417,13 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
             if (ext != ".json" && ext != ".csv")
                 continue;
 
+            // 伴生装备文件（equipments_<stem>.csv）仅经主 CSV 文件加载，不独立成 profile
+            if (ext == ".csv") {
+                const std::string stem = path.stem().string();
+                if (stem.rfind("equipments_", 0) == 0)
+                    continue;
+            }
+
             // B-T26 #18: load_into resolves the profile KEY itself (JSON
             // top-level `name`, falling back to the file stem), so loaded.name()
             // is always the resolved key — never empty for a real file.  The

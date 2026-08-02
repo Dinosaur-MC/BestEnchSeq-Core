@@ -6,8 +6,11 @@
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
 #include "domain/business/components/TagResolver.h"
+#include "domain/business/components/FormatDetector.h"
 #include "common/io/FileUtils.hpp"
 
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -578,6 +581,45 @@ void test_csv_empty_scalar_cell_drops_row() {
     TEST_PASS("test_csv_empty_scalar_cell_drops_row");
 }
 
+// ─── test_format_detector_csv_companion ─────────────────────────────────
+// T6: FormatDetector::parse on a NativeCsv file reads back the companion
+// equipment file (equipments_<stem>.csv).  The companion is merged into the
+// parse result's `equipment` vector; without a companion the vector stays
+// empty.
+
+void test_format_detector_csv_companion() {
+    namespace fs = std::filesystem;
+    auto dir = fs::temp_directory_path() / "besq_csv_comp";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    std::ofstream(dir / "custom.csv") <<
+        "id,name,platform,max_level,multiplier,exclusive_set,supported_items\n"
+        "mod:sharp,Sharp,java,5,1,,\"#minecraft:swords\"\n";
+    std::ofstream(dir / "equipments_custom.csv") <<
+        "id,name,category,max_durability\n"
+        "minecraft:diamond_sword,Diamond Sword,sword,1561\n";
+    auto result = FormatDetector::parse(dir / "custom.csv");
+    expect_eq(static_cast<int>(result.enchantments.size()), 1,
+              "csv_comp: 1 ench");
+    expect_eq(static_cast<int>(result.equipment.size()), 1,
+              "csv_comp: 1 eq from companion");
+    expect(result.equipment[0].id == "minecraft:diamond_sword",
+           "csv_comp: eq id");
+    expect(result.enchantments[0].platform == "java",
+           "csv_comp: platform read");
+
+    // Negative: a CSV WITHOUT a companion file → empty equipment vector.
+    std::ofstream(dir / "naked.csv") <<
+        "id,name,max_level,multiplier\n"
+        "mod:plain,Plain,1,1\n";
+    auto no_comp = FormatDetector::parse(dir / "naked.csv");
+    expect_eq(static_cast<int>(no_comp.equipment.size()), 0,
+              "csv_comp: no companion → empty equipment");
+
+    fs::remove_all(dir);
+    TEST_PASS("test_format_detector_csv_companion");
+}
+
 // ============================================================================
 // Section C — McOfficialParser
 //
@@ -1018,6 +1060,7 @@ int main() {
         test_csv_parse_escaped_quotes();
         test_csv_parse_equipment_companion();
         test_csv_empty_scalar_cell_drops_row();
+        test_format_detector_csv_companion();
 
         // Section C — McOfficialParser
         test_mc_single_enchantment_basic();

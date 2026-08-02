@@ -1346,6 +1346,46 @@ void test_format_detector_datapack() {
     TEST_PASS("test_format_detector_datapack");
 }
 
+// ─── Test: load_directory skips equipments_*.csv companion files ────────
+// T6: companion equipment files (equipments_<stem>.csv) load only through
+// their main CSV file; they must NOT become standalone profiles.  The
+// companion equipment still round-trips into the main profile via
+// FormatDetector's NativeCsv branch.
+
+void test_load_directory_skips_equipments_csv() {
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_prof_dir_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+
+    std::ofstream(dir / "pack.csv") <<
+        "id,name,max_level,multiplier,exclusive_set,supported_items\n"
+        "mod:sharp,Sharp,5,1,,\"#minecraft:swords\"\n";
+    std::ofstream(dir / "equipments_pack.csv") <<
+        "id,name,category,max_durability\n"
+        "minecraft:diamond_sword,Diamond Sword,sword,1561\n";
+
+    ProfileManager pm;
+    pm.load_directory(dir);
+    expect(pm.exists("pack"), "pack profile loaded");
+    expect(!pm.exists("equipments_pack"),
+           "equipments_* companion NOT a standalone profile");
+    // The enchantment survives cross-validation (#minecraft:swords is a real
+    // vanilla tag) and the companion equipment flows into the main profile
+    // (Step 1 read-back).
+    const Profile* pack = pm.find("pack");
+    expect(pack != nullptr, "pack profile findable");
+    if (pack) {
+        expect_eq(static_cast<int>(pack->ench().size()), 1,
+                  "pack profile carries the enchantment from the main CSV");
+        expect_eq(static_cast<int>(pack->eq().size()), 1,
+                  "pack profile carries companion equipment");
+    }
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_load_directory_skips_equipments_csv");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -1391,6 +1431,7 @@ int main() {
         test_pm_empty_key_rejected();
         test_profile_loader_load_datapack_keeps_tags();
         test_format_detector_datapack();
+        test_load_directory_skips_equipments_csv();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

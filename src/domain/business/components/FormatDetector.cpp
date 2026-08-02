@@ -53,8 +53,16 @@ FormatDetector::Result FormatDetector::parse(const std::filesystem::path& path) 
         auto [ench, eq] = NativeJsonParser::parse(json);
         return {std::move(ench), std::move(eq), {}};
     }
-    case DataFormat::NativeCsv:
-        return {NativeCsvParser::parse_file(path), {}, {}};
+    case DataFormat::NativeCsv: {
+        // 魔咒主文件 + 可选伴生装备文件（equipments_<stem>.csv），实现装备
+        // CSV 完整往返（#11）。伴生文件缺失时 equipment 保持为空。
+        auto ench = NativeCsvParser::parse_file(path);
+        std::vector<business::loader::EquipmentData> eq;
+        auto companion = path.parent_path() / ("equipments_" + path.filename().string());
+        if (std::filesystem::exists(companion))
+            eq = NativeCsvParser::parse_equipment_file(companion);
+        return {std::move(ench), std::move(eq), {}};
+    }
     case DataFormat::McOfficial: {
         auto result = McOfficialParser::parse(path);
         return {std::move(result.enchantments), std::move(result.equipment),
