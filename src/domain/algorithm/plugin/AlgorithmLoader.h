@@ -15,7 +15,7 @@
 ///   AlgorithmLoader loader;
 ///   loader.load_builtin();
 ///   loader.scan_and_load("./algorithms");
-///   auto algo = loader.create("astar");
+///   auto algo = loader.create("dp_merge");
 ///
 /// Thread-safety:
 ///   Mutation (load, unload) intended for startup / shutdown only.

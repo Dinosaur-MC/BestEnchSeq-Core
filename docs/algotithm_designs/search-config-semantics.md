@@ -8,7 +8,7 @@
 
 ## 1. 背景与问题
 
-审计发现 `SearchConfig` 各字段在 5 个内置策略（astar / dfs / dp_merge / bb_dp / hamming）中实际遵守情况不一致：
+审计发现 `SearchConfig` 各字段在 5 个策略（astar / dfs 已移为插件、dp_merge / bb_dp / hamming 内置）中实际遵守情况不一致：
 
 | SearchConfig 字段 | astar | dfs | dp_merge | bb_dp | hamming | CLI flag |
 |---|---|---|---|---|---|---|
@@ -21,7 +21,7 @@
 | `max_step_cost` | ✗ | ✗ | ✗ | ✓ | ✗ | — |
 | `beam_width` | ✗ | ✗ | ✗ | ✓ | ✗ | — |
 
-`--max-threads` 对单线程策略（astar / dfs / hamming）是 no-op，此前没有任何说明。
+`--max-threads` 对单线程策略（hamming，及以插件加载的 astar / dfs）是 no-op，此前没有任何说明。
 
 ## 2. 决策（用户定夺，2026-08-02）
 
@@ -36,9 +36,9 @@
 
 | 字段 | 默认 | 语义 | 遵守策略 | 例外说明 |
 |---|---|---|---|---|
-| `max_search_time` | 180 s | 全局搜索时间预算 | **Executor 级对所有策略生效**（`AlgorithmExecutor.cpp:188` 启动 timeout watcher）；AStar/DFS 另在热循环内自查 | hamming 为 O(n) 贪心构建、极快，不设内检（Executor 兜底） |
-| `max_solutions` | 0（不限） | 最多返回 N 个解 | AStar（`AStarAlgorithm.cpp:371`）、DFS（`DFSAlgorithm.cpp:257`） | bb_dp / dp_merge / hamming 只产 1 个最优解，对任意 N≥1 天然满足；N>1 时无更多解可给——文档标注，非 bug |
-| `initial_bound` | `INT32_MAX` | warm-start 上界，成本已超此值的分支剪枝 | AStar（`AStarAlgorithm.cpp:214`）、DFS（`DFSAlgorithm.cpp:144`）、bb_dp（`BBDpAlgorithm.cpp:552`） | dp_merge / hamming 忽略 → 仅预热更慢，不影响正确性 |
+| `max_search_time` | 180 s | 全局搜索时间预算 | **Executor 级对所有策略生效**（`AlgorithmExecutor.cpp:188` 启动 timeout watcher）；AStar/DFS 插件另在热循环内自查 | hamming 为 O(n) 贪心构建、极快，不设内检（Executor 兜底） |
+| `max_solutions` | 0（不限） | 最多返回 N 个解 | AStar（`plugins/astar/AStarAlgorithm.cpp:371`）、DFS（`plugins/dfs/DFSAlgorithm.cpp:257`） | bb_dp / dp_merge / hamming 只产 1 个最优解，对任意 N≥1 天然满足；N>1 时无更多解可给——文档标注，非 bug |
+| `initial_bound` | `INT32_MAX` | warm-start 上界，成本已超此值的分支剪枝 | AStar（`plugins/astar/AStarAlgorithm.cpp:214`）、DFS（`plugins/dfs/DFSAlgorithm.cpp:144`）、bb_dp（`BBDpAlgorithm.cpp:552`） | dp_merge / hamming 忽略 → 仅预热更慢，不影响正确性 |
 
 ### 通用字段的合规语义
 
@@ -49,9 +49,9 @@
 
 | 字段 | 默认 | 语义 | 遵守策略 | 其余策略 |
 |---|---|---|---|---|
-| `max_depth` | 0 | 最大递归/栈深度 | DFS（`DFSAlgorithm.cpp:246`） | no-op |
-| `memory_mb` | 0（A* 内 fallback 2048） | 开放/关闭集内存预算（MB） | AStar（`AStarAlgorithm.cpp:183`） | no-op |
-| `max_threads` | 0 = `hardware_concurrency` | 线程池并发 | bb_dp（`BBDpAlgorithm.cpp:515`）、dp_merge（`DPMergeAlgorithm.cpp:329`） | 单线程策略（astar / dfs / hamming）no-op |
+| `max_depth` | 0 | 最大递归/栈深度 | DFS（`plugins/dfs/DFSAlgorithm.cpp:246`） | no-op |
+| `memory_mb` | 0（A* 内 fallback 2048） | 开放/关闭集内存预算（MB） | AStar（`plugins/astar/AStarAlgorithm.cpp:183`） | no-op |
+| `max_threads` | 0 = `hardware_concurrency` | 线程池并发 | bb_dp（`BBDpAlgorithm.cpp:515`）、dp_merge（`DPMergeAlgorithm.cpp:329`） | 单线程策略（hamming；astar / dfs 插件）no-op |
 | `max_step_cost` | 39 | 每步铁砧成本上限（vanilla Too-Expensive=39），SOFT 约束 | bb_dp | no-op |
 | `beam_width` | 0（精确） | Pareto 前沿束宽 | bb_dp | no-op |
 
@@ -73,8 +73,8 @@
 | CLI | SearchConfig | 适用范围文案 |
 |---|---|---|
 | `--max-time <s>` | `max_search_time` | 所有策略（Executor 级） |
-| `--solutions <n>` | `max_solutions` | AStar/DFS 生效；DP/贪心策略返回单个最优解 |
-| `--memory <mb>` | `memory_mb` | AStar 专用；其它策略忽略 |
+| `--solutions <n>` | `max_solutions` | AStar/DFS（插件）生效；DP/贪心策略返回单个最优解 |
+| `--memory <mb>` | `memory_mb` | AStar（插件）专用；其它策略忽略 |
 | `--max-threads <n>` | `max_threads` | 并行策略（bb_dp / dp_merge）专用；单线程策略忽略 |
 | `--algo-opt k=v,...` | `extra` | 算法专用逃生舱；键策略私有，值任意字符串 |
 

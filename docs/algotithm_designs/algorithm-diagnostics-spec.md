@@ -60,8 +60,8 @@
 
 ```
 AlgorithmDiagnostics                ← 公共核心（所有算法）
-├─ SearchDiagnostics                ← 展开式搜索（dfs、未来搜索插件）
-│   └─ PoolSearchDiagnostics        ← 用 ItemPool 的搜索（astar、idastar）
+├─ SearchDiagnostics                ← 展开式搜索（dfs——插件、未来搜索插件）
+│   └─ PoolSearchDiagnostics        ← 用 ItemPool 的搜索（astar——插件、idastar）
 └─ PartitionDpDiagnostics           ← Catalan/分治 DP（bb_dp、dp_merge、未来 DP 插件）
     └─ 可再派生（如 BBoundDpDiagnostics : PartitionDpDiagnostics）
 ```
@@ -71,8 +71,8 @@ AlgorithmDiagnostics                ← 公共核心（所有算法）
 | 范式 | 选型 | 例子 |
 |---|---|---|
 | 确定性合成（贪心、无搜索）| `AlgorithmDiagnostics` | hamming、diff_first、penalty_balance |
-| 搜索，无 ItemPool | `SearchDiagnostics` | dfs |
-| 搜索，有 ItemPool | `PoolSearchDiagnostics` | astar、idastar |
+| 搜索，无 ItemPool | `SearchDiagnostics` | dfs（插件） |
+| 搜索，有 ItemPool | `PoolSearchDiagnostics` | astar（插件）、idastar |
 | Catalan/分治 DP（含可选 B&B bound）| `PartitionDpDiagnostics` | bb_dp、dp_merge |
 
 ## 4. 公共核心（必填）

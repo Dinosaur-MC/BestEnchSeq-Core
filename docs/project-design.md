@@ -1,6 +1,6 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：2.1 · 最后更新：2026-07-27
+> 版本：2.2 · 最后更新：2026-08-02
 
 ---
 
@@ -211,8 +211,10 @@ Algorithm domain (src/domain/algorithm/registries/):
 | Hierarchical | 近似 | 否 | 大量 | 插件 | 分层分组 → 组内合并 |
 | DiffFirst | 近似 | 否 | 任意 | 插件 | PPN 分层，每层选最便宜对 |
 | Hamming | 近似 | 否 | 大量 | 内置 | Popcount 平衡二叉合并树 |
-| DFS | 精确 | 是 | ≤ 8 | 内置 | 迭代 B&B + 哈希记忆化 |
-| A* | 精确 | 是 | ≤ 9 | 内置 | 可采启发 + 优先队列 |
+| dp_merge | 精确 | 是 | ≤ 16 | 内置 | 分治 DP + (EnchSet, PPN) Pareto 分桶 |
+| bb_dp | 精确 | 是 | ≤ 24 | 内置 | B&B 分治 DP + Pareto + 可选 39 级上限 |
+| DFS | 精确 | 是 | ≤ 8 | 插件 | 迭代 B&B + 哈希记忆化 |
+| A* | 精确 | 是 | ≤ 9 | 插件 | 可采启发 + 优先队列 |
 | IDA* | 精确 | 是 | ≤ 10 | 插件 | 迭代加深 + TT 剪枝 |
 
 所有算法共用 `IForgeEngine` 接口和 compact 类型系统。新算法只需实现 `IAlgorithm::execute()`，自动获得线程管理、暂停/取消、进度报告能力。
@@ -291,7 +293,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 **forge_engine/**：`IForgeEngine`（虚接口）+ `ForgeEngine`（原版实现）
 **registries/**：`EnchReg`（固定 64×64 冲突矩阵 + 掩码缓存 + 紧凑注册表）、`AlgorithmRegistry`（工厂）
-**_strategies/**：内置策略（A*、DFS、Hamming），通过 `Registration.h` 自动注册
+**_strategies/**：内置策略（Hamming、dp_merge、bb_dp），通过 `Registration.h` 自动注册
 **components/**：Heuristic、ItemPool、StateHash、SearchUtils 等共享搜索基础设施
 **diagnostics/**：事件驱动诊断管道（`DiagnosticsService` + `IAlgorithmObserver` + `DiagnosticsWriter`）
 **serialization/**：二进制 checkpoint（`IAlgorithmSerializer` + `Checkpoint`）

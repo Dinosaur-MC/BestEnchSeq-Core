@@ -10,15 +10,17 @@
 | DiffFirst | `diff_first/` | 确定性 | O(n²) | PPN 分层，每层选最便宜的 |
 | HierarchicalMerge | `hierarchical/` | 确定性 | O(n²) | 分组合并，递归 |
 | DynamicPenaltyBalance | `penalty_balance/` | 确定性 | O(n²) | 动态平衡惩罚成本 |
+| DFS | `dfs/` | 搜索 | — | 迭代 B&B + 哈希记忆化（原内置）|
+| A* | `astar/` | 搜索 | — | 最佳优先 + ItemPool + 可恢复序列化（原内置）|
 | IDA* | `idastar/` | 搜索 | — | 迭代加深 + TT best_g 剪枝 |
 
 ### 确定性算法
 
 确定性算法**不展开搜索树**，通过固定策略合并物品。速度快但解的质量不可控。
 
-### IDA* 搜索
+### 搜索算法
 
-IDA*（Iterative Deepening A*）是搜索算法，可在合理时间内找到更优解。使用 `TTTable` 进行 transposition table 剪枝。
+DFS、A*、IDA* 是精确搜索算法，可在合理时间内找到更优解（≤ 8-10 魔咒）。DFS 使用迭代 B&B + 哈希记忆化并流式上报解；A* 使用最佳优先 + ItemPool，支持断点序列化；IDA* 使用 `TTTable` transposition table 剪枝。三者均可通过 `get_serializer()` 实现断点续跑（A*/DFS 提供序列化器）。
 
 ## 构建
 

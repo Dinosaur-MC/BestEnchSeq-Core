@@ -16,27 +16,15 @@ public:
 
 ## 内置策略列表
 
-### 确定性合成算法
+| 策略 | 目录 | 类型 | 复杂度 | 方法 |
+|---|---|---|---|---|
+| Hamming | `hamming/` | 近似 | O(n log n) | Popcount 平衡二叉合并树 |
+| dp_merge | `dp_merge/` | 精确 | O(2^N) 带剪枝 | 分治 DP + (EnchSet, PPN) Pareto 分桶 |
+| bb_dp | `bb_dp/` | 精确 | O(2^N) B&B | B&B 分治 DP + Pareto + 可选 39 级上限 |
 
-| 策略 | 目录 | 复杂度 | 方法 |
-|---|---|---|---|
-| Hamming | `hamming/` | O(n log n) | Popcount 平衡二叉合并树 |
-| dp_merge | `dp_merge/` | O(2^N) 带剪枝 | 分治 DP + (EnchSet, PPN) Pareto 分桶 |
+dp_merge 是最快的精确算法，对于 N ≤ 10 可在毫秒级达到最优解（见对比数据）。bb_dp 在其上增加 B&B 上界、Pareto 分桶与可选 39 级 Too Expensive 上限，直达 N ≤ 24。
 
-确定性算法**不展开搜索树**，通过固定策略合并物品。速度快但解的质量不可控。
-
-dp_merge 是最快的确定性算法，对于 N ≤ 10 可在毫秒级达到最优解（见对比数据）。
-
-### 搜索算法
-
-| 策略 | 目录 | 方法 | 状态表示 |
-|---|---|---|---|
-| DFS | `dfs/` | 回溯 + 哈希剪枝 + 启发式剪枝 | `vector<Item>` 拷贝，哈希化 visited 表 |
-| A* | `astar/` | 最佳优先 + ItemPool ID 索引 | `vector<ItemID>` + best_g 表 |
-
-搜索算法可以找到更优解，但时间随搜索空间指数增长。
-
-> 更多策略（Greedy、DiffFirst、HierarchicalMerge、DynamicPenaltyBalance、IDA*）以插件形式提供，见 `plugins/`。
+**搜索算法（A*、DFS、IDA*）已移出内置，作为插件提供**，见 `plugins/`。它们能找到更优解，但时间随搜索空间指数增长（A* ≤ 9 魔咒、DFS ≤ 8、IDA* ≤ 10）。更多插件（Greedy、DiffFirst、HierarchicalMerge、DynamicPenaltyBalance）亦见 `plugins/`。
 
 ## 注册机制
 
@@ -54,8 +42,8 @@ dp_merge 是最快的确定性算法，对于 N ≤ 10 可在毫秒级达到最�
 | _diag 类型 | 适用策略 |
 |---|---|
 | `AlgorithmDiagnostics` | 确定性算法（Hamming、dp_merge）|
-| `SearchDiagnostics` | 搜索但无 ItemPool（DFS）|
-| `PoolSearchDiagnostics` + 具体类型 | 有 ItemPool 的搜索（A* → `AStarDiagnostics`）|
+| `SearchDiagnostics` | 搜索但无 ItemPool（DFS——插件）|
+| `PoolSearchDiagnostics` + 具体类型 | 有 ItemPool 的搜索（A* → `AStarDiagnostics`——插件）|
 
 ## EnchSet 访问规范
 
@@ -164,7 +152,7 @@ IAlgorithm::execute(input, ctx)
   ├─ 确定性策略：
   │   循环选择 pair → forge → 判断完成 → report_solution → set_exit_diagnostics
   │
-  └─ 搜索策略（A*/DFS）：
+  └─ 搜索策略（A*/DFS/IDA*——插件）：
        ├─ 状态展开循环
        │   ├─ incr_nodes_visited
        │   ├─ 启发式剪枝 → incr_nodes_pruned

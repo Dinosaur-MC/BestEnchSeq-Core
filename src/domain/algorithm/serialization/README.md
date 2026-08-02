@@ -26,7 +26,7 @@ AStarStateSerializer (算法专属)       ← 算法专有段转换
 |---|---|---|
 | **基类** | 文件首部读写、CRC 校验、Input 段处理、文件总装 | `IAlgorithmSerializer.h/.cpp` |
 | **共享原语** | checkpoint 文件格式（MetaHeader / SectionHeader / Section / Checkpoint） | `Checkpoint.h/.cpp` |
-| **算法专属** | 专有数据段的转换（算法内部成员 ↔ 二进制 payload），tag 常量由各算法自行定义 | `strategies/astar/AStarStateSerializer.*` |
+| **算法专属** | 专有数据段的转换（算法内部成员 ↔ 二进制 payload），tag 常量由各算法自行定义 | `plugins/astar/AStarStateSerializer.*` |
 
 ### IAlgorithm 集成
 
