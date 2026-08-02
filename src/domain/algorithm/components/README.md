@@ -16,6 +16,7 @@ operator[](ItemID) → Item // O(1) 索引
 - 所有 Item 连续存储，`ItemID = int32_t` 直接索引
 - 默认容量上限 10M，超限返回 `INVALID_ITEM_ID`
 - A* 用 ItemPool 为搜索状态提供稳定索引，避免 `vector<Item>` 拷贝
+- `hash_ids(ids)` — ID 序列经池解析后的内容哈希（visited/转置表键），复用 `std::hash<Item>`
 
 ### SearchUtils
 
@@ -25,15 +26,6 @@ operator[](ItemID) → Item // O(1) 索引
 - `compute_h(target, reg, filled_buf)` — 根据目标附魔计算启发式下限
 
 复杂度 O(n×m)，其中 n = 物品数，m = target 附魔数。
-
-### StateHash
-
-算法内部状态哈希工具。
-
-- `item(const Item&)` — 单物品哈希
-- `ids(const vector<ItemID>&, pool)` — 通过池解析的 ID 序列哈希
-
-用于 A* 和 IDA* 的 visited 表/转置表键值。
 
 ### Heuristic / HeuristicBasic
 
@@ -53,7 +45,7 @@ compute(ids, pool, reg, target, buf, dirty) → h
 ## 使用规范
 
 - **ItemPool** 不保证线程安全（每个搜索实例独占）
-- **SearchUtils** / **StateHash** 纯函数，无状态
+- **SearchUtils** 纯函数，无状态
 - **Heuristic** buffer 应复用搜索实例级别的 `_h_buf` / `_h_dirty`，不要每次都重新申请
 - `fill_max_levels` 的 yield lambda 在每个物品的每个附魔上调用，保持轻量
 

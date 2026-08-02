@@ -6,6 +6,7 @@
 #include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -147,11 +148,11 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
     if (const Frontier* hit = cache_get(mask))
         return *hit;
 
-    const size_t n = static_cast<size_t>(__builtin_popcountll(mask));
+    const size_t n = static_cast<size_t>(std::popcount(mask));
 
     if (n == 1) {
         auto f = std::make_unique<Frontier>();
-        const Item& it = _base_items[static_cast<size_t>(__builtin_ctzll(mask))];
+        const Item& it = _base_items[static_cast<size_t>(std::countr_zero(mask))];
         f->entries.push_back(ParetoEntry{0, it.ppn, it, StepTree{}});
         return cache_put(mask, std::move(f));
     }
@@ -159,8 +160,8 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
     if (n == 2) {
         auto f = std::make_unique<Frontier>();
         uint64_t m = mask;
-        const size_t i0 = static_cast<size_t>(__builtin_ctzll(m)); m &= m - 1;
-        const size_t i1 = static_cast<size_t>(__builtin_ctzll(m));
+        const size_t i0 = static_cast<size_t>(std::countr_zero(m)); m &= m - 1;
+        const size_t i1 = static_cast<size_t>(std::countr_zero(m));
         const Item& a = _base_items[i0];
         const Item& b = _base_items[i1];
 
@@ -240,7 +241,7 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
     auto process_subset = [&](Frontier& out, uint64_t left) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) return;
-        const size_t k = __builtin_popcountll(left);
+        const size_t k = std::popcount(left);
         if (k * 2 > n) return;
         if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
 

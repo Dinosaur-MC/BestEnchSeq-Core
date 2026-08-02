@@ -1,6 +1,5 @@
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
-#include "domain/algorithm/components/StateHash.h"
 #include "domain/algorithm/resolvers/IResolver.h"
 #include "AStarAlgorithm.h"
 #include "AStarStateSerializer.h"
@@ -32,7 +31,7 @@ const IAlgorithmSerializer *AStarAlgorithm::get_serializer() const noexcept {
 
 // ─── ItemPool helpers ───────────────────────────────────────────────────
 
-size_t AStarAlgorithm::_hash_ids(const std::vector<ItemID> &ids) const { return StateHash::ids(ids, _pool); }
+size_t AStarAlgorithm::_hash_ids(const std::vector<ItemID> &ids) const { return _pool.hash_ids(ids); }
 
 int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID> &ids) const {
     int32_t h = 0;

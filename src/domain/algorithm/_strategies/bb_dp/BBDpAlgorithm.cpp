@@ -4,6 +4,7 @@
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -82,13 +83,7 @@ void BBDpAlgorithm::canonicalize(std::vector<Item>& items) noexcept {
 // ─── compute_ub: deterministic balanced-merge bound (hamming-style) ───────
 
 static int popcount32(int x) noexcept {
-#if defined(__GNUC__) || defined(__clang__)
-    return __builtin_popcount(static_cast<unsigned>(x));
-#else
-    int c = 0;
-    while (x) { c += x & 1; x >>= 1; }
-    return c;
-#endif
+    return std::popcount(static_cast<unsigned>(x));
 }
 
 static std::vector<int> dup_floor_members(int j, int n) {
@@ -281,7 +276,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
     if (const Frontier* hit = cache_get(mask))
         return *hit;
 
-    const size_t n = static_cast<size_t>(__builtin_popcountll(mask));
+    const size_t n = static_cast<size_t>(std::popcount(mask));
 
     // Snapshot of the dynamic B&B bound at this subproblem's entry.  The bound
     // is only ever tightened by a genuine full-set solution (final_level), so
@@ -296,7 +291,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
 
     if (n == 1) {
         auto f = std::make_unique<Frontier>();
-        const Item& it = _base_items[static_cast<size_t>(__builtin_ctzll(mask))];
+        const Item& it = _base_items[static_cast<size_t>(std::countr_zero(mask))];
         f->entries.push_back(ParetoEntry{0, it.ppn, 0, it, StepTree{}});
         return cache_put(mask, std::move(f));
     }
@@ -304,8 +299,8 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
     if (n == 2) {
         auto f = std::make_unique<Frontier>();
         uint64_t m = mask;
-        const size_t i0 = static_cast<size_t>(__builtin_ctzll(m)); m &= m - 1;
-        const size_t i1 = static_cast<size_t>(__builtin_ctzll(m));
+        const size_t i0 = static_cast<size_t>(std::countr_zero(m)); m &= m - 1;
+        const size_t i1 = static_cast<size_t>(std::countr_zero(m));
         const Item& a = _base_items[i0];
         const Item& b = _base_items[i1];
         auto make_leaf = [&](const Item& base, const Item& sac,
@@ -399,7 +394,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
                               uint64_t& cap_cnt, uint64_t& bound_cnt) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) return;
-        const size_t k = __builtin_popcountll(left);
+        const size_t k = std::popcount(left);
         if (k * 2 > n) return;
         if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
 

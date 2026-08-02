@@ -1,7 +1,6 @@
 #include "IDAStarAlgorithm.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/components/SearchUtils.h"
-#include "domain/algorithm/components/StateHash.h"
 #include "domain/algorithm/resolvers/IResolver.h"
 #include <algorithm>
 #include <cmath>
@@ -57,7 +56,7 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
 
     // TT: global best_g — check BEFORE heuristic so that states already
     // explored with an equal-or-better g skip the heuristic computation.
-    size_t h = StateHash::ids(ids, _pool);
+    size_t h = _pool.hash_ids(ids);
     ++_diag.tt_lookups;
     if (const int32_t* tt_g = _tt.lookup(h)) {
         if (*tt_g <= g) {

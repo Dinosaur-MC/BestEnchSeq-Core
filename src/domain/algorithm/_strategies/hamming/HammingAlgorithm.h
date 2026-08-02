@@ -3,6 +3,7 @@
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/registries/EnchReg.h"
+#include <bit>
 #include <vector>
 
 /// Popcount-based balanced merge tree algorithm.
@@ -48,15 +49,7 @@ private:
     // ── Popcount helpers ────────────────────────────────────────────────
 
     /// Count set bits (Hamming weight / popcount).
-    static int popcount(int x) noexcept {
-#if defined(__GNUC__) || defined(__clang__)
-        return __builtin_popcount(static_cast<unsigned>(x));
-#else
-        int c = 0;
-        while (x) { c += x & 1; x >>= 1; }
-        return c;
-#endif
-    }
+    static int popcount(int x) noexcept { return std::popcount(static_cast<unsigned>(x)); }
 
     /// Return all indices k in [0, n-1] where popcount(k) == j.
     static std::vector<int> dup_floor_members(int j, int n) noexcept;

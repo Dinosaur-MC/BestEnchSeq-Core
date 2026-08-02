@@ -1,9 +1,11 @@
 #pragma once
 #include "domain/algorithm/types/Item.h"
+#include "common/utils/HashUtils.hpp"
 #include "common/utils/MemoryPool.hpp"
 #include <cstdint>
 #include <memory_resource>
 #include <unordered_map>
+#include <vector>
 
 namespace algorithm {
 
@@ -63,6 +65,16 @@ class ItemPool {
         _items.clear();
         _dedup.clear();
         _pool.release();
+    }
+
+    /// Hash an ID vector through this pool's items — visited / transposition
+    /// table keys for search algorithms (A*, IDA*).  Uses the same content
+    /// hash as the pool's own dedup (std::hash<Item>).
+    size_t hash_ids(const std::vector<ItemID>& ids) const noexcept {
+        size_t h = ids.size();
+        for (ItemID id : ids)
+            hash_combine(h, _hash_item(_items[static_cast<size_t>(id)]));
+        return h;
     }
 
   private:

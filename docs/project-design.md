@@ -294,7 +294,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 **forge_engine/**：`IForgeEngine`（虚接口）+ `ForgeEngine`（原版实现）
 **registries/**：`EnchReg`（固定 64×64 冲突矩阵 + 掩码缓存 + 紧凑注册表）、`AlgorithmRegistry`（工厂）
 **_strategies/**：内置策略（Hamming、dp_merge、bb_dp），通过 `Registration.h` 自动注册
-**components/**：Heuristic、ItemPool、StateHash、SearchUtils 等共享搜索基础设施
+**components/**：Heuristic、ItemPool、SearchUtils、StepTree 等共享搜索基础设施
 **diagnostics/**：事件驱动诊断管道（`DiagnosticsService` + `IAlgorithmObserver` + `DiagnosticsWriter`）
 **serialization/**：二进制 checkpoint（`IAlgorithmSerializer` + `Checkpoint`）
 **plugin/**：`AlgorithmLoader`（内置注册 + 插件热加载）
