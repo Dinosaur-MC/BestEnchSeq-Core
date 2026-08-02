@@ -3,6 +3,9 @@
 #include "builtin/DataLoader.h"
 #include "builtin/EmbeddedData.h"
 #include "domain/business/components/TagResolver.h"
+#include "domain/business/schemas/EnchInfoSchema.h"
+#include "domain/business/schemas/EquipmentSchema.h"
+#include "ds/ds.h"
 #include "common/log/log.hpp"
 
 #include <unordered_set>
@@ -145,109 +148,22 @@ void process_inline_tags(const Json::Object& root_obj, TagResolver& tag_resolver
 // ── Parse a single enchantment entry ──────────────────────────────────
 
 business::loader::EnchantmentData parse_ench_entry(
-    const Json::Object& elem_obj,
+    const Json& elem,
     TagResolver& tag_resolver
 ) {
     using namespace business::parser_detail;
+    using EnchDataJson = business::schema::EnchantmentDataJson;
 
-    std::string id_str, display_name;
-    int32_t max_level = 0, multiplier = 0, limited_level = 0;
-    bool limited_level_provided = false;
-    bool is_treasure = false;
-    int32_t min_cost_base = 0, min_cost_per_level = 0;
-    std::vector<std::string> exclusive_set_items, app_items;
-
-    {
-        auto it = elem_obj.find("id");
-        if (it != elem_obj.end()) id_str = it->second.as<std::string>();
-    }
-    {
-        auto it = elem_obj.find("max_level");
-        if (it != elem_obj.end()) max_level = it->second.as<int32_t>();
-    }
-    {
-        auto it = elem_obj.find("multiplier");
-        if (it != elem_obj.end()) multiplier = it->second.as<int32_t>();
-    }
-    {
-        auto it = elem_obj.find("name");
-        if (it != elem_obj.end()) display_name = it->second.as<std::string>();
-    }
-    if (display_name.empty()) display_name = id_str;
-
-    {
-        auto it = elem_obj.find("limited_level");
-        if (it != elem_obj.end()) {
-            limited_level = it->second.as<int32_t>();
-            limited_level_provided = true;
-        }
-    }
-    if (limited_level <= 0) limited_level = 0;
-
-    {
-        auto it = elem_obj.find("is_treasure");
-        if (it != elem_obj.end()) is_treasure = it->second.as<bool>();
-    }
-
-    // min_cost 原始字段：接受两种形态 —— 扁平（min_cost_base / min_cost_per_level）
-    // 或 MC 嵌套对象（min_cost: {base, per_level_above_first}）。嵌套形态优先
-    // （当两者同时出现时以嵌套为准）。
-    {
-        auto it = elem_obj.find("min_cost_base");
-        if (it != elem_obj.end()) min_cost_base = it->second.as<int32_t>();
-    }
-    {
-        auto it = elem_obj.find("min_cost_per_level");
-        if (it != elem_obj.end()) min_cost_per_level = it->second.as<int32_t>();
-    }
-    {
-        auto it = elem_obj.find("min_cost");
-        if (it != elem_obj.end()) {
-            auto mc = it->second.get_value();
-            if (auto* mc_obj = std::get_if<Json::Object>(&mc)) {
-                {
-                    auto b = mc_obj->find("base");
-                    if (b != mc_obj->end()) min_cost_base = b->second.as<int32_t>();
-                }
-                {
-                    auto p = mc_obj->find("per_level_above_first");
-                    if (p != mc_obj->end()) min_cost_per_level = p->second.as<int32_t>();
-                }
-            }
-        }
-    }
-
-    {
-        auto it = elem_obj.find("exclusive_set");
-        if (it != elem_obj.end()) {
-            Json::Array arr = it->second.as<Json::Array>();
-            for (const auto& elem : arr)
-                exclusive_set_items.push_back(elem.as<std::string>());
-        }
-    }
-    auto exclusive_set = resolve_references(exclusive_set_items, tag_resolver);
-
-    {
-        auto it = elem_obj.find("supported_items");
-        if (it != elem_obj.end()) {
-            Json::Array arr = it->second.as<Json::Array>();
-            for (const auto& elem : arr)
-                app_items.push_back(elem.as<std::string>());
-        }
-    }
     business::loader::EnchantmentData ench;
-    ench.id               = id_str;
-    ench.display_name     = std::move(display_name);
-    ench.multiplier       = multiplier;
-    ench.max_level        = max_level;
-    ench.limited_level    = limited_level;
-    ench.limited_level_provided = limited_level_provided;
-    ench.min_cost_base      = min_cost_base;
-    ench.min_cost_per_level = min_cost_per_level;
-    ench.is_treasure        = is_treasure;
-    ench.exclusive_with   = std::vector<std::string>(exclusive_set.begin(), exclusive_set.end());
-    // supported_items: 原始引用透传（`#tag` 或具体 ID），不展开；加载期交叉验证
-    ench.applicable_to    = std::move(app_items);
+    ds::ErrorList err;
+    if (!EnchDataJson::parse(elem, ench, err)) {
+        LOG_WARN("Enchantment parse errors: %s", err.str().c_str());
+        // 仍用已解析的部分字段走下方跳过检查（与旧行为一致：容错）
+    }
+    if (ench.display_name.empty()) ench.display_name = ench.id;
+    // exclusive_set：tag 引用展开（#ref → 具体魔咒 ID）；supported_items 原样透传
+    auto resolved = resolve_references(ench.exclusive_with, tag_resolver);
+    ench.exclusive_with.assign(resolved.begin(), resolved.end());
     return ench;
 }
 
@@ -255,57 +171,29 @@ business::loader::EnchantmentData parse_ench_entry(
 
 std::vector<business::loader::EquipmentData> parse_equipments_json(const Json::Object& root_obj) {
     using namespace business::loader;
+    using EqDataJson = business::schema::EquipmentDataJson;
 
     auto eq_it = root_obj.find("equipments");
     if (eq_it == root_obj.end()) return {};
-
     auto eq_val = eq_it->second.get_value();
     if (!std::holds_alternative<Json::Array>(eq_val)) return {};
     const auto& eq_arr = std::get<Json::Array>(eq_val);
 
     std::vector<EquipmentData> result;
     for (const auto& eq_json : eq_arr) {
-        auto elem_val = eq_json.get_value();
-        if (!std::holds_alternative<Json::Object>(elem_val)) continue;
-        const auto& elem_obj = std::get<Json::Object>(elem_val);
-
-        std::string id_str, category, name;
-        int32_t max_durability = 0;
-
-        {
-            auto it = elem_obj.find("id");
-            if (it != elem_obj.end()) id_str = it->second.as<std::string>();
+        EquipmentData eq;
+        ds::ErrorList err;
+        if (!EqDataJson::parse(eq_json, eq, err)) {
+            LOG_WARN("Equipment parse errors: %s", err.str().c_str());
         }
-        {
-            auto it = elem_obj.find("category");
-            if (it != elem_obj.end()) category = it->second.as<std::string>();
-        }
-
-        if (id_str.empty() || category.empty()) {
+        if (eq.id.empty() || eq.category.empty()) {
             LOG_WARN("Warning: Skipping equipment entry with missing id or category.");
             continue;
         }
-
-        {
-            auto it = elem_obj.find("name");
-            if (it != elem_obj.end()) name = it->second.as<std::string>();
-        }
-        if (name.empty()) name = id_str;
-
-        {
-            auto it = elem_obj.find("max_durability");
-            if (it != elem_obj.end()) max_durability = it->second.as<int32_t>();
-        }
-        if (max_durability <= 0) max_durability = 0;
-
-        EquipmentData eq;
-        eq.id             = id_str;
-        eq.display_name   = std::move(name);
-        eq.category       = std::move(category);
-        eq.max_durability = max_durability;
+        if (eq.display_name.empty()) eq.display_name = eq.id;
+        if (eq.max_durability <= 0) eq.max_durability = 0;
         result.push_back(std::move(eq));
     }
-
     return result;
 }
 
@@ -335,31 +223,19 @@ NativeJsonParser::Result NativeJsonParser::parse(const Json& json) {
             for (const auto& ench_json : ench_arr) {
                 auto elem_val = ench_json.get_value();
                 if (!std::holds_alternative<Json::Object>(elem_val)) continue;
-                const auto& elem_obj = std::get<Json::Object>(elem_val);
 
-                std::string id;
-                int32_t max_level = 0, multiplier = 0;
-                {
-                    auto it = elem_obj.find("id");
-                    if (it != elem_obj.end()) id = it->second.as<std::string>();
-                }
-                {
-                    auto it = elem_obj.find("max_level");
-                    if (it != elem_obj.end()) max_level = it->second.as<int32_t>();
-                }
-                {
-                    auto it = elem_obj.find("multiplier");
-                    if (it != elem_obj.end()) multiplier = it->second.as<int32_t>();
-                }
+                auto ench = parse_ench_entry(ench_json, tag_resolver);
 
-                if (id.empty() || max_level <= 0 || multiplier <= 0) {
+                // 跳过逻辑：从 parse_ench_entry 返回的 DTO 读字段（schema 解析容错，
+                // 缺失/类型错时字段保持默认值），语义与旧手写读取一致。
+                if (ench.id.empty() || ench.max_level <= 0 || ench.multiplier <= 0) {
                     LOG_WARN("Warning: Skipping enchantment with missing/invalid fields "
                              "(id='%s', max_level=%d, multiplier=%d)",
-                             id.c_str(), max_level, multiplier);
+                             ench.id.c_str(), ench.max_level, ench.multiplier);
                     continue;
                 }
 
-                enchantments.push_back(parse_ench_entry(elem_obj, tag_resolver));
+                enchantments.push_back(std::move(ench));
             }
         }
     }

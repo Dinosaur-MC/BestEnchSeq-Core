@@ -257,6 +257,54 @@ void test_json_parse_limited_level_hint() {
     std::cout << "PASS: test_json_parse_limited_level_hint" << std::endl;
 }
 
+// ─── test_json_parse_platform ──────────────────────────────────────────
+// T4: the native JSON parser reads the `platform` field into the DTO.
+// Primary key `platform`, legacy alias `supported_platform` both accepted.
+
+void test_json_parse_platform() {
+    std::string json_str = R"({
+        "enchantments": [
+            {"id": "minecraft:sharpness", "name": "Sharpness", "platform": "java",
+             "max_level": 5, "multiplier": 1}
+        ],
+        "equipments": []
+    })";
+    auto result = NativeJsonParser::parse_string(json_str);
+    expect(result.first[0].platform == "java", "native JSON platform read into DTO");
+    // 旧别名 supported_platform
+    std::string legacy = R"({
+        "enchantments": [
+            {"id": "minecraft:mending", "name": "Mending", "supported_platform": "bedrock",
+             "max_level": 1, "multiplier": 4}
+        ],
+        "equipments": []
+    })";
+    auto r2 = NativeJsonParser::parse_string(legacy);
+    expect(r2.first[0].platform == "bedrock", "legacy supported_platform alias read");
+    TEST_PASS("test_json_parse_platform");
+}
+
+// ─── test_json_parse_malformed_tolerated ──────────────────────────────
+// T4: 新容错语义。旧行为：max_level 为字符串抛 JsonException 中止整次解析；
+// 新行为：schema 记录错误 → WARN → 该条目跳过，其余条目继续（容错）。
+
+void test_json_parse_malformed_tolerated() {
+    std::string json_str = R"({
+        "enchantments": [
+            {"id": "minecraft:bad", "name": "Bad", "max_level": "five", "multiplier": 1},
+            {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "multiplier": 1}
+        ],
+        "equipments": []
+    })";
+    auto result = NativeJsonParser::parse_string(json_str);
+    // malformed 条目被跳过，合法条目保留——解析不抛异常
+    expect_eq(static_cast<int>(result.first.size()), 1,
+              "malformed_tolerated: malformed entry dropped, valid kept");
+    expect_eq(result.first[0].id, std::string("minecraft:sharpness"),
+              "malformed_tolerated: valid entry retained");
+    TEST_PASS("test_json_parse_malformed_tolerated");
+}
+
 // ─── test_json_parse_empty ─────────────────────────────────────────────
 // parse_string("{}"). Verify empty results, no crash.
 
@@ -885,6 +933,8 @@ int main() {
         test_json_parse_min_cost_nested();
         test_json_parse_min_cost_default();
         test_json_parse_limited_level_hint();
+        test_json_parse_platform();
+        test_json_parse_malformed_tolerated();
         test_json_parse_empty();
         test_json_parse_via_Json();
 
