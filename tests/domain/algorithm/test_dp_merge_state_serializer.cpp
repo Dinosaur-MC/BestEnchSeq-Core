@@ -145,7 +145,23 @@ void test_dp_merge_populated_cache_roundtrip() {
     // Faithful restore: re-serializing the restored algorithm must produce the
     // same bytes as the original.
     auto blob2 = ser.serialize(algo2, input);
-    expect(blob1 == blob2, "restore must be faithful (re-serialize identical)");
+
+    // The checkpoint MetaHeader embeds a wall-clock `timestamp` (bytes 12..19:
+    // magic 4 + version 2 + flags 2 + num_sections 4, then int64 ms).  It is
+    // pure metadata — excluded from the CRC by finalize() and never read back —
+    // so the two serialize() calls may legitimately straddle a millisecond
+    // boundary and differ by 1ms.  Zero it in both blobs so the comparison
+    // asserts state fidelity rather than process timing.
+    constexpr size_t kTimestampOffset = 4 + 2 + 2 + 4;   // past magic/version/flags/num_sections
+    constexpr size_t kTimestampSize   = sizeof(int64_t); // MetaHeader::timestamp
+    auto without_timestamp = [](std::vector<uint8_t> b) {
+        for (size_t i = kTimestampOffset;
+             i < kTimestampOffset + kTimestampSize && i < b.size(); ++i)
+            b[i] = 0;
+        return b;
+    };
+    expect(without_timestamp(blob1) == without_timestamp(blob2),
+           "restore must be faithful (re-serialize identical)");
     TEST_PASS("test_dp_merge_populated_cache_roundtrip");
 }
 
