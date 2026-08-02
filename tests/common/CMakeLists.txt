@@ -110,3 +110,13 @@ target_include_directories(test_i18n PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_i18n COMMAND test_i18n)
 set_tests_properties(test_i18n PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# --- DataSchema engine ---
+
+add_executable(test_data_schema
+    ds/test_data_schema.cpp
+)
+target_include_directories(test_data_schema PRIVATE ${TEST_INCLUDE})
+target_link_libraries(test_data_schema PRIVATE besq-core)
+add_test(NAME test_data_schema COMMAND test_data_schema)
+set_tests_properties(test_data_schema PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
