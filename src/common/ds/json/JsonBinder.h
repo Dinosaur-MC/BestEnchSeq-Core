@@ -50,6 +50,9 @@ struct Schema {
         std::apply([&](const auto&... f) { (parse_field(f, obj, o, err, ok), ...); }, S::fields);
         if constexpr (Strict)
             check_unknown_keys(obj, err);
+        // 跨字段校验钩子：S 定义 static validate(Type&, ErrorList&) 时调用（spec §5）。
+        if constexpr (requires { S::validate(o, err); })
+            S::validate(o, err);
         return ok && err.empty();
     }
     template<typename F>
@@ -59,12 +62,16 @@ struct Schema {
             typename F::value_type v{};
             if (f.codec.from_json(raw, v, err, f.name)) {
                 f.set(o, std::move(v));
+                if constexpr (F::Presence != nullptr)
+                    o.*(F::Presence) = true;
             } else {
                 ok = false;
             }
         } else if (f.required) {
             err.add(f.name, "missing required field");
             ok = false;
+        } else if constexpr (F::Presence != nullptr) {
+            o.*(F::Presence) = false;
         }
         // 非必填且缺省 → 保持默认
     }

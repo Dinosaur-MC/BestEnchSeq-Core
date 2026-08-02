@@ -539,7 +539,8 @@ struct EnchInfoLikeSchema {
         ds::field("multiplier", &Type::multiplier, ds::int_codec{.min = 1}),
         ds::field("is_treasure", &Type::is_treasure, ds::bool_codec{}),
         ds::field("limited_level", &Type::limited_level, ds::int_codec{},
-                  [](const Type& t) { return t.limited_level_provided; }),
+                  [](const Type& t) { return t.limited_level_provided; },
+                  ds::presence_flag<&Type::limited_level_provided>{}),
         ds::field("min_cost_base", &Type::min_cost_base, ds::int_codec{}, "min_cost.base"),
         ds::field("min_cost_per_level", &Type::min_cost_per_level, ds::int_codec{}, "min_cost.per_level_above_first"),
         ds::field("exclusive_set", &Type::exclusive_set, ds::set_codec<ds::string_codec>{}),
@@ -574,7 +575,22 @@ void test_enchlike_json_roundtrip() {
     expect(out.min_cost_base == 1 && out.min_cost_per_level == 11, "min_cost roundtrip");
     expect(out.limited_level == 5, "limited_level value json roundtrip");
     expect(out.is_treasure, "is_treasure roundtrip");
+    expect(out.limited_level_provided, "presence flag reconstructed on json parse");
+    // re-serialize after parse → limited_level still emitted (roundtrip stable)
+    Json j2 = EnchJson::serialize(out);
+    expect(j2.has("limited_level"), "re-serialize emits limited_level after presence reconstruction");
     TEST_PASS("EnchInfoLike JSON roundtrip");
+}
+
+void test_presence_flag_absent() {
+    Json j = Json::object()
+        .set("id", Json(std::string("minecraft:sharpness")))
+        .set("max_level", Json(int64_t{5}))
+        .set("multiplier", Json(int64_t{1}));
+    EnchInfoLike out; ds::ErrorList err;
+    expect(EnchJson::parse(j, out, err), "parse without limited_level ok");
+    expect(!out.limited_level_provided, "presence flag false when key absent");
+    TEST_PASS("presence flag false when field absent");
 }
 void test_enchlike_platform_legacy_alias() {
     Json j = Json::object()
@@ -657,11 +673,11 @@ void test_nsid_set_roundtrip() {
     TEST_PASS("set_codec<text_codec<NSIDConverter>> json+csv roundtrip");
 }
 
-// 11b. conditional emit + value roundtrip：presence-derived flag
-//      （limited_level_provided）不被本 schema 重建——emit 谓词只控制序列化；
-//      from_json 无从重建兄弟成员（字段 codec 只拿到本字段值，无法触达 provided）。
-//      重建需 schema 级 post-parse 钩子（spec §5 validate(T&, ErrorList&)，引擎未实现），
-//      为 Phase-2 迁移工作。本测试如实固定：值往返 + 发射谓词生效。
+// 11b. conditional emit + value roundtrip：本 schema 未声明 presence_flag，
+//      故 limited_level_provided 不重建（emit 谓词只控制序列化；字段 codec 只拿到
+//      本字段值，无法触达 provided）。重建需 presence_flag 机制（Task 10 已实现，
+//      见 §9b EnchInfoLikeSchema 的 limited_level 字段）。本测试固定：无 presence_flag
+//      时值往返 + 发射谓词生效。
 struct HintCarrier { int limited_level = 0; bool provided = false; };
 struct HintSchema {
     using Type = HintCarrier;
@@ -675,10 +691,10 @@ using HintJson = ds::json::Schema<HintSchema>;
 void test_custom_codec_value_roundtrip_with_conditional_emit() {
     // The value roundtrips and the emit predicate gates serialization. The
     // presence-derived flag (limited_level_provided) is NOT reconstructed by
-    // this schema: the field codec receives only the field's own value and
-    // cannot reach sibling members. Reconstructing it needs a schema-level
-    // post-parse hook (spec §5 validate(T&, ErrorList&), not implemented in
-    // the engine) — that is Phase-2 migration work.
+    // this schema: it declares no presence_flag, so the binder never touches
+    // `provided`. Reconstructing the flag requires declaring
+    // ds::presence_flag<&...> on the field (implemented in Task 10; see the
+    // limited_level field of EnchInfoLikeSchema in §9b).
     HintCarrier h{5, true};
     Json j = HintJson::serialize(h);
     expect(j.has("limited_level"), "emitted when provided");
@@ -686,10 +702,48 @@ void test_custom_codec_value_roundtrip_with_conditional_emit() {
     ds::ErrorList e;
     expect(HintJson::parse(j, out, e), "parse ok");
     expect(out.limited_level == 5, "value roundtrips");
-    // NOTE: out.provided stays false (default) — presence-derived flags are not
-    // reconstructed by this engine. This test pins value roundtrip + conditional
-    // emit only; flag wiring is Phase-2 migration work.
+    // NOTE: out.provided stays false (default) because HintSchema declares no
+    // presence_flag on this field — the binder only writes a presence flag when
+    // the schema opts in (see EnchInfoLikeSchema's limited_level in §9b).
     TEST_PASS("custom codec value roundtrip with conditional emit (flag not reconstructed)");
+}
+
+// ── 12. Task 10: schema 级 validate 钩子（spec §5 跨字段校验） ──────────
+struct Invariant { int max_level = 0; int multiplier = 0; };
+struct InvariantSchema {
+    using Type = Invariant;
+    static constexpr auto fields = std::tuple{
+        ds::field("max_level", &Invariant::max_level, ds::int_codec{}),
+        ds::field("multiplier", &Invariant::multiplier, ds::int_codec{}),
+    };
+    static void validate(Type& o, ds::ErrorList& err) {
+        if (o.max_level < o.multiplier)
+            err.add("max_level", "max_level must be >= multiplier");
+    }
+};
+using InvariantJson = ds::json::Schema<InvariantSchema>;
+
+void test_validate_hook() {
+    Json okj = Json::object()
+        .set("max_level", Json(int64_t{5})).set("multiplier", Json(int64_t{2}));
+    Invariant ok; ds::ErrorList eok;
+    expect(InvariantJson::parse(okj, ok, eok), "valid cross-field parse ok");
+    expect(eok.empty(), "no errors when invariant holds");
+    Json bad = Json::object()
+        .set("max_level", Json(int64_t{1})).set("multiplier", Json(int64_t{5}));
+    Invariant bado; ds::ErrorList eb;
+    expect(!InvariantJson::parse(bad, bado, eb), "invariant violation fails parse");
+    expect(eb.size() == 1 && eb.errors()[0].path == "max_level", "validate error path");
+    TEST_PASS("schema validate hook cross-field");
+}
+
+void test_validate_hook_csv() {
+    using InvariantCsv = ds::csv::Schema<InvariantSchema>;
+    auto row = InvariantCsv::serialize_row(Invariant{1, 5});   // violates invariant
+    Invariant out; ds::ErrorList err;
+    expect(!InvariantCsv::parse_row(InvariantCsv::header(), row, out, err),
+           "csv validate hook catches invariant violation");
+    TEST_PASS("csv schema validate hook");
 }
 
 int main() {
@@ -725,8 +779,11 @@ int main() {
     test_enchlike_json_roundtrip();
     test_enchlike_platform_legacy_alias();
     test_enchlike_csv_roundtrip();
+    test_presence_flag_absent();
     test_set_codec_int_roundtrip();
     test_nsid_set_roundtrip();
     test_custom_codec_value_roundtrip_with_conditional_emit();
+    test_validate_hook();
+    test_validate_hook_csv();
     return print_summary();
 }

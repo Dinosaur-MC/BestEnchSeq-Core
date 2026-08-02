@@ -44,6 +44,9 @@ struct Schema {
             col[hdr[i]] = i;
         bool ok = true;
         std::apply([&](const auto&... f) { (parse_field(f, col, row, o, err, ok), ...); }, fields);
+        // 跨字段校验钩子：S 定义 static validate(Type&, ErrorList&) 时调用（spec §5）。
+        if constexpr (requires { S::validate(o, err); })
+            S::validate(o, err);
         return ok && err.empty();
     }
     template<typename F>
@@ -52,11 +55,17 @@ struct Schema {
         auto it = col.find(f.name);
         if (it == col.end() || it->second >= row.size()) {
             if (f.required) { err.add(f.name, "missing required column"); ok = false; }
+            if constexpr (F::Presence != nullptr) o.*(F::Presence) = false;
             return;
         }
         typename F::value_type v{};
-        if (f.codec.from_csv(row[it->second], v, err, f.name)) f.set(o, std::move(v));
-        else ok = false;
+        if (f.codec.from_csv(row[it->second], v, err, f.name)) {
+            f.set(o, std::move(v));
+            if constexpr (F::Presence != nullptr)
+                o.*(F::Presence) = !row[it->second].empty();
+        } else {
+            ok = false;
+        }
     }
 };
 
