@@ -568,6 +568,55 @@ void test_pm_load_datapack() {
     TEST_PASS("test_pm_load_datapack");
 }
 
+// ─── Test: datapack limited_level computed by LimitedLevelCalculator (B-T18) ──
+// The datapack parser no longer computes limited_level inline; after load the
+// calculator must have back-filled it from min_cost.  leeching: max_level=3,
+// min_cost {base:5, per_level_above_first:5}, supported #minecraft:swords →
+// diamond_sword (enchantability 10): power = round((31+4)*1.15) = 40,
+// level = (40-5)/5+1 = 8 → clamped to max_level 3 → 3.
+
+void test_pm_load_datapack_computes_limited_level() {
+    auto dir = std::filesystem::temp_directory_path() / "LL Datapack";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        std::ofstream f(dir / "data" / "mytest" / "enchantment" / "leeching.json");
+        f << R"({
+            "description": "Leeching",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 2,
+            "max_level": 3,
+            "min_cost": {"base": 5, "per_level_above_first": 5}
+        })";
+    }
+    {
+        std::ofstream f(dir / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack succeeds");
+    const Profile* dp = pm.find("LL Datapack");
+    expect(dp != nullptr, "datapack profile findable");
+    if (dp) {
+        expect(dp->has_enchantment(NSID("mytest:leeching")), "leeching loaded");
+        const auto& leech = dp->ench().at(NSID("mytest:leeching"));
+        expect(leech.min_cost_base == 5, "min_cost.base carried into EnchInfo");
+        expect(leech.min_cost_per_level == 5, "min_cost.per_level carried into EnchInfo");
+        expect_eq(leech.limited_level, 3,
+                  "limited_level computed by LimitedLevelCalculator (not lost by parser removal)");
+    }
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_computes_limited_level");
+}
+
 // ─── Test: Datapack-defined item tags survive load (B-T14 I-1) ───────────
 
 void test_pm_load_datapack_custom_tag() {
@@ -1071,6 +1120,7 @@ int main() {
         test_pm_edit_preserves_tag_resolver();
         test_pm_publish();
         test_pm_load_datapack();
+        test_pm_load_datapack_computes_limited_level();
         test_pm_load_datapack_custom_tag();
         test_pm_load_datapack_vanilla_tag_override();
         test_pm_load_datapack_skips_invalid_tag_key();

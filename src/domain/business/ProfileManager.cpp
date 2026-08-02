@@ -1,10 +1,12 @@
 #include "ProfileManager.h"
+#include "domain/business/components/LimitedLevelCalculator.h"
 #include "domain/business/components/RegistryHelper.h"
 #include "domain/business/components/Serializer.h"  // Profile << Json (snapshot)
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/parsers/McOfficialParser.h"
 #include "builtin/DataLoader.h"
+#include "builtin/ItemProperties.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
@@ -457,6 +459,13 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
             tag_json.set("values", std::move(values));
             resolver->load_tag_json(tag.key, tag_json);
         }
+
+        // Compute limited_level uniformly (B-T18): the datapack's own registry
+        // with the vanilla∪datapack resolver, BEFORE the profile is constructed
+        // (Profile exposes only const registry access).  The datapack parser no
+        // longer computes limited_level inline.
+        LimitedLevelCalculator::compute(own.ench, *resolver, load_item_properties());
+
         profile.set_tag_resolver(std::move(resolver));
 
         // ── COMMIT POINT ──  From here the manager is mutated; nothing below

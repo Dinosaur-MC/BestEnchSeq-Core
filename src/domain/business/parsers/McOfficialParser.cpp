@@ -162,7 +162,6 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
     const std::string& content,
     TagResolver& tag_resolver)
 {
-    auto item_props = load_item_properties();
     Json root;
     try {
         root = Json::parse(content);
@@ -219,32 +218,40 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
         if (it != obj.end())
             supp_items = collect_strings(it->second);
     }
-    // supported_items 透传（真实 MC 格式：单字符串或数组、#tag 或具体 ID）
-    // limited_level 计算需要解析后的具体物品集合；applicable_to 保持原始引用透传
-    auto limited_items = business::parser_detail::resolve_references(supp_items, tag_resolver);
+    // supported_items 透传（真实 MC 格式：单字符串或数组、#tag 或具体 ID）。
+    // limited_level 计算由注册表级 LimitedLevelCalculator 统一完成（B-T18），
+    // 解析器只搬运 min_cost 原始字段。
 
-    // Compute limited_level from cost formula
-    int32_t limited_level = max_level;
+    // min_cost — carried as raw fields; the registry-level calculator derives
+    // limited_level from them uniformly across data sources.
+    int32_t min_cost_base      = 0;
+    int32_t min_cost_per_level = 0;
     auto min_cost_it = obj.find("min_cost");
     if (min_cost_it != obj.end()) {
         auto mc = min_cost_it->second.get_value();
         if (auto* mc_obj = std::get_if<Json::Object>(&mc)) {
-            int32_t min_base      = 0;
-            int32_t min_per_level = 0;
             {
                 auto it = mc_obj->find("base");
-                if (it != mc_obj->end()) min_base = it->second.as<int32_t>();
+                if (it != mc_obj->end()) min_cost_base = it->second.as<int32_t>();
             }
             {
                 auto it = mc_obj->find("per_level_above_first");
-                if (it != mc_obj->end()) min_per_level = it->second.as<int32_t>();
-            }
-            if (min_base > 0 && min_per_level >= 0) {
-                limited_level = business::parser_detail::compute_limited_level(
-                    max_level, min_base, min_per_level, limited_items, item_props
-                );
+                if (it != mc_obj->end()) min_cost_per_level = it->second.as<int32_t>();
             }
         }
+    }
+
+    // Rare: a datapack enchant JSON may carry a legacy pre-computed
+    // `limited_level` field — keep it symmetric with the native parser (hint
+    // flag).  Otherwise the DTO defaults to max_level so the loader's
+    // `is_treasure` heuristic (limited_level == 0 → treasure) does NOT mark a
+    // non-treasure enchant as treasure before the calculator runs.
+    int32_t limited_level = max_level;
+    bool limited_level_provided = false;
+    auto ll_it = obj.find("limited_level");
+    if (ll_it != obj.end()) {
+        limited_level = ll_it->second.as<int32_t>();
+        limited_level_provided = true;
     }
 
     business::loader::EnchantmentData ench;
@@ -253,6 +260,9 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
     ench.multiplier       = multiplier;
     ench.max_level        = max_level;
     ench.limited_level    = limited_level;
+    ench.limited_level_provided = limited_level_provided;
+    ench.min_cost_base    = min_cost_base;
+    ench.min_cost_per_level = min_cost_per_level;
     ench.exclusive_with.assign(exclusive_set.begin(), exclusive_set.end());
     ench.applicable_to    = std::move(supp_items);
     return ench;

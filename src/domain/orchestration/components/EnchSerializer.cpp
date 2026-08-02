@@ -109,7 +109,16 @@ std::string EnchSerializer::to_json(
         obj["name"]          = Json(info.name);
         obj["platform"]      = Json(platform_to_string(info.supported_platform));
         obj["max_level"]     = Json(info.max_level);
-        obj["limited_level"] = Json(info.limited_level);
+        // Mirror EnchInfo::to_json (B-T18 roundtrip fix): `limited_level` is
+        // emitted ONLY when the data provided the legacy pre-computed hint;
+        // otherwise an export would write a bogus limited_level=0.  min_cost
+        // raw fields are emitted when non-zero so the cost data round-trips.
+        if (info.limited_level_provided)
+            obj["limited_level"] = Json(info.limited_level);
+        if (info.min_cost_base != 0)
+            obj["min_cost_base"] = Json(info.min_cost_base);
+        if (info.min_cost_per_level != 0)
+            obj["min_cost_per_level"] = Json(info.min_cost_per_level);
         obj["multiplier"]    = Json(info.multiplier);
         obj["is_treasure"]   = Json(info.is_treasure);
 
@@ -144,10 +153,12 @@ EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const TagRegistry &ca
     (void)cat_reg;
     csv::CsvTable table;
 
-    // Header row
+    // Header row — min_cost columns added (B-T18) so a CSV round-trip keeps the
+    // cost data.  The `limited_level_provided` hint is inherently CSV-lossy
+    // (a re-import sees `limited_level` as a provided value) — noted, not forced.
     table.push_back(
-        {"id", "name", "platform", "max_level", "limited_level", "multiplier", "is_treasure", "exclusive_set",
-         "supported_items"}
+        {"id", "name", "platform", "max_level", "limited_level", "min_cost_base", "min_cost_per_level",
+         "multiplier", "is_treasure", "exclusive_set", "supported_items"}
     );
 
     for (const auto &info : infos) {
@@ -177,6 +188,8 @@ EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const TagRegistry &ca
             platform_to_string(info.supported_platform),
             std::to_string(info.max_level),
             std::to_string(info.limited_level),
+            std::to_string(info.min_cost_base),
+            std::to_string(info.min_cost_per_level),
             std::to_string(info.multiplier),
             info.is_treasure ? "true" : "false",
             excl_set,

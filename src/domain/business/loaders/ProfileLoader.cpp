@@ -1,7 +1,9 @@
 #include "ProfileLoader.h"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/components/LimitedLevelCalculator.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "builtin/DataLoader.h"
+#include "builtin/ItemProperties.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
@@ -51,6 +53,12 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // references stay interpretable downstream.
         auto own = RegistryLoader::resolve_own_content(ench_data, eq_data);
 
+        // Compute limited_level uniformly (B-T18): the profile's own registry,
+        // using the attached vanilla-universe resolver, BEFORE the profile is
+        // constructed (Profile exposes only const registry access).
+        auto resolver = besq::data::make_builtin_tag_resolver();
+        LimitedLevelCalculator::compute(own.ench, *resolver, load_item_properties());
+
         // Construct Profile via full-parameter constructor.
         std::string stem = path.stem().string();
         profile = Profile(ProfileMetadata(stem), std::move(own.ench),
@@ -60,7 +68,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // Attach the vanilla tag universe resolver so the profile's `#tag`
         // supported_items references resolve at the business→algorithm boundary
         // (T7/T10: real MC item tags are the applicability source of truth).
-        profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
+        profile.set_tag_resolver(std::move(resolver));
 
         return true;
     } catch (const std::exception& e) {
@@ -97,9 +105,12 @@ bool ProfileLoader::load_builtin(Profile& profile) {
         EnchantmentRegistry ench_reg;
         EquipmentRegistry eq_reg;
         besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
+        // Compute limited_level uniformly (B-T18) with the builtin resolver.
+        auto resolver = besq::data::make_builtin_tag_resolver();
+        LimitedLevelCalculator::compute(ench_reg, *resolver, load_item_properties());
         profile = Profile(ProfileMetadata("builtin:vanilla"), std::move(ench_reg),
                           std::move(eq_reg), std::move(tag_reg));
-        profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
+        profile.set_tag_resolver(std::move(resolver));
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to load built-in data: %s", e.what());

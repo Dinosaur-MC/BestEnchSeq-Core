@@ -83,15 +83,4 @@ inline std::string category_short_name(const NSID& category) {
 // with function-local static std::unordered_map).
 std::string get_category_suffix(const std::string& item_id);
 
-// ── Limited level computation ──────────────────────────────────────────
-// Compute max reachable level from cost formula and item enchantability.
-// Defined in ParserShared.cpp.
-int32_t compute_limited_level(
-    int32_t max_level,
-    int32_t min_cost_base,
-    int32_t min_cost_per_level,
-    const std::unordered_set<std::string>& applicable_items,
-    const std::unordered_map<std::string, ItemProperty>& item_props
-);
-
 } // namespace business::parser_detail
