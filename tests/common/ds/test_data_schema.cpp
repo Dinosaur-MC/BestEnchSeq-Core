@@ -3,6 +3,7 @@
 #include "ds/codec/Codecs.h"
 #include "ds/codec/Converter.h"
 #include "ds/json/JsonBinder.h"
+#include "ds/csv/CsvBinder.h"
 #include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
 #include "framework/test_utils.h"
 #include <optional>
@@ -154,6 +155,7 @@ struct PersonSchema {
     };
 };
 using PersonJson = ds::json::Schema<PersonSchema>;
+using PersonCsv = ds::csv::Schema<PersonSchema>;
 static_assert(std::tuple_size_v<decltype(PersonSchema::fields)> == 3, "schema fields constexpr-evaluable");
 
 void test_json_roundtrip() {
@@ -397,6 +399,44 @@ void test_alias_nested_form() {
     TEST_PASS("alias nested path (min_cost.base)");
 }
 
+// ── 8. CSV 绑定 ────────────────────────────────────────────────────
+void test_csv_header_and_roundtrip() {
+    auto hdr = PersonCsv::header();
+    expect(hdr.size() == 3 && hdr[0] == "name" && hdr[1] == "age", "header order");
+    Person p{"alice", 30, true};
+    auto row = PersonCsv::serialize_row(p);
+    expect(row.size() == 3 && row[0] == "alice" && row[1] == "30" && row[2] == "true",
+           "row serialized");
+    Person out; ds::ErrorList e;
+    expect(PersonCsv::parse_row(hdr, row, out, e), "row parse ok");
+    expect(out.name == "alice" && out.age == 30 && out.active, "csv roundtrip");
+    TEST_PASS("csv header + row roundtrip");
+}
+void test_csv_column_missing_optional() {
+    // 缺 age 列（可选）→ 保持默认；缺 name 列（必填）→ 报错
+    auto hdr = PersonCsv::header();
+    Person out; ds::ErrorList e;
+    expect(PersonCsv::parse_row({"name"}, {"bob"}, out, e), "missing optional col tolerated");
+    expect(e.empty(), "no errors");
+    Person out2; ds::ErrorList e2;
+    expect(!PersonCsv::parse_row({"age"}, {"5"}, out2, e2), "missing required col fails");
+    expect(e2.size() == 1 && e2.errors()[0].path == "name", "missing required col path");
+    TEST_PASS("csv missing optional vs required column");
+}
+void test_csv_set_join_and_quotes() {
+    Vals v{{}, {"x", "a"}, std::nullopt};
+    using ValsCsv = ds::csv::Schema<ValsSchema>;
+    auto row = ValsCsv::serialize_row(v);
+    expect(row[1] == "a;x", "set ;-joined and sorted");
+    Vals out; ds::ErrorList e;
+    expect(ValsCsv::parse_row(ValsCsv::header(), row, out, e), "set row parse ok");
+    expect(out.tags.count("a") && out.tags.count("x"), "set csv roundtrip");
+    // 含逗号的值 → format_row 加引号
+    auto quoted = csv::format_row({"a,b"});
+    expect(quoted.find('"') != std::string::npos, "csv quoting for comma value");
+    TEST_PASS("csv set join + quoting");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -421,5 +461,8 @@ int main() {
     test_optional_codec();
     test_conditional_emit();
     test_alias_nested_form();
+    test_csv_header_and_roundtrip();
+    test_csv_column_missing_optional();
+    test_csv_set_join_and_quotes();
     return print_summary();
 }

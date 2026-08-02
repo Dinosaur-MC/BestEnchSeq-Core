@@ -9,3 +9,4 @@
 #include "ds/codec/Codecs.h"   // IWYU pragma: export
 #include "ds/codec/Converter.h"   // IWYU pragma: export
 #include "ds/json/JsonBinder.h"   // IWYU pragma: export
+#include "ds/csv/CsvBinder.h"   // IWYU pragma: export
