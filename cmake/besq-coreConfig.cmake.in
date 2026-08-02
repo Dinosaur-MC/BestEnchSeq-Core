@@ -22,7 +22,7 @@ if(WIN32)
     set_target_properties(besq-core::besq-core PROPERTIES
         INTERFACE_LINK_LIBRARIES "${_besq_static_libs}"
         INTERFACE_INCLUDE_DIRECTORIES "${_besq_src}/src;${_besq_build}/generated;${_besq_src}/src/common"
-        INTERFACE_COMPILE_DEFINITIONS "BESQ_MAX_SOLUTIONS=@BESQ_MAX_SOLUTIONS@"
+        INTERFACE_COMPILE_DEFINITIONS "@BESQ_PLUGIN_DIAG_DEFS@"
     )
 else()
     # Linux/macOS: .so exports all symbols, link directly
@@ -31,6 +31,6 @@ else()
         IMPORTED_LOCATION "${_besq_build}/libbesq-core.so"
         IMPORTED_SONAME "libbesq-core.so"
         INTERFACE_INCLUDE_DIRECTORIES "${_besq_src}/src;${_besq_build}/generated;${_besq_src}/src/common"
-        INTERFACE_COMPILE_DEFINITIONS "BESQ_MAX_SOLUTIONS=@BESQ_MAX_SOLUTIONS@"
+        INTERFACE_COMPILE_DEFINITIONS "@BESQ_PLUGIN_DIAG_DEFS@"
     )
 endif()

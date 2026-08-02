@@ -268,10 +268,14 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
                 if ((left & ~mask) != 0) return;  // not a subset of `mask`
                 Frontier local;
                 process_subset(local, left);
-                if (!local.empty()) {
+                {
                     std::lock_guard<std::mutex> lk(result_mutex);
-                    for (auto& e : local.entries)
-                        result.insert(std::move(e));
+                    // Carry this partition's Pareto drops into `result` so they
+                    // are aggregated at the top-level cache_put (review #2).
+                    result.dropped += local.dropped;
+                    if (!local.empty())
+                        for (auto& e : local.entries)
+                            result.insert(std::move(e));
                 }
             });
     } else {
@@ -398,9 +402,12 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         _diag.dp_max_frontier_size     = static_cast<uint32_t>(max_f);
         _diag.normalized_explored_states = static_cast<int64_t>(solved);
     } else {
-        _diag.dp_subproblems_solved = _cache.size();
-        _diag.dp_cache_slots        = _cache.size();
-        _diag.normalized_explored_states = static_cast<int64_t>(_cache.size());
+        // Map path: count map entries + the pass-lifetime overflow arena
+        // (cache_put past MAX_CACHE_ENTRIES lands in `_owners`).
+        const size_t solved = _cache.size() + _owners.size();
+        _diag.dp_subproblems_solved = solved;
+        _diag.dp_cache_slots        = solved;
+        _diag.normalized_explored_states = static_cast<int64_t>(solved);
     }
 
     if (ctx.is_cancelled()) {

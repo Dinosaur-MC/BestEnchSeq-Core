@@ -184,6 +184,18 @@ endif()
 # Export for plugin build system — auto-generated config for plugins/
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Diagnostics macros propagated to plugin builds, so plugins compile
+# ExecutionContext::incr_* consistently with the host (see spec §5 — an ODR
+# divergence on inline functions would otherwise make plugin per-op counters
+# silently no-op).  Includes BESQ_MAX_SOLUTIONS + the two diagnostics macros.
+set(BESQ_PLUGIN_DIAG_DEFS "BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}")
+if(BESQ_DEEP_DIAGNOSTICS)
+    string(APPEND BESQ_PLUGIN_DIAG_DEFS ";BESQ_DEEP_DIAGNOSTICS")
+endif()
+if(BESQ_DISABLE_DIAGNOSTICS)
+    string(APPEND BESQ_PLUGIN_DIAG_DEFS ";BESQ_DISABLE_DIAGNOSTICS")
+endif()
+
 configure_file(
     "${CMAKE_SOURCE_DIR}/cmake/besq-coreConfig.cmake.in"
     "${CMAKE_BINARY_DIR}/besq-coreConfig.cmake"

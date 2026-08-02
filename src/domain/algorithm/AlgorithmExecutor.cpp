@@ -17,6 +17,11 @@ AlgorithmExecutor::AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm)
 AlgorithmExecutor::~AlgorithmExecutor() {
     cancel();
     _join_worker();
+    // Join the timeout watcher so it can never fire cancel() on a destroyed
+    // `this` when the executor is destroyed without wait()/wait_for() (review
+    // finding #3).  _stop_timeout_watcher() sets alive=false and joins the
+    // watcher thread; safe to call here since `this` is still alive.
+    _stop_timeout_watcher();
 }
 
 // ─── Internal helpers ───

@@ -333,6 +333,11 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         };
         try_forge(a, b);
         try_forge(b, a);
+        // Flush this n==2 subproblem's own prunes before the early return —
+        // n==2 leaves are the most numerous in the recursion, so their counts
+        // would otherwise be silently dropped (review finding #1).
+        _dp_cap_pruned.fetch_add(cap_pruned, std::memory_order_relaxed);
+        _dp_bound_pruned.fetch_add(bound_pruned, std::memory_order_relaxed);
         return cache_put(mask, std::move(f));
     }
 
@@ -420,10 +425,15 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
             uint64_t p_cap = 0, p_bound = 0;
             Frontier local;
             process_subset(local, left, p_cap, p_bound);
-            if (!local.empty()) {
+            {
                 std::lock_guard<std::mutex> lk(result_mutex);
-                for (auto& e : local.entries)
-                    result.insert(std::move(e), beam_width);
+                // Carry this partition's Pareto drops into `result` so they are
+                // aggregated at the top-level cache_put (review finding #2).
+                // local itself is never cache_put — only its entries are merged.
+                result.dropped += local.dropped;
+                if (!local.empty())
+                    for (auto& e : local.entries)
+                        result.insert(std::move(e), beam_width);
             }
             // Flush per-mask prunes into the global counters (Tier 1: one
             // relaxed atomic per partition, never per forge).
@@ -580,10 +590,13 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
             _diag.dp_max_frontier_size     = static_cast<uint32_t>(max_f);
             _diag.normalized_explored_states = static_cast<int64_t>(solved);
         } else {
-            _diag.dp_subproblems_solved = _cache.size();
-            _diag.dp_cache_slots        = _cache.size();
+            // Map path: count map entries + the pass-lifetime overflow arena
+            // (cache_put past MAX_CACHE_ENTRIES lands there).
+            const size_t solved = _cache.size() + _overflow.size();
+            _diag.dp_subproblems_solved = solved;
+            _diag.dp_cache_slots        = solved;
             _diag.dp_cache_hits         = 0;  // map path: hit rate not tracked
-            _diag.normalized_explored_states = static_cast<int64_t>(_cache.size());
+            _diag.normalized_explored_states = static_cast<int64_t>(solved);
         }
     };
 
