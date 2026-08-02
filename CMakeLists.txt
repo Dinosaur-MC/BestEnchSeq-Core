@@ -77,6 +77,7 @@ endif()
 # Options
 # ═══════════════════════════════════════════════════════════════════════════════
 option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
+option(BESQ_DEEP_DIAGNOSTICS "Enable per-operation diagnostic counters (profiling builds; default off = zero hot-path cost)" OFF)
 option(BESQ_BUILD_CLI "Build the besq CLI executable" ON)
 option(BUILD_TESTING "Build test targets" ON)
 option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
@@ -171,6 +172,7 @@ target_include_directories(besq-core PUBLIC
 target_compile_definitions(besq-core PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+    $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
 )
 
 # Link dl library for plugin loading
@@ -240,6 +242,7 @@ target_include_directories(besq-minimal PUBLIC
 target_compile_definitions(besq-minimal PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+    $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -258,6 +261,7 @@ if(BESQ_BUILD_CLI)
 
     target_compile_definitions(besq PRIVATE
         $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+        $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
     )
 endif()
 

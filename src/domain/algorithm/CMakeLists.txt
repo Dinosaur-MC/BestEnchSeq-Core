@@ -28,3 +28,14 @@ target_link_libraries(besq-domain-algorithm PRIVATE
 target_include_directories(besq-domain-algorithm PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/algorithm/types/Enchantment.h"
 )
+
+# Diagnostics + solution-count macros.  NOTE: these must be defined HERE (this
+# is where ExecutionContext/DiagnosticsWriter/strategies are compiled), not
+# just on besq-core — a PUBLIC definition on a consumer does NOT reach its
+# dependencies, so putting them only on besq-core left them undefined here
+# (BESQ_DISABLE_DIAGNOSTICS / BESQ_MAX_SOLUTIONS silently no-ops before).
+target_compile_definitions(besq-domain-algorithm PUBLIC
+    BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
+    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+    $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
+)

@@ -96,19 +96,31 @@ AlgorithmDiagnostics                ← 公共核心（所有算法）
 |---|---|---|---|
 | **Tier 0** | pass 结束时派生（扫描已有状态，零计数器）| 零 | 无条件可用。例：扫描 memo cache 得到子问题数 / 命中率 / 最大 frontier |
 | **Tier 1** | 每状态/每子问题（≤ 2^n，n≤20 即 ≤ 1M 次）| 可忽略（~ms）| 可无条件加。原子操作数 ≤ 2^n |
-| **Tier 2** | 每操作（每 forge / 每展开）| **贵** | **必须**门控在编译期/运行时开关后（默认关），并注明性能影响 |
+| **Tier 2** | 每操作（每 forge / 每展开）| **贵** | **必须**门控在 `BESQ_DEEP_DIAGNOSTICS` 后（默认关，编译期零成本），并注明性能影响 |
 
 **Tier 1 的聚合模式**：不要在每个 forge/展开处 `atomic++`，而是**在单个状态内用本地非原子累加，该状态结束时一次性 flush 到全局原子**。这样原子操作数从"操作数（203M）"降到"状态数（2^n ≤ 1M）"。
 
 ```cpp
-// ❌ Tier 2：每 forge 原子自增（203M 次，~1.5s）
-ctx.incr_steps_forged();
+// ❌ Tier 2（每操作原子）：仅当 BESQ_DEEP_DIAGNOSTICS 定义时启用，
+//    否则 `incr_*` 是空内联函数，编译器消除全部调用点 → 真正零成本
+#if defined(BESQ_DEEP_DIAGNOSTICS)
+    ctx.incr_steps_forged();
+#endif
 
 // ✅ Tier 1：状态内本地累加，状态结束 flush 一次（≤2^n 次原子）
 uint64_t local_pruned = 0;
 for (/* 状态内的操作 */) { if (pruned) ++local_pruned; }
 _dp_pruned.fetch_add(local_pruned, std::memory_order_relaxed);
 ```
+
+### 门控宏总览（CMake option，两者正交）
+
+| 宏 | 默认 | 控制 | 构建 |
+|---|---|---|---|
+| `BESQ_DISABLE_DIAGNOSTICS` | OFF | 编译掉诊断**输出**（`DiagnosticsWriter` 持久化到 logs/diag）| `-DBESQ_DISABLE_DIAGNOSTICS=ON` |
+| `BESQ_DEEP_DIAGNOSTICS` | OFF | 启用每操作**计数器**（`ExecutionContext::incr_*`）| `-DBESQ_DEEP_DIAGNOSTICS=ON` |
+
+默认构建（两者皆 OFF）：诊断输出正常，每操作计数器**零成本**（空内联函数，调用点被编译器消除）。深挖单次运行需要 `-DBESQ_DEEP_DIAGNOSTICS=ON` 重建一个 profiling 构建——不能运行时热切换，这是"编译期零成本"的代价。
 
 ## 6. 命名规范
 

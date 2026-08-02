@@ -44,9 +44,20 @@ class ExecutionContext {
     // ═══════════════════════════════════════════════════════════════════
     // 🔴 热路径 — 每次展开调用, 内联, 零堆分配
     // ═══════════════════════════════════════════════════════════════════
+    // Per-operation counters are TIER 2 (spec §5): off by default, enabled
+    // only in profiling builds (-DBESQ_DEEP_DIAGNOSTICS).  When off these are
+    // empty inline functions, so the compiler eliminates every call site —
+    // zero instructions, zero atomics, zero contention.  (relaxed atomics are
+    // not free: 32 threads writing the same cacheline cost ~1.5s at sword_16.)
+#if defined(BESQ_DEEP_DIAGNOSTICS)
     void incr_nodes_visited() noexcept { _nodes_visited.fetch_add(1, std::memory_order_relaxed); }
     void incr_nodes_pruned() noexcept { _nodes_pruned.fetch_add(1, std::memory_order_relaxed); }
     void incr_steps_forged() noexcept { _steps_forged.fetch_add(1, std::memory_order_relaxed); }
+#else
+    void incr_nodes_visited() noexcept {}
+    void incr_nodes_pruned() noexcept {}
+    void incr_steps_forged() noexcept {}
+#endif
 
     // ═══════════════════════════════════════════════════════════════════
     // 🟡 流式通知 — 直接内部调 DiagnosticsService::push
