@@ -6,7 +6,42 @@
 #include "domain/business/parsers/McOfficialParser.h"
 #include "domain/business/types/Profile.h"
 
+#include <filesystem>
 #include <string>
+
+namespace {
+
+/// Shared data-file merge: parse a data file (native JSON/CSV/datapack) and
+/// merge its content into the given profile (tags/equipment/enchantments).
+/// Extracted from LoadFile / ImportRegistry — both actions route through here.
+static void merge_data_file(Profile& profile, const std::filesystem::path& path) {
+    auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
+
+    TagRegistry tag_reg;
+    EquipmentRegistry eq_reg;
+    EnchantmentRegistry ench_reg;
+    RegistryLoader reg_loader;
+    // Seed tag resolution with the profile's tags (vanilla fallback) PLUS a
+    // datapack's own item tags so `#mypack:*` supported_items references
+    // survive cross-validation (B-T24 #24).
+    TagRegistry base_tags;
+    for (const auto& [nsid, tag] : profile.tags().data())
+        base_tags.insert(tag);
+    auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
+    for (const auto& [nsid, tag] : datapack_tags.data())
+        base_tags.insert(tag);
+    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg, &base_tags);
+    if (auto resolver = profile.tag_resolver_ptr())
+        McOfficialParser::load_item_tags_into(*resolver, item_tags);
+    for (const auto& [nsid, tag] : tag_reg.data())
+        profile.add_tag(tag);
+    for (const auto& [nsid, eq] : eq_reg.data())
+        profile.add_equipment(eq);
+    for (const auto& [nsid, info] : ench_reg.data())
+        profile.add_enchantment(info);
+}
+
+} // anonymous namespace
 
 ManageResult ManagePipeline::run(
     ProfileManager& profiles,
@@ -18,46 +53,28 @@ ManageResult ManagePipeline::run(
     switch (request.action) {
 
     case ManageRequest::Action::LoadBuiltin: {
-        auto& profile = profiles.create("builtin:vanilla");
-        loader.load_builtin(profile);
-        profiles.activate("builtin:vanilla");
-        result.message = "Loaded built-in vanilla data";
+        if (!profiles.exists("builtin:vanilla")) {
+            auto& profile = profiles.create("builtin:vanilla");
+            loader.load_builtin(profile);
+            profiles.activate("builtin:vanilla");
+            result.message = "Loaded built-in vanilla data";
+        } else {
+            result.message = "Vanilla already loaded";
+        }
         break;
     }
 
     case ManageRequest::Action::LoadFile: {
         auto& profile = profiles.active();
-        auto [ench_data, eq_data, item_tags] = FormatDetector::parse(request.file_path);
-        TagRegistry tag_reg;
-        EquipmentRegistry eq_reg;
-        EnchantmentRegistry ench_reg;
-        RegistryLoader reg_loader;
-        // Seed tag resolution with the active profile's tags (vanilla fallback)
-        // PLUS a datapack's own item tags so `#mypack:*` supported_items
-        // references survive cross-validation (B-T24 #24).
-        TagRegistry base_tags;
-        for (const auto& [nsid, tag] : profile.tags().data())
-            base_tags.insert(tag);
-        auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
-        for (const auto& [nsid, tag] : datapack_tags.data())
-            base_tags.insert(tag);
-        reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
-                           &base_tags);
-        if (auto resolver = profile.tag_resolver_ptr())
-            McOfficialParser::load_item_tags_into(*resolver, item_tags);
-        for (const auto& [nsid, tag] : tag_reg.data())
-            profile.add_tag(tag);
-        for (const auto& [nsid, eq] : eq_reg.data())
-            profile.add_equipment(eq);
-        for (const auto& [nsid, info] : ench_reg.data())
-            profile.add_enchantment(info);
+        merge_data_file(profile, request.file_path);
+        profiles.notify_mutated();
         result.message = "Loaded: " + request.file_path;
         break;
     }
 
     case ManageRequest::Action::LoadData: {
         for (const auto& filter : request.filters) {
-            if (!filter.empty()) {
+            if (!filter.empty() && std::filesystem::exists(filter)) {
                 ManageRequest sub;
                 sub.action = ManageRequest::Action::LoadFile;
                 sub.file_path = filter;
@@ -66,6 +83,13 @@ ManageResult ManagePipeline::run(
                     return sub_result;
             }
         }
+        break;
+    }
+
+    case ManageRequest::Action::LoadDirectory: {
+        profiles.load_directory(request.dir_path);
+        profiles.notify_mutated();
+        result.message = "Loaded profiles from: " + request.dir_path;
         break;
     }
 
@@ -156,6 +180,24 @@ ManageResult ManagePipeline::run(
         } else {
             result.success = profiles.add_tag(profiles.active_name(), {cat_nsid, request.category_name});
         }
+        break;
+    }
+
+    case ManageRequest::Action::PublishProfile: {
+        result.success = profiles.publish(request.profile_name, request.publish_version,
+                                          request.publish_tag, request.output_path);
+        if (!result.success)
+            result.message = "Publish failed for profile: " + request.profile_name;
+        else
+            result.message = "Published profile: " + request.profile_name;
+        break;
+    }
+
+    case ManageRequest::Action::ImportRegistry: {
+        auto& profile = profiles.active();
+        merge_data_file(profile, request.file_path);
+        profiles.notify_mutated();
+        result.message = "Imported: " + request.file_path;
         break;
     }
     }
