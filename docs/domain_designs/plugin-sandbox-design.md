@@ -294,8 +294,12 @@ M1 Linux 隔离 + IPC（已实现 + WSL 验证通过）：
     （arch jt/jf 方向；bpf_ld_abs 丢弃 offset 导致全 KILL——真正根因）
   - 测试插件 plugins/malicious/（open("/etc/passwd") 对照），可作 M3 自动化用例
 
-M2 Windows：
-  - CreateProcess + Job Object + 双管道
+M2 Windows（已实现 + Windows 验证）：
+  - SandboxedAlgorithm Windows spawn：CreateProcess + 双管道（父→子 stdin、子→父 stdout）+ stderr 管道
+  - Job Object：KILL_ON_JOB_CLOSE + 512MB 进程/作业内存上限 + 单活动进程
+  - worker 服务循环在 Windows 复用（_read/_write + 二进制管道）
+  - BESQ_SANDBOX=1 在 Windows 也启用（get_env<bool>）
+  - ✅ Windows 验证：idastar 经沙箱求解；无 seccomp（Windows 无等价物）——隔离靠进程 + Job Object 资源上限；文件/网络阻断需 AppContainer（后续）
 
 M3 Capability profile 分级 + 故障处理 + 全套测试
 

@@ -25,8 +25,6 @@
 #include "PluginAPI.h"
 #include "PluginAudit.h"
 
-#include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
@@ -36,13 +34,10 @@ namespace algorithm {
 
 class AlgorithmLoader {
   public:
-    /// Sandbox is enabled when the BESQ_SANDBOX env var is "1" on Linux.
-    AlgorithmLoader() {
-#if defined(__linux__)
-        if (const char *s = std::getenv("BESQ_SANDBOX"); s && std::strcmp(s, "1") == 0)
-            _sandbox_enabled = true;
-#endif
-    }
+    /// Sandbox is enabled when the BESQ_SANDBOX env var is "1" (Linux uses
+    /// seccomp; Windows uses CreateProcess + Job Object resource limits).
+    /// Constructor body is in AlgorithmLoader.cpp (reads the env).
+    AlgorithmLoader();
     ~AlgorithmLoader();
 
     AlgorithmLoader(const AlgorithmLoader &)            = delete;

@@ -5,6 +5,7 @@
 #include "AlgorithmLoader.h"
 #include "PluginAudit.h"
 #include "common/log/log.hpp"
+#include "common/utils/EnvUtil.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -73,6 +74,10 @@ namespace algorithm {
 // ====================================================================
 // Lifecycle
 // ====================================================================
+
+AlgorithmLoader::AlgorithmLoader() {
+    _sandbox_enabled = get_env<bool>("BESQ_SANDBOX", false);
+}
 
 AlgorithmLoader::~AlgorithmLoader() {
     // Process all pending diagnostics events while plugins are still loaded.

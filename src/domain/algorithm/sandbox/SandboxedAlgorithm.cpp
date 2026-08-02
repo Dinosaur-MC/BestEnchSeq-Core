@@ -2,14 +2,10 @@
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "common/io/ByteStream.h"
+#include "common/utils/EnvUtil.hpp"
 
-#include <cstdlib>
+#include <algorithm>
 #include <stdexcept>
-
-// std::getenv is fine here (worker-path config); silence MSVC deprecation.
-#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
-#pragma warning(disable : 4996)
-#endif
 
 #if defined(__linux__)
 #include <csignal>
@@ -19,6 +15,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <fcntl.h>
+#include <io.h>
 #endif
 
 namespace algorithm {
@@ -29,7 +30,8 @@ namespace {
 std::string resolve_worker_path(const std::string &given) {
     if (!given.empty())
         return given;
-    if (const char *env = std::getenv("BESQ_WORKER_PATH"); env && *env)
+    const std::string env = get_env_str("BESQ_WORKER_PATH");
+    if (!env.empty())
         return env;
     return "besq-worker";
 }
@@ -66,6 +68,24 @@ SandboxedAlgorithm::~SandboxedAlgorithm() {
         ::kill(-_pid, SIGKILL);
         ::waitpid(_pid, nullptr, 0);
     }
+#elif defined(_WIN32)
+    if (_proc_handle) {
+        ::TerminateProcess(static_cast<HANDLE>(_proc_handle), 1);
+        ::WaitForSingleObject(static_cast<HANDLE>(_proc_handle), INFINITE);
+        ::CloseHandle(static_cast<HANDLE>(_proc_handle));
+        _proc_handle = nullptr;
+    }
+    if (_job_handle) {
+        ::CloseHandle(static_cast<HANDLE>(_job_handle));  // KILL_ON_JOB_CLOSE
+        _job_handle = nullptr;
+    }
+    if (_stderr_handle) {
+        ::CloseHandle(static_cast<HANDLE>(_stderr_handle));
+        _stderr_handle = nullptr;
+    }
+    if (_fd >= 0) { ::_close(_fd); _fd = -1; }
+    if (_write_fd >= 0) { ::_close(_write_fd); _write_fd = -1; }
+    if (_stderr_fd >= 0) { ::_close(_stderr_fd); _stderr_fd = -1; }
 #endif
 }
 
@@ -213,9 +233,70 @@ void SandboxedAlgorithm::spawn_worker() {
     _fd = sv[0];
     _stderr_fd = err_pipe[0];
     _pid = static_cast<long>(pid);
+#elif defined(_WIN32)
+    SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};  // inheritable
+
+    HANDLE to_child_rd = nullptr, to_child_wr = nullptr;    // parent→child (child stdin)
+    HANDLE from_child_rd = nullptr, from_child_wr = nullptr; // child→parent (child stdout)
+    HANDLE err_rd = nullptr, err_wr = nullptr;              // child stderr
+    if (!::CreatePipe(&to_child_rd, &to_child_wr, &sa, 0) ||
+        !::CreatePipe(&from_child_rd, &from_child_wr, &sa, 0) ||
+        !::CreatePipe(&err_rd, &err_wr, &sa, 0))
+        throw std::runtime_error("sandbox: CreatePipe failed");
+    // Parent's ends must not be inherited by the child.
+    ::SetHandleInformation(to_child_wr, HANDLE_FLAG_INHERIT, 0);
+    ::SetHandleInformation(from_child_rd, HANDLE_FLAG_INHERIT, 0);
+    ::SetHandleInformation(err_rd, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput  = to_child_rd;
+    si.hStdOutput = from_child_wr;
+    si.hStdError  = err_wr;
+
+    // Quote both paths (may contain spaces).
+    const std::string cmdline = "\"" + _worker_path + "\" --plugin \"" + _plugin_path + "\"";
+    PROCESS_INFORMATION pi{};
+    if (!::CreateProcessA(nullptr, const_cast<char *>(cmdline.c_str()), nullptr, nullptr,
+                          TRUE /*inherit handles*/, 0, nullptr, nullptr, &si, &pi)) {
+        ::CloseHandle(to_child_rd); ::CloseHandle(to_child_wr);
+        ::CloseHandle(from_child_rd); ::CloseHandle(from_child_wr);
+        ::CloseHandle(err_rd); ::CloseHandle(err_wr);
+        throw std::runtime_error("sandbox: CreateProcess failed");
+    }
+    ::CloseHandle(to_child_rd);
+    ::CloseHandle(from_child_wr);
+    ::CloseHandle(err_wr);
+    ::CloseHandle(pi.hThread);
+
+    // Job Object: kill-on-close + memory/process limits (resource containment —
+    // Windows has no seccomp; process isolation + these limits are the sandbox).
+    HANDLE job = ::CreateJobObjectA(nullptr, nullptr);
+    if (job) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli{};
+        jeli.BasicLimitInformation.LimitFlags =
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE |
+            JOB_OBJECT_LIMIT_ACTIVE_PROCESS |
+            JOB_OBJECT_LIMIT_PROCESS_MEMORY |
+            JOB_OBJECT_LIMIT_JOB_MEMORY;
+        jeli.BasicLimitInformation.ActiveProcessLimit = 1;
+        jeli.ProcessMemoryLimit = 512u * 1024 * 1024;  // 512 MB
+        jeli.JobMemoryLimit     = 512u * 1024 * 1024;
+        ::SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                  &jeli, sizeof(jeli));
+        ::AssignProcessToJobObject(job, pi.hProcess);
+    }
+
+    _fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(from_child_rd), _O_RDONLY | _O_BINARY);
+    _write_fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(to_child_wr), _O_WRONLY | _O_BINARY);
+    _stderr_handle = err_rd;  // raw handle for PeekNamedPipe-based stderr drain
+    _pid = static_cast<long>(pi.dwProcessId);
+    _proc_handle = pi.hProcess;
+    _job_handle = job;
 #else
     (void)0;
-    throw std::runtime_error("sandbox: subprocess isolation is Linux-only in M1");
+    throw std::runtime_error("sandbox: subprocess isolation not supported on this platform");
 #endif
 }
 
@@ -237,6 +318,22 @@ std::string SandboxedAlgorithm::take_worker_stderr() {
         if (n <= 0)
             break;
         out.append(buf, static_cast<size_t>(n));
+    }
+    return out;
+#elif defined(_WIN32)
+    if (!_stderr_handle)
+        return {};
+    // PeekNamedPipe + ReadFile: read only what is already buffered.
+    std::string out;
+    char buf[512];
+    DWORD avail = 0;
+    while (_stderr_handle && ::PeekNamedPipe(_stderr_handle, nullptr, 0, nullptr, &avail, nullptr)
+           && avail > 0) {
+        DWORD got = 0;
+        if (!::ReadFile(_stderr_handle, buf, static_cast<DWORD>(std::min<size_t>(sizeof(buf), avail)),
+                        &got, nullptr) || got == 0)
+            break;
+        out.append(buf, static_cast<size_t>(got));
     }
     return out;
 #else
@@ -268,7 +365,10 @@ void SandboxedAlgorithm::query_metadata() {
 }
 
 void SandboxedAlgorithm::send(ipc::MsgType type, const std::vector<uint8_t> &payload) const {
-    if (!ipc::write_frame(_fd, type, payload))
+    // Windows: writes go to the parent→child pipe; Linux uses the full-duplex
+    // socketpair.
+    const int fd = _write_fd >= 0 ? _write_fd : _fd;
+    if (!ipc::write_frame(fd, type, payload))
         throw std::runtime_error("sandbox: worker IPC write failed");
 }
 

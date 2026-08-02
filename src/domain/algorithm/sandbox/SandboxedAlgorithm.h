@@ -67,9 +67,17 @@ class SandboxedAlgorithm : public IAlgorithm {
     std::string _worker_path;
     // Capability → seccomp profile mapping is M3; retained for the field.
     [[maybe_unused]] PluginCapability _capability;
+    // Linux: _fd is the full-duplex socketpair.  Windows: _fd reads the
+    // child→parent pipe, _write_fd writes the parent→child pipe.
     int _fd = -1;
-    [[maybe_unused]] int _stderr_fd = -1;  // worker's stderr (Linux; used by take_worker_stderr)
-    [[maybe_unused]] long _pid = -1;  // used in the Linux destructor
+    int _write_fd = -1;
+    [[maybe_unused]] int _stderr_fd = -1;  // worker's stderr (used by take_worker_stderr)
+    [[maybe_unused]] long _pid = -1;  // Linux pid / Windows process id
+    // Windows-only handles (Job Object + process + raw stderr pipe) for
+    // cleanup / limits / stderr capture.
+    [[maybe_unused]] void *_proc_handle = nullptr;
+    [[maybe_unused]] void *_job_handle = nullptr;
+    [[maybe_unused]] void *_stderr_handle = nullptr;
 
     std::string _name;
     std::string _version;
