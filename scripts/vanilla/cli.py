@@ -55,7 +55,7 @@ def run_enchantment_pipeline(release: str) -> None:
     dur_map = enchantment.load_durability_from_source(RES_DIR)
 
     print("Loading enchantments…")
-    ench = enchantment.load_enchantments(base, lang_data, tags, pfx, ench_map)
+    ench = enchantment.load_enchantments(base, lang_data, tags, pfx)
     ench.sort(key=lambda e: e["id"])
 
     print("Post-processing enchantments…")

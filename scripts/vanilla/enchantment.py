@@ -140,9 +140,14 @@ def resolve_ref(refs: list[str], context: str | None,
 
 def load_enchantments(base: Path, lang: dict[str, str],
                       tags: dict[str, list[str]],
-                      prefixes: list[str],
-                      enchantability_map: dict[str, int]) -> list[dict]:
-    """Parse enchantment definition JSONs from the extracted jar."""
+                      prefixes: list[str]) -> list[dict]:
+    """Parse enchantment definition JSONs from the extracted jar.
+
+    Only RAW fields are emitted (``min_cost`` base/per_level_above_first,
+    ``multiplier``, ``max_level``, ``is_treasure``).  ``limited_level`` is NOT
+    pre-computed here any more — the C++ ``LimitedLevelCalculator`` (B-T18)
+    derives it at registry load time uniformly across data sources.
+    """
     ench = []
     for f in sorted(base.glob("data/*/enchantment/*.json")):
         rel = PurePosixPath(f.relative_to(base)).as_posix()
@@ -176,24 +181,22 @@ def load_enchantments(base: Path, lang: dict[str, str],
         raw_sup = data.get("supported_items") or data.get("supportedItems") or []
         if isinstance(raw_sup, str):
             raw_sup = [raw_sup]
-        # sup_ids 仍用于 limited_level 计算（已解析为具体物品 ID）
-        sup_ids = resolve_ref(raw_sup, "supported_items", tags, prefixes)
         supported_items = normalize_refs(raw_sup)
 
-        # limited level
+        # min_cost 原始字段（附魔台成本公式）；limited_level 由 C++ 统一计算
         min_cost_data = data.get("min_cost", {"base": 1, "per_level_above_first": 10})
         max_level_val = data.get("max_level", 1)
-        limited_level = calc_limited_level(
-            max_level_val, min_cost_data, sup_ids, enchantability_map
-        )
 
         ench.append({
             "id": eid,
             "name": name,
             "platform": "java",
             "max_level": max_level_val,
-            "limited_level": limited_level,
             "multiplier": multiplier,
+            "min_cost": {
+                "base": min_cost_data.get("base", 1),
+                "per_level_above_first": min_cost_data.get("per_level_above_first", 10),
+            },
             "exclusive_set": excl,
             "supported_items": supported_items,
         })
@@ -617,40 +620,6 @@ def load_durability_from_source(res_dir: Path) -> dict[str, int]:
 
     print(f"  Loaded {len(dur)} durability values from source")
     return dur
-
-
-# ── limited-level calculation ─────────────────────────────────────────────
-
-def _min_cost(cost_obj: dict, level: int) -> int:
-    """Compute minimum enchanting-table cost for a given level."""
-    base = cost_obj.get("base", 1)
-    per = cost_obj.get("per_level_above_first", 10)
-    return base + per * (level - 1)
-
-
-def _max_power(enchantability: int) -> int:
-    """Maximum enchanting-table power (15 bookshelves, best slot)."""
-    base = 30
-    added = 1 + 2 * (enchantability // 4)
-    return round((base + added) * 1.15)
-
-
-def calc_limited_level(max_level: int, min_cost_data: dict,
-                       sup_ids: set[str],
-                       enchantability_map: dict[str, int]) -> int:
-    """Highest enchantment level obtainable from an enchanting table."""
-    best = 0
-    for item_id in sup_ids:
-        short = _item_short(item_id)
-        ench = enchantability_map.get(short, 0)
-        if ench <= 0:
-            continue
-        power = _max_power(ench)
-        for level in range(max_level, 0, -1):
-            if _min_cost(min_cost_data, level) <= power:
-                best = max(best, level)
-                break
-    return max(1, best)
 
 
 # ── post-processing ───────────────────────────────────────────────────────

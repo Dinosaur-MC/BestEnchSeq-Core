@@ -3,9 +3,11 @@
 #include "common/io/json.h"
 #include "domain/business/components/LimitedLevelCalculator.h"
 #include "domain/business/components/TagResolver.h"
+#include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
 #include "domain/business/types/EnchInfo.h"
+#include "domain/business/types/Profile.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "framework/test_utils.h"
 
@@ -177,6 +179,29 @@ void test_ll_serializer_csv_columns() {
     TEST_PASS("test_ll_serializer_csv_columns");
 }
 
+// ─── Test: builtin vanilla.json loads with computed limited_level (B-T19) ─
+// The regenerated vanilla.json carries `min_cost` + `is_treasure` but NO
+// pre-computed `limited_level`; the registry-level calculator must back-fill it
+// at load time: sharpness → computed > 0; mending → treasure → 0.
+
+void test_ll_builtin_vanilla_data() {
+    ProfileLoader loader;
+    Profile p = loader.load_builtin();
+
+    const auto& sharp = p.ench().at(NSID("minecraft:sharpness"));
+    expect(sharp.min_cost_base > 0, "sharpness: min_cost_base carried from vanilla.json");
+    expect(sharp.min_cost_per_level > 0, "sharpness: min_cost_per_level carried");
+    expect(!sharp.is_treasure, "sharpness: not treasure");
+    expect(sharp.limited_level > 0,
+           "sharpness: COMPUTED limited_level > 0 (no longer a stored field)");
+
+    const auto& mending = p.ench().at(NSID("minecraft:mending"));
+    expect(mending.is_treasure, "mending: is_treasure from vanilla.json");
+    expect_eq(mending.limited_level, 0, "mending: treasure → limited_level 0");
+
+    TEST_PASS("test_ll_builtin_vanilla_data");
+}
+
 } // namespace
 
 int main() {
@@ -189,6 +214,7 @@ int main() {
         test_ll_serializer_json_roundtrip();
         test_ll_serializer_json_hint();
         test_ll_serializer_csv_columns();
+        test_ll_builtin_vanilla_data();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

@@ -35,8 +35,11 @@
       "name": "Aqua Affinity",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 4,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/head_armor"
@@ -48,8 +51,11 @@
       "name": "Bane of Arthropods",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
       "multiplier": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [
         "breach",
         "density",
@@ -67,8 +73,11 @@
       "name": "Curse of Binding",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 8,
+      "min_cost": {
+        "base": 25,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/equippable"
@@ -80,8 +89,11 @@
       "name": "Blast Protection",
       "platform": "java",
       "max_level": 4,
-      "limited_level": 4,
       "multiplier": 4,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [
         "fire_protection",
         "projectile_protection",
@@ -97,8 +109,11 @@
       "name": "Breach",
       "platform": "java",
       "max_level": 4,
-      "limited_level": 4,
       "multiplier": 4,
+      "min_cost": {
+        "base": 15,
+        "per_level_above_first": 9
+      },
       "exclusive_set": [
         "bane_of_arthropods",
         "density",
@@ -116,8 +131,11 @@
       "name": "Channeling",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 8,
+      "min_cost": {
+        "base": 25,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [
         "riptide"
       ],
@@ -131,8 +149,11 @@
       "name": "Density",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
       "multiplier": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [
         "bane_of_arthropods",
         "breach",
@@ -150,8 +171,11 @@
       "name": "Depth Strider",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 10,
+        "per_level_above_first": 10
+      },
       "exclusive_set": [
         "frost_walker"
       ],
@@ -165,8 +189,11 @@
       "name": "Efficiency",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
       "multiplier": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 10
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/mining"
@@ -178,8 +205,11 @@
       "name": "Feather Falling",
       "platform": "java",
       "max_level": 4,
-      "limited_level": 4,
       "multiplier": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 6
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/foot_armor"
@@ -191,8 +221,11 @@
       "name": "Fire Aspect",
       "platform": "java",
       "max_level": 2,
-      "limited_level": 2,
       "multiplier": 4,
+      "min_cost": {
+        "base": 10,
+        "per_level_above_first": 20
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/fire_aspect"
@@ -204,8 +237,11 @@
       "name": "Fire Protection",
       "platform": "java",
       "max_level": 4,
-      "limited_level": 4,
       "multiplier": 2,
+      "min_cost": {
+        "base": 10,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [
         "blast_protection",
         "projectile_protection",
@@ -221,8 +257,11 @@
       "name": "Flame",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 4,
+      "min_cost": {
+        "base": 20,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/bow"
@@ -234,8 +273,11 @@
       "name": "Fortune",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 15,
+        "per_level_above_first": 9
+      },
       "exclusive_set": [
         "silk_touch"
       ],
@@ -249,8 +291,11 @@
       "name": "Frost Walker",
       "platform": "java",
       "max_level": 2,
-      "limited_level": 2,
       "multiplier": 4,
+      "min_cost": {
+        "base": 10,
+        "per_level_above_first": 10
+      },
       "exclusive_set": [
         "depth_strider"
       ],
@@ -264,8 +309,11 @@
       "name": "Impaling",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
       "multiplier": 4,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [
         "bane_of_arthropods",
         "breach",
@@ -283,8 +331,11 @@
       "name": "Infinity",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 8,
+      "min_cost": {
+        "base": 20,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [
         "mending"
       ],
@@ -298,8 +349,11 @@
       "name": "Knockback",
       "platform": "java",
       "max_level": 2,
-      "limited_level": 2,
       "multiplier": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 20
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/melee_weapon"
@@ -311,8 +365,11 @@
       "name": "Looting",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 15,
+        "per_level_above_first": 9
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/melee_weapon"
@@ -324,8 +381,11 @@
       "name": "Loyalty",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 2,
+      "min_cost": {
+        "base": 12,
+        "per_level_above_first": 7
+      },
       "exclusive_set": [
         "riptide"
       ],
@@ -339,8 +399,11 @@
       "name": "Luck of the Sea",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 15,
+        "per_level_above_first": 9
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/fishing"
@@ -352,8 +415,11 @@
       "name": "Lunge",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/lunge"
@@ -365,8 +431,11 @@
       "name": "Lure",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 15,
+        "per_level_above_first": 9
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/fishing"
@@ -378,8 +447,11 @@
       "name": "Mending",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 4,
+      "min_cost": {
+        "base": 25,
+        "per_level_above_first": 25
+      },
       "exclusive_set": [
         "infinity"
       ],
@@ -393,8 +465,11 @@
       "name": "Multishot",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 4,
+      "min_cost": {
+        "base": 20,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [
         "piercing"
       ],
@@ -408,8 +483,11 @@
       "name": "Piercing",
       "platform": "java",
       "max_level": 4,
-      "limited_level": 4,
       "multiplier": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 10
+      },
       "exclusive_set": [
         "multishot"
       ],
@@ -423,8 +501,11 @@
       "name": "Power",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 4,
       "multiplier": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 10
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/bow"
@@ -436,8 +517,11 @@
       "name": "Projectile Protection",
       "platform": "java",
       "max_level": 4,
-      "limited_level": 4,
       "multiplier": 2,
+      "min_cost": {
+        "base": 3,
+        "per_level_above_first": 6
+      },
       "exclusive_set": [
         "blast_protection",
         "fire_protection",
@@ -453,8 +537,11 @@
       "name": "Protection",
       "platform": "java",
       "max_level": 4,
-      "limited_level": 4,
       "multiplier": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 11
+      },
       "exclusive_set": [
         "blast_protection",
         "fire_protection",
@@ -470,8 +557,11 @@
       "name": "Punch",
       "platform": "java",
       "max_level": 2,
-      "limited_level": 2,
       "multiplier": 4,
+      "min_cost": {
+        "base": 12,
+        "per_level_above_first": 20
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/bow"
@@ -483,8 +573,11 @@
       "name": "Quick Charge",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 2,
       "multiplier": 2,
+      "min_cost": {
+        "base": 12,
+        "per_level_above_first": 20
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/crossbow"
@@ -496,8 +589,11 @@
       "name": "Respiration",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 10,
+        "per_level_above_first": 10
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/head_armor"
@@ -509,8 +605,11 @@
       "name": "Riptide",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 17,
+        "per_level_above_first": 7
+      },
       "exclusive_set": [
         "channeling",
         "loyalty"
@@ -525,8 +624,11 @@
       "name": "Sharpness",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
       "multiplier": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 11
+      },
       "exclusive_set": [
         "bane_of_arthropods",
         "breach",
@@ -544,8 +646,11 @@
       "name": "Silk Touch",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 8,
+      "min_cost": {
+        "base": 15,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [
         "fortune"
       ],
@@ -559,8 +664,11 @@
       "name": "Smite",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
       "multiplier": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [
         "bane_of_arthropods",
         "breach",
@@ -578,8 +686,11 @@
       "name": "Soul Speed",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 8,
+      "min_cost": {
+        "base": 10,
+        "per_level_above_first": 10
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/foot_armor"
@@ -591,8 +702,11 @@
       "name": "Sweeping Edge",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 9
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/sweeping"
@@ -604,8 +718,11 @@
       "name": "Swift Sneak",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 1,
       "multiplier": 8,
+      "min_cost": {
+        "base": 25,
+        "per_level_above_first": 25
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/leg_armor"
@@ -617,8 +734,11 @@
       "name": "Thorns",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 2,
       "multiplier": 8,
+      "min_cost": {
+        "base": 10,
+        "per_level_above_first": 20
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/armor"
@@ -630,8 +750,11 @@
       "name": "Unbreaking",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level_above_first": 8
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/durability"
@@ -643,8 +766,11 @@
       "name": "Curse of Vanishing",
       "platform": "java",
       "max_level": 1,
-      "limited_level": 1,
       "multiplier": 8,
+      "min_cost": {
+        "base": 25,
+        "per_level_above_first": 0
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/vanishing"
@@ -656,8 +782,11 @@
       "name": "Wind Burst",
       "platform": "java",
       "max_level": 3,
-      "limited_level": 3,
       "multiplier": 4,
+      "min_cost": {
+        "base": 15,
+        "per_level_above_first": 9
+      },
       "exclusive_set": [],
       "supported_items": [
         "#minecraft:enchantable/mace"
