@@ -107,6 +107,29 @@ void test_type_mismatch() {
     expect(!ds::int_codec{}.from_json(j, v, e, "n"), "type mismatch rejected");
     TEST_PASS("type mismatch rejected");
 }
+void test_scalar_csv_roundtrip() {
+    std::string c1; ds::string_codec{}.to_csv(std::string("hi"), c1);
+    std::string s1; ds::ErrorList e1;
+    expect(ds::string_codec{}.from_csv(c1, s1, e1, "s") && s1 == "hi", "string csv roundtrip");
+    std::string c2; ds::int_codec{}.to_csv(42, c2);
+    int i2 = 0; ds::ErrorList e2;
+    expect(ds::int_codec{}.from_csv(c2, i2, e2, "i") && i2 == 42, "int csv roundtrip");
+    std::string c3; ds::float_codec{}.to_csv(1.5f, c3);
+    float f3 = 0; ds::ErrorList e3;
+    expect(ds::float_codec{}.from_csv(c3, f3, e3, "f") && f3 == 1.5f, "float csv roundtrip");
+    std::string c4; ds::bool_codec{}.to_csv(true, c4);
+    bool b4 = false; ds::ErrorList e4;
+    expect(ds::bool_codec{}.from_csv(c4, b4, e4, "b") && b4, "bool csv roundtrip");
+    TEST_PASS("scalar csv roundtrip");
+}
+void test_csv_range_and_partial_rejected() {
+    int v = 0; ds::ErrorList e;
+    expect(!ds::int_codec{0, 10}.from_csv("500", v, e, "lv"), "csv range rejected");
+    expect(e.size() == 1, "csv range error");
+    int v2 = 0; ds::ErrorList e2;
+    expect(!ds::int_codec{}.from_csv("42abc", v2, e2, "lv"), "csv partial parse rejected");
+    TEST_PASS("csv range + partial rejected");
+}
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -116,5 +139,7 @@ int main() {
     test_scalar_codecs();
     test_int_range_validation();
     test_type_mismatch();
+    test_scalar_csv_roundtrip();
+    test_csv_range_and_partial_rejected();
     return print_summary();
 }
