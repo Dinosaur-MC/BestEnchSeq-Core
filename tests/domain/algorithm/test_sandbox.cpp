@@ -60,11 +60,6 @@ std::string find_worker() {
 } // anonymous namespace
 
 int main() {
-#if !defined(__linux__)
-    std::cout << "SKIP: test_sandbox is Linux-only (seccomp)" << std::endl;
-    return 0;
-#endif
-
     const std::string plugin = find_plugin();
     if (plugin.empty()) {
         std::cout << "SKIP: malicious test plugin not built (set BESQ_TEST_MALICIOUS_PLUGIN)"
@@ -74,20 +69,31 @@ int main() {
 
     try {
         // ── Spawn the worker with the malicious plugin ─────────────────
-        // The worker dlopens the plugin, installs seccomp, then constructs
-        // the plugin (create_fn after seccomp) → its open() is EPERM'd.
+        // Linux: dlopen → seccomp → construct (open EPERM'd).  Windows:
+        // CreateProcess + Job Object, no seccomp.
         SandboxedAlgorithm sa(plugin, find_worker(), PluginCapability::None);
 
-        // ── Worker survived seccomp + metadata query works ────────────
+        // ── Worker survived + metadata query works ────────────────────
         expect(std::string(sa.name()) == "malicious", "sandbox: worker reports name");
         expect(std::string(sa.version()) == "1.0.0", "sandbox: worker reports version");
 
-        // ── The plugin's file open was blocked by seccomp ─────────────
+#if defined(__linux__)
+        // ── seccomp isolation: the plugin's open("/etc/passwd") was EPERM'd ──
         const std::string stderr_out = sa.take_worker_stderr();
         expect(stderr_out.find("OPEN BLOCKED") != std::string::npos,
                "sandbox: plugin open() blocked (seccomp EPERM)");
         expect(stderr_out.find("OPEN OK") == std::string::npos,
                "sandbox: plugin must NOT have read the file");
+#else
+        // ── Windows smoke test: binary IPC integrity ──────────────────
+        // The request payload for evaluate(26) is the int16 bytes {0x1A, 0x00}.
+        // A worker with CRT TEXT-mode stdin/stdout would mangle this (0x1A =
+        // Ctrl-Z EOF) and fail to respond.  Verifies the _O_BINARY fix.
+        std::cout << "SKIP seccomp assertion on Windows (no seccomp); "
+                     "checking binary IPC with evaluate(26)..." << std::endl;
+        const double v = sa.evaluate(26);
+        expect(v >= 0.0, "sandbox: worker responded to evaluate(0x1A payload) — binary IPC ok");
+#endif
     } catch (const test_error &e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return print_summary();

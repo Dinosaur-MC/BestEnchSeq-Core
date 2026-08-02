@@ -2,6 +2,7 @@
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "common/io/ByteStream.h"
+#include "common/log/log.hpp"
 #include "common/utils/EnvUtil.hpp"
 
 #include <algorithm>
@@ -283,9 +284,11 @@ void SandboxedAlgorithm::spawn_worker() {
         jeli.BasicLimitInformation.ActiveProcessLimit = 1;
         jeli.ProcessMemoryLimit = 512u * 1024 * 1024;  // 512 MB
         jeli.JobMemoryLimit     = 512u * 1024 * 1024;
-        ::SetInformationJobObject(job, JobObjectExtendedLimitInformation,
-                                  &jeli, sizeof(jeli));
-        ::AssignProcessToJobObject(job, pi.hProcess);
+        if (!::SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                       &jeli, sizeof(jeli)))
+            LOG_WARN("sandbox: SetInformationJobObject failed — worker has no resource limits");
+        if (!::AssignProcessToJobObject(job, pi.hProcess))
+            LOG_WARN("sandbox: AssignProcessToJobObject failed — worker NOT in Job Object");
     }
 
     _fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(from_child_rd), _O_RDONLY | _O_BINARY);

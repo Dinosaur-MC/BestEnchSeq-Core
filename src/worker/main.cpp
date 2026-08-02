@@ -36,6 +36,8 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <fcntl.h>
+#include <io.h>
 #else
 #include <dlfcn.h>
 #include <poll.h>
@@ -211,6 +213,15 @@ void serve(IAlgorithm &algo) {
 } // anonymous namespace
 
 int main(int argc, char **argv) {
+#if defined(_WIN32)
+    // The IPC channel is stdin/stdout.  CRT defaults to TEXT mode, which
+    // would CR/LF-mangle binary frames and treat 0x1A (Ctrl-Z) as EOF —
+    // corrupting the protocol.  Force binary mode on all three std streams.
+    ::_setmode(::_fileno(stdin), _O_BINARY);
+    ::_setmode(::_fileno(stdout), _O_BINARY);
+    ::_setmode(::_fileno(stderr), _O_BINARY);
+#endif
+
     const char *plugin_path = nullptr;
     for (int i = 1; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--plugin") == 0)
