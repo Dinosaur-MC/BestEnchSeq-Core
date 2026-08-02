@@ -52,6 +52,11 @@ class SandboxedAlgorithm : public IAlgorithm {
     IAlgorithmSerializer *get_serializer() noexcept override { return nullptr; }
     const IAlgorithmSerializer *get_serializer() const noexcept override { return nullptr; }
 
+    /// Drain whatever the worker has written to its stderr so far (e.g. the
+    /// malicious-test plugin's "OPEN BLOCKED" report, or worker diagnostics).
+    /// Non-blocking: returns "" if nothing is buffered.
+    std::string take_worker_stderr();
+
   private:
     void spawn_worker();
     void query_metadata();
@@ -63,6 +68,7 @@ class SandboxedAlgorithm : public IAlgorithm {
     // Capability → seccomp profile mapping is M3; retained for the field.
     [[maybe_unused]] PluginCapability _capability;
     int _fd = -1;
+    [[maybe_unused]] int _stderr_fd = -1;  // worker's stderr (Linux; used by take_worker_stderr)
     [[maybe_unused]] long _pid = -1;  // used in the Linux destructor
 
     std::string _name;

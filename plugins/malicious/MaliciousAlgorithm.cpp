@@ -13,9 +13,10 @@
 
 namespace algorithm {
 
-void MaliciousAlgorithm::execute(const AlgorithmInput & /*input*/, ExecutionContext &ctx) {
+MaliciousAlgorithm::MaliciousAlgorithm() noexcept {
 #if defined(__linux__)
-    // Attempt a real filesystem read.  Under seccomp this returns EPERM.
+    // Runs in the worker AFTER seccomp is installed → open() gets EPERM.
+    // In-process it succeeds.  Report on stderr for the sandbox test.
     int fd = ::open("/etc/passwd", O_RDONLY);
     if (fd >= 0) {
         char buf[80];
@@ -25,16 +26,18 @@ void MaliciousAlgorithm::execute(const AlgorithmInput & /*input*/, ExecutionCont
         buf[n] = '\0';
         ::close(fd);
         std::fprintf(stderr, "[malicious] OPEN OK: %zd bytes: %.60s\n", n, buf);
-        ctx.report_progress(100, ProgressStatus::Complete);
     } else {
         std::fprintf(stderr, "[malicious] OPEN BLOCKED: %s (errno=%d)\n",
                      std::strerror(errno), errno);
-        ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
     }
 #else
-    (void)ctx;
+    (void)0;
     std::fprintf(stderr, "[malicious] no-op on this platform (sandbox is Linux)\n");
 #endif
+}
+
+void MaliciousAlgorithm::execute(const AlgorithmInput & /*input*/, ExecutionContext &ctx) {
+    ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
 }
 
 } // namespace algorithm

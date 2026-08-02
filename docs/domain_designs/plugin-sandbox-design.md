@@ -257,13 +257,17 @@ seccomp 过滤器           syscall 时 <1% 开销（热循环无 syscall → �
 ## 11. 测试策略
 
 ```
-恶意插件（open 文件）    → seccomp kill → "sandbox violation" ✅
-死循环插件              → timeout kill ✅
-崩溃插件（segfault）    → "plugin crashed" ✅
-std::thread 插件         → 验证 CLONE_THREAD 放行 ✅
-合法插件（idastar）      → 完整功能往返 ✅
-Capability profile 强制 → 声明 None 却联网 → 被禁 ✅
-每个 IAlgorithm 方法 IPC 往返 → 参数/返回值 roundtrip ✅
+已固化（M1）：
+  test_ipc_protocol（跨平台）——帧往返/空帧/多字节帧/多帧顺序，23 断言
+  test_sandbox（Linux）——worker 存活 + malicious 插件 OPEN BLOCKED 断言
+  67/67 全量（Windows），test_sandbox 在 WSL 单独验证
+
+待补（M2/M3）：
+  死循环插件 → timeout kill ✅
+  崩溃插件（segfault）→ "plugin crashed"
+  std::thread 插件 → 验证 CLONE_THREAD 放行
+  Capability profile 强制 → 声明 None 却联网 → 被禁
+  每个 IAlgorithm 方法 IPC 往返 → 参数/返回值 roundtrip
 ```
 
 ## 12. 实施阶段

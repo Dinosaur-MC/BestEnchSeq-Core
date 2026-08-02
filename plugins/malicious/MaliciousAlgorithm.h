@@ -17,12 +17,16 @@ namespace algorithm {
 
 class MaliciousAlgorithm : public IAlgorithm {
   public:
-    MaliciousAlgorithm() noexcept = default;
+    /// Tries open("/etc/passwd") — runs in the worker AFTER seccomp is
+    /// installed (create_fn is called post-seccomp), so a sandboxed load
+    /// gets EPERM and reports "OPEN BLOCKED" on stderr.  In-process it
+    /// succeeds and reports "OPEN OK".  This is the isolation assertion.
+    MaliciousAlgorithm() noexcept;
 
     std::string_view name() const noexcept override { return "malicious"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0.0; }
-    void execute(const AlgorithmInput &input, ExecutionContext &ctx) override;
+    void execute(const AlgorithmInput &, ExecutionContext &ctx) override;
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
         return std::make_unique<ForgeEngine>();
     }

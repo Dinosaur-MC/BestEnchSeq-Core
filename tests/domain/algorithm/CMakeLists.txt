@@ -63,6 +63,8 @@ besq_test_common_props(test_penalty_balance)
 
 besq_test(test_algorithm_loader test_algorithm_loader.cpp)
 besq_test(test_plugin_audit test_plugin_audit.cpp)
+besq_test(test_ipc_protocol test_ipc_protocol.cpp)
+besq_test(test_sandbox test_sandbox.cpp)  # Linux-only; skips elsewhere
 
 # astar/dfs 已为插件：策略正确性测试直接编译插件源码（保留 bb_dp 以 A* 为最优 oracle）
 besq_test_with_plugins(test_algorithm_strategies test_algorithm_strategies.cpp

@@ -56,6 +56,10 @@ SandboxedAlgorithm::~SandboxedAlgorithm() {
         ::close(_fd);
         _fd = -1;
     }
+    if (_stderr_fd >= 0) {
+        ::close(_stderr_fd);
+        _stderr_fd = -1;
+    }
     if (_pid > 0) {
         // Kill the whole worker process group (covers plugin-forked children
         // that might keep the IPC channel open).
@@ -170,33 +174,73 @@ void SandboxedAlgorithm::spawn_worker() {
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0)
         throw std::runtime_error("sandbox: socketpair failed");
 
+    // Capture the worker's stderr so plugin/worker diagnostics surface to
+    // the parent (and the sandbox test can assert on them).
+    int err_pipe[2];
+    if (::pipe(err_pipe) != 0) {
+        ::close(sv[0]);
+        ::close(sv[1]);
+        throw std::runtime_error("sandbox: stderr pipe failed");
+    }
+
     pid_t pid = ::fork();
     if (pid < 0) {
         ::close(sv[0]);
         ::close(sv[1]);
+        ::close(err_pipe[0]);
+        ::close(err_pipe[1]);
         throw std::runtime_error("sandbox: fork failed");
     }
     if (pid == 0) {
-        // Child: stdin/stdout are the IPC channel.  Become a process-group
-        // leader so the parent can killpg() the whole group (worker + any
-        // plugin-forked descendants) instead of just the direct child.
+        // Child: stdin/stdout are the IPC channel, stderr → pipe.  Become a
+        // process-group leader so the parent can killpg() the whole group
+        // (worker + any plugin-forked descendants) instead of just the child.
         ::setpgid(0, 0);
-        // If the parent (besq) dies, take ourselves down too — no orphans.
-        ::prctl(PR_SET_PDEATHSIG, SIGKILL);
+        ::prctl(PR_SET_PDEATHSIG, SIGKILL);  // no orphans if the parent dies
         ::dup2(sv[1], 0);
         ::dup2(sv[1], 1);
+        ::dup2(err_pipe[1], 2);
         ::close(sv[0]);
         ::close(sv[1]);
+        ::close(err_pipe[0]);
+        ::close(err_pipe[1]);
         ::execl(_worker_path.c_str(), "besq-worker", "--plugin", _plugin_path.c_str(),
                 (const char *)nullptr);
         ::_exit(127);
     }
     ::close(sv[1]);
+    ::close(err_pipe[1]);
     _fd = sv[0];
+    _stderr_fd = err_pipe[0];
     _pid = static_cast<long>(pid);
 #else
     (void)0;
     throw std::runtime_error("sandbox: subprocess isolation is Linux-only in M1");
+#endif
+}
+
+std::string SandboxedAlgorithm::take_worker_stderr() {
+#if defined(__linux__)
+    if (_stderr_fd < 0)
+        return {};
+    // Non-blocking drain: the worker stays alive with its stderr write end
+    // open, so a blocking read would hang forever waiting for EOF.  Poll with
+    // a zero timeout and read only what is already buffered.
+    std::string out;
+    char buf[512];
+    for (;;) {
+        struct pollfd pfd{_stderr_fd, POLLIN, 0};
+        int rc = ::poll(&pfd, 1, 0);
+        if (rc <= 0)
+            break;  // nothing buffered / error
+        ssize_t n = ::read(_stderr_fd, buf, sizeof(buf));
+        if (n <= 0)
+            break;
+        out.append(buf, static_cast<size_t>(n));
+    }
+    return out;
+#else
+    return {};
 #endif
 }
 
