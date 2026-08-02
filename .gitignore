@@ -315,3 +315,4 @@ logs/
 tmp*
 data/tests/benchmark_plus.json
 *.bak
+.mcp.json
