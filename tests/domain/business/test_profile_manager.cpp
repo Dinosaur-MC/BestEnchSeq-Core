@@ -488,6 +488,130 @@ void test_pm_publish() {
     TEST_PASS("test_pm_publish");
 }
 
+// ─── Test: Load Datapack (pack.mcmeta detection + load_datapack) ─────────
+
+void test_pm_load_datapack() {
+    // Build a minimal datapack inline in a temp dir (NO res/ fixtures —
+    // everything must be committed or runtime-built).
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_datapack_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
+
+    // pack.mcmeta with a `pack.id` containing characters that are INVALID in an
+    // NSID ("More Enchants 1.4" → sanitized "More_Enchants_1_4").
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({
+            "pack": {
+                "description": "test pack",
+                "pack_format": 15,
+                "id": "More Enchants 1.4"
+            }
+        })";
+    }
+    // One enchantment referencing the minecraft:swords item tag.
+    {
+        std::ofstream f(dir / "data" / "mytest" / "enchantment" / "leeching.json");
+        f << R"({
+            "description": "Leeching",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 2,
+            "max_level": 3,
+            "min_cost": {"base": 5, "per_level_above_first": 5},
+            "max_cost": {"base": 20, "per_level_above_first": 5}
+        })";
+    }
+    // Item tag so the enchantment's supported_items reference resolves.
+    {
+        std::ofstream f(dir / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack returns true for a valid datapack");
+    expect(pm.exists(NSID("More_Enchants_1_4")),
+           "profile name derived from pack.id and sanitized to a valid NSID");
+    expect(pm.exists(NSID("vanilla")), "vanilla root injected");
+
+    const Profile* dp = pm.find(NSID("More_Enchants_1_4"));
+    expect(dp != nullptr, "datapack profile findable");
+    if (dp) {
+        expect(dp->has_enchantment(NSID("mytest:leeching")), "leeching loaded into profile");
+        const auto& supp = dp->ench().at(NSID("mytest:leeching")).supported_items;
+        expect(supp.count(NSID("#minecraft:swords")) == 1,
+               "leeching keeps #minecraft:swords after cross_validate");
+        expect(dp->tag_resolver() != nullptr, "datapack profile carries builtin TagResolver");
+    }
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack");
+}
+
+// ─── Test: Load Directory detects datapack subdirectories ───────────────
+
+void test_pm_load_directory_with_datapack() {
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_dir_dp_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+
+    // Native JSON profile in the root.
+    auto native = dir / "bare_mod.json";
+    {
+        std::ofstream f(native);
+        f << R"({
+            "name": "bare_mod",
+            "dependencies": ["vanilla"],
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+    }
+
+    // Datapack SUBDIRECTORY (no pack.id → directory-stem name, sanitized).
+    auto dp = dir / "My Pack";
+    std::filesystem::create_directories(dp / "data" / "mydp" / "enchantment");
+    std::filesystem::create_directories(dp / "data" / "minecraft" / "tags" / "item");
+    {
+        std::ofstream f(dp / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        std::ofstream f(dp / "data" / "mydp" / "enchantment" / "moonwalk.json");
+        f << R"({
+            "description": "Moonwalk",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 4,
+            "max_level": 3,
+            "min_cost": {"base": 15, "per_level_above_first": 9}
+        })";
+    }
+    {
+        std::ofstream f(dp / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+
+    ProfileManager pm;
+    pm.load_directory(dir);
+
+    expect(pm.exists(NSID("bare_mod")), "native profile loaded from file");
+    expect(pm.exists(NSID("My_Pack")),
+           "datapack subdirectory loaded as profile (directory stem sanitized)");
+    expect(pm.exists(NSID("vanilla")), "vanilla base auto-created");
+
+    const Profile* dp_p = pm.find(NSID("My_Pack"));
+    expect(dp_p != nullptr, "datapack profile findable");
+    if (dp_p)
+        expect(dp_p->has_enchantment(NSID("mydp:moonwalk")), "datapack enchantment loaded");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_directory_with_datapack");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -513,6 +637,8 @@ int main() {
         test_pm_edit_snapshot_undo();
         test_pm_edit_preserves_tag_resolver();
         test_pm_publish();
+        test_pm_load_datapack();
+        test_pm_load_directory_with_datapack();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

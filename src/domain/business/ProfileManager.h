@@ -95,8 +95,14 @@ public:
     /// 任何 profile 变更（manager 级 mutation）都会使缓存失效。
     const Profile& resolve_effective(const NSID& profile) const;
 
-    /// 从目录加载全部 profile（native JSON/CSV），构建依赖图。datapack 目录留待 T11。
+    /// 从目录加载全部 profile（native JSON/CSV + datapack 子目录），构建依赖图。
     void load_directory(const std::filesystem::path& dir);
+
+    /// 从 MC datapack 目录加载 profile（要求 dir/pack.mcmeta 存在）。
+    /// 通过 McOfficialParser 解析 data/*/enchantment + tags，经与 ProfileLoader
+    /// 相同的两阶段 RegistryLoader 路径构建，仅保留 datapack 自身内容。
+    /// 返回 false 表示目录不是有效 datapack 或解析失败。
+    bool load_datapack(const std::filesystem::path& dir);
 
     /// 对目标 profile 的 supported_items 引用按 (vanilla ∪ 依赖链) 交叉验证，返回移除数。
     size_t cross_validate(const NSID& profile);

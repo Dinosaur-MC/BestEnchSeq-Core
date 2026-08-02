@@ -12,7 +12,11 @@ DataFormat FormatDetector::detect(const std::filesystem::path& path) {
     if (path.empty()) return DataFormat::Unknown;
 
     if (std::filesystem::is_directory(path)) {
-        // Check for MC official structure
+        // A directory with pack.mcmeta is a datapack (MC official format).
+        if (std::filesystem::exists(path / "pack.mcmeta"))
+            return DataFormat::McOfficial;
+
+        // Secondary check: MC official structure
         auto data_dir = path / "data";
         if (std::filesystem::is_directory(data_dir)) {
             for (const auto& ns_entry : std::filesystem::directory_iterator(
