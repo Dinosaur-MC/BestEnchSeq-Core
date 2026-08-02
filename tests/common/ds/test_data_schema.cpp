@@ -1,9 +1,13 @@
 #include "ds/ds.h"
 #include "ds/Field.h"
 #include "ds/codec/Codecs.h"
+#include "ds/codec/Converter.h"
 #include "ds/json/JsonBinder.h"
+#include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
 #include "framework/test_utils.h"
+#include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 
 // ── 1. ErrorList 收集 + ValidationError 聚合 ──────────────────────────
@@ -189,6 +193,62 @@ void test_json_parse_or_throw() {
     TEST_PASS("json parse_or_throw");
 }
 
+// ── 5. Converter 适配（引擎零领域依赖）────────────────────────────
+struct NSIDConverter {                      // 用户定义，测试内建
+    using value_type = NSID;
+    static std::string to_string(const NSID& id) { return id.str(); }
+    static std::optional<NSID> from_string(std::string_view s) {
+        try { return NSID(s); } catch (...) { return std::nullopt; }
+    }
+};
+struct PlatformConv {                       // enum ↔ 字符串
+    using value_type = MCE;
+    static std::string to_string(MCE p) {
+        switch (p) { case MCE::Java: return "java"; case MCE::Bedrock: return "bedrock";
+                     case MCE::All: return "all"; default: return "none"; }
+    }
+    static std::optional<MCE> from_string(std::string_view s) {
+        if (s == "java") return MCE::Java;
+        if (s == "bedrock") return MCE::Bedrock;
+        if (s == "all") return MCE::All;
+        if (s == "none") return MCE::None;
+        return std::nullopt;
+    }
+};
+
+struct Equip {
+    NSID id;
+    MCE platform = MCE::All;
+    int durability = 0;
+};
+struct EquipSchema {
+    using Type = Equip;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("id", &Equip::id, ds::text_codec<NSIDConverter>{}),
+        ds::field("platform", &Equip::platform, ds::text_codec<PlatformConv>{}),
+        ds::field("durability", &Equip::durability, ds::int_codec{}),
+    };
+};
+using EquipJson = ds::json::Schema<EquipSchema>;
+
+void test_text_codec_roundtrip() {
+    Equip eq{NSID("minecraft:diamond_sword"), MCE::Java, 1561};
+    Json j = EquipJson::serialize(eq);
+    Equip out; ds::ErrorList e;
+    expect(EquipJson::parse(j, out, e), "equip parse ok");
+    expect(out.id == eq.id, "NSID roundtrip");
+    expect(out.platform == MCE::Java, "enum roundtrip via converter");
+    expect(out.durability == 1561, "int roundtrip");
+    TEST_PASS("text_codec (NSID + enum) roundtrip");
+}
+void test_text_codec_invalid_rejected() {
+    Json j = Json::object().set("id", Json(std::string("BadID!"))).set("durability", Json(int64_t{1}));
+    Equip out; ds::ErrorList e;
+    expect(!EquipJson::parse(j, out, e), "invalid NSID rejected");
+    expect(e.size() == 1 && e.errors()[0].path == "id", "NSID invalid error path");
+    TEST_PASS("text_codec invalid value rejected");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -204,5 +264,7 @@ int main() {
     test_json_required_missing();
     test_json_unknown_key_tolerant_vs_strict();
     test_json_parse_or_throw();
+    test_text_codec_roundtrip();
+    test_text_codec_invalid_rejected();
     return print_summary();
 }
