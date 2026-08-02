@@ -6,3 +6,4 @@
 //   domain types — NSID/AID/... plug in via user Converters.
 #include "ds/Error.h"   // IWYU pragma: export
 #include "ds/Field.h"   // IWYU pragma: export
+#include "ds/codec/Codecs.h"   // IWYU pragma: export
