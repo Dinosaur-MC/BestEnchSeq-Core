@@ -22,23 +22,23 @@ public:
     RegistryHelper& intersect(const Profile& other);
 
     /// Finalise and produce the result Profile.
-    Profile build(const NSID& result_name) const;
+    Profile build(const std::string& result_name) const;
 
     // ── Static operations ─────────────────────────────────────────────
 
     /// Union: all entries from both profiles.
-    static Profile unite(const NSID& name, const Profile& a, const Profile& b);
+    static Profile unite(const std::string& name, const Profile& a, const Profile& b);
 
     /// Intersection: entries present in both profiles.
-    static Profile intersect(const NSID& name, const Profile& a, const Profile& b);
+    static Profile intersect(const std::string& name, const Profile& a, const Profile& b);
 
     /// Subtract: entries in base but not in other.
-    static Profile subtract(const NSID& name, const Profile& base, const Profile& other);
+    static Profile subtract(const std::string& name, const Profile& base, const Profile& other);
 
     /// Merge: insert_or_assign from other into base (overwrite semantics).
     /// Returns a NEW profile named `name` (base metadata preserved, other wins
     /// on enchantment conflicts; equipment/tags added if absent).
-    static Profile merge(const NSID& name, const Profile& base, const Profile& other);
+    static Profile merge(const std::string& name, const Profile& base, const Profile& other);
 
     /// Merge `src` into `dest` IN PLACE (overwrite semantics: src wins on
     /// enchantment conflict; equipment/tags added if absent).  Dest metadata is

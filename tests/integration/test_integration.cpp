@@ -30,7 +30,7 @@ Profile make_builtin_profile() {
     EquipmentRegistry eq_reg;
     besq::data::load_builtin_data(cat_reg, ench_reg, eq_reg);
 
-    ProfileMetadata meta(NSID("test:integration"));
+    ProfileMetadata meta("test:integration");
     Profile profile(std::move(meta), std::move(ench_reg),
                     std::move(eq_reg), std::move(cat_reg));
     // Attach the real vanilla tag-universe resolver (T10: real MC item tags

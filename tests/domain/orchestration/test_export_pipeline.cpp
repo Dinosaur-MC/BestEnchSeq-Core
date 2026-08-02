@@ -20,7 +20,7 @@ namespace {
 // ─── Test 8: export registry as JSON ───────────────────────────────
 
 void test_export_registry_json() {
-    Profile profile(NSID("test"));
+    Profile profile("test");
 
     // Set up a sword equipment tag
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
@@ -54,7 +54,7 @@ void test_export_registry_json() {
 // ─── Test 9: export registry as CSV ────────────────────────────────
 
 void test_export_registry_csv() {
-    Profile profile(NSID("test"));
+    Profile profile("test");
 
     // Set up a sword equipment tag
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
@@ -82,7 +82,7 @@ void test_export_registry_csv() {
 // ─── Test 10: export solution ──────────────────────────────────────
 
 void test_export_solution() {
-    Profile profile(NSID("test"));
+    Profile profile("test");
 
     // Set up a sword equipment tag
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});

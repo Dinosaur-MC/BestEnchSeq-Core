@@ -16,12 +16,12 @@ class TagResolver;  // fwd — Profile stores a shared_ptr; complete type only n
 // ── Profile Metadata ──────────────────────────────────────────────────
 
 struct ProfileMetadata {
-    NSID name;
+    std::string name;
     std::string description;
     std::string author;
     std::string version;
     std::string parent;                          ///< Branch source profile name
-    std::vector<NSID> dependencies;              ///< 声明的直接依赖（传递解析）
+    std::vector<std::string> dependencies;       ///< 声明的直接依赖（传递解析）
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point updated_at;
 
@@ -29,13 +29,13 @@ struct ProfileMetadata {
     ProfileMetadata() = default;
 
     /// Name-only constructor: timestamps default to now.
-    explicit ProfileMetadata(NSID name_)
+    explicit ProfileMetadata(std::string name_)
         : name(std::move(name_))
         , created_at(std::chrono::system_clock::now())
         , updated_at(created_at) {}
 
     /// Full-parameter constructor.
-    ProfileMetadata(NSID name_, std::string desc, std::string author_,
+    ProfileMetadata(std::string name_, std::string desc, std::string author_,
                     std::string ver, std::string parent_)
         : name(std::move(name_))
         , description(std::move(desc))
@@ -68,7 +68,7 @@ class RegistryHelper;
 class Profile : IJsonSerializable {
 public:
     Profile() = default;
-    explicit Profile(NSID name);
+    explicit Profile(std::string name);
 
     /// Full-parameter constructor: construct with all data upfront.
     /// Takes ownership of metadata (by move) and three registries.
@@ -78,13 +78,13 @@ public:
     // -- Metadata -------------------------------------------------------
 
     const ProfileMetadata& metadata() const noexcept { return _meta; }
-    const NSID& name() const noexcept { return _meta.name; }
+    const std::string& name() const noexcept { return _meta.name; }
     void set_description(std::string desc) { _meta.description = std::move(desc); }
     void set_version(std::string version) { _meta.version = std::move(version); }
 
     /// Declared direct dependencies (transitively resolved at load).
-    const std::vector<NSID>& dependencies() const noexcept { return _meta.dependencies; }
-    void set_dependencies(std::vector<NSID> deps) { _meta.dependencies = std::move(deps); }
+    const std::vector<std::string>& dependencies() const noexcept { return _meta.dependencies; }
+    void set_dependencies(std::vector<std::string> deps) { _meta.dependencies = std::move(deps); }
 
     // -- Registry read access (lenient, for trusted downstream) ---------
 
@@ -139,7 +139,7 @@ public:
     // -- Clone ----------------------------------------------------------
 
     /// Deep copy with new name (supports snapshot/branch).
-    Profile clone(const NSID& new_name) const;
+    Profile clone(const std::string& new_name) const;
 
     // -- Serialization --------------------------------------------------
 

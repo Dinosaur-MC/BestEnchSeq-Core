@@ -31,7 +31,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // JSON root. FormatDetector::Result only carries enchantments and
         // equipments, so re-read the top-level `dependencies` array here.
         // (CSV / MC-official formats have no JSON dependencies array.)
-        std::vector<NSID> dependencies;
+        std::vector<std::string> dependencies;
         const auto format = FormatDetector::detect(path);
         if (format == DataFormat::NativeJson || format == DataFormat::Unknown) {
             auto root = Json::parse(file_utils::read_file(path));
@@ -39,7 +39,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
                 Json dep_val = root[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
                 if (dep_val.type() == JsonType::Array) {
                     for (const auto& e : dep_val.as_array())
-                        dependencies.push_back(NSID(e.as<std::string>()));
+                        dependencies.push_back(e.as<std::string>());
                 }
             }
         }
@@ -53,7 +53,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
 
         // Construct Profile via full-parameter constructor.
         std::string stem = path.stem().string();
-        profile = Profile(ProfileMetadata(NSID(stem)), std::move(own.ench),
+        profile = Profile(ProfileMetadata(stem), std::move(own.ench),
                           std::move(own.eq), std::move(own.tags));
         // Restore the declared dependencies parsed in Phase 1b.
         profile.set_dependencies(std::move(dependencies));
@@ -97,7 +97,7 @@ bool ProfileLoader::load_builtin(Profile& profile) {
         EnchantmentRegistry ench_reg;
         EquipmentRegistry eq_reg;
         besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
-        profile = Profile(ProfileMetadata(NSID("builtin:vanilla")), std::move(ench_reg),
+        profile = Profile(ProfileMetadata("builtin:vanilla"), std::move(ench_reg),
                           std::move(eq_reg), std::move(tag_reg));
         profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
         return true;

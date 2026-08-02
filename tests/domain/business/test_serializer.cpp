@@ -509,15 +509,16 @@ void test_to_mc_official_strings() {
 // Round-trip ProfileMetadata.dependencies through Profile JSON.
 
 void test_profile_dependencies_roundtrip() {
-    Profile p(NSID("test:pack"));
-    p.set_dependencies({NSID("vanilla"), NSID("enchantencore")});
+    // B-T13: profile dependencies are plain std::string keys (not NSID).
+    Profile p("test:pack");
+    p.set_dependencies({"builtin:vanilla", "enchantencore"});
     Json json;
     json << p;
     Profile restored;
     json >> restored;
     expect(restored.dependencies().size() == 2, "dependencies preserved");
-    expect(restored.dependencies()[0] == NSID("vanilla"), "dep 0");
-    expect(restored.dependencies()[1] == NSID("enchantencore"), "dep 1");
+    expect(restored.dependencies()[0] == "builtin:vanilla", "dep 0");
+    expect(restored.dependencies()[1] == "enchantencore", "dep 1");
     TEST_PASS("test_profile_dependencies_roundtrip");
 }
 

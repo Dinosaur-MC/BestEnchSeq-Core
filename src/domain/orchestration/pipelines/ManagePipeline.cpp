@@ -17,9 +17,9 @@ ManageResult ManagePipeline::run(
     switch (request.action) {
 
     case ManageRequest::Action::LoadBuiltin: {
-        auto& profile = profiles.create(NSID("builtin:vanilla"));
+        auto& profile = profiles.create("builtin:vanilla");
         loader.load_builtin(profile);
-        profiles.activate(NSID("builtin:vanilla"));
+        profiles.activate("builtin:vanilla");
         result.message = "Loaded built-in vanilla data";
         break;
     }
@@ -60,41 +60,41 @@ ManageResult ManagePipeline::run(
 
     case ManageRequest::Action::CreateProfile: {
         profiles.create(request.profile_name);
-        result.message = "Created profile: " + request.profile_name.str();
+        result.message = "Created profile: " + request.profile_name;
         break;
     }
 
     case ManageRequest::Action::ActivateProfile: {
         profiles.activate(request.profile_name);
-        result.message = "Activated profile: " + request.profile_name.str();
+        result.message = "Activated profile: " + request.profile_name;
         break;
     }
 
     case ManageRequest::Action::ForkProfile: {
         profiles.branch(request.source_name, request.dest_name);
-        result.message = "Forked " + request.source_name.str()
-                       + " -> " + request.dest_name.str();
+        result.message = "Forked " + request.source_name
+                       + " -> " + request.dest_name;
         break;
     }
 
     case ManageRequest::Action::MergeProfile: {
         profiles.merge(request.source_name, request.dest_name);
-        result.message = "Merged " + request.source_name.str()
-                       + " -> " + request.dest_name.str();
+        result.message = "Merged " + request.source_name
+                       + " -> " + request.dest_name;
         break;
     }
 
     case ManageRequest::Action::RemoveProfile: {
         profiles.remove(request.profile_name);
-        result.message = "Removed profile: " + request.profile_name.str();
+        result.message = "Removed profile: " + request.profile_name;
         break;
     }
 
     case ManageRequest::Action::ListProfiles: {
-        auto nsids = profiles.list();
-        result.profile_list.reserve(nsids.size());
-        for (const auto& nsid : nsids)
-            result.profile_list.push_back(nsid.str());
+        auto names = profiles.list();
+        result.profile_list.reserve(names.size());
+        for (const auto& name : names)
+            result.profile_list.push_back(name);
         result.message = std::to_string(result.profile_list.size()) + " profiles";
         break;
     }
@@ -105,14 +105,14 @@ ManageResult ManagePipeline::run(
     }
 
     case ManageRequest::Action::RemoveEnchantment: {
-        result.success = profiles.remove_enchantment(profiles.active_name(), request.profile_name);
+        result.success = profiles.remove_enchantment(profiles.active_name(), NSID(request.profile_name));
         break;
     }
 
     case ManageRequest::Action::ModifyEnchantment: {
         auto& active = profiles.active();
         try {
-            auto current = active.ench().at(request.profile_name);
+            auto current = active.ench().at(NSID(request.profile_name));
             if (request.ench_info.multiplier > 0)
                 current.multiplier = request.ench_info.multiplier;
             if (request.ench_info.max_level > 0)
@@ -133,7 +133,7 @@ ManageResult ManagePipeline::run(
     }
 
     case ManageRequest::Action::RemoveEquipment: {
-        result.success = profiles.remove_equipment(profiles.active_name(), request.profile_name);
+        result.success = profiles.remove_equipment(profiles.active_name(), NSID(request.profile_name));
         break;
     }
 

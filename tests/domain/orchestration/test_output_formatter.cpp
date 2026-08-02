@@ -17,7 +17,7 @@ namespace {
 
 // Helper: build a Profile from the TestFixture's registries
 Profile profile_from_fx(const TestFixture& fx) {
-    Profile profile(NSID("test:formatter"));
+    Profile profile("test:formatter");
     for (const auto& tag : fx.categories) profile.add_tag(tag);
     for (const auto& eq : fx.equipment) profile.add_equipment(eq);
     for (const auto& ench : fx.enchants) profile.add_enchantment(ench);

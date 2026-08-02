@@ -27,9 +27,9 @@ struct ManageRequest {
     Action action;
     std::string file_path;
     std::vector<std::string> filters;
-    NSID profile_name;
-    NSID source_name;
-    NSID dest_name;
+    std::string profile_name;   // profile identity key (B-T13: plain string)
+    std::string source_name;
+    std::string dest_name;
     EnchInfo ench_info;
     Equipment equip;
     std::string category_name;

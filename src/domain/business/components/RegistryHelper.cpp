@@ -96,7 +96,7 @@ RegistryHelper& RegistryHelper::intersect(const Profile& other) {
     return *this;
 }
 
-Profile RegistryHelper::build(const NSID& result_name) const {
+Profile RegistryHelper::build(const std::string& result_name) const {
     return Profile(
         ProfileMetadata(result_name),
         _ench.value_or(EnchantmentRegistry{}),
@@ -110,7 +110,7 @@ Profile RegistryHelper::build(const NSID& result_name) const {
 // ============================================================================
 
 Profile RegistryHelper::unite(
-    const NSID& name, const Profile& a, const Profile& b)
+    const std::string& name, const Profile& a, const Profile& b)
 {
     RegistryHelper builder;
     builder.load(a).unite(b);
@@ -118,7 +118,7 @@ Profile RegistryHelper::unite(
 }
 
 Profile RegistryHelper::intersect(
-    const NSID& name, const Profile& a, const Profile& b)
+    const std::string& name, const Profile& a, const Profile& b)
 {
     RegistryHelper builder;
     builder.load(a).intersect(b);
@@ -126,7 +126,7 @@ Profile RegistryHelper::intersect(
 }
 
 Profile RegistryHelper::subtract(
-    const NSID& name, const Profile& base, const Profile& other)
+    const std::string& name, const Profile& base, const Profile& other)
 {
     // Enchantments: keep those NOT in other
     EnchantmentRegistry ench_result;
@@ -178,7 +178,7 @@ void RegistryHelper::merge(Profile& dest, const Profile& src) {
 }
 
 Profile RegistryHelper::merge(
-    const NSID& name, const Profile& base, const Profile& other)
+    const std::string& name, const Profile& base, const Profile& other)
 {
     Profile p = base.clone(name);
     merge(p, other);  // other wins on conflict
@@ -284,17 +284,17 @@ bool RegistryHelper::validate(const Profile& profile) {
 // ============================================================================
 
 Profile operator|(const Profile& a, const Profile& b) {
-    return RegistryHelper::unite(NSID(), a, b);
+    return RegistryHelper::unite("", a, b);
 }
 
 Profile operator&(const Profile& a, const Profile& b) {
-    return RegistryHelper::intersect(NSID(), a, b);
+    return RegistryHelper::intersect("", a, b);
 }
 
 Profile operator+(const Profile& a, const Profile& b) {
-    return RegistryHelper::merge(NSID(), a, b);
+    return RegistryHelper::merge("", a, b);
 }
 
 Profile operator-(const Profile& a, const Profile& b) {
-    return RegistryHelper::subtract(NSID(), a, b);
+    return RegistryHelper::subtract("", a, b);
 }

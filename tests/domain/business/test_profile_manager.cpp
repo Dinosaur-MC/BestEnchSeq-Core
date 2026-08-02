@@ -25,9 +25,9 @@ static EnchInfo make_ench(const std::string& id_str, const std::string& name, in
 
 void test_create_profile() {
     ProfileManager mgr;
-    auto& p = mgr.create(NSID("test:profile_a"));
+    auto& p = mgr.create("test:profile_a");
 
-    expect(mgr.exists(NSID("test:profile_a")), "profile should exist after create");
+    expect(mgr.exists("test:profile_a"), "profile should exist after create");
     expect(mgr.size() == 1, "manager size should be 1 after one create");
 
     // Verify profile can be modified via returned reference
@@ -44,14 +44,14 @@ void test_create_from() {
     ProfileManager mgr;
 
     // Create profile A and add an enchantment
-    auto& a = mgr.create(NSID("test:a"));
+    auto& a = mgr.create("test:a");
     a.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
 
     // Create B from A
-    auto& b = mgr.create_from(NSID("test:a"), NSID("test:b"));
+    auto& b = mgr.create_from("test:a", "test:b");
 
     // Verify B exists and has same enchantments as A
-    expect(mgr.exists(NSID("test:b")), "B should exist after create_from");
+    expect(mgr.exists("test:b"), "B should exist after create_from");
     expect(mgr.size() == 2, "manager should have 2 profiles");
     expect(b.has_enchantment(NSID("minecraft:sharpness")), "B should inherit sharpness from A");
     expect(a.ench().size() == b.ench().size(), "A and B should have same enchantment count");
@@ -68,14 +68,14 @@ void test_create_from() {
 
 void test_remove_profile() {
     ProfileManager mgr;
-    mgr.create(NSID("test:a"));
-    mgr.create(NSID("test:b"));
+    mgr.create("test:a");
+    mgr.create("test:b");
 
-    bool removed = mgr.remove(NSID("test:a"));
+    bool removed = mgr.remove("test:a");
     expect(removed, "remove should return true for existing profile");
     expect(mgr.size() == 1, "size should be 1 after removing one profile");
-    expect(!mgr.exists(NSID("test:a")), "removed profile should not exist");
-    expect(mgr.exists(NSID("test:b")), "remaining profile should still exist");
+    expect(!mgr.exists("test:a"), "removed profile should not exist");
+    expect(mgr.exists("test:b"), "remaining profile should still exist");
 
     std::cout << "PASS: test_remove_profile" << std::endl;
 }
@@ -84,9 +84,9 @@ void test_remove_profile() {
 
 void test_remove_nonexistent() {
     ProfileManager mgr;
-    mgr.create(NSID("test:a"));
+    mgr.create("test:a");
 
-    bool removed = mgr.remove(NSID("test:nonexistent"));
+    bool removed = mgr.remove("test:nonexistent");
     expect(!removed, "remove should return false for nonexistent profile");
     expect(mgr.size() == 1, "size should remain unchanged");
 
@@ -97,18 +97,18 @@ void test_remove_nonexistent() {
 
 void test_activate_and_active() {
     ProfileManager mgr;
-    auto& a = mgr.create(NSID("test:a"));
-    mgr.create(NSID("test:b"));
+    auto& a = mgr.create("test:a");
+    mgr.create("test:b");
 
     // Activate first profile
-    mgr.activate(NSID("test:a"));
-    expect(mgr.active_name() == NSID("test:a"), "active name should be a");
+    mgr.activate("test:a");
+    expect(mgr.active_name() == "test:a", "active name should be a");
     // active() returns the same profile reference
     expect(&mgr.active() == &a, "active() should return reference to profile a");
 
     // Activate second profile
-    mgr.activate(NSID("test:b"));
-    expect(mgr.active_name() == NSID("test:b"), "active name should be b after switching");
+    mgr.activate("test:b");
+    expect(mgr.active_name() == "test:b", "active name should be b after switching");
 
     std::cout << "PASS: test_activate_and_active" << std::endl;
 }
@@ -117,10 +117,10 @@ void test_activate_and_active() {
 
 void test_activate_nonexistent_throws() {
     ProfileManager mgr;
-    mgr.create(NSID("test:a"));
+    mgr.create("test:a");
 
     expect_throws_as<std::runtime_error>([&]() {
-        mgr.activate(NSID("test:nonexistent"));
+        mgr.activate("test:nonexistent");
     }, "activate() should throw for nonexistent profile");
 
     std::cout << "PASS: test_activate_nonexistent_throws" << std::endl;
@@ -142,9 +142,9 @@ void test_empty_active_throws() {
 
 void test_list() {
     ProfileManager mgr;
-    mgr.create(NSID("test:alpha"));
-    mgr.create(NSID("test:beta"));
-    mgr.create(NSID("test:gamma"));
+    mgr.create("test:alpha");
+    mgr.create("test:beta");
+    mgr.create("test:gamma");
 
     auto names = mgr.list();
     expect(names.size() == 3, "list should return 3 names");
@@ -152,9 +152,9 @@ void test_list() {
     // Each of the expected names must be in the list
     bool found_alpha = false, found_beta = false, found_gamma = false;
     for (const auto& n : names) {
-        if (n == NSID("test:alpha"))   found_alpha = true;
-        if (n == NSID("test:beta"))    found_beta  = true;
-        if (n == NSID("test:gamma"))   found_gamma = true;
+        if (n == "test:alpha")   found_alpha = true;
+        if (n == "test:beta")    found_beta  = true;
+        if (n == "test:gamma")   found_gamma = true;
     }
     expect(found_alpha, "list should contain alpha");
     expect(found_beta,  "list should contain beta");
@@ -167,12 +167,12 @@ void test_list() {
 
 void test_find() {
     ProfileManager mgr;
-    mgr.create(NSID("test:found_me"));
+    mgr.create("test:found_me");
 
-    Profile* p = mgr.find(NSID("test:found_me"));
+    Profile* p = mgr.find("test:found_me");
     expect(p != nullptr, "find() should return non-null for existing profile");
 
-    Profile* q = mgr.find(NSID("test:unknown"));
+    Profile* q = mgr.find("test:unknown");
     expect(q == nullptr, "find() should return null for unknown profile");
 
     std::cout << "PASS: test_find" << std::endl;
@@ -184,14 +184,14 @@ void test_snapshot() {
     ProfileManager mgr;
 
     // Create profile A with an enchantment
-    auto& a = mgr.create(NSID("test:a"));
+    auto& a = mgr.create("test:a");
     a.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
 
     // Snapshot
-    auto& snap = mgr.snapshot(NSID("test:a"), NSID("test:a_snap"));
+    auto& snap = mgr.snapshot("test:a", "test:a_snap");
 
     // Verify snapshot exists and has same data
-    expect(mgr.exists(NSID("test:a_snap")), "snapshot should exist");
+    expect(mgr.exists("test:a_snap"), "snapshot should exist");
     expect(snap.has_enchantment(NSID("minecraft:sharpness")), "snapshot should inherit sharpness");
     expect(a.ench().size() == snap.ench().size(), "snapshot should have same enchantment count as original");
 
@@ -212,14 +212,14 @@ void test_branch() {
     ProfileManager mgr;
 
     // Create profile A
-    auto& a = mgr.create(NSID("test:a"));
+    auto& a = mgr.create("test:a");
     a.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
 
     // Branch
-    auto& branch = mgr.branch(NSID("test:a"), NSID("test:a_branch"));
+    auto& branch = mgr.branch("test:a", "test:a_branch");
 
     // Verify branch exists and inherited data
-    expect(mgr.exists(NSID("test:a_branch")), "branch should exist");
+    expect(mgr.exists("test:a_branch"), "branch should exist");
     expect(branch.has_enchantment(NSID("minecraft:sharpness")), "branch should inherit sharpness");
 
     // Modify branch — A unchanged
@@ -236,15 +236,15 @@ void test_merge() {
     ProfileManager mgr;
 
     // Create profile A with enchantment X (sharpness)
-    auto& a = mgr.create(NSID("test:a"));
+    auto& a = mgr.create("test:a");
     a.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
 
     // Create profile B with enchantment Y (unbreaking)
-    auto& b = mgr.create(NSID("test:b"));
+    auto& b = mgr.create("test:b");
     b.add_enchantment(make_ench("minecraft:unbreaking", "Unbreaking", 3));
 
     // Merge B into A
-    mgr.merge(NSID("test:b"), NSID("test:a"));
+    mgr.merge("test:b", "test:a");
 
     // Verify A now has both X and Y
     expect(a.has_enchantment(NSID("minecraft:sharpness")), "A should have sharpness after merge");
@@ -262,11 +262,11 @@ void test_merge() {
 
 void test_create_empty_profile_structure() {
     ProfileManager mgr;
-    auto& p = mgr.create(NSID("test:empty"));
+    auto& p = mgr.create("test:empty");
 
     // Check default metadata version
     expect(p.metadata().version.empty(), "default version should be empty string");
-    expect(p.metadata().name == NSID("test:empty"), "name should match create parameter");
+    expect(p.metadata().name == "test:empty", "name should match create parameter");
     expect(p.ench().size() == 0, "empty profile should have 0 enchantments");
     expect(p.eq().size() == 0, "empty profile should have 0 equipment");
     expect(p.tags().size() == 0, "empty profile should have 0 tags");
@@ -278,17 +278,17 @@ void test_create_empty_profile_structure() {
 
 void test_pm_dependency_chain() {
     ProfileManager pm;
-    pm.create(NSID("vanilla"));
-    auto& mod = pm.create(NSID("enchantencore"));
-    mod.set_dependencies({NSID("vanilla")});
-    auto& pack = pm.create(NSID("mypack"));
-    pack.set_dependencies({NSID("enchantencore")});
+    pm.create("builtin:vanilla");
+    auto& mod = pm.create("enchantencore");
+    mod.set_dependencies({"builtin:vanilla"});
+    auto& pack = pm.create("mypack");
+    pack.set_dependencies({"enchantencore"});
 
-    auto chain = pm.resolve_dependencies(NSID("mypack"));
-    // transitive: mypack -> enchantencore -> vanilla; deps before self, self excluded
-    expect(chain.size() == 2, "mypack has 2 deps (enchantencore + vanilla)");
-    expect(chain[0] == NSID("vanilla"), "vanilla first (leaf dep)");
-    expect(chain[1] == NSID("enchantencore"), "enchantencore second");
+    auto chain = pm.resolve_dependencies("mypack");
+    // transitive: mypack -> enchantencore -> builtin:vanilla; deps before self, self excluded
+    expect(chain.size() == 2, "mypack has 2 deps (enchantencore + builtin:vanilla)");
+    expect(chain[0] == "builtin:vanilla", "builtin:vanilla first (leaf dep)");
+    expect(chain[1] == "enchantencore", "enchantencore second");
 
     TEST_PASS("test_pm_dependency_chain");
 }
@@ -297,12 +297,12 @@ void test_pm_dependency_chain() {
 
 void test_pm_dependency_cycle() {
     ProfileManager pm;
-    auto& a = pm.create(NSID("a"));
-    auto& b = pm.create(NSID("b"));
-    a.set_dependencies({NSID("b")});
-    b.set_dependencies({NSID("a")});
+    auto& a = pm.create("a");
+    auto& b = pm.create("b");
+    a.set_dependencies({"b"});
+    b.set_dependencies({"a"});
 
-    auto chain = pm.resolve_dependencies(NSID("a"));
+    auto chain = pm.resolve_dependencies("a");
     expect(chain.empty(), "cycle detected → empty chain");
 
     TEST_PASS("test_pm_dependency_cycle");
@@ -312,13 +312,13 @@ void test_pm_dependency_cycle() {
 
 void test_pm_cross_validate() {
     ProfileManager pm;
-    auto& vanilla = pm.create(NSID("vanilla"));
+    auto& vanilla = pm.create("builtin:vanilla");
     vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
                                     NSID("#minecraft:sword"), 1561});
     vanilla.add_tag(EquipmentTag{NSID("#minecraft:sword"), "sword"});
 
-    auto& mod = pm.create(NSID("mod"));
-    mod.set_dependencies({NSID("vanilla")});
+    auto& mod = pm.create("mod");
+    mod.set_dependencies({"builtin:vanilla"});
 
     // Valid refs (tag + concrete item from vanilla) plus one unknown item.
     EnchInfo sharp = make_ench("minecraft:sharpness", "Sharpness", 5);
@@ -331,7 +331,7 @@ void test_pm_cross_validate() {
     mending.supported_items = {NSID("minecraft:netherite_ingot")};
     mod.add_enchantment(mending);
 
-    size_t removed = pm.cross_validate(NSID("mod"));
+    size_t removed = pm.cross_validate("mod");
     expect(removed == 2, "two dangling refs removed");
 
     expect(mod.has_enchantment(NSID("minecraft:sharpness")), "sharpness survives cross-validate");
@@ -362,7 +362,7 @@ void test_pm_load_directory() {
         std::ofstream f(path);
         f << R"({
             "name": "bare_mod",
-            "dependencies": ["vanilla"],
+            "dependencies": ["builtin:vanilla"],
             "enchantments": [],
             "equipments": [],
             "categories": [],
@@ -371,15 +371,15 @@ void test_pm_load_directory() {
     }
 
     pm.load_directory(dir);
-    expect(pm.exists(NSID("bare_mod")), "bare_mod loaded by file stem");
-    expect(pm.exists(NSID("vanilla")), "vanilla base auto-created");
+    expect(pm.exists("bare_mod"), "bare_mod loaded by file stem");
+    expect(pm.exists("builtin:vanilla"), "builtin:vanilla base auto-created");
 
     // The JSON `dependencies` array must be parsed into the loaded profile.
-    Profile* loaded_mod = pm.find(NSID("bare_mod"));
+    Profile* loaded_mod = pm.find("bare_mod");
     expect(loaded_mod != nullptr, "loaded bare_mod findable");
     if (loaded_mod) {
         const auto& deps = loaded_mod->dependencies();
-        expect(deps.size() == 1 && deps[0] == NSID("vanilla"),
+        expect(deps.size() == 1 && deps[0] == "builtin:vanilla",
                "dependencies parsed from JSON root");
     }
 
@@ -393,17 +393,17 @@ void test_pm_load_directory() {
 
 void test_pm_effective_view() {
     ProfileManager pm;
-    pm.create(NSID("vanilla"));
-    auto& mod = pm.create(NSID("enchantencore"));
-    mod.set_dependencies({NSID("vanilla")});
+    pm.create("builtin:vanilla");
+    auto& mod = pm.create("enchantencore");
+    mod.set_dependencies({"builtin:vanilla"});
     mod.add_enchantment({NSID("mod:leeching"), "Leeching", MCE::All, 2, 2, 1, false, {}, {NSID("#minecraft:swords")}});
     mod.add_tag({NSID("#minecraft:swords"), "swords"});
-    auto& pack = pm.create(NSID("mypack"));
-    pack.set_dependencies({NSID("enchantencore")});
+    auto& pack = pm.create("mypack");
+    pack.set_dependencies({"enchantencore"});
     // pack overrides leeching's max_level
     pack.add_enchantment({NSID("mod:leeching"), "Leeching", MCE::All, 3, 3, 1, false, {}, {NSID("#minecraft:swords")}});
 
-    auto& eff = pm.resolve_effective(NSID("mypack"));
+    auto& eff = pm.resolve_effective("mypack");
     expect(eff.ench().contains(NSID("mod:leeching")), "effective view contains dep enchant");
     expect(eff.ench().at(NSID("mod:leeching")).max_level == 3, "pack overrides dep");
     expect(eff.tag_resolver() != nullptr, "effective view carries TagResolver");
@@ -414,14 +414,14 @@ void test_pm_effective_view() {
 
 void test_pm_edit_snapshot_undo() {
     ProfileManager pm;
-    auto& p = pm.create(NSID("test:edit"));
+    auto& p = pm.create("test:edit");
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
     p.add_enchantment({NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false, {NSID("minecraft:sharpness")}, {NSID("#minecraft:swords")}});
 
     // 实时校验：给 smite 加不存在的 exclusive 引用 → 拒绝（不应用、无快照）
     EnchInfo bad = p.ench().at(NSID("minecraft:smite"));
     bad.exclusive_set.insert(NSID("nonexistent:ench"));
-    expect(!pm.update_enchantment(NSID("test:edit"), bad), "invalid exclusive ref rejected");
+    expect(!pm.update_enchantment("test:edit", bad), "invalid exclusive ref rejected");
     // 拒绝的变更未应用
     expect(p.ench().at(NSID("minecraft:smite")).exclusive_set.count(NSID("nonexistent:ench")) == 0,
            "rejected edit leaves profile untouched");
@@ -429,13 +429,13 @@ void test_pm_edit_snapshot_undo() {
     // 合法编辑 → 应用；undo 回滚
     EnchInfo patch = p.ench().at(NSID("minecraft:sharpness"));
     patch.max_level = 6;
-    expect(pm.update_enchantment(NSID("test:edit"), patch), "valid edit applied");
+    expect(pm.update_enchantment("test:edit", patch), "valid edit applied");
     expect(p.ench().at(NSID("minecraft:sharpness")).max_level == 6, "max_level updated");
-    expect(pm.undo(NSID("test:edit")), "undo succeeds");
+    expect(pm.undo("test:edit"), "undo succeeds");
     expect(p.ench().at(NSID("minecraft:sharpness")).max_level == 5, "undo reverts max_level");
 
     // 连续两次 undo：第二次应失败（仅回滚最近一次）
-    expect(!pm.undo(NSID("test:edit")), "second undo fails (log exhausted)");
+    expect(!pm.undo("test:edit"), "second undo fails (log exhausted)");
 
     TEST_PASS("test_pm_edit_snapshot_undo");
 }
@@ -444,7 +444,7 @@ void test_pm_edit_snapshot_undo() {
 
 void test_pm_edit_preserves_tag_resolver() {
     ProfileManager pm;
-    auto& p = pm.create(NSID("test:resolver"));
+    auto& p = pm.create("test:resolver");
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
     p.set_tag_resolver(std::make_shared<TagResolver>());
     expect(p.tag_resolver() != nullptr, "resolver attached before edits");
@@ -452,14 +452,14 @@ void test_pm_edit_preserves_tag_resolver() {
     // 被拒绝的编辑（max_level < 1 → 事后校验失败）：resolver 不应丢失
     EnchInfo bad = p.ench().at(NSID("minecraft:sharpness"));
     bad.max_level = 0;
-    expect(!pm.update_enchantment(NSID("test:resolver"), bad), "invalid edit rejected");
+    expect(!pm.update_enchantment("test:resolver", bad), "invalid edit rejected");
     expect(p.tag_resolver() != nullptr, "resolver survives rejected edit");
 
     // 合法编辑 + undo：resolver 不应丢失
     EnchInfo patch = p.ench().at(NSID("minecraft:sharpness"));
     patch.max_level = 6;
-    expect(pm.update_enchantment(NSID("test:resolver"), patch), "valid edit applied");
-    expect(pm.undo(NSID("test:resolver")), "undo succeeds");
+    expect(pm.update_enchantment("test:resolver", patch), "valid edit applied");
+    expect(pm.undo("test:resolver"), "undo succeeds");
     expect(p.tag_resolver() != nullptr, "resolver survives undo");
 
     TEST_PASS("test_pm_edit_preserves_tag_resolver");
@@ -469,13 +469,13 @@ void test_pm_edit_preserves_tag_resolver() {
 
 void test_pm_publish() {
     ProfileManager pm;
-    pm.create(NSID("vanilla"));
-    auto& pack = pm.create(NSID("mypack"));
-    pack.set_dependencies({NSID("vanilla")});
+    pm.create("builtin:vanilla");
+    auto& pack = pm.create("mypack");
+    pack.set_dependencies({"builtin:vanilla"});
     pack.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
 
     auto tmp = std::filesystem::temp_directory_path() / "besq_publish_test.json";
-    bool ok = pm.publish(NSID("mypack"), "1.0.0", "stable", tmp);
+    bool ok = pm.publish("mypack", "1.0.0", "stable", tmp);
     expect(ok, "publish succeeds");
     // 自包含：有效视图（依赖链合并）的 sharpness 存在 + version 内嵌
     auto json = Json::parse(file_utils::read_file(tmp));
@@ -501,8 +501,9 @@ void test_pm_load_datapack() {
     std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
     std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
 
-    // pack.mcmeta with a `pack.id` containing characters that are INVALID in an
-    // NSID ("More Enchants 1.4" → sanitized "More_Enchants_1_4").
+    // pack.mcmeta with a `pack.id` containing spaces and a dot.  B-T13: profile
+    // keys are plain std::string, so the name is kept VERBATIM (no NSID
+    // sanitization): "More Enchants 1.4" stays "More Enchants 1.4".
     {
         std::ofstream f(dir / "pack.mcmeta");
         f << R"({
@@ -534,13 +535,14 @@ void test_pm_load_datapack() {
     ProfileManager pm;
     bool ok = pm.load_datapack(dir);
     expect(ok, "load_datapack returns true for a valid datapack");
-    expect(pm.exists(NSID("More_Enchants_1_4")),
-           "profile name derived from pack.id and sanitized to a valid NSID");
-    expect(pm.exists(NSID("vanilla")), "vanilla root injected");
+    expect(pm.exists("More Enchants 1.4"),
+           "profile name derived from pack.id kept verbatim (spaces + dot)");
+    expect(pm.exists("builtin:vanilla"), "builtin:vanilla root injected");
 
-    const Profile* dp = pm.find(NSID("More_Enchants_1_4"));
+    const Profile* dp = pm.find("More Enchants 1.4");
     expect(dp != nullptr, "datapack profile findable");
     if (dp) {
+        // Content ids stay NSIDs — only the profile key became a plain string.
         expect(dp->has_enchantment(NSID("mytest:leeching")), "leeching loaded into profile");
         const auto& supp = dp->ench().at(NSID("mytest:leeching")).supported_items;
         expect(supp.count(NSID("#minecraft:swords")) == 1,
@@ -566,7 +568,7 @@ void test_pm_load_directory_with_datapack() {
         std::ofstream f(native);
         f << R"({
             "name": "bare_mod",
-            "dependencies": ["vanilla"],
+            "dependencies": ["builtin:vanilla"],
             "enchantments": [],
             "equipments": [],
             "categories": [],
@@ -574,7 +576,7 @@ void test_pm_load_directory_with_datapack() {
         })";
     }
 
-    // Datapack SUBDIRECTORY (no pack.id → directory-stem name, sanitized).
+    // Datapack SUBDIRECTORY (no pack.id → directory-stem name, VERBATIM).
     auto dp = dir / "My Pack";
     std::filesystem::create_directories(dp / "data" / "mydp" / "enchantment");
     std::filesystem::create_directories(dp / "data" / "minecraft" / "tags" / "item");
@@ -600,12 +602,12 @@ void test_pm_load_directory_with_datapack() {
     ProfileManager pm;
     pm.load_directory(dir);
 
-    expect(pm.exists(NSID("bare_mod")), "native profile loaded from file");
-    expect(pm.exists(NSID("My_Pack")),
-           "datapack subdirectory loaded as profile (directory stem sanitized)");
-    expect(pm.exists(NSID("vanilla")), "vanilla base auto-created");
+    expect(pm.exists("bare_mod"), "native profile loaded from file");
+    expect(pm.exists("My Pack"),
+           "datapack subdirectory loaded as profile (directory stem verbatim)");
+    expect(pm.exists("builtin:vanilla"), "builtin:vanilla base auto-created");
 
-    const Profile* dp_p = pm.find(NSID("My_Pack"));
+    const Profile* dp_p = pm.find("My Pack");
     expect(dp_p != nullptr, "datapack profile findable");
     if (dp_p)
         expect(dp_p->has_enchantment(NSID("mydp:moonwalk")), "datapack enchantment loaded");
@@ -632,7 +634,7 @@ void test_pm_load_datapack_no_mcmeta() {
     TEST_PASS("test_pm_load_datapack_no_mcmeta");
 }
 
-// ─── Test: datapack whose sanitized name would collide with "vanilla" ───
+// ─── Test: datapack whose name would collide with the root key ──────────
 
 void test_pm_load_datapack_vanilla_name() {
     static int counter = 0;
@@ -662,13 +664,13 @@ void test_pm_load_datapack_vanilla_name() {
     ProfileManager pm;
     bool ok = pm.load_datapack(dir);
     expect(ok, "load_datapack succeeds for a pack named vanilla");
-    expect(pm.exists(NSID("vanilla")), "vanilla base profile preserved");
-    expect(pm.exists(NSID("vanilla_datapack")),
+    expect(pm.exists("builtin:vanilla"), "builtin:vanilla base profile preserved");
+    expect(pm.exists("vanilla_datapack"),
            "datapack name disambiguated to vanilla_datapack");
-    const Profile* v = pm.find(NSID("vanilla"));
+    const Profile* v = pm.find("builtin:vanilla");
     expect(v != nullptr && !v->has_enchantment(NSID("vdp:leeching")),
-           "vanilla base not replaced by datapack content");
-    const Profile* dp = pm.find(NSID("vanilla_datapack"));
+           "builtin:vanilla base not replaced by datapack content");
+    const Profile* dp = pm.find("vanilla_datapack");
     expect(dp != nullptr && dp->has_enchantment(NSID("vdp:leeching")),
            "datapack enchantment lives under the disambiguated name");
 
@@ -676,25 +678,24 @@ void test_pm_load_datapack_vanilla_name() {
     TEST_PASS("test_pm_load_datapack_vanilla_name");
 }
 
-// ─── Test: name sanitization + datapack name derivation (direct) ────────
+// ─── Test: datapack name derivation (verbatim, B-T13) ───────────────────
 
-void test_pm_name_sanitize() {
-    // Pure sanitizer edge cases — every result must be a VALID NSID name.
-    expect_eq(sanitize_nsid_name("123 pack"), std::string("_123_pack"),
-              "leading digit is prefixed with underscore");
-    expect_eq(sanitize_nsid_name("!!!"), std::string("___"),
-              "all-invalid characters replaced with underscores");
-    expect_eq(sanitize_nsid_name(""), std::string("datapack"),
-              "empty name defaults to 'datapack'");
-    expect_eq(sanitize_nsid_name("More Enchants 1.4"), std::string("More_Enchants_1_4"),
-              "spaces and dots replaced with underscores");
-
-    // derive_datapack_name: pack.id source, vanilla guard, malformed fallback.
+void test_pm_name_derive() {
+    // B-T13: profile keys are plain std::string.  derive_datapack_name returns
+    // pack.id (else the directory stem) VERBATIM — spaces/dots are preserved,
+    // there is no NSID charset sanitization.
     static int counter = 0;
     auto dir = std::filesystem::temp_directory_path() /
                ("besq_pm_naming_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
     const std::string stem = "besq_pm_naming_" + std::to_string(counter);
+
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15, "id": "More Enchants 1.4"}})";
+    }
+    expect_eq(derive_datapack_name(dir), std::string("More Enchants 1.4"),
+              "pack.id 'More Enchants 1.4' kept verbatim");
 
     {
         std::ofstream f(dir / "pack.mcmeta");
@@ -708,17 +709,22 @@ void test_pm_name_sanitize() {
         f << R"({"pack": {"pack_format": 15}})";
     }
     expect_eq(derive_datapack_name(dir), stem,
-              "no pack.id → sanitized directory stem");
+              "no pack.id → directory stem verbatim");
 
     {
         std::ofstream f(dir / "pack.mcmeta");
         f << "{not valid json";
     }
     expect_eq(derive_datapack_name(dir), stem,
-              "malformed pack.mcmeta → sanitized directory stem");
+              "malformed pack.mcmeta → directory stem verbatim");
+
+    // A directory with no stem falls back to a non-empty name.
+    expect_eq(derive_datapack_name(std::filesystem::current_path().root_path()),
+              std::string("datapack"),
+              "directory with no stem → 'datapack' fallback");
 
     std::filesystem::remove_all(dir);
-    TEST_PASS("test_pm_name_sanitize");
+    TEST_PASS("test_pm_name_derive");
 }
 
 // ─── Test: FormatDetector::detect pack.mcmeta branch ────────────────────
@@ -779,7 +785,7 @@ int main() {
         test_pm_load_directory_with_datapack();
         test_pm_load_datapack_no_mcmeta();
         test_pm_load_datapack_vanilla_name();
-        test_pm_name_sanitize();
+        test_pm_name_derive();
         test_format_detector_datapack();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

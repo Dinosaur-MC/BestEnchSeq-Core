@@ -51,8 +51,8 @@ void load_profiles(const std::filesystem::path& dir) {
             if (entry.path().extension() != ".json") continue;
             try {
                 Profile p = loader.load(entry.path());
-                // Use local ID (without "minecraft:" prefix) as lookup key
-                std::string name = p.name().get_id();
+                // Profile keys are plain strings (B-T13) — use the name verbatim.
+                std::string name = p.name();
                 if (name.empty()) name = entry.path().stem().string();
                 g_profiles[name] = std::move(p);
                 std::cout << "  Profile: " << name << std::endl;
@@ -67,7 +67,7 @@ void load_profiles(const std::filesystem::path& dir) {
     if (g_profiles.empty()) {
         std::cout << "  Profile: (builtin)" << std::endl;
         Profile p = loader.load_builtin();
-        g_profiles[p.name().str()] = std::move(p);
+        g_profiles[p.name()] = std::move(p);
     }
 }
 
@@ -83,7 +83,7 @@ Profile merge_profiles(const std::vector<std::string>& names) {
     auto base_it = g_profiles.find(names[0]);
     if (base_it == g_profiles.end())
         return {};
-    Profile merged = base_it->second.clone(NSID("__merged__"));
+    Profile merged = base_it->second.clone("__merged__");
 
     // Merge subsequent profiles directly via Profile mutation methods.
     for (size_t i = 1; i < names.size(); ++i) {
@@ -136,7 +136,7 @@ void load_testcases(const std::filesystem::path& dir) {
             } else if (json.has("profile")) {
                 profile_names.push_back(json["profile"].as_string());
             } else {
-                profile_names.push_back("vanilla");  // sensible default
+                profile_names.push_back("builtin:vanilla");  // sensible default
             }
 
             for (auto& jgroup : json["groups"].as_array()) {
@@ -717,7 +717,7 @@ int main(int argc, char* argv[]) {
                 resolved = &it->second;
         } else {
             merged_profiles.push_back(merge_profiles(profile_names));
-            if (!merged_profiles.back().name().str().empty())
+            if (!merged_profiles.back().name().empty())
                 resolved = &merged_profiles.back();
         }
 

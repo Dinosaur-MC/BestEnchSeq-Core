@@ -200,7 +200,7 @@ void test_besq_default_profiles_scan() {
     std::filesystem::create_directories(tmp);
     {
         std::ofstream f(tmp / "moda.json");
-        f << R"({"name":"moda","dependencies":["vanilla"],"enchantments":[{"id":"mod:x","name":"X","platform":"java","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]}]})";
+        f << R"({"name":"moda","dependencies":["builtin:vanilla"],"enchantments":[{"id":"mod:x","name":"X","platform":"java","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]}]})";
     }
 
     BesqContext ctx;

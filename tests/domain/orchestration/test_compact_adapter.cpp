@@ -26,7 +26,7 @@ EnchantmentRegistry make_sword_registry() {
 // Attaches a TagResolver so tag membership (diamond_sword ∈ #minecraft:sword)
 // is known at the compact boundary.
 Profile make_sword_profile() {
-    Profile profile(NSID("test:compact"));
+    Profile profile("test:compact");
     profile.add_tag({EquipmentTag::sword(), "sword"});
     profile.add_tag({EquipmentTag::chestplate(), "chestplate"});
     profile.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
@@ -432,7 +432,7 @@ void test_apply_inventory_equipment_over_level_throws() {
 // lets the assertion reach the registry content directly — direct mode would
 // throw "ench_not_applicable" from the old logic before the assertion runs.
 void test_apply_supported_items_tag_intersection() {
-    Profile p(NSID("test:tagapp"));
+    Profile p("test:tagapp");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
                      NSID("#minecraft:sword"), 1561});
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5,
@@ -467,7 +467,7 @@ void test_apply_supported_items_tag_intersection() {
 // An enchantment restricted to one platform is excluded from a solve targeting
 // the other, even when the tag intersection would admit it.
 void test_apply_platform_filter() {
-    Profile p(NSID("test:plat"));
+    Profile p("test:plat");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
                      NSID("#minecraft:sword"), 1561});
     // sharpness is Java-only; a Bedrock solve must exclude it despite being
@@ -500,7 +500,7 @@ void test_apply_platform_filter() {
 //     applicability were (wrongly) evaluated against the target's tags, this
 //     would NOT throw — the test would fail. ───
 void test_apply_inventory_equipment_inapplicable_ench() {
-    Profile p(NSID("test:invbad"));
+    Profile p("test:invbad");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
                      NSID("#minecraft:sword"), 1561});
     p.add_equipment({NSID("minecraft:diamond_chestplate"), "Diamond Chestplate",

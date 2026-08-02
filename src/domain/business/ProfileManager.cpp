@@ -10,39 +10,20 @@
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 
-#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <unordered_set>
 
 // ── Datapack → profile naming (declared in ProfileNaming.h) ───────────
 
-std::string sanitize_nsid_name(std::string raw) {
-    // NSID allowed character set (mirrors CommonTypes.cpp validate_id).
-    static constexpr std::string_view valid =
-        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-/";
-    std::string out;
-    out.reserve(raw.size());
-    for (const char c : raw) {
-        if (valid.find(c) != std::string_view::npos)
-            out.push_back(c);
-        else
-            out.push_back('_');
-    }
-    if (out.empty())
-        out = "datapack";
-    // NSID::validate_id rejects a leading digit — prefix to disambiguate.
-    if (std::isdigit(static_cast<unsigned char>(out[0])))
-        out.insert(out.begin(), '_');
-    return out;
-}
-
 std::string derive_datapack_name(const std::filesystem::path& dir) {
+    // Profile keys are plain std::string (B-T13), so the datapack name is
+    // taken VERBATIM from pack.id (else the directory stem) with no charset
+    // cleanup and no leading-digit guard — spaces/dots are preserved as-is.
     std::string raw = dir.filename().string();
     const auto mcmeta_path = dir / "pack.mcmeta";
     if (std::filesystem::is_regular_file(mcmeta_path)) {
@@ -57,28 +38,29 @@ std::string derive_datapack_name(const std::filesystem::path& dir) {
             // Malformed pack.mcmeta → fall back to the directory stem.
         }
     }
-    std::string out = sanitize_nsid_name(std::move(raw));
+    if (raw.empty())
+        raw = "datapack";
     // A datapack must never replace the injected vanilla base profile.
-    if (out == "vanilla")
-        out = "vanilla_datapack";
-    return out;
+    if (raw == "vanilla")
+        raw = "vanilla_datapack";
+    return raw;
 }
 
-Profile* ProfileManager::_find(const NSID& name) {
+Profile* ProfileManager::_find(const std::string& name) {
     auto it = _profiles.find(name);
     return (it != _profiles.end()) ? it->second.get() : nullptr;
 }
 
-const Profile* ProfileManager::_find(const NSID& name) const {
+const Profile* ProfileManager::_find(const std::string& name) const {
     auto it = _profiles.find(name);
     return (it != _profiles.end()) ? it->second.get() : nullptr;
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────
 
-Profile& ProfileManager::create(const NSID& name) {
+Profile& ProfileManager::create(const std::string& name) {
     if (exists(name))
-        throw std::runtime_error("Profile already exists: " + name.str());
+        throw std::runtime_error("Profile already exists: " + name);
     auto p = std::make_unique<Profile>(name);
     Profile& ref = *p;
     _profiles[name] = std::move(p);
@@ -86,11 +68,11 @@ Profile& ProfileManager::create(const NSID& name) {
     return ref;
 }
 
-Profile& ProfileManager::create_from(const NSID& source, const NSID& dest) {
+Profile& ProfileManager::create_from(const std::string& source, const std::string& dest) {
     if (!exists(source))
-        throw std::runtime_error("Source profile not found: " + source.str());
+        throw std::runtime_error("Source profile not found: " + source);
     if (exists(dest))
-        throw std::runtime_error("Destination profile already exists: " + dest.str());
+        throw std::runtime_error("Destination profile already exists: " + dest);
 
     const Profile& src = *find(source);
     auto p = std::make_unique<Profile>(src.clone(dest));
@@ -100,7 +82,7 @@ Profile& ProfileManager::create_from(const NSID& source, const NSID& dest) {
     return ref;
 }
 
-bool ProfileManager::remove(const NSID& name) {
+bool ProfileManager::remove(const std::string& name) {
     auto it = _profiles.find(name);
     if (it == _profiles.end()) return false;
 
@@ -109,7 +91,7 @@ bool ProfileManager::remove(const NSID& name) {
 
     // Adjust active if needed
     if (_profiles.empty()) {
-        _active = NSID();
+        _active.clear();
     } else if (_active == name) {
         _active = _profiles.begin()->first;
     }
@@ -117,29 +99,29 @@ bool ProfileManager::remove(const NSID& name) {
     return true;
 }
 
-bool ProfileManager::exists(const NSID& name) const {
+bool ProfileManager::exists(const std::string& name) const {
     return _profiles.find(name) != _profiles.end();
 }
 
-Profile* ProfileManager::find(const NSID& name) {
+Profile* ProfileManager::find(const std::string& name) {
     return _find(name);
 }
 
-const Profile* ProfileManager::find(const NSID& name) const {
+const Profile* ProfileManager::find(const std::string& name) const {
     return _find(name);
 }
 
-std::vector<NSID> ProfileManager::list() const {
-    std::vector<NSID> names;
+std::vector<std::string> ProfileManager::list() const {
+    std::vector<std::string> names;
     names.reserve(_profiles.size());
-    for (const auto& [nsid, _] : _profiles)
-        names.push_back(nsid);
+    for (const auto& [name, _] : _profiles)
+        names.push_back(name);
     return names;
 }
 
 // ── Stable CRUD (real-time validation + snapshot/undo) ────────────────
 
-bool ProfileManager::_mutate(const NSID& profile, std::function<bool(Profile&)> op) {
+bool ProfileManager::_mutate(const std::string& profile, std::function<bool(Profile&)> op) {
     Profile* p = _find(profile);
     if (!p) return false;
 
@@ -170,35 +152,35 @@ bool ProfileManager::_mutate(const NSID& profile, std::function<bool(Profile&)> 
     return true;
 }
 
-bool ProfileManager::add_enchantment(const NSID& profile, const EnchInfo& info) {
+bool ProfileManager::add_enchantment(const std::string& profile, const EnchInfo& info) {
     return _mutate(profile, [&](Profile& p) { return p.add_enchantment(info); });
 }
 
-bool ProfileManager::update_enchantment(const NSID& profile, const EnchInfo& patch) {
+bool ProfileManager::update_enchantment(const std::string& profile, const EnchInfo& patch) {
     return _mutate(profile, [&](Profile& p) { return p.update_enchantment(patch); });
 }
 
-bool ProfileManager::remove_enchantment(const NSID& profile, const NSID& id) {
+bool ProfileManager::remove_enchantment(const std::string& profile, const NSID& id) {
     return _mutate(profile, [&](Profile& p) { return p.remove_enchantment(id); });
 }
 
-bool ProfileManager::add_equipment(const NSID& profile, const Equipment& eq) {
+bool ProfileManager::add_equipment(const std::string& profile, const Equipment& eq) {
     return _mutate(profile, [&](Profile& p) { return p.add_equipment(eq); });
 }
 
-bool ProfileManager::remove_equipment(const NSID& profile, const NSID& id) {
+bool ProfileManager::remove_equipment(const std::string& profile, const NSID& id) {
     return _mutate(profile, [&](Profile& p) { return p.remove_equipment(id); });
 }
 
-bool ProfileManager::add_tag(const NSID& profile, const EquipmentTag& tag) {
+bool ProfileManager::add_tag(const std::string& profile, const EquipmentTag& tag) {
     return _mutate(profile, [&](Profile& p) { return p.add_tag(tag); });
 }
 
-bool ProfileManager::remove_tag(const NSID& profile, const NSID& id) {
+bool ProfileManager::remove_tag(const std::string& profile, const NSID& id) {
     return _mutate(profile, [&](Profile& p) { return p.remove_tag(id); });
 }
 
-bool ProfileManager::undo(const NSID& profile) {
+bool ProfileManager::undo(const std::string& profile) {
     // 防御性顺序：先确认 profile 存在，再消费快照。
     Profile* p = _find(profile);
     if (!p) return false;
@@ -219,9 +201,9 @@ bool ProfileManager::undo(const NSID& profile) {
 
 // ── Activation ────────────────────────────────────────────────────────
 
-void ProfileManager::activate(const NSID& name) {
+void ProfileManager::activate(const std::string& name) {
     if (!exists(name))
-        throw std::runtime_error("Profile not found: " + name.str());
+        throw std::runtime_error("Profile not found: " + name);
     _active = name;
 }
 
@@ -239,11 +221,11 @@ const Profile& ProfileManager::active() const {
 
 // ── Snapshot ──────────────────────────────────────────────────────────
 
-Profile& ProfileManager::snapshot(const NSID& source, const NSID& snapshot_name) {
+Profile& ProfileManager::snapshot(const std::string& source, const std::string& snapshot_name) {
     if (!exists(source))
-        throw std::runtime_error("Source profile not found: " + source.str());
+        throw std::runtime_error("Source profile not found: " + source);
     if (exists(snapshot_name))
-        throw std::runtime_error("Snapshot name already exists: " + snapshot_name.str());
+        throw std::runtime_error("Snapshot name already exists: " + snapshot_name);
 
     const Profile& src = *find(source);
     auto p = std::make_unique<Profile>(src.clone(snapshot_name));
@@ -256,11 +238,11 @@ Profile& ProfileManager::snapshot(const NSID& source, const NSID& snapshot_name)
 
 // ── Branch ────────────────────────────────────────────────────────────
 
-Profile& ProfileManager::branch(const NSID& source, const NSID& branch_name) {
+Profile& ProfileManager::branch(const std::string& source, const std::string& branch_name) {
     if (!exists(source))
-        throw std::runtime_error("Source profile not found: " + source.str());
+        throw std::runtime_error("Source profile not found: " + source);
     if (exists(branch_name))
-        throw std::runtime_error("Branch name already exists: " + branch_name.str());
+        throw std::runtime_error("Branch name already exists: " + branch_name);
 
     const Profile& src = *find(source);
     auto p = std::make_unique<Profile>(src.clone(branch_name));
@@ -272,7 +254,7 @@ Profile& ProfileManager::branch(const NSID& source, const NSID& branch_name) {
 
 // ── Merge ─────────────────────────────────────────────────────────────
 
-void ProfileManager::merge(const NSID& source, const NSID& dest) {
+void ProfileManager::merge(const std::string& source, const std::string& dest) {
     if (source == dest) return;  // self-merge is no-op
     const Profile& src = *find(source);
     Profile& dst = *find(dest);
@@ -285,18 +267,18 @@ void ProfileManager::merge(const NSID& source, const NSID& dest) {
 
 void ProfileManager::_build_graph() const {
     _dep_graph.clear();
-    for (const auto& [nsid, p] : _profiles)
-        _dep_graph[nsid] = p->dependencies();
+    for (const auto& [name, p] : _profiles)
+        _dep_graph[name] = p->dependencies();
 }
 
-std::vector<NSID> ProfileManager::resolve_dependencies(const NSID& profile) const {
+std::vector<std::string> ProfileManager::resolve_dependencies(const std::string& profile) const {
     // Rebuild from the current profiles so direct set_dependencies() calls
     // (which bypass the manager) are always honored.
     _build_graph();
 
-    std::vector<NSID> order;
-    std::unordered_map<NSID, uint8_t> color;   // 0 白 1 灰 2 黑
-    std::function<bool(const NSID&)> dfs = [&](const NSID& n) -> bool {
+    std::vector<std::string> order;
+    std::unordered_map<std::string, uint8_t> color;   // 0 白 1 灰 2 黑
+    std::function<bool(const std::string&)> dfs = [&](const std::string& n) -> bool {
         color[n] = 1;
         auto it = _dep_graph.find(n);
         if (it != _dep_graph.end()) {
@@ -317,7 +299,7 @@ std::vector<NSID> ProfileManager::resolve_dependencies(const NSID& profile) cons
 
 // ── Effective view (topological merge + TagResolver + cache) ──────────
 
-const Profile& ProfileManager::resolve_effective(const NSID& profile) const {
+const Profile& ProfileManager::resolve_effective(const std::string& profile) const {
     auto cache_it = _effective_cache.find(profile);
     if (cache_it != _effective_cache.end())
         return *cache_it->second;
@@ -360,7 +342,7 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
                 continue;
 
             Profile loaded = loader.load(path);
-            const NSID name = loaded.name().empty() ? NSID(path.stem().string()) : loaded.name();
+            const std::string name = loaded.name().empty() ? path.stem().string() : loaded.name();
             if (exists(name))
                 remove(name);  // replace-on-conflict
             _profiles[name] = std::make_unique<Profile>(std::move(loaded));
@@ -372,8 +354,8 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
     }
 
     // The vanilla base profile must exist for dependency resolution.
-    if (!exists(NSID("vanilla")))
-        create(NSID("vanilla"));
+    if (!exists("builtin:vanilla"))
+        create("builtin:vanilla");
 
     _build_graph();
     _effective_cache.clear();
@@ -401,7 +383,7 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // is retained so `#tag` supported_items references resolve downstream.
         auto own = RegistryLoader::resolve_own_content(ench_data, eq_data);
 
-        const NSID name(derive_datapack_name(dir));
+        const std::string name = derive_datapack_name(dir);
 
         // Construct the Profile and attach the builtin tag resolver.
         Profile profile(ProfileMetadata(name), std::move(own.ench),
@@ -412,8 +394,8 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // can fail in a way that leaves a half-registered profile behind.
         // The vanilla root is the implicit dependency (NOT declared via
         // `dependencies`); inject it so cross_validate has a base universe.
-        if (!exists(NSID("vanilla")))
-            create(NSID("vanilla"));
+        if (!exists("builtin:vanilla"))
+            create("builtin:vanilla");
 
         if (exists(name))
             remove(name);  // replace-on-conflict
@@ -430,7 +412,7 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
 
 // ── Cross-validate supported_items against the dependency universe ────
 
-size_t ProfileManager::cross_validate(const NSID& profile) {
+size_t ProfileManager::cross_validate(const std::string& profile) {
     Profile* target = _find(profile);
     if (!target)
         return 0;
@@ -440,7 +422,7 @@ size_t ProfileManager::cross_validate(const NSID& profile) {
     // Validation universe = vanilla base ∪ dependency chain (equipment + tags).
     std::unordered_set<NSID> universe_eq;
     std::unordered_set<NSID> universe_tags;
-    auto collect = [&](const NSID& name) {
+    auto collect = [&](const std::string& name) {
         const Profile* p = _find(name);
         if (!p)
             return;
@@ -449,7 +431,7 @@ size_t ProfileManager::cross_validate(const NSID& profile) {
         for (const auto& [id, tag] : p->tags().data())
             universe_tags.insert(id);
     };
-    collect(NSID("vanilla"));
+    collect("builtin:vanilla");
     for (const auto& d : deps)
         collect(d);
     // The target's own profile re-contributes its own equipment (so concrete
@@ -496,7 +478,7 @@ size_t ProfileManager::cross_validate(const NSID& profile) {
 
 // ── Publish (flatten effective view + version/tag) ──────────────────────
 
-bool ProfileManager::publish(const NSID& profile, const std::string& version,
+bool ProfileManager::publish(const std::string& profile, const std::string& version,
                              const std::string& tag, const std::filesystem::path& out) {
     if (_find(profile) == nullptr) return false;
     const Profile& eff = resolve_effective(profile);

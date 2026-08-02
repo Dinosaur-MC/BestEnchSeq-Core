@@ -43,11 +43,11 @@ BesqContext& BesqContext::operator=(BesqContext&&) noexcept = default;
 // ====================================================================
 
 void BesqContext::load_builtin() {
-    if (!_impl->profiles.exists(NSID("builtin:vanilla"))) {
+    if (!_impl->profiles.exists("builtin:vanilla")) {
         _impl->loader.load_builtin(
-            _impl->profiles.create(NSID("builtin:vanilla"))
+            _impl->profiles.create("builtin:vanilla")
         );
-        _impl->profiles.activate(NSID("builtin:vanilla"));
+        _impl->profiles.activate("builtin:vanilla");
     }
 }
 
@@ -104,42 +104,37 @@ void BesqContext::load_profiles() {
 
 const std::string& BesqContext::active_profile() const noexcept {
     static std::string cached;
-    cached = _impl->profiles.active_name().str();
+    cached = _impl->profiles.active_name();
     return cached;
 }
 
 std::vector<std::string> BesqContext::list_profiles() const {
-    auto nsids = _impl->profiles.list();
-    std::vector<std::string> names;
-    names.reserve(nsids.size());
-    for (const auto& nsid : nsids)
-        names.push_back(nsid.str());
-    return names;
+    return _impl->profiles.list();
 }
 
 void BesqContext::activate_profile(const std::string& name) {
-    _impl->profiles.activate(NSID(name));
+    _impl->profiles.activate(name);
 }
 
 void BesqContext::fork_profile(const std::string& source,
                                const std::string& dest) {
-    _impl->profiles.branch(NSID(source), NSID(dest));
+    _impl->profiles.branch(source, dest);
 }
 
 void BesqContext::merge_profile(const std::string& source,
                                 const std::string& dest) {
-    _impl->profiles.merge(NSID(source), NSID(dest));
+    _impl->profiles.merge(source, dest);
 }
 
 void BesqContext::remove_profile(const std::string& name) {
-    _impl->profiles.remove(NSID(name));
+    _impl->profiles.remove(name);
 }
 
 bool BesqContext::publish_profile(const std::string& nsid,
                                   const std::string& version,
                                   const std::string& tag,
                                   const std::string& out_path) {
-    return _impl->profiles.publish(NSID(nsid), version, tag, out_path);
+    return _impl->profiles.publish(nsid, version, tag, out_path);
 }
 
 // ====================================================================

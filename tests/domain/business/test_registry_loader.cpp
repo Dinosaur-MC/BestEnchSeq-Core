@@ -770,7 +770,7 @@ void test_tag_tags_of() {
 // 12. Serialize a Profile to JSON and verify expected fields.
 // ---------------------------------------------------------------------------
 void test_serialize_profile() {
-    Profile profile(NSID("test:profile"));
+    Profile profile("test:profile");
     profile.set_description("Test description");
     profile.set_version("1.0.0");
 
@@ -799,7 +799,7 @@ void test_serialize_profile() {
 // 13. Profile serialization roundtrip: serialize, deserialize, verify.
 // ---------------------------------------------------------------------------
 void test_serialize_profile_roundtrip() {
-    Profile original(NSID("test:roundtrip"));
+    Profile original("test:roundtrip");
     original.set_description("Roundtrip test");
 
     EnchInfo sharpness(
@@ -817,7 +817,7 @@ void test_serialize_profile_roundtrip() {
     json >> restored;
 
     // -- Verify --
-    expect(restored.name() == NSID("test:roundtrip"),
+    expect(restored.name() == "test:roundtrip",
            "name preserved after roundtrip");
     expect(restored.ench().contains(NSID("minecraft:sharpness")),
            "enchantment present after roundtrip");
