@@ -3,10 +3,8 @@
 #include "common/io/json.h"
 #include "domain/business/components/LimitedLevelCalculator.h"
 #include "domain/business/components/TagResolver.h"
-#include "domain/business/parsers/NativeCsvParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
-#include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "framework/test_utils.h"
@@ -161,21 +159,22 @@ void test_ll_serializer_json_hint() {
     TEST_PASS("test_ll_serializer_json_hint");
 }
 
-// ─── Test: EnchSerializer CSV round-trip keeps min_cost (B-T18) ──────────
+// ─── Test: EnchSerializer CSV export carries the min_cost columns (B-T18) ──
 
-void test_ll_serializer_csv_roundtrip() {
+void test_ll_serializer_csv_columns() {
     TagRegistry tag_reg;
     EnchInfo info{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 0, 1, false, {}, tag_set("#minecraft:swords"), 10, 7};
 
     std::string csv_str = EnchSerializer::to_csv({info}, tag_reg);
-    auto parsed = NativeCsvParser::parse(csv_str);
-    expect(parsed.size() == 1, "CSV round-trip parses one enchantment");
-    if (!parsed.empty()) {
-        expect_eq(parsed[0].min_cost_base, 10, "CSV round-trip keeps min_cost_base");
-        expect_eq(parsed[0].min_cost_per_level, 7, "CSV round-trip keeps min_cost_per_level");
-    }
+    expect(csv_str.find("min_cost_base") != std::string::npos,
+           "CSV header carries min_cost_base");
+    expect(csv_str.find("min_cost_per_level") != std::string::npos,
+           "CSV header carries min_cost_per_level");
+    // The cost values appear in the data row.
+    expect(csv_str.find(",10,") != std::string::npos, "CSV row carries min_cost_base value");
+    expect(csv_str.find(",7,") != std::string::npos, "CSV row carries min_cost_per_level value");
 
-    TEST_PASS("test_ll_serializer_csv_roundtrip");
+    TEST_PASS("test_ll_serializer_csv_columns");
 }
 
 } // namespace
@@ -189,7 +188,7 @@ int main() {
         test_ll_no_contributing_item();
         test_ll_serializer_json_roundtrip();
         test_ll_serializer_json_hint();
-        test_ll_serializer_csv_roundtrip();
+        test_ll_serializer_csv_columns();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

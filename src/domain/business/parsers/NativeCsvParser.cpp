@@ -101,18 +101,6 @@ parse_csv_rows(const csv::CsvTable& rows) {
         if (!limited_str.empty()) { try { limited_level = std::stoi(limited_str); } catch (...) {} }
         if (limited_level <= 0) limited_level = 0;
 
-        // min_cost raw fields (B-T18): the to_csv export now writes these
-        // columns; read them so a CSV round-trip keeps the cost data.  Old
-        // headers without the columns gracefully default to 0.  The
-        // `limited_level_provided` hint is inherently CSV-lossy — not forced.
-        int32_t min_cost_base = 0;
-        auto base_str = get_field(fields, "min_cost_base");
-        if (!base_str.empty()) { try { min_cost_base = std::stoi(base_str); } catch (...) {} }
-
-        int32_t min_cost_per_level = 0;
-        auto per_str = get_field(fields, "min_cost_per_level");
-        if (!per_str.empty()) { try { min_cost_per_level = std::stoi(per_str); } catch (...) {} }
-
         std::unordered_set<std::string> exclusive_set;
         std::string excl_str = get_field(fields, "exclusive_set");
         if (!excl_str.empty()) {
@@ -134,8 +122,6 @@ parse_csv_rows(const csv::CsvTable& rows) {
         ench.multiplier       = multiplier;
         ench.max_level        = max_level;
         ench.limited_level    = limited_level;
-        ench.min_cost_base    = min_cost_base;
-        ench.min_cost_per_level = min_cost_per_level;
         ench.exclusive_with.assign(exclusive_set.begin(), exclusive_set.end());
         ench.applicable_to    = std::move(applicable_items);
         enchantments.push_back(std::move(ench));
