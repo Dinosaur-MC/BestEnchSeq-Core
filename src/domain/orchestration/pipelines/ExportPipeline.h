@@ -11,9 +11,8 @@ struct ExportPipeline {
     );
 
     /// Infer the export format from a file path extension (`.csv`/`.CSV` →
-    /// Csv, everything else → Json).  Becomes the shared single source of
-    /// truth for BesqContext::export_registry / CLI / C ABI once P2.3 wires
-    /// BesqContext to ExportPipeline (today BesqContext still carries an
-    /// inline extension check).
+    /// Csv, everything else → Json).  Shared single source of truth — the
+    /// CLI and C ABI reach it transitively via BesqContext::export_registry,
+    /// which calls this helper directly.
     static ExportRequest::Format format_for_path(const std::string& path);
 };

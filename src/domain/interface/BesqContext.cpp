@@ -97,9 +97,7 @@ std::string BesqContext::active_profile() const noexcept {
 }
 
 std::vector<std::string> BesqContext::list_profiles() const {
-    ManageRequest req;
-    req.action = ManageRequest::Action::ListProfiles;
-    return ManagePipeline::run(_impl->profiles, _impl->loader, req).profile_list;
+    return _impl->profiles.list();
 }
 
 void BesqContext::activate_profile(const std::string& name) {

@@ -78,17 +78,15 @@ ManageResult ManagePipeline::run(
                 ManageRequest sub;
                 sub.action = ManageRequest::Action::LoadFile;
                 sub.file_path = filter;
-                auto sub_result = run(profiles, loader, sub);
-                if (!sub_result.success)
-                    return sub_result;
+                run(profiles, loader, sub);
             }
         }
         break;
     }
 
     case ManageRequest::Action::LoadDirectory: {
+        // load_directory clears the effective-view cache internally.
         profiles.load_directory(request.dir_path);
-        profiles.notify_mutated();
         result.message = "Loaded profiles from: " + request.dir_path;
         break;
     }
