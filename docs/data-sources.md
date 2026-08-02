@@ -651,7 +651,7 @@ FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
 |-----------|-------------|------|
 | `id` | `id` (string → NSID) | 唯一标识 |
 | `name` | `display_name` → `name` | 显示名称（仅用于数据快照，运行时由 i18n 重写） |
-| `platform` | `platform` → `supported_platform`（`MCE`） | 平台限制（`"java"`/`"bedrock"`/`"all"`/`"none"`）。键名标准为 `platform`，读取兼容旧键名 `supported_platform`（旧 profile）；`RegistryLoader::from_dto` 按数据字面映射——空 → `MCE::All`，否则 `string_to_mce`。vanilla.json 43 条 `"java"` → 加载后 `MCE::Java`（Java 求解不受影响；Bedrock 数据源后续引入） |
+| `platform` | `platform` → `supported_platform`（`MCE`） | 平台限制（`"java"`/`"bedrock"`/`"all"`/`"none"`）。键名标准为 `platform`，读取兼容旧键名 `supported_platform`（旧 profile）；`RegistryLoader::from_dto` 按数据字面映射——空 → `MCE::All`，否则 `string_to_mce`。vanilla.json 43 条 `"java"` → 加载后 `MCE::Java`（Java 求解不受影响；Bedrock 数据源后续引入）。**缺失/空 platform 双入口默认不一致**：`from_dto` 空 → `MCE::All`（#10 兼容默认）；`EnchInfo::from_json`（Profile 反序列化）缺失 → 字段默认 `MCE::None`。二者在求解过滤（`CompactAdapter`）中均视为不受限，无求解影响；仅再导出/显示有 "all"/"none" 差异，且仅手写显式空串才触发 |
 | `max_level` | `max_level` | 最大等级 |
 | `min_cost` | `min_cost_base`/`min_cost_per_level` | 附魔台成本公式原始字段；`LimitedLevelCalculator` 加载期据此推导 `limited_level` |
 | `is_treasure` | `is_treasure` | 宝藏标志（数据值，非启发式） |
