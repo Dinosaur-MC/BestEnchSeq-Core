@@ -1,6 +1,5 @@
 #include "framework/test_utils.h"
 #include "domain/business/ProfileManager.h"
-#include "domain/business/ProfileNaming.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"

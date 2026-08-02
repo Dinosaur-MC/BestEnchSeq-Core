@@ -1,5 +1,4 @@
 #include "ProfileManager.h"
-#include "domain/business/ProfileNaming.h"
 #include "domain/business/components/RegistryHelper.h"
 #include "domain/business/components/Serializer.h"  // Profile << Json (snapshot)
 #include "domain/business/loaders/ProfileLoader.h"
@@ -18,7 +17,7 @@
 #include <string>
 #include <unordered_set>
 
-// ── Datapack → profile naming (declared in ProfileNaming.h) ───────────
+// ── Datapack → profile naming (declared in ProfileManager.h) ───────────
 
 std::string derive_datapack_name(const std::filesystem::path& dir) {
     // Profile keys are plain std::string (B-T13), so the datapack name is the
