@@ -7,6 +7,7 @@
 #include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
 #include "framework/test_utils.h"
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -437,6 +438,46 @@ void test_csv_set_join_and_quotes() {
     TEST_PASS("csv set join + quoting");
 }
 
+// 全文本层往返（format_row → split_line）所需：label 必填，验证空串可往返。
+struct Note { std::string label; int n = 0; };
+struct NoteSchema {
+    using Type = Note;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("label", &Note::label, ds::string_codec{}),
+        ds::field("n", &Note::n, ds::int_codec{}),
+    };
+};
+using NoteCsv = ds::csv::Schema<NoteSchema>;
+
+void test_csv_full_text_roundtrip() {
+    Person p{"alice, bob", 30, true};
+    auto row = PersonCsv::serialize_row(p);
+    auto table = ::csv::CsvTable{PersonCsv::header(), row};
+    auto text = csv::format(table);
+    // split back into lines
+    std::vector<::csv::CsvRow> parsed;
+    std::istringstream ss(text);
+    std::string line;
+    while (std::getline(ss, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        parsed.push_back(csv::split_line(line));
+    }
+    expect(parsed.size() == 2, "header + one data row");
+    Person out; ds::ErrorList e;
+    expect(PersonCsv::parse_row(parsed[0], parsed[1], out, e), "full text roundtrip parse");
+    expect(out.name == "alice, bob" && out.age == 30 && out.active, "full text roundtrip values");
+    TEST_PASS("csv full text roundtrip");
+}
+void test_csv_required_empty_string_roundtrip() {
+    Note note{std::string{}, 7};   // required label is empty
+    auto row = NoteCsv::serialize_row(note);
+    expect(row[0].empty(), "empty label cell");
+    Note out; ds::ErrorList e;
+    expect(NoteCsv::parse_row(NoteCsv::header(), row, out, e), "empty required string roundtrips");
+    expect(out.label.empty() && out.n == 7, "empty label + int retained");
+    TEST_PASS("csv required empty-string roundtrip");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -464,5 +505,7 @@ int main() {
     test_csv_header_and_roundtrip();
     test_csv_column_missing_optional();
     test_csv_set_join_and_quotes();
+    test_csv_full_text_roundtrip();
+    test_csv_required_empty_string_roundtrip();
     return print_summary();
 }

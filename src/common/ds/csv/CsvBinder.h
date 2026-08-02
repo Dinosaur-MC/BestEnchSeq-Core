@@ -50,7 +50,7 @@ struct Schema {
     static void parse_field(const F& f, const std::unordered_map<std::string, std::size_t>& col,
                             const ::csv::CsvRow& row, Type& o, ErrorList& err, bool& ok) {
         auto it = col.find(f.name);
-        if (it == col.end() || it->second >= row.size() || row[it->second].empty()) {
+        if (it == col.end() || it->second >= row.size()) {
             if (f.required) { err.add(f.name, "missing required column"); ok = false; }
             return;
         }
