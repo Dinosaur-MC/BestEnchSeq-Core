@@ -50,20 +50,23 @@ FormatDetector::Result FormatDetector::parse(const std::filesystem::path& path) 
     switch (format) {
     case DataFormat::NativeJson: {
         auto json = Json::parse(file_utils::read_file(path));
-        return NativeJsonParser::parse(json);
+        auto [ench, eq] = NativeJsonParser::parse(json);
+        return {std::move(ench), std::move(eq), {}};
     }
     case DataFormat::NativeCsv:
-        return {NativeCsvParser::parse_file(path), {}};
+        return {NativeCsvParser::parse_file(path), {}, {}};
     case DataFormat::McOfficial: {
         auto result = McOfficialParser::parse(path);
-        return {std::move(result.enchantments), std::move(result.equipment)};
+        return {std::move(result.enchantments), std::move(result.equipment),
+                std::move(result.item_tags)};
     }
     case DataFormat::Unknown:
     case DataFormat::Auto:
         // Fallback: attempt NativeJson parse
         try {
             auto content = file_utils::read_file(path);
-            return NativeJsonParser::parse_string(content);
+            auto [ench, eq] = NativeJsonParser::parse_string(content);
+            return {std::move(ench), std::move(eq), {}};
         } catch (const std::exception& e) {
             throw std::runtime_error(
                 "Cannot determine format and NativeJson fallback failed for: "

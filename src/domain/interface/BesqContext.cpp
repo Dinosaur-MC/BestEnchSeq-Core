@@ -3,6 +3,7 @@
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/parsers/McOfficialParser.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/orchestration/components/OutputFormatter.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
@@ -58,16 +59,29 @@ void BesqContext::load_builtin() {
 
 void BesqContext::load_file(const std::string& path) {
     auto& profile = _impl->profiles.active();
-    auto [ench_data, eq_data] = FormatDetector::parse(path);
+    auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
 
     // Build temporary registries then merge into profile
     TagRegistry tag_reg;
     EquipmentRegistry eq_reg;
     EnchantmentRegistry ench_reg;
     RegistryLoader reg_loader;
-    // Seed tag resolution with the active profile's tags (vanilla fallback).
+    // Seed tag resolution with the active profile's tags (vanilla fallback)
+    // PLUS the datapack's own item tags so `#mypack:*` supported_items
+    // references survive cross-validation instead of being dropped (B-T24 #24).
+    TagRegistry base_tags;
+    for (const auto& [nsid, tag] : profile.tags().data())
+        base_tags.insert(tag);
+    auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
+    for (const auto& [nsid, tag] : datapack_tags.data())
+        base_tags.insert(tag);
     reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
-                       &profile.tags());
+                       &base_tags);
+
+    // Make the datapack item tags resolvable for `tags_of` applicability on
+    // the active profile's resolver (additive; no-op for native JSON/CSV).
+    if (auto resolver = profile.tag_resolver_ptr())
+        McOfficialParser::load_item_tags_into(*resolver, item_tags);
 
     // Merge into active profile via proxy methods
     for (const auto& [nsid, tag] : tag_reg.data())
@@ -220,7 +234,7 @@ bool BesqContext::export_registry(const std::string& path) const {
 
 void BesqContext::import_registry(const std::string& path) {
     auto& profile = _impl->profiles.active();
-    auto [ench_data, eq_data] = FormatDetector::parse(path);
+    auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
 
     TagRegistry tag_reg;
     EquipmentRegistry eq_reg;
@@ -228,8 +242,19 @@ void BesqContext::import_registry(const std::string& path) {
     RegistryLoader reg_loader;
     // Seed with the active profile's tag universe (vanilla fallback) so the
     // imported file's `#tag` supported_items references cross-validate (T10).
+    // A datapack dir additionally contributes its own item tags so `#mypack:*`
+    // references survive (B-T24 #24).
+    TagRegistry base_tags;
+    for (const auto& [nsid, tag] : profile.tags().data())
+        base_tags.insert(tag);
+    auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
+    for (const auto& [nsid, tag] : datapack_tags.data())
+        base_tags.insert(tag);
     reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
-                       &profile.tags());
+                       &base_tags);
+
+    if (auto resolver = profile.tag_resolver_ptr())
+        McOfficialParser::load_item_tags_into(*resolver, item_tags);
 
     for (const auto& [nsid, tag] : tag_reg.data())
         profile.add_tag(tag);

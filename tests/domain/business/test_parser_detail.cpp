@@ -4,6 +4,7 @@
 #include "domain/business/components/FormatDetector.h"
 
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 // ============================================================================
@@ -105,6 +106,45 @@ void test_detect_mc_dir() {
 }
 
 // ============================================================================
+// Section C — FormatDetector::parse() carries datapack item_tags (#24)
+// ============================================================================
+
+void test_format_detector_mc_official_carries_item_tags() {
+    // Build a minimal datapack in a temp dir (committed fixtures under
+    // data/tests/datapack/ are bare enchantment JSONs, not full pack dirs).
+    auto dir = std::filesystem::temp_directory_path() / "fmt_det_item_tags";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "mypack" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        std::ofstream f(dir / "data" / "mypack" / "enchantment" / "leeching.json");
+        f << R"({"supported_items": "#mypack:swords", "anvil_cost": 2, "max_level": 3})";
+    }
+    {
+        std::ofstream f(dir / "data" / "mypack" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+
+    auto result = FormatDetector::parse(dir);
+    expect(!result.item_tags.empty(),
+           "McOfficial branch of FormatDetector carries datapack item_tags");
+    bool has_swords = false;
+    for (const auto& tag : result.item_tags) {
+        if (tag.key == "mypack:swords") { has_swords = true; break; }
+    }
+    expect(has_swords, "item_tags contains the mypack:swords definition");
+    // Sanity: enchantment + equipment still carried alongside.
+    expect(!result.enchantments.empty(), "McOfficial branch also carries enchantments");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_format_detector_mc_official_carries_item_tags");
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -123,6 +163,9 @@ int main() {
         test_detect_unknown_ext();
         test_detect_no_ext();
         test_detect_mc_dir();
+
+        // Section C — FormatDetector::parse() carries datapack item_tags
+        test_format_detector_mc_official_carries_item_tags();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

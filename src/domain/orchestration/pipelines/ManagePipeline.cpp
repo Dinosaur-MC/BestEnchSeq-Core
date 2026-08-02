@@ -3,6 +3,7 @@
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/parsers/McOfficialParser.h"
 #include "domain/business/types/Profile.h"
 
 #include <string>
@@ -26,14 +27,24 @@ ManageResult ManagePipeline::run(
 
     case ManageRequest::Action::LoadFile: {
         auto& profile = profiles.active();
-        auto [ench_data, eq_data] = FormatDetector::parse(request.file_path);
+        auto [ench_data, eq_data, item_tags] = FormatDetector::parse(request.file_path);
         TagRegistry tag_reg;
         EquipmentRegistry eq_reg;
         EnchantmentRegistry ench_reg;
         RegistryLoader reg_loader;
-        // Seed tag resolution with the active profile's tags (vanilla fallback).
+        // Seed tag resolution with the active profile's tags (vanilla fallback)
+        // PLUS a datapack's own item tags so `#mypack:*` supported_items
+        // references survive cross-validation (B-T24 #24).
+        TagRegistry base_tags;
+        for (const auto& [nsid, tag] : profile.tags().data())
+            base_tags.insert(tag);
+        auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
+        for (const auto& [nsid, tag] : datapack_tags.data())
+            base_tags.insert(tag);
         reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
-                           &profile.tags());
+                           &base_tags);
+        if (auto resolver = profile.tag_resolver_ptr())
+            McOfficialParser::load_item_tags_into(*resolver, item_tags);
         for (const auto& [nsid, tag] : tag_reg.data())
             profile.add_tag(tag);
         for (const auto& [nsid, eq] : eq_reg.data())

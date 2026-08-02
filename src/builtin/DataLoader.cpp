@@ -129,7 +129,8 @@ void load_builtin_data(
         // Filesystem path: allows user to replace builtin data (any supported
         // format; for non-JSON overrides the categories array is simply empty).
         auto parsed = FormatDetector::parse(vanilla_path);
-        loader.resolve(parsed.first, parsed.second, tag_reg, eq_reg, ench_reg, &base_tags);
+        loader.resolve(parsed.enchantments, parsed.equipment,
+                       tag_reg, eq_reg, ench_reg, &base_tags);
     } else {
         // Embedded fallback: zero I/O, always available (native JSON).
         auto parsed = NativeJsonParser::parse_string(content);

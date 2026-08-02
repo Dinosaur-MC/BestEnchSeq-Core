@@ -394,6 +394,45 @@ McOfficialParser::extract_item_tag_definitions(
 
 // ============================================================================
 
+TagRegistry McOfficialParser::build_item_tag_registry(
+    const std::vector<ItemTagDefinition>& item_tags)
+{
+    TagRegistry reg;
+    for (const auto& tag : item_tags) {
+        try {
+            reg.insert({NSID("#" + tag.key), tag.key});
+        } catch (const std::exception&) {
+            LOG_WARN("Skipping datapack item tag '%s': invalid tag id",
+                     tag.key.c_str());
+        }
+    }
+    return reg;
+}
+
+void McOfficialParser::load_item_tags_into(
+    TagResolver& resolver, const std::vector<ItemTagDefinition>& item_tags)
+{
+    for (const auto& tag : item_tags) {
+        // Skip tags whose ids fail NSID validation (same filter as
+        // build_item_tag_registry) so a malformed tag never reaches the
+        // resolver.
+        try {
+            (void)NSID("#" + tag.key);
+        } catch (const std::exception&) {
+            continue;
+        }
+        Json tag_json = Json::object();
+        tag_json.set("replace", Json(tag.replace));
+        Json values = Json::array();
+        for (const auto& v : tag.values)
+            values.push_back(Json(v));
+        tag_json.set("values", std::move(values));
+        resolver.load_tag_json(tag.key, tag_json);
+    }
+}
+
+// ============================================================================
+
 McOfficialParser::Result McOfficialParser::parse_files(
     const std::unordered_map<std::string, std::string>& files)
 {

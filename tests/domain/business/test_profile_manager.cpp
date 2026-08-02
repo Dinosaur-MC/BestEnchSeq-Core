@@ -6,6 +6,7 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/loaders/ProfileLoader.h"
 #include "common/io/json.h"
 #include "common/io/FileUtils.hpp"
 
@@ -1139,6 +1140,50 @@ void test_pm_empty_key_rejected() {
 
 // ─── Test: FormatDetector::detect pack.mcmeta branch ────────────────────
 
+// ─── Test: ProfileLoader::load on a datapack dir keeps #mypack:* tags (#24) ──
+// load_into shares the two-phase RegistryLoader path; after the fix the parsed
+// datapack item_tags seed the validation universe AND land in the profile's tag
+// registry so a `#mypack:*`-referencing enchantment survives (previously the
+// FormatDetector dropped item_tags, so the enchantment was silently removed).
+
+void test_profile_loader_load_datapack_keeps_tags() {
+    auto dir = std::filesystem::temp_directory_path() / "Loader Custom Pack";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "mypack" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        std::ofstream f(dir / "data" / "mypack" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+    {
+        std::ofstream f(dir / "data" / "mypack" / "enchantment" / "leeching.json");
+        f << R"({
+            "description": "Leeching",
+            "supported_items": "#mypack:swords",
+            "anvil_cost": 2,
+            "max_level": 3,
+            "min_cost": {"base": 5, "per_level_above_first": 5}
+        })";
+    }
+
+    ProfileLoader loader;
+    Profile p = loader.load(dir);
+    expect(p.has_enchantment(NSID("mypack:leeching")),
+           "leeching with #mypack:* supported_items survives ProfileLoader::load");
+    const auto& supp = p.ench().at(NSID("mypack:leeching")).supported_items;
+    expect(supp.count(NSID("#mypack:swords")) == 1,
+           "leeching keeps #mypack:swords after load");
+    expect(p.tags().contains(NSID("#mypack:swords")),
+           "datapack item tag #mypack:swords lands in the profile's tag registry");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_profile_loader_load_datapack_keeps_tags");
+}
+
 void test_format_detector_datapack() {
     static int counter = 0;
 
@@ -1205,6 +1250,7 @@ int main() {
         test_pm_load_datapack_builtin_vanilla_name();
         test_pm_name_derive();
         test_pm_empty_key_rejected();
+        test_profile_loader_load_datapack_keeps_tags();
         test_format_detector_datapack();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

@@ -97,6 +97,48 @@ void test_item_parser_unknown_equip_throws() {
 }
 
 // ============================================================================
+// Invalid NSID input maps to the friendly unknown-equipment error (#22)
+// ============================================================================
+
+void test_item_parser_uppercase_maps_to_unknown() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        ItemParser::parse("Diamond_Sword", ench_reg, eq_reg);  // uppercase → invalid NSID
+    } catch (const std::exception& e) {
+        threw = true;
+        std::string msg(e.what());
+        expect(msg.find("The NSID") == std::string::npos,
+               "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_equipment") != std::string::npos ||
+                   msg.find("Unknown equipment") != std::string::npos,
+               "uppercase equipment id maps to friendly unknown-equipment error");
+    }
+    expect(threw, "uppercase equipment id should throw");
+    TEST_PASS("test_item_parser_uppercase_maps_to_unknown");
+}
+
+void test_item_parser_dot_segment_maps_to_unknown() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        ItemParser::parse("minecraft:..", ench_reg, eq_reg);  // `..` segment → invalid NSID
+    } catch (const std::exception& e) {
+        threw = true;
+        std::string msg(e.what());
+        expect(msg.find("The NSID") == std::string::npos,
+               "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_equipment") != std::string::npos ||
+                   msg.find("Unknown equipment") != std::string::npos,
+               "dot-segment equipment id maps to friendly unknown-equipment error");
+    }
+    expect(threw, "dot-segment equipment id should throw");
+    TEST_PASS("test_item_parser_dot_segment_maps_to_unknown");
+}
+
+// ============================================================================
 // Properties block { } — prior_penalty
 // ============================================================================
 
@@ -290,6 +332,8 @@ int main() {
         test_item_parser_no_bracket_close();
         test_item_parser_trailing_content();
         test_item_parser_unknown_equip_throws();
+        test_item_parser_uppercase_maps_to_unknown();
+        test_item_parser_dot_segment_maps_to_unknown();
         // prior_penalty
         test_item_parser_prior_penalty();
         // durability defaults and validation

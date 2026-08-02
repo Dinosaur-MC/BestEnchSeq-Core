@@ -1,6 +1,7 @@
 #pragma once
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
+#include "domain/business/parsers/McOfficialParser.h"
 
 #include <filesystem>
 #include <vector>
@@ -22,10 +23,16 @@ enum class DataFormat {
 /// before raising an error.
 class FormatDetector {
 public:
-    using Result = std::pair<
-        std::vector<business::loader::EnchantmentData>,
-        std::vector<business::loader::EquipmentData>
-    >;
+    /// Parse result: enchantments + equipment + the datapack's own item-tag
+    /// definitions (`data/<ns>/tags/item/*.json`, only populated in the
+    /// McOfficial branch — empty for native JSON/CSV).  Carrying item_tags lets
+    /// a datapack dir loaded via `load_file` / `ProfileLoader::load_into` keep
+    /// its `#mypack:*` tag definitions instead of dropping them (B-T24 #24).
+    struct Result {
+        std::vector<business::loader::EnchantmentData> enchantments;
+        std::vector<business::loader::EquipmentData> equipment;
+        std::vector<McOfficialParser::ItemTagDefinition> item_tags;
+    };
 
     /// Detect data format from path.
     /// For files: checks extension (.json / .csv).

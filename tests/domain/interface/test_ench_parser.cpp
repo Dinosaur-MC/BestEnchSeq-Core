@@ -150,6 +150,50 @@ void test_ench_parser_unknown_throws() {
     TEST_PASS("test_ench_parser_unknown_throws");
 }
 
+// ============================================================================
+// Invalid NSID input maps to the friendly unknown-enchantment error (#22)
+//
+// NSID validation rejects uppercase / `.`/`..` segments with the bare validator
+// text "The NSID '...' is invalid".  The parser must instead surface the
+// actionable cli.err.unknown_ench error.
+// ============================================================================
+
+void test_ench_parser_uppercase_maps_to_unknown() {
+    auto reg = make_test_registry();
+    bool threw = false;
+    try {
+        EnchParser::parse("Sharpness=5", reg);  // uppercase → invalid NSID
+    } catch (const std::exception& e) {
+        threw = true;
+        std::string msg(e.what());
+        expect(msg.find("The NSID") == std::string::npos,
+               "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_ench") != std::string::npos ||
+                   msg.find("Unknown enchantment") != std::string::npos,
+               "uppercase id maps to friendly unknown-enchantment error");
+    }
+    expect(threw, "uppercase enchantment id should throw");
+    TEST_PASS("test_ench_parser_uppercase_maps_to_unknown");
+}
+
+void test_ench_parser_dot_segment_maps_to_unknown() {
+    auto reg = make_test_registry();
+    bool threw = false;
+    try {
+        EnchParser::parse("minecraft:..=3", reg);  // `..` segment → invalid NSID
+    } catch (const std::exception& e) {
+        threw = true;
+        std::string msg(e.what());
+        expect(msg.find("The NSID") == std::string::npos,
+               "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_ench") != std::string::npos ||
+                   msg.find("Unknown enchantment") != std::string::npos,
+               "dot-segment id maps to friendly unknown-enchantment error");
+    }
+    expect(threw, "dot-segment enchantment id should throw");
+    TEST_PASS("test_ench_parser_dot_segment_maps_to_unknown");
+}
+
 void test_ench_parser_duplicate_rejected() {
     auto reg = make_test_registry();
     bool threw = false;
@@ -175,6 +219,8 @@ int main() {
         test_ench_parser_empty_token_rejected();
         test_ench_parser_level_too_high_rejected();
         test_ench_parser_unknown_throws();
+        test_ench_parser_uppercase_maps_to_unknown();
+        test_ench_parser_dot_segment_maps_to_unknown();
         test_ench_parser_blank_input_rejected();
         test_ench_parser_trailing_comma_rejected();
         test_ench_parser_duplicate_rejected();

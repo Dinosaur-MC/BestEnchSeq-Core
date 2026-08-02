@@ -307,6 +307,45 @@ void test_besq_import_invalidates_effective_cache() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: load_file on a datapack dir keeps #mypack:* enchantments (#24)
+// ---------------------------------------------------------------------------
+// FormatDetector used to drop a datapack's item_tags, so an enchantment whose
+// supported_items references the datapack's own `#mypack:*` tag was silently
+// removed during cross-validation.  The datapack item tags now seed the
+// validation universe and land in the active profile's tag registry.
+
+void test_besq_load_file_datapack_keeps_tags() {
+    auto dir = std::filesystem::temp_directory_path() / "besq_load_file_dp";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "mypack" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        std::ofstream f(dir / "data" / "mypack" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+    {
+        std::ofstream f(dir / "data" / "mypack" / "enchantment" / "leeching.json");
+        f << R"({"supported_items": "#mypack:swords", "anvil_cost": 2, "max_level": 3})";
+    }
+
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.load_file(dir.string());
+
+    expect(ctx.enchantments().contains(NSID("mypack:leeching")),
+           "load_file on a datapack keeps the #mypack:* enchantment");
+    expect(ctx.categories().contains(NSID("#mypack:swords")),
+           "datapack item tag lands in the active profile's tag registry");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("BesqContext load_file datapack keeps tags");
+}
+
+// ---------------------------------------------------------------------------
 // Test: C ABI bindings
 // ---------------------------------------------------------------------------
 
@@ -585,6 +624,7 @@ int main() {
         test_besq_default_profiles_scan();
         test_besq_export();
         test_besq_import_invalidates_effective_cache();
+        test_besq_load_file_datapack_keeps_tags();
         test_c_abi();
         test_c_abi_solve_default_algo();
         test_c_abi_solve_inventory();

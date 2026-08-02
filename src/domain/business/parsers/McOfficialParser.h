@@ -2,6 +2,7 @@
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
 #include "domain/business/components/TagResolver.h"
+#include "domain/business/registries/TagRegistry.h"
 
 #include <filesystem>
 #include <string>
@@ -55,6 +56,23 @@ public:
         const std::string& filename,
         const std::string& content,
         TagResolver& tag_resolver
+    );
+
+    /// Build a TagRegistry from the datapack's item-tag definitions, skipping
+    /// tags whose ids fail NSID validation (uppercase, `.`/`..` segments, … —
+    /// logged with a warning, mirroring `ProfileManager::load_datapack`).
+    /// Each registry entry maps the tag NSID (`NSID("#" + key)`) → key.
+    static TagRegistry build_item_tag_registry(
+        const std::vector<ItemTagDefinition>& item_tags
+    );
+
+    /// Load each item-tag definition into \p resolver (honoring its `replace`
+    /// flag) on top of whatever universe the resolver already holds (typically
+    /// the seeded vanilla tags).  Invalid tag ids are skipped.  A no-op for an
+    /// empty \p item_tags.
+    static void load_item_tags_into(
+        TagResolver& resolver,
+        const std::vector<ItemTagDefinition>& item_tags
     );
 
 private:

@@ -2,6 +2,7 @@
 #include "domain/business/components/FormatDetector.h"
 #include "domain/business/components/LimitedLevelCalculator.h"
 #include "domain/business/loaders/RegistryLoader.h"
+#include "domain/business/parsers/McOfficialParser.h"
 #include "builtin/DataLoader.h"
 #include "builtin/ItemProperties.h"
 #include "common/io/FileUtils.hpp"
@@ -26,13 +27,16 @@ Profile ProfileLoader::load(const std::filesystem::path& path) {
 bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& path) {
     try {
         // Phase 1: parse the profile's own DTOs.  The vanilla universe is
-        // loaded separately below as the cross-validation fallback.
-        auto [ench_data, eq_data] = FormatDetector::parse(path);
+        // loaded separately below as the cross-validation fallback.  For a
+        // datapack dir the result also carries the datapack's own item-tag
+        // definitions (data/<ns>/tags/item/*.json) so `#mypack:*`
+        // supported_items references survive cross-validation (B-T24 #24).
+        auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
 
         // Phase 1b: parse the profile's declared dependencies from the raw
-        // JSON root. FormatDetector::Result only carries enchantments and
-        // equipments, so re-read the top-level `dependencies` array here.
-        // (CSV / MC-official formats have no JSON dependencies array.)
+        // JSON root. FormatDetector::Result carries enchantments/equipment/
+        // item_tags but NOT the top-level `dependencies` array, so re-read it
+        // here.  (CSV / MC-official formats have no JSON dependencies array.)
         std::vector<std::string> dependencies;
         const auto format = FormatDetector::detect(path);
         if (format == DataFormat::NativeJson || format == DataFormat::Unknown) {
@@ -51,12 +55,24 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // union, then filter back to the profile's own content.  The vanilla
         // tag universe is retained so the profile's `#tag` supported_items
         // references stay interpretable downstream.
-        auto own = RegistryLoader::resolve_own_content(ench_data, eq_data);
+        //
+        // The datapack's own item tags must seed the validation universe so
+        // `#mypack:*` supported_items references resolve during
+        // cross-validation, and must land in the profile's tag registry so the
+        // profile owns them (mirrors ProfileManager::load_datapack, B-T14 I-1).
+        // FormatDetector::Result carries item_tags for the McOfficial branch;
+        // native JSON/CSV have none, so this is a no-op for them (B-T24 #24).
+        auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
+        auto own = RegistryLoader::resolve_own_content(
+            ench_data, eq_data, item_tags.empty() ? nullptr : &datapack_tags);
 
         // Compute limited_level uniformly (B-T18): the profile's own registry,
         // using the attached vanilla-universe resolver, BEFORE the profile is
-        // constructed (Profile exposes only const registry access).
+        // constructed (Profile exposes only const registry access).  Datapack
+        // item tags are loaded into the resolver (honoring `replace`) so
+        // `#mypack:*` / `tags_of` applicability holds at solve time.
         auto resolver = besq::data::make_builtin_tag_resolver();
+        McOfficialParser::load_item_tags_into(*resolver, item_tags);
         LimitedLevelCalculator::compute(own.ench, *resolver, load_item_properties());
 
         // Construct Profile via full-parameter constructor.

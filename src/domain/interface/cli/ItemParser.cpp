@@ -122,7 +122,18 @@ Item ItemParser::parse(const std::string &input,
         throw std::runtime_error("Empty item id in target spec");
 
     // ── Look up equipment (needed for max_durability defaults) ──
-    auto eq_it = eq_reg.find(NSID(item_id));
+    // NSID() throws its bare validator text ("The NSID '...' is invalid") when
+    // the id contains now-invalid chars (uppercase, `/` in ns, `.`/`..`
+    // segments).  Such input is genuinely unknown/invalid — map it to the
+    // actionable unknown-equipment error instead (B-T24 #22).
+    auto make_nsid = [](const std::string& k) -> NSID {
+        try {
+            return NSID(k);
+        } catch (const std::exception&) {
+            throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", k));
+        }
+    };
+    auto eq_it = eq_reg.find(make_nsid(item_id));
     if (eq_it == eq_reg.end())
         throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", item_id));
 

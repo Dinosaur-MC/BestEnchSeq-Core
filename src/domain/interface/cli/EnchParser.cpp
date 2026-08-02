@@ -132,10 +132,21 @@ EnchSet EnchParser::parse(const std::string& input,
 
         // ── Resolve against registry and insert into EnchSet ──────────────
         std::string key = (ns.empty() || ns == "minecraft") ? id : ns + ":" + id;
-        auto it = ench_reg.find(NSID(key));
+        // NSID() throws its bare validator text ("The NSID '...' is invalid")
+        // when the input contains now-invalid chars (uppercase, `/` in ns,
+        // `.`/`..` segments).  Such input is genuinely unknown/invalid — map it
+        // to the actionable unknown-enchantment error instead (B-T24 #22).
+        auto make_nsid = [](const std::string& k) -> NSID {
+            try {
+                return NSID(k);
+            } catch (const std::exception&) {
+                throw std::runtime_error(tr_fmt("cli.err.unknown_ench", k));
+            }
+        };
+        auto it = ench_reg.find(make_nsid(key));
         if (it == ench_reg.end()) {
             // bare-ID fallback
-            it = ench_reg.find(NSID(id));
+            it = ench_reg.find(make_nsid(id));
             if (it == ench_reg.end())
                 throw std::runtime_error(tr_fmt("cli.err.unknown_ench", key));
         }
