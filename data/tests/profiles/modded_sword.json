@@ -189,6 +189,45 @@
       "supported_items": [
         "#minecraft:swords"
       ]
+    },
+    {
+      "id": "attack_speed",
+      "name": "Attack Speed",
+      "platform": "java",
+      "max_level": 3,
+      "limited_level": 3,
+      "multiplier": 3,
+      "exclusive_set": [],
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
+    },
+    {
+      "id": "certainty",
+      "name": "Certainty",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
+    },
+    {
+      "id": "divinity",
+      "name": "Divinity",
+      "platform": "java",
+      "max_level": 5,
+      "limited_level": 5,
+      "multiplier": 2,
+      "exclusive_set": [],
+      "is_treasure": true,
+      "supported_items": [
+        "#minecraft:swords"
+      ]
     }
   ],
   "equipments": [],
