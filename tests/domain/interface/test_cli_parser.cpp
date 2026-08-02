@@ -148,6 +148,8 @@ void test_default_values() {
     expect(config.mode == "direct", "default mode should be direct");
     expect(config.format == "text", "default format should be text");
     expect(config.solutions == 1, "default solutions should be 1");
+    expect(config.profile.has_value() && *config.profile == "builtin:vanilla",
+           "default profile should be builtin:vanilla");
     std::cout << "  PASS: test_default_values" << std::endl;
 }
 

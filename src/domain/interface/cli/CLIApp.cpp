@@ -228,7 +228,7 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<std::string>{.long_name = "memory",                           .help_key = "cli.help.memory_desc",    .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-time",                         .help_key = "cli.help.max_time_desc",  .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-threads",      .short_name = 'j', .help_key = "cli.help.max_threads_desc", .help_group = "cli.help.group_advanced"},
-    Option<std::string>{.long_name = "profile",          .help_key = "cli.help.profile_desc",       .help_group = "cli.help.group_profile"},
+    Option<std::string>{.long_name = "profile",          .help_key = "cli.help.profile_desc",       .help_group = "cli.help.group_profile", .default_v = std::string("builtin:vanilla")},
     Option<std::string>{.long_name = "profile-dir",      .help_key = "cli.help.profile_dir_desc",   .help_group = "cli.help.group_profile"},
     Option<std::string>{.long_name = "publish",          .help_key = "cli.help.publish_desc",       .help_group = "cli.help.group_profile"},
     Option<std::string>{.long_name = "publish-version",  .help_key = "cli.help.publish_version_desc", .help_group = "cli.help.group_profile"},
