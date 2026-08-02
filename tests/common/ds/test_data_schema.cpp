@@ -478,6 +478,152 @@ void test_csv_required_empty_string_roundtrip() {
     TEST_PASS("csv required empty-string roundtrip");
 }
 
+// ── 9. 验收：min_cost 双形态 + EnchInfoLike 端到端（spec §6.5/6.6） ──
+
+// ── 9a. 双形态：嵌套 min_cost 对象 → 两个扁平字段（经别名） ────────
+struct CostHolder { int min_cost_base = 0; int min_cost_per_level = 0; };
+struct CostSchema {
+    using Type = CostHolder;
+    static constexpr auto fields = std::tuple{
+        ds::field("min_cost_base", &CostHolder::min_cost_base, ds::int_codec{}, "min_cost.base"),
+        ds::field("min_cost_per_level", &CostHolder::min_cost_per_level, ds::int_codec{}, "min_cost.per_level_above_first"),
+    };
+};
+using CostJson = ds::json::Schema<CostSchema>;
+
+void test_min_cost_dual_form() {
+    // 嵌套形态（MC 官方）
+    Json nested = Json::object()
+        .set("min_cost", Json::object()
+            .set("base", Json(int64_t{10}))
+            .set("per_level_above_first", Json(int64_t{5})));
+    CostHolder c; ds::ErrorList e;
+    expect(CostJson::parse(nested, c, e), "nested form parses");
+    expect(c.min_cost_base == 10 && c.min_cost_per_level == 5, "nested values extracted");
+    // 扁平形态（native）
+    Json flat = Json::object()
+        .set("min_cost_base", Json(int64_t{7}))
+        .set("min_cost_per_level", Json(int64_t{3}));
+    CostHolder c2; ds::ErrorList e2;
+    expect(CostJson::parse(flat, c2, e2), "flat form parses");
+    expect(c2.min_cost_base == 7 && c2.min_cost_per_level == 3, "flat values extracted");
+    // 序列化 → 扁平（canonical）
+    CostHolder c3{2, 4};
+    Json j = CostJson::serialize(c3);
+    expect(j.has("min_cost_base") && !j.has("min_cost"), "serialize emits flat canonical");
+    TEST_PASS("min_cost dual-form (nested + flat)");
+}
+
+// ── 9b. EnchInfo-式完整端到端（JSON + CSV 双往返） ──────────────────
+struct EnchInfoLike {
+    std::string id;
+    std::string name;
+    std::string platform;
+    int max_level = 0;
+    int multiplier = 0;
+    bool is_treasure = false;
+    int limited_level = 0;
+    bool limited_level_provided = false;
+    int min_cost_base = 0;
+    int min_cost_per_level = 0;
+    std::unordered_set<std::string> exclusive_set;
+    std::unordered_set<std::string> supported_items;
+};
+struct EnchInfoLikeSchema {
+    using Type = EnchInfoLike;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("id", &Type::id, ds::string_codec{}),
+        ds::field("name", &Type::name, ds::string_codec{}),
+        ds::field("platform", &Type::platform, ds::string_codec{}, "supported_platform"),
+        ds::field("max_level", &Type::max_level, ds::int_codec{.min = 1}),
+        ds::field("multiplier", &Type::multiplier, ds::int_codec{.min = 1}),
+        ds::field("is_treasure", &Type::is_treasure, ds::bool_codec{}),
+        ds::field("limited_level", &Type::limited_level, ds::int_codec{},
+                  [](const Type& t) { return t.limited_level_provided; }),
+        ds::field("min_cost_base", &Type::min_cost_base, ds::int_codec{}, "min_cost.base"),
+        ds::field("min_cost_per_level", &Type::min_cost_per_level, ds::int_codec{}, "min_cost.per_level_above_first"),
+        ds::field("exclusive_set", &Type::exclusive_set, ds::set_codec<ds::string_codec>{}),
+        ds::field("supported_items", &Type::supported_items, ds::set_codec<ds::string_codec>{}),
+    };
+};
+using EnchJson = ds::json::Schema<EnchInfoLikeSchema>;
+using EnchCsv  = ds::csv::Schema<EnchInfoLikeSchema>;
+
+EnchInfoLike make_ench() {
+    EnchInfoLike e;
+    e.id = "minecraft:sharpness"; e.name = "Sharpness"; e.platform = "java";
+    e.max_level = 5; e.multiplier = 1; e.is_treasure = false;
+    e.limited_level = 5; e.limited_level_provided = true;
+    e.min_cost_base = 1; e.min_cost_per_level = 11;
+    e.exclusive_set = {"minecraft:smite"};
+    e.supported_items = {"#minecraft:sword", "#minecraft:axe"};
+    return e;
+}
+
+void test_enchlike_json_roundtrip() {
+    EnchInfoLike e = make_ench();
+    Json j = EnchJson::serialize(e);
+    std::string s = j.to_string();
+    expect(s.find("\"platform\":\"java\"") != std::string::npos, "platform key canonical");
+    expect(s.find("limited_level") != std::string::npos, "conditional emitted when provided");
+    EnchInfoLike out; ds::ErrorList err;
+    expect(EnchJson::parse(j, out, err), "ench json parse ok");
+    expect(out.id == e.id && out.platform == e.platform && out.max_level == 5, "basic fields");
+    expect(out.exclusive_set == e.exclusive_set, "exclusive_set roundtrip");
+    expect(out.supported_items == e.supported_items, "supported_items roundtrip");
+    expect(out.min_cost_base == 1 && out.min_cost_per_level == 11, "min_cost roundtrip");
+    TEST_PASS("EnchInfoLike JSON roundtrip");
+}
+void test_enchlike_platform_legacy_alias() {
+    Json j = Json::object()
+        .set("id", Json(std::string("minecraft:sharpness")))
+        .set("max_level", Json(int64_t{5}))
+        .set("multiplier", Json(int64_t{1}))
+        .set("supported_platform", Json(std::string("bedrock")));  // 旧键名
+    EnchInfoLike out; ds::ErrorList err;
+    expect(EnchJson::parse(j, out, err), "legacy supported_platform alias accepted");
+    expect(out.platform == "bedrock", "legacy alias sourced");
+    TEST_PASS("legacy platform alias (supported_platform)");
+}
+void test_enchlike_csv_roundtrip() {
+    EnchInfoLike e = make_ench();
+    auto hdr = EnchCsv::header();
+    expect(hdr[2] == "platform", "csv header third col is platform");
+    auto row = EnchCsv::serialize_row(e);
+    EnchInfoLike out; ds::ErrorList err;
+    expect(EnchCsv::parse_row(hdr, row, out, err), "ench csv parse ok");
+    expect(out.id == e.id && out.platform == "java" && out.max_level == 5, "csv basic fields");
+    expect(out.supported_items == e.supported_items, "csv supported_items roundtrip");
+    expect(out.exclusive_set == e.exclusive_set, "csv exclusive_set roundtrip");
+    expect(out.limited_level == 5, "csv limited_level roundtrip");
+    TEST_PASS("EnchInfoLike CSV roundtrip");
+}
+
+// ── 10. set_codec<int> 数值往返（非字符串内层，Task 6 review fold-in） ──
+// 注：schema 与类型必须在命名空间作用域——局部类不能含 static constexpr 数据成员（C++20）。
+struct IntSet { std::unordered_set<int> values; };
+struct IntSetSchema {
+    using Type = IntSet;
+    static constexpr auto fields = std::tuple{
+        ds::field("values", &IntSet::values, ds::set_codec<ds::int_codec>{}),
+    };
+};
+using IntSetJson = ds::json::Schema<IntSetSchema>;
+
+void test_set_codec_int_roundtrip() {
+    IntSet s{{5, 1, 3}};
+    Json j = IntSetJson::serialize(s);
+    // values emitted as JSON numbers, sorted
+    auto arr = j["values"].as<Json::Array>();
+    expect(arr.size() == 3, "int set size");
+    expect(arr[0].as<int64_t>() == 1 && arr[1].as<int64_t>() == 3 && arr[2].as<int64_t>() == 5,
+           "int set emitted sorted numeric");
+    IntSet out; ds::ErrorList e;
+    expect(IntSetJson::parse(j, out, e), "int set parse ok");
+    expect(out.values.count(1) && out.values.count(3) && out.values.count(5), "int set roundtrip");
+    TEST_PASS("set_codec<int> numeric roundtrip");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -507,5 +653,10 @@ int main() {
     test_csv_set_join_and_quotes();
     test_csv_full_text_roundtrip();
     test_csv_required_empty_string_roundtrip();
+    test_min_cost_dual_form();
+    test_enchlike_json_roundtrip();
+    test_enchlike_platform_legacy_alias();
+    test_enchlike_csv_roundtrip();
+    test_set_codec_int_roundtrip();
     return print_summary();
 }
