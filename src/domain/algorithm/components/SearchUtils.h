@@ -1,5 +1,6 @@
 #pragma once
 #include "ItemPool.h"
+#include "common/utils/bit_iterator.hpp"
 #include "domain/algorithm/forge_engine/IForgeEngine.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
@@ -11,23 +12,26 @@ namespace algorithm {
 
 // ─── Shared helpers ───────────────────────────────────────────────────
 
-/// Check whether \p equipment satisfies all enchantments in \p target.
-/// Returns true when every target enchantment is present at or above
-/// the required level.
-/// Accepts any iterable collection of Ench (EnchSet or EnchCollection).
-template <typename EnchRange>
-inline bool meets_target(const Item &equipment, const EnchRange &target) noexcept {
-    for (const auto &t : target) {
-        Ench ench = static_cast<Ench>(t);
-        if (equipment.enchs[ench.id] < ench.level)
+/// Check whether \p item satisfies the full \p target: it must be the same
+/// item type (equipment for gear targets, a book for enchanted-book targets —
+/// a book result can never satisfy an equipment target, and vice versa) and
+/// carry every target enchantment at or above the required level.
+inline bool meets_target(const Item &item, const Item &target) noexcept {
+    if (item.type != target.type)
+        return false;
+    // Traverse the target's enchanted-id mask with the low-overhead bit
+    // iterator rather than the EnchSet input iterator (hot path: final-item
+    // checks in every strategy run per candidate).
+    bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
+    for (auto id = it.next(); id != it.npos; id = it.next()) {
+        if (item.enchs[id] < target.enchs[id])
             return false;
     }
     return true;
 }
 
 /// Pool-based overload: resolves \p equip_id through \p pool.
-template <typename EnchRange>
-inline bool meets_target(ItemPool::ItemID equip_id, const ItemPool &pool, const EnchRange &target) noexcept {
+inline bool meets_target(ItemPool::ItemID equip_id, const ItemPool &pool, const Item &target) noexcept {
     return meets_target(pool[equip_id], target);
 }
 
@@ -93,13 +97,15 @@ inline void precompute_max(
 
 // ─── Compute heuristic h from precomputed max levels ──────────────────
 
+template <typename EnchRange>
 inline int32_t
-compute_h(const std::vector<Ench> &target, const EnchReg &reg, const std::vector<int16_t> &h_max) {
+compute_h(const EnchRange &target, const EnchReg &reg, const std::vector<int16_t> &h_max) {
     int32_t h = 0;
     for (const auto &t : target) {
-        int16_t have = h_max[t.id];
-        if (have < t.level)
-            h += (t.level - have) * reg[t.id].mul_b;
+        Ench e  = static_cast<Ench>(t);
+        int16_t have = h_max[e.id];
+        if (have < e.level)
+            h += (e.level - have) * reg[e.id].mul_b;
     }
     return h;
 }
@@ -112,7 +118,7 @@ compute_h(const std::vector<Ench> &target, const EnchReg &reg, const std::vector
 
 inline int32_t dfs_bound(
     std::vector<Item> items, int32_t g, int32_t best_cost, int64_t &node_limit,
-    const IForgeEngine &forge_engine, const EnchReg &reg, const std::vector<Ench> &target,
+    const IForgeEngine &forge_engine, const EnchReg &reg, const Item &target,
     std::vector<int16_t> &h_buf, std::vector<int16_t> &h_dirty
 ) {
     if (node_limit <= 0)
@@ -132,7 +138,7 @@ inline int32_t dfs_bound(
         },
         reg, h_buf, h_dirty
     );
-    int32_t h = search_utils::compute_h(target, reg, h_buf);
+    int32_t h = search_utils::compute_h(target.enchs, reg, h_buf);
     for (auto id : h_dirty)
         h_buf[id] = 0;
     if (g + h >= best_cost)

@@ -103,7 +103,7 @@ private:
 
     ForgeEngine _forge_engine;
     const EnchReg* _ench_reg{nullptr};
-    std::vector<Ench> _target;
+    Item _target;  // full solve target (type + enchantments)
     std::vector<Item> _base_items;  // canonicalised input; masks index into this
 
     // ── Diagnostics (PartitionDpDiagnostics, spec Tier 0/1) ─────────────

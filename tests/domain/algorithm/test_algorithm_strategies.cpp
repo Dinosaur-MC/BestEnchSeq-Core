@@ -457,9 +457,45 @@ void test_bbdp_final_item_meets_target() {
     auto out = executor.output();
     const bool meets = state == algorithm::AlgorithmState::Completed
         && !out.solutions.empty()
-        && meets_target(out.final_item, ctx.target_item.enchs);
+        && meets_target(out.final_item, ctx.target_item);
     expect(meets, "bb_dp: final_item should meet the target");
     std::cout << "PASS: test_bbdp_final_item_meets_target (cost="
+              << (out.solutions.empty() ? -1 : out.solutions[0].total_cost) << ")"
+              << std::endl;
+}
+
+// ─── Book target: an enchanted_book accepts any enchantment; with an empty
+// source the resolver emits only the diff books (no empty base book), so a
+// two-enchant book merges directly — optimal cost 2 (knockback onto sharpness).
+void test_bbdp_book_target() {
+    // Reuse the sword registry; the book target is what admits every enchant
+    // (the CompactAdapter book exception).  Drive the algorithm directly.
+    auto ctx = TestContext({}, {});
+    algorithm::AlgorithmExecutor executor(std::make_unique<BBDpAlgorithm>());
+    algorithm::AlgorithmInput input;
+    input.config.forge.platform = MCE::Java;
+    input.registry = ctx.ench_reg;
+    input.target   = algorithm::Item{algorithm::ItemType::Book, 0, 0, {}};
+    input.target.enchs.insert(algorithm::Ench{ID_SHARPNESS, 5});
+    input.target.enchs.insert(algorithm::Ench{ID_KNOCKBACK, 2});
+    input.config.mode = AlgorithmMode::direct;
+    input.data = algorithm::DirectPayload{};
+    algorithm::Item target_copy = input.target;
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    auto out = executor.output();
+    expect(state == algorithm::AlgorithmState::Completed,
+           "book target solve completed");
+    expect(!out.solutions.empty(), "book target produced a solution");
+    if (!out.solutions.empty()) {
+        expect(out.solutions[0].total_cost == 2,
+               "book merge cost should be 2 (knockback onto sharpness)");
+        expect(out.final_item.type == algorithm::ItemType::Book,
+               "final item is a book");
+        expect(meets_target(out.final_item, target_copy),
+               "final book meets the book target");
+    }
+    std::cout << "PASS: test_bbdp_book_target (cost="
               << (out.solutions.empty() ? -1 : out.solutions[0].total_cost) << ")"
               << std::endl;
 }
@@ -657,6 +693,7 @@ int main() {
     RUN_TEST(test_bbdp_beam_width);
     RUN_TEST(test_bbdp_cap_infeasible_fallback);
     RUN_TEST(test_bbdp_final_item_meets_target);
+    RUN_TEST(test_bbdp_book_target);
 
     // DPMergeAlgorithm tests
     RUN_TEST(test_dpmerge_target_already_met);

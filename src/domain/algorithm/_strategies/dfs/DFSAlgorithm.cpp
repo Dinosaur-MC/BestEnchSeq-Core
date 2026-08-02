@@ -110,6 +110,7 @@ void DFSAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx
     _target.clear();
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
+    _target_item = input.target;
 
     if (ctx.is_restored())
         return;  // stack/frame_pairs/visited_best/steps already restored by serializer
@@ -220,7 +221,7 @@ void DFSAlgorithm::_dfs_iterative(ExecutionContext& ctx) {
             _visited_best[h] = _stack[frame_idx].cost_so_far;
         }
 
-        if (meets_target(_stack[frame_idx].items[0], _target)) {
+        if (meets_target(_stack[frame_idx].items[0], _target_item)) {
             ++_solutions_found;
             ctx.report_solution(_current_steps);
 

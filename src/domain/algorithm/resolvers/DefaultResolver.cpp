@@ -20,8 +20,13 @@ ResolverOutput DefaultResolver::resolve(const AlgorithmInput &input) const {
         // Generate the books needed to reach the target from the source.
         ResolverOutput books = ItemResolver::resolve(input.target, base.enchs);
         ResolverOutput out;
-        out.reserve(books.size() + 1);
-        out.push_back(std::move(base));  // always present → GoalAlreadyMet path
+        // A book target with no source has no base book to preserve: its first
+        // enchantment comes from the enchanting table (book → enchanted_book),
+        // outside the anvil model.  Emitting an empty base book would force a
+        // pointless merge step that only inflates the final ppn (and its cost).
+        out.reserve(books.size() + (base.enchs.empty() ? 0 : 1));
+        if (!(input.target.type == ItemType::Book && base.enchs.empty()))
+            out.push_back(std::move(base));  // equipment base / sourced book
         for (auto &b : books)
             out.push_back(std::move(b));
         return out;

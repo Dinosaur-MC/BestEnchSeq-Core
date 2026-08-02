@@ -79,7 +79,7 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         return;
     }
 
-    if (meets_target(items[0], target.enchs)) {
+    if (meets_target(items[0], target)) {
         ctx.report_solution({});
         ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
@@ -202,8 +202,7 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     if (!cancelled) {
         for (auto it = tiers.rbegin(); it != tiers.rend(); ++it) {
             for (auto& item : *it) {
-                if (item.type == ItemType::Equip
-                    && meets_target(item, target.enchs))
+                if (meets_target(item, target))
                 {
                     int32_t total_cost = std::accumulate(
                         steps.begin(), steps.end(), int32_t{0},

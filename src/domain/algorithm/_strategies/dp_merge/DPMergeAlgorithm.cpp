@@ -304,10 +304,8 @@ const IAlgorithmSerializer *DPMergeAlgorithm::get_serializer() const noexcept {
 // ─── init ─────────────────────────────────────────────────────────────────
 
 void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
-    _ench_reg  = &input.registry;
-    _target.clear();
-    for (const auto& e : input.target.enchs)
-        _target.push_back(e);
+    _ench_reg = &input.registry;
+    _target   = input.target;
 
     if (ctx.is_restored())
         return;  // _cache already restored by serializer
@@ -419,9 +417,7 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
     const ParetoEntry* best = nullptr;
     for (const auto& entry : frontier.entries) {
-        if (entry.item.type == ItemType::Equip &&
-            meets_target(entry.item, _target))
-        {
+        if (meets_target(entry.item, _target)) {
             if (!best || entry.cost < best->cost)
                 best = &entry;
         }

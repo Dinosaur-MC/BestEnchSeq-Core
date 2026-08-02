@@ -185,17 +185,18 @@ int32_t BBDpAlgorithm::compute_ub(std::vector<Item> items) {
     }
 
     // Only trust the bound if the construction actually reaches the target.
-    bool found_equip = false;
+    // The final holder must be the target item type (equipment or book).
+    bool found_final = false;
     Item final_item;
     for (auto& tier : tiers) {
         for (auto& it : tier) {
-            if (it.type == ItemType::Equip) {
+            if (it.type == _target.type) {
                 final_item = std::move(it);
-                found_equip = true;
+                found_final = true;
             }
         }
     }
-    if (!found_equip || !meets_target(final_item, _target))
+    if (!found_final || !meets_target(final_item, _target))
         return INT32_MAX;
     return static_cast<int32_t>(total);
 }
@@ -322,7 +323,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
             // Only a genuine full-set solution may tighten the anytime bound.
             // A proper-subset "complete" item (redundant books) must not prune
             // the top-level frontier (see review finding I2).
-            if (final_level && result.type == ItemType::Equip && meets_target(result, _target)) {
+            if (final_level && meets_target(result, _target)) {
                 int32_t seen = _best_cost.load(std::memory_order_relaxed);
                 while (cost < seen &&
                        !_best_cost.compare_exchange_weak(seen, cost, std::memory_order_relaxed)) {}
@@ -371,7 +372,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
             if (total > bound_snapshot) { ++bound_cnt; return; }  // keep == bound (may be optimal)
             // Only a genuine full-set solution may tighten the anytime bound
             // (see review finding I2).
-            if (final_level && new_item.type == ItemType::Equip && meets_target(new_item, _target)) {
+            if (final_level && meets_target(new_item, _target)) {
                 int32_t seen = _best_cost.load(std::memory_order_relaxed);
                 while (total < seen &&
                        !_best_cost.compare_exchange_weak(seen, static_cast<int32_t>(total),
@@ -499,9 +500,7 @@ double BBDpAlgorithm::evaluate(int16_t ench_count) const noexcept {
 void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
     _forge_engine.set_config(input.config.forge);
     _ench_reg = &input.registry;
-    _target.clear();
-    for (const auto& e : input.target.enchs)
-        _target.push_back(e);
+    _target = input.target;
     _diag = PartitionDpDiagnostics{};
     // Reset per-pass diagnostic accumulators (execute() may be re-run).
     _dp_cap_pruned.store(0, std::memory_order_relaxed);
@@ -603,7 +602,7 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
     auto find_best = [&](const Frontier& f) -> const ParetoEntry* {
         const ParetoEntry* best = nullptr;
         for (const auto& e : f.entries)
-            if (e.item.type == ItemType::Equip && meets_target(e.item, _target))
+            if (meets_target(e.item, _target))
                 if (!best || e.cost < best->cost)
                     best = &e;
         return best;

@@ -106,6 +106,7 @@ class AStarAlgorithm : public IAlgorithm {
     ForgeEngine _forge_engine;
     const EnchReg *_ench_reg{nullptr};
     std::vector<Ench> _target;
+    Item _target_item;  // full solve target (type + enchantments)
     int32_t _best_solution_cost{INT32_MAX};
     int32_t _solutions_found{0};
     AStarMemoryBudget _budget;

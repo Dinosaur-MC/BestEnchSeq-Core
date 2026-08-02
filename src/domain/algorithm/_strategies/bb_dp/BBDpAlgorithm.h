@@ -85,7 +85,7 @@ private:
 
     ForgeEngine _forge_engine;
     const EnchReg *_ench_reg{nullptr};
-    std::vector<Ench> _target;
+    Item _target;  // full solve target (type + enchantments)
 
     // Base items in canonical order — every recursive subproblem is a subset
     // of this array, identified by a bitmask (see `_cache` key).
