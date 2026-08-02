@@ -5,6 +5,8 @@
 #include "domain/business/parsers/McOfficialParser.h"
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
+#include "domain/business/components/TagResolver.h"
+#include "common/io/FileUtils.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -526,6 +528,130 @@ void test_mc_parse_files_empty() {
     TEST_PASS("test_mc_parse_files_empty");
 }
 
+// ─── test_mc_official_single_string_supported ──────────────────────────
+// T10: real MC 1.21+ datapack format allows supported_items to be a SINGLE
+// STRING (e.g. "#minecraft:swords") rather than an array. Regression: the
+// array-only parser threw JsonException on a string. Fixture:
+// res/More Enchants 1.4/.../attack_speed.json.
+// Verify it does NOT throw and the raw tag reference survives in applicable_to.
+
+void test_mc_official_single_string_supported() {
+    TagResolver tag_resolver;
+
+    std::string content = file_utils::read_file(
+        "res/More Enchants 1.4/data/enchantments/enchantment/attack_speed.json");
+
+    auto ench = McOfficialParser::parse_single_enchantment(
+        "enchantments", "attack_speed", content, tag_resolver);
+
+    expect_eq(ench.id, std::string("enchantments:attack_speed"),
+              "mc_single_string: ench id");
+    expect_eq(ench.multiplier, 7,
+              "mc_single_string: anvil_cost -> multiplier");
+    expect_eq(ench.max_level, 3,
+              "mc_single_string: max_level");
+
+    // supported_items was a single string "#minecraft:swords" — passed through RAW
+    bool has_swords = false;
+    for (const auto& a : ench.applicable_to) {
+        if (a == "#minecraft:swords") { has_swords = true; break; }
+    }
+    expect(has_swords,
+           "mc_single_string: applicable_to contains raw #minecraft:swords");
+
+    TEST_PASS("test_mc_official_single_string_supported");
+}
+
+// ─── test_mc_official_array_supported_items ────────────────────────────
+// T10: real MC datapack also uses supported_items as an ARRAY of concrete
+// item IDs (no "#" prefix). Fixture: res/enchantments-encore-4.6/.../moonwalk.json.
+// Verify the array form still parses and concrete IDs pass through unchanged.
+
+void test_mc_official_array_supported_items() {
+    TagResolver tag_resolver;
+
+    std::string content = file_utils::read_file(
+        "res/enchantments-encore-4.6/data/enchantencore/enchantment/moonwalk.json");
+
+    auto ench = McOfficialParser::parse_single_enchantment(
+        "enchantencore", "moonwalk", content, tag_resolver);
+
+    expect_eq(ench.id, std::string("enchantencore:moonwalk"),
+              "mc_array_supp: ench id");
+    expect_eq(ench.multiplier, 4,
+              "mc_array_supp: anvil_cost -> multiplier");
+    expect_eq(ench.max_level, 3,
+              "mc_array_supp: max_level");
+
+    bool has_elytra = false;
+    for (const auto& a : ench.applicable_to) {
+        if (a == "minecraft:elytra") { has_elytra = true; break; }
+    }
+    expect(has_elytra,
+           "mc_array_supp: applicable_to contains minecraft:elytra");
+
+    TEST_PASS("test_mc_official_array_supported_items");
+}
+
+// ─── test_mc_single_string_exclusive_set ───────────────────────────────
+// T10: exclusive_set may also be a single string reference (robustness of the
+// collect_strings helper). Empty TagResolver → tag resolves to nothing, but
+// parsing must NOT throw.
+
+void test_mc_single_string_exclusive_set() {
+    TagResolver tag_resolver;
+
+    std::string content = R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "exclusive_set": "#minecraft:sword",
+        "supported_items": "#minecraft:sword"
+    })";
+
+    auto ench = McOfficialParser::parse_single_enchantment(
+        "minecraft", "sharpness", content, tag_resolver);
+
+    expect_eq(ench.id, std::string("minecraft:sharpness"),
+              "mc_single_excl: ench id");
+    expect(ench.exclusive_with.empty(),
+           "mc_single_excl: unresolved tag resolves to empty exclusive_with");
+
+    TEST_PASS("test_mc_single_string_exclusive_set");
+}
+
+// ─── test_mc_tag_replace_semantics ─────────────────────────────────────
+// T10: MC 1.21 tag files may carry "replace": true → the definition REPLACES
+// any existing tag with the same key instead of merging. Absent / false → the
+// definitions MERGE (datapack semantics).
+
+void test_mc_tag_replace_semantics() {
+    TagResolver resolver;
+
+    // First definition for the tag
+    resolver.load_tag_content("minecraft:swords",
+        R"({"values": ["minecraft:stone_sword", "minecraft:wooden_sword"]})");
+
+    // Without "replace", a second definition MERGES with the first
+    resolver.load_tag_content("minecraft:swords",
+        R"({"values": ["minecraft:iron_sword"]})");
+    auto merged = resolver.resolve("#minecraft:swords");
+    expect(merged.contains("minecraft:stone_sword"),
+           "tag_replace: merge keeps first tag's values");
+    expect(merged.contains("minecraft:iron_sword"),
+           "tag_replace: merge adds second tag's values");
+
+    // With "replace": true, the tag is replaced entirely
+    resolver.load_tag_content("minecraft:swords",
+        R"({"replace": true, "values": ["minecraft:diamond_sword"]})");
+    auto replaced = resolver.resolve("#minecraft:swords");
+    expect_eq(static_cast<int>(replaced.size()), 1,
+              "tag_replace: replaced tag has only the new value");
+    expect(replaced.contains("minecraft:diamond_sword"),
+           "tag_replace: replaced tag contains the new value");
+
+    TEST_PASS("test_mc_tag_replace_semantics");
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -551,6 +677,10 @@ int main() {
         test_mc_limited_level_tag_resolved();
         test_mc_parse_files_basic();
         test_mc_parse_files_empty();
+        test_mc_official_single_string_supported();
+        test_mc_official_array_supported_items();
+        test_mc_single_string_exclusive_set();
+        test_mc_tag_replace_semantics();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

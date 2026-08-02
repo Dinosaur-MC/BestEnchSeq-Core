@@ -58,11 +58,30 @@ void TagResolver::parse_tag_values(const Json &json, std::vector<TagValue> &out)
 
 // ---------------------------------------------------------------------------
 // load_tag_json  --  load a single tag from a pre-parsed Json DOM
+//
+// Honors the MC datapack "replace" flag: a tag file with
+//   { "replace": true, "values": [...] }
+// REPLACES any existing tag with the same key. Without the flag (or with
+// "replace": false) the new values MERGE (append) with the existing ones.
 // ---------------------------------------------------------------------------
 void TagResolver::load_tag_json(const std::string &key, const Json &json) {
     _resolved_cache.clear();
+
+    bool replace = false;
+    auto root_var = json.get_value();
+    if (auto *root_obj = std::get_if<Json::Object>(&root_var)) {
+        auto replace_it = root_obj->find("replace");
+        if (replace_it != root_obj->end()) {
+            auto replace_val = replace_it->second.get_value();
+            if (auto *b = std::get_if<Json::Bool>(&replace_val)) {
+                replace = *b;
+            }
+        }
+    }
+
     auto &vec = _raw_tags[key];
-    vec.clear();
+    if (replace)
+        vec.clear();
     parse_tag_values(json, vec);
 }
 

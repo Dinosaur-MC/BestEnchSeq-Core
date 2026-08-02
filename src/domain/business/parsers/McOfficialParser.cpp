@@ -131,6 +131,27 @@ bool is_tag_file(const std::string& path) {
            path.find("\\tags\\") != std::string::npos;
 }
 
+// ── Collect strings from a value that may be a single string OR an array ──
+// Real MC 1.21+ datapack format allows fields like supported_items /
+// exclusive_set to be a SINGLE STRING (e.g. "#minecraft:swords") OR an array
+// of strings / "#"-prefixed tag refs. Old array-only parsing threw
+// JsonException on the single-string form.
+
+std::vector<std::string> collect_strings(const Json& v) {
+    std::vector<std::string> out;
+    auto val = v.get_value();
+    if (auto* s = std::get_if<Json::String>(&val)) {
+        out.push_back(*s);
+    } else if (auto* arr = std::get_if<Json::Array>(&val)) {
+        for (const auto& e : *arr) {
+            auto e_val = e.get_value();
+            if (auto* es = std::get_if<Json::String>(&e_val))
+                out.push_back(*es);
+        }
+    }
+    return out;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -180,27 +201,23 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
 
     std::string display_name = business::parser_detail::derive_display_name(filename);
 
-    // exclusive_set
+    // exclusive_set — real MC 1.21+ allows a single string OR array of
+    // concrete IDs / "#tag" refs
     std::vector<std::string> excl_items;
     {
         auto it = obj.find("exclusive_set");
-        if (it != obj.end()) {
-            Json::Array arr = it->second.as<Json::Array>();
-            for (const auto& elem : arr)
-                excl_items.push_back(elem.as<std::string>());
-        }
+        if (it != obj.end())
+            excl_items = collect_strings(it->second);
     }
     auto exclusive_set = business::parser_detail::resolve_references(excl_items, tag_resolver);
 
-    // supported_items
+    // supported_items — real MC 1.21+ allows a single string OR array of
+    // concrete IDs / "#tag" refs
     std::vector<std::string> supp_items;
     {
         auto it = obj.find("supported_items");
-        if (it != obj.end()) {
-            Json::Array arr = it->second.as<Json::Array>();
-            for (const auto& elem : arr)
-                supp_items.push_back(elem.as<std::string>());
-        }
+        if (it != obj.end())
+            supp_items = collect_strings(it->second);
     }
     // supported_items 透传（真实 MC 格式：单字符串或数组、#tag 或具体 ID）
     // limited_level 计算需要解析后的具体物品集合；applicable_to 保持原始引用透传
