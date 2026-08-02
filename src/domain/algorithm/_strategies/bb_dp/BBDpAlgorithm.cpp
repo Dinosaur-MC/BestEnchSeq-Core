@@ -281,7 +281,16 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::cache_put(uint64_t mask, std::uniq
     return *_overflow.back();
 }
 
-// ─── solve: recursive partition DP with B&B + cap + Pareto ───────────────
+// ─── solve: bottom-up layered partition DP with B&B + cap + Pareto ───────
+//
+// Replaces the old recursive top-down solver.  Bottom-up computes the memo
+// cache layer by layer (a mask of size k depends only on subfrontiers of
+// smaller size, all cached by earlier layers), which lets EVERY layer run as
+// an independent parallel_for with no nesting and no shared-result mutex.
+// The old recursion only parallelised the top level, capping speedup at ~3×
+// on 32 threads: the single largest subset (size n-1) was a serial
+// bottleneck.  Each mask's frontier is built identically (same partitions,
+// same cap / bound / Pareto prunes), so the optimum is unchanged.
 
 const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
                                                     int32_t max_step_cost,
@@ -289,89 +298,19 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
                                                     bool parallelize,
                                                     bool final_level,
                                                     ExecutionContext &ctx) {
-    // Memoisation (frontiers pruned at this run's dynamic `_best_cost`).
     if (const Frontier* hit = cache_get(mask))
         return *hit;
 
     const size_t n = static_cast<size_t>(std::popcount(mask));
 
-    // Snapshot of the dynamic B&B bound at this subproblem's entry.  The bound
-    // is only ever tightened by a genuine full-set solution (final_level), so
-    // it is constant throughout a non-final solve; for the top-level solve the
-    // post-loop re-prune below corrects any mid-loop tightening.  Hoisting the
-    // load here removes ~one atomic load per forged pair from the hot path.
+    // Dynamic B&B bound at solve entry.  In bottom-up it is constant for all
+    // layers (only top-layer full-set solutions tighten it), and the initial
+    // bound is achievable ≥ optimum, so pruning against it stays admissible.
     const int32_t bound_snapshot = _best_cost.load(std::memory_order_relaxed);
 
-    // Tier-1 prune counters (spec §5): accumulate locally in this subproblem,
-    // flush to the global once at the end.  Never a per-operation atomic.
-    uint64_t cap_pruned = 0, bound_pruned = 0;
-
-    if (n == 1) {
-        auto f = std::make_unique<Frontier>();
-        const Item& it = _base_items[static_cast<size_t>(std::countr_zero(mask))];
-        f->entries.push_back(ParetoEntry{0, it.ppn, 0, it, StepTree{}});
-        return cache_put(mask, std::move(f));
-    }
-
-    if (n == 2) {
-        auto f = std::make_unique<Frontier>();
-        uint64_t m = mask;
-        const size_t i0 = static_cast<size_t>(std::countr_zero(m)); m &= m - 1;
-        const size_t i1 = static_cast<size_t>(std::countr_zero(m));
-        const Item& a = _base_items[i0];
-        const Item& b = _base_items[i1];
-        auto make_leaf = [&](const Item& base, const Item& sac,
-                             const Item& result, int32_t cost) -> StepTree {
-            auto node = std::make_shared<StepTree::Node>(
-                EnchStep{base, sac, result, cost}, nullptr, nullptr, 1);
-            return StepTree{std::move(node)};
-        };
-        auto try_forge = [&](const Item& base, const Item& sac) {
-            if (!_forge_engine.is_forgeable(base, sac)) return;
-            // O(1) cap pre-check: forge cost = penalty(base.ppn) + penalty(sac.ppn)
-            // + enchant_cost + repair_cost, and the last two are ≥ 0.  When the
-            // penalty sum alone already exceeds the cap, the forge is guaranteed
-            // capped — skip the full forge() computation.
-            if (max_step_cost > 0 &&
-                _forge_engine.penalty_cost(base.ppn) + _forge_engine.penalty_cost(sac.ppn) > max_step_cost) {
-                ++cap_pruned;
-                return;
-            }
-            auto [result, cost] = _forge_engine.forge(base, sac, *_ench_reg);
-            if (cost == INT32_MAX) return;
-            if (max_step_cost > 0 && cost > max_step_cost) { ++cap_pruned; return; }
-            if (static_cast<int64_t>(cost) > bound_snapshot) { ++bound_pruned; return; }  // keep == bound (may be optimal)
-            // Only a genuine full-set solution may tighten the anytime bound.
-            // A proper-subset "complete" item (redundant books) must not prune
-            // the top-level frontier (see review finding I2).
-            if (final_level && meets_target(result, _target)) {
-                int32_t seen = _best_cost.load(std::memory_order_relaxed);
-                while (cost < seen &&
-                       !_best_cost.compare_exchange_weak(seen, cost, std::memory_order_relaxed)) {}
-            }
-            auto tree = make_leaf(base, sac, result, cost);
-            f->insert(ParetoEntry{cost, result.ppn, cost,
-                                  std::move(result), std::move(tree)}, beam_width);
-        };
-        try_forge(a, b);
-        try_forge(b, a);
-        // Flush this n==2 subproblem's own prunes before the early return —
-        // n==2 leaves are the most numerous in the recursion, so their counts
-        // would otherwise be silently dropped (review finding #1).
-        _dp_cap_pruned.fetch_add(cap_pruned, std::memory_order_relaxed);
-        _dp_bound_pruned.fetch_add(bound_pruned, std::memory_order_relaxed);
-        return cache_put(mask, std::move(f));
-    }
-
-    // No hard n cap: the Executor's max_search_time timeout bounds the search
-    // (a cancelled subproblem returns an empty frontier below).
-    if (ctx.is_cancelled())
-        return cache_put(mask, std::make_unique<Frontier>());
-
-    Frontier result;
-
+    // ── combine: cartesian forge of two subfrontier entries into `local` ──
     auto combine = [&](Frontier& local, const ParetoEntry& a, const ParetoEntry& b,
-                       uint64_t& cap_cnt, uint64_t& bound_cnt) {
+                       uint64_t& cap_cnt, uint64_t& bound_cnt, bool final_layer) {
         if (a.cost + b.cost > bound_snapshot) { ++bound_cnt; return; }  // any completion > bound can't improve
         auto make_tree = [&](const std::shared_ptr<StepTree::Node>& base_tree,
                              const std::shared_ptr<StepTree::Node>& sac_tree,
@@ -402,7 +341,7 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
             if (total > bound_snapshot) { ++bound_cnt; return; }  // keep == bound (may be optimal)
             // Only a genuine full-set solution may tighten the anytime bound
             // (see review finding I2).
-            if (final_level && meets_target(new_item, _target)) {
+            if (final_layer && meets_target(new_item, _target)) {
                 int32_t seen = _best_cost.load(std::memory_order_relaxed);
                 while (total < seen &&
                        !_best_cost.compare_exchange_weak(seen, static_cast<int32_t>(total),
@@ -430,118 +369,123 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         try_forge(b.item, a.item, b.step_tree.root_ptr(), a.step_tree.root_ptr());
     };
 
-    // Partition enumeration over the set bits of `mask`.  Each unordered
-    // 2-partition appears once: keep subsets with |left| ≤ n/2; for even n +
-    // equal halves require the lowest set bit to be in `left` (canonical order
-    // of `_base_items` is fixed, so bit 0 of the full set is a stable anchor).
-    const uint64_t low_bit = mask & (~mask + 1);
-
-    auto process_subset = [&](Frontier& out, uint64_t left,
-                              uint64_t& cap_cnt, uint64_t& bound_cnt) {
-        ctx.wait_if_paused();
-        if (ctx.is_cancelled()) return;
-        const size_t k = std::popcount(left);
-        if (k * 2 > n) return;
-        if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
-
-        const uint64_t right = mask & ~left;
-        // Hot path: ~1.16B partition iterations, of which ~all subfrontiers are
-        // already memoised.  Fetch them with the inline flat-cache load and only
-        // recurse into solve() on a miss — solve() carries a large stack frame
-        // (locals + lambdas), so a cache-hit call costs ~10× a single load.
-        const Frontier* left_f = _using_flat
-            ? _flat_cache[left].load(std::memory_order_acquire)
-            : cache_get(left);
-        if (!left_f)
-            left_f = &solve(left, max_step_cost, beam_width,
-                            /*parallelize=*/false, /*final_level=*/false, ctx);
-        if (!left_f->empty()) {
-            const Frontier* right_f = _using_flat
-                ? _flat_cache[right].load(std::memory_order_acquire)
-                : cache_get(right);
-            if (!right_f)
-                right_f = &solve(right, max_step_cost, beam_width,
-                                 /*parallelize=*/false, /*final_level=*/false, ctx);
-            if (!right_f->empty()) {
-                for (const auto& ea : left_f->entries)
-                    for (const auto& eb : right_f->entries)
-                        combine(out, ea, eb, cap_cnt, bound_cnt);
-            }
+    // ── forge_leaf: forge of a size-2 mask (two single items) ──
+    auto forge_leaf = [&](Frontier& f, const Item& base, const Item& sac,
+                          uint64_t& cap_cnt, uint64_t& bound_cnt, bool final_layer) {
+        if (!_forge_engine.is_forgeable(base, sac)) return;
+        if (max_step_cost > 0 &&
+            _forge_engine.penalty_cost(base.ppn) + _forge_engine.penalty_cost(sac.ppn) > max_step_cost) {
+            ++cap_cnt;
+            return;
         }
+        auto [result, cost] = _forge_engine.forge(base, sac, *_ench_reg);
+        if (cost == INT32_MAX) return;
+        if (max_step_cost > 0 && cost > max_step_cost) { ++cap_cnt; return; }
+        if (static_cast<int64_t>(cost) > bound_snapshot) { ++bound_cnt; return; }  // keep == bound (may be optimal)
+        if (final_layer && meets_target(result, _target)) {
+            int32_t seen = _best_cost.load(std::memory_order_relaxed);
+            while (cost < seen &&
+                   !_best_cost.compare_exchange_weak(seen, cost, std::memory_order_relaxed)) {}
+        }
+        auto node = std::make_shared<StepTree::Node>(
+            EnchStep{base, sac, result, cost}, nullptr, nullptr, 1);
+        f.insert(ParetoEntry{cost, result.ppn, cost,
+                             std::move(result), StepTree{std::move(node)}}, beam_width);
     };
 
-    if (parallelize && n >= PARALLEL_THRESHOLD) {
-        auto& pool = besq::ThreadPool::shared();
-        std::mutex result_mutex;
-        ctx.report_progress(20, ProgressStatus::Exploring);
-        // Stoppable: on cancel the chunk loops stop at their next index, so
-        // the 2^n mask range is not drained element-by-element after a timeout.
-        parallel_for_stoppable(pool, uint64_t{1}, mask,
-            [&](uint64_t left) {
-                if ((left & ~mask) != 0) return;      // not a subset of `mask`
-                uint64_t p_cap = 0, p_bound = 0;
-                Frontier local;
-                process_subset(local, left, p_cap, p_bound);
-                {
-                    std::lock_guard<std::mutex> lk(result_mutex);
-                    // Carry this partition's Pareto drops into `result` so they are
-                    // aggregated at the top-level cache_put (review finding #2).
-                    // local itself is never cache_put — only its entries are merged.
-                    result.dropped += local.dropped;
-                    if (!local.empty())
-                        for (auto& e : local.entries)
-                            result.insert(std::move(e), beam_width);
+    // Bucket every non-empty submask by popcount — one O(2^n) pass.
+    std::vector<std::vector<uint64_t>> masks_by_size(n + 1);
+    for (uint64_t m = mask; m; m = (m - 1) & mask)
+        masks_by_size[static_cast<size_t>(std::popcount(m))].push_back(m);
+
+    // Layer 1: single-item leaves.
+    for (uint64_t m : masks_by_size[1]) {
+        auto f = std::make_unique<Frontier>();
+        const Item& it = _base_items[static_cast<size_t>(std::countr_zero(m))];
+        f->entries.push_back(ParetoEntry{0, it.ppn, 0, it, StepTree{}});
+        cache_put(m, std::move(f));
+    }
+
+    const bool use_parallel = parallelize && n >= PARALLEL_THRESHOLD;
+    auto& pool = besq::ThreadPool::shared();
+
+    // Layers 2..n.  Every mask in a layer depends only on cached subfrontiers
+    // of strictly smaller size, so the layer's masks are independent → a
+    // barrier-parallel_for per layer (no nesting, no shared result mutex).
+    for (size_t k = 2; k <= n; ++k) {
+        auto& layer = masks_by_size[k];
+        const bool final_layer = (k == n) && final_level;
+        auto body = [&](size_t idx) {
+            ctx.wait_if_paused();
+            if (ctx.is_cancelled()) return;
+            const uint64_t sub = layer[idx];
+            Frontier result;
+            uint64_t cap_cnt = 0, bound_cnt = 0;
+
+            if (k == 2) {
+                uint64_t m = sub;
+                const size_t i0 = static_cast<size_t>(std::countr_zero(m)); m &= m - 1;
+                const size_t i1 = static_cast<size_t>(std::countr_zero(m));
+                forge_leaf(result, _base_items[i0], _base_items[i1], cap_cnt, bound_cnt, final_layer);
+                forge_leaf(result, _base_items[i1], _base_items[i0], cap_cnt, bound_cnt, final_layer);
+            } else {
+                // Partition enumeration over `sub`: each unordered 2-partition
+                // once (|left| ≤ k/2; for even k require the lowest bit in left).
+                const uint64_t low_bit = sub & (~sub + 1);
+                uint64_t left = (sub - 1) & sub;
+                while (left != 0) {
+                    const size_t kk = std::popcount(left);
+                    if (kk * 2 <= k && !((k & 1) == 0 && kk * 2 == k && !(left & low_bit))) {
+                        const uint64_t right = sub & ~left;
+                        const Frontier* left_f  = cache_get(left);
+                        const Frontier* right_f = cache_get(right);
+                        if (left_f && right_f && !left_f->empty() && !right_f->empty()) {
+                            for (const auto& ea : left_f->entries)
+                                for (const auto& eb : right_f->entries)
+                                    combine(result, ea, eb, cap_cnt, bound_cnt, final_layer);
+                        }
+                    }
+                    left = (left - 1) & sub;
                 }
-                // Flush per-mask prunes into the global counters (Tier 1: one
-                // relaxed atomic per partition, never per forge).
-                _dp_cap_pruned.fetch_add(p_cap, std::memory_order_relaxed);
-                _dp_bound_pruned.fetch_add(p_bound, std::memory_order_relaxed);
-            },
-            [&] { return ctx.is_cancelled(); });
-    } else {
-        // Enumerate all proper non-empty subsets of `mask` (skip 0 and mask).
-        uint64_t left = (mask - 1) & mask;  // largest proper subset
-        uint64_t count = 0;
-        const uint64_t total = static_cast<uint64_t>(1) << n;
-        while (left != 0 && !ctx.is_cancelled()) {
-            process_subset(result, left, cap_pruned, bound_pruned);
-            ++count;
-            if ((count & 0xFF) == 0)
-                ctx.report_progress(5 + static_cast<uint8_t>(90 * count / total),
-                                    ProgressStatus::Exploring);
-            left = (left - 1) & mask;
+            }
+
+            // Post-layer prunes (same semantics as the old recursion).
+            const int32_t dyn_bound = _best_cost.load(std::memory_order_relaxed);
+            if (dyn_bound < INT32_MAX) {
+                result.entries.erase(
+                    std::remove_if(result.entries.begin(), result.entries.end(),
+                        [dyn_bound](const ParetoEntry& e) { return e.cost > dyn_bound; }),
+                    result.entries.end());
+            }
+            // Admissible PPN lower-bound: a non-final entry must be merged at
+            // least once more, and that next merge pays ≥ penalty(ppn).
+            if (!final_layer && dyn_bound < INT32_MAX) {
+                result.entries.erase(
+                    std::remove_if(result.entries.begin(), result.entries.end(),
+                        [&](const ParetoEntry& e) {
+                            int64_t forced = e.cost + _forge_engine.penalty_cost(e.item.ppn);
+                            return forced > dyn_bound;
+                        }),
+                    result.entries.end());
+            }
+            _dp_cap_pruned.fetch_add(cap_cnt, std::memory_order_relaxed);
+            _dp_bound_pruned.fetch_add(bound_cnt, std::memory_order_relaxed);
+            cache_put(sub, std::make_unique<Frontier>(std::move(result)));
+        };
+        if (use_parallel && layer.size() > 1) {
+            parallel_for_stoppable(pool, size_t{0}, layer.size(), body,
+                [&] { return ctx.is_cancelled(); });
+        } else {
+            for (size_t idx = 0; idx < layer.size(); ++idx)
+                body(idx);
         }
+        ctx.report_progress(static_cast<uint8_t>(k * 100 / n), ProgressStatus::Exploring);
+        if (ctx.is_cancelled()) break;
     }
 
-    // Flush this subproblem's own (base-case + sequential-loop) prunes.  For
-    // the parallel top-level this is just the n==2 base counts (0 for n ≥ 14);
-    // the per-partition counts were already flushed inside the workers.
-    _dp_cap_pruned.fetch_add(cap_pruned, std::memory_order_relaxed);
-    _dp_bound_pruned.fetch_add(bound_pruned, std::memory_order_relaxed);
-
-    // Drop complete entries that cannot beat the bound (keep those equal to it).
-    const int32_t dyn_bound = _best_cost.load(std::memory_order_relaxed);
-    if (dyn_bound < INT32_MAX) {
-        result.entries.erase(
-            std::remove_if(result.entries.begin(), result.entries.end(),
-                [dyn_bound](const ParetoEntry& e) { return e.cost > dyn_bound; }),
-            result.entries.end());
-    }
-
-    // Admissible PPN lower-bound: a non-final entry must be merged at least
-    // once more, and that next merge pays ≥ penalty(ppn), so an entry with
-    // cost + penalty(ppn) > bound can never reach a solution ≤ bound.
-    if (!final_level && dyn_bound < INT32_MAX) {
-        result.entries.erase(
-            std::remove_if(result.entries.begin(), result.entries.end(),
-                [&](const ParetoEntry& e) {
-                    int64_t forced = e.cost + _forge_engine.penalty_cost(e.item.ppn);
-                    return forced > dyn_bound;
-                }),
-            result.entries.end());
-    }
-
-    return cache_put(mask, std::make_unique<Frontier>(std::move(result)));
+    if (const Frontier* hit = cache_get(mask))
+        return *hit;
+    return cache_put(mask, std::make_unique<Frontier>());  // cancelled — empty
 }
 
 // ─── evaluate ─────────────────────────────────────────────────────────────
