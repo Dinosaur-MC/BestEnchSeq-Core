@@ -130,11 +130,11 @@ void BesqContext::remove_profile(const std::string& name) {
     _impl->profiles.remove(name);
 }
 
-bool BesqContext::publish_profile(const std::string& nsid,
+bool BesqContext::publish_profile(const std::string& name,
                                   const std::string& version,
                                   const std::string& tag,
                                   const std::string& out_path) {
-    return _impl->profiles.publish(nsid, version, tag, out_path);
+    return _impl->profiles.publish(name, version, tag, out_path);
 }
 
 // ====================================================================

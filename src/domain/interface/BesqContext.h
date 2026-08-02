@@ -47,7 +47,7 @@ public:
     /// into a self-contained profile file (embeds version/tag).  Delegates to
     /// ProfileManager::publish.  Returns false if the profile is unknown or the
     /// file cannot be written.
-    bool publish_profile(const std::string& nsid, const std::string& version,
+    bool publish_profile(const std::string& name, const std::string& version,
                          const std::string& tag, const std::string& out_path);
 
     // ── Registry editing (active profile) ──

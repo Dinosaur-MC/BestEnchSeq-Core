@@ -678,6 +678,57 @@ void test_pm_load_datapack_vanilla_name() {
     TEST_PASS("test_pm_load_datapack_vanilla_name");
 }
 
+// ─── Test: datapack whose name equals the current root key (builtin:vanilla) ──
+
+void test_pm_load_datapack_builtin_vanilla_name() {
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_dp_bvanilla_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir / "data" / "vdp" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15, "id": "builtin:vanilla"}})";
+    }
+    {
+        std::ofstream f(dir / "data" / "vdp" / "enchantment" / "leeching.json");
+        f << R"({
+            "description": "Leeching",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 2,
+            "max_level": 3,
+            "min_cost": {"base": 5, "per_level_above_first": 5}
+        })";
+    }
+    {
+        std::ofstream f(dir / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+
+    ProfileManager pm;
+    // Pre-seed the injected root with content so "not replaced" is observable.
+    auto& root = pm.create("builtin:vanilla");
+    root.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5,
+                          1, false, {}, {NSID("#minecraft:swords")}});
+
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack succeeds for a pack named builtin:vanilla");
+    expect(pm.exists("builtin:vanilla"), "builtin:vanilla base profile preserved");
+    expect(pm.exists("vanilla_datapack"),
+           "datapack name disambiguated to vanilla_datapack");
+    const Profile* v = pm.find("builtin:vanilla");
+    expect(v != nullptr && v->has_enchantment(NSID("minecraft:sharpness")),
+           "builtin:vanilla base content intact (not replaced by datapack)");
+    expect(v != nullptr && !v->has_enchantment(NSID("vdp:leeching")),
+           "builtin:vanilla base does not contain datapack enchantment");
+    const Profile* dp = pm.find("vanilla_datapack");
+    expect(dp != nullptr && dp->has_enchantment(NSID("vdp:leeching")),
+           "datapack enchantment lives under the disambiguated name");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_builtin_vanilla_name");
+}
+
 // ─── Test: datapack name derivation (verbatim, B-T13) ───────────────────
 
 void test_pm_name_derive() {
@@ -725,6 +776,24 @@ void test_pm_name_derive() {
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_pm_name_derive");
+}
+
+// ─── Test: empty profile keys are rejected at manager entry points ──────
+
+void test_pm_empty_key_rejected() {
+    ProfileManager pm;
+    pm.create("base");
+
+    expect_throws_as<std::invalid_argument>([&]() { pm.create(""); },
+        "create with empty name throws");
+    expect_throws_as<std::invalid_argument>([&]() { pm.create_from("base", ""); },
+        "create_from with empty dest throws");
+    expect_throws_as<std::invalid_argument>([&]() { pm.snapshot("base", ""); },
+        "snapshot with empty name throws");
+    expect_throws_as<std::invalid_argument>([&]() { pm.branch("base", ""); },
+        "branch with empty name throws");
+
+    TEST_PASS("test_pm_empty_key_rejected");
 }
 
 // ─── Test: FormatDetector::detect pack.mcmeta branch ────────────────────
@@ -785,7 +854,9 @@ int main() {
         test_pm_load_directory_with_datapack();
         test_pm_load_datapack_no_mcmeta();
         test_pm_load_datapack_vanilla_name();
+        test_pm_load_datapack_builtin_vanilla_name();
         test_pm_name_derive();
+        test_pm_empty_key_rejected();
         test_format_detector_datapack();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

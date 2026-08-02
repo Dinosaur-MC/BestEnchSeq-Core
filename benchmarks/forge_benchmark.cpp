@@ -182,7 +182,7 @@ void load_testcases(const std::filesystem::path& dir) {
 static std::vector<std::string> split_profiles(const std::string& group_name) {
     auto p = group_name.find('|');
     if (p == std::string::npos)
-        return {"vanilla"};
+        return {"builtin:vanilla"};
     std::string rest = group_name.substr(p + 1);
     std::vector<std::string> names;
     std::istringstream ss(rest);

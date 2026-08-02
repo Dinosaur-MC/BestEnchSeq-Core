@@ -3,7 +3,6 @@
 #include "common/CommonTypes.h"
 
 #include <chrono>
-#include <stdexcept>
 
 // ============================================================================
 // Construction
@@ -194,7 +193,9 @@ Profile Profile::from_json_static(const Json& json) {
     if (json.type() != JsonType::Object)
         return p;
 
-    p._meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME)) ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>() : "";
+    p._meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME))
+                              ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>()
+                              : "";
     p._meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
     p._meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
     p._meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";
@@ -276,7 +277,9 @@ const Json& operator>>(const Json& json, ProfileMetadata& meta) {
     if (json.type() != JsonType::Object)
         return json;
 
-    meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME)) ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>() : "";
+    meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME))
+                           ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>()
+                           : "";
     meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
     meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
     meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";

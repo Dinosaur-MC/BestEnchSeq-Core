@@ -41,7 +41,9 @@ std::string derive_datapack_name(const std::filesystem::path& dir) {
     if (raw.empty())
         raw = "datapack";
     // A datapack must never replace the injected vanilla base profile.
-    if (raw == "vanilla")
+    // "builtin:vanilla" is the current root key; "vanilla" is kept as a
+    // legacy alias so a pack named after the old root is also disambiguated.
+    if (raw == "builtin:vanilla" || raw == "vanilla")
         raw = "vanilla_datapack";
     return raw;
 }
@@ -59,6 +61,8 @@ const Profile* ProfileManager::_find(const std::string& name) const {
 // ── CRUD ──────────────────────────────────────────────────────────────
 
 Profile& ProfileManager::create(const std::string& name) {
+    if (name.empty())
+        throw std::invalid_argument("Profile name must not be empty");
     if (exists(name))
         throw std::runtime_error("Profile already exists: " + name);
     auto p = std::make_unique<Profile>(name);
@@ -69,6 +73,8 @@ Profile& ProfileManager::create(const std::string& name) {
 }
 
 Profile& ProfileManager::create_from(const std::string& source, const std::string& dest) {
+    if (dest.empty())
+        throw std::invalid_argument("Profile name must not be empty");
     if (!exists(source))
         throw std::runtime_error("Source profile not found: " + source);
     if (exists(dest))
@@ -222,6 +228,8 @@ const Profile& ProfileManager::active() const {
 // ── Snapshot ──────────────────────────────────────────────────────────
 
 Profile& ProfileManager::snapshot(const std::string& source, const std::string& snapshot_name) {
+    if (snapshot_name.empty())
+        throw std::invalid_argument("Profile name must not be empty");
     if (!exists(source))
         throw std::runtime_error("Source profile not found: " + source);
     if (exists(snapshot_name))
@@ -239,6 +247,8 @@ Profile& ProfileManager::snapshot(const std::string& source, const std::string& 
 // ── Branch ────────────────────────────────────────────────────────────
 
 Profile& ProfileManager::branch(const std::string& source, const std::string& branch_name) {
+    if (branch_name.empty())
+        throw std::invalid_argument("Profile name must not be empty");
     if (!exists(source))
         throw std::runtime_error("Source profile not found: " + source);
     if (exists(branch_name))

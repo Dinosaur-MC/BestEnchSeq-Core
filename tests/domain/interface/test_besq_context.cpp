@@ -13,11 +13,10 @@
 #include "besq/besq.h"
 #include "framework/test_utils.h"
 
-#include <cstring>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
 
 // ---------------------------------------------------------------------------
 // Test: Context lifecycle

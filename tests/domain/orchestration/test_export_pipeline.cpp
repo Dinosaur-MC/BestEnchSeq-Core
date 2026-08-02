@@ -9,7 +9,6 @@
 #include "domain/business/types/Solution.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/EnchSet.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
 #include <iostream>
 #include <string>
 #include <unordered_set>

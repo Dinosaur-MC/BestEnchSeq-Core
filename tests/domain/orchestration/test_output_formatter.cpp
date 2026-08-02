@@ -3,7 +3,6 @@
 #include "domain/orchestration/orchestration.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/Equipment.h"
-#include "domain/business/types/EquipmentTag.h"
 #include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"

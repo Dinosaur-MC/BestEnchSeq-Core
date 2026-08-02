@@ -1,5 +1,4 @@
 #include "framework/test_utils.h"
-#include "domain/business/ProfileManager.h"
 #include "domain/business/components/RegistryHelper.h"
 
 namespace {
