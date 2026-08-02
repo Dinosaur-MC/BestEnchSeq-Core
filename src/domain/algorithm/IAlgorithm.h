@@ -102,7 +102,12 @@ class IAlgorithm {
     /// Whether this algorithm supports checkpoint serialization for resume.
     /// Default returns false.  Resumable algorithms must override to return true.
     virtual bool is_resumable() const noexcept { return false; }
-    /// Evaluate the cost time (ms) grade of the given enchantment count.
+    /// Predicted wall-clock time to solve an input with \p ench_count target
+    /// enchantments, in **seconds**.  Deterministic (greedy/constructive)
+    /// algorithms return 0.  Used by tooling (e.g. the benchmark's dynamic
+    /// tier matrix) to skip algorithms whose predicted runtime exceeds the
+    /// configured budget.  Fitted from the scaling benchmark (Release);
+    /// fits are per-family exponentials with a ~30% safety margin.
     virtual double evaluate(int16_t ench_count) const noexcept = 0;
 
     /// Initialize before execute().  Called once by AlgorithmExecutor before

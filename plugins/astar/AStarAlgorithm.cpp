@@ -540,9 +540,10 @@ void AStarAlgorithm::_x_import_best_g(ByteStreamReader &r) {
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
 double AStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // Fitted from benchmark data:  t(e) ≈ 0.025 × 3.8^e
-    // (best-first A*, confirmed 11ms@7 / 475ms@9 / 22s@12)
-    double r = 0.025 * std::pow(3.8, static_cast<double>(ench_count));
+    // Fitted from scaling benchmark (Release, netherite_sword 9-10 enchs):
+    //   t(e) ≈ 2.576e-9 × 8.626^e   seconds   (2-point fit +30% safety)
+    // Feasible ≤ 10 in the benchmark context; 11+ exceeds the 20 s budget.
+    double r = 2.576e-9 * std::pow(8.626, static_cast<double>(ench_count));
     return r;
 }
 
