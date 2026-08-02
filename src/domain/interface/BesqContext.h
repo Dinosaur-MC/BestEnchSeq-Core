@@ -10,7 +10,10 @@
 namespace algorithm { class AlgorithmExecutor; }
 
 /// Main public API class for BestEnchSeq.
-/// Manages profiles, registries, solving, and formatting.
+/// Session facade: holds session state (active profile, algorithm loader) and
+/// exposes service interfaces.  Management / export / formatting logic is
+/// delegated to the orchestration pipelines (ManagePipeline / ExportPipeline);
+/// solving, read-only registry access, and algorithm queries stay direct.
 class BesqContext {
 public:
     BesqContext();
@@ -36,7 +39,7 @@ public:
     void load_profiles();
 
     // ── Profile management ──
-    const std::string& active_profile() const noexcept;
+    std::string active_profile() const noexcept;
     std::vector<std::string> list_profiles() const;
     void activate_profile(const std::string& name);
     void fork_profile(const std::string& source, const std::string& dest);
@@ -60,7 +63,6 @@ public:
 
     // ── Registry import / export ──
     void import_registry(const std::string& path);
-    void import_registries(const std::vector<std::string>& paths);
     bool export_registry(const std::string& path) const;
 
     // ── Registry access (active profile, read-only) ──
@@ -75,9 +77,6 @@ public:
     // ── Format ──
     std::string format(const SolveResult& result, AlgorithmMode mode,
                        std::string_view fmt) const;
-    std::string format_verbose(const SolveResult& result, AlgorithmMode mode) const;
-    std::string format_compact(const SolveResult& result, AlgorithmMode mode) const;
-    std::string format_json(const SolveResult& result, AlgorithmMode mode) const;
 
     // ── Algorithm queries ──
     std::vector<std::string> list_algorithms() const;

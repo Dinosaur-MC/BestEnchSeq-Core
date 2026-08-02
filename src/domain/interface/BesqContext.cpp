@@ -1,11 +1,11 @@
 #include "domain/interface/BesqContext.h"
 #include "domain/business/ProfileManager.h"
 #include "domain/business/loaders/ProfileLoader.h"
-#include "domain/business/loaders/RegistryLoader.h"
-#include "domain/business/components/FormatDetector.h"
-#include "domain/business/parsers/McOfficialParser.h"
-#include "domain/orchestration/components/EnchSerializer.h"
-#include "domain/orchestration/components/OutputFormatter.h"
+#include "domain/orchestration/pipelines/ManagePipeline.h"
+#include "domain/orchestration/pipelines/ExportPipeline.h"
+#include "domain/orchestration/pipelines/SolvePipeline.h"
+#include "domain/orchestration/types/ManageRequest.h"
+#include "domain/orchestration/types/ExportRequest.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 
@@ -49,59 +49,27 @@ BesqContext& BesqContext::operator=(BesqContext&&) noexcept = default;
 // ====================================================================
 
 void BesqContext::load_builtin() {
-    if (!_impl->profiles.exists("builtin:vanilla")) {
-        _impl->loader.load_builtin(
-            _impl->profiles.create("builtin:vanilla")
-        );
-        _impl->profiles.activate("builtin:vanilla");
-    }
+    // ManagePipeline LoadBuiltin guards on `exists("builtin:vanilla")`
+    // (idempotent), then loads and activates it.
+    ManageRequest req;
+    req.action = ManageRequest::Action::LoadBuiltin;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 void BesqContext::load_file(const std::string& path) {
-    auto& profile = _impl->profiles.active();
-    auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
-
-    // Build temporary registries then merge into profile
-    TagRegistry tag_reg;
-    EquipmentRegistry eq_reg;
-    EnchantmentRegistry ench_reg;
-    RegistryLoader reg_loader;
-    // Seed tag resolution with the active profile's tags (vanilla fallback)
-    // PLUS the datapack's own item tags so `#mypack:*` supported_items
-    // references survive cross-validation instead of being dropped (B-T24 #24).
-    TagRegistry base_tags;
-    for (const auto& [nsid, tag] : profile.tags().data())
-        base_tags.insert(tag);
-    auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
-    for (const auto& [nsid, tag] : datapack_tags.data())
-        base_tags.insert(tag);
-    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
-                       &base_tags);
-
-    // Make the datapack item tags resolvable for `tags_of` applicability on
-    // the active profile's resolver (additive; no-op for native JSON/CSV).
-    if (auto resolver = profile.tag_resolver_ptr())
-        McOfficialParser::load_item_tags_into(*resolver, item_tags);
-
-    // Merge into active profile via proxy methods
-    for (const auto& [nsid, tag] : tag_reg.data())
-        profile.add_tag(tag);
-    for (const auto& [nsid, eq] : eq_reg.data())
-        profile.add_equipment(eq);
-    for (const auto& [nsid, info] : ench_reg.data())
-        profile.add_enchantment(info);
-
-    // Profile was mutated directly (bypassing manager _mutate) — the cached
-    // effective view must be invalidated or a later read would be stale.
-    _impl->profiles.notify_mutated();
+    ManageRequest req;
+    req.action = ManageRequest::Action::LoadFile;
+    req.file_path = path;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 void BesqContext::load_data(const std::vector<std::string>& filters) {
-    for (const auto& filter : filters) {
-        if (std::filesystem::exists(filter)) {
-            load_file(filter);
-        }
-    }
+    // ManagePipeline LoadData filters on `exists()` and routes each existing
+    // path through LoadFile.
+    ManageRequest req;
+    req.action = ManageRequest::Action::LoadData;
+    req.filters = filters;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 void BesqContext::set_profiles_dir(const std::string& dir) {
@@ -114,46 +82,69 @@ void BesqContext::load_profiles() {
     std::filesystem::path dir = _impl->profiles_dir.empty()
         ? (std::filesystem::current_path() / "profiles")
         : std::filesystem::path(_impl->profiles_dir);
-    _impl->profiles.load_directory(dir);
+    ManageRequest req;
+    req.action = ManageRequest::Action::LoadDirectory;
+    req.dir_path = dir.string();
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 // ====================================================================
 // Profile management
 // ====================================================================
 
-const std::string& BesqContext::active_profile() const noexcept {
-    static std::string cached;
-    cached = _impl->profiles.active_name();
-    return cached;
+std::string BesqContext::active_profile() const noexcept {
+    return _impl->profiles.active_name();
 }
 
 std::vector<std::string> BesqContext::list_profiles() const {
-    return _impl->profiles.list();
+    ManageRequest req;
+    req.action = ManageRequest::Action::ListProfiles;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).profile_list;
 }
 
 void BesqContext::activate_profile(const std::string& name) {
-    _impl->profiles.activate(name);
+    ManageRequest req;
+    req.action = ManageRequest::Action::ActivateProfile;
+    req.profile_name = name;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 void BesqContext::fork_profile(const std::string& source,
                                const std::string& dest) {
-    _impl->profiles.branch(source, dest);
+    ManageRequest req;
+    req.action = ManageRequest::Action::ForkProfile;
+    req.source_name = source;
+    req.dest_name = dest;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 void BesqContext::merge_profile(const std::string& source,
                                 const std::string& dest) {
-    _impl->profiles.merge(source, dest);
+    ManageRequest req;
+    req.action = ManageRequest::Action::MergeProfile;
+    req.source_name = source;
+    req.dest_name = dest;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 void BesqContext::remove_profile(const std::string& name) {
-    _impl->profiles.remove(name);
+    ManageRequest req;
+    req.action = ManageRequest::Action::RemoveProfile;
+    req.profile_name = name;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
 bool BesqContext::publish_profile(const std::string& name,
                                   const std::string& version,
                                   const std::string& tag,
                                   const std::string& out_path) {
-    return _impl->profiles.publish(name, version, tag, out_path);
+    ManageRequest req;
+    req.action = ManageRequest::Action::PublishProfile;
+    req.profile_name = name;
+    req.publish_version = version;
+    req.publish_tag = tag;
+    req.output_path = out_path;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
 }
 
 // ====================================================================
@@ -161,41 +152,74 @@ bool BesqContext::publish_profile(const std::string& name,
 // ====================================================================
 
 bool BesqContext::add_enchantment(const EnchInfo& info) {
-    return _impl->profiles.add_enchantment(_impl->profiles.active_name(), info);
+    ManageRequest req;
+    req.action = ManageRequest::Action::AddEnchantment;
+    req.ench_info = info;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
 }
 
 bool BesqContext::remove_enchantment(const std::string& name_id) {
-    return _impl->profiles.remove_enchantment(_impl->profiles.active_name(), NSID(name_id));
+    // DUAL-USE: profile_name carries the enchantment content NSID for
+    // RemoveEnchantment (ManagePipeline wraps it in NSID(...)).
+    ManageRequest req;
+    req.action = ManageRequest::Action::RemoveEnchantment;
+    req.profile_name = name_id;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
 }
 
 bool BesqContext::modify_enchantment(const std::string& name_id,
                                      const EnchInfo& patch) {
-    auto& active = _impl->profiles.active();
-    try {
-        auto current = active.ench().at(NSID(name_id));
-        if (patch.multiplier > 0)      current.multiplier = patch.multiplier;
-        if (patch.max_level > 0)       current.max_level = patch.max_level;
-        if (patch.limited_level >= 0)  current.limited_level = patch.limited_level;
-        return _impl->profiles.update_enchantment(_impl->profiles.active_name(), current);
-    } catch (const std::out_of_range&) {
-        return false;
-    }
+    // DUAL-USE: profile_name carries the enchantment content NSID for
+    // ModifyEnchantment.  ManagePipeline patches multiplier/max_level/
+    // limited_level in place and catches std::out_of_range → success=false.
+    ManageRequest req;
+    req.action = ManageRequest::Action::ModifyEnchantment;
+    req.profile_name = name_id;
+    req.ench_info = patch;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
 }
 
 bool BesqContext::add_equipment(const Equipment& eq) {
-    return _impl->profiles.add_equipment(_impl->profiles.active_name(), eq);
+    ManageRequest req;
+    req.action = ManageRequest::Action::AddEquipment;
+    req.equip = eq;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
 }
 
 bool BesqContext::remove_equipment(const std::string& name_id) {
-    return _impl->profiles.remove_equipment(_impl->profiles.active_name(), NSID(name_id));
+    // DUAL-USE: profile_name carries the equipment content NSID for
+    // RemoveEquipment (ManagePipeline wraps it in NSID(...)).
+    ManageRequest req;
+    req.action = ManageRequest::Action::RemoveEquipment;
+    req.profile_name = name_id;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
 }
 
 bool BesqContext::add_category(const std::string& name) {
-    auto& active = _impl->profiles.active();
-    NSID cat_nsid("#minecraft:" + name);
-    if (active.tags().contains(cat_nsid))
-        return false;
-    return _impl->profiles.add_tag(_impl->profiles.active_name(), EquipmentTag{cat_nsid, name});
+    ManageRequest req;
+    req.action = ManageRequest::Action::AddCategory;
+    req.category_name = name;
+    return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
+}
+
+// ====================================================================
+// Registry import / export
+// ====================================================================
+
+void BesqContext::import_registry(const std::string& path) {
+    ManageRequest req;
+    req.action = ManageRequest::Action::ImportRegistry;
+    req.file_path = path;
+    ManagePipeline::run(_impl->profiles, _impl->loader, req);
+}
+
+bool BesqContext::export_registry(const std::string& path) const {
+    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+    ExportRequest req;
+    req.target = ExportRequest::TargetType::Registry;
+    req.output_path = path;
+    req.format = ExportPipeline::format_for_path(path);   // `.csv` → Csv, else Json
+    return ExportPipeline::run(profile, req).success;
 }
 
 // ====================================================================
@@ -215,94 +239,23 @@ const TagRegistry& BesqContext::categories() const noexcept {
 }
 
 // ====================================================================
-// Persistence
-// ====================================================================
-
-bool BesqContext::export_registry(const std::string& path) const {
-    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
-    auto ext = std::filesystem::path(path).extension().string();
-
-    if (ext == ".csv" || ext == ".CSV") {
-        return EnchSerializer::export_csv(path, profile);
-    }
-    return EnchSerializer::export_json(path, profile);
-}
-
-// ====================================================================
-// Registry import
-// ====================================================================
-
-void BesqContext::import_registry(const std::string& path) {
-    auto& profile = _impl->profiles.active();
-    auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
-
-    TagRegistry tag_reg;
-    EquipmentRegistry eq_reg;
-    EnchantmentRegistry ench_reg;
-    RegistryLoader reg_loader;
-    // Seed with the active profile's tag universe (vanilla fallback) so the
-    // imported file's `#tag` supported_items references cross-validate (T10).
-    // A datapack dir additionally contributes its own item tags so `#mypack:*`
-    // references survive (B-T24 #24).
-    TagRegistry base_tags;
-    for (const auto& [nsid, tag] : profile.tags().data())
-        base_tags.insert(tag);
-    auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
-    for (const auto& [nsid, tag] : datapack_tags.data())
-        base_tags.insert(tag);
-    reg_loader.resolve(ench_data, eq_data, tag_reg, eq_reg, ench_reg,
-                       &base_tags);
-
-    if (auto resolver = profile.tag_resolver_ptr())
-        McOfficialParser::load_item_tags_into(*resolver, item_tags);
-
-    for (const auto& [nsid, tag] : tag_reg.data())
-        profile.add_tag(tag);
-    for (const auto& [nsid, eq] : eq_reg.data())
-        profile.add_equipment(eq);
-    for (const auto& [nsid, info] : ench_reg.data())
-        profile.add_enchantment(info);
-
-    // Direct profile mutation bypasses manager _mutate — invalidate the
-    // effective-view cache so the next read reflects the imported content.
-    _impl->profiles.notify_mutated();
-}
-
-void BesqContext::import_registries(const std::vector<std::string>& paths) {
-    for (const auto& path : paths)
-        import_registry(path);
-}
-
-// ====================================================================
 // Output formatting
 // ====================================================================
 
 std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode,
                                 std::string_view fmt) const {
     auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
-    if (fmt == "json")
-        return OutputFormatter::format_json(result.solutions, profile, mode,
-                                            result.success, result.algorithm_used,
-                                            result.computation_time_ms);
-    if (fmt == "compact")
-        return OutputFormatter::format_compact(result.solutions, profile, mode);
-    return OutputFormatter::format_verbose(result.solutions, profile, mode);
-}
-
-std::string BesqContext::format_verbose(const SolveResult& result, AlgorithmMode mode) const {
-    return OutputFormatter::format_verbose(
-        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()), mode);
-}
-
-std::string BesqContext::format_compact(const SolveResult& result, AlgorithmMode mode) const {
-    return OutputFormatter::format_compact(
-        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()), mode);
-}
-
-std::string BesqContext::format_json(const SolveResult& result, AlgorithmMode mode) const {
-    return OutputFormatter::format_json(
-        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()),
-        mode, result.success, result.algorithm_used, result.computation_time_ms);
+    ExportRequest req;
+    req.target = ExportRequest::TargetType::Solution;
+    req.format = (fmt == "json") ? ExportRequest::Format::Json
+               : (fmt == "compact") ? ExportRequest::Format::Compact
+                                    : ExportRequest::Format::Verbose;
+    req.solutions = result.solutions;
+    req.mode = mode;
+    req.success = result.success;
+    req.algorithm_used = result.algorithm_used;
+    req.computation_time_ms = result.computation_time_ms;
+    return ExportPipeline::run(profile, req).content;
 }
 
 // ====================================================================

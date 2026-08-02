@@ -30,6 +30,10 @@
 struct BesqContextC {
     BesqContext impl;
     std::string last_error;
+    /// Stable buffer for besq_active_profile: BesqContext::active_profile()
+    /// now returns by value, so we copy the name here to honor the C ABI
+    /// "valid until next call, do not free" contract.
+    std::string active_profile_cache;
 };
 
 // ====================================================================
@@ -331,7 +335,11 @@ int besq_load_data(BesqContext* ctx, const char* path) {
 const char* besq_active_profile(BesqContext* ctx) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
     try {
-        return c->impl.active_profile().c_str();
+        // Copy the by-value result into a per-context buffer so the returned
+        // pointer stays valid until the next profile-modifying call (besq.h
+        // contract: "Do not free it").
+        c->active_profile_cache = c->impl.active_profile();
+        return c->active_profile_cache.c_str();
     } catch (...) {
         c->last_error = "No active profile";
         return nullptr;
