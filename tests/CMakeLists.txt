@@ -53,18 +53,50 @@ function(besq_test_common_props NAME)
     endif()
 endfunction()
 
-# Default: link besq-core for all project-dependent tests.
+# ── Core link set (DRY) ────────────────────────────────────────────
+# business ↔ builtin is a real circular static-lib dependency: business
+# parsers call besq::data::* (compiled into besq-core's builtin objects),
+# which fill business registries.  GNU ld needs the whole reference chain
+# (core → orchestration → business, plus the late entry points) inside
+# one --start-group.  Windows lld-link resolves cycles automatically.
+if(UNIX)
+    set(BESQ_TEST_CORE_LIBS
+        -Wl,--start-group
+        besq-core besq-domain-business besq-domain-orchestration besq-algo-core
+        -Wl,--end-group
+    )
+    set(BESQ_TEST_CORE_LIBS_INTERFACE
+        -Wl,--start-group
+        besq-core besq-domain-business besq-domain-orchestration besq-algo-core besq-domain-interface
+        -Wl,--end-group
+    )
+else()
+    set(BESQ_TEST_CORE_LIBS besq-core)
+    set(BESQ_TEST_CORE_LIBS_INTERFACE besq-core besq-domain-interface)
+endif()
+
+# Default: link besq-core for domain tests.
 function(besq_test NAME SOURCE)
     add_executable(${NAME} ${SOURCE})
     target_include_directories(${NAME} PRIVATE
         ${TEST_INCLUDE}
         ${PROJECT_ROOT}/include
     )
-    target_link_libraries(${NAME} PRIVATE besq-core)
+    target_link_libraries(${NAME} PRIVATE ${BESQ_TEST_CORE_LIBS})
     besq_test_common_props(${NAME})
 endfunction()
 
-# Helper for tests that need CLI/parser code (currently same as besq_test)
+# Variant for interface-domain and integration tests: adds the interface
+# domain (inside the group — it is a late entry point to the cycle).
+function(besq_test_interface NAME SOURCE)
+    add_executable(${NAME} ${SOURCE})
+    target_include_directories(${NAME} PRIVATE
+        ${TEST_INCLUDE}
+        ${PROJECT_ROOT}/include
+    )
+    target_link_libraries(${NAME} PRIVATE ${BESQ_TEST_CORE_LIBS_INTERFACE})
+    besq_test_common_props(${NAME})
+endfunction()
 
 # ─── Subdirectories (per domain) ───
 add_subdirectory(common)

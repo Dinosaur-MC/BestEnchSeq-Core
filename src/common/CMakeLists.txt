@@ -2,7 +2,7 @@
 # besq-common — shared infrastructure libraries
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Rather than one monolithic static library, common is split into five
+# Rather than one monolithic static library, common is split into six
 # independent sub-targets so consumers link only what they need:
 #
 #   besq-common-core   NSID, LogLevel, memory pools, lock-free queues,
@@ -11,8 +11,9 @@
 #   besq-common-log    Logger implementation & log.hpp convenience wrappers
 #   besq-common-i18n   Language manager, locale detection
 #   besq-common-cli    CLIParser v2 (CLICommon, CLIFormatter)
+#   besq-common-thread ThreadPool
 #
-#   besq-common        (INTERFACE) convenience umbrella — links all five.
+#   besq-common        (INTERFACE) convenience umbrella — links all six.
 #
 # Each sub-target has BOTH include paths:
 #   ${CMAKE_CURRENT_SOURCE_DIR}  → #include "CommonTypes.h" / "io/json.h"

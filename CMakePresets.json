@@ -2,41 +2,9 @@
     "version": 6,
     "configurePresets": [
         {
-            "name": "cli",
-            "displayName": "CLI (default)",
-            "description": "Build besq CLI executable (and besq-core library). No tests or benchmarks.",
-            "binaryDir": "${sourceDir}/build",
-            "generator": "Ninja",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_CXX_COMPILER": "clang++",
-                "CMAKE_C_COMPILER": "clang",
-                "BESQ_BUILD_CLI": "ON",
-                "BUILD_TESTING": "OFF",
-                "BUILD_BENCHMARKS": "OFF",
-                "BESQ_MAX_SOLUTIONS": "32"
-            }
-        },
-        {
-            "name": "core",
-            "displayName": "Core library",
-            "description": "Build besq-core static library only (no CLI, no tests).",
-            "binaryDir": "${sourceDir}/build",
-            "generator": "Ninja",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_CXX_COMPILER": "clang++",
-                "CMAKE_C_COMPILER": "clang",
-                "BESQ_BUILD_CLI": "OFF",
-                "BUILD_TESTING": "OFF",
-                "BUILD_BENCHMARKS": "OFF",
-                "BESQ_MAX_SOLUTIONS": "32"
-            }
-        },
-        {
             "name": "full",
             "displayName": "Full (all targets)",
-            "description": "Build everything: libraries, executable, tests, and benchmarks",
+            "description": "Build everything: libraries, CLI, tests, benchmarks (Release)",
             "binaryDir": "${sourceDir}/build",
             "generator": "Ninja",
             "cacheVariables": {
@@ -44,6 +12,7 @@
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_C_COMPILER": "clang",
                 "BESQ_BUILD_CLI": "ON",
+                "BESQ_BUILD_SANDBOX": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "32"
@@ -52,7 +21,7 @@
         {
             "name": "debug",
             "displayName": "Debug (all targets)",
-            "description": "Build all targets with debug symbols and tests enabled",
+            "description": "Build everything with debug symbols and tests enabled",
             "binaryDir": "${sourceDir}/build",
             "generator": "Ninja",
             "cacheVariables": {
@@ -60,15 +29,33 @@
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_C_COMPILER": "clang",
                 "BESQ_BUILD_CLI": "ON",
+                "BESQ_BUILD_SANDBOX": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "128"
             }
         },
         {
+            "name": "cli",
+            "displayName": "CLI (default)",
+            "description": "Build the besq CLI executable and its dependencies (Release). No tests or benchmarks.",
+            "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "ON",
+                "BESQ_BUILD_SANDBOX": "OFF",
+                "BUILD_TESTING": "OFF",
+                "BUILD_BENCHMARKS": "OFF",
+                "BESQ_MAX_SOLUTIONS": "32"
+            }
+        },
+        {
             "name": "minimal",
-            "displayName": "Minimal (algorithm only)",
-            "description": "Build besq-minimal — compact algorithm core with Hamming strategy only. Links only besq-common-core (NSID, LogLevel, memory pools). No JSON, CSV, Logger, i18n, CLI parser, diagnostics, or embedded data.",
+            "displayName": "Minimal (algorithm kernel only)",
+            "description": "Build only the besq-algo-core algorithm kernel (STATIC). No CLI, worker, tests, or benchmarks.",
             "binaryDir": "${sourceDir}/build",
             "generator": "Ninja",
             "cacheVariables": {
@@ -76,32 +63,36 @@
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_C_COMPILER": "clang",
                 "BESQ_BUILD_CLI": "OFF",
+                "BESQ_BUILD_SANDBOX": "OFF",
                 "BUILD_TESTING": "OFF",
                 "BUILD_BENCHMARKS": "OFF",
                 "BESQ_MAX_SOLUTIONS": "32"
+            }
+        },
+        {
+            "name": "sandbox",
+            "displayName": "Sandbox (worker only)",
+            "description": "Build only the besq-worker sandbox executable and its dependencies (algorithm kernel + worker sources).",
+            "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "OFF",
+                "BESQ_BUILD_SANDBOX": "ON",
+                "BUILD_TESTING": "OFF",
+                "BUILD_BENCHMARKS": "OFF",
+                "BESQ_MAX_SOLUTIONS": "128"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "cli",
-            "configurePreset": "cli",
-            "displayName": "CLI executable",
-            "description": "Build besq executable (and besq-core transitively)",
-            "targets": ["besq"]
-        },
-        {
-            "name": "core",
-            "configurePreset": "core",
-            "displayName": "Core library",
-            "description": "Build besq-core static library only",
-            "targets": ["besq-core"]
-        },
-        {
             "name": "full",
             "configurePreset": "full",
             "displayName": "Build all targets",
-            "description": "Build everything (libraries + executable + tests + benchmarks)"
+            "description": "Build everything (libraries + CLI + worker + tests + benchmarks)"
         },
         {
             "name": "debug",
@@ -110,11 +101,25 @@
             "description": "Build all targets with debug symbols"
         },
         {
+            "name": "cli",
+            "configurePreset": "cli",
+            "displayName": "CLI executable",
+            "description": "Build the besq CLI and its dependencies",
+            "targets": ["besq"]
+        },
+        {
             "name": "minimal",
             "configurePreset": "minimal",
-            "displayName": "Minimal library",
-            "description": "Build besq-minimal static library",
-            "targets": ["besq-minimal"]
+            "displayName": "Algorithm kernel",
+            "description": "Build the besq-algo-core algorithm kernel only",
+            "targets": ["besq-algo-core"]
+        },
+        {
+            "name": "sandbox",
+            "configurePreset": "sandbox",
+            "displayName": "Sandbox worker",
+            "description": "Build the besq-worker sandbox executable only",
+            "targets": ["besq-worker"]
         }
     ],
     "testPresets": [

@@ -4,32 +4,30 @@
 get_filename_component(_besq_build "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
 get_filename_component(_besq_src "${_besq_build}/.." ABSOLUTE)
 
+# ── besq-algo-core — the STATIC algorithm kernel (纯净扩展) ──────────────
+# Plugins are PURE extensions: they depend on the algorithm kernel's symbols
+# but must NOT pull in business/orchestration/interface.  Hosts (CLI/worker)
+# statically link the kernel and export it (-rdynamic / ENABLE_EXPORTS), so
+# plugin symbols resolve to the host's single copy.
+#
+#   Linux   → INTERFACE imported: plugin links nothing, symbols left undefined,
+#             resolved at dlopen against the host's exports.  One copy.
+#   Windows → STATIC imported: plugin links the kernel archive (carries its
+#             own copy).  Known limitation until the Windows sandbox lands.
 if(WIN32)
-    # Windows (MinGW/Clang): DLL doesn't auto-export symbols from linked
-    # static libs, so plugins must link the static libs directly.
-    set(_besq_static_libs
-        "${_besq_build}/src/common/besq-common-core.lib"
-        "${_besq_build}/src/common/besq-common-io.lib"
-        "${_besq_build}/src/common/besq-common-log.lib"
-        "${_besq_build}/src/common/besq-common-i18n.lib"
-        "${_besq_build}/src/common/besq-common-cli.lib"
-        "${_besq_build}/src/domain/algorithm/besq-domain-algorithm.lib"
-        "${_besq_build}/src/domain/business/besq-domain-business.lib"
-        "${_besq_build}/src/domain/orchestration/besq-domain-orchestration.lib"
-        "${_besq_build}/src/domain/interface/besq-domain-interface.lib"
-    )
-    add_library(besq-core::besq-core INTERFACE IMPORTED)
-    set_target_properties(besq-core::besq-core PROPERTIES
-        INTERFACE_LINK_LIBRARIES "${_besq_static_libs}"
+    add_library(besq-algo-core::besq-algo-core STATIC IMPORTED)
+    set_target_properties(besq-algo-core::besq-algo-core PROPERTIES
+        IMPORTED_LOCATION "${_besq_build}/besq-algo-core.lib"
+        # The kernel's own common deps — the plugin must link them too
+        # (static archive carries the Logger references from the kernel).
+        INTERFACE_LINK_LIBRARIES
+            "${_besq_build}/src/common/besq-common-core.lib;${_besq_build}/src/common/besq-common-thread.lib;${_besq_build}/src/common/besq-common-log.lib"
         INTERFACE_INCLUDE_DIRECTORIES "${_besq_src}/src;${_besq_build}/generated;${_besq_src}/src/common"
         INTERFACE_COMPILE_DEFINITIONS "@BESQ_PLUGIN_DIAG_DEFS@"
     )
 else()
-    # Linux/macOS: .so exports all symbols, link directly
-    add_library(besq-core::besq-core SHARED IMPORTED)
-    set_target_properties(besq-core::besq-core PROPERTIES
-        IMPORTED_LOCATION "${_besq_build}/libbesq-core.so"
-        IMPORTED_SONAME "libbesq-core.so"
+    add_library(besq-algo-core::besq-algo-core INTERFACE IMPORTED)
+    set_target_properties(besq-algo-core::besq-algo-core PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${_besq_src}/src;${_besq_build}/generated;${_besq_src}/src/common"
         INTERFACE_COMPILE_DEFINITIONS "@BESQ_PLUGIN_DIAG_DEFS@"
     )

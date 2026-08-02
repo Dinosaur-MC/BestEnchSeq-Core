@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 project(BestEnchSeq-Core
     VERSION 0.0.1
     DESCRIPTION "BestEnchSeq Core - the console version of BestEnchSeq."
@@ -79,6 +79,7 @@ endif()
 option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
 option(BESQ_DEEP_DIAGNOSTICS "Enable per-operation diagnostic counters (profiling builds; default off = zero hot-path cost)" OFF)
 option(BESQ_BUILD_CLI "Build the besq CLI executable" ON)
+option(BESQ_BUILD_SANDBOX "Build the besq-worker sandbox executable (algorithm sandboxing for third-party plugins)" OFF)
 option(BUILD_TESTING "Build test targets" ON)
 option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
 set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution (presets override this)")
@@ -145,40 +146,38 @@ set(BESQ_EMBEDDED_SRCS
 add_subdirectory(src/common)
 add_subdirectory(src/domain)
 
-# ── besq-core (shared library) ──────────────────────────────────────────────
-# Links all domain libraries together.  On Windows, auto-export all symbols
-# so loaded plugins can resolve IAlgorithm / ForgeEngine vtables.
-if(WIN32)
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-endif()
-
-add_library(besq-core SHARED
-    ${BESQ_EMBEDDED_SRCS}
+# ═══════════════════════════════════════════════════════════════════════════════
+# besq-core (STATIC) — BESQ 核心: 算法域 + 业务域 + 编排域 + 内嵌数据 (排除接口域)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Compiles the built-in data bootstrap (DataLoader / ItemProperties / I18nLoader
+# + embedded resources) directly into the core, and links the three non-interface
+# domains.  Statically linked into hosts (the CLI), never a shared DLL.
+# The interface domain is added by the CLI executable.
+add_library(besq-core STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/DataLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/ItemProperties.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/I18nLoader.cpp
+    ${BESQ_EMBEDDED_SRCS}
 )
-
 target_link_libraries(besq-core PUBLIC
-    besq-domain-interface   # PUBLIC so transitive include paths (via orchestration → algorithm → common-core) propagate to consumers
+    besq-domain-orchestration   # links besq-algo-core + besq-domain-business
+    besq-domain-business
+    besq-algo-core
 )
-
+target_link_libraries(besq-core PRIVATE
+    besq-common-i18n            # LanguageManager for I18nLoader
+)
 target_include_directories(besq-core PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>   # → #include "besq/besq.h"
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>       # → #include "domain/algorithm/..."
-    $<BUILD_INTERFACE:${BESQ_GENERATED_DIR}>                 # → #include "BuildConfig.h"
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${BESQ_GENERATED_DIR}>
 )
-
 target_compile_definitions(besq-core PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
     $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
     $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
 )
-
-# Link dl library for plugin loading
-if(UNIX AND NOT APPLE)
-    target_link_libraries(besq-core PUBLIC ${CMAKE_DL_LIBS})
-endif()
+# dl for plugin loading comes from besq-algo-core (PUBLIC), which hosts the
+# AlgorithmLoader.  Not linked here.
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Export for plugin build system — auto-generated config for plugins/
@@ -203,72 +202,37 @@ configure_file(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# besq-minimal (static library for embedders)
-# ═══════════════════════════════════════════════════════════════════════════════
-# Compact algorithm core with Hamming strategy only.  Links only
-# besq-common-core (NSID, LogLevel, memory pools).  No plugin loader,
-# serialization, Logger, i18n, CLI parser, or embedded data.
-#
-# Build with: cmake --preset minimal && cmake --build build --preset minimal
-
-file(GLOB_RECURSE BESQ_MINIMAL_ALGO_SRCS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/*.cpp"
-    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/*.hpp"
-)
-# Exclude plugin loader and serialization
-list(FILTER BESQ_MINIMAL_ALGO_SRCS EXCLUDE REGEX
-    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/(plugin/|serialization/)")
-# Exclude all built-in strategies — add back only hamming below
-list(FILTER BESQ_MINIMAL_ALGO_SRCS EXCLUDE REGEX
-    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/_strategies/")
-
-# Add Hamming strategy
-file(GLOB BESQ_MINIMAL_HAMMING_SRCS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/src/domain/algorithm/_strategies/hamming/*.cpp")
-
-# Minimal strategy registration (hamming only)
-set(BESQ_MINIMAL_REG "${BESQ_GENERATED_DIR}/_minimal_registration.cpp")
-file(WRITE "${BESQ_MINIMAL_REG}"
-    "// GENERATED -- do not edit\n"
-    "#include \"domain/algorithm/_strategies/Registration.h\"\n"
-    "#include \"domain/algorithm/_strategies/hamming/HammingAlgorithm.h\"\n"
-    "\n"
-    "void besq_register_builtin_strategies(algorithm::AlgorithmRegistry &reg) {\n"
-    "    reg.register_algorithm(\"hamming\", []{ return std::make_unique<algorithm::HammingAlgorithm>(); });\n"
-    "}\n"
-)
-
-add_library(besq-minimal STATIC
-    ${BESQ_MINIMAL_ALGO_SRCS}
-    ${BESQ_MINIMAL_HAMMING_SRCS}
-    "${BESQ_MINIMAL_REG}"
-)
-
-target_link_libraries(besq-minimal PUBLIC besq-common-core)
-
-target_include_directories(besq-minimal PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
-    $<BUILD_INTERFACE:${BESQ_GENERATED_DIR}>
-)
-
-target_compile_definitions(besq-minimal PUBLIC
-    BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
-    $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
-    $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
-)
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # CLI executable (guarded by BESQ_BUILD_CLI)
 # ═══════════════════════════════════════════════════════════════════════════════
+# Links the static besq-core (three domains) + the interface domain + builtin
+# data + embedded resources.  Exports its symbols (-rdynamic / ENABLE_EXPORTS)
+# so in-process plugins resolve the algorithm kernel from this single copy.
 if(BESQ_BUILD_CLI)
     add_executable(besq
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     )
-    target_link_libraries(besq PRIVATE besq-core)
-    target_include_directories(besq PRIVATE ${BESQ_GENERATED_DIR})
+    if(UNIX)
+        # business ↔ builtin is a real circular static-lib dependency, and the
+        # entry points (interface/orchestration → business → builtin) sit
+        # across archives.  The group MUST bracket the WHOLE chain — core,
+        # business, orchestration, AND interface — not just core+business
+        # (that leaves interface outside, whose late business pulls then
+        # reference builtin after core was already scanned).
+        target_link_libraries(besq PRIVATE
+            -Wl,--start-group besq-core besq-domain-business besq-domain-orchestration besq-domain-interface besq-algo-core -Wl,--end-group
+        )
+    else()
+        target_link_libraries(besq PRIVATE besq-core besq-domain-interface)
+    endif()
+    target_include_directories(besq PRIVATE
+        ${BESQ_GENERATED_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include   # → #include "besq/besq.h"
+    )
 
     if(UNIX)
         target_link_options(besq PRIVATE -rdynamic)
+    elseif(WIN32)
+        set_target_properties(besq PROPERTIES ENABLE_EXPORTS ON)
     endif()
 
     target_compile_definitions(besq PRIVATE
@@ -278,13 +242,47 @@ if(BESQ_BUILD_CLI)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# besq-worker (guarded by BESQ_BUILD_SANDBOX) — sandbox algorithm execution worker
+# ═══════════════════════════════════════════════════════════════════════════════
+# Links ONLY the algorithm kernel (besq-algo-core) + worker sources.  Exports
+# symbols so sandbox plugins resolve the kernel from this single copy.
+if(BESQ_BUILD_SANDBOX)
+    add_executable(besq-worker
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/worker/main.cpp
+    )
+    target_link_libraries(besq-worker PRIVATE
+        besq-algo-core
+        besq-common-io    # ByteStream for the IPC wire format
+    )
+    target_include_directories(besq-worker PRIVATE ${BESQ_GENERATED_DIR})
+
+    if(UNIX)
+        target_link_options(besq-worker PRIVATE -rdynamic)
+    elseif(WIN32)
+        set_target_properties(besq-worker PROPERTIES ENABLE_EXPORTS ON)
+    endif()
+
+    target_compile_definitions(besq-worker PRIVATE
+        $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+        $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
+    )
+endif()
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Install rules
 # ═══════════════════════════════════════════════════════════════════════════════
 include(GNUInstallDirs)
-install(TARGETS besq-core ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# besq-core is a STATIC aggregate of the three non-interface domains + builtin
+# data — installed via its consumers (the CLI).  Nothing to install directly.
 
 if(BESQ_BUILD_CLI)
     install(TARGETS besq
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+if(BESQ_BUILD_SANDBOX)
+    install(TARGETS besq-worker
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 endif()

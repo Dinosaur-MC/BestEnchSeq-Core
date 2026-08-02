@@ -22,7 +22,7 @@ function(besq_test_with_plugins NAME SOURCE PLUGIN_SRCS)
         ${PROJECT_ROOT}/include
         ${PROJECT_ROOT}/plugins
     )
-    target_link_libraries(${NAME} PRIVATE besq-core)
+    target_link_libraries(${NAME} PRIVATE ${BESQ_TEST_CORE_LIBS})
     besq_test_common_props(${NAME})
 endfunction()
 
@@ -58,7 +58,7 @@ target_include_directories(test_penalty_balance PRIVATE
     ${PROJECT_ROOT}/include
     ${PROJECT_ROOT}/plugins
 )
-target_link_libraries(test_penalty_balance PRIVATE besq-core)
+target_link_libraries(test_penalty_balance PRIVATE ${BESQ_TEST_CORE_LIBS})
 besq_test_common_props(test_penalty_balance)
 
 besq_test(test_algorithm_loader test_algorithm_loader.cpp)

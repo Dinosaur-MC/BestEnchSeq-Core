@@ -10,11 +10,12 @@ file(GLOB_RECURSE BESQ_ORCHESTRATION_SRCS CONFIGURE_DEPENDS
 add_library(besq-domain-orchestration STATIC ${BESQ_ORCHESTRATION_SRCS})
 
 target_link_libraries(besq-domain-orchestration PUBLIC
-    besq-domain-algorithm
+    besq-algo-core          # single shared source of the algorithm domain
     besq-domain-business
 )
 target_link_libraries(besq-domain-orchestration PRIVATE
     besq-common-log           # internal logging (not propagated)
+    besq-common-i18n          # tr() / LanguageManager in OutputFormatter
 )
 
 target_include_directories(besq-domain-orchestration PUBLIC

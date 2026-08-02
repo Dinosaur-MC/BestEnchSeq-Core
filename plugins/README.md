@@ -44,6 +44,10 @@ cmake --build build/plugins
 
 插件**必须使用与主程序完全相同的编译器**，否则运行时加载会因 ABI 不兼容而失败。本项目默认使用 LLVM/Clang 工具链。
 
+### 构建类型（Debug/Release）必须与主程序一致
+
+插件构建的 `CMAKE_BUILD_TYPE` **必须与主程序主机完全一致**。Windows 上两者不一致（如 Debug 主机 + Release 插件）会导致 `lld-link: /failifmismatch: _ITERATOR_DEBUG_LEVEL` 链接失败。请对照主程序的构建类型设置。
+
 ### CMake 选项
 
 | 选项 | 说明 |

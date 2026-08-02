@@ -31,7 +31,7 @@ find_package(besq-core REQUIRED
 # absolute paths (e.g. Windows F:/... when building from WSL) that would
 # cause "non-existent path" errors.  Plugins add their own include dirs
 # directly below via PLUGIN_SYSTEM_INCLUDES.
-set_target_properties(besq-core::besq-core PROPERTIES
+set_target_properties(besq-algo-core::besq-algo-core PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES ""
 )
 
@@ -74,7 +74,10 @@ foreach(PLUGIN_DIR ${PLUGIN_DIRS})
         "${CMAKE_CURRENT_LIST_DIR}"              # for #include "<name>/<file>.h"
     )
 
-    target_link_libraries(algo_${PLUGIN_NAME} PRIVATE besq-core::besq-core)
+    # Link the shared algorithm domain (besq-algo-core), NOT the full
+    # besq-core — so the plugin's algorithm symbols resolve to the SAME
+    # shared instance as the host (CLI in-process or sandbox worker).
+    target_link_libraries(algo_${PLUGIN_NAME} PRIVATE besq-algo-core::besq-algo-core)
 
     set_target_properties(algo_${PLUGIN_NAME} PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
