@@ -96,6 +96,7 @@ Item ItemParser::parse(const std::string &input,
     EnchSet ench_set;
     int32_t prior_penalty = 0;
     int32_t durability = 0;
+    int32_t max_durability = 0;
     size_t pos = 0;
 
     // ── Parse enchantment block [ ... ] ──
@@ -121,7 +122,12 @@ Item ItemParser::parse(const std::string &input,
     if (item_id.empty())
         throw std::runtime_error("Empty item id in target spec");
 
-    // ── Look up equipment (needed for max_durability defaults) ──
+    // ── Resolve item type ──
+    // Books are valid forge targets but are not equipment: a plain `book` has
+    // no durability and cannot hold enchantments itself — enchanting it turns
+    // it into an `enchanted_book`.  Both ids therefore normalise to the
+    // enchanted_book (the item that actually carries the enchantments), and
+    // durability defaults to 0 (books have no durability).
     // NSID() throws its bare validator text ("The NSID '...' is invalid") when
     // the id contains now-invalid chars (uppercase, `/` in ns, `.`/`..`
     // segments).  Such input is genuinely unknown/invalid — map it to the
@@ -133,12 +139,20 @@ Item ItemParser::parse(const std::string &input,
             throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", k));
         }
     };
-    auto eq_it = eq_reg.find(make_nsid(item_id));
-    if (eq_it == eq_reg.end())
-        throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", item_id));
-
-    // ── Set defaults from equipment data ──
-    durability = eq_it->max_durability;
+    NSID nid = make_nsid(item_id);
+    const bool is_book = (nid == NSID("minecraft:book") ||
+                          nid == NSID("minecraft:enchanted_book"));
+    if (is_book) {
+        item_id        = "enchanted_book";  // book → enchanted_book on enchanting
+        durability     = 0;
+        max_durability = 0;
+    } else {
+        auto eq_it = eq_reg.find(nid);
+        if (eq_it == eq_reg.end())
+            throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", item_id));
+        durability     = eq_it->max_durability;
+        max_durability = eq_it->max_durability;
+    }
 
     // ── Parse properties block { ... } (overrides defaults) ──
     size_t after_props = parse_properties(input, pos, prior_penalty, durability);
@@ -150,8 +164,8 @@ Item ItemParser::parse(const std::string &input,
             "Malformed target spec: unexpected content after '}' in '" + input + "'");
 
     // ── Post-parse validation ──
-    validate_durability(durability, eq_it->max_durability, item_id);
+    validate_durability(durability, max_durability, item_id);
     validate_prior_penalty(prior_penalty);
 
-    return Item(eq_it->id, ench_set, prior_penalty, durability);
+    return Item(NSID(item_id), ench_set, prior_penalty, durability);
 }

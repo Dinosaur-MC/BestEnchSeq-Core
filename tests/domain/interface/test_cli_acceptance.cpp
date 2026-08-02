@@ -382,6 +382,49 @@ void test_apply_config_pairs() {
 // Main
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Test: book/enchanted_book targets — parsed without an equipment-registry
+// lookup and normalised to the enchanted_book that actually carries the
+// enchantments (a plain book becomes an enchanted_book when enchanted).
+// ---------------------------------------------------------------------------
+
+void test_book_target_parsing() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // enchanted_book directly
+    {
+        const char* argv[] = {"besq", "--target", "enchanted_book[sharpness=5]"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.target_item.is_book(), "enchanted_book target flagged as book");
+        expect(req.target_item.id.str() == "minecraft:enchanted_book",
+               "enchanted_book id preserved");
+        expect(req.target_item.enchantments.size() == 1, "one enchantment");
+        expect(req.target_item.durability == 0, "books have no durability");
+        TEST_PASS("book target: enchanted_book parses");
+    }
+    // plain book normalises to enchanted_book
+    {
+        const char* argv[] = {"besq", "--target", "book[sharpness=5]"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.target_item.id.str() == "minecraft:enchanted_book",
+               "book normalises to enchanted_book");
+        expect(req.target_item.is_book(), "book flagged as book");
+        TEST_PASS("book target: book normalises to enchanted_book");
+    }
+    // namespaced form
+    {
+        const char* argv[] = {"besq", "--target", "minecraft:enchanted_book[knockback=2]"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.target_item.is_book(), "namespaced enchanted_book flagged as book");
+        expect(req.target_item.enchantments.size() == 1, "one enchantment");
+        TEST_PASS("book target: namespaced enchanted_book parses");
+    }
+}
+
 int main() {
     try {
         test_no_args_shows_usage();
@@ -389,6 +432,7 @@ int main() {
         test_missing_target_and_export_errors();
         test_max_time_parsing();
         test_solve_request_config_wiring();
+        test_book_target_parsing();
         test_config_parsing();
         test_registry_edit_parsing();
         test_algorithm_name();

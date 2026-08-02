@@ -493,6 +493,33 @@ void test_apply_platform_filter() {
     TEST_PASS("test_apply_platform_filter");
 }
 
+// ─── Test: book target accepts every enchantment ───
+// A book (→ enchanted_book) can hold enchantments from any category: neither
+// sharpness (sword-only) nor protection (chestplate-only) is applicable to a
+// book via the tag system, yet both must enter the compact registry.
+void test_apply_book_target_all_enchants_applicable() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:enchanted_book"), target_enchs, 0, 0);
+    auto request = make_request(target_item);
+    auto input = apply_for(profile, request);
+
+    expect(input.target.type == algorithm::ItemType::Book,
+           "book target maps to Book item type");
+    bool sharpness_present = false;
+    bool protection_present = false;
+    for (const auto& gid : input.registry.get_global_ids()) {
+        if (gid == NSID("minecraft:sharpness")) sharpness_present = true;
+        if (gid == NSID("minecraft:protection")) protection_present = true;
+    }
+    expect(sharpness_present,
+           "sharpness applicable to a book target despite sword-only tag");
+    expect(protection_present,
+           "protection applicable to a book target despite chestplate-only tag");
+    TEST_PASS("test_apply_book_target_all_enchants_applicable");
+}
+
 // ─── Test 20: inventory equipment carrying an enchant inapplicable to ITSELF
 //     throws.  The validation must use the ITEM's own tag set, not the target's:
 //     here the target is a chestplate (protection IS applicable there) while the
@@ -558,6 +585,7 @@ int main() {
         test_apply_inventory_equipment_over_level_throws();
         test_apply_supported_items_tag_intersection();
         test_apply_platform_filter();
+        test_apply_book_target_all_enchants_applicable();
         test_apply_inventory_equipment_inapplicable_ench();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

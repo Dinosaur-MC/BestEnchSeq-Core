@@ -26,6 +26,14 @@ struct ItemParser {
     ///   "diamond_sword[sharpness=5]{prior_penalty:2}"
     ///   "diamond_sword[sharpness=5,knockback=2]{prior_penalty:3,durability:500}"
     ///
+    /// Books are valid targets but are not equipment: "book" and
+    /// "enchanted_book" are both accepted and normalise to "enchanted_book"
+    /// (a plain book cannot hold enchantments — enchanting it produces an
+    /// enchanted_book).  Books have no durability (defaults to 0; non-zero
+    /// durability is rejected) but do carry prior_penalty like any anvil item.
+    ///   "book[sharpness=5]"
+    ///   "enchanted_book[sharpness=5,knockback=2]{prior_penalty:3}"
+    ///
     /// Resolves equipment and enchantments against the given registries.
     /// Throws std::runtime_error on unknown equipment, unknown enchantments,
     /// malformed syntax, or unrecognised property keys.
