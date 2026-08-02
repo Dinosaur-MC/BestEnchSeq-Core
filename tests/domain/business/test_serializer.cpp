@@ -39,6 +39,8 @@ void test_serialize_enchinfo() {
         5, 5, 1, false,
         exclusive_set, applicable
     };
+    // Mark limited_level as provided so it round-trips (B-T17 hint flag).
+    info.limited_level_provided = true;
 
     Json j;
     j << info;
@@ -66,6 +68,87 @@ void test_serialize_enchinfo() {
            "enchinfo round-trip: applicable contains axe");
 
     std::cout << "PASS: test_serialize_enchinfo" << std::endl;
+}
+
+// ─── test_serialize_enchinfo_min_cost ──────────────────────────────────
+// B-T17: min_cost raw fields (base / per_level_above_first) round-trip
+// through EnchInfo JSON. Non-zero values are serialized; absent / zero
+// values default to 0 and are NOT emitted.
+
+void test_serialize_enchinfo_min_cost() {
+    std::unordered_set<NSID> exclusive_set = {NSID("minecraft:smite")};
+    std::unordered_set<NSID> applicable = {NSID("#minecraft:sword")};
+    EnchInfo info{
+        NSID("minecraft:sharpness"), "Sharpness", MCE::All,
+        5, 5, 1, false, exclusive_set, applicable,
+        10, 5
+    };
+
+    Json j;
+    j << info;
+
+    // Non-zero min_cost fields are serialized.
+    expect(j.has("min_cost_base"), "min_cost_base present when non-zero");
+    expect(j.has("min_cost_per_level"), "min_cost_per_level present when non-zero");
+    expect(j["min_cost_base"].as<int64_t>() == 10,
+           "min_cost_base serialized value");
+    expect(j["min_cost_per_level"].as<int64_t>() == 5,
+           "min_cost_per_level serialized value");
+
+    // Round-trip preserves both fields.
+    EnchInfo i2;
+    j >> i2;
+    expect(i2.min_cost_base == 10, "min_cost_base preserved round-trip");
+    expect(i2.min_cost_per_level == 5, "min_cost_per_level preserved round-trip");
+
+    // Defaults: an EnchInfo built via the legacy 9-arg ctor has 0s, and they
+    // are NOT serialized (absent).
+    EnchInfo plain{
+        NSID("minecraft:smite"), "Smite", MCE::All,
+        5, 5, 1, false, exclusive_set, applicable
+    };
+    Json pj;
+    pj << plain;
+    expect(!pj.has("min_cost_base"), "min_cost_base omitted when 0");
+    expect(!pj.has("min_cost_per_level"), "min_cost_per_level omitted when 0");
+
+    // from_json on JSON lacking the fields keeps defaults at 0.
+    EnchInfo restored;
+    pj >> restored;
+    expect(restored.min_cost_base == 0, "min_cost_base defaults to 0");
+    expect(restored.min_cost_per_level == 0, "min_cost_per_level defaults to 0");
+
+    // set_min_cost convenience setter.
+    EnchInfo s;
+    s.set_min_cost(3, 4);
+    expect(s.min_cost_base == 3, "set_min_cost base");
+    expect(s.min_cost_per_level == 4, "set_min_cost per_level");
+
+    // ── limited_level fallback hint (B-T17) ──────────────────────────────
+    // The `info` built via ctor has limited_level_provided == false, so
+    // `limited_level` is NOT emitted by to_json (mirror the input).
+    expect(!j.has("limited_level"), "limited_level omitted when hint false");
+    expect(i2.limited_level == 0, "limited_level defaults to 0 when hint false");
+
+    // When the hint is true, to_json emits limited_level and from_json
+    // re-derives both the value and the hint.
+    EnchInfo hinted;
+    hinted.id = NSID("minecraft:hinted");
+    hinted.name = "Hinted";
+    hinted.set_min_cost(1, 2);
+    hinted.limited_level = 5;
+    hinted.limited_level_provided = true;
+    Json hj;
+    hj << hinted;
+    expect(hj.has("limited_level"), "limited_level emitted when hint true");
+    expect(hj["limited_level"].as<int64_t>() == 5, "limited_level serialized value");
+    EnchInfo h2;
+    hj >> h2;
+    expect(h2.limited_level == 5, "limited_level preserved round-trip");
+    expect(h2.limited_level_provided == true,
+           "limited_level_provided preserved round-trip");
+
+    std::cout << "PASS: test_serialize_enchinfo_min_cost" << std::endl;
 }
 
 // ─── test_serialize_enchset ────────────────────────────────────────────
@@ -578,6 +661,7 @@ int main() {
     try {
         test_serialize_ench();
         test_serialize_enchinfo();
+        test_serialize_enchinfo_min_cost();
         test_serialize_enchset();
         test_serialize_equipment();
         test_serialize_equipment_tag();

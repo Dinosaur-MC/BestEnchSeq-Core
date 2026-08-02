@@ -64,7 +64,10 @@ void RegistryLoader::from_dto(
         info.supported_platform = MCE::All;
         info.max_level         = d.max_level;
         info.limited_level     = d.limited_level;
+        info.limited_level_provided = d.limited_level_provided;
         info.multiplier        = d.multiplier;
+        info.min_cost_base     = d.min_cost_base;
+        info.min_cost_per_level = d.min_cost_per_level;
         info.is_treasure       = (d.limited_level == 0);
         info.exclusive_set     = std::move(exclusive_nsid);
         info.supported_items   = std::move(supported);
@@ -197,6 +200,9 @@ std::vector<business::loader::EnchantmentData> RegistryLoader::to_dto(
         d.multiplier       = info.multiplier;
         d.max_level        = info.max_level;
         d.limited_level    = info.limited_level;
+        d.limited_level_provided = info.limited_level_provided;
+        d.min_cost_base    = info.min_cost_base;
+        d.min_cost_per_level = info.min_cost_per_level;
         d.exclusive_with   = std::move(exclusive_bare);
         d.applicable_to    = std::move(applicable);
         result.push_back(std::move(d));

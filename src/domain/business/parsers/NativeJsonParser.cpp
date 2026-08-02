@@ -152,6 +152,8 @@ business::loader::EnchantmentData parse_ench_entry(
 
     std::string id_str, display_name;
     int32_t max_level = 0, multiplier = 0, limited_level = 0;
+    bool limited_level_provided = false;
+    int32_t min_cost_base = 0, min_cost_per_level = 0;
     std::vector<std::string> exclusive_set_items, app_items;
 
     {
@@ -174,9 +176,40 @@ business::loader::EnchantmentData parse_ench_entry(
 
     {
         auto it = elem_obj.find("limited_level");
-        if (it != elem_obj.end()) limited_level = it->second.as<int32_t>();
+        if (it != elem_obj.end()) {
+            limited_level = it->second.as<int32_t>();
+            limited_level_provided = true;
+        }
     }
     if (limited_level <= 0) limited_level = 0;
+
+    // min_cost 原始字段：接受两种形态 —— 扁平（min_cost_base / min_cost_per_level）
+    // 或 MC 嵌套对象（min_cost: {base, per_level_above_first}）。嵌套形态优先
+    // （当两者同时出现时以嵌套为准）。
+    {
+        auto it = elem_obj.find("min_cost_base");
+        if (it != elem_obj.end()) min_cost_base = it->second.as<int32_t>();
+    }
+    {
+        auto it = elem_obj.find("min_cost_per_level");
+        if (it != elem_obj.end()) min_cost_per_level = it->second.as<int32_t>();
+    }
+    {
+        auto it = elem_obj.find("min_cost");
+        if (it != elem_obj.end()) {
+            auto mc = it->second.get_value();
+            if (auto* mc_obj = std::get_if<Json::Object>(&mc)) {
+                {
+                    auto b = mc_obj->find("base");
+                    if (b != mc_obj->end()) min_cost_base = b->second.as<int32_t>();
+                }
+                {
+                    auto p = mc_obj->find("per_level_above_first");
+                    if (p != mc_obj->end()) min_cost_per_level = p->second.as<int32_t>();
+                }
+            }
+        }
+    }
 
     {
         auto it = elem_obj.find("exclusive_set");
@@ -202,6 +235,9 @@ business::loader::EnchantmentData parse_ench_entry(
     ench.multiplier       = multiplier;
     ench.max_level        = max_level;
     ench.limited_level    = limited_level;
+    ench.limited_level_provided = limited_level_provided;
+    ench.min_cost_base      = min_cost_base;
+    ench.min_cost_per_level = min_cost_per_level;
     ench.exclusive_with   = std::vector<std::string>(exclusive_set.begin(), exclusive_set.end());
     // supported_items: 原始引用透传（`#tag` 或具体 ID），不展开；加载期交叉验证
     ench.applicable_to    = std::move(app_items);

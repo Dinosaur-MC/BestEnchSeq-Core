@@ -145,6 +145,118 @@ void test_json_parse_with_applicable() {
     std::cout << "PASS: test_json_parse_with_applicable" << std::endl;
 }
 
+// ─── test_json_parse_min_cost_flat ─────────────────────────────────────
+// B-T17: flat min_cost_base / min_cost_per_level fields populate the DTO.
+
+void test_json_parse_min_cost_flat() {
+    std::string json_str = R"({
+        "enchantments": [
+            {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "multiplier": 1,
+             "min_cost_base": 10, "min_cost_per_level": 7}
+        ],
+        "equipments": []
+    })";
+
+    auto result = NativeJsonParser::parse_string(json_str);
+    const auto& enchantments = result.first;
+
+    expect_eq(static_cast<int>(enchantments.size()), 1,
+              "min_cost_flat: 1 enchantment");
+    expect_eq(enchantments[0].min_cost_base, 10,
+              "min_cost_flat: min_cost_base");
+    expect_eq(enchantments[0].min_cost_per_level, 7,
+              "min_cost_flat: min_cost_per_level");
+    expect(enchantments[0].limited_level_provided == false,
+           "min_cost_flat: no limited_level hint");
+
+    std::cout << "PASS: test_json_parse_min_cost_flat" << std::endl;
+}
+
+// ─── test_json_parse_min_cost_nested ───────────────────────────────────
+// B-T17: MC-nested min_cost object { base, per_level_above_first } populates
+// the DTO.
+
+void test_json_parse_min_cost_nested() {
+    std::string json_str = R"({
+        "enchantments": [
+            {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "multiplier": 1,
+             "min_cost": {"base": 5, "per_level_above_first": 9}}
+        ],
+        "equipments": []
+    })";
+
+    auto result = NativeJsonParser::parse_string(json_str);
+    const auto& enchantments = result.first;
+
+    expect_eq(static_cast<int>(enchantments.size()), 1,
+              "min_cost_nested: 1 enchantment");
+    expect_eq(enchantments[0].min_cost_base, 5,
+              "min_cost_nested: min_cost.base");
+    expect_eq(enchantments[0].min_cost_per_level, 9,
+              "min_cost_nested: min_cost.per_level_above_first");
+    expect(enchantments[0].limited_level_provided == false,
+           "min_cost_nested: no limited_level hint");
+
+    std::cout << "PASS: test_json_parse_min_cost_nested" << std::endl;
+}
+
+// ─── test_json_parse_min_cost_default ──────────────────────────────────
+// B-T17: neither min_cost nor limited_level → all default to 0, hint false.
+
+void test_json_parse_min_cost_default() {
+    std::string json_str = R"({
+        "enchantments": [
+            {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "multiplier": 1}
+        ],
+        "equipments": []
+    })";
+
+    auto result = NativeJsonParser::parse_string(json_str);
+    const auto& enchantments = result.first;
+
+    expect_eq(static_cast<int>(enchantments.size()), 1,
+              "min_cost_default: 1 enchantment");
+    expect_eq(enchantments[0].min_cost_base, 0,
+              "min_cost_default: base defaults 0");
+    expect_eq(enchantments[0].min_cost_per_level, 0,
+              "min_cost_default: per_level defaults 0");
+    expect_eq(enchantments[0].limited_level, 0,
+              "min_cost_default: limited_level defaults 0");
+    expect(enchantments[0].limited_level_provided == false,
+           "min_cost_default: no hint (fallback → max_level)");
+
+    std::cout << "PASS: test_json_parse_min_cost_default" << std::endl;
+}
+
+// ─── test_json_parse_limited_level_hint ────────────────────────────────
+// B-T17: legacy pre-computed `limited_level` field (no min_cost) → DTO keeps
+// the value and marks limited_level_provided = true.
+
+void test_json_parse_limited_level_hint() {
+    std::string json_str = R"({
+        "enchantments": [
+            {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "limited_level": 4, "multiplier": 1}
+        ],
+        "equipments": []
+    })";
+
+    auto result = NativeJsonParser::parse_string(json_str);
+    const auto& enchantments = result.first;
+
+    expect_eq(static_cast<int>(enchantments.size()), 1,
+              "ll_hint: 1 enchantment");
+    expect_eq(enchantments[0].limited_level, 4,
+              "ll_hint: limited_level value kept");
+    expect(enchantments[0].limited_level_provided == true,
+           "ll_hint: limited_level_provided true");
+    expect_eq(enchantments[0].min_cost_base, 0,
+              "ll_hint: min_cost_base 0 (no min_cost)");
+    expect_eq(enchantments[0].min_cost_per_level, 0,
+              "ll_hint: min_cost_per_level 0 (no min_cost)");
+
+    std::cout << "PASS: test_json_parse_limited_level_hint" << std::endl;
+}
+
 // ─── test_json_parse_empty ─────────────────────────────────────────────
 // parse_string("{}"). Verify empty results, no crash.
 
@@ -663,6 +775,10 @@ int main() {
         test_json_parse_basic();
         test_json_parse_with_exclusive();
         test_json_parse_with_applicable();
+        test_json_parse_min_cost_flat();
+        test_json_parse_min_cost_nested();
+        test_json_parse_min_cost_default();
+        test_json_parse_limited_level_hint();
         test_json_parse_empty();
         test_json_parse_via_Json();
 

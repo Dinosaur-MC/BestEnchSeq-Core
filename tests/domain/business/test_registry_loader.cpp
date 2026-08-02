@@ -48,6 +48,7 @@ void test_loader_ench_dto_to_reg() {
         1,                                   // multiplier
         5,                                   // max_level
         5,                                   // limited_level (non-zero => not treasure)
+        false,                               // limited_level_provided
         {"smite"},                           // exclusive_with (bare name, no namespace)
         {"#minecraft:sword"}                 // applicable_to (raw tag reference)
     });
@@ -58,6 +59,7 @@ void test_loader_ench_dto_to_reg() {
         1,
         5,
         5,
+        false,                               // limited_level_provided
         {"sharpness"},
         {"#minecraft:sword"}
     });
@@ -68,6 +70,7 @@ void test_loader_ench_dto_to_reg() {
         1,
         4,
         4,
+        false,                               // limited_level_provided
         {},
         {"#minecraft:helmet"}
     });
@@ -294,19 +297,19 @@ void test_loader_resolve_full() {
     // -- Build Enchantment DTOs -------------------------------------------
     std::vector<business::loader::EnchantmentData> ench_data;
     ench_data.push_back({
-        "minecraft:sharpness", "Sharpness", 1, 5, 5,
+        "minecraft:sharpness", "Sharpness", 1, 5, 5, false,
         {"smite"}, {"#minecraft:sword"}
     });
     ench_data.push_back({
-        "minecraft:smite", "Smite", 1, 5, 5,
+        "minecraft:smite", "Smite", 1, 5, 5, false,
         {"sharpness"}, {"#minecraft:sword"}
     });
     ench_data.push_back({
-        "minecraft:protection", "Protection", 1, 4, 4,
+        "minecraft:protection", "Protection", 1, 4, 4, false,
         {}, {"#minecraft:helmet"}
     });
     ench_data.push_back({
-        "minecraft:unbreaking", "Unbreaking", 1, 3, 3,
+        "minecraft:unbreaking", "Unbreaking", 1, 3, 3, false,
         {}, {"#minecraft:sword", "#minecraft:helmet"}
     });
 
@@ -417,7 +420,7 @@ void test_loader_supported_items_resolution() {
     std::vector<business::loader::EquipmentData> no_eq;
     std::vector<business::loader::EnchantmentData> ench_data;
     ench_data.push_back({
-        "minecraft:leeching", "Leeching", 1, 2, 2,
+        "minecraft:leeching", "Leeching", 1, 2, 2, false,
         {"sharpness"}, {"#minecraft:swords"}
     });
     RegistryLoader loader;
@@ -446,17 +449,17 @@ void test_loader_supported_items_concrete_and_drop() {
     std::vector<business::loader::EnchantmentData> ench_data;
     // Concrete ID that exists in eq_reg → kept with the reference preserved.
     ench_data.push_back({
-        "minecraft:test_concrete", "Test Concrete", 1, 1, 1,
+        "minecraft:test_concrete", "Test Concrete", 1, 1, 1, false,
         {}, {"minecraft:diamond_sword"}
     });
     // Concrete ID that does NOT exist → no resolvable supported_items → dropped.
     ench_data.push_back({
-        "minecraft:test_bad_ref", "Test Bad Ref", 1, 1, 1,
+        "minecraft:test_bad_ref", "Test Bad Ref", 1, 1, 1, false,
         {}, {"minecraft:not_a_real_item"}
     });
     // #tag that is not defined → dropped.
     ench_data.push_back({
-        "minecraft:test_bad_tag", "Test Bad Tag", 1, 1, 1,
+        "minecraft:test_bad_tag", "Test Bad Tag", 1, 1, 1, false,
         {}, {"#minecraft:undefined_tag"}
     });
 
@@ -537,7 +540,7 @@ void test_loader_resolve_with_base() {
 
     // Profile: a mod enchant referencing the concrete vanilla item.
     std::vector<business::loader::EnchantmentData> profile_ench;
-    profile_ench.push_back({"mod:glide", "Glide", 2, 3, 3, {}, {"minecraft:elytra"}});
+    profile_ench.push_back({"mod:glide", "Glide", 2, 3, 3, false, {}, {"minecraft:elytra"}});
 
     RegistryLoader loader;
     TagRegistry tag_reg;
@@ -595,6 +598,142 @@ void test_loader_concrete_item_vanilla_universe() {
     expect(!p.ench().contains(NSID("minecraft:sharpness")),
            "vanilla enchantment excluded from profile");
     TEST_PASS("test_loader_concrete_item_vanilla_universe");
+}
+
+// ---------------------------------------------------------------------------
+// 8. B-T17: Native JSON parse populates EnchInfo min_cost raw fields — both the
+//    flat (min_cost_base / min_cost_per_level) and the MC-nested (min_cost
+//    object) shapes flow through the loader into the registry. Absent fields
+//    stay 0.
+// ---------------------------------------------------------------------------
+void test_loader_native_min_cost() {
+    static int counter = 0;
+
+    auto write_and_load = [&](const std::string& content) {
+        auto path = std::filesystem::temp_directory_path() /
+                    ("besq_mincost_test_" + std::to_string(++counter) + ".json");
+        {
+            std::ofstream f(path);
+            f << content;
+        }
+        ProfileLoader loader;
+        return loader.load(path);
+    };
+
+    // Flat shape: min_cost_base / min_cost_per_level (no limited_level hint)
+    {
+        const std::string flat = R"({
+            "name": "flat_mincost",
+            "enchantments": [
+                { "id": "minecraft:flat_ench", "name": "Flat", "platform": "java",
+                  "max_level": 5, "multiplier": 1,
+                  "min_cost_base": 10, "min_cost_per_level": 7,
+                  "exclusive_set": [],
+                  "supported_items": ["#minecraft:swords"] }
+            ],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+        auto p = write_and_load(flat);
+        const auto& e = p.ench().at(NSID("minecraft:flat_ench"));
+        expect(e.min_cost_base == 10, "flat: min_cost_base populated");
+        expect(e.min_cost_per_level == 7, "flat: min_cost_per_level populated");
+        expect(e.limited_level_provided == false,
+               "flat: no limited_level hint (min_cost path → T18 computes)");
+    }
+
+    // MC-nested shape: min_cost: { base, per_level_above_first } (no hint)
+    {
+        const std::string nested = R"({
+            "name": "nested_mincost",
+            "enchantments": [
+                { "id": "minecraft:nested_ench", "name": "Nested", "platform": "java",
+                  "max_level": 3, "multiplier": 2,
+                  "min_cost": {"base": 5, "per_level_above_first": 9},
+                  "exclusive_set": [],
+                  "supported_items": ["#minecraft:swords"] }
+            ],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+        auto p = write_and_load(nested);
+        const auto& e = p.ench().at(NSID("minecraft:nested_ench"));
+        expect(e.min_cost_base == 5, "nested: min_cost.base populated");
+        expect(e.min_cost_per_level == 9, "nested: min_cost.per_level_above_first populated");
+        expect(e.limited_level_provided == false,
+               "nested: no limited_level hint (min_cost path → T18 computes)");
+    }
+
+    // Neither min_cost nor limited_level → both default to 0, hint false.
+    {
+        const std::string absent = R"({
+            "name": "no_mincost",
+            "enchantments": [
+                { "id": "minecraft:plain_ench", "name": "Plain", "platform": "java",
+                  "max_level": 1, "multiplier": 1,
+                  "exclusive_set": [],
+                  "supported_items": ["#minecraft:swords"] }
+            ],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+        auto p = write_and_load(absent);
+        const auto& e = p.ench().at(NSID("minecraft:plain_ench"));
+        expect(e.min_cost_base == 0, "absent: min_cost_base defaults to 0");
+        expect(e.min_cost_per_level == 0, "absent: min_cost_per_level defaults to 0");
+        expect(e.limited_level == 0, "absent: limited_level defaults to 0");
+        expect(e.limited_level_provided == false,
+               "absent: no hint (fallback → T18 uses max_level)");
+    }
+
+    TEST_PASS("test_loader_native_min_cost");
+}
+
+// ---------------------------------------------------------------------------
+// 8b. B-T17: limited_level fallback compatibility hint — when the native JSON
+//     carries a legacy pre-computed `limited_level` field (and no min_cost),
+//     the EnchInfo keeps the value and marks limited_level_provided = true.
+// ---------------------------------------------------------------------------
+void test_loader_native_limited_level_hint() {
+    static int counter = 0;
+
+    auto write_and_load = [&](const std::string& content) {
+        auto path = std::filesystem::temp_directory_path() /
+                    ("besq_llhint_test_" + std::to_string(++counter) + ".json");
+        {
+            std::ofstream f(path);
+            f << content;
+        }
+        ProfileLoader loader;
+        return loader.load(path);
+    };
+
+    // Legacy pre-computed limited_level, no min_cost → hint true, value kept.
+    {
+        const std::string legacy = R"({
+            "name": "legacy_ll",
+            "enchantments": [
+                { "id": "minecraft:legacy_ench", "name": "Legacy", "platform": "java",
+                  "max_level": 5, "limited_level": 4, "multiplier": 1,
+                  "exclusive_set": [],
+                  "supported_items": ["#minecraft:swords"] }
+            ],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+        auto p = write_and_load(legacy);
+        const auto& e = p.ench().at(NSID("minecraft:legacy_ench"));
+        expect(e.limited_level == 4, "legacy: limited_level value kept");
+        expect(e.limited_level_provided == true, "legacy: limited_level_provided true");
+        expect(e.min_cost_base == 0, "legacy: min_cost_base 0 (no min_cost)");
+        expect(e.min_cost_per_level == 0, "legacy: min_cost_per_level 0 (no min_cost)");
+    }
+
+    TEST_PASS("test_loader_native_limited_level_hint");
 }
 
 // =============================================================================
@@ -897,6 +1036,8 @@ int main() {
         test_loader_vanilla_tag_fallback();
         test_loader_resolve_with_base();
         test_loader_concrete_item_vanilla_universe();
+        test_loader_native_min_cost();
+        test_loader_native_limited_level_hint();
 
         // Section B -- TagResolver
         test_tag_resolve_basic();
