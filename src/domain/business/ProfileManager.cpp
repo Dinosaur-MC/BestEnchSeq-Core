@@ -413,9 +413,10 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // the validation universe so `#mypack:*` supported_items references
         // survive cross-validation, and must land in the profile's tag registry
         // so the profile owns them (B-T14 I-1).
-        // Filter out item tags whose ids fail NSID validation (spaces/dots/
-        // leading digits): they are unusable as `supported_items` refs, so skip
-        // them (with a warning) instead of aborting the whole datapack load.
+        // Filter out item tags whose ids fail NSID validation (spaces,
+        // uppercase, `.`/`..` segments): they are unusable as `supported_items`
+        // refs, so skip them (with a warning) instead of aborting the whole
+        // datapack load.
         TagRegistry datapack_tags;
         std::vector<McOfficialParser::ItemTagDefinition> valid_item_tags;
         valid_item_tags.reserve(result.item_tags.size());

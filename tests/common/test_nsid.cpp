@@ -246,6 +246,8 @@ void test_mc_identifier_rules() {
                   "slash in namespace should throw");
 
     // Filesystem-safety: '.' and '..' as whole segments are rejected.
+    expect_throws([] { NSID(".:x"); }, "'.' namespace should throw");
+    expect_throws([] { NSID("..:x"); }, "'..' namespace should throw");
     expect_throws([] { NSID("minecraft:."); }, "'.' id should throw");
     expect_throws([] { NSID("minecraft:.."); }, "'..' id should throw");
     expect_throws([] { NSID("minecraft:a/../b"); }, "'..' path segment should throw");

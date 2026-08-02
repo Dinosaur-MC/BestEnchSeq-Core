@@ -261,7 +261,7 @@ All algorithms share `IForgeEngine` and compact types. New algorithms only need 
 
 ### Profile Management
 
-`ProfileManager` (business-domain entry) manages profiles whose keys are **plain strings** (arbitrary readable names, spaces/dots kept verbatim — not NSID; NSID is reserved for MC content ids). The root key is fixed at `builtin:vanilla`.
+`ProfileManager` (business-domain entry) manages profiles whose keys are **plain strings** (arbitrary readable names, spaces and dots kept verbatim; NSID is reserved for MC content ids). The root key is fixed at `builtin:vanilla`.
 
 - **Dependencies**: `ProfileMetadata.dependencies` (string list) is resolved transitively in topological order with cycle detection (`resolve_dependencies`).
 - **Effective view**: `resolve_effective` topologically merges the dependency chain + the profile itself (upper layers win), builds a merged-tag `TagResolver`, and caches the result.

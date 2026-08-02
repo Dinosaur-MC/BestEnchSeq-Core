@@ -681,9 +681,10 @@ void test_pm_load_datapack_vanilla_tag_override() {
 // ─── Test: invalid tag key is skipped, not fatal (B-T14 follow-up) ───────
 
 void test_pm_load_datapack_skips_invalid_tag_key() {
-    // A tag file whose path contains a space → tag id "mypack:My Tag" is invalid
-    // (NSID rejects spaces/dots/leading digits).  It must be skipped, NOT abort
-    // the whole datapack load; valid tags are still processed.
+    // A tag file whose path contains a space and uppercase → tag id
+    // "mypack:My Tag" is invalid (NSID rejects spaces and uppercase).  It must
+    // be skipped, NOT abort the whole datapack load; valid tags are still
+    // processed.
     auto dir = std::filesystem::temp_directory_path() / "Valid And Odd Tags";
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
