@@ -285,7 +285,7 @@ interface/
 | Game data types | `business/types/` |
 | Data file parsing | `business/parsers/` |
 | Format detection | `business/components/FormatDetector` |
-| Profile management | `business/managers/ProfileManager` |
+| Profile management | `business/ProfileManager` |
 
 ---
 

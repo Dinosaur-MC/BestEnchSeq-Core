@@ -222,7 +222,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 | Pipeline | 职责 | 关键依赖 |
 |----------|------|---------|
 | `SolvePipeline` | 锻造求解（apply → execute → recall） | CompactAdapter, AlgorithmLoader, AlgorithmExecutor |
-| `ManagePipeline` | Profile/注册表管理 | ProfileManager, ProfileLoader, RegistryManager |
+| `ManagePipeline` | Profile/注册表管理 | ProfileManager, ProfileLoader, RegistryHelper |
 | `ExportPipeline` | 数据导出 | EnchSerializer, OutputFormatter |
 
 ### 并发模型
@@ -306,8 +306,8 @@ Algorithm domain (src/domain/algorithm/registries/):
 **registries/**：纯数据容器（`EnchantmentRegistry`、`EquipmentRegistry`、`TagRegistry`，均继承自 `IRegistry`）
 **parsers/**：格式解析器（`NativeJsonParser`、`NativeCsvParser`、`McOfficialParser`，共享 `ParserShared`）
 **loaders/**：DTO ↔ 注册表/Profile 转换（`RegistryLoader`、`ProfileLoader`）
-**managers/**：Profile 生命周期（`ProfileManager`）+ 集合运算（`RegistryManager`，含 `| & + -` 运算符）
-**components/**：`FormatDetector`（格式检测+自动分派）、`Serializer`（JSON ADL 委托）、`TagResolver`（标签解析）
+**ProfileManager**（业务域顶层）：Profile 生命周期与依赖图/有效视图（`| & + -` 运算符位于 `components/RegistryHelper`）
+**components/**：`FormatDetector`（格式检测+自动分派）、`Serializer`（JSON ADL 委托）、`TagResolver`（标签解析）、`RegistryHelper`（集合运算，原 `RegistryManager`）
 
 ### `src/domain/interface/`（接口域）
 
@@ -353,8 +353,8 @@ Algorithm domain (src/domain/algorithm/registries/):
 - `src/domain/algorithm/_strategies/` — 内置算法策略
 - `src/domain/business/types/Profile.h/.cpp` — Profile 一等公民
 - `src/domain/business/loaders/ProfileLoader.h/.cpp` — Profile 加载/导出
-- `src/domain/business/managers/ProfileManager.h/.cpp` — Profile 生命周期管理
-- `src/domain/business/managers/RegistryManager.h/.cpp` — 注册表集合运算
+- `src/domain/business/ProfileManager.h/.cpp` — Profile 生命周期管理
+- `src/domain/business/components/RegistryHelper.h/.cpp` — 注册表集合运算
 - `src/domain/business/components/Serializer.h/.cpp` — ADL 兼容的序列化 delegate
 - `src/domain/orchestration/components/CompactAdapter.h/.cpp` — 边界转换
 - `src/domain/orchestration/components/OutputFormatter.h/.cpp` — 输出格式化

@@ -266,9 +266,6 @@ public:
     static Profile from_json_static(const Json& json);
 
 private:
-    friend class ProfileManager;             // for lifecycle management
-    friend class RegistryHelper;             // for set operation result construction
-
     ProfileMetadata _meta;
     EnchantmentRegistry _ench;
     EquipmentRegistry _eq;
@@ -276,6 +273,8 @@ private:
     std::shared_ptr<TagResolver> _tag_resolver;  // runtime-derived, not serialized
 };
 ```
+
+> **Note**: `Profile` 无 `friend` 声明 — `ProfileManager`/`RegistryHelper` 通过公开 proxy 方法与 `RegistryHelper::merge` 操作 Profile。mod profile 若要显式依赖内置根，可声明 `dependencies: ["builtin:vanilla"]`。
 
 **Design notes**:
 - `name` is a **`std::string` profile key** — 任意可读名（可含空格/点，verbatim 保留），**不是 NSID**（B-T13：Profile key 与 NSID 解耦）。NSID 仅用于 MC 内容类型（魔咒/装备/tag id、datapack 内命名空间）。根 key 固定为 `builtin:vanilla`。`--profile` 匹配任意字符串 key。
