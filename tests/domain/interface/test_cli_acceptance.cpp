@@ -425,6 +425,78 @@ void test_book_target_parsing() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Test: --algo-opt → SearchConfig::extra (strategy-specific knob escape hatch)
+// ---------------------------------------------------------------------------
+
+void test_algo_opt_wiring() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // Valid: comma-separated key=value pairs land in search_config.extra
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--source", "sharpness=2",
+                              "--algo-opt", "bb_dp.chunk_bits=12,idastar.threshold=1.5"};
+        auto config = CLIApp::parse(7, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.search_config.extra.size() == 2, "two algo-opt pairs wired");
+        expect(req.search_config.extra.at("bb_dp.chunk_bits") == "12",
+               "bb_dp.chunk_bits value");
+        expect(req.search_config.extra.at("idastar.threshold") == "1.5",
+               "idastar.threshold value");
+        TEST_PASS("--algo-opt pairs wired to extra");
+    }
+    // Omitted → extra stays empty
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--source", "sharpness=2"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
+        auto req = CLIApp::build_solve_request(config, ctx);
+        expect(req.search_config.extra.empty(), "omitted --algo-opt leaves extra empty");
+        TEST_PASS("--algo-opt omitted → extra empty");
+    }
+    // Empty value → parse throws
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--algo-opt", ""};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
+                      "Empty --algo-opt should throw");
+        TEST_PASS("--algo-opt empty throws");
+    }
+    // Malformed pair (no '=' / empty key / empty value) → parse throws
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--algo-opt", "bb_dp.chunk_bits"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
+                      "Malformed --algo-opt should throw");
+        TEST_PASS("--algo-opt malformed throws");
+    }
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--algo-opt", "=8"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
+                      "Empty --algo-opt key should throw");
+        TEST_PASS("--algo-opt empty key throws");
+    }
+    {
+        const char* argv[] = {"besq", "--target", "diamond_sword",
+                              "--algo-opt", "bb_dp.chunk_bits="};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
+                      "Empty --algo-opt value should throw");
+        TEST_PASS("--algo-opt empty value throws");
+    }
+    // apply_algo_opts functional (mirror of apply_config_pairs test)
+    {
+        algorithm::SearchConfig cfg;
+        CLIApp::apply_algo_opts("a.b=1,c=hello", cfg);
+        expect(cfg.extra.size() == 2, "apply_algo_opts fills extra");
+        expect(cfg.extra.at("a.b") == "1", "apply_algo_opts a.b");
+        expect(cfg.extra.at("c") == "hello", "apply_algo_opts c");
+        TEST_PASS("CLIApp::apply_algo_opts functional");
+    }
+}
+
 int main() {
     try {
         test_no_args_shows_usage();
@@ -440,6 +512,7 @@ int main() {
         test_memory_parsing();
         test_apply_config_pairs();
         test_profile_publish_parsing();
+        test_algo_opt_wiring();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

@@ -22,7 +22,7 @@ inline constexpr uint32_t get_algo_tag(uint32_t raw_type) noexcept {
 
 // File-level constants
 inline constexpr uint32_t FILE_MAGIC   = 0x51534542; // "BESQ" LE
-inline constexpr uint16_t FILE_VERSION = 2;
+inline constexpr uint16_t FILE_VERSION = 3; // v3: SearchConfig::extra map added
 inline constexpr uint32_t MAX_CHECKPOINT_SECTIONS = 256;
 
 struct MetaHeader : IBinarySerializable {

@@ -234,12 +234,13 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<int>        {.long_name = "solutions",          .short_name = 's', .help_key = "cli.help.solutions_desc", .help_group = "cli.help.group_basic", .default_v = 1},
     Option<std::string>{.long_name = "memory",                           .help_key = "cli.help.memory_desc",    .help_group = "cli.help.group_advanced"},
     Option<int>        {.long_name = "max-time",                         .help_key = "cli.help.max_time_desc",  .help_group = "cli.help.group_advanced"},
-    Option<int>        {.long_name = "max-threads",      .short_name = 'j', .help_key = "Maximum thread pool size (0 = auto)", .help_group = "cli.help.group_advanced"},
+    Option<int>        {.long_name = "max-threads",      .short_name = 'j', .help_key = "cli.help.max_threads_desc", .help_group = "cli.help.group_advanced"},
     Option<std::string>{.long_name = "profile",          .help_key = "cli.help.profile_desc",       .help_group = "cli.help.group_registry"},
     Option<std::string>{.long_name = "profile-dir",      .help_key = "cli.help.profile_dir_desc",   .help_group = "cli.help.group_registry"},
     Option<std::string>{.long_name = "publish",          .help_key = "cli.help.publish_desc",       .help_group = "cli.help.group_registry"},
     Option<std::string>{.long_name = "publish-version",  .help_key = "cli.help.publish_version_desc", .help_group = "cli.help.group_registry"},
     Option<std::string>{.long_name = "publish-tag",      .help_key = "cli.help.publish_tag_desc",   .help_group = "cli.help.group_registry"},
+    Option<std::string>{.long_name = "algo-opt",         .help_key = "cli.help.algo_opt_desc",      .help_group = "cli.help.group_advanced"},
 };
 
 } // anonymous namespace
@@ -369,6 +370,21 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
             throw std::runtime_error(tr("cli.err.empty_config"));
     }
 
+    // Post-bind: --algo-opt (empty + format check; values are arbitrary
+    // strings, so only shape is validated — key ownership is strategy-defined)
+    {
+        auto& raw_opt = std::get<28>(result.value);
+        if (raw_opt.has_value() && raw_opt->empty())
+            throw std::runtime_error(tr("cli.err.empty_algo_opt"));
+        if (!cfg.algo_opt_pairs.empty()) {
+            for (const auto& pair : string_utils::split(cfg.algo_opt_pairs, ',')) {
+                auto eq = pair.find('=');
+                if (eq == std::string::npos || eq == 0 || eq + 1 >= pair.size())
+                    throw std::runtime_error(tr_fmt("cli.err.invalid_algo_opt", pair));
+            }
+        }
+    }
+
     // Business validation
     if (!cfg.target.empty()) {
         if (cfg.mode != "direct" && cfg.mode != "inventory")
@@ -460,6 +476,19 @@ void CLIApp::apply_config_pairs(const std::string& config_pairs, algorithm::Forg
     }
 }
 
+// apply_algo_opts — parse --algo-opt k=v,k=v into SearchConfig::extra.
+// Values are arbitrary strings; keys are strategy-owned (namespaced by the
+// strategy that reads them). Shape validated in parse(); here we only split.
+void CLIApp::apply_algo_opts(const std::string& algo_opts, algorithm::SearchConfig& cfg) {
+    if (algo_opts.empty()) return;
+    for (const auto& pair : string_utils::split(algo_opts, ',')) {
+        auto eq = pair.find('=');
+        if (eq == std::string::npos || eq == 0 || eq + 1 >= pair.size())
+            throw std::runtime_error(tr_fmt("cli.err.invalid_algo_opt", pair));
+        cfg.extra.emplace(pair.substr(0, eq), pair.substr(eq + 1));
+    }
+}
+
 // ====================================================================
 // build_solve_request — assemble a SolveRequest from a parsed Config
 // ====================================================================
@@ -511,6 +540,7 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
     // --memory: forward when set; 0 lets A* fall back to its own 2048 MB.
     request.search_config.memory_mb = config.memory_mb;
     CLIApp::apply_config_pairs(config.config_pairs, request.forge_config);
+    CLIApp::apply_algo_opts(config.algo_opt_pairs, request.search_config);
     return request;
 }
 

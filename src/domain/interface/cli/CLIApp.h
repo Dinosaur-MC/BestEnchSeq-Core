@@ -27,6 +27,7 @@ public:
         std::string source;
         std::string lang;
         std::string config_pairs;
+        std::string algo_opt_pairs;      // --algo-opt k=v,k=v → SearchConfig::extra
         std::optional<std::string> input;
         std::optional<std::string> registry_dir;
         std::optional<std::string> registries;
@@ -58,6 +59,8 @@ public:
     static Config parse(int argc, char* argv[]);
     static std::string help_text(std::string_view program_name = "besq");
     static void apply_config_pairs(const std::string& config_pairs, algorithm::ForgeConfig& cfg);
+    /// Parse --algo-opt k=v,k=v into SearchConfig::extra (strategy-specific knobs).
+    static void apply_algo_opts(const std::string& algo_opts, algorithm::SearchConfig& cfg);
 
     /// Build a SolveRequest from a parsed Config (used by run() and tests).
     static SolveRequest build_solve_request(const Config& config, BesqContext& ctx);
@@ -106,6 +109,7 @@ private:
         cfg.publish         = std::get<25>(v);
         cfg.publish_version = std::get<26>(v);
         cfg.publish_tag     = std::get<27>(v);
+        cfg.algo_opt_pairs  = std::get<28>(v).value_or(Config{}.algo_opt_pairs);
         return cfg;
     }
 };

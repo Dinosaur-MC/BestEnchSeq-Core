@@ -244,6 +244,7 @@ void test_search_config_roundtrip() {
     original.memory_mb = 512;
     original.initial_bound = 1234;
     original.max_search_time = std::chrono::milliseconds(5000);
+    original.extra = {{"bb_dp.chunk_bits", "12"}, {"idastar.threshold", "1.5"}};
 
     ByteStreamWriter w;
     w << original;
@@ -258,6 +259,16 @@ void test_search_config_roundtrip() {
     expect_eq(result.memory_mb, 512, "memory_mb");
     expect_eq(result.initial_bound, 1234, "initial_bound");
     expect_eq(result.max_search_time.count(), 5000LL, "max_search_time");
+    expect(result.extra == original.extra, "extra map should roundtrip");
+    expect_eq(result.extra.at("bb_dp.chunk_bits"), std::string("12"), "extra value");
+    // Empty extra also roundtrips (backward-compatible tail)
+    algorithm::SearchConfig empty;
+    ByteStreamWriter w2;
+    w2 << empty;
+    ByteStreamReader r2(w2.data());
+    algorithm::SearchConfig result2;
+    r2 >> result2;
+    expect(r2.ok() && result2.extra.empty(), "empty extra map roundtrip");
     TEST_PASS("test_search_config_roundtrip");
 }
 
