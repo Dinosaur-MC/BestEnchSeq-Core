@@ -657,43 +657,28 @@ void test_nsid_set_roundtrip() {
     TEST_PASS("set_codec<text_codec<NSIDConverter>> json+csv roundtrip");
 }
 
-// 11b. presence-derived flag：真实 EnchInfo::from_json 在 limited_level 键存在
-//      时置 limited_level_provided=true（存在性派生的元旗标）；纯 schema parse 后
-//      丢失该旗标（re-serialize 会丢 limited_level）。引擎可由自定义 codec 在
-//      from_json 同时写值与旗标来表达——此测试演示该机制（Phase 2 据此接线；
-//      旗标重建本身是文档化的 Phase-2 缺口）。
-struct ProvidedFlagCodec {
-    template<class V>
-    void to_json(const V& v, Json& out) const { out = Json(static_cast<int64_t>(v)); }
-    template<class V>
-    bool from_json(const Json& j, V& v, ds::ErrorList& e, const std::string& path) const {
-        if (j.type() != JsonType::Number) { e.add(path, "expected number"); return false; }
-        v = static_cast<V>(j.as<int64_t>());
-        return true;
-    }
-    template<class V>
-    void to_csv(const V& v, std::string& out) const { out = std::to_string(v); }
-    template<class V>
-    bool from_csv(const std::string_view& s, V& v, ds::ErrorList& e, const std::string& path) const {
-        try { v = static_cast<V>(std::stoll(std::string(s))); return true; }
-        catch (...) { e.add(path, "invalid integer"); return false; }
-    }
-};
+// 11b. conditional emit + value roundtrip：presence-derived flag
+//      （limited_level_provided）不被本 schema 重建——emit 谓词只控制序列化；
+//      from_json 无从重建兄弟成员（字段 codec 只拿到本字段值，无法触达 provided）。
+//      重建需 schema 级 post-parse 钩子（spec §5 validate(T&, ErrorList&)，引擎未实现），
+//      为 Phase-2 迁移工作。本测试如实固定：值往返 + 发射谓词生效。
 struct HintCarrier { int limited_level = 0; bool provided = false; };
 struct HintSchema {
     using Type = HintCarrier;
     static constexpr auto fields = std::tuple{
-        ds::field("limited_level", &HintCarrier::limited_level, ProvidedFlagCodec{},
+        ds::field("limited_level", &HintCarrier::limited_level, ds::int_codec{},
                   [](const Type& t) { return t.provided; }),
     };
 };
 using HintJson = ds::json::Schema<HintSchema>;
 
-void test_presence_derived_flag_reconstruction() {
-    // With an emit-only design, parse cannot see the flag. This test proves the
-    // phase-2 pattern: a custom codec CAN set both value and flag when present,
-    // provided the schema exposes the flag through a second, parse-only field.
-    // (Demonstrate the mechanism; the concrete Phase-2 wiring is migration work.)
+void test_custom_codec_value_roundtrip_with_conditional_emit() {
+    // The value roundtrips and the emit predicate gates serialization. The
+    // presence-derived flag (limited_level_provided) is NOT reconstructed by
+    // this schema: the field codec receives only the field's own value and
+    // cannot reach sibling members. Reconstructing it needs a schema-level
+    // post-parse hook (spec §5 validate(T&, ErrorList&), not implemented in
+    // the engine) — that is Phase-2 migration work.
     HintCarrier h{5, true};
     Json j = HintJson::serialize(h);
     expect(j.has("limited_level"), "emitted when provided");
@@ -701,10 +686,10 @@ void test_presence_derived_flag_reconstruction() {
     ds::ErrorList e;
     expect(HintJson::parse(j, out, e), "parse ok");
     expect(out.limited_level == 5, "value roundtrips");
-    // NOTE: the flag itself is not reconstructed by this schema — that is the
-    // documented Phase-2 gap. This test pins that the VALUE roundtrips and that
-    // a custom codec is the intended mechanism to also write the flag.
-    TEST_PASS("presence-derived flag: custom codec carries value; flag wiring is Phase 2");
+    // NOTE: out.provided stays false (default) — presence-derived flags are not
+    // reconstructed by this engine. This test pins value roundtrip + conditional
+    // emit only; flag wiring is Phase-2 migration work.
+    TEST_PASS("custom codec value roundtrip with conditional emit (flag not reconstructed)");
 }
 
 int main() {
@@ -742,6 +727,6 @@ int main() {
     test_enchlike_csv_roundtrip();
     test_set_codec_int_roundtrip();
     test_nsid_set_roundtrip();
-    test_presence_derived_flag_reconstruction();
+    test_custom_codec_value_roundtrip_with_conditional_emit();
     return print_summary();
 }
