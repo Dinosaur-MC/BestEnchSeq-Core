@@ -421,32 +421,36 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         auto& pool = besq::ThreadPool::shared();
         std::mutex result_mutex;
         ctx.report_progress(20, ProgressStatus::Exploring);
-        parallel_for(pool, uint64_t{1}, mask, [&](uint64_t left) {
-            if ((left & ~mask) != 0) return;      // not a subset of `mask`
-            uint64_t p_cap = 0, p_bound = 0;
-            Frontier local;
-            process_subset(local, left, p_cap, p_bound);
-            {
-                std::lock_guard<std::mutex> lk(result_mutex);
-                // Carry this partition's Pareto drops into `result` so they are
-                // aggregated at the top-level cache_put (review finding #2).
-                // local itself is never cache_put — only its entries are merged.
-                result.dropped += local.dropped;
-                if (!local.empty())
-                    for (auto& e : local.entries)
-                        result.insert(std::move(e), beam_width);
-            }
-            // Flush per-mask prunes into the global counters (Tier 1: one
-            // relaxed atomic per partition, never per forge).
-            _dp_cap_pruned.fetch_add(p_cap, std::memory_order_relaxed);
-            _dp_bound_pruned.fetch_add(p_bound, std::memory_order_relaxed);
-        });
+        // Stoppable: on cancel the chunk loops stop at their next index, so
+        // the 2^n mask range is not drained element-by-element after a timeout.
+        parallel_for_stoppable(pool, uint64_t{1}, mask,
+            [&](uint64_t left) {
+                if ((left & ~mask) != 0) return;      // not a subset of `mask`
+                uint64_t p_cap = 0, p_bound = 0;
+                Frontier local;
+                process_subset(local, left, p_cap, p_bound);
+                {
+                    std::lock_guard<std::mutex> lk(result_mutex);
+                    // Carry this partition's Pareto drops into `result` so they are
+                    // aggregated at the top-level cache_put (review finding #2).
+                    // local itself is never cache_put — only its entries are merged.
+                    result.dropped += local.dropped;
+                    if (!local.empty())
+                        for (auto& e : local.entries)
+                            result.insert(std::move(e), beam_width);
+                }
+                // Flush per-mask prunes into the global counters (Tier 1: one
+                // relaxed atomic per partition, never per forge).
+                _dp_cap_pruned.fetch_add(p_cap, std::memory_order_relaxed);
+                _dp_bound_pruned.fetch_add(p_bound, std::memory_order_relaxed);
+            },
+            [&] { return ctx.is_cancelled(); });
     } else {
         // Enumerate all proper non-empty subsets of `mask` (skip 0 and mask).
         uint64_t left = (mask - 1) & mask;  // largest proper subset
         uint64_t count = 0;
         const uint64_t total = static_cast<uint64_t>(1) << n;
-        while (left != 0) {
+        while (left != 0 && !ctx.is_cancelled()) {
             process_subset(result, left, cap_pruned, bound_pruned);
             ++count;
             if ((count & 0xFF) == 0)

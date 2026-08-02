@@ -26,6 +26,7 @@
 #include <atomic>
 #include <concepts>
 #include <exception>
+#include <functional>
 #include <future>
 #include <memory>
 #include <stop_token>
@@ -169,13 +170,20 @@ auto ThreadPool::submit(F&& f)
 // parallel_for  —  static chunk helper
 // =======================================================================
 
+/// Stoppable variant of parallel_for.  When \p should_stop returns true,
+/// in-flight chunk loops stop at their next index; already-submitted chunks
+/// are still joined but finish promptly.  An empty \p should_stop never
+/// stops.  This is what lets a search algorithm's cancellation propagate
+/// promptly: without it the chunk loop would drain every element of the
+/// (possibly 2^n) index range even after cancel.
 template <typename Index, typename Body>
     requires std::integral<Index> && std::invocable<Body&, Index>
-void parallel_for(ThreadPool& pool,
-                  Index first,
-                  Index last,
-                  Body&& body,
-                  Index chunk_size = 0) {
+void parallel_for_stoppable(ThreadPool& pool,
+                            Index first,
+                            Index last,
+                            Body&& body,
+                            std::function<bool()> should_stop,
+                            Index chunk_size = 0) {
     if (first >= last) return;
 
     using diff_t = std::make_signed_t<Index>;
@@ -201,8 +209,10 @@ void parallel_for(ThreadPool& pool,
         for (std::size_t ci = 0; ci < num_chunks; ++ci) {
             Index chunk_begin = pos;
             Index chunk_end = (last - pos < step) ? last : pos + step;
-            futures[ci] = pool.submit([&body, chunk_begin, chunk_end] {
-                for (Index i = chunk_begin; i < chunk_end; ++i) body(i);
+            futures[ci] = pool.submit([&body, &should_stop, chunk_begin, chunk_end] {
+                for (Index i = chunk_begin;
+                     i < chunk_end && !(should_stop && should_stop()); ++i)
+                    body(i);
             });
             pos = chunk_end;
         }
@@ -218,6 +228,18 @@ void parallel_for(ThreadPool& pool,
         catch (...) { if (!first_error) first_error = std::current_exception(); }
     }
     if (first_error) std::rethrow_exception(first_error);
+}
+
+/// Non-stoppable parallel_for — delegates to the stoppable form with a
+/// never-stop predicate (no early-exit when omitted).
+template <typename Index, typename Body>
+    requires std::integral<Index> && std::invocable<Body&, Index>
+void parallel_for(ThreadPool& pool,
+                  Index first,
+                  Index last,
+                  Body&& body,
+                  Index chunk_size = 0) {
+    parallel_for_stoppable(pool, first, last, std::forward<Body>(body), {}, chunk_size);
 }
 
 } // namespace besq
