@@ -158,7 +158,7 @@ A solution may have `is_success: false` if the target cannot be reached:
 ```
 
 ### No --target (export only)
-When `--export-registry` is used without `--target`, no JSON output is produced. Instead, the registry file is written.
+When `--export` is used without `--target`, no JSON output is produced. Instead, the profile data file is written.
 
 ---
 

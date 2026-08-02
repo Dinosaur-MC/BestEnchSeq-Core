@@ -172,7 +172,7 @@ Profile (ench() + eq() + tags() 三元组)
 ```
 
 内置数据通过 `ProfileLoader::load_builtin()` 加载，委托 `builtin/DataLoader` 层读取嵌入的 vanilla.json。
-`--registry-dir` / `--registries` CLI 选项调用 `FormatDetector` 自动识别格式（JSON / CSV / MC Official）。
+`--import` CLI 选项调用 `FormatDetector` 自动识别格式（JSON / CSV / MC Official）。
 
 ### 注册表体系
 
@@ -316,7 +316,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 纯翻译层，无业务逻辑。
 
 - `BesqContext`：应用会话外观，持有 ProfileManager 和 AlgorithmLoader，委托所有操作到 orchestration pipeline
-- **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）；`--registry-edit` 解析内联在 CLIApp 中
+- **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）；`--edit` 解析内联在 CLIApp 中
 - **components/**：公共组件预留（暂无内容）
 - **abi/**：`CAbiBindings`（C ABI 包装，JSON 交换）
 

@@ -125,8 +125,8 @@ public:
     const EquipmentRegistry& equipment() const noexcept;
     const TagRegistry& categories() const noexcept;
 
-    // ── Persistence ──
-    bool export_registry(const std::string& path) const;
+    // ── Profile data import / export ──
+    bool export_profile(const std::string& path) const;
 
     // ── Algorithm ──
     size_t load_algorithms(const std::string& dir_path);
