@@ -213,7 +213,7 @@ void test_config_parsing() {
 // Test: --edit parsing
 // ---------------------------------------------------------------------------
 
-void test_registry_edit_parsing() {
+void test_edit_parsing() {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
                               "--edit", "ench:mod,sharpness,max_level=10"};
@@ -506,7 +506,7 @@ int main() {
         test_solve_request_config_wiring();
         test_book_target_parsing();
         test_config_parsing();
-        test_registry_edit_parsing();
+        test_edit_parsing();
         test_algorithm_name();
         test_already_met_args_parse();
         test_memory_parsing();
