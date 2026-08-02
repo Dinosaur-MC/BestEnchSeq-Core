@@ -15,7 +15,7 @@
   -i, --img              渲染趋势图
   -g, --group <分组>     enchs 数分组，如 "1,2;3..4;5..;..6;3,7"
                            ; 分隔组，, 分隔条件，.. 表示范围
-                           （默认 "1..6;7..9;10.."）
+                           （默认 "1..6;7..9;10..16;17.."）
   -h, --help             显示帮助信息
 """
 
@@ -244,6 +244,7 @@ def merge_results(
 # ------------------------------------------------------------
 def generate_output(header, latest_time, datasets, dataset_order, algo_orders):
     blocks = []
+    dataset_order = sorted(dataset_order, key=lambda x: int(re.search(r"(\d+) ench", x).group(1)))
     for ds in dataset_order:
         lines = [ds]
         for algo in algo_orders.get(ds, []):
@@ -606,8 +607,8 @@ def main():
     parser.add_argument(
         "-g",
         "--group",
-        default="1..6;7..9;10..",
-        help='enchs 数分组，如 "1,2;3..4;5..;..6;3,7"' '（默认 "1..6;7..9;10.."）',
+        default="1..6;7..9;10..16;17..",
+        help='enchs 数分组，如 "1,2;3..4;5..;..6;3,7"' '（默认 "1..6;7..9;10..16;17.."）',
     )
     args = parser.parse_args()
 
