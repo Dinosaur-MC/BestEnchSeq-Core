@@ -140,15 +140,14 @@ struct Person {
 };
 struct PersonSchema {
     using Type = Person;
-    // NOTE: Field 含 std::vector 别名存储，非 literal 类型，无法 static constexpr。
-    // inline 允许类内运行时初始化（若 Field.h 后续改 constexpr 存储，可恢复 static constexpr）。
-    static inline const auto fields = std::tuple{
+    static constexpr auto fields = std::tuple{
         ds::required_field("name", &Person::name, ds::string_codec{}),
         ds::field("age",  &Person::age,  ds::int_codec{0, 150}),
         ds::field("active", &Person::active, ds::bool_codec{}),
     };
 };
 using PersonJson = ds::json::Schema<PersonSchema>;
+static_assert(std::tuple_size_v<decltype(PersonSchema::fields)> == 3, "schema fields constexpr-evaluable");
 
 void test_json_roundtrip() {
     Person p{"alice", 30, true};

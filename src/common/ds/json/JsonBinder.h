@@ -7,14 +7,15 @@
 #include <string>
 #include <tuple>
 #include <utility>
-#include <vector>
 
 namespace ds::json {
 
 /// 取 JSON 键值：优先主键，缺省时依次尝试别名路径（Json::at 支持点路径）。
+/// aliases 为任意可范围遍历的 const char* 容器（Field 用 std::array 定长存储）。
 /// 找到返回 true，out 置该值；全缺省返回 false（out 为 null）。
+template<typename Aliases>
 inline bool get_key(const Json& obj, const std::string& key,
-                    const std::vector<const char*>& aliases, Json& out) {
+                    const Aliases& aliases, Json& out) {
     if (obj.has(key)) { out = obj[key]; return true; }
     for (const char* a : aliases) {
         Json v = obj.at(a, Json());
