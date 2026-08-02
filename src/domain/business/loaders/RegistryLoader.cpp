@@ -61,7 +61,8 @@ void RegistryLoader::from_dto(
         EnchInfo info;
         info.id                = NSID(d.id);
         info.name              = d.display_name;
-        info.supported_platform = MCE::All;
+        info.supported_platform = d.platform.empty() ? MCE::All
+                                                     : Serializer::string_to_mce(d.platform);
         info.max_level         = d.max_level;
         info.limited_level     = d.limited_level;
         info.limited_level_provided = d.limited_level_provided;
@@ -204,6 +205,7 @@ std::vector<business::loader::EnchantmentData> RegistryLoader::to_dto(
         d.min_cost_base    = info.min_cost_base;
         d.min_cost_per_level = info.min_cost_per_level;
         d.is_treasure      = info.is_treasure;
+        d.platform         = std::string(Serializer::mce_to_string(info.supported_platform));
         d.exclusive_with   = std::move(exclusive_bare);
         d.applicable_to    = std::move(applicable);
         result.push_back(std::move(d));

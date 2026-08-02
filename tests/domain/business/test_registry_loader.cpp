@@ -744,6 +744,45 @@ void test_loader_native_limited_level_hint() {
     TEST_PASS("test_loader_native_limited_level_hint");
 }
 
+// ---------------------------------------------------------------------------
+// 9. DTO.platform → EnchInfo.supported_platform mapping (P2-T3): the platform
+//    string is read literally ("bedrock" → MCE::Bedrock), empty defaults to
+//    MCE::All, and to_dto writes it back via mce_to_string for round-trips.
+// ---------------------------------------------------------------------------
+void test_loader_platform_mapping() {
+    RegistryLoader loader;
+    std::vector<business::loader::EnchantmentData> data;
+    // platform="bedrock" → MCE::Bedrock（按数据字面读取）
+    data.push_back({.id = "mod:bedrock_only", .display_name = "Bedrock Only",
+                    .multiplier = 2, .max_level = 3, .limited_level = 3,
+                    .limited_level_provided = false, .exclusive_with = {},
+                    .applicable_to = {"minecraft:elytra"}, .platform = "bedrock"});
+    // platform 空 → MCE::All
+    data.push_back({.id = "mod:all_plat", .display_name = "All Plat",
+                    .multiplier = 1, .max_level = 2, .limited_level = 2,
+                    .limited_level_provided = false, .exclusive_with = {},
+                    .applicable_to = {"minecraft:elytra"}});
+    TagRegistry tag_reg;
+    tag_reg.insert({NSID("#minecraft:elytra"), "elytra"});
+    EquipmentRegistry eq_reg;
+    eq_reg.insert({NSID("minecraft:elytra"), "Elytra", NSID("#minecraft:elytra"), 432});
+    EnchantmentRegistry ench_reg;
+    loader.from_dto(ench_reg, tag_reg, eq_reg, data);
+    expect(ench_reg.at(NSID("mod:bedrock_only")).supported_platform == MCE::Bedrock,
+           "platform bedrock honored literally");
+    expect(ench_reg.at(NSID("mod:all_plat")).supported_platform == MCE::All,
+           "empty platform defaults to All");
+    // to_dto 反向写回
+    auto dto = loader.to_dto(ench_reg, tag_reg);
+    for (const auto& d : dto) {
+        if (d.id == "mod:bedrock_only")
+            expect(d.platform == "bedrock", "to_dto writes platform back");
+        if (d.id == "mod:all_plat")
+            expect(d.platform == "all", "to_dto All → 'all'");
+    }
+    TEST_PASS("test_loader_platform_mapping");
+}
+
 // =============================================================================
 // Section B -- TagResolver
 // =============================================================================
@@ -1046,6 +1085,7 @@ int main() {
         test_loader_concrete_item_vanilla_universe();
         test_loader_native_min_cost();
         test_loader_native_limited_level_hint();
+        test_loader_platform_mapping();
 
         // Section B -- TagResolver
         test_tag_resolve_basic();
