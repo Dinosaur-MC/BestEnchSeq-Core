@@ -258,7 +258,7 @@ void test_besq_default_profiles_scan() {
 }
 
 // ---------------------------------------------------------------------------
-// Test: Export registry
+// Test: Export profile
 // ---------------------------------------------------------------------------
 
 void test_besq_export() {

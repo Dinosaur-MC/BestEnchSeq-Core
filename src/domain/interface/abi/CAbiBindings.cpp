@@ -400,7 +400,7 @@ int besq_remove_profile(BesqContext* ctx, const char* name) {
     BESQ_CAPI_TRY(c, c->impl.remove_profile(name));
 }
 
-// ── Registry editing ────────────────────────────────────────────────────────
+// ── Registry editing (active profile) ───────────────────────────────────────
 
 int besq_add_enchantment(BesqContext* ctx, const char* json_info) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
@@ -614,7 +614,7 @@ void besq_free_string(char* str) {
     std::free(str);
 }
 
-// ── Registry query ───────────────────────────────────────────────────────────
+// ── Registry access (active profile, read-only) ─────────────────────────────
 
 char* besq_list_enchantments(BesqContext* ctx) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
@@ -658,7 +658,7 @@ char* besq_list_categories(BesqContext* ctx) {
     }
 }
 
-// ── Persistence ────────────────────────────────────────────────────────────
+// ── Profile data import / export ────────────────────────────────────────────
 
 int besq_export_profile(BesqContext* ctx, const char* path) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
