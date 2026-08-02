@@ -47,10 +47,11 @@ public:
 
     /// Build a TagResolver covering the merged tag universe of an effective
     /// view: every `#tag` in `eff.tags()` is registered.  Member data is pulled
-    /// from the first source profile whose attached resolver defines the tag
-    /// (lowest-priority source wins, mirroring "tags: add if absent"); sources
-    /// without a resolver yield an empty member set.  Used by
-    /// ProfileManager::resolve_effective so the merged view is `tags_of`-queryable.
+    /// from the highest-priority source profile whose attached resolver defines
+    /// the tag (LAST source wins, matching the effective-view merge direction —
+    /// upper overrides lower); sources without a resolver yield an empty member
+    /// set.  Used by ProfileManager::resolve_effective so the merged view is
+    /// `tags_of`-queryable.
     static std::shared_ptr<TagResolver> build_tag_resolver(
         const Profile& eff, const std::vector<const Profile*>& sources);
 

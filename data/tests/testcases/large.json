@@ -1,5 +1,5 @@
 {
-    "profiles": ["vanilla", "modded_sword"],
+    "profiles": ["Vanilla", "modded_sword"],
     "groups": [
         {
             "group": "large",

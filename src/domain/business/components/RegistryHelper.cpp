@@ -196,11 +196,11 @@ std::shared_ptr<TagResolver> RegistryHelper::build_tag_resolver(
 
         const std::string tag_key = key.substr(1);
 
-        // Member data: pull from the first source whose attached resolver
-        // defines the tag.  Sources are ordered lowest-priority-first, which
-        // mirrors the "tags: add if absent" semantics of merge().  Sources
-        // without a resolver (e.g. manually-built test profiles) yield an
-        // empty member set — the tag key stays registered and queryable.
+        // Member data: overwrite as we iterate so the LAST (highest-priority)
+        // source whose attached resolver defines the tag wins — matching the
+        // effective-view merge direction (upper overrides lower, B-T26 #19).
+        // Sources without a resolver (e.g. manually-built test profiles) yield
+        // an empty member set — the tag key stays registered and queryable.
         std::unordered_set<std::string> members;
         for (const Profile* src : sources) {
             if (!src)
@@ -213,10 +213,8 @@ std::shared_ptr<TagResolver> RegistryHelper::build_tag_resolver(
                 continue;  // unnamespaced key: no ns/name member lookup
             const std::string ns   = tag_key.substr(0, pos);
             const std::string name = tag_key.substr(pos + 1);
-            if (const auto* m = tr->get_tag(ns, name)) {
-                members = *m;
-                break;
-            }
+            if (const auto* m = tr->get_tag(ns, name))
+                members = *m;  // later (higher-priority) sources override earlier
         }
         resolver->add_tag(tag_key, std::move(members));
     }

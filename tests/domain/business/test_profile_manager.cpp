@@ -322,6 +322,26 @@ void test_pm_dependency_cycle() {
     TEST_PASS("test_pm_dependency_cycle");
 }
 
+// ─── Test: dependency cycle → reported + resolve_effective throws (B-T26 #21) ──
+// is_cyclic distinguishes a cycle from a not-found profile; resolve_effective
+// throws on a cyclic profile instead of silently degrading to a self-only view.
+
+void test_pm_dependency_cycle_throws() {
+    ProfileManager pm;
+    auto& a = pm.create("a");
+    auto& b = pm.create("b");
+    a.set_dependencies({"b"});
+    b.set_dependencies({"a"});
+
+    expect(pm.is_cyclic("a"), "a is cyclic");
+    expect(pm.is_cyclic("b"), "b is cyclic");
+    expect(!pm.is_cyclic("nonexistent"), "nonexistent profile is NOT cyclic");
+    expect_throws_as<std::runtime_error>([&]() { pm.resolve_effective("a"); },
+        "resolve_effective on a cyclic profile throws");
+
+    TEST_PASS("test_pm_dependency_cycle_throws");
+}
+
 // ─── Test: Cross-validate supported_items against dependency universe ─
 
 void test_pm_cross_validate() {
@@ -422,6 +442,121 @@ void test_pm_effective_view() {
     expect(eff.ench().at(NSID("mod:leeching")).max_level == 3, "pack overrides dep");
     expect(eff.tag_resolver() != nullptr, "effective view carries TagResolver");
     TEST_PASS("test_pm_effective_view");
+}
+
+// ─── Test: JSON `name` is the profile key (load_directory + ProfileLoader agree) ──
+// B-T26 #18: the same file must load under the SAME key via load_directory and
+// ProfileLoader::load.  JSON top-level `name` wins when present and non-empty;
+// otherwise the file stem is used.
+
+void test_pm_load_directory_json_name_key() {
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_name_key_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+
+    auto with_name = dir / "a.json";
+    {
+        std::ofstream f(with_name);
+        f << R"({
+            "name": "custom_key",
+            "dependencies": ["builtin:vanilla"],
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+    }
+    auto no_name = dir / "b.json";
+    {
+        std::ofstream f(no_name);
+        f << R"({
+            "dependencies": ["builtin:vanilla"],
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+    }
+
+    // ProfileLoader::load — the file's own key.
+    ProfileLoader loader;
+    Profile a = loader.load(with_name);
+    expect(a.name() == "custom_key", "ProfileLoader::load uses JSON name as key");
+    Profile b = loader.load(no_name);
+    expect(b.name() == "b", "ProfileLoader::load falls back to file stem without name");
+
+    // load_directory — same keys.
+    ProfileManager pm;
+    pm.load_directory(dir);
+    expect(pm.exists("custom_key"), "load_directory registers JSON-name key");
+    expect(pm.exists("b"), "load_directory registers stem key without name");
+    expect(!pm.exists("a"), "file a.json NOT registered under its stem (JSON name wins)");
+
+    std::filesystem::remove(with_name);
+    std::filesystem::remove(no_name);
+    std::filesystem::remove(dir);
+    TEST_PASS("test_pm_load_directory_json_name_key");
+}
+
+// ─── Test: tag merge direction — higher-priority source wins (B-T26 #19) ───
+// build_tag_resolver must take member data from the LAST (highest-priority)
+// source that defines a tag, matching the effective-view merge direction
+// (upper overrides lower).
+
+void test_pm_tag_merge_direction() {
+    ProfileManager pm;
+    auto& a = pm.create("a");
+    auto ra = std::make_shared<TagResolver>();
+    ra->add_tag("minecraft:swords", {"minecraft:diamond_sword"});
+    a.set_tag_resolver(ra);
+    a.add_tag({NSID("#minecraft:swords"), "swords"});
+
+    auto& b = pm.create("b");
+    b.set_dependencies({"a"});
+    auto rb = std::make_shared<TagResolver>();
+    rb->add_tag("minecraft:swords", {"minecraft:netherite_sword"});
+    b.set_tag_resolver(rb);
+    b.add_tag({NSID("#minecraft:swords"), "swords"});
+
+    const Profile& eff = pm.resolve_effective("b");
+    const TagResolver* tr = eff.tag_resolver();
+    expect(tr != nullptr, "effective view carries TagResolver");
+    if (tr) {
+        const auto* m = tr->get_tag("minecraft", "swords");
+        expect(m != nullptr, "merged tag present in effective resolver");
+        if (m) {
+            expect(m->count("minecraft:netherite_sword") == 1,
+                   "higher-priority B's member wins");
+            expect(m->count("minecraft:diamond_sword") == 0,
+                   "lower-priority A's member overridden");
+        }
+    }
+    TEST_PASS("test_pm_tag_merge_direction");
+}
+
+// ─── Test: resolve_effective injects vanilla base (B-T26 #20) ─────────────
+// A profile with NO declared dependencies still gets vanilla equipment (real
+// max_durability, not a 0 placeholder) and a vanilla enchant in its effective
+// view.
+
+void test_pm_effective_injects_vanilla() {
+    ProfileManager pm;
+    auto& vanilla = pm.create("builtin:vanilla");
+    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
+                                    NSID("#minecraft:sword"), 1561});
+    vanilla.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
+    pm.create("mypack");   // no declared dependencies
+
+    const Profile& eff = pm.resolve_effective("mypack");
+    expect(eff.has_equipment(NSID("minecraft:diamond_sword")),
+           "effective view includes vanilla equipment");
+    if (eff.has_equipment(NSID("minecraft:diamond_sword")))
+        expect_eq(eff.eq().at(NSID("minecraft:diamond_sword")).max_durability, 1561,
+                  "vanilla equipment has real max_durability (not a 0 placeholder)");
+    expect(eff.has_enchantment(NSID("minecraft:sharpness")),
+           "effective view includes vanilla enchant");
+    TEST_PASS("test_pm_effective_injects_vanilla");
 }
 
 // ─── Test: Manager-level edit (real-time validation) + snapshot/undo ────
@@ -1231,9 +1366,13 @@ int main() {
         test_create_empty_profile_structure();
         test_pm_dependency_chain();
         test_pm_dependency_cycle();
+        test_pm_dependency_cycle_throws();
         test_pm_cross_validate();
         test_pm_load_directory();
+        test_pm_load_directory_json_name_key();
         test_pm_effective_view();
+        test_pm_tag_merge_direction();
+        test_pm_effective_injects_vanilla();
         test_pm_edit_snapshot_undo();
         test_pm_edit_preserves_tag_resolver();
         test_pm_publish();

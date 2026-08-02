@@ -33,14 +33,21 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // supported_items references survive cross-validation (B-T24 #24).
         auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
 
-        // Phase 1b: parse the profile's declared dependencies from the raw
-        // JSON root. FormatDetector::Result carries enchantments/equipment/
-        // item_tags but NOT the top-level `dependencies` array, so re-read it
-        // here.  (CSV / MC-official formats have no JSON dependencies array.)
+        // Phase 1b: parse the profile's declared dependencies AND the profile
+        // KEY from the raw JSON root.  FormatDetector::Result carries
+        // enchantments/equipment/item_tags but NOT the top-level `dependencies`
+        // array or `name`, so re-read them here.  (CSV / MC-official formats
+        // have no JSON name/dependencies — the profile key falls back to the
+        // file stem.)
         std::vector<std::string> dependencies;
+        std::string json_name;
         const auto format = FormatDetector::detect(path);
         if (format == DataFormat::NativeJson || format == DataFormat::Unknown) {
             auto root = Json::parse(file_utils::read_file(path));
+            // B-T26 #18: JSON top-level `name` is the profile KEY when present
+            // and non-empty (user-confirmed "name 优先，fallback 文件/目录名").
+            if (root.has(std::string(ProfileMetadata::KEY_NAME)))
+                json_name = root[std::string(ProfileMetadata::KEY_NAME)].as<std::string>();
             if (root.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
                 Json dep_val = root[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
                 if (dep_val.type() == JsonType::Array) {
@@ -75,9 +82,16 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         McOfficialParser::load_item_tags_into(*resolver, item_tags);
         LimitedLevelCalculator::compute(own.ench, *resolver, load_item_properties());
 
-        // Construct Profile via full-parameter constructor.
-        std::string stem = path.stem().string();
-        profile = Profile(ProfileMetadata(stem), std::move(own.ench),
+        // Construct Profile via full-parameter constructor.  The profile KEY is
+        // the JSON top-level `name` when present and non-empty (B-T26 #18), so
+        // load_directory / load / load_into agree on the key for the same file
+        // regardless of the path.  Otherwise fall back to the file stem.
+        // Datapack dirs (McOfficial) are unaffected — they keep the folder-stem
+        // key.
+        std::string key = path.stem().string();
+        if (!json_name.empty())
+            key = std::move(json_name);
+        profile = Profile(ProfileMetadata(std::move(key)), std::move(own.ench),
                           std::move(own.eq), std::move(own.tags));
         // Restore the declared dependencies parsed in Phase 1b.
         profile.set_dependencies(std::move(dependencies));

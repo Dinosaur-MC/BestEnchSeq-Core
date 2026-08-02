@@ -325,6 +325,32 @@ std::vector<std::string> ProfileManager::resolve_dependencies(const std::string&
     return order;
 }
 
+bool ProfileManager::_has_cycle(const std::string& start) const {
+    // DFS 环检测：白/灰/黑三色标记；从 start 出发回到灰色节点（回边）即环。
+    std::unordered_map<std::string, uint8_t> color;   // 0 白 1 灰 2 黑
+    std::function<bool(const std::string&)> dfs = [&](const std::string& n) -> bool {
+        color[n] = 1;
+        auto it = _dep_graph.find(n);
+        if (it != _dep_graph.end()) {
+            for (const auto& d : it->second) {
+                if (color[d] == 1) return true;            // back edge → cycle
+                if (color[d] == 0 && dfs(d)) return true;
+            }
+        }
+        color[n] = 2;
+        return false;
+    };
+    return dfs(start);
+}
+
+bool ProfileManager::is_cyclic(const std::string& profile) const {
+    _build_graph();
+    // 与"未找到"区分：不存在的 profile 不是环（返回 false）。
+    if (_dep_graph.find(profile) == _dep_graph.end())
+        return false;
+    return _has_cycle(profile);
+}
+
 // ── Effective view (topological merge + TagResolver + cache) ──────────
 
 const Profile& ProfileManager::resolve_effective(const std::string& profile) const {
@@ -337,16 +363,33 @@ const Profile& ProfileManager::resolve_effective(const std::string& profile) con
     if (cache_it != _effective_cache.end())
         return *cache_it->second;
 
+    // B-T26 #21: a dependency cycle must not silently degrade to a self-only
+    // view — 报错并标记不可用 (spec §9).
+    if (is_cyclic(profile)) {
+        LOG_ERROR("Profile '%s' has a dependency cycle", profile.c_str());
+        throw std::runtime_error("Profile '" + profile + "' has a dependency cycle");
+    }
+
     auto chain = resolve_dependencies(profile);   // 依赖在前，自身排除
     auto eff = std::make_unique<Profile>(profile); // 空 Profile 起步
 
-    // 收集参与合并的源：依赖按拓扑序（下层在前），目标自身最后。
+    // 收集参与合并的源：vanilla 隐式根（最低优先级）→ 依赖（拓扑序，下层在
+    // 前）→ 目标自身（最高优先级）。目标自身不存在时（未找到）保持空视图。
     std::vector<const Profile*> sources;
-    for (const auto& dep : chain)
-        if (const Profile* d = _find(dep))
-            sources.push_back(d);
-    if (const Profile* self = _find(profile))
+    if (const Profile* self = _find(profile)) {
+        // B-T26 #20: inject `builtin:vanilla` as the implicit lowest-priority
+        // base so the effective view always includes vanilla
+        // equipment/enchantments (spec §9).  When the profile IS vanilla, the
+        // chain is already itself — don't double-inject.  If vanilla isn't
+        // loaded, fall back to declared-deps-only (no crash).
+        if (profile != "builtin:vanilla")
+            if (const Profile* v = _find("builtin:vanilla"))
+                sources.push_back(v);
+        for (const auto& dep : chain)
+            if (const Profile* d = _find(dep))
+                sources.push_back(d);
         sources.push_back(self);
+    }
 
     // 依赖按拓扑序 merge（上层覆盖下层）；最后 merge 目标自身。
     for (const Profile* src : sources)
@@ -374,8 +417,12 @@ void ProfileManager::load_directory(const std::filesystem::path& dir) {
             if (ext != ".json" && ext != ".csv")
                 continue;
 
+            // B-T26 #18: load_into resolves the profile KEY itself (JSON
+            // top-level `name`, falling back to the file stem), so loaded.name()
+            // is always the resolved key — never empty for a real file.  The
+            // same file now loads under the same key via load_directory / load.
             Profile loaded = loader.load(path);
-            const std::string name = loaded.name().empty() ? path.stem().string() : loaded.name();
+            const std::string name = loaded.name();
             if (exists(name))
                 remove(name);  // replace-on-conflict
             _profiles[name] = std::make_unique<Profile>(std::move(loaded));

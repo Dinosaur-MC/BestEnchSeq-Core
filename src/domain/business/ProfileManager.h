@@ -105,6 +105,9 @@ public:
     /// 传递解析依赖链（拓扑序：依赖在前，不含目标自身）。环 → 返回空。
     std::vector<std::string> resolve_dependencies(const std::string& profile) const;
 
+    /// 该 profile 是否处于依赖环中（与"未找到"区分）。环 → true；未找到 → false。
+    bool is_cyclic(const std::string& profile) const;
+
     /// 拓扑合并依赖链 + 自身 → 有效视图 Profile（缓存；上层覆盖下层）。
     /// 任何 profile 变更（manager 级 mutation）都会使缓存失效。
     const Profile& resolve_effective(const std::string& profile) const;
@@ -144,6 +147,9 @@ private:
     /// Rebuild the adjacency list from the current profiles. `mutable` so a
     /// const resolve_dependencies() can honor direct set_dependencies() calls.
     void _build_graph() const;
+
+    /// DFS 环检测：从 start 出发是否存在回边（依赖环）。is_cyclic 的底层实现。
+    bool _has_cycle(const std::string& start) const;
 
     struct Snapshot {
         Json before;  // pre-change profile state (Json round-trip)
