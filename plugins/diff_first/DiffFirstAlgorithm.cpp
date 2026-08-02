@@ -27,7 +27,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
         ctx.report_progress(100, ProgressStatus::CompleteNoSolution);
         return;
     }
-    if (meets_target(items[0], target.enchs)) {
+    if (meets_target(items[0], target)) {
         ctx.report_solution({});
         ctx.report_progress(100, ProgressStatus::GoalAlreadyMet);
         return;
@@ -186,7 +186,7 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
 
     if (!cancelled) {
         for (auto& item : items) {
-            if (item.type == ItemType::Equip && meets_target(item, target.enchs)) {
+            if (meets_target(item, target)) {
                 int32_t total = std::accumulate(
                     steps.begin(), steps.end(), int32_t{0},
                     [](int32_t s, const EnchStep& st) { return s + st.cost; });

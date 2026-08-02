@@ -235,7 +235,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
         // cost unrealistic — using it as a bound would prune paths that
         // spend extra levels to resolve conflicts, preventing the DFS from
         // ever finding a valid solution.
-        if (greedy_cost > 0 && meets_target(equip, _target)) {
+        if (greedy_cost > 0 && meets_target(equip, input.target)) {
             best_cost = greedy_cost;
             has_realistic_bound = true;
         }
@@ -249,7 +249,7 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
             int32_t dfs_cost = search_utils::dfs_bound(
                 std::vector<Item>(items.begin(), items.end()),
                 0, best_cost, node_limit,
-                _forge_engine, *_ench_reg, _target,
+                _forge_engine, *_ench_reg, input.target,
                 _h_buf, _h_dirty);
             if (dfs_cost < best_cost) {
                 best_cost = dfs_cost;
