@@ -1,8 +1,10 @@
 #include "ds/ds.h"
 #include "ds/Field.h"
 #include "ds/codec/Codecs.h"
+#include "ds/json/JsonBinder.h"
 #include "framework/test_utils.h"
 #include <string>
+#include <tuple>
 
 // ── 1. ErrorList 收集 + ValidationError 聚合 ──────────────────────────
 void test_error_collection() {
@@ -130,6 +132,64 @@ void test_csv_range_and_partial_rejected() {
     expect(!ds::int_codec{}.from_csv("42abc", v2, e2, "lv"), "csv partial parse rejected");
     TEST_PASS("csv range + partial rejected");
 }
+// ── 4. JSON 绑定 ────────────────────────────────────────────────────
+struct Person {
+    std::string name;
+    int age = 0;
+    bool active = false;
+};
+struct PersonSchema {
+    using Type = Person;
+    // NOTE: Field 含 std::vector 别名存储，非 literal 类型，无法 static constexpr。
+    // inline 允许类内运行时初始化（若 Field.h 后续改 constexpr 存储，可恢复 static constexpr）。
+    static inline const auto fields = std::tuple{
+        ds::required_field("name", &Person::name, ds::string_codec{}),
+        ds::field("age",  &Person::age,  ds::int_codec{0, 150}),
+        ds::field("active", &Person::active, ds::bool_codec{}),
+    };
+};
+using PersonJson = ds::json::Schema<PersonSchema>;
+
+void test_json_roundtrip() {
+    Person p{"alice", 30, true};
+    Json j = PersonJson::serialize(p);
+    Person out;
+    ds::ErrorList e;
+    expect(PersonJson::parse(j, out, e), "parse ok");
+    expect(out.name == "alice" && out.age == 30 && out.active, "roundtrip equal");
+    TEST_PASS("json roundtrip");
+}
+void test_json_required_missing() {
+    Json j = Json::object().set("age", Json(int64_t{5}));   // name missing
+    Person out; ds::ErrorList e;
+    expect(!PersonJson::parse(j, out, e), "required missing fails");
+    expect(e.size() == 1 && e.errors()[0].path == "name", "missing required path");
+    TEST_PASS("json required missing");
+}
+void test_json_unknown_key_tolerant_vs_strict() {
+    Json j = Json::object()
+        .set("name", Json(std::string("bob")))
+        .set("age", Json(int64_t{1}))
+        .set("extra", Json(int64_t{999}));
+    Person out; ds::ErrorList e;
+    expect(PersonJson::parse(j, out, e), "unknown key tolerated by default");
+    expect(e.empty(), "no errors when tolerant");
+    using StrictPersonJson = ds::json::Schema<PersonSchema, true>;
+    Person out2; ds::ErrorList e2;
+    expect(!StrictPersonJson::parse(j, out2, e2), "strict rejects unknown key");
+    expect(e2.size() == 1 && e2.errors()[0].path == "extra", "unknown key path");
+    TEST_PASS("json unknown key tolerant/strict");
+}
+void test_json_parse_or_throw() {
+    Json j = Json::object().set("age", Json(int64_t{5}));
+    Person out;
+    bool threw = false;
+    try { PersonJson::parse_or_throw(j, out); }
+    catch (const ds::ValidationError& ve) { threw = true; expect(ve.errors().size() == 1, "aggregated"); }
+    expect(threw, "parse_or_throw throws on errors");
+    TEST_PASS("json parse_or_throw");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -141,5 +201,9 @@ int main() {
     test_type_mismatch();
     test_scalar_csv_roundtrip();
     test_csv_range_and_partial_rejected();
+    test_json_roundtrip();
+    test_json_required_missing();
+    test_json_unknown_key_tolerant_vs_strict();
+    test_json_parse_or_throw();
     return print_summary();
 }
