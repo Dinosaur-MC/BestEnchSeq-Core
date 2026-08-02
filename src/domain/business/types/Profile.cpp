@@ -154,6 +154,11 @@ Json Profile::to_json() const {
         .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(_meta.author))
         .set(std::string(ProfileMetadata::KEY_VERSION),     Json(_meta.version));
 
+    // Display name — only when set AND distinct from the identity key, so a
+    // profile that merely mirrors its key stays noise-free.
+    if (!_meta.display_name.empty() && _meta.display_name != _meta.name)
+        obj.set(std::string(ProfileMetadata::KEY_DISPLAY_NAME), Json(_meta.display_name));
+
     // Dependencies — declared direct profile dependencies (transitively resolved)
     if (!_meta.dependencies.empty()) {
         Json::Array deps_arr;
@@ -195,6 +200,9 @@ Profile Profile::from_json_static(const Json& json) {
 
     p._meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME))
                               ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>()
+                              : "";
+    p._meta.display_name = json.has(std::string(ProfileMetadata::KEY_DISPLAY_NAME))
+                              ? json[std::string(ProfileMetadata::KEY_DISPLAY_NAME)].as<std::string>()
                               : "";
     p._meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
     p._meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
@@ -264,6 +272,8 @@ Json& operator<<(Json& json, const ProfileMetadata& meta) {
         .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(meta.description))
         .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(meta.author))
         .set(std::string(ProfileMetadata::KEY_VERSION),     Json(meta.version));
+    if (!meta.display_name.empty() && meta.display_name != meta.name)
+        json.set(std::string(ProfileMetadata::KEY_DISPLAY_NAME), Json(meta.display_name));
     if (!meta.dependencies.empty()) {
         Json::Array deps_arr;
         for (const auto& d : meta.dependencies)
@@ -279,6 +289,9 @@ const Json& operator>>(const Json& json, ProfileMetadata& meta) {
 
     meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME))
                            ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>()
+                           : "";
+    meta.display_name = json.has(std::string(ProfileMetadata::KEY_DISPLAY_NAME))
+                           ? json[std::string(ProfileMetadata::KEY_DISPLAY_NAME)].as<std::string>()
                            : "";
     meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
     meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";

@@ -522,6 +522,56 @@ void test_profile_dependencies_roundtrip() {
     TEST_PASS("test_profile_dependencies_roundtrip");
 }
 
+// ─── test_profile_display_name ─────────────────────────────────────────
+// B-T16: display_name is an optional human-friendly label.  It falls back to
+// the identity key when empty, and is only serialized when set AND distinct
+// from the key (mirroring the key → no JSON noise).
+
+void test_profile_display_name() {
+    // Fallback: empty display_name → display_name() returns the identity key.
+    Profile p("my:pack");
+    expect_eq(p.display_name(), std::string("my:pack"),
+              "empty display_name falls back to the name key");
+
+    // Set a friendly name; it wins over the key.
+    p.set_display_name("My Pack");
+    expect_eq(p.display_name(), std::string("My Pack"),
+              "display_name preferred when set");
+
+    // Serialized only when set AND distinct from the key.
+    Json json;
+    json << p;
+    expect(json.has("display_name"), "display_name present when set and distinct");
+    expect_eq(json["display_name"].as<std::string>(), std::string("My Pack"),
+              "display_name serialized value");
+
+    // Round-trip preserves display_name.
+    Profile restored;
+    json >> restored;
+    expect_eq(restored.display_name(), std::string("My Pack"),
+              "display_name preserved after JSON round-trip");
+
+    // NOT serialized when it merely mirrors the identity key.
+    Profile q("my:pack");
+    q.set_display_name("my:pack");
+    Json qj;
+    qj << q;
+    expect(!qj.has("display_name"), "display_name omitted when it equals the key");
+
+    // NOT serialized when empty.
+    Profile r("my:pack");
+    Json rj;
+    rj << r;
+    expect(!rj.has("display_name"), "display_name omitted when empty");
+
+    // Display name rides along with clone (metadata copy).
+    Profile clone = p.clone("my:pack_copy");
+    expect_eq(clone.display_name(), std::string("My Pack"),
+              "display_name preserved across clone");
+
+    TEST_PASS("test_profile_display_name");
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────
 
 int main() {
@@ -541,6 +591,7 @@ int main() {
         test_serializer_to_from_string();
         test_to_mc_official_strings();
         test_profile_dependencies_roundtrip();
+        test_profile_display_name();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

@@ -16,7 +16,8 @@ class TagResolver;  // fwd — Profile stores a shared_ptr; complete type only n
 // ── Profile Metadata ──────────────────────────────────────────────────
 
 struct ProfileMetadata {
-    std::string name;
+    std::string name;          ///< Identity key (string, arbitrary — B-T13)
+    std::string display_name;  ///< Human-friendly name for UI (optional; empty → fall back to name)
     std::string description;
     std::string author;
     std::string version;
@@ -46,7 +47,8 @@ struct ProfileMetadata {
         , updated_at(created_at) {}
 
     // JSON keys (matching vanilla.json structure)
-    static constexpr std::string_view KEY_NAME        = "name";
+    static constexpr std::string_view KEY_NAME         = "name";
+    static constexpr std::string_view KEY_DISPLAY_NAME = "display_name";
     static constexpr std::string_view KEY_DESCRIPTION = "description";
     static constexpr std::string_view KEY_AUTHOR      = "author";
     static constexpr std::string_view KEY_VERSION     = "version";
@@ -78,7 +80,19 @@ public:
     // -- Metadata -------------------------------------------------------
 
     const ProfileMetadata& metadata() const noexcept { return _meta; }
+
+    /// Identity key (string, arbitrary — B-T13).  Not necessarily human-readable.
     const std::string& name() const noexcept { return _meta.name; }
+
+    /// Human-friendly name for UI.  Falls back to the identity key when no
+    /// display_name is set, so it always returns something non-empty.
+    std::string display_name() const {
+        return _meta.display_name.empty() ? _meta.name : _meta.display_name;
+    }
+
+    /// Set the human-friendly name (empty clears it → falls back to the key).
+    void set_display_name(std::string n) { _meta.display_name = std::move(n); }
+
     void set_description(std::string desc) { _meta.description = std::move(desc); }
     void set_version(std::string version) { _meta.version = std::move(version); }
 

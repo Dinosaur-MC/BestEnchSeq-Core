@@ -552,6 +552,14 @@ bool ProfileManager::publish(const std::string& profile, const std::string& vers
     if (_find(profile) == nullptr) return false;
     const Profile& eff = resolve_effective(profile);
     Json json = eff.to_json();
+    // The effective view is metadata-stripped (built from registry merges), so
+    // emit the source profile's human-friendly display_name explicitly when it
+    // is set and distinct from the identity key.
+    if (const Profile* src = _find(profile)) {
+        const std::string dn = src->display_name();
+        if (!dn.empty() && dn != profile)
+            json.set(std::string(ProfileMetadata::KEY_DISPLAY_NAME), Json(dn));
+    }
     json.set("version", Json(version));
     if (!tag.empty())
         json.set("release_tag", Json(tag));
