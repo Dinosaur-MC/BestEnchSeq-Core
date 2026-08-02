@@ -21,21 +21,25 @@
 // ── Datapack → profile naming (declared in ProfileNaming.h) ───────────
 
 std::string derive_datapack_name(const std::filesystem::path& dir) {
-    // Profile keys are plain std::string (B-T13), so the datapack name is
-    // taken VERBATIM from pack.id (else the directory stem) with no charset
-    // cleanup and no leading-digit guard — spaces/dots are preserved as-is.
+    // Profile keys are plain std::string (B-T13), so the datapack name is the
+    // FOLDER STEM verbatim (user-confirmed "key = 文件夹名 verbatim", B-T14
+    // M-4) with no charset cleanup and no leading-digit guard — spaces/dots
+    // are preserved as-is.  `pack.id` is typically a UUID and is used ONLY as
+    // a fallback when the folder has no usable stem.
     std::string raw = dir.filename().string();
-    const auto mcmeta_path = dir / "pack.mcmeta";
-    if (std::filesystem::is_regular_file(mcmeta_path)) {
-        try {
-            Json mcmeta = Json::parse(file_utils::read_file(mcmeta_path));
-            if (mcmeta.has("pack")) {
-                Json pack = mcmeta["pack"];
-                if (pack.has("id"))
-                    raw = pack["id"].as<std::string>();
+    if (raw.empty()) {
+        const auto mcmeta_path = dir / "pack.mcmeta";
+        if (std::filesystem::is_regular_file(mcmeta_path)) {
+            try {
+                Json mcmeta = Json::parse(file_utils::read_file(mcmeta_path));
+                if (mcmeta.has("pack")) {
+                    Json pack = mcmeta["pack"];
+                    if (pack.has("id"))
+                        raw = pack["id"].as<std::string>();
+                }
+            } catch (...) {
+                // Malformed pack.mcmeta → fall back to the placeholder below.
             }
-        } catch (...) {
-            // Malformed pack.mcmeta → fall back to the directory stem.
         }
     }
     if (raw.empty())
@@ -266,6 +270,12 @@ Profile& ProfileManager::branch(const std::string& source, const std::string& br
 
 void ProfileManager::merge(const std::string& source, const std::string& dest) {
     if (source == dest) return;  // self-merge is no-op
+    // Existence checks before dereferencing (matches create_from/snapshot/
+    // branch; B-T14 I-2 — a missing source/dest would otherwise be a null-deref).
+    if (!exists(source))
+        throw std::runtime_error("Source profile not found: " + source);
+    if (!exists(dest))
+        throw std::runtime_error("Destination profile not found: " + dest);
     const Profile& src = *find(source);
     Profile& dst = *find(dest);
     // Source wins on conflict, merged in place (dest metadata preserved).
@@ -276,9 +286,16 @@ void ProfileManager::merge(const std::string& source, const std::string& dest) {
 // ── Dependency graph ──────────────────────────────────────────────────
 
 void ProfileManager::_build_graph() const {
-    _dep_graph.clear();
+    std::unordered_map<std::string, std::vector<std::string>> next;
     for (const auto& [name, p] : _profiles)
-        _dep_graph[name] = p->dependencies();
+        next[name] = p->dependencies();
+    // If the adjacency actually changed (e.g. a direct Profile::set_dependencies
+    // call bypassed the manager), the cached effective view is stale — clear it
+    // (B-T14 M-1).  Compare before/after so cache hits don't spuriously clear.
+    if (next != _dep_graph) {
+        _dep_graph = std::move(next);
+        _effective_cache.clear();
+    }
 }
 
 std::vector<std::string> ProfileManager::resolve_dependencies(const std::string& profile) const {
@@ -310,6 +327,11 @@ std::vector<std::string> ProfileManager::resolve_dependencies(const std::string&
 // ── Effective view (topological merge + TagResolver + cache) ──────────
 
 const Profile& ProfileManager::resolve_effective(const std::string& profile) const {
+    // Rebuild the adjacency BEFORE hitting the cache so a direct
+    // Profile::set_dependencies() mutation invalidates the cached effective
+    // view (B-T14 M-1).  No-op cost when nothing changed.
+    _build_graph();
+
     auto cache_it = _effective_cache.find(profile);
     if (cache_it != _effective_cache.end())
         return *cache_it->second;
@@ -384,21 +406,46 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         // construction) happens strictly ABOVE the manager commit point below,
         // so a failure never leaves a stray vanilla or half-registered profile.
 
-        // Phase 1: parse the datapack's own DTOs.
-        auto [ench_data, eq_data] = McOfficialParser::parse(dir);
+        // Phase 1: parse the datapack's own DTOs + item-tag definitions.
+        auto result = McOfficialParser::parse(dir);
+
+        // The datapack's own item tags (data/<ns>/tags/item/*.json) must seed
+        // the validation universe so `#mypack:*` supported_items references
+        // survive cross-validation, and must land in the profile's tag registry
+        // so the profile owns them (B-T14 I-1).
+        TagRegistry datapack_tags;
+        for (const auto& tag : result.item_tags)
+            datapack_tags.insert({NSID("#" + tag.key), tag.key});
 
         // Phase 2: two-phase loading — build the vanilla universe into
         // temporary registries, cross-validate the datapack's DTOs on top, then
         // filter back to the datapack's own content.  The vanilla tag universe
         // is retained so `#tag` supported_items references resolve downstream.
-        auto own = RegistryLoader::resolve_own_content(ench_data, eq_data);
+        auto own = RegistryLoader::resolve_own_content(
+            result.enchantments, result.equipment, &datapack_tags);
 
         const std::string name = derive_datapack_name(dir);
 
-        // Construct the Profile and attach the builtin tag resolver.
+        // Construct the Profile.  own.tags now = vanilla ∪ datapack item tags.
         Profile profile(ProfileMetadata(name), std::move(own.ench),
                         std::move(own.eq), std::move(own.tags));
-        profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
+
+        // Build the TagResolver as vanilla ∪ datapack item tags, honoring each
+        // tag file's "replace" flag (MC semantics): a datapack may override a
+        // vanilla tag (#minecraft:swords) via replace/merge, or define a
+        // brand-new #mypack:* tag.  This drives `tags_of` applicability at
+        // solve time (B-T14 I-1).
+        auto resolver = besq::data::make_builtin_tag_resolver();
+        for (const auto& tag : result.item_tags) {
+            Json tag_json = Json::object();
+            tag_json.set("replace", Json(tag.replace));
+            Json values = Json::array();
+            for (const auto& v : tag.values)
+                values.push_back(Json(v));
+            tag_json.set("values", std::move(values));
+            resolver->load_tag_json(tag.key, tag_json);
+        }
+        profile.set_tag_resolver(std::move(resolver));
 
         // ── COMMIT POINT ──  From here the manager is mutated; nothing below
         // can fail in a way that leaves a half-registered profile behind.
@@ -445,10 +492,10 @@ size_t ProfileManager::cross_validate(const std::string& profile) {
     for (const auto& d : deps)
         collect(d);
     // The target's own profile re-contributes its own equipment (so concrete
-    // item refs it defines resolve) and re-adds the vanilla tag universe that a
-    // loaded profile retains in its own tags registry.  NOTE: this does NOT
-    // make datapack-defined custom `#tags` resolve — McOfficialParser does not
-    // retain datapack tag definitions in the profile's tags registry.
+    // item refs it defines resolve) and re-adds the tag universe that a loaded
+    // profile retains in its own tags registry — including datapack-defined
+    // item tags (own.tags = vanilla ∪ datapack tags, B-T14 I-1), so `#mypack:*`
+    // supported_items references survive cross-validation.
     collect(profile);
 
     // Drop supported_items refs that fail validation; drop the whole

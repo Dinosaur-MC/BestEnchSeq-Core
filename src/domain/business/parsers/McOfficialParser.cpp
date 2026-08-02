@@ -289,6 +289,71 @@ McOfficialParser::derive_equipment_from_tag_files(
 
 // ============================================================================
 
+std::vector<McOfficialParser::ItemTagDefinition>
+McOfficialParser::extract_item_tag_definitions(
+    const std::unordered_map<std::string, std::string>& tag_files)
+{
+    std::vector<ItemTagDefinition> result;
+    for (const auto& [path, content] : tag_files) {
+        std::string p = path;
+        for (auto& c : p) { if (c == '\\') c = '/'; }
+
+        // Only item tags drive item applicability (`tags_of`); enchantment
+        // tags are out of scope for the profile tag universe (B-T14 I-1).
+        if (p.find("/tags/item/") == std::string::npos)
+            continue;
+
+        auto tags_pos = p.find("/tags/");
+        if (tags_pos == std::string::npos) continue;
+        auto data_pos = p.find("data/");
+        if (data_pos == std::string::npos) continue;
+        auto ns_start = data_pos + 5;
+        std::string ns = p.substr(ns_start, tags_pos - ns_start);
+        auto category_end = p.find('/', tags_pos + 6);
+        if (category_end == std::string::npos) continue;
+        auto key_start = category_end + 1;
+        std::string relative = p.substr(key_start);
+        auto dot_pos = relative.find('.');
+        if (dot_pos != std::string::npos)
+            relative = relative.substr(0, dot_pos);
+
+        try {
+            Json json = Json::parse(content);
+            auto root_var = json.get_value();
+            if (!std::holds_alternative<Json::Object>(root_var)) continue;
+            const auto& obj = std::get<Json::Object>(root_var);
+
+            ItemTagDefinition def;
+            def.key = ns + ":" + relative;
+
+            auto replace_it = obj.find("replace");
+            if (replace_it != obj.end()) {
+                auto rv = replace_it->second.get_value();
+                if (auto* b = std::get_if<Json::Bool>(&rv))
+                    def.replace = *b;
+            }
+
+            auto values_it = obj.find("values");
+            if (values_it != obj.end()) {
+                auto vv = values_it->second.get_value();
+                if (auto* arr = std::get_if<Json::Array>(&vv)) {
+                    for (const auto& elem : *arr) {
+                        auto ev = elem.get_value();
+                        if (auto* s = std::get_if<Json::String>(&ev))
+                            def.values.push_back(*s);
+                    }
+                }
+            }
+            result.push_back(std::move(def));
+        } catch (...) {
+            // Skip malformed tag files.
+        }
+    }
+    return result;
+}
+
+// ============================================================================
+
 McOfficialParser::Result McOfficialParser::parse_files(
     const std::unordered_map<std::string, std::string>& files)
 {
@@ -347,7 +412,11 @@ McOfficialParser::Result McOfficialParser::parse_files(
     // Derive equipment from tag files
     auto equipment = derive_equipment_from_tag_files(tag_files);
 
-    return {std::move(enchantments), std::move(equipment)};
+    // Extract the datapack's own item-tag definitions so they survive into the
+    // profile's tag universe and TagResolver (B-T14 I-1).
+    auto item_tags = extract_item_tag_definitions(tag_files);
+
+    return {std::move(enchantments), std::move(equipment), std::move(item_tags)};
 }
 
 // ============================================================================

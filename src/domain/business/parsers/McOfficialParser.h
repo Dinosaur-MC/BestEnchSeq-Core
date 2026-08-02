@@ -19,10 +19,22 @@
 /// no filesystem access required.
 class McOfficialParser {
 public:
-    using Result = std::pair<
-        std::vector<business::loader::EnchantmentData>,
-        std::vector<business::loader::EquipmentData>
-    >;
+    /// A single item-tag definition parsed from `data/<ns>/tags/item/<path>.json`.
+    /// Carried alongside enchantments+equipment so datapack-defined item tags
+    /// survive into the profile's tag universe and TagResolver (B-T14 I-1).
+    struct ItemTagDefinition {
+        std::string key;                  ///< "<ns>:<tagpath>" (no '#')
+        std::vector<std::string> values;  ///< raw entries (concrete IDs or "#refs")
+        bool replace = false;             ///< MC "replace" flag
+    };
+
+    /// Parser result: enchantments + equipment + the datapack's own item-tag
+    /// definitions (`data/<ns>/tags/item/*.json`).
+    struct Result {
+        std::vector<business::loader::EnchantmentData> enchantments;
+        std::vector<business::loader::EquipmentData> equipment;
+        std::vector<ItemTagDefinition> item_tags;
+    };
 
     /// Parse a directory following the MC official data-pack layout.
     static Result parse(const std::filesystem::path& directory);
@@ -48,6 +60,11 @@ public:
 private:
     /// Derive equipment data from item tag file contents (in-memory).
     static std::vector<business::loader::EquipmentData> derive_equipment_from_tag_files(
+        const std::unordered_map<std::string, std::string>& tag_files
+    );
+
+    /// Extract item-tag definitions (`data/<ns>/tags/item/*.json`) in-memory.
+    static std::vector<ItemTagDefinition> extract_item_tag_definitions(
         const std::unordered_map<std::string, std::string>& tag_files
     );
 };

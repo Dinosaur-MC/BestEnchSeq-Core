@@ -495,22 +495,23 @@ void test_pm_publish() {
 void test_pm_load_datapack() {
     // Build a minimal datapack inline in a temp dir (NO res/ fixtures —
     // everything must be committed or runtime-built).
-    static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_datapack_" + std::to_string(++counter));
+    // B-T14 M-4: profile key prefers the FOLDER STEM verbatim.  Use a folder
+    // name with spaces + a dot so the verbatim behavior is observable.
+    auto dir = std::filesystem::temp_directory_path() / "More Enchants 1.4";
+    std::filesystem::remove_all(dir);  // stale cleanup from prior runs
     std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
     std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
 
-    // pack.mcmeta with a `pack.id` containing spaces and a dot.  B-T13: profile
-    // keys are plain std::string, so the name is kept VERBATIM (no NSID
-    // sanitization): "More Enchants 1.4" stays "More Enchants 1.4".
+    // pack.mcmeta — `pack.id` is typically a UUID; B-T13 profile keys are plain
+    // std::string (verbatim, no NSID sanitization), B-T14 M-4 prefers the folder
+    // stem and ignores pack.id here.
     {
         std::ofstream f(dir / "pack.mcmeta");
         f << R"({
             "pack": {
                 "description": "test pack",
                 "pack_format": 15,
-                "id": "More Enchants 1.4"
+                "id": "8a3c7f5b-0000-4b1a-9d7e-abc123def456"
             }
         })";
     }
@@ -536,7 +537,7 @@ void test_pm_load_datapack() {
     bool ok = pm.load_datapack(dir);
     expect(ok, "load_datapack returns true for a valid datapack");
     expect(pm.exists("More Enchants 1.4"),
-           "profile name derived from pack.id kept verbatim (spaces + dot)");
+           "profile name derived from FOLDER STEM verbatim (spaces + dot)");
     expect(pm.exists("builtin:vanilla"), "builtin:vanilla root injected");
 
     const Profile* dp = pm.find("More Enchants 1.4");
@@ -547,11 +548,145 @@ void test_pm_load_datapack() {
         const auto& supp = dp->ench().at(NSID("mytest:leeching")).supported_items;
         expect(supp.count(NSID("#minecraft:swords")) == 1,
                "leeching keeps #minecraft:swords after cross_validate");
-        expect(dp->tag_resolver() != nullptr, "datapack profile carries builtin TagResolver");
+        expect(dp->tag_resolver() != nullptr, "datapack profile carries vanilla∪datapack TagResolver");
     }
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_pm_load_datapack");
+}
+
+// ─── Test: Datapack-defined item tags survive load (B-T14 I-1) ───────────
+
+void test_pm_load_datapack_custom_tag() {
+    // A datapack that defines its OWN item tag (#mypack:magic_staffs) and an
+    // enchantment referencing it.  Previously the enchantment was dropped
+    // entirely at from_dto because the tag wasn't in the vanilla universe.
+    auto dir = std::filesystem::temp_directory_path() / "Magic Staff Pack";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "mypack" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    // Brand-new item tag defined by the datapack itself.
+    {
+        std::ofstream f(dir / "data" / "mypack" / "tags" / "item" / "magic_staffs.json");
+        f << R"({"values": ["mypack:magic_staff"]})";
+    }
+    // Enchantment whose supported_items references the datapack's own tag.
+    {
+        std::ofstream f(dir / "data" / "mypack" / "enchantment" / "staff_power.json");
+        f << R"({
+            "description": "Staff Power",
+            "supported_items": "#mypack:magic_staffs",
+            "anvil_cost": 3,
+            "max_level": 4,
+            "min_cost": {"base": 8, "per_level_above_first": 6}
+        })";
+    }
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack succeeds");
+    const Profile* dp = pm.find("Magic Staff Pack");
+    expect(dp != nullptr, "datapack profile findable");
+    if (dp) {
+        expect(dp->has_enchantment(NSID("mypack:staff_power")),
+               "staff_power survives load (datapack tag in profile universe)");
+        const auto& supp = dp->ench().at(NSID("mypack:staff_power")).supported_items;
+        expect(supp.count(NSID("#mypack:magic_staffs")) == 1,
+               "staff_power keeps #mypack:magic_staffs after cross_validate");
+        expect(dp->tags().contains(NSID("#mypack:magic_staffs")),
+               "datapack item tag present in profile tag universe");
+
+        // tags_of applicability at solve time — direct resolver + effective view.
+        const TagResolver* tr = dp->tag_resolver();
+        expect(tr != nullptr, "resolver attached");
+        if (tr)
+            expect(tr->tags_of("mypack:magic_staff").count(NSID("#mypack:magic_staffs")) == 1,
+                   "tags_of(mypack:magic_staff) includes #mypack:magic_staffs");
+
+        const Profile& eff = pm.resolve_effective("Magic Staff Pack");
+        const TagResolver* etr = eff.tag_resolver();
+        expect(etr != nullptr, "effective view carries TagResolver");
+        if (etr)
+            expect(etr->tags_of("mypack:magic_staff").count(NSID("#mypack:magic_staffs")) == 1,
+                   "effective tags_of honors datapack item tag");
+    }
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_custom_tag");
+}
+
+// ─── Test: Vanilla-tag override honored (replace + merge) (B-T14 I-1) ─────
+
+void test_pm_load_datapack_vanilla_tag_override() {
+    // A datapack that REPLACES #minecraft:swords with a custom sword item.
+    // The override must drive tags_of at solve time (direct + effective view).
+    auto dir = std::filesystem::temp_directory_path() / "Vanilla Swords Override";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    {
+        std::ofstream f(dir / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"replace": true, "values": ["mypack:great_sword"]})";
+    }
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack succeeds");
+    const Profile* dp = pm.find("Vanilla Swords Override");
+    expect(dp != nullptr, "datapack profile findable");
+    if (dp) {
+        const TagResolver* tr = dp->tag_resolver();
+        expect(tr != nullptr, "resolver attached");
+        if (tr) {
+            expect(tr->tags_of("mypack:great_sword").count(NSID("#minecraft:swords")) == 1,
+                   "tags_of(great_sword) includes #minecraft:swords (override)");
+            expect(tr->tags_of("minecraft:diamond_sword").count(NSID("#minecraft:swords")) == 0,
+                   "tags_of(diamond_sword) excludes #minecraft:swords (replace=true)");
+        }
+
+        // Effective view honors the override too.
+        const Profile& eff = pm.resolve_effective("Vanilla Swords Override");
+        const TagResolver* etr = eff.tag_resolver();
+        expect(etr != nullptr, "effective view carries TagResolver");
+        if (etr)
+            expect(etr->tags_of("mypack:great_sword").count(NSID("#minecraft:swords")) == 1,
+                   "effective tags_of honors vanilla-tag override");
+    }
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_vanilla_tag_override");
+}
+
+// ─── Test: direct Profile::set_dependencies invalidates effective view (M-1) ──
+
+void test_pm_direct_set_dependencies_invalidates_effective() {
+    ProfileManager pm;
+    pm.create("builtin:vanilla");
+    auto& base = pm.create("base");
+    base.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
+    auto& pack = pm.create("mypack");
+
+    // Populate the effective-view cache: mypack with no deps → no sharpness.
+    const Profile& eff0 = pm.resolve_effective("mypack");
+    expect(!eff0.ench().contains(NSID("minecraft:sharpness")),
+           "before dep, effective view has no sharpness");
+
+    // Bypass the manager: mutate dependencies directly on the Profile.
+    pack.set_dependencies({"base"});
+
+    // The next resolve_effective must honor the new dep (cache invalidated).
+    const Profile& eff1 = pm.resolve_effective("mypack");
+    expect(eff1.ench().contains(NSID("minecraft:sharpness")),
+           "after direct set_dependencies, effective view sees dep enchantment");
+
+    TEST_PASS("test_pm_direct_set_dependencies_invalidates_effective");
 }
 
 // ─── Test: Load Directory detects datapack subdirectories ───────────────
@@ -637,14 +772,15 @@ void test_pm_load_datapack_no_mcmeta() {
 // ─── Test: datapack whose name would collide with the root key ──────────
 
 void test_pm_load_datapack_vanilla_name() {
-    static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_dp_vanilla_" + std::to_string(++counter));
+    // A datapack whose FOLDER STEM is "vanilla" (legacy alias of the injected
+    // root key) must be disambiguated so it never replaces the base profile.
+    auto dir = std::filesystem::temp_directory_path() / "vanilla";
+    std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "data" / "vdp" / "enchantment");
     std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
     {
         std::ofstream f(dir / "pack.mcmeta");
-        f << R"({"pack": {"pack_format": 15, "id": "vanilla"}})";
+        f << R"({"pack": {"pack_format": 15}})";
     }
     {
         std::ofstream f(dir / "data" / "vdp" / "enchantment" / "leeching.json");
@@ -681,9 +817,10 @@ void test_pm_load_datapack_vanilla_name() {
 // ─── Test: datapack whose name equals the current root key (builtin:vanilla) ──
 
 void test_pm_load_datapack_builtin_vanilla_name() {
-    static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_dp_bvanilla_" + std::to_string(++counter));
+    // B-T14 M-4: `pack.id` is a FALLBACK only — even a pack.id of
+    // "builtin:vanilla" must not rename the profile away from the folder stem.
+    auto dir = std::filesystem::temp_directory_path() / "My Vanilla Replacer";
+    std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "data" / "vdp" / "enchantment");
     std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
     {
@@ -712,18 +849,18 @@ void test_pm_load_datapack_builtin_vanilla_name() {
                           1, false, {}, {NSID("#minecraft:swords")}});
 
     bool ok = pm.load_datapack(dir);
-    expect(ok, "load_datapack succeeds for a pack named builtin:vanilla");
+    expect(ok, "load_datapack succeeds");
     expect(pm.exists("builtin:vanilla"), "builtin:vanilla base profile preserved");
-    expect(pm.exists("vanilla_datapack"),
-           "datapack name disambiguated to vanilla_datapack");
+    expect(pm.exists("My Vanilla Replacer"),
+           "profile key = folder stem, NOT pack.id (M-4)");
     const Profile* v = pm.find("builtin:vanilla");
     expect(v != nullptr && v->has_enchantment(NSID("minecraft:sharpness")),
            "builtin:vanilla base content intact (not replaced by datapack)");
     expect(v != nullptr && !v->has_enchantment(NSID("vdp:leeching")),
            "builtin:vanilla base does not contain datapack enchantment");
-    const Profile* dp = pm.find("vanilla_datapack");
+    const Profile* dp = pm.find("My Vanilla Replacer");
     expect(dp != nullptr && dp->has_enchantment(NSID("vdp:leeching")),
-           "datapack enchantment lives under the disambiguated name");
+           "datapack enchantment lives under the folder-stem name");
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_pm_load_datapack_builtin_vanilla_name");
@@ -732,41 +869,49 @@ void test_pm_load_datapack_builtin_vanilla_name() {
 // ─── Test: datapack name derivation (verbatim, B-T13) ───────────────────
 
 void test_pm_name_derive() {
-    // B-T13: profile keys are plain std::string.  derive_datapack_name returns
-    // pack.id (else the directory stem) VERBATIM — spaces/dots are preserved,
-    // there is no NSID charset sanitization.
-    static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_naming_" + std::to_string(++counter));
-    std::filesystem::create_directories(dir);
-    const std::string stem = "besq_pm_naming_" + std::to_string(counter);
+    // B-T13: profile keys are plain std::string.  B-T14 M-4: derive_datapack_name
+    // prefers the FOLDER STEM verbatim — spaces/dots are preserved, no NSID
+    // charset sanitization; pack.id is used ONLY when the folder has no stem.
+    auto root = std::filesystem::temp_directory_path();
 
+    // Folder stem with spaces + a dot wins over a UUID pack.id.
+    auto stem_dir = root / "More Enchants 1.4";
+    std::filesystem::remove_all(stem_dir);
+    std::filesystem::create_directories(stem_dir);
     {
-        std::ofstream f(dir / "pack.mcmeta");
-        f << R"({"pack": {"pack_format": 15, "id": "More Enchants 1.4"}})";
+        std::ofstream f(stem_dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15, "id": "8a3c7f5b-0000-4b1a-9d7e-abc123def456"}})";
     }
-    expect_eq(derive_datapack_name(dir), std::string("More Enchants 1.4"),
-              "pack.id 'More Enchants 1.4' kept verbatim");
+    expect_eq(derive_datapack_name(stem_dir), std::string("More Enchants 1.4"),
+              "folder stem verbatim (spaces + dot) over pack.id");
 
+    // A folder literally named "vanilla" is disambiguated (legacy alias guard).
+    auto vanilla_dir = root / "vanilla";
+    std::filesystem::remove_all(vanilla_dir);
+    std::filesystem::create_directories(vanilla_dir);
     {
-        std::ofstream f(dir / "pack.mcmeta");
-        f << R"({"pack": {"pack_format": 15, "id": "vanilla"}})";
+        std::ofstream f(vanilla_dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15, "id": "8a3c7f5b-0000-4b1a-9d7e-abc123def456"}})";
     }
-    expect_eq(derive_datapack_name(dir), std::string("vanilla_datapack"),
-              "pack.id 'vanilla' is disambiguated");
+    expect_eq(derive_datapack_name(vanilla_dir), std::string("vanilla_datapack"),
+              "folder stem 'vanilla' is disambiguated");
 
-    {
-        std::ofstream f(dir / "pack.mcmeta");
-        f << R"({"pack": {"pack_format": 15}})";
-    }
-    expect_eq(derive_datapack_name(dir), stem,
-              "no pack.id → directory stem verbatim");
+    // No pack.mcmeta at all → directory stem verbatim.
+    auto bare_dir = root / "bare_stem";
+    std::filesystem::remove_all(bare_dir);
+    std::filesystem::create_directories(bare_dir);
+    expect_eq(derive_datapack_name(bare_dir), std::string("bare_stem"),
+              "no pack.mcmeta → directory stem verbatim");
 
+    // Malformed pack.mcmeta → directory stem verbatim.
+    auto malformed_dir = root / "malformed_stem";
+    std::filesystem::remove_all(malformed_dir);
+    std::filesystem::create_directories(malformed_dir);
     {
-        std::ofstream f(dir / "pack.mcmeta");
+        std::ofstream f(malformed_dir / "pack.mcmeta");
         f << "{not valid json";
     }
-    expect_eq(derive_datapack_name(dir), stem,
+    expect_eq(derive_datapack_name(malformed_dir), std::string("malformed_stem"),
               "malformed pack.mcmeta → directory stem verbatim");
 
     // A directory with no stem falls back to a non-empty name.
@@ -774,7 +919,10 @@ void test_pm_name_derive() {
               std::string("datapack"),
               "directory with no stem → 'datapack' fallback");
 
-    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(stem_dir);
+    std::filesystem::remove_all(vanilla_dir);
+    std::filesystem::remove_all(bare_dir);
+    std::filesystem::remove_all(malformed_dir);
     TEST_PASS("test_pm_name_derive");
 }
 
@@ -851,6 +999,9 @@ int main() {
         test_pm_edit_preserves_tag_resolver();
         test_pm_publish();
         test_pm_load_datapack();
+        test_pm_load_datapack_custom_tag();
+        test_pm_load_datapack_vanilla_tag_override();
+        test_pm_direct_set_dependencies_invalidates_effective();
         test_pm_load_directory_with_datapack();
         test_pm_load_datapack_no_mcmeta();
         test_pm_load_datapack_vanilla_name();

@@ -492,8 +492,8 @@ void test_mc_parse_files_basic() {
     })";
 
     auto result = McOfficialParser::parse_files(files);
-    const auto& enchantments = result.first;
-    const auto& equipment    = result.second;
+    const auto& enchantments = result.enchantments;
+    const auto& equipment    = result.equipment;
 
     expect_eq(static_cast<int>(enchantments.size()), 1,
               "mc_files_basic: 1 enchantment");
@@ -519,8 +519,8 @@ void test_mc_parse_files_empty() {
     std::unordered_map<std::string, std::string> files;
 
     auto result = McOfficialParser::parse_files(files);
-    const auto& enchantments = result.first;
-    const auto& equipment    = result.second;
+    const auto& enchantments = result.enchantments;
+    const auto& equipment    = result.equipment;
 
     expect(enchantments.empty(), "mc_files_empty: no enchantments");
     expect(equipment.empty(),    "mc_files_empty: no equipment");

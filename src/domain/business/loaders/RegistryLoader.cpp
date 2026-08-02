@@ -293,7 +293,8 @@ void RegistryLoader::populate(
 
 RegistryLoader::OwnContent RegistryLoader::resolve_own_content(
     const std::vector<business::loader::EnchantmentData>& enchants,
-    const std::vector<business::loader::EquipmentData>& equipments)
+    const std::vector<business::loader::EquipmentData>& equipments,
+    const TagRegistry* extra_tags)
 {
     // Seed the vanilla universe into temporary registries, then cross-validate
     // the source DTOs on top of the union.  A profile must NOT keep vanilla's
@@ -304,6 +305,14 @@ RegistryLoader::OwnContent RegistryLoader::resolve_own_content(
     EquipmentRegistry eq_reg;     // vanilla universe: equipment
     EnchantmentRegistry ench_reg; // vanilla universe + source content
     besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
+    // Seed datapack-defined item tags so `#mypack:*` supported_items refs
+    // resolve during from_dto (B-T14 I-1).  Brand-new tags are added; a
+    // vanilla-tag override is a no-op here (TagRegistry has no member data —
+    // the replace/merge semantics live in the TagResolver built downstream).
+    if (extra_tags) {
+        for (const auto& [id, tag] : extra_tags->data())
+            tag_reg.insert(tag);
+    }
     loader.resolve_with_base(enchants, equipments, tag_reg, eq_reg, ench_reg);
 
     std::unordered_set<NSID> ench_ids;

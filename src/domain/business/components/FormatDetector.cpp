@@ -54,8 +54,10 @@ FormatDetector::Result FormatDetector::parse(const std::filesystem::path& path) 
     }
     case DataFormat::NativeCsv:
         return {NativeCsvParser::parse_file(path), {}};
-    case DataFormat::McOfficial:
-        return McOfficialParser::parse(path);
+    case DataFormat::McOfficial: {
+        auto result = McOfficialParser::parse(path);
+        return {std::move(result.enchantments), std::move(result.equipment)};
+    }
     case DataFormat::Unknown:
     case DataFormat::Auto:
         // Fallback: attempt NativeJson parse

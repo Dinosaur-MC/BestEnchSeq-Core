@@ -102,9 +102,15 @@ public:
     /// seed the vanilla universe into temporary registries, cross-validate
     /// \p enchants / \p equipments on top via resolve_with_base(), then filter
     /// the union back to the DTOs' own ids.  Returns the own-content registries.
+    ///
+    /// \p extra_tags (optional) seeds ADDITIONAL tags into the validation
+    /// universe before cross-validation — used by load_datapack to inject the
+    /// datapack's own item tags so `#mypack:*` supported_items references
+    /// survive (B-T14 I-1).
     static OwnContent resolve_own_content(
         const std::vector<business::loader::EnchantmentData>& enchants,
-        const std::vector<business::loader::EquipmentData>& equipments);
+        const std::vector<business::loader::EquipmentData>& equipments,
+        const TagRegistry* extra_tags = nullptr);
 
 private:
     /// Shared equipment-then-enchantment populate step used by both resolve()
