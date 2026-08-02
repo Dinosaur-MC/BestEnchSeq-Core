@@ -167,8 +167,16 @@ struct PartitionDpDiagnostics : SearchDiagnostics {
         out.push_back({"dp_bound_pruned",       static_cast<int64_t>(dp_bound_pruned)});
         out.push_back({"dp_pareto_dropped",     static_cast<int64_t>(dp_pareto_dropped)});
         out.push_back({"dp_ub_cost",            static_cast<int64_t>(dp_ub_cost)});
-        out.push_back({"dp_pass_b_ran",         dp_pass_b_ran ? 1 : 0});
+        // 仅在实际运行 Pass B 时上报；默认 false（未运行）省略
+        if (dp_pass_b_ran)
+            out.push_back({"dp_pass_b_ran", 1});
     }
+```
+
+> **省略语义（v1 字段不变，仅输出规则收窄）**：`solutions_found` / `max_depth` 用
+> `-1` 哨兵表示"未跟踪"，仅在上报（≥0）时输出；`dp_pass_b_ran` 默认未运行省略；
+> `nodes_visited` / `nodes_pruned` / `steps_forged`（Tier-2 计数器，默认构建编译为空、
+> 恒 0）三者全 0 时整组省略。字段名与 §7 schema 版本不变。
 };
 ```
 

@@ -20,8 +20,12 @@ void SearchDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) const 
     AlgorithmDiagnostics::flush(out);
     out.push_back({"initial_bound",   static_cast<int64_t>(initial_bound)});
     out.push_back({"final_bound",     static_cast<int64_t>(final_bound)});
-    out.push_back({"solutions_found", static_cast<int64_t>(solutions_found)});
-    out.push_back({"max_depth",       static_cast<int64_t>(max_depth_reached)});
+    // solutions_found / max_depth are emitted only when the algorithm reports
+    // them (>= 0); -1 means "not tracked / not applicable" (e.g. DP strategies).
+    if (solutions_found >= 0)
+        out.push_back({"solutions_found", static_cast<int64_t>(solutions_found)});
+    if (max_depth_reached >= 0)
+        out.push_back({"max_depth",       static_cast<int64_t>(max_depth_reached)});
 }
 
 // ─── PoolSearchDiagnostics ────────────────────────────────────────────
@@ -48,7 +52,10 @@ void PartitionDpDiagnostics::flush(std::vector<DiagnosticsWriter::Entry>& out) c
     out.push_back({"dp_bound_pruned",       static_cast<int64_t>(dp_bound_pruned)});
     out.push_back({"dp_pareto_dropped",     static_cast<int64_t>(dp_pareto_dropped)});
     out.push_back({"dp_ub_cost",            static_cast<int64_t>(dp_ub_cost)});
-    out.push_back({"dp_pass_b_ran",         dp_pass_b_ran ? 1 : 0});
+    // dp_pass_b_ran reports "did the unconstrained Pass B run" — a false is the
+    // default/disabled state and carries no information, so emit only on true.
+    if (dp_pass_b_ran)
+        out.push_back({"dp_pass_b_ran", 1});
 }
 
 } // namespace algorithm

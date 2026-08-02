@@ -39,11 +39,16 @@ struct AlgorithmDiagnostics {
 ///
 /// For AStar, IDAStar, DFS — algorithms that explore a search space
 /// by expanding nodes and tracking bounds.
+///
+/// solutions_found / max_depth_reached use the same "-1 = not reported"
+/// sentinel as normalized_explored_states: search strategies that track the
+/// value assign it explicitly; algorithms for which the concept is
+/// meaningless (e.g. DP) leave it at -1 and flush() omits it.
 struct SearchDiagnostics : AlgorithmDiagnostics {
     int32_t initial_bound{INT32_MAX};
     int32_t final_bound{INT32_MAX};
-    int32_t solutions_found{0};
-    int32_t max_depth_reached{0};
+    int32_t solutions_found{-1};     // -1 = not reported
+    int32_t max_depth_reached{-1};   // -1 = not reported
 
     void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };
@@ -83,7 +88,7 @@ struct PartitionDpDiagnostics : SearchDiagnostics {
     uint64_t dp_bound_pruned{0};         // combines rejected by the B&B bound
     uint64_t dp_pareto_dropped{0};       // entries dropped by Pareto domination
     int32_t  dp_ub_cost{INT32_MAX};      // initial upper-bound cost (compute_ub)
-    bool     dp_pass_b_ran{false};       // unconstrained Pass B ran
+    bool     dp_pass_b_ran{false};       // unconstrained Pass B ran; emitted only when true
 
     void flush(std::vector<DiagnosticsWriter::Entry>& out) const override;
 };

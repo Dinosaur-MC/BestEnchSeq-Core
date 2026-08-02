@@ -92,10 +92,20 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
                     all.end());
             }
 
-            // Add atomic counter entries
-            all.push_back(std::move(p.nodes_visited));
-            all.push_back(std::move(p.nodes_pruned));
-            all.push_back(std::move(p.steps_forged));
+            // Add atomic counter entries (incr_* counters).  These are Tier-2
+            // per-operation counters: compiled to no-ops unless
+            // BESQ_DEEP_DIAGNOSTICS, and unused by non-search strategies (DP,
+            // deterministic).  When all three are zero they carry no
+            // information — omit the whole set instead of emitting noise.
+            const int64_t* n_visited = std::get_if<int64_t>(&p.nodes_visited.value);
+            const int64_t* n_pruned  = std::get_if<int64_t>(&p.nodes_pruned.value);
+            const int64_t* n_forged  = std::get_if<int64_t>(&p.steps_forged.value);
+            if (!n_visited || !n_pruned || !n_forged ||
+                *n_visited != 0 || *n_pruned != 0 || *n_forged != 0) {
+                all.push_back(std::move(p.nodes_visited));
+                all.push_back(std::move(p.nodes_pruned));
+                all.push_back(std::move(p.steps_forged));
+            }
 
             // Persist to file
             if (persist && persist->load(std::memory_order_acquire))

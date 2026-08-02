@@ -60,11 +60,13 @@ algorithm=<name>
 status=Complete|NoSolution|Cancelled|Failed
 wall_ms=<ms>
 solution_cost=<cost>
-nodes_visited=<N>
-nodes_pruned=<N>
-steps_forged=<N>
 <key>=<value>
 ```
+
+**省略规则**（只输出有意义/已上报的字段，默认构建零噪声）：
+- `solutions_found` / `max_depth`：仅在算法显式上报（≥0）时输出；`-1`（未跟踪，如 DP）省略。
+- `dp_pass_b_ran`：仅在 Pass B 实际运行时输出 `=1`；默认未运行省略。
+- `nodes_visited` / `nodes_pruned` / `steps_forged`：Tier-2 每操作计数器，`BESQ_DEEP_DIAGNOSTICS` 关闭时编译为空（恒 0），且非搜索算法不使用——三者全为 0 时整组省略。
 
 最多保留 128 份最新文件，超出自动清理。
 
