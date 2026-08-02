@@ -55,4 +55,8 @@ struct EnchantmentDataSchema {
 using EnchJsonSchema      = ds::json::Schema<EnchInfoSchema>;
 using EnchantmentDataJson = ds::json::Schema<EnchantmentDataSchema>;
 
+// ── CSV binder 别名 ────────────────────────────────────────────────────
+using EnchCsv             = ds::csv::Schema<EnchInfoSchema>;
+using EnchantmentDataCsv  = ds::csv::Schema<EnchantmentDataSchema>;
+
 } // namespace business::schema

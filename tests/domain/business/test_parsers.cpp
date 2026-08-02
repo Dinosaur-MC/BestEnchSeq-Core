@@ -508,6 +508,76 @@ void test_csv_parse_is_treasure() {
     TEST_PASS("test_csv_parse_is_treasure");
 }
 
+// ─── test_csv_parse_platform ───────────────────────────────────────────
+// The schema-driven parser reads the platform / min_cost columns that the
+// EnchSerializer emits, so a CSV round-trip preserves them instead of
+// defaulting.
+
+void test_csv_parse_platform() {
+    std::string csv =
+        "id,name,platform,max_level,limited_level,min_cost_base,min_cost_per_level,multiplier,is_treasure,exclusive_set,supported_items\n"
+        "minecraft:sharpness,Sharpness,java,5,5,1,11,1,false,,\"#minecraft:sword\"\n"
+        "minecraft:mending,Mending,all,1,1,2,5,4,true,,\"#minecraft:durability\"\n";
+    auto enchantments = NativeCsvParser::parse(csv);
+    expect_eq(static_cast<int>(enchantments.size()), 2, "csv_platform: 2 enchants");
+    expect(enchantments[0].platform == "java", "csv_platform: platform column read");
+    expect(enchantments[1].platform == "all", "csv_platform: 'all' read");
+    expect(enchantments[1].is_treasure, "csv_platform: is_treasure read");
+    expect_eq(enchantments[0].min_cost_base, 1, "csv_platform: min_cost_base read");
+    TEST_PASS("test_csv_parse_platform");
+}
+
+// ─── test_csv_parse_escaped_quotes ─────────────────────────────────────
+// 旧 parse_csv_string 不处理 "" 转义——回归：逗号字段用引号包裹，内含引号转义为 ""
+
+void test_csv_parse_escaped_quotes() {
+    std::string csv =
+        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
+        "\"minecraft:sharpness\",\"Sharp, Comma\",5,5,1,,\"#minecraft:sword\"\n"
+        "\"minecraft:unbreaking\",\"Un\"\"broken\"\"\",3,3,1,,\n";
+    auto enchantments = NativeCsvParser::parse(csv);
+    expect_eq(static_cast<int>(enchantments.size()), 2, "csv_escaped: 2 enchants");
+    expect(enchantments[0].display_name == "Sharp, Comma", "csv_escaped: comma inside quotes");
+    expect(enchantments[1].display_name == "Un\"broken\"", "csv_escaped: escaped double-quote");
+    TEST_PASS("test_csv_parse_escaped_quotes");
+}
+
+// ─── test_csv_parse_equipment_companion ────────────────────────────────
+// Equipment companion CSV (equipments_<stem>.csv) is parsed via the
+// EquipmentDataSchema.
+
+void test_csv_parse_equipment_companion() {
+    std::string csv =
+        "id,name,category,max_durability\n"
+        "minecraft:diamond_sword,Diamond Sword,sword,1561\n"
+        "minecraft:iron_pickaxe,Iron Pickaxe,pickaxe,250\n";
+    auto eqs = NativeCsvParser::parse_equipment(csv);
+    expect_eq(static_cast<int>(eqs.size()), 2, "csv_eq: 2 equipments");
+    expect_eq(eqs[0].id, std::string("minecraft:diamond_sword"), "csv_eq: id");
+    expect_eq(eqs[0].category, std::string("sword"), "csv_eq: category");
+    expect_eq(eqs[0].max_durability, 1561, "csv_eq: max_durability");
+    TEST_PASS("test_csv_parse_equipment_companion");
+}
+
+// ─── test_csv_empty_scalar_cell_drops_row ─────────────────────────────
+// 旧解析器：空 limited_level 单元格回退 max_level 保留行；空 is_treasure 默认
+// false 保留行。新引擎 CSV 契约（test_csv_presence_zero_counts_as_present 固化）：
+// 空数值格 = codec 错误 → parse_row 失败 → 该行丢弃（WARN）。向后兼容仅承诺
+// "缺列"（缺失可选字段默认），不承诺"列在但空"。本测试锁定此刻意行为。
+
+void test_csv_empty_scalar_cell_drops_row() {
+    std::string csv =
+        "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
+        "minecraft:bad_empty,Bad,5,,1,,,\n"                    // limited_level 空 + is_treasure 空 → 行丢弃
+        "minecraft:sharpness,Sharpness,5,5,1,false,,\n";       // 合法行保留
+    auto enchantments = NativeCsvParser::parse(csv);
+    expect_eq(static_cast<int>(enchantments.size()), 1,
+              "empty_cell: malformed row dropped, valid kept");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"),
+              "empty_cell: valid row retained");
+    TEST_PASS("test_csv_empty_scalar_cell_drops_row");
+}
+
 // ============================================================================
 // Section C — McOfficialParser
 //
@@ -944,6 +1014,10 @@ int main() {
         test_csv_parse_empty_header_only();
         test_csv_parse_multiple_rows();
         test_csv_parse_is_treasure();
+        test_csv_parse_platform();
+        test_csv_parse_escaped_quotes();
+        test_csv_parse_equipment_companion();
+        test_csv_empty_scalar_cell_drops_row();
 
         // Section C — McOfficialParser
         test_mc_single_enchantment_basic();

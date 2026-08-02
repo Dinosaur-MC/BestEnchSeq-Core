@@ -42,4 +42,8 @@ using EquipJsonSchema    = ds::json::Schema<EquipmentSchema>;
 using EquipmentDataJson  = ds::json::Schema<EquipmentDataSchema>;
 using EquipTagJsonSchema = ds::json::Schema<EquipmentTagSchema>;
 
+// ── CSV binder 别名 ────────────────────────────────────────────────────
+using EquipCsv           = ds::csv::Schema<EquipmentSchema>;
+using EquipmentDataCsv   = ds::csv::Schema<EquipmentDataSchema>;
+
 } // namespace business::schema

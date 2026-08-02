@@ -1,6 +1,7 @@
 #include "CsvIO.h"
 
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 
 namespace csv {
@@ -85,6 +86,24 @@ CsvTable parse(const std::filesystem::path &path) {
         rows.push_back(split_line(line));
     }
 
+    return rows;
+}
+
+// ---------------------------------------------------------------------------
+// Parse a CSV string
+// ---------------------------------------------------------------------------
+
+CsvTable parse_string(const std::string& content) {
+    CsvTable rows;
+    std::istringstream stream(content);
+    std::string line;
+    while (std::getline(stream, line)) {
+        // Strip Windows-style line endings (same as parse())
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        rows.push_back(split_line(line));
+    }
     return rows;
 }
 
