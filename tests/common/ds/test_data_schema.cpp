@@ -60,10 +60,22 @@ void test_field_emit_predicate() {
     expect(f.should_emit(d), "emit true when predicate true");
     TEST_PASS("field custom emit predicate");
 }
+void test_field_aliases_and_required() {
+    auto fa = ds::field("id", &Demo::id, DummyCodec{}, "old_id");
+    expect(fa.aliases.size() == 1 && std::string(fa.aliases[0]) == "old_id",
+           "single alias lands in aliases, not emit");
+    auto fb = ds::field("id", &Demo::id, DummyCodec{}, "a", "b");
+    expect(fb.aliases.size() == 2 && std::string(fb.aliases[1]) == "b", "multi alias");
+    auto fr = ds::required_field("id", &Demo::id, DummyCodec{});
+    expect(fr.required, "required_field sets required");
+    expect(!fa.required, "plain field not required");
+    TEST_PASS("field aliases + required");
+}
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
     test_field_descriptor();
     test_field_emit_predicate();
+    test_field_aliases_and_required();
     return print_summary();
 }

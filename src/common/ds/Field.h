@@ -1,6 +1,5 @@
 #pragma once
-#include <string>
-#include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -42,6 +41,7 @@ struct Field {
 
 // ── 工厂：普通字段（可选，别名可选）────────────────────────────────
 template<typename Ptr, typename Codec, typename Emit>
+    requires std::is_invocable_v<Emit, const typename member_traits<Ptr>::class_type&>
 auto field(const char* name, Ptr member, Codec codec, Emit emit) {
     using traits = member_traits<Ptr>;
     return Field<typename traits::class_type, Ptr, Codec, Emit>{
