@@ -6,10 +6,13 @@
 #include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
 #include "framework/test_utils.h"
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_set>
+#include <vector>
 
 // ── 1. ErrorList 收集 + ValidationError 聚合 ──────────────────────────
 void test_error_collection() {
@@ -193,6 +196,23 @@ void test_json_parse_or_throw() {
     expect(threw, "parse_or_throw throws on errors");
     TEST_PASS("json parse_or_throw");
 }
+void test_json_collective_multi_error() {
+    // name missing (required) AND age wrong type (string where int expected) AND active wrong type
+    Json j = Json::object()
+        .set("age", Json(std::string("oops")))
+        .set("active", Json(int64_t{5}));
+    Person out; ds::ErrorList e;
+    expect(!PersonJson::parse(j, out, e), "multi-error parse fails");
+    expect(e.size() == 3, "all three errors collected");   // name + age + active
+    bool has_name = false, has_age = false, has_active = false;
+    for (const auto& fe : e.errors()) {
+        if (fe.path == "name") has_name = true;
+        if (fe.path == "age") has_age = true;
+        if (fe.path == "active") has_active = true;
+    }
+    expect(has_name && has_age && has_active, "errors carry distinct paths");
+    TEST_PASS("json collective multi-error");
+}
 
 // ── 5. Converter 适配（引擎零领域依赖）────────────────────────────
 struct NSIDConverter {                      // 用户定义，测试内建
@@ -288,6 +308,88 @@ void test_json_codec() {
     TEST_PASS("json_codec roundtrip + CSV rejection");
 }
 
+// ── 6. 结构型 codec（vector/set/optional）────────────────────────────
+struct Vals {
+    std::vector<int> nums;
+    std::unordered_set<std::string> tags;
+    std::optional<int> maybe;
+};
+struct ValsSchema {
+    using Type = Vals;
+    static constexpr auto fields = std::tuple{
+        ds::field("nums",  &Vals::nums,  ds::vector_codec<ds::int_codec>{}),
+        ds::field("tags",  &Vals::tags,  ds::set_codec<ds::string_codec>{}),
+        ds::field("maybe", &Vals::maybe, ds::optional_codec<ds::int_codec>{}),
+    };
+};
+using ValsJson = ds::json::Schema<ValsSchema>;
+
+void test_vector_codec() {
+    Vals v{{1, 2, 3}, {}, std::nullopt};
+    Json j = ValsJson::serialize(v);
+    Vals out; ds::ErrorList e;
+    expect(ValsJson::parse(j, out, e), "vector parse ok");
+    expect(out.nums.size() == 3 && out.nums[0] == 1 && out.nums[2] == 3, "vector roundtrip");
+    TEST_PASS("vector codec roundtrip");
+}
+void test_set_codec() {
+    Vals v{{}, {"b", "a", "c"}, std::nullopt};
+    Json j = ValsJson::serialize(v);
+    Vals out; ds::ErrorList e;
+    expect(ValsJson::parse(j, out, e), "set parse ok");
+    expect(out.tags.count("a") && out.tags.count("b") && out.tags.count("c"),
+           "set roundtrip (order-independent)");
+    TEST_PASS("set codec roundtrip");
+}
+void test_optional_codec() {
+    Vals v{{}, {}, 42};
+    Json j = ValsJson::serialize(v);
+    Vals out; ds::ErrorList e;
+    expect(ValsJson::parse(j, out, e), "optional parse ok");
+    expect(out.maybe.has_value() && *out.maybe == 42, "optional present roundtrip");
+    Vals v2{{}, {}, std::nullopt};
+    Json j2 = ValsJson::serialize(v2);
+    Vals out2; ds::ErrorList e2;
+    expect(ValsJson::parse(j2, out2, e2), "optional absent parse ok");
+    expect(!out2.maybe.has_value(), "optional absent roundtrip");
+    TEST_PASS("optional codec present/absent");
+}
+
+// ── 7. 条件发射 + 别名 ──────────────────────────────────────────────
+struct Cond {
+    int limited_level = 0;
+    bool provided = false;
+    int min_cost_base = 0;
+};
+struct CondSchema {
+    using Type = Cond;
+    static constexpr auto fields = std::tuple{
+        ds::field("limited_level", &Cond::limited_level, ds::int_codec{},
+                  [](const Cond& c) { return c.provided; }),
+        ds::field("min_cost_base", &Cond::min_cost_base, ds::int_codec{},
+                  "min_cost.base"),                    // 别名：嵌套形态
+    };
+};
+using CondJson = ds::json::Schema<CondSchema>;
+
+void test_conditional_emit() {
+    Cond c1{5, true, 0};
+    Json j1 = CondJson::serialize(c1);
+    expect(j1.has("limited_level"), "emitted when provided");
+    Cond c2{5, false, 0};
+    Json j2 = CondJson::serialize(c2);
+    expect(!j2.has("limited_level"), "skipped when not provided");
+    TEST_PASS("conditional emit predicate");
+}
+void test_alias_nested_form() {
+    Json j = Json::object()
+        .set("min_cost", Json::object().set("base", Json(int64_t{10})));
+    Cond out; ds::ErrorList e;
+    expect(CondJson::parse(j, out, e), "nested alias parse ok");
+    expect(out.min_cost_base == 10, "alias sources value from nested path");
+    TEST_PASS("alias nested path (min_cost.base)");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -303,8 +405,14 @@ int main() {
     test_json_required_missing();
     test_json_unknown_key_tolerant_vs_strict();
     test_json_parse_or_throw();
+    test_json_collective_multi_error();
     test_text_codec_roundtrip();
     test_text_codec_invalid_rejected();
     test_json_codec();
+    test_vector_codec();
+    test_set_codec();
+    test_optional_codec();
+    test_conditional_emit();
+    test_alias_nested_form();
     return print_summary();
 }
