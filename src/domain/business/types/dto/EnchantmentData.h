@@ -22,6 +22,7 @@ struct EnchantmentData {
     int32_t min_cost_base      = 0;          ///< min_cost.base（附魔台成本公式）
     int32_t min_cost_per_level = 0;          ///< min_cost.per_level_above_first
     bool is_treasure           = false;      ///< 宝藏魔咒（#minecraft:enchantment/treasure 成员）
+    std::string platform;                    ///< 平台限制（"java"/"bedrock"/"all"/"none"，空 = 未指定）
 };
 
 } // namespace business::loader
