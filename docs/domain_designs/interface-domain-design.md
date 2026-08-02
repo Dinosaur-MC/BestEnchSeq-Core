@@ -184,7 +184,9 @@ Format:
 | `[ ]` | `[sharpness=5,knockback=2]` | Enchantments (optional) |
 | `{ }` | `{prior_penalty:3,durability:500}` | Item properties (optional) |
 
-Supportd property keys: `prior_penalty` (anvil prior-work penalty), `durability`.
+`item_id` 也接受 `book` / `enchanted_book` 作为附魔书目标：两者归一化为 `enchanted_book`（book 被附魔后转变为 enchanted_book，本身不承载魔咒），无耐久（`durability` 恒 0、非零拒绝）但携带 `prior_penalty`。
+
+Supported property keys: `prior_penalty` (anvil prior-work penalty), `durability`.
 
 **Key change from v1:**
 - `EnchantmentSpec`/`TargetSpec` eliminated
