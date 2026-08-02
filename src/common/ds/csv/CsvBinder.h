@@ -58,6 +58,8 @@ struct Schema {
             if constexpr (F::Presence != nullptr) o.*(F::Presence) = false;
             return;
         }
+        // CSV presence = non-empty serialized cell. A numeric 0 counts as present;
+        // an empty numeric cell is a codec error (int_codec rejects ""), not "absent".
         typename F::value_type v{};
         if (f.codec.from_csv(row[it->second], v, err, f.name)) {
             f.set(o, std::move(v));
@@ -65,6 +67,9 @@ struct Schema {
                 o.*(F::Presence) = !row[it->second].empty();
         } else {
             ok = false;
+            // 解析失败也清除旗标，避免复用对象残留上一次的 true。
+            if constexpr (F::Presence != nullptr)
+                o.*(F::Presence) = false;
         }
     }
 };

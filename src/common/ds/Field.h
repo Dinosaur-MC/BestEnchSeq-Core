@@ -20,10 +20,9 @@ template<typename T> struct AlwaysEmit {
 
 /// Marker: bind a bool member to this field's PRESENCE — when the field is
 /// found (key present + value parses) on parse, the binder sets it true.
+/// FlagPtr is recovered via template deduction in the field() factories.
 template<auto FlagPtr>
-struct presence_flag {
-    static constexpr auto value = FlagPtr;
-};
+struct presence_flag {};
 
 // ── 字段描述符 ───────────────────────────────────────────────────────
 // name = JSON 键名 / CSV 表头；member = 运行时成员指针（类型安全）；

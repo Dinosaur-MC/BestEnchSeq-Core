@@ -66,10 +66,15 @@ struct Schema {
                     o.*(F::Presence) = true;
             } else {
                 ok = false;
+                // 解析失败也清除旗标，避免复用对象残留上一次的 true。
+                if constexpr (F::Presence != nullptr)
+                    o.*(F::Presence) = false;
             }
         } else if (f.required) {
             err.add(f.name, "missing required field");
             ok = false;
+            if constexpr (F::Presence != nullptr)
+                o.*(F::Presence) = false;
         } else if constexpr (F::Presence != nullptr) {
             o.*(F::Presence) = false;
         }

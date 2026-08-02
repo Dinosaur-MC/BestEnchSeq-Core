@@ -592,6 +592,27 @@ void test_presence_flag_absent() {
     expect(!out.limited_level_provided, "presence flag false when key absent");
     TEST_PASS("presence flag false when field absent");
 }
+
+void test_presence_flag_cleared_on_failed_parse() {
+    EnchInfoLike o;
+    ds::ErrorList err;
+    Json okj = Json::object()
+        .set("id", Json(std::string("minecraft:sharpness")))
+        .set("max_level", Json(int64_t{5}))
+        .set("multiplier", Json(int64_t{1}))
+        .set("limited_level", Json(int64_t{5}));
+    expect(EnchJson::parse(okj, o, err), "valid parse");
+    expect(o.limited_level_provided, "flag true after valid parse");
+    Json bad = Json::object()
+        .set("id", Json(std::string("minecraft:sharpness")))
+        .set("max_level", Json(int64_t{5}))
+        .set("multiplier", Json(int64_t{1}))
+        .set("limited_level", Json(std::string("not-a-number")));  // codec fails
+    ds::ErrorList err2;
+    expect(!EnchJson::parse(bad, o, err2), "invalid parse fails");
+    expect(!o.limited_level_provided, "stale flag cleared on codec failure");
+    TEST_PASS("presence flag cleared on failed parse");
+}
 void test_enchlike_platform_legacy_alias() {
     Json j = Json::object()
         .set("id", Json(std::string("minecraft:sharpness")))
@@ -615,7 +636,19 @@ void test_enchlike_csv_roundtrip() {
     expect(out.exclusive_set == e.exclusive_set, "csv exclusive_set roundtrip");
     expect(out.limited_level == 5, "csv limited_level roundtrip");
     expect(out.is_treasure, "is_treasure roundtrip");
+    expect(out.limited_level_provided, "csv presence flag reconstructed");
     TEST_PASS("EnchInfoLike CSV roundtrip");
+}
+
+void test_csv_presence_zero_counts_as_present() {
+    EnchInfoLike e = make_ench();
+    e.limited_level_provided = false;   // limited_level stays 0
+    auto row = EnchCsv::serialize_row(e);
+    EnchInfoLike out; ds::ErrorList err;
+    expect(EnchCsv::parse_row(EnchCsv::header(), row, out, err), "csv parse ok");
+    // CSV structurally cannot express "int field absent": cell "0" counts as present.
+    expect(out.limited_level_provided, "csv non-empty cell counts as present (documented CSV limitation)");
+    TEST_PASS("csv presence zero cell counts as present");
 }
 
 // ── 10. set_codec<int> 数值往返（非字符串内层，Task 6 review fold-in） ──
@@ -779,7 +812,9 @@ int main() {
     test_enchlike_json_roundtrip();
     test_enchlike_platform_legacy_alias();
     test_enchlike_csv_roundtrip();
+    test_csv_presence_zero_counts_as_present();
     test_presence_flag_absent();
+    test_presence_flag_cleared_on_failed_parse();
     test_set_codec_int_roundtrip();
     test_nsid_set_roundtrip();
     test_custom_codec_value_roundtrip_with_conditional_emit();
