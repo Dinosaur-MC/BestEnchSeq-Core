@@ -3,6 +3,7 @@
 #include "domain/orchestration/components/OutputFormatter.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/EnchInfo.h"
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -121,7 +122,9 @@ ExportResult ExportPipeline::run(
         switch (request.format) {
         case ExportRequest::Format::Json:
             output = OutputFormatter::format_json(
-                request.solutions, profile, request.mode);
+                request.solutions, profile, request.mode,
+                request.success, request.algorithm_used,
+                request.computation_time_ms);
             break;
         case ExportRequest::Format::Verbose:
             output = OutputFormatter::format_verbose(
@@ -151,4 +154,12 @@ ExportResult ExportPipeline::run(
     }
 
     return result;
+}
+
+ExportRequest::Format ExportPipeline::format_for_path(const std::string& path) {
+    auto ext = std::filesystem::path(path).extension().string();
+    for (auto& c : ext)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return ext == ".csv" ? ExportRequest::Format::Csv
+                         : ExportRequest::Format::Json;
 }
