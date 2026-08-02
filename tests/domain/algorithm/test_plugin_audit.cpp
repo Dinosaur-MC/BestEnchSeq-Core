@@ -349,7 +349,7 @@ void test_audit_get_report_builtin() {
     loader.load_builtin();
 
     // Built-in algorithms are NOT plugins, so no audit report.
-    auto *report = loader.get_audit_report("astar");
+    auto *report = loader.get_audit_report("dp_merge");
     expect(report == nullptr, "audit: built-in algo has no audit report");
 
     std::cout << "PASS: test_audit_get_report_builtin" << std::endl;

@@ -6,9 +6,9 @@
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
-#include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
+#include "astar/AStarAlgorithm.h"
 #include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
-#include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
+#include "dfs/DFSAlgorithm.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
 #include "domain/algorithm/types/ConfigTypes.h"
@@ -635,11 +635,12 @@ void test_loader_registration() {
     auto names = loader.list();
 
     expect(!names.empty(), "at least one built-in strategy should be registered");
-    expect(loader.contains("astar"), "astar should be registered");
-    expect(loader.contains("dfs"), "dfs should be registered");
+    expect(!loader.contains("astar"), "astar should NOT be registered (moved to plugin)");
+    expect(!loader.contains("dfs"), "dfs should NOT be registered (moved to plugin)");
     expect(loader.contains("hamming"), "hamming should be registered");
+    expect(loader.contains("dp_merge"), "dp_merge should be registered");
     expect(loader.contains("bb_dp"), "bb_dp should be registered");
-    expect(loader.size() >= 4, "at least 4 built-in strategies");
+    expect(loader.size() >= 3, "at least 3 built-in strategies");
 
     for (const auto& name : names) {
         auto algo = loader.create(name);

@@ -360,7 +360,7 @@ BenchConfig parse_cli(int argc, char* argv[]) {
             std::cout << "\nExamples:\n"
                       << "  forge_benchmark --group netherite\n"
                       << "  forge_benchmark --test netherite_sword,boots_full --alg dp_merge\n"
-                      << "  forge_benchmark --group armor --alg astar\n"
+                      << "  forge_benchmark --group armor --alg hamming\n"
                       << "  forge_benchmark --algo-dir build/plugins --group sword\n"
                       << "  forge_benchmark --group large\n";
             std::exit(0);

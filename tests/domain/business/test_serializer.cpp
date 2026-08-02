@@ -317,7 +317,7 @@ void test_serialize_solution() {
 
     // Metadata
     SolutionMetaData meta;
-    meta.algorithm_name    = "astar";
+    meta.algorithm_name    = "dp_merge";
     meta.algorithm_version = "1.0";
     meta.created_at        = std::chrono::system_clock::now();
     meta.computation_time  = std::chrono::milliseconds(500);
@@ -345,7 +345,7 @@ void test_serialize_solution() {
            "solution round-trip: platform");
 
     // Metadata
-    expect(s2.metadata.algorithm_name == "astar",
+    expect(s2.metadata.algorithm_name == "dp_merge",
            "solution round-trip: algorithm_name");
     expect(s2.metadata.algorithm_version == "1.0",
            "solution round-trip: algorithm_version");

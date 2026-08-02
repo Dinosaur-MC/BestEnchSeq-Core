@@ -21,8 +21,8 @@ void test_loader_contains() {
     AlgorithmLoader loader;
     loader.load_builtin();
 
-    expect(loader.contains("astar"), "contains: astar is available");
-    expect(loader.contains("dfs"), "contains: dfs is available");
+    expect(!loader.contains("astar"), "contains: astar is not built-in (moved to plugin)");
+    expect(!loader.contains("dfs"), "contains: dfs is not built-in (moved to plugin)");
     expect(loader.contains("hamming"), "contains: hamming is available");
     expect(!loader.contains("nonexistent_algo"), "contains: unknown algorithm absent");
 
@@ -35,13 +35,11 @@ void test_loader_create() {
 
     {
         auto algo = loader.create("astar");
-        expect(algo != nullptr, "create: astar instance not null");
-        expect(std::string(algo->name()) == "astar", "create: astar name matches");
+        expect(algo == nullptr, "create: astar absent (moved to plugin)");
     }
     {
         auto algo = loader.create("dfs");
-        expect(algo != nullptr, "create: dfs instance not null");
-        expect(std::string(algo->name()) == "dfs", "create: dfs name matches");
+        expect(algo == nullptr, "create: dfs absent (moved to plugin)");
     }
     {
         auto algo = loader.create("hamming");
@@ -81,8 +79,8 @@ void test_loader_double_load() {
 
     expect(second_size == first_size, "double load: size unchanged");
     expect(second_list.size() == first_list.size(), "double load: list size unchanged");
-    expect(loader.contains("astar"), "double load: astar still present");
-    expect(loader.contains("dfs"), "double load: dfs still present");
+    expect(!loader.contains("astar"), "double load: astar absent (moved to plugin)");
+    expect(!loader.contains("dfs"), "double load: dfs absent (moved to plugin)");
     expect(loader.contains("hamming"), "double load: hamming still present");
 
     std::cout << "PASS: test_loader_double_load" << std::endl;

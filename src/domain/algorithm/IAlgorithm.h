@@ -56,8 +56,8 @@ class IResolver;
 //   框架自动补充 algorithm_name、wall_ms。
 //   _diag 类型选择（按搜索范式，见规范 §3）：
 //     AlgorithmDiagnostics      确定性合成算法（Hamming、diff_first）
-//     SearchDiagnostics         展开式搜索，无 ItemPool（DFS）
-//     PoolSearchDiagnostics     有 ItemPool 的搜索（A*、IDA*）
+//     SearchDiagnostics         展开式搜索，无 ItemPool（DFS——插件）
+//     PoolSearchDiagnostics     有 ItemPool 的搜索（A*、IDA*——插件）
 //     PartitionDpDiagnostics    Catalan/分治 DP（bb_dp、dp_merge）
 //   公共核心必填（规范 §4）：status / solution_cost / normalized_explored_states。
 //   字段命名带范式前缀（dp_ / search_ / 插件名_），见规范 §6。

@@ -1,6 +1,6 @@
 #include "framework/test_utils.h"
-#include "domain/algorithm/_strategies/dfs/DFSStateSerializer.h"
-#include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
+#include "dfs/DFSStateSerializer.h"
+#include "dfs/DFSAlgorithm.h"
 #include <memory>
 #include <span>
 using namespace algorithm;

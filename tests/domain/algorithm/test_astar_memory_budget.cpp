@@ -1,5 +1,5 @@
 #include "framework/test_utils.h"
-#include "domain/algorithm/_strategies/astar/AStarMemoryBudget.h"
+#include "astar/AStarMemoryBudget.h"
 using namespace algorithm;
 
 

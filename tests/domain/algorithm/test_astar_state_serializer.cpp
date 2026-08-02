@@ -1,7 +1,7 @@
 #include "framework/test_utils.h"
-#include "domain/algorithm/_strategies/astar/AStarStateSerializer.h"
-#include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
-#include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
+#include "astar/AStarStateSerializer.h"
+#include "astar/AStarAlgorithm.h"
+#include "dfs/DFSAlgorithm.h"
 #include "domain/algorithm/serialization/Checkpoint.h"
 #include <memory>
 #include <span>
