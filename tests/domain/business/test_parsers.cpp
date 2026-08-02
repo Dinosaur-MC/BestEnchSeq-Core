@@ -440,6 +440,26 @@ void test_csv_parse_multiple_rows() {
     std::cout << "PASS: test_csv_parse_multiple_rows" << std::endl;
 }
 
+// ─── test_csv_parse_is_treasure ─────────────────────────────────────────
+// B-T19: the is_treasure column (exported by EnchSerializer) is read back so a
+// CSV round-trip preserves the treasure flag instead of defaulting to false.
+
+void test_csv_parse_is_treasure() {
+    std::string csv =
+        "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
+        "minecraft:mending,Mending,1,1,4,true,infinity,#minecraft:durability\n"
+        "minecraft:sharpness,Sharpness,5,5,1,false,,\n";
+
+    auto enchantments = NativeCsvParser::parse(csv);
+
+    expect_eq(static_cast<int>(enchantments.size()), 2,
+              "csv_treasure: 2 enchantments");
+    expect(enchantments[0].is_treasure, "csv_treasure: mending is_treasure true");
+    expect(!enchantments[1].is_treasure, "csv_treasure: sharpness is_treasure false");
+
+    TEST_PASS("test_csv_parse_is_treasure");
+}
+
 // ============================================================================
 // Section C — McOfficialParser
 //
@@ -819,6 +839,7 @@ int main() {
         test_csv_parse_with_exclusive();
         test_csv_parse_empty_header_only();
         test_csv_parse_multiple_rows();
+        test_csv_parse_is_treasure();
 
         // Section C — McOfficialParser
         test_mc_single_enchantment_basic();

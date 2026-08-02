@@ -116,12 +116,18 @@ parse_csv_rows(const csv::CsvTable& rows) {
             applicable_items.assign(items.begin(), items.end());  // 透传，不展开
         }
 
+        bool is_treasure = false;
+        std::string treasure_str = get_field(fields, "is_treasure");
+        if (!treasure_str.empty())
+            is_treasure = (treasure_str == "true" || treasure_str == "1");
+
         EnchantmentData ench;
         ench.id               = id;
         ench.display_name     = std::move(name);
         ench.multiplier       = multiplier;
         ench.max_level        = max_level;
         ench.limited_level    = limited_level;
+        ench.is_treasure      = is_treasure;
         ench.exclusive_with.assign(exclusive_set.begin(), exclusive_set.end());
         ench.applicable_to    = std::move(applicable_items);
         enchantments.push_back(std::move(ench));
