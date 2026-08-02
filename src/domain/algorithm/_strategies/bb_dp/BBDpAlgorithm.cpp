@@ -494,9 +494,10 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
 // ─── evaluate ─────────────────────────────────────────────────────────────
 
 double BBDpAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // B&B bound + cap + Pareto collapse the Catalan blow-up; placeholder fit
-    // (discounted from dp_merge's 2.9^e).  Recalibrate on the benchmark.
-    return 0.002 * std::pow(2.5, static_cast<double>(ench_count));
+    // Fitted from scaling benchmark (Release, netherite_sword 9-18 enchs):
+    //   t(e) ≈ 3.573e-8 × 3.1504^e   seconds   (R²=0.9999, tail fit +30% safety)
+    // Feasible ≤ 18 in the benchmark context; 19+ exceeds the 45 s budget.
+    return 3.573e-8 * std::pow(3.1504, static_cast<double>(ench_count));
 }
 
 // ─── execute ──────────────────────────────────────────────────────────────

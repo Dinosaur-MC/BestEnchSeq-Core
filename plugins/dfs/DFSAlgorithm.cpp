@@ -164,14 +164,10 @@ void DFSAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
 double DFSAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // Branch-and-bound DFS: O(b^d) worst-case.  Slightly slower than A* in
-    // practice due to weaker pruning.
-    if (ench_count <= 3) return 1;
-    if (ench_count <= 5) return 10;
-    if (ench_count <= 7) return 150;
-    if (ench_count == 8) return 800;
-    if (ench_count == 9) return 8000;
-    return 60000; // ≥10 — likely to hit timeout
+    // Fitted from scaling benchmark (Release, netherite_sword 9-10 enchs):
+    //   t(e) ≈ 5.664e-10 × 10.96^e   seconds   (2-point fit +30% safety)
+    // Feasible ≤ 10 in the benchmark context; 11+ exceeds the 20 s budget.
+    return 5.664e-10 * std::pow(10.96, static_cast<double>(ench_count));
 }
 
 

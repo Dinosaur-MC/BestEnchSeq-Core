@@ -9,6 +9,7 @@
 #include "common/io/json.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -191,83 +192,71 @@ static std::vector<std::string> split_profiles(const std::string& group_name) {
     return names;
 }
 
-// ─── Algorithm enchant limit matrix ───────────────────────────────────
+// ─── Dynamic tier matrix (generated from each algorithm's evaluate()) ──
 //
-// Each entry defines the maximum enchant count an algorithm can handle
-// Each algorithm has a row across tier levels 0..6.  For a given --tier N,
-// the algorithm runs only when ench_count ≤ row[N].  -1 = unlimited.
-// Higher tier = more permissive; lower tier = more restrictive.
+// Replaces the old hand-maintained ALGO_LIMITS table.  Tier T means
+// "single-case time budget = 10^T ms" (T=0 → 1 ms … T=8 → 100 s).  An
+// algorithm's cell at tier T = the largest enchant count e whose predicted
+// time evaluate(e) fits the budget, so the matrix is regenerated from the
+// loaded algorithms' fitted evaluate() curves.
 //
-//              tier→ 0   1   2   3   4   5   6   ...
-struct AlgoLimit {
-    const char* name;
-    int8_t max_ench_by_tier[9];   // -1 = unlimited
-};
+//   tier→   0    1    2    3    4    5    6    7    8
+//   budget  1ms  10ms 100ms 1s   10s  100s 1e3s 1e4s 1e5s
 
-static constexpr AlgoLimit ALGO_LIMITS[] = {
-    // Fastest: handle any enchant count instantly
-    {"hamming",          {-1, -1, -1, -1, -1, -1, -1, -1, -1}},
-    {"difficulty_first", {-1, -1, -1, -1, -1, -1, -1, -1, -1}},
-    {"penalty_balance",  {-1, -1, -1, -1, -1, -1, -1, -1, -1}},
-    // Medium: near-optimal, moderate speed
-    {"dp_merge",         { 8,  10,  12,14, 16, 16, 16, 16, 16}},
-    // Exact DP with B&B bound + Pareto + optional per-step cap: faster than
-    // dp_merge, handles more enchantments (direct mode).
-    {"bb_dp",            {10,  12,  14,16, 18, 20, 24, 24, 28}},
-    // Slow: exact search, practical up to 9 enchants
-    {"astar",            { 7,  9,  10,  10, 11, 12, 13, 14, 15}},
-    {"idastar",          { 7,  9,  9,  9, 10, 10, 12, 12, 14}},
-    // Slowest: dfs caps lower by default
-    {"dfs",              { 7,  8,  9,  9,  9,  9, 10, 10, 12}},
-};
+static constexpr int TIER_LEVELS = 9;    // 0..8
+static constexpr int DEFAULT_TIER = 3;   // 1 s budget
+static constexpr int TIER_MAX_ENCH = 40; // matrix scan ceiling
 
-static constexpr int TIER_LEVELS = 9;  // 0..8
-static constexpr int DEFAULT_TIER = 2;
-
-/// Look up an algorithm's limit entry (nullptr if unknown).
-static const AlgoLimit* find_limit(const std::string& name) {
-    for (const auto& limit : ALGO_LIMITS)
-        if (name == limit.name) return &limit;
-    return nullptr;
+/// Tier time budget in seconds == 10^(T-3) == 10^T ms.
+static double tier_budget_sec(int tier) {
+    return std::pow(10.0, static_cast<double>(tier - 3));
 }
 
-/// Get the "main" name from a chain "warmup+main".
-static std::string main_name(const std::string& algo) {
-    auto p = algo.find('+');
-    return (p != std::string::npos) ? algo.substr(p + 1) : algo;
+/// Predicted wall time (seconds) for \p algo at \p ench_count.
+static double predicted_sec(const algorithm::IAlgorithm& algo, int ench_count) {
+    return algo.evaluate(static_cast<int16_t>(ench_count));
 }
 
-/// Check whether \p algo should be skipped for test case with
-/// \p ench_count at configured \p tier.  Returns false when \p no_skip.
-static bool should_skip(const std::string& algo, int ench_count,
-                         int tier, bool no_skip) {
+/// Largest e in [0, TIER_MAX_ENCH] whose predicted time fits the tier budget
+/// (evaluate() is monotonic in the enchant count → binary search).
+static int max_ench_for_tier(const algorithm::IAlgorithm& algo, int tier) {
+    double budget = tier_budget_sec(tier);
+    int lo = 0, hi = TIER_MAX_ENCH;
+    while (lo < hi) {
+        int mid = (lo + hi + 1) / 2;
+        if (predicted_sec(algo, mid) <= budget) lo = mid;
+        else hi = mid - 1;
+    }
+    return lo;
+}
+
+/// Check whether \p algo should be skipped for a case with \p ench_count at
+/// \p tier (predicted time exceeds the tier budget).  False when \p no_skip.
+static bool should_skip(const algorithm::IAlgorithm& algo, int ench_count,
+                        int tier, bool no_skip) {
     if (no_skip) return false;
-    auto* lim = find_limit(main_name(algo));
-    if (!lim) return false;
-    int8_t limit = lim->max_ench_by_tier[tier];
-    return limit >= 0 && ench_count > limit;
+    return predicted_sec(algo, ench_count) > tier_budget_sec(tier);
 }
 
-/// Print the algorithm limit matrix to stdout.
-static void print_algo_limits() {
-    std::cout << "\nAlgorithm enchant limits (--tier N selects column):\n";
+/// Print the dynamically generated tier matrix for all loaded algorithms.
+static void print_algo_limits(const algorithm::AlgorithmLoader& loader) {
+    std::cout << "\nDynamic tier matrix (tier T = 10^T ms budget; from evaluate()):\n";
     std::cout << "  " << std::left << std::setw(20) << "Algorithm";
     for (int t = 0; t < TIER_LEVELS; ++t)
         std::cout << std::right << std::setw(4) << t;
     std::cout << "\n";
     std::cout << "  " << std::string(4 * TIER_LEVELS + 20, '-') << "\n";
-    for (const auto& limit : ALGO_LIMITS) {
-        std::cout << "  " << std::left << std::setw(20) << limit.name;
-        for (int t = 0; t < TIER_LEVELS; ++t) {
-            if (limit.max_ench_by_tier[t] < 0)
-                std::cout << std::right << std::setw(4) << "--";
-            else
-                std::cout << std::right << std::setw(4) << (int)limit.max_ench_by_tier[t];
-        }
+    for (const auto& name : loader.list()) {
+        auto algo = loader.create(name);
+        if (!algo) continue;
+        std::cout << "  " << std::left << std::setw(20) << name;
+        for (int t = 0; t < TIER_LEVELS; ++t)
+            std::cout << std::right << std::setw(4) << max_ench_for_tier(*algo, t);
         std::cout << "\n";
     }
-    std::cout << "  (default tier " << DEFAULT_TIER
-              << ".  --no-skip disables all limits.)\n";
+    std::cout << "  (default tier " << DEFAULT_TIER << " = "
+              << tier_budget_sec(DEFAULT_TIER) << " s budget. "
+              << "--no-skip disables all limits.)\n";
 }
 
 // ─── Helper: comma-separated list → unordered_set ───
@@ -286,6 +275,7 @@ struct BenchConfig {
     std::unordered_set<std::string> raw_algos;  // from --alg; empty = all loaded
     std::string algo_dir;                       // plugin dir, empty = none
     int tier = DEFAULT_TIER;                    // 0..6 permissiveness level
+    int max_time_sec = 600;                     // per-algorithm search budget (seconds)
     bool list_only = false;
     bool no_skip = false;
 };
@@ -346,6 +336,11 @@ BenchConfig parse_cli(int argc, char* argv[]) {
             cfg.tier = t;
         } else if (arg == "--no-skip") {
             cfg.no_skip = true;
+        } else if (arg == "--max-time") {
+            if (i + 1 >= argc) die("--max-time requires a value (seconds)");
+            int s = std::atoi(argv[++i]);
+            if (s <= 0) die("--max-time must be a positive integer (seconds)");
+            cfg.max_time_sec = s;
         } else if (arg == "--help") {
             std::cout << "Usage: forge_benchmark [options]\n"
                       << "  --list                List test cases, groups & algorithm limits\n"
@@ -354,9 +349,15 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                       << "  --alg   <names>       Comma-separated algorithm names (--algo also accepted)\n"
                       << "  --algo-dir <dir>      Load algorithm plugins from directory\n"
                       << "  --tier <num>          Algorithm permissiveness level (0-" << TIER_LEVELS - 1 << ", default " << DEFAULT_TIER << ")\n"
+                      << "  --max-time <secs>     Per-algorithm search time budget (default 600s)\n"
                       << "  --no-skip             Run all algorithms without enchant limits\n"
                       << "  --help                This help\n";
-            print_algo_limits();
+            std::cout << "\nDynamic tier matrix (see --list): tier T = 10^T ms "
+                      << "budget, regenerated from each loaded algorithm's\n"
+                      << "  evaluate() curve.  Algorithms whose predicted runtime "
+                      << "exceeds the tier budget are SKIPped\n"
+                      << "  (--no-skip disables).  Default tier " << DEFAULT_TIER
+                      << " = " << tier_budget_sec(DEFAULT_TIER) << " s.\n";
             std::cout << "\nExamples:\n"
                       << "  forge_benchmark --group netherite\n"
                       << "  forge_benchmark --test netherite_sword,boots_full --alg dp_merge\n"
@@ -444,7 +445,7 @@ void print_result(const algorithm::AlgorithmOutput& out,
 void run_case(const TestCase& tc, const Profile& profile,
               const std::vector<std::string>& algos,
               const algorithm::AlgorithmLoader& loader,
-              int tier, bool no_skip) {
+              int tier, bool no_skip, int max_time_sec) {
     const auto& G_ENCH = profile.ench();
     const auto& G_EQ   = profile.eq();
 
@@ -542,7 +543,7 @@ void run_case(const TestCase& tc, const Profile& profile,
     // ── Build AlgorithmInput via from_domain ───────────────────────────
     algorithm::AlgorithmInput algo_input;
     algo_input.config.forge.platform = MCE::Java;
-    algo_input.config.search.max_search_time = std::chrono::seconds(60 * 10);
+    algo_input.config.search.max_search_time = std::chrono::seconds(max_time_sec);
     algo_input.registry = std::move(ench_reg);
 
     {
@@ -578,12 +579,20 @@ void run_case(const TestCase& tc, const Profile& profile,
             std::string warmup_name = algo_name.substr(0, plus);
             std::string main_name   = algo_name.substr(plus + 1);
 
-            if (should_skip(main_name, static_cast<int>(tc.wanted.size()), tier, no_skip)) {
-                std::cout << "SKIP (too many enchants)" << std::endl;
+            auto main_algo = loader.create(main_name);
+            if (!main_algo) {
+                std::cout << "no such algorithm" << std::endl;
+                continue;
+            }
+            if (should_skip(*main_algo, static_cast<int>(tc.wanted.size()),
+                            tier, no_skip)) {
+                std::cout << "SKIP (predicted "
+                          << predicted_sec(*main_algo, tc.wanted.size())
+                          << "s > " << tier_budget_sec(tier) << "s budget)"
+                          << std::endl;
                 continue;
             }
             try {
-                auto main_algo = loader.create(main_name);
                 algorithm::AlgorithmExecutor executor(std::move(main_algo));
                 algorithm::AlgorithmInput run_input = algo_input;
                 executor.start(std::move(run_input),
@@ -603,12 +612,19 @@ void run_case(const TestCase& tc, const Profile& profile,
             continue;
         }
 
-        if (should_skip(algo_name, static_cast<int>(tc.wanted.size()), tier, no_skip)) {
-            std::cout << "SKIP (too many enchants)" << std::endl;
+        auto algo = loader.create(algo_name);
+        if (!algo) {
+            std::cout << "no such algorithm" << std::endl;
+            continue;
+        }
+        if (should_skip(*algo, static_cast<int>(tc.wanted.size()), tier, no_skip)) {
+            std::cout << "SKIP (predicted "
+                      << predicted_sec(*algo, tc.wanted.size())
+                      << "s > " << tier_budget_sec(tier) << "s budget)"
+                      << std::endl;
             continue;
         }
         try {
-            auto algo = loader.create(algo_name);
             algorithm::AlgorithmExecutor executor(std::move(algo));
             algorithm::AlgorithmInput run_input = algo_input;
             executor.start(std::move(run_input));
@@ -628,7 +644,7 @@ void run_case(const TestCase& tc, const Profile& profile,
     }
 }
 
-void list_cases() {
+void list_cases(const algorithm::AlgorithmLoader& loader) {
     int total = 0;
     for (const auto& g : g_groups) {
         auto display = g.name.substr(0, g.name.find('|'));
@@ -640,7 +656,7 @@ void list_cases() {
         std::cout << "\n";
     }
     std::cout << "Total: " << total << " test cases\n";
-    print_algo_limits();
+    print_algo_limits(loader);
 }
 
 } // anonymous namespace
@@ -657,19 +673,8 @@ int main(int argc, char* argv[]) {
 
     BenchConfig cfg = parse_cli(argc, argv);
 
-    if (cfg.list_only) {
-        list_cases();
-        return 0;
-    }
-
-    std::cout << "Time: "
-              << std::chrono::current_zone()->to_local(
-                     std::chrono::system_clock::now())
-              << std::endl;
-
-    // ═════════════════════════════════════════════════════════════════════
-    // Load algorithms: built-in + optional plugins
-    // ═════════════════════════════════════════════════════════════════════
+    // Load algorithms before any branch — the dynamic tier matrix (--list)
+    // and the skip checks both read evaluate() from loaded instances.
     algorithm::AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -684,6 +689,16 @@ int main(int argc, char* argv[]) {
                       << "' not found, skipping plugins" << std::endl;
         }
     }
+
+    if (cfg.list_only) {
+        list_cases(loader);
+        return 0;
+    }
+
+    std::cout << "Time: "
+              << std::chrono::current_zone()->to_local(
+                     std::chrono::system_clock::now())
+              << std::endl;
 
     std::vector<std::string> algos = resolve_algos(cfg, loader);
     if (algos.empty()) {
@@ -751,7 +766,8 @@ int main(int argc, char* argv[]) {
         std::cout << "\n" << qc.tc->name << " (" << qc.tc->wanted.size()
                   << " enchants, max " << qc.tc->max_cost << "L):" << std::endl;
         try {
-            run_case(*qc.tc, *qc.profile, algos, loader, cfg.tier, cfg.no_skip);
+            run_case(*qc.tc, *qc.profile, algos, loader, cfg.tier, cfg.no_skip,
+                     cfg.max_time_sec);
         } catch (const std::exception& e) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }

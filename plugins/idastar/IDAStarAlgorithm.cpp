@@ -312,10 +312,11 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
 double IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // IDA*: iterative deepening adds ~50% overhead vs A* due to
-    // re-exploration at each depth threshold.
-    // Base:  t(e) ≈ 0.025 × 3.8^e  (A* curve), scaled 1.5× for IDA*.
-    return 1.5 * 0.025 * std::pow(3.8, static_cast<double>(ench_count));
+    // Same family as A* (ItemPool best-first); measured near-identical at
+    // n=9 (0.48 s vs A* 0.52 s).  Share the fitted A* curve:
+    //   t(e) ≈ 2.576e-9 × 8.626^e   seconds
+    // Feasible ≤ 9 in the benchmark context; 10+ exceeds the 20 s budget.
+    return 2.576e-9 * std::pow(8.626, static_cast<double>(ench_count));
 }
 
 

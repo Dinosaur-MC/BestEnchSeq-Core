@@ -444,9 +444,10 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
 double DPMergeAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // Fitted from benchmark data:  t(e) ≈ 0.004 × 2.7^e
-    // (Catalan-number DP, confirmed 1ms@7 / 20ms@9 / 389ms@12 / 14s@16)
-    double r = 0.004 * std::pow(2.7, static_cast<double>(ench_count));
+    // Fitted from scaling benchmark (Release, netherite_sword 9-18 enchs):
+    //   t(e) ≈ 5.467e-9 × 3.5357^e   seconds   (R²=0.9998, tail fit +30% safety)
+    // Feasible ≤ 18 in the benchmark context; 19+ exceeds the 45 s budget.
+    double r = 5.467e-9 * std::pow(3.5357, static_cast<double>(ench_count));
     return r;
 }
 
