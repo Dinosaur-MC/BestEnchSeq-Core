@@ -1,14 +1,10 @@
 #include "EquipmentTag.h"
+#include "domain/business/schemas/EquipmentSchema.h"
 
 Json EquipmentTag::to_json() const {
-    return Json::object()
-        .set("id", id.str())
-        .set("name", name);
+    return business::schema::EquipTagJsonSchema::serialize(*this);
 }
 
 void EquipmentTag::from_json(const Json& json) {
-    if (json.has("id"))
-        id = NSID(json["id"].as<std::string>());
-    if (json.has("name"))
-        name = json["name"].as<std::string>();
+    business::schema::EquipTagJsonSchema::parse_or_throw(json, *this);
 }

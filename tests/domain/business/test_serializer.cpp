@@ -1,5 +1,6 @@
 #include "framework/test_utils.h"
 #include "domain/business/components/Serializer.h"
+#include "domain/business/schemas/EnchInfoSchema.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 
 // ─── test_serialize_ench ───────────────────────────────────────────────
@@ -68,6 +69,30 @@ void test_serialize_enchinfo() {
            "enchinfo round-trip: applicable contains axe");
 
     std::cout << "PASS: test_serialize_enchinfo" << std::endl;
+}
+
+// ─── test_enchinfo_platform_key ────────────────────────────────────────
+// B-#10: EnchInfo::to_json emits the canonical 'platform' key (was
+// 'supported_platform'). from_json reads both — legacy profiles with the old
+// key still load.
+
+void test_enchinfo_platform_key() {
+    EnchInfo info{NSID("minecraft:sharpness"), "Sharpness", MCE::Bedrock,
+                  5, 5, 1, false, {}, {}};
+    Json j;
+    j << info;
+    expect(j.has("platform"), "EnchInfo::to_json emits canonical 'platform' key");
+    expect(!j.has("supported_platform"), "no legacy supported_platform key on serialize");
+    expect(j["platform"].as<std::string>() == "bedrock", "platform value");
+    // legacy alias read-back
+    Json legacy = Json::object()
+        .set("id", Json(std::string("minecraft:sharpness")))
+        .set("supported_platform", Json(std::string("all")));
+    EnchInfo i2;
+    ds::ErrorList e;
+    expect(business::schema::EnchJsonSchema::parse(legacy, i2, e), "legacy alias accepted");
+    expect(i2.supported_platform == MCE::All, "legacy supported_platform maps to All");
+    TEST_PASS("test_enchinfo_platform_key");
 }
 
 // ─── test_serialize_enchinfo_min_cost ──────────────────────────────────
@@ -661,6 +686,7 @@ int main() {
     try {
         test_serialize_ench();
         test_serialize_enchinfo();
+        test_enchinfo_platform_key();
         test_serialize_enchinfo_min_cost();
         test_serialize_enchset();
         test_serialize_equipment();
