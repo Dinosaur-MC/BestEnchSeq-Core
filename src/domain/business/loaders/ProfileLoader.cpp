@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 // ============================================================================
@@ -46,41 +45,16 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         }
 
         // Phase 2: two-phase loading — build the vanilla universe into
-        // TEMPORARY registries (tags + equipment + enchantments), then
-        // cross-validate the profile's DTOs on top of the union.  A user
-        // Profile must NOT contain vanilla's registries as its own, so after
-        // validation the Profile keeps ONLY its own enchantments/equipments;
-        // the vanilla tag universe is retained so the profile's `#tag`
-        // supported_items references stay interpretable downstream.
-        RegistryLoader loader;
-        TagRegistry tag_reg;          // vanilla universe: tags
-        EquipmentRegistry eq_reg;     // vanilla universe: equipment
-        EnchantmentRegistry ench_reg; // vanilla universe + profile content
-        besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
-        loader.resolve_with_base(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
-
-        // Filter the union back to the profile's own content (ids come from
-        // the profile's raw DTOs; NSID() normalization matches from_dto).
-        std::unordered_set<NSID> profile_ench_ids;
-        for (const auto& d : ench_data)
-            profile_ench_ids.insert(NSID(d.id));
-        std::unordered_set<NSID> profile_eq_ids;
-        for (const auto& d : eq_data)
-            profile_eq_ids.insert(NSID(d.id));
-
-        EnchantmentRegistry profile_ench;
-        for (const auto& [id, info] : ench_reg.data())
-            if (profile_ench_ids.count(id) != 0)
-                profile_ench.insert(info);
-        EquipmentRegistry profile_eq;
-        for (const auto& [id, eq] : eq_reg.data())
-            if (profile_eq_ids.count(id) != 0)
-                profile_eq.insert(eq);
+        // temporary registries, cross-validate the profile's DTOs on top of the
+        // union, then filter back to the profile's own content.  The vanilla
+        // tag universe is retained so the profile's `#tag` supported_items
+        // references stay interpretable downstream.
+        auto own = RegistryLoader::resolve_own_content(ench_data, eq_data);
 
         // Construct Profile via full-parameter constructor.
         std::string stem = path.stem().string();
-        profile = Profile(ProfileMetadata(NSID(stem)), std::move(profile_ench),
-                          std::move(profile_eq), std::move(tag_reg));
+        profile = Profile(ProfileMetadata(NSID(stem)), std::move(own.ench),
+                          std::move(own.eq), std::move(own.tags));
         // Restore the declared dependencies parsed in Phase 1b.
         profile.set_dependencies(std::move(dependencies));
         // Attach the vanilla tag universe resolver so the profile's `#tag`

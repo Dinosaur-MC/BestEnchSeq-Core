@@ -1,6 +1,7 @@
 #include "RegistryLoader.h"
 #include "domain/business/components/Serializer.h"
 #include "domain/business/parsers/ParserShared.h"
+#include "builtin/DataLoader.h"
 #include "common/CommonTypes.h"
 #include "common/log/log.hpp"
 
@@ -284,4 +285,42 @@ void RegistryLoader::populate(
 {
     from_dto(eq_reg, tag_reg, equipments);
     from_dto(ench_reg, tag_reg, eq_reg, enchants);
+}
+
+// ============================================================================
+// Full pipeline (vanilla universe → own content)
+// ============================================================================
+
+RegistryLoader::OwnContent RegistryLoader::resolve_own_content(
+    const std::vector<business::loader::EnchantmentData>& enchants,
+    const std::vector<business::loader::EquipmentData>& equipments)
+{
+    // Seed the vanilla universe into temporary registries, then cross-validate
+    // the source DTOs on top of the union.  A profile must NOT keep vanilla's
+    // registries as its own, so after validation we filter back to the DTOs'
+    // own ids (NSID() normalization matches from_dto).
+    RegistryLoader loader;
+    TagRegistry tag_reg;          // vanilla universe: tags
+    EquipmentRegistry eq_reg;     // vanilla universe: equipment
+    EnchantmentRegistry ench_reg; // vanilla universe + source content
+    besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
+    loader.resolve_with_base(enchants, equipments, tag_reg, eq_reg, ench_reg);
+
+    std::unordered_set<NSID> ench_ids;
+    for (const auto& d : enchants)
+        ench_ids.insert(NSID(d.id));
+    std::unordered_set<NSID> eq_ids;
+    for (const auto& d : equipments)
+        eq_ids.insert(NSID(d.id));
+
+    EnchantmentRegistry own_ench;
+    for (const auto& [id, info] : ench_reg.data())
+        if (ench_ids.count(id) != 0)
+            own_ench.insert(info);
+    EquipmentRegistry own_eq;
+    for (const auto& [id, eq] : eq_reg.data())
+        if (eq_ids.count(id) != 0)
+            own_eq.insert(eq);
+
+    return OwnContent{std::move(own_ench), std::move(own_eq), std::move(tag_reg)};
 }

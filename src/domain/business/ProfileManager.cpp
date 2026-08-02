@@ -1,4 +1,5 @@
 #include "ProfileManager.h"
+#include "domain/business/ProfileNaming.h"
 #include "domain/business/components/RegistryHelper.h"
 #include "domain/business/components/Serializer.h"  // Profile << Json (snapshot)
 #include "domain/business/loaders/ProfileLoader.h"
@@ -19,16 +20,10 @@
 #include <string_view>
 #include <unordered_set>
 
-// ── Internal helpers ──────────────────────────────────────────────────
+// ── Datapack → profile naming (declared in ProfileNaming.h) ───────────
 
-namespace {
-
-/// NSID allowed character set (mirrors CommonTypes.cpp validate_id).
-/// pack.mcmeta `pack.id` / directory stems may contain characters outside this
-/// set (e.g. "More Enchants 1.4" contains spaces and dots) which are INVALID
-/// in an NSID — replace them with `_`.  Also guard against a leading digit
-/// (NSID::validate_id rejects a digit as the first character).
 std::string sanitize_nsid_name(std::string raw) {
+    // NSID allowed character set (mirrors CommonTypes.cpp validate_id).
     static constexpr std::string_view valid =
         "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-/";
     std::string out;
@@ -41,13 +36,12 @@ std::string sanitize_nsid_name(std::string raw) {
     }
     if (out.empty())
         out = "datapack";
+    // NSID::validate_id rejects a leading digit — prefix to disambiguate.
     if (std::isdigit(static_cast<unsigned char>(out[0])))
         out.insert(out.begin(), '_');
     return out;
 }
 
-/// Read pack.mcmeta `pack.id` (if present), else the datapack directory stem —
-/// both sanitized into a valid NSID name.
 std::string derive_datapack_name(const std::filesystem::path& dir) {
     std::string raw = dir.filename().string();
     const auto mcmeta_path = dir / "pack.mcmeta";
@@ -63,10 +57,12 @@ std::string derive_datapack_name(const std::filesystem::path& dir) {
             // Malformed pack.mcmeta → fall back to the directory stem.
         }
     }
-    return sanitize_nsid_name(raw);
+    std::string out = sanitize_nsid_name(std::move(raw));
+    // A datapack must never replace the injected vanilla base profile.
+    if (out == "vanilla")
+        out = "vanilla_datapack";
+    return out;
 }
-
-} // namespace
 
 Profile* ProfileManager::_find(const NSID& name) {
     auto it = _profiles.find(name);
@@ -392,61 +388,39 @@ bool ProfileManager::load_datapack(const std::filesystem::path& dir) {
         return false;
 
     try {
-        // The vanilla root is the implicit dependency (NOT declared via
-        // `dependencies`); inject it so cross_validate has a base universe.
-        if (!exists(NSID("vanilla")))
-            create(NSID("vanilla"));
-
-        const NSID name(derive_datapack_name(dir));
+        // All fallible work (parse, two-phase resolve, NSID/profile
+        // construction) happens strictly ABOVE the manager commit point below,
+        // so a failure never leaves a stray vanilla or half-registered profile.
 
         // Phase 1: parse the datapack's own DTOs.
         auto [ench_data, eq_data] = McOfficialParser::parse(dir);
 
         // Phase 2: two-phase loading — build the vanilla universe into
-        // TEMPORARY registries, then cross-validate the datapack's DTOs on top
-        // of the union (mirrors ProfileLoader::load_into).  The datapack keeps
-        // ONLY its own enchantments/equipments; the vanilla tag universe
-        // (tag_reg) is retained so `#tag` supported_items resolve downstream.
-        RegistryLoader loader;
-        TagRegistry tag_reg;          // vanilla universe: tags
-        EquipmentRegistry eq_reg;     // vanilla universe: equipment
-        EnchantmentRegistry ench_reg; // vanilla universe + datapack content
-        besq::data::load_builtin_data(tag_reg, ench_reg, eq_reg);
-        loader.resolve_with_base(ench_data, eq_data, tag_reg, eq_reg, ench_reg);
+        // temporary registries, cross-validate the datapack's DTOs on top, then
+        // filter back to the datapack's own content.  The vanilla tag universe
+        // is retained so `#tag` supported_items references resolve downstream.
+        auto own = RegistryLoader::resolve_own_content(ench_data, eq_data);
 
-        // Filter the union back to the datapack's own content.
-        std::unordered_set<NSID> profile_ench_ids;
-        for (const auto& d : ench_data)
-            profile_ench_ids.insert(NSID(d.id));
-        std::unordered_set<NSID> profile_eq_ids;
-        for (const auto& d : eq_data)
-            profile_eq_ids.insert(NSID(d.id));
-
-        EnchantmentRegistry profile_ench;
-        for (const auto& [id, info] : ench_reg.data())
-            if (profile_ench_ids.count(id) != 0)
-                profile_ench.insert(info);
-        EquipmentRegistry profile_eq;
-        for (const auto& [id, eq] : eq_reg.data())
-            if (profile_eq_ids.count(id) != 0)
-                profile_eq.insert(eq);
+        const NSID name(derive_datapack_name(dir));
 
         // Construct the Profile and attach the builtin tag resolver.
-        Profile profile(ProfileMetadata(name), std::move(profile_ench),
-                        std::move(profile_eq), std::move(tag_reg));
+        Profile profile(ProfileMetadata(name), std::move(own.ench),
+                        std::move(own.eq), std::move(own.tags));
         profile.set_tag_resolver(besq::data::make_builtin_tag_resolver());
 
-        // Register (replace-on-conflict) and rebuild the dependency graph.
+        // ── COMMIT POINT ──  From here the manager is mutated; nothing below
+        // can fail in a way that leaves a half-registered profile behind.
+        // The vanilla root is the implicit dependency (NOT declared via
+        // `dependencies`); inject it so cross_validate has a base universe.
+        if (!exists(NSID("vanilla")))
+            create(NSID("vanilla"));
+
         if (exists(name))
-            remove(name);
+            remove(name);  // replace-on-conflict
         _profiles[name] = std::make_unique<Profile>(std::move(profile));
+
         _build_graph();
-
-        // Cross-validate the datapack's supported_items refs against
-        // (vanilla ∪ target's own vanilla tag universe).
-        cross_validate(name);
-
-        _effective_cache.clear();
+        cross_validate(name);  // clears _effective_cache
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to load datapack from '%s': %s", dir.string().c_str(), e.what());
@@ -478,9 +452,11 @@ size_t ProfileManager::cross_validate(const NSID& profile) {
     collect(NSID("vanilla"));
     for (const auto& d : deps)
         collect(d);
-    // A datapack keeps the vanilla tag universe in its OWN tags registry, so
-    // its `#tag` supported_items references must also validate against its own
-    // equipment/tags (self-contained datapack tags resolve here too).
+    // The target's own profile re-contributes its own equipment (so concrete
+    // item refs it defines resolve) and re-adds the vanilla tag universe that a
+    // loaded profile retains in its own tags registry.  NOTE: this does NOT
+    // make datapack-defined custom `#tags` resolve — McOfficialParser does not
+    // retain datapack tag definitions in the profile's tags registry.
     collect(profile);
 
     // Drop supported_items refs that fail validation; drop the whole

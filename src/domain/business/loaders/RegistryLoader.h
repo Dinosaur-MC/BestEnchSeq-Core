@@ -86,6 +86,26 @@ public:
         EquipmentRegistry& eq_reg,
         EnchantmentRegistry& ench_reg);
 
+    // ── Full pipeline (vanilla universe → own content) ─────────────────
+
+    /// The registries a profile should keep as ITS OWN after two-phase loading:
+    /// only the enchantments/equipments declared by the source DTOs, plus the
+    /// full vanilla TAG universe (retained so `#tag` supported_items references
+    /// stay interpretable downstream).
+    struct OwnContent {
+        EnchantmentRegistry ench;
+        EquipmentRegistry eq;
+        TagRegistry tags;
+    };
+
+    /// Two-phase load shared by ProfileLoader and ProfileManager::load_datapack:
+    /// seed the vanilla universe into temporary registries, cross-validate
+    /// \p enchants / \p equipments on top via resolve_with_base(), then filter
+    /// the union back to the DTOs' own ids.  Returns the own-content registries.
+    static OwnContent resolve_own_content(
+        const std::vector<business::loader::EnchantmentData>& enchants,
+        const std::vector<business::loader::EquipmentData>& equipments);
+
 private:
     /// Shared equipment-then-enchantment populate step used by both resolve()
     /// and resolve_with_base().

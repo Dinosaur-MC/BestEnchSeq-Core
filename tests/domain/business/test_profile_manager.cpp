@@ -1,10 +1,12 @@
 #include "framework/test_utils.h"
 #include "domain/business/ProfileManager.h"
+#include "domain/business/ProfileNaming.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/components/TagResolver.h"
+#include "domain/business/components/FormatDetector.h"
 #include "common/io/json.h"
 #include "common/io/FileUtils.hpp"
 
@@ -612,6 +614,142 @@ void test_pm_load_directory_with_datapack() {
     TEST_PASS("test_pm_load_directory_with_datapack");
 }
 
+// ─── Test: load_datapack on a dir WITHOUT pack.mcmeta ───────────────────
+
+void test_pm_load_datapack_no_mcmeta() {
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_nomcmeta_" + std::to_string(++counter));
+    // Datapack-like data dir, but NO pack.mcmeta → not a datapack.
+    std::filesystem::create_directories(dir / "data" / "x" / "enchantment");
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(!ok, "load_datapack returns false when pack.mcmeta is absent");
+    expect(pm.size() == 0, "no profiles registered on failure");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_no_mcmeta");
+}
+
+// ─── Test: datapack whose sanitized name would collide with "vanilla" ───
+
+void test_pm_load_datapack_vanilla_name() {
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_dp_vanilla_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir / "data" / "vdp" / "enchantment");
+    std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15, "id": "vanilla"}})";
+    }
+    {
+        std::ofstream f(dir / "data" / "vdp" / "enchantment" / "leeching.json");
+        f << R"({
+            "description": "Leeching",
+            "supported_items": "#minecraft:swords",
+            "anvil_cost": 2,
+            "max_level": 3,
+            "min_cost": {"base": 5, "per_level_above_first": 5}
+        })";
+    }
+    {
+        std::ofstream f(dir / "data" / "minecraft" / "tags" / "item" / "swords.json");
+        f << R"({"values": ["minecraft:diamond_sword"]})";
+    }
+
+    ProfileManager pm;
+    bool ok = pm.load_datapack(dir);
+    expect(ok, "load_datapack succeeds for a pack named vanilla");
+    expect(pm.exists(NSID("vanilla")), "vanilla base profile preserved");
+    expect(pm.exists(NSID("vanilla_datapack")),
+           "datapack name disambiguated to vanilla_datapack");
+    const Profile* v = pm.find(NSID("vanilla"));
+    expect(v != nullptr && !v->has_enchantment(NSID("vdp:leeching")),
+           "vanilla base not replaced by datapack content");
+    const Profile* dp = pm.find(NSID("vanilla_datapack"));
+    expect(dp != nullptr && dp->has_enchantment(NSID("vdp:leeching")),
+           "datapack enchantment lives under the disambiguated name");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_load_datapack_vanilla_name");
+}
+
+// ─── Test: name sanitization + datapack name derivation (direct) ────────
+
+void test_pm_name_sanitize() {
+    // Pure sanitizer edge cases — every result must be a VALID NSID name.
+    expect_eq(sanitize_nsid_name("123 pack"), std::string("_123_pack"),
+              "leading digit is prefixed with underscore");
+    expect_eq(sanitize_nsid_name("!!!"), std::string("___"),
+              "all-invalid characters replaced with underscores");
+    expect_eq(sanitize_nsid_name(""), std::string("datapack"),
+              "empty name defaults to 'datapack'");
+    expect_eq(sanitize_nsid_name("More Enchants 1.4"), std::string("More_Enchants_1_4"),
+              "spaces and dots replaced with underscores");
+
+    // derive_datapack_name: pack.id source, vanilla guard, malformed fallback.
+    static int counter = 0;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_pm_naming_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+    const std::string stem = "besq_pm_naming_" + std::to_string(counter);
+
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15, "id": "vanilla"}})";
+    }
+    expect_eq(derive_datapack_name(dir), std::string("vanilla_datapack"),
+              "pack.id 'vanilla' is disambiguated");
+
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    expect_eq(derive_datapack_name(dir), stem,
+              "no pack.id → sanitized directory stem");
+
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << "{not valid json";
+    }
+    expect_eq(derive_datapack_name(dir), stem,
+              "malformed pack.mcmeta → sanitized directory stem");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_name_sanitize");
+}
+
+// ─── Test: FormatDetector::detect pack.mcmeta branch ────────────────────
+
+void test_format_detector_datapack() {
+    static int counter = 0;
+
+    // Directory with pack.mcmeta → McOfficial (new primary check).
+    auto dir = std::filesystem::temp_directory_path() /
+               ("besq_fmt_dp_" + std::to_string(++counter));
+    std::filesystem::create_directories(dir);
+    {
+        std::ofstream f(dir / "pack.mcmeta");
+        f << R"({"pack": {"pack_format": 15}})";
+    }
+    expect(FormatDetector::detect(dir) == DataFormat::McOfficial,
+           "dir with pack.mcmeta detected as McOfficial");
+
+    // Directory WITHOUT pack.mcmeta but with data/<ns>/enchantment → still
+    // McOfficial via the secondary data/ scan.
+    auto alt = std::filesystem::temp_directory_path() /
+               ("besq_fmt_dp2_" + std::to_string(counter));
+    std::filesystem::create_directories(alt / "data" / "ns" / "enchantment");
+    expect(FormatDetector::detect(alt) == DataFormat::McOfficial,
+           "dir with data/<ns>/enchantment still detected as McOfficial");
+
+    std::filesystem::remove_all(dir);
+    std::filesystem::remove_all(alt);
+    TEST_PASS("test_format_detector_datapack");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -639,6 +777,10 @@ int main() {
         test_pm_publish();
         test_pm_load_datapack();
         test_pm_load_directory_with_datapack();
+        test_pm_load_datapack_no_mcmeta();
+        test_pm_load_datapack_vanilla_name();
+        test_pm_name_sanitize();
+        test_format_detector_datapack();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
