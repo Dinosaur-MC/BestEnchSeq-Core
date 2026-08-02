@@ -88,7 +88,11 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
               biz.supported_platform == request.forge_config.platform))
             continue;
 
-        if (!is_supported(biz, request.target_item.id, target_tags))
+        // A book target accepts every enchantment: in MC a book becomes an
+        // enchanted_book when enchanted, and an enchanted book can hold any
+        // enchantment.  Mirrors the inventory-item book exception below.
+        if (!request.target_item.is_book() &&
+            !is_supported(biz, request.target_item.id, target_tags))
             continue;
 
         algorithm::EnchInfo ai;

@@ -333,17 +333,19 @@ AlgorithmInput make_direct_input(int n, uint8_t max_lvl, uint8_t level,
 AlgorithmInput make_large_direct_input() {
     // 26 distinct level-5 enchants → 27 items (n > 20): the removed `n > 20`
     // bail would have returned "no solution" instantly; now the map-backed
-    // search runs until the 200ms Executor timeout cancels it.
+    // search runs until the 200ms Executor timeout cancels it.  The
+    // stoppable parallel_for makes the post-cancel drain prompt even at this
+    // size (previously ~4 minutes of unwinding the 2^26 mask range).
     return make_direct_input(26, /*max_lvl=*/5, /*level=*/5,
                              std::chrono::milliseconds(200));
 }
 
-// A REACHABLE input (15 level-1 enchants → 16 items) that completes quickly,
-// proving dp_merge still finds real solutions after the n-cap removal / ctx
-// threading.  (A reachable n > 20 case is impractical: the map-backed search
-// is exponential, so "completes" would take minutes.)
+// A REACHABLE input that completes quickly, proving dp_merge still finds real
+// solutions after the n-cap removal / ctx threading.  n is kept small: the
+// uniform all-level-1 / all-multiplier-1 data (no exclusivity) defeats the
+// Pareto pruning, so even n=15 takes ~3 minutes of exact DP.
 AlgorithmInput make_reachable_large_input() {
-    return make_direct_input(15, /*max_lvl=*/1, /*level=*/1,
+    return make_direct_input(9, /*max_lvl=*/1, /*level=*/1,
                              std::chrono::milliseconds(0));  // unlimited
 }
 } // anonymous namespace

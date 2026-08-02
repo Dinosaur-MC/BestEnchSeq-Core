@@ -67,7 +67,7 @@ int32_t AStarAlgorithm::_heuristic(const std::vector<ItemID> &ids) const {
     return h;
 }
 
-bool AStarAlgorithm::_meets_target(ItemID equip_id) const { return meets_target(equip_id, _pool, _target); }
+bool AStarAlgorithm::_meets_target(ItemID equip_id) const { return meets_target(equip_id, _pool, _target_item); }
 
 // ─── Greedy bound (unchanged — operates on raw Items at startup) ────────
 
@@ -133,6 +133,7 @@ void AStarAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &c
     _target.clear();
     for (const auto& e : input.target.enchs)
         _target.push_back(e);
+    _target_item = input.target;
     _target_level_map.assign(_ench_reg->size(), 0);
     for (const auto &t : _target)
         _target_level_map[t.id] = t.level;
@@ -216,7 +217,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
             int64_t node_limit = 50'000;
             int32_t dfs_cost   = search_utils::dfs_bound(
                 std::vector<Item>(items.begin(), items.end()), 0, _best_solution_cost, node_limit,
-                _forge_engine, *_ench_reg, _target, _h_buf, _h_dirty
+                _forge_engine, *_ench_reg, _target_item, _h_buf, _h_dirty
             );
             if (dfs_cost < _best_solution_cost)
                 _best_solution_cost = dfs_cost;

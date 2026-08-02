@@ -263,7 +263,10 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
         auto& pool = besq::ThreadPool::shared();
         std::mutex result_mutex;
 
-        parallel_for(pool, uint64_t{1}, mask,
+        // Stoppable: on cancel the chunk loops stop at their next index, so
+        // the 2^n mask range is not drained element-by-element after a
+        // timeout (n=26 previously took ~4 minutes of unwind).
+        parallel_for_stoppable(pool, uint64_t{1}, mask,
             [&](uint64_t left) {
                 if ((left & ~mask) != 0) return;  // not a subset of `mask`
                 Frontier local;
@@ -277,11 +280,12 @@ const DPMergeAlgorithm::Frontier& DPMergeAlgorithm::solve(uint64_t mask, bool pa
                         for (auto& e : local.entries)
                             result.insert(std::move(e));
                 }
-            });
+            },
+            [&] { return ctx.is_cancelled(); });
     } else {
         // ─── Sequential mask loop (original path for N < 12) ────────
         uint64_t left = (mask - 1) & mask;  // largest proper submask of `mask`
-        while (left != 0) {
+        while (left != 0 && !ctx.is_cancelled()) {
             process_subset(result, left);
             left = (left - 1) & mask;
         }
@@ -304,10 +308,8 @@ const IAlgorithmSerializer *DPMergeAlgorithm::get_serializer() const noexcept {
 // ─── init ─────────────────────────────────────────────────────────────────
 
 void DPMergeAlgorithm::init(const AlgorithmInput &input, const ExecutionContext &ctx) {
-    _ench_reg  = &input.registry;
-    _target.clear();
-    for (const auto& e : input.target.enchs)
-        _target.push_back(e);
+    _ench_reg = &input.registry;
+    _target   = input.target;
 
     if (ctx.is_restored())
         return;  // _cache already restored by serializer
@@ -419,9 +421,7 @@ void DPMergeAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
     const ParetoEntry* best = nullptr;
     for (const auto& entry : frontier.entries) {
-        if (entry.item.type == ItemType::Equip &&
-            meets_target(entry.item, _target))
-        {
+        if (meets_target(entry.item, _target)) {
             if (!best || entry.cost < best->cost)
                 best = &entry;
         }

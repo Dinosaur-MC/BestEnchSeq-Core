@@ -325,6 +325,82 @@ void test_item_parser_prior_penalty_at_max_ok() {
     TEST_PASS("test_item_parser_prior_penalty_at_max_ok");
 }
 
+// ============================================================================
+// Book targets — a book is not equipment; enchanting it produces an
+// enchanted_book (which can hold any enchantment).  `book` therefore
+// normalises to `enchanted_book`.
+// ============================================================================
+
+void test_item_parser_book_bare() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("book", ench_reg, eq_reg);
+    expect(result.id.str() == "minecraft:enchanted_book",
+           "plain book normalises to enchanted_book");
+    expect(result.is_book(), "should be flagged as book");
+    expect(result.enchantments.empty(), "no enchantments");
+    expect(result.durability == 0, "books have no durability");
+    expect(result.prior_penalty == 0, "default prior_penalty");
+    TEST_PASS("test_item_parser_book_bare");
+}
+
+void test_item_parser_book_with_enchants() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("book[sharpness=5]", ench_reg, eq_reg);
+    expect(result.id.str() == "minecraft:enchanted_book",
+           "book normalises to enchanted_book when enchanted");
+    expect(result.is_book(), "should be flagged as book");
+    expect(result.enchantments.size() == 1, "one enchant");
+    expect(result.durability == 0, "books have no durability");
+    TEST_PASS("test_item_parser_book_with_enchants");
+}
+
+void test_item_parser_enchanted_book_direct() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("enchanted_book[sharpness=5]", ench_reg, eq_reg);
+    expect(result.id.str() == "minecraft:enchanted_book",
+           "enchanted_book id preserved");
+    expect(result.is_book(), "should be flagged as book");
+    expect(result.enchantments.size() == 1, "one enchant");
+    expect(result.durability == 0, "books have no durability");
+    TEST_PASS("test_item_parser_enchanted_book_direct");
+}
+
+void test_item_parser_book_namespaced() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("minecraft:enchanted_book[sharpness=5]",
+                                    ench_reg, eq_reg);
+    expect(result.id.str() == "minecraft:enchanted_book", "namespaced book ok");
+    expect(result.is_book(), "should be flagged as book");
+    TEST_PASS("test_item_parser_book_namespaced");
+}
+
+void test_item_parser_book_prior_penalty_ok() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto result = ItemParser::parse("enchanted_book[sharpness=5]{prior_penalty:2}",
+                                    ench_reg, eq_reg);
+    expect(result.prior_penalty == 2, "books carry prior penalty");
+    expect(result.durability == 0, "books have no durability");
+    TEST_PASS("test_item_parser_book_prior_penalty_ok");
+}
+
+void test_item_parser_book_durability_rejected() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        ItemParser::parse("enchanted_book{durability:5}", ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "non-zero durability on a book should throw");
+    TEST_PASS("test_item_parser_book_durability_rejected");
+}
+
 int main() {
     try {
         test_item_parser_bare();
@@ -352,6 +428,13 @@ int main() {
         test_item_parser_durability_overflow_throws();
         test_item_parser_prior_penalty_overflow_throws();
         test_item_parser_prior_penalty_at_max_ok();
+        // book targets
+        test_item_parser_book_bare();
+        test_item_parser_book_with_enchants();
+        test_item_parser_enchanted_book_direct();
+        test_item_parser_book_namespaced();
+        test_item_parser_book_prior_penalty_ok();
+        test_item_parser_book_durability_rejected();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

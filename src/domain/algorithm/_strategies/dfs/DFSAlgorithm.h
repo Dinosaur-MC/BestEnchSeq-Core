@@ -74,6 +74,7 @@ class DFSAlgorithm : public IAlgorithm {
     mutable std::vector<int16_t> _h_dirty;
 
     std::vector<Ench> _target;
+    Item _target_item;  // full solve target (type + enchantments)
 
     int32_t _best_cost{INT32_MAX};
     std::vector<EnchStep> _best_steps;
