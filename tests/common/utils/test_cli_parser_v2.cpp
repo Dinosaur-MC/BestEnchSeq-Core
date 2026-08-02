@@ -153,6 +153,22 @@ void test_error_missing_value() {
     TEST_PASS("missing value error");
 }
 
+void test_bare_dash_as_value() {
+    // 单个 `-` 是合法值（Unix stdout/stdin 惯例，如 `--export -`）——
+    // 解析器只拒绝多字符 `-` 前缀 token（--foo / -f 是选项，不吞为值）。
+    const char* argv[] = {"prog", "--target", "-"};
+    auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 3));
+    expect(result.diagnostics.empty(), "bare dash should parse as a value");
+    expect(std::get<4>(result.value).has_value() && *std::get<4>(result.value) == "-",
+           "--target - should bind '-' as the value");
+
+    const char* argv2[] = {"prog", "--target", "--foo"};
+    auto result2 = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv2, 3));
+    expect(has_diag(result2.diagnostics, ParseErrorCode::missing_value),
+           "--target --foo should produce missing_value (option not swallowed)");
+    TEST_PASS("bare dash as value");
+}
+
 void test_error_invalid_value() {
     const char* argv[] = {"prog", "--target", "x", "--solutions", "abc"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 5));
@@ -265,6 +281,7 @@ int main() {
         test_double_dash_terminator();
         test_error_unknown_option();
         test_error_missing_value();
+        test_bare_dash_as_value();
         test_error_invalid_value();
         test_error_required_missing();
         test_error_accumulation();

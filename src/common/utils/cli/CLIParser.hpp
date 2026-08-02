@@ -200,7 +200,9 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
                 if (h) detail::set_value_by_index<Entries...>(tup, idx, val, r.diagnostics, key);
                 else if (i + 1 < args.size()) {
                     std::string_view n(args[i + 1]);
-                    if (!n.empty() && n[0] != '-') { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, key); }
+                    // 单个 `-` 是合法值（Unix stdout/stdin 惯例，如 `--export -`）；
+                    // 仅拒绝多字符 `-` 前缀 token（`--foo`/`-f` 是选项，不吞为值）。
+                    if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, key); }
                     else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
                 } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
             }
@@ -244,7 +246,8 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
             if (sc.size() > 1) detail::set_value_by_index<Entries...>(tup, idx, sc.substr(1), r.diagnostics, {&f, 1});
             else if (i + 1 < args.size()) {
                 std::string_view n(args[i + 1]);
-                if (!n.empty() && n[0] != '-') { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, std::string_view(&f, 1)); }
+                // 单个 `-` 是合法值（Unix 惯例）；仅拒绝多字符 `-` 前缀 token。
+                if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, std::string_view(&f, 1)); }
                 else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
             } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
         }

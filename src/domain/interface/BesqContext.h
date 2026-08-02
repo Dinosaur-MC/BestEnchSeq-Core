@@ -64,6 +64,9 @@ public:
     // ── Profile data import / export ──
     void import_profile(const std::string& path);
     bool export_profile(const std::string& path) const;
+    /// Export the active profile's data as a string (in-memory JSON), without
+    /// writing a file.  Used by `--export -` (stdout dump).
+    std::string export_profile_to_string() const;
 
     // ── Registry access (active profile, read-only) ──
     const EnchantmentRegistry& enchantments() const noexcept;

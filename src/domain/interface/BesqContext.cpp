@@ -220,6 +220,15 @@ bool BesqContext::export_profile(const std::string& path) const {
     return ExportPipeline::run(profile, req).success;
 }
 
+std::string BesqContext::export_profile_to_string() const {
+    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+    ExportRequest req;
+    req.target = ExportRequest::TargetType::Registry;
+    req.format = ExportRequest::Format::Json;
+    // output_path 留空 → ExportPipeline 走内存导出，返回 result.content。
+    return ExportPipeline::run(profile, req).content;
+}
+
 // ====================================================================
 // Registry access (active profile, read-only)
 // ====================================================================

@@ -147,12 +147,16 @@ int CLIApp::run(int argc, char* argv[]) {
     if (config.edit_ops)
         CLIApp::apply_edits(*config.edit_ops, _ctx);
 
-    // 6. Profile export
+    // 6. Profile export (`--export -` dumps JSON to stdout)
     if (config.export_path) {
-        bool ok = _ctx.export_profile(*config.export_path);
-        if (!ok) throw std::runtime_error(
-            tr_fmt("main.err.export_failed", *config.export_path));
-        LOG_INFO("%s", tr_fmt("main.msg.profile_exported", *config.export_path).c_str());
+        if (*config.export_path == "-") {
+            std::cout << _ctx.export_profile_to_string() << "\n";
+        } else {
+            bool ok = _ctx.export_profile(*config.export_path);
+            if (!ok) throw std::runtime_error(
+                tr_fmt("main.err.export_failed", *config.export_path));
+            LOG_INFO("%s", tr_fmt("main.msg.profile_exported", *config.export_path).c_str());
+        }
         return 0;
     }
 
