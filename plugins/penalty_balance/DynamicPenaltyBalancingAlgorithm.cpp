@@ -21,7 +21,6 @@ void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, Exec
     ctx.report_progress(0, ProgressStatus::Starting);
 
     auto start = std::chrono::steady_clock::now();
-    int32_t steps_performed = 0;
 
     std::vector<Item> mut_items = items;
 
@@ -98,15 +97,19 @@ void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, Exec
             std::move(saved_i), std::move(saved_j), std::move(result), step_cost
         });
 
-        ++steps_performed;
-
         {
+            // `max_solutions` is a SOLUTION-count cap (same semantics as dfs/astar:
+            // stop after N solutions found), NOT a merge-step cap.  This greedy
+            // produces exactly one solution, and the loop is already bounded by
+            // the shrinking item count, max_search_time and cooperative
+            // cancellation — so misreading it as a step limit here would abort
+            // multi-step targets early (e.g. default --solutions 1 → needless
+            // CompleteNoSolution).  Nothing to cap.
             const auto& sc = input.config.search;
             if (sc.max_search_time.count() > 0) {
                 auto elapsed = std::chrono::steady_clock::now() - start;
                 if (elapsed > sc.max_search_time) break;
             }
-            if (sc.max_solutions > 0 && steps_performed >= sc.max_solutions) break;
         }
 
         mut_items.erase(mut_items.begin() + best_j);

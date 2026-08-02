@@ -15,6 +15,20 @@ besq_test(test_dfs_state_serializer test_dfs_state_serializer.cpp)
 besq_test(test_dp_merge_state_serializer test_dp_merge_state_serializer.cpp)
 
 besq_test(test_diagnostics test_diagnostics.cpp)
+
+# penalty_balance plugin algorithm: the plugin is a separate shared-lib pipeline,
+# but its algorithm source is a plain IAlgorithm and links directly into a unit
+# test.  Compiled from plugins/ so it needs that tree on the include path.
+add_executable(test_penalty_balance test_penalty_balance.cpp
+    ${PROJECT_ROOT}/plugins/penalty_balance/DynamicPenaltyBalancingAlgorithm.cpp)
+target_include_directories(test_penalty_balance PRIVATE
+    ${TEST_INCLUDE}
+    ${PROJECT_ROOT}/include
+    ${PROJECT_ROOT}/plugins
+)
+target_link_libraries(test_penalty_balance PRIVATE besq-core)
+besq_test_common_props(test_penalty_balance)
+
 besq_test(test_algorithm_loader test_algorithm_loader.cpp)
 besq_test(test_plugin_audit test_plugin_audit.cpp)
 besq_test(test_algorithm_strategies test_algorithm_strategies.cpp)
