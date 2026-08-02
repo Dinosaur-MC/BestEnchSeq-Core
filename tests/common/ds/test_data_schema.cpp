@@ -6,6 +6,7 @@
 #include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
 #include "framework/test_utils.h"
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -197,9 +198,8 @@ void test_json_parse_or_throw() {
 struct NSIDConverter {                      // 用户定义，测试内建
     using value_type = NSID;
     static std::string to_string(const NSID& id) { return id.str(); }
-    static std::optional<NSID> from_string(std::string_view s) {
-        try { return NSID(s); } catch (...) { return std::nullopt; }
-    }
+    // NSID(s) 会抛异常（非法标识符）——text_codec 内部 try/catch 防御，无需在此兜底。
+    static std::optional<NSID> from_string(std::string_view s) { return NSID(s); }
 };
 struct PlatformConv {                       // enum ↔ 字符串
     using value_type = MCE;
@@ -215,6 +215,29 @@ struct PlatformConv {                       // enum ↔ 字符串
         return std::nullopt;
     }
 };
+
+// json_codec：富类型 ↔ Json（CSV 无自然表示 → from_csv 报错、to_csv 抛异常）。
+struct Point { int x = 0; int y = 0; };
+struct PointConv {
+    using value_type = Point;
+    static Json to_json(const Point& p) {
+        return Json::object().set("x", Json(int64_t{p.x})).set("y", Json(int64_t{p.y}));
+    }
+    static bool from_json(const Json& j, Point& p) {
+        if (j.type() != JsonType::Object || !j.has("x") || !j.has("y")) return false;
+        p.x = static_cast<int>(j["x"].as<int64_t>());
+        p.y = static_cast<int>(j["y"].as<int64_t>());
+        return true;
+    }
+};
+struct Holder { Point pt; };
+struct HolderSchema {
+    using Type = Holder;
+    static constexpr auto fields = std::tuple{
+        ds::field("pt", &Holder::pt, ds::json_codec<PointConv>{}),
+    };
+};
+using HolderJson = ds::json::Schema<HolderSchema>;
 
 struct Equip {
     NSID id;
@@ -248,6 +271,22 @@ void test_text_codec_invalid_rejected() {
     expect(e.size() == 1 && e.errors()[0].path == "id", "NSID invalid error path");
     TEST_PASS("text_codec invalid value rejected");
 }
+void test_json_codec() {
+    Holder h{{3, 4}};
+    Json j = HolderJson::serialize(h);
+    Holder out; ds::ErrorList e;
+    expect(HolderJson::parse(j, out, e), "json_codec roundtrip");
+    expect(out.pt.x == 3 && out.pt.y == 4, "json_codec values");
+    // from_csv rejects loudly
+    Point p; ds::ErrorList e2;
+    expect(!ds::json_codec<PointConv>{}.from_csv("3;4", p, e2, "pt"), "json_codec from_csv rejects");
+    expect(e2.size() == 1, "from_csv error recorded");
+    // to_csv throws
+    std::string cell; bool threw = false;
+    try { ds::json_codec<PointConv>{}.to_csv(h.pt, cell); } catch (const std::logic_error&) { threw = true; }
+    expect(threw, "json_codec to_csv throws");
+    TEST_PASS("json_codec roundtrip + CSV rejection");
+}
 
 int main() {
     test_error_collection();
@@ -266,5 +305,6 @@ int main() {
     test_json_parse_or_throw();
     test_text_codec_roundtrip();
     test_text_codec_invalid_rejected();
+    test_json_codec();
     return print_summary();
 }

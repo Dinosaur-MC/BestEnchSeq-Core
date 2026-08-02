@@ -3,8 +3,10 @@
 #include "ds/Error.h"
 
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace ds {
 
@@ -17,14 +19,17 @@ struct text_codec {
     void to_json(const V& v, Json& out) const { out = Json(Conv::to_string(v)); }
     bool from_json(const Json& j, V& v, ErrorList& e, const std::string& path) const {
         if (j.type() != JsonType::String) { e.add(path, "expected string"); return false; }
-        auto r = Conv::from_string(j.as<std::string>());
-        if (!r) { e.add(path, "invalid value"); return false; }
+        auto s = j.as<std::string>();
+        std::optional<V> r;
+        try { r = Conv::from_string(s); } catch (...) { r = std::nullopt; }
+        if (!r) { e.add(path, "invalid value: '" + s + "'"); return false; }
         v = std::move(*r); return true;
     }
     void to_csv(const V& v, std::string& out) const { out = Conv::to_string(v); }
     bool from_csv(const std::string_view& s, V& v, ErrorList& e, const std::string& path) const {
-        auto r = Conv::from_string(s);
-        if (!r) { e.add(path, "invalid value"); return false; }
+        std::optional<V> r;
+        try { r = Conv::from_string(s); } catch (...) { r = std::nullopt; }
+        if (!r) { e.add(path, "invalid value: '" + std::string(s) + "'"); return false; }
         v = std::move(*r); return true;
     }
 };
@@ -37,10 +42,14 @@ struct json_codec {
     using V = typename Conv::value_type;
     void to_json(const V& v, Json& out) const { out = Conv::to_json(v); }
     bool from_json(const Json& j, V& v, ErrorList& e, const std::string& path) const {
-        if (!Conv::from_json(j, v)) { e.add(path, "invalid value"); return false; }
+        bool ok = false;
+        try { ok = Conv::from_json(j, v); } catch (...) { ok = false; }
+        if (!ok) { e.add(path, "invalid value"); return false; }
         return true;
     }
-    void to_csv(const V&, std::string&) const {}
+    void to_csv(const V&, std::string&) const {
+        throw std::logic_error("ds::json_codec field has no CSV representation");
+    }
     bool from_csv(const std::string_view&, V&, ErrorList& e, const std::string& path) const {
         e.add(path, "field has no CSV representation"); return false;
     }
