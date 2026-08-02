@@ -4,6 +4,7 @@
 #include "common/log/log.hpp"
 #include "domain/business/business.h"
 #include "domain/business/parsers/ParserShared.h"
+#include "domain/business/schemas/EnchInfoSchema.h"
 #include "domain/business/types/EnchantmentDataPack.h"
 #include "domain/business/types/EnchInfo.h"
 
@@ -15,15 +16,6 @@
 // ============================================================================
 // Local helpers (migrated from interface/domain/ParserUtilsDomain.hpp)
 // ============================================================================
-
-/// Convert platform enum to string.
-static std::string platform_to_string(MCE p) {
-    switch (p) {
-    case MCE::Java:    return "java";
-    case MCE::Bedrock: return "bedrock";
-    default:                     return "unknown";
-    }
-}
 
 /// Split "ns:id" into {ns, id}. If no colon, ns is empty.
 static std::pair<std::string, std::string> split_namespace(const std::string& qualified_id) {
@@ -101,44 +93,12 @@ std::string EnchSerializer::to_json(
         root["version"]     = Json(metadata->version);
     }
 
-    // Build enchantments array
+    // Build enchantments array — each entry delegates to EnchInfo::to_json()
+    // (schema-driven via EnchInfoSchema, single source of truth).
     Json::Array enchants;
-    for (const auto &info : infos) {
-        Json::Object obj;
-        obj["id"]            = Json(info.id.str());
-        obj["name"]          = Json(info.name);
-        obj["platform"]      = Json(platform_to_string(info.supported_platform));
-        obj["max_level"]     = Json(info.max_level);
-        // Mirror EnchInfo::to_json (B-T18 roundtrip fix): `limited_level` is
-        // emitted ONLY when the data provided the legacy pre-computed hint;
-        // otherwise an export would write a bogus limited_level=0.  min_cost
-        // raw fields are emitted when non-zero so the cost data round-trips.
-        if (info.limited_level_provided)
-            obj["limited_level"] = Json(info.limited_level);
-        if (info.min_cost_base != 0)
-            obj["min_cost_base"] = Json(info.min_cost_base);
-        if (info.min_cost_per_level != 0)
-            obj["min_cost_per_level"] = Json(info.min_cost_per_level);
-        obj["multiplier"]    = Json(info.multiplier);
-        obj["is_treasure"]   = Json(info.is_treasure);
-
-        // exclusive_set array
-        Json::Array excl;
-        for (const auto &e : info.exclusive_set) {
-            excl.push_back(Json(e.str()));
-        }
-        obj["exclusive_set"] = Json(excl);
-
-        // supported_items array — raw references preserved (T10): `#tag` or
-        // concrete item id, so an export → import round-trip keeps reference
-        // semantics for cross-validation.
-        Json::Array sup;
-        for (const auto &cat_nsid : info.supported_items) {
-            sup.push_back(Json(cat_nsid.str()));
-        }
-        obj["supported_items"] = Json(sup);
-
-        enchants.push_back(Json(obj));
+    for (const auto& info : infos) {
+        Json obj = info.to_json();
+        enchants.push_back(std::move(obj));
     }
     root["enchantments"] = Json(enchants);
 
@@ -148,55 +108,13 @@ std::string EnchSerializer::to_json(
 // ============================================================================
 
 std::string
-EnchSerializer::to_csv(const std::vector<EnchInfo> &infos, const TagRegistry &cat_reg) {
-    // supported_items are emitted as raw references (T10).
+EnchSerializer::to_csv(const std::vector<EnchInfo>& infos, const TagRegistry& cat_reg) {
     (void)cat_reg;
+    using EnchCsv = business::schema::EnchCsv;   // 别名已在 EnchInfoSchema.h 定义
     csv::CsvTable table;
-
-    // Header row — min_cost columns added (B-T18) so a CSV round-trip keeps the
-    // cost data.  The `limited_level_provided` hint is inherently CSV-lossy
-    // (a re-import sees `limited_level` as a provided value) — noted, not forced.
-    table.push_back(
-        {"id", "name", "platform", "max_level", "limited_level", "min_cost_base", "min_cost_per_level",
-         "multiplier", "is_treasure", "exclusive_set", "supported_items"}
-    );
-
-    for (const auto &info : infos) {
-        // exclusive_set: join with ;
-        std::string excl_set;
-        bool first = true;
-        for (const auto &e : info.exclusive_set) {
-            if (!first)
-                excl_set += ";";
-            first = false;
-            excl_set += e.str();
-        }
-
-        // supported_items: join with ; (raw references preserved)
-        std::string app_eq;
-        first = true;
-        for (const auto &cat_nsid : info.supported_items) {
-            if (!first)
-                app_eq += ";";
-            first = false;
-            app_eq += cat_nsid.str();
-        }
-
-        table.push_back({
-            info.id.str(),
-            info.name,
-            platform_to_string(info.supported_platform),
-            std::to_string(info.max_level),
-            std::to_string(info.limited_level),
-            std::to_string(info.min_cost_base),
-            std::to_string(info.min_cost_per_level),
-            std::to_string(info.multiplier),
-            info.is_treasure ? "true" : "false",
-            excl_set,
-            app_eq,
-        });
-    }
-
+    table.push_back(EnchCsv::header());
+    for (const auto& info : infos)
+        table.push_back(EnchCsv::serialize_row(info));
     return csv::format(table);
 }
 
