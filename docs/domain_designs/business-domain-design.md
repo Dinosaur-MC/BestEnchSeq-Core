@@ -1,7 +1,7 @@
 # Business Domain Design
 
 > Version: 1.0
-> Last updated: 2026-07-25
+> Last updated: 2026-08-02
 
 ---
 
@@ -90,7 +90,9 @@ src/domain/business/
 └── components/
     ├── RegistryHelper.h/cpp                     Filter, set operations, validation, diff（原 RegistryManager）
     ├── FormatDetector.h/cpp                     File format detection + dispatch
-    └── Serializer.h/cpp                         Json streaming serialization (extended for Profile)
+    ├── Serializer.h/cpp                         Json streaming serialization (extended for Profile)
+    ├── TagResolver.h/cpp                        Tag resolution helpers
+    └── LimitedLevelCalculator.h/cpp             `limited_level` 统一计算（B-T18，注册表级）
 ```
 
 ---
@@ -104,7 +106,7 @@ Existing value types remain unchanged in their data layout. Only namespace/heade
 | Type | File | Description |
 |------|------|-------------|
 | `Ench` | `Ench.h` | Enchantment value object: `NSID id` + `name` + `level` |
-| `EnchInfo` | `EnchInfo.h` | Enchantment definition: `max_level`, `multiplier`, `exclusive_set`, `supported_items`（原始 `#tag` 引用或具体物品 NSID） |
+| `EnchInfo` | `EnchInfo.h` | Enchantment definition: `max_level`, `multiplier`, `exclusive_set`, `supported_items`（原始 `#tag` 引用或具体物品 NSID）, `min_cost_base`/`min_cost_per_level`（附魔台成本公式原始字段）, `limited_level`/`limited_level_provided`, `is_treasure`（数据携带） |
 | `EnchSet` | `EnchSet.h` | `unordered_set<Ench>` with `NSID` find helper |
 | `Equipment` | `Equipment.h` | Equipment definition: `NSID id` + `name` + `category`（显示短名）+ `max_durability` |
 | `EquipmentTag` | `EquipmentTag.h` | MC tag 定义: `NSID`（真实 MC 物品/附魔 tag，如 `#minecraft:swords`、`#minecraft:enchantable/sharp_weapon`）+ `name` |
@@ -125,9 +127,13 @@ struct EnchantmentData {
     std::string display_name;
     int32_t multiplier;
     int32_t max_level;
-    int32_t limited_level;                   // 0 = treasure
+    int32_t limited_level;                   // 旧格式预计算值；加载期由 LimitedLevelCalculator 计算
+    bool limited_level_provided;             // 数据中提供了 limited_level 字段（旧格式预计算值）
     std::vector<std::string> exclusive_with; // conflicting enchantment IDs
     std::vector<std::string> applicable_to;  // 原始 supported_items 引用（`#tag` 或具体物品 ID，透传不展开）
+    int32_t min_cost_base;                   // min_cost.base（附魔台成本公式）
+    int32_t min_cost_per_level;              // min_cost.per_level_above_first
+    bool is_treasure;                        // 宝藏标志（#minecraft:enchantment/treasure 成员，数据携带，非启发式）
 };
 
 } // namespace business::loader
@@ -405,6 +411,7 @@ public:
 - 装备 `category` 只是**显示短名**（如 `"sword"`），不再从中推导合成 tag（T10）——真实 MC 物品 tag（`#minecraft:swords`、`#minecraft:enchantable/*`）才是适用性判定来源
 - 魔咒 `applicable_to`（原始 `supported_items` 引用）**透传不展开**，交叉验证：`#tag` 引用需在 tag 定义中存在、具体物品 ID 需在装备注册表中存在，否则丢弃；引用全部丢弃则整条魔咒被跳过（T6）
 - 魔咒 `exclusive_with` 字符串 → `NSID` set lookup（带 `"minecraft:"` 命名空间回退）
+- 魔咒 `is_treasure` 为**数据值**（解析自 vanilla.json 字段或 datapack `#minecraft:enchantment/treasure` 标签成员），**非** `limited_level == 0` 启发式；`limited_level` 由 `LimitedLevelCalculator` 在注册表加载后统一回填（B-T18）
 
 ### 6.2 ProfileLoader
 
@@ -446,6 +453,7 @@ File → FormatDetector::detect(path) → [NativeJsonParser | NativeCsvParser | 
      → {EnchantmentData[], EquipmentData[]}
      → RegistryLoader::resolve_with_base()    (两阶段：以 vanilla tag/装备为基准做交叉验证，T7)
      → EnchantmentRegistry + EquipmentRegistry + TagRegistry
+     → LimitedLevelCalculator::compute()      (统一回填 limited_level，B-T18)
      → Profile + set_tag_resolver(内置 vanilla tag resolver)
 ```
 
@@ -663,6 +671,17 @@ enum class DataFormat {
 - `.json` extension → `NativeJson`
 - `.csv` extension → `NativeCsv`
 - Other → attempt `NativeJson` (embedded data path)
+
+### LimitedLevelCalculator
+
+`limited_level` 的**唯一计算归属**（B-T18）。数据文件只携带原始字段（`max_level` / `min_cost` / `supported_items` / `is_treasure`）；注册表级 `LimitedLevelCalculator::compute()` 在加载期对所有数据源（vanilla native / custom native / datapack）统一回填 `EnchInfo::limited_level`：
+
+1. `is_treasure` → `limited_level = 0`（不在附魔台可用池）
+2. `min_cost_base > 0` → 按附魔台成本公式 + 物品附魔值计算，封顶 `max_level`
+3. `limited_level_provided`（旧格式预计算值）→ 保留
+4. 缺失 → `limited_level = max_level`
+
+调用点：`ProfileLoader`（builtin + profile 加载）与 `ProfileManager`（datapack/有效视图）在注册表构建后调用，附魔值取自 `builtin::load_item_properties()`（`data/builtin/item_properties.json`）。
 
 ### Serializer
 

@@ -271,9 +271,10 @@ business::loader::EnchantmentData McOfficialParser::parse_single_enchantment(
 
     // Rare: a datapack enchant JSON may carry a legacy pre-computed
     // `limited_level` field — keep it symmetric with the native parser (hint
-    // flag).  Otherwise the DTO defaults to max_level so the loader's
-    // `is_treasure` heuristic (limited_level == 0 → treasure) does NOT mark a
-    // non-treasure enchant as treasure before the calculator runs.
+    // flag).  Otherwise the DTO defaults to max_level; the registry-level
+    // LimitedLevelCalculator (B-T18) back-fills the real value at load.
+    // is_treasure is carried as a data value (from the treasure tag), not
+    // derived from limited_level.
     int32_t limited_level = max_level;
     bool limited_level_provided = false;
     auto ll_it = obj.find("limited_level");

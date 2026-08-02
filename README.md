@@ -34,10 +34,14 @@ fallbacks. C++17 or earlier is not supported.
 ```bash
 cmake -S . -B build
 cmake --build build
-besq --target diamond_sword --source "sharpness=5"
-besq --algorithm astar --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]"
+# --target 必须携带 `[附魔]`（期望最终状态），--source 为装备当前已有魔咒（起点状态）
+besq --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+besq --algorithm astar --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]" --source "sharpness=3"
 besq --algorithm penalty_balance --target "diamond_chestplate[protection=4,thorns=3,unbreaking=3,mending=1]"
 besq --algorithm hamming --target "netherite_sword[sharpness=5,sweeping_edge=3,looting=3,unbreaking=3,fire_aspect=2,knockback=2,mending=1,vanishing_curse=1]"
+
+# 目标已达成：--source 已 ≥ --target 时输出 0 步方案（"目标已达成"）
+besq --target "diamond_sword[sharpness=5]" --source "sharpness=5"
 
 # Profile / datapack / publish
 besq --profile builtin:vanilla --target "diamond_sword[sharpness=5]" --source "sharpness=2"
@@ -48,7 +52,7 @@ besq --publish builtin:vanilla --publish-version 1.0 --publish-tag stable --outp
 Alternatively, invoke directly from the build directory:
 
 ```bash
-./build/bin/besq --target diamond_sword --source "sharpness=5"
+./build/bin/besq --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 ```
 
 ### Running tests

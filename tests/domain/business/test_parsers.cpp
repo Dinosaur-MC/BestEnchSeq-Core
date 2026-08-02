@@ -563,13 +563,12 @@ void test_mc_single_enchantment_with_exclusive() {
 }
 
 // ─── test_mc_limited_level_tag_resolved ────────────────────────────────
-// Regression (T5 review): supported_items is passed through RAW, but the
-// limited_level computation must resolve the tag to concrete items first.
-// With "#minecraft:sword" → {diamond_sword (enchant 10), iron_sword
-// (enchant 14)}, the max power is 44 (iron_sword):
-//   (44 - 10) / 5 + 1 = 7  → capped to max_level = 5.
-// If the raw "#minecraft:sword" string were fed to compute_limited_level it
-// matches no item_props key and limited_level collapses to max(1, 0) = 1.
+// B-T18: the parser no longer computes limited_level — that moved to the
+// registry-level LimitedLevelCalculator. parse_single_enchantment only
+// carries the raw min_cost fields and, when the JSON has no `limited_level`
+// field, defaults the DTO's limited_level to max_level (the calculator
+// back-fills the real value at registry load). This pins the parser's
+// current behavior: raw pass-through of supported_items and raw min_cost.
 
 void test_mc_limited_level_tag_resolved() {
     TagResolver tag_resolver;
@@ -595,11 +594,17 @@ void test_mc_limited_level_tag_resolved() {
     expect(has_tag,
            "mc_limited_tag: applicable_to raw #minecraft:sword");
 
-    // limited_level computed from the RESOLVED items, not collapsed to 1
-    expect(ench.limited_level > 1,
-           "mc_limited_tag: limited_level not collapsed to 1");
-    expect_eq(ench.limited_level, 5,
-              "mc_limited_tag: limited_level computed from resolved items");
+    // No `limited_level` field in the JSON → DTO defaults to max_level.
+    expect_eq(ench.limited_level, ench.max_level,
+              "mc_limited_tag: limited_level defaults to max_level");
+    expect(!ench.limited_level_provided,
+           "mc_limited_tag: limited_level not marked provided");
+
+    // min_cost is carried as raw fields for the LimitedLevelCalculator.
+    expect_eq(ench.min_cost_base, 10,
+              "mc_limited_tag: min_cost_base carried raw");
+    expect_eq(ench.min_cost_per_level, 5,
+              "mc_limited_tag: min_cost_per_level carried raw");
 
     TEST_PASS("test_mc_limited_level_tag_resolved");
 }

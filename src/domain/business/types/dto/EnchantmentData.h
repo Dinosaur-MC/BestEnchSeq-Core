@@ -15,7 +15,7 @@ struct EnchantmentData {
     std::string display_name;
     int32_t multiplier       = 0;
     int32_t max_level        = 0;
-    int32_t limited_level    = 0;            ///< 0 = treasure
+    int32_t limited_level    = 0;            ///< 旧格式预计算值；加载期由 LimitedLevelCalculator 统一计算
     bool limited_level_provided = false;     ///< 数据中提供了 limited_level 字段（旧格式预计算值）
     std::vector<std::string> exclusive_with; ///< Conflicting enchantment IDs
     std::vector<std::string> applicable_to;  ///< 原始 supported_items 引用（`#tag` 或具体物品 ID，透传不展开）

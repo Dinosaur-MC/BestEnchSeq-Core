@@ -1,7 +1,7 @@
 # 数据源与提取方法
 
 > 版本：2.0
-> 最后更新：2026-07-29
+> 最后更新：2026-08-02
 
 ---
 
@@ -32,8 +32,8 @@
 | 数据类别 | 条目数 | 说明 |
 |---------|:------:|------|
 | **enchantments** | 43 | 全部原版魔咒的注册信息 |
-| **equipments** | 77 | 可锻造的装备类型 |
-| **tags** | 29 | 魔咒冲突组和物品分类标签 |
+| **equipments** | 85 | 可锻造的装备类型 |
+| **tags** | 246 | 魔咒冲突组（`enchantment/exclusive_set/*`）、可附魔类别（`enchantable/*`）与物品分类标签 |
 
 此外，`data/i18n/minecraft/` 包含从 Mojang 资源服务器提取的翻译数据：
 
@@ -75,13 +75,17 @@ Mojang 版本清单 (version_manifest.json)
     │  4. 物品标签    → 装备列表           │
     │  5. 字节码分析 → 耐久度值            │
     │  6. 源码常量    → 物品附魔值         │
-    │  7. 成本模拟    → limited_level      │
+    │  7. 原始字段    → min_cost / is_treasure │
     │  8. 物品分组    → 装备显示类别（短名，不参与适用性判定）│
     └──────────────────────────────────────┘
         │
         ▼
     data/builtin/vanilla.json
 ```
+
+> **说明（T17-T19）**：`limited_level` 不再由脚本计算。脚本只输出 `min_cost` 与
+> `is_treasure` 原始字段；`limited_level` 由 **C++ 加载期**的 `LimitedLevelCalculator`
+> 统一计算（见第 10 节）。
 
 ---
 
@@ -250,7 +254,9 @@ res/vanilla/
 | `name` | `description.translate` → 查 `en_us.json` | 显示名称（vanilla.json 中的快照，运行时由 i18n 重写） |
 | `platform` | 硬编码 `"java"` | MC 官方为跨平台数据 |
 | `max_level` | `max_level` | 铁砧/附魔台统一最大等级 |
-| `limited_level` | **计算所得** | 见第 10 节 |
+| `min_cost` | `min_cost` | 附魔台成本公式原始字段（`{base, per_level_above_first}`），脚本透传不计算 |
+| `is_treasure` | `#minecraft:enchantment/treasure` 标签成员 | 宝藏标志（数据携带，非启发式） |
+| `limited_level` | **计算所得（C++ 加载期）** | 见第 10 节；脚本不再输出此字段 |
 | `multiplier` | `anvil_cost` | MC 1.21+ 改名，含义相同 |
 | `exclusive_set` | `exclusive_set` / `exclusiveSet` | 冲突魔咒 ID 列表，展开 `#` 标签引用 |
 | `supported_items` | `supported_items` / `supportedItems` | 适用物品原始引用（`#tag` 或具体物品 ID），**透传不展开**，见第 11 节 |
@@ -379,6 +385,12 @@ invokevirtual ...durability... ← 耐久度方法调用
 
 ## 10. 步骤 6：Limited_Level 计算
 
+> **计算归属（T17-T19）**：`limited_level` 不再由提取脚本计算。脚本只输出
+> `min_cost`（`{base, per_level_above_first}`）与 `is_treasure` 原始字段；
+> `limited_level` 由 **C++ 加载期**的 `LimitedLevelCalculator`
+> （`src/domain/business/components/LimitedLevelCalculator.cpp`）在注册表加载时统一计算，
+> 对所有数据源（vanilla native / custom native / datapack）一致。
+
 ### 背景
 
 MC 1.21+ 的 data-driven 系统中**不存在独立的 `limited_level` 字段**。
@@ -391,11 +403,23 @@ MC 1.21+ 的 data-driven 系统中**不存在独立的 `limited_level` 字段**�
 铁砧：  直接允许到 max_level
 ```
 
+### 回退链
+
+`LimitedLevelCalculator` 对每条魔咒按优先级回退（成本公式与游戏一致，参考
+[minecraft.wiki — Enchanting_table_mechanics](https://minecraft.wiki/w/Enchanting_table_mechanics)）：
+
+1. **`is_treasure` → `limited_level = 0`** — 宝藏魔咒不在附魔台可用池
+   （`#in_enchanting_table`）中。
+2. **有 `min_cost` → 按成本公式计算** — 取适用物品中的最高可达等级，封顶 `max_level`；
+   无贡献物品时保守取 1。
+3. **数据提供 `limited_level` 字段（旧格式预计算值）→ 保留**。
+4. **缺失 → `limited_level = max_level`** — 保证可用性。
+
 ### 计算公式
 
-**物品最大能量**（`_max_power`）：
+**物品最大能量**（`max_power`，`LimitedLevelCalculator.cpp`）：
 
-```python
+```
 base = 30                     # 15书架，第3格
 added = 1 + 2 × (附魔值 // 4)  # 附魔值随机加成上限
 max_power = round((30 + added) × 1.15)  # 随机浮动上限
@@ -405,9 +429,9 @@ max_power = round((30 + added) × 1.15)  # 随机浮动上限
 - `getEnchantmentCost()`（行 494-510）：基础成本
 - `selectEnchantment()`（行 540-571）：物品附魔值修正
 
-**等级成本检查**（`_min_cost`）：
+**等级成本检查**（`min_cost`）：
 
-```python
+```
 minCost(level) = min_cost.base + min_cost.per_level_above_first × (level - 1)
 ```
 
@@ -417,13 +441,18 @@ minCost(level) = min_cost.base + min_cost.per_level_above_first × (level - 1)
 
 ```
 对于每个魔咒 e:
+    if e.is_treasure:
+        e.limited_level = 0
+        continue
+    if e 无 min_cost:                       # 回退链 3/4
+        e.limited_level = 数据提供 limited_level ? 保留 : e.max_level
+        continue
     best = 0
-    对于 e 的每个适用物品 i:
-        power = _max_power(i.附魔值)
-        从 max_level 向下遍历 level:
-            如果 min_cost(level) ≤ power:
-                best = max(best, level)
-                跳出内层循环
+    对于 e 的每个适用物品 i:                 # `#tag` 经 TagResolver 展开为具体物品 ID
+        power = max_power(i.附魔值)          # 附魔值来自 data/builtin/item_properties.json
+        if power < min_cost.base: continue
+        lvl = (power - min_cost.base) / min_cost.per_level_above_first + 1
+        best = max(best, min(lvl, e.max_level))
     e.limited_level = max(1, best)
 ```
 
@@ -546,8 +575,12 @@ python scripts/vanilla/cli.py --lang-only --locales all
       "name": "Sharpness",
       "platform": "java",
       "max_level": 5,
-      "limited_level": 5,
       "multiplier": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level_above_first": 11
+      },
+      "is_treasure": false,
       "exclusive_set": ["breach", "density", "impaling", "smite"],
       "supported_items": [
         "#minecraft:enchantable/weapon"
@@ -570,6 +603,9 @@ python scripts/vanilla/cli.py --lang-only --locales all
 }
 ```
 
+> vanilla.json **不含** `limited_level` 字段——它由 C++ 加载期 `LimitedLevelCalculator`
+> 从 `min_cost` / `is_treasure` 计算得出（见第 10 节）。
+
 ### 13.2 minecraft i18n 文件
 
 `data/i18n/minecraft/<locale>.json`：
@@ -591,7 +627,8 @@ python scripts/vanilla/cli.py --lang-only --locales all
 
 | 文件 | 大小 |
 |------|:----:|
-| `data/builtin/vanilla.json` | ~33 KB |
+| `data/builtin/vanilla.json` | ~96 KB |
+| `data/builtin/item_properties.json` | 物品附魔值（enchantability）等属性 |
 | `data/i18n/minecraft/en_US.json` | ~49 KB |
 | `data/i18n/minecraft/zh_CN.json` | ~49 KB |
 
@@ -615,7 +652,9 @@ FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
 | `id` | `id` (string → NSID) | 唯一标识 |
 | `name` | `display_name` → `name` | 显示名称（仅用于数据快照，运行时由 i18n 重写） |
 | `max_level` | `max_level` | 最大等级 |
-| `limited_level` | `limited_level` | 0 或缺失时 = max_level |
+| `min_cost` | `min_cost_base`/`min_cost_per_level` | 附魔台成本公式原始字段；`LimitedLevelCalculator` 加载期据此推导 `limited_level` |
+| `is_treasure` | `is_treasure` | 宝藏标志（数据值，非启发式） |
+| `limited_level` | `limited_level`（加载期回填） | 由 `LimitedLevelCalculator::compute()` 统一计算（见第 10 节）；旧格式预计算值仅在数据提供时保留 |
 | `multiplier` | `multiplier` | 费用倍率 |
 | `exclusive_set` | `exclusive_with` → `exclusive_set` | 冲突魔咒 |
 | `supported_items` | `applicable_to` → `supported_items`（透传不展开） | 适用物品（`#tag` 或具体 ID） |
@@ -706,6 +745,8 @@ besq 支持把真实 MC 数据包（datapack）直接加载为一个 profile，�
 
 **多命名空间聚合**：一个 datapack = **一个 profile**，其下所有 `data/<ns>/` 命名空间（含覆盖 vanilla 的 `data/minecraft/`）全部聚合进这一个 profile。加载经与 `ProfileLoader` 相同的**两阶段 `RegistryLoader` 路径**（先以内置 vanilla 全宇宙为基准，再对 datapack 自身 DTO 交叉验证），仅保留 datapack 自身内容；vanilla tag 宇宙保留，使 `#minecraft:swords` 等 `#tag` supported_items 引用在业务→算法边界仍可解析。datapack 自身定义的 item tag（`data/<ns>/tags/item/*.json`）会并入 profile 的 tag 宇宙与 TagResolver，并按其 `replace` 标志对 vanilla tag 覆盖（replace=替换 / 默认=合并），使 `#mypack:*` supported_items 引用与 `tags_of` 适用性在解算时生效（B-T14 I-1）。
 
+**宝藏判定限制（T19）**：datapack 魔咒的宝藏标志由 `#minecraft:enchantment/treasure` 标签成员推导（同时检查 category-dropped 的 `#minecraft:treasure` 键）。对 `#minecraft:enchantment/treasure` 的完整 `replace:true` **不被完整支持**——`McOfficialParser` 先播种内置 vanilla 标签宇宙（全路径键 `minecraft:enchantment/treasure`），datapack 的标签文件随后加载；datapack 的 `data/minecraft/tags/enchantment/treasure.json` 只替换/合并其自身派生的 `minecraft:treasure` 键，内置 vanilla 全路径键的成员仍保留并参与判定，因此 vanilla 宝藏成员无法被 datapack 整体剔除。datapack 可新增宝藏成员（默认 `replace:false` 合并）或覆盖非 vanilla 命名空间。
+
 `datapack` profile 的 `dependencies()` 保持为空：内置 `builtin:vanilla` 作为**隐式基准**，由 `cross_validate` 无条件收集（B-T14 M-5），而非写入依赖链。
 
 **扫描与 CLI**：默认扫描 `<cwd>/profiles/`（`BesqContext::set_profiles_dir(dir)` 可覆盖，CLI 用 `--profile-dir <dir>`）。`--profile <key>` 激活任意字符串 key 的 profile；`--publish <key> [--publish-version <v> --publish-tag <t>]` 将有效视图拍平为自包含 JSON。
@@ -722,7 +763,9 @@ besq 支持把真实 MC 数据包（datapack）直接加载为一个 profile，�
 | `name` | `assets/<ns>/lang/en_us.json` → Language 系统 | `description.translate` 键查表 | 高（运行时从 Language 重写） |
 | `platform` | — | 硬编码 `"java"` | 高 |
 | `max_level` | 魔咒 JSON | `max_level` | 高 |
-| `limited_level` | — | **成本模拟计算** | 中（保守估算） |
+| `min_cost` | 魔咒 JSON | `min_cost` | 高 |
+| `is_treasure` | 魔咒标签 | `#minecraft:enchantment/treasure` 成员 | 高 |
+| `limited_level` | — | **C++ `LimitedLevelCalculator` 加载期计算**（见第 10 节） | 中（保守估算） |
 | `multiplier` | 魔咒 JSON | `anvil_cost` | 高 |
 | `exclusive_set` | 魔咒 JSON | `exclusive_set` | 高 |
 | `supported_items` | 魔咒 JSON | `supported_items`（`#tag` 引用透传） | 见第 11 节 | 高 |
@@ -799,8 +842,9 @@ python scripts/get_vanilla_data.py         # 薄封装，同上
 
 `limited_level` 只计算**成本是否允许**，不检查魔咒是否出现在附魔台的可用列表中
 （后者由 `#minecraft:in_enchanting_table` / `#minecraft:non_treasure` 标签控制）。
-宝藏魔咒（如 Swift Sneak）在附魔台中不会出现，但如果它们出现，计算出的 limited_level
-表示其最高可达等级。
+`LimitedLevelCalculator` 对宝藏魔咒（`is_treasure`，如 Swift Sneak）直接置
+`limited_level = 0`（不在附魔台可用池）；非宝藏魔咒即使计算出的 limited_level 较低，
+也只表示成本上限，不代表其实际出现在附魔台中。
 
 ### Q: 装备类别推导会出错吗？
 
