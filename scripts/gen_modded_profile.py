@@ -58,6 +58,10 @@ profile = {
     "author": "benchmark",
     "version": "1.0.0",
     "schema_version": "2.1.0",
+    # B-T13: incremental profile — declare the vanilla base so the effective
+    # view (resolve_effective) merges builtin:vanilla + modded_sword, and so
+    # `#minecraft:swords` supported_items resolve via the builtin tag universe.
+    "dependencies": ["builtin:vanilla"],
     "enchantments": MOD_ENCHANTS,
     "equipments": [],
     "tags": [],

@@ -4,6 +4,9 @@
   "author": "benchmark",
   "version": "1.0.0",
   "schema_version": "2.1.0",
+  "dependencies": [
+    "builtin:vanilla"
+  ],
   "enchantments": [
     {
       "id": "leeching",

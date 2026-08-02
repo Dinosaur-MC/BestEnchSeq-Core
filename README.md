@@ -14,7 +14,9 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Moddable forge engine via IForgeEngine virtual interface
 - [x] Profile-based data management with versioning, branching, merging
-- [x] Multi-format data loading: vanilla JSON, CSV, MC data-driven format
+- [x] Profile dependencies (transitive resolution + cycle detection), effective view, versioned publish (`--publish`)
+- [x] Multi-format data loading: vanilla JSON, CSV, MC data-driven format, and datapack (`pack.mcmeta`) as profiles
+- [x] String-keyed profile identity (`--profile <key>`, root `builtin:vanilla`) — NSID reserved for MC content ids
 - [x] Built-in + plugin algorithm strategies
 - [x] Binary checkpointing for long-running searches
 - [x] Input validation + EnchReg pruning via CompactAdapter::apply()
@@ -36,6 +38,11 @@ besq --target diamond_sword --source "sharpness=5"
 besq --algorithm astar --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]"
 besq --algorithm penalty_balance --target "diamond_chestplate[protection=4,thorns=3,unbreaking=3,mending=1]"
 besq --algorithm hamming --target "netherite_sword[sharpness=5,sweeping_edge=3,looting=3,unbreaking=3,fire_aspect=2,knockback=2,mending=1,vanishing_curse=1]"
+
+# Profile / datapack / publish
+besq --profile builtin:vanilla --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+besq --profile-dir data/tests/profiles --profile modded_sword --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+besq --publish builtin:vanilla --publish-version 1.0 --publish-tag stable --output out/vanilla.json
 ```
 
 Alternatively, invoke directly from the build directory:
@@ -78,7 +85,7 @@ CLI → CLIApp (application runner)
 | Domain | Namespace | Purpose | Dependencies |
 |--------|-----------|---------|-------------|
 | `algorithm/` | `algorithm::` | Algorithm execution: compact types, forge engine, strategies, diagnostics | `common-core` + log |
-| `business/` | `::` | Business types, registries, Profile, parsers, loaders, managers | `common-core` + io + log |
+| `business/` | `::` | Business types, registries, Profile, parsers, loaders, ProfileManager, components (RegistryHelper) | `common-core` + io + log |
 | `orchestration/` | `orchestration::` | Cross-domain wiring: pipelines, CompactAdapter, formatters | algorithm + business |
 | `interface/` | `::` | I/O boundary: CLIApp, BesqContext, C ABI | orchestration + common sub-targets |
 
@@ -142,8 +149,8 @@ flowchart TB
         Registries["registries/<br/>IRegistry / EnchantmentRegistry<br/>EquipmentRegistry / TagRegistry"]
         Parsers["parsers/<br/>NativeJsonParser / NativeCsvParser<br/>McOfficialParser"]
         Loaders["loaders/<br/>RegistryLoader / ProfileLoader"]
-        Managers["managers/<br/>RegistryManager / ProfileManager"]
-        Comp["components/<br/>FormatDetector / Serializer / TagResolver"]
+        PM["ProfileManager<br/>dependencies / effective view<br/>publish / datapack"]
+        Comp["components/<br/>RegistryHelper / FormatDetector<br/>Serializer / TagResolver"]
     end
     style Business fill:#fff3e0,stroke:#e65100
 
@@ -196,7 +203,7 @@ flowchart TB
     EnchSer --> Profile
     Profile --> Types & Registries
     Loaders --> Registries
-    Managers --> Profile
+    PM --> Profile
 
     %% Common → all domains
     Algorithm -.-> Common
@@ -251,6 +258,17 @@ src/                          tests/                        benchmarks/
 | IDA* | Exact | Yes | ≤ 10 | Plugin (plugins/) | Iterative deepening + TT pruning |
 
 All algorithms share `IForgeEngine` and compact types. New algorithms only need to implement `IAlgorithm::execute()` to gain thread management, pause/cancel, and progress reporting.
+
+### Profile Management
+
+`ProfileManager` (business-domain entry) manages profiles whose keys are **plain strings** (arbitrary readable names, spaces/dots kept verbatim — not NSID; NSID is reserved for MC content ids). The root key is fixed at `builtin:vanilla`.
+
+- **Dependencies**: `ProfileMetadata.dependencies` (string list) is resolved transitively in topological order with cycle detection (`resolve_dependencies`).
+- **Effective view**: `resolve_effective` topologically merges the dependency chain + the profile itself (upper layers win), builds a merged-tag `TagResolver`, and caches the result.
+- **Stable CRUD**: real-time validation + automatic snapshot; `undo()` rolls back the last successful change.
+- **Publish**: `--publish <key> [--publish-version <v> --publish-tag <t>]` flattens the effective view into a self-contained profile JSON (with embedded `version` / `release_tag`).
+- **Datapack**: directories with `pack.mcmeta` load as one profile via the real MC 1.21+ format (single-string/array `supported_items`, `slots`, `tag replace`, `anvil_cost`). A datapack's multiple namespaces (`data/<ns1>/`, `data/<ns2>/`, including `data/minecraft/` overriding vanilla) aggregate into that profile; the profile key is `pack.id` or the folder name verbatim.
+- **Discovery**: `<cwd>/profiles/` is scanned by default (`--profile-dir <dir>` overrides); `--profile <key>` activates any string key.
 
 ### Key Design Decisions
 

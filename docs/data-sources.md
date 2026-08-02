@@ -675,6 +675,39 @@ OutputFormatter 不再使用 `EnchInfo::name` 或 `NSID::str()`，而是统一�
 | compact | `item.id.str()`（NSID 字符串，机器可读） | `ench.id.str()` |
 | JSON | `item.id.str()`（id 字段，机器可读） | `ench.id.str()` |
 
+### 14.4 Datapack 加载为 Profile（runtime）
+
+besq 支持把真实 MC 数据包（datapack）直接加载为一个 profile，通过 `McOfficialParser` 解析其内部 `data/<ns>/` 目录（真实 MC 1.21+ 格式：`supported_items`/`exclusive_set` 单字符串或数组、`slots`、`tag replace`、`anvil_cost`）。
+
+**pack.mcmeta 检测**：目录含 `pack.mcmeta` 才被识别为 datapack。`ProfileManager::load_datapack(dir)` 显式加载；`ProfileManager::load_directory(dir)` 会把扫描目录下含 `pack.mcmeta` 的子目录当作 datapack 加载（目录中的 `.json`/`.csv` 文件按 native 格式加载）。
+
+**目录布局**：
+
+```
+<profiles_dir>/
+├── custom.json                      ← native JSON profile
+├── my_sheet.csv                     ← native CSV profile
+└── <My Pack>/                      ← datapack 子目录（含 pack.mcmeta）
+    ├── pack.mcmeta
+    └── data/
+        ├── <ns1>/                   ← 命名空间 1（如自定义模组）
+        │   ├── enchantment/*.json
+        │   └── tags/item/*.json
+        ├── <ns2>/                   ← 命名空间 2
+        │   └── enchantment/*.json
+        └── minecraft/               ← 覆盖 vanilla 的命名空间
+            └── tags/item/*.json
+```
+
+**命名规则**（B-T13：profile key 是字符串，verbatim 保留）：
+- profile key = `pack.mcmeta` 中 `pack.id`；无 `pack.id` 时 = 文件夹名，**verbatim 保留**（可含空格/点，不做 NSID 清洗）。
+- 根 key 固定为 `builtin:vanilla`；datapack 命名为 `builtin:vanilla`/`vanilla`（旧别名）时改写为 `vanilla_datapack`，防止覆盖内置根。
+- datapack 内魔咒/装备/tag id 仍是 NSID（`<ns>:<id>`），如 `mytest:leeching`。
+
+**多命名空间聚合**：一个 datapack = **一个 profile**，其下所有 `data/<ns>/` 命名空间（含覆盖 vanilla 的 `data/minecraft/`）全部聚合进这一个 profile。加载经与 `ProfileLoader` 相同的**两阶段 `RegistryLoader` 路径**（先以内置 vanilla 全宇宙为基准，再对 datapack 自身 DTO 交叉验证），仅保留 datapack 自身内容；vanilla tag 宇宙保留，使 `#minecraft:swords` 等 `#tag` supported_items 引用在业务→算法边界仍可解析。datapack 自动注入隐式依赖 `builtin:vanilla`（写入依赖链，供 `cross_validate` 使用）。
+
+**扫描与 CLI**：默认扫描 `<cwd>/profiles/`（`BesqContext::set_profiles_dir(dir)` 可覆盖，CLI 用 `--profile-dir <dir>`）。`--profile <key>` 激活任意字符串 key 的 profile；`--publish <key> [--publish-version <v> --publish-tag <t>]` 将有效视图拍平为自包含 JSON。
+
 ---
 
 ## 15. 条目级数据来源参考

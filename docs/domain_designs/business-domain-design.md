@@ -18,8 +18,8 @@
 6. [Loaders](#6-loaders)
    - 6.1 [RegistryLoader](#61-registryloader)
    - 6.2 [ProfileLoader](#62-profileloader)
-7. [Managers](#7-managers)
-   - 7.1 [RegistryManager](#71-registrymanager)
+7. [Profile Management](#7-profile-management)
+   - 7.1 [RegistryHelper](#71-registryhelper)
    - 7.2 [ProfileManager](#72-profilemanager)
 8. [Components](#8-components)
 9. [Cross-Domain Cleanup](#9-cross-domain-cleanup)
@@ -36,7 +36,7 @@ The business domain (`src/domain/business/`) encapsulates all game-concept types
 
 - **Profile is the first-class citizen** — all normal operations take and return `Profile` as the unit of input/output. Low-level detail handling is delegated through Profile proxy methods or obtained from Profile resource access.
 - **Cross-registry and cross-profile operations must be done through Profile**, not by manually manipulating individual registries.
-- **Self-contained core** — the domain owns its types, registries, parsers, loaders, and managers. External domains consume business types through public headers only.
+- **Self-contained core** — the domain owns its types, registries, parsers, loaders, `ProfileManager`（业务域入口）, and components (`RegistryHelper` 等). External domains consume business types through public headers only.
 - **Profile is the complete serialization unit** — its JSON format corresponds directly to the existing `vanilla.json` structure.
 
 ### Architecture
@@ -85,11 +85,10 @@ src/domain/business/
 │   ├── RegistryLoader.h/cpp                    Low-level: DTO ↔ Registry
 │   └── ProfileLoader.h/cpp                     External: Profile I/O (primary entry point)
 │
-├── managers/                                   ← Profile-centric operations
-│   ├── RegistryManager.h/cpp                   Filter, set operations, validation, diff
-│   └── ProfileManager.h/cpp                    Lifecycle, snapshot, branch, merge, activation
+├── ProfileManager.h/cpp                        ← Profile 生命周期 + 依赖图/有效视图/稳定 CRUD/发布/datapack（业务域入口）
 │
 └── components/
+    ├── RegistryHelper.h/cpp                     Filter, set operations, validation, diff（原 RegistryManager）
     ├── FormatDetector.h/cpp                     File format detection + dispatch
     └── Serializer.h/cpp                         Json streaming serialization (extended for Profile)
 ```
@@ -173,11 +172,12 @@ class TagResolver;  // fwd — Profile stores a shared_ptr; complete type only n
 // ── Profile Metadata ───────────────────────────────────────────────────
 
 struct ProfileMetadata {
-    NSID name;                               // "builtin:vanilla", "profile:my_custom"
+    std::string name;                        // 任意可读名（可含空格/点，verbatim 保留，非 NSID）
     std::string description;
     std::string author;
     std::string version;
     std::string parent;                      // branch source profile name
+    std::vector<std::string> dependencies;   // 声明的直接依赖（传递解析）
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point updated_at;
 
@@ -186,6 +186,7 @@ struct ProfileMetadata {
     static constexpr std::string_view KEY_DESCRIPTION = "description";
     static constexpr std::string_view KEY_AUTHOR      = "author";
     static constexpr std::string_view KEY_VERSION     = "version";
+    static constexpr std::string_view KEY_DEPENDENCIES = "dependencies";
     static constexpr std::string_view KEY_ENCHANTMENTS = "enchantments";
     static constexpr std::string_view KEY_EQUIPMENTS   = "equipments";
     static constexpr std::string_view KEY_TAGS         = "tags";
@@ -196,14 +197,18 @@ struct ProfileMetadata {
 class Profile {
 public:
     Profile() = default;
-    explicit Profile(NSID name);
+    explicit Profile(std::string name);
 
     // -- Metadata -------------------------------------------------------
 
     const ProfileMetadata& metadata() const noexcept;
-    const NSID& name() const noexcept;
+    const std::string& name() const noexcept;
     void set_description(std::string desc);
     void set_version(std::string version);
+
+    /// Declared direct dependencies (transitively resolved at load).
+    const std::vector<std::string>& dependencies() const noexcept;
+    void set_dependencies(std::vector<std::string> deps);
 
     // -- Registry read access (lenient, for trusted downstream) ----------
 
@@ -252,16 +257,17 @@ public:
     // -- Clone ----------------------------------------------------------
 
     /// Deep copy with new name (supports snapshot/branch)
-    Profile clone(const NSID& new_name) const;
+    Profile clone(const std::string& new_name) const;
 
     // -- Serialization --------------------------------------------------
 
     Json to_json() const;
-    static Profile from_json(const Json& json);
+    void from_json(const Json& json);
+    static Profile from_json_static(const Json& json);
 
 private:
     friend class ProfileManager;             // for lifecycle management
-    friend class RegistryManager;            // for set operation result construction
+    friend class RegistryHelper;             // for set operation result construction
 
     ProfileMetadata _meta;
     EnchantmentRegistry _ench;
@@ -272,8 +278,10 @@ private:
 ```
 
 **Design notes**:
-- `name` uses `NSID` — profiles are identified by namespaced identifiers like `"builtin:vanilla"`, `"profile:experimental"`, `"backup:pre_test_0725"`.
-- `tags` in `ProfileMetadata` is **not present** — the `tags` field in `vanilla.json` maps to `TagRegistry`, not metadata.
+- `name` is a **`std::string` profile key** — 任意可读名（可含空格/点，verbatim 保留），**不是 NSID**（B-T13：Profile key 与 NSID 解耦）。NSID 仅用于 MC 内容类型（魔咒/装备/tag id、datapack 内命名空间）。根 key 固定为 `builtin:vanilla`。`--profile` 匹配任意字符串 key。
+- `dependencies` 声明直接依赖（字符串列表），由 `ProfileManager` 传递解析（见 7.2）。
+- `tags` in `ProfileMetadata` is **not present** — the `tags` field in `vanilla.json` maps to `TagRegistry`, not metadata。
+- **内容 id 仍是 NSID** — `has_enchantment(const NSID&)`、`remove_enchantment(const NSID&)`、注册表 key 等全部保持不变；只有 profile 身份（name/key）改为字符串。
 - Profile exposes `const&` access to registries for trusted downstream (e.g., `CompactAdapter` needs raw `EnchantmentRegistry` to build `EnchReg`). Normal business logic uses proxy methods instead.
 
 ---
@@ -334,13 +342,20 @@ public:
 
 ### McOfficialParser
 
-Parses MC 1.21+ data-driven format (`data/<ns>/enchantment/<id>.json` with tag resolution).
+Parses the real MC 1.21+ data-driven format (`data/<ns>/enchantment/<id>.json` with tag resolution). 支持真实格式特性：`supported_items`/`exclusive_set` 单字符串或数组、`slots`、`tag replace`、`anvil_cost`（→ 费用倍率）。也支持内存解析（`parse_files`，无文件系统访问）与单条解析（`parse_single_enchantment`）。
 
 ```cpp
 class McOfficialParser {
 public:
     static std::pair<std::vector<EnchantmentData>, std::vector<EquipmentData>>
     parse(const std::filesystem::path& directory);
+
+    static std::pair<std::vector<EnchantmentData>, std::vector<EquipmentData>>
+    parse_files(const std::unordered_map<std::string, std::string>& files);
+
+    static business::loader::EnchantmentData parse_single_enchantment(
+        const std::string& ns, const std::string& filename,
+        const std::string& content, TagResolver& tag_resolver);
 };
 ```
 
@@ -447,50 +462,60 @@ ProfileLoader::load_builtin()
 
 ---
 
-## 7. Managers
+## 7. Profile Management
 
-### 7.1 RegistryManager
+`managers/` 目录已解散（B-T12 结构重组）：`ProfileManager` 上移到 `src/domain/business/` 顶层（业务域入口），原 `RegistryManager` 改名 **`RegistryHelper`** 并移入 `src/domain/business/components/`。
 
-Provides set operations, filtering, validation, and diff on Profiles. Supports both **single-shot static methods** and a **chainable builder** for multi-step operations.
+### 7.1 RegistryHelper
+
+位于 `src/domain/business/components/RegistryHelper.h/cpp`（原 `RegistryManager`）。提供 Profile 上的集合运算、筛选、验证与 diff，支持**单发静态方法**与**链式 Builder** 两种用法。
 
 ```cpp
-class RegistryManager {
+class RegistryHelper {
 public:
     // ── Chainable Builder ─────────────────────────────────────────────
     //
     // Allows multi-round operations before finalizing:
     //
-    //   Profile result = RegistryManager{}
+    //   Profile result = RegistryHelper{}
     //       .load(base)
     //       .filter_platform(MCE::Java)
     //       .filter_equipment(NSID("#minecraft:sword"))
     //       .unite(other_profile)
-    //       .build(NSID("result:java_swords"));
+    //       .build("result:java_swords");
 
-    RegistryManager& load(const Profile& from);
-    RegistryManager& filter(std::function<bool(const EnchInfo&)> pred);
-    RegistryManager& filter_platform(MCE platform);
-    RegistryManager& filter_equipment(const NSID& category);
-    RegistryManager& unite(const Profile& other);
-    RegistryManager& intersect(const Profile& other);
+    RegistryHelper& load(const Profile& from);
+    RegistryHelper& filter(std::function<bool(const EnchInfo&)> pred);
+    RegistryHelper& filter_platform(MCE platform);
+    RegistryHelper& filter_equipment(const NSID& category);
+    RegistryHelper& unite(const Profile& other);
+    RegistryHelper& intersect(const Profile& other);
 
     /// Finalize and produce result Profile.
-    Profile build(const NSID& result_name) const;
+    Profile build(const std::string& result_name) const;
 
     // ── Static Single Operations ──────────────────────────────────────
 
     /// Union: all entries from both profiles.
-    static Profile unite(const NSID& name,
+    static Profile unite(const std::string& name,
                          const Profile& a, const Profile& b);
     /// Intersection: entries present in both profiles.
-    static Profile intersect(const NSID& name,
+    static Profile intersect(const std::string& name,
                              const Profile& a, const Profile& b);
     /// Subtraction: entries in base but not in other.
-    static Profile subtract(const NSID& name,
+    static Profile subtract(const std::string& name,
                             const Profile& base, const Profile& other);
     /// Merge: insert_or_assign from other into base (overwrite semantics).
-    static Profile merge(const NSID& name,
+    static Profile merge(const std::string& name,
                          const Profile& base, const Profile& other);
+    /// Merge `src` into `dest` IN PLACE (overwrite semantics; used by ProfileManager::merge).
+    static void merge(Profile& dest, const Profile& src);
+
+    /// Build a TagResolver covering the merged tag universe of an effective
+    /// view (every `#tag` in `eff.tags()` is registered).  Used by
+    /// ProfileManager::resolve_effective so the merged view is `tags_of`-queryable.
+    static std::shared_ptr<TagResolver> build_tag_resolver(
+        const Profile& eff, const std::vector<const Profile*>& sources);
 
     // ── Diff ──────────────────────────────────────────────────────────
 
@@ -526,9 +551,9 @@ Profile operator-(const Profile& a, const Profile& b);  // subtract
 
 ### 7.2 ProfileManager
 
-Manages Profile lifecycle: creation, activation, snapshot, branching, merging.
+位于 `src/domain/business/ProfileManager.h/cpp`（业务域入口）。管理 Profile 生命周期（CRUD、激活、快照、分支、合并），并在其上叠加**依赖图 / 有效视图 / 稳定 CRUD+快照 / 版本化发布 / datapack 加载**。
 
-**Implementation note**: Built by extending the existing `interface/ProfileSet` (which already has CRUD + activate + fork/merge). The new version adds snapshot, version metadata, NSID-based naming, and diff delegation.
+**Implementation note**: Built by extending the former `interface/ProfileSet` (CRUD + activate + fork/merge). Profile key 是 `std::string`（非 NSID）；内容 id 仍是 NSID。
 
 ```cpp
 class ProfileManager {
@@ -537,63 +562,79 @@ public:
 
     // ── CRUD ──────────────────────────────────────────────────────────
 
-    /// Create an empty profile.
-    Profile& create(const NSID& name);
-
-    /// Create a profile from an existing source (deep copy).
-    Profile& create_from(const NSID& source, const NSID& dest);
-
-    /// Remove a profile. Returns false if not found.
-    bool remove(const NSID& name);
-
-    /// Check if profile exists.
-    bool exists(const NSID& name) const;
-
-    /// Find profile by name (nullptr if not found).
-    Profile* find(const NSID& name);
-    const Profile* find(const NSID& name) const;
-
-    /// List all profile names.
-    std::vector<NSID> list() const;
-
-    /// Number of managed profiles.
+    Profile& create(const std::string& name);
+    Profile& create_from(const std::string& source, const std::string& dest);
+    bool remove(const std::string& name);
+    bool exists(const std::string& name) const;
+    Profile* find(const std::string& name);
+    const Profile* find(const std::string& name) const;
+    std::vector<std::string> list() const;
     size_t size() const noexcept;
+
+    // ── 稳定 CRUD（实时校验 + 自动快照/undo）─────────────────────────
+
+    bool add_enchantment(const std::string& profile, const EnchInfo& info);
+    bool update_enchantment(const std::string& profile, const EnchInfo& patch);
+    bool remove_enchantment(const std::string& profile, const NSID& id);
+    bool add_equipment(const std::string& profile, const Equipment& eq);
+    bool remove_equipment(const std::string& profile, const NSID& id);
+    bool add_tag(const std::string& profile, const EquipmentTag& tag);
+    bool remove_tag(const std::string& profile, const NSID& id);
+    bool undo(const std::string& profile);   // 回滚最近一次成功变更
 
     // ── Activation ────────────────────────────────────────────────────
 
-    /// Set the active profile. Throws if not found.
-    void activate(const NSID& name);
-
-    /// Get active profile. Throws if manager is empty.
+    void activate(const std::string& name);
     Profile& active();
     const Profile& active() const;
+    const std::string& active_name() const noexcept;
 
-    // ── Snapshot (immutable point-in-time copy) ───────────────────────
+    // ── Snapshot / Branch / Merge ─────────────────────────────────────
 
-    /// Create an immutable copy of a profile at this point in time.
-    Profile& snapshot(const NSID& source, const NSID& snapshot_name);
+    Profile& snapshot(const std::string& source, const std::string& snapshot_name);
+    Profile& branch(const std::string& source, const std::string& branch_name);
+    void merge(const std::string& source, const std::string& dest);
 
-    // ── Branch (independently evolvable copy) ─────────────────────────
+    // ── 依赖图 ────────────────────────────────────────────────────────
 
-    /// Create a fork of a profile that can evolve independently.
-    /// The branch inherits all data from source but tracks parent metadata.
-    Profile& branch(const NSID& source, const NSID& branch_name);
+    std::vector<std::string> resolve_dependencies(const std::string& profile) const;  // 拓扑序（依赖在前），环→空
+    const Profile& resolve_effective(const std::string& profile) const;               // 拓扑合并有效视图 + TagResolver + 缓存
+    void load_directory(const std::filesystem::path& dir);                            // native JSON/CSV + datapack 子目录
+    bool load_datapack(const std::filesystem::path& dir);                             // pack.mcmeta 检测 + McOfficialParser
+    size_t cross_validate(const std::string& profile);                                // 对 (vanilla ∪ 依赖链) 校验，返回移除数
+    void notify_mutated() const;                                                      // 直接改 Profile 后使有效视图缓存失效
 
-    // ── Merge ─────────────────────────────────────────────────────────
+    // ── Publish（拍平有效视图 + version/tag）─────────────────────────
 
-    /// Merge source profile into dest (insert_or_assign semantics).
-    /// Source entries overwrite dest entries on conflict.
-    void merge(const NSID& source, const NSID& dest);
+    bool publish(const std::string& profile, const std::string& version,
+                 const std::string& tag, const std::filesystem::path& out);
 
 private:
-    std::unordered_map<NSID, std::unique_ptr<Profile>> _profiles;
-    NSID _active;
+    bool _mutate(const std::string& profile, std::function<bool(Profile&)> op);
+    void _build_graph() const;
+    std::unordered_map<std::string, std::vector<Snapshot>> _undo_log;  // 每个 profile 的变更历史
+    std::unordered_map<std::string, std::unique_ptr<Profile>> _profiles;
+    mutable std::unordered_map<std::string, std::vector<std::string>> _dep_graph;    // 邻接表
+    mutable std::unordered_map<std::string, std::unique_ptr<Profile>> _effective_cache;
+    std::string _active;
 };
 ```
+
+**关键设计**：
+
+- **依赖图**：`dependencies` 声明直接依赖；`resolve_dependencies` 用 DFS 求传递闭包（拓扑序，依赖在前，不含目标自身）；检测到环返回空。
+- **有效视图**：`resolve_effective` 按拓扑序 merge 依赖链 + 自身（上层覆盖下层），构造覆盖合并 tag 宇宙的 `TagResolver`，并缓存；任何 manager 级 mutation 使缓存失效，直接改 Profile 后须 `notify_mutated()`。
+- **稳定 CRUD**：`_mutate` 在应用前/后各校验一次，成功后记录变更前快照（`_undo_log`），失败回滚不留脏状态；`undo()` 回滚最近一次成功变更。回滚/撤销通过 JSON round-trip 恢复，同时保留 `TagResolver`。
+- **版本化发布**：`publish(profile, version, tag, out)` 拍平有效视图为自包含 profile JSON，内嵌 `version` / `release_tag`。
+- **datapack**：`load_datapack` 要求目录含 `pack.mcmeta`，用 `McOfficialParser` 解析真实 MC 1.21+ 格式（单字符串/数组 `supported_items`、`slots`、`tag replace`、`anvil_cost`），经与 `ProfileLoader` 相同的两阶段 `RegistryLoader` 路径构建，仅保留 datapack 自身内容；自动注入隐式依赖 `builtin:vanilla`。`load_directory` 加载目录下 native JSON/CSV 文件并把含 `pack.mcmeta` 的子目录当作 datapack 加载。datapack profile key = `pack.id`（否则文件夹名），verbatim 保留（可含空格/点）；命名为 `builtin:vanilla`/`vanilla` 时改写为 `vanilla_datapack` 防止覆盖根。
 
 ---
 
 ## 8. Components
+
+### RegistryHelper
+
+集合运算助手（原 `RegistryManager`，B-T12 改名并移入 `components/`）。提供链式 Builder 与静态集合运算（unite/intersect/subtract/merge）、diff、validate，以及 `build_tag_resolver`（为有效视图构造覆盖合并 tag 宇宙的 `TagResolver`）。详见 7.1。
 
 ### FormatDetector
 
@@ -677,9 +718,10 @@ Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `TagRegistry`) keep 
 |------|--------|-------------|
 | `interface/parsers/EnchInfoParser.h/cpp` | Format parsing belongs in business/ | `business/parsers/NativeJsonParser`, `NativeCsvParser`, `McOfficialParser` |
 | `interface/types/RawTypes.h` | DTO types now owned by business/ | `business/types/dto/EnchantmentData.h`, `EquipmentData.h` |
-| `interface/ProfileSet.h/cpp` | Profile management belongs in business/ | `business/managers/ProfileManager` |
+| `interface/ProfileSet.h/cpp` | Profile management belongs in business/ | `business/ProfileManager` |
 | `orchestration/components/RawTypeAdapter.h/cpp` | String→ID resolve is a loading concern | `RegistryLoader::from_dto()` internal logic |
-| `business/registries/RegistryManager.h/cpp` | Loading logic splits into loaders + managers | `RegistryLoader`, `ProfileLoader`, `RegistryManager`, `ProfileManager` |
+| `business/managers/RegistryManager.h/cpp`（B-T12 改名 + 移位） | `managers/` 解散；集合运算下沉到 components | `business/components/RegistryHelper` |
+| `business/managers/ProfileManager.h/cpp`（B-T12 移位） | `managers/` 解散；上移到业务域顶层 | `business/ProfileManager` |
 
 ### Files to Keep (unaffected)
 
@@ -698,7 +740,7 @@ Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `TagRegistry`) keep 
 
 | File | Change |
 |------|--------|
-| `business/business.h` | Update umbrella includes: add `Profile.h`, `RegistryLoader.h`, `ProfileLoader.h`, `RegistryManager.h`, `ProfileManager.h`; remove old `RegistryManager.h` |
+| `business/business.h` | Update umbrella includes: add `Profile.h`, `RegistryLoader.h`, `ProfileLoader.h`, `ProfileManager.h`, `components/RegistryHelper.h`；移除旧 `managers/` 引用 |
 | `interface/BesqContext.cpp` | Delegate loading to `ProfileLoader`, management to `ProfileManager` |
 | `interface/interface.h` | Remove `ProfileSet` and `RawTypes` includes |
 | `orchestration/orchestration.h` | Remove `RawTypeAdapter` include |
@@ -716,10 +758,10 @@ Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `TagRegistry`) keep 
 ```cpp
 // Load built-in vanilla data
 ProfileLoader loader;
-Profile vanilla = loader.load_builtin();         // NSID("builtin:vanilla")
+Profile vanilla = loader.load_builtin();         // name "builtin:vanilla"（根 key）
 
 // Load custom data file (auto-detect format)
-Profile custom = loader.load("mods/custom.json");// → Profile("mods:custom")
+Profile custom = loader.load("mods/custom.json");// → Profile("custom")（name 为文件内 name 或文件名）
 ```
 
 ### Set Operations via Operators
@@ -741,40 +783,45 @@ Profile working = vanilla + custom;
 ### Builder for Complex Filtering
 
 ```cpp
-Profile java_swords = RegistryManager{}
+Profile java_swords = RegistryHelper{}
     .load(vanilla)                              // start from vanilla
     .filter_platform(MCE::Java)                 // Java-only enchantments
     .filter_equipment(NSID("#minecraft:sword")) // sword-applicable only
-    .build(NSID("subset:java_swords"));
+    .build("subset:java_swords");
 ```
 
 ### Profile Manager Lifecycle
 
 ```cpp
 ProfileManager mgr;
-mgr.create_from(vanilla.name(), NSID("profile:experimental"));
-mgr.activate(NSID("profile:experimental"));
+mgr.create_from(vanilla.name(), "profile:experimental");  // name 是字符串 key
+mgr.activate("profile:experimental");
 
 auto& active = mgr.active();
 active.add_enchantment(custom_ench);
-active.remove_enchantment(NSID("minecraft:vanishing_curse"));
+active.remove_enchantment(NSID("minecraft:vanishing_curse"));  // 内容 id 仍是 NSID
 
 // Snapshot before risky changes
-mgr.snapshot(NSID("profile:experimental"), NSID("backup:pre_test"));
+mgr.snapshot("profile:experimental", "backup:pre_test");
 
 // Branch for parallel exploration
-mgr.branch(NSID("profile:experimental"), NSID("branch:alt_config"));
+mgr.branch("profile:experimental", "branch:alt_config");
 
 // Merge branch back
-mgr.merge(NSID("branch:alt_config"), NSID("profile:experimental"));
+mgr.merge("branch:alt_config", "profile:experimental");
+
+// 依赖图 / 有效视图 / 发布
+auto chain = mgr.resolve_dependencies("profile:experimental");  // 拓扑序依赖链
+const Profile& eff = mgr.resolve_effective("profile:experimental");  // 有效视图（含依赖）
+mgr.publish("profile:experimental", "1.0.0", "stable", "out/experimental.json");
 ```
 
 ### Diff Comparison
 
 ```cpp
-auto diff = RegistryManager::diff(
-    *mgr.find(NSID("profile:experimental")),
-    *mgr.find(NSID("backup:pre_test"))
+auto diff = RegistryHelper::diff(
+    *mgr.find("profile:experimental"),
+    *mgr.find("backup:pre_test")
 );
 // diff.enchantments → {Added/Removed/Modified entries}
 ```
@@ -807,12 +854,12 @@ std::string json = loader.to_json_string(mgr.active());
 | **S3a** | `loaders/RegistryLoader.h/cpp` | DTO ↔ Registry (absorb `RawTypeAdapter` logic) |
 | **S3b** | `loaders/ProfileLoader.h/cpp` | Profile I/O entry point |
 
-### Phase 3: Managers (S4–S5)
+### Phase 3: Profile 管理（S4–S5）
 
 | Step | Files | Description |
 |------|-------|-------------|
-| **S4** | `managers/ProfileManager.h/cpp` | Profile lifecycle (based on existing `ProfileSet`) |
-| **S5a** | `managers/RegistryManager.h/cpp` | Set operations + operator overloads + builder |
+| **S4** | `ProfileManager.h/cpp` | Profile lifecycle（基于既有 `ProfileSet`）+ 依赖图/有效视图/稳定 CRUD/发布/datapack |
+| **S5a** | `components/RegistryHelper.h/cpp` | Set operations + operator overloads + builder（原 `RegistryManager`） |
 | **S5b** | *Add operator overloads in global ns* | `|`, `&`, `+`, `-` for Profile |
 
 ### Phase 4: Components & Cleanup (S6–S8)
@@ -820,7 +867,7 @@ std::string json = loader.to_json_string(mgr.active());
 | Step | Files | Description |
 |------|-------|-------------|
 | **S6** | `components/FormatDetector.h/cpp` | Format detection + dispatch |
-| **S7** | *Remove old files* | `EnchInfoParser`, `RawTypeAdapter`, `RegistryManager`, `ProfileSet`, `RawTypes` |
+| **S7** | *Remove old files* | `EnchInfoParser`, `RawTypeAdapter`, `managers/`, `ProfileSet`, `RawTypes`；`RegistryManager` → `components/RegistryHelper` |
 | **S8a** | *Update consumers* | `main.cpp`, `BesqContext`, `SolvePipeline` |
 | **S8b** | *Update tests* | Migrate and adapt test files |
 | **S8c** | *Update CMakeLists* | All affected build files |
