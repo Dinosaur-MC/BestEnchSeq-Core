@@ -1,5 +1,6 @@
 #include "OutputFormatter.h"
 #include "domain/business/business.h"
+#include "domain/business/parsers/ParserShared.h"
 #include "common/i18n/Language.h"
 #include "common/i18n/NsidDisplay.h"
 
@@ -352,16 +353,49 @@ std::string OutputFormatter::format_compact(
 // ===========================================================================
 // Format JSON
 // ===========================================================================
+
+// ---------------------------------------------------------------------------
+// build_json_root — shared root metadata object (CLI `--format json` + C ABI)
+//
+// Root schema (v1.0): {schema_version, mode, success, algorithm,
+// computation_time_ms}.  Both OutputFormatter::format_json and the C ABI
+// besq_solve build this object so the two outputs share one schema.
+// ---------------------------------------------------------------------------
+Json OutputFormatter::build_json_root(AlgorithmMode mode, bool success,
+                                      const std::string &algorithm,
+                                      int64_t computation_time_ms) {
+    Json root = Json::object();
+    root["schema_version"]      = Json("1.0");
+    root["mode"]                = Json(mode_to_raw(mode));
+    root["success"]             = Json(success);
+    root["algorithm"]           = Json(algorithm);
+    root["computation_time_ms"] = Json(computation_time_ms);
+    return root;
+}
+
 std::string OutputFormatter::format_json(
     const std::vector<Solution> &solutions,
     const Profile &profile,
-    AlgorithmMode mode
+    AlgorithmMode mode,
+    bool success,
+    const std::string &algorithm,
+    int64_t computation_time_ms
 ) {
     const auto &ench_reg = profile.ench();
-    const auto &cat_reg = profile.tags();
-    Json::Object root;
-    root["schema_version"] = Json("1.0");
-    root["mode"]           = Json(mode_to_raw(mode));
+    const auto &cat_reg  = profile.tags();
+    const auto &eq_reg   = profile.eq();
+
+    // Root metadata defaults: when the caller has no SolveResult (e.g. a bare
+    // solution export), derive the algorithm name / time from the first
+    // solution so the root fields stay populated.
+    std::string algo    = algorithm;
+    int64_t time_ms     = computation_time_ms;
+    if (algo.empty() && !solutions.empty())
+        algo = solutions[0].metadata.algorithm_name;
+    if (time_ms <= 0 && !solutions.empty())
+        time_ms = solutions[0].metadata.computation_time.count();
+
+    Json root = OutputFormatter::build_json_root(mode, success, algo, time_ms);
 
     Json::Array sol_arr;
     for (size_t si = 0; si < solutions.size(); ++si) {
@@ -388,19 +422,19 @@ std::string OutputFormatter::format_json(
         s["original_ench"] = Json(orig_arr);
 
         // Target item
-        s["target_item"] = item_to_json(sol.target_item, ench_reg, cat_reg);
+        s["target_item"] = item_to_json(sol.target_item, ench_reg, cat_reg, eq_reg);
 
         // Available items
         Json::Array avail_arr;
         for (const auto &item : sol.available_items) {
-            avail_arr.push_back(item_to_json(item, ench_reg, cat_reg));
+            avail_arr.push_back(item_to_json(item, ench_reg, cat_reg, eq_reg));
         }
         s["available_items"] = Json(avail_arr);
 
         // Steps
         Json::Array steps_arr;
         for (const auto &step : sol.steps) {
-            steps_arr.push_back(step_to_json(step, ench_reg, cat_reg));
+            steps_arr.push_back(step_to_json(step, ench_reg, cat_reg, eq_reg));
         }
         s["steps"] = Json(steps_arr);
 
@@ -424,7 +458,7 @@ std::string OutputFormatter::format_json(
     }
     root["solutions"] = Json(sol_arr);
 
-    return Json(root).to_string(Json::Pretty);
+    return root.to_string(Json::Pretty);
 }
 
 // ===========================================================================
@@ -519,7 +553,8 @@ std::vector<Solution> OutputFormatter::parse_json(
 Json OutputFormatter::item_to_json(
     const Item &item,
     const EnchantmentRegistry &ench_reg,
-    const TagRegistry &cat_reg
+    const TagRegistry &cat_reg,
+    const EquipmentRegistry &eq_reg
 ) {
     Json::Object obj;
 
@@ -527,9 +562,31 @@ Json OutputFormatter::item_to_json(
     if (!item.is_book()) {
         Json::Object eq;
         eq["id"]             = Json(item.id.str());
-        eq["category"]       = Json("unknown"); // temp
+        eq["category"]       = Json("unknown");
         eq["name"]           = Json(item_display_name(item.id));
         eq["max_durability"] = Json(0);
+
+        // Fill in the real equipment data when the item id is registered.
+        // `category` is the equipment's display short name (e.g. "sword"),
+        // resolved from the equipment's category NSID via the tag registry,
+        // falling back to the NSID's short form (mirrors RegistryLoader).
+        // Unknown ids keep the sensible defaults above (books are is_book:true
+        // with equipment:null already).
+        if (auto eq_it = eq_reg.find(item.id); eq_it != eq_reg.end()) {
+            eq["max_durability"] = Json(eq_it->max_durability);
+            std::string category_name;
+            if (auto tag_it = cat_reg.find(eq_it->category);
+                tag_it != cat_reg.end()) {
+                category_name = tag_it->name;
+            } else {
+                category_name =
+                    business::parser_detail::category_short_name(eq_it->category);
+                if (category_name.empty())
+                    category_name = "unknown";
+            }
+            eq["category"] = Json(std::move(category_name));
+        }
+
         obj["equipment"]     = Json(eq);
         obj["is_book"]       = Json(false);
     } else {
@@ -614,11 +671,12 @@ Item OutputFormatter::item_from_json(
 Json OutputFormatter::step_to_json(
     const Solution::EnchStep &step,
     const EnchantmentRegistry &ench_reg,
-    const TagRegistry &cat_reg
+    const TagRegistry &cat_reg,
+    const EquipmentRegistry &eq_reg
 ) {
     Json::Object obj;
-    obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg);
-    obj["item_b"]         = item_to_json(step.item_b, ench_reg, cat_reg);
+    obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg, eq_reg);
+    obj["item_b"]         = item_to_json(step.item_b, ench_reg, cat_reg, eq_reg);
     obj["exp_level_cost"] = Json(step.exp_level_cost);
     obj["exp_cost"]       = Json(step.exp_cost);
     return Json(obj);

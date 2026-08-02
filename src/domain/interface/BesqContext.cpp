@@ -256,7 +256,9 @@ std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode,
                                 std::string_view fmt) const {
     auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
     if (fmt == "json")
-        return OutputFormatter::format_json(result.solutions, profile, mode);
+        return OutputFormatter::format_json(result.solutions, profile, mode,
+                                            result.success, result.algorithm_used,
+                                            result.computation_time_ms);
     if (fmt == "compact")
         return OutputFormatter::format_compact(result.solutions, profile, mode);
     return OutputFormatter::format_verbose(result.solutions, profile, mode);
@@ -274,7 +276,8 @@ std::string BesqContext::format_compact(const SolveResult& result, AlgorithmMode
 
 std::string BesqContext::format_json(const SolveResult& result, AlgorithmMode mode) const {
     return OutputFormatter::format_json(
-        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()), mode);
+        result.solutions, _impl->profiles.resolve_effective(_impl->profiles.active_name()),
+        mode, result.success, result.algorithm_used, result.computation_time_ms);
 }
 
 // ====================================================================

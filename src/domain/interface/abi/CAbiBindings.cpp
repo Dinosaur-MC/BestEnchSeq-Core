@@ -6,6 +6,7 @@
 
 #include "domain/interface/abi/abi.h"
 #include "domain/interface/BesqContext.h"
+#include "domain/orchestration/components/OutputFormatter.h"
 #include "common/io/json.h"
 #include "common/i18n/Language.h"
 #include "common/CommonTypes.h"
@@ -537,8 +538,6 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
             request.mode = AlgorithmMode::direct;
             request.payload = DirectPayload{source_enchants};
         }
-        std::string mode_json = (request.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
-
         // ── Algorithm ─────────────────────────────────────────────────────
         // Canonical default mirrors the CLI: direct → "dp_merge",
         // inventory → "hamming" (an inventory-capable strategy).  An omitted
@@ -575,24 +574,26 @@ char* besq_solve(BesqContext* ctx, const char* json_input) {
         // ── Solve ─────────────────────────────────────────────────────────
         auto result = c->impl.solve(request);
 
-        // ── Format result as raw JSON (aligns with OutputFormatter's schema) ─
-        Json::Object root_obj;
-        root_obj["schema_version"] = Json("1.0");
-        root_obj["mode"] = Json(mode_json);
-        root_obj["success"] = Json(result.success);
-        root_obj["algorithm"] = Json(result.algorithm_used);
-        root_obj["computation_time_ms"] = Json(result.computation_time_ms);
+        // ── Format result as raw JSON ─────────────────────────────────────
+        // The root metadata object is shared with OutputFormatter::format_json
+        // (OutputFormatter::build_json_root) so the C ABI and the CLI
+        // `--format json` cannot drift on the root schema.
+        Json root_obj = OutputFormatter::build_json_root(
+            request.mode, result.success, result.algorithm_used,
+            result.computation_time_ms);
 
         Json::Array sol_arr;
         for (size_t si = 0; si < result.solutions.size(); ++si) {
             auto sol_json = result.solutions[si].to_json();
-            // to_json() provides all fields except rank (a contextual index)
-            sol_json.as_object()["rank"] = Json(static_cast<int32_t>(si + 1));
+            // to_json() provides all fields except rank (a contextual index).
+            // Note: mutating via as_object() would copy the map and drop the
+            // rank — mutate the Json in place instead.
+            sol_json["rank"] = Json(static_cast<int32_t>(si + 1));
             sol_arr.push_back(sol_json);
         }
         root_obj["solutions"] = Json(sol_arr);
 
-        auto json_out = Json(root_obj).to_string(Json::Pretty);
+        auto json_out = root_obj.to_string(Json::Pretty);
         return strdup(json_out.c_str());
     }
     catch (const std::exception& e) {

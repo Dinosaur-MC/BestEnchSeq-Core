@@ -14,9 +14,12 @@ The JSON output is a single root object containing metadata and an array of solu
 
 ```json
 {
+    "algorithm": "dp_merge",
+    "computation_time_ms": 0,
     "mode": "direct",
     "schema_version": "1.0",
-    "solutions": [ ... ]
+    "solutions": [ ... ],
+    "success": true
 }
 ```
 
@@ -28,7 +31,12 @@ The JSON output is a single root object containing metadata and an array of solu
 |---|---|---|---|
 | `schema_version` | `string` | always | Schema version string (`"1.0"`). Incremented on breaking changes. |
 | `mode` | `string` | always | Operating mode: `"direct"` or `"inventory"`. |
+| `success` | `bool` | always | Whether the solve completed successfully. Shared with the C ABI `besq_solve` root. |
+| `algorithm` | `string` | always | Name of the algorithm used. Derived from the first solution's metadata when a bare solution set is formatted without a `SolveResult`. |
+| `computation_time_ms` | `int64` | always | Total wall-clock search time in milliseconds. |
 | `solutions` | `array<Solution>` | always | Array of zero or more forge solutions, sorted by cost ascending. |
+
+The root metadata (`schema_version`, `mode`, `success`, `algorithm`, `computation_time_ms`) is produced by `OutputFormatter::build_json_root`, which is shared with the C ABI `besq_solve` so the CLI `--format json` and the C ABI output cannot drift.
 
 ---
 
@@ -124,9 +132,12 @@ All object keys are sorted **alphabetically** (via `std::map<std::string, Json>`
 When no feasible forge sequence exists, `solutions` is an empty array:
 ```json
 {
+    "algorithm": "dp_merge",
+    "computation_time_ms": 0,
     "mode": "direct",
     "schema_version": "1.0",
-    "solutions": []
+    "solutions": [],
+    "success": true
 }
 ```
 
@@ -182,3 +193,4 @@ Limitations:
 | Schema Version | Changes |
 |---|---|
 | 1.0 | Initial stable schema |
+| 1.0 (B-T23) | Root now carries `success` / `algorithm` / `computation_time_ms`, aligned with the C ABI `besq_solve` root via a shared `OutputFormatter::build_json_root`; `equipment.category` / `equipment.max_durability` in `ItemStack` now emit real registry data instead of `"unknown"` / `0`. |

@@ -6,6 +6,8 @@
 #include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
+#include "common/io/json.h"
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -290,6 +292,47 @@ void test_format_verbose_too_expensive() {
     std::cout << "PASS: test_format_verbose_too_expensive" << std::endl;
 }
 
+// ─── Test: format_json emits real equipment data + C ABI-aligned root ──
+
+void test_format_json_real_equipment() {
+    g_fx.init_sword_set();
+    auto profile = profile_from_fx(g_fx);
+
+    Solution solution;
+    solution.is_success = true;
+    solution.platform = MCE::Java;
+    solution.metadata.algorithm_name = "dp_merge";
+    solution.metadata.computation_time = std::chrono::milliseconds(42);
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
+    solution.target_item = Item(equip.id, EnchSet{}, 0, equip.max_durability);
+    solution.total_exp_level_cost = 0;
+    solution.total_exp_cost = 0;
+
+    auto json_str = OutputFormatter::format_json(
+        {solution}, profile, AlgorithmMode::direct, true, "dp_merge", 42);
+    Json root = Json::parse(json_str);
+
+    // Root metadata aligned with the C ABI (besq_solve).
+    expect(root["success"].as<bool>() == true, "format_json root: success");
+    expect(root["algorithm"].as<std::string>() == "dp_merge",
+           "format_json root: algorithm");
+    expect(root["computation_time_ms"].as<int64_t>() == 42,
+           "format_json root: computation_time_ms");
+    expect(root["mode"].as<std::string>() == "direct", "format_json root: mode");
+
+    // Real equipment durability/category instead of 0 / "unknown".
+    Json target = root["solutions"][0]["target_item"];
+    expect(target["is_book"].as<bool>() == false, "format_json: target is not a book");
+    expect(target["equipment"]["id"].as<std::string>() == "minecraft:diamond_sword",
+           "format_json: equipment id");
+    expect(target["equipment"]["max_durability"].as<int32_t>() == 1561,
+           "format_json: real max_durability");
+    expect(target["equipment"]["category"].as<std::string>() == "sword",
+           "format_json: real category short name");
+
+    TEST_PASS("format_json real equipment + root metadata");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -304,6 +347,7 @@ int main() {
         test_verbose_item_format();
         test_format_verbose_final_item();
         test_format_verbose_too_expensive();
+        test_format_json_real_equipment();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
