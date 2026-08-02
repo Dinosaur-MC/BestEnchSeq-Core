@@ -6,12 +6,10 @@
 #include <charconv>
 #include <concepts>
 #include <cstdint>
-#include <optional>
-#include <set>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace ds {
@@ -111,6 +109,8 @@ struct bool_codec {
 };
 
 // ── vector_codec ─────────────────────────────────────────────────────
+/// NOTE: elements must not contain the CSV list separator ';' in their
+/// serialized form (guaranteed for NSID/identifier sets; escaping is future work).
 template<typename InnerCodec>
 struct vector_codec {
     InnerCodec inner;
@@ -126,7 +126,11 @@ struct vector_codec {
     }
     template<class V>
     bool from_json(const Json& j, V& vec, ErrorList& err, const std::string& path) const {
-        if (j.type() != JsonType::Array) { err.add(path, "expected array"); return false; }
+        if (j.type() != JsonType::Array) {
+            vec.clear();
+            err.add(path, "expected array");
+            return false;
+        }
         vec.clear();
         auto arr = j.as<Json::Array>();
         for (std::size_t i = 0; i < arr.size(); ++i) {
@@ -153,35 +157,44 @@ struct vector_codec {
         vec.clear();
         if (s.empty()) return true;
         std::size_t start = 0;
+        std::size_t elem_index = 0;
         while (start <= s.size()) {
             std::size_t end = s.find(';', start);
             if (end == std::string_view::npos) end = s.size();
             typename V::value_type elem{};
-            if (inner.from_csv(s.substr(start, end - start), elem, err, path))
+            std::string p = path + "[" + std::to_string(elem_index) + "]";
+            if (inner.from_csv(s.substr(start, end - start), elem, err, p))
                 vec.push_back(std::move(elem));
             if (end == s.size()) break;
             start = end + 1;
+            ++elem_index;
         }
         return true;
     }
 };
 
 // ── set_codec（序列化排序保证确定性）──────────────────────────────
+/// NOTE: elements must not contain the CSV list separator ';' in their
+/// serialized form (guaranteed for NSID/identifier sets; escaping is future work).
 template<typename InnerCodec>
 struct set_codec {
     InnerCodec inner;
     template<class V>  // V = std::set/std::unordered_set<Elem>
     void to_json(const V& set, Json& out) const {
-        std::vector<std::string> cells;
+        // 以 CSV 文本为排序键保证确定性，元素按 inner.to_json 发射保证任意类型往返一致。
+        std::vector<std::pair<std::string, Json>> cells;   // {sortKey, json}
         for (const auto& e : set) {
-            std::string cell;
-            inner.to_csv(e, cell);          // 用 CSV 文本作排序键
-            cells.push_back(std::move(cell));
+            std::string key;
+            inner.to_csv(e, key);
+            Json item;
+            inner.to_json(e, item);
+            cells.push_back({std::move(key), std::move(item)});
         }
-        std::sort(cells.begin(), cells.end());
+        std::sort(cells.begin(), cells.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
         Json arr = Json::array();
-        for (const auto& c : cells)
-            arr.push_back(Json(c));          // 元素为标量文本（NSID/string 等）
+        for (auto& [key, item] : cells)
+            arr.push_back(std::move(item));
         out = std::move(arr);
     }
     template<class V>
@@ -218,14 +231,17 @@ struct set_codec {
         set.clear();
         if (s.empty()) return true;
         std::size_t start = 0;
+        std::size_t elem_index = 0;
         while (start <= s.size()) {
             std::size_t end = s.find(';', start);
             if (end == std::string_view::npos) end = s.size();
             typename V::value_type elem{};
-            if (inner.from_csv(s.substr(start, end - start), elem, err, path))
+            std::string p = path + "[" + std::to_string(elem_index) + "]";
+            if (inner.from_csv(s.substr(start, end - start), elem, err, p))
                 set.insert(std::move(elem));
             if (end == s.size()) break;
             start = end + 1;
+            ++elem_index;
         }
         return true;
     }

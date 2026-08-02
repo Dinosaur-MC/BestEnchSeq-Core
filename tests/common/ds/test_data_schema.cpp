@@ -6,7 +6,6 @@
 #include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
 #include "framework/test_utils.h"
 #include <optional>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -339,6 +338,14 @@ void test_set_codec() {
     expect(ValsJson::parse(j, out, e), "set parse ok");
     expect(out.tags.count("a") && out.tags.count("b") && out.tags.count("c"),
            "set roundtrip (order-independent)");
+    // deterministic sorted emission
+    Json j2 = ValsJson::serialize(Vals{{}, {"b", "a", "c"}, std::nullopt});
+    auto tags_json = j2.has("tags") ? j2["tags"] : Json();
+    expect(tags_json.type() == JsonType::Array, "tags emitted as array");
+    auto tag_arr = tags_json.as<Json::Array>();
+    expect(tag_arr.size() == 3 && tag_arr[0].as<std::string>() == "a" &&
+           tag_arr[1].as<std::string>() == "b" && tag_arr[2].as<std::string>() == "c",
+           "set emitted deterministically sorted");
     TEST_PASS("set codec roundtrip");
 }
 void test_optional_codec() {
