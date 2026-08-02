@@ -14,6 +14,18 @@
 
 namespace {
 
+/// RAII guard: clears the shared executor handle on scope exit (normal or
+/// exceptional), so the owning BesqContext never retains a shared_ptr to an
+/// executor whose local reference in stage_execute has been released.  An
+/// abort thread that already copied the handle keeps the executor alive, so
+/// cancel() remains safe even after the clear.
+struct ExecutorHandleGuard {
+    ActiveExecutorHandle* handle;
+    ~ExecutorHandleGuard() {
+        if (handle) handle->store(nullptr);
+    }
+};
+
 /// Build a TagResolver from the profile's equipment → category mapping when
 /// the profile does not carry an explicit resolver.  Each equipment id is
 /// recorded as a member of its `#tag` category, reproducing the legacy
@@ -40,7 +52,7 @@ SolveResult SolvePipeline::run(
     const Profile& profile,
     const SolveRequest& request,
     algorithm::AlgorithmLoader& loader,
-    algorithm::AlgorithmExecutor** out_executor)
+    ActiveExecutorHandle* out_executor)
 {
     // Stage 1: Apply
     auto s1 = stage_apply(profile, request);
@@ -83,7 +95,7 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(
     algorithm::AlgorithmInput& algo_input,
     const std::string& algorithm,
     algorithm::AlgorithmLoader& loader,
-    algorithm::AlgorithmExecutor** out_executor)
+    ActiveExecutorHandle* out_executor)
 {
     Stage2Result result;
 
@@ -115,20 +127,24 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(
         return result;
     }
 
-    // Execute
+    // Execute on the heap so a shared_ptr can publish the executor's address
+    // while keeping it alive.  The handle only ever carries shared_ptr copies:
+    // the stack-local `executor` keeps the object alive until this function
+    // returns, and an abort thread that already copied the handle keeps it
+    // alive even longer — so cancel() can never dereference a destroyed
+    // executor.  The guard clears the handle on every exit path (including
+    // exceptions), so the owning BesqContext never retains a stale reference.
     auto start = std::chrono::steady_clock::now();
-    algorithm::AlgorithmExecutor executor(std::move(algo));
-    // Expose executor for cross-thread cancellation (besq_abort_solve).
-    // out_executor stays valid until stage_execute returns.
-    if (out_executor) *out_executor = &executor;
-    executor.start(algo_input);
-    executor.wait();
-    if (out_executor) *out_executor = nullptr;
+    auto executor = std::make_shared<algorithm::AlgorithmExecutor>(std::move(algo));
+    ExecutorHandleGuard handle_guard{out_executor};
+    if (out_executor) out_executor->store(executor);
+    executor->start(algo_input);
+    executor->wait();
     auto end = std::chrono::steady_clock::now();
 
     result.computation_time_ms = std::chrono::duration_cast<
         std::chrono::milliseconds>(end - start).count();
-    result.algo_output = executor.output();
+    result.algo_output = executor->output();
     return result;
 }
 

@@ -8,6 +8,7 @@
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 
+#include <atomic>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -19,7 +20,11 @@ struct BesqContext::Impl {
     ProfileManager profiles;
     ProfileLoader loader;
     algorithm::AlgorithmLoader algo_loader;
-    algorithm::AlgorithmExecutor* active_executor{nullptr};
+    /// Shared handle to the executor owned by the solve thread's stage_execute.
+    /// Atomic + shared_ptr: the solve thread stores/clears it, and an abort
+    /// thread copies it — the copy keeps the executor alive through cancel(),
+    /// so cancel() can never dereference a destroyed executor (B-T22).
+    std::atomic<std::shared_ptr<algorithm::AlgorithmExecutor>> active_executor{nullptr};
     std::string profiles_dir;   ///< overridden profiles dir ("" → default `<cwd>/profiles`)
 };
 
@@ -286,15 +291,22 @@ std::vector<std::string> BesqContext::list_algorithms() const {
 
 SolveResult BesqContext::solve(const SolveRequest& request) {
     auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
-    _impl->active_executor = nullptr;
+    _impl->active_executor.store(nullptr);
     auto result = SolvePipeline::run(profile, request, _impl->algo_loader,
                                      &_impl->active_executor);
-    _impl->active_executor = nullptr;
+    _impl->active_executor.store(nullptr);
     return result;
 }
 
 void BesqContext::abort_solve() {
-    if (auto* exec = _impl->active_executor) {
+    // Copy the handle under synchronization: the shared_ptr copy keeps the
+    // executor alive for the duration of cancel(), so a concurrent solve()
+    // clearing the handle (and dropping its own reference) can never leave us
+    // dereferencing a destroyed executor.  No-op when no solve is running or
+    // after completion (cancel() on a Completed/Failed/Idle executor is a
+    // no-op).
+    auto exec = _impl->active_executor.load();
+    if (exec) {
         exec->cancel();
     }
 }
