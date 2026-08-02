@@ -651,6 +651,7 @@ FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
 |-----------|-------------|------|
 | `id` | `id` (string → NSID) | 唯一标识 |
 | `name` | `display_name` → `name` | 显示名称（仅用于数据快照，运行时由 i18n 重写） |
+| `platform` | `platform` → `supported_platform`（`MCE`） | 平台限制（`"java"`/`"bedrock"`/`"all"`/`"none"`）。键名标准为 `platform`，读取兼容旧键名 `supported_platform`（旧 profile）；`RegistryLoader::from_dto` 按数据字面映射——空 → `MCE::All`，否则 `string_to_mce`。vanilla.json 43 条 `"java"` → 加载后 `MCE::Java`（Java 求解不受影响；Bedrock 数据源后续引入） |
 | `max_level` | `max_level` | 最大等级 |
 | `min_cost` | `min_cost_base`/`min_cost_per_level` | 附魔台成本公式原始字段；`LimitedLevelCalculator` 加载期据此推导 `limited_level` |
 | `is_treasure` | `is_treasure` | 宝藏标志（数据值，非启发式） |
@@ -658,6 +659,25 @@ FormatDetector::parse(path) 或 NativeJsonParser::parse(json)
 | `multiplier` | `multiplier` | 费用倍率 |
 | `exclusive_set` | `exclusive_with` → `exclusive_set` | 冲突魔咒 |
 | `supported_items` | `applicable_to` → `supported_items`（透传不展开） | 适用物品（`#tag` 或具体 ID） |
+
+> **序列化实现（DataSchema Phase 2）**：`EnchInfo`/`Equipment`/`EquipmentTag` 的 `to_json`/`from_json` 与解析器、`EnchSerializer` 导出均由 `src/domain/business/schemas/` 的 schema 声明驱动（单一事实源），替代旧三套手写实现。平台键名统一为 `platform`；`min_cost` 双形态（扁平 `min_cost_base`/`min_cost_per_level` 主键 + 嵌套 `min_cost.{base,per_level_above_first}` 读别名）；`limited_level` 按 presence 重建 `limited_level_provided` 提示位。
+
+### 14.1b CSV 格式（NativeCsv）
+
+CSV 与 JSON 共享同一套 schema 字段，格式完整支持魔咒 + 装备（#11 完整往返）。
+
+**魔咒表头**（`EnchSerializer::export_csv` 导出列，即 schema 字段序）：
+
+```
+id,name,platform,max_level,limited_level,min_cost_base,min_cost_per_level,multiplier,is_treasure,exclusive_set,supported_items
+```
+
+- `exclusive_set`/`supported_items` 单元格以 `;` 连接；`exclusive_set` 读取时经 tag 展开，`supported_items` 原样透传。
+- `platform` 列读取 → `MCE`（`"java"`/`"bedrock"`/`"all"`/`"none"`）；空列 → 未指定。
+- 旧表头（缺 `platform`/`min_cost` 等列）向后兼容——缺失可选字段保持默认。
+- **已知严格化**：单元格存在但为空（如空 `limited_level`）按 CSV 契约视为 codec 错误 → 该行丢弃（WARN）；缺列不报错、保留默认。
+
+**装备伴生文件**：导出时在主文件同目录写 `equipments_<stem>.csv`（表头 `id,name,category,max_durability`，`category` 为显示短名）。导入时 `FormatDetector` 检测伴生文件并读回（`NativeCsvParser::parse_equipment_file`）。`ProfileManager::load_directory` 跳过 stem 以 `equipments_` 开头的 `.csv`——伴生文件仅经主文件加载，不独立成 profile。
 
 ### 14.2 国际化（i18n）系统
 
