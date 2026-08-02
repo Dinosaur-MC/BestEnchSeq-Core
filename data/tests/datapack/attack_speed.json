@@ -1,0 +1,29 @@
+{
+	"description": "Attack Speed",
+	"supported_items": "#minecraft:swords",
+	"primary_items": "#minecraft:swords",
+	"slots": ["mainhand"],
+	"weight": 100,
+	"anvil_cost": 7,
+	"min_cost": {
+		"base": 1,
+		"per_level_above_first": 10
+	},
+	"max_cost": {
+		"base": 20,
+		"per_level_above_first": 10
+	},
+	"max_level": 3,
+	"effects": {
+		"minecraft:attributes": [{
+			"attribute": "attack_speed",
+			"id": "enchantments:example_attack_speed",
+			"amount": {
+				"type": "linear",
+				"base": 0.5,
+				"per_level_above_first": 6
+			},
+			"operation": "add_multiplied_base"
+		}]
+	}
+}

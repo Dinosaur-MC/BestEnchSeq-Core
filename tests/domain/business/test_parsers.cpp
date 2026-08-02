@@ -531,15 +531,15 @@ void test_mc_parse_files_empty() {
 // ─── test_mc_official_single_string_supported ──────────────────────────
 // T10: real MC 1.21+ datapack format allows supported_items to be a SINGLE
 // STRING (e.g. "#minecraft:swords") rather than an array. Regression: the
-// array-only parser threw JsonException on a string. Fixture:
-// res/More Enchants 1.4/.../attack_speed.json.
+// array-only parser threw JsonException on a string. Fixture (copied from the
+// git-ignored res/More Enchants 1.4/...): data/tests/datapack/attack_speed.json.
 // Verify it does NOT throw and the raw tag reference survives in applicable_to.
 
 void test_mc_official_single_string_supported() {
     TagResolver tag_resolver;
 
     std::string content = file_utils::read_file(
-        "res/More Enchants 1.4/data/enchantments/enchantment/attack_speed.json");
+        "data/tests/datapack/attack_speed.json");
 
     auto ench = McOfficialParser::parse_single_enchantment(
         "enchantments", "attack_speed", content, tag_resolver);
@@ -564,14 +564,15 @@ void test_mc_official_single_string_supported() {
 
 // ─── test_mc_official_array_supported_items ────────────────────────────
 // T10: real MC datapack also uses supported_items as an ARRAY of concrete
-// item IDs (no "#" prefix). Fixture: res/enchantments-encore-4.6/.../moonwalk.json.
+// item IDs (no "#" prefix). Fixture (copied from the git-ignored
+// res/enchantments-encore-4.6/...): data/tests/datapack/moonwalk.json.
 // Verify the array form still parses and concrete IDs pass through unchanged.
 
 void test_mc_official_array_supported_items() {
     TagResolver tag_resolver;
 
     std::string content = file_utils::read_file(
-        "res/enchantments-encore-4.6/data/enchantencore/enchantment/moonwalk.json");
+        "data/tests/datapack/moonwalk.json");
 
     auto ench = McOfficialParser::parse_single_enchantment(
         "enchantencore", "moonwalk", content, tag_resolver);
