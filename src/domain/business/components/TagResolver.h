@@ -3,7 +3,6 @@
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
 
-#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -30,13 +29,6 @@ using TagValue = std::variant<EntryRef, TagRef>;
 
 class TagResolver {
   public:
-    // ── Filesystem loading ────────────────────────────────────────────────
-
-    /// Load all tag files from a data pack directory.
-    /// Scans data/<ns>/tags/enchantment/ and data/<ns>/tags/item/
-    /// Stores raw TagValue references -- expansion is deferred to resolve().
-    void load_from(const std::filesystem::path &data_pack_dir);
-
     // ── In-memory tag loading (no filesystem access) ──────────────────────
 
     /// Load a single tag from a Json DOM object expected to have a "values" array.

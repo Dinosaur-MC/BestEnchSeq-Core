@@ -60,10 +60,21 @@ std::unordered_set<std::string> extract_item_ids_from_tag(const std::string& con
 
         for (const auto& elem : values_arr) {
             auto elem_var = elem.get_value();
-            if (std::holds_alternative<Json::String>(elem_var)) {
-                std::string val = std::get<Json::String>(elem_var);
+            if (auto* s = std::get_if<Json::String>(&elem_var)) {
+                std::string val = *s;
                 if (!val.empty() && val[0] != '#') {
                     result.insert(val);
+                }
+            } else if (auto* obj = std::get_if<Json::Object>(&elem_var)) {
+                // Object entry: { "id": "minecraft:item", "required": false }.
+                // Keep the id so the member is not silently dropped; `required`
+                // has no consumer here (the resolver stores ids verbatim).
+                auto id_it = obj->find("id");
+                if (id_it == obj->end()) continue;
+                auto id_val = id_it->second.get_value();
+                if (auto* id_str = std::get_if<Json::String>(&id_val)) {
+                    if (!id_str->empty() && (*id_str)[0] != '#')
+                        result.insert(*id_str);
                 }
             }
         }
@@ -379,8 +390,18 @@ McOfficialParser::extract_item_tag_definitions(
                 if (auto* arr = std::get_if<Json::Array>(&vv)) {
                     for (const auto& elem : *arr) {
                         auto ev = elem.get_value();
-                        if (auto* s = std::get_if<Json::String>(&ev))
+                        if (auto* s = std::get_if<Json::String>(&ev)) {
                             def.values.push_back(*s);
+                        } else if (auto* obj = std::get_if<Json::Object>(&ev)) {
+                            // Object entry: { "id": "...", "required": ... }.
+                            // Preserve the id (plain or "#tag" ref); `required`
+                            // is noted but has no downstream consumer yet.
+                            auto id_it = obj->find("id");
+                            if (id_it == obj->end()) continue;
+                            auto id_val = id_it->second.get_value();
+                            if (auto* id_str = std::get_if<Json::String>(&id_val))
+                                def.values.push_back(*id_str);
+                        }
                     }
                 }
             }

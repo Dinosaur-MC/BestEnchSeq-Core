@@ -6,6 +6,7 @@
 #include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
+#include "common/i18n/Language.h"
 #include "common/io/json.h"
 #include <chrono>
 #include <iostream>
@@ -333,6 +334,63 @@ void test_format_json_real_equipment() {
     TEST_PASS("format_json real equipment + root metadata");
 }
 
+// ─── Test: compact #PLATFORM uses raw enum name (never localized) ─────
+// B-T25: compact output is machine-readable and must NOT localize the
+// platform name.  Register a zh_CN table where the display string is
+// "Java版" to prove the compact output still emits `#PLATFORM=Java`.
+
+void test_format_compact_platform_raw() {
+    g_fx.init_sword_set();
+    auto profile = profile_from_fx(g_fx);
+
+    Solution solution;
+    solution.is_success = true;
+    solution.platform = MCE::Java;
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
+    solution.target_item = Item(equip.id, EnchSet{}, 0, 1561);
+
+    auto& lm = LanguageManager::instance();
+
+    // Register minimal platform tables for both locales (only if absent).
+    bool has_cn = false, has_en = false;
+    for (const auto& code : lm.available()) {
+        if (code == "zh_CN") has_cn = true;
+        if (code == "en_US") has_en = true;
+    }
+    if (!has_cn) {
+        Language::Table cn;
+        cn["output.platform.java"]    = "Java版";
+        cn["output.platform.bedrock"] = "基岩版";
+        cn["output.platform.all"]     = "全部";
+        cn["output.platform.unknown"] = "未知";
+        lm.register_language(Language("zh_CN", std::move(cn)));
+    }
+    if (!has_en) {
+        Language::Table en;
+        en["output.platform.java"]    = "Java";
+        en["output.platform.bedrock"] = "Bedrock";
+        en["output.platform.all"]     = "All";
+        en["output.platform.unknown"] = "Unknown";
+        lm.register_language(Language("en_US", std::move(en)));
+    }
+
+    // zh_CN: display string is "Java版" — compact must stay raw.
+    lm.select("zh_CN");
+    auto zh = OutputFormatter::format_compact({solution}, profile, AlgorithmMode::direct);
+    expect(zh.find("#PLATFORM=Java\n") != std::string::npos,
+           "compact zh_CN: emits #PLATFORM=Java (raw enum name)");
+    expect(zh.find("Java版") == std::string::npos,
+           "compact zh_CN: must NOT leak localized platform name");
+
+    // en_US: same raw name.
+    lm.select("en_US");
+    auto en = OutputFormatter::format_compact({solution}, profile, AlgorithmMode::direct);
+    expect(en.find("#PLATFORM=Java\n") != std::string::npos,
+           "compact en_US: emits #PLATFORM=Java (raw enum name)");
+
+    TEST_PASS("test_format_compact_platform_raw");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -348,6 +406,7 @@ int main() {
         test_format_verbose_final_item();
         test_format_verbose_too_expensive();
         test_format_json_real_equipment();
+        test_format_compact_platform_raw();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

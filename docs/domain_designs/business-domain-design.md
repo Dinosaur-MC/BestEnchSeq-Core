@@ -238,9 +238,6 @@ public:
 
     // -- Profile proxy queries (preferred over manual registry access) ---
 
-    /// Are two enchantments mutually exclusive?
-    bool is_compatible(const NSID& a, const NSID& b) const;
-
     /// Does this enchantment exist in the profile?
     bool has_enchantment(const NSID& id) const;
     /// Does this equipment exist in the profile?

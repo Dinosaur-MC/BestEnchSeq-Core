@@ -1,5 +1,4 @@
 #include "TagResolver.h"
-#include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 
 // ---------------------------------------------------------------------------
@@ -91,97 +90,6 @@ void TagResolver::load_tag_json(const std::string &key, const Json &json) {
 void TagResolver::load_tag_content(const std::string &key, const std::string &json_content) {
     Json json = Json::parse(json_content);
     load_tag_json(key, json);
-}
-
-// ---------------------------------------------------------------------------
-// load_from  --  collect raw TagValue from filesystem, do NOT expand
-// ---------------------------------------------------------------------------
-void TagResolver::load_from(const std::filesystem::path &data_pack_dir) {
-    // NOTE: _raw_tags is NOT cleared before loading. Tags from inline JSON and
-    // from the filesystem are expected to merge. This allows multiple calls
-    // to load_from to accumulate tags without invalidating previously loaded
-    // inline tag definitions.
-    //
-    // The resolved cache IS cleared since any previous expansions may now be
-    // stale after new raw tag entries are added.
-    _resolved_cache.clear();
-
-    std::filesystem::path data_dir = data_pack_dir / "data";
-    if (!std::filesystem::is_directory(data_dir)) {
-        return;
-    }
-
-    for (const auto &ns_entry : std::filesystem::directory_iterator(
-             data_dir, std::filesystem::directory_options::skip_permission_denied)) {
-        if (!ns_entry.is_directory()) {
-            continue;
-        }
-
-        std::string ns = ns_entry.path().filename().string();
-
-        std::filesystem::path tags_dir = ns_entry.path() / "tags";
-        if (!std::filesystem::is_directory(tags_dir)) {
-            continue;
-        }
-
-        for (const auto &category_entry : std::filesystem::directory_iterator(
-                 tags_dir, std::filesystem::directory_options::skip_permission_denied)) {
-            if (!category_entry.is_directory()) {
-                continue;
-            }
-
-            // category_entry is data/<ns>/tags/enchantment/ or data/<ns>/tags/item/
-            // Recursively find all .json tag files under this category
-            try {
-                for (const auto &file_entry :
-                     std::filesystem::recursive_directory_iterator(
-                         category_entry.path(),
-                         std::filesystem::directory_options::skip_permission_denied)) {
-                    if (!file_entry.is_regular_file()) {
-                        continue;
-                    }
-                    if (file_entry.path().extension() != ".json") {
-                        continue;
-                    }
-
-                    // Compute tag key: "<ns>:<relative_path_without_extension>"
-                    // relative_path is relative to the category directory
-                    std::string relative = std::filesystem::relative(
-                                               file_entry.path(), category_entry.path()
-                    )
-                                               .string();
-
-                    // Strip .json extension
-                    if (relative.size() >= 5 &&
-                        relative.compare(relative.size() - 5, 5, ".json") == 0) {
-                        relative = relative.substr(0, relative.size() - 5);
-                    }
-
-                    // Normalise path separators to forward slashes
-                    for (auto &c : relative) {
-                        if (c == '\\') {
-                            c = '/';
-                        }
-                    }
-
-                    std::string key = ns + ":" + relative;
-
-                    // Parse JSON and load via the in-memory path
-                    try {
-                        std::string content = file_utils::read_file(file_entry.path());
-                        Json json          = Json::parse(content);
-                        load_tag_json(key, json);
-                    } catch (const std::exception &) {
-                        // Skip files that cannot be read or parsed
-                        continue;
-                    }
-                }
-            } catch (const std::filesystem::filesystem_error &) {
-                // Skip directories that cannot be enumerated
-                continue;
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

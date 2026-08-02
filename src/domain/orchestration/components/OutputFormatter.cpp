@@ -190,6 +190,16 @@ static std::string mode_to_raw(AlgorithmMode mode) {
     }
 }
 
+// Machine-readable raw platform name (compact / JSON must NOT be localized).
+static std::string platform_to_raw(MCE p) {
+    switch (p) {
+    case MCE::Java:    return "Java";
+    case MCE::Bedrock: return "Bedrock";
+    case MCE::All:     return "All";
+    default:           return "None";
+    }
+}
+
 // ---------------------------------------------------------------------------
 // platform_to_display
 // ---------------------------------------------------------------------------
@@ -327,7 +337,7 @@ std::string OutputFormatter::format_compact(
     out += "#MODE=" + mode_to_raw(mode) + "\n";
     if (solutions.empty()) return out;
 
-    out += "#PLATFORM=" + platform_to_display(solutions[0].platform) + "\n";
+    out += "#PLATFORM=" + platform_to_raw(solutions[0].platform) + "\n";
     out += "#SOLUTIONS=" + std::to_string(solutions.size()) + "\n";
 
     for (size_t i = 0; i < solutions.size(); ++i) {

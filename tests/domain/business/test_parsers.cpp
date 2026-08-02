@@ -822,6 +822,55 @@ void test_mc_tag_replace_semantics() {
     TEST_PASS("test_mc_tag_replace_semantics");
 }
 
+// ─── test_mc_tag_object_entry ──────────────────────────────────────────
+// B-T25: real MC 1.21+ tag files allow object entries
+//   { "id": "minecraft:diamond_sword", "required": false }
+// alongside plain strings.  The object's `id` must be preserved so the member
+// is not silently dropped from item_tags / derived equipment / the resolver.
+
+void test_mc_tag_object_entry() {
+    std::unordered_map<std::string, std::string> files;
+    files["data/minecraft/tags/item/swords.json"] = R"({
+        "values": [
+            "minecraft:stone_sword",
+            {"id": "minecraft:diamond_sword", "required": false}
+        ]
+    })";
+
+    auto result = McOfficialParser::parse_files(files);
+
+    // item_tags: the object entry id must survive into the tag definition
+    expect_eq(static_cast<int>(result.item_tags.size()), 1,
+              "mc_tag_object: one item tag definition");
+    expect_eq(result.item_tags[0].key, std::string("minecraft:swords"),
+              "mc_tag_object: tag key");
+    bool has_diamond = false, has_stone = false;
+    for (const auto& v : result.item_tags[0].values) {
+        if (v == "minecraft:diamond_sword") has_diamond = true;
+        if (v == "minecraft:stone_sword")   has_stone   = true;
+    }
+    expect(has_diamond, "mc_tag_object: object entry id present in item_tags values");
+    expect(has_stone,   "mc_tag_object: plain string entry preserved");
+
+    // equipment: the object entry id contributes to derived equipment
+    bool eq_diamond = false;
+    for (const auto& e : result.equipment) {
+        if (e.id == "minecraft:diamond_sword") { eq_diamond = true; break; }
+    }
+    expect(eq_diamond, "mc_tag_object: object entry id in derived equipment");
+
+    // resolver: loading the item tag preserves the object entry member
+    TagResolver resolver;
+    McOfficialParser::load_item_tags_into(resolver, result.item_tags);
+    auto resolved = resolver.resolve("#minecraft:swords");
+    expect(resolved.contains("minecraft:diamond_sword"),
+           "mc_tag_object: resolver resolves object entry id");
+    expect(resolved.contains("minecraft:stone_sword"),
+           "mc_tag_object: resolver keeps plain string entry");
+
+    TEST_PASS("test_mc_tag_object_entry");
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -857,6 +906,7 @@ int main() {
         test_mc_official_array_supported_items();
         test_mc_single_string_exclusive_set();
         test_mc_tag_replace_semantics();
+        test_mc_tag_object_entry();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

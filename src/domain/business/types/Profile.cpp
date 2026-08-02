@@ -29,10 +29,6 @@ Profile::Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegist
 // Proxy Queries
 // ============================================================================
 
-bool Profile::is_compatible(const NSID& a, const NSID& b) const {
-    return !_ench.is_incompatible(a, b);
-}
-
 bool Profile::has_enchantment(const NSID& id) const {
     return _ench.contains(id);
 }
