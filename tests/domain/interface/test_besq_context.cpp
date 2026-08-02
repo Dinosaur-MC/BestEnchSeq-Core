@@ -132,6 +132,47 @@ void test_besq_solve() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: Solve when source already satisfies the target (goal already met)
+// ---------------------------------------------------------------------------
+
+void test_besq_solve_already_met() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // Source == target: the current state already meets the goal.  This must
+    // produce a 0-step solution, NOT "目标不可达".
+    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
+                          "--source", "sharpness=5"};
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
+
+    Item target_item = ItemParser::parse(config.target,
+                                         ctx.enchantments(), ctx.equipment());
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::direct;
+    request.payload = DirectPayload{
+        EnchParser::parse(config.source, ctx.enchantments())
+    };
+    request.algorithm = "dp_merge";
+    request.forge_config.platform = MCE::Java;
+    request.search_config.max_solutions = 1;
+
+    auto result = ctx.solve(request);
+    expect(result.success, "already-met solve should succeed (not unreachable)");
+    expect(!result.solutions.empty(), "already-met solve should produce a solution");
+    expect(result.solutions[0].is_success, "already-met solution should succeed");
+    expect(result.solutions[0].steps.empty(), "already-met solve should be 0 steps");
+    expect(result.solutions[0].total_exp_level_cost == 0,
+           "already-met solve cost should be 0");
+
+    auto text_out = ctx.format(result, AlgorithmMode::direct, "text");
+    expect(!text_out.empty(), "already-met text output should be non-empty");
+
+    TEST_PASS("BesqContext solve already-met");
+}
+
+// ---------------------------------------------------------------------------
 // Test: Registry editing (add / modify / remove)
 // ---------------------------------------------------------------------------
 
@@ -452,6 +493,7 @@ int main() {
         test_context_lifecycle();
         test_fork_merge();
         test_besq_solve();
+        test_besq_solve_already_met();
         test_besq_registry_edit();
         test_besq_default_profiles_scan();
         test_besq_export();

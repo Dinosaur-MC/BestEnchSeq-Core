@@ -246,6 +246,25 @@ void test_registry_edit_parsing() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: already-met solve args parse (source == target)
+// ---------------------------------------------------------------------------
+// Backlog #13 residual: `--target diamond_sword[sharpness=5] --source
+// sharpness=5` used to error with "目标不可达" at solve time.  Parse-level this
+// must be accepted (the full 0-step solve behaviour is covered by
+// test_besq_solve_already_met).
+
+void test_already_met_args_parse() {
+    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
+                          "--source", "sharpness=5"};
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
+    expect(config.target == "diamond_sword[sharpness=5]",
+           "target should be the bracketed inline item");
+    expect(config.source == "sharpness=5", "source should be sharpness=5");
+    expect(config.algorithm == "dp_merge", "default algorithm should be dp_merge");
+    TEST_PASS("already-met args parse");
+}
+
+// ---------------------------------------------------------------------------
 // Test: --algorithm unknown name
 // ---------------------------------------------------------------------------
 
@@ -373,6 +392,7 @@ int main() {
         test_config_parsing();
         test_registry_edit_parsing();
         test_algorithm_name();
+        test_already_met_args_parse();
         test_memory_parsing();
         test_apply_config_pairs();
         test_profile_publish_parsing();

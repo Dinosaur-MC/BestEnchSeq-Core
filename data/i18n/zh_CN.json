@@ -150,6 +150,7 @@
     "output.verbose.algorithm": "算法: {0}",
     "output.verbose.version": " v{0}",
     "output.verbose.time_ms": "用时: {0}毫秒",
-    "output.verbose.time_s": "用时: {0}.{1}秒"
+    "output.verbose.time_s": "用时: {0}.{1}秒",
+    "output.verbose.already_met": "目标已达成——无需锻造步骤。"
   }
 }

@@ -9,6 +9,7 @@
 #include "domain/algorithm/_strategies/astar/AStarAlgorithm.h"
 #include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
 #include "domain/algorithm/_strategies/dfs/DFSAlgorithm.h"
+#include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include <algorithm>
@@ -23,6 +24,7 @@ using algorithm::DFSAlgorithm;
 using algorithm::AStarAlgorithm;
 using algorithm::HammingAlgorithm;
 using algorithm::BBDpAlgorithm;
+using algorithm::DPMergeAlgorithm;
 using algorithm::AlgorithmLoader;
 using algorithm::EnchCollection;
 
@@ -235,6 +237,16 @@ void test_dfs_target_unreachable() {
     auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx);
     expect(cost == -1, "dfs: unreachable target should return -1");
     std::cout << "PASS: test_dfs_target_unreachable" << std::endl;
+}
+
+void test_dfs_target_already_met() {
+    // Source already has sharpness V → base meets target → 0-step solution.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
+    auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx, source);
+    expect(cost >= 0, "dfs: target already met should produce result");
+    std::cout << "PASS: test_dfs_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
 // ========================================================================
@@ -453,6 +465,131 @@ void test_bbdp_final_item_meets_target() {
 }
 
 // ========================================================================
+// DPMergeAlgorithm tests
+// ========================================================================
+
+void test_dpmerge_target_already_met() {
+    // Source already has sharpness V → base meets target → 0-step solution.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
+    auto cost = run_strategy(std::make_unique<DPMergeAlgorithm>(), ctx, source);
+    expect(cost >= 0, "dp_merge: target already met should produce result");
+    std::cout << "PASS: test_dpmerge_target_already_met (cost=" << cost << ")" << std::endl;
+}
+
+void test_dpmerge_source_exceeds_target() {
+    // Source sharpness V > target sharpness III → already satisfied → 0-step.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 3}});
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
+    auto cost = run_strategy(std::make_unique<DPMergeAlgorithm>(), ctx, source);
+    expect(cost >= 0, "dp_merge: source exceeding target should produce result");
+    std::cout << "PASS: test_dpmerge_source_exceeds_target (cost=" << cost << ")" << std::endl;
+}
+
+// ========================================================================
+// IAlgorithm::simulate tests — direct already-met must be reachable
+// ========================================================================
+
+void test_simulate_direct_already_met() {
+    // Direct mode: source == target → simulate must report reachable so the
+    // strategy's GoalAlreadyMet path emits a 0-step solution instead of the
+    // pipeline short-circuiting with "target unreachable".
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.registry    = ctx.ench_reg;
+    input.target      = ctx.target_item;
+    input.data        = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 5}}};
+
+    expect(DFSAlgorithm{}.simulate(input),
+           "simulate: source == target direct should be reachable (dfs)");
+    expect(AStarAlgorithm{}.simulate(input),
+           "simulate: source == target direct should be reachable (astar)");
+    expect(HammingAlgorithm{}.simulate(input),
+           "simulate: source == target direct should be reachable (hamming)");
+    expect(BBDpAlgorithm{}.simulate(input),
+           "simulate: source == target direct should be reachable (bb_dp)");
+    expect(DPMergeAlgorithm{}.simulate(input),
+           "simulate: source == target direct should be reachable (dp_merge)");
+    std::cout << "PASS: test_simulate_direct_already_met" << std::endl;
+}
+
+void test_simulate_direct_source_exceeds() {
+    // Direct mode: source level > target level → already satisfied → reachable.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 3}});
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.registry    = ctx.ench_reg;
+    input.target      = ctx.target_item;
+    input.data        = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 5}}};
+
+    expect(DFSAlgorithm{}.simulate(input),
+           "simulate: source level > target level should be reachable");
+    std::cout << "PASS: test_simulate_direct_source_exceeds" << std::endl;
+}
+
+void test_simulate_direct_below_target() {
+    // Direct mode: source below target → books needed → reachable (unchanged).
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.registry    = ctx.ench_reg;
+    input.target      = ctx.target_item;
+    input.data        = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 2}}};
+
+    expect(DFSAlgorithm{}.simulate(input),
+           "simulate: source below target should be reachable");
+    std::cout << "PASS: test_simulate_direct_below_target" << std::endl;
+}
+
+void test_simulate_inventory_empty_pool() {
+    // Inventory mode: empty pool → unreachable (unchanged).
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::inventory;
+    input.registry    = ctx.ench_reg;
+    input.target      = ctx.target_item;
+    input.data        = algorithm::InventoryPayload{algorithm::ItemCollection{}, {}};
+
+    expect(!DFSAlgorithm{}.simulate(input),
+           "simulate: empty inventory pool should be unreachable");
+    std::cout << "PASS: test_simulate_inventory_empty_pool" << std::endl;
+}
+
+void test_simulate_inventory_equip_no_book() {
+    // Inventory mode: equipment target without a non-empty book → unreachable.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::inventory;
+    input.registry    = ctx.ench_reg;
+    input.target      = ctx.target_item;
+    algorithm::Item empty_book{algorithm::ItemType::Book, 0, 0, {}};
+    input.data = algorithm::InventoryPayload{algorithm::ItemCollection{empty_book}, {0}};
+
+    expect(!DFSAlgorithm{}.simulate(input),
+           "simulate: equipment target without a non-empty book should be unreachable");
+    std::cout << "PASS: test_simulate_inventory_equip_no_book" << std::endl;
+}
+
+void test_simulate_inventory_with_book() {
+    // Inventory mode: a non-empty book present → reachable.
+    auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::inventory;
+    input.registry    = ctx.ench_reg;
+    input.target      = ctx.target_item;
+    algorithm::Item book_item{algorithm::ItemType::Book, 0, 0, {}};
+    book_item.enchs.insert(algorithm::Ench{ID_SHARPNESS, 5});
+    input.data = algorithm::InventoryPayload{algorithm::ItemCollection{book_item}, {0}};
+
+    expect(DFSAlgorithm{}.simulate(input),
+           "simulate: inventory with a non-empty book should be reachable");
+    std::cout << "PASS: test_simulate_inventory_with_book" << std::endl;
+}
+
+// ========================================================================
 // AlgorithmLoader validation test
 // ========================================================================
 
@@ -494,6 +631,7 @@ int main() {
     RUN_TEST(test_dfs_simple);
     RUN_TEST(test_dfs_two_books);
     RUN_TEST(test_dfs_target_unreachable);
+    RUN_TEST(test_dfs_target_already_met);
 
     // AStarAlgorithm tests
     RUN_TEST(test_astar_simple);
@@ -519,6 +657,18 @@ int main() {
     RUN_TEST(test_bbdp_beam_width);
     RUN_TEST(test_bbdp_cap_infeasible_fallback);
     RUN_TEST(test_bbdp_final_item_meets_target);
+
+    // DPMergeAlgorithm tests
+    RUN_TEST(test_dpmerge_target_already_met);
+    RUN_TEST(test_dpmerge_source_exceeds_target);
+
+    // IAlgorithm::simulate tests
+    RUN_TEST(test_simulate_direct_already_met);
+    RUN_TEST(test_simulate_direct_source_exceeds);
+    RUN_TEST(test_simulate_direct_below_target);
+    RUN_TEST(test_simulate_inventory_empty_pool);
+    RUN_TEST(test_simulate_inventory_equip_no_book);
+    RUN_TEST(test_simulate_inventory_with_book);
 
     // AlgorithmLoader validation
     RUN_TEST(test_loader_registration);

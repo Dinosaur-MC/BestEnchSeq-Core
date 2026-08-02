@@ -150,6 +150,7 @@
     "output.verbose.algorithm": "Algorithm: {0}",
     "output.verbose.version": " v{0}",
     "output.verbose.time_ms": "Time: {0}ms",
-    "output.verbose.time_s": "Time: {0}.{1}s"
+    "output.verbose.time_s": "Time: {0}.{1}s",
+    "output.verbose.already_met": "Goal already met — no forge steps needed."
   }
 }

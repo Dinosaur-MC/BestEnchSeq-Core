@@ -22,7 +22,14 @@ bool IAlgorithm::simulate(const AlgorithmInput &input) const noexcept {
             if (base.enchs[t.id()] < t.level())
                 return true;  // diff non-empty → books generatable
         }
-        return false;  // target already met → no output
+        // No target enchantment is below the current source level: the goal is
+        // either already met (source == target, or source exceeds every target
+        // level) or needs no additional books.  Both are reachable — the
+        // strategy's GoalAlreadyMet path emits a 0-step solution, it must NOT
+        // be reported as unreachable.  (There is no genuine blocker in the
+        // direct-mode inline predicate: inapplicable/over-level enchantments
+        // were already rejected by CompactAdapter validation.)
+        return true;
     }
     case AlgorithmMode::inventory: {
         const auto *inv = std::get_if<InventoryPayload>(&input.data);

@@ -272,6 +272,13 @@ std::string OutputFormatter::format_verbose(
             }
         }
 
+        // Goal already met: a successful 0-step solution (source already
+        // satisfies the target) — render a clear message instead of an empty
+        // steps list.
+        if (sol.is_success && sol.steps.empty()) {
+            out += "  " + tr("output.verbose.already_met") + "\n";
+        }
+
         out += "\n" + tr("output.verbose.input_section") + "\n";
         // Source/available items first, then target item
         if (!sol.original_ench.empty() && mode == AlgorithmMode::direct) {
