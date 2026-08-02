@@ -18,7 +18,7 @@ using namespace algorithm;
 
 // ─── Frontier::insert (Pareto domination + optional beam) ────────────────
 
-void BBDpAlgorithm::Frontier::insert(ParetoEntry entry, int32_t beam_width) {
+BBDpAlgorithm::ParetoEntry* BBDpAlgorithm::Frontier::insert(ParetoEntry entry, int32_t beam_width) {
     const Item& item = entry.item;
 
     // Cross-ppn Pareto domination over the same (type, enchset):
@@ -30,7 +30,7 @@ void BBDpAlgorithm::Frontier::insert(ParetoEntry entry, int32_t beam_width) {
         if (it->item.type == item.type && it->item.enchs == item.enchs) {
             if (it->ppn <= entry.ppn && it->cost <= entry.cost) {
                 ++dropped;  // candidate eliminated by Pareto domination
-                return;     // entry is dominated
+                return nullptr;  // entry is dominated
             }
             if (entry.ppn <= it->ppn && entry.cost <= it->cost) {
                 ++dropped;  // existing entry pruned (replaced by a dominant one)
@@ -48,7 +48,11 @@ void BBDpAlgorithm::Frontier::insert(ParetoEntry entry, int32_t beam_width) {
         std::sort(entries.begin(), entries.end(),
             [](const ParetoEntry& a, const ParetoEntry& b) { return a.cost < b.cost; });
         entries.resize(static_cast<size_t>(beam_width));
+        // Beam re-sorting moves entries around, so a returned pointer would be
+        // ambiguous; beam callers build trees eagerly, so nullptr is safe here.
+        return nullptr;
     }
+    return &entries.back();
 }
 
 // ─── canonicalize ─────────────────────────────────────────────────────────
@@ -126,13 +130,26 @@ int32_t BBDpAlgorithm::compute_ub(std::vector<Item> items) {
         }
 
         auto& cur = tiers[tier];
-        std::sort(cur.begin(), cur.end(), [&](const Item& a, const Item& b) {
-            bool a_eq = (a.type == ItemType::Equip);
-            bool b_eq = (b.type == ItemType::Equip);
+        // Precompute each item's self-estimate once, then sort indices — the
+        // previous comparator re-ran estimate_forge_cost() on every comparison
+        // (O(n log n) full cost computations per tier).
+        std::vector<int32_t> est(cur.size());
+        for (size_t i = 0; i < cur.size(); ++i)
+            est[i] = _forge_engine.estimate_forge_cost(cur[i], cur[i], *_ench_reg);
+        std::vector<size_t> order(cur.size());
+        for (size_t i = 0; i < order.size(); ++i)
+            order[i] = i;
+        std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+            bool a_eq = (cur[a].type == ItemType::Equip);
+            bool b_eq = (cur[b].type == ItemType::Equip);
             if (a_eq != b_eq) return a_eq;
-            return _forge_engine.estimate_forge_cost(a, a, *_ench_reg)
-                 > _forge_engine.estimate_forge_cost(b, b, *_ench_reg);
+            return est[a] > est[b];
         });
+        std::vector<Item> ordered_cur;
+        ordered_cur.reserve(cur.size());
+        for (size_t i : order)
+            ordered_cur.push_back(std::move(cur[i]));
+        cur = std::move(ordered_cur);
 
         const size_t n = cur.size();
         std::vector<Item> arranged(n);
@@ -311,6 +328,15 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         };
         auto try_forge = [&](const Item& base, const Item& sac) {
             if (!_forge_engine.is_forgeable(base, sac)) return;
+            // O(1) cap pre-check: forge cost = penalty(base.ppn) + penalty(sac.ppn)
+            // + enchant_cost + repair_cost, and the last two are ≥ 0.  When the
+            // penalty sum alone already exceeds the cap, the forge is guaranteed
+            // capped — skip the full forge() computation.
+            if (max_step_cost > 0 &&
+                _forge_engine.penalty_cost(base.ppn) + _forge_engine.penalty_cost(sac.ppn) > max_step_cost) {
+                ++cap_pruned;
+                return;
+            }
             auto [result, cost] = _forge_engine.forge(base, sac, *_ench_reg);
             if (cost == INT32_MAX) return;
             if (max_step_cost > 0 && cost > max_step_cost) { ++cap_pruned; return; }
@@ -360,6 +386,15 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
                              const std::shared_ptr<StepTree::Node>& base_tree,
                              const std::shared_ptr<StepTree::Node>& sac_tree) {
             if (!_forge_engine.is_forgeable(base, sac)) return;
+            // O(1) cap pre-check: forge cost = penalty(base.ppn) + penalty(sac.ppn)
+            // + enchant_cost + repair_cost, and the last two are ≥ 0.  When the
+            // penalty sum alone already exceeds the cap, the forge is guaranteed
+            // capped — skip the full forge() computation.
+            if (max_step_cost > 0 &&
+                _forge_engine.penalty_cost(base.ppn) + _forge_engine.penalty_cost(sac.ppn) > max_step_cost) {
+                ++cap_cnt;
+                return;
+            }
             auto [new_item, cost] = _forge_engine.forge(base, sac, *_ench_reg);
             if (cost == INT32_MAX) return;
             if (max_step_cost > 0 && cost > max_step_cost) { ++cap_cnt; return; }
@@ -375,10 +410,21 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
             }
             int32_t max_step = std::max(a.max_step, b.max_step);
             max_step = std::max(max_step, cost);
-            auto tree = make_tree(base_tree, sac_tree, base, sac, new_item, cost);
-            local.insert(ParetoEntry{total, new_item.ppn, max_step,
-                                     std::move(new_item), std::move(tree)},
-                         beam_width);
+            // Build the merge-history StepTree lazily: the large majority of
+            // candidates are dropped by Pareto domination, and each tree costs a
+            // make_shared<StepTree::Node>.  Attach the tree only on survival —
+            // the parent trees come from the frozen (cached) subfrontiers, so
+            // referencing them here is stable.
+            ParetoEntry entry{total, new_item.ppn, max_step, std::move(new_item), StepTree{}};
+            if (beam_width > 0) {
+                // Beam path builds eagerly: the entry may be re-sorted below
+                // insert(), so a returned pointer would be ambiguous.  Rare.
+                entry.step_tree = make_tree(base_tree, sac_tree, base, sac, entry.item, cost);
+                local.insert(std::move(entry), beam_width);
+            } else if (ParetoEntry* stored = local.insert(std::move(entry), beam_width)) {
+                stored->step_tree = make_tree(base_tree, sac_tree, base, sac,
+                                              stored->item, cost);
+            }
         };
         try_forge(a.item, b.item, a.step_tree.root_ptr(), b.step_tree.root_ptr());
         try_forge(b.item, a.item, b.step_tree.root_ptr(), a.step_tree.root_ptr());
@@ -399,14 +445,26 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
         if ((n & 1) == 0 && k * 2 == n && !(left & low_bit)) return;
 
         const uint64_t right = mask & ~left;
-        const Frontier& left_f  = solve(left,  max_step_cost, beam_width,
-                                        /*parallelize=*/false, /*final_level=*/false, ctx);
-        if (!left_f.empty()) {
-            const Frontier& right_f = solve(right, max_step_cost, beam_width,
-                                            /*parallelize=*/false, /*final_level=*/false, ctx);
-            if (!right_f.empty()) {
-                for (const auto& ea : left_f.entries)
-                    for (const auto& eb : right_f.entries)
+        // Hot path: ~1.16B partition iterations, of which ~all subfrontiers are
+        // already memoised.  Fetch them with the inline flat-cache load and only
+        // recurse into solve() on a miss — solve() carries a large stack frame
+        // (locals + lambdas), so a cache-hit call costs ~10× a single load.
+        const Frontier* left_f = _using_flat
+            ? _flat_cache[left].load(std::memory_order_acquire)
+            : cache_get(left);
+        if (!left_f)
+            left_f = &solve(left, max_step_cost, beam_width,
+                            /*parallelize=*/false, /*final_level=*/false, ctx);
+        if (!left_f->empty()) {
+            const Frontier* right_f = _using_flat
+                ? _flat_cache[right].load(std::memory_order_acquire)
+                : cache_get(right);
+            if (!right_f)
+                right_f = &solve(right, max_step_cost, beam_width,
+                                 /*parallelize=*/false, /*final_level=*/false, ctx);
+            if (!right_f->empty()) {
+                for (const auto& ea : left_f->entries)
+                    for (const auto& eb : right_f->entries)
                         combine(out, ea, eb, cap_cnt, bound_cnt);
             }
         }
@@ -553,7 +611,10 @@ void BBDpAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) 
     }
     if (bound < INT32_MAX) {
         // Tighten with a node-limited DFS (always to an achievable cost ≥ optimum).
-        int64_t node_limit = 50'000;
+        // The internal compute_ub (hamming-style) is already within ~1 level of
+        // optimal for typical inputs, so dp_bound_pruned is tiny and a large DFS
+        // here is wasted work (~34% of the pre-pass profile at 50k nodes).
+        int64_t node_limit = 2'000;  // cheap guard against pathologically loose UBs
         std::vector<int16_t> h_buf, h_dirty;
         bound = search_utils::dfs_bound(items, 0, bound, node_limit,
                                         _forge_engine, *_ench_reg, _target,

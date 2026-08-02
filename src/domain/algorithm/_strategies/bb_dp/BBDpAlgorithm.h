@@ -79,7 +79,12 @@ private:
         /// at cache_put — spec Tier 1).
         uint64_t dropped{0};
 
-        void insert(ParetoEntry entry, int32_t beam_width);
+        /// Insert under Pareto domination (plus optional beam).  Returns a
+        /// pointer to the stored entry when it survived, nullptr when dropped —
+        /// the caller uses it to attach the merge-history StepTree lazily,
+        /// avoiding a make_shared for the large majority of entries that get
+        /// dominated (spec: the tree is only needed for surviving entries).
+        ParetoEntry* insert(ParetoEntry entry, int32_t beam_width);
         bool empty() const { return entries.empty(); }
     };
 
