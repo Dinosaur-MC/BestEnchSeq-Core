@@ -88,6 +88,7 @@
     "cli.err.inventory_file_error": "库存文件读取/解析失败: {0}",
     "cli.err.inventory_bad_type": "库存条目类型无效: '{0}'",
     "cli.err.inventory_missing_id": "库存装备条目缺少 id",
+    "cli.err.inventory_schema_error": "库存文件 schema 错误: {0}",
     "cli.err.inventory_requires_input": "库存模式需要指定 --input <文件路径>",
     "cli.err.inventory_rejects_source": "库存模式下请用 --target \"item[期望魔咒]\" 指定目标魔咒；--source 不支持",
     "cli.err.invalid_edit_op": "无效编辑: '{0}'",

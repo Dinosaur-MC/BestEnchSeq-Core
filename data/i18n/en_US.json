@@ -88,6 +88,7 @@
     "cli.err.inventory_file_error": "Failed to read/parse inventory file: {0}",
     "cli.err.inventory_bad_type": "Invalid inventory item type: '{0}'",
     "cli.err.inventory_missing_id": "Inventory equipment entry is missing 'id'",
+    "cli.err.inventory_schema_error": "Inventory file schema error: {0}",
     "cli.err.inventory_requires_input": "Inventory mode requires --input <file path>",
     "cli.err.inventory_rejects_source": "In inventory mode, specify desired enchantments via --target brackets (e.g. --target \"diamond_sword[sharpness=5]\"); --source is not supported",
     "cli.err.invalid_edit_op": "Invalid edit: '{0}'",
