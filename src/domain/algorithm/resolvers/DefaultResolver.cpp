@@ -18,11 +18,12 @@ namespace {
 //   - Level merge: a == b ? min(max_lvl, a+1) : max(a, b).
 
 /// Prior-work penalty value for an item whose ppn field is the exponent n.
+/// Matches ForgeEngine::penalty_cost: ppn > 30 is beyond the vanilla anvil
+/// model and treated as infeasible (INT32_MAX), so a ppn-31..59 pool item is
+/// never scored as a cheap, valid base.
 int64_t ppn_penalty(uint8_t ppn) {
-    // Realistic ppn is tiny (single-digit); the clamp guards the shift for
-    // malformed input without paying anything on the hot path.
-    if (ppn >= 60)
-        return (int64_t{1} << 60) - 1;
+    if (ppn > 30)
+        return INT32_MAX;
     return (int64_t{1} << ppn) - 1;
 }
 
@@ -74,19 +75,48 @@ bool can_reach(const std::vector<uint8_t> &levels, uint8_t threshold, uint8_t ma
     return max_reachable_level(levels, max_lvl) >= threshold;
 }
 
+/// Whether \p e carries any enchant that conflicts with enchant \p id.
+/// Uses the compact registry's conflict matrix (EnchReg::is_conflict).
+bool carries_conflict_with(uint8_t id, const Item &e, const EnchReg &reg) {
+    bit_iterator<EnchSet::mask_type, uint8_t> it(e.enchs.get_mask());
+    for (auto id_c = it.next(); id_c != it.npos; id_c = it.next())
+        if (reg.is_conflict(id_c, id))
+            return true;
+    return false;
+}
+
+/// Whether base \p e is infeasible: it carries an enchant that conflicts with a
+/// target enchant still to be added (a gap).  The conflicting target enchant
+/// can never be transferred onto \p e, so such a base cannot reach the target
+/// and must not be selected as the forge base.
+bool base_conflicts_with_gap(const Item &e, const Item &target, const EnchReg &reg) {
+    bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
+    for (auto id_t = it.next(); id_t != it.npos; id_t = it.next()) {
+        if (e.enchs[id_t] >= target.enchs[id_t])
+            continue;  // already satisfied — no gap for this enchant
+        if (carries_conflict_with(id_t, e, reg))
+            return true;
+    }
+    return false;
+}
+
 /// Whether equipment \p k carries a target enchantment at a level the books in
 /// \p books (combined via the anvil rule) CANNOT reach.  This covers both
 /// bookless enchants (no book carries it at all → books reach 0) and the
 /// under-level case (a thorns-1 book cannot reach a thorns-3 target even though
 /// a thorns-3 equipment is present).  Such an enchant can only be supplied by
-/// equipment, so \p k must be retained.
+/// equipment, so \p k must be retained — provided the chosen \p base can
+/// actually receive it (a base already carrying a conflicting enchant would
+/// drop it during the merge, so it is not credited for that enchant).
 bool carries_irreplaceable_target_ench(const Item &k, const Item &target,
                                        const std::vector<const Item *> &books,
-                                       const EnchReg &reg) {
+                                       const EnchReg &reg, const Item &base) {
     bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
     for (auto id = it.next(); id != it.npos; id = it.next()) {
         if (k.enchs[id] == 0)
             continue;
+        if (carries_conflict_with(id, base, reg))
+            continue;  // base would drop id during the merge — not helpful
         std::vector<uint8_t> book_levels;
         for (const Item *b : books)
             if (b->enchs[id] > 0)
@@ -115,6 +145,18 @@ uint8_t max_book_level(const Item &item) {
         if (item.enchs[id] > m)
             m = item.enchs[id];
     return m;
+}
+
+/// Actual anvil cost of applying \p book's enchant \p id to a base already at
+/// level \p base_level (Java): penalty(book) + final_level × mul_b, where
+/// final_level follows the merge rule (equal → +1 capped at max_lvl, else max).
+int64_t book_apply_cost(const Item &book, uint8_t id, uint8_t base_level,
+                        const EnchReg &reg) {
+    const uint8_t L   = book.enchs[id];
+    const uint8_t fin = (L == base_level)
+        ? std::min<uint8_t>(reg[id].max_lvl, static_cast<uint8_t>(base_level + 1))
+        : std::max<uint8_t>(base_level, L);
+    return ppn_penalty(book.ppn) + static_cast<int64_t>(fin) * reg[id].mul_b;
 }
 
 /// Diff-aware book selection: keep the books needed to fill the enchant gap
@@ -156,17 +198,23 @@ std::vector<const Item *> select_books(const std::vector<const Item *> &books,
         const uint8_t max_lvl   = reg[id].max_lvl;
         const uint8_t threshold = (T == static_cast<uint8_t>(B + 1)) ? B : T;
 
-        // Phase A: a single book suffices → keep the LOWEST-level sufficient
-        // book (diff-aware: a u2 book reaches u3 from a u2 base at the same
-        // cost as a u3 book, so keep the minimal one; ties → lower ppn).
+        // Phase A: a single book suffices → keep the sufficient book with the
+        // lowest actual apply cost (penalty + final_level × mul_b), so a
+        // low-ppn higher-level book beats a high-ppn lower-level one when both
+        // reach the target; ties → lower level, then lower ppn.
         size_t single_idx = SIZE_MAX;
+        int64_t single_cost = INT64_MAX;
         uint8_t single_level = 0, single_ppn = 0;
         for (size_t ci : cand) {
             const Item *c = books[ci];
             if (c->enchs[id] >= threshold) {
-                if (single_idx == SIZE_MAX || c->enchs[id] < single_level ||
-                    (c->enchs[id] == single_level && c->ppn < single_ppn)) {
+                const int64_t cost = book_apply_cost(*c, id, B, reg);
+                if (single_idx == SIZE_MAX || cost < single_cost ||
+                    (cost == single_cost && c->enchs[id] < single_level) ||
+                    (cost == single_cost && c->enchs[id] == single_level &&
+                     c->ppn < single_ppn)) {
                     single_idx   = ci;
+                    single_cost  = cost;
                     single_level = c->enchs[id];
                     single_ppn   = c->ppn;
                 }
@@ -269,21 +317,31 @@ ResolverOutput DefaultResolver::resolve(const AlgorithmInput &input) const {
             if (equips.empty())
                 return {};
 
-            // Phase 2 — best base: the equipment minimizing est_forge_cost.
-            const Item *best = *std::min_element(equips.begin(), equips.end(),
-                [&](const Item *a, const Item *b) {
-                    return est_forge_cost(*a, target, reg) < est_forge_cost(*b, target, reg);
-                });
+            // Phase 2 — best base: the feasible equipment minimizing
+            // est_forge_cost.  A base carrying an enchant that conflicts with a
+            // still-needed target enchant is infeasible (that target enchant
+            // can never be added to it) and is skipped.
+            const Item *best = nullptr;
+            for (const Item *e : equips) {
+                if (base_conflicts_with_gap(*e, target, reg))
+                    continue;
+                if (best == nullptr ||
+                    est_forge_cost(*e, target, reg) < est_forge_cost(*best, target, reg))
+                    best = e;
+            }
+            if (best == nullptr)
+                return {};  // every equipment conflicts with a needed enchant
 
-            // Phase 3 — retain equipment carrying a target enchant that no book
-            // provides (a book can never supply it, so this base must).
+            // Phase 3 — retain equipment carrying a target enchant that the
+            // books cannot reach (a book can never supply it) and the base can
+            // actually receive.
             std::vector<const Item *> kept_equips;
             kept_equips.reserve(equips.size());
             kept_equips.push_back(best);
             for (const Item *k : equips) {
                 if (k == best)
                     continue;
-                if (carries_irreplaceable_target_ench(*k, target, books, reg))
+                if (carries_irreplaceable_target_ench(*k, target, books, reg, *best))
                     kept_equips.push_back(k);
             }
 

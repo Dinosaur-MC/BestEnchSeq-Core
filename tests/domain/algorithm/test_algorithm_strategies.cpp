@@ -639,10 +639,11 @@ enum ResolverEnch : uint8_t {
     RE_MENDING    = 1,
     RE_SHARPNESS  = 2,
     RE_THORNS     = 3,
+    RE_SMITE      = 4,
 };
 
 algorithm::EnchReg make_resolver_registry() {
-    std::vector<algorithm::EnchInfo> infos(4);
+    std::vector<algorithm::EnchInfo> infos(5);
     for (uint8_t i = 0; i < infos.size(); ++i) {
         infos[i].id          = i;
         infos[i].mul         = 1;
@@ -654,13 +655,19 @@ algorithm::EnchReg make_resolver_registry() {
     infos[RE_MENDING].mul_b    = 2; infos[RE_MENDING].max_lvl    = 1;
     infos[RE_SHARPNESS].mul_b  = 1; infos[RE_SHARPNESS].max_lvl  = 5;
     infos[RE_THORNS].mul_b     = 1; infos[RE_THORNS].max_lvl     = 3;
+    infos[RE_SMITE].mul_b      = 1; infos[RE_SMITE].max_lvl      = 5;
+    // sharpness ↔ smite mutually exclusive.  The compact conflict-matrix builder
+    // ORs both directions (EnchReg::_build_mask_cache), so declare on both sides
+    // so is_conflict(sharpness, smite) is symmetric.
+    infos[RE_SHARPNESS].exc_mask |= (algorithm::mask_type{1} << RE_SMITE);
+    infos[RE_SMITE].exc_mask     |= (algorithm::mask_type{1} << RE_SHARPNESS);
 
     std::vector<NSID> gids = {NSID("unbreaking"), NSID("mending"),
-                              NSID("sharpness"), NSID("thorns")};
+                              NSID("sharpness"), NSID("thorns"), NSID("smite")};
     algorithm::Equipment eq;
     eq.id = "test";
     eq.max_durability   = 1561;
-    eq.applicable_enchs = {RE_UNBREAKING, RE_MENDING, RE_SHARPNESS, RE_THORNS};
+    eq.applicable_enchs = {RE_UNBREAKING, RE_MENDING, RE_SHARPNESS, RE_THORNS, RE_SMITE};
 
     algorithm::EnchReg reg;
     reg.init(std::move(infos), std::move(gids), eq);
@@ -941,6 +948,90 @@ void test_resolver_retain_equip_when_books_cannot_reach() {
     TEST_PASS("resolver: equip retained when books can't reach target level");
 }
 
+void test_resolver_conflict_aware_base() {
+    // Regression reproduction (reviewer): a sharpness-4 sword (high ppn) and a
+    // smite-5 sword (low ppn, conflicts with sharpness), plus a sharpness-5
+    // book, target sharpness-5.  A conflict-blind est would pick the smite
+    // sword (est=5, low ppn) as base and drop the sharpness-4 sword as
+    // book-reachable → false unreachable.  Conflict-aware selection must pick
+    // the sharpness-4 sword and keep the pool solvable.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_SHARPNESS, 5);
+    auto out = run_resolver(reg, target, {
+        re_equip_with(RE_SHARPNESS, 4, 6),  // correct base, high ppn
+        re_equip_with(RE_SMITE, 5, 0),      // low ppn but conflicts with sharpness
+        re_book(RE_SHARPNESS, 5)});
+    expect(!out.empty(),
+           "resolver: conflict-aware base keeps the pool non-empty/solvable");
+    expect(count_equips(out) == 1 && out[0].type == algorithm::ItemType::Equip &&
+               out[0].enchs[RE_SHARPNESS] == 4,
+           "resolver: sharpness-4 sword chosen as base (not the smite sword)");
+    expect(has_book_with(out, RE_SHARPNESS, 5),
+           "resolver: sharpness-5 book kept");
+    bool has_smite_equip = false;
+    for (const auto &it : out)
+        if (it.type == algorithm::ItemType::Equip && it.enchs[RE_SMITE] > 0)
+            has_smite_equip = true;
+    expect(!has_smite_equip,
+           "resolver: smite sword dropped (base-infeasible, not a target)");
+    TEST_PASS("resolver: conflict-aware base selection fixes false unreachable");
+}
+
+void test_resolver_conflict_aware_base_control() {
+    // Control: without the smite sword, the same solve still works.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_SHARPNESS, 5);
+    auto out = run_resolver(reg, target, {
+        re_equip_with(RE_SHARPNESS, 4, 6), re_book(RE_SHARPNESS, 5)});
+    expect(!out.empty() && count_equips(out) == 1 &&
+               out[0].type == algorithm::ItemType::Equip &&
+               out[0].enchs[RE_SHARPNESS] == 4,
+           "resolver: control — sharpness-4 base + sharpness-5 book solves");
+    TEST_PASS("resolver: control without smite still solves");
+}
+
+void test_resolver_retention_conflict_aware() {
+    // A retained equipment may carry an enchant that conflicts with a needed
+    // target enchant (here smite on the thorns-3 sword conflicts with the
+    // sharpness target).  The resolver must still retain it (it is the only
+    // thorns source) and choose a base that can receive it — the pool stays
+    // solvable (the strategy orders the forge so the conflict is dropped).
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_SHARPNESS, 5);
+    target.enchs.insert(RE_THORNS, 3);
+    auto out = run_resolver(reg, target, {
+        re_equip_with(RE_SHARPNESS, 4, 6),        // best base (sharpness gap)
+        re_equip_with(RE_THORNS, 3, 0),           // retained: thorns only here
+        re_book(RE_SHARPNESS, 5)});
+    // Also carry smite on the thorns sword: it must still be retained.
+    auto out2 = run_resolver(reg, target, {
+        re_equip_with(RE_SHARPNESS, 4, 6),
+        [] {
+            algorithm::Item e{algorithm::ItemType::Equip, 1561, 0, {}};
+            e.enchs.insert(RE_THORNS, 3);
+            e.enchs.insert(RE_SMITE, 5);
+            return e;
+        }(),
+        re_book(RE_SHARPNESS, 5)});
+    expect(count_equips(out2) == 2,
+           "resolver: conflicting smite enchant does not drop the thorns equip");
+    bool has_thorns_equip = false;
+    for (const auto &it : out2)
+        if (it.type == algorithm::ItemType::Equip && it.enchs[RE_THORNS] == 3)
+            has_thorns_equip = true;
+    expect(has_thorns_equip,
+           "resolver: thorns-3 equipment retained despite carrying smite");
+    expect(!out2.empty() && out2[0].type == algorithm::ItemType::Equip &&
+               out2[0].enchs[RE_SHARPNESS] == 4,
+           "resolver: sharpness-4 base chosen, pool solvable");
+    expect(has_book_with(out2, RE_SHARPNESS, 5),
+           "resolver: sharpness-5 book kept");
+    TEST_PASS("resolver: retention is conflict-aware (pool stays solvable)");
+}
+
 void test_resolver_preenchanted_equip_reaches_target() {
     // Equipment already meets the target → pool stays non-empty, no books
     // needed, irrelevant books dropped.
@@ -1055,6 +1146,9 @@ int main() {
     RUN_TEST(test_resolver_accumulate_books_for_combine);
     RUN_TEST(test_resolver_output_order);
     RUN_TEST(test_resolver_retain_equip_when_books_cannot_reach);
+    RUN_TEST(test_resolver_conflict_aware_base);
+    RUN_TEST(test_resolver_conflict_aware_base_control);
+    RUN_TEST(test_resolver_retention_conflict_aware);
     RUN_TEST(test_resolver_preenchanted_equip_reaches_target);
 
     // AlgorithmLoader validation
