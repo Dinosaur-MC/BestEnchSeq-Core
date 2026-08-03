@@ -7,6 +7,7 @@
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/types/Enchantment.h"
 #include "common/io/json.h"
+#include "log/Logger.h"
 
 #include <algorithm>
 #include <cmath>
@@ -662,6 +663,8 @@ void list_cases(const algorithm::AlgorithmLoader& loader) {
 } // anonymous namespace
 
 int main(int argc, char* argv[]) {
+    Logger::instance().set_console_enabled(false);
+
     // ── Load profiles & test cases before CLI parsing (needed for group validation) ──
     std::cout << "=== Dataset Benchmark ===\n"
               << "Loading profiles..." << std::endl;

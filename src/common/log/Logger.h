@@ -118,7 +118,7 @@ private:
         std::atomic<LogLevel>* file_level_ptr{nullptr};
     };
 
-    explicit Logger(std::string log_dir = "logs");
+    explicit Logger(const LoggerConfig &cfg = {});
 
     // _console_*, _max_retention and _processed MUST precede _loop because
     // the FileHandler constructor receives pointers to them (via the _loop
@@ -129,6 +129,6 @@ private:
     size_t _max_retention{5};
     std::atomic<bool> _console_enabled{true};
     std::atomic<LogLevel> _console_level{LogLevel::Warn};
-    EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, FileHandler> _loop;
     std::atomic<LogLevel> _level{LogLevel::Debug};
+    EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, FileHandler> _loop;
 };

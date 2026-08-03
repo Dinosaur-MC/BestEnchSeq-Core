@@ -23,4 +23,5 @@ struct LoggerConfig {
     size_t  retention       = 5;    // max historic log files kept during rotation
     bool    console_enabled = true; // mirror to stderr (Warn/Error) / stdout (Debug/Info)
     int32_t console_level   = 2;    // console mirror threshold
+    std::string log_dir     = "logs";
 };

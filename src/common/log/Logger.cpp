@@ -140,9 +140,21 @@ Logger& Logger::instance() {
 }
 
 // ─── Public API ───────────────────────────────────────────────────────
-
-Logger::Logger(std::string log_dir)
-    : _loop(FileHandler(std::move(log_dir), &_processed, &_max_retention,
+/*
+struct LoggerConfig {
+    int32_t level           = 0;    // file-log threshold
+    size_t  retention       = 5;    // max historic log files kept during rotation
+    bool    console_enabled = true; // mirror to stderr (Warn/Error) / stdout (Debug/Info)
+    int32_t console_level   = 2;    // console mirror threshold
+    std::string log_dir     = "logs";
+};
+*/
+Logger::Logger(const LoggerConfig &cfg)
+    : _max_retention(cfg.retention),
+      _console_enabled(cfg.console_enabled),
+      _console_level(static_cast<LogLevel>(cfg.console_level)),
+      _level(static_cast<LogLevel>(cfg.level)),
+      _loop(FileHandler(cfg.log_dir, &_processed, &_max_retention,
                         &_console_enabled, &_console_level, &_level))
 {
     // Console mirror defaults to enabled at Warn.  The host overrides via
