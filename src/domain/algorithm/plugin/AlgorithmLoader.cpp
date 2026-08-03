@@ -4,8 +4,8 @@
 #include "domain/algorithm/sandbox/SandboxedAlgorithm.h"
 #include "AlgorithmLoader.h"
 #include "PluginAudit.h"
+#include "AppConfig.h"
 #include "common/log/log.hpp"
-#include "common/utils/EnvUtil.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -76,7 +76,9 @@ namespace algorithm {
 // ====================================================================
 
 AlgorithmLoader::AlgorithmLoader() {
-    _sandbox_enabled = get_env<bool>("BESQ_SANDBOX", false);
+    // Sandbox mode is global app config (BESQ_SANDBOX), read from the shared
+    // AppConfig singleton — callers may still override via set_sandbox_enabled.
+    _sandbox_enabled = AppConfig::get().sandbox_enabled;
 }
 
 AlgorithmLoader::~AlgorithmLoader() {

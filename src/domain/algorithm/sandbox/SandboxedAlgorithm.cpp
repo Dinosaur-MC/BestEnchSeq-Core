@@ -1,9 +1,9 @@
 #include "domain/algorithm/sandbox/SandboxedAlgorithm.h"
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
+#include "AppConfig.h"
 #include "common/io/ByteStream.h"
 #include "common/log/log.hpp"
-#include "common/utils/EnvUtil.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -58,13 +58,14 @@ const char *worker_exe_suffix() {
 #endif
 }
 
-/// Env-var / exe-dir / PATH worker resolution.
+/// AppConfig / exe-dir / PATH worker resolution.
 std::string resolve_worker_path(const std::string &given) {
     if (!given.empty())
         return given;
-    const std::string env = get_env_str("BESQ_WORKER_PATH");
-    if (!env.empty())
-        return env;
+    // Global app config (BESQ_WORKER_PATH), from the shared AppConfig singleton.
+    const std::string cfg_path = AppConfig::get().sandbox_worker_path;
+    if (!cfg_path.empty())
+        return cfg_path;
     // The worker ships alongside the host executable — try there first so
     // BESQ_SANDBOX=1 works without the worker on PATH.
     const std::string dir = current_exe_dir();

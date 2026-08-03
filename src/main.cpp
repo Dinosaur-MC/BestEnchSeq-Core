@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[]) try {
     // ── Configuration ──
-    auto app_cfg = AppConfig::load();
+    auto& app_cfg = AppConfig::get();  // global singleton — consumers read it directly
 
     // ── i18n setup ──
     register_builtin_translations(LanguageManager::instance());
@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) try {
     CLIApp::apply_lang(argc, argv);
 
     // ── Logger setup ──
-    setup_logger(app_cfg.log_level, app_cfg.log_retention);
+    setup_logger(app_cfg.logger_config());
 
     // ── Detect target app and route ──
     auto target = CLIApp::detect_target(argc, argv);

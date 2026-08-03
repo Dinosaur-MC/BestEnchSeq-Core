@@ -76,18 +76,19 @@ public:
     void set_retention(size_t n) noexcept { _max_retention = n; }
     size_t get_retention() const noexcept { return _max_retention; }
 
-private:
-    // ── Console output (stdout/stderr mirror) ─────────────────────────
+    /// ── Console output (stdout/stderr mirror) ────────────────────────────
     /// Mirror log lines to the terminal: Warn/Error → stderr, Debug/Info →
     /// stdout.  Enabled by default at Warn level (warnings/errors are the
     /// user-visible diagnostics); Info/Debug stay in files unless the level
-    /// is lowered.  Configure via BESQ_LOG_CONSOLE (0/1) and
-    /// BESQ_LOG_CONSOLE_LEVEL (debug|info|warn|error), or here.
+    /// is lowered.  The host configures this via AppConfig → setup_logger()
+    /// (BESQ_LOG_CONSOLE=0/1, BESQ_LOG_CONSOLE_LEVEL=0..3); override here
+    /// programmatically.
     void set_console_enabled(bool on) noexcept { _console_enabled.store(on, std::memory_order_release); }
     bool console_enabled() const noexcept { return _console_enabled.load(std::memory_order_acquire); }
     void set_console_level(LogLevel lv) noexcept { _console_level.store(lv, std::memory_order_release); }
     LogLevel console_level() const noexcept { return _console_level.load(std::memory_order_acquire); }
 
+private:
     // ── FileHandler ────────────────────────────────────────────────────
     // Consumes LogEntry instances on the EventLoop worker thread.
     // Files are opened in the constructor (before worker starts) and

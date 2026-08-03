@@ -59,16 +59,21 @@ inline void printf(LogLevel, const char*, Args&&...) {}
 
 // ─── Logger setup helper (avoids direct Logger::instance() calls) ─────────
 
-/// Configure the global Logger from an AppConfig-compatible level +
-/// retention pair.  log_level map: 0=Debug, 1=Info, 2=Warn, 3+=Error.
-/// Defaults match AppConfig defaults (Debug, retention 5).
-inline void setup_logger(int log_level = 0, size_t retention = 5) {
+/// Apply a LoggerConfig to the global Logger singleton.  Defaults match the
+/// AppConfig defaults (Debug, retention 5, console on at Warn).
+inline void setup_logger(const LoggerConfig &cfg = {}) {
     Logger::instance().set_level(
-        log_level >= 3 ? LogLevel::Error
-      : log_level >= 2 ? LogLevel::Warn
-      : log_level >= 1 ? LogLevel::Info
+        cfg.level >= 3 ? LogLevel::Error
+      : cfg.level >= 2 ? LogLevel::Warn
+      : cfg.level >= 1 ? LogLevel::Info
       :                  LogLevel::Debug);
-    Logger::instance().set_retention(retention);
+    Logger::instance().set_retention(cfg.retention);
+    Logger::instance().set_console_enabled(cfg.console_enabled);
+    Logger::instance().set_console_level(
+        cfg.console_level >= 3 ? LogLevel::Error
+      : cfg.console_level >= 2 ? LogLevel::Warn
+      : cfg.console_level >= 1 ? LogLevel::Info
+      :                          LogLevel::Debug);
 }
 
 namespace besq {

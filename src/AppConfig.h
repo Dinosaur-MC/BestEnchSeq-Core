@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/log/LogTypes.h"
 #include "common/utils/EnvUtil.hpp"
 #include <cstdint>
 #include <string>
@@ -18,6 +19,10 @@
 ///   BESQ_LOG_DIR         — Log output directory                        (default: "logs")
 ///   BESQ_LOG_LEVEL       — Minimum log level (0=debug,1=info,2=warn,3=error, default: 0)
 ///   BESQ_LOG_RETENTION   — Max historic log files to keep during rotation (default: 5)
+///   BESQ_LOG_CONSOLE     — Mirror logs to console: Warn/Error→stderr, Debug/Info→stdout (default: 1)
+///   BESQ_LOG_CONSOLE_LEVEL — Console mirror threshold (0=debug,1=info,2=warn,3=error, default: 2)
+///   BESQ_SANDBOX         — Run algorithm plugins in a sandboxed worker (default: 0)
+///   BESQ_WORKER_PATH     — Path to besq-worker binary (default: auto — <exe_dir>/besq-worker[.exe], then PATH)
 struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
@@ -26,6 +31,18 @@ struct AppConfig {
     std::string log_dir      = "logs";
     int32_t  log_level       = 0;     // 0=Debug, 1=Info, 2=Warn, 3=Error
     size_t   log_retention   = 5;
+    bool     log_console       = true;  // mirror to console (stderr/stdout)
+    int32_t  log_console_level = 2;     // console threshold (0=Debug..3=Error)
+    bool     sandbox_enabled   = false; // run plugins in a sandboxed worker
+    std::string sandbox_worker_path;    // besq-worker binary ("" → <exe_dir>/besq-worker[.exe], then PATH)
+
+    /// Global app configuration singleton — loads BESQ_* env vars on first
+    /// use.  Consumers include AppConfig.h and read directly (no param
+    /// threading); main.cpp configures the Logger from the same instance.
+    static AppConfig& get() noexcept {
+        static AppConfig cfg = load();
+        return cfg;
+    }
 
     /// Load configuration from environment variables, applying defaults
     /// for any variables that are not set.
@@ -38,6 +55,15 @@ struct AppConfig {
         cfg.log_dir       = get_env<std::string>("BESQ_LOG_DIR",   cfg.log_dir);
         cfg.log_level     = get_env<int32_t>  ("BESQ_LOG_LEVEL",    cfg.log_level);
         cfg.log_retention = get_env<size_t>   ("BESQ_LOG_RETENTION", cfg.log_retention);
+        cfg.log_console       = get_env<bool>   ("BESQ_LOG_CONSOLE",       cfg.log_console);
+        cfg.log_console_level = get_env<int32_t>("BESQ_LOG_CONSOLE_LEVEL", cfg.log_console_level);
+        cfg.sandbox_enabled   = get_env<bool>   ("BESQ_SANDBOX",       cfg.sandbox_enabled);
+        cfg.sandbox_worker_path = get_env_str   ("BESQ_WORKER_PATH");
         return cfg;
+    }
+
+    /// Produce the Logger's typed config from this AppConfig.
+    LoggerConfig logger_config() const noexcept {
+        return {log_level, log_retention, log_console, log_console_level};
     }
 };

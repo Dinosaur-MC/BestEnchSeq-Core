@@ -1,5 +1,4 @@
 #include "Logger.h"
-#include "utils/EnvUtil.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -131,31 +130,15 @@ Logger& Logger::instance() {
     return logger;
 }
 
-namespace {
-
-/// Parse BESQ_LOG_CONSOLE_LEVEL ("debug"|"info"|"warn"|"error"; default warn).
-LogLevel parse_console_level(const std::string &s) {
-    if (s == "debug") return LogLevel::Debug;
-    if (s == "info")  return LogLevel::Info;
-    if (s == "warn")  return LogLevel::Warn;
-    if (s == "error") return LogLevel::Error;
-    return LogLevel::Warn;
-}
-
-} // anonymous namespace
-
 // ─── Public API ───────────────────────────────────────────────────────
 
 Logger::Logger(std::string log_dir)
     : _loop(FileHandler(std::move(log_dir), &_processed, &_max_retention,
                         &_console_enabled, &_console_level))
 {
-    // Env overrides for the console mirror (before the worker starts):
-    //   BESQ_LOG_CONSOLE        = 0/1  (default 1 = enabled)
-    //   BESQ_LOG_CONSOLE_LEVEL  = debug|info|warn|error  (default warn)
-    _console_enabled.store(get_env<bool>("BESQ_LOG_CONSOLE", true), std::memory_order_release);
-    _console_level.store(parse_console_level(get_env_str("BESQ_LOG_CONSOLE_LEVEL")),
-                         std::memory_order_release);
+    // Console mirror defaults to enabled at Warn.  The host overrides via
+    // AppConfig → setup_logger() (BESQ_LOG_CONSOLE / BESQ_LOG_CONSOLE_LEVEL);
+    // the constructor does no env parsing of its own.
     _loop.start();
 }
 
