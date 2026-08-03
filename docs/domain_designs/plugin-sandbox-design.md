@@ -189,7 +189,9 @@ PluginCapability::Unrestricted→ 不装 seccomp（仅审计 + 记录）
   MsgSerializeState                                             暂停时请求 checkpoint blob
 
 子→主（响应 + 异步事件）：
-  MsgResult     —— 按请求类型：元数据值 / checkpoint blob / 最终 AlgorithmOutput（编码）
+  MsgResult     —— 按请求类型：元数据值 / 最终 AlgorithmOutput（编码）
+  MsgCheckpoint —— MsgSerializeState 的专用回复（不透明 checkpoint blob），
+                  与运行结束的 MsgResult 区分，握手绝不会吃错终态帧
   MsgProgress / MsgSolution   流式事件
   MsgError
 ```
