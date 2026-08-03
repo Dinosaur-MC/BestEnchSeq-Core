@@ -83,6 +83,8 @@
     "cli.err.invalid_ench_level": "Invalid enchantment level: '{0}' in '{1}'",
     "cli.err.unknown_ench": "Unknown enchantment: '{0}'",
     "cli.err.invalid_int": "Invalid integer value '{0}' for {1}",
+    "cli.err.empty_int": "Empty value for {0}",
+    "cli.err.int_exceeds_range": "Value '{0}' for {1} exceeds int32 range",
     "cli.err.unknown_property": "Unknown property key '{0}' in target item",
     "cli.err.unknown_equipment": "Unknown equipment: '{0}'",
     "cli.err.inventory_file_error": "Failed to read/parse inventory input: {0}",

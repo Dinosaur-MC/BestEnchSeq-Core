@@ -54,15 +54,19 @@ inline void validate_durability(int32_t durability, int32_t max_durability, cons
 
 inline int32_t parse_nonneg_int(const std::string& str, const std::string& context) {
     if (str.empty())
-        throw std::runtime_error("Empty value for " + context);
+        throw std::runtime_error(tr_fmt("cli.err.empty_int", context));
     for (char c : str) {
         if (!std::isdigit(static_cast<unsigned char>(c)))
             throw std::runtime_error(tr_fmt("cli.err.invalid_int", str, context));
     }
-    // safe: all digits at this point
+    // 防御：>10 位十进制必超 int32 上限（std::stoull 对超长串抛 out_of_range，
+    // 非 runtime_error 子类，调用方的 catch 会漏过）。先按位数短路。
+    if (str.size() > 10 ||
+        (str.size() == 10 && str > std::to_string(std::numeric_limits<int32_t>::max())))
+        throw std::runtime_error(tr_fmt("cli.err.int_exceeds_range", str, context));
     unsigned long long val = std::stoull(str);
     if (val > static_cast<unsigned long long>(std::numeric_limits<int32_t>::max()))
-        throw std::runtime_error("Value '" + str + "' for " + context + " exceeds int32 range");
+        throw std::runtime_error(tr_fmt("cli.err.int_exceeds_range", str, context));
     return static_cast<int32_t>(val);
 }
 
