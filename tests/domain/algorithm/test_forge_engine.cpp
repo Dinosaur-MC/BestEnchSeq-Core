@@ -369,6 +369,121 @@ void test_zero_level_enchant_rejected() {
     std::cout << "PASS: test_zero_level_enchant_rejected (cost=" << cost << ")" << std::endl;
 }
 
+// ─── Additional sub-operation boundary tests ─────────────────────────
+
+void test_penalty_cost_bounds() {
+    algorithm::ForgeEngine engine;
+    expect(engine.penalty_cost(-1) == INT32_MAX, "penalty_cost(-1) should be INT32_MAX");
+    expect(engine.penalty_cost(31) == INT32_MAX, "penalty_cost(31) should be INT32_MAX");
+    TEST_PASS("penalty_cost bounds");
+}
+
+void test_is_forgeable_combinations() {
+    TestFixture fx;
+    algorithm::ForgeEngine engine;
+    auto book        = fx.make_book(fx.id("sharpness"), 1);
+    auto book2       = fx.make_book(fx.id("sharpness"), 1);
+    algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
+    algorithm::Item eq2{algorithm::ItemType::Equip, 1561, 0, {}};
+
+    expect(engine.is_forgeable(eq, book), "equip + book forgeable");
+    expect(engine.is_forgeable(eq, eq2), "equip + equip forgeable");
+    expect(engine.is_forgeable(book, book2), "book + book forgeable");
+    expect(!engine.is_forgeable(book, eq), "book + equip NOT forgeable");
+    TEST_PASS("is_forgeable combinations");
+}
+
+void test_forge_into_repair_cost() {
+    algorithm::ForgeConfig cfg;
+    cfg.ignore_penalty_cost = false;
+    cfg.ignore_repair_cost  = false;
+    cfg.platform            = MCE::Java;
+    algorithm::ForgeEngine engine{cfg};
+
+    // equip (damaged) + equip sacrifice → +2 repair cost + durability increase
+    TestFixture fx;
+    algorithm::Item target{algorithm::ItemType::Equip, 1561, 0, {}};
+    target.dur = 800;
+    algorithm::Item sacrifice{algorithm::ItemType::Equip, 1561, 0, {}};
+    sacrifice.dur = 100;
+    int32_t cost = engine.forge_into(target, sacrifice, fx.reg);
+    expect(cost == 2, "equip+equip repair: cost should be 2 (0 penalty + 2 repair)");
+    // 800 + 100 + 1561*12/100 = 800 + 100 + 187 = 1087
+    expect(target.dur == 1087, "repair durability formula (target + sacrifice + 12% of max)");
+
+    // ignore_repair_cost=true → no +2, no durability change
+    algorithm::ForgeConfig cfg2 = cfg;
+    cfg2.ignore_repair_cost = true;
+    algorithm::ForgeEngine engine2{cfg2};
+    algorithm::Item target2{algorithm::ItemType::Equip, 1561, 0, {}};
+    target2.dur = 800;
+    algorithm::Item sacrifice2{algorithm::ItemType::Equip, 1561, 0, {}};
+    sacrifice2.dur = 100;
+    int32_t cost2 = engine2.forge_into(target2, sacrifice2, fx.reg);
+    expect(cost2 == 0, "ignore_repair_cost: cost should be 0");
+    expect(target2.dur == 800, "ignore_repair_cost: durability unchanged");
+    TEST_PASS("forge_into repair cost");
+}
+
+void test_forge_into_inapplicable_ench_skipped() {
+    TestFixture fx;
+    algorithm::ForgeEngine engine;
+    // protection is only applicable to chestplate — not to the sword target
+    // (its applicable flag is false in the fixture).  Forging a protection
+    // book onto the sword must skip it (no apply, no cost).
+    algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
+    auto book = fx.make_book(fx.id("protection"), 3);
+    int32_t cost = engine.forge_into(eq, book, fx.reg);
+    auto pid = static_cast<algorithm::Ench::value_type>(fx.id("protection"));
+    expect(!eq.enchs.contains(pid), "inapplicable enchant should be skipped on equip");
+    expect(cost == 0, "skipped enchant adds no cost");
+    TEST_PASS("forge_into inapplicable enchant skip");
+}
+
+void test_pure_forge_into() {
+    TestFixture fx;
+    algorithm::ForgeEngine engine;
+
+    // book + book: same-level upgrade + ppn update (no cost arithmetic)
+    auto a   = fx.make_book(fx.id("sharpness"), 4);
+    a.ppn    = 0;
+    auto b   = fx.make_book(fx.id("sharpness"), 4);
+    b.ppn    = 1;
+    engine.pure_forge_into(a, b, fx.reg);
+    auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
+    expect(a.enchs.contains(sid) && a.enchs[sid] == 5,
+           "pure_forge: 4+4 should upgrade to 5");
+    expect(a.ppn == 2, "pure_forge: ppn(0,1) should become 2");
+
+    // equip + equip: repair applied (durability increases), still cost-free
+    algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
+    eq.dur  = 800;
+    algorithm::Item eq2{algorithm::ItemType::Equip, 1561, 0, {}};
+    eq2.dur = 100;
+    engine.pure_forge_into(eq, eq2, fx.reg);
+    expect(eq.dur == 1087, "pure_forge: repair durability formula");
+
+    TEST_PASS("pure_forge_into");
+}
+
+void test_estimate_forge_cost_equip_sacrifice() {
+    TestFixture fx;
+    algorithm::ForgeEngine engine;
+    // Equipment sacrifice uses mul (not mul_b): knockback mul=2.
+    algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
+    algorithm::Item sac{algorithm::ItemType::Equip, 1561, 0, {}};
+    sac.enchs.insert(algorithm::Ench{
+        static_cast<algorithm::Ench::value_type>(fx.id("knockback")), 2});
+    int32_t est = engine.estimate_forge_cost(eq, sac, fx.reg);
+    expect(est == 4, "estimate equip-sacrifice: knockback 2 × mul(2) = 4");
+
+    // Book sacrifice uses mul_b (knockback mul_b = 1) — discriminates the path
+    auto book      = fx.make_book(fx.id("knockback"), 2);
+    int32_t est_bk = engine.estimate_forge_cost(eq, book, fx.reg);
+    expect(est_bk == 2, "estimate book-sacrifice: knockback 2 × mul_b(1) = 2");
+    TEST_PASS("estimate_forge_cost equipment sacrifice");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -386,6 +501,12 @@ int main() {
         test_different_level_max();
         test_invalid_enchant_level_rejected();
         test_zero_level_enchant_rejected();
+        test_penalty_cost_bounds();
+        test_is_forgeable_combinations();
+        test_forge_into_repair_cost();
+        test_forge_into_inapplicable_ench_skipped();
+        test_pure_forge_into();
+        test_estimate_forge_cost_equip_sacrifice();
     } catch (const test_error &e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception &e) {

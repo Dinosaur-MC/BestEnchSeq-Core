@@ -120,3 +120,12 @@ target_link_libraries(test_data_schema PRIVATE besq-core)
 add_test(NAME test_data_schema COMMAND test_data_schema)
 set_tests_properties(test_data_schema PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# --- Logger (links the shared besq-common-log; DLL resolved via BESQ_TEST_ENV PATH) ---
+
+add_executable(test_logger
+    log/test_logger.cpp
+)
+target_include_directories(test_logger PRIVATE ${TEST_INCLUDE} ${PROJECT_ROOT}/include)
+target_link_libraries(test_logger PRIVATE besq-common-log)
+besq_test_common_props(test_logger)
+

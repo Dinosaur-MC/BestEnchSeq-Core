@@ -84,3 +84,6 @@ besq_test(test_sandbox test_sandbox.cpp)  # Linux-only; skips elsewhere
 # idastar 同样为插件源码，一并编译进测试可执行文件（test 直接构造 IDAStarAlgorithm）。
 besq_test_with_plugins(test_algorithm_strategies test_algorithm_strategies.cpp
     "${BESQ_PLUGIN_ASTAR_SRCS};${BESQ_PLUGIN_DFS_SRCS};${BESQ_PLUGIN_IDASTAR_SRCS}")
+
+# dp_merge 正确性：与 bb_dp 精确解最优值等价（守卫 Pareto 剪枝/双缓存）
+besq_test(test_dp_merge_correctness test_dp_merge_correctness.cpp)
