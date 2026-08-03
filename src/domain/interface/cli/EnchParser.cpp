@@ -1,6 +1,7 @@
 #include "EnchParser.h"
 #include "common/i18n/Language.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/interface/components/ParserShared.hpp"
 #include "common/utils/StringUtils.hpp"
 
 #include <algorithm>
@@ -136,17 +137,10 @@ EnchSet EnchParser::parse(const std::string& input,
         // when the input contains now-invalid chars (uppercase, `/` in ns,
         // `.`/`..` segments).  Such input is genuinely unknown/invalid — map it
         // to the actionable unknown-enchantment error instead (B-T24 #22).
-        auto make_nsid = [](const std::string& k) -> NSID {
-            try {
-                return NSID(k);
-            } catch (const std::exception&) {
-                throw std::runtime_error(tr_fmt("cli.err.unknown_ench", k));
-            }
-        };
-        auto it = ench_reg.find(make_nsid(key));
+        auto it = ench_reg.find(interface_detail::make_nsid(key, "cli.err.unknown_ench"));
         if (it == ench_reg.end()) {
             // bare-ID fallback
-            it = ench_reg.find(make_nsid(id));
+            it = ench_reg.find(interface_detail::make_nsid(id, "cli.err.unknown_ench"));
             if (it == ench_reg.end())
                 throw std::runtime_error(tr_fmt("cli.err.unknown_ench", key));
         }

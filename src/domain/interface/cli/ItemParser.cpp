@@ -2,29 +2,13 @@
 #include "common/i18n/Language.h"
 #include "common/utils/StringUtils.hpp"
 #include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/interface/components/ParserShared.hpp"
 #include "EnchParser.h"
-#include <cctype>
-#include <limits>
 #include <stdexcept>
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/// Parse a non-negative integer from a string. Throws on failure.
-static int32_t parse_nonneg_int(const std::string& str, const std::string& context) {
-    if (str.empty())
-        throw std::runtime_error("Empty value for " + context);
-    for (char c : str) {
-        if (!std::isdigit(static_cast<unsigned char>(c)))
-            throw std::runtime_error(tr_fmt("cli.err.invalid_int", str, context));
-    }
-    // safe: all digits at this point
-    unsigned long long val = std::stoull(str);
-    if (val > static_cast<unsigned long long>(std::numeric_limits<int32_t>::max()))
-        throw std::runtime_error("Value '" + str + "' for " + context + " exceeds int32 range");
-    return static_cast<int32_t>(val);
-}
 
 /// Parse {key:value,...} properties block. Returns trailing position after '}'.
 /// prior_penalty and durability are filled in if present in the block;
@@ -50,29 +34,15 @@ static size_t parse_properties(const std::string& input, size_t start, int32_t& 
             std::string val = pair.substr(colon + 1);
 
             if (key == "prior_penalty")
-                prior_penalty = parse_nonneg_int(val, "prior_penalty");
+                prior_penalty = interface_detail::parse_nonneg_int(val, "prior_penalty");
             else if (key == "durability")
-                durability = parse_nonneg_int(val, "durability");
+                durability = interface_detail::parse_nonneg_int(val, "durability");
             else
                 throw std::runtime_error(tr_fmt("cli.err.unknown_property", key));
         }
     }
 
     return close_pos + 1; // position after '}'
-}
-
-/// Validate durability is within equipment bounds.
-static void validate_durability(int32_t durability, int32_t max_durability, const std::string& item_id) {
-    if (durability > max_durability)
-        throw std::runtime_error(tr_fmt("cli.err.durability_exceeds_max", durability, max_durability, item_id));
-}
-
-/// Validate prior_penalty fits the compact representation (uint8_t).
-/// Larger values would silently wrap (e.g. 999 → 231) downstream.
-static void validate_prior_penalty(int32_t prior_penalty) {
-    if (prior_penalty > std::numeric_limits<uint8_t>::max())
-        throw std::runtime_error(
-            tr_fmt("cli.err.prior_penalty_exceeds_max", prior_penalty, std::numeric_limits<uint8_t>::max()));
 }
 
 // ============================================================================
@@ -116,18 +86,7 @@ Item ItemParser::parse(const std::string& input, const EnchantmentRegistry& ench
     // it into an `enchanted_book`.  Both ids therefore normalise to the
     // enchanted_book (the item that actually carries the enchantments), and
     // durability defaults to 0 (books have no durability).
-    // NSID() throws its bare validator text ("The NSID '...' is invalid") when
-    // the id contains now-invalid chars (uppercase, `/` in ns, `.`/`..`
-    // segments).  Such input is genuinely unknown/invalid — map it to the
-    // actionable unknown-equipment error instead (B-T24 #22).
-    auto make_nsid = [](const std::string& k) -> NSID {
-        try {
-            return NSID(k);
-        } catch (const std::exception&) {
-            throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", k));
-        }
-    };
-    NSID nid = make_nsid(item_id);
+    NSID nid = interface_detail::make_nsid(item_id, "cli.err.unknown_equipment");
     const bool is_book = (nid == NSID("minecraft:book") || nid == NSID("minecraft:enchanted_book"));
     if (is_book) {
         item_id = "enchanted_book"; // book → enchanted_book on enchanting
@@ -150,8 +109,8 @@ Item ItemParser::parse(const std::string& input, const EnchantmentRegistry& ench
         throw std::runtime_error("Malformed target spec: unexpected content after '}' in '" + input + "'");
 
     // ── Post-parse validation ──
-    validate_durability(durability, max_durability, item_id);
-    validate_prior_penalty(prior_penalty);
+    interface_detail::validate_durability(durability, max_durability, item_id);
+    interface_detail::validate_prior_penalty(prior_penalty);
 
     return Item(NSID(item_id), ench_set, prior_penalty, durability);
 }
