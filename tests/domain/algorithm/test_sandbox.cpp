@@ -16,10 +16,15 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/sandbox/SandboxedAlgorithm.h"
 #include "domain/algorithm/plugin/PluginAPI.h"
+#include "domain/algorithm/types/AlgorithmTypes.h"
+#include "domain/algorithm/types/EnchSet.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <thread>
 
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #pragma warning(disable : 4996)
@@ -60,6 +65,96 @@ std::string find_worker() {
     return "besq-worker";  // rely on PATH as a last resort
 }
 
+/// A real search plugin (idastar/astar/dfs) for the pause/resume test — the
+/// malicious plugin's execute() returns instantly, so it can't be paused.
+/// Returns an ABSOLUTE path: the worker is a child process whose cwd may
+/// differ from the test's, so a relative plugin path could fail to load.
+/// Platform-aware: build-wsl/ is present on Windows (readable files from a
+/// WSL build) but those are Linux .so files a Windows worker can't load.
+std::string find_search_plugin() {
+    const char *candidates[] = {
+#if defined(_WIN32)
+        "build/plugins/algo_idastar.dll",
+#else
+        "build-wsl/plugins/libalgo_idastar.so",
+        "build/plugins/libalgo_idastar.so",
+#endif
+    };
+    for (const char *c : candidates)
+        if (std::filesystem::exists(c))
+            return std::filesystem::absolute(c).string();
+    return {};
+}
+
+/// Diamond sword with 4 target enchants — long enough to pause mid-search.
+AlgorithmInput build_search_input() {
+    EnchInfo infos[4];
+    for (int i = 0; i < 4; ++i) {
+        infos[i].id         = static_cast<uint8_t>(i);
+        infos[i].mul        = 1;
+        infos[i].mul_b      = 1;
+        infos[i].applicable = true;
+    }
+    infos[0].max_lvl = 5;  // sharpness
+    infos[1].max_lvl = 3;  // knockback
+    infos[2].max_lvl = 3;  // looting
+    infos[3].max_lvl = 3;  // unbreaking
+
+    Equipment equip;
+    equip.id               = NSID("minecraft:diamond_sword");
+    equip.max_durability   = 1561;
+    equip.applicable_enchs = {0, 1, 2, 3};
+
+    EnchReg reg;
+    reg.init({infos[0], infos[1], infos[2], infos[3]},
+             {NSID("minecraft:sharpness"), NSID("minecraft:knockback"),
+              NSID("minecraft:looting"), NSID("minecraft:unbreaking")},
+             equip);
+
+    AlgorithmInput input;
+    input.registry          = reg;
+    input.config.mode       = AlgorithmMode::direct;
+    input.config.forge.platform = MCE::Java;
+    EnchSet tgt;
+    tgt.insert(0, 5); tgt.insert(1, 2); tgt.insert(2, 3); tgt.insert(3, 3);
+    input.target = Item(ItemType::Equip, 1561, 0, tgt);
+    input.data   = DirectPayload{{Ench{0, 2}}};
+    return input;
+}
+
+/// Pause/resume forwarding: run a sandboxed execute, pause mid-flight, wait,
+/// resume — the solve must complete correctly (no deadlock, no corruption).
+void test_pause_resume(const std::string &plugin) {
+    auto input = build_search_input();
+    SandboxedAlgorithm sa(plugin, find_worker(), PluginCapability::None);
+
+    ExecutionContext ctx(0, "pause-test");
+    std::atomic<const char *> outcome{"?"};
+    std::thread runner([&] {
+        try {
+            sa.execute(input, ctx);
+            outcome.store("completed", std::memory_order_release);
+        } catch (const std::exception &e) {
+            outcome.store(e.what(), std::memory_order_release);
+        } catch (...) {
+            outcome.store("threw-nonstd", std::memory_order_release);
+        }
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    ctx.pause();                 // parent → worker MsgPause
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    const bool paused_stall = ctx.is_paused();
+    ctx.resume();                // parent → worker MsgResume
+    runner.join();
+
+    std::string out(outcome.load());
+    std::cout << "pause: outcome=" << out << " (paused observed="
+              << paused_stall << ")" << std::endl;
+    expect(out == "completed", "sandbox: execute completed after pause/resume");
+    expect(paused_stall, "sandbox: pause state observed during run");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -97,6 +192,14 @@ int main() {
         const double v = sa.evaluate(26);
         expect(v >= 0.0, "sandbox: worker responded to evaluate(0x1A payload) — binary IPC ok");
 #endif
+
+        // ── Pause/resume forwarding (needs a real search plugin) ──────
+        const std::string search_plugin = find_search_plugin();
+        if (search_plugin.empty()) {
+            std::cout << "SKIP: pause/resume test — no search plugin built" << std::endl;
+        } else {
+            test_pause_resume(search_plugin);
+        }
     } catch (const test_error &e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return print_summary();

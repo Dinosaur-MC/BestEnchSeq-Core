@@ -15,14 +15,14 @@
 
 namespace algorithm {
 
-/// Abstract cancellation wakeup.  SandboxedAlgorithm derives a concrete one
-/// that OWNS the eventfd / Win32 event and closes it on destruction, so
-/// cancel() can wake the IPC wait without leaking the handle or racing its
-/// lifetime (a single atomic shared_ptr keeps the notifier alive while a
-/// cancel() is in flight).
-class CancellationNotifier {
+/// Abstract execution-control wakeup.  SandboxedAlgorithm derives a concrete
+/// one that OWNS the eventfd / Win32 event and closes it on destruction, so
+/// cancel()/pause()/resume() can wake the IPC wait without leaking the handle
+/// or racing its lifetime (a single atomic shared_ptr keeps the notifier alive
+/// while a notify() is in flight).
+class ControlNotifier {
   public:
-    virtual ~CancellationNotifier() = default;
+    virtual ~ControlNotifier() = default;
     virtual void notify() noexcept = 0;
 };
 
@@ -43,28 +43,38 @@ class ExecutionContext {
     // ═══════════════════════════════════════════════════════════════════
     // 执行控制
     // ═══════════════════════════════════════════════════════════════════
-    /// Cancellation notifier: SandboxedAlgorithm installs one so its IPC wait
-    /// wakes the INSTANT the executor cancels (eventfd write / Win32 SetEvent),
-    /// instead of polling.  A single atomic shared_ptr keeps the notifier alive
-    /// across the cancel()/execute() handoff — no torn fn/ud pair, no
-    /// use-after-free when it is reset while a cancel is in flight (the
+    /// Execution-control notifier: SandboxedAlgorithm installs one so its IPC
+    /// wait wakes the INSTANT the executor's control state changes — cancel(),
+    /// pause() or resume() — instead of polling.  A single atomic shared_ptr
+    /// keeps the notifier alive across the handoff: no torn fn/ud pair, no
+    /// use-after-free when it is reset while a notify() is in flight (the
     /// notifier frees its fd/event only when the last ref drops).  In-process
-    /// algorithms never install one: cancel() then does one extra null load.
-    void set_cancel_notifier(std::shared_ptr<CancellationNotifier> n) noexcept {
-        _cancel_notifier.store(std::move(n), std::memory_order_release);
+    /// algorithms never install one: each control call then does one extra
+    /// null load — nothing on the hot path.
+    void set_control_notifier(std::shared_ptr<ControlNotifier> n) noexcept {
+        _control_notifier.store(std::move(n), std::memory_order_release);
     }
     void cancel() noexcept {
         _cancelled.store(true, std::memory_order_release);
-        auto n = _cancel_notifier.load(std::memory_order_acquire);
+        auto n = _control_notifier.load(std::memory_order_acquire);
         if (n)
             n->notify();
     }
-    void pause() noexcept { _paused.store(true, std::memory_order_release); }
+    void pause() noexcept {
+        _paused.store(true, std::memory_order_release);
+        auto n = _control_notifier.load(std::memory_order_acquire);
+        if (n)
+            n->notify();
+    }
     void resume() noexcept {
         _paused.store(false, std::memory_order_release);
         _pause_cv.notify_all();
+        auto n = _control_notifier.load(std::memory_order_acquire);
+        if (n)
+            n->notify();
     }
     bool is_cancelled() const noexcept { return _cancelled.load(std::memory_order_acquire); }
+    bool is_paused() const noexcept { return _paused.load(std::memory_order_acquire); }
     void wait_if_paused();
 
     // ═══════════════════════════════════════════════════════════════════
@@ -156,10 +166,10 @@ class ExecutionContext {
     // ── 退出诊断 ──────────────────────────────────────────────────────
     std::unique_ptr<AlgorithmDiagnostics> _exit_diag;
 
-    // ── 取消通知（SandboxedAlgorithm 专用）────────────────────────────
+    // ── 执行控制通知（SandboxedAlgorithm 专用）────────────────────────
     // 追加在类末尾：既有成员偏移不变，已编译插件（旧 ABI）不会因本类
     // 布局变化而读写错位（2026-08-03 曾因字段插中间导致插件 DLL 段错误）。
-    std::atomic<std::shared_ptr<CancellationNotifier>> _cancel_notifier{nullptr};
+    std::atomic<std::shared_ptr<ControlNotifier>> _control_notifier{nullptr};
 };
 
 } // namespace algorithm

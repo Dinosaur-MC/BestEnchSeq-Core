@@ -77,22 +77,23 @@ std::string resolve_worker_path(const std::string &given) {
     return "besq-worker";  // last resort: PATH
 }
 
-/// Owns the parent-side cancellation wakeup for ONE execute() call.  On Linux
-/// it's an eventfd (poll sees POLLIN); on Windows a manual-reset event
-/// (WaitForSingleObject sees it).  notify() is the ExecutionContext cancel
-/// hook; the destructor closes the underlying handle.  The notifier is held by
-/// an atomic shared_ptr, so the fd/event cannot leak across solves and cannot
-/// be used-after-free while a concurrent cancel() still references it.
-class ExecuteCancelNotifier : public CancellationNotifier {
+/// Owns the parent-side execution-control wakeup for ONE execute() call.  On
+/// Linux it's an eventfd (poll sees POLLIN); on Windows a manual-reset event
+/// (WaitForSingleObject sees it).  notify() is the ExecutionContext control
+/// hook (cancel/pause/resume all trigger it); the destructor closes the
+/// underlying handle.  The notifier is held by an atomic shared_ptr, so the
+/// fd/event cannot leak across solves and cannot be used-after-free while a
+/// concurrent control call still references it.
+class ExecuteControlNotifier : public ControlNotifier {
   public:
-    ExecuteCancelNotifier() {
+    ExecuteControlNotifier() {
 #if defined(__linux__)
         _fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
         _evt = ::CreateEventA(nullptr, TRUE, FALSE, nullptr);
 #endif
     }
-    ~ExecuteCancelNotifier() override {
+    ~ExecuteControlNotifier() override {
 #if defined(__linux__)
         if (_fd >= 0) ::close(_fd);
 #elif defined(_WIN32)
@@ -220,20 +221,28 @@ bool SandboxedAlgorithm::simulate(const AlgorithmInput &input) const noexcept {
 void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
     send(ipc::MsgType::MsgExecute, ipc::encode(input));
 
-    // Event-driven wakeup for parent-side cancellation: the executor's
-    // timeout watcher / signal handler calls ctx.cancel() on another thread.
+    // Event-driven wakeup for parent-side execution control: the executor's
+    // timeout watcher / signal handler calls ctx.cancel()/pause()/resume() on
+    // another thread — each triggers the notifier, which wakes the wait below.
     // The notifier OWNS the eventfd / Win32 event and closes it when the last
-    // reference drops (after execute() and any in-flight cancel() finish) —
-    // no per-solve fd/handle leak, no use-after-free.
-    auto notifier = std::make_shared<ExecuteCancelNotifier>();
+    // reference drops (after execute() and any in-flight notify finish) — no
+    // per-solve fd/handle leak, no use-after-free.
+    auto notifier = std::make_shared<ExecuteControlNotifier>();
     if (!notifier->valid())
-        throw std::runtime_error("sandboxed execute: cancel notifier creation failed");
-    ctx.set_cancel_notifier(notifier);
+        throw std::runtime_error("sandboxed execute: control notifier creation failed");
+    ctx.set_control_notifier(notifier);
 
-    // Race guard: the executor may have cancelled between MsgExecute and the
-    // hook install above (the event would then never fire).  Re-check once.
-    if (ctx.is_cancelled())
+    bool pause_sent = false;  // MsgPause forwarded to the worker (until MsgResume)
+
+    // Race guard: the executor may have cancelled/paused between MsgExecute
+    // and the hook install above (the event would then never fire).  Forward
+    // whatever state is already set.
+    if (ctx.is_cancelled()) {
         send(ipc::MsgType::MsgCancel, {});
+    } else if (ctx.is_paused()) {
+        send(ipc::MsgType::MsgPause, {});
+        pause_sent = true;
+    }
 
     try {
         bool done = false;
@@ -241,10 +250,11 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
             ipc::MsgType type;
             std::vector<uint8_t> payload;
             bool got = false;
+            bool woken = false;  // the control notifier fired (cancel/pause/resume)
 #if defined(__linux__)
             // Wait on BOTH event sources with an infinite timeout: the worker's
-            // IPC channel (data → kernel wakes poll) and the cancel eventfd
-            // (cancel → cancel_notify writes → poll wakes).  Zero polling.
+            // IPC channel (data → kernel wakes poll) and the control eventfd
+            // (cancel/pause/resume → notifier writes → poll wakes).  Zero polling.
             struct pollfd pfds[2] = {{_fd, POLLIN, 0}, {notifier->fd(), POLLIN, 0}};
             int rc = ::poll(pfds, 2, -1);
             if (rc < 0)
@@ -252,30 +262,52 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
             if (pfds[1].revents & POLLIN) {
                 uint64_t v;
                 (void)::read(notifier->fd(), &v, sizeof(v));  // consume the counter
-                send(ipc::MsgType::MsgCancel, {});
-                continue;
+                woken = true;
+            } else {
+                got = ipc::read_frame(_fd, type, payload);
             }
-            got = ipc::read_frame(_fd, type, payload);
 #elif defined(_WIN32)
             // Windows anonymous pipes are NOT reliable wait objects — WFMO
             // on the read handle spuriously signals "readable" on an empty
             // pipe and read_frame would then block forever.  Detect data
-            // with PeekNamedPipe (non-blocking); the cancel event is a REAL
-            // waitable object, so an executor cancel still wakes us instantly.
+            // with PeekNamedPipe (non-blocking); the control event is a REAL
+            // waitable object, so an executor cancel/pause/resume still wakes
+            // us promptly.
             HANDLE pipe_h = reinterpret_cast<HANDLE>(::_get_osfhandle(_fd));
             DWORD avail = 0;
             if (::PeekNamedPipe(pipe_h, nullptr, 0, nullptr, &avail, nullptr) && avail > 0) {
                 got = ipc::read_frame(_fd, type, payload);
             } else if (::WaitForSingleObject(notifier->handle(), 1) == WAIT_OBJECT_0) {
                 ::ResetEvent(notifier->handle());
-                send(ipc::MsgType::MsgCancel, {});
-                continue;
+                woken = true;
             } else {
                 continue;  // nothing ready — re-poll (≤1 ms)
             }
 #else
             got = ipc::read_frame(_fd, type, payload);
 #endif
+
+            // Forward the executor's control state to the worker.  The notifier
+            // is triggered by cancel()/pause()/resume(); on wake we diff the
+            // current state against what we already forwarded.
+            if (woken) {
+                if (ctx.is_cancelled()) {
+                    send(ipc::MsgType::MsgCancel, {});
+                    continue;
+                }
+                if (ctx.is_paused() && !pause_sent) {
+                    send(ipc::MsgType::MsgPause, {});
+                    pause_sent = true;
+                    continue;
+                }
+                if (!ctx.is_paused() && pause_sent) {
+                    send(ipc::MsgType::MsgResume, {});
+                    pause_sent = false;
+                    continue;
+                }
+                continue;  // spurious wake — nothing to forward
+            }
+
             if (!got)
                 throw std::runtime_error("sandboxed execute: worker closed channel");
 
@@ -311,11 +343,12 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
         }
     } catch (...) {
         // Drop our reference; the notifier (and its fd/event) is freed once no
-        // in-flight cancel() holds it — a late cancel never touches a freed handle.
-        ctx.set_cancel_notifier(nullptr);
+        // in-flight control call holds it — a late cancel/pause never touches a
+        // freed handle.
+        ctx.set_control_notifier(nullptr);
         throw;
     }
-    ctx.set_cancel_notifier(nullptr);
+    ctx.set_control_notifier(nullptr);
 }
 
 std::unique_ptr<IForgeEngine> SandboxedAlgorithm::get_forge_engine() const noexcept {
@@ -489,8 +522,13 @@ void SandboxedAlgorithm::query_metadata() {
     std::vector<uint8_t> result;
 
     send(ipc::MsgType::MsgGetName, {});
-    if (!recv(type, result))
-        throw std::runtime_error("sandbox: worker get_name failed");
+    if (!recv(type, result)) {
+        // The worker likely died at startup (plugin load failure, seccomp, …).
+        // Drain its stderr so the reason surfaces instead of a bare EOF.
+        const std::string err = take_worker_stderr();
+        throw std::runtime_error("sandbox: worker get_name failed" +
+                                 (err.empty() ? std::string{} : ": " + err));
+    }
     { ByteStreamReader r(result); r >> _name; }
 
     send(ipc::MsgType::MsgGetVersion, {});
