@@ -127,6 +127,12 @@ for tier = 0, 1, 2, … while tiers[tier] exists:
     while items ≥ 2:
         a = pop_front(items)    // base
         b = pop_front(items)    // sacrifice
+        if wastes_target(a, b):   // b 携带仍需要的目标魔咒、a 的冲突会丢弃它
+            if 有相邻位（序列下一位）:
+                交换 a 与相邻位 → 重试配对（保持汉明层平衡）
+            else:
+                next_items.push(a); next_items.push(b)  // 双双保送，目标书存活
+                continue
         forge_into(a, b)        // a absorbs b
         steps.push(pre-forge state of a, b, cost)
         next_items.push(a)      // forged result preserved
@@ -136,7 +142,7 @@ for tier = 0, 1, 2, … while tiers[tier] exists:
 
     clear tiers[tier]
     push ALL next_items to tiers[tier + 1]
-    → guarantees convergence
+    → guarantees convergence（级联层数有界：max_ppn + 物品数 + 2，超界即无解）
 ```
 
 ### Phase 3 — Resolution
@@ -384,12 +390,19 @@ pairs forward.
   equipment order (base at position 0 = the balanced-tree root), so a
   same-tier conflicting equipment merges into the base as a sacrifice and
   its conflicting enchant is dropped by `forge_into` (Java +1 penalty) —
-  correct.  Residual (pre-existing): if the conflicting retained
-  equipment sits in a **lower PPN tier** than the base, it forges with the
-  books in its own tier first and can absorb a needed book, wasting its
-  enchant via silent conflict-drop → false "unreachable".  Follow-up
-  candidates: make `is_forgeable` reject book→conflicting-equipment, or
-  bias tier processing so the base's tier resolves first.
+  correct.  The **waste-avoidance pass** additionally handles the
+  cross-tier case (retained conflicting equipment in a LOWER PPN tier than
+  the base): a pair that would waste a needed target enchant (sacrifice
+  carries a target enchant the base's conflict would drop) is reordered —
+  swap the conflicting base with the adjacent position in the hamming
+  arrangement sequence (popcount-same-level, preserving tree balance); if
+  no adjacent partner exists, both are carried to the next tier and the
+  target book survives until it reaches a compatible base.  A cascade
+  bound (`max_ppn + item_count + 2`) guarantees termination when no
+  compatible base exists (e.g. mutually-conflicting target enchants →
+  correctly reported unreachable).  `ForgeEngine` itself is unchanged —
+  MC vanilla mechanics are preserved; the avoidance lives in the pairing
+  strategy only.
 
 ---
 

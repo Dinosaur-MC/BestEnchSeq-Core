@@ -1070,6 +1070,43 @@ void test_hamming_inventory_conflict_retained_equip() {
     TEST_PASS("hamming: inventory conflict retained equip does not displace base");
 }
 
+void test_hamming_inventory_cross_tier_conflict() {
+    // Cross-tier regression: the retained conflicting equipment sits in a LOWER
+    // ppn tier (0) than the base (ppn 2).  The target book (ppn 0) would be
+    // absorbed by the conflict equip in tier 0 (its enchant dropped).  The
+    // waste-avoidance swap/carry must carry the pair up to the base's tier,
+    // where the book merges into the (non-conflicting) base.  Before the fix
+    // this reported false "unreachable".
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_SHARPNESS, 5);
+    target.enchs.insert(RE_THORNS, 3);
+
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::inventory;
+    input.config.forge.platform = MCE::Java;
+    input.registry = reg;
+    input.target = target;
+    algorithm::ItemCollection pool;
+    pool.push_back(re_equip_with(RE_SHARPNESS, 4, 2));   // base at ppn 2
+    algorithm::Item conflict_equip = re_equip_with(RE_THORNS, 3, 0);
+    conflict_equip.enchs.insert(RE_SMITE, 5);            // ppn 0, conflicting
+    pool.push_back(std::move(conflict_equip));
+    pool.push_back(re_book(RE_SHARPNESS, 5));            // ppn 0, needed book
+    input.data = algorithm::InventoryPayload{std::move(pool), {}};
+
+    algorithm::AlgorithmExecutor executor(
+        std::make_unique<algorithm::HammingAlgorithm>());
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    expect(state == algorithm::AlgorithmState::Completed,
+           "hamming: cross-tier conflict solve should complete");
+    auto out = executor.output();
+    expect(!out.solutions.empty(),
+           "hamming: cross-tier conflicting retained equip must not cause false unreachable");
+    TEST_PASS("hamming: cross-tier conflict retained equip resolves at base tier");
+}
+
 void test_resolver_preenchanted_equip_reaches_target() {
     // Equipment already meets the target → pool stays non-empty, no books
     // needed, irrelevant books dropped.
@@ -1179,6 +1216,7 @@ int main() {
     RUN_TEST(test_resolver_best_base_selection);
     RUN_TEST(test_resolver_retain_equipment_only_ench);
     RUN_TEST(test_hamming_inventory_conflict_retained_equip);
+    RUN_TEST(test_hamming_inventory_cross_tier_conflict);
     RUN_TEST(test_resolver_book_target_pure_book_pool);
     RUN_TEST(test_resolver_book_target_multi_ench);
     RUN_TEST(test_resolver_equip_target_pure_book_pool);

@@ -67,6 +67,24 @@ void HammingAlgorithm::arrange_by_popcount(
     items = std::move(arranged);
 }
 
+// ─── Waste-avoidance ─────────────────────────────────────────────────────
+
+/// 若将 \p sac 锻入 \p base 会丢弃一个仍需要的目标魔咒（sac 携带目标魔咒 E、
+/// base 尚缺 E、且 base 持有与 E 冲突的魔咒 → forge_into 会丢弃 E），则该合并
+/// 是浪费性的——E 的唯一来源可能因此丢失，导致假"目标不可达"。ForgeEngine 的
+/// 行为本身是 MC 原版机制，这里只在配对策略层避免做浪费性合并。
+static bool merge_wastes_target(const Item& base, const Item& sac,
+                                const Item& target, const EnchReg& reg) noexcept {
+    bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
+    for (auto id = it.next(); id != it.npos; id = it.next()) {
+        if (sac.enchs[id] > 0 &&
+            base.enchs[id] < target.enchs[id] &&
+            (base.enchs & reg.get_conflict_mask(id)) != 0)
+            return true;
+    }
+    return false;
+}
+
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
@@ -100,6 +118,7 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
     // ── Phase 1: Seed the PPN-tiered work queue ──────────────────────────
 
+    const size_t initial_item_count = items.size();
     int max_ppn = 0;
     for (const auto& item : items)
         if (item.ppn > max_ppn) max_ppn = item.ppn;
@@ -107,6 +126,11 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     std::vector<std::vector<Item>> tiers(static_cast<size_t>(max_ppn) + 1);
     for (auto& item : items)
         tiers[item.ppn].push_back(std::move(item));
+
+    // 终止边界：浪费性配对（目标魔咒与冲突 base）通过保送逐层上浮，最迟在
+    // base 所在层（max_ppn）解析；若池中无兼容 base（如目标魔咒互相冲突），
+    // 保送将无限继续。此上界保证终止——超界即真正不可达，进入最终扫描得无解。
+    const size_t max_tiers = static_cast<size_t>(max_ppn) + initial_item_count + 2;
 
     std::vector<EnchStep> steps;
     steps.reserve(items.size() - 1);
@@ -118,7 +142,7 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     // Items bubble up one tier per outer iteration (tier → tier+1).
     // Forged results and leftovers always go to tier+1, guaranteeing every
     // item converges at the final tier.
-    for (size_t tier = 0; tier < tiers.size() && !cancelled; ++tier) {
+    for (size_t tier = 0; tier < tiers.size() && tier <= max_tiers && !cancelled; ++tier) {
         ctx.wait_if_paused();
         if (ctx.is_cancelled()) { cancelled = true; break; }
 
@@ -163,6 +187,35 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
                 if (_forge_engine.is_forgeable(sac, base)) {
                     std::swap(base, sac);
                 } else {
+                    next_items.push_back(std::move(base));
+                    next_items.push_back(std::move(sac));
+                    continue;
+                }
+            }
+
+            // ── Waste-avoidance（相邻位 swap / carry）───────────────────
+            // 若该配对会把一个仍需要的目标魔咒浪费掉（sac 携带目标魔咒、base 持
+            // 冲突魔咒致其被 forge_into 丢弃），将冲突物品（base）与汉明排列序列
+            // 中的相邻下一位交换（位置 1 ↔ 位置 2，popcount 同层，保持平衡树）：
+            //   ① 交换后 base 与目标书配对不浪费 → 正常锻造（冲突物品与后续项合并）
+            //   ② 交换后仍浪费 → 双双保送下一 tier，可继续 swap 直到冲突被消耗
+            // 序列耗尽无相邻位 → 双双保送。目标书因此存活到兼容的 base，避免假
+            // "目标不可达"。（ForgeEngine 行为是 MC 原版机制，不改。）
+            if (merge_wastes_target(base, sac, target, reg)) {
+                if (!tiers[tier].empty()) {
+                    Item next = std::move(tiers[tier].front());
+                    tiers[tier].erase(tiers[tier].begin());
+                    // base（冲突物品）放回序列（与后续项配对）；目标书与 next 配对。
+                    tiers[tier].insert(tiers[tier].begin(), std::move(base));
+                    base = std::move(next);
+                    if (merge_wastes_target(base, sac, target, reg)) {
+                        // 交换后仍浪费 → 双双保送（下一 tier 可继续 swap）。
+                        next_items.push_back(std::move(base));
+                        next_items.push_back(std::move(sac));
+                        continue;
+                    }
+                } else {
+                    // 无相邻位 → 双双保送。
                     next_items.push_back(std::move(base));
                     next_items.push_back(std::move(sac));
                     continue;
