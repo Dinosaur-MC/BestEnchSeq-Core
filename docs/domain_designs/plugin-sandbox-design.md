@@ -177,53 +177,93 @@ PluginCapability::Unrestricted→ 不装 seccomp（仅审计 + 记录）
 ```
 双向 socketpair（Linux）/ 双匿名管道（Windows）
 帧格式：[4B 长度][4B 消息类型][payload]
+分块：≤16MiB 单帧直传，>16MiB 自动拆 1MiB 帧（MsgChunkedStart/Data/End）透明重组
+     —— MB~GB 级 checkpoint 无需单独分块协议
 
 主→子（请求）：
-  MSG_RESOLVE / MSG_SIMULATE / MSG_EXECUTE / MSG_PROCESS /
-  MSG_GET_FORGE_ENGINE / MSG_EVALUATE / MSG_CANCEL / MSG_PAUSE / MSG_RESUME
+  MsgGetName / MsgGetVersion / MsgGetMode / MsgIsSerializable   构造握手（元数据缓存）
+  MsgEvaluate / MsgSimulate                                     预检（Windows 二进制冒烟用 evaluate）
+  MsgRun(AlgorithmInput)                                        运行新求解
+  MsgResumeRun(不透明 checkpoint blob)                          恢复运行（input 内嵌在 blob）
+  MsgPause / MsgResume / MsgCancel                              运行期控制
+  MsgSerializeState                                             暂停时请求 checkpoint blob
 
 子→主（响应 + 异步事件）：
-  MSG_RESPONSE / MSG_PROGRESS / MSG_SOLUTION /
-  MSG_DIAGNOSTICS / MSG_CRASH / MSG_SANDBOX_VIOLATION
+  MsgResult     —— 按请求类型：元数据值 / checkpoint blob / 最终 AlgorithmOutput（编码）
+  MsgProgress / MsgSolution   流式事件
+  MsgError
 ```
 
-序列化复用 `ByteStream`（`besq-common-io`）泛型 write/read。紧凑类型（`EnchSet` 位掩码 + `uint8_t[64]`、`Item` POD）天然二进制友好。
+序列化复用 `ByteStream`（`besq-common-io`）。`AlgorithmOutput` 有专用编解码
+（`encode_algorithm_output`/`decode_algorithm_output`）——`solutions` 含 `std::vector`
+非平凡类型，逐元素 `serialize()` 手写，避免 ByteStream 的平凡类型模板。
 
-## 6. IAlgorithm 代理面（全量）
+## 6. Executor 代理面（IExecutor）—— 沙箱缝在 executor 之上
 
-```
-父进程 SandboxedAlgorithm 实现 IAlgorithm，每个方法一次 IPC 往返：
-  name/version/supported_mode/is_resumable/evaluate()  → 子进程首次读取缓存
-  resolve(input) → ResolverOutput
-  simulate(input) → bool
-  execute(input, ctx)  → 子进程执行，progress 流式回传
-  process(sol, cfg, reg) → optional<Item>
-  get_forge_engine()   → 父进程拿"转发型 IForgeEngine"（forge 调用走 IPC，量小）
-  get_serializer()     → 沙箱插件 v1 禁用 resume（后续再做 checkpoint 跨进程）
-```
+**`AlgorithmExecutor` 是整个算法域的权威入口**：它持有 `ExecutionContext`、驱动
+`IAlgorithm::execute()`、跑状态机（Idle→Running→Paused→Completed/Failed/Cancelled）、
+产出/消费 checkpoint。编排层（`SolvePipeline`）只跟它打交道。
 
-## 7. 诊断转发（决策 B）
+因此沙箱缝**不在 `IAlgorithm`**（那样会把 executor/context/algorithm 的高度耦合拆散跨进程、
+再用握手重新接通——旧 `SandboxedAlgorithm` 的教训），而在 **executor 之上**：
 
 ```
-子进程：
-  DiagnosticsService::instance().set_persist(false)          # 子进程不写盘
-  attach_observer(IpcForwardObserver)                        # 唯一 observer
+父进程 SandboxedExecutor : IExecutor          worker 进程（真 AlgorithmExecutor）
+  name/version/supported_mode/simulate          ├─ ctx（内部，本地，不拆）
+  start(input)  ── MsgRun ────────────▶         ├─ algorithm（内部，本地）
+  start(blob)   ── MsgResumeRun ──────▶         ├─ serialize_state（本地）
+  pause/resume/cancel（任意线程）──▶ exec.pause()/resume()/cancel()（原生线程安全）
+  serialize_state() ── MsgSerializeState ─▶    exec.serialize_state() → 完整不透明 blob
+  wait()/output() ◀── MsgResult(AlgorithmOutput)
+  （reader 线程：运行期唯一读管道者）
+```
+
+IExecutor 公共面（`src/domain/algorithm/IExecutor.h`）：`name/version/supported_mode/simulate`
++ `start(input)`/`start(checkpoint)` + `pause()/resume()/cancel()` + `wait()/state()/progress()/output()`
++ `serialize_state()/is_serializable()`。`AlgorithmExecutor` 与 `SandboxedExecutor` 并列实现之；
+`SolvePipeline`/`BesqContext` 只依赖 `IExecutor`，沙箱开关在 `AlgorithmLoader::create_executor()`：
+沙箱插件 → `SandboxedExecutor`，内建/无沙箱插件 → `AlgorithmExecutor`（**内建策略永不沙箱化**——
+编译进可信内核）。
+
+对比旧实现（已删除 `SandboxedAlgorithm`）：IAlgorithm 代理被迫
+- 把 ctx 劈成父侧壳 + worker 侧真身，progress/solution 跨进程回注
+- pause/cancel 退化为 `notifier → MsgPause → worker 控制线程 → 本地 ctx` 四段接力
+- 序列化靠 `_pipe_yielded` 原子握手 + `SandboxSerializer` 代理 + section 编解码，硬耦合"已暂停"语义
+
+全部删掉。IPC 上只留粗消息，executor 的耦合完整留在 worker 内，checkpoint 变为**不透明 blob**
+（`exec.serialize_state()` 产出含 input 段的完整 checkpoint，父侧只搬字节）。
+
+## 7. 诊断转发
+
+```
+worker：
+  DiagnosticsService::instance().set_persist(false)          # 不写盘
+  attach_observer(IpcForwardObserver)                        # 运行期唯一 observer
+  worker 侧所有 stdout 写（observer 事件 + 控制线程序列化回复 + serve 的 MsgResult）
+  统一走 IpcForwardObserver::send_frame() 的锁 → 帧永不交错
 
   algorithm → ctx.report_progress()/report_solution()
            → 子进程 DiagnosticsService → IpcForwardObserver
-           → 序列化 DiagnosticsEvent → IPC 管道
+           → MsgProgress/MsgSolution 帧
 
-父进程：
-  IPC reader 线程 → 反序列化 → 父进程 DiagnosticsService::push()
-                 → observers（CLI --verbose）+ DiagnosticsWriter（写盘）
+父侧 SandboxedExecutor（reader 线程）：
+  MsgProgress → 更新 progress()；MsgSolution → 忽略（权威解法在最终 MsgResult 的
+  AlgorithmOutput 里）；MsgResult → 解码存 _output。CLI 无 observer 依赖父进程
+  DiagnosticsService，无回注需求。
 ```
-
-单一写入者（父进程），无文件竞争，父进程完全控制诊断去向。
 
 ## 8. 生命周期与故障处理
 
 ```
-每次 solve 惰性 spawn 一个 worker，销毁时 kill。CLI 单次求解场景最简单。
+一个 SandboxedExecutor = 一个 worker 进程：构造时 spawn + 元数据握手（name/version/mode/
+is_serializable），析构时 cancel + join reader + kill。同一 worker 可复用多次求解
+（AlgorithmExecutor 允许从 Completed 重跑）。CLI 单次求解场景最简单。
+
+运行期 worker 结构：
+  serve 线程：空闲时处理元数据/预检消息；收到 MsgRun/MsgResumeRun 后阻塞在 exec.wait()
+  控制线程：运行期唯一 stdin 读者，事件驱动（poll/eventfd 或 PeekNamedPipe+事件），
+            把 MsgPause/Resume/Cancel/SerializeState 直接调 executor 的原生线程安全 API——
+            不再有"转发给本地 ctx"的接力
 
 | 子进程状态     | 判定            | 上报                   |
 |---------------|----------------|------------------------|
@@ -257,18 +297,18 @@ seccomp 过滤器           syscall 时 <1% 开销（热循环无 syscall → �
 ## 11. 测试策略
 
 ```
-已固化（M1）：
-  test_ipc_protocol（跨平台）——帧往返/空帧/多字节帧/多帧顺序，23 断言
-  test_sandbox（Linux）——worker 存活 + malicious 插件 OPEN BLOCKED 断言
-  67/67 全量（Windows），test_sandbox 在 WSL 单独验证
+已固化（2026-08-03 架构重定后）：
+  test_ipc_protocol（跨平台）——帧往返/空帧/多字节帧/多帧顺序 + AlgorithmOutput 编解码回环，31 断言
+  test_sandbox（双平台）——worker 存活 + 元数据；Windows evaluate(0x1A) 二进制 IPC 冒烟；
+    Linux malicious 插件 OPEN BLOCKED 断言（seccomp EPERM）；
+    pause/resume 经 SandboxedExecutor 接口端到端；checkpoint 往返（暂停→序列化 blob→新 worker
+    恢复→Completed+解）；9 断言（Windows）/ 10 断言（WSL，多 seccomp 一项）
+  67/67 全量双平台
 
-待补（M2/M3）：
-  死循环插件 → timeout kill ✅
-  pause/resume 转发（父进程 diff 暂停态 → MsgPause/MsgResume）✅ 双平台 test_sandbox
+待补（M3/M4）：
   崩溃插件（segfault）→ "plugin crashed"
   std::thread 插件 → 验证 CLONE_THREAD 放行
   Capability profile 强制 → 声明 None 却联网 → 被禁
-  每个 IAlgorithm 方法 IPC 往返 → 参数/返回值 roundtrip
 ```
 
 ## 12. 实施阶段
@@ -286,7 +326,7 @@ M1 Linux 隔离 + IPC（已实现 + WSL 验证通过）：
   - IpcProtocol（帧协议：len+type+payload）
   - besq-worker 服务循环（stdin/stdout IPC，事件流 + 控制消息）
   - seccomp 白名单（dlopen 后安装；EPERM 拦截文件/网络，KILL 拦截 mprotect(PROT_EXEC)）
-  - SandboxedAlgorithm（父进程代理：spawn worker + IPC + 事件注入父 ctx + 取消轮询）
+  - SandboxedAlgorithm（父进程 IAlgorithm 代理：spawn worker + IPC + 事件注入父 ctx + 取消轮询）—— 2026-08-03 已被 executor 级架构取代（见 M2 架构修正）
   - 集成：AlgorithmLoader.set_sandbox_enabled()（BESQ_SANDBOX=1 opt-in）
   - ✅ WSL 验证：
     * malicious 插件 in-process OPEN OK / sandboxed OPEN BLOCKED（EPERM）
@@ -314,15 +354,25 @@ M2 Windows（已实现 + Windows 验证）：
     （getaddrinfo/gethostbyname 等）、代码/进程注入（CreateRemoteThread/WriteProcessMemory/
     memfd_create/process_vm_writev/bpf）、Windows 注册表/进程控制、Linux syscall/prctl/unshare；
     非沙箱模式下这些危险导入一律硬拒
-  - ✅ checkpoint 序列化/恢复接通（2026-08-03）：SandboxedAlgorithm 提供**代理序列化器**
-    （`SandboxSerializer`）——checkpoint 包装留在父进程，仅算法状态段跨 IPC 由 worker 的真实
-    序列化器产出/消费。**透明分块传输**：`write_frame`/`read_frame` 自动把 >16MiB 载荷拆成
-    1MiB 帧并重组（无需单独分块协议），支持 MB~GB 级 checkpoint。worker serve 循环/控制线程
-    处理 MsgSerializeState/MsgDeserializeState；MsgExecute 携带 restored 标志；pause 时
-    execute() 循环让出管道（`_pipe_yielded` 握手）给序列化线程独占。**修复 AStar 两处恢复 bug**：
-    (1) open heap 从局部 move 改为成员 `OpenSet`（序列化器才能捕获活的开集——此前恢复得到空
-    开集 → 0 解）；(2) restored 路径补 `_budget` 初始化（否则 `max_explored` 垃圾值 → 恢复搜索
-    立即退出）。双平台 test_sandbox 验证：暂停→序列化 1.9MB→新 worker 恢复→求解成功
+  - ✅ checkpoint 序列化/恢复接通（2026-08-03 重构后）：沙箱缝在 executor 之上，checkpoint
+    走 worker 内真 executor 的 `serialize_state()`/`start(checkpoint)`——**完整不透明 blob**
+    （含 input 段），父侧 `SandboxedExecutor` 只搬字节。**透明分块传输**：`write_frame`/
+    `read_frame` 自动把 >16MiB 载荷拆成 1MiB 帧并重组，支持 MB~GB 级 checkpoint。worker 控制
+    线程把 MsgSerializeState 转调 `exec.serialize_state()`；`MsgResumeRun(blob)` 恢复运行。
+    无 `_pipe_yielded` 握手（executor 状态静止契约保证，同 in-process）。**修复 AStar 两处恢复
+    bug**：(1) open heap 从局部 move 改为成员 `OpenSet`；(2) restored 路径补 `_budget` 初始化。
+    双平台 test_sandbox 验证：暂停→序列化（Windows 2MB / WSL 173KB）→新 worker 恢复→求解成功
+
+  - ✅ 架构修正（2026-08-03）：沙箱缝从 **IAlgorithm** 上移到 **executor**——
+    AlgorithmExecutor 是算法域的权威入口（持有 ctx/状态机/序列化），拿 IAlgorithm 做代理面
+    会把 executor/algorithm/context 拆散跨进程再手工接回（`_pipe_yielded` 握手、notifier、
+    代理序列化器、section 编解码）。重做为 `IExecutor` 接口 + `SandboxedExecutor`（父侧粗消息
+    代理）+ worker host 真 `AlgorithmExecutor`；`SolvePipeline`/`BesqContext` 只依赖 `IExecutor`。
+    删除 `SandboxedAlgorithm`、`SandboxSerializer`、`ExecuteControlNotifier`、`encode/decode_sections`、
+    `MsgDeserializeState`。`ExecutionContext` 随后**恢复沙箱前纯本地形态**——`ControlNotifier`/
+    `set_control_notifier()` 及三个 notify 钩子整体删除（executor 级沙箱已无人安装它），字段是末尾
+    成员、删除不移动任何既有偏移，但 idastar 插件内联调 `ctx.cancel()` 烧过该偏移 → **必须连插件
+    一起重编**（文档教训 2 的既有规则）。重编后双平台 67/67 验证通过。
 
 M3 Capability profile 分级 + 故障处理 + 全套测试
 
