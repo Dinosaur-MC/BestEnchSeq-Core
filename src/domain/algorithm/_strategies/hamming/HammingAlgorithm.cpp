@@ -67,24 +67,6 @@ void HammingAlgorithm::arrange_by_popcount(
     items = std::move(arranged);
 }
 
-// ─── Waste-avoidance ─────────────────────────────────────────────────────
-
-/// 若将 \p sac 锻入 \p base 会丢弃一个仍需要的目标魔咒（sac 携带目标魔咒 E、
-/// base 尚缺 E、且 base 持有与 E 冲突的魔咒 → forge_into 会丢弃 E），则该合并
-/// 是浪费性的——E 的唯一来源可能因此丢失，导致假"目标不可达"。ForgeEngine 的
-/// 行为本身是 MC 原版机制，这里只在配对策略层避免做浪费性合并。
-static bool merge_wastes_target(const Item& base, const Item& sac,
-                                const Item& target, const EnchReg& reg) noexcept {
-    bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
-    for (auto id = it.next(); id != it.npos; id = it.next()) {
-        if (sac.enchs[id] > 0 &&
-            base.enchs[id] < target.enchs[id] &&
-            (base.enchs & reg.get_conflict_mask(id)) != 0)
-            return true;
-    }
-    return false;
-}
-
 // ─── execute ───────────────────────────────────────────────────────────────
 
 void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
@@ -195,14 +177,28 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 
             // ── Waste-avoidance（相邻位 swap / carry）───────────────────
             // 若该配对会把一个仍需要的目标魔咒浪费掉（sac 携带目标魔咒、base 持
-            // 冲突魔咒致其被 forge_into 丢弃），将冲突物品（base）与汉明排列序列
-            // 中的相邻下一位交换（位置 1 ↔ 位置 2，popcount 同层，保持平衡树）：
+            // 冲突魔咒致其被 forge_into 丢弃），优先尝试书-书反向配对——把原 base
+            // 锻入原 sac（如 direct 模式书目标：源书与所需目标书冲突时，把源书锻
+            // 入目标书只会丢弃冲突魔咒而非目标魔咒）。设备配对保留 resolver 的
+            // base 选择，退回相邻位 swap / carry：将冲突物品（base）与汉明排列
+            // 序列中的相邻下一位交换（位置 1 ↔ 位置 2，popcount 同层，保持平衡
+            // 树）：
             //   ① 交换后 base 与目标书配对不浪费 → 正常锻造（冲突物品与后续项合并）
             //   ② 交换后仍浪费 → 双双保送下一 tier，可继续 swap 直到冲突被消耗
             // 序列耗尽无相邻位 → 双双保送。目标书因此存活到兼容的 base，避免假
             // "目标不可达"。（ForgeEngine 行为是 MC 原版机制，不改。）
             if (merge_wastes_target(base, sac, target, reg)) {
-                if (!tiers[tier].empty()) {
+                // Book-book pair with no fixed root: try the reverse
+                // orientation — forge the original base INTO the sacrifice if
+                // that direction is not wasteful (e.g. a direct-mode book target
+                // whose source book conflicts with the needed target book:
+                // forging the source into the target book drops the conflict
+                // instead of the target enchant).  Equipment pairs keep the
+                // resolver's base choice (the adjacent-position swap below).
+                if (base.type == ItemType::Book && sac.type == ItemType::Book &&
+                    !merge_wastes_target(sac, base, target, reg)) {
+                    std::swap(base, sac);
+                } else if (!tiers[tier].empty()) {
                     Item next = std::move(tiers[tier].front());
                     tiers[tier].erase(tiers[tier].begin());
                     // base（冲突物品）放回序列（与后续项配对）；目标书与 next 配对。
@@ -265,7 +261,12 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
     if (!cancelled) {
         for (auto it = tiers.rbegin(); it != tiers.rend(); ++it) {
             for (auto& item : *it) {
-                if (meets_target(item, target))
+                // A 0-step result in the final scan is always spurious — the
+                // only legitimate "already met" case (source ≥ target) was
+                // short-circuited above; an un-forged pool item (e.g. a
+                // resolver-generated gap book) that meets the target here must
+                // not be reported as a 0-step solution.
+                if (meets_target(item, target) && !steps.empty())
                 {
                     int32_t total_cost = std::accumulate(
                         steps.begin(), steps.end(), int32_t{0},

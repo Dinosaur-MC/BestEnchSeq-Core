@@ -12,6 +12,9 @@ set(BESQ_PLUGIN_ASTAR_SRCS
 set(BESQ_PLUGIN_DFS_SRCS
     ${PROJECT_ROOT}/plugins/dfs/DFSAlgorithm.cpp
     ${PROJECT_ROOT}/plugins/dfs/DFSStateSerializer.cpp)
+set(BESQ_PLUGIN_IDASTAR_SRCS
+    ${PROJECT_ROOT}/plugins/idastar/IDAStarAlgorithm.cpp
+    ${PROJECT_ROOT}/plugins/idastar/IDAStarDiagnostics.cpp)
 
 # 把插件源码编译进 host 测试可执行文件（penalty_balance 同款模式）。
 # PLUGIN_SRCS 需以引号传列表（如 "${BESQ_PLUGIN_ASTAR_SRCS}"）。
@@ -61,11 +64,23 @@ target_include_directories(test_penalty_balance PRIVATE
 target_link_libraries(test_penalty_balance PRIVATE ${BESQ_TEST_CORE_LIBS})
 besq_test_common_props(test_penalty_balance)
 
+# difficulty_first plugin algorithm (mirrors test_penalty_balance pattern).
+add_executable(test_diff_first test_diff_first.cpp
+    ${PROJECT_ROOT}/plugins/diff_first/DiffFirstAlgorithm.cpp)
+target_include_directories(test_diff_first PRIVATE
+    ${TEST_INCLUDE}
+    ${PROJECT_ROOT}/include
+    ${PROJECT_ROOT}/plugins
+)
+target_link_libraries(test_diff_first PRIVATE ${BESQ_TEST_CORE_LIBS})
+besq_test_common_props(test_diff_first)
+
 besq_test(test_algorithm_loader test_algorithm_loader.cpp)
 besq_test(test_plugin_audit test_plugin_audit.cpp)
 besq_test(test_ipc_protocol test_ipc_protocol.cpp)
 besq_test(test_sandbox test_sandbox.cpp)  # Linux-only; skips elsewhere
 
 # astar/dfs 已为插件：策略正确性测试直接编译插件源码（保留 bb_dp 以 A* 为最优 oracle）
+# idastar 同样为插件源码，一并编译进测试可执行文件（test 直接构造 IDAStarAlgorithm）。
 besq_test_with_plugins(test_algorithm_strategies test_algorithm_strategies.cpp
-    "${BESQ_PLUGIN_ASTAR_SRCS};${BESQ_PLUGIN_DFS_SRCS}")
+    "${BESQ_PLUGIN_ASTAR_SRCS};${BESQ_PLUGIN_DFS_SRCS};${BESQ_PLUGIN_IDASTAR_SRCS}")

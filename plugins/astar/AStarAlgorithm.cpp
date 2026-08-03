@@ -404,7 +404,10 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
                     continue;
 
                 // ── Phase A: Lightweight pre-pruning (zero Item copies) ──
-                int32_t est = _forge_engine.estimate_forge_cost(_pool[cur_ids[i]], _pool[cur_ids[j]], reg);
+                // Admissible lower bound: the standard estimate over-charges
+                // sacrifice enchants forge_into will DROP on conflict, which
+                // could prune the ONLY valid child → false "unreachable".
+                int32_t est = admissible_forge_cost(_forge_engine, _pool[cur_ids[i]], _pool[cur_ids[j]], reg);
                 int32_t child_est_g = current.g + est;
                 if (_best_solution_cost != INT32_MAX && child_est_g > _best_solution_cost) {
                     ++_diag.pruned_by_cost;

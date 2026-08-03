@@ -86,6 +86,19 @@ void DynamicPenaltyBalancingAlgorithm::execute(const AlgorithmInput &input, Exec
 
         if (!found) break;
 
+        // Reverse-orientation guard (book-book only): the chosen direction would
+        // discard a still-needed target enchant (ForgeEngine::forge_into drops
+        // it), but the reverse direction would keep it → swap so the wasteful
+        // book is the sacrifice.  Safe because book-book pairs have no fixed
+        // forge root; equipment-involving pairs keep the equipment as base (a
+        // wasteful drop there means the base's conflict is permanent → genuinely
+        // unreachable).
+        if (merge_wastes_target(mut_items[best_i], mut_items[best_j], target, reg) &&
+            mut_items[best_i].type == ItemType::Book && mut_items[best_j].type == ItemType::Book &&
+            !merge_wastes_target(mut_items[best_j], mut_items[best_i], target, reg)) {
+            std::swap(best_i, best_j);
+        }
+
         Item saved_i = mut_items[best_i];
         Item saved_j = mut_items[best_j];
 

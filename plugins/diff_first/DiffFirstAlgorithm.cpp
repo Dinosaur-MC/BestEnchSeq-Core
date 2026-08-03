@@ -133,6 +133,17 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
                 // with items at the next level.
                 if (e - b < 2) { cur_ppn++; continue; }
 
+                // Reverse-orientation guard (book-book only): forging the chosen
+                // sacrifice INTO the base would discard a still-needed target
+                // enchant (ForgeEngine::forge_into drops it), but the reverse
+                // direction would keep it → swap so the wasteful book is the
+                // sacrifice.  Book-book pairs have no fixed forge root.
+                if (merge_wastes_target(items[b], items[b + 1], target, reg) &&
+                    items[b].type == ItemType::Book && items[b + 1].type == ItemType::Book &&
+                    !merge_wastes_target(items[b + 1], items[b], target, reg)) {
+                    std::swap(items[b], items[b + 1]);
+                }
+
                 Item saved_base = items[b];
                 Item saved_sac  = items[b + 1];
                 int32_t cost = _forge_engine.forge_into(items[b], items[b + 1], reg);
@@ -154,6 +165,17 @@ void DiffFirstAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& 
                     std::swap(base_idx, sac_idx);
                 else
                     break;
+            }
+
+            // Reverse-orientation guard (book-book only, i.e. no equipment in
+            // the pool): the chosen direction would discard a still-needed
+            // target enchant, but the reverse would keep it → swap so the
+            // wasteful book is the sacrifice.
+            if (eq < 0 &&
+                merge_wastes_target(items[base_idx], items[sac_idx], target, reg) &&
+                items[base_idx].type == ItemType::Book && items[sac_idx].type == ItemType::Book &&
+                !merge_wastes_target(items[sac_idx], items[base_idx], target, reg)) {
+                std::swap(base_idx, sac_idx);
             }
 
             Item saved_base = items[base_idx];

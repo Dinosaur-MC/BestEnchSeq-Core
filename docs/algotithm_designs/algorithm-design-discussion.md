@@ -441,6 +441,37 @@ private:
 
 ---
 
+## 10. 跨算法正确性修复：浪费性合并（2026-08-04）
+
+### 问题类
+
+当牺牲品携带一个仍需要的目标魔咒 E、基座尚缺 E、且基座持有与 E 冲突的魔咒时，
+`ForgeEngine::forge_into` 按原版机制丢弃 E——该"浪费性合并"会让目标魔咒的唯一来源
+丢失，产生假"目标不可达"（或汉明 Phase-3 的伪 0 步方案）。修复全部位于配对策略层，
+`ForgeEngine` 原版语义不变。
+
+### 共享助手（`src/domain/algorithm/components/SearchUtils.h`）
+
+- `merge_wastes_target(base, sac, target, reg)` — 检测一次合并是否浪费（sac 携带目标
+  魔咒、base 缺它、且 base 有冲突）。
+- `admissible_forge_cost(engine, target, sac, reg)` — 可采（下界）锻造成本：减去
+  `forge_into` 因冲突丢弃、以及 Bedrock 同级合并按等级差计费而不再收取的虚高部分；
+  供 A*/IDA* 作 Phase-A / 候选剪枝下界，避免把唯一有效子节点误剪（Java 同级合并按
+  合并后等级计费 ≥ 牺牲等级，无需调整）。
+
+### 各算法修复
+
+- **hamming**（内置）：书-书反向配对——浪费性配对若反向不浪费则交换 base/sac（direct
+  书目标：把源书锻入目标书只丢冲突魔咒、不丢目标魔咒）；设备配对保留 resolver base，
+  退回相邻位 swap / carry。Phase-3 最终扫描加 `!steps.empty()` 守卫杜绝伪 0 步方案。
+- **difficulty_first** / **penalty_balance**（插件）：贪心选对后加书-书反向配对守卫
+  （两书无固定锻造根，方向可安全交换；含设备的配对保持设备为 base）。
+- **astar** / **idastar**（插件）：用 `admissible_forge_cost` 替换原 `estimate_forge_cost`
+  作 Phase-A 剪枝 / 候选过滤，保持下界可采。
+- **dp_merge / bb_dp / dfs**：本身为完整搜索，天然正确，无此问题。
+
+---
+
 ## 参考
 
 - `docs/anvil-mechanics-reference.md` — 铁砧机制算法参考

@@ -2,6 +2,7 @@
 #include "ItemPool.h"
 #include "common/utils/bit_iterator.hpp"
 #include "domain/algorithm/forge_engine/IForgeEngine.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
 #include <algorithm>
@@ -47,6 +48,74 @@ inline void normalize_base_equipment(ItemCollection &items) noexcept {
             return;
         }
     }
+}
+
+/// Whether forging \p sac into \p base would discard a still-needed target
+/// enchantment (sac carries a target enchant E, base lacks E, and base holds an
+/// enchant conflicting with E → ForgeEngine::forge_into drops E).  The merge is
+/// wasteful — E's only source may be lost — even though a different merge order
+/// (forge E into a non-conflicting base first, or consume the conflict into a
+/// sacrifice) could reach the target.  ForgeEngine's behaviour itself is the
+/// vanilla anvil rule; this only detects the wasted merge at the pairing layer.
+inline bool merge_wastes_target(const Item &base, const Item &sac,
+                                const Item &target, const EnchReg &reg) noexcept {
+    bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
+    for (auto id = it.next(); id != it.npos; id = it.next()) {
+        if (sac.enchs[id] > 0 &&
+            base.enchs[id] < target.enchs[id] &&
+            (base.enchs & reg.get_conflict_mask(id)) != 0)
+            return true;
+    }
+    return false;
+}
+
+/// Admissible (lower-bound) forge-cost estimate, on BOTH platforms.
+///
+/// The standard estimate_forge_cost over-charges two classes of sacrifice
+/// enchantments that forge_into does NOT charge at the full level×mult:
+///   • conflict drops — a sacrifice enchant conflicting with one already on
+///     the target is consumed for 0 cost (Java only charges a tiny
+///     popcount(conflict_mask) penalty);
+///   • Bedrock same-enchant merges — forge_into charges the LEVEL DELTA
+///     (merged − base)×mult, while the estimate charges the full sacrifice
+///     level (Java same-enchant merges charge the merged level, which is
+///     always ≥ the sacrifice level, so Java needs no adjustment here).
+/// Subtracting those over-charged portions yields a value ≤ the real forge
+/// cost, so it is safe to use as a pruning / reachability bound (a child
+/// pruned because g + est > best can never have real cost ≤ best).
+///
+/// Residual (documented, not subtracted): a NON-applicable sacrifice enchant
+/// on an equipment base is also dropped by forge_into for free, but such an
+/// enchant never appears in the supported direct-mode pools (the resolver
+/// only emits target-relevant, applicable books), so it is unreachable in
+/// practice.
+inline int32_t admissible_forge_cost(const IForgeEngine& engine,
+                                     const Item& target, const Item& sac,
+                                     const EnchReg& reg) noexcept {
+    int32_t est = engine.estimate_forge_cost(target, sac, reg);
+    const bool sac_is_book = (sac.type == ItemType::Book);
+    const bool is_bedrock  = (engine.get_config().platform == MCE::Bedrock);
+    bit_iterator<EnchSet::mask_type, uint8_t> it(sac.enchs.get_mask());
+    for (auto id = it.next(); id != it.npos; id = it.next()) {
+        const uint8_t base_lvl = target.enchs[id];
+        const uint8_t sac_lvl  = sac.enchs[id];
+        const int32_t mult     = sac_is_book ? reg[id].mul_b : reg[id].mul;
+        if ((target.enchs & reg.get_conflict_mask(id)) != 0) {
+            // forge_into drops this enchant on conflict — the estimate
+            // over-charges it (real cost is only the Java popcount penalty).
+            est -= static_cast<int32_t>(sac_lvl) * mult;
+        } else if (is_bedrock && base_lvl > 0) {
+            // Bedrock charges same-enchant merges as the LEVEL DELTA
+            // (merged − base); the estimate charges the full sacrifice level.
+            // Subtract the over-charged portion so est never exceeds the real
+            // delta (0 when sacrifice ≤ base; equal levels real delta = 1×mult
+            // ≥ 0).  Java same-enchant merges charge the merged level, which
+            // is always ≥ the sacrifice level, so Java is already admissible
+            // and is left unchanged.
+            est -= static_cast<int32_t>(sac_lvl <= base_lvl ? sac_lvl : base_lvl) * mult;
+        }
+    }
+    return est;
 }
 
 /// Shared search utilities extracted from AStarAlgorithm / IDAStarAlgorithm.

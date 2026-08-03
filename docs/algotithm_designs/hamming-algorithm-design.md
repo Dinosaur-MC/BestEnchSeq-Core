@@ -403,6 +403,21 @@ pairs forward.
   correctly reported unreachable).  `ForgeEngine` itself is unchanged —
   MC vanilla mechanics are preserved; the avoidance lives in the pairing
   strategy only.
+- **Book-book reverse orientation (direct-mode book target)** — a wasteful
+  book-book pair where both items are books and the REVERSE direction is not
+  wasteful (e.g. direct mode book target: the resolver emits source book{smite}
+  + gap book{sharpness}; forging smite INTO sharpness drops only the non-target
+  smite) is swapped — the original base becomes the sacrifice — so the target
+  enchant survives.  Equipment-involving pairs keep the resolver's base choice
+  (the adjacent-position swap / carry above).  This also covers multi-enchant
+  source books (a compatible non-target enchant on the sacrifice, e.g.
+  unbreaking, survives onto the result) and source books with ppn>0 (the pair
+  is carried up to the source book's tier, where the reverse swap still fires).
+- **Phase-3 final-scan guard (`!steps.empty()`)** — the only legitimate 0-step
+  result (source already ≥ target) is short-circuited before the cascade; an
+  un-forged pool item (e.g. a resolver gap book) that happens to meet the
+  target in the final scan must NOT be reported as a spurious 0-step solution,
+  so the scan now requires at least one forge to have been recorded.
 
 ---
 

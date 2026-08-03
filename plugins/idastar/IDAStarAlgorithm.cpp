@@ -86,8 +86,11 @@ void IDAStarAlgorithm::_dfs(std::vector<ItemID>& ids, int32_t g,
             if (i == j) continue;
             if (!_forge_engine.is_forgeable(_pool[ids[i]], _pool[ids[j]]))
                 continue;
-            int32_t est = _forge_engine.estimate_forge_cost(
-                _pool[ids[i]], _pool[ids[j]], *_ench_reg);
+            // Admissible lower bound: the standard estimate over-charges
+            // sacrifice enchants forge_into will DROP on conflict, which
+            // pruned the ONLY valid child → false "unreachable".
+            int32_t est = admissible_forge_cost(
+                _forge_engine, _pool[ids[i]], _pool[ids[j]], *_ench_reg);
             if (g + est <= best_cost)
                 candidates.push_back({i, j, est});
         }

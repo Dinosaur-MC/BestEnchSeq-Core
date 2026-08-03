@@ -7,6 +7,7 @@
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "astar/AStarAlgorithm.h"
+#include "idastar/IDAStarAlgorithm.h"
 #include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
 #include "dfs/DFSAlgorithm.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
@@ -1107,6 +1108,436 @@ void test_hamming_inventory_cross_tier_conflict() {
     TEST_PASS("hamming: cross-tier conflict retained equip resolves at base tier");
 }
 
+// ─── Book-target direct-mode conflict regression tests ─────────────────
+// Direct mode with an enchanted-book target and a conflicting source book:
+// the resolver emits base book{smite} + gap book{sharpness}.  ForgeEngine
+// drops smite by conflict when the smite book is forged into the sharpness
+// book, but the old waste-avoidance blocked the ONLY forge in this direction
+// and the Phase-3 final scan then reported the un-forged gap book as a
+// spurious 0-step "goal already met".  The correct answer (agreed by
+// dp_merge / bb_dp / dfs) is a 1-step forge: smite book → sharpness book.
+
+/// Run HammingAlgorithm in direct mode against a book target carrying
+/// \p target_sharpness, with source enchantments \p source.  Returns the
+/// solution's step count (or -1 on failure) and fills \p final_out.
+int32_t run_hamming_book_direct(algorithm::EnchReg &reg,
+                                const algorithm::EnchCollection &source,
+                                uint8_t target_sharpness,
+                                algorithm::Item &final_out) {
+    algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
+    target.enchs.insert(RE_SHARPNESS, target_sharpness);
+
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.config.forge.platform = MCE::Java;
+    input.registry = reg;
+    input.target = target;
+    input.data = algorithm::DirectPayload{source};
+
+    algorithm::AlgorithmExecutor executor(
+        std::make_unique<algorithm::HammingAlgorithm>());
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    if (state != algorithm::AlgorithmState::Completed)
+        return -1;
+    auto out = executor.output();
+    if (out.solutions.empty())
+        return -1;
+    final_out = out.final_item;
+    return static_cast<int32_t>(out.solutions[0].steps.size());
+}
+
+// ─── Book-target direct-mode conflict regression (astar / idastar) ─────
+// Direct mode with an enchanted-book target and a conflicting source book:
+// the resolver emits base book{smite} + gap book{sharpness}.  ForgeEngine
+// drops smite by conflict when the smite book is forged into the sharpness
+// book.  estimate_forge_cost over-charges the to-be-dropped smite (level×mul),
+// so the Phase-A / candidate filter pruned the ONLY valid forge → false
+// "Target unreachable".  admissible_forge_cost subtracts those dropped
+// charges, keeping the estimate a valid lower bound.
+
+/// Run \p make_algo in direct mode against a BOOK target carrying
+/// \p target_enchs, with source enchantments \p source.  Returns the
+/// solution's step count (or -1 on failure / no solution) and fills
+/// \p final_out.  Generalized over the target enchantment set so the SAME
+/// scenario can be asserted across every in-process algorithm (cross-algorithm
+/// regression / negative control).
+int32_t run_algorithm_book_direct_target(const std::function<std::unique_ptr<algorithm::IAlgorithm>()> &make_algo,
+                                         algorithm::EnchReg &reg,
+                                         const algorithm::EnchCollection &source,
+                                         const algorithm::EnchCollection &target_enchs,
+                                         algorithm::Item &final_out) {
+    algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
+    for (const auto &ench : target_enchs)
+        target.enchs.insert(ench);
+
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.config.forge.platform = MCE::Java;
+    input.registry = reg;
+    input.target = target;
+    input.data = algorithm::DirectPayload{source};
+
+    algorithm::AlgorithmExecutor executor(make_algo());
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    if (state != algorithm::AlgorithmState::Completed)
+        return -1;
+    auto out = executor.output();
+    if (out.solutions.empty())
+        return -1;
+    final_out = out.final_item;
+    return static_cast<int32_t>(out.solutions[0].steps.size());
+}
+
+/// Single-target-enchant convenience wrapper over
+/// run_algorithm_book_direct_target (kept for the existing callers).
+int32_t run_algorithm_book_direct(const std::function<std::unique_ptr<algorithm::IAlgorithm>()> &make_algo,
+                                  algorithm::EnchReg &reg,
+                                  const algorithm::EnchCollection &source,
+                                  uint8_t target_sharpness,
+                                  algorithm::Item &final_out) {
+    return run_algorithm_book_direct_target(make_algo, reg, source,
+        algorithm::EnchCollection{algorithm::Ench{RE_SHARPNESS, target_sharpness}},
+        final_out);
+}
+
+void test_astar_book_target_conflict_source() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 5});
+    int32_t steps = run_algorithm_book_direct(
+        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
+        reg, source, /*sharpness*/ 3, final_item);
+    expect(steps == 1,
+           "astar: book target + smite-5 source needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book &&
+               final_item.enchs[RE_SHARPNESS] == 3,
+           "astar: final item is the sharpness-3 book");
+    TEST_PASS("astar: book target + conflict source forges smite into sharpness book");
+}
+
+void test_astar_book_target_conflict_source_low_level() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 2});
+    int32_t steps = run_algorithm_book_direct(
+        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
+        reg, source, /*sharpness*/ 3, final_item);
+    expect(steps == 1,
+           "astar: book target + smite-2 source needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book &&
+               final_item.enchs[RE_SHARPNESS] == 3,
+           "astar: final item is the sharpness-3 book");
+    TEST_PASS("astar: book target + lower-level conflict source still forges");
+}
+
+void test_idastar_book_target_conflict_source() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 5});
+    int32_t steps = run_algorithm_book_direct(
+        [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); },
+        reg, source, /*sharpness*/ 3, final_item);
+    expect(steps == 1,
+           "idastar: book target + smite-5 source needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book &&
+               final_item.enchs[RE_SHARPNESS] == 3,
+           "idastar: final item is the sharpness-3 book");
+    TEST_PASS("idastar: book target + conflict source forges smite into sharpness book");
+}
+
+// ─── Bedrock same-merge upgrade regression (astar / idastar) ──────────
+// Direct mode, EQUIPMENT target sharpness 5, source sharpness 2.  On Bedrock,
+// forge_into charges same-enchant merges as the LEVEL DELTA (5−2)×1 = 3, but
+// estimate_forge_cost charges the full sacrifice level (5) → the Phase-A /
+// candidate filter pruned the ONLY valid forge → false "unreachable".
+
+/// Run \p make_algo in direct mode against an EQUIPMENT target carrying
+/// \p target_enchs, with source enchantments \p source on \p platform.
+/// Returns the solution's step count (or -1 on failure) and fills \p final_out.
+int32_t run_algorithm_equip_direct(const std::function<std::unique_ptr<algorithm::IAlgorithm>()> &make_algo,
+                                   algorithm::EnchReg &reg,
+                                   const algorithm::EnchCollection &source,
+                                   const algorithm::EnchCollection &target_enchs,
+                                   MCE platform,
+                                   algorithm::Item &final_out) {
+    algorithm::Item target{algorithm::ItemType::Equip, 1561, 0, {}};
+    for (const auto &ench : target_enchs)
+        target.enchs.insert(ench);
+
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.config.forge.platform = platform;
+    input.registry = reg;
+    input.target = target;
+    input.data = algorithm::DirectPayload{source};
+
+    algorithm::AlgorithmExecutor executor(make_algo());
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    if (state != algorithm::AlgorithmState::Completed)
+        return -1;
+    auto out = executor.output();
+    if (out.solutions.empty())
+        return -1;
+    final_out = out.final_item;
+    return static_cast<int32_t>(out.solutions[0].steps.size());
+}
+
+void test_astar_bedrock_same_merge_upgrade() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SHARPNESS, 2});
+    algorithm::EnchCollection target_enchs;
+    target_enchs.push_back(algorithm::Ench{RE_SHARPNESS, 5});
+    int32_t steps = run_algorithm_equip_direct(
+        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
+        reg, source, target_enchs, MCE::Bedrock, final_item);
+    expect(steps == 1,
+           "astar: bedrock same-merge upgrade (sh2→sh5) needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Equip &&
+               final_item.enchs[RE_SHARPNESS] == 5,
+           "astar: bedrock final item carries sharpness 5");
+    TEST_PASS("astar: bedrock same-enchant upgrade forges equip sh2 + book sh5");
+}
+
+void test_idastar_bedrock_same_merge_upgrade() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SHARPNESS, 2});
+    algorithm::EnchCollection target_enchs;
+    target_enchs.push_back(algorithm::Ench{RE_SHARPNESS, 5});
+    int32_t steps = run_algorithm_equip_direct(
+        [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); },
+        reg, source, target_enchs, MCE::Bedrock, final_item);
+    expect(steps == 1,
+           "idastar: bedrock same-merge upgrade (sh2→sh5) needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Equip &&
+               final_item.enchs[RE_SHARPNESS] == 5,
+           "idastar: bedrock final item carries sharpness 5");
+    TEST_PASS("idastar: bedrock same-enchant upgrade forges equip sh2 + book sh5");
+}
+
+void test_hamming_book_target_conflict_source() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 5});
+    int32_t steps = run_hamming_book_direct(reg, source, /*sharpness*/ 3, final_item);
+    expect(steps == 1,
+           "hamming: book target + smite-5 source needs exactly 1 forge (not 0, not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book &&
+               final_item.enchs[RE_SHARPNESS] == 3,
+           "hamming: final item is the sharpness-3 book");
+    TEST_PASS("hamming: book target + conflict source forges smite into sharpness book");
+}
+
+void test_hamming_book_target_conflict_source_low_level() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 2});
+    int32_t steps = run_hamming_book_direct(reg, source, /*sharpness*/ 3, final_item);
+    expect(steps == 1,
+           "hamming: book target + smite-2 source needs exactly 1 forge (not 0, not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book &&
+               final_item.enchs[RE_SHARPNESS] == 3,
+           "hamming: final item is the sharpness-3 book");
+    TEST_PASS("hamming: book target + lower-level conflict source still forges");
+}
+
+// ─── Cross-algorithm regression: book target + conflicting source ─────────
+// The SAME scenario — direct mode, book target, source carries a conflict —
+// must solve in exactly 1 step through EVERY in-process algorithm.  A wasteful
+// pair (a forge that would drop the still-needed target enchant) is avoided by
+// each strategy's fix; before the fix hamming / astar / idastar reported false
+// "unreachable" and hamming's Phase-3 final scan reported a spurious 0-step.
+
+void test_all_algorithms_book_target_conflict_source() {
+    auto reg = make_resolver_registry();
+    const std::vector<std::pair<const char *, std::function<std::unique_ptr<algorithm::IAlgorithm>()>>> algos = {
+        {"hamming",  [] { return std::make_unique<algorithm::HammingAlgorithm>(); }},
+        {"dp_merge", [] { return std::make_unique<algorithm::DPMergeAlgorithm>(); }},
+        {"bb_dp",    [] { return std::make_unique<algorithm::BBDpAlgorithm>(); }},
+        {"astar",    [] { return std::make_unique<algorithm::AStarAlgorithm>(); }},
+        {"dfs",      [] { return std::make_unique<algorithm::DFSAlgorithm>(); }},
+        {"idastar",  [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }},
+    };
+    for (const auto &[name, make] : algos) {
+        algorithm::Item final_item;
+        algorithm::EnchCollection source;
+        source.push_back(algorithm::Ench{RE_SMITE, 5});
+        int32_t steps = run_algorithm_book_direct(make, reg, source, /*sharpness*/ 3, final_item);
+        expect(steps == 1,
+               std::string(name) + ": book target + smite-5 source needs exactly 1 forge (not unreachable / 0-step)");
+        expect(final_item.type == algorithm::ItemType::Book &&
+                   final_item.enchs[RE_SHARPNESS] == 3,
+               std::string(name) + ": final item is the sharpness-3 book");
+    }
+    TEST_PASS("all algorithms: book target + conflict source solves in 1 step");
+}
+
+void test_all_algorithms_book_target_internally_conflicting() {
+    // NEGATIVE control: the same book target + conflicting source, but the
+    // target itself is contradictory (sharpness 3 + smite 3 are mutually
+    // exclusive) → every algorithm must report NO solution (unreachable).
+    auto reg = make_resolver_registry();
+    const std::vector<std::pair<const char *, std::function<std::unique_ptr<algorithm::IAlgorithm>()>>> algos = {
+        {"hamming",  [] { return std::make_unique<algorithm::HammingAlgorithm>(); }},
+        {"dp_merge", [] { return std::make_unique<algorithm::DPMergeAlgorithm>(); }},
+        {"bb_dp",    [] { return std::make_unique<algorithm::BBDpAlgorithm>(); }},
+        {"astar",    [] { return std::make_unique<algorithm::AStarAlgorithm>(); }},
+        {"dfs",      [] { return std::make_unique<algorithm::DFSAlgorithm>(); }},
+        {"idastar",  [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }},
+    };
+    for (const auto &[name, make] : algos) {
+        algorithm::Item final_item;
+        algorithm::EnchCollection source;
+        source.push_back(algorithm::Ench{RE_SMITE, 5});
+        algorithm::EnchCollection target_enchs;
+        target_enchs.push_back(algorithm::Ench{RE_SHARPNESS, 3});
+        target_enchs.push_back(algorithm::Ench{RE_SMITE, 3});
+        int32_t steps = run_algorithm_book_direct_target(make, reg, source, target_enchs, final_item);
+        expect(steps == -1,
+               std::string(name) + ": internally-contradictory book target must be unreachable");
+    }
+    TEST_PASS("all algorithms: internally-contradictory book target is unreachable");
+}
+
+// ─── Multi-enchant source book: compatible non-target enchant survives ─────
+// Direct mode, book target sharpness 3, source = {smite 5, unbreaking 1}.
+// The resolver emits base book{smite 5, unbreaking 1} + gap book{sharpness 3}.
+// The reverse orientation (smite book → sharpness book) drops the conflicting
+// smite but KEEPS unbreaking onto the result: final = book{sharpness 3,
+// unbreaking 1}.  Exercises the reverse-orientation with a multi-enchant book.
+
+void test_hamming_book_target_multi_ench_source() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 5});
+    source.push_back(algorithm::Ench{RE_UNBREAKING, 1});
+    int32_t steps = run_hamming_book_direct(reg, source, /*sharpness*/ 3, final_item);
+    expect(steps == 1,
+           "hamming: book target + {smite5, unbreaking1} source needs exactly 1 forge");
+    expect(final_item.type == algorithm::ItemType::Book &&
+               final_item.enchs[RE_SHARPNESS] == 3 &&
+               final_item.enchs[RE_UNBREAKING] == 1,
+           "hamming: final book carries sharpness 3 AND unbreaking 1 (smite dropped)");
+    TEST_PASS("hamming: multi-enchant conflict source keeps the compatible enchant");
+}
+
+void test_astar_book_target_multi_ench_source() {
+    auto reg = make_resolver_registry();
+    algorithm::Item final_item;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 5});
+    source.push_back(algorithm::Ench{RE_UNBREAKING, 1});
+    int32_t steps = run_algorithm_book_direct(
+        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
+        reg, source, /*sharpness*/ 3, final_item);
+    expect(steps == 1,
+           "astar: book target + {smite5, unbreaking1} source needs exactly 1 forge");
+    expect(final_item.type == algorithm::ItemType::Book &&
+               final_item.enchs[RE_SHARPNESS] == 3 &&
+               final_item.enchs[RE_UNBREAKING] == 1,
+           "astar: final book carries sharpness 3 AND unbreaking 1 (smite dropped)");
+    TEST_PASS("astar: multi-enchant conflict source keeps the compatible enchant");
+}
+
+// ─── ppn>0 conflicting source book ────────────────────────────────────────
+// Direct mode, book target sharpness 3, source = {smite 5}, but the base
+// (source) book carries ppn 2 (direct mode derives the base book from the
+// target item, so the target's ppn seeds it).  The reverse orientation must
+// still fire across the ppn boundary: the ppn-2 smite book is consumed into
+// the ppn-0 sharpness book, yielding a 1-step solution (NOT false-unreachable,
+// NOT a spurious 0-step).
+
+void test_hamming_book_target_conflict_ppn2_source() {
+    auto reg = make_resolver_registry();
+    algorithm::Item target{algorithm::ItemType::Book, 0, 2, {}};  // ppn 2
+    target.enchs.insert(RE_SHARPNESS, 3);
+
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.config.forge.platform = MCE::Java;
+    input.registry = reg;
+    input.target = target;
+    algorithm::EnchCollection source;
+    source.push_back(algorithm::Ench{RE_SMITE, 5});
+    input.data = algorithm::DirectPayload{source};
+
+    algorithm::AlgorithmExecutor executor(std::make_unique<algorithm::HammingAlgorithm>());
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    expect(state == algorithm::AlgorithmState::Completed,
+           "hamming: ppn-2 conflict source solve should complete");
+    auto out = executor.output();
+    expect(!out.solutions.empty(),
+           "hamming: ppn-2 conflict source must not be false-unreachable");
+    if (!out.solutions.empty()) {
+        expect(out.solutions[0].steps.size() == 1,
+               "hamming: ppn-2 conflict source forges in exactly 1 step (not 0-step)");
+        expect(out.final_item.type == algorithm::ItemType::Book &&
+                   out.final_item.enchs[RE_SHARPNESS] == 3,
+               "hamming: final item is the sharpness-3 book");
+    }
+    TEST_PASS("hamming: ppn-2 conflicting source book still solves in 1 step");
+}
+
+// ─── Non-wasteful book-book merge is NOT re-oriented (negative control) ────
+// A book-book pair with no conflict must forge in the NATURAL orientation —
+// the reverse-orientation guard must NOT over-trigger.  Direct mode, target
+// book {sharpness 3, unbreaking 1}, empty source → the resolver emits the two
+// gap books in ascending-enchant-id order: [book{unbreaking 1}, book{sharpness 3}].
+// Neither direction wastes a target enchant, so base = the natural pool[0]
+// (unbreaking book) and sacrifice = sharpness book are recorded unchanged.
+
+void test_hamming_book_target_non_wasteful_not_swapped() {
+    auto reg = make_resolver_registry();
+    algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
+    target.enchs.insert(RE_SHARPNESS, 3);
+    target.enchs.insert(RE_UNBREAKING, 1);
+
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::direct;
+    input.config.forge.platform = MCE::Java;
+    input.registry = reg;
+    input.target = target;
+    input.data = algorithm::DirectPayload{};
+
+    algorithm::AlgorithmExecutor executor(std::make_unique<algorithm::HammingAlgorithm>());
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    expect(state == algorithm::AlgorithmState::Completed,
+           "hamming: non-wasteful book merge should complete");
+    auto out = executor.output();
+    expect(!out.solutions.empty(),
+           "hamming: non-wasteful book merge produces a solution");
+    if (!out.solutions.empty()) {
+        expect(out.solutions[0].steps.size() == 1,
+               "hamming: non-wasteful merge is a single forge (not 0-step)");
+        const auto &step = out.solutions[0].steps[0];
+        expect(step.base.type == algorithm::ItemType::Book &&
+                   step.base.enchs[RE_UNBREAKING] == 1,
+               "hamming: natural base is the unbreaking book (NOT swapped)");
+        expect(step.sacrifice.type == algorithm::ItemType::Book &&
+                   step.sacrifice.enchs[RE_SHARPNESS] == 3,
+               "hamming: sacrifice is the sharpness book (natural orientation)");
+        expect(out.final_item.type == algorithm::ItemType::Book &&
+                   out.final_item.enchs[RE_SHARPNESS] == 3 &&
+                   out.final_item.enchs[RE_UNBREAKING] == 1,
+               "hamming: final book carries sharpness 3 + unbreaking 1");
+    }
+    TEST_PASS("hamming: non-wasteful book-book merge keeps the natural orientation");
+}
+
 void test_resolver_preenchanted_equip_reaches_target() {
     // Equipment already meets the target → pool stays non-empty, no books
     // needed, irrelevant books dropped.
@@ -1217,6 +1648,23 @@ int main() {
     RUN_TEST(test_resolver_retain_equipment_only_ench);
     RUN_TEST(test_hamming_inventory_conflict_retained_equip);
     RUN_TEST(test_hamming_inventory_cross_tier_conflict);
+    RUN_TEST(test_hamming_book_target_conflict_source);
+    RUN_TEST(test_hamming_book_target_conflict_source_low_level);
+    RUN_TEST(test_astar_book_target_conflict_source);
+    RUN_TEST(test_astar_book_target_conflict_source_low_level);
+    RUN_TEST(test_idastar_book_target_conflict_source);
+    RUN_TEST(test_astar_bedrock_same_merge_upgrade);
+    RUN_TEST(test_idastar_bedrock_same_merge_upgrade);
+
+    // Cross-algorithm regression (wasteful-pair fix)
+    RUN_TEST(test_all_algorithms_book_target_conflict_source);
+    RUN_TEST(test_all_algorithms_book_target_internally_conflicting);
+
+    // Edge cases from the code-quality reviews
+    RUN_TEST(test_hamming_book_target_multi_ench_source);
+    RUN_TEST(test_astar_book_target_multi_ench_source);
+    RUN_TEST(test_hamming_book_target_conflict_ppn2_source);
+    RUN_TEST(test_hamming_book_target_non_wasteful_not_swapped);
     RUN_TEST(test_resolver_book_target_pure_book_pool);
     RUN_TEST(test_resolver_book_target_multi_ench);
     RUN_TEST(test_resolver_equip_target_pure_book_pool);
