@@ -461,7 +461,13 @@ int besq_remove_equipment(BesqContext* ctx, const char* name_id) {
 
 int besq_add_category(BesqContext* ctx, const char* name) {
     auto* c = reinterpret_cast<BesqContextC*>(ctx);
-    BESQ_CAPI_TRY(c, c->impl.add_category(name));
+    // Check the bool like besq_add_enchantment/equipment do — a plain
+    // BESQ_CAPI_TRY(c, expr) would discard add_category()'s result and
+    // report success even when the pipeline refused (e.g. duplicate tag).
+    BESQ_CAPI_TRY(c,
+        if (!c->impl.add_category(name))
+            throw std::runtime_error(std::string("category already exists: ") + name);
+    );
 }
 
 // ── Solve ───────────────────────────────────────────────────────────────────
