@@ -83,6 +83,11 @@ public:
     /// is lowered.  The host configures this via AppConfig → setup_logger()
     /// (BESQ_LOG_CONSOLE=0/1, BESQ_LOG_CONSOLE_LEVEL=0..3); override here
     /// programmatically.
+    ///
+    /// Caveat: lowering the level to Info/Debug routes those lines to STDOUT,
+    /// which will interleave with machine-readable CLI output (--format
+    /// json/compact also writes stdout) and corrupt it.  Keep the console
+    /// level at Warn (default) when using machine output.
     void set_console_enabled(bool on) noexcept { _console_enabled.store(on, std::memory_order_release); }
     bool console_enabled() const noexcept { return _console_enabled.load(std::memory_order_acquire); }
     void set_console_level(LogLevel lv) noexcept { _console_level.store(lv, std::memory_order_release); }
@@ -98,7 +103,8 @@ private:
                              std::atomic<uint64_t>* pp = nullptr,
                              size_t* rp = nullptr,
                              std::atomic<bool>* ce = nullptr,
-                             std::atomic<LogLevel>* cl = nullptr);
+                             std::atomic<LogLevel>* cl = nullptr,
+                             std::atomic<LogLevel>* fl = nullptr);
         void operator()(LogEntry entry);
         void rotate();
 
@@ -109,6 +115,7 @@ private:
         size_t* retention_ptr{nullptr};
         std::atomic<bool>* console_enabled_ptr{nullptr};
         std::atomic<LogLevel>* console_level_ptr{nullptr};
+        std::atomic<LogLevel>* file_level_ptr{nullptr};
     };
 
     explicit Logger(std::string log_dir = "logs");

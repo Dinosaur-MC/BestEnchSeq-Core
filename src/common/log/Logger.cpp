@@ -53,9 +53,10 @@ static std::string level_str(LogLevel lv) {
 // ─── FileHandler ──────────────────────────────────────────────────────
 
 Logger::FileHandler::FileHandler(std::string log_dir, std::atomic<uint64_t>* pp, size_t* rp,
-                                 std::atomic<bool>* ce, std::atomic<LogLevel>* cl)
+                                 std::atomic<bool>* ce, std::atomic<LogLevel>* cl,
+                                 std::atomic<LogLevel>* fl)
     : log_dir(std::move(log_dir)), processed_ptr(pp), retention_ptr(rp),
-      console_enabled_ptr(ce), console_level_ptr(cl)
+      console_enabled_ptr(ce), console_level_ptr(cl), file_level_ptr(fl)
 {
     try {
         rotate();
@@ -98,13 +99,21 @@ void Logger::FileHandler::rotate() {
 void Logger::FileHandler::operator()(LogEntry entry) {
     auto line = "[" + now_str() + "] [" + level_str(entry.level) + "] "
               + entry.message + "\n";
-    if (run_file.is_open()) {
-        run_file << line;
-        run_file.flush();
-    }
-    if (latest_file.is_open()) {
-        latest_file << line;
-        latest_file.flush();
+
+    // File sinks are gated by the FILE threshold (BESQ_LOG_LEVEL); the console
+    // mirror by its OWN threshold (BESQ_LOG_CONSOLE_LEVEL).  They are
+    // independent — log() passes an entry through if either would show it.
+    const auto file_lvl = file_level_ptr ? file_level_ptr->load(std::memory_order_acquire)
+                                         : LogLevel::Debug;
+    if (entry.level >= file_lvl) {
+        if (run_file.is_open()) {
+            run_file << line;
+            run_file.flush();
+        }
+        if (latest_file.is_open()) {
+            latest_file << line;
+            latest_file.flush();
+        }
     }
 
     // Console mirror: Warn/Error → stderr (diagnostics), Debug/Info → stdout.
@@ -134,7 +143,7 @@ Logger& Logger::instance() {
 
 Logger::Logger(std::string log_dir)
     : _loop(FileHandler(std::move(log_dir), &_processed, &_max_retention,
-                        &_console_enabled, &_console_level))
+                        &_console_enabled, &_console_level, &_level))
 {
     // Console mirror defaults to enabled at Warn.  The host overrides via
     // AppConfig → setup_logger() (BESQ_LOG_CONSOLE / BESQ_LOG_CONSOLE_LEVEL);
@@ -147,7 +156,13 @@ Logger::~Logger() {
 }
 
 void Logger::log(LogLevel level, std::string message) {
-    if (level < _level.load(std::memory_order_acquire))
+    // Drop only if NEITHER sink would show it: the file is gated by _level
+    // (BESQ_LOG_LEVEL) and the console mirror by its own threshold
+    // (BESQ_LOG_CONSOLE_LEVEL) — the two knobs are independent.
+    const auto file_lvl    = _level.load(std::memory_order_acquire);
+    const bool console_on  = _console_enabled.load(std::memory_order_acquire);
+    const auto console_lvl = _console_level.load(std::memory_order_acquire);
+    if (level < file_lvl && !(console_on && level >= console_lvl))
         return;
     if (_loop.try_post(LogEntry{level, std::move(message)})) {
         _enqueued.fetch_add(1, std::memory_order_release);

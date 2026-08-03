@@ -46,13 +46,30 @@ if(MSVC)
 endif()
 
 # ── besq-common-log ───────────────────────────────────────────────────────────
+# SHARED: the Logger singleton must be ONE instance per process.  If it were
+# static it would be compiled into BOTH besq-algo-core.dll (PRIVATE link) and
+# the exe — two Logger objects on Windows, so BESQ_LOG_CONSOLE=0 (configured
+# via setup_logger in the exe) would not silence algorithm-domain logs.  A
+# shared lib makes every consumer resolve Logger::instance() to the same copy.
 
-add_library(besq-common-log STATIC
+add_library(besq-common-log SHARED
     "${CMAKE_CURRENT_SOURCE_DIR}/log/Logger.cpp"
 )
 target_include_directories(besq-common-log PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "log/Logger.h"
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "common/log/Logger.h"
+)
+if(WIN32)
+    # Export the Logger class so besq-algo-core.dll and besq.exe resolve the
+    # SAME instance from this DLL.
+    set_property(TARGET besq-common-log PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+# Land next to the host binaries (rpath = build dir / bin) so runtime lookup
+# works without LD_LIBRARY_PATH / PATH tricks.
+set_target_properties(besq-common-log PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # ── besq-common-i18n ──────────────────────────────────────────────────────────

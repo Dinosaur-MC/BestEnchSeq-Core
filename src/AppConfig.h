@@ -19,7 +19,7 @@
 ///   BESQ_LOG_DIR         — Log output directory                        (default: "logs")
 ///   BESQ_LOG_LEVEL       — Minimum log level (0=debug,1=info,2=warn,3=error, default: 0)
 ///   BESQ_LOG_RETENTION   — Max historic log files to keep during rotation (default: 5)
-///   BESQ_LOG_CONSOLE     — Mirror logs to console: Warn/Error→stderr, Debug/Info→stdout (default: 1)
+///   BESQ_LOG_CONSOLE     — Mirror logs to console: Warn/Error→stderr, Debug/Info→stdout (default: 1; keep level ≥2 with --format json/compact)
 ///   BESQ_LOG_CONSOLE_LEVEL — Console mirror threshold (0=debug,1=info,2=warn,3=error, default: 2)
 ///   BESQ_SANDBOX         — Run algorithm plugins in a sandboxed worker (default: 0)
 ///   BESQ_WORKER_PATH     — Path to besq-worker binary (default: auto — <exe_dir>/besq-worker[.exe], then PATH)
