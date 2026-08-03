@@ -181,6 +181,40 @@ void test_int_double_bounds_no_ub() {
     expect(!ds::int_codec{}.from_json(j5["x"], v5, e5, "x"), "fractional double rejected");
     TEST_PASS("int_codec double bounds no UB");
 }
+void test_csv_trailing_separator_no_spurious() {
+    // 尾随 ';' 不再产出多余空元素（review L1）
+    std::vector<std::string> v;
+    ds::ErrorList e;
+    ds::vector_codec<ds::string_codec>{}.from_csv("a;b;", v, e, "v");
+    expect(v.size() == 2 && v[0] == "a" && v[1] == "b", "trailing sep drops last empty");
+    expect(e.empty(), "no errors");
+    // 中间空段保留（空串元素可往返）
+    std::vector<std::string> v2;
+    ds::ErrorList e2;
+    ds::vector_codec<ds::string_codec>{}.from_csv("a;;b", v2, e2, "v");
+    expect(v2.size() == 3 && v2[1].empty(), "middle empty segment kept");
+    // set 侧同样
+    std::unordered_set<std::string> s;
+    ds::ErrorList e3;
+    ds::set_codec<ds::string_codec>{}.from_csv("x;y;", s, e3, "s");
+    expect(s.size() == 2 && s.count("x") == 1 && s.count("y") == 1,
+           "set trailing sep no empty element");
+    TEST_PASS("csv trailing separator no spurious element");
+}
+void test_float_csv_roundtrip_exact() {
+    // float_codec::to_csv 输出可被 from_csv 精确往返（to_chars shortest-roundtrip 保证）
+    const double vals[] = {0.0, 1.0, 3.141592653589793, 1e-300, 1.7976931348623157e308};
+    bool all_ok = true;
+    for (double d : vals) {
+        std::string c;
+        ds::float_codec{}.to_csv(d, c);
+        double back = 0;
+        ds::ErrorList e;
+        if (!ds::float_codec{}.from_csv(c, back, e, "f") || back != d) all_ok = false;
+    }
+    expect(all_ok, "float csv to_chars roundtrip exact");
+    TEST_PASS("float csv exact roundtrip");
+}
 // ── 4. JSON 绑定 ────────────────────────────────────────────────────
 struct Person {
     std::string name;
@@ -991,10 +1025,11 @@ void test_object_codec_nested_validate_hook() {
 }
 
 void test_object_codec_csv_rejected() {
-    // CSV 无嵌套对象表示：to_csv 写占位符；from_csv 记错拒绝。
-    std::string cell;
-    ds::object_codec<AddrSchema>{}.to_csv(Addr{"a", "b"}, cell);
-    expect(cell == "<nested-object>", "to_csv emits placeholder");
+    // CSV 无嵌套对象表示：to_csv 抛错防静默丢失（同 json_codec）；from_csv 记错拒绝。
+    expect_throws_as<std::logic_error>([&] {
+        std::string cell;
+        ds::object_codec<AddrSchema>{}.to_csv(Addr{"a", "b"}, cell);
+    }, "to_csv throws (no silent placeholder)");
     Addr out; ds::ErrorList err;
     expect(!ds::object_codec<AddrSchema>{}.from_csv("a;b", out, err, "home"),
            "from_csv rejects nested object");
@@ -1115,6 +1150,8 @@ int main() {
     test_csv_range_and_partial_rejected();
     test_int_narrow_type_guard();
     test_int_double_bounds_no_ub();
+    test_csv_trailing_separator_no_spurious();
+    test_float_csv_roundtrip_exact();
     test_json_roundtrip();
     test_json_required_missing();
     test_json_unknown_key_tolerant_vs_strict();

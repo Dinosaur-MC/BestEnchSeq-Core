@@ -8,6 +8,7 @@
 #include <concepts>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -113,8 +114,10 @@ struct float_codec {
     }
     template<class V> requires std::floating_point<V>
     void to_csv(const V& v, std::string& out) const {
-        char buf[32];
+        // 64 字节对 double shortest-roundtrip 恒够；仍检查 ec 防 value_too_large 静默失败。
+        char buf[64];
         auto res = std::to_chars(buf, buf + sizeof(buf), static_cast<double>(v));
+        if (res.ec != std::errc()) throw std::logic_error("ds::float_codec to_chars failed");
         out.assign(buf, res.ptr);
     }
     template<class V> requires std::floating_point<V>
@@ -148,7 +151,7 @@ struct bool_codec {
 /// 嵌套对象 codec：SubSchema 为逻辑 schema（S::Type + S::fields），
 /// 复用 ds::json::Schema 的序列化/反序列化，用于表示 JSON 中的嵌套对象字段
 /// （如 inventory task 的 target 子对象）。与 vector_codec 组合得到对象数组。
-/// 嵌套对象无 CSV 自然表示：to_csv 写占位符，from_csv 记错拒绝。
+/// 嵌套对象无 CSV 自然表示：to_csv 抛错防静默丢失（同 json_codec），from_csv 记错拒绝。
 template<typename SubSchema>
 struct object_codec {
     template<class V>  // V = SubSchema::Type
@@ -162,7 +165,9 @@ struct object_codec {
         return ds::json::Schema<SubSchema>::parse(j, obj, err, path);
     }
     template<class V>
-    void to_csv(const V&, std::string& out) const { out = "<nested-object>"; }
+    void to_csv(const V&, std::string&) const {
+        throw std::logic_error("ds::object_codec field has no CSV representation");
+    }
     template<class V>
     bool from_csv(const std::string_view&, V&, ErrorList& err, const std::string& path) const {
         err.add(path, "nested object not supported in CSV");
@@ -220,7 +225,8 @@ struct vector_codec {
         if (s.empty()) return true;
         std::size_t start = 0;
         std::size_t elem_index = 0;
-        while (start <= s.size()) {
+        // start < size：尾随 ';' 的最后空段不再产出假元素；中间空段（空串元素）保留可往返。
+        while (start < s.size()) {
             std::size_t end = s.find(';', start);
             if (end == std::string_view::npos) end = s.size();
             typename V::value_type elem{};
@@ -294,7 +300,8 @@ struct set_codec {
         if (s.empty()) return true;
         std::size_t start = 0;
         std::size_t elem_index = 0;
-        while (start <= s.size()) {
+        // start < size：尾随 ';' 的最后空段不再产出假元素；中间空段（空串元素）保留可往返。
+        while (start < s.size()) {
             std::size_t end = s.find(';', start);
             if (end == std::string_view::npos) end = s.size();
             typename V::value_type elem{};
