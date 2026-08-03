@@ -299,7 +299,7 @@ std::string CLIApp::help_text(std::string_view program_name) {
     // Examples
     r += "\nExamples:\n";
     r += "  " + std::string(program_name) + " --target diamond_sword[sharpness=5,knockback=2]\n";
-    r += "  " + std::string(program_name) + " --target diamond_chestplate --source \"protection=4,unbreaking=3\"\n";
+    r += "  " + std::string(program_name) + " --source \"protection=4\" --target diamond_chestplate[protection=5,unbreaking=3]\n";
     r += "  " + std::string(program_name) + " --export out.json\n\n";
 
     // Enchantment format reference
