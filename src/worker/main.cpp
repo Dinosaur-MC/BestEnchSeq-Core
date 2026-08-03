@@ -20,6 +20,7 @@
 #include "domain/algorithm/diagnostics/IAlgorithmObserver.h"
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include "domain/algorithm/sandbox/IpcProtocol.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "common/io/ByteStream.h"
 #include "sandbox_seccomp.h"
@@ -175,8 +176,15 @@ void send_error(const std::string &msg) {
 
 // ── Handle MsgExecute: run the algorithm, stream events, reply done ──
 void handle_execute(IAlgorithm &algo, const std::vector<uint8_t> &payload) {
+    // MsgExecute payload: [u8 restored][AlgorithmInput] — the restored flag
+    // comes from the parent's ctx.is_restored() (checkpoint resume), so the
+    // plugin's init() skips redundant pre-allocation after a state restore.
+    ByteStreamReader r(payload);
+    uint8_t restored = 0;
+    r >> restored;
     AlgorithmInput input;
-    if (!ipc::decode(payload, input)) {
+    input.deserialize(r);
+    if (!r.ok()) {
         send_error("besq-worker: malformed AlgorithmInput");
         return;
     }
@@ -184,6 +192,8 @@ void handle_execute(IAlgorithm &algo, const std::vector<uint8_t> &payload) {
     // Local ExecutionContext — entirely within this process (hot path, no IPC).
     std::string name(algo.name());
     ExecutionContext local_ctx(0, name.c_str());
+    if (restored != 0)
+        local_ctx.set_restored(true);
 
     // Forward progress/solutions to the parent via DiagnosticsService.
     auto forwarder = IAlgorithmObserver::create<IpcForwardObserver>();
@@ -208,6 +218,19 @@ void handle_execute(IAlgorithm &algo, const std::vector<uint8_t> &payload) {
             case ipc::MsgType::MsgCancel: local_ctx.cancel(); break;
             case ipc::MsgType::MsgPause:  local_ctx.pause();  break;
             case ipc::MsgType::MsgResume: local_ctx.resume(); break;
+            case ipc::MsgType::MsgSerializeState: {
+                // The main thread is paused (blocked in wait_if_paused) → the
+                // algorithm state is stable, safe to read here.  Reply with the
+                // encoded sections (large → auto-chunked by write_frame).
+                std::fprintf(stderr, "[worker] serialize_state begin\n");
+                auto sections = algo.get_serializer()
+                                    ? algo.get_serializer()->serialize_state(algo)
+                                    : std::vector<checkpoint::Section>{};
+                std::fprintf(stderr, "[worker] serialize_state done (%zu sections)\n", sections.size());
+                ipc::write_frame(1, ipc::MsgType::MsgResult, ipc::encode_sections(sections));
+                std::fprintf(stderr, "[worker] serialize_state sent\n");
+                break;
+            }
             default: break;
             }
         }
@@ -266,6 +289,18 @@ void serve(IAlgorithm &algo) {
             } else {
                 send_error("besq-worker: malformed AlgorithmInput");
             }
+            break;
+        }
+        case ipc::MsgType::MsgDeserializeState: {
+            // The payload (already reassembled by read_frame) is the encoded
+            // state sections; restore the algorithm before a resume MsgExecute.
+            std::vector<checkpoint::Section> sections;
+            bool ok = false;
+            if (ipc::decode_sections(payload, sections) && algo.get_serializer())
+                ok = algo.get_serializer()->deserialize_state(algo, sections);
+            ByteStreamWriter w;
+            w << ok;
+            ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
             break;
         }
         case ipc::MsgType::MsgExecute:

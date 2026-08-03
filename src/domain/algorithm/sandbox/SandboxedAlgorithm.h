@@ -15,8 +15,11 @@
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/sandbox/IpcProtocol.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/algorithm/plugin/PluginAPI.h"
 
+#include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -48,9 +51,10 @@ class SandboxedAlgorithm : public IAlgorithm {
     /// computes results itself; this only serves default process() replay).
     std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override;
 
-    /// v1: sandboxed plugins are not resumable.
-    IAlgorithmSerializer *get_serializer() noexcept override { return nullptr; }
-    const IAlgorithmSerializer *get_serializer() const noexcept override { return nullptr; }
+    /// Proxy serializer: checkpoint wrapping stays in the parent, the
+    /// algorithm-state sections cross IPC to the worker's real serializer.
+    IAlgorithmSerializer *get_serializer() noexcept override { return _serializer.get(); }
+    const IAlgorithmSerializer *get_serializer() const noexcept override { return _serializer.get(); }
 
     /// Drain whatever the worker has written to its stderr so far (e.g. the
     /// malicious-test plugin's "OPEN BLOCKED" report, or worker diagnostics).
@@ -58,6 +62,28 @@ class SandboxedAlgorithm : public IAlgorithm {
     std::string take_worker_stderr();
 
   private:
+    /// Parent-side serializer proxy.  Keeps IAlgorithmSerializer::serialize /
+    /// deserialize (checkpoint wrapping + input section) in the parent, but
+    /// forwards ONLY the algorithm-state sections over IPC: the worker's real
+    /// serializer produces/consumes them.  As a nested class it can use the
+    /// enclosing SandboxedAlgorithm's private send/recv and pipe fds.  Large
+    /// state (MB–GB) crosses in kChunkSize frames.
+    class SandboxSerializer : public IAlgorithmSerializer {
+      public:
+        explicit SandboxSerializer(const SandboxedAlgorithm &sa) noexcept : _sa(sa) {}
+        std::string_view algorithm_name() const noexcept override { return _sa._name; }
+        std::string_view algorithm_version() const noexcept override { return _sa._version; }
+      protected:
+        std::vector<checkpoint::Section> _serialize_state(const IAlgorithm &) const override;
+        bool _deserialize_state(IAlgorithm &,
+                                std::span<const checkpoint::Section>) const override;
+      private:
+        /// Read frames until the MsgResult response, skipping straggler
+        /// progress/solution events queued before the worker paused.
+        std::vector<uint8_t> recv_result() const;
+        const SandboxedAlgorithm &_sa;
+    };
+
     void spawn_worker();
     void query_metadata();
     void send(ipc::MsgType type, const std::vector<uint8_t> &payload) const;
@@ -82,6 +108,12 @@ class SandboxedAlgorithm : public IAlgorithm {
     std::string _name;
     std::string _version;
     AlgorithmMode _mode = AlgorithmMode::direct;
+    std::unique_ptr<SandboxSerializer> _serializer;  // created after query_metadata
+
+    /// Set by execute() while the loop is paused and has yielded the IPC pipe
+    /// (blocked in wait_if_paused).  The SandboxSerializer waits on this so its
+    /// MsgSerializeState exchange can't race the execute loop's read_frame.
+    std::atomic<bool> _pipe_yielded{false};
 };
 
 } // namespace algorithm

@@ -88,10 +88,11 @@ checkpoint::Section AStarStateSerializer::_write_step_pool(const AStarAlgorithm&
 }
 
 checkpoint::Section AStarStateSerializer::_write_open_heap(const AStarAlgorithm& astar) {
-    uint32_t count = static_cast<uint32_t>(astar._open_heap.size());
+    const auto& heap = astar._open_heap.container();
+    uint32_t count = static_cast<uint32_t>(heap.size());
     ByteStreamWriter payload;
     payload.u32(count);
-    for (const auto& entry : astar._open_heap) {
+    for (const auto& entry : heap) {
         const auto& state = entry.state;
         payload.i32(state.g);
         payload.i32(state.h);
@@ -163,10 +164,11 @@ void AStarStateSerializer::_read_step_pool(ByteStreamReader& r, AStarAlgorithm& 
 }
 
 void AStarStateSerializer::_read_open_heap(ByteStreamReader& r, AStarAlgorithm& astar) const {
-    astar._open_heap.clear();
+    auto& heap = astar._open_heap.container();
+    heap.clear();
     uint32_t count = r.u32();
     if (count > MAX_SERIAL_HEAP) { r.set_fail(); return; }
-    astar._open_heap.reserve(count);
+    heap.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         AStarAlgorithm::PriorityEntry entry;
         entry.state.g        = r.i32();
@@ -182,8 +184,11 @@ void AStarStateSerializer::_read_open_heap(ByteStreamReader& r, AStarAlgorithm& 
         }
         entry.f = r.i32();
         if (!r.ok()) break;
-        astar._open_heap.push_back(std::move(entry));
+        heap.push_back(std::move(entry));
     }
+    if (r.ok())
+        std::make_heap(heap.begin(), heap.end(),
+                       std::greater<AStarAlgorithm::PriorityEntry>());
 }
 
 void AStarStateSerializer::_read_best_g(ByteStreamReader& r, AStarAlgorithm& astar) const {

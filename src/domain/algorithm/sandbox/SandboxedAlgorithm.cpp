@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <stdexcept>
+#include <thread>
 
 #if defined(__linux__)
 #include <csignal>
@@ -144,6 +145,7 @@ SandboxedAlgorithm::SandboxedAlgorithm(std::string plugin_path, std::string work
 #endif
     spawn_worker();
     query_metadata();
+    _serializer = std::make_unique<SandboxSerializer>(*this);
 }
 
 SandboxedAlgorithm::~SandboxedAlgorithm() {
@@ -219,7 +221,13 @@ bool SandboxedAlgorithm::simulate(const AlgorithmInput &input) const noexcept {
 }
 
 void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
-    send(ipc::MsgType::MsgExecute, ipc::encode(input));
+    // MsgExecute payload: [u8 restored][AlgorithmInput].  The restored flag
+    // tells the worker's handle_execute to mark its local ctx restored (so the
+    // plugin's init() skips redundant pre-allocation after a checkpoint load).
+    ByteStreamWriter w;
+    w << static_cast<uint8_t>(ctx.is_restored() ? 1 : 0);
+    input.serialize(w);
+    send(ipc::MsgType::MsgExecute, std::move(w).take());
 
     // Event-driven wakeup for parent-side execution control: the executor's
     // timeout watcher / signal handler calls ctx.cancel()/pause()/resume() on
@@ -242,6 +250,13 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
     } else if (ctx.is_paused()) {
         send(ipc::MsgType::MsgPause, {});
         pause_sent = true;
+        // The pause arrived before the notifier install — the loop must still
+        // yield the pipe so the checkpoint serializer (another thread) can run.
+        _pipe_yielded.store(true, std::memory_order_release);
+        ctx.wait_if_paused();
+        _pipe_yielded.store(false, std::memory_order_release);
+        if (ctx.is_cancelled())
+            send(ipc::MsgType::MsgCancel, {});
     }
 
     try {
@@ -298,12 +313,25 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
                 if (ctx.is_paused() && !pause_sent) {
                     send(ipc::MsgType::MsgPause, {});
                     pause_sent = true;
-                    continue;
                 }
                 if (!ctx.is_paused() && pause_sent) {
                     send(ipc::MsgType::MsgResume, {});
                     pause_sent = false;
-                    continue;
+                }
+                // While paused the worker sends no frames, and the loop must
+                // STOP reading the pipe: the checkpoint serializer (executor
+                // .serialize_state, running on the caller's thread) needs the
+                // pipe exclusively.  Yield until resumed or cancelled (the
+                // executor's cancel() also resumes a paused run).
+                if (ctx.is_paused()) {
+                    _pipe_yielded.store(true, std::memory_order_release);
+                    ctx.wait_if_paused();
+                    _pipe_yielded.store(false, std::memory_order_release);
+                    if (ctx.is_cancelled()) {
+                        send(ipc::MsgType::MsgCancel, {});
+                        continue;
+                    }
+                    continue;  // resumed — re-enter wait (sends MsgResume next wake)
                 }
                 continue;  // spurious wake — nothing to forward
             }
@@ -349,6 +377,61 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
         throw;
     }
     ctx.set_control_notifier(nullptr);
+}
+
+// ── SandboxSerializer: forward state sections over IPC ─────────────────
+
+/// Read frames until the MsgResult response, skipping straggler
+/// MsgProgress/MsgSolution events that were queued before the worker paused
+/// (the proxy reads while execute()'s loop has yielded the pipe).
+std::vector<uint8_t> SandboxedAlgorithm::SandboxSerializer::recv_result() const {
+    for (;;) {
+        ipc::MsgType type;
+        std::vector<uint8_t> payload;
+        if (!_sa.recv(type, payload))
+            throw std::runtime_error("sandbox: worker closed channel during serialize");
+        if (type == ipc::MsgType::MsgResult)
+            return payload;
+        if (type == ipc::MsgType::MsgError) {
+            std::string msg;
+            ByteStreamReader r(payload);
+            r >> msg;
+            throw std::runtime_error(msg.empty() ? "sandbox: worker error during serialize" : msg);
+        }
+        // MsgProgress / MsgSolution stragglers — skip.
+    }
+}
+
+std::vector<checkpoint::Section> SandboxedAlgorithm::SandboxSerializer::_serialize_state(
+    const IAlgorithm &) const {
+    // The executor paused the solve and called serialize_state() from ANOTHER
+    // thread while execute()'s loop is still running.  Wait until the loop has
+    // yielded the IPC pipe (paused) so our MsgSerializeState exchange can't
+    // race its read_frame.
+    while (!_sa._pipe_yielded.load(std::memory_order_acquire))
+        std::this_thread::yield();
+
+    _sa.send(ipc::MsgType::MsgSerializeState, {});
+    // The worker replies with the encoded sections as the MsgResult payload;
+    // write_frame/read_frame auto-chunked the transfer, so MB–GB state arrives
+    // reassembled.
+    const auto payload = recv_result();
+    std::vector<checkpoint::Section> sections;
+    if (!ipc::decode_sections(payload, sections))
+        throw std::runtime_error("sandbox: serialize_state decode failed");
+    return sections;
+}
+
+bool SandboxedAlgorithm::SandboxSerializer::_deserialize_state(
+    IAlgorithm &, std::span<const checkpoint::Section> sections) const {
+    const auto bytes = ipc::encode_sections(
+        std::vector<checkpoint::Section>(sections.begin(), sections.end()));
+    _sa.send(ipc::MsgType::MsgDeserializeState, bytes);  // auto-chunked by write_frame
+    const auto payload = recv_result();
+    bool ok = false;
+    ByteStreamReader r(payload);
+    r >> ok;
+    return r.ok() && ok;
 }
 
 std::unique_ptr<IForgeEngine> SandboxedAlgorithm::get_forge_engine() const noexcept {

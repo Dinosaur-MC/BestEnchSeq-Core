@@ -13,12 +13,24 @@
 /// implement IBinarySerializable).
 
 #include "common/io/ByteStream.h"
+#include "domain/algorithm/serialization/Checkpoint.h"
 #include <cstdint>
 #include <vector>
 
 namespace algorithm::ipc {
 
 enum class MsgType : uint32_t {
+    // ── Internal chunking markers — transparent to callers ─────────────
+    // A large payload (> kDirectMax) is written as a sequence of frames:
+    //   MsgChunkedStart  payload = [4B real type][first chunk bytes]
+    //   MsgChunkData     payload = chunk bytes
+    //   MsgChunkEnd      empty
+    // read_frame() reassembles them back into ONE logical message, so every
+    // caller gets transparent MB–GB payloads without a separate chunk protocol.
+    MsgChunkedStart = 0x0000,
+    MsgChunkData    = 0x0001,
+    MsgChunkEnd     = 0x0002,
+
     // ── Parent → worker ────────────────────────────────────────────────
     MsgGetName       = 0x0101,
     MsgGetVersion    = 0x0102,
@@ -30,6 +42,8 @@ enum class MsgType : uint32_t {
     MsgCancel        = 0x0108,
     MsgPause         = 0x0109,
     MsgResume        = 0x010A,
+    MsgSerializeState   = 0x010B,  // request the algorithm's state sections
+    MsgDeserializeState = 0x010C,  // payload = encoded sections (auto-chunked)
 
     // ── Worker → parent ────────────────────────────────────────────────
     MsgResult        = 0x0201,  // request completion, payload varies by request
@@ -40,11 +54,28 @@ enum class MsgType : uint32_t {
 
 constexpr size_t kHeaderSize = 8;
 
-/// Write one frame to fd.  Returns false on write error / truncation.
+/// Transparent large-payload chunking.  Payloads > kDirectMax are streamed as
+/// kChunkSize frames and reassembled by read_frame(), so MB–GB checkpoints
+/// cross the pipe without hitting the per-frame limit below.
+constexpr size_t kChunkSize = 1u << 20;   // 1 MiB per chunk frame
+constexpr size_t kDirectMax = 16u << 20;  // ≤16 MiB goes in a single frame
+
+/// Write one message to fd.  Large payloads (> kDirectMax) are transparently
+/// split into chunk frames.  Returns false on write error / truncation.
 bool write_frame(int fd, MsgType type, const std::vector<uint8_t> &payload);
 
-/// Read one frame from fd (blocking).  Returns false on EOF or protocol error.
+/// Read one message from fd (blocking).  Chunked sequences are transparently
+/// reassembled into a single payload.  Returns false on EOF or protocol error.
 bool read_frame(int fd, MsgType &out_type, std::vector<uint8_t> &out_payload);
+
+// ── checkpoint::Section list codec ──────────────────────────────────────
+
+/// Encode vector<checkpoint::Section> as [u32 count][sections...].
+std::vector<uint8_t> encode_sections(const std::vector<checkpoint::Section> &sections);
+
+/// Decode the above.  Returns false on malformed input / count overrun.
+bool decode_sections(const std::vector<uint8_t> &bytes,
+                     std::vector<checkpoint::Section> &out);
 
 // ── Payload helpers (ByteStream codecs) ────────────────────────────
 

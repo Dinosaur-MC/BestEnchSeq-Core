@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <queue>
 #include <vector>
 
 namespace algorithm {
@@ -91,9 +92,18 @@ class AStarAlgorithm : public IAlgorithm {
     std::chrono::milliseconds _max_search_time{0};
 
     // ─── Pool storage (all vector — contiguous) ───────────────────────────
+    // The open set is a MEMBER (not a local moved out of execute) so the
+    // serializer can capture the LIVE open set at checkpoint time.  Previously
+    // execute() moved _open_heap into a local priority_queue, leaving the
+    // member empty → resumes restored an empty open set → 0 solutions.
+    struct OpenSet : std::priority_queue<PriorityEntry, std::vector<PriorityEntry>,
+                                         std::greater<PriorityEntry>> {
+        const std::vector<PriorityEntry> &container() const noexcept { return c; }
+        std::vector<PriorityEntry> &container() noexcept { return c; }
+    };
     ItemPool _pool;
     std::vector<StepNode> _step_pool;
-    std::vector<PriorityEntry> _open_heap;
+    OpenSet _open_heap;
 
     // ─── Helpers ──────────────────────────────────────────────────────────
     int32_t _heuristic(const std::vector<ItemID> &ids) const;

@@ -314,6 +314,15 @@ M2 Windows（已实现 + Windows 验证）：
     （getaddrinfo/gethostbyname 等）、代码/进程注入（CreateRemoteThread/WriteProcessMemory/
     memfd_create/process_vm_writev/bpf）、Windows 注册表/进程控制、Linux syscall/prctl/unshare；
     非沙箱模式下这些危险导入一律硬拒
+  - ✅ checkpoint 序列化/恢复接通（2026-08-03）：SandboxedAlgorithm 提供**代理序列化器**
+    （`SandboxSerializer`）——checkpoint 包装留在父进程，仅算法状态段跨 IPC 由 worker 的真实
+    序列化器产出/消费。**透明分块传输**：`write_frame`/`read_frame` 自动把 >16MiB 载荷拆成
+    1MiB 帧并重组（无需单独分块协议），支持 MB~GB 级 checkpoint。worker serve 循环/控制线程
+    处理 MsgSerializeState/MsgDeserializeState；MsgExecute 携带 restored 标志；pause 时
+    execute() 循环让出管道（`_pipe_yielded` 握手）给序列化线程独占。**修复 AStar 两处恢复 bug**：
+    (1) open heap 从局部 move 改为成员 `OpenSet`（序列化器才能捕获活的开集——此前恢复得到空
+    开集 → 0 解）；(2) restored 路径补 `_budget` 初始化（否则 `max_explored` 垃圾值 → 恢复搜索
+    立即退出）。双平台 test_sandbox 验证：暂停→序列化 1.9MB→新 worker 恢复→求解成功
 
 M3 Capability profile 分级 + 故障处理 + 全套测试
 

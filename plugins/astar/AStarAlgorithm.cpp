@@ -163,16 +163,13 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
     auto t0 = std::chrono::steady_clock::now();
 
     size_t open_heap_cap = 0;
-    std::priority_queue<PriorityEntry, std::vector<PriorityEntry>, std::greater<>> open_set(
-        std::greater<>{}, std::move(_open_heap)
-    );
 
     // ─── Fresh start: seed pool, guards, greedy bound ─────────────────
     if (!ctx.is_restored()) {
         // Reset search state
         _pool.clear();
         _step_pool.clear();
-        _open_heap.clear();
+        _open_heap.container().clear();
         _best_g.clear();
         _best_solution_cost = INT32_MAX;
         _solutions_found = 0;
@@ -247,14 +244,14 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
         _pool.reserve(std::min(_state_est, static_cast<size_t>(_budget.max_items_pool)));
         _step_pool.reserve(std::min(_state_est, _budget.max_step_pool));
         // Open set is typically smaller than explored set
-        _open_heap.reserve(std::min(_state_est / 2 + 64, _budget.max_open_set));
+        _open_heap.container().reserve(std::min(_state_est / 2 + 64, _budget.max_open_set));
     }
 
     int32_t h0           = _heuristic(initial_ids);
     size_t initial_hash  = _hash_ids(initial_ids);
-    open_heap_cap = _open_heap.capacity();
+    open_heap_cap = _open_heap.container().capacity();
 
-    open_set.push(PriorityEntry{SearchState{0, h0, initial_hash, -1, std::move(initial_ids)}, h0});
+    _open_heap.push(PriorityEntry{SearchState{0, h0, initial_hash, -1, std::move(initial_ids)}, h0});
 
     // _best_g keyed by hash — open-addressing flat map (contiguous, cache-friendly).
     // Initial capacity estimated from problem size to avoid over-allocation
@@ -274,7 +271,14 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
     _explored = 0;
 
     } else {
-        // Restored path: report restored progress
+        // Restored path: report restored progress.  The memory budget is NOT
+        // part of the checkpoint — re-derive it from the input config so
+        // _budget.max_explored etc. aren't uninitialized garbage (the resumed
+        // search would otherwise break out of the main loop immediately).
+        _budget = AStarMemoryBudget::from_memory_mb(
+            input.config.search.memory_mb > 0 ? input.config.search.memory_mb : 2048,
+            static_cast<int32_t>(items.size())
+        );
         {
             _state_est = 64;
             if (items.size() > 1) {
@@ -294,18 +298,18 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
             ctx.report_progress(restored_progress, ProgressStatus::Exploring);
 
         _diag.initial_bound = _best_solution_cost;
-        open_heap_cap = _open_heap.capacity();
+        open_heap_cap = _open_heap.container().capacity();
     }
 
     // ─── Main search loop (shared) ─────────────────────────────────────
-    while (!open_set.empty() && !ctx.is_cancelled()) {
+    while (!_open_heap.empty() && !ctx.is_cancelled()) {
         ctx.wait_if_paused();
 
         // const_cast + move from top() is valid here because top() returns
         // a const& to an element that is immediately popped.  All major
         // stdlib implementations accept this pattern in practice.
-        SearchState current = std::move(const_cast<PriorityEntry &>(open_set.top())).state;
-        open_set.pop();
+        SearchState current = std::move(const_cast<PriorityEntry &>(_open_heap.top())).state;
+        _open_heap.pop();
 
         // best_g check
         size_t cur_h = current.hash;
@@ -346,7 +350,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
             _diag.items_pool_used     = _pool.size();
             _diag.items_pool_capacity = _pool.capacity();
             _diag.solution_cost       = _best_solution_cost;
-            _diag.open_set_pending    = open_set.size();
+            _diag.open_set_pending    = _open_heap.size();
             _diag.estimated_peak_bytes =
                 static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item)) +
                 static_cast<int64_t>(_step_pool.capacity()) * static_cast<int64_t>(sizeof(StepNode)) +
@@ -416,7 +420,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
                 // Pool capacity check (avoid forging when no room)
                 bool at_cap =
                     (_step_pool.size() >= _budget.max_step_pool ||
-                     open_set.size() >= static_cast<size_t>(_budget.max_open_set));
+                     _open_heap.size() >= static_cast<size_t>(_budget.max_open_set));
                 if (at_cap) {
                     ++_diag.pruned_by_caps;
                     ctx.incr_nodes_pruned();
@@ -469,7 +473,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
                 _step_pool.push_back({current.step_idx, old_base_id, old_sac_id, real_cost});
                 int32_t step_idx = static_cast<int32_t>(_step_pool.size()) - 1;
 
-                open_set.push(
+                _open_heap.push(
                     PriorityEntry{
                         SearchState{child_g, child_h_val, child_hash, step_idx, std::move(child_ids)},
                         child_fv
@@ -487,7 +491,7 @@ void AStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx)
     _diag.step_pool_capacity  = _step_pool.capacity();
     _diag.items_pool_used     = _pool.size();
     _diag.items_pool_capacity = _pool.capacity();
-    _diag.open_set_pending    = open_set.size();
+    _diag.open_set_pending    = _open_heap.size();
     _diag.solution_cost       = _best_solution_cost;
     _diag.estimated_peak_bytes =
         static_cast<int64_t>(_pool.capacity()) * static_cast<int64_t>(sizeof(Item)) +
