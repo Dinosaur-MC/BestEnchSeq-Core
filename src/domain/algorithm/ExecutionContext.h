@@ -32,7 +32,22 @@ class ExecutionContext {
     // ═══════════════════════════════════════════════════════════════════
     // 执行控制
     // ═══════════════════════════════════════════════════════════════════
-    void cancel() noexcept { _cancelled.store(true, std::memory_order_release); }
+    /// Opaque cancellation notifier (eventfd write / Win32 SetEvent).  Used by
+    /// SandboxedAlgorithm so its IPC wait is woken the INSTANT the executor
+    /// cancels, instead of polling.  In-process algorithms never install one:
+    /// cancel() then does one extra null-atomic load — nothing on the hot path
+    /// (is_cancelled / wait_if_paused are untouched).
+    using CancelNotifyFn = void (*)(void *) noexcept;
+    void set_cancel_notify(CancelNotifyFn fn, void *userdata) noexcept {
+        _cancel_fn.store(fn, std::memory_order_release);
+        _cancel_ud.store(userdata, std::memory_order_release);
+    }
+    void cancel() noexcept {
+        _cancelled.store(true, std::memory_order_release);
+        auto fn = _cancel_fn.load(std::memory_order_acquire);
+        if (fn)
+            fn(_cancel_ud.load(std::memory_order_acquire));
+    }
     void pause() noexcept { _paused.store(true, std::memory_order_release); }
     void resume() noexcept {
         _paused.store(false, std::memory_order_release);
@@ -129,6 +144,12 @@ class ExecutionContext {
 
     // ── 退出诊断 ──────────────────────────────────────────────────────
     std::unique_ptr<AlgorithmDiagnostics> _exit_diag;
+
+    // ── 取消通知（SandboxedAlgorithm 专用）────────────────────────────
+    // 追加在类末尾：既有成员偏移不变，已编译插件（旧 ABI）不会因本类
+    // 布局变化而读写错位（2026-08-03 曾因字段插中间导致插件 DLL 段错误）。
+    std::atomic<CancelNotifyFn> _cancel_fn{nullptr};
+    std::atomic<void *> _cancel_ud{nullptr};
 };
 
 } // namespace algorithm

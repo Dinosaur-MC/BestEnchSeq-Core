@@ -11,6 +11,7 @@
 #if defined(__linux__)
 #include <csignal>
 #include <poll.h>
+#include <sys/eventfd.h>
 #include <sys/prctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -35,6 +36,23 @@ std::string resolve_worker_path(const std::string &given) {
     if (!env.empty())
         return env;
     return "besq-worker";
+}
+
+/// Cancellation wakeup for execute() (see ExecutionContext::set_cancel_notify).
+/// ExecutionContext::cancel() runs on the executor's timeout-watcher thread;
+/// this is the ONLY bridge to the IPC wait below.  Linux: write one byte to
+/// an eventfd.  Windows: set a manual-reset event.  The wait then wakes the
+/// instant the executor cancels — event-driven, no polling.
+void cancel_notify(void *ud) noexcept {
+#if defined(__linux__)
+    const int efd = static_cast<int>(reinterpret_cast<intptr_t>(ud));
+    const uint64_t one = 1;
+    (void)::write(efd, &one, sizeof(one));
+#elif defined(_WIN32)
+    ::SetEvent(static_cast<HANDLE>(ud));
+#else
+    (void)ud;
+#endif
 }
 
 } // anonymous namespace
@@ -128,57 +146,112 @@ bool SandboxedAlgorithm::simulate(const AlgorithmInput &input) const noexcept {
 void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
     send(ipc::MsgType::MsgExecute, ipc::encode(input));
 
-    for (;;) {
-        // Poll with a short timeout so we can observe parent-side cancellation.
-        ipc::MsgType type;
-        std::vector<uint8_t> payload;
-        bool got = false;
+    // Event-driven wakeup object for parent-side cancellation: the executor's
+    // timeout watcher / signal handler calls ctx.cancel() on another thread —
+    // its only signal here is the notifier we install below.
 #if defined(__linux__)
-        struct pollfd pfd{_fd, POLLIN, 0};
-        int rc = ::poll(&pfd, 1, 100);
-        if (rc > 0)
-            got = ipc::read_frame(_fd, type, payload);
-        if (rc == 0 && ctx.is_cancelled()) {
-            send(ipc::MsgType::MsgCancel, {});
-            continue;
-        }
-        if (rc < 0)
-            throw std::runtime_error("sandboxed execute: poll failed");
+    int efd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (efd < 0)
+        throw std::runtime_error("sandboxed execute: eventfd failed");
+    void *ud = reinterpret_cast<void *>(static_cast<intptr_t>(efd));
+#elif defined(_WIN32)
+    // Manual-reset: stays signaled until ResetEvent in the loop, so a cancel
+    // that lands while we are busy processing a frame is not lost.
+    HANDLE cancel_evt = ::CreateEventA(nullptr, TRUE, FALSE, nullptr);
+    if (!cancel_evt)
+        throw std::runtime_error("sandboxed execute: CreateEvent failed");
+    void *ud = static_cast<void *>(cancel_evt);
 #else
-        got = ipc::read_frame(_fd, type, payload);
+    void *ud = nullptr;
 #endif
-        if (!got)
-            throw std::runtime_error("sandboxed execute: worker closed channel");
+    ctx.set_cancel_notify(&cancel_notify, ud);
 
-        switch (type) {
-        case ipc::MsgType::MsgProgress: {
-            ByteStreamReader r(payload);
-            uint8_t pct = 0, status = 0;
-            r >> pct >> status;
-            if (r.ok())
-                ctx.report_progress(pct, static_cast<ProgressStatus>(status));
-            break;
+    // Race guard: the executor may have cancelled between MsgExecute and the
+    // hook install above (the event would then never fire).  Re-check once.
+    if (ctx.is_cancelled())
+        send(ipc::MsgType::MsgCancel, {});
+
+    try {
+        bool done = false;
+        while (!done) {
+            ipc::MsgType type;
+            std::vector<uint8_t> payload;
+            bool got = false;
+#if defined(__linux__)
+            // Wait on BOTH event sources with an infinite timeout: the worker's
+            // IPC channel (data → kernel wakes poll) and the cancel eventfd
+            // (cancel → cancel_notify writes → poll wakes).  Zero polling.
+            struct pollfd pfds[2] = {{_fd, POLLIN, 0}, {efd, POLLIN, 0}};
+            int rc = ::poll(pfds, 2, -1);
+            if (rc < 0)
+                throw std::runtime_error("sandboxed execute: poll failed");
+            if (pfds[1].revents & POLLIN) {
+                uint64_t v;
+                (void)::read(efd, &v, sizeof(v));  // consume the counter
+                send(ipc::MsgType::MsgCancel, {});
+                continue;
+            }
+            got = ipc::read_frame(_fd, type, payload);
+#elif defined(_WIN32)
+            // Windows anonymous pipes are NOT reliable wait objects — WFMO
+            // on the read handle spuriously signals "readable" on an empty
+            // pipe and read_frame would then block forever.  Detect data
+            // with PeekNamedPipe (non-blocking); the cancel event is a REAL
+            // waitable object, so an executor cancel still wakes us instantly.
+            HANDLE pipe_h = reinterpret_cast<HANDLE>(::_get_osfhandle(_fd));
+            DWORD avail = 0;
+            if (::PeekNamedPipe(pipe_h, nullptr, 0, nullptr, &avail, nullptr) && avail > 0) {
+                got = ipc::read_frame(_fd, type, payload);
+            } else if (::WaitForSingleObject(cancel_evt, 1) == WAIT_OBJECT_0) {
+                ::ResetEvent(cancel_evt);
+                send(ipc::MsgType::MsgCancel, {});
+                continue;
+            } else {
+                continue;  // nothing ready — re-poll (≤1 ms)
+            }
+#else
+            got = ipc::read_frame(_fd, type, payload);
+#endif
+            if (!got)
+                throw std::runtime_error("sandboxed execute: worker closed channel");
+
+            switch (type) {
+            case ipc::MsgType::MsgProgress: {
+                ByteStreamReader r(payload);
+                uint8_t pct = 0, status = 0;
+                r >> pct >> status;
+                if (r.ok())
+                    ctx.report_progress(pct, static_cast<ProgressStatus>(status));
+                break;
+            }
+            case ipc::MsgType::MsgSolution: {
+                std::vector<EnchStep> steps;
+                ByteStreamReader r(payload);
+                r >> steps;
+                if (r.ok())
+                    ctx.report_solution(std::move(steps));
+                break;
+            }
+            case ipc::MsgType::MsgResult:
+                done = true;
+                break;
+            case ipc::MsgType::MsgError: {
+                ByteStreamReader r(payload);
+                std::string msg;
+                r >> msg;
+                throw std::runtime_error(msg.empty() ? "sandboxed execute failed" : msg);
+            }
+            default:
+                break;
+            }
         }
-        case ipc::MsgType::MsgSolution: {
-            std::vector<EnchStep> steps;
-            ByteStreamReader r(payload);
-            r >> steps;
-            if (r.ok())
-                ctx.report_solution(std::move(steps));
-            break;
-        }
-        case ipc::MsgType::MsgResult:
-            return;
-        case ipc::MsgType::MsgError: {
-            ByteStreamReader r(payload);
-            std::string msg;
-            r >> msg;
-            throw std::runtime_error(msg.empty() ? "sandboxed execute failed" : msg);
-        }
-        default:
-            break;
-        }
+    } catch (...) {
+        // Never leave the hook armed with an fd/event that is about to be
+        // destroyed — a late cancel from the executor must not dereference it.
+        ctx.set_cancel_notify(nullptr, nullptr);
+        throw;
     }
+    ctx.set_cancel_notify(nullptr, nullptr);
 }
 
 std::unique_ptr<IForgeEngine> SandboxedAlgorithm::get_forge_engine() const noexcept {

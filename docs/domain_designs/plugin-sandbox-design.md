@@ -300,6 +300,25 @@ M2 Windows（已实现 + Windows 验证）：
   - worker 服务循环在 Windows 复用（_read/_write + 二进制管道）
   - BESQ_SANDBOX=1 在 Windows 也启用（get_env<bool>）
   - ✅ Windows 验证：idastar 经沙箱求解；无 seccomp（Windows 无等价物）——隔离靠进程 + Job Object 资源上限；文件/网络阻断需 AppContainer（后续）
+  - ✅ 取消/超时事件驱动化（2026-08-03）：`ExecutionContext::cancel()` 增加零成本通知钩子
+    （冷路径，进程内算法仅多一次 null 原子 load；字段追加在类**末尾**，保持既有成员偏移不变），
+    父进程 `execute()` 与 worker 控制线程改为事件驱动等待——取消/超时即时生效（cancel→join 0ms），
+    不再有 100ms 轮询延迟 / Windows 纯阻塞读失效问题
+
+### 两个平台教训（2026-08-03 实证）
+
+**1. Windows 匿名管道不是可靠等待对象**
+`WaitForMultipleObjects` 等待匿名管道读句柄会在**空管道上虚假报告"可读"**，随后阻塞
+`read_frame` 永久挂死（worker 的 `control.join()` 死锁 → 不响应 → 父进程挂死）。
+修复：数据侧用 `PeekNamedPipe`（非阻塞探测）+ 取消/退出用**真正的等待对象**（Win32 事件），
+事件即时唤醒，数据探测 ≤1ms。Linux 无此问题——`poll` 在管道 fd 上可靠，用 `eventfd` + `poll(-1)`
+保持完全事件驱动。
+
+**2. 头文件布局变化会打断插件 ABI**
+`ExecutionContext` 新增字段若插在既有成员**中间**，会把后续成员偏移整体后移。插件 DLL 若用旧
+头文件编译（未随 host 重建），其内联成员函数按旧偏移读写 → 搜索时在 besq-algo-core.dll 里
+段错误（0xC0000005）。恶意插件只调非内联的 `report_progress`（走 DLL 符号）所以幸存——迷惑性极强。
+修复：新字段**追加在类末尾** + 重建插件树。注意：修改算法域头文件后必须重编 `build/plugins`。
 
 M3 Capability profile 分级 + 故障处理 + 全套测试
 

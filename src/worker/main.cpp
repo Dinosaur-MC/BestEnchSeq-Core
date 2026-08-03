@@ -24,7 +24,6 @@
 #include "common/io/ByteStream.h"
 #include "sandbox_seccomp.h"
 
-#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -41,6 +40,7 @@
 #else
 #include <dlfcn.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 #endif
 
@@ -92,18 +92,74 @@ class IpcForwardObserver : public IAlgorithmObserver {
     std::mutex _mtx;  // serializes all writes to the IPC channel
 };
 
-// ── Timeout-bounded frame read for the control thread (Linux) ───────
-bool read_frame_timeout(int fd, ipc::MsgType &type, std::vector<uint8_t> &payload,
-                        int timeout_ms) {
+// ── Event-driven wakeup for the control thread ─────────────────────
+// Two event sources: an IPC frame on stdin (cancel/pause/resume from the
+// parent) OR the main thread finishing execute().  No polling — both are
+// waited on with an infinite kernel sleep.
+class ExitSignal {
+  public:
+    ExitSignal() {
 #if defined(__linux__)
-    struct pollfd pfd{fd, POLLIN, 0};
-    int rc = ::poll(&pfd, 1, timeout_ms);
-    if (rc <= 0)
-        return false;  // timeout or error
-    return ipc::read_frame(fd, type, payload);
+        _fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+#elif defined(_WIN32)
+        _evt = ::CreateEventA(nullptr, TRUE, FALSE, nullptr);
+#endif
+    }
+    ~ExitSignal() {
+#if defined(__linux__)
+        if (_fd >= 0) ::close(_fd);
+#elif defined(_WIN32)
+        if (_evt) ::CloseHandle(_evt);
+#endif
+    }
+#if defined(__linux__)
+    int fd() const { return _fd; }
+    void signal() {
+        const uint64_t one = 1;
+        if (_fd >= 0) (void)::write(_fd, &one, sizeof(one));
+    }
+#elif defined(_WIN32)
+    HANDLE handle() const { return _evt; }
+    void signal() {
+        if (_evt) ::SetEvent(_evt);
+    }
+#endif
+  private:
+#if defined(__linux__)
+    int _fd = -1;
+#elif defined(_WIN32)
+    HANDLE _evt = nullptr;
+#endif
+};
+
+/// Wait for either an IPC frame on stdin or the exit signal.
+/// @return 0 = stdin readable, 1 = exit signal, -2 = nothing ready (retry),
+///         -1 = error.
+int wait_ipc_or_exit(const ExitSignal &exit_sig) {
+#if defined(__linux__)
+    struct pollfd pfds[2] = {{0, POLLIN, 0}, {exit_sig.fd(), POLLIN, 0}};
+    int rc = ::poll(pfds, 2, -1);
+    if (rc < 0)
+        return -1;
+    if (pfds[1].revents & POLLIN)
+        return 1;
+    return 0;
+#elif defined(_WIN32)
+    // Windows anonymous pipes are NOT reliable wait objects — WFMO on the
+    // read handle spuriously signals "readable" on an empty pipe and then
+    // read_frame would block forever.  Detect data with PeekNamedPipe
+    // (non-blocking), and wait on the exit event (a REAL waitable object) so
+    // execute()-done still wakes us instantly.
+    HANDLE stdin_h = reinterpret_cast<HANDLE>(::_get_osfhandle(::_fileno(stdin)));
+    DWORD avail = 0;
+    if (::PeekNamedPipe(stdin_h, nullptr, 0, nullptr, &avail, nullptr) && avail > 0)
+        return 0;
+    if (::WaitForSingleObject(exit_sig.handle(), 1) == WAIT_OBJECT_0)
+        return 1;
+    return -2;  // nothing ready — retry
 #else
-    (void)fd; (void)type; (void)payload; (void)timeout_ms;
-    return false;
+    (void)exit_sig;
+    return -1;
 #endif
 }
 
@@ -129,13 +185,21 @@ void handle_execute(IAlgorithm &algo, const std::vector<uint8_t> &payload) {
     auto forwarder = IAlgorithmObserver::create<IpcForwardObserver>();
 
     // Control thread: receive cancel/pause/resume while execute() runs.
-    std::atomic<bool> execute_done{false};
+    // Event-driven — sleeps in poll/WFMO until an IPC frame arrives OR the
+    // main thread signals execute() is done (no polling, no busy-spin).
+    ExitSignal exit_sig;
     std::thread control([&] {
-        while (!execute_done.load(std::memory_order_acquire)) {
+        for (;;) {
+            switch (wait_ipc_or_exit(exit_sig)) {
+            case 1:   return;  // execute() finished — control no longer needed
+            case -2:  continue;                         // nothing ready — retry
+            case -1:  return;  // poll/WFMO error
+            default:  break;   // stdin readable
+            }
             ipc::MsgType type;
             std::vector<uint8_t> ctl;
-            if (!read_frame_timeout(0, type, ctl, 50))
-                continue;
+            if (!ipc::read_frame(0, type, ctl))
+                return;  // EOF (parent closed the channel)
             switch (type) {
             case ipc::MsgType::MsgCancel: local_ctx.cancel(); break;
             case ipc::MsgType::MsgPause:  local_ctx.pause();  break;
@@ -148,7 +212,7 @@ void handle_execute(IAlgorithm &algo, const std::vector<uint8_t> &payload) {
     algo.init(input, local_ctx);
     algo.execute(input, local_ctx);
 
-    execute_done.store(true, std::memory_order_release);
+    exit_sig.signal();  // wake the control thread to exit
     control.join();
 
     // Flush queued progress/solution events BEFORE MsgResult, so the parent

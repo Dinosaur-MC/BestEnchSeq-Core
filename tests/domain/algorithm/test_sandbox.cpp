@@ -50,6 +50,9 @@ std::string find_worker() {
     const char *candidates[] = {
         "build-wsl/bin/besq-worker",
         "build/bin/besq-worker",
+#if defined(_WIN32)
+        "build/bin/besq-worker.exe",
+#endif
     };
     for (const char *c : candidates)
         if (std::filesystem::exists(c))
