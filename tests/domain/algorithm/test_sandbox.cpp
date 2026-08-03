@@ -225,6 +225,70 @@ void test_checkpoint_roundtrip(const std::string& plugin) {
     expect(!out.solutions.empty(), "sandbox: resumed solve produced solutions");
 }
 
+/// Destroy a SandboxedExecutor MID-RUN without wait(): the destructor must
+/// force the reader to exit and kill the worker promptly — no hang even if the
+/// worker is busy (regression for review finding 2).
+void test_destroy_mid_run(const std::string& plugin) {
+    auto input = build_search_input();
+    auto se = std::make_unique<SandboxedExecutor>(plugin, find_worker(), PluginCapability::None);
+    se->start(input);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20)); // search is running
+    const auto t0 = std::chrono::steady_clock::now();
+    se.reset(); // destructor: cancel → shutdown reader → join → kill worker
+    const auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    std::cout << "destroy-mid-run: " << dt << " ms" << std::endl;
+    expect(dt < 5000, "sandbox: destroying mid-run returns promptly (no hang)");
+}
+
+/// Constructing with a bad plugin path throws, and the partially-constructed
+/// executor must not leak the spawned worker (regression for review finding 3).
+void test_bad_plugin_path() {
+    bool threw = false;
+    try {
+        SandboxedExecutor se("nonexistent/libalgo_does_not_exist.so", find_worker(), PluginCapability::None);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "sandbox: bad plugin path throws (worker cleaned up on failure)");
+}
+
+/// One SandboxedExecutor reuses its worker across runs from Completed — the
+/// worker hosts a real AlgorithmExecutor that allows re-running.
+void test_reuse_after_completed(const std::string& plugin) {
+    auto input = build_search_input();
+    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    se.start(input);
+    expect(se.wait() == AlgorithmState::Completed, "sandbox: first run completes");
+    expect(!se.output().solutions.empty(), "sandbox: first run has solutions");
+    se.start(input); // re-run on the SAME worker/executor (from Completed)
+    expect(se.wait() == AlgorithmState::Completed, "sandbox: re-run completes");
+    expect(!se.output().solutions.empty(), "sandbox: re-run has solutions");
+}
+
+/// Cancel racing an in-flight serialize handshake: the run-completion MsgResult
+/// must never be mis-read as the checkpoint blob, and wait() must terminate
+/// (regression for review findings 1/9).  Best-effort race — several iterations.
+void test_cancel_races_serialize(const std::string& plugin) {
+    for (int i = 0; i < 4; ++i) {
+        auto input = build_search_input();
+        SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+        se.start(input);
+        std::this_thread::sleep_for(std::chrono::milliseconds(8));
+        se.pause();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10)); // worker actually pauses
+
+        std::vector<uint8_t> cp;
+        std::thread serializer([&] { cp = se.serialize_state(); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(2)); // handshake in flight
+        se.cancel();                                               // now races the in-flight handshake
+        serializer.join();
+        const auto st = se.wait(); // must not hang
+        std::cout << "cancel-race iter " << i << ": cp=" << cp.size() << " state=" << static_cast<int>(st) << std::endl;
+        expect(st == AlgorithmState::Cancelled || st == AlgorithmState::Completed || st == AlgorithmState::Failed,
+               "cancel-race: terminal state reached (wait did not hang)");
+    }
+}
+
 } // anonymous namespace
 
 int main() {
@@ -261,13 +325,19 @@ int main() {
         expect(v >= 0.0, "sandbox: worker responded to evaluate(0x1A payload) — binary IPC ok");
 #endif
 
+        // ── Bad plugin path throws + cleans up the worker (fix 3) ──────
+        test_bad_plugin_path();
+
         // ── Pause/resume + checkpoint round-trip (needs a search plugin) ──
         const std::string search_plugin = find_search_plugin();
         if (search_plugin.empty()) {
-            std::cout << "SKIP: pause/checkpoint tests — no search plugin built" << std::endl;
+            std::cout << "SKIP: pause/checkpoint/races tests — no search plugin built" << std::endl;
         } else {
             test_pause_resume(search_plugin);
             test_checkpoint_roundtrip(search_plugin);
+            test_destroy_mid_run(search_plugin);        // fix 2
+            test_reuse_after_completed(search_plugin);  // re-run from Completed
+            test_cancel_races_serialize(search_plugin); // fix 1/9
         }
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

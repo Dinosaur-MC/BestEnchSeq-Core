@@ -163,6 +163,18 @@ void AlgorithmExecutor::start(AlgorithmInput input) {
 }
 
 void AlgorithmExecutor::start(AlgorithmInput input, std::unique_ptr<IAlgorithm> warmup) {
+    // Reject unsupported modes BEFORE acquiring the Running state.  A throw
+    // here must leave the executor reusable (Idle): if the state flipped first,
+    // a long-lived executor (e.g. the sandbox worker's) would be stuck in
+    // Running with no worker thread and every later start() would fail.
+    if (!(_algorithm->supported_mode() & input.config.mode)) {
+        std::string mode_str = (input.config.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
+        throw std::runtime_error(std::string(_algorithm->name()) + " does not support '" + mode_str + "' mode");
+    }
+    if (warmup && !(warmup->supported_mode() & input.config.mode))
+        throw std::runtime_error(std::string(warmup->name()) + " (warmup) does not support '" +
+                                 (input.config.mode == AlgorithmMode::inventory ? "inventory" : "direct") + "' mode");
+
     if (!_set_state(AlgorithmState::Running))
         throw std::logic_error("executor already running or in terminal state");
 
@@ -171,22 +183,12 @@ void AlgorithmExecutor::start(AlgorithmInput input, std::unique_ptr<IAlgorithm> 
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
     _start_time = std::chrono::steady_clock::now();
 
-    // Verify the algorithm supports the requested mode
-    if (!(_algorithm->supported_mode() & input.config.mode)) {
-        std::string mode_str = (input.config.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
-        throw std::runtime_error(std::string(_algorithm->name()) + " does not support '" + mode_str + "' mode");
-    }
-
     // Start timeout watcher if max_search_time > 0
     _start_timeout_watcher(input.config.search.max_search_time);
 
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
-    if (warmup) {
-        if (!(warmup->supported_mode() & input.config.mode))
-            throw std::runtime_error(std::string(warmup->name()) + " (warmup) does not support '" +
-                                     (input.config.mode == AlgorithmMode::inventory ? "inventory" : "direct") + "' mode");
+    if (warmup)
         _run_warmup(input, *warmup);
-    }
 
     _algorithm_input = std::move(input);
 

@@ -46,10 +46,14 @@ enum class MsgType : uint32_t {
     MsgSerializeState = 0x010B, // reply MsgResult = full opaque checkpoint blob
 
     // ── Worker → parent ────────────────────────────────────────────────
-    MsgResult = 0x0201,   // request completion, payload varies by request
-    MsgProgress = 0x0202, // { uint8 pct, uint8 status } (streamed during execute)
-    MsgSolution = 0x0203, // EnchSolution steps (streamed during execute)
-    MsgError = 0x0204,    // string error message
+    MsgResult = 0x0201,     // request completion, payload varies by request
+    MsgProgress = 0x0202,   // { uint8 pct, uint8 status } (streamed during execute)
+    MsgSolution = 0x0203,   // EnchSolution steps (streamed during execute)
+    MsgError = 0x0204,      // string error message
+    MsgCheckpoint = 0x0205, // opaque checkpoint blob — DEDICATED reply to
+                            // MsgSerializeState, distinct from the run-completion
+                            // MsgResult so a serialize handshake can never mis-read
+                            // a terminal result as the checkpoint
 };
 
 constexpr size_t kHeaderSize = 8;

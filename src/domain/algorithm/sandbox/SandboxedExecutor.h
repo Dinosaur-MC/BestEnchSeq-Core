@@ -100,10 +100,18 @@ private:
     /// Terminal-state transition from the reader thread: Cancelled wins (it is
     /// a terminal state set by cancel() and must not be clobbered).
     void set_terminal(AlgorithmState terminal) noexcept;
+    /// Abort a still-pending serialize handshake (mark it errored + notify) —
+    /// called on reader-thread exit so a serializing caller never hangs.
+    void abort_pending_serialize() noexcept;
+    /// Kill the worker + close all fds/handles.  Assumes the reader thread has
+    /// already exited (or never started).  Called by the destructor and by the
+    /// constructor's exception path (partial-construction cleanup).
+    void teardown_worker() noexcept;
 
     std::string _plugin_path;
     std::string _worker_path;
-    PluginCapability _capability;
+    // Capability → sandbox-profile mapping is future work (M3); retained.
+    [[maybe_unused]] PluginCapability _capability;
 
     // ── Worker handles (see SandboxedAlgorithm::spawn_worker for lifecycle) ──
     int _fd = -1;       // read: worker→parent (Linux: full-duplex socketpair)
@@ -125,6 +133,10 @@ private:
     std::atomic<double> _progress{0.0};
     mutable std::mutex _out_mtx; // guards _output
     AlgorithmOutput _output;     // authoritative result from MsgResult
+    /// Set by the destructor to force the reader thread to exit promptly
+    /// (checked at the top of each reader-loop iteration; on Linux the read
+    /// side of the IPC socket is also shutdown() to unblock a blocking poll).
+    std::atomic<bool> _shutdown{false};
 
     // Reader thread + serialize handshake (created fresh each run).
     std::shared_ptr<SerializeIntent> _serialize_intent;

@@ -8,6 +8,7 @@
 
 #if defined(__linux__)
 #include <csignal>
+#include <fcntl.h>
 #include <poll.h>
 #include <sys/eventfd.h>
 #include <sys/prctl.h>
@@ -99,19 +100,41 @@ SandboxedExecutor::SandboxedExecutor(std::string plugin_path, std::string worker
     std::signal(SIGPIPE, SIG_IGN);
 #endif
     spawn_worker();
-    query_metadata();
+    try {
+        query_metadata();
+    } catch (...) {
+        // Partial construction: the destructor never runs, so kill the spawned
+        // worker and close the fds/handles before rethrowing.  (No reader
+        // thread exists yet — start() hasn't been called.)
+        teardown_worker();
+        throw;
+    }
 }
 
 SandboxedExecutor::~SandboxedExecutor() {
-    // Forward a best-effort cancel so a mid-run worker stops promptly, then
-    // let the reader exit (it returns on the worker's MsgResult or on EOF once
-    // the worker is killed below).  Never throw from a destructor.
+    // Forward a best-effort cancel so a mid-run worker stops promptly.
     try {
         cancel();
     } catch (...) {
     }
+    // Force the reader thread to exit promptly, so the join below cannot hang
+    // even if the worker ignores cancel() — precisely the malicious-plugin
+    // threat model this sandbox exists to contain.  Never throw from a dtor.
+    _shutdown.store(true, std::memory_order_release);
+    wake_reader();
+#if defined(__linux__)
+    // Unblock the reader's poll/read immediately: shutdown() the read side of
+    // the socketpair makes pending reads return EOF.  The fd number stays
+    // valid, so the reader cannot read from a recycled descriptor.
+    if (_fd >= 0)
+        ::shutdown(_fd, SHUT_RD);
+#endif
     if (_reader.joinable())
         _reader.join();
+    teardown_worker();
+}
+
+void SandboxedExecutor::teardown_worker() noexcept {
 #if defined(__linux__)
     if (_wake >= 0) {
         ::close(static_cast<int>(_wake));
@@ -168,6 +191,11 @@ SandboxedExecutor::~SandboxedExecutor() {
 // ── IExecutor metadata / preflight ─────────────────────────────────
 
 bool SandboxedExecutor::simulate(const AlgorithmInput& input) const noexcept {
+    // Preflight only: during a run the reader thread owns the pipe; a second
+    // reader would corrupt frames.  Reject silently outside Idle (Idle is the
+    // only state from which start() may be called, so this is a safe guard).
+    if (_state.load(std::memory_order_acquire) != AlgorithmState::Idle)
+        return false;
     try {
         send(ipc::MsgType::MsgSimulate, ipc::encode(input));
         ipc::MsgType type;
@@ -184,6 +212,8 @@ bool SandboxedExecutor::simulate(const AlgorithmInput& input) const noexcept {
 }
 
 double SandboxedExecutor::evaluate(int16_t ench_count) const noexcept {
+    if (_state.load(std::memory_order_acquire) != AlgorithmState::Idle)
+        return 0.0;
     try {
         const auto payload = ipc::encode_value(ench_count);
         send(ipc::MsgType::MsgEvaluate, payload);
@@ -308,6 +338,11 @@ std::vector<uint8_t> SandboxedExecutor::serialize_state() const {
 
 void SandboxedExecutor::reader_loop() noexcept {
     for (;;) {
+        // Destructor requested prompt exit — leave without touching state.
+        if (_shutdown.load(std::memory_order_acquire)) {
+            abort_pending_serialize();
+            return;
+        }
         ipc::MsgType type = ipc::MsgType::MsgResult;
         std::vector<uint8_t> payload;
         bool got = false;
@@ -319,6 +354,7 @@ void SandboxedExecutor::reader_loop() noexcept {
         int rc = ::poll(pfds, 2, -1);
         if (rc < 0) {
             set_terminal(AlgorithmState::Failed);
+            abort_pending_serialize();
             return;
         }
         if (pfds[1].revents & POLLIN) {
@@ -341,7 +377,7 @@ void SandboxedExecutor::reader_loop() noexcept {
             ::ResetEvent(reinterpret_cast<HANDLE>(_wake));
             woken = true;
         } else {
-            continue; // nothing ready — re-poll (≤1 ms)
+            continue; // nothing ready — re-poll (≤1 ms); _shutdown checked at top
         }
 #else
         got = ipc::read_frame(_fd, type, payload);
@@ -359,37 +395,70 @@ void SandboxedExecutor::reader_loop() noexcept {
             if (do_serialize) {
                 std::vector<uint8_t> blob;
                 bool ok = false;
+                bool run_ended = false; // worker sent a run-completion MsgResult
+                bool eof = false;       // worker died mid-handshake
                 try {
                     send(ipc::MsgType::MsgSerializeState, {});
-                    // The reply is a MsgResult; skip straggler progress/solution
-                    // frames queued before the worker paused.
+                    // The reply is a DEDICATED MsgCheckpoint — unambiguous
+                    // against the run-completion MsgResult that can share the
+                    // wire when a cancel()/completion races the handshake.
+                    // Skip straggler progress/solution frames queued before
+                    // the worker paused.
                     for (;;) {
                         ipc::MsgType t;
                         std::vector<uint8_t> p;
-                        if (!recv(t, p))
+                        if (!recv(t, p)) {
+                            eof = true;
                             break; // EOF — worker died mid-serialize
-                        if (t == ipc::MsgType::MsgResult) {
+                        }
+                        if (t == ipc::MsgType::MsgCheckpoint) {
                             blob = std::move(p);
                             ok = true;
                             break;
                         }
-                        if (t == ipc::MsgType::MsgError)
+                        if (t == ipc::MsgType::MsgResult) {
+                            // The run ended while we were serializing — consume
+                            // the terminal result instead of the checkpoint and
+                            // exit with the true state.
+                            AlgorithmOutput out;
+                            if (ipc::decode_algorithm_output(p, out)) {
+                                std::lock_guard lk(_out_mtx);
+                                _output = std::move(out);
+                            }
+                            run_ended = true;
+                            ok = false;
                             break;
+                        }
+                        if (t == ipc::MsgType::MsgError) {
+                            ok = false;
+                            break;
+                        }
                     }
                 } catch (...) {
                     ok = false;
                 }
-                std::lock_guard lk(intent->mtx);
-                intent->result = std::move(blob);
-                intent->error = !ok;
-                intent->pending = false;
-                intent->cv.notify_all();
+                {
+                    std::lock_guard lk(intent->mtx);
+                    intent->result = std::move(blob);
+                    intent->error = !ok;
+                    intent->pending = false;
+                    intent->cv.notify_all();
+                }
+                if (run_ended) {
+                    set_terminal(AlgorithmState::Completed);
+                    return;
+                }
+                if (eof) {
+                    set_terminal(AlgorithmState::Failed);
+                    return;
+                }
             }
             continue;
         }
 
         if (!got) {
             set_terminal(AlgorithmState::Failed); // worker closed the channel
+            abort_pending_serialize();
             return;
         }
 
@@ -406,6 +475,10 @@ void SandboxedExecutor::reader_loop() noexcept {
             // The authoritative solutions arrive in the final MsgResult; the
             // streamed copy is only for live UIs, which we don't drive here.
             break;
+        case ipc::MsgType::MsgCheckpoint:
+            // Worker sends this only in reply to MsgSerializeState (handled
+            // above); outside a handshake it's a stray — ignore.
+            break;
         case ipc::MsgType::MsgResult: {
             AlgorithmOutput out;
             if (ipc::decode_algorithm_output(payload, out)) {
@@ -413,16 +486,30 @@ void SandboxedExecutor::reader_loop() noexcept {
                 _output = std::move(out);
             }
             set_terminal(AlgorithmState::Completed);
+            abort_pending_serialize(); // natural completion raced a serialize intent
             return;
         }
         case ipc::MsgType::MsgError: {
             // Keep Cancelled if the run was cancelled; otherwise Failed.
             set_terminal(AlgorithmState::Failed);
+            abort_pending_serialize();
             return;
         }
         default:
             break;
         }
+    }
+}
+
+void SandboxedExecutor::abort_pending_serialize() noexcept {
+    auto intent = _serialize_intent;
+    if (!intent)
+        return;
+    std::lock_guard lk(intent->mtx);
+    if (intent->pending) {
+        intent->error = true;
+        intent->pending = false;
+        intent->cv.notify_all();
     }
 }
 
@@ -465,8 +552,12 @@ void SandboxedExecutor::wake_reader() const noexcept {
 
 void SandboxedExecutor::spawn_worker() {
 #if defined(__linux__)
+    // CLOEXEC on both channels: the forked child closes them via dup2 anyway,
+    // but without CLOEXEC any OTHER fd the parent has open (e.g. a second
+    // SandboxedExecutor's socketpair, if lifetimes overlap) leaks into the
+    // worker process and could keep that pipe's read end open forever.
     int sv[2];
-    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0)
+    if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) != 0)
         throw std::runtime_error("sandbox: socketpair failed");
 
     // Capture the worker's stderr so plugin/worker diagnostics surface to
@@ -477,6 +568,10 @@ void SandboxedExecutor::spawn_worker() {
         ::close(sv[1]);
         throw std::runtime_error("sandbox: stderr pipe failed");
     }
+    // Set CLOEXEC on both ends via fcntl — pipe2(O_CLOEXEC) needs _GNU_SOURCE,
+    // which the project's default feature macros don't define.
+    ::fcntl(err_pipe[0], F_SETFD, FD_CLOEXEC);
+    ::fcntl(err_pipe[1], F_SETFD, FD_CLOEXEC);
 
     pid_t pid = ::fork();
     if (pid < 0) {

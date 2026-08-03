@@ -224,6 +224,14 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
             LOG_WARN("Plugin '%s' sandbox probe failed: %s", so_path.c_str(), e.what());
             return false;
         }
+        // Name collision: a sandboxed plugin must not shadow a trusted builtin
+        // (or a previously-loaded plugin) — that would silently change what the
+        // name means under BESQ_SANDBOX=1.  Refuse with a clear warning.
+        if (_registry.contains(algo_name) || _sandboxed.contains(algo_name)) {
+            LOG_WARN("Plugin '%s' name '%s' collides with an existing algorithm — refusing", so_path.c_str(),
+                     algo_name.c_str());
+            return false;
+        }
         _sandboxed[algo_name] = [path = resolved, cap = audit.capability]() {
             return std::make_unique<SandboxedExecutor>(path, "", cap);
         };

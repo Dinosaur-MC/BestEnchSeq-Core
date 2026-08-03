@@ -215,8 +215,10 @@ void handle_run(AlgorithmExecutor& exec,
             case ipc::MsgType::MsgSerializeState: {
                 // Only meaningful while paused (executor gates on its state);
                 // returns the full opaque checkpoint blob (large → auto-chunked).
+                // Dedicated MsgCheckpoint so the parent can never mistake the
+                // run-completion MsgResult for this reply.
                 const auto blob = exec.serialize_state();
-                forwarder->send_frame(ipc::MsgType::MsgResult, blob);
+                forwarder->send_frame(ipc::MsgType::MsgCheckpoint, blob);
                 break;
             }
             default:
@@ -240,10 +242,13 @@ void handle_run(AlgorithmExecutor& exec,
         exec.wait();
     } catch (const std::exception& e) {
         failed = true;
-        send_error(std::string("besq-worker: ") + e.what());
+        // Route through the forwarder's lock: the control thread may be
+        // mid-write (serialize reply) when this fires, and all stdout writes
+        // must share one mutex to keep frames from interleaving.
+        forwarder->send_frame(ipc::MsgType::MsgError, ipc::encode_value(std::string("besq-worker: ") + e.what()));
     } catch (...) {
         failed = true;
-        send_error("besq-worker: unknown error");
+        forwarder->send_frame(ipc::MsgType::MsgError, ipc::encode_value(std::string("besq-worker: unknown error")));
     }
 
     exit_sig.signal(); // wake the control thread to exit
