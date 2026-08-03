@@ -6,9 +6,7 @@
 
 | 策略 | 目录 | 类型 | 复杂度 | 方法 |
 |------|------|------|--------|------|
-| Greedy | `greedy/` | 确定性 | O(n²) | 每次选预估成本最低的 pair |
 | DiffFirst | `diff_first/` | 确定性 | O(n²) | PPN 分层，每层选最便宜的 |
-| HierarchicalMerge | `hierarchical/` | 确定性 | O(n²) | 分组合并，递归 |
 | DynamicPenaltyBalance | `penalty_balance/` | 确定性 | O(n²) | 动态平衡惩罚成本 |
 | DFS | `dfs/` | 搜索 | — | 迭代 B&B + 哈希记忆化（原内置）|
 | A* | `astar/` | 搜索 | — | 最佳优先 + ItemPool + 可恢复序列化（原内置）|
