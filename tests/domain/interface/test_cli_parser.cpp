@@ -150,7 +150,36 @@ void test_default_values() {
     expect(config.solutions == 1, "default solutions should be 1");
     expect(config.profile.has_value() && *config.profile == "builtin:vanilla",
            "default profile should be builtin:vanilla");
+    expect(!config.profile_explicit, "profile_explicit false when --profile omitted");
     std::cout << "  PASS: test_default_values" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
+// profile_explicit — true only when the user literally passed --profile
+// (profile carries default_v="builtin:vanilla", so the value alone can't tell)
+// ---------------------------------------------------------------------------
+
+void test_profile_explicit_flag() {
+    {
+        const char *argv[] = {"besq", "--target", "diamond_sword", "--profile", "modpack"};
+        auto config = CLIApp::parse(5, const_cast<char **>(argv));
+        expect(config.profile_explicit, "profile_explicit true when --profile passed");
+        expect(config.profile.has_value() && *config.profile == "modpack",
+               "profile value set to modpack");
+    }
+    {
+        const char *argv[] = {"besq", "--target", "diamond_sword", "--profile=builtin:vanilla"};
+        auto config = CLIApp::parse(4, const_cast<char **>(argv));
+        expect(config.profile_explicit, "--profile= form also sets profile_explicit");
+        expect(config.profile.has_value() && *config.profile == "builtin:vanilla",
+               "explicit --profile=builtin:vanilla keeps the value");
+    }
+    {
+        const char *argv[] = {"besq", "--target", "diamond_sword"};
+        auto config = CLIApp::parse(3, const_cast<char **>(argv));
+        expect(!config.profile_explicit, "profile_explicit false when --profile omitted");
+    }
+    std::cout << "  PASS: test_profile_explicit_flag" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +487,7 @@ int main() {
         test_help_short_flag();
         test_verbose_short_flag();
         test_default_values();
+        test_profile_explicit_flag();
         test_unknown_flag_throws();
         test_enchantment_list();
         test_empty_enchantment_list();

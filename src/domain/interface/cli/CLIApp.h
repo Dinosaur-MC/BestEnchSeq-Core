@@ -22,6 +22,7 @@ public:
     struct Config {
         std::string algorithm = "dp_merge";
         bool algorithm_explicit = false;  // true when --algorithm was given
+        bool profile_explicit   = false;  // true when --profile was literally given
         std::string mode      = "direct";
         std::string target;
         std::string source;
@@ -62,6 +63,11 @@ public:
     static void apply_algo_opts(const std::string& algo_opts, algorithm::SearchConfig& cfg);
 
     /// Build a SolveRequest from a parsed Config (used by run() and tests).
+    ///
+    /// NOTE: In inventory mode this may activate the profile named in the JSON
+    /// task (when no explicit `--profile` is given) — a side effect on the
+    /// context's active profile. Callers must not assume the active profile is
+    /// unchanged after the call.
     static SolveRequest build_solve_request(const Config& config, BesqContext& ctx);
 
     /// Select language from BESQ_LANG env var / system locale / --lang CLI flag.

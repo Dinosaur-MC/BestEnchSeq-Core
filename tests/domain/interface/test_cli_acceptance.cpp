@@ -9,6 +9,8 @@
 #include "domain/interface/cli/CLIApp.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include "builtin/I18nLoader.h"
+#include "common/i18n/Language.h"
 #include "framework/test_utils.h"
 
 #include <filesystem>
@@ -18,16 +20,25 @@
 #include <variant>
 
 // ---------------------------------------------------------------------------
-// Helper: write inventory JSON content to a unique temp file, return its path.
+// Helper: RAII guard writing inventory JSON to a unique temp file; the file is
+// removed on scope exit (no leftovers between test runs).
 // ---------------------------------------------------------------------------
-static std::string write_inv_temp(const std::string& content) {
-    static int counter = 0;
-    auto path = std::filesystem::temp_directory_path() /
-                ("besq_cli_inv_" + std::to_string(++counter) + ".json");
-    std::ofstream f(path);
-    f << content;
-    return path.string();
-}
+class TempInvFile {
+public:
+    explicit TempInvFile(const std::string& content) {
+        static int counter = 0;
+        _path = (std::filesystem::temp_directory_path() /
+                 ("besq_cli_inv_" + std::to_string(++counter) + ".json")).string();
+        std::ofstream f(_path);
+        f << content;
+    }
+    ~TempInvFile() { std::error_code ec; std::filesystem::remove(_path, ec); }
+
+    const char* c_str() const { return _path.c_str(); }
+
+private:
+    std::string _path;
+};
 
 // ---------------------------------------------------------------------------
 // Test: --export without --target is valid
@@ -393,17 +404,21 @@ void test_input_alone_valid() {
 // ---------------------------------------------------------------------------
 
 void test_inventory_solve_request_wiring() {
+    // Pin the locale so resolved i18n error text is deterministic.
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+
     BesqContext ctx;
     ctx.load_builtin();
 
     // JSON with target → target_item populated from JSON, mode=inventory,
     // default inventory algorithm (hamming).
     {
-        auto path = write_inv_temp(R"({
+        TempInvFile f(R"({
             "target": { "item": "diamond_sword", "enchants": [{"id":"sharpness","level":5}] },
             "items": [ { "type": "book", "enchants": [{"id":"sharpness","level":5}] } ]
         })");
-        const char* argv[] = {"besq", "--input", path.c_str()};
+        const char* argv[] = {"besq", "--input", f.c_str()};
         auto config = CLIApp::parse(3, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
         expect(req.mode == AlgorithmMode::inventory, "--input implies inventory mode");
@@ -418,11 +433,11 @@ void test_inventory_solve_request_wiring() {
 
     // JSON without target + no --target → inventory_requires_target
     {
-        auto path = write_inv_temp(R"({
+        TempInvFile f(R"({
             "target": { "item": "", "enchants": [] },
             "items": []
         })");
-        const char* argv[] = {"besq", "--input", path.c_str()};
+        const char* argv[] = {"besq", "--input", f.c_str()};
         auto config = CLIApp::parse(3, const_cast<char**>(argv));
         bool threw = false;
         std::string msg;
@@ -433,20 +448,20 @@ void test_inventory_solve_request_wiring() {
             msg = e.what();
         }
         expect(threw, "JSON without target + no --target should throw");
-        expect(msg.find("inventory_requires_target") != std::string::npos ||
-                   msg.find("target item") != std::string::npos,
-               "error is inventory_requires_target");
+        // en_US pinned above → resolved "Inventory task requires a target item ..."
+        expect(msg.find("target item") != std::string::npos,
+               "error is inventory_requires_target (resolved en_US)");
         TEST_PASS("inventory wiring: missing target throws");
     }
 
     // CLI --target / --algorithm override JSON values (priority CLI > JSON)
     {
-        auto path = write_inv_temp(R"({
+        TempInvFile f(R"({
             "target": { "item": "diamond_sword", "enchants": [{"id":"sharpness","level":5}] },
             "items": [],
             "algorithm": "dp_merge"
         })");
-        const char* argv[] = {"besq", "--input", path.c_str(),
+        const char* argv[] = {"besq", "--input", f.c_str(),
                               "--target", "diamond_sword[knockback=2]",
                               "--algorithm", "bb_dp"};
         auto config = CLIApp::parse(7, const_cast<char**>(argv));
@@ -461,14 +476,10 @@ void test_inventory_solve_request_wiring() {
 }
 
 // ---------------------------------------------------------------------------
-// Test: build_solve_request — JSON "profile" activates the profile BEFORE
-// cross-validation, so profile-only content resolves
+// Helper: create a temp profiles dir with a "modded_sword" profile (depends on
+// vanilla, adds the mod:ember enchantment).  Returns the directory path.
 // ---------------------------------------------------------------------------
-
-void test_inventory_profile_switch() {
-    // Temp profiles dir: a modded profile depending on vanilla that adds a
-    // custom enchantment. If the JSON "profile" does not switch the active
-    // registry before cross-validation, the mod enchantment is unknown.
+static std::string make_modded_profiles_dir() {
     auto tmp = std::filesystem::temp_directory_path() / "besq_inv_profile_switch";
     std::filesystem::remove_all(tmp);
     std::filesystem::create_directories(tmp);
@@ -479,21 +490,34 @@ void test_inventory_profile_switch() {
                                    "max_level":3,"multiplier":2,
                                    "supported_items":["#minecraft:swords"]}]})";
     }
+    return tmp.string();
+}
+
+// ---------------------------------------------------------------------------
+// Test: build_solve_request — JSON "profile" activates the profile BEFORE
+// cross-validation, so profile-only content resolves
+// ---------------------------------------------------------------------------
+
+void test_inventory_profile_switch() {
+    // Temp profiles dir: a modded profile depending on vanilla that adds a
+    // custom enchantment. If the JSON "profile" does not switch the active
+    // registry before cross-validation, the mod enchantment is unknown.
+    std::string tmp = make_modded_profiles_dir();
 
     BesqContext ctx;
     ctx.load_builtin();
-    ctx.set_profiles_dir(tmp.string());
+    ctx.set_profiles_dir(tmp);
     ctx.load_profiles();
     expect(!ctx.enchantments().contains(NSID("mod:ember")),
            "mod:ember absent while vanilla is active");
 
     // The task names modded_sword; mod:ember is only valid under that profile.
-    auto inv_path = write_inv_temp(R"({
+    TempInvFile f(R"({
         "profile": "modded_sword",
         "target": { "item": "diamond_sword", "enchants": [{"id":"mod:ember","level":2}] },
         "items": [ { "type": "book", "enchants": [{"id":"mod:ember","level":2}] } ]
     })");
-    const char* argv[] = {"besq", "--input", inv_path.c_str()};
+    const char* argv[] = {"besq", "--input", f.c_str()};
     auto config = CLIApp::parse(3, const_cast<char**>(argv));
     auto req = CLIApp::build_solve_request(config, ctx);
     expect(ctx.active_profile() == "modded_sword",
@@ -503,6 +527,97 @@ void test_inventory_profile_switch() {
 
     std::filesystem::remove_all(tmp);
     TEST_PASS("inventory wiring: JSON profile switches registries before cross-validation");
+}
+
+// ---------------------------------------------------------------------------
+// Test: build_solve_request — an explicit CLI --profile overrides the JSON
+// profile field, so the JSON profile is NOT activated (F1)
+// ---------------------------------------------------------------------------
+
+void test_inventory_explicit_profile_overrides_json() {
+    std::string tmp = make_modded_profiles_dir();
+
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.set_profiles_dir(tmp);
+    ctx.load_profiles();
+
+    // JSON names modded_sword and uses mod:ember, but the user EXPLICITLY
+    // passed `--profile builtin:vanilla`.  profile_explicit must suppress the
+    // JSON activation; cross-validation then runs against vanilla where
+    // mod:ember is unknown → throws.
+    TempInvFile f(R"({
+        "profile": "modded_sword",
+        "target": { "item": "diamond_sword", "enchants": [{"id":"mod:ember","level":2}] },
+        "items": [ { "type": "book", "enchants": [{"id":"mod:ember","level":2}] } ]
+    })");
+    const char* argv[] = {"besq", "--input", f.c_str(), "--profile", "builtin:vanilla"};
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
+    expect(config.profile_explicit, "profile_explicit true when --profile passed");
+    bool threw = false;
+    std::string msg;
+    try {
+        CLIApp::build_solve_request(config, ctx);
+    } catch (const std::runtime_error& e) {
+        threw = true;
+        msg = e.what();
+    }
+    expect(threw, "explicit --profile builtin:vanilla suppresses JSON profile activation");
+    // The only error that names the enchantment here is cli.err.unknown_ench
+    // (resolved per active locale), proving cross-validation ran against
+    // vanilla rather than the JSON's modded_sword.
+    expect(msg.find("mod:ember") != std::string::npos,
+           "cross-validation ran against vanilla (mod:ember unknown)");
+    expect(ctx.active_profile() == "builtin:vanilla",
+           "active profile unchanged by the JSON field when --profile explicit");
+
+    std::filesystem::remove_all(tmp);
+    TEST_PASS("inventory wiring: explicit --profile overrides JSON profile");
+}
+
+// ---------------------------------------------------------------------------
+// Test: --source + --input (no --target) is rejected with the inventory
+// message, not the generic source_without_target (F3)
+// ---------------------------------------------------------------------------
+
+void test_inventory_source_rejection() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    TempInvFile f(R"({
+        "target": { "item": "diamond_sword", "enchants": [{"id":"sharpness","level":5}] },
+        "items": []
+    })");
+    const char* argv[] = {"besq", "--input", f.c_str(), "--source", "sharpness=2"};
+    // parse() must NOT throw source_without_target (--input present).
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
+    expect(config.input.has_value(), "--input parsed");
+    expect(config.source == "sharpness=2", "--source parsed (not rejected at parse)");
+
+    bool threw = false;
+    std::string msg;
+    try {
+        CLIApp::build_solve_request(config, ctx);
+    } catch (const std::runtime_error& e) {
+        threw = true;
+        msg = e.what();
+    }
+    expect(threw, "inventory + --source should throw in build_solve_request");
+    expect(msg.find("cli.err.inventory_rejects_source") != std::string::npos ||
+               msg.find("--source") != std::string::npos,
+           "error is inventory_rejects_source");
+    TEST_PASS("inventory wiring: --source rejected with inventory message");
+}
+
+// ---------------------------------------------------------------------------
+// Test: --input with an invalid --mode throws invalid_mode (F4)
+// ---------------------------------------------------------------------------
+
+void test_inventory_invalid_mode_throws() {
+    const char* argv[] = {"besq", "--input", "inv.json", "--mode", "banana"};
+    expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
+                  "--input with invalid --mode should throw invalid_mode");
+    TEST_PASS("inventory wiring: --input --mode banana throws invalid_mode");
 }
 
 // ---------------------------------------------------------------------------
@@ -662,6 +777,9 @@ int main() {
         test_input_alone_valid();
         test_inventory_solve_request_wiring();
         test_inventory_profile_switch();
+        test_inventory_explicit_profile_overrides_json();
+        test_inventory_source_rejection();
+        test_inventory_invalid_mode_throws();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

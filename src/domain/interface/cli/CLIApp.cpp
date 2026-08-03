@@ -209,6 +209,22 @@ int CLIApp::run(int argc, char* argv[]) {
 namespace {
 using namespace cli;
 
+/// True when the user literally passed `--profile` (either `--profile X` or
+/// `--profile=X`).  `config.profile` alone cannot tell: CLIParser applies the
+/// default_v ("builtin:vanilla") during parse(), so an omitted --profile is
+/// value-identical to an explicit `--profile builtin:vanilla`.  The token
+/// scan runs before any `--` terminator (everything after `--` is positional).
+bool has_profile_token(int argc, char* argv[]) {
+    for (int i = 1; i < argc; ++i) {
+        std::string_view a(argv[i]);
+        if (a == "--")
+            break;
+        if (a == "--profile" || a.starts_with("--profile="))
+            return true;
+    }
+    return false;
+}
+
 const auto BESQ_OPTIONS = OptionTable{
     // ── basic ──
     Flag    {.long_name = "help",              .short_name = 'h', .help_key = "cli.help.help_desc",            .help_group = "cli.help.group_basic"},
@@ -333,6 +349,11 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
 
     Config cfg = bind(result);
 
+    // `--profile` has a default_v ("builtin:vanilla") that CLIParser applies
+    // during parse(), so the bound value cannot distinguish "omitted" from an
+    // explicit `--profile builtin:vanilla`.  Scan argv for the literal token.
+    cfg.profile_explicit = has_profile_token(argc, argv);
+
     // Handle --help / --version for clean parses (no diagnostics)
     if (cfg.help) {
         return cfg;
@@ -383,8 +404,9 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         }
     }
 
-    // Business validation
-    if (!cfg.target.empty()) {
+    // Business validation.  `--input` implies inventory mode, so an invalid
+    // --mode must be rejected on that path too.
+    if (!cfg.target.empty() || cfg.input.has_value()) {
         if (cfg.mode != "direct" && cfg.mode != "inventory")
             throw std::runtime_error(tr_fmt("cli.err.invalid_mode", cfg.mode));
     }
@@ -399,8 +421,10 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
     if (cfg.max_time.has_value() && *cfg.max_time < 0)
         throw std::runtime_error(tr("cli.err.max_time_negative"));
 
-    // --source requires --target
-    if (!cfg.source.empty() && cfg.target.empty())
+    // --source requires --target, EXCEPT when --input is present: inventory
+    // mode rejects --source with its own (more specific) error in
+    // build_solve_request, so the generic guard must not fire first.
+    if (!cfg.source.empty() && cfg.target.empty() && !cfg.input.has_value())
         throw std::runtime_error(tr("cli.err.source_without_target"));
 
     if (!cfg.config_pairs.empty()) {
@@ -509,10 +533,15 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
         // ── 两阶段：先结构解析（读 profile），激活 profile 后再交叉验证 ──
         std::string content = InventoryParser::read_content(*config.input);  // "-" → stdin
         auto dto = InventoryParser::parse_task(content);                     // structural (schema errors throw)
-        // profile：CLI --profile（非默认 vanilla）覆盖 JSON profile；否则 JSON 激活
-        // 注：config.profile 带 default_v="builtin:vanilla"，用 == 判定"未显式覆盖"
-        if (config.profile == "builtin:vanilla" && !dto.profile.empty())
-            ctx.activate_profile(dto.profile);
+        // profile：CLI 显式 --profile 覆盖 JSON profile；否则 JSON 激活
+        // （profile_explicit 由 argv token 判定，见 parse()；profile 字段本身
+        //   携带 default_v="builtin:vanilla"，无法区分显式/缺省）
+        if (!config.profile_explicit && !dto.profile.empty()) {
+            auto profiles = ctx.list_profiles();
+            if (std::find(profiles.begin(), profiles.end(), dto.profile) == profiles.end())
+                throw std::runtime_error(tr_fmt("cli.err.profile_not_found", dto.profile));
+            ctx.activate_profile(dto.profile);   // side effect: changes active profile
+        }
         auto inv = InventoryParser::build_inventory(dto, ctx.enchantments(), ctx.equipment());
 
         // target：CLI --target 覆盖 JSON target；两者皆缺 → 报错

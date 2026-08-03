@@ -41,8 +41,9 @@ struct InventoryParser {
     static InventoryInput
     parse_file(const std::string& path, const EnchantmentRegistry& ench_reg, const EquipmentRegistry& eq_reg);
 
-    /// Shared parse core. `path == "-"` in parse_file reads stdin and
-    /// delegates here.
+    /// Convenience wrapper: `parse_task` (structural) + `build_inventory`
+    /// (registry cross-validation) in one call.  `parse_file` with a path of
+    /// "-" reads stdin and delegates here.
     static InventoryInput
     parse_string(const std::string& content, const EnchantmentRegistry& ench_reg, const EquipmentRegistry& eq_reg);
 
