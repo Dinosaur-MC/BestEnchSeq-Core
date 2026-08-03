@@ -6,6 +6,7 @@
 #include "common/utils/EnvUtil.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <stdexcept>
 
 #if defined(__linux__)
@@ -28,14 +29,51 @@ namespace algorithm {
 
 namespace {
 
-/// Env-var / default worker path resolution.
+/// Directory containing the current executable (empty if unavailable).
+std::string current_exe_dir() {
+#if defined(__linux__)
+    char buf[4096];
+    ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0)
+        return {};
+    buf[n] = '\0';
+    return std::filesystem::path(buf).parent_path().string();
+#elif defined(_WIN32)
+    char buf[MAX_PATH];
+    DWORD n = ::GetModuleFileNameA(nullptr, buf, MAX_PATH);
+    if (n == 0)
+        return {};
+    return std::filesystem::path(buf).parent_path().string();
+#else
+    return {};
+#endif
+}
+
+/// Worker binary name suffix (".exe" on Windows, "" elsewhere).
+const char *worker_exe_suffix() {
+#if defined(_WIN32)
+    return ".exe";
+#else
+    return "";
+#endif
+}
+
+/// Env-var / exe-dir / PATH worker resolution.
 std::string resolve_worker_path(const std::string &given) {
     if (!given.empty())
         return given;
     const std::string env = get_env_str("BESQ_WORKER_PATH");
     if (!env.empty())
         return env;
-    return "besq-worker";
+    // The worker ships alongside the host executable — try there first so
+    // BESQ_SANDBOX=1 works without the worker on PATH.
+    const std::string dir = current_exe_dir();
+    if (!dir.empty()) {
+        const std::string candidate = dir + "/besq-worker" + worker_exe_suffix();
+        if (std::filesystem::exists(candidate))
+            return candidate;
+    }
+    return "besq-worker";  // last resort: PATH
 }
 
 /// Cancellation wakeup for execute() (see ExecutionContext::set_cancel_notify).

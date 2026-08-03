@@ -57,6 +57,18 @@ bool is_red_flag(const std::string_view name) noexcept {
         "ptrace",
         "CreateProcessA", "CreateProcessW", "WinExec",
         "ShellExecuteA",  "ShellExecuteW",
+        // ── Filesystem access — forge plugins are pure computation, ANY file
+        // access is suspicious (was a blind spot: the malicious plugin's
+        // open("/etc/passwd") imported `open` but it wasn't flagged). ──
+        "open",       "openat",     "creat",      "unlink",     "unlinkat",
+        "rename",     "renameat",   "mkdir",      "mkdirat",    "rmdir",
+        "chmod",      "fchmod",     "chown",      "fchown",     "truncate",
+        "ftruncate",  "access",     "readlink",   "symlink",    "link",
+        "mknod",      "remove",
+        "CreateFileA", "CreateFileW", "DeleteFileA", "DeleteFileW",
+        "MoveFileA",   "MoveFileW",   "CopyFileA",   "CopyFileW",
+        "RemoveDirectoryA", "RemoveDirectoryW", "SetFileAttributesA",
+        "SetFileAttributesW", "CreateDirectoryA", "CreateDirectoryW",
     });
     // clang-format on
     return std::ranges::any_of(RED, [name](const char *f) { return name == f; });

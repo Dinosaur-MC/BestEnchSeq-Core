@@ -8,6 +8,7 @@
 #include "common/utils/EnvUtil.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 
@@ -151,6 +152,8 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     if (audit.has_wx_segment) {
         LOG_ERROR("[Audit] REFUSED '%s' — W+X memory segment (exploit risk)",
                   so_path.c_str());
+        std::fprintf(stderr, "[Audit] REFUSED '%s' — W+X memory segment (exploit risk)\n",
+                     so_path.c_str());
         return false;
     }
 
@@ -158,6 +161,9 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     if (!audit.passed) {
         LOG_ERROR("[Audit] REFUSED '%s' — binary audit failed (corrupted or "
                   "unrecognized format)", so_path.c_str());
+        std::fprintf(stderr, "[Audit] REFUSED '%s' — binary audit failed (corrupted or "
+                             "unrecognized format)\n",
+                     so_path.c_str());
         return false;
     }
 
@@ -189,6 +195,24 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
             joined += lib;
         }
         LOG_INFO("[Audit] '%s' links: %s", so_path.c_str(), joined.c_str());
+    }
+
+    // ── Non-sandbox mode: NO containment layer ────────────────────────
+    // A plugin that statically imports privileged operations (network /
+    // filesystem / process / dynamic-code) would run them IN-PROCESS with
+    // full privileges — the audit's warnings alone don't stop it (the
+    // malicious test plugin's open("/etc/passwd") ran fine in-process).
+    // Refuse instead of warning.  Sandbox mode permits these — seccomp /
+    // Job Object physically contain the behavior.
+    if (!_sandbox_enabled && !audit.dangerous_imports.empty()) {
+        LOG_ERROR("[Audit] REFUSED '%s' — imports %zu dangerous symbol(s) "
+                  "(no sandbox).  Run with BESQ_SANDBOX=1 to load it sandboxed.",
+                  so_path.c_str(), audit.dangerous_imports.size());
+        std::fprintf(stderr,
+                     "[Audit] REFUSED '%s' — imports %zu dangerous symbol(s) "
+                     "(no sandbox).  Run with BESQ_SANDBOX=1 to load it sandboxed.\n",
+                     so_path.c_str(), audit.dangerous_imports.size());
+        return false;
     }
 
     // ── Sandbox mode: NEVER dlopen in the parent ─────────────────────
