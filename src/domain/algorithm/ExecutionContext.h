@@ -15,6 +15,17 @@
 
 namespace algorithm {
 
+/// Abstract cancellation wakeup.  SandboxedAlgorithm derives a concrete one
+/// that OWNS the eventfd / Win32 event and closes it on destruction, so
+/// cancel() can wake the IPC wait without leaking the handle or racing its
+/// lifetime (a single atomic shared_ptr keeps the notifier alive while a
+/// cancel() is in flight).
+class CancellationNotifier {
+  public:
+    virtual ~CancellationNotifier() = default;
+    virtual void notify() noexcept = 0;
+};
+
 class ExecutionContext {
   public:
     ExecutionContext(size_t task_id, const char *algorithm_name) noexcept;
@@ -32,21 +43,21 @@ class ExecutionContext {
     // ═══════════════════════════════════════════════════════════════════
     // 执行控制
     // ═══════════════════════════════════════════════════════════════════
-    /// Opaque cancellation notifier (eventfd write / Win32 SetEvent).  Used by
-    /// SandboxedAlgorithm so its IPC wait is woken the INSTANT the executor
-    /// cancels, instead of polling.  In-process algorithms never install one:
-    /// cancel() then does one extra null-atomic load — nothing on the hot path
-    /// (is_cancelled / wait_if_paused are untouched).
-    using CancelNotifyFn = void (*)(void *) noexcept;
-    void set_cancel_notify(CancelNotifyFn fn, void *userdata) noexcept {
-        _cancel_fn.store(fn, std::memory_order_release);
-        _cancel_ud.store(userdata, std::memory_order_release);
+    /// Cancellation notifier: SandboxedAlgorithm installs one so its IPC wait
+    /// wakes the INSTANT the executor cancels (eventfd write / Win32 SetEvent),
+    /// instead of polling.  A single atomic shared_ptr keeps the notifier alive
+    /// across the cancel()/execute() handoff — no torn fn/ud pair, no
+    /// use-after-free when it is reset while a cancel is in flight (the
+    /// notifier frees its fd/event only when the last ref drops).  In-process
+    /// algorithms never install one: cancel() then does one extra null load.
+    void set_cancel_notifier(std::shared_ptr<CancellationNotifier> n) noexcept {
+        _cancel_notifier.store(std::move(n), std::memory_order_release);
     }
     void cancel() noexcept {
         _cancelled.store(true, std::memory_order_release);
-        auto fn = _cancel_fn.load(std::memory_order_acquire);
-        if (fn)
-            fn(_cancel_ud.load(std::memory_order_acquire));
+        auto n = _cancel_notifier.load(std::memory_order_acquire);
+        if (n)
+            n->notify();
     }
     void pause() noexcept { _paused.store(true, std::memory_order_release); }
     void resume() noexcept {
@@ -148,8 +159,7 @@ class ExecutionContext {
     // ── 取消通知（SandboxedAlgorithm 专用）────────────────────────────
     // 追加在类末尾：既有成员偏移不变，已编译插件（旧 ABI）不会因本类
     // 布局变化而读写错位（2026-08-03 曾因字段插中间导致插件 DLL 段错误）。
-    std::atomic<CancelNotifyFn> _cancel_fn{nullptr};
-    std::atomic<void *> _cancel_ud{nullptr};
+    std::atomic<std::shared_ptr<CancellationNotifier>> _cancel_notifier{nullptr};
 };
 
 } // namespace algorithm

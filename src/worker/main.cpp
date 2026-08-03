@@ -94,8 +94,12 @@ class IpcForwardObserver : public IAlgorithmObserver {
 
 // ── Event-driven wakeup for the control thread ─────────────────────
 // Two event sources: an IPC frame on stdin (cancel/pause/resume from the
-// parent) OR the main thread finishing execute().  No polling — both are
-// waited on with an infinite kernel sleep.
+// parent) OR the main thread finishing execute().
+//   Linux:  poll([stdin, exit eventfd], -1) — true kernel sleep, zero polling.
+//   Windows: anonymous pipes are NOT reliable wait objects (WFMO spuriously
+//            signals "readable" on an empty pipe), so stdin is probed with
+//            PeekNamedPipe (~1 ms); the exit event is a REAL waitable object
+//            so execute()-done still wakes instantly.
 class ExitSignal {
   public:
     ExitSignal() {

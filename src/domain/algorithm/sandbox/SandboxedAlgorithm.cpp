@@ -77,22 +77,57 @@ std::string resolve_worker_path(const std::string &given) {
     return "besq-worker";  // last resort: PATH
 }
 
-/// Cancellation wakeup for execute() (see ExecutionContext::set_cancel_notify).
-/// ExecutionContext::cancel() runs on the executor's timeout-watcher thread;
-/// this is the ONLY bridge to the IPC wait below.  Linux: write one byte to
-/// an eventfd.  Windows: set a manual-reset event.  The wait then wakes the
-/// instant the executor cancels — event-driven, no polling.
-void cancel_notify(void *ud) noexcept {
+/// Owns the parent-side cancellation wakeup for ONE execute() call.  On Linux
+/// it's an eventfd (poll sees POLLIN); on Windows a manual-reset event
+/// (WaitForSingleObject sees it).  notify() is the ExecutionContext cancel
+/// hook; the destructor closes the underlying handle.  The notifier is held by
+/// an atomic shared_ptr, so the fd/event cannot leak across solves and cannot
+/// be used-after-free while a concurrent cancel() still references it.
+class ExecuteCancelNotifier : public CancellationNotifier {
+  public:
+    ExecuteCancelNotifier() {
 #if defined(__linux__)
-    const int efd = static_cast<int>(reinterpret_cast<intptr_t>(ud));
-    const uint64_t one = 1;
-    (void)::write(efd, &one, sizeof(one));
+        _fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
-    ::SetEvent(static_cast<HANDLE>(ud));
-#else
-    (void)ud;
+        _evt = ::CreateEventA(nullptr, TRUE, FALSE, nullptr);
 #endif
-}
+    }
+    ~ExecuteCancelNotifier() override {
+#if defined(__linux__)
+        if (_fd >= 0) ::close(_fd);
+#elif defined(_WIN32)
+        if (_evt) ::CloseHandle(_evt);
+#endif
+    }
+    [[nodiscard]] bool valid() const noexcept {
+#if defined(__linux__)
+        return _fd >= 0;
+#elif defined(_WIN32)
+        return _evt != nullptr;
+#else
+        return false;
+#endif
+    }
+    void notify() noexcept override {
+#if defined(__linux__)
+        const uint64_t one = 1;
+        if (_fd >= 0) (void)::write(_fd, &one, sizeof(one));
+#elif defined(_WIN32)
+        if (_evt) ::SetEvent(_evt);
+#endif
+    }
+#if defined(__linux__)
+    int fd() const noexcept { return _fd; }
+#elif defined(_WIN32)
+    HANDLE handle() const noexcept { return _evt; }
+#endif
+  private:
+#if defined(__linux__)
+    int _fd = -1;
+#elif defined(_WIN32)
+    HANDLE _evt = nullptr;
+#endif
+};
 
 } // anonymous namespace
 
@@ -185,25 +220,15 @@ bool SandboxedAlgorithm::simulate(const AlgorithmInput &input) const noexcept {
 void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &ctx) {
     send(ipc::MsgType::MsgExecute, ipc::encode(input));
 
-    // Event-driven wakeup object for parent-side cancellation: the executor's
-    // timeout watcher / signal handler calls ctx.cancel() on another thread —
-    // its only signal here is the notifier we install below.
-#if defined(__linux__)
-    int efd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-    if (efd < 0)
-        throw std::runtime_error("sandboxed execute: eventfd failed");
-    void *ud = reinterpret_cast<void *>(static_cast<intptr_t>(efd));
-#elif defined(_WIN32)
-    // Manual-reset: stays signaled until ResetEvent in the loop, so a cancel
-    // that lands while we are busy processing a frame is not lost.
-    HANDLE cancel_evt = ::CreateEventA(nullptr, TRUE, FALSE, nullptr);
-    if (!cancel_evt)
-        throw std::runtime_error("sandboxed execute: CreateEvent failed");
-    void *ud = static_cast<void *>(cancel_evt);
-#else
-    void *ud = nullptr;
-#endif
-    ctx.set_cancel_notify(&cancel_notify, ud);
+    // Event-driven wakeup for parent-side cancellation: the executor's
+    // timeout watcher / signal handler calls ctx.cancel() on another thread.
+    // The notifier OWNS the eventfd / Win32 event and closes it when the last
+    // reference drops (after execute() and any in-flight cancel() finish) —
+    // no per-solve fd/handle leak, no use-after-free.
+    auto notifier = std::make_shared<ExecuteCancelNotifier>();
+    if (!notifier->valid())
+        throw std::runtime_error("sandboxed execute: cancel notifier creation failed");
+    ctx.set_cancel_notifier(notifier);
 
     // Race guard: the executor may have cancelled between MsgExecute and the
     // hook install above (the event would then never fire).  Re-check once.
@@ -220,13 +245,13 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
             // Wait on BOTH event sources with an infinite timeout: the worker's
             // IPC channel (data → kernel wakes poll) and the cancel eventfd
             // (cancel → cancel_notify writes → poll wakes).  Zero polling.
-            struct pollfd pfds[2] = {{_fd, POLLIN, 0}, {efd, POLLIN, 0}};
+            struct pollfd pfds[2] = {{_fd, POLLIN, 0}, {notifier->fd(), POLLIN, 0}};
             int rc = ::poll(pfds, 2, -1);
             if (rc < 0)
                 throw std::runtime_error("sandboxed execute: poll failed");
             if (pfds[1].revents & POLLIN) {
                 uint64_t v;
-                (void)::read(efd, &v, sizeof(v));  // consume the counter
+                (void)::read(notifier->fd(), &v, sizeof(v));  // consume the counter
                 send(ipc::MsgType::MsgCancel, {});
                 continue;
             }
@@ -241,8 +266,8 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
             DWORD avail = 0;
             if (::PeekNamedPipe(pipe_h, nullptr, 0, nullptr, &avail, nullptr) && avail > 0) {
                 got = ipc::read_frame(_fd, type, payload);
-            } else if (::WaitForSingleObject(cancel_evt, 1) == WAIT_OBJECT_0) {
-                ::ResetEvent(cancel_evt);
+            } else if (::WaitForSingleObject(notifier->handle(), 1) == WAIT_OBJECT_0) {
+                ::ResetEvent(notifier->handle());
                 send(ipc::MsgType::MsgCancel, {});
                 continue;
             } else {
@@ -285,12 +310,12 @@ void SandboxedAlgorithm::execute(const AlgorithmInput &input, ExecutionContext &
             }
         }
     } catch (...) {
-        // Never leave the hook armed with an fd/event that is about to be
-        // destroyed — a late cancel from the executor must not dereference it.
-        ctx.set_cancel_notify(nullptr, nullptr);
+        // Drop our reference; the notifier (and its fd/event) is freed once no
+        // in-flight cancel() holds it — a late cancel never touches a freed handle.
+        ctx.set_cancel_notifier(nullptr);
         throw;
     }
-    ctx.set_cancel_notify(nullptr, nullptr);
+    ctx.set_cancel_notifier(nullptr);
 }
 
 std::unique_ptr<IForgeEngine> SandboxedAlgorithm::get_forge_engine() const noexcept {
