@@ -149,9 +149,11 @@ inline RunResult run_cli_posix(const std::vector<std::string>& args,
         }
     }
     if (r.exit_code < 0 && st != -1) {
-        r.exit_code = ::WIFEXITED(st)   ? ::WEXITSTATUS(st)
-                    : ::WIFSIGNALED(st) ? 128 + ::WTERMSIG(st)
-                                        : -1;
+        // WIFEXITED/WEXITSTATUS/WIFSIGNALED/WTERMSIG are MACROS (sys/wait.h) —
+        // never qualify them with `::` (that is invalid on a macro).
+        r.exit_code = WIFEXITED(st)   ? WEXITSTATUS(st)
+                    : WIFSIGNALED(st) ? 128 + WTERMSIG(st)
+                                      : -1;
     }
     r.out = read_file_norm(tf.out);
     r.err = read_file_norm(tf.err);
