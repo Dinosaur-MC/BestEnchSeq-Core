@@ -962,6 +962,75 @@ void test_object_codec_csv_rejected() {
     TEST_PASS("object_codec CSV rejection");
 }
 
+// 嵌套对象在 optional 中（Phase-2：inventory target 可能为可选）
+struct EmpOpt {
+    std::string name;
+    std::optional<Addr> home;
+};
+struct EmpOptSchema {
+    using Type = EmpOpt;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("name", &EmpOpt::name, ds::string_codec{}),
+        ds::field("home", &EmpOpt::home, ds::optional_codec<ds::object_codec<AddrSchema>>{}),
+    };
+};
+using EmpOptJson = ds::json::Schema<EmpOptSchema>;
+
+void test_object_codec_optional_nested() {
+    EmpOpt e{"bob", Addr{"2 Oak", "Metropolis"}};
+    Json j = EmpOptJson::serialize(e);
+    expect(j.has("home") && j["home"].type() == JsonType::Object, "optional nested serialized as object");
+    EmpOpt out; ds::ErrorList err;
+    expect(EmpOptJson::parse(j, out, err) && out.home.has_value() &&
+           out.home->street == "2 Oak", "optional nested roundtrip");
+    // 显式 null → 空 optional
+    Json jn = Json::parse("{\"name\":\"bob\",\"home\":null}");
+    EmpOpt out2; ds::ErrorList err2;
+    expect(EmpOptJson::parse(jn, out2, err2) && !out2.home.has_value(),
+           "null → empty optional");
+    TEST_PASS("object_codec nested in optional");
+}
+
+// 深层嵌套：object_codec<object_codec<X>> 递归组合
+struct DeepLeaf {
+    int v = 0;
+};
+struct DeepLeafSchema {
+    using Type = DeepLeaf;
+    static constexpr auto fields = std::tuple{
+        ds::field("v", &DeepLeaf::v, ds::int_codec{}),
+    };
+};
+struct DeepMid {
+    DeepLeaf leaf;
+};
+struct DeepMidSchema {
+    using Type = DeepMid;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("leaf", &DeepMid::leaf, ds::object_codec<DeepLeafSchema>{}),
+    };
+};
+struct DeepOuter {
+    DeepMid mid;
+};
+struct DeepOuterSchema {
+    using Type = DeepOuter;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("mid", &DeepOuter::mid, ds::object_codec<DeepMidSchema>{}),
+    };
+};
+using DeepOuterJson = ds::json::Schema<DeepOuterSchema>;
+
+void test_object_codec_deep_nesting() {
+    DeepOuter d{{{42}}};
+    Json j = DeepOuterJson::serialize(d);
+    expect(j.has("mid") && j["mid"].has("leaf") && j["mid"]["leaf"]["v"].as<int64_t>() == 42,
+           "deep nested serialized");
+    DeepOuter out; ds::ErrorList err;
+    expect(DeepOuterJson::parse(j, out, err) && out.mid.leaf.v == 42, "deep nested roundtrip");
+    TEST_PASS("object_codec deep nesting");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -1010,5 +1079,7 @@ int main() {
     test_object_codec_nested_unknown_key_tolerant();
     test_object_codec_nested_validate_hook();
     test_object_codec_csv_rejected();
+    test_object_codec_optional_nested();
+    test_object_codec_deep_nesting();
     return print_summary();
 }

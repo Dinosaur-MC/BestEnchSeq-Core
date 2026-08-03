@@ -138,7 +138,7 @@ struct object_codec {
         return ds::json::Schema<SubSchema>::parse(j, obj, err);
     }
     template<class V>
-    void to_csv(const V&, std::string& out) const { out += "<nested-object>"; }
+    void to_csv(const V&, std::string& out) const { out = "<nested-object>"; }
     template<class V>
     bool from_csv(const std::string_view&, V&, ErrorList& err, const std::string& path) const {
         err.add(path, "nested object not supported in CSV");
