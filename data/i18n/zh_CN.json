@@ -91,6 +91,7 @@
     "cli.err.inventory_schema_error": "库存 schema 错误: {0}",
     "cli.err.inventory_requires_input": "库存模式需要指定 --input <文件路径>",
     "cli.err.inventory_rejects_source": "库存模式下请用 --target \"item[期望魔咒]\" 指定目标魔咒；--source 不支持",
+    "cli.err.inventory_requires_target": "库存任务需要目标物品（JSON 'target' 或 --target）",
     "cli.err.invalid_edit_op": "无效编辑: '{0}'",
     "cli.err.invalid_edit_header": "无效编辑头: '{0}'",
     "cli.err.empty_edit_id": "编辑操作中 ID 为空: '{0}'",

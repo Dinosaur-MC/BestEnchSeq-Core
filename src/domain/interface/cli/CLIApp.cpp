@@ -1,6 +1,7 @@
 #include "domain/interface/cli/CLIApp.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/InventoryParser.h"
+#include "domain/interface/cli/InventorySchema.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/business/types/EnchInfo.h"
@@ -173,7 +174,7 @@ int CLIApp::run(int argc, char* argv[]) {
     }
 
     // 8. Solve
-    if (!config.target.empty()) {
+    if (!config.target.empty() || config.input) {
         SolveRequest request = CLIApp::build_solve_request(config, _ctx);
 
         OutputFormatter::set_show_nsid(config.verbose);
@@ -437,7 +438,8 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr_fmt("cli.err.empty_export"));
 
     if (!cfg.help && !cfg.version && !cfg.list_algorithms) {
-        if (cfg.target.empty() && !cfg.export_path.has_value()
+        if (cfg.target.empty() && !cfg.input.has_value()
+            && !cfg.export_path.has_value()
             && !cfg.publish.has_value()) {
             if (argc <= 1) {
                 // Pure no-args: show brief usage + hint, then exit cleanly
@@ -493,41 +495,49 @@ void CLIApp::apply_algo_opts(const std::string& algo_opts, algorithm::SearchConf
 // are wired into algorithm::SearchConfig (max_search_time, memory_mb, ...).
 
 SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx) {
-    auto mode = (config.mode == "inventory")
-        ? AlgorithmMode::inventory : AlgorithmMode::direct;
+    const bool inventory = config.input.has_value() || config.mode == "inventory";
 
     SolveRequest request;
-    request.target_item = ItemParser::parse(
-        config.target, ctx.enchantments(), ctx.equipment());
-    request.mode = mode;
-    if (mode == AlgorithmMode::inventory) {
-        // Inventory mode: the desired enchantments come from the --target
-        // brackets; the equipment's current state and the available
-        // sacrifice items come from the --input inventory file.
+    request.mode = inventory ? AlgorithmMode::inventory : AlgorithmMode::direct;
+
+    if (inventory) {
         if (!config.input)
             throw std::runtime_error(tr("cli.err.inventory_requires_input"));
         if (!config.source.empty())
             throw std::runtime_error(tr("cli.err.inventory_rejects_source"));
-        auto inv = InventoryParser::parse_file(
-            *config.input, ctx.enchantments(), ctx.equipment());
-        request.payload = InventoryPayload{
-            std::move(inv.items), std::move(inv.priorities)};
-    } else {
-        request.payload = DirectPayload{};
-        if (!config.source.empty()) {
-            request.payload = DirectPayload{
-                EnchParser::parse(config.source, ctx.enchantments())
-            };
+
+        // ── 两阶段：先结构解析（读 profile），激活 profile 后再交叉验证 ──
+        std::string content = InventoryParser::read_content(*config.input);  // "-" → stdin
+        auto dto = InventoryParser::parse_task(content);                     // structural (schema errors throw)
+        // profile：CLI --profile（非默认 vanilla）覆盖 JSON profile；否则 JSON 激活
+        // 注：config.profile 带 default_v="builtin:vanilla"，用 == 判定"未显式覆盖"
+        if (config.profile == "builtin:vanilla" && !dto.profile.empty())
+            ctx.activate_profile(dto.profile);
+        auto inv = InventoryParser::build_inventory(dto, ctx.enchantments(), ctx.equipment());
+
+        // target：CLI --target 覆盖 JSON target；两者皆缺 → 报错
+        if (!config.target.empty()) {
+            request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
+        } else {
+            request.target_item = inv.target_item;
+            if (request.target_item.id.str().empty())
+                throw std::runtime_error(tr("cli.err.inventory_requires_target"));
         }
+        request.payload = InventoryPayload{std::move(inv.items), std::move(inv.priorities)};
+        // algorithm：CLI 显式 > JSON > 默认 hamming
+        request.algorithm = config.algorithm_explicit ? config.algorithm
+            : (!inv.algorithm.empty() ? inv.algorithm : "hamming");
+    } else {
+        request.target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
+        request.payload = DirectPayload{};
+        if (!config.source.empty())
+            request.payload = DirectPayload{EnchParser::parse(config.source, ctx.enchantments())};
+        request.algorithm = config.algorithm;
     }
+
     request.forge_config.platform = (config.platform == "bedrock")
         ? MCE::Bedrock : MCE::Java;
     request.search_config.max_solutions = config.solutions;
-    // Inventory mode needs an inventory-capable algorithm; when the user
-    // did not pick one explicitly, fall back to the default inventory
-    // strategy (hamming).
-    request.algorithm = (mode == AlgorithmMode::inventory && !config.algorithm_explicit)
-        ? "hamming" : config.algorithm;
     request.search_config.max_threads = static_cast<uint32_t>(config.max_threads);
     // --max-time: only override when explicitly provided. 0 = unlimited
     // (strategies/executor treat 0 as "no timeout"). When omitted, the

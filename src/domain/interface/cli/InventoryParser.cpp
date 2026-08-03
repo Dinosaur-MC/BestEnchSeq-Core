@@ -86,9 +86,7 @@ Item build_target_item(const InvTargetDto& target, const EnchantmentRegistry& en
 
 } // namespace
 
-InventoryInput InventoryParser::parse_string(const std::string& content,
-                                             const EnchantmentRegistry& ench_reg,
-                                             const EquipmentRegistry& eq_reg) {
+InvTaskDto InventoryParser::parse_task(const std::string& content) {
     Json root;
     try {
         root = Json::parse(content);
@@ -100,7 +98,12 @@ InventoryInput InventoryParser::parse_string(const std::string& content,
     ds::ErrorList err;
     if (!InvTaskJson::parse(root, dto, err))
         throw std::runtime_error(tr_fmt("cli.err.inventory_schema_error", err.str()));
+    return dto;
+}
 
+InventoryInput InventoryParser::build_inventory(const InvTaskDto& dto,
+                                                const EnchantmentRegistry& ench_reg,
+                                                const EquipmentRegistry& eq_reg) {
     InventoryInput out;
 
     // ── target ──
@@ -132,23 +135,29 @@ InventoryInput InventoryParser::parse_string(const std::string& content,
         out.priorities.push_back(it.priority);
     }
 
-    out.algorithm = std::move(dto.algorithm);
-    out.profile = std::move(dto.profile);
+    out.algorithm = dto.algorithm;
+    out.profile = dto.profile;
     return out;
+}
+
+InventoryInput InventoryParser::parse_string(const std::string& content,
+                                             const EnchantmentRegistry& ench_reg,
+                                             const EquipmentRegistry& eq_reg) {
+    return build_inventory(parse_task(content), ench_reg, eq_reg);
+}
+
+std::string InventoryParser::read_content(const std::string& path) {
+    if (path == "-")
+        return std::string((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
+
+    try {
+        return file_utils::read_file(path);
+    } catch (const std::exception& e) {
+        throw std::runtime_error(tr_fmt("cli.err.inventory_file_error", e.what()));
+    }
 }
 
 InventoryInput
 InventoryParser::parse_file(const std::string& path, const EnchantmentRegistry& ench_reg, const EquipmentRegistry& eq_reg) {
-    if (path == "-") {
-        std::string content((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
-        return parse_string(content, ench_reg, eq_reg);
-    }
-
-    std::string content;
-    try {
-        content = file_utils::read_file(path);
-    } catch (const std::exception& e) {
-        throw std::runtime_error(tr_fmt("cli.err.inventory_file_error", e.what()));
-    }
-    return parse_string(content, ench_reg, eq_reg);
+    return parse_string(read_content(path), ench_reg, eq_reg);
 }

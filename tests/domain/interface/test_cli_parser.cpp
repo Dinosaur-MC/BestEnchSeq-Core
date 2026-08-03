@@ -278,6 +278,30 @@ void test_source_not_required() {
 }
 
 // ---------------------------------------------------------------------------
+// --input alone is a valid inventory-mode invocation (no --mode/--target)
+// ---------------------------------------------------------------------------
+
+void test_input_alone_valid() {
+    const char *argv[] = {"besq", "--input", "inv.json"};
+    auto config = CLIApp::parse(3, const_cast<char **>(argv));
+    expect(config.input.has_value() && *config.input == "inv.json",
+           "--input should be set");
+    expect(config.target.empty(),
+           "--input alone must not trigger the missing-target error");
+    std::cout << "  PASS: test_input_alone_valid" << std::endl;
+}
+
+void test_input_with_verbosity() {
+    const char *argv[] = {"besq", "--input", "inv.json", "--verbose"};
+    auto config = CLIApp::parse(4, const_cast<char **>(argv));
+    expect(config.input.has_value() && *config.input == "inv.json",
+           "--input preserved alongside --verbose");
+    expect(config.verbose, "--verbose still parsed");
+    expect(config.target.empty(), "no --target required with --input present");
+    std::cout << "  PASS: test_input_with_verbosity" << std::endl;
+}
+
+// ---------------------------------------------------------------------------
 // Enchantment with only namespace and id (no level, no equals)
 // ---------------------------------------------------------------------------
 
@@ -441,6 +465,8 @@ int main() {
         test_solutions_flag();
         test_missing_target_throws();
         test_source_not_required();
+        test_input_alone_valid();
+        test_input_with_verbosity();
         test_double_dash_stops_parsing();
         test_source_flag();
         test_import_default_nullopt();

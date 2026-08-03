@@ -1,4 +1,5 @@
 #pragma once
+#include "InventorySchema.h"
 #include "domain/business/types/Item.h"
 #include <string>
 #include <vector>
@@ -44,4 +45,20 @@ struct InventoryParser {
     /// delegates here.
     static InventoryInput
     parse_string(const std::string& content, const EnchantmentRegistry& ench_reg, const EquipmentRegistry& eq_reg);
+
+    // ── Two-phase split (CLI --input wiring) ──
+    //
+    // Phase 1 (no registry): structural ds parse only.  The caller may switch
+    // the active profile based on `dto.profile` BEFORE cross-validating, so a
+    // self-contained task can reference enchantments/equipment from a profile
+    // other than the currently-active one.
+    static InvTaskDto parse_task(const std::string& content);
+
+    /// Phase 2: registry cross-validation + domain Item construction from a
+    /// structurally-parsed DTO.  `parse_string` is this followed by Phase 1.
+    static InventoryInput
+    build_inventory(const InvTaskDto& dto, const EnchantmentRegistry& ench_reg, const EquipmentRegistry& eq_reg);
+
+    /// Read task content from a file path, or stdin when `path == "-"`.
+    static std::string read_content(const std::string& path);
 };
