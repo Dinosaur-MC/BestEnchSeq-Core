@@ -8,7 +8,6 @@
 #include "common/utils/EnvUtil.hpp"
 
 #include <algorithm>
-#include <cstdio>
 #include <cstring>
 #include <filesystem>
 
@@ -152,8 +151,6 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     if (audit.has_wx_segment) {
         LOG_ERROR("[Audit] REFUSED '%s' — W+X memory segment (exploit risk)",
                   so_path.c_str());
-        std::fprintf(stderr, "[Audit] REFUSED '%s' — W+X memory segment (exploit risk)\n",
-                     so_path.c_str());
         return false;
     }
 
@@ -161,19 +158,16 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     if (!audit.passed) {
         LOG_ERROR("[Audit] REFUSED '%s' — binary audit failed (corrupted or "
                   "unrecognized format)", so_path.c_str());
-        std::fprintf(stderr, "[Audit] REFUSED '%s' — binary audit failed (corrupted or "
-                             "unrecognized format)\n",
-                     so_path.c_str());
         return false;
     }
 
-    // Log extra exports (if any)
+    // Log extra exports (if any) — diagnostic noise, not a user-facing warning.
     if (!audit.extra_exports.empty()) {
         // clang-format off
-        LOG_WARN("[Audit] '%s' exports %zu unexpected symbol(s):", so_path.c_str(),
-                 audit.extra_exports.size());
+        LOG_DEBUG("[Audit] '%s' exports %zu unexpected symbol(s):", so_path.c_str(),
+                  audit.extra_exports.size());
         for (const auto &s : audit.extra_exports)
-            LOG_WARN("[Audit]   export → %s", s.c_str());
+            LOG_DEBUG("[Audit]   export → %s", s.c_str());
         // clang-format on
     }
 
@@ -208,10 +202,6 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
         LOG_ERROR("[Audit] REFUSED '%s' — imports %zu dangerous symbol(s) "
                   "(no sandbox).  Run with BESQ_SANDBOX=1 to load it sandboxed.",
                   so_path.c_str(), audit.dangerous_imports.size());
-        std::fprintf(stderr,
-                     "[Audit] REFUSED '%s' — imports %zu dangerous symbol(s) "
-                     "(no sandbox).  Run with BESQ_SANDBOX=1 to load it sandboxed.\n",
-                     so_path.c_str(), audit.dangerous_imports.size());
         return false;
     }
 
