@@ -135,8 +135,8 @@ struct ForgeConfig {
        │     → AlgorithmInput { ench_reg, target, items, config }
        │
        ├─ stage_execute()
-       │   → loader.create(algorithm)
-       │   → resolver.resolve(input)
+       │   → loader.create_executor(algorithm)   // IExecutor：沙箱插件→SandboxedExecutor，内建→AlgorithmExecutor
+       │   → executor.supported_mode()/simulate(input)
        │   → executor.start(input)     (异步)
        │   → AlgorithmOutput
        │

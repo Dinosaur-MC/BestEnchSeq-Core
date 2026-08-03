@@ -318,7 +318,7 @@ seccomp 过滤器           syscall 时 <1% 开销（热循环无 syscall → �
 M0（已完成）构建基础：
   - besq-algo-core 算法内核（STATIC）
   - besq-core 三域聚合（INTERFACE）+ besq-builtin（内嵌数据）
-  - besq-worker 目标 + 骨架（--plugin/--capability 解析 + 插件加载）
+  - besq-worker 目标 + 骨架（--plugin 解析 + 插件加载）
   - 插件纯净扩展（Linux 裸解析 / Windows 静态内核）
   - 预设 full/debug/minimal/cli/sandbox
   - 65 测试全通过（Windows）

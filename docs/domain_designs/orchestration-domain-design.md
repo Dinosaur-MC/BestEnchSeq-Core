@@ -321,7 +321,7 @@ run()
   │     CompactAdapter::apply(profile, request) → AlgorithmInput
   │
   ├── stage_execute()
-  │     loader.create(algorithm) → resolve() → simulate() → executor.start() → output
+  │     loader.create_executor(algorithm) → supported_mode()/simulate() → executor.start() → output
   │
   └── stage_recall()
         CompactAdapter::recall(output, input) → Solutions → SolveResult
@@ -603,9 +603,8 @@ CLI args
        │     → AlgorithmInput { ench_reg, target, mode, data }
        │
        ├→ stage_execute()
-       │   → loader.create(algorithm)
-       │   → algo.resolve(input)     → generate books / filter inventory
-       │   → algo.simulate(input)    → reachability check
+       │   → loader.create_executor(algorithm)   → IExecutor（沙箱插件→SandboxedExecutor，内建→AlgorithmExecutor）
+       │   → executor.supported_mode()/simulate(input)  → reachability check
        │   → executor.start(input)   → search
        │   → AlgorithmOutput
        │
