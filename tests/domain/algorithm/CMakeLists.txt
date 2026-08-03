@@ -49,7 +49,9 @@ besq_test_with_plugins(test_dfs_state_serializer test_dfs_state_serializer.cpp
     "${BESQ_PLUGIN_DFS_SRCS}")
 besq_test(test_dp_merge_state_serializer test_dp_merge_state_serializer.cpp)
 
-besq_test(test_diagnostics test_diagnostics.cpp)
+# 插件诊断（AStar/IDAStar）flush 直接测试 → 编译插件诊断源码进 host 测试
+besq_test_with_plugins(test_diagnostics test_diagnostics.cpp
+    "${PROJECT_ROOT}/plugins/astar/AStarDiagnostics.cpp;${PROJECT_ROOT}/plugins/idastar/IDAStarDiagnostics.cpp")
 
 # penalty_balance plugin algorithm: the plugin is a separate shared-lib pipeline,
 # but its algorithm source is a plain IAlgorithm and links directly into a unit
@@ -78,6 +80,12 @@ besq_test_common_props(test_diff_first)
 besq_test(test_algorithm_loader test_algorithm_loader.cpp)
 besq_test(test_plugin_audit test_plugin_audit.cpp)
 besq_test(test_ipc_protocol test_ipc_protocol.cpp)
+# Sandbox executor tests.  Requires a built plugin tree + besq-worker:
+#   cmake -S plugins -B build/plugins && cmake --build build/plugins   # plugin .dll/.so
+#   BESQ_BUILD_SANDBOX=ON                                              # besq-worker
+# When either is absent the test prints `SKIP:` and returns 0 — a CI
+# regression run MUST build both first, or the sandbox coverage silently
+# no-ops (the whole main() bails at test_sandbox.cpp:400-405).
 besq_test(test_sandbox test_sandbox.cpp)  # Linux-only; skips elsewhere
 
 # astar/dfs 已为插件：策略正确性测试直接编译插件源码（保留 bb_dp 以 A* 为最优 oracle）
@@ -87,3 +95,6 @@ besq_test_with_plugins(test_algorithm_strategies test_algorithm_strategies.cpp
 
 # dp_merge 正确性：与 bb_dp 精确解最优值等价（守卫 Pareto 剪枝/双缓存）
 besq_test(test_dp_merge_correctness test_dp_merge_correctness.cpp)
+
+# 搜索构件（Heuristic / ItemPool / SearchUtils）直接测试
+besq_test(test_search_components test_search_components.cpp)

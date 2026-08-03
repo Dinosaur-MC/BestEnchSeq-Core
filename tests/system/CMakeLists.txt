@@ -53,3 +53,11 @@ set_tests_properties(test_system_cli PROPERTIES
     ENVIRONMENT "BESQ_BIN_PATH=$<TARGET_FILE:besq>;${BESQ_TEST_ENV}"
     TIMEOUT 300
 )
+
+# NOTE: the plugin / sandbox cases inside test_system_cli (plugin list/solve,
+# malicious audit refusal, BESQ_SANDBOX=1) self-SKIP when the plugin tree or
+# besq-worker is not built.  To exercise them run the same two prerequisites
+# as test_sandbox:
+#   cmake -S plugins -B build/plugins && cmake --build build/plugins
+#   (configure the host with -DBESQ_BUILD_SANDBOX=ON for the worker)
+# A CI regression run must build both, or those cases silently no-op.

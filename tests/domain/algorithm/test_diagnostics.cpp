@@ -1,7 +1,12 @@
 #include "framework/test_utils.h"
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/diagnostics/DiagnosticsWriter.h"
+#include "astar/AStarDiagnostics.h"
+#include "idastar/IDAStarDiagnostics.h"
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <variant>
@@ -339,6 +344,155 @@ void test_partition_dp_diagnostics_flush() {
     std::cout << "PASS: test_partition_dp_diagnostics_pass_b" << std::endl;
 }
 
+// ─── DiagnosticsWriter file output (logs/diag/*.log) ─────────────────────
+// The writer emits logs/diag/<algo>_<ts>_<rand>.log relative to CWD.  These
+// tests chdir to a fresh temp dir so they never touch the project tree.
+
+namespace {
+int g_diag_cwd_counter = 0;
+
+class DiagCwdGuard {
+public:
+    DiagCwdGuard() {
+        _orig = std::filesystem::current_path();
+        _tmp = std::filesystem::temp_directory_path() /
+               ("besq_diag_test_" + std::to_string(++g_diag_cwd_counter));
+        std::filesystem::remove_all(_tmp);
+        std::filesystem::create_directories(_tmp);
+        std::filesystem::current_path(_tmp);
+    }
+    ~DiagCwdGuard() {
+        std::error_code ec;
+        std::filesystem::current_path(_orig, ec);
+        std::filesystem::remove_all(_tmp, ec);
+    }
+    const std::filesystem::path& dir() const { return _tmp; }
+
+private:
+    std::filesystem::path _orig, _tmp;
+};
+
+size_t count_diag_files(const std::filesystem::path& dir) {
+    size_t n = 0;
+    std::error_code ec;
+    for (auto& e : std::filesystem::directory_iterator(dir / "logs" / "diag", ec))
+        if (e.path().extension() == ".log") ++n;
+    return n;
+}
+}  // anonymous namespace
+
+void test_diagnostics_writer_writes_file() {
+    DiagCwdGuard cwd;
+    std::vector<DiagnosticsWriter::Entry> entries;
+    entries.emplace_back("found_solutions", int64_t(7));
+    entries.emplace_back("note", std::string("hello"));
+    DiagnosticsWriter::write("algo_w", entries, 100, "Complete");
+
+    bool found = false;
+    std::string content;
+    std::error_code ec;
+    for (auto& e : std::filesystem::directory_iterator(cwd.dir() / "logs" / "diag", ec)) {
+        if (e.path().filename().string().rfind("algo_w_", 0) == 0) {
+            found = true;
+            std::ifstream f(e.path());
+            std::ostringstream ss;
+            ss << f.rdbuf();
+            content = ss.str();
+        }
+    }
+    expect(found, "write created logs/diag/algo_w_*.log");
+    expect(content.find("algorithm=algo_w") != std::string::npos, "log has algorithm line");
+    expect(content.find("status=Complete") != std::string::npos, "log has status line");
+    expect(content.find("wall_ms=100") != std::string::npos, "log has wall_ms line");
+    expect(content.find("found_solutions=7") != std::string::npos, "log has int entry");
+    expect(content.find("note=hello") != std::string::npos, "log has string entry");
+    TEST_PASS("diagnostics writer file output");
+}
+
+void test_diagnostics_writer_short_creates_nothing() {
+    DiagCwdGuard cwd;
+    std::vector<DiagnosticsWriter::Entry> entries;
+    entries.emplace_back("k", int64_t(1));
+    DiagnosticsWriter::write("algo_short", entries, 5, "ok");  // wall_ms < 10
+
+    expect(!std::filesystem::exists(cwd.dir() / "logs" / "diag"),
+           "wall_ms < 10 writes no diagnostic file");
+    TEST_PASS("diagnostics writer short-run skip");
+}
+
+void test_diagnostics_writer_trims() {
+    DiagCwdGuard cwd;
+    // Pre-create 130 fake diagnostic logs (over MAX_DIAG_FILES = 128).
+    std::filesystem::create_directories(cwd.dir() / "logs" / "diag");
+    for (int i = 0; i < 130; ++i) {
+        std::ofstream f(cwd.dir() / "logs" / "diag" / ("old_" + std::to_string(i) + ".log"));
+        f << "x\n";
+    }
+    std::vector<DiagnosticsWriter::Entry> entries;
+    entries.emplace_back("k", int64_t(1));
+    DiagnosticsWriter::write("algo_trim", entries, 200, "Complete");  // +1 → 131
+
+    const auto n = count_diag_files(cwd.dir());
+    expect(n <= 128, "trim pruned the directory to MAX_DIAG_FILES");
+    expect(n < 131, "trim actually removed files");
+    TEST_PASS("diagnostics writer trim");
+}
+
+// ─── Plugin diagnostics flush ───────────────────────────────────────────
+
+void test_astar_diagnostics_flush() {
+    algorithm::AStarDiagnostics diag;
+    diag.status           = "Complete";
+    diag.solution_cost    = 10;
+    diag.explored_count   = 5;
+    diag.best_g_entries   = 3;
+    diag.open_set_pending = 2;
+    diag.pruned_by_cost   = 7;
+
+    std::vector<DiagnosticsWriter::Entry> entries;
+    diag.flush(entries);
+
+    bool explored = false, pending = false, pruned = false;
+    for (const auto& e : entries) {
+        if (std::string(e.key) == "explored_count")
+            explored = std::get<int64_t>(e.value) == 5;
+        if (std::string(e.key) == "open_set_pending")
+            pending = std::get<int64_t>(e.value) == 2;
+        if (std::string(e.key) == "pruned_by_cost")
+            pruned = std::get<int64_t>(e.value) == 7;
+    }
+    expect(explored, "AStar flush emits explored_count");
+    expect(pending, "AStar flush emits open_set_pending");
+    expect(pruned, "AStar flush emits pruned_by_cost");
+    TEST_PASS("AStarDiagnostics flush");
+}
+
+void test_idastar_diagnostics_flush() {
+    algorithm::IDAStarDiagnostics diag;
+    diag.status            = "Complete";
+    diag.solution_cost     = 4;
+    diag.tt_lookups        = 100;
+    diag.tt_stores         = 40;
+    diag.solution_path_len = 3;
+
+    std::vector<DiagnosticsWriter::Entry> entries;
+    diag.flush(entries);
+
+    bool lookups = false, stores = false, path_len = false;
+    for (const auto& e : entries) {
+        if (std::string(e.key) == "tt_lookups")
+            lookups = std::get<int64_t>(e.value) == 100;
+        if (std::string(e.key) == "tt_stores")
+            stores = std::get<int64_t>(e.value) == 40;
+        if (std::string(e.key) == "solution_path_len")
+            path_len = std::get<int64_t>(e.value) == 3;
+    }
+    expect(lookups, "IDAStar flush emits tt_lookups");
+    expect(stores, "IDAStar flush emits tt_stores");
+    expect(path_len, "IDAStar flush emits solution_path_len");
+    TEST_PASS("IDAStarDiagnostics flush");
+}
+
 int main() {
     try {
         test_algorithm_diagnostics_flush();
@@ -348,6 +502,11 @@ int main() {
         test_partition_dp_diagnostics_flush();
         test_diagnostics_writer_skip_short();
         test_diagnostics_writer_entry();
+        test_diagnostics_writer_writes_file();
+        test_diagnostics_writer_short_creates_nothing();
+        test_diagnostics_writer_trims();
+        test_astar_diagnostics_flush();
+        test_idastar_diagnostics_flush();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
