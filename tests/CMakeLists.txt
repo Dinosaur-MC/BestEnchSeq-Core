@@ -102,3 +102,7 @@ endfunction()
 add_subdirectory(common)
 add_subdirectory(domain)
 add_subdirectory(integration)
+
+# system/ spawns the real besq CLI binary (skipped internally when
+# BESQ_BUILD_CLI=OFF — no besq target to invoke).
+add_subdirectory(system)
