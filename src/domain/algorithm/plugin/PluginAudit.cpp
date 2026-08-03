@@ -109,7 +109,7 @@ bool is_red_flag(const std::string_view name) noexcept {
 
 // — Standard BESQ exports — filter out of extra_exports
 static bool is_besq_export(const std::string_view name) noexcept {
-    return name == BESQ_PLUGIN_CREATE_SYM || name == BESQ_PLUGIN_CAPABILITY_SYM;
+    return name == BESQ_PLUGIN_CREATE_SYM;
 }
 
 // — Common C/C++ runtime symbols — NOT suspicious, filter out of imports

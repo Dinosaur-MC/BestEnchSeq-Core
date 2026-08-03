@@ -92,8 +92,8 @@ std::string resolve_worker_path(const std::string& given) {
 
 } // anonymous namespace
 
-SandboxedExecutor::SandboxedExecutor(std::string plugin_path, std::string worker_path, PluginCapability capability)
-    : _plugin_path(std::move(plugin_path)), _worker_path(resolve_worker_path(std::move(worker_path))), _capability(capability) {
+SandboxedExecutor::SandboxedExecutor(std::string plugin_path, std::string worker_path)
+    : _plugin_path(std::move(plugin_path)), _worker_path(resolve_worker_path(std::move(worker_path))) {
 #if defined(__linux__)
     // A dead worker makes the socket write return EPIPE — convert it to a
     // throwable error instead of SIGPIPE-killing the whole parent process.

@@ -17,7 +17,6 @@
 /// $BESQ_TEST_MALICIOUS_PLUGIN / $BESQ_WORKER_PATH or build-tree defaults.
 /// If no plugin binaries are present, the plugin-dependent tests SKIP.
 
-#include "domain/algorithm/plugin/PluginAPI.h"
 #include "domain/algorithm/sandbox/SandboxedExecutor.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/EnchSet.h"
@@ -170,7 +169,7 @@ AlgorithmInput build_search_input() {
 /// assertions always hold.
 void test_pause_resume(const std::string& plugin) {
     auto input = build_search_input();
-    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker());
 
     std::atomic<const char*> outcome{"?"};
     std::thread runner([&] {
@@ -214,7 +213,7 @@ void test_checkpoint_roundtrip(const std::string& plugin) {
     auto input = build_search_input();
 
     // ── Solve 1: run, pause, serialize ──
-    SandboxedExecutor se1(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se1(plugin, find_worker());
     se1.start(input);
     std::this_thread::sleep_for(std::chrono::milliseconds(5)); // let the search start
     se1.pause();
@@ -239,7 +238,7 @@ void test_checkpoint_roundtrip(const std::string& plugin) {
     se1.wait();
 
     // ── Solve 2: fresh worker, restore from the opaque checkpoint ──
-    SandboxedExecutor se2(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se2(plugin, find_worker());
     se2.start(checkpoint);
     const auto state = se2.wait();
     const auto out = se2.output();
@@ -253,7 +252,7 @@ void test_checkpoint_roundtrip(const std::string& plugin) {
 /// worker is busy (regression for review finding 2).
 void test_destroy_mid_run(const std::string& plugin) {
     auto input = build_search_input();
-    auto se = std::make_unique<SandboxedExecutor>(plugin, find_worker(), PluginCapability::None);
+    auto se = std::make_unique<SandboxedExecutor>(plugin, find_worker());
     se->start(input);
     std::this_thread::sleep_for(std::chrono::milliseconds(20)); // search is running
     const auto t0 = std::chrono::steady_clock::now();
@@ -268,7 +267,7 @@ void test_destroy_mid_run(const std::string& plugin) {
 void test_bad_plugin_path() {
     bool threw = false;
     try {
-        SandboxedExecutor se("nonexistent/libalgo_does_not_exist.so", find_worker(), PluginCapability::None);
+        SandboxedExecutor se("nonexistent/libalgo_does_not_exist.so", find_worker());
     } catch (const std::exception&) {
         threw = true;
     }
@@ -279,7 +278,7 @@ void test_bad_plugin_path() {
 /// worker hosts a real AlgorithmExecutor that allows re-running.
 void test_reuse_after_completed(const std::string& plugin) {
     auto input = build_search_input();
-    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker());
     se.start(input);
     expect(se.wait() == AlgorithmState::Completed, "sandbox: first run completes");
     expect(!se.output().solutions.empty(), "sandbox: first run has solutions");
@@ -294,7 +293,7 @@ void test_reuse_after_completed(const std::string& plugin) {
 void test_cancel_races_serialize(const std::string& plugin) {
     for (int i = 0; i < 4; ++i) {
         auto input = build_search_input();
-        SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+        SandboxedExecutor se(plugin, find_worker());
         se.start(input);
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
         se.pause();
@@ -316,19 +315,19 @@ void test_cancel_races_serialize(const std::string& plugin) {
 /// supported_mode, simulate — differ between serializable (astar) and
 /// non-serializable (malicious) plugins.
 void test_metadata(const std::string& search_plugin, const std::string& malicious_plugin) {
-    SandboxedExecutor astar(search_plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor astar(search_plugin, find_worker());
     expect(astar.is_serializable(), "sandbox: astar is serializable");
     expect(static_cast<int>(astar.supported_mode() & AlgorithmMode::direct) != 0, "sandbox: astar supports direct mode");
     expect(astar.simulate(build_search_input()), "sandbox: astar simulate reaches target");
 
-    SandboxedExecutor mal(malicious_plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor mal(malicious_plugin, find_worker());
     expect(!mal.is_serializable(), "sandbox: malicious is not serializable");
 }
 
 /// serialize_state() is only valid while Paused — empty both before a run and
 /// after it has completed (mirrors AlgorithmExecutor's contract).
 void test_serialize_only_when_paused(const std::string& plugin) {
-    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker());
     expect(se.serialize_state().empty(), "sandbox: serialize before start returns {}");
     se.start(build_search_input());
     se.wait();
@@ -338,7 +337,7 @@ void test_serialize_only_when_paused(const std::string& plugin) {
 /// A garbage checkpoint blob must fail cleanly on the worker side (deserialize
 /// throws → MsgError → Failed), never crash or hang.
 void test_garbage_checkpoint_fails(const std::string& plugin) {
-    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker());
     const std::vector<uint8_t> garbage = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
     se.start(garbage);
     const auto st = se.wait();
@@ -349,7 +348,7 @@ void test_garbage_checkpoint_fails(const std::string& plugin) {
 /// The malicious plugin's execute() returns instantly — the run completes with
 /// an empty solution set (no hang, no crash).
 void test_malicious_run(const std::string& plugin) {
-    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker());
     se.start(build_search_input()); // the plugin ignores the input
     const auto st = se.wait();
     expect(st == AlgorithmState::Completed, "sandbox: malicious execute completes");
@@ -360,7 +359,7 @@ void test_malicious_run(const std::string& plugin) {
 /// return the guarded default instead of touching the pipe (a second reader
 /// would corrupt frames).
 void test_preflight_during_run_guarded(const std::string& plugin) {
-    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker());
     auto input = build_search_input();
     se.start(input);
     std::this_thread::sleep_for(std::chrono::milliseconds(10)); // still Running
@@ -377,7 +376,7 @@ void test_preflight_during_run_guarded(const std::string& plugin) {
 /// failing the pause-state assertion.
 void test_stress_pause_resume(const std::string& plugin) {
     auto input = build_search_input();
-    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker());
     se.start(input);
     int cycles = 0;
     for (int i = 0; i < 3; ++i) {
@@ -409,7 +408,7 @@ int main() {
         // ── Spawn the worker with the malicious plugin ─────────────────
         // Linux: dlopen → seccomp → construct (open EPERM'd).  Windows:
         // CreateProcess + Job Object, no seccomp.
-        SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+        SandboxedExecutor se(plugin, find_worker());
 
         // ── Worker survived + metadata query works ────────────────────
         expect(std::string(se.name()) == "malicious", "sandbox: worker reports name");

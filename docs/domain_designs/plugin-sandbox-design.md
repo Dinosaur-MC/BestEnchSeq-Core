@@ -161,16 +161,15 @@ CreateProcess（restricted token：去 SeDebugPrivilege 等高权限）
 AppContainer（文件/网络 ACL 级隔离）→ 后续增强
 ```
 
-### 4.3 Capability → 沙箱 Profile
+### 4.3 沙箱 Profile（已删除 Capability 机制，2026-08-04）
 
-```
-PluginCapability::None        → 完整 DENY 白名单（默认）
-PluginCapability::Filesystem  → 放宽 open/openat 但限制路径（需 Landlock/LPAC，后续）
-PluginCapability::Network     → 放宽 socket/connect（仅网络，仍禁文件）
-PluginCapability::Unrestricted→ 不装 seccomp（仅审计 + 记录）
+Capability Manifest（`besq_plugin_capability` / `PluginCapability` enum）已**整体移除**：
+worker 从未解析它、SandboxedExecutor 的字段是死代码、seccomp 一律按 DENY 白名单（文件/网络
+全禁）。声明能力不提供任何运行时差异，纯属装饰——删之。
 
-原则：声明什么 = 允许什么，其余物理禁止。撒谎的插件被 seccomp kill。
-```
+当前沙箱 profile 只有一个：`PluginCapability::None` 等价物 = 完整 DENY 白名单（默认，且唯一）。
+若未来需要按插件放宽（如声明 Filesystem 才允许 open），可重新引入"能力声明 → seccomp profile"
+映射，但那必须是**真的被 worker 执行**的机制，而非存储型字段。
 
 ## 5. IPC 协议
 

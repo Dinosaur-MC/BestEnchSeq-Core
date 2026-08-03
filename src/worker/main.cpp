@@ -11,7 +11,7 @@
 /// encoded AlgorithmOutput.
 ///
 /// Sandbox lifecycle (Linux):
-///   1. parse --plugin <path> [--capability <level>]
+///   1. parse --plugin <path>
 ///   2. dlopen + resolve besq_create_algorithm
 ///   3. install seccomp filter (after dlopen — the .so is already mapped)
 ///   4. construct the AlgorithmExecutor, serve IPC frames on stdin/stdout

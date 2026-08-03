@@ -227,7 +227,7 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     if (_sandbox_enabled) {
         std::string algo_name;
         try {
-            auto probe = std::make_unique<SandboxedExecutor>(resolved, "", audit.capability);
+            auto probe = std::make_unique<SandboxedExecutor>(resolved, "");
             algo_name = std::string(probe->name());
         } catch (const std::exception& e) {
             LOG_WARN("Plugin '%s' sandbox probe failed: %s", so_path.c_str(), e.what());
@@ -241,9 +241,7 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
                      algo_name.c_str());
             return false;
         }
-        _sandboxed[algo_name] = [path = resolved, cap = audit.capability]() {
-            return std::make_unique<SandboxedExecutor>(path, "", cap);
-        };
+        _sandboxed[algo_name] = [path = resolved]() { return std::make_unique<SandboxedExecutor>(path, ""); };
         LoadedPlugin plugin;
         plugin.name = algo_name;
         plugin.path = std::move(resolved);
@@ -265,30 +263,6 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     if (!resolve_plugin(handle, so_path, create_fn)) {
         dl_close(handle);
         return false;
-    }
-
-    // ── Step 4: Read capability manifest (post-dlopen) ──────────────
-    {
-        auto cap_fn = reinterpret_cast<BesqCapabilityFn>(dl_sym(handle, BESQ_PLUGIN_CAPABILITY_SYM));
-        if (cap_fn) {
-            audit.has_manifest = true;
-            audit.capability = cap_fn();
-        }
-
-        if (!audit.has_manifest) {
-            LOG_WARN("[Audit] '%s' does not declare a capability manifest. "
-                     "Add BESQ_PLUGIN_ENTRY_CAP(..., PluginCapability::None) "
-                     "to its plugin.cpp.",
-                     so_path.c_str());
-        } else if (audit.capability != PluginCapability::None) {
-            LOG_WARN("[Audit] '%s' declares capability '%s' — suspicious for a "
-                     "pure-compute forge plugin.",
-                     so_path.c_str(),
-                     audit.capability == PluginCapability::Filesystem     ? "Filesystem"
-                     : audit.capability == PluginCapability::Network      ? "Network"
-                     : audit.capability == PluginCapability::Unrestricted ? "Unrestricted"
-                                                                          : "Unknown");
-        }
     }
 
     // ── Step 5: Probe (validate ABI by creating an instance) ─────────

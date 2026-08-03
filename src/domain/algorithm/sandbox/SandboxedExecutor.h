@@ -29,7 +29,6 @@
 ///     (no reader active yet) — same as in-process preflight ordering.
 
 #include "domain/algorithm/IExecutor.h"
-#include "domain/algorithm/plugin/PluginAPI.h"
 #include "domain/algorithm/sandbox/IpcProtocol.h"
 
 #include <atomic>
@@ -47,7 +46,7 @@ public:
     /// `plugin_path` — .so/.dll to load in the worker.
     /// `worker_path` — path to the besq-worker executable ("" → $BESQ_WORKER_PATH
     ///                 or <exe_dir>/besq-worker[.exe], then PATH).
-    SandboxedExecutor(std::string plugin_path, std::string worker_path, PluginCapability capability);
+    SandboxedExecutor(std::string plugin_path, std::string worker_path);
     ~SandboxedExecutor() override;
 
     SandboxedExecutor(const SandboxedExecutor&) = delete;
@@ -110,8 +109,6 @@ private:
 
     std::string _plugin_path;
     std::string _worker_path;
-    // Capability → sandbox-profile mapping is future work (M3); retained.
-    [[maybe_unused]] PluginCapability _capability;
 
     // ── Worker handles (see SandboxedAlgorithm::spawn_worker for lifecycle) ──
     int _fd = -1;       // read: worker→parent (Linux: full-duplex socketpair)

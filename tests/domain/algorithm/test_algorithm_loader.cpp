@@ -1,7 +1,7 @@
-#include "framework/test_utils.h"
+#include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/plugin/PluginAudit.h"
-#include "domain/algorithm/IAlgorithm.h"
+#include "framework/test_utils.h"
 
 using namespace algorithm;
 
@@ -119,9 +119,6 @@ void test_audit_report_defaults() {
     expect(r.extra_exports.empty(), "audit: default report has no extra exports");
     expect(r.dangerous_imports.empty(), "audit: default report has no dangerous imports");
     expect(r.linked_libraries.empty(), "audit: default report has no linked libs");
-    expect(!r.has_manifest, "audit: default report has no manifest");
-    expect(r.capability == PluginCapability::Unrestricted,
-           "audit: default capability is Unrestricted");
 
     std::cout << "PASS: test_audit_report_defaults" << std::endl;
 }
