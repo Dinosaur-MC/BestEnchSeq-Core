@@ -12,6 +12,19 @@
 #include <utility>
 #include <vector>
 
+// 前置声明 ds::json::Schema：object_codec 的成员模板在实例化点（用户 schema 文件
+// 已包含完整 ds/ds.h → JsonBinder.h）才解析 Schema 的完整定义；此处仅需模板名可见，
+// 以把 `Schema<SubSchema>` 解析为类模板（非依赖限定名在定义期查找）。
+// 必须在此携带 Strict=false 默认实参：成员模板体在解析期就对 `Schema<SubSchema>`
+// 做实参数目检查（2 参模板给 1 参），若默认实参不可见即报 "too few template arguments"。
+// 故默认实参的唯一声明位置迁移到此处，JsonBinder.h 的定义不再重复指定（同作用域
+// 重复指定默认实参为 ill-formed）。Codecs.h 恒先于 JsonBinder.h 被包含（ds.h 顺序，
+// 且 JsonBinder.h 自身 include Codecs.h），故默认实参全局可见。
+namespace ds::json {
+template<typename, bool = false>
+struct Schema;
+}
+
 namespace ds {
 
 // ── string ───────────────────────────────────────────────────────────
@@ -105,6 +118,31 @@ struct bool_codec {
         if (s == "true" || s == "1") { v = true; return true; }
         if (s == "false" || s == "0") { v = false; return true; }
         e.add(path, "invalid bool"); return false;
+    }
+};
+
+// ── object_codec（嵌套对象）─────────────────────────────────────────
+/// 嵌套对象 codec：SubSchema 为逻辑 schema（S::Type + S::fields），
+/// 复用 ds::json::Schema 的序列化/反序列化，用于表示 JSON 中的嵌套对象字段
+/// （如 inventory task 的 target 子对象）。与 vector_codec 组合得到对象数组。
+/// 嵌套对象无 CSV 自然表示：to_csv 写占位符，from_csv 记错拒绝。
+template<typename SubSchema>
+struct object_codec {
+    template<class V>  // V = SubSchema::Type
+    void to_json(const V& obj, Json& out) const {
+        out = ds::json::Schema<SubSchema>::serialize(obj);
+    }
+    template<class V>
+    bool from_json(const Json& j, V& obj, ErrorList& err, const std::string& path) const {
+        if (j.type() != JsonType::Object) { err.add(path, "expected object"); return false; }
+        return ds::json::Schema<SubSchema>::parse(j, obj, err);
+    }
+    template<class V>
+    void to_csv(const V&, std::string& out) const { out += "<nested-object>"; }
+    template<class V>
+    bool from_csv(const std::string_view&, V&, ErrorList& err, const std::string& path) const {
+        err.add(path, "nested object not supported in CSV");
+        return false;
     }
 };
 

@@ -25,7 +25,9 @@ inline bool get_key(const Json& obj, const std::string& key,
 }
 
 /// 物理 JSON 绑定：S 为逻辑 schema（S::Type + S::fields），Strict=true 时未知键报错。
-template<typename S, bool Strict = false>
+/// 默认实参 Strict=false 由 Codecs.h 的前置声明提供（object_codec 成员模板需在解析期
+/// 看到默认实参完成 `Schema<SubSchema>` 实参数目检查；同作用域不能重复指定默认实参）。
+template<typename S, bool Strict>
 struct Schema {
     using Type = typename S::Type;
 

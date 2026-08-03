@@ -779,6 +779,189 @@ void test_validate_hook_csv() {
     TEST_PASS("csv schema validate hook");
 }
 
+// ── 13. object_codec 嵌套对象（P0：inventory 嵌套 target / items 数组） ──
+struct Addr {
+    std::string street;
+    std::string city;
+};
+struct AddrSchema {
+    using Type = Addr;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("street", &Addr::street, ds::string_codec{}),
+        ds::field("city", &Addr::city, ds::string_codec{}),
+    };
+};
+using AddrJson = ds::json::Schema<AddrSchema>;
+
+struct Employee {
+    std::string name;
+    Addr home;                       // 嵌套对象字段
+};
+struct EmployeeSchema {
+    using Type = Employee;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("name", &Employee::name, ds::string_codec{}),
+        ds::required_field("home", &Employee::home, ds::object_codec<AddrSchema>{}),
+    };
+};
+using EmployeeJson = ds::json::Schema<EmployeeSchema>;
+
+void test_object_codec_roundtrip() {
+    Employee e{"alice", {"1 Main St", "Springfield"}};
+    Json j = EmployeeJson::serialize(e);
+    expect(j.has("home") && j["home"].type() == JsonType::Object, "nested field serialized as object");
+    expect(j["home"]["street"].as<std::string>() == "1 Main St", "nested street serialized");
+    expect(j["home"]["city"].as<std::string>() == "Springfield", "nested city serialized");
+    Employee out; ds::ErrorList err;
+    expect(EmployeeJson::parse(j, out, err), "nested object parse ok");
+    expect(out.name == "alice" && out.home.street == "1 Main St" && out.home.city == "Springfield",
+           "nested object roundtrip equal");
+    TEST_PASS("object_codec nested object roundtrip");
+}
+
+// 对象数组：vector_codec<object_codec<X>> → items: [{...}, {...}]
+struct Job {
+    std::string title;
+    int years = 0;
+};
+struct JobSchema {
+    using Type = Job;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("title", &Job::title, ds::string_codec{}),
+        ds::field("years", &Job::years, ds::int_codec{}),
+    };
+};
+struct Career {
+    std::string person;
+    std::vector<Job> jobs;
+};
+struct CareerSchema {
+    using Type = Career;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("person", &Career::person, ds::string_codec{}),
+        ds::field("jobs", &Career::jobs, ds::vector_codec<ds::object_codec<JobSchema>>{}),
+    };
+};
+using CareerJson = ds::json::Schema<CareerSchema>;
+
+void test_object_codec_array_roundtrip() {
+    Career c{"bob", {{"dev", 3}, {"lead", 5}}};
+    Json j = CareerJson::serialize(c);
+    auto arr = j["jobs"].as<Json::Array>();
+    expect(arr.size() == 2, "array of objects serialized");
+    expect(arr[0]["title"].as<std::string>() == "dev" && arr[0]["years"].as<int64_t>() == 3,
+           "first element serialized");
+    expect(arr[1]["title"].as<std::string>() == "lead" && arr[1]["years"].as<int64_t>() == 5,
+           "second element serialized");
+    Career out; ds::ErrorList err;
+    expect(CareerJson::parse(j, out, err), "array of objects parse ok");
+    expect(out.jobs.size() == 2 && out.jobs[0].title == "dev" && out.jobs[0].years == 3 &&
+           out.jobs[1].title == "lead" && out.jobs[1].years == 5,
+           "array of objects roundtrip equal");
+    TEST_PASS("vector_codec<object_codec> array roundtrip");
+}
+
+void test_object_codec_required_nested_missing() {
+    // 外层必填嵌套字段整体缺省 → 错误路径为外层字段名 "home"
+    Json j = Json::object().set("name", Json(std::string("alice")));
+    Employee out; ds::ErrorList err;
+    expect(!EmployeeJson::parse(j, out, err), "missing required nested field fails");
+    expect(err.size() == 1 && err.errors()[0].path == "home", "missing nested path is home");
+    // 嵌套对象在场但内部必填子字段缺省 → 嵌套 parse 失败；内层错误路径为扁平子字段名
+    Json j2 = Json::object()
+        .set("name", Json(std::string("alice")))
+        .set("home", Json::object().set("city", Json(std::string("Springfield"))));  // street 缺省
+    Employee out2; ds::ErrorList err2;
+    expect(!EmployeeJson::parse(j2, out2, err2), "missing inner required field fails");
+    bool has_street = false;
+    for (const auto& fe : err2.errors()) if (fe.path == "street") has_street = true;
+    expect(has_street, "inner required error recorded (flat path design)");
+    TEST_PASS("object_codec required nested field missing");
+}
+
+void test_object_codec_wrong_type() {
+    Json j = Json::object()
+        .set("name", Json(std::string("alice")))
+        .set("home", Json(std::string("not-an-object")));   // 字符串而非对象
+    Employee out; ds::ErrorList err;
+    expect(!EmployeeJson::parse(j, out, err), "nested field with wrong type fails");
+    expect(err.size() == 1 && err.errors()[0].path == "home", "wrong-type error path is home");
+    expect(err.errors()[0].message.find("object") != std::string::npos, "error mentions object");
+    TEST_PASS("object_codec wrong type (string where object expected)");
+}
+
+void test_object_codec_nested_unknown_key_tolerant() {
+    Json j = Json::object()
+        .set("name", Json(std::string("alice")))
+        .set("home", Json::object()
+            .set("street", Json(std::string("1 Main St")))
+            .set("city", Json(std::string("Springfield")))
+            .set("extra", Json(int64_t{999})));    // 嵌套对象内的未知键
+    Employee out; ds::ErrorList err;
+    expect(EmployeeJson::parse(j, out, err), "unknown key inside nested object tolerated (non-Strict)");
+    expect(err.empty(), "no errors");
+    TEST_PASS("object_codec nested unknown keys tolerated");
+}
+
+// 嵌套 schema 的 validate() 跨字段钩子在解析时被调用
+struct NestedInv {
+    int lo = 0;
+    int hi = 0;
+};
+struct NestedInvSchema {
+    using Type = NestedInv;
+    static constexpr auto fields = std::tuple{
+        ds::field("lo", &NestedInv::lo, ds::int_codec{}),
+        ds::field("hi", &NestedInv::hi, ds::int_codec{}),
+    };
+    static void validate(Type& o, ds::ErrorList& err) {
+        if (o.lo > o.hi) err.add("lo", "lo must be <= hi");
+    }
+};
+struct NestedHolder {
+    std::string tag;
+    NestedInv range;
+};
+struct NestedHolderSchema {
+    using Type = NestedHolder;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("tag", &NestedHolder::tag, ds::string_codec{}),
+        ds::field("range", &NestedHolder::range, ds::object_codec<NestedInvSchema>{}),
+    };
+};
+using NestedHolderJson = ds::json::Schema<NestedHolderSchema>;
+
+void test_object_codec_nested_validate_hook() {
+    Json okj = Json::object()
+        .set("tag", Json(std::string("x")))
+        .set("range", Json::object().set("lo", Json(int64_t{1})).set("hi", Json(int64_t{5})));
+    NestedHolder ok; ds::ErrorList eok;
+    expect(NestedHolderJson::parse(okj, ok, eok), "valid nested object parse ok");
+    expect(eok.empty(), "no errors when nested invariant holds");
+    expect(ok.range.lo == 1 && ok.range.hi == 5, "nested values roundtrip");
+    Json badj = Json::object()
+        .set("tag", Json(std::string("x")))
+        .set("range", Json::object().set("lo", Json(int64_t{9})).set("hi", Json(int64_t{2})));
+    NestedHolder bado; ds::ErrorList eb;
+    expect(!NestedHolderJson::parse(badj, bado, eb), "nested validate hook fails parse");
+    bool has_lo = false;
+    for (const auto& fe : eb.errors()) if (fe.path == "lo") has_lo = true;
+    expect(has_lo, "nested validate error recorded");
+    TEST_PASS("object_codec nested validate hook invoked");
+}
+
+void test_object_codec_csv_rejected() {
+    // CSV 无嵌套对象表示：to_csv 写占位符；from_csv 记错拒绝。
+    std::string cell;
+    ds::object_codec<AddrSchema>{}.to_csv(Addr{"a", "b"}, cell);
+    expect(cell == "<nested-object>", "to_csv emits placeholder");
+    Addr out; ds::ErrorList err;
+    expect(!ds::object_codec<AddrSchema>{}.from_csv("a;b", out, err, "home"),
+           "from_csv rejects nested object");
+    expect(err.size() == 1 && err.errors()[0].path == "home", "from_csv error path");
+    TEST_PASS("object_codec CSV rejection");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -820,5 +1003,12 @@ int main() {
     test_custom_codec_value_roundtrip_with_conditional_emit();
     test_validate_hook();
     test_validate_hook_csv();
+    test_object_codec_roundtrip();
+    test_object_codec_array_roundtrip();
+    test_object_codec_required_nested_missing();
+    test_object_codec_wrong_type();
+    test_object_codec_nested_unknown_key_tolerant();
+    test_object_codec_nested_validate_hook();
+    test_object_codec_csv_rejected();
     return print_summary();
 }
