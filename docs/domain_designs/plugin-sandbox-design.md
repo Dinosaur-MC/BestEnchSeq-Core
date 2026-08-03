@@ -264,6 +264,7 @@ seccomp 过滤器           syscall 时 <1% 开销（热循环无 syscall → �
 
 待补（M2/M3）：
   死循环插件 → timeout kill ✅
+  pause/resume 转发（父进程 diff 暂停态 → MsgPause/MsgResume）✅ 双平台 test_sandbox
   崩溃插件（segfault）→ "plugin crashed"
   std::thread 插件 → 验证 CLONE_THREAD 放行
   Capability profile 强制 → 声明 None 却联网 → 被禁
@@ -304,6 +305,15 @@ M2 Windows（已实现 + Windows 验证）：
     （冷路径，进程内算法仅多一次 null 原子 load；字段追加在类**末尾**，保持既有成员偏移不变），
     父进程 `execute()` 与 worker 控制线程改为事件驱动等待——取消/超时即时生效（cancel→join 0ms），
     不再有 100ms 轮询延迟 / Windows 纯阻塞读失效问题
+  - ✅ pause/resume 接通（2026-08-03）：`ExecutionContext` 的 notifier 泛化为**控制态 notifier**
+    （cancel/pause/resume 都触发同一个 eventfd/事件），父进程 execute() 循环在唤醒时 diff 当前
+    暂停态并转发 MsgPause/MsgResume；worker 控制线程本就能处理，插件算法均调用 `wait_if_paused()`。
+    取消钩子同时改为单个 `std::atomic<std::shared_ptr<ControlNotifier>>`——修掉每次 execute 泄漏
+    一个 fd/句柄 + fn/ud 撕裂读（曾向 Linux stdin fd 0 写字节）
+  - ✅ 审计 RED 清单补全（2026-08-03）：文件打开入口（fopen/fopen_s/_wfopen）、网络解析
+    （getaddrinfo/gethostbyname 等）、代码/进程注入（CreateRemoteThread/WriteProcessMemory/
+    memfd_create/process_vm_writev/bpf）、Windows 注册表/进程控制、Linux syscall/prctl/unshare；
+    非沙箱模式下这些危险导入一律硬拒
 
 M3 Capability profile 分级 + 故障处理 + 全套测试
 

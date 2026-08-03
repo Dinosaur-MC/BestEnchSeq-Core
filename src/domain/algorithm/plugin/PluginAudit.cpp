@@ -69,6 +69,28 @@ bool is_red_flag(const std::string_view name) noexcept {
         "MoveFileA",   "MoveFileW",   "CopyFileA",   "CopyFileW",
         "RemoveDirectoryA", "RemoveDirectoryW", "SetFileAttributesA",
         "SetFileAttributesW", "CreateDirectoryA", "CreateDirectoryW",
+        // ── High-level file-open entry points — pure-compute plugins need
+        // none; fopen was previously whitelisted as a "runtime" symbol, an
+        // asymmetry with open() that let stdio file access sail through. ──
+        "fopen",  "fopen_s", "_wfopen",
+        // ── Network resolvers — DNS is network activity even without connect ──
+        "getaddrinfo", "gethostbyname", "getnameinfo", "gethostbyaddr",
+        "InternetOpenA", "InternetOpenW", "InternetConnectA", "InternetConnectW",
+        "WinHttpOpen", "URLDownloadToFileA", "URLDownloadToFileW",
+        // ── Code/process injection & cross-process memory ──
+        "memfd_create", "process_vm_writev", "process_vm_readv",
+        "bpf", "userfaultfd",
+        "CreateRemoteThread", "WriteProcessMemory", "ReadProcessMemory",
+        "VirtualAllocEx", "VirtualProtectEx",
+        // ── Registry (Windows) ──
+        "RegOpenKeyExA", "RegOpenKeyExW", "RegCreateKeyExA", "RegCreateKeyExW",
+        "RegSetValueExA", "RegSetValueExW", "RegDeleteKeyA", "RegDeleteKeyW",
+        // ── Windows process control ──
+        "CreateProcessWithTokenA", "CreateProcessWithTokenW",
+        "CreateProcessAsUserA", "CreateProcessAsUserW",
+        "TerminateProcess",
+        // ── Linux process / kernel interface ──
+        "syscall", "prctl", "unshare", "personality",
     });
     // clang-format on
     return std::ranges::any_of(RED, [name](const char *f) { return name == f; });
@@ -94,7 +116,7 @@ bool is_runtime_sym(const std::string_view name) noexcept {
         "strlen",  "strcpy",  "strcmp",  "strncmp",  "strncpy", "strchr", "strrchr",
         "printf",  "fprintf", "sprintf", "snprintf", "asprintf",
         "puts",    "fputs",   "putchar", "fputc",    "fwrite",  "fread",
-        "fopen",   "fclose",  "fflush",
+        "fclose",  "fflush",   // fopen is RED (file-open entry point)
         "exit",    "abort",   "atexit",  "quick_exit", "_Exit",
         "__assert_fail", "__cxa_assert_fail",
         "write",   "read",
