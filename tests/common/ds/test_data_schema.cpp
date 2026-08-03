@@ -141,6 +141,46 @@ void test_csv_range_and_partial_rejected() {
     expect(!ds::int_codec{}.from_csv("42abc", v2, e2, "lv"), "csv partial parse rejected");
     TEST_PASS("csv range + partial rejected");
 }
+void test_int_narrow_type_guard() {
+    // int32_t 目标收到超出 int32 范围的值 → 拒绝，而非静默截断（review M2）
+    Json j; j = Json(int64_t{3000000000LL});
+    int32_t v = 0; ds::ErrorList e;
+    expect(!ds::int_codec{}.from_json(j, v, e, "n"), "value beyond int32 rejected");
+    expect(e.size() == 1 && e.errors()[0].path == "n", "narrow error path");
+    // CSV 侧同样拒绝
+    int32_t v2 = 0; ds::ErrorList e2;
+    expect(!ds::int_codec{}.from_csv("3000000000", v2, e2, "n"), "csv beyond int32 rejected");
+    // 正常值仍通过
+    Json j2; j2 = Json(int64_t{42});
+    int32_t ok = 0; ds::ErrorList e3;
+    expect(ds::int_codec{}.from_json(j2, ok, e3, "n") && ok == 42, "in-range int32 still ok");
+    TEST_PASS("int_codec narrow-type guard");
+}
+void test_int_double_bounds_no_ub() {
+    // 超大 double（1e300，超出 int64）→ cast 前拦截（防 [conv.fpint] UB，review M1）
+    Json j = Json::parse("{\"x\": 1e300}");
+    int v = 0; ds::ErrorList e;
+    expect(!ds::int_codec{}.from_json(j["x"], v, e, "x"), "1e300 rejected");
+    expect(e.size() == 1 && e.errors()[0].path == "x", "huge double error path");
+    // 2^63（> INT64_MAX）拒绝
+    Json j2 = Json::parse("{\"x\": 9223372036854775808.0}");
+    int v2 = 0; ds::ErrorList e2;
+    expect(!ds::int_codec{}.from_json(j2["x"], v2, e2, "x"), "2^63 rejected");
+    // -2^63 与 < 2^63 的最大可表示 double，用 int64_t 目标精确解析
+    Json j3 = Json::parse("{\"x\": -9223372036854775808.0}");
+    int64_t v3 = 0; ds::ErrorList e3;
+    expect(ds::int_codec{}.from_json(j3["x"], v3, e3, "x") && v3 == INT64_MIN,
+           "-2^63 representable in int64_t");
+    Json j4 = Json::parse("{\"x\": 9223372036854774784.0}");   // 2^63 - 1024
+    int64_t v4 = 0; ds::ErrorList e4;
+    expect(ds::int_codec{}.from_json(j4["x"], v4, e4, "x") && v4 == 9223372036854774784LL,
+           "largest double < 2^63 parses");
+    // 小数 double 仍报 expected integer
+    Json j5 = Json::parse("{\"x\": 3.5}");
+    int v5 = 0; ds::ErrorList e5;
+    expect(!ds::int_codec{}.from_json(j5["x"], v5, e5, "x"), "fractional double rejected");
+    TEST_PASS("int_codec double bounds no UB");
+}
 // ── 4. JSON 绑定 ────────────────────────────────────────────────────
 struct Person {
     std::string name;
@@ -867,15 +907,15 @@ void test_object_codec_required_nested_missing() {
     Employee out; ds::ErrorList err;
     expect(!EmployeeJson::parse(j, out, err), "missing required nested field fails");
     expect(err.size() == 1 && err.errors()[0].path == "home", "missing nested path is home");
-    // 嵌套对象在场但内部必填子字段缺省 → 嵌套 parse 失败；内层错误路径为扁平子字段名
+    // 嵌套对象在场但内部必填子字段缺省 → 嵌套 parse 失败；内层错误路径带外层前缀
     Json j2 = Json::object()
         .set("name", Json(std::string("alice")))
         .set("home", Json::object().set("city", Json(std::string("Springfield"))));  // street 缺省
     Employee out2; ds::ErrorList err2;
     expect(!EmployeeJson::parse(j2, out2, err2), "missing inner required field fails");
     bool has_street = false;
-    for (const auto& fe : err2.errors()) if (fe.path == "street") has_street = true;
-    expect(has_street, "inner required error recorded (flat path design)");
+    for (const auto& fe : err2.errors()) if (fe.path == "home.street") has_street = true;
+    expect(has_street, "inner required error recorded (prefixed path)");
     TEST_PASS("object_codec required nested field missing");
 }
 
@@ -1031,6 +1071,37 @@ void test_object_codec_deep_nesting() {
     TEST_PASS("object_codec deep nesting");
 }
 
+// 对象数组：内层错误路径带 [i] 下标前缀，可区分元素（防 items[0] vs items[1] 歧义，review M3）
+struct Row {
+    std::string name;
+};
+struct RowSchema {
+    using Type = Row;
+    static constexpr auto fields = std::tuple{
+        ds::required_field("name", &Row::name, ds::string_codec{}),
+    };
+};
+struct Grid {
+    std::vector<Row> rows;
+};
+struct GridSchema {
+    using Type = Grid;
+    static constexpr auto fields = std::tuple{
+        ds::field("rows", &Grid::rows, ds::vector_codec<ds::object_codec<RowSchema>>{}),
+    };
+};
+using GridJson = ds::json::Schema<GridSchema>;
+
+void test_object_codec_array_error_path_prefix() {
+    Json j = Json::parse(R"({"rows":[{"name":"a"},{}]})");
+    Grid out; ds::ErrorList err;
+    expect(!GridJson::parse(j, out, err), "element missing required fails");
+    bool has_ix = false;
+    for (const auto& fe : err.errors()) if (fe.path == "rows[1].name") has_ix = true;
+    expect(has_ix, "array element error path is rows[1].name");
+    TEST_PASS("object_codec array element error path prefixed");
+}
+
 int main() {
     test_error_collection();
     test_validation_error_aggregates();
@@ -1042,6 +1113,8 @@ int main() {
     test_type_mismatch();
     test_scalar_csv_roundtrip();
     test_csv_range_and_partial_rejected();
+    test_int_narrow_type_guard();
+    test_int_double_bounds_no_ub();
     test_json_roundtrip();
     test_json_required_missing();
     test_json_unknown_key_tolerant_vs_strict();
@@ -1081,5 +1154,6 @@ int main() {
     test_object_codec_csv_rejected();
     test_object_codec_optional_nested();
     test_object_codec_deep_nesting();
+    test_object_codec_array_error_path_prefix();
     return print_summary();
 }

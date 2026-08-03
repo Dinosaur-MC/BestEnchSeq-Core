@@ -4,11 +4,14 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <concepts>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -44,8 +47,26 @@ struct string_codec {
 
 // ── int_（聚合：min/max，默认全范围）───────────────────────────────
 struct int_codec {
-    int64_t min = INT64_MIN;
-    int64_t max = INT64_MAX;
+    int64_t min = std::numeric_limits<int64_t>::min();
+    int64_t max = std::numeric_limits<int64_t>::max();
+
+    // double 表示下 int64 的边界：-2^63 精确可表示，2^63（> INT64_MAX）不可表示，
+    // 故可安全 cast 的区间为 [-2^63, 2^63)。
+    static constexpr double kInt64MinD = -9223372036854775808.0;      // -2^63
+    static constexpr double kInt64MaxPlus1D = 9223372036854775808.0;  //  2^63
+
+    // n 须落在 [codec 配置范围 ∩ V 可表示范围]：防窄目标类型（int32/uint8/...）静默截断。
+    template<class V> requires std::integral<V>
+    bool in_v_range(int64_t n) const {
+        if (n < min || n > max) return false;
+        if constexpr (std::is_signed_v<V>) {
+            return n >= static_cast<int64_t>(std::numeric_limits<V>::min()) &&
+                   n <= static_cast<int64_t>(std::numeric_limits<V>::max());
+        } else {
+            return n >= 0 &&
+                   static_cast<uint64_t>(n) <= static_cast<uint64_t>(std::numeric_limits<V>::max());
+        }
+    }
 
     template<class V> requires std::integral<V>
     void to_json(const V& v, Json& out) const { out = Json(static_cast<int64_t>(v)); }
@@ -55,13 +76,15 @@ struct int_codec {
         const auto* num = std::get_if<Json::Number>(&val);
         if (!num) { e.add(path, "expected number"); return false; }
         if (const auto* i = std::get_if<int64_t>(num)) {
-            if (*i < min || *i > max) { e.add(path, "out of range"); return false; }
+            if (!in_v_range<V>(*i)) { e.add(path, "out of range"); return false; }
             v_out = static_cast<V>(*i); return true;
         }
         if (const auto* d = std::get_if<double>(num)) {
-            if (*d != static_cast<int64_t>(*d)) { e.add(path, "expected integer"); return false; }
+            // 非有限（NaN/±inf）或非整数拒绝；cast 前先验 int64 表示范围防 [conv.fpint] UB。
+            if (!std::isfinite(*d) || std::trunc(*d) != *d) { e.add(path, "expected integer"); return false; }
+            if (*d < kInt64MinD || *d >= kInt64MaxPlus1D) { e.add(path, "out of range"); return false; }
             int64_t n = static_cast<int64_t>(*d);
-            if (n < min || n > max) { e.add(path, "out of range"); return false; }
+            if (!in_v_range<V>(n)) { e.add(path, "out of range"); return false; }
             v_out = static_cast<V>(n); return true;
         }
         e.add(path, "expected number"); return false;
@@ -74,7 +97,7 @@ struct int_codec {
         const char* end = s.data() + s.size();
         auto [ptr, ec] = std::from_chars(s.data(), end, n);
         if (ec != std::errc() || ptr != end) { e.add(path, "invalid integer"); return false; }
-        if (n < min || n > max) { e.add(path, "out of range"); return false; }
+        if (!in_v_range<V>(n)) { e.add(path, "out of range"); return false; }
         v = static_cast<V>(n); return true;
     }
 };
@@ -135,7 +158,8 @@ struct object_codec {
     template<class V>
     bool from_json(const Json& j, V& obj, ErrorList& err, const std::string& path) const {
         if (j.type() != JsonType::Object) { err.add(path, "expected object"); return false; }
-        return ds::json::Schema<SubSchema>::parse(j, obj, err);
+        // 把自身路径传入子 schema（如 "home"/"items[0]"），使内层字段错误带完整路径。
+        return ds::json::Schema<SubSchema>::parse(j, obj, err, path);
     }
     template<class V>
     void to_csv(const V&, std::string& out) const { out = "<nested-object>"; }

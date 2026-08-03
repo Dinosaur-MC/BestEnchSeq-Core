@@ -1,8 +1,6 @@
 #pragma once
 #include "common/io/json.h"
 #include "ds/Error.h"
-#include "ds/Field.h"
-#include "ds/codec/Codecs.h"
 
 #include <string>
 #include <tuple>
@@ -47,22 +45,32 @@ struct Schema {
 
     // ── 反序列化（收集式）──
     static bool parse(const Json& obj, Type& o, ErrorList& err) {
-        if (obj.type() != JsonType::Object) { err.add("", "expected object"); return false; }
+        return parse(obj, o, err, "");
+    }
+    /// 带路径前缀重载：嵌套对象（object_codec）把自身路径传入（如 "home"/"items[0]"），
+    /// 使内层字段错误带完整路径（"home.street"/"items[0].type"），避免数组元素间歧义。
+    static bool parse(const Json& obj, Type& o, ErrorList& err, const std::string& prefix) {
+        if (obj.type() != JsonType::Object) { err.add(prefix, "expected object"); return false; }
         bool ok = true;
-        std::apply([&](const auto&... f) { (parse_field(f, obj, o, err, ok), ...); }, S::fields);
+        std::apply([&](const auto&... f) { (parse_field(f, obj, o, err, ok, prefix), ...); }, S::fields);
         if constexpr (Strict)
-            check_unknown_keys(obj, err);
+            check_unknown_keys(obj, err, prefix);
         // 跨字段校验钩子：S 定义 static validate(Type&, ErrorList&) 时调用（spec §5）。
         if constexpr (requires { S::validate(o, err); })
             S::validate(o, err);
         return ok && err.empty();
     }
+    static std::string field_path(const std::string& prefix, const char* name) {
+        return prefix.empty() ? std::string(name) : prefix + "." + name;
+    }
     template<typename F>
-    static void parse_field(const F& f, const Json& obj, Type& o, ErrorList& err, bool& ok) {
+    static void parse_field(const F& f, const Json& obj, Type& o, ErrorList& err, bool& ok,
+                            const std::string& prefix) {
+        std::string fp = field_path(prefix, f.name);
         Json raw;
         if (get_key(obj, f.name, f.aliases, raw)) {
             typename F::value_type v{};
-            if (f.codec.from_json(raw, v, err, f.name)) {
+            if (f.codec.from_json(raw, v, err, fp)) {
                 f.set(o, std::move(v));
                 if constexpr (F::Presence != nullptr)
                     o.*(F::Presence) = true;
@@ -73,7 +81,7 @@ struct Schema {
                     o.*(F::Presence) = false;
             }
         } else if (f.required) {
-            err.add(f.name, "missing required field");
+            err.add(fp, "missing required field");
             ok = false;
             if constexpr (F::Presence != nullptr)
                 o.*(F::Presence) = false;
@@ -82,12 +90,12 @@ struct Schema {
         }
         // 非必填且缺省 → 保持默认
     }
-    static void check_unknown_keys(const Json& obj, ErrorList& err) {
+    static void check_unknown_keys(const Json& obj, ErrorList& err, const std::string& prefix) {
         for (const auto& [key, _] : obj.as_object()) {
             bool known = std::apply([&](const auto&... f) {
                 return ((std::string(f.name) == key) || ...);
             }, S::fields);
-            if (!known) err.add(key, "unknown field");
+            if (!known) err.add(prefix.empty() ? key : prefix + "." + key, "unknown field");
         }
     }
 
