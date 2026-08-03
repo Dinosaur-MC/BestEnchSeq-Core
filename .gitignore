@@ -303,6 +303,7 @@ massif.out.*
 
 CLAUDE.md
 .claude/
+.superpowers/
 docs/superpowers
 .cache/
 .temp/
