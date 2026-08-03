@@ -527,6 +527,307 @@ void test_c_abi_solve_unknown_ench() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: C ABI version
+// ---------------------------------------------------------------------------
+
+void test_c_abi_version() {
+    const char* v = besq_get_version();
+    expect(v != nullptr, "c abi get_version: non-null");
+    expect(v && *v != '\0', "c abi get_version: non-empty");
+    TEST_PASS("C ABI version");
+}
+
+// ---------------------------------------------------------------------------
+// Helper: write a small native profile JSON (a custom enchantment) to a temp
+// file and return the path.  Removed on scope exit.
+// ---------------------------------------------------------------------------
+class TempProfileFile {
+public:
+    explicit TempProfileFile(const std::string& content) {
+        static int counter = 0;
+        _path = (std::filesystem::temp_directory_path() /
+                 ("besq_abi_prof_" + std::to_string(++counter) + ".json")).string();
+        std::ofstream f(_path);
+        f << content;
+    }
+    ~TempProfileFile() { std::error_code ec; std::filesystem::remove(_path, ec); }
+    const char* c_str() const { return _path.c_str(); }
+
+private:
+    std::string _path;
+};
+
+// ---------------------------------------------------------------------------
+// Test: C ABI load_file — merges the file's enchantments into the active
+// profile (visible via besq_list_enchantments)
+// ---------------------------------------------------------------------------
+
+void test_c_abi_load_file() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    TempProfileFile f(R"({"name":"abi_extra","enchantments":[{"id":"mod:cabi","name":"Cabi","platform":"java","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]}]})");
+    int rc = besq_load_file(ctx, f.c_str());
+    expect_eq(rc, 0, "c abi load_file returns 0");
+
+    char* list = besq_list_enchantments(ctx);
+    expect(list != nullptr, "c abi list_enchantments non-null after load_file");
+    if (list) {
+        expect(std::string(list).find("mod:cabi") != std::string::npos,
+               "c abi load_file merges the enchantment into the active profile");
+        besq_free_string(list);
+    }
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI load_file");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI load_data — same merge path via the filters routing
+// ---------------------------------------------------------------------------
+
+void test_c_abi_load_data() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    TempProfileFile f(R"({"name":"abi_data","enchantments":[{"id":"mod:cabid","name":"CabiD","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})");
+    int rc = besq_load_data(ctx, f.c_str());
+    expect_eq(rc, 0, "c abi load_data returns 0");
+
+    char* list = besq_list_enchantments(ctx);
+    expect(list != nullptr, "c abi list_enchantments non-null after load_data");
+    if (list) {
+        expect(std::string(list).find("mod:cabid") != std::string::npos,
+               "c abi load_data merges the enchantment into the active profile");
+        besq_free_string(list);
+    }
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI load_data");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI import_profile — merges into the active profile
+// ---------------------------------------------------------------------------
+
+void test_c_abi_import_profile() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    TempProfileFile f(R"({"name":"abi_import","enchantments":[{"id":"mod:cabiimp","name":"CabiImp","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})");
+    int rc = besq_import_profile(ctx, f.c_str());
+    expect_eq(rc, 0, "c abi import_profile returns 0");
+
+    char* list = besq_list_enchantments(ctx);
+    expect(list != nullptr, "c abi list_enchantments non-null after import_profile");
+    if (list) {
+        expect(std::string(list).find("mod:cabiimp") != std::string::npos,
+               "c abi import_profile merges the enchantment into the active profile");
+        besq_free_string(list);
+    }
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI import_profile");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI merge_profile — content added to source lands in dest
+// ---------------------------------------------------------------------------
+
+void test_c_abi_merge_profile() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    expect(besq_fork_profile(ctx, "builtin:vanilla", "minecraft:src") == 0, "fork src");
+    expect(besq_fork_profile(ctx, "builtin:vanilla", "minecraft:dst") == 0, "fork dst");
+    expect(besq_activate_profile(ctx, "minecraft:src") == 0, "activate src");
+
+    int rc = besq_add_enchantment(ctx,
+        R"({"id":"mod:mrg","name":"Mrg","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
+    expect_eq(rc, 0, "c abi add_enchantment to src");
+
+    expect(besq_merge_profile(ctx, "minecraft:src", "minecraft:dst") == 0, "merge src into dst");
+    expect(besq_activate_profile(ctx, "minecraft:dst") == 0, "activate dst");
+
+    char* list = besq_list_enchantments(ctx);
+    expect(list != nullptr, "c abi list_enchantments non-null after merge");
+    if (list) {
+        expect(std::string(list).find("mod:mrg") != std::string::npos,
+               "c abi merged enchantment is present in dest");
+        besq_free_string(list);
+    }
+
+    besq_remove_profile(ctx, "minecraft:src");
+    besq_remove_profile(ctx, "minecraft:dst");
+    besq_destroy(ctx);
+    TEST_PASS("C ABI merge_profile");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI enchantment add / modify / remove (incl. error paths)
+// ---------------------------------------------------------------------------
+
+void test_c_abi_ench_edit() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    int rc = besq_add_enchantment(ctx,
+        R"({"id":"mod:edit","name":"Edit","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
+    expect_eq(rc, 0, "c abi add_enchantment");
+
+    rc = besq_add_enchantment(ctx,
+        R"({"id":"mod:edit","name":"Edit","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
+    expect_eq(rc, -1, "c abi duplicate add_enchantment fails");
+    expect(besq_last_error(ctx) != nullptr, "c abi last_error set on duplicate add");
+
+    rc = besq_modify_enchantment(ctx, R"({"id":"mod:edit","max_level":5})");
+    expect_eq(rc, 0, "c abi modify_enchantment");
+
+    rc = besq_modify_enchantment(ctx, R"({"id":"mod:nope","max_level":5})");
+    expect_eq(rc, -1, "c abi modify nonexistent enchantment fails");
+
+    rc = besq_remove_enchantment(ctx, "mod:edit");
+    expect_eq(rc, 0, "c abi remove_enchantment");
+
+    rc = besq_remove_enchantment(ctx, "mod:edit");
+    expect_eq(rc, -1, "c abi remove nonexistent enchantment fails");
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI enchantment edit");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI equipment add / remove (incl. error paths)
+// ---------------------------------------------------------------------------
+
+void test_c_abi_equipment_edit() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    int rc = besq_add_equipment(ctx,
+        R"({"id":"mod:weapon","name":"Weapon","category":"sword","max_durability":1561})");
+    expect_eq(rc, 0, "c abi add_equipment");
+
+    rc = besq_add_equipment(ctx,
+        R"({"id":"mod:weapon","name":"Weapon","category":"sword","max_durability":1561})");
+    expect_eq(rc, -1, "c abi duplicate add_equipment fails");
+
+    rc = besq_remove_equipment(ctx, "mod:weapon");
+    expect_eq(rc, 0, "c abi remove_equipment");
+
+    rc = besq_remove_equipment(ctx, "mod:weapon");
+    expect_eq(rc, -1, "c abi remove nonexistent equipment fails");
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI equipment edit");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI add_category + list_categories
+// ---------------------------------------------------------------------------
+
+void test_c_abi_category() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    int rc = besq_add_category(ctx, "mycat");
+    expect_eq(rc, 0, "c abi add_category");
+
+    rc = besq_add_category(ctx, "mycat");
+    expect_eq(rc, -1, "c abi duplicate add_category fails");
+
+    char* cats = besq_list_categories(ctx);
+    expect(cats != nullptr, "c abi list_categories non-null");
+    if (cats) {
+        expect(std::string(cats).find("mycat") != std::string::npos,
+               "c abi list_categories contains the added category");
+        besq_free_string(cats);
+    }
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI category");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI list_enchantments / list_equipment / list_categories
+// ---------------------------------------------------------------------------
+
+void test_c_abi_lists() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    char* ench = besq_list_enchantments(ctx);
+    expect(ench != nullptr, "c abi list_enchantments non-null");
+    if (ench) {
+        expect(std::string(ench).find("sharpness") != std::string::npos,
+               "c abi list_enchantments has sharpness");
+        besq_free_string(ench);
+    }
+
+    char* eq = besq_list_equipment(ctx);
+    expect(eq != nullptr, "c abi list_equipment non-null");
+    if (eq) {
+        expect(std::string(eq).find("diamond_sword") != std::string::npos,
+               "c abi list_equipment has diamond_sword");
+        besq_free_string(eq);
+    }
+
+    char* cat = besq_list_categories(ctx);
+    expect(cat != nullptr, "c abi list_categories non-null");
+    if (cat) besq_free_string(cat);
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI lists");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI list_algorithms — built-in strategies enumerated
+// ---------------------------------------------------------------------------
+
+void test_c_abi_list_algorithms() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    int n = 0;
+    char** algos = besq_list_algorithms(ctx, &n);
+    expect(algos != nullptr, "c abi list_algorithms non-null");
+    expect(n >= 3, "c abi list_algorithms has at least the 3 built-ins");
+    bool has_dp = false;
+    for (int i = 0; i < n; ++i)
+        if (algos[i] && std::string(algos[i]) == "dp_merge") has_dp = true;
+    expect(has_dp, "c abi list_algorithms contains dp_merge");
+    besq_free_string_list(algos, n);
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI list_algorithms");
+}
+
+// ---------------------------------------------------------------------------
+// Test: C ABI abort_solve when idle is a safe no-op
+// ---------------------------------------------------------------------------
+
+void test_c_abi_abort_idle() {
+    auto* ctx = besq_create();
+    expect(ctx != nullptr, "c abi create");
+    expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
+
+    int rc = besq_abort_solve(ctx);
+    expect_eq(rc, 0, "c abi abort_solve when idle is a no-op");
+
+    besq_destroy(ctx);
+    TEST_PASS("C ABI abort idle");
+}
+
+// ---------------------------------------------------------------------------
 // Test: concurrent abort_solve (B-T22)
 // ---------------------------------------------------------------------------
 
@@ -626,6 +927,17 @@ int main() {
         test_besq_import_profile_invalidates_effective_cache();
         test_besq_load_file_datapack_keeps_tags();
         test_c_abi();
+        test_c_abi_version();
+        test_c_abi_load_file();
+        test_c_abi_load_data();
+        test_c_abi_import_profile();
+        test_c_abi_merge_profile();
+        test_c_abi_ench_edit();
+        test_c_abi_equipment_edit();
+        test_c_abi_category();
+        test_c_abi_lists();
+        test_c_abi_list_algorithms();
+        test_c_abi_abort_idle();
         test_c_abi_solve_default_algo();
         test_c_abi_solve_inventory();
         test_c_abi_solve_unknown_ench();

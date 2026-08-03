@@ -11,6 +11,7 @@
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
+#include "common/utils/EnvUtil.hpp"
 #include "framework/test_utils.h"
 
 #include <filesystem>
@@ -758,6 +759,101 @@ void test_algo_opt_wiring() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Test: CLIApp::apply_lang — env / flag precedence and invalid fallback
+// ---------------------------------------------------------------------------
+
+void test_apply_lang() {
+    register_builtin_translations(LanguageManager::instance());
+    auto& lang_mgr = LanguageManager::instance();
+
+    // --lang en_US
+    {
+        const char* argv[] = {"besq", "--lang", "en_US"};
+        CLIApp::apply_lang(3, const_cast<char**>(argv));
+        expect_eq(lang_mgr.active().name(), std::string("en_US"),
+                  "apply_lang: --lang en_US");
+    }
+    // --lang zh_CN
+    {
+        const char* argv[] = {"besq", "--lang", "zh_CN"};
+        CLIApp::apply_lang(3, const_cast<char**>(argv));
+        expect_eq(lang_mgr.active().name(), std::string("zh_CN"),
+                  "apply_lang: --lang zh_CN");
+    }
+    // BESQ_LANG env (no --lang)
+    {
+        set_env("BESQ_LANG", "zh_CN");
+        const char* argv[] = {"besq"};
+        CLIApp::apply_lang(1, const_cast<char**>(argv));
+        expect_eq(lang_mgr.active().name(), std::string("zh_CN"),
+                  "apply_lang: BESQ_LANG env selected");
+        unset_env("BESQ_LANG");
+    }
+    // --lang flag overrides env
+    {
+        set_env("BESQ_LANG", "zh_CN");
+        const char* argv[] = {"besq", "--lang", "en_US"};
+        CLIApp::apply_lang(3, const_cast<char**>(argv));
+        expect_eq(lang_mgr.active().name(), std::string("en_US"),
+                  "apply_lang: --lang overrides env");
+        unset_env("BESQ_LANG");
+    }
+    // Invalid --lang prints a stderr warning and keeps the base language
+    {
+        set_env("BESQ_LANG", "en_US");
+        const char* argv[] = {"besq", "--lang", "xx_YY"};
+        CLIApp::apply_lang(3, const_cast<char**>(argv));
+        expect_eq(lang_mgr.active().name(), std::string("en_US"),
+                  "apply_lang: invalid --lang keeps base");
+        unset_env("BESQ_LANG");
+    }
+
+    TEST_PASS("CLIApp apply_lang");
+}
+
+// ---------------------------------------------------------------------------
+// Test: CLIApp::detect_target
+// ---------------------------------------------------------------------------
+
+void test_detect_target() {
+    {
+        const char* argv[] = {"besq"};
+        expect_eq(CLIApp::detect_target(1, const_cast<char**>(argv)),
+                  std::string("cli"), "detect_target: default is cli");
+    }
+    {
+        const char* argv[] = {"besq", "--api", "gui"};
+        expect_eq(CLIApp::detect_target(3, const_cast<char**>(argv)),
+                  std::string("gui"), "detect_target: --api gui");
+    }
+    {
+        const char* argv[] = {"besq", "--api", "gui", "--target", "diamond_sword"};
+        expect_eq(CLIApp::detect_target(5, const_cast<char**>(argv)),
+                  std::string("gui"), "detect_target: --api found anywhere");
+    }
+    TEST_PASS("CLIApp detect_target");
+}
+
+// ---------------------------------------------------------------------------
+// Test: CLIApp::help_text — grouped option help
+// ---------------------------------------------------------------------------
+
+void test_help_text() {
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
+
+    auto text = CLIApp::help_text();
+    expect(text.find("Usage:") != std::string::npos, "help_text has Usage header");
+    expect(text.find("--target") != std::string::npos, "help_text lists --target");
+    expect(text.find("--export") != std::string::npos, "help_text lists --export");
+    expect(text.find("--list-algorithms") != std::string::npos,
+           "help_text lists --list-algorithms");
+    expect(text.find("--profile") != std::string::npos, "help_text lists --profile");
+
+    TEST_PASS("CLIApp help_text");
+}
+
 int main() {
     try {
         test_no_args_shows_usage();
@@ -780,6 +876,9 @@ int main() {
         test_inventory_explicit_profile_overrides_json();
         test_inventory_source_rejection();
         test_inventory_invalid_mode_throws();
+        test_apply_lang();
+        test_detect_target();
+        test_help_text();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
