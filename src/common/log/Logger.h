@@ -77,6 +77,17 @@ public:
     size_t get_retention() const noexcept { return _max_retention; }
 
 private:
+    // ── Console output (stdout/stderr mirror) ─────────────────────────
+    /// Mirror log lines to the terminal: Warn/Error → stderr, Debug/Info →
+    /// stdout.  Enabled by default at Warn level (warnings/errors are the
+    /// user-visible diagnostics); Info/Debug stay in files unless the level
+    /// is lowered.  Configure via BESQ_LOG_CONSOLE (0/1) and
+    /// BESQ_LOG_CONSOLE_LEVEL (debug|info|warn|error), or here.
+    void set_console_enabled(bool on) noexcept { _console_enabled.store(on, std::memory_order_release); }
+    bool console_enabled() const noexcept { return _console_enabled.load(std::memory_order_acquire); }
+    void set_console_level(LogLevel lv) noexcept { _console_level.store(lv, std::memory_order_release); }
+    LogLevel console_level() const noexcept { return _console_level.load(std::memory_order_acquire); }
+
     // ── FileHandler ────────────────────────────────────────────────────
     // Consumes LogEntry instances on the EventLoop worker thread.
     // Files are opened in the constructor (before worker starts) and
@@ -84,7 +95,9 @@ private:
     struct FileHandler {
         explicit FileHandler(std::string log_dir,
                              std::atomic<uint64_t>* pp = nullptr,
-                             size_t* rp = nullptr);
+                             size_t* rp = nullptr,
+                             std::atomic<bool>* ce = nullptr,
+                             std::atomic<LogLevel>* cl = nullptr);
         void operator()(LogEntry entry);
         void rotate();
 
@@ -93,17 +106,21 @@ private:
         std::ofstream latest_file;
         std::atomic<uint64_t>* processed_ptr{nullptr};
         size_t* retention_ptr{nullptr};
+        std::atomic<bool>* console_enabled_ptr{nullptr};
+        std::atomic<LogLevel>* console_level_ptr{nullptr};
     };
 
     explicit Logger(std::string log_dir = "logs");
 
-    // _max_retention and _processed MUST precede _loop because the
-    // FileHandler constructor receives pointers to them (via the
-    // _loop initializer list). C++ initializes members in declaration
-    // order, so these must come before _loop.
+    // _console_*, _max_retention and _processed MUST precede _loop because
+    // the FileHandler constructor receives pointers to them (via the _loop
+    // initializer list). C++ initializes members in declaration order, so
+    // these must come before _loop.
     std::atomic<uint64_t> _enqueued{0};
     std::atomic<uint64_t> _processed{0};
     size_t _max_retention{5};
+    std::atomic<bool> _console_enabled{true};
+    std::atomic<LogLevel> _console_level{LogLevel::Warn};
     EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, FileHandler> _loop;
     std::atomic<LogLevel> _level{LogLevel::Debug};
 };

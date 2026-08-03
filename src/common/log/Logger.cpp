@@ -1,6 +1,8 @@
 #include "Logger.h"
+#include "utils/EnvUtil.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <exception>
 #include <filesystem>
@@ -51,8 +53,10 @@ static std::string level_str(LogLevel lv) {
 
 // ─── FileHandler ──────────────────────────────────────────────────────
 
-Logger::FileHandler::FileHandler(std::string log_dir, std::atomic<uint64_t>* pp, size_t* rp)
-    : log_dir(std::move(log_dir)), processed_ptr(pp), retention_ptr(rp)
+Logger::FileHandler::FileHandler(std::string log_dir, std::atomic<uint64_t>* pp, size_t* rp,
+                                 std::atomic<bool>* ce, std::atomic<LogLevel>* cl)
+    : log_dir(std::move(log_dir)), processed_ptr(pp), retention_ptr(rp),
+      console_enabled_ptr(ce), console_level_ptr(cl)
 {
     try {
         rotate();
@@ -104,6 +108,18 @@ void Logger::FileHandler::operator()(LogEntry entry) {
         latest_file.flush();
     }
 
+    // Console mirror: Warn/Error → stderr (diagnostics), Debug/Info → stdout.
+    // Async, but flushed per-line; the Logger destructor drains on exit.
+    if (console_enabled_ptr && console_enabled_ptr->load(std::memory_order_acquire)) {
+        auto cl = console_level_ptr ? console_level_ptr->load(std::memory_order_acquire)
+                                    : LogLevel::Warn;
+        if (entry.level >= cl) {
+            std::FILE* s = (entry.level >= LogLevel::Warn) ? stderr : stdout;
+            std::fputs(line.c_str(), s);
+            std::fflush(s);
+        }
+    }
+
     if (processed_ptr)
         processed_ptr->fetch_add(1, std::memory_order_release);
 }
@@ -115,11 +131,31 @@ Logger& Logger::instance() {
     return logger;
 }
 
+namespace {
+
+/// Parse BESQ_LOG_CONSOLE_LEVEL ("debug"|"info"|"warn"|"error"; default warn).
+LogLevel parse_console_level(const std::string &s) {
+    if (s == "debug") return LogLevel::Debug;
+    if (s == "info")  return LogLevel::Info;
+    if (s == "warn")  return LogLevel::Warn;
+    if (s == "error") return LogLevel::Error;
+    return LogLevel::Warn;
+}
+
+} // anonymous namespace
+
 // ─── Public API ───────────────────────────────────────────────────────
 
 Logger::Logger(std::string log_dir)
-    : _loop(FileHandler(std::move(log_dir), &_processed, &_max_retention))
+    : _loop(FileHandler(std::move(log_dir), &_processed, &_max_retention,
+                        &_console_enabled, &_console_level))
 {
+    // Env overrides for the console mirror (before the worker starts):
+    //   BESQ_LOG_CONSOLE        = 0/1  (default 1 = enabled)
+    //   BESQ_LOG_CONSOLE_LEVEL  = debug|info|warn|error  (default warn)
+    _console_enabled.store(get_env<bool>("BESQ_LOG_CONSOLE", true), std::memory_order_release);
+    _console_level.store(parse_console_level(get_env_str("BESQ_LOG_CONSOLE_LEVEL")),
+                         std::memory_order_release);
     _loop.start();
 }
 
