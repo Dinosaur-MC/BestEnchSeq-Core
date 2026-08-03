@@ -117,6 +117,9 @@ for tier = 0, 1, 2, … while tiers[tier] exists:
 
     sort items by forge cost descending
     → equipment first, then highest-cost book, etc.
+    (inventory 模式：装备保持 resolver 进入顺序——位置 0 恒为 resolver
+     选定的无冲突 base（平衡树根）；仅书按成本降序。direct 模式单装备，
+     装备排序无差别，保持原行为。)
 
     arrange_by_popcount(items)
     → position k → item that should go through ~popcount(k) merges
@@ -374,6 +377,19 @@ pairs forward.
   tier, one item passes through un-forged to the next tier.  This
   "leftover strand" may rejoin the main forge chain later but will
   always have gone through one fewer merge than optimal.
+- **Inventory conflicting retained equipment** — In inventory mode the
+  resolver may retain an equipment that carries a target enchant AND an
+  enchant conflicting with the target (e.g. thorns III + blast_protection
+  IV on one chestplate).  `arrange_by_popcount` preserves the resolver's
+  equipment order (base at position 0 = the balanced-tree root), so a
+  same-tier conflicting equipment merges into the base as a sacrifice and
+  its conflicting enchant is dropped by `forge_into` (Java +1 penalty) —
+  correct.  Residual (pre-existing): if the conflicting retained
+  equipment sits in a **lower PPN tier** than the base, it forges with the
+  books in its own tier first and can absorb a needed book, wasting its
+  enchant via silent conflict-drop → false "unreachable".  Follow-up
+  candidates: make `is_forgeable` reject book→conflicting-equipment, or
+  bias tier processing so the base's tier resolves first.
 
 ---
 
@@ -400,9 +416,14 @@ item).  The arrangement and merge overhead scales with `n log n` via the
 
 ## Implementation notes
 
-- **`arrange_by_popcount()`** — sorts by `estimate_forge_cost()` which
-  is a virtual call on `IForgeEngine`.  Subclasses that override the
-  cost model will automatically affect Hamming's ordering.
+- **`arrange_by_popcount(preserve_equip_order)`** — sorts by
+  `estimate_forge_cost()` (a virtual call on `IForgeEngine`; subclasses
+  that override the cost model automatically affect Hamming's ordering).
+  In inventory mode (`preserve_equip_order=true`) equipment is kept in
+  resolver order via `std::stable_sort` (position 0 = resolver base), and
+  only books are cost-sorted — the resolver, not cost, decides the base.
+  In direct mode (`false`) equipment keeps the cost-descending sort
+  (single equipment, no effect).
 - **`dup_floor_members()`** — called once per popcount level per tier.
   Each call allocates a small `std::vector<int>`.  For n ≲ 32 this is
   negligible; for extremely large n a pre-computed LUT could replace it.
