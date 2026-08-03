@@ -520,13 +520,13 @@ void test_apply_book_target_all_enchants_applicable() {
     TEST_PASS("test_apply_book_target_all_enchants_applicable");
 }
 
-// ─── Test 20: inventory equipment carrying an enchant inapplicable to ITSELF
-//     throws.  The validation must use the ITEM's own tag set, not the target's:
-//     here the target is a chestplate (protection IS applicable there) while the
-//     inventory equipment item is a sword (protection is NOT applicable).  If the
-//     applicability were (wrongly) evaluated against the target's tags, this
-//     would NOT throw — the test would fail. ───
-void test_apply_inventory_equipment_inapplicable_ench() {
+// ─── Test 20: heterogeneous equipment is excluded BEFORE per-item applicability
+//     validation.  The target is a chestplate; the inventory holds a sword carrying
+//     protection (inapplicable to the sword).  The heterogeneous filter drops the
+//     sword first (SRS: pool = books + same-id equipment only), so the inapplicable
+//     enchant never reaches validation — no throw, empty pool.  Matching-id
+//     equipment still validates (see test_apply_inventory_equipment_inapplicable_throws). ───
+void test_apply_inventory_hetero_equipment_skips_validation() {
     Profile p("test:invbad");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
                      NSID("#minecraft:sword"), 1561});
@@ -547,18 +547,174 @@ void test_apply_inventory_equipment_inapplicable_ench() {
     req.target_item.enchantments.emplace(NSID("minecraft:protection"), "Protection", 4);
     req.forge_config = algorithm::ForgeConfig{};
 
-    // inventory: a diamond_sword EQUIPMENT item carrying protection (inapplicable to itself)
+    // inventory: a diamond_sword EQUIPMENT item carrying protection (inapplicable to
+    // itself).  Heterogeneous vs. the chestplate target → excluded before validation.
     std::vector<Item> items;
     EnchSet esc;
     esc.emplace(NSID("minecraft:protection"), "Protection", 4);
     items.push_back(Item(NSID("minecraft:diamond_sword"), esc, 0, 1561));
     req.payload = InventoryPayload{items, {}};
 
-    bool threw = false;
-    try { CompactAdapter::apply(p, req, *p.tag_resolver()); }
-    catch (const std::runtime_error&) { threw = true; }
-    expect(threw, "inventory equipment item with inapplicable enchant must throw");
-    TEST_PASS("test_apply_inventory_equipment_inapplicable_ench");
+    auto input = CompactAdapter::apply(p, req, *p.tag_resolver());
+    expect(input.available().empty(),
+           "heterogeneous equipment excluded before applicability validation (no throw)");
+    TEST_PASS("test_apply_inventory_hetero_equipment_skips_validation");
+}
+
+// ─── Test 21: matching-id equipment is kept in the pool ───
+void test_apply_inventory_same_id_equipment_kept() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    EnchSet eq_enchs;
+    eq_enchs.emplace(NSID("sharpness"), "Sharpness", 2);
+    payload.extra_items.emplace_back(NSID("minecraft:diamond_sword"), eq_enchs, 0, 1561);
+    request.payload = std::move(payload);
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = apply_for(profile, request);
+    expect(input.available().size() == 1,
+           "matching-id equipment should be kept in the pool");
+    expect(input.inventory().available[0].type == algorithm::ItemType::Equip,
+           "kept item should be an equipment");
+    TEST_PASS("test_apply_inventory_same_id_equipment_kept");
+}
+
+// ─── Test 22: mismatched-id equipment is excluded and its priority dropped ───
+void test_apply_inventory_hetero_equipment_excluded() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    std::vector<Item> items;
+    EnchSet sw_enchs;
+    sw_enchs.emplace(NSID("sharpness"), "Sharpness", 2);
+    items.emplace_back(NSID("minecraft:diamond_sword"), sw_enchs, 0, 1561);  // kept (matches)
+    items.emplace_back(NSID("minecraft:diamond_chestplate"), EnchSet{}, 0, 528); // excluded
+    std::vector<int32_t> prios = {1, 2};
+    request.payload = InventoryPayload{items, prios};
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = apply_for(profile, request);
+    expect(input.available().size() == 1,
+           "heterogeneous equipment should be excluded from the pool");
+    expect(input.inventory().available[0].type == algorithm::ItemType::Equip,
+           "kept item is the matching equipment");
+    expect(input.inventory().priorities.size() == 1,
+           "priority list stays parallel after exclusion");
+    expect(input.inventory().priorities[0] == 1,
+           "excluded item's priority is absent");
+    TEST_PASS("test_apply_inventory_hetero_equipment_excluded");
+}
+
+// ─── Test 23: book target excludes ALL equipment, books kept ───
+void test_apply_inventory_book_target_excludes_equipment() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:enchanted_book"), target_enchs, 0, 0);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    std::vector<Item> items;
+    EnchSet sw_enchs;
+    sw_enchs.emplace(NSID("sharpness"), "Sharpness", 2);
+    items.emplace_back(NSID("minecraft:diamond_sword"), sw_enchs, 0, 1561); // excluded
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("sharpness"), "Sharpness", 3);
+    items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);    // kept
+    std::vector<int32_t> prios = {1, 2};
+    request.payload = InventoryPayload{items, prios};
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = apply_for(profile, request);
+    expect(input.available().size() == 1,
+           "book target excludes all equipment; only the book is kept");
+    expect(input.inventory().available[0].type == algorithm::ItemType::Book,
+           "kept item is the book");
+    expect(input.inventory().priorities == std::vector<int32_t>{2},
+           "book's priority kept, excluded equipment priority dropped");
+    TEST_PASS("test_apply_inventory_book_target_excludes_equipment");
+}
+
+// ─── Test 24: empty book is still dropped (regression) ───
+void test_apply_inventory_empty_book_dropped() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    std::vector<Item> items;
+    items.emplace_back(NSID("minecraft:enchanted_book"), EnchSet{}, 0);  // dropped
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("sharpness"), "Sharpness", 3);
+    items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0); // kept
+    request.payload = InventoryPayload{items, {}};
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = apply_for(profile, request);
+    expect(input.available().size() == 1,
+           "empty book dropped, only the value book is kept");
+    TEST_PASS("test_apply_inventory_empty_book_dropped");
+}
+
+// ─── Test 25: mixed pool — matching equipment kept, mismatched excluded,
+//     books kept, priorities stay parallel to available ───
+void test_apply_inventory_mixed_pool_parallel_priorities() {
+    auto profile = make_sword_profile();
+    EnchSet target_enchs;
+    target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    std::vector<Item> items;
+    EnchSet b1;
+    b1.emplace(NSID("sharpness"), "Sharpness", 3);
+    items.emplace_back(NSID("minecraft:enchanted_book"), b1, 0);            // kept (book)
+    EnchSet e1;
+    e1.emplace(NSID("sharpness"), "Sharpness", 2);
+    items.emplace_back(NSID("minecraft:diamond_sword"), e1, 0, 1561);       // kept (matches)
+    items.emplace_back(NSID("minecraft:diamond_chestplate"), EnchSet{}, 0, 528); // excluded
+    items.emplace_back(NSID("minecraft:enchanted_book"), EnchSet{}, 0);     // dropped (empty)
+    std::vector<int32_t> prios = {10, 20, 30, 40};
+    request.payload = InventoryPayload{items, prios};
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = apply_for(profile, request);
+    expect(input.available().size() == 2,
+           "only book + matching equipment survive the pool filter");
+    expect(input.inventory().available[0].type == algorithm::ItemType::Book,
+           "first survivor is the book");
+    expect(input.inventory().available[1].type == algorithm::ItemType::Equip,
+           "second survivor is the matching equipment");
+    expect(input.inventory().priorities.size() == 2,
+           "priority list stays parallel to available");
+    expect(input.inventory().priorities[0] == 10,
+           "book priority preserved in order");
+    expect(input.inventory().priorities[1] == 20,
+           "matching-equipment priority preserved in order");
+    TEST_PASS("test_apply_inventory_mixed_pool_parallel_priorities");
 }
 
 } // anonymous namespace
@@ -586,7 +742,12 @@ int main() {
         test_apply_supported_items_tag_intersection();
         test_apply_platform_filter();
         test_apply_book_target_all_enchants_applicable();
-        test_apply_inventory_equipment_inapplicable_ench();
+        test_apply_inventory_hetero_equipment_skips_validation();
+        test_apply_inventory_same_id_equipment_kept();
+        test_apply_inventory_hetero_equipment_excluded();
+        test_apply_inventory_book_target_excludes_equipment();
+        test_apply_inventory_empty_book_dropped();
+        test_apply_inventory_mixed_pool_parallel_priorities();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

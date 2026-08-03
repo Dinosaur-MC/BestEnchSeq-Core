@@ -237,6 +237,12 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
                     const auto &item = extra[i];
                     if (item.is_book() && item.enchantments.empty())
                         continue;  // drop empty books (no forge value)
+                    // 异类装备过滤：非目标 id 的装备从池中排除（SRS 语义）——
+                    // 避免异类装备被选为 base 产出错误方案（compact Item 无装备 NSID 无法区分）。
+                    // 目标为书时无匹配装备——全部装备排除。
+                    if (!item.is_book() &&
+                        (request.target_item.is_book() || item.id != request.target_item.id))
+                        continue;
                     validate_inventory_item(item);
                     algorithm::Item algo_item;
                     algo_item.type  = item.is_book() ? algorithm::ItemType::Book : algorithm::ItemType::Equip;
