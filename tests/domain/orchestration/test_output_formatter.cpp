@@ -391,6 +391,43 @@ void test_format_compact_platform_raw() {
     TEST_PASS("test_format_compact_platform_raw");
 }
 
+// ─── JSON round-trip: format_json → parse_json ─────────────────────────
+
+void test_json_roundtrip() {
+    g_fx.init_sword_set();
+    auto profile = profile_from_fx(g_fx);
+
+    Solution solution;
+    solution.is_success = true;
+    solution.platform    = MCE::Java;
+    solution.total_exp_level_cost = 5;
+    solution.total_exp_cost       = 5;
+    solution.metadata.algorithm_name = "hamming";
+
+    Solution::EnchStep step;
+    step.exp_level_cost = 5;
+    step.exp_cost       = 5;
+    step.item_a = Item(NSID("minecraft:enchanted_book"), EnchSet{}, 0);
+    step.item_b = Item(NSID("minecraft:enchanted_book"), EnchSet{}, 0);
+    solution.steps.push_back(step);
+
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
+    solution.target_item = Item(equip.id, EnchSet{}, 0, 1561);
+
+    const auto json = OutputFormatter::format_json({solution}, profile, AlgorithmMode::direct);
+    const auto parsed = OutputFormatter::parse_json(json, profile);
+
+    expect_eq(parsed.size(), 1u, "round-trip: one solution parsed");
+    if (parsed.size() != 1)
+        return;  // avoid crashing on a malformed parse below
+    expect(parsed[0].is_success, "round-trip: is_success preserved");
+    expect_eq(parsed[0].steps.size(), 1u, "round-trip: step count preserved");
+    expect_eq(parsed[0].total_exp_level_cost, 5, "round-trip: total level cost");
+    expect(parsed[0].target_item.id == NSID("minecraft:diamond_sword"),
+           "round-trip: target equipment preserved");
+    TEST_PASS("OutputFormatter JSON round-trip");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -407,6 +444,7 @@ int main() {
         test_format_verbose_too_expensive();
         test_format_json_real_equipment();
         test_format_compact_platform_raw();
+        test_json_roundtrip();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

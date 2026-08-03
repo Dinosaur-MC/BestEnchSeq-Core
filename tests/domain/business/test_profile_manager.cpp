@@ -614,6 +614,39 @@ void test_pm_edit_preserves_tag_resolver() {
     TEST_PASS("test_pm_edit_preserves_tag_resolver");
 }
 
+// ─── Test: Manager-level add/remove (enchantment/equipment/tag) + undo ──
+
+void test_pm_crud_full() {
+    ProfileManager pm;
+    auto& p = pm.create("test:crud");
+
+    EnchInfo e1{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}};
+    expect(pm.add_enchantment("test:crud", e1), "manager add_enchantment");
+    expect(p.ench().contains(NSID("minecraft:sharpness")), "enchantment present after add");
+
+    Equipment eq{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:swords"), 1561};
+    expect(pm.add_equipment("test:crud", eq), "manager add_equipment");
+    expect(p.eq().contains(NSID("minecraft:diamond_sword")), "equipment present after add");
+
+    expect(pm.add_tag("test:crud", EquipmentTag(NSID("#minecraft:crudgroup"), "Crud")), "manager add_tag");
+    expect(p.tags().contains(NSID("#minecraft:crudgroup")), "tag present after add");
+
+    expect(pm.remove_tag("test:crud", NSID("#minecraft:crudgroup")), "manager remove_tag");
+    expect(!p.tags().contains(NSID("#minecraft:crudgroup")), "tag removed");
+
+    expect(pm.remove_equipment("test:crud", NSID("minecraft:diamond_sword")), "manager remove_equipment");
+    expect(!p.eq().contains(NSID("minecraft:diamond_sword")), "equipment removed");
+
+    expect(pm.remove_enchantment("test:crud", NSID("minecraft:sharpness")), "manager remove_enchantment");
+    expect(!p.ench().contains(NSID("minecraft:sharpness")), "enchantment removed");
+
+    // undo rolls back the last change (remove_enchantment)
+    expect(pm.undo("test:crud"), "undo succeeds");
+    expect(p.ench().contains(NSID("minecraft:sharpness")), "undo restores sharpness");
+
+    TEST_PASS("test_pm_crud_full");
+}
+
 // ─── Test: Versioned publish (flatten effective view + version/tag) ──────
 
 void test_pm_publish() {
@@ -1415,6 +1448,7 @@ int main() {
         test_pm_effective_injects_vanilla();
         test_pm_edit_snapshot_undo();
         test_pm_edit_preserves_tag_resolver();
+        test_pm_crud_full();
         test_pm_publish();
         test_pm_load_datapack();
         test_pm_load_datapack_computes_limited_level();

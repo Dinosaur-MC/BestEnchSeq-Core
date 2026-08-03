@@ -28,6 +28,23 @@ target_include_directories(test_byte_stream PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_byte_stream COMMAND test_byte_stream)
 set_tests_properties(test_byte_stream PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# CSV I/O (compiles CsvIO.cpp directly, mirroring json_tests)
+add_executable(test_csv_io
+    io/test_csv_io.cpp
+    ${PROJECT_ROOT}/src/common/io/CsvIO.cpp
+)
+target_include_directories(test_csv_io PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_csv_io COMMAND test_csv_io)
+set_tests_properties(test_csv_io PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
+# StringUtils (header-only)
+add_executable(test_string_utils
+    utils/test_string_utils.cpp
+)
+target_include_directories(test_string_utils PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_string_utils COMMAND test_string_utils)
+set_tests_properties(test_string_utils PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
 # --- Utility tests (standalone -- no project source dependencies) ---
 
 # Queue tests

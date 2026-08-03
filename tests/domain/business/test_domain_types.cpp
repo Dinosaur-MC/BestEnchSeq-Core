@@ -2,6 +2,8 @@
 #include "domain/business/types/Ench.h"
 #include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Item.h"
+#include "domain/business/types/Solution.h"
+#include "common/utils/ExpCalculator.hpp"
 
 #include <string>
 
@@ -103,6 +105,63 @@ void test_item_book() {
     std::cout << "PASS: test_item_book" << std::endl;
 }
 
+// ─── Item boundaries ─────────────────────────────────────────────────────
+
+void test_item_boundaries() {
+    bool threw = false;
+    try {
+        Item(NSID("minecraft:diamond_sword"), EnchSet{}, -1);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect(threw, "negative prior_penalty throws invalid_argument");
+
+    threw = false;
+    try {
+        Item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, -5);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect(threw, "negative durability throws invalid_argument");
+
+    Item eq(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    expect(eq.is_equipment(), "sword item is equipment");
+    expect(!eq.is_book(), "sword item is not a book");
+
+    std::cout << "PASS: test_item_boundaries" << std::endl;
+}
+
+// ─── Solution derived metrics ───────────────────────────────────────────
+
+void test_solution_derived_metrics() {
+    Solution::EnchStep s1{Item{}, Item{}, 5, 100};
+    Solution::EnchStep s2{Item{}, Item{}, 3, 60};
+
+    Solution sol = Solution::make(MCE::Java, EnchSet{}, Item{}, {}, {s1, s2});
+    expect_eq(sol.total_exp_level_cost, 8, "make: total level cost = 5+3");
+    expect_eq(sol.total_exp_cost,
+              ExpCalculator::level_to_exp(5) + ExpCalculator::level_to_exp(3),
+              "make: total exp cost = sum of level_to_exp");
+    expect_eq(sol.max_cost_step_index, 0u, "make: peak step is the cost-5 step");
+    expect(sol.is_feasible(), "make: feasible with steps");
+    expect_eq(sol.get_peak_level_cost(), 5, "peak level cost = 5");
+
+    Solution empty = Solution::make(MCE::Java, EnchSet{}, Item{}, {}, {});
+    expect(!empty.is_feasible(), "empty steps → not feasible");
+    expect_eq(empty.get_peak_level_cost(), 0, "empty steps → peak 0");
+
+    Solution not_ok = Solution::make(MCE::Java, EnchSet{}, Item{}, {}, {s1}, false);
+    expect(!not_ok.is_feasible(), "is_success=false → not feasible");
+
+    Solution bad;
+    bad.is_success          = true;
+    bad.steps               = {s1};
+    bad.max_cost_step_index = 5;  // out of range
+    expect_eq(bad.get_peak_level_cost(), 0, "out-of-range peak index → 0");
+
+    std::cout << "PASS: test_solution_derived_metrics" << std::endl;
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -118,6 +177,9 @@ int main() {
 
         test_item_default();
         test_item_book();
+
+        test_item_boundaries();
+        test_solution_derived_metrics();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
