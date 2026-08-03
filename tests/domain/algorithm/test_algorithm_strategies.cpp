@@ -1032,6 +1032,44 @@ void test_resolver_retention_conflict_aware() {
     TEST_PASS("resolver: retention is conflict-aware (pool stays solvable)");
 }
 
+void test_hamming_inventory_conflict_retained_equip() {
+    // End-to-end hamming regression: the resolver retains a thorns-3 equipment
+    // that ALSO carries smite-5 (conflicting with the sharpness target).  The
+    // retained equip must NOT displace the resolver's chosen base (sharpness-4)
+    // in hamming's arrange_by_popcount — the base must stay at the balanced-tree
+    // root, so the sharpness-5 book is not wasted on the conflicting equipment.
+    // Before the fix hamming re-sorted equipment by self-cost, promoted the
+    // smite/thorns equip to position 0, and reported unreachable.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_SHARPNESS, 5);
+    target.enchs.insert(RE_THORNS, 3);
+
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::inventory;
+    input.config.forge.platform = MCE::Java;
+    input.registry = reg;
+    input.target = target;
+    algorithm::ItemCollection pool;
+    pool.push_back(re_equip_with(RE_SHARPNESS, 4));       // correct base (resolver choice)
+    algorithm::Item conflict_equip = re_equip_with(RE_THORNS, 3);
+    conflict_equip.enchs.insert(RE_SMITE, 5);             // retained + conflicting
+    pool.push_back(std::move(conflict_equip));
+    pool.push_back(re_book(RE_SHARPNESS, 5));
+    input.data = algorithm::InventoryPayload{std::move(pool), {}};
+
+    algorithm::AlgorithmExecutor executor(
+        std::make_unique<algorithm::HammingAlgorithm>());
+    executor.start(std::move(input));
+    auto state = executor.wait();
+    expect(state == algorithm::AlgorithmState::Completed,
+           "hamming: inventory conflict solve should complete");
+    auto out = executor.output();
+    expect(!out.solutions.empty(),
+           "hamming: retained conflicting equip must not cause false unreachable");
+    TEST_PASS("hamming: inventory conflict retained equip does not displace base");
+}
+
 void test_resolver_preenchanted_equip_reaches_target() {
     // Equipment already meets the target → pool stays non-empty, no books
     // needed, irrelevant books dropped.
@@ -1140,6 +1178,7 @@ int main() {
     RUN_TEST(test_resolver_same_level_lower_ppn);
     RUN_TEST(test_resolver_best_base_selection);
     RUN_TEST(test_resolver_retain_equipment_only_ench);
+    RUN_TEST(test_hamming_inventory_conflict_retained_equip);
     RUN_TEST(test_resolver_book_target_pure_book_pool);
     RUN_TEST(test_resolver_book_target_multi_ench);
     RUN_TEST(test_resolver_equip_target_pure_book_pool);

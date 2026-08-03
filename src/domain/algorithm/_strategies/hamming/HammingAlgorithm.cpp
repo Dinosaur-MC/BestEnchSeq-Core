@@ -26,18 +26,26 @@ std::vector<int> HammingAlgorithm::dup_floor_members(int j, int n) noexcept {
 
 void HammingAlgorithm::arrange_by_popcount(
     std::vector<Item>& items,
-    const EnchReg& reg) const
+    const EnchReg& reg,
+    bool preserve_equip_order) const
 {
     const size_t n = items.size();
     if (n <= 2) return;
 
     // Sort by forge cost descending (expensive books first → merge early).
-    // Equipment unconditionally goes to position 0.
-    std::sort(items.begin(), items.end(),
+    // Equipment unconditionally goes to position 0 — the root of the
+    // balanced merge tree (position k merges ~popcount(k) times).
+    // Inventory mode (preserve_equip_order): 装备保持 resolver 进入顺序——
+    // 位置 0 恒为 resolver 选定的无冲突 base（平衡树根），不按自锻成本重排。
+    // 否则冲突装备（保留的牺牲品）可能抢占根位置，把需要的书全锻入它而浪费
+    // （forge 遇冲突丢弃魔咒），导致假"目标不可达"。
+    std::stable_sort(items.begin(), items.end(),
         [&](const Item& a, const Item& b) {
             bool a_eq = (a.type == ItemType::Equip);
             bool b_eq = (b.type == ItemType::Equip);
             if (a_eq != b_eq) return a_eq;
+            if (preserve_equip_order && a_eq)
+                return false;  // 装备保持进入顺序（stable_sort 下等价即保序）
             return _forge_engine.estimate_forge_cost(a, a, reg)
                  > _forge_engine.estimate_forge_cost(b, b, reg);
         });
@@ -128,8 +136,10 @@ void HammingAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
             continue;
         }
 
-        // Arrange items in this tier using popcount ordering
-        arrange_by_popcount(tiers[tier], reg);
+        // Arrange items in this tier using popcount ordering.
+        // Inventory 模式保留 resolver 装备顺序（位置 0 = resolver base）；
+        // direct 模式单装备，保持原逻辑。
+        arrange_by_popcount(tiers[tier], reg, input.is_inventory());
 
         // Pairwise forge: drain current tier, collect results in local buf.
         std::vector<Item> next_items;

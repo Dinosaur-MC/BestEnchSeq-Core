@@ -56,8 +56,12 @@ private:
 
     /// Arrange \p items at one ppn tier into popcount-balanced order.
     /// \p items  in: sorted-by-cost (desc); out: popcount-arranged.
+    /// \p preserve_equip_order  inventory 模式为 true：装备保持 resolver 顺序
+    /// （位置 0 恒为 resolver 选定的 base，不按自锻成本重排——避免冲突装备
+    /// 抢 base 浪费需要的书）。direct 模式为 false（单装备，保持原逻辑）。
     void arrange_by_popcount(std::vector<Item>& items,
-                              const EnchReg& reg) const;
+                             const EnchReg& reg,
+                             bool preserve_equip_order) const;
 
     // ── Members ─────────────────────────────────────────────────────────
 
