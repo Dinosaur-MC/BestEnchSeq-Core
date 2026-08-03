@@ -1,24 +1,27 @@
 /// @file test_sandbox.cpp
-/// Sandbox isolation end-to-end test (Linux).
+/// Sandbox isolation end-to-end test.
 ///
-/// Spawns a besq-worker via SandboxedAlgorithm with the malicious test
-/// plugin (whose constructor tries open("/etc/passwd") — it runs AFTER
-/// seccomp in the worker).  Asserts:
-///   - the worker survives seccomp (native syscalls are allowed) and
-///     responds to metadata queries
-///   - the plugin's open() was blocked → its stderr report is "OPEN BLOCKED"
+/// The sandbox seam is the EXECUTOR: a SandboxedExecutor runs a REAL
+/// AlgorithmExecutor inside a besq-worker subprocess and mirrors its public
+/// surface over coarse IPC.  This test drives SandboxedExecutor directly —
+/// the same way the solve pipeline consumes it — and asserts:
+///   - the worker survives seccomp (Linux) / binary IPC (Windows) and answers
+///     metadata queries
+///   - the malicious plugin's open("/etc/passwd") was blocked → its stderr
+///     report is "OPEN BLOCKED" (Linux seccomp)
+///   - pause/resume via the executor interface works end-to-end (no deadlock)
+///   - a full checkpoint round-trip: solve 1 pauses + serializes; a FRESH
+///     worker deserializes the opaque blob and resumes to completion
 ///
-/// The plugin is built by the plugins/ tree.  Its path comes from
-/// $BESQ_TEST_MALICIOUS_PLUGIN, or a default relative to the working dir.
-/// If no plugin binary is present, the test SKIPS (returns 0) rather than
-/// failing — the fixture is optional.
+/// The plugins are built by the plugins/ tree; paths come from
+/// $BESQ_TEST_MALICIOUS_PLUGIN / $BESQ_WORKER_PATH or build-tree defaults.
+/// If no plugin binaries are present, the plugin-dependent tests SKIP.
 
-#include "framework/test_utils.h"
-#include "domain/algorithm/AlgorithmExecutor.h"
-#include "domain/algorithm/sandbox/SandboxedAlgorithm.h"
 #include "domain/algorithm/plugin/PluginAPI.h"
+#include "domain/algorithm/sandbox/SandboxedExecutor.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/EnchSet.h"
+#include "framework/test_utils.h"
 
 #include <atomic>
 #include <chrono>
@@ -36,34 +39,45 @@ using namespace algorithm;
 namespace {
 
 std::string find_plugin() {
-    if (const char *env = std::getenv("BESQ_TEST_MALICIOUS_PLUGIN"); env && *env)
+    if (const char* env = std::getenv("BESQ_TEST_MALICIOUS_PLUGIN"); env && *env)
         if (std::filesystem::exists(env))
             return env;
     // Defaults relative to the CTest working directory (project root).
-    const char *candidates[] = {
+    // Platform-aware: build-wsl/ artifacts exist on Windows but are Linux .so
+    // a Windows worker can't load — never pick them on Windows.
+    const char* candidates[] = {
+#if defined(_WIN32)
+        "build/plugins/algo_malicious.dll",
+#else
         "build-wsl/plugins/libalgo_malicious.so",
         "build/plugins/libalgo_malicious.so",
+#endif
     };
-    for (const char *c : candidates)
+    for (const char* c : candidates)
         if (std::filesystem::exists(c))
             return c;
     return {};
 }
 
 std::string find_worker() {
-    if (const char *env = std::getenv("BESQ_WORKER_PATH"); env && *env)
+    if (const char* env = std::getenv("BESQ_WORKER_PATH"); env && *env)
         return env;
-    const char *candidates[] = {
-        "build-wsl/bin/besq-worker",
-        "build/bin/besq-worker",
+    // Platform-aware: build-wsl/ artifacts exist on Windows (readable) but are
+    // Linux ELF binaries a Windows CreateProcess can't launch — prefer the
+    // platform-native worker.  "build" is a native Windows build here; "build-wsl"
+    // is the native Linux build on WSL.
+    const char* candidates[] = {
 #if defined(_WIN32)
         "build/bin/besq-worker.exe",
+#else
+        "build-wsl/bin/besq-worker",
+        "build/bin/besq-worker",
 #endif
     };
-    for (const char *c : candidates)
+    for (const char* c : candidates)
         if (std::filesystem::exists(c))
             return c;
-    return "besq-worker";  // rely on PATH as a last resort
+    return "besq-worker"; // rely on PATH as a last resort
 }
 
 /// A real search plugin for the pause/resume + checkpoint tests — the
@@ -73,7 +87,7 @@ std::string find_worker() {
 /// Platform-aware: build-wsl/ is present on Windows (readable files from a WSL
 /// build) but those are Linux .so files a Windows worker can't load.
 std::string find_search_plugin() {
-    const char *candidates[] = {
+    const char* candidates[] = {
 #if defined(_WIN32)
         "build/plugins/algo_astar.dll",
 #else
@@ -81,7 +95,7 @@ std::string find_search_plugin() {
         "build/plugins/libalgo_astar.so",
 #endif
     };
-    for (const char *c : candidates)
+    for (const char* c : candidates)
         if (std::filesystem::exists(c))
             return std::filesystem::absolute(c).string();
     return {};
@@ -94,67 +108,71 @@ std::string find_search_plugin() {
 AlgorithmInput build_search_input() {
     EnchInfo infos[10];
     for (int i = 0; i < 10; ++i) {
-        infos[i].id         = static_cast<uint8_t>(i);
-        infos[i].mul        = 1;
-        infos[i].mul_b      = 1;
+        infos[i].id = static_cast<uint8_t>(i);
+        infos[i].mul = 1;
+        infos[i].mul_b = 1;
         infos[i].applicable = true;
-        infos[i].exc_mask   = 0;
+        infos[i].exc_mask = 0;
     }
-    infos[0].max_lvl = 5;  // sharpness
-    infos[1].max_lvl = 5;  // smite
-    infos[2].max_lvl = 5;  // bane_of_arthropods
-    infos[3].max_lvl = 3;  // knockback
-    infos[4].max_lvl = 3;  // looting
-    infos[5].max_lvl = 3;  // sweeping_edge
-    infos[6].max_lvl = 3;  // unbreaking
-    infos[7].max_lvl = 2;  // fire_aspect
-    infos[8].max_lvl = 1;  // mending
-    infos[9].max_lvl = 1;  // curse_of_vanishing
+    infos[0].max_lvl = 5; // sharpness
+    infos[1].max_lvl = 5; // smite
+    infos[2].max_lvl = 5; // bane_of_arthropods
+    infos[3].max_lvl = 3; // knockback
+    infos[4].max_lvl = 3; // looting
+    infos[5].max_lvl = 3; // sweeping_edge
+    infos[6].max_lvl = 3; // unbreaking
+    infos[7].max_lvl = 2; // fire_aspect
+    infos[8].max_lvl = 1; // mending
+    infos[9].max_lvl = 1; // curse_of_vanishing
     // sharpness(0) / smite(1) / bane_of_arthropods(2) are mutually exclusive.
     infos[0].exc_mask = (mask_type{1} << 1) | (mask_type{1} << 2);
     infos[1].exc_mask = (mask_type{1} << 0) | (mask_type{1} << 2);
     infos[2].exc_mask = (mask_type{1} << 0) | (mask_type{1} << 1);
 
     Equipment equip;
-    equip.id               = NSID("minecraft:diamond_sword");
-    equip.max_durability   = 1561;
+    equip.id = NSID("minecraft:diamond_sword");
+    equip.max_durability = 1561;
     equip.applicable_enchs = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     EnchReg reg;
-    reg.init({infos[0], infos[1], infos[2], infos[3], infos[4], infos[5],
-              infos[6], infos[7], infos[8], infos[9]},
-             {NSID("minecraft:sharpness"), NSID("minecraft:smite"),
-              NSID("minecraft:bane_of_arthropods"), NSID("minecraft:knockback"),
-              NSID("minecraft:looting"), NSID("minecraft:sweeping_edge"),
-              NSID("minecraft:unbreaking"), NSID("minecraft:fire_aspect"),
-              NSID("minecraft:mending"), NSID("minecraft:curse_of_vanishing")},
+    reg.init({infos[0], infos[1], infos[2], infos[3], infos[4], infos[5], infos[6], infos[7], infos[8], infos[9]},
+             {NSID("minecraft:sharpness"), NSID("minecraft:smite"), NSID("minecraft:bane_of_arthropods"),
+              NSID("minecraft:knockback"), NSID("minecraft:looting"), NSID("minecraft:sweeping_edge"),
+              NSID("minecraft:unbreaking"), NSID("minecraft:fire_aspect"), NSID("minecraft:mending"),
+              NSID("minecraft:curse_of_vanishing")},
              equip);
 
     AlgorithmInput input;
-    input.registry          = reg;
-    input.config.mode       = AlgorithmMode::direct;
+    input.registry = reg;
+    input.config.mode = AlgorithmMode::direct;
     input.config.forge.platform = MCE::Java;
     EnchSet tgt;
-    tgt.insert(0, 5); tgt.insert(3, 3); tgt.insert(4, 3); tgt.insert(5, 3);
-    tgt.insert(6, 3); tgt.insert(7, 2); tgt.insert(8, 1); tgt.insert(9, 1);
+    tgt.insert(0, 5);
+    tgt.insert(3, 3);
+    tgt.insert(4, 3);
+    tgt.insert(5, 3);
+    tgt.insert(6, 3);
+    tgt.insert(7, 2);
+    tgt.insert(8, 1);
+    tgt.insert(9, 1);
     input.target = Item(ItemType::Equip, 1561, 0, tgt);
-    input.data   = DirectPayload{{Ench{0, 2}}};
+    input.data = DirectPayload{{Ench{0, 2}}};
     return input;
 }
 
-/// Pause/resume forwarding: run a sandboxed execute, pause mid-flight, wait,
+/// Pause/resume through the executor interface: start, pause mid-flight, wait,
 /// resume — the solve must complete correctly (no deadlock, no corruption).
-void test_pause_resume(const std::string &plugin) {
+void test_pause_resume(const std::string& plugin) {
     auto input = build_search_input();
-    SandboxedAlgorithm sa(plugin, find_worker(), PluginCapability::None);
+    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
 
-    ExecutionContext ctx(0, "pause-test");
-    std::atomic<const char *> outcome{"?"};
+    std::atomic<const char*> outcome{"?"};
     std::thread runner([&] {
         try {
-            sa.execute(input, ctx);
+            se.start(input);
+            se.wait();
             outcome.store("completed", std::memory_order_release);
-        } catch (const std::exception &e) {
+        } catch (const std::exception& e) {
             outcome.store(e.what(), std::memory_order_release);
         } catch (...) {
             outcome.store("threw-nonstd", std::memory_order_release);
@@ -162,47 +180,47 @@ void test_pause_resume(const std::string &plugin) {
     });
 
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
-    ctx.pause();                 // parent → worker MsgPause
+    se.pause(); // parent → worker MsgPause → exec.pause()
     std::this_thread::sleep_for(std::chrono::milliseconds(40));
-    const bool paused_stall = ctx.is_paused();
-    ctx.resume();                // parent → worker MsgResume
+    const bool paused_observed = se.state() == AlgorithmState::Paused;
+    se.resume(); // parent → worker MsgResume → exec.resume()
     runner.join();
 
     std::string out(outcome.load());
-    std::cout << "pause: outcome=" << out << " (paused observed="
-              << paused_stall << ")" << std::endl;
+    std::cout << "pause: outcome=" << out << " (paused observed=" << paused_observed << ")" << std::endl;
     expect(out == "completed", "sandbox: execute completed after pause/resume");
-    expect(paused_stall, "sandbox: pause state observed during run");
+    expect(paused_observed, "sandbox: pause state observed during run");
+    expect(se.state() == AlgorithmState::Completed, "sandbox: final state Completed");
 }
 
 /// Full checkpoint round-trip through the sandbox: solve 1 pauses and
-/// serializes its state; a FRESH worker deserializes the checkpoint and resumes
-/// to completion.  Exercises the proxy serializer + IPC chunked transfer.
-void test_checkpoint_roundtrip(const std::string &plugin) {
+/// serializes its state into an opaque blob; a FRESH worker deserializes the
+/// blob and resumes to completion.  Exercises the executor seam + chunked IPC.
+void test_checkpoint_roundtrip(const std::string& plugin) {
     auto input = build_search_input();
 
     // ── Solve 1: run, pause, serialize ──
-    auto sa1 = std::make_unique<SandboxedAlgorithm>(plugin, find_worker(), PluginCapability::None);
-    AlgorithmExecutor exec1(std::move(sa1));
-    exec1.start(input);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));  // let the search start
-    exec1.pause();
-    // serialize_state() spins until the execute loop has yielded the pipe.
-    const auto checkpoint = exec1.serialize_state();
+    SandboxedExecutor se1(plugin, find_worker(), PluginCapability::None);
+    se1.start(input);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); // let the search start
+    se1.pause();
+    // Let the worker's executor actually reach its quiescent point (the
+    // algorithm blocks in wait_if_paused) before snapshotting — same contract
+    // as the in-process executor, no pipe-yield handshake.
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const auto checkpoint = se1.serialize_state();
     std::cout << "checkpoint: " << checkpoint.size() << " bytes" << std::endl;
     expect(!checkpoint.empty(), "sandbox: checkpoint serialized while paused");
 
-    exec1.resume();  // let solve 1 finish cleanly
-    exec1.wait();
+    se1.resume(); // let solve 1 finish cleanly
+    se1.wait();
 
-    // ── Solve 2: fresh worker, restore from the checkpoint ──
-    auto sa2 = std::make_unique<SandboxedAlgorithm>(plugin, find_worker(), PluginCapability::None);
-    AlgorithmExecutor exec2(std::move(sa2));
-    exec2.start(checkpoint);
-    const auto state = exec2.wait();
-    const auto out = exec2.output();
-    std::cout << "resume: state=" << static_cast<int>(state)
-              << " solutions=" << out.solutions.size() << std::endl;
+    // ── Solve 2: fresh worker, restore from the opaque checkpoint ──
+    SandboxedExecutor se2(plugin, find_worker(), PluginCapability::None);
+    se2.start(checkpoint);
+    const auto state = se2.wait();
+    const auto out = se2.output();
+    std::cout << "resume: state=" << static_cast<int>(state) << " solutions=" << out.solutions.size() << std::endl;
     expect(state == AlgorithmState::Completed, "sandbox: resumed solve completed");
     expect(!out.solutions.empty(), "sandbox: resumed solve produced solutions");
 }
@@ -212,8 +230,7 @@ void test_checkpoint_roundtrip(const std::string &plugin) {
 int main() {
     const std::string plugin = find_plugin();
     if (plugin.empty()) {
-        std::cout << "SKIP: malicious test plugin not built (set BESQ_TEST_MALICIOUS_PLUGIN)"
-                  << std::endl;
+        std::cout << "SKIP: malicious test plugin not built (set BESQ_TEST_MALICIOUS_PLUGIN)" << std::endl;
         return 0;
     }
 
@@ -221,31 +238,30 @@ int main() {
         // ── Spawn the worker with the malicious plugin ─────────────────
         // Linux: dlopen → seccomp → construct (open EPERM'd).  Windows:
         // CreateProcess + Job Object, no seccomp.
-        SandboxedAlgorithm sa(plugin, find_worker(), PluginCapability::None);
+        SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
 
         // ── Worker survived + metadata query works ────────────────────
-        expect(std::string(sa.name()) == "malicious", "sandbox: worker reports name");
-        expect(std::string(sa.version()) == "1.0.0", "sandbox: worker reports version");
+        expect(std::string(se.name()) == "malicious", "sandbox: worker reports name");
+        expect(std::string(se.version()) == "1.0.0", "sandbox: worker reports version");
 
 #if defined(__linux__)
         // ── seccomp isolation: the plugin's open("/etc/passwd") was EPERM'd ──
-        const std::string stderr_out = sa.take_worker_stderr();
-        expect(stderr_out.find("OPEN BLOCKED") != std::string::npos,
-               "sandbox: plugin open() blocked (seccomp EPERM)");
-        expect(stderr_out.find("OPEN OK") == std::string::npos,
-               "sandbox: plugin must NOT have read the file");
+        const std::string stderr_out = se.take_worker_stderr();
+        expect(stderr_out.find("OPEN BLOCKED") != std::string::npos, "sandbox: plugin open() blocked (seccomp EPERM)");
+        expect(stderr_out.find("OPEN OK") == std::string::npos, "sandbox: plugin must NOT have read the file");
 #else
         // ── Windows smoke test: binary IPC integrity ──────────────────
         // The request payload for evaluate(26) is the int16 bytes {0x1A, 0x00}.
         // A worker with CRT TEXT-mode stdin/stdout would mangle this (0x1A =
         // Ctrl-Z EOF) and fail to respond.  Verifies the _O_BINARY fix.
         std::cout << "SKIP seccomp assertion on Windows (no seccomp); "
-                     "checking binary IPC with evaluate(26)..." << std::endl;
-        const double v = sa.evaluate(26);
+                     "checking binary IPC with evaluate(26)..."
+                  << std::endl;
+        const double v = se.evaluate(26);
         expect(v >= 0.0, "sandbox: worker responded to evaluate(0x1A payload) — binary IPC ok");
 #endif
 
-        // ── Pause/resume + checkpoint round-trip (needs a real search plugin) ──
+        // ── Pause/resume + checkpoint round-trip (needs a search plugin) ──
         const std::string search_plugin = find_search_plugin();
         if (search_plugin.empty()) {
             std::cout << "SKIP: pause/checkpoint tests — no search plugin built" << std::endl;
@@ -253,10 +269,10 @@ int main() {
             test_pause_resume(search_plugin);
             test_checkpoint_roundtrip(search_plugin);
         }
-    } catch (const test_error &e) {
+    } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return print_summary();
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
         std::cerr << "UNEXPECTED: " << e.what() << std::endl;
         return print_summary();
     }

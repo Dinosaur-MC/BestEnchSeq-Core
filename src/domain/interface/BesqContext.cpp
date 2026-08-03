@@ -1,13 +1,13 @@
 #include "domain/interface/BesqContext.h"
-#include "domain/business/ProfileManager.h"
-#include "domain/business/loaders/ProfileLoader.h"
-#include "domain/orchestration/pipelines/ManagePipeline.h"
-#include "domain/orchestration/pipelines/ExportPipeline.h"
-#include "domain/orchestration/pipelines/SolvePipeline.h"
-#include "domain/orchestration/types/ManageRequest.h"
-#include "domain/orchestration/types/ExportRequest.h"
-#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/IExecutor.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/business/loaders/ProfileLoader.h"
+#include "domain/business/ProfileManager.h"
+#include "domain/orchestration/pipelines/ExportPipeline.h"
+#include "domain/orchestration/pipelines/ManagePipeline.h"
+#include "domain/orchestration/pipelines/SolvePipeline.h"
+#include "domain/orchestration/types/ExportRequest.h"
+#include "domain/orchestration/types/ManageRequest.h"
 
 #include <atomic>
 #include <filesystem>
@@ -25,17 +25,15 @@ struct BesqContext::Impl {
     /// Atomic + shared_ptr: the solve thread stores/clears it, and an abort
     /// thread copies it — the copy keeps the executor alive through cancel(),
     /// so cancel() can never dereference a destroyed executor (B-T22).
-    std::atomic<std::shared_ptr<algorithm::AlgorithmExecutor>> active_executor{nullptr};
-    std::string profiles_dir;   ///< overridden profiles dir ("" → default `<cwd>/profiles`)
+    std::atomic<std::shared_ptr<algorithm::IExecutor>> active_executor{nullptr};
+    std::string profiles_dir; ///< overridden profiles dir ("" → default `<cwd>/profiles`)
 };
 
 // ====================================================================
 // Lifecycle
 // ====================================================================
 
-BesqContext::BesqContext()
-    : _impl(std::make_unique<Impl>())
-{
+BesqContext::BesqContext() : _impl(std::make_unique<Impl>()) {
     _impl->algo_loader.load_builtin();
 }
 
@@ -79,9 +77,8 @@ void BesqContext::set_profiles_dir(const std::string& dir) {
 void BesqContext::load_profiles() {
     // Default directory is `<cwd>/profiles` (no argv available at this layer;
     // the CLI `--profile-dir` in T9 overrides via set_profiles_dir).
-    std::filesystem::path dir = _impl->profiles_dir.empty()
-        ? (std::filesystem::current_path() / "profiles")
-        : std::filesystem::path(_impl->profiles_dir);
+    std::filesystem::path dir = _impl->profiles_dir.empty() ? (std::filesystem::current_path() / "profiles")
+                                                            : std::filesystem::path(_impl->profiles_dir);
     ManageRequest req;
     req.action = ManageRequest::Action::LoadDirectory;
     req.dir_path = dir.string();
@@ -107,8 +104,7 @@ void BesqContext::activate_profile(const std::string& name) {
     ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
-void BesqContext::fork_profile(const std::string& source,
-                               const std::string& dest) {
+void BesqContext::fork_profile(const std::string& source, const std::string& dest) {
     ManageRequest req;
     req.action = ManageRequest::Action::ForkProfile;
     req.source_name = source;
@@ -116,8 +112,7 @@ void BesqContext::fork_profile(const std::string& source,
     ManagePipeline::run(_impl->profiles, _impl->loader, req);
 }
 
-void BesqContext::merge_profile(const std::string& source,
-                                const std::string& dest) {
+void BesqContext::merge_profile(const std::string& source, const std::string& dest) {
     ManageRequest req;
     req.action = ManageRequest::Action::MergeProfile;
     req.source_name = source;
@@ -165,8 +160,7 @@ bool BesqContext::remove_enchantment(const std::string& name_id) {
     return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
 }
 
-bool BesqContext::modify_enchantment(const std::string& name_id,
-                                     const EnchInfo& patch) {
+bool BesqContext::modify_enchantment(const std::string& name_id, const EnchInfo& patch) {
     // DUAL-USE: profile_name carries the enchantment content NSID for
     // ModifyEnchantment.  ManagePipeline patches multiplier/max_level/
     // limited_level in place and catches std::out_of_range → success=false.
@@ -216,7 +210,7 @@ bool BesqContext::export_profile(const std::string& path) const {
     ExportRequest req;
     req.target = ExportRequest::TargetType::Registry;
     req.output_path = path;
-    req.format = ExportPipeline::format_for_path(path);   // `.csv` → Csv, else Json
+    req.format = ExportPipeline::format_for_path(path); // `.csv` → Csv, else Json
     return ExportPipeline::run(profile, req).success;
 }
 
@@ -249,14 +243,13 @@ const TagRegistry& BesqContext::categories() const noexcept {
 // Output formatting
 // ====================================================================
 
-std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode,
-                                std::string_view fmt) const {
+std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode, std::string_view fmt) const {
     auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
     ExportRequest req;
     req.target = ExportRequest::TargetType::Solution;
-    req.format = (fmt == "json") ? ExportRequest::Format::Json
-               : (fmt == "compact") ? ExportRequest::Format::Compact
-                                    : ExportRequest::Format::Verbose;
+    req.format = (fmt == "json")      ? ExportRequest::Format::Json
+                 : (fmt == "compact") ? ExportRequest::Format::Compact
+                                      : ExportRequest::Format::Verbose;
     req.solutions = result.solutions;
     req.mode = mode;
     req.success = result.success;
@@ -280,8 +273,7 @@ std::vector<std::string> BesqContext::list_algorithms() const {
 SolveResult BesqContext::solve(const SolveRequest& request) {
     auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
     _impl->active_executor.store(nullptr);
-    auto result = SolvePipeline::run(profile, request, _impl->algo_loader,
-                                     &_impl->active_executor);
+    auto result = SolvePipeline::run(profile, request, _impl->algo_loader, &_impl->active_executor);
     _impl->active_executor.store(nullptr);
     return result;
 }

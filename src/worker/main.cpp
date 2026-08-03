@@ -1,28 +1,30 @@
 /// @file worker/main.cpp
 /// besq-worker — sandboxed algorithm execution worker.
 ///
-/// A dedicated process that dlopens a plugin and serves its IAlgorithm over
-/// stdin/stdout IPC.  The parent (besq) spawns this with stdin/stdout wired
-/// to a socketpair (Linux) / pipe pair (Windows), sends AlgorithmInput, and
-/// receives streamed progress/solution events plus the final result.
+/// A dedicated process that dlopens a plugin and hosts a REAL AlgorithmExecutor
+/// (the algorithm domain's authoritative engine) over stdin/stdout IPC.  The
+/// sandbox seam lives ABOVE the executor: the executor, its ExecutionContext
+/// and the plugin run fully locally in this process; the parent
+/// (SandboxedExecutor) mirrors the executor's surface with coarse messages —
+/// MsgRun/MsgResumeRun for lifecycle, MsgPause/Resume/Cancel for control,
+/// MsgSerializeState for checkpoints, and a final MsgResult carrying the
+/// encoded AlgorithmOutput.
 ///
 /// Sandbox lifecycle (Linux):
 ///   1. parse --plugin <path> [--capability <level>]
-///   2. dlopen + create the plugin's IAlgorithm
+///   2. dlopen + resolve besq_create_algorithm
 ///   3. install seccomp filter (after dlopen — the .so is already mapped)
-///   4. serve IPC frames on stdin/stdout
+///   4. construct the AlgorithmExecutor, serve IPC frames on stdin/stdout
 ///
 /// The worker links ONLY the algorithm kernel (besq-algo-core) + common.
 
-#include "domain/algorithm/IAlgorithm.h"
-#include "domain/algorithm/ExecutionContext.h"
+#include "common/io/ByteStream.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "domain/algorithm/diagnostics/IAlgorithmObserver.h"
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include "domain/algorithm/sandbox/IpcProtocol.h"
-#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
-#include "common/io/ByteStream.h"
 #include "sandbox_seccomp.h"
 
 #include <cstdio>
@@ -35,9 +37,9 @@
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <fcntl.h>
 #include <io.h>
+#include <windows.h>
 #else
 #include <dlfcn.h>
 #include <poll.h>
@@ -50,18 +52,18 @@ using namespace algorithm;
 namespace {
 
 // ── Plugin ABI (mirrors PluginAPI.h) ────────────────────────────────
-using BesqCreateFn = void *(*)();
+using BesqCreateFn = void* (*)();
 
-void *dl_open_plugin(const char *path) {
+void* dl_open_plugin(const char* path) {
 #if defined(_WIN32)
-    return static_cast<void *>(::LoadLibraryA(path));
+    return static_cast<void*>(::LoadLibraryA(path));
 #else
     return ::dlopen(path, RTLD_NOW | RTLD_LOCAL);
 #endif
 }
-void *dl_sym_plugin(void *handle, const char *sym) {
+void* dl_sym_plugin(void* handle, const char* sym) {
 #if defined(_WIN32)
-    return reinterpret_cast<void *>(::GetProcAddress(static_cast<HMODULE>(handle), sym));
+    return reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(handle), sym));
 #else
     return ::dlsym(handle, sym);
 #endif
@@ -69,40 +71,40 @@ void *dl_sym_plugin(void *handle, const char *sym) {
 
 // ── IPC forward observer: stream progress/solution back to the parent ──
 // Attached to the worker's DiagnosticsService; runs on its event-loop thread.
+// The mutex is the worker's SINGLE stdout write lock: the observer's events,
+// the control thread's serialize reply and the serve thread's MsgResult all
+// funnel through send_frame() so frames can never interleave.
 class IpcForwardObserver : public IAlgorithmObserver {
-  public:
+public:
     void on_progress(size_t /*task*/, uint8_t pct, ProgressStatus status) override {
         ByteStreamWriter w;
         w << pct << static_cast<uint8_t>(status);
-        std::lock_guard lk(_mtx);
-        ipc::write_frame(1, ipc::MsgType::MsgProgress, std::move(w).take());
+        send_frame(ipc::MsgType::MsgProgress, std::move(w).take());
     }
-    void on_solution_found(size_t /*task*/, const std::vector<EnchStep> &solution) override {
+    void on_solution_found(size_t /*task*/, const std::vector<EnchStep>& solution) override {
         ByteStreamWriter w;
-        w << solution;  // vector<EnchStep>
-        std::lock_guard lk(_mtx);
-        ipc::write_frame(1, ipc::MsgType::MsgSolution, std::move(w).take());
+        w << solution; // vector<EnchStep>
+        send_frame(ipc::MsgType::MsgSolution, std::move(w).take());
     }
-    /// Write a frame under the same lock as the event callbacks, so the
-    /// parent never sees interleaved frames (write_frame is two syscalls).
-    void send_frame(ipc::MsgType type, const std::vector<uint8_t> &payload) {
+    /// Write one frame under the shared lock (write_frame is two+ syscalls).
+    void send_frame(ipc::MsgType type, const std::vector<uint8_t>& payload) {
         std::lock_guard lk(_mtx);
         ipc::write_frame(1, type, payload);
     }
-  private:
-    std::mutex _mtx;  // serializes all writes to the IPC channel
+
+private:
+    std::mutex _mtx; // serializes ALL writes to the IPC channel
 };
 
 // ── Event-driven wakeup for the control thread ─────────────────────
-// Two event sources: an IPC frame on stdin (cancel/pause/resume from the
-// parent) OR the main thread finishing execute().
-//   Linux:  poll([stdin, exit eventfd], -1) — true kernel sleep, zero polling.
-//   Windows: anonymous pipes are NOT reliable wait objects (WFMO spuriously
-//            signals "readable" on an empty pipe), so stdin is probed with
-//            PeekNamedPipe (~1 ms); the exit event is a REAL waitable object
-//            so execute()-done still wakes instantly.
+// Two event sources: an IPC frame on stdin (cancel/pause/resume/serialize from
+// the parent) OR the main thread finishing execute().  Linux: poll([stdin,
+// exit eventfd], -1) — true kernel sleep.  Windows: anonymous pipes are NOT
+// reliable wait objects (WFMO spuriously signals "readable" on an empty pipe),
+// so stdin is probed with PeekNamedPipe (~1 ms); the exit event is a REAL
+// waitable object so execute()-done still wakes instantly.
 class ExitSignal {
-  public:
+public:
     ExitSignal() {
 #if defined(__linux__)
         _fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
@@ -112,24 +114,28 @@ class ExitSignal {
     }
     ~ExitSignal() {
 #if defined(__linux__)
-        if (_fd >= 0) ::close(_fd);
+        if (_fd >= 0)
+            ::close(_fd);
 #elif defined(_WIN32)
-        if (_evt) ::CloseHandle(_evt);
+        if (_evt)
+            ::CloseHandle(_evt);
 #endif
     }
 #if defined(__linux__)
     int fd() const { return _fd; }
     void signal() {
         const uint64_t one = 1;
-        if (_fd >= 0) (void)::write(_fd, &one, sizeof(one));
+        if (_fd >= 0)
+            (void)::write(_fd, &one, sizeof(one));
     }
 #elif defined(_WIN32)
     HANDLE handle() const { return _evt; }
     void signal() {
-        if (_evt) ::SetEvent(_evt);
+        if (_evt)
+            ::SetEvent(_evt);
     }
 #endif
-  private:
+private:
 #if defined(__linux__)
     int _fd = -1;
 #elif defined(_WIN32)
@@ -140,7 +146,7 @@ class ExitSignal {
 /// Wait for either an IPC frame on stdin or the exit signal.
 /// @return 0 = stdin readable, 1 = exit signal, -2 = nothing ready (retry),
 ///         -1 = error.
-int wait_ipc_or_exit(const ExitSignal &exit_sig) {
+int wait_ipc_or_exit(const ExitSignal& exit_sig) {
 #if defined(__linux__)
     struct pollfd pfds[2] = {{0, POLLIN, 0}, {exit_sig.fd(), POLLIN, 0}};
     int rc = ::poll(pfds, 2, -1);
@@ -150,126 +156,138 @@ int wait_ipc_or_exit(const ExitSignal &exit_sig) {
         return 1;
     return 0;
 #elif defined(_WIN32)
-    // Windows anonymous pipes are NOT reliable wait objects — WFMO on the
-    // read handle spuriously signals "readable" on an empty pipe and then
-    // read_frame would block forever.  Detect data with PeekNamedPipe
-    // (non-blocking), and wait on the exit event (a REAL waitable object) so
-    // execute()-done still wakes us instantly.
     HANDLE stdin_h = reinterpret_cast<HANDLE>(::_get_osfhandle(::_fileno(stdin)));
     DWORD avail = 0;
     if (::PeekNamedPipe(stdin_h, nullptr, 0, nullptr, &avail, nullptr) && avail > 0)
         return 0;
     if (::WaitForSingleObject(exit_sig.handle(), 1) == WAIT_OBJECT_0)
         return 1;
-    return -2;  // nothing ready — retry
+    return -2; // nothing ready — retry
 #else
     (void)exit_sig;
     return -1;
 #endif
 }
 
-void send_error(const std::string &msg) {
+void send_error(const std::string& msg) {
     ByteStreamWriter w;
     w << msg;
     ipc::write_frame(1, ipc::MsgType::MsgError, std::move(w).take());
 }
 
-// ── Handle MsgExecute: run the algorithm, stream events, reply done ──
-void handle_execute(IAlgorithm &algo, const std::vector<uint8_t> &payload) {
-    // MsgExecute payload: [u8 restored][AlgorithmInput] — the restored flag
-    // comes from the parent's ctx.is_restored() (checkpoint resume), so the
-    // plugin's init() skips redundant pre-allocation after a state restore.
-    ByteStreamReader r(payload);
-    uint8_t restored = 0;
-    r >> restored;
-    AlgorithmInput input;
-    input.deserialize(r);
-    if (!r.ok()) {
-        send_error("besq-worker: malformed AlgorithmInput");
-        return;
-    }
-
-    // Local ExecutionContext — entirely within this process (hot path, no IPC).
-    std::string name(algo.name());
-    ExecutionContext local_ctx(0, name.c_str());
-    if (restored != 0)
-        local_ctx.set_restored(true);
-
-    // Forward progress/solutions to the parent via DiagnosticsService.
-    auto forwarder = IAlgorithmObserver::create<IpcForwardObserver>();
-
-    // Control thread: receive cancel/pause/resume while execute() runs.
-    // Event-driven — sleeps in poll/WFMO until an IPC frame arrives OR the
-    // main thread signals execute() is done (no polling, no busy-spin).
+// ── Handle MsgRun / MsgResumeRun: drive the executor to completion ──
+void handle_run(AlgorithmExecutor& exec,
+                bool resume,
+                const std::vector<uint8_t>& payload,
+                const std::shared_ptr<IpcForwardObserver>& forwarder) {
+    // Control thread: receive cancel/pause/resume/serialize while execute()
+    // runs.  Event-driven — sleeps in poll/WFMO until an IPC frame arrives OR
+    // the main thread signals execute() is done.  It is the ONLY stdin reader
+    // during the run (the serve thread is blocked in exec.wait()); it calls the
+    // executor's own thread-safe control API, so no context-splitting is needed.
     ExitSignal exit_sig;
     std::thread control([&] {
         for (;;) {
             switch (wait_ipc_or_exit(exit_sig)) {
-            case 1:   return;  // execute() finished — control no longer needed
-            case -2:  continue;                         // nothing ready — retry
-            case -1:  return;  // poll/WFMO error
-            default:  break;   // stdin readable
+            case 1:
+                return; // execute() finished — control no longer needed
+            case -2:
+                continue; // nothing ready — retry
+            case -1:
+                return; // poll/WFMO error
+            default:
+                break; // stdin readable
             }
             ipc::MsgType type;
             std::vector<uint8_t> ctl;
             if (!ipc::read_frame(0, type, ctl))
-                return;  // EOF (parent closed the channel)
+                return; // EOF (parent closed the channel)
             switch (type) {
-            case ipc::MsgType::MsgCancel: local_ctx.cancel(); break;
-            case ipc::MsgType::MsgPause:  local_ctx.pause();  break;
-            case ipc::MsgType::MsgResume: local_ctx.resume(); break;
+            case ipc::MsgType::MsgCancel:
+                exec.cancel();
+                break;
+            case ipc::MsgType::MsgPause:
+                exec.pause();
+                break;
+            case ipc::MsgType::MsgResume:
+                exec.resume();
+                break;
             case ipc::MsgType::MsgSerializeState: {
-                // The main thread is paused (blocked in wait_if_paused) → the
-                // algorithm state is stable, safe to read here.  Reply with the
-                // encoded sections (large → auto-chunked by write_frame).
-                std::fprintf(stderr, "[worker] serialize_state begin\n");
-                auto sections = algo.get_serializer()
-                                    ? algo.get_serializer()->serialize_state(algo)
-                                    : std::vector<checkpoint::Section>{};
-                std::fprintf(stderr, "[worker] serialize_state done (%zu sections)\n", sections.size());
-                ipc::write_frame(1, ipc::MsgType::MsgResult, ipc::encode_sections(sections));
-                std::fprintf(stderr, "[worker] serialize_state sent\n");
+                // Only meaningful while paused (executor gates on its state);
+                // returns the full opaque checkpoint blob (large → auto-chunked).
+                const auto blob = exec.serialize_state();
+                forwarder->send_frame(ipc::MsgType::MsgResult, blob);
                 break;
             }
-            default: break;
+            default:
+                break;
             }
         }
     });
 
-    algo.init(input, local_ctx);
-    algo.execute(input, local_ctx);
+    bool failed = false;
+    try {
+        if (resume) {
+            exec.start(payload); // opaque checkpoint blob (input is embedded)
+        } else {
+            AlgorithmInput input;
+            ByteStreamReader r(payload);
+            input.deserialize(r);
+            if (!r.ok())
+                throw std::runtime_error("besq-worker: malformed AlgorithmInput");
+            exec.start(std::move(input));
+        }
+        exec.wait();
+    } catch (const std::exception& e) {
+        failed = true;
+        send_error(std::string("besq-worker: ") + e.what());
+    } catch (...) {
+        failed = true;
+        send_error("besq-worker: unknown error");
+    }
 
-    exit_sig.signal();  // wake the control thread to exit
+    exit_sig.signal(); // wake the control thread to exit
     control.join();
 
+    if (failed)
+        return; // MsgError already sent
+
     // Flush queued progress/solution events BEFORE MsgResult, so the parent
-    // never sees MsgResult followed by straggler solutions.  MsgResult is
-    // written under the observer's lock to avoid frame interleaving.
+    // never sees MsgResult followed by straggler solutions.
     DiagnosticsService::instance().flush();
-    forwarder->send_frame(ipc::MsgType::MsgResult, {});
+    forwarder->send_frame(ipc::MsgType::MsgResult, ipc::encode_algorithm_output(exec.output()));
 }
 
 // ── Main IPC service loop ───────────────────────────────────────────
-void serve(IAlgorithm &algo) {
+void serve(AlgorithmExecutor& exec) {
     for (;;) {
         ipc::MsgType type;
         std::vector<uint8_t> payload;
         if (!ipc::read_frame(0, type, payload))
-            return;  // EOF (parent closed)
+            return; // EOF (parent closed)
 
         switch (type) {
         case ipc::MsgType::MsgGetName: {
-            ByteStreamWriter w; w << std::string(algo.name());
+            ByteStreamWriter w;
+            w << std::string(exec.name());
             ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
             break;
         }
         case ipc::MsgType::MsgGetVersion: {
-            ByteStreamWriter w; w << std::string(algo.version());
+            ByteStreamWriter w;
+            w << std::string(exec.version());
             ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
             break;
         }
         case ipc::MsgType::MsgGetMode: {
-            ByteStreamWriter w; w << static_cast<uint8_t>(algo.supported_mode());
+            ByteStreamWriter w;
+            w << static_cast<uint8_t>(exec.supported_mode());
+            ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
+            break;
+        }
+        case ipc::MsgType::MsgIsSerializable: {
+            ByteStreamWriter w;
+            w << exec.is_serializable();
             ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
             break;
         }
@@ -277,37 +295,34 @@ void serve(IAlgorithm &algo) {
             int16_t n = 0;
             if (payload.size() >= sizeof(n))
                 std::memcpy(&n, payload.data(), sizeof(n));
-            ByteStreamWriter w; w << algo.evaluate(n);
+            ByteStreamWriter w;
+            w << exec.evaluate(n);
             ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
             break;
         }
         case ipc::MsgType::MsgSimulate: {
             AlgorithmInput input;
             if (ipc::decode(payload, input)) {
-                ByteStreamWriter w; w << algo.simulate(input);
+                ByteStreamWriter w;
+                w << exec.simulate(input);
                 ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
             } else {
                 send_error("besq-worker: malformed AlgorithmInput");
             }
             break;
         }
-        case ipc::MsgType::MsgDeserializeState: {
-            // The payload (already reassembled by read_frame) is the encoded
-            // state sections; restore the algorithm before a resume MsgExecute.
-            std::vector<checkpoint::Section> sections;
-            bool ok = false;
-            if (ipc::decode_sections(payload, sections) && algo.get_serializer())
-                ok = algo.get_serializer()->deserialize_state(algo, sections);
-            ByteStreamWriter w;
-            w << ok;
-            ipc::write_frame(1, ipc::MsgType::MsgResult, std::move(w).take());
+        case ipc::MsgType::MsgRun: {
+            auto forwarder = IAlgorithmObserver::create<IpcForwardObserver>();
+            handle_run(exec, /*resume=*/false, payload, forwarder);
             break;
         }
-        case ipc::MsgType::MsgExecute:
-            handle_execute(algo, payload);
+        case ipc::MsgType::MsgResumeRun: {
+            auto forwarder = IAlgorithmObserver::create<IpcForwardObserver>();
+            handle_run(exec, /*resume=*/true, payload, forwarder);
             break;
+        }
         default:
-            // Unknown / out-of-execute control messages are no-ops.
+            // Unknown / out-of-run control messages are no-ops.
             break;
         }
     }
@@ -315,7 +330,7 @@ void serve(IAlgorithm &algo) {
 
 } // anonymous namespace
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
 #if defined(_WIN32)
     // The IPC channel is stdin/stdout.  CRT defaults to TEXT mode, which
     // would CR/LF-mangle binary frames and treat 0x1A (Ctrl-Z) as EOF —
@@ -325,7 +340,7 @@ int main(int argc, char **argv) {
     ::_setmode(::_fileno(stderr), _O_BINARY);
 #endif
 
-    const char *plugin_path = nullptr;
+    const char* plugin_path = nullptr;
     for (int i = 1; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--plugin") == 0)
             plugin_path = argv[i + 1];
@@ -339,7 +354,7 @@ int main(int argc, char **argv) {
     // dlopen must run before seccomp (the dynamic loader needs open/mmap).
     // But seccomp is installed BEFORE besq_create_algorithm(), so the
     // plugin's constructor (and any code it runs) is already sandboxed.
-    void *handle = dl_open_plugin(plugin_path);
+    void* handle = dl_open_plugin(plugin_path);
     if (!handle) {
         std::fprintf(stderr, "besq-worker: failed to load plugin: %s\n", plugin_path);
         return 1;
@@ -356,15 +371,18 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    std::unique_ptr<IAlgorithm> algo(static_cast<IAlgorithm *>(create_fn()));
+    std::unique_ptr<IAlgorithm> algo(static_cast<IAlgorithm*>(create_fn()));
     if (!algo) {
         std::fprintf(stderr, "besq-worker: plugin returned null\n");
         return 1;
     }
+    // The executor IS the sandbox boundary now: it owns the plugin, the
+    // ExecutionContext and the serializer — all local to this process.
+    auto exec = std::make_unique<AlgorithmExecutor>(std::move(algo));
 
     // Diagnostics are forwarded over IPC, not persisted to files.
     DiagnosticsService::instance().set_persist(false);
 
-    serve(*algo);
+    serve(*exec);
     return 0;
 }

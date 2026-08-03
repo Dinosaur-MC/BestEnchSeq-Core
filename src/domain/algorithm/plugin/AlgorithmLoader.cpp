@@ -1,11 +1,12 @@
-#include "domain/algorithm/IAlgorithm.h"
-#include "domain/algorithm/_strategies/Registration.h"
-#include "domain/algorithm/diagnostics/DiagnosticsService.h"
-#include "domain/algorithm/sandbox/SandboxedAlgorithm.h"
 #include "AlgorithmLoader.h"
-#include "PluginAudit.h"
 #include "AppConfig.h"
 #include "common/log/log.hpp"
+#include "domain/algorithm/_strategies/Registration.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/sandbox/SandboxedExecutor.h"
+#include "PluginAudit.h"
 
 #include <algorithm>
 #include <cstring>
@@ -24,23 +25,23 @@
 
 namespace {
 
-void *dl_open(const std::string &path) {
+void* dl_open(const std::string& path) {
 #if defined(_WIN32)
-    return static_cast<void *>(LoadLibraryA(path.c_str()));
+    return static_cast<void*>(LoadLibraryA(path.c_str()));
 #else
     return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
 }
 
-void *dl_sym(void *handle, const char *symbol) {
+void* dl_sym(void* handle, const char* symbol) {
 #if defined(_WIN32)
-    return reinterpret_cast<void *>(GetProcAddress(static_cast<HMODULE>(handle), symbol));
+    return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(handle), symbol));
 #else
     return dlsym(handle, symbol);
 #endif
 }
 
-void dl_close(void *handle) {
+void dl_close(void* handle) {
 #if defined(_WIN32)
     FreeLibrary(static_cast<HMODULE>(handle));
 #else
@@ -54,15 +55,13 @@ std::string dl_error() {
     if (err == 0)
         return {};
     LPSTR buf = nullptr;
-    DWORD len = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr, err, 0,
-        reinterpret_cast<LPSTR>(&buf), 0, nullptr
-    );
+    DWORD len = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, nullptr, err, 0,
+                               reinterpret_cast<LPSTR>(&buf), 0, nullptr);
     std::string msg(buf, len);
     LocalFree(buf);
     return msg;
 #else
-    const char *err = dlerror();
+    const char* err = dlerror();
     return err ? std::string(err) : std::string{};
 #endif
 }
@@ -104,7 +103,7 @@ void AlgorithmLoader::load_builtin() {
 // Plugin loading
 // ====================================================================
 
-constexpr const char *SO_EXT =
+constexpr const char* SO_EXT =
 #if defined(_WIN32)
     ".dll";
 #elif defined(__APPLE__)
@@ -113,7 +112,7 @@ constexpr const char *SO_EXT =
     ".so";
 #endif
 
-size_t AlgorithmLoader::scan_and_load(const std::string &dir_path) {
+size_t AlgorithmLoader::scan_and_load(const std::string& dir_path) {
     namespace fs = std::filesystem;
 
     if (!fs::is_directory(dir_path)) {
@@ -122,10 +121,10 @@ size_t AlgorithmLoader::scan_and_load(const std::string &dir_path) {
     }
 
     size_t count = 0;
-    for (const auto &entry : fs::directory_iterator(dir_path)) {
+    for (const auto& entry : fs::directory_iterator(dir_path)) {
         if (!entry.is_regular_file())
             continue;
-        const auto &path = entry.path().string();
+        const auto& path = entry.path().string();
         if (!path.ends_with(SO_EXT))
             continue;
         if (load_plugin(path))
@@ -136,10 +135,10 @@ size_t AlgorithmLoader::scan_and_load(const std::string &dir_path) {
     return count;
 }
 
-bool AlgorithmLoader::load_plugin(const std::string &so_path) {
+bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     // Avoid double-load on exact path
     auto resolved = std::filesystem::weakly_canonical(so_path).string();
-    for (const auto &p : _plugins)
+    for (const auto& p : _plugins)
         if (p.path == resolved) {
             LOG_WARN("Algorithm plugin already loaded: %s", so_path.c_str());
             return true;
@@ -151,15 +150,15 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
 
     // W^X segment is a hard reject — indicates a JIT / code-injection risk.
     if (audit.has_wx_segment) {
-        LOG_ERROR("[Audit] REFUSED '%s' — W+X memory segment (exploit risk)",
-                  so_path.c_str());
+        LOG_ERROR("[Audit] REFUSED '%s' — W+X memory segment (exploit risk)", so_path.c_str());
         return false;
     }
 
     // General audit failure (corrupted / truncated / non-native format).
     if (!audit.passed) {
         LOG_ERROR("[Audit] REFUSED '%s' — binary audit failed (corrupted or "
-                  "unrecognized format)", so_path.c_str());
+                  "unrecognized format)",
+                  so_path.c_str());
         return false;
     }
 
@@ -186,8 +185,9 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     // Log linked libraries (always informative)
     if (!audit.linked_libraries.empty()) {
         std::string joined;
-        for (const auto &lib : audit.linked_libraries) {
-            if (!joined.empty()) joined += ", ";
+        for (const auto& lib : audit.linked_libraries) {
+            if (!joined.empty())
+                joined += ", ";
             joined += lib;
         }
         LOG_INFO("[Audit] '%s' links: %s", so_path.c_str(), joined.c_str());
@@ -211,36 +211,35 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     // The parent's in-process dlopen of a plugin (bare or shared) crashed
     // the dynamic linker in the large exe.  Instead, probe by spawning a
     // real worker — which loads the plugin in its own small process and
-    // returns the name — and register a sandboxed factory.  This both gets
-    // the name and validates the plugin loads under the sandbox.
+    // returns the name — and register a SandboxedExecutor factory.  This both
+    // gets the name and validates the plugin loads under the sandbox.  The
+    // sandbox seam is the EXECUTOR, so these register into _sandboxed
+    // (IExecutor-typed), NOT _registry (IAlgorithm-typed).
     if (_sandbox_enabled) {
         std::string algo_name;
         try {
-            auto probe = std::make_unique<SandboxedAlgorithm>(resolved, "", audit.capability);
+            auto probe = std::make_unique<SandboxedExecutor>(resolved, "", audit.capability);
             algo_name = std::string(probe->name());
-        } catch (const std::exception &e) {
+        } catch (const std::exception& e) {
             LOG_WARN("Plugin '%s' sandbox probe failed: %s", so_path.c_str(), e.what());
             return false;
         }
-        _registry.unregister_algorithm(algo_name);
-        _registry.register_algorithm(algo_name, [path = resolved, cap = audit.capability]() {
-            return std::make_unique<SandboxedAlgorithm>(path, "", cap);
-        });
+        _sandboxed[algo_name] = [path = resolved, cap = audit.capability]() {
+            return std::make_unique<SandboxedExecutor>(path, "", cap);
+        };
         LoadedPlugin plugin;
-        plugin.name  = algo_name;
-        plugin.path  = std::move(resolved);
+        plugin.name = algo_name;
+        plugin.path = std::move(resolved);
         plugin.audit = std::move(audit);
         _plugins.push_back(std::move(plugin));
-        LOG_INFO("Loaded algorithm plugin (sandboxed): %s (from %s)",
-                 algo_name.c_str(), so_path.c_str());
+        LOG_INFO("Loaded algorithm plugin (sandboxed): %s (from %s)", algo_name.c_str(), so_path.c_str());
         return true;
     }
 
     // ── Step 2: dlopen (in-process mode only) ────────────────────────
-    void *handle = dl_open(resolved);
+    void* handle = dl_open(resolved);
     if (!handle) {
-        LOG_WARN("Failed to load algorithm plugin '%s': %s",
-                 so_path.c_str(), dl_error().c_str());
+        LOG_WARN("Failed to load algorithm plugin '%s': %s", so_path.c_str(), dl_error().c_str());
         return false;
     }
 
@@ -253,30 +252,30 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
 
     // ── Step 4: Read capability manifest (post-dlopen) ──────────────
     {
-        auto cap_fn = reinterpret_cast<BesqCapabilityFn>(
-            dl_sym(handle, BESQ_PLUGIN_CAPABILITY_SYM));
+        auto cap_fn = reinterpret_cast<BesqCapabilityFn>(dl_sym(handle, BESQ_PLUGIN_CAPABILITY_SYM));
         if (cap_fn) {
             audit.has_manifest = true;
-            audit.capability   = cap_fn();
+            audit.capability = cap_fn();
         }
 
         if (!audit.has_manifest) {
             LOG_WARN("[Audit] '%s' does not declare a capability manifest. "
                      "Add BESQ_PLUGIN_ENTRY_CAP(..., PluginCapability::None) "
-                     "to its plugin.cpp.", so_path.c_str());
+                     "to its plugin.cpp.",
+                     so_path.c_str());
         } else if (audit.capability != PluginCapability::None) {
             LOG_WARN("[Audit] '%s' declares capability '%s' — suspicious for a "
                      "pure-compute forge plugin.",
                      so_path.c_str(),
-                     audit.capability == PluginCapability::Filesystem ? "Filesystem" :
-                     audit.capability == PluginCapability::Network    ? "Network" :
-                     audit.capability == PluginCapability::Unrestricted ? "Unrestricted" :
-                     "Unknown");
+                     audit.capability == PluginCapability::Filesystem     ? "Filesystem"
+                     : audit.capability == PluginCapability::Network      ? "Network"
+                     : audit.capability == PluginCapability::Unrestricted ? "Unrestricted"
+                                                                          : "Unknown");
         }
     }
 
     // ── Step 5: Probe (validate ABI by creating an instance) ─────────
-    std::unique_ptr<IAlgorithm> probe(static_cast<IAlgorithm *>(create_fn()));
+    std::unique_ptr<IAlgorithm> probe(static_cast<IAlgorithm*>(create_fn()));
     if (!probe) {
         LOG_WARN("Plugin '%s' returned null from create", so_path.c_str());
         dl_close(handle);
@@ -287,16 +286,17 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
     // ── Step 6: Register (in-process mode only) ─────────────────────
     _registry.unregister_algorithm(algo_name);
     _registry.register_algorithm(algo_name, [create_fn]() -> std::unique_ptr<IAlgorithm> {
-        void *raw = create_fn();
-        if (!raw) return nullptr;
-        return std::unique_ptr<IAlgorithm>(static_cast<IAlgorithm *>(raw));
+        void* raw = create_fn();
+        if (!raw)
+            return nullptr;
+        return std::unique_ptr<IAlgorithm>(static_cast<IAlgorithm*>(raw));
     });
 
     LoadedPlugin plugin;
     plugin.handle = handle;
-    plugin.name   = algo_name;
-    plugin.path   = std::move(resolved);
-    plugin.audit  = std::move(audit);
+    plugin.name = algo_name;
+    plugin.path = std::move(resolved);
+    plugin.audit = std::move(audit);
     _plugins.push_back(std::move(plugin));
 
     LOG_INFO("Loaded algorithm plugin: %s (from %s)", algo_name.c_str(), so_path.c_str());
@@ -307,7 +307,7 @@ bool AlgorithmLoader::load_plugin(const std::string &so_path) {
 // Symbol resolution — looks for one symbol: besq_create_algorithm
 // ====================================================================
 
-bool AlgorithmLoader::resolve_plugin(void *handle, const std::string &path, BesqCreateFn &out_create) {
+bool AlgorithmLoader::resolve_plugin(void* handle, const std::string& path, BesqCreateFn& out_create) {
     auto create_fn = reinterpret_cast<BesqCreateFn>(dl_sym(handle, BESQ_PLUGIN_CREATE_SYM));
     if (!create_fn) {
         LOG_WARN("Plugin '%s' missing '%s': %s", path.c_str(), BESQ_PLUGIN_CREATE_SYM, dl_error().c_str());
@@ -322,23 +322,47 @@ bool AlgorithmLoader::resolve_plugin(void *handle, const std::string &path, Besq
 // Query — delegate to internal registry
 // ====================================================================
 
-std::vector<std::string> AlgorithmLoader::list() const { return _registry.list(); }
+std::vector<std::string> AlgorithmLoader::list() const {
+    std::vector<std::string> names = _registry.list();
+    for (const auto& [name, _] : _sandboxed)
+        names.push_back(name);
+    return names;
+}
 
-bool AlgorithmLoader::contains(std::string_view name) const { return _registry.contains(name); }
+bool AlgorithmLoader::contains(std::string_view name) const {
+    return _registry.contains(name) || _sandboxed.contains(std::string(name));
+}
 
-size_t AlgorithmLoader::size() const { return _registry.size(); }
+size_t AlgorithmLoader::size() const {
+    return _registry.size() + _sandboxed.size();
+}
 
 std::unique_ptr<IAlgorithm> AlgorithmLoader::create(std::string_view name) const {
+    // In-process surface: built-ins + in-process plugins only.  Sandboxed
+    // plugins live in _sandboxed and are reached via create_executor().
     return _registry.create(name);
+}
+
+std::unique_ptr<IExecutor> AlgorithmLoader::create_executor(std::string_view name) const {
+    if (_sandbox_enabled) {
+        auto it = _sandboxed.find(std::string(name));
+        if (it != _sandboxed.end())
+            return it->second(); // SandboxedExecutor — worker-hosted real executor
+    }
+    auto algo = _registry.create(name);
+    if (!algo)
+        return nullptr;
+    // In-process executor.  Built-in strategies are never sandboxed — they are
+    // compiled into the trusted kernel, so the registry path is correct for them.
+    return std::make_unique<AlgorithmExecutor>(std::move(algo));
 }
 
 // ====================================================================
 // Audit
 // ====================================================================
 
-const PluginAuditReport *AlgorithmLoader::get_audit_report(std::string_view name) const {
-    auto it = std::find_if(_plugins.begin(), _plugins.end(),
-                           [&](const auto &p) { return p.name == name; });
+const PluginAuditReport* AlgorithmLoader::get_audit_report(std::string_view name) const {
+    auto it = std::find_if(_plugins.begin(), _plugins.end(), [&](const auto& p) { return p.name == name; });
     return it != _plugins.end() ? &it->audit : nullptr;
 }
 
@@ -346,12 +370,13 @@ const PluginAuditReport *AlgorithmLoader::get_audit_report(std::string_view name
 // Unload
 // ====================================================================
 
-void AlgorithmLoader::unload(const std::string &name) {
-    auto it = std::find_if(_plugins.begin(), _plugins.end(), [&](const auto &p) { return p.name == name; });
+void AlgorithmLoader::unload(const std::string& name) {
+    auto it = std::find_if(_plugins.begin(), _plugins.end(), [&](const auto& p) { return p.name == name; });
     if (it == _plugins.end())
         return;
 
     _registry.unregister_algorithm(name);
+    _sandboxed.erase(name);
     if (it->handle)
         dl_close(it->handle);
     _plugins.erase(it);
@@ -360,11 +385,12 @@ void AlgorithmLoader::unload(const std::string &name) {
 }
 
 void AlgorithmLoader::unload_all() {
-    for (auto &p : _plugins) {
+    for (auto& p : _plugins) {
         _registry.unregister_algorithm(p.name);
         if (p.handle)
             dl_close(p.handle);
     }
+    _sandboxed.clear();
     _plugins.clear();
 }
 } // namespace algorithm

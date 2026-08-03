@@ -7,7 +7,9 @@
 
 #include "domain/orchestration/orchestration.h"
 
-namespace algorithm { class AlgorithmExecutor; }
+namespace algorithm {
+class IExecutor;
+}
 
 /// Main public API class for BestEnchSeq.
 /// Session facade: holds session state (active profile, algorithm loader) and
@@ -50,8 +52,8 @@ public:
     /// into a self-contained profile file (embeds version/tag).  Delegates to
     /// ProfileManager::publish.  Returns false if the profile is unknown or the
     /// file cannot be written.
-    bool publish_profile(const std::string& name, const std::string& version,
-                         const std::string& tag, const std::string& out_path);
+    bool
+    publish_profile(const std::string& name, const std::string& version, const std::string& tag, const std::string& out_path);
 
     // ── Registry editing (active profile) ──
     bool add_enchantment(const EnchInfo& info);
@@ -78,8 +80,7 @@ public:
     void abort_solve();
 
     // ── Format ──
-    std::string format(const SolveResult& result, AlgorithmMode mode,
-                       std::string_view fmt) const;
+    std::string format(const SolveResult& result, AlgorithmMode mode, std::string_view fmt) const;
 
     // ── Algorithm queries ──
     std::vector<std::string> list_algorithms() const;
