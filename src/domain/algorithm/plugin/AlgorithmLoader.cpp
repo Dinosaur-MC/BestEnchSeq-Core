@@ -200,6 +200,15 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     // malicious test plugin's open("/etc/passwd") ran fine in-process).
     // Refuse instead of warning.  Sandbox mode permits these — seccomp /
     // Job Object physically contain the behavior.
+    if (!_sandbox_enabled && audit.limited) {
+        // An opaque binary (no section headers / no dynsym) cannot be
+        // certified as pure-compute — refuse without a sandbox, same policy
+        // as dangerous imports.
+        LOG_ERROR("[Audit] REFUSED '%s' — binary audit incomplete (opaque).  "
+                  "Run with BESQ_SANDBOX=1 to load it sandboxed.",
+                  so_path.c_str());
+        return false;
+    }
     if (!_sandbox_enabled && !audit.dangerous_imports.empty()) {
         LOG_ERROR("[Audit] REFUSED '%s' — imports %zu dangerous symbol(s) "
                   "(no sandbox).  Run with BESQ_SANDBOX=1 to load it sandboxed.",

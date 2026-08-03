@@ -22,6 +22,13 @@ namespace algorithm {
 struct PluginAuditReport {
     bool passed{true}; ///< Overall verdict.  false → should not be loaded.
 
+    // ── Audit completeness ────────────────────────────────────
+    /// True when the scanner could NOT fully inspect imports/exports (e.g. the
+    /// binary has no section headers or no dynamic symbol table).  The plugin
+    /// is structurally valid but OPAQUE — the loader treats this like a
+    /// dangerous import: refuse without a sandbox, permit when contained.
+    bool limited{false};
+
     // ── W^X policy ─────────────────────────────────────────────
     bool has_wx_segment{false}; ///< Segment with PF_W|PF_X → EXPLOIT
 
@@ -44,6 +51,6 @@ struct PluginAuditReport {
 /// Read a shared-library binary and produce a security report.
 /// No code from the library is executed — the file is mmap'd
 /// and parsed structurally.
-PluginAuditReport audit_plugin_binary(const std::string &so_path);
+PluginAuditReport audit_plugin_binary(const std::string& so_path);
 
 } // namespace algorithm
