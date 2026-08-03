@@ -10,13 +10,42 @@
 #include <iostream>
 #include <istream>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
 namespace {
 
-/// Build an EnchSet from schema DTOs.  Throws on empty/unknown ids or
-/// out-of-range/over-max levels.
+/// Construct an NSID, mapping NSID's bare validator text ("The NSID '...' is
+/// invalid") for now-invalid input (uppercase, `/` in ns, `.`/`..` segments)
+/// to the actionable registry error instead.
+NSID make_nsid(const std::string& k, const char* err_key) {
+    try {
+        return NSID(k);
+    } catch (const std::exception&) {
+        throw std::runtime_error(tr_fmt(err_key, k));
+    }
+}
+
+/// Validate prior_penalty fits the compact representation (uint8_t).
+/// Negative or >255 values would silently wrap (e.g. -5→251, 999→231)
+/// downstream in CompactAdapter.
+static void validate_prior_penalty(int32_t prior_penalty) {
+    if (prior_penalty < 0)
+        throw std::runtime_error(tr_fmt("cli.err.prior_penalty_negative", prior_penalty));
+    if (prior_penalty > std::numeric_limits<uint8_t>::max())
+        throw std::runtime_error(
+            tr_fmt("cli.err.prior_penalty_exceeds_max", prior_penalty, std::numeric_limits<uint8_t>::max()));
+}
+
+/// Validate durability is within equipment bounds.
+static void validate_durability(int32_t durability, int32_t max_durability, const std::string& item_id) {
+    if (durability > max_durability)
+        throw std::runtime_error(tr_fmt("cli.err.durability_exceeds_max", durability, max_durability, item_id));
+}
+
+/// Build an EnchSet from schema DTOs.  Throws on empty/unknown ids,
+/// out-of-range/over-max levels, or duplicate enchantments.
 EnchSet parse_ench_array(const std::vector<InvEnchDto>& enchs, const EnchantmentRegistry& ench_reg) {
     EnchSet result;
     for (const auto& e : enchs) {
@@ -24,11 +53,16 @@ EnchSet parse_ench_array(const std::vector<InvEnchDto>& enchs, const Enchantment
             throw std::runtime_error(tr_fmt("cli.err.empty_ench_id", e.id));
         if (e.level < 1 || e.level > 255)
             throw std::runtime_error(tr_fmt("cli.err.invalid_ench_level", e.level, e.id));
-        auto it = ench_reg.find(NSID(e.id));
+        auto it = ench_reg.find(make_nsid(e.id, "cli.err.unknown_ench"));
         if (it == ench_reg.end())
             throw std::runtime_error(tr_fmt("cli.err.unknown_ench", e.id));
         if (e.level > it->max_level)
             throw std::runtime_error(tr_fmt("main.err.ench_level_exceeds_max", it->id.str(), e.level, it->max_level));
+        // Duplicate IDs (regardless of level) are invalid — an item has at
+        // most one level per enchantment.  Reject instead of silently keeping
+        // the first entry (consistent with EnchParser).
+        if (result.find(it->id) != result.end())
+            throw std::runtime_error(tr_fmt("cli.err.duplicate_ench", it->id.str()));
         result.emplace(it->id, it->name, e.level);
     }
     return result;
@@ -40,16 +74,7 @@ EnchSet parse_ench_array(const std::vector<InvEnchDto>& enchs, const Enchantment
 Item build_target_item(const InvTargetDto& target, const EnchantmentRegistry& ench_reg, const EquipmentRegistry& eq_reg) {
     EnchSet ench_set = parse_ench_array(target.enchants, ench_reg);
 
-    // NSID() throws its bare validator text on now-invalid chars — map it to
-    // the actionable unknown-equipment error instead (mirrors ItemParser).
-    auto make_nsid = [](const std::string& k) -> NSID {
-        try {
-            return NSID(k);
-        } catch (const std::exception&) {
-            throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", k));
-        }
-    };
-    NSID nid = make_nsid(target.item);
+    NSID nid = make_nsid(target.item, "cli.err.unknown_equipment");
     if (nid == NSID("minecraft:book") || nid == NSID("minecraft:enchanted_book"))
         return Item(NSID("minecraft:enchanted_book"), ench_set, 0, 0);
 
@@ -87,6 +112,7 @@ InventoryInput InventoryParser::parse_string(const std::string& content,
         if (it.type != "book" && it.type != "equipment")
             throw std::runtime_error(tr_fmt("cli.err.inventory_bad_type", it.type));
 
+        validate_prior_penalty(it.prior_penalty);
         EnchSet ench_set = parse_ench_array(it.enchants, ench_reg);
 
         if (it.type == "book") {
@@ -94,15 +120,13 @@ InventoryInput InventoryParser::parse_string(const std::string& content,
         } else {
             if (it.id.empty())
                 throw std::runtime_error(tr("cli.err.inventory_missing_id"));
-            auto eq_it = eq_reg.find(NSID(it.id));
+            auto eq_it = eq_reg.find(make_nsid(it.id, "cli.err.unknown_equipment"));
             if (eq_it == eq_reg.end())
                 throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", it.id));
             int32_t dur = eq_it->max_durability;
             if (it.durability > 0)
                 dur = it.durability;
-            if (dur > eq_it->max_durability)
-                throw std::runtime_error("durability " + std::to_string(dur) + " exceeds max_durability " +
-                                         std::to_string(eq_it->max_durability) + " for '" + it.id + "'");
+            validate_durability(dur, eq_it->max_durability, it.id);
             out.items.emplace_back(eq_it->id, ench_set, it.prior_penalty, dur);
         }
         out.priorities.push_back(it.priority);

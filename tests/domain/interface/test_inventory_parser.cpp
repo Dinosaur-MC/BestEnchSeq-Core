@@ -378,6 +378,135 @@ void test_unknown_root_keys_tolerated() {
     TEST_PASS("test_unknown_root_keys_tolerated");
 }
 
+// ── item bounds / duplicates ───────────────────────────────────────────
+
+void test_durability_exceeds_max_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        InventoryParser::parse_string(R"({
+            "target": { "item": "diamond_sword", "enchants": [] },
+            "items": [ { "type": "equipment", "id": "diamond_sword", "durability": 2000 } ]
+        })",
+                                      ench_reg, eq_reg); // diamond_sword max_durability is 1561
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "durability above max_durability should throw");
+    TEST_PASS("test_durability_exceeds_max_throws");
+}
+
+void test_prior_penalty_negative_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        InventoryParser::parse_string(R"({
+            "target": { "item": "diamond_sword", "enchants": [] },
+            "items": [ { "type": "book", "enchants": [], "prior_penalty": -1 } ]
+        })",
+                                      ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "negative prior_penalty should throw");
+    TEST_PASS("test_prior_penalty_negative_throws");
+}
+
+void test_prior_penalty_over_255_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        InventoryParser::parse_string(R"({
+            "target": { "item": "diamond_sword", "enchants": [] },
+            "items": [ { "type": "book", "enchants": [], "prior_penalty": 256 } ]
+        })",
+                                      ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "prior_penalty above 255 should throw");
+    TEST_PASS("test_prior_penalty_over_255_throws");
+}
+
+void test_prior_penalty_255_ok() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto inv = InventoryParser::parse_string(R"({
+        "target": { "item": "diamond_sword", "enchants": [] },
+        "items": [ { "type": "book", "enchants": [], "prior_penalty": 255 } ]
+    })",
+                                             ench_reg, eq_reg);
+    expect(inv.items.size() == 1 && inv.items[0].prior_penalty == 255, "prior_penalty at max 255 is allowed");
+    TEST_PASS("test_prior_penalty_255_ok");
+}
+
+void test_duplicate_ench_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        InventoryParser::parse_string(R"({
+            "target": { "item": "diamond_sword", "enchants": [] },
+            "items": [ { "type": "book",
+                         "enchants": [{"id":"sharpness","level":5},{"id":"sharpness","level":3}] } ]
+        })",
+                                      ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "duplicate enchantment in an item should throw");
+    TEST_PASS("test_duplicate_ench_throws");
+}
+
+void test_duplicate_target_ench_throws() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    bool threw = false;
+    try {
+        InventoryParser::parse_string(R"({
+            "target": { "item": "diamond_sword",
+                        "enchants": [{"id":"sharpness","level":5},{"id":"sharpness","level":3}] },
+            "items": []
+        })",
+                                      ench_reg, eq_reg);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "duplicate enchantment in target should throw");
+    TEST_PASS("test_duplicate_target_ench_throws");
+}
+
+// ── schema shape ───────────────────────────────────────────────────────
+
+void test_items_key_absent() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto inv = InventoryParser::parse_string(R"({
+        "target": { "item": "diamond_sword", "enchants": [] }
+    })",
+                                             ench_reg, eq_reg);
+    expect(inv.items.empty(), "absent items key yields an empty items list");
+    expect(inv.target_item.id == NSID("minecraft:diamond_sword"), "target parsed without an items key");
+    TEST_PASS("test_items_key_absent");
+}
+
+// Empty target item string drops any listed enchants (documented behaviour —
+// the parser skips target construction entirely).
+void test_target_empty_item_with_enchants() {
+    auto eq_reg = make_eq_reg();
+    auto ench_reg = make_ench_reg();
+    auto inv = InventoryParser::parse_string(R"({
+        "target": { "item": "", "enchants": [{"id":"sharpness","level":5}] },
+        "items": []
+    })",
+                                             ench_reg, eq_reg);
+    expect(inv.target_item.id.empty(), "empty target item leaves target_item empty");
+    TEST_PASS("test_target_empty_item_with_enchants");
+}
+
 // ============================================================================
 // main
 // ============================================================================
@@ -404,6 +533,14 @@ int main() {
         test_missing_target_key_throws();
         test_wrong_target_type_throws();
         test_unknown_root_keys_tolerated();
+        test_durability_exceeds_max_throws();
+        test_prior_penalty_negative_throws();
+        test_prior_penalty_over_255_throws();
+        test_prior_penalty_255_ok();
+        test_duplicate_ench_throws();
+        test_duplicate_target_ench_throws();
+        test_items_key_absent();
+        test_target_empty_item_with_enchants();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

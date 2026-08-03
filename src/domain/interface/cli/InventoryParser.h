@@ -9,7 +9,7 @@ class EquipmentRegistry;
 /// Parsed inventory task: target item + available items and their forge
 /// priorities, plus optional algorithm/profile overrides from the file.
 struct InventoryInput {
-    Item target_item; // JSON `target` → domain Item; default-empty if absent
+    Item target_item; // JSON `target` → domain Item; default-empty if the item string is empty
     ItemCollection items;
     std::vector<int32_t> priorities; // parallel to items; absent → 99
     std::string algorithm;           // empty = not specified
