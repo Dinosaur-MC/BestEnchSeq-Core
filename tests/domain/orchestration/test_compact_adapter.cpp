@@ -717,6 +717,25 @@ void test_apply_inventory_mixed_pool_parallel_priorities() {
     TEST_PASS("test_apply_inventory_mixed_pool_parallel_priorities");
 }
 
+void test_apply_inventory_empty_target_throws() {
+    auto profile = make_sword_profile();
+    SolveRequest request;
+    request.mode = AlgorithmMode::inventory;
+    std::vector<Item> items;
+    items.emplace_back(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
+    std::vector<int32_t> prios = {1};
+    request.payload = InventoryPayload{items, prios};
+
+    bool threw = false;
+    try {
+        (void)CompactAdapter::apply(profile, request, *profile.tag_resolver());
+    } catch (const std::runtime_error &) {
+        threw = true;
+    }
+    expect(threw, "inventory mode with empty target should throw (not silently drop all equipment)");
+    TEST_PASS("test_apply_inventory_empty_target_throws");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -748,6 +767,7 @@ int main() {
         test_apply_inventory_book_target_excludes_equipment();
         test_apply_inventory_empty_book_dropped();
         test_apply_inventory_mixed_pool_parallel_priorities();
+        test_apply_inventory_empty_target_throws();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

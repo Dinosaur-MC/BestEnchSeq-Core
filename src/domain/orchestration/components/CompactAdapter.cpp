@@ -233,6 +233,10 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
                 std::vector<int32_t> inv_prios;
                 avail.reserve(extra.size());
                 inv_prios.reserve(extra.size());
+                // 守卫：inventory 模式必须有非空 target。空 target 会让下方
+                // 异类过滤静默排除全部装备（item.id != "" 恒真），产出空池。
+                if (request.target_item.id.str().empty())
+                    throw std::runtime_error("inventory mode requires a target item");
                 for (size_t i = 0; i < extra.size(); ++i) {
                     const auto &item = extra[i];
                     if (item.is_book() && item.enchantments.empty())
