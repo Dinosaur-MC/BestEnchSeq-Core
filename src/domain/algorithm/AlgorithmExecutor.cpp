@@ -7,9 +7,7 @@ namespace algorithm {
 
 // ─── Construction / Destruction ───
 
-AlgorithmExecutor::AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm)
-    : _algorithm(std::move(algorithm))
-{
+AlgorithmExecutor::AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm) : _algorithm(std::move(algorithm)) {
     if (!_algorithm)
         throw std::invalid_argument("algorithm cannot be null");
 }
@@ -27,7 +25,8 @@ AlgorithmExecutor::~AlgorithmExecutor() {
 // ─── Internal helpers ───
 
 void AlgorithmExecutor::_start_timeout_watcher(std::chrono::milliseconds max_time) {
-    if (max_time.count() <= 0) return;
+    if (max_time.count() <= 0)
+        return;
 
     _timeout_alive = std::make_shared<std::atomic<bool>>(true);
     auto alive = _timeout_alive;
@@ -38,8 +37,7 @@ void AlgorithmExecutor::_start_timeout_watcher(std::chrono::milliseconds max_tim
         // so a join does not wait out the full 10ms poll interval.
         auto deadline = std::chrono::steady_clock::now() + max_time;
         std::unique_lock lock(_timeout_mtx);
-        while (std::chrono::steady_clock::now() < deadline &&
-               alive->load(std::memory_order_acquire)) {
+        while (std::chrono::steady_clock::now() < deadline && alive->load(std::memory_order_acquire)) {
             _timeout_cv.wait_for(lock, std::chrono::milliseconds(10));
         }
         if (alive->load(std::memory_order_acquire)) {
@@ -78,13 +76,11 @@ bool AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
         // Don't transition TO the same state (noop)
         if (prev == new_state)
             return false;
-        if (_state.compare_exchange_weak(prev, new_state,
-                std::memory_order_acq_rel, std::memory_order_acquire)) {
+        if (_state.compare_exchange_weak(prev, new_state, std::memory_order_acq_rel, std::memory_order_acquire)) {
             _state_cv.notify_all();
             if (!_algo_name_cache.empty()) {
-                DiagnosticsService::instance().push(
-                    DiagEventKind::StateChange, _algo_name_cache, _task_id,
-                    DiagnosticsEvent::StatePayload{prev, new_state});
+                DiagnosticsService::instance().push(DiagEventKind::StateChange, _algo_name_cache, _task_id,
+                                                    DiagnosticsEvent::StatePayload{prev, new_state});
             }
             return true;
         }
@@ -100,20 +96,21 @@ void AlgorithmExecutor::_run_warmup(AlgorithmInput& input, IAlgorithm& warmup_al
     if (!solutions.empty()) {
         int32_t bound = solutions[0].total_cost;
         for (const auto& sol : solutions)
-            if (sol.total_cost < bound) bound = sol.total_cost;
+            if (sol.total_cost < bound)
+                bound = sol.total_cost;
         if (bound < input.config.search.initial_bound)
             input.config.search.initial_bound = bound;
     }
 }
 
 void AlgorithmExecutor::_record_computation_time() noexcept {
-    _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - _start_time);
+    _computation_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - _start_time);
     _computation_time_recorded = true;
 }
 
 void AlgorithmExecutor::_finalize() {
-    if (_finalized) return;
+    if (_finalized)
+        return;
     _finalized = true;
     // Stop timeout watcher so it doesn't access _ctx after finalization
     _stop_timeout_watcher();
@@ -147,28 +144,25 @@ void AlgorithmExecutor::_finalize() {
             diag->status += ": " + _error_message;
     } else {
         status = diag->status;
-        if (status.empty()) status = "Complete";
+        if (status.empty())
+            status = "Complete";
     }
 
     DiagnosticsService::instance().push(
-        DiagEventKind::Exit,
-        _algo_name_cache,
-        _task_id,
-        DiagnosticsEvent::ExitPayload{
-            std::move(diag),
-            output(),
-            status,
-            _computation_time.count(),
-            DiagnosticsWriter::Entry("nodes_visited", atoms.nodes_visited),
-            DiagnosticsWriter::Entry("nodes_pruned",  atoms.nodes_pruned),
-            DiagnosticsWriter::Entry("steps_forged",  atoms.steps_forged)
-        });
+        DiagEventKind::Exit, _algo_name_cache, _task_id,
+        DiagnosticsEvent::ExitPayload{std::move(diag), output(), status, _computation_time.count(),
+                                      DiagnosticsWriter::Entry("nodes_visited", atoms.nodes_visited),
+                                      DiagnosticsWriter::Entry("nodes_pruned", atoms.nodes_pruned),
+                                      DiagnosticsWriter::Entry("steps_forged", atoms.steps_forged)});
 }
 
 // ─── Lifecycle ───
 
-void AlgorithmExecutor::start(AlgorithmInput input,
-                               std::unique_ptr<IAlgorithm> warmup) {
+void AlgorithmExecutor::start(AlgorithmInput input) {
+    start(std::move(input), nullptr);
+}
+
+void AlgorithmExecutor::start(AlgorithmInput input, std::unique_ptr<IAlgorithm> warmup) {
     if (!_set_state(AlgorithmState::Running))
         throw std::logic_error("executor already running or in terminal state");
 
@@ -179,10 +173,8 @@ void AlgorithmExecutor::start(AlgorithmInput input,
 
     // Verify the algorithm supports the requested mode
     if (!(_algorithm->supported_mode() & input.config.mode)) {
-        std::string mode_str =
-            (input.config.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
-        throw std::runtime_error(std::string(_algorithm->name()) +
-            " does not support '" + mode_str + "' mode");
+        std::string mode_str = (input.config.mode == AlgorithmMode::inventory) ? "inventory" : "direct";
+        throw std::runtime_error(std::string(_algorithm->name()) + " does not support '" + mode_str + "' mode");
     }
 
     // Start timeout watcher if max_search_time > 0
@@ -191,10 +183,8 @@ void AlgorithmExecutor::start(AlgorithmInput input,
     // Warmup phase (synchronous): run a fast algorithm to tighten bound
     if (warmup) {
         if (!(warmup->supported_mode() & input.config.mode))
-            throw std::runtime_error(std::string(warmup->name()) +
-                " (warmup) does not support '" +
-                (input.config.mode == AlgorithmMode::inventory ? "inventory" : "direct") +
-                "' mode");
+            throw std::runtime_error(std::string(warmup->name()) + " (warmup) does not support '" +
+                                     (input.config.mode == AlgorithmMode::inventory ? "inventory" : "direct") + "' mode");
         _run_warmup(input, *warmup);
     }
 
@@ -268,14 +258,14 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 
 void AlgorithmExecutor::pause() {
     if (!_ctx)
-        return;  // not started — nothing to pause
+        return; // not started — nothing to pause
     if (_set_state(AlgorithmState::Paused))
         _ctx->pause();
 }
 
 void AlgorithmExecutor::resume() {
     if (!_ctx)
-        return;  // not started — nothing to resume
+        return; // not started — nothing to resume
     if (_set_state(AlgorithmState::Running))
         _ctx->resume();
 }
@@ -284,8 +274,7 @@ void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
     // Don't clobber Completed or Failed — results/loss would be lost/mislabeled.
     // Idle is restored too so a pre-start cancel() cannot brick later start()s.
-    if (prev == AlgorithmState::Completed || prev == AlgorithmState::Failed ||
-        prev == AlgorithmState::Idle) {
+    if (prev == AlgorithmState::Completed || prev == AlgorithmState::Failed || prev == AlgorithmState::Idle) {
         _state.store(prev, std::memory_order_release);
         return;
     }
@@ -299,9 +288,8 @@ void AlgorithmExecutor::cancel() {
 
     // Notify observer of the Running/Paused → Cancelled transition
     if (!_algo_name_cache.empty())
-        DiagnosticsService::instance().push(
-            DiagEventKind::StateChange, _algo_name_cache, _task_id,
-            DiagnosticsEvent::StatePayload{prev, AlgorithmState::Cancelled});
+        DiagnosticsService::instance().push(DiagEventKind::StateChange, _algo_name_cache, _task_id,
+                                            DiagnosticsEvent::StatePayload{prev, AlgorithmState::Cancelled});
 }
 
 AlgorithmState AlgorithmExecutor::wait() {
@@ -318,15 +306,11 @@ AlgorithmState AlgorithmExecutor::wait_for(std::chrono::milliseconds timeout) {
     std::unique_lock lock(_state_mtx);
     _state_cv.wait_for(lock, timeout, [this] {
         auto s = _state.load(std::memory_order_acquire);
-        return s == AlgorithmState::Completed ||
-               s == AlgorithmState::Failed ||
-               s == AlgorithmState::Cancelled;
+        return s == AlgorithmState::Completed || s == AlgorithmState::Failed || s == AlgorithmState::Cancelled;
     });
 
     auto s = _state.load(std::memory_order_acquire);
-    if (s == AlgorithmState::Completed ||
-        s == AlgorithmState::Failed ||
-        s == AlgorithmState::Cancelled) {
+    if (s == AlgorithmState::Completed || s == AlgorithmState::Failed || s == AlgorithmState::Cancelled) {
         _join_worker();
         _finalize();
     }

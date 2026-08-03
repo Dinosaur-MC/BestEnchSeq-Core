@@ -22,7 +22,11 @@
 #include "domain/algorithm/AlgorithmExecutor.h"              // IWYU pragma: export
 #include "domain/algorithm/ExecutionContext.h"               // IWYU pragma: export
 #include "domain/algorithm/IAlgorithm.h"                     // IWYU pragma: export
+#include "domain/algorithm/IExecutor.h"                      // IWYU pragma: export
 #include "domain/algorithm/diagnostics/IAlgorithmObserver.h" // IWYU pragma: export
+
+// ── Sandbox ──
+#include "domain/algorithm/sandbox/SandboxedExecutor.h" // IWYU pragma: export
 
 // ── Registries ──
 #include "domain/algorithm/registries/AlgorithmRegistry.h" // IWYU pragma: export

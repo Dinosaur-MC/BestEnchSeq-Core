@@ -1,7 +1,8 @@
 #pragma once
-#include "domain/algorithm/types/AlgorithmState.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/IAlgorithm.h"
+#include "domain/algorithm/IExecutor.h"
+#include "domain/algorithm/types/AlgorithmState.h"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -19,51 +20,65 @@ class IAlgorithm;
 class DiagnosticsService;
 
 // ─── AlgorithmExecutor (async execution engine, compact-only) ───
-class AlgorithmExecutor {
-  public:
+class AlgorithmExecutor : public IExecutor {
+public:
     explicit AlgorithmExecutor(std::unique_ptr<IAlgorithm> algorithm);
     ~AlgorithmExecutor();
 
-    AlgorithmExecutor(const AlgorithmExecutor &)            = delete;
-    AlgorithmExecutor &operator=(const AlgorithmExecutor &) = delete;
+    AlgorithmExecutor(const AlgorithmExecutor&) = delete;
+    AlgorithmExecutor& operator=(const AlgorithmExecutor&) = delete;
 
-    void start(AlgorithmInput input, std::unique_ptr<IAlgorithm> warmup = nullptr);
+    // ── IExecutor metadata / preflight ─────────────────────────────────
+    // Thin forwarders to the owned algorithm (this executor always owns one;
+    // the constructor throws on null).
+    std::string_view name() const noexcept override { return _algorithm->name(); }
+    std::string_view version() const noexcept override { return _algorithm->version(); }
+    AlgorithmMode supported_mode() const noexcept override { return _algorithm->supported_mode(); }
+    bool simulate(const AlgorithmInput& input) const noexcept override { return _algorithm->simulate(input); }
+    /// Predicted wall-clock solve time for \p ench_count enchantments (seconds).
+    double evaluate(int16_t ench_count) const noexcept { return _algorithm->evaluate(ench_count); }
+
+    /// IExecutor: fresh run (no warmup).
+    void start(AlgorithmInput input) override;
+    /// Run with a synchronous warmup phase (benchmark-only; distinct signature
+    /// from the virtual — no default arg so the two never collide at call sites).
+    void start(AlgorithmInput input, std::unique_ptr<IAlgorithm> warmup);
 
     /// Start execution from a self-contained checkpoint.
     /// The checkpoint must contain all AlgorithmInput data and algorithm state.
     /// Throws std::invalid_argument on empty checkpoint.
     /// Throws std::logic_error if algorithm doesn't support serialization.
     /// Throws std::runtime_error if checkpoint deserialization fails.
-    void start(const std::vector<uint8_t> &checkpoint);
+    void start(const std::vector<uint8_t>& checkpoint) override;
 
-    void pause();
-    void resume();
-    void cancel();
-    AlgorithmState wait();
+    void pause() override;
+    void resume() override;
+    void cancel() override;
+    AlgorithmState wait() override;
     AlgorithmState wait_for(std::chrono::milliseconds timeout);
 
-    AlgorithmState state() const noexcept;
-    double progress() const noexcept;
+    AlgorithmState state() const noexcept override;
+    double progress() const noexcept override;
 
-    AlgorithmOutput output() const;
+    AlgorithmOutput output() const override;
 
     ExecutionContext::Snapshot get_diagnostics(int64_t elapsed_ms = 0) const {
         return _ctx ? _ctx->get_diagnostics(elapsed_ms) : ExecutionContext::Snapshot{};
     }
 
-    std::vector<uint8_t> serialize_state() const;
-    bool restore_state(const std::vector<uint8_t> &data);
-    bool is_serializable() const noexcept;
+    std::vector<uint8_t> serialize_state() const override;
+    bool restore_state(const std::vector<uint8_t>& data);
+    bool is_serializable() const noexcept override;
 
     /// Returns the error message from a failed execution, if any.
-    const std::string &error_message() const noexcept { return _error_message; }
+    const std::string& error_message() const noexcept { return _error_message; }
 
-  private:
+private:
     void _join_worker() noexcept;
     /// Atomically transition to new_state. Returns true if state changed.
     /// Skips if already at new_state (noop) or if FROM a terminal state.
     bool _set_state(AlgorithmState new_state) noexcept;
-    void _run_warmup(AlgorithmInput &input, IAlgorithm &warmup_algo);
+    void _run_warmup(AlgorithmInput& input, IAlgorithm& warmup_algo);
     void _finalize();
     void _start_timeout_watcher(std::chrono::milliseconds max_time);
     void _stop_timeout_watcher() noexcept;
