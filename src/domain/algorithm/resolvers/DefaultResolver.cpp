@@ -34,27 +34,64 @@ int64_t est_forge_cost(const Item &e, const Item &target, const EnchReg &reg) {
     bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
     for (auto id = it.next(); id != it.npos; id = it.next()) {
         if (e.enchs[id] < target.enchs[id])
-            book_est += static_cast<int64_t>(target.enchs[id]) * reg[id].mul_b;
+            book_est += static_cast<int64_t>(target.enchs[id] - e.enchs[id]) * reg[id].mul_b;
     }
     return ppn_penalty(e.ppn) + book_est;
 }
 
-/// Whether equipment \p k carries a target enchantment that NO book in \p books
-/// provides — such an enchant can only come from equipment, so \p k must be kept.
-bool has_target_ench_only_on_equipment(const Item &k, const Item &target,
-                                       const std::vector<const Item *> &books) {
+/// Highest level reachable from the given book levels, combined via the anvil
+/// rule (a == b → min(max_lvl, a+1), else max(a, b)).
+///
+/// Exact (never over-approximate): raising a level is only possible by merging
+/// two EQUAL levels, so the greedy pair-carry below enumerates every real
+/// merge.  Because it never reports a level the merge tree cannot produce, it
+/// is conservative in the direction the selection needs — callers that stop
+/// accumulating books once can_reach() returns true never under-keep.
+uint8_t max_reachable_level(const std::vector<uint8_t> &levels, uint8_t max_lvl) {
+    std::vector<int> freq(static_cast<size_t>(max_lvl) + 1, 0);
+    for (uint8_t lv : levels) {
+        uint8_t capped = lv < max_lvl ? lv : max_lvl;
+        ++freq[capped];
+    }
+    uint8_t top = 0;
+    for (int lv = 0; lv <= static_cast<int>(max_lvl); ++lv) {
+        if (freq[lv] > 0)
+            top = static_cast<uint8_t>(lv);
+        if (lv < static_cast<int>(max_lvl)) {
+            int pairs = freq[lv] / 2;
+            if (pairs > 0)
+                freq[lv + 1] += pairs;
+        }
+    }
+    return top;
+}
+
+/// Can the given book levels, combined via the anvil rule, reach level
+/// \p threshold?  Equivalent to max_reachable_level(levels) >= threshold.
+bool can_reach(const std::vector<uint8_t> &levels, uint8_t threshold, uint8_t max_lvl) {
+    if (threshold == 0)
+        return true;  // a level-1+ book already reaches a zero gap
+    return max_reachable_level(levels, max_lvl) >= threshold;
+}
+
+/// Whether equipment \p k carries a target enchantment at a level the books in
+/// \p books (combined via the anvil rule) CANNOT reach.  This covers both
+/// bookless enchants (no book carries it at all → books reach 0) and the
+/// under-level case (a thorns-1 book cannot reach a thorns-3 target even though
+/// a thorns-3 equipment is present).  Such an enchant can only be supplied by
+/// equipment, so \p k must be retained.
+bool carries_irreplaceable_target_ench(const Item &k, const Item &target,
+                                       const std::vector<const Item *> &books,
+                                       const EnchReg &reg) {
     bit_iterator<EnchSet::mask_type, uint8_t> it(target.enchs.get_mask());
     for (auto id = it.next(); id != it.npos; id = it.next()) {
         if (k.enchs[id] == 0)
             continue;
-        bool book_has = false;
-        for (const Item *b : books) {
-            if (b->enchs[id] > 0) {
-                book_has = true;
-                break;
-            }
-        }
-        if (!book_has)
+        std::vector<uint8_t> book_levels;
+        for (const Item *b : books)
+            if (b->enchs[id] > 0)
+                book_levels.push_back(b->enchs[id]);
+        if (max_reachable_level(book_levels, reg[id].max_lvl) < target.enchs[id])
             return true;
     }
     return false;
@@ -69,31 +106,15 @@ void merge_max(EnchSet &acc, const EnchSet &src) {
     }
 }
 
-/// Can the given book levels, combined via the anvil rule
-/// (a == b → min(max_lvl, a+1), else max(a, b)), reach level \p threshold?
-///
-/// Exact (never over-approximate): raising a level is only possible by merging
-/// two EQUAL levels, so the greedy pair-carry below enumerates every real
-/// merge.  Because it never claims "reachable" when the merge tree cannot
-/// produce the level, it is conservative in the direction the selection needs —
-/// callers that stop accumulating books once this returns true never under-keep.
-bool can_reach(const std::vector<uint8_t> &levels, uint8_t threshold, uint8_t max_lvl) {
-    if (threshold == 0)
-        return true;  // a level-1+ book already reaches a zero gap
-    std::vector<int> freq(static_cast<size_t>(max_lvl) + 1, 0);
-    for (uint8_t lv : levels) {
-        uint8_t capped = lv < max_lvl ? lv : max_lvl;
-        ++freq[capped];
-    }
-    for (int lv = 0; lv < static_cast<int>(threshold); ++lv) {
-        int pairs = freq[lv] / 2;
-        if (pairs == 0)
-            continue;
-        int next = std::min(lv + 1, static_cast<int>(max_lvl));
-        freq[next] += pairs;
-    }
-    // threshold ≤ max_lvl always holds for a valid target enchantment.
-    return freq[threshold] >= 1;
+/// Highest level carried by \p item (used as the sort key for multi-enchant
+/// books whose per-id level is ambiguous in the final ordering).
+uint8_t max_book_level(const Item &item) {
+    uint8_t m = 0;
+    bit_iterator<EnchSet::mask_type, uint8_t> it(item.enchs.get_mask());
+    for (auto id = it.next(); id != it.npos; id = it.next())
+        if (item.enchs[id] > m)
+            m = item.enchs[id];
+    return m;
 }
 
 /// Diff-aware book selection: keep the books needed to fill the enchant gap
@@ -262,7 +283,7 @@ ResolverOutput DefaultResolver::resolve(const AlgorithmInput &input) const {
             for (const Item *k : equips) {
                 if (k == best)
                     continue;
-                if (has_target_ench_only_on_equipment(*k, target, books))
+                if (carries_irreplaceable_target_ench(*k, target, books, reg))
                     kept_equips.push_back(k);
             }
 
@@ -274,9 +295,15 @@ ResolverOutput DefaultResolver::resolve(const AlgorithmInput &input) const {
             std::vector<const Item *> selected = select_books(books, effective, target, reg);
 
             // Phase 5 — order: equipment first (best base first), then books
-            // by (ppn asc); stable so equal-ppn books keep their priority order.
+            // by (level desc, ppn asc); stable so equal (level, ppn) books keep
+            // their priority order from the initial pool sort.
             std::stable_sort(selected.begin(), selected.end(),
-                [](const Item *a, const Item *b) { return a->ppn < b->ppn; });
+                [](const Item *a, const Item *b) {
+                    uint8_t la = max_book_level(*a), lb = max_book_level(*b);
+                    if (la != lb)
+                        return la > lb;
+                    return a->ppn < b->ppn;
+                });
 
             ResolverOutput out;
             out.reserve(kept_equips.size() + selected.size());
@@ -292,7 +319,12 @@ ResolverOutput DefaultResolver::resolve(const AlgorithmInput &input) const {
         // relevance + diff filtering applies; the strategy picks the base book.
         std::vector<const Item *> selected = select_books(books, EnchSet{}, target, reg);
         std::stable_sort(selected.begin(), selected.end(),
-            [](const Item *a, const Item *b) { return a->ppn < b->ppn; });
+            [](const Item *a, const Item *b) {
+                uint8_t la = max_book_level(*a), lb = max_book_level(*b);
+                if (la != lb)
+                    return la > lb;
+                return a->ppn < b->ppn;
+            });
 
         ResolverOutput out;
         out.reserve(selected.size());

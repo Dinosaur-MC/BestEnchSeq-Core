@@ -893,7 +893,9 @@ void test_resolver_accumulate_books_for_combine() {
 }
 
 void test_resolver_output_order() {
-    // Equipment first (best base), then books by (ppn asc).
+    // Equipment first (best base), then books by (level desc, ppn asc): the
+    // unbreaking III book (level 3) precedes the mending I book (level 1)
+    // despite its higher ppn.
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
@@ -904,12 +906,39 @@ void test_resolver_output_order() {
     expect(out[0].type == algorithm::ItemType::Equip,
            "resolver: equipment first (best base)");
     expect(out[1].type == algorithm::ItemType::Book &&
-               out[1].enchs[RE_MENDING] == 1,
-           "resolver: mending (ppn 1) book first among books");
+               out[1].enchs[RE_UNBREAKING] == 3,
+           "resolver: unbreaking III (higher level) book first among books");
     expect(out[2].type == algorithm::ItemType::Book &&
-               out[2].enchs[RE_UNBREAKING] == 3,
-           "resolver: unbreaking (ppn 2) book last");
-    TEST_PASS("resolver: output ordering — equip first, books by ppn");
+               out[2].enchs[RE_MENDING] == 1,
+           "resolver: mending I (lower level) book last");
+    TEST_PASS("resolver: output ordering — equip first, books by (level desc, ppn asc)");
+}
+
+void test_resolver_retain_equip_when_books_cannot_reach() {
+    // Edge case: a thorns-1 book exists, so the old "no book provides it" rule
+    // would drop the thorns-3 equipment — but the level-1 book cannot reach the
+    // thorns-3 target, so the equipment must be retained (and the pool remains
+    // reachable).
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    target.enchs.insert(RE_THORNS, 3);
+    auto out = run_resolver(reg, target, {
+        re_equip(), re_equip_with(RE_THORNS, 3, 4), re_book(RE_UNBREAKING, 3),
+        re_book(RE_THORNS, 1)});
+    expect(count_equips(out) == 2,
+           "resolver: thorns-3 equipment retained (thorns-1 book can't reach 3)");
+    bool has_thorns_equip = false;
+    for (const auto &it : out)
+        if (it.type == algorithm::ItemType::Equip && it.enchs[RE_THORNS] == 3)
+            has_thorns_equip = true;
+    expect(has_thorns_equip,
+           "resolver: retained equipment carries thorns 3");
+    expect(!has_book_with(out, RE_THORNS, 1),
+           "resolver: thorns-1 book dropped (equipment already covers thorns 3)");
+    expect(has_book_with(out, RE_UNBREAKING, 3),
+           "resolver: unbreaking book still kept");
+    TEST_PASS("resolver: equip retained when books can't reach target level");
 }
 
 void test_resolver_preenchanted_equip_reaches_target() {
@@ -1025,6 +1054,7 @@ int main() {
     RUN_TEST(test_resolver_equip_target_pure_book_pool);
     RUN_TEST(test_resolver_accumulate_books_for_combine);
     RUN_TEST(test_resolver_output_order);
+    RUN_TEST(test_resolver_retain_equip_when_books_cannot_reach);
     RUN_TEST(test_resolver_preenchanted_equip_reaches_target);
 
     // AlgorithmLoader validation
