@@ -1,43 +1,44 @@
 {
-  "name": "Example Inventory",
-  "description": "Example inventory file for testing — 4 enchanted books and 1 diamond sword",
-  "author": "BestEnchSeq",
-  "version": "1.0.0",
+  "target": {
+    "item": "diamond_sword",
+    "enchants": [
+      {"id": "sharpness", "level": 5},
+      {"id": "knockback", "level": 2}
+    ]
+  },
   "items": [
     {
       "type": "book",
-      "enchants": [
-        {"id": "sharpness", "level": 5}
-      ],
-      "prior_penalty": 0
+      "enchants": [{"id": "sharpness", "level": 5}],
+      "prior_penalty": 0,
+      "priority": 1
     },
     {
       "type": "book",
-      "enchants": [
-        {"id": "knockback", "level": 2}
-      ],
-      "prior_penalty": 1
+      "enchants": [{"id": "knockback", "level": 2}],
+      "prior_penalty": 1,
+      "priority": 2
     },
     {
       "type": "book",
-      "enchants": [
-        {"id": "looting", "level": 3}
-      ],
-      "prior_penalty": 0
+      "enchants": [{"id": "looting", "level": 3}],
+      "prior_penalty": 0,
+      "priority": 3
     },
     {
       "type": "book",
-      "enchants": [
-        {"id": "unbreaking", "level": 3}
-      ],
-      "prior_penalty": 0
+      "enchants": [{"id": "unbreaking", "level": 3}],
+      "prior_penalty": 0,
+      "priority": 4
     },
     {
       "type": "equipment",
       "id": "diamond_sword",
       "enchants": [],
       "prior_penalty": 0,
-      "durability": 1561
+      "durability": 1561,
+      "priority": 10
     }
-  ]
+  ],
+  "algorithm": "hamming"
 }
