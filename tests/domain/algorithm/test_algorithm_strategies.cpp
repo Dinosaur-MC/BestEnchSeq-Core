@@ -11,6 +11,7 @@
 #include "dfs/DFSAlgorithm.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
+#include "domain/algorithm/resolvers/DefaultResolver.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include <algorithm>
 #include <functional>
@@ -626,6 +627,310 @@ void test_simulate_inventory_with_book() {
 }
 
 // ========================================================================
+// DefaultResolver inventory selection tests
+// ========================================================================
+
+// Compact registry for the resolver selection tests: unbreaking (mul_b=1,
+// max 3), mending (mul_b=2, max 1), sharpness (mul_b=1, max 5), thorns
+// (mul_b=1, max 3).  Built directly so tests are independent of the sword
+// fixture's sharpness/knockback/bane registry.
+enum ResolverEnch : uint8_t {
+    RE_UNBREAKING = 0,
+    RE_MENDING    = 1,
+    RE_SHARPNESS  = 2,
+    RE_THORNS     = 3,
+};
+
+algorithm::EnchReg make_resolver_registry() {
+    std::vector<algorithm::EnchInfo> infos(4);
+    for (uint8_t i = 0; i < infos.size(); ++i) {
+        infos[i].id          = i;
+        infos[i].mul         = 1;
+        infos[i].mul_b       = 1;
+        infos[i].max_lvl     = 3;
+        infos[i].applicable  = true;
+    }
+    infos[RE_UNBREAKING].mul_b = 1; infos[RE_UNBREAKING].max_lvl = 3;
+    infos[RE_MENDING].mul_b    = 2; infos[RE_MENDING].max_lvl    = 1;
+    infos[RE_SHARPNESS].mul_b  = 1; infos[RE_SHARPNESS].max_lvl  = 5;
+    infos[RE_THORNS].mul_b     = 1; infos[RE_THORNS].max_lvl     = 3;
+
+    std::vector<NSID> gids = {NSID("unbreaking"), NSID("mending"),
+                              NSID("sharpness"), NSID("thorns")};
+    algorithm::Equipment eq;
+    eq.id = "test";
+    eq.max_durability   = 1561;
+    eq.applicable_enchs = {RE_UNBREAKING, RE_MENDING, RE_SHARPNESS, RE_THORNS};
+
+    algorithm::EnchReg reg;
+    reg.init(std::move(infos), std::move(gids), eq);
+    return reg;
+}
+
+algorithm::Item re_book(uint8_t id, uint8_t lvl, uint8_t ppn = 0) {
+    algorithm::Item b{algorithm::ItemType::Book, 0, ppn, {}};
+    b.enchs.insert(id, lvl);
+    return b;
+}
+algorithm::Item re_equip(uint8_t ppn = 0) {
+    return algorithm::Item{algorithm::ItemType::Equip, 1561, ppn, {}};
+}
+algorithm::Item re_equip_with(uint8_t id, uint8_t lvl, uint8_t ppn = 0) {
+    algorithm::Item e{algorithm::ItemType::Equip, 1561, ppn, {}};
+    e.enchs.insert(id, lvl);
+    return e;
+}
+
+/// Run the DefaultResolver inventory pass on a compact input built from \p pool.
+algorithm::ResolverOutput run_resolver(algorithm::EnchReg &reg,
+                                       const algorithm::Item &target,
+                                       std::vector<algorithm::Item> pool) {
+    algorithm::AlgorithmInput input;
+    input.config.mode = AlgorithmMode::inventory;
+    input.registry    = reg;
+    input.target      = target;
+    input.data        = algorithm::InventoryPayload{std::move(pool), {}};
+    return algorithm::DefaultResolver{}.resolve(input);
+}
+
+bool has_book_with(const algorithm::ResolverOutput &out, uint8_t id, uint8_t lvl) {
+    for (const auto &it : out)
+        if (it.type == algorithm::ItemType::Book && it.enchs.contains(id) &&
+            it.enchs[id] == lvl)
+            return true;
+    return false;
+}
+bool has_book_ppn(const algorithm::ResolverOutput &out, uint8_t ppn) {
+    for (const auto &it : out)
+        if (it.type == algorithm::ItemType::Book && it.ppn == ppn)
+            return true;
+    return false;
+}
+size_t count_books(const algorithm::ResolverOutput &out) {
+    size_t n = 0;
+    for (const auto &it : out)
+        if (it.type == algorithm::ItemType::Book)
+            ++n;
+    return n;
+}
+size_t count_equips(const algorithm::ResolverOutput &out) {
+    size_t n = 0;
+    for (const auto &it : out)
+        if (it.type == algorithm::ItemType::Equip)
+            ++n;
+    return n;
+}
+
+void test_resolver_irrelevant_book_dropped() {
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    target.enchs.insert(RE_MENDING, 1);
+    auto out = run_resolver(reg, target, {
+        re_equip(), re_book(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 3),
+        re_book(RE_MENDING, 1), re_book(RE_SHARPNESS, 5)});
+    expect(!has_book_with(out, RE_SHARPNESS, 5),
+           "resolver: irrelevant sharpness book dropped");
+    expect(has_book_with(out, RE_MENDING, 1),
+           "resolver: mending book kept");
+    expect(has_book_with(out, RE_UNBREAKING, 3),
+           "resolver: unbreaking 3 kept (dominates redundant 2)");
+    expect(!has_book_with(out, RE_UNBREAKING, 2),
+           "resolver: redundant unbreaking 2 dropped");
+    expect(count_equips(out) == 1,
+           "resolver: single equipment kept");
+    TEST_PASS("resolver: irrelevant book dropped (unbreaking+mending target)");
+}
+
+void test_resolver_diff_aware_base() {
+    // Base already has u2, target u3 → a u2 book suffices (equal-level +1);
+    // the u3 book is redundant and dropped (sharpness is irrelevant).
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    auto out = run_resolver(reg, target, {
+        re_equip_with(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 2),
+        re_book(RE_UNBREAKING, 3), re_book(RE_SHARPNESS, 5)});
+    expect(has_book_with(out, RE_UNBREAKING, 2),
+           "resolver: u2 book kept (suffices from a u2 base)");
+    expect(!has_book_with(out, RE_UNBREAKING, 3),
+           "resolver: redundant u3 book dropped");
+    expect(!has_book_with(out, RE_SHARPNESS, 5),
+           "resolver: irrelevant sharpness dropped");
+    expect(out.size() == 2,
+           "resolver: base equipment + one book");
+    TEST_PASS("resolver: diff-aware — u2 suffices from a u2 base");
+}
+
+void test_resolver_prefer_higher_level_book() {
+    // Clean base, target u3 → only the u3 book suffices; u2 is dominated.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 2),
+                                          re_book(RE_UNBREAKING, 3)});
+    expect(has_book_with(out, RE_UNBREAKING, 3),
+           "resolver: u3 book kept (higher level dominates)");
+    expect(!has_book_with(out, RE_UNBREAKING, 2),
+           "resolver: u2 book dropped as dominated");
+    expect(count_books(out) == 1,
+           "resolver: exactly one book kept");
+    TEST_PASS("resolver: prefer level 3 over 2 on a clean base");
+}
+
+void test_resolver_same_level_lower_ppn() {
+    // Two level-3 books at different ppn → keep the lower-ppn one.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 3, 2),
+                                          re_book(RE_UNBREAKING, 3, 0)});
+    expect(count_books(out) == 1,
+           "resolver: exactly one u3 book kept");
+    expect(has_book_with(out, RE_UNBREAKING, 3) && !has_book_ppn(out, 2),
+           "resolver: lower-ppn u3 book kept");
+    TEST_PASS("resolver: equal level keeps the lower-ppn book");
+}
+
+void test_resolver_best_base_selection() {
+    // Two equips: the one already carrying u3 covers the unbreaking gap → its
+    // estimated cost is smaller, so it becomes the base; the clean one is
+    // redundant and dropped.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    target.enchs.insert(RE_MENDING, 1);
+    auto out = run_resolver(reg, target, {
+        re_equip(), re_equip_with(RE_UNBREAKING, 3), re_book(RE_MENDING, 1)});
+    expect(count_equips(out) == 1,
+           "resolver: one equipment kept");
+    expect(!out.empty() && out[0].type == algorithm::ItemType::Equip &&
+               out[0].enchs[RE_UNBREAKING] == 3,
+           "resolver: u3 equipment chosen as best base (first)");
+    expect(count_books(out) == 1 && has_book_with(out, RE_MENDING, 1),
+           "resolver: only the mending book kept for the remaining gap");
+    TEST_PASS("resolver: best base chosen by min estimated cost");
+}
+
+void test_resolver_retain_equipment_only_ench() {
+    // equipB carries thorns (no book provides it) and a high ppn so it is NOT
+    // the best base — but it must be retained because thorns can only come
+    // from equipment.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    target.enchs.insert(RE_THORNS, 1);
+    auto out = run_resolver(reg, target, {
+        re_equip(), re_equip_with(RE_THORNS, 1, 4), re_book(RE_UNBREAKING, 3)});
+    expect(count_equips(out) == 2,
+           "resolver: thorns-carrying equipment retained");
+    bool has_thorns_equip = false;
+    for (const auto &it : out)
+        if (it.type == algorithm::ItemType::Equip && it.enchs[RE_THORNS] == 1)
+            has_thorns_equip = true;
+    expect(has_thorns_equip,
+           "resolver: retained equipment carries thorns");
+    expect(has_book_with(out, RE_UNBREAKING, 3),
+           "resolver: u3 book still kept for the unbreaking gap");
+    TEST_PASS("resolver: equipment-only enchant retains the second equip");
+}
+
+void test_resolver_book_target_pure_book_pool() {
+    // Book target + pure-book pool → reachable (non-empty output); irrelevant
+    // mending and the dominated u2 are dropped.
+    auto reg = make_resolver_registry();
+    algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
+    target.enchs.insert(RE_SHARPNESS, 3);
+    auto out = run_resolver(reg, target, {re_book(RE_SHARPNESS, 2),
+                                          re_book(RE_SHARPNESS, 3),
+                                          re_book(RE_MENDING, 1)});
+    expect(!out.empty(),
+           "resolver: book target + pure-book pool is reachable");
+    expect(has_book_with(out, RE_SHARPNESS, 3),
+           "resolver: u3 book kept for the book target");
+    expect(!has_book_with(out, RE_SHARPNESS, 2),
+           "resolver: redundant u2 book dropped for the book target");
+    expect(!has_book_with(out, RE_MENDING, 1),
+           "resolver: irrelevant mending dropped for the book target");
+    TEST_PASS("resolver: book target + pure-book pool reachable");
+}
+
+void test_resolver_book_target_multi_ench() {
+    auto reg = make_resolver_registry();
+    algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
+    target.enchs.insert(RE_SHARPNESS, 3);
+    target.enchs.insert(RE_MENDING, 1);
+    auto out = run_resolver(reg, target, {re_book(RE_SHARPNESS, 3),
+                                          re_book(RE_MENDING, 1)});
+    expect(count_books(out) == 2 && has_book_with(out, RE_SHARPNESS, 3) &&
+               has_book_with(out, RE_MENDING, 1),
+           "resolver: both enchant books kept for multi-enchant book target");
+    TEST_PASS("resolver: multi-enchant book target keeps needed books");
+}
+
+void test_resolver_equip_target_pure_book_pool() {
+    // Regression: equipment target + pure-book pool → unreachable (empty).
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    auto out = run_resolver(reg, target, {re_book(RE_UNBREAKING, 2),
+                                          re_book(RE_UNBREAKING, 3)});
+    expect(out.empty(),
+           "resolver: equipment target + pure-book pool is unreachable (empty)");
+    TEST_PASS("resolver: equip target + pure-book pool unreachable (regression)");
+}
+
+void test_resolver_accumulate_books_for_combine() {
+    // No single book suffices (u2+u2 merge into u3): both must be kept.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 2),
+                                          re_book(RE_UNBREAKING, 2)});
+    expect(count_books(out) == 2 && has_book_with(out, RE_UNBREAKING, 2),
+           "resolver: two u2 books kept to combine into u3");
+    TEST_PASS("resolver: accumulate u2+u2 books to reach u3");
+}
+
+void test_resolver_output_order() {
+    // Equipment first (best base), then books by (ppn asc).
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    target.enchs.insert(RE_MENDING, 1);
+    auto out = run_resolver(reg, target, {
+        re_equip(), re_book(RE_UNBREAKING, 3, 2), re_book(RE_MENDING, 1, 1)});
+    expect(out.size() == 3, "resolver: 3 items in output");
+    expect(out[0].type == algorithm::ItemType::Equip,
+           "resolver: equipment first (best base)");
+    expect(out[1].type == algorithm::ItemType::Book &&
+               out[1].enchs[RE_MENDING] == 1,
+           "resolver: mending (ppn 1) book first among books");
+    expect(out[2].type == algorithm::ItemType::Book &&
+               out[2].enchs[RE_UNBREAKING] == 3,
+           "resolver: unbreaking (ppn 2) book last");
+    TEST_PASS("resolver: output ordering — equip first, books by ppn");
+}
+
+void test_resolver_preenchanted_equip_reaches_target() {
+    // Equipment already meets the target → pool stays non-empty, no books
+    // needed, irrelevant books dropped.
+    auto reg = make_resolver_registry();
+    algorithm::Item target = re_equip();
+    target.enchs.insert(RE_UNBREAKING, 3);
+    auto out = run_resolver(reg, target, {re_equip_with(RE_UNBREAKING, 3),
+                                          re_book(RE_SHARPNESS, 5)});
+    expect(!out.empty() && out[0].type == algorithm::ItemType::Equip &&
+               out[0].enchs[RE_UNBREAKING] == 3,
+           "resolver: pre-enchanted base retained and meets target");
+    expect(count_books(out) == 0,
+           "resolver: no books needed (gap already met)");
+    expect(!has_book_with(out, RE_SHARPNESS, 5),
+           "resolver: irrelevant sharpness book dropped");
+    TEST_PASS("resolver: pre-enchanted equipment meets target, pool non-empty");
+}
+
+// ========================================================================
 // AlgorithmLoader validation test
 // ========================================================================
 
@@ -707,6 +1012,20 @@ int main() {
     RUN_TEST(test_simulate_inventory_empty_pool);
     RUN_TEST(test_simulate_inventory_equip_no_book);
     RUN_TEST(test_simulate_inventory_with_book);
+
+    // DefaultResolver inventory selection tests
+    RUN_TEST(test_resolver_irrelevant_book_dropped);
+    RUN_TEST(test_resolver_diff_aware_base);
+    RUN_TEST(test_resolver_prefer_higher_level_book);
+    RUN_TEST(test_resolver_same_level_lower_ppn);
+    RUN_TEST(test_resolver_best_base_selection);
+    RUN_TEST(test_resolver_retain_equipment_only_ench);
+    RUN_TEST(test_resolver_book_target_pure_book_pool);
+    RUN_TEST(test_resolver_book_target_multi_ench);
+    RUN_TEST(test_resolver_equip_target_pure_book_pool);
+    RUN_TEST(test_resolver_accumulate_books_for_combine);
+    RUN_TEST(test_resolver_output_order);
+    RUN_TEST(test_resolver_preenchanted_equip_reaches_target);
 
     // AlgorithmLoader validation
     RUN_TEST(test_loader_registration);
