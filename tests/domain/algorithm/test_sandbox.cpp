@@ -289,6 +289,81 @@ void test_cancel_races_serialize(const std::string& plugin) {
     }
 }
 
+/// Metadata/preflight through the executor surface: is_serializable,
+/// supported_mode, simulate — differ between serializable (astar) and
+/// non-serializable (malicious) plugins.
+void test_metadata(const std::string& search_plugin, const std::string& malicious_plugin) {
+    SandboxedExecutor astar(search_plugin, find_worker(), PluginCapability::None);
+    expect(astar.is_serializable(), "sandbox: astar is serializable");
+    expect(static_cast<int>(astar.supported_mode() & AlgorithmMode::direct) != 0, "sandbox: astar supports direct mode");
+    expect(astar.simulate(build_search_input()), "sandbox: astar simulate reaches target");
+
+    SandboxedExecutor mal(malicious_plugin, find_worker(), PluginCapability::None);
+    expect(!mal.is_serializable(), "sandbox: malicious is not serializable");
+}
+
+/// serialize_state() is only valid while Paused — empty both before a run and
+/// after it has completed (mirrors AlgorithmExecutor's contract).
+void test_serialize_only_when_paused(const std::string& plugin) {
+    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    expect(se.serialize_state().empty(), "sandbox: serialize before start returns {}");
+    se.start(build_search_input());
+    se.wait();
+    expect(se.serialize_state().empty(), "sandbox: serialize after completion returns {}");
+}
+
+/// A garbage checkpoint blob must fail cleanly on the worker side (deserialize
+/// throws → MsgError → Failed), never crash or hang.
+void test_garbage_checkpoint_fails(const std::string& plugin) {
+    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    const std::vector<uint8_t> garbage = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+    se.start(garbage);
+    const auto st = se.wait();
+    std::cout << "garbage-checkpoint: state=" << static_cast<int>(st) << std::endl;
+    expect(st == AlgorithmState::Failed, "sandbox: garbage checkpoint → Failed");
+}
+
+/// The malicious plugin's execute() returns instantly — the run completes with
+/// an empty solution set (no hang, no crash).
+void test_malicious_run(const std::string& plugin) {
+    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    se.start(build_search_input()); // the plugin ignores the input
+    const auto st = se.wait();
+    expect(st == AlgorithmState::Completed, "sandbox: malicious execute completes");
+    expect(se.output().solutions.empty(), "sandbox: malicious run has no solutions");
+}
+
+/// simulate()/evaluate() are pre-start only (fix 8): during a run they must
+/// return the guarded default instead of touching the pipe (a second reader
+/// would corrupt frames).
+void test_preflight_during_run_guarded(const std::string& plugin) {
+    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    auto input = build_search_input();
+    se.start(input);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); // still Running
+    expect(!se.simulate(input), "sandbox: simulate during run returns false (guarded)");
+    expect(se.evaluate(5) == 0.0, "sandbox: evaluate during run returns 0 (guarded)");
+    se.wait();
+}
+
+/// Stress the pause/resume state machine: several mid-run cycles must leave the
+/// final solve correct (no stuck pause, no deadlock).
+void test_stress_pause_resume(const std::string& plugin) {
+    auto input = build_search_input();
+    SandboxedExecutor se(plugin, find_worker(), PluginCapability::None);
+    se.start(input);
+    for (int i = 0; i < 3; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        se.pause();
+        expect(se.state() == AlgorithmState::Paused, "sandbox: stress pause state");
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        se.resume();
+    }
+    se.wait();
+    expect(se.state() == AlgorithmState::Completed, "sandbox: stress run completes");
+    expect(!se.output().solutions.empty(), "sandbox: stress run has solutions");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -328,7 +403,10 @@ int main() {
         // ── Bad plugin path throws + cleans up the worker (fix 3) ──────
         test_bad_plugin_path();
 
-        // ── Pause/resume + checkpoint round-trip (needs a search plugin) ──
+        // ── Malicious plugin's execute runs to completion (no solutions) ──
+        test_malicious_run(plugin);
+
+        // ── Pause/resume + checkpoint + stress (needs a search plugin) ──
         const std::string search_plugin = find_search_plugin();
         if (search_plugin.empty()) {
             std::cout << "SKIP: pause/checkpoint/races tests — no search plugin built" << std::endl;
@@ -338,6 +416,11 @@ int main() {
             test_destroy_mid_run(search_plugin);        // fix 2
             test_reuse_after_completed(search_plugin);  // re-run from Completed
             test_cancel_races_serialize(search_plugin); // fix 1/9
+            test_serialize_only_when_paused(search_plugin);
+            test_garbage_checkpoint_fails(search_plugin);
+            test_preflight_during_run_guarded(search_plugin);
+            test_stress_pause_resume(search_plugin);
+            test_metadata(search_plugin, plugin);
         }
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;

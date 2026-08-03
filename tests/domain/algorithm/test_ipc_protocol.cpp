@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <thread>
 #include <vector>
 
 // POSIX close() on Windows needs _close; silence MSVC deprecation for the
@@ -171,6 +172,34 @@ void test_multiple_frames_order() {
     std::cout << "PASS: test_multiple_frames_order" << std::endl;
 }
 
+/// Large-payload CHUNKING round-trip: a payload just past kDirectMax (>16 MiB)
+/// must be split into 1 MiB frames by write_frame and transparently reassembled
+/// by read_frame.  This is the path MB–GB checkpoints depend on.  The reader
+/// drains on a thread so the writer never blocks on a full pipe.
+void test_chunked_roundtrip() {
+    TestPipe p;
+    expect(p.valid(), "ipc: pipe created");
+
+    const size_t n = ipc::kDirectMax + 1024; // just over the single-frame limit
+    std::vector<uint8_t> payload(n);
+    for (size_t i = 0; i < n; ++i)
+        payload[i] = static_cast<uint8_t>((i * 131) & 0xFF);
+
+    ipc::MsgType got_type = ipc::MsgType::MsgResult;
+    std::vector<uint8_t> got;
+    bool read_ok = false;
+    std::thread reader([&] { read_ok = ipc::read_frame(p.read_fd, got_type, got); });
+
+    const bool wrote = ipc::write_frame(p.write_fd, ipc::MsgType::MsgCheckpoint, payload);
+    reader.join();
+
+    expect(wrote, "chunked: write_frame succeeds");
+    expect(read_ok, "chunked: read_frame succeeds");
+    expect(got_type == ipc::MsgType::MsgCheckpoint, "chunked: type round-trips");
+    expect(got.size() == n && got == payload, "chunked: payload transparently reassembled");
+    std::cout << "PASS: test_chunked_roundtrip (" << (n >> 20) << " MiB+)" << std::endl;
+}
+
 int main() {
     try {
         test_roundtrip_basic();
@@ -178,6 +207,7 @@ int main() {
         test_roundtrip_large();
         test_multiple_frames_order();
         test_algorithm_output_roundtrip();
+        test_chunked_roundtrip();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {
