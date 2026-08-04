@@ -201,7 +201,9 @@ ProfileMeta BesqContext::profile_metadata(const std::string& name) const {
 
     ProfileMeta m;
     const auto& meta = p->metadata();
-    m.name = meta.name;
+    // name 用外部请求 key：rename 只重键 _profiles，不更新 Profile 内部
+    // metadata，故内部 meta.name 可能是旧身份。
+    m.name = name;
     m.dependencies = meta.dependencies;
     m.version = meta.version;
     m.release_tag = "";                     // Profile 无 release_tag 字段（未发布）
@@ -367,7 +369,14 @@ AlgorithmDetail BesqContext::algorithm_detail(const std::string& name) const {
     if (algo) {
         d.version = std::string(algo->version());
         d.is_resumable = algo->is_resumable();
-        d.supported_mode = (algo->supported_mode() == AlgorithmMode::inventory) ? "inventory" : "direct";
+        // supported_mode 是位掩码（direct|inventory）；精确 == 会丢掉 both 能力。
+        const auto mode = algo->supported_mode();
+        if ((mode & AlgorithmMode::direct) && (mode & AlgorithmMode::inventory))
+            d.supported_mode = "both";
+        else if (mode & AlgorithmMode::inventory)
+            d.supported_mode = "inventory";
+        else
+            d.supported_mode = "direct";
     }
     return d;
 }

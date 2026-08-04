@@ -932,6 +932,7 @@ void test_named_profile_edit_and_meta() {
     if (!ctx.profile_exists(new_name)) {
         expect(ctx.rename_profile(active, new_name), "rename");
         expect(ctx.profile_exists(new_name) && !ctx.profile_exists(active), "renamed maps");
+        expect(ctx.profile_metadata(new_name).name == new_name, "metadata reflects new identity");
     }
 
     TEST_PASS("BesqContext named profile edit + metadata");
@@ -987,6 +988,8 @@ void test_algorithm_detail_and_unload_gate() {
     auto detail = ctx.algorithm_detail("dp_merge");
     expect(detail.name == "dp_merge", "detail name");
     expect(detail.origin == AlgorithmOrigin::builtin, "builtin origin");
+    expect(detail.supported_mode == "direct" || detail.supported_mode == "inventory" || detail.supported_mode == "both",
+           "supported_mode valid");
 
     // unload builtin → false
     expect(!ctx.unload_algorithm("dp_merge"), "cannot unload builtin");
