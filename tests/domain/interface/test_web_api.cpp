@@ -2,7 +2,17 @@
 // Web API tests: BesqContext facade increments (+ per-resource handlers in M1.3+).
 // =============================================================================
 #include "domain/interface/BesqContext.h"
+#include "domain/interface/web/resources/ApiHealth.h"
+#include "domain/interface/web/resources/ApiSettings.h"
+#include "domain/interface/web/resources/ApiStatus.h"
+#include "domain/interface/web/WebHttpError.h"
+#include "builtin/I18nLoader.h"
+#include "common/i18n/Language.h"
+#include "common/log/log.hpp"
+#include "common/io/json.h"
+#include "BuildConfig.h"
 #include "framework/test_utils.h"
+#include <chrono>
 #include <string>
 
 // ── Facade increment: by-name profile read/write ──────────────────────────
@@ -48,9 +58,62 @@ void test_facade_by_name_registry() {
     TEST_PASS("facade by-name registry");
 }
 
+// ── Per-resource handlers (M1.3) ─────────────────────────────────────────
+
+void test_api_health() {
+    auto json = Json::parse(ApiHealth::handle());
+    expect(json["status"].as<std::string>() == "ok", "health status ok");
+    expect(json["version"].as<std::string>() == BESQ_VERSION, "health version matches build");
+    expect(json["uptime_ms"].as<int64_t>() >= 0, "uptime non-negative");
+    TEST_PASS("ApiHealth");
+}
+
+void test_api_status() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    auto json = Json::parse(ApiStatus::handle(ctx));
+    expect(json["active_profile"].as<std::string>() == "builtin:vanilla", "active profile reported");
+    expect(json["algorithm_count"].as<int64_t>() >= 3, "builtin algorithm count");
+    expect(json["has_active_solve"] == false, "no active solve when idle");
+    TEST_PASS("ApiStatus");
+}
+
+void test_api_settings() {
+    // Register the builtin zh_CN/en_US tables first — the language flip
+    // asserts on the active language, so select("zh_CN") must find it.
+    register_builtin_translations(LanguageManager::instance());
+    // Registration registers zh_CN first, which leaves zh_CN active by default
+    // (first registered wins). Pin the reported default to en_US explicitly.
+    LanguageManager::instance().select("en_US");
+
+    BesqContext ctx;
+    auto json = Json::parse(ApiSettings::handle_get(ctx));
+    expect(json["lang"].as<std::string>() == "en_US", "default lang reported");
+    expect(json["gui_host"].as<std::string>() == "127.0.0.1", "gui_host reported");
+
+    // PUT with a valid lang flips the active language.
+    auto body = Json::parse(R"({"lang":"zh_CN"})");
+    auto out = Json::parse(ApiSettings::handle_put(ctx, body));
+    expect(out["lang"].as<std::string>() == "zh_CN", "lang updated in response");
+    expect(LanguageManager::instance().active().name() == "zh_CN", "active language flipped");
+
+    // Invalid lang → WebHttpError (WebModule maps its `status` to the wire
+    // error envelope in M1.7), language unchanged.
+    auto bad = Json::parse(R"({"lang":"xx_XX"})");
+    expect_throws_as<webhttp::WebHttpError>(
+        [&] { ApiSettings::handle_put(ctx, bad); }, "invalid lang throws");
+    expect(LanguageManager::instance().active().name() == "zh_CN", "lang unchanged after bad put");
+
+    LanguageManager::instance().select("en_US");  // restore
+    TEST_PASS("ApiSettings");
+}
+
 int main() {
     try {
         test_facade_by_name_registry();
+        test_api_health();
+        test_api_status();
+        test_api_settings();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
