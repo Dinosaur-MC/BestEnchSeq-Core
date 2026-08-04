@@ -202,32 +202,44 @@ void handle_run(AlgorithmExecutor& exec,
             std::vector<uint8_t> ctl;
             if (!ipc::read_frame(0, type, ctl))
                 return; // EOF (parent closed the channel)
-            switch (type) {
-            case ipc::MsgType::MsgCancel:
-                exec.cancel();
-                break;
-            case ipc::MsgType::MsgPause:
-                // exec.pause() is synchronous: it blocks until the algorithm
-                // has actually quiesced at wait_if_paused() and only then flips
-                // to Paused.  Ack AFTER it returns, so the parent can mirror
-                // Pausing→Paused honestly (not merely "pause requested").
-                exec.pause();
-                forwarder->send_frame(ipc::MsgType::MsgPauseAck, {});
-                break;
-            case ipc::MsgType::MsgResume:
-                exec.resume();
-                break;
-            case ipc::MsgType::MsgSerializeState: {
-                // Only meaningful while paused (executor gates on its state);
-                // returns the full opaque checkpoint blob (large → auto-chunked).
-                // Dedicated MsgCheckpoint so the parent can never mistake the
-                // run-completion MsgResult for this reply.
-                const auto blob = exec.serialize_state();
-                forwarder->send_frame(ipc::MsgType::MsgCheckpoint, blob);
-                break;
-            }
-            default:
-                break;
+            try {
+                switch (type) {
+                case ipc::MsgType::MsgCancel:
+                    exec.cancel();
+                    break;
+                case ipc::MsgType::MsgPause:
+                    // exec.pause() is synchronous: it blocks until the algorithm
+                    // has actually quiesced at wait_if_paused() and only then flips
+                    // to Paused.  Ack AFTER it returns, so the parent can mirror
+                    // Pausing→Paused honestly (not merely "pause requested").
+                    exec.pause();
+                    forwarder->send_frame(ipc::MsgType::MsgPauseAck, {});
+                    break;
+                case ipc::MsgType::MsgResume:
+                    exec.resume();
+                    break;
+                case ipc::MsgType::MsgSerializeState: {
+                    // Only meaningful while paused (executor gates on its state);
+                    // returns the full opaque checkpoint blob (large → auto-chunked).
+                    // Dedicated MsgCheckpoint so the parent can never mistake the
+                    // run-completion MsgResult for this reply.
+                    const auto blob = exec.serialize_state();
+                    forwarder->send_frame(ipc::MsgType::MsgCheckpoint, blob);
+                    break;
+                }
+                default:
+                    break;
+                }
+            } catch (const std::exception& e) {
+                // Never let a control-API exception escape this thread — an
+                // unhandled exception in a std::thread is std::terminate →
+                // abort() → a debugger/JIT dialog, and the parent would only
+                // see a dead worker.  Surface it as a frame instead.
+                forwarder->send_frame(ipc::MsgType::MsgError,
+                                      ipc::encode_value(std::string("besq-worker control: ") + e.what()));
+            } catch (...) {
+                forwarder->send_frame(ipc::MsgType::MsgError,
+                                      ipc::encode_value(std::string("besq-worker control: unknown error")));
             }
         }
     });
@@ -276,6 +288,11 @@ void serve(AlgorithmExecutor& exec) {
         if (!ipc::read_frame(0, type, payload))
             return; // EOF (parent closed)
 
+        // Any handler exception must not escape main() — on Windows that is
+        // std::terminate → abort() → a debugger/JIT dialog, blocking the parent
+        // (which is waiting on this pipe) and reading as a hang.  Surface as a
+        // frame instead.
+        try {
         switch (type) {
         case ipc::MsgType::MsgGetName: {
             ByteStreamWriter w;
@@ -334,6 +351,11 @@ void serve(AlgorithmExecutor& exec) {
         default:
             // Unknown / out-of-run control messages are no-ops.
             break;
+        }
+        } catch (const std::exception& e) {
+            send_error(std::string("besq-worker: ") + e.what());
+        } catch (...) {
+            send_error("besq-worker: unknown error");
         }
     }
 }

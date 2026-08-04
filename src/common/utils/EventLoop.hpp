@@ -269,10 +269,19 @@ private:
     }
 
     void _dispatch(T& item) noexcept {
-        if constexpr (std::is_void_v<Handler>)
-            std::invoke(std::move(item));
-        else
-            std::invoke(_handler, std::move(item));
+        try {
+            if constexpr (std::is_void_v<Handler>)
+                std::invoke(std::move(item));
+            else
+                std::invoke(_handler, std::move(item));
+        } catch (...) {
+            // A handler exception must NEVER escape the worker thread: on a
+            // std::thread it would be std::terminate → abort() → a debugger/JIT
+            // dialog that takes down the whole process — including the Logger's
+            // console mirror and the diagnostics dispatcher, whose handlers are
+            // the real users of this loop.  A dropped event beats a crash.
+            std::fprintf(stderr, "[EventLoop] handler threw; event dropped\n");
+        }
     }
 
     Queue                                   _queue;
