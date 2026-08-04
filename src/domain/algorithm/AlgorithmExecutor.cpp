@@ -266,8 +266,36 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
 void AlgorithmExecutor::pause() {
     if (!_ctx)
         return; // not started — nothing to pause
-    if (_set_state(AlgorithmState::Paused))
-        _ctx->pause();
+    // Only a genuinely Running executor can be paused.  Use a direct CAS rather
+    // than _set_state(): the generic guard lets Completed→Pausing through (a
+    // finished run must not be pausable), and the CAS guarantees prev was
+    // Running, so the wait below can never hang on a run that already ended.
+    // Side effects mirror _set_state's (notify + StateChange diagnostics).
+    AlgorithmState prev = AlgorithmState::Running;
+    if (!_state.compare_exchange_strong(prev, AlgorithmState::Pausing, std::memory_order_acq_rel,
+                                        std::memory_order_acquire))
+        return;
+    _state_cv.notify_all();
+    if (_ctx)
+        _ctx->notify_pause_ack();
+    if (!_algo_name_cache.empty())
+        DiagnosticsService::instance().push(DiagEventKind::StateChange, _algo_name_cache, _task_id,
+                                            DiagnosticsEvent::StatePayload{prev, AlgorithmState::Pausing});
+    _ctx->pause();
+    // Synchronous: only return once the algorithm has actually quiesced at
+    // wait_if_paused() (it may still be in a long pause-ignorant phase such as
+    // the greedy/dfs bound).  Pausing is a transient intermediate — an observer
+    // reading state() from another thread sees it, but this call returns only
+    // after the flip to Paused.  The wait also ends if the run is cancelled or
+    // completes (both notify the ack cv), so it can never hang.
+    std::unique_lock lk(_ctx->pause_ack_mutex());
+    _ctx->pause_ack_cv().wait(lk, [&] {
+        return _ctx->is_paused_acked() ||
+               _ctx->is_cancelled() ||
+               _state.load(std::memory_order_acquire) != AlgorithmState::Pausing;
+    });
+    if (_state.load(std::memory_order_acquire) == AlgorithmState::Pausing)
+        _set_state(AlgorithmState::Paused);
 }
 
 void AlgorithmExecutor::resume() {
@@ -285,10 +313,10 @@ void AlgorithmExecutor::cancel() {
         _state.store(prev, std::memory_order_release);
         return;
     }
-    if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused) {
+    if (prev == AlgorithmState::Running || prev == AlgorithmState::Pausing || prev == AlgorithmState::Paused) {
         if (_ctx) {
             _ctx->cancel();
-            _ctx->resume();
+            _ctx->resume(); // wake an algorithm blocked at wait_if_paused (also from Pausing)
         }
     }
     _state_cv.notify_all();

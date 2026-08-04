@@ -191,6 +191,9 @@ worker 从未解析它、SandboxedExecutor 的字段是死代码、seccomp 一�
   MsgResult     —— 按请求类型：元数据值 / 最终 AlgorithmOutput（编码）
   MsgCheckpoint —— MsgSerializeState 的专用回复（不透明 checkpoint blob），
                   与运行结束的 MsgResult 区分，握手绝不会吃错终态帧
+  MsgPauseAck   —— MsgPause 的专用回复：worker 的 `exec.pause()` 已返回，
+                  即算法**真正静止**（不只是"暂停请求已收"）。父侧据此把本地镜像
+                  Pausing→Paused，保证同步 pause 语义跨进程成立
   MsgProgress / MsgSolution   流式事件
   MsgError
 ```
@@ -202,7 +205,8 @@ worker 从未解析它、SandboxedExecutor 的字段是死代码、seccomp 一�
 ## 6. Executor 代理面（IExecutor）—— 沙箱缝在 executor 之上
 
 **`AlgorithmExecutor` 是整个算法域的权威入口**：它持有 `ExecutionContext`、驱动
-`IAlgorithm::execute()`、跑状态机（Idle→Running→Paused→Completed/Failed/Cancelled）、
+`IAlgorithm::execute()`、跑状态机（Idle→Running→Pausing→Paused→Completed/Failed/Cancelled，
+`Pausing` 是同步 pause() 内部"暂停请求已收、算法尚未在 `wait_if_paused()` 静止"的瞬时中间态）、
 产出/消费 checkpoint。编排层（`SolvePipeline`）只跟它打交道。
 
 因此沙箱缝**不在 `IAlgorithm`**（那样会把 executor/context/algorithm 的高度耦合拆散跨进程、
@@ -363,6 +367,12 @@ M2 Windows（已实现 + Windows 验证）：
     无 `_pipe_yielded` 握手（executor 状态静止契约保证，同 in-process）。**修复 AStar 两处恢复
     bug**：(1) open heap 从局部 move 改为成员 `OpenSet`；(2) restored 路径补 `_budget` 初始化。
     双平台 test_sandbox 验证：暂停→序列化（Windows 2MB / WSL 173KB）→新 worker 恢复→求解成功
+  - ✅ `Pausing` 中间态 + 同步 pause（2026-08-04）：`AlgorithmState` 增加 `Pausing`——
+    `pause()` 用直接 CAS Running→Pausing 后**阻塞等算法在 `wait_if_paused()` 真正静止**才翻
+    `Paused` 返回（Pausing 是瞬时中间态，经 StateChange 诊断事件可观测；取消/自然完成都会唤醒
+    等待，不会挂死）。`cancel()` 从 `Pausing` 取消时同样唤醒算法。父侧 `SandboxedExecutor` 用
+    新 `MsgPauseAck`（worker 的 `exec.pause()` 返回后发出）把本地镜像 Pausing→Paused，同步
+    pause 语义跨进程成立。checkpoint 静止契约不再依赖 ack 补偿——`Paused` 即真正静止。
 
   - ✅ 架构修正（2026-08-03）：沙箱缝从 **IAlgorithm** 上移到 **executor**——
     AlgorithmExecutor 是算法域的权威入口（持有 ctx/状态机/序列化），拿 IAlgorithm 做代理面

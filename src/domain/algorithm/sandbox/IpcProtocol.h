@@ -54,6 +54,9 @@ enum class MsgType : uint32_t {
                             // MsgSerializeState, distinct from the run-completion
                             // MsgResult so a serialize handshake can never mis-read
                             // a terminal result as the checkpoint
+    MsgPauseAck = 0x0206,   // worker → parent: exec.pause() has returned, i.e.
+                            // the algorithm is TRULY paused (quiesced), not just
+                            // pause-requested.  Lets the parent mirror Pausing→Paused.
 };
 
 constexpr size_t kHeaderSize = 8;

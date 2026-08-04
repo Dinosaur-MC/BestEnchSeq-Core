@@ -234,7 +234,7 @@ double SandboxedExecutor::evaluate(int16_t ench_count) const noexcept {
 
 void SandboxedExecutor::start(AlgorithmInput input) {
     const AlgorithmState prev = _state.load(std::memory_order_acquire);
-    if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused)
+    if (prev == AlgorithmState::Running || prev == AlgorithmState::Pausing || prev == AlgorithmState::Paused)
         throw std::logic_error("sandboxed executor already running or paused");
     if (prev == AlgorithmState::Cancelled || prev == AlgorithmState::Failed)
         throw std::logic_error("sandboxed executor in terminal state");
@@ -249,7 +249,7 @@ void SandboxedExecutor::start(const std::vector<uint8_t>& checkpoint) {
     if (checkpoint.empty())
         throw std::invalid_argument("empty checkpoint");
     const AlgorithmState prev = _state.load(std::memory_order_acquire);
-    if (prev == AlgorithmState::Running || prev == AlgorithmState::Paused)
+    if (prev == AlgorithmState::Running || prev == AlgorithmState::Pausing || prev == AlgorithmState::Paused)
         throw std::logic_error("sandboxed executor already running or paused");
     if (prev == AlgorithmState::Cancelled || prev == AlgorithmState::Failed)
         throw std::logic_error("sandboxed executor in terminal state");
@@ -274,15 +274,35 @@ void SandboxedExecutor::begin_run() {
 }
 
 void SandboxedExecutor::pause() {
-    // Mirror in-process: a pause before start() is a no-op.
+    // Mirror in-process synchronous pause: a pause before start() is a no-op.
     if (_state.load(std::memory_order_acquire) != AlgorithmState::Running)
         return;
+    auto intent = std::make_shared<PauseIntent>();
+    _pause_intent = intent;
+    {
+        std::lock_guard lk(intent->mtx);
+        intent->pending = true;
+    }
     send(ipc::MsgType::MsgPause, {});
-    _state.store(AlgorithmState::Paused, std::memory_order_release);
+    _state.store(AlgorithmState::Pausing, std::memory_order_release);
+    // The reader thread (single pipe owner) performs the confirmation exchange:
+    // it waits for the worker's MsgPauseAck — sent only after exec.pause()
+    // returned, i.e. the algorithm is TRULY quiesced — then this call flips the
+    // mirror Pausing→Paused.  Pausing is transient, exactly like in-process.
+    wake_reader();
+    std::unique_lock lk(intent->mtx);
+    intent->cv.wait(lk, [&] { return !intent->pending; });
+    if (intent->failed)
+        return; // reader set a terminal state (worker died / run ended)
+    // Only flip to Paused if still Pausing — a concurrent cancel() may have
+    // already moved the mirror to Cancelled.
+    if (_state.load(std::memory_order_acquire) == AlgorithmState::Pausing)
+        _state.store(AlgorithmState::Paused, std::memory_order_release);
 }
 
 void SandboxedExecutor::resume() {
-    if (_state.load(std::memory_order_acquire) != AlgorithmState::Paused)
+    const AlgorithmState s = _state.load(std::memory_order_acquire);
+    if (s != AlgorithmState::Paused && s != AlgorithmState::Pausing)
         return;
     send(ipc::MsgType::MsgResume, {});
     _state.store(AlgorithmState::Running, std::memory_order_release);
@@ -341,6 +361,7 @@ void SandboxedExecutor::reader_loop() noexcept {
         // Destructor requested prompt exit — leave without touching state.
         if (_shutdown.load(std::memory_order_acquire)) {
             abort_pending_serialize();
+            abort_pending_pause();
             return;
         }
         ipc::MsgType type = ipc::MsgType::MsgResult;
@@ -384,6 +405,69 @@ void SandboxedExecutor::reader_loop() noexcept {
 #endif
 
         if (woken) {
+            // Pause confirmation handshake: the worker acks (MsgPauseAck) only
+            // after exec.pause() returned — i.e. the algorithm is TRULY
+            // quiesced — so the mirror can flip Pausing→Paused honestly.
+            auto p_intent = _pause_intent;
+            bool do_pause = false;
+            if (p_intent) {
+                std::lock_guard lk(p_intent->mtx);
+                do_pause = p_intent->pending;
+            }
+            if (do_pause) {
+                bool ok = false;
+                bool run_ended = false; // worker sent a run-completion MsgResult
+                bool eof = false;       // worker died mid-handshake
+                try {
+                    // MsgPause was already sent by pause(); the worker's reply
+                    // follows.  Skip straggler progress/solution frames queued
+                    // before the pause took effect.
+                    for (;;) {
+                        ipc::MsgType t;
+                        std::vector<uint8_t> p;
+                        if (!recv(t, p)) {
+                            eof = true;
+                            break; // EOF — worker died mid-pause
+                        }
+                        if (t == ipc::MsgType::MsgPauseAck) {
+                            ok = true;
+                            break;
+                        }
+                        if (t == ipc::MsgType::MsgResult) {
+                            // The run ended while we were pausing — consume the
+                            // terminal result and exit with the true state.
+                            AlgorithmOutput out;
+                            if (ipc::decode_algorithm_output(p, out)) {
+                                std::lock_guard lk(_out_mtx);
+                                _output = std::move(out);
+                            }
+                            run_ended = true;
+                            break;
+                        }
+                        if (t == ipc::MsgType::MsgError) {
+                            break; // ok stays false
+                        }
+                    }
+                } catch (...) {
+                    /* ok stays false */
+                }
+                {
+                    std::lock_guard lk(p_intent->mtx);
+                    p_intent->failed = !ok;
+                    p_intent->pending = false;
+                    p_intent->cv.notify_all();
+                }
+                if (run_ended) {
+                    set_terminal(AlgorithmState::Completed);
+                    return;
+                }
+                if (eof) {
+                    set_terminal(AlgorithmState::Failed);
+                    return;
+                }
+                continue;
+            }
+
             // Serialize handshake: the reader owns the pipe, so it performs
             // the MsgSerializeState exchange and delivers the opaque blob.
             auto intent = _serialize_intent;
@@ -459,6 +543,7 @@ void SandboxedExecutor::reader_loop() noexcept {
         if (!got) {
             set_terminal(AlgorithmState::Failed); // worker closed the channel
             abort_pending_serialize();
+            abort_pending_pause();
             return;
         }
 
@@ -487,12 +572,14 @@ void SandboxedExecutor::reader_loop() noexcept {
             }
             set_terminal(AlgorithmState::Completed);
             abort_pending_serialize(); // natural completion raced a serialize intent
+            abort_pending_pause();     // ...or a pause intent
             return;
         }
         case ipc::MsgType::MsgError: {
             // Keep Cancelled if the run was cancelled; otherwise Failed.
             set_terminal(AlgorithmState::Failed);
             abort_pending_serialize();
+            abort_pending_pause();
             return;
         }
         default:
@@ -508,6 +595,18 @@ void SandboxedExecutor::abort_pending_serialize() noexcept {
     std::lock_guard lk(intent->mtx);
     if (intent->pending) {
         intent->error = true;
+        intent->pending = false;
+        intent->cv.notify_all();
+    }
+}
+
+void SandboxedExecutor::abort_pending_pause() noexcept {
+    auto intent = _pause_intent;
+    if (!intent)
+        return;
+    std::lock_guard lk(intent->mtx);
+    if (intent->pending) {
+        intent->failed = true;
         intent->pending = false;
         intent->cv.notify_all();
     }

@@ -207,7 +207,12 @@ void handle_run(AlgorithmExecutor& exec,
                 exec.cancel();
                 break;
             case ipc::MsgType::MsgPause:
+                // exec.pause() is synchronous: it blocks until the algorithm
+                // has actually quiesced at wait_if_paused() and only then flips
+                // to Paused.  Ack AFTER it returns, so the parent can mirror
+                // Pausing→Paused honestly (not merely "pause requested").
                 exec.pause();
+                forwarder->send_frame(ipc::MsgType::MsgPauseAck, {});
                 break;
             case ipc::MsgType::MsgResume:
                 exec.resume();

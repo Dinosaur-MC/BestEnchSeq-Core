@@ -89,6 +89,17 @@ private:
         std::vector<uint8_t> result; // opaque checkpoint blob
     };
 
+    /// Per-pause confirmation handshake.  pause() sends MsgPause and sets
+    /// `pending`, then the reader thread (the single pipe owner) waits for the
+    /// worker's MsgPauseAck — sent only after exec.pause() returned, i.e. the
+    /// algorithm is TRULY quiesced — and flips the local mirror Pausing→Paused.
+    struct PauseIntent {
+        std::mutex mtx;
+        std::condition_variable cv;
+        bool pending = false;
+        bool failed = false; // worker died / run ended before acking
+    };
+
     void spawn_worker();
     void query_metadata();
     void send(ipc::MsgType type, const std::vector<uint8_t>& payload) const;
@@ -102,6 +113,9 @@ private:
     /// Abort a still-pending serialize handshake (mark it errored + notify) —
     /// called on reader-thread exit so a serializing caller never hangs.
     void abort_pending_serialize() noexcept;
+    /// Abort a still-pending pause handshake (mark it failed + notify) — called
+    /// on reader-thread exit so a pausing caller never hangs.
+    void abort_pending_pause() noexcept;
     /// Kill the worker + close all fds/handles.  Assumes the reader thread has
     /// already exited (or never started).  Called by the destructor and by the
     /// constructor's exception path (partial-construction cleanup).
@@ -135,8 +149,9 @@ private:
     /// side of the IPC socket is also shutdown() to unblock a blocking poll).
     std::atomic<bool> _shutdown{false};
 
-    // Reader thread + serialize handshake (created fresh each run).
+    // Reader thread + handshakes (created fresh each run).
     std::shared_ptr<SerializeIntent> _serialize_intent;
+    std::shared_ptr<PauseIntent> _pause_intent;
     intptr_t _wake = -1; // eventfd (Linux) / event HANDLE (Windows)
     std::thread _reader;
 };
