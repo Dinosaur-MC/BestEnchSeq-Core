@@ -22,6 +22,7 @@
 #include "common/log/LogRingBuffer.h"
 #include "framework/test_utils.h"
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -439,7 +440,19 @@ void test_logs(TestApp& app) {
 // ── Fake StreamChannel: captures every frame delivered to the "connection" ──
 struct FakeChannel : web::StreamChannel {
     std::vector<std::string> frames;
+    std::function<void()> on_close_cb;
+    bool close_fired = false;
     void post_frame(std::string f) override { frames.push_back(std::move(f)); }
+    void on_close(std::function<void()> cb) override { on_close_cb = std::move(cb); }
+    /// 模拟连接关闭：触发控制器注册的 on_close 回调（触发一次后清空）。
+    void fire_close() {
+        close_fired = true;
+        if (on_close_cb) {
+            auto cb = std::move(on_close_cb);
+            on_close_cb = nullptr;
+            cb();
+        }
+    }
 };
 
 /// WebModule 组装测试：/ → 307 + Location、/public/* → 静态、其余 → Router。
@@ -513,9 +526,50 @@ void test_stream_channel(TestApp& app) {
         if (f == "data: x\n\n") delivered = true;
     expect(delivered, "published frame delivered to StreamChannel");
 
+    // 连接关闭 → on_close 回调 → 从 hub 退订该任务的订阅（SubId 幂等）。
+    // 若任务恰在此时完成，WebSolveService 已 unsubscribe_all，计数同样为 0 ——
+    // 两种路径都让订阅数归零，断言不抖动。
+    expect(fake->on_close_cb != nullptr, "on_close callback registered on task channel");
+    fake->fire_close();
+    expect(app.hub.subscriber_count(id) == 0, "task subscription dropped after close");
+
     // 取消任务，避免占用单活动槽影响后续测试。
     auto c = app.call(Method::Delete, "/api/tasks/" + id);
     expect(c.status == 200, "cancel channel task");
+}
+
+/// 连接关闭钩子测试（确定性证明 on_close → 退订 的接线）：
+/// 用 "logs" 键最确定 —— 该键无任何自动退订（WebSolveService 只清任务键），
+/// 唯一能把它从 1 清零的机制就是 LogsController 注册的 on_close 回调。
+void test_stream_close_hook(TestApp& app) {
+    auto fake = std::make_shared<FakeChannel>();
+    LogsController lc(app.ctx, app.hub);
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/api/logs/events";
+    req.stream = fake;
+    auto r = lc.events(req);
+    expect(r.status == 200 && r.is_stream, "logs events stream response via channel");
+    expect(app.hub.subscriber_count("logs") == 1, "logs subscription registered");
+
+    // 关闭前帧投递链路正常。
+    app.hub.publish("logs", "data: hi\n\n");
+    bool got = false;
+    for (const auto& f : fake->frames)
+        if (f == "data: hi\n\n") got = true;
+    expect(got, "frame delivered before close");
+
+    // 模拟客户端断开 → on_close 回调 → 退订（唯一清零路径，证明接线生效）。
+    expect(fake->on_close_cb != nullptr, "on_close callback registered on logs channel");
+    fake->fire_close();
+    expect(app.hub.subscriber_count("logs") == 0, "logs subscription dropped after close");
+
+    // 退订后 publish 不再送达该通道（死连接回调已从 hub 移除）。
+    app.hub.publish("logs", "data: nope\n\n");
+    bool leaked = false;
+    for (const auto& f : fake->frames)
+        if (f == "data: nope\n\n") leaked = true;
+    expect(!leaked, "no frame delivered after close");
 }
 } // namespace
 
@@ -529,6 +583,7 @@ int main() {
         test_profiles(app);
         test_algorithms(app);
         test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
+        test_stream_close_hook(app); // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
         test_calculator(app);
         test_logs(app);
         test_web_module(app.ctx);

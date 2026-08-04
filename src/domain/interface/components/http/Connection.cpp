@@ -14,7 +14,16 @@ void Connection::close() {
         _alive = false;
         sock_close(_fd);
         _fd = -1;
+        // 关闭回调只触发一次：连接真正关闭后（_alive 已翻 false）通知订阅方退订。
+        // 先移出再执行，避免回调重入 close() 时再次触发。
+        auto cb = std::move(_on_close);
+        _on_close = nullptr;
+        if (cb) cb();
     }
+}
+
+void Connection::on_close(std::function<void()> cb) {
+    _on_close = std::move(cb);
 }
 
 void Connection::set_frame_sink(std::function<void(std::string)> sink) {

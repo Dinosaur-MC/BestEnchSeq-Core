@@ -33,7 +33,6 @@ public:
     void remove_connection(int fd);
     void on_readable(int fd); // poller 投递
     void on_writable(int fd);
-    void post_frame(int fd, std::string frame); // SSE 帧（solve worker 投递；Task 10 落位）
     void close_all();                           // 优雅关闭：清空连接
 
     size_t connection_count() const;

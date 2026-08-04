@@ -56,8 +56,10 @@ public:
 
     /// StreamChannel：把一帧交给 home-loop 帧汇（Reactor 注入）；未设置 sink 时静默丢弃。
     void post_frame(std::string frame) override;
-    /// Reactor 注入帧汇：`[this,fd](std::string f){ post_frame(fd, std::move(f)); }`。
+    /// Reactor 注入帧汇（捕获 shared_ptr/weak_ptr 而非 fd，避免 fd 复用串扰）。
     void set_frame_sink(std::function<void(std::string)> sink);
+    /// StreamChannel：连接关闭时触发一次（客户端断开/服务端关闭）。控制器用它退订 SseHub。
+    void on_close(std::function<void()> cb) override;
 
     /// SSE 心跳间隔：流缓冲空闲超过该时长且无新帧 → 注入 `: ping` 注释帧。
     std::chrono::milliseconds heartbeat_interval = std::chrono::milliseconds(15000);
@@ -76,6 +78,7 @@ private:
     std::shared_ptr<SseStream> _stream;                 // 非空 = SSE 流模式
     std::chrono::steady_clock::time_point _last_write;  // 最近一次写出帧的时间（心跳节流）
     std::function<void(std::string)> _frame_sink;       // Reactor 注入的 home-loop 帧汇
+    std::function<void()> _on_close;                    // 连接关闭回调（触发一次后清空）
 };
 
 } // namespace web

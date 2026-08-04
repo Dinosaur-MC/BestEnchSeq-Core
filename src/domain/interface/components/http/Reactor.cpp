@@ -51,7 +51,15 @@ void Reactor::add_connection(int fd) {
         // StreamChannel 帧汇：post_frame → 本 Reactor → home loop 上 push_sse_frame。
         // 捕获 `this`（Reactor）安全：post 的任务在 loop 线程上于 Reactor 析构前
         // （loop.stop() 会 drain 剩余任务）全部执行完。
-        conn->set_frame_sink([this, fd](std::string f) { post_frame(fd, std::move(f)); });
+        // 捕获 weak_ptr<Connection> 而非 fd：连接关闭后 fd 可能被复用，fd 键会把旧帧
+        // 串到新连接；weak_ptr 解析失败即静默丢弃。用 weak 也避免帧汇（存于连接自身）
+        // 捕获自身 shared_ptr 形成环导致连接永不析构。
+        conn->set_frame_sink([this, weak = std::weak_ptr<Connection>(conn)](std::string f) {
+            if (auto sp = weak.lock())
+                _impl->loop.post([sp, f = std::move(f)]() mutable {
+                    sp->push_sse_frame(std::move(f));
+                });
+        });
         _impl->conns.emplace(fd, std::move(conn));
     }
     // 首推进：消费线程首次 process（请求可能已到达）
@@ -71,22 +79,6 @@ void Reactor::on_readable(int fd) {
 }
 void Reactor::on_writable(int fd) {
     _impl->loop.post([this, fd] { drive(fd); });
-}
-
-void Reactor::post_frame(int fd, std::string frame) {
-    // SSE 帧出口：把帧 post 到 home loop，loop 线程上交给连接入缓冲 + 写出。
-    // 连接可能已被关闭（_conns.erase）→ 帧静默丢弃。
-    _impl->loop.post([this, fd, frame = std::move(frame)]() mutable {
-        std::shared_ptr<Connection> conn;
-        {
-            std::lock_guard lk(_impl->mutex);
-            auto it = _impl->conns.find(fd);
-            if (it == _impl->conns.end())
-                return;
-            conn = it->second;
-        }
-        conn->push_sse_frame(std::move(frame));
-    });
 }
 
 void Reactor::close_all() {

@@ -101,6 +101,18 @@ Response CalculatorController::events(const HttpRequest& req, const PathParams& 
         if (ch) ch->post_frame(std::move(frame));
     });
     _streams[id] = sub;
+    // 连接关闭（客户端断开/服务端关闭）时退订：SseHub 不再持有死连接的帧回调，
+    // 避免连接及其帧汇永久存活（每次 publish 白费功夫 + 长期泄漏）。不捕获 ch ——
+    // on_close 存于连接自身，捕获自身会形成 shared_ptr 环；只捕获 this + id + SubId。
+    // SseHub::unsubscribe 幂等：即使任务已被 unsubscribe_all 清空也能安全调用。
+    if (ch) {
+        ch->on_close([this, id, sub] {
+            _hub.unsubscribe(id, sub);
+            auto it = _streams.find(id);
+            if (it != _streams.end() && it->second == sub)
+                _streams.erase(it);
+        });
+    }
     return sse_stream_response();
 }
 
