@@ -20,18 +20,6 @@ const char* state_name(webhttp::TaskState s) {
     return "unknown";
 }
 
-/// `text/event-stream` stream response. is_stream=true means the transport
-/// switches to chunked streaming and ignores `body` (frame writing is wired in
-/// Task 18).
-HttpResponse sse_response() {
-    HttpResponse r;
-    r.status = 200;
-    r.reason = "OK";
-    r.content_type = "text/event-stream";
-    r.is_stream = true;
-    return r;
-}
-
 /// The service layer throws the legacy 2-arg `webhttp::WebHttpError`
 /// (WebSolveService.h), while the Router only catches the 3-arg
 /// `web::WebHttpError` (Router.h). Without a bridge a service conflict/404
@@ -109,7 +97,7 @@ Response CalculatorController::events(const HttpRequest&, const PathParams& pp) 
     // is retained so that task can unsubscribe on disconnect.
     auto sub = _hub.subscribe(id, [](const std::string&, std::string) {});
     _streams[id] = sub;
-    return sse_response();
+    return sse_stream_response();
 }
 
 } // namespace web

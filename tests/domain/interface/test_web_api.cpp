@@ -16,10 +16,14 @@
 #include "domain/interface/components/http/Router.h"
 #include "domain/interface/BesqContext.h"
 #include "common/io/json.h"
+#include "common/log/log.hpp"
+#include "common/log/LogRingBuffer.h"
 #include "framework/test_utils.h"
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 
 using namespace web;
 
@@ -257,6 +261,18 @@ void test_algorithms(TestApp& app) {
     // Unknown algorithm → 404.
     auto no = app.call(Method::Get, "/api/algorithms/nope");
     expect(no.status == 404, "unknown algorithm 404");
+
+    // Load with a missing/invalid body → 400 INVALID_FIELD (code present).
+    auto load_empty = app.call(Method::Post, "/api/algorithms/load", "{}");
+    expect(load_empty.status == 400 && load_empty.body.find("code") != std::string::npos,
+           "algorithms load {} 400 with code");
+
+    // Load from a nonexistent directory → 200 {"loaded":0} (scan does not throw).
+    auto load_missing = app.call(Method::Post, "/api/algorithms/load",
+                                 R"({"dir":"/nonexistent_dir_xyz"})");
+    expect(load_missing.status == 200, "algorithms load missing dir 200");
+    auto lj = Json::parse(load_missing.body);
+    expect(lj["loaded"].as<int64_t>() == 0, "algorithms load missing dir loaded=0");
 }
 
 void test_calculator(TestApp& app) {
@@ -271,6 +287,37 @@ void test_calculator(TestApp& app) {
     expect(lb["task_id"].type() == JsonType::String, "light task_id returned");
     expect(light.header_value("Location").find("/api/tasks/") != std::string::npos,
            "submit Location header");
+    std::string light_id = lb["task_id"].as<std::string>();
+
+    // Poll the light task to a terminal state (bounded ≤5s) so cancel/status on
+    // a completed task below are deterministic.
+    bool light_done = false;
+    for (int i = 0; i < 50 && !light_done; ++i) {
+        auto st = app.call(Method::Get, "/api/tasks/" + light_id);
+        if (st.status != 200) break;
+        auto sj = Json::parse(st.body);
+        light_done = sj["state"].as<std::string>() != "running";
+        if (!light_done) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(light_done, "light task reached terminal state");
+
+    // DELETE unknown → 404; DELETE a completed task → 200 no-op.
+    auto cno = app.call(Method::Delete, "/api/tasks/nope");
+    expect(cno.status == 404 && cno.body.find("code") != std::string::npos,
+           "cancel unknown task 404");
+    auto cdone = app.call(Method::Delete, "/api/tasks/" + light_id);
+    expect(cdone.status == 200 && cdone.body.find("ok") != std::string::npos,
+           "cancel completed task 200 no-op");
+
+    // Status of the completed light task → 200 with a result payload.
+    auto sdone = app.call(Method::Get, "/api/tasks/" + light_id);
+    expect(sdone.status == 200 && sdone.body.find("result") != std::string::npos,
+           "status completed task carries result");
+
+    // Submit with a missing required field ("target") → 400 INVALID_TASK.
+    auto badtask = app.call(Method::Post, "/api/tasks", "{}");
+    expect(badtask.status == 400 && badtask.body.find("code") != std::string::npos,
+           "submit {} 400 with code");
 
     // test_profiles deletes netherite_sword from the builtin profile; restore it
     // so the heavy target resolves (idempotent: DELETE then POST).
@@ -313,6 +360,15 @@ void test_calculator(TestApp& app) {
     })");
     expect(dup.status == 409, "second POST while active 409");
 
+    // SSE subscribe while the heavy task is Running → 200 and exactly one hub
+    // subscription registered for it (Fix 3 coverage for the events path).
+    auto heav_ev = app.call(Method::Get, "/api/tasks/" + heavy_id + "/events");
+    expect(heav_ev.status == 200 && heav_ev.is_stream &&
+               heav_ev.content_type == "text/event-stream",
+           "heavy events stream response");
+    expect(app.hub.subscriber_count(heavy_id) == 1,
+           "heavy task SSE subscription registered");
+
     // Unknown task → 404 for both status and events.
     auto no = app.call(Method::Get, "/api/tasks/nope");
     expect(no.status == 404, "unknown task status 404");
@@ -321,7 +377,6 @@ void test_calculator(TestApp& app) {
 
     // The heavy task may still be running; it is cancelled + joined when the
     // TestApp (owning WebSolveService) is destroyed at the end of main().
-    (void)heavy_id;
 }
 
 void test_logs(TestApp& app) {
@@ -342,6 +397,39 @@ void test_logs(TestApp& app) {
     expect(ev.status == 200 && ev.is_stream &&
                ev.content_type == "text/event-stream",
            "logs events stream response");
+
+    // ── Fix 3 additions ──
+
+    // Exact empty-ring shape: no ring installed → {"logs":[],"next":0}. If a
+    // ring is present in the test environment, derive the expected cursor from
+    // its current contents instead (deterministic either way).
+    auto empty = app.call(Method::Get, "/api/logs");
+    expect(empty.status == 200, "logs empty tail 200");
+    auto ej = Json::parse(empty.body);
+    expect(ej["logs"].type() == JsonType::Array && ej["logs"].as_array().empty(),
+           "logs exact empty array");
+    int64_t expected_next = 0;
+    if (auto ring = Logger::instance().ring_buffer()) {
+        auto snap = ring->snapshot(LogLevel::Debug, 200);
+        if (!snap.empty()) expected_next = snap.back().timestamp_ms;
+    }
+    expect(ej["next"].as<int64_t>() == expected_next, "logs exact next cursor");
+
+    // Overflow / negative limit → 400.
+    auto ovf = app.call(Method::Get, "/api/logs?limit=99999999999999999999");
+    expect(ovf.status == 400 && ovf.body.find("code") != std::string::npos,
+           "limit overflow 400");
+    auto neg = app.call(Method::Get, "/api/logs?limit=-1");
+    expect(neg.status == 400 && neg.body.find("code") != std::string::npos,
+           "limit negative 400");
+
+    // Explicit limit=0 → empty slice (cursor stays put), not a full dump.
+    auto zero = app.call(Method::Get, "/api/logs?limit=0");
+    expect(zero.status == 200, "limit=0 tail 200");
+    auto zj = Json::parse(zero.body);
+    expect(zj["logs"].type() == JsonType::Array && zj["logs"].as_array().empty(),
+           "limit=0 exact empty array");
+    expect(zj["next"].as<int64_t>() == 0, "limit=0 next 0");
 }
 } // namespace
 

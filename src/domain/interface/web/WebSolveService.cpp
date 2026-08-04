@@ -193,12 +193,18 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 // single-active-slot invariant.
                 {
                     std::lock_guard<std::mutex> lock(task->mutex);
-                    if (task->state == TaskState::Cancelled) return;
+                    if (task->state == TaskState::Cancelled) {
+                        if (_hub) _hub->unsubscribe_all(task->id);
+                        return;
+                    }
                 }
                 auto request = build_request(dto, _ctx);
                 {
                     std::lock_guard<std::mutex> lock(task->mutex);
-                    if (task->state == TaskState::Cancelled) return;
+                    if (task->state == TaskState::Cancelled) {
+                        if (_hub) _hub->unsubscribe_all(task->id);
+                        return;
+                    }
                 }
                 if (_hub) {
                     // Progress exit: without a core observer hook the worker
@@ -224,7 +230,10 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             // to cancel.
             {
                 std::lock_guard<std::mutex> lock(task->mutex);
-                if (task->state == TaskState::Cancelled) return;
+                if (task->state == TaskState::Cancelled) {
+                    if (_hub) _hub->unsubscribe_all(task->id);
+                    return;
+                }
                 task->state = TaskState::Completed;
                 task->result = result_json;  // copy (not move): result_json is still needed for the SSE frame
             }

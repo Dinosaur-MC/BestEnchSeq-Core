@@ -67,4 +67,16 @@ struct HttpResponse {
     static HttpResponse error(int status, const std::string& code, const std::string& message);
 };
 
+/// `text/event-stream` stream response. is_stream=true means the transport
+/// switches to chunked streaming and ignores `body` (frame writing is wired in
+/// the SSE transport task).
+inline HttpResponse sse_stream_response() {
+    HttpResponse r;
+    r.status = 200;
+    r.reason = "OK";
+    r.content_type = "text/event-stream";
+    r.is_stream = true;
+    return r;
+}
+
 } // namespace web

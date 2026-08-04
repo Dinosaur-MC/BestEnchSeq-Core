@@ -32,15 +32,6 @@ bool parse_i64(const std::string& s, int64_t& out) {
     out = static_cast<int64_t>(v);
     return true;
 }
-
-HttpResponse sse_response() {
-    HttpResponse r;
-    r.status = 200;
-    r.reason = "OK";
-    r.content_type = "text/event-stream";
-    r.is_stream = true;
-    return r;
-}
 } // namespace
 
 Response LogsController::tail(const HttpRequest& req) {
@@ -56,8 +47,16 @@ Response LogsController::tail(const HttpRequest& req) {
             throw WebHttpError(400, "INVALID_FIELD", "limit must be a non-negative integer");
     }
     // Default 200 (matches the old ApiLogs tail); an explicit 0 means "return
-    // nothing" — but snapshot(tail=0) would erase everything, so guard it.
-    size_t tail_n = (!has_limit || limit == 0) ? 200 : static_cast<size_t>(limit);
+    // nothing" — a clean empty slice with the incremental cursor left in place
+    // (snapshot(tail=0) would not erase anything, but the slice contract says 0
+    // records, so short-circuit before touching the ring).
+    if (has_limit && limit == 0) {
+        Json root = Json::object();
+        root["logs"] = Json::array();
+        root["next"] = Json(since);
+        return Response::json(200, "OK", root.to_string());
+    }
+    size_t tail_n = has_limit ? static_cast<size_t>(limit) : 200;
 
     auto ring = Logger::instance().ring_buffer();
     Json arr = Json::array();
@@ -89,7 +88,7 @@ Response LogsController::events(const HttpRequest&) {
     // transport wiring (Task 18) pushes new ring records to the hub; this
     // handler only validates the route and returns a stream response.
     _hub.subscribe("logs", [](const std::string&, std::string) {});
-    return sse_response();
+    return sse_stream_response();
 }
 
 } // namespace web
