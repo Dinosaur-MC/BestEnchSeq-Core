@@ -16,6 +16,11 @@ const dicts = {
     'calc.no_result': 'No result',
     'calc.run': 'Solve', 'calc.cancel': 'Cancel',
     'calc.progress': 'Solving…',
+    'prof.title': 'Profiles', 'prof.active': 'Active',
+    'prof.new_name': 'New profile name', 'prof.fork_from': 'Fork from',
+    'prof.create': 'Create', 'prof.activate': 'Activate', 'prof.remove': 'Remove',
+    'prof.publish': 'Publish', 'prof.ench': 'Enchantments', 'prof.equip': 'Equipment', 'prof.tag': 'Tags',
+    'prof.add': 'Add', 'prof.id': 'ID', 'prof.name': 'Name', 'prof.max_level': 'Max level',
     'err.network': 'Network error — is besq-gui running?',
   },
   'zh-CN': {
@@ -34,6 +39,11 @@ const dicts = {
     'calc.no_result': '无结果',
     'calc.run': '求解', 'calc.cancel': '取消',
     'calc.progress': '求解中…',
+    'prof.title': '数据', 'prof.active': '当前',
+    'prof.new_name': '新数据名', 'prof.fork_from': '分支来源',
+    'prof.create': '创建', 'prof.activate': '启用', 'prof.remove': '删除',
+    'prof.publish': '发布', 'prof.ench': '魔咒', 'prof.equip': '装备', 'prof.tag': '标签',
+    'prof.add': '添加', 'prof.id': 'ID', 'prof.name': '名称', 'prof.max_level': '最大等级',
     'err.network': '网络错误 — besq-gui 未运行？',
   },
 };

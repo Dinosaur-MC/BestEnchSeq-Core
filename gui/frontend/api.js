@@ -28,6 +28,13 @@ export const http = {
   del:  (p) => api('DELETE', p),
 };
 
+// Escape a backend-supplied string for safe interpolation into innerHTML.
+// Shared here (not per-view) so every view uses the same escaping.
+export function esc(s) {
+  return String(s).replace(/[&<>"']/g,
+    (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 // Global error banner. Lives here (not app.js) so views don't create a
 // circular module dependency: app.js imports views, views import api.js,
 // api.js imports nothing.
