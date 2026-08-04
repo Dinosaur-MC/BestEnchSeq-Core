@@ -21,10 +21,9 @@ struct ConstRouteDef {
 namespace detail {
 template <typename...> inline constexpr bool always_false = false;
 
-/// body 解析失败 → 由调用方捕获转 400；缺 body 当作 {}。
+/// body 解析失败 → JsonException 向上传播，Router::dispatch 映射为 400 INVALID_BODY。
 inline const Json& parse_body(const HttpRequest& req, Json& stash) {
-    try { stash = Json::parse(req.body.empty() ? "{}" : req.body); }
-    catch (const JsonException&) { throw std::runtime_error("invalid body"); }
+    stash = Json::parse(req.body.empty() ? "{}" : req.body);
     return stash;
 }
 } // namespace detail

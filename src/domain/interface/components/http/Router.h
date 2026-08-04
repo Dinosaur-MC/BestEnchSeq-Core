@@ -65,7 +65,11 @@ consteval bool validate_routes(std::span<const ConstRouteDef> routes) {
         bool in_param = false;
         for (size_t i = 0; i < p.size(); ++i) {
             if (p[i] == '{') { if (in_param) return false; in_param = true; }
-            else if (p[i] == '}') { if (!in_param) return false; in_param = false; }
+            else if (p[i] == '}') {
+                if (!in_param) return false;
+                in_param = false;
+                if (i == 0 || p[i - 1] == '{') return false;   // empty param name
+            }
             else if (in_param && (p[i] == '/' || p[i] == ' ')) return false;
         }
         if (in_param) return false;

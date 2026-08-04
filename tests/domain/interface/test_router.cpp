@@ -41,6 +41,9 @@ static_assert(validate_routes(std::array{
     ConstRouteDef{Method::Get, "/a/{id}/sub", nullptr},
     ConstRouteDef{Method::Get, "/a/{id}/other", nullptr},
 }) == true, "same-level literals under param OK");
+static_assert(validate_routes(std::array{
+    ConstRouteDef{Method::Get, "/demo/{}", nullptr},
+}) == false, "empty param name rejected");
 
 void test_ok() {
     Router r;
@@ -74,12 +77,22 @@ void test_percent_decode_path() {
     auto resp = r.dispatch(req);
     expect(resp.status == 200 && resp.body.find("42/7") != std::string::npos, "decoded param");
 }
+
+void test_bad_body_400() {
+    Router r;
+    r.register_controller<DemoCtl>();
+    HttpRequest req; req.method = Method::Post; req.path = "/demo"; req.body = "{not json";
+    auto resp = r.dispatch(req);
+    expect(resp.status == 400, "malformed body -> 400");
+    expect(resp.body.find("INVALID_BODY") != std::string::npos, "code INVALID_BODY");
+}
 } // namespace
 
 int main() {
     test_ok();
     test_404_405();
     test_percent_decode_path();
+    test_bad_body_400();
     TEST_PASS("test_router");
     return print_summary();
 }
