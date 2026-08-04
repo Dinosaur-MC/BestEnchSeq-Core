@@ -4,6 +4,7 @@
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/web/resources/ApiAlgorithm.h"
 #include "domain/interface/web/resources/ApiHealth.h"
+#include "domain/interface/web/resources/ApiLogs.h"
 #include "domain/interface/web/resources/ApiProfiles.h"
 #include "domain/interface/web/resources/ApiSettings.h"
 #include "domain/interface/web/resources/ApiStatus.h"
@@ -11,11 +12,13 @@
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
+#include "common/log/LogRingBuffer.h"
 #include "common/io/json.h"
 #include "BuildConfig.h"
 #include "framework/test_utils.h"
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <string>
 
 // ── Facade increment: by-name profile read/write ──────────────────────────
@@ -334,6 +337,40 @@ void test_api_algorithm() {
     TEST_PASS("ApiAlgorithm");
 }
 
+// ── LogRingBuffer (M1.6): bounded ring buffer + /api/logs ──────────────
+
+void test_log_ring_buffer() {
+    auto ring = std::make_shared<LogRingBuffer>(8);
+    ring->push(LogLevel::Info, "one");
+    ring->push(LogLevel::Error, "two");
+    ring->push(LogLevel::Info, "three");
+
+    auto all = ring->snapshot(LogLevel::Debug, 100);
+    expect(all.size() == 3, "ring holds 3 entries");
+
+    auto errors_only = ring->snapshot(LogLevel::Warn, 100);
+    expect(errors_only.size() == 1 && errors_only[0].message == "two", "level filter works");
+
+    auto tail1 = ring->snapshot(LogLevel::Debug, 1);
+    expect(tail1.size() == 1 && tail1[0].message == "three", "tail limit works");
+
+    // Capacity drops the oldest.
+    for (int i = 0; i < 12; ++i)
+        ring->push(LogLevel::Info, "x" + std::to_string(i));
+    auto capped = ring->snapshot(LogLevel::Debug, 100);
+    expect(capped.size() == 8, "ring capped at capacity");
+    expect(capped[0].message == "x4", "oldest dropped, x4 is oldest");
+    TEST_PASS("LogRingBuffer");
+}
+
+void test_api_logs() {
+    auto ring = std::make_shared<LogRingBuffer>(32);
+    ring->push(LogLevel::Info, "hello web logs");
+    auto json = Json::parse(ApiLogs::handle(*ring, LogLevel::Debug, 32));
+    expect(json["logs"][0]["message"].as<std::string>() == "hello web logs", "log entry served");
+    TEST_PASS("ApiLogs");
+}
+
 int main() {
     try {
         test_facade_by_name_registry();
@@ -343,6 +380,8 @@ int main() {
         test_api_profiles_list_and_actions();
         test_api_profiles_error_branches();
         test_api_algorithm();
+        test_log_ring_buffer();
+        test_api_logs();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

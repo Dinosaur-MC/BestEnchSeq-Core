@@ -1,4 +1,5 @@
 #include "Logger.h"
+#include "LogRingBuffer.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -168,6 +169,10 @@ Logger::~Logger() {
 }
 
 void Logger::log(LogLevel level, std::string message) {
+    // Optional /api/logs sink: every log() call also lands a copy in the ring
+    // buffer (bounded, thread-safe) regardless of the file/console thresholds.
+    if (auto ring = _ring_buffer)
+        ring->push(level, message);
     // Drop only if NEITHER sink would show it: the file is gated by _level
     // (BESQ_LOG_LEVEL) and the console mirror by its own threshold
     // (BESQ_LOG_CONSOLE_LEVEL) — the two knobs are independent.
