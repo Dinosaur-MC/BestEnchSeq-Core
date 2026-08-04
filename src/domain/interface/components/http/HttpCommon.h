@@ -39,7 +39,7 @@ struct PathParams {
 
 struct HttpRequest {
     Method method = Method::Get;
-    std::string path;            // percent-decode 后
+    std::string path;            // raw（未解码；参数捕获时逐段解码）
     QueryParams query;           // 解析后
     std::vector<std::pair<std::string, std::string>> headers;
     std::string body;
@@ -53,7 +53,7 @@ struct HttpResponse {
     std::vector<std::pair<std::string, std::string>> headers;   // 额外响应头（Allow/Location…）
     std::string body;
     bool is_stream = false;          // true → 流式（SSE），body 忽略
-    std::string to_bytes() const;    // HTTP/1.1 线格式，Connection: close（非流）
+    std::string to_bytes() const;    // HTTP/1.1 线格式；非流默认 Connection: keep-alive（关闭由 Connection 状态机决定）
     std::string header_value(const std::string& name) const;    // 大小写不敏感查找，缺省 ""
     static HttpResponse json(int status, const std::string& reason, const std::string& body);
     static HttpResponse created(const std::string& location, const std::string& body);  // 201+Location

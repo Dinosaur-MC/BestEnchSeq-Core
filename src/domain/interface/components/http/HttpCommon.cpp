@@ -129,7 +129,7 @@ std::string HttpResponse::to_bytes() const {
         out += "\r\n";
     }
     if (is_stream) out += "Transfer-Encoding: chunked\r\n";
-    else out += "Connection: close\r\n";
+    else out += "Connection: keep-alive\r\n";   // HTTP/1.1 默认 keep-alive；是否关闭由 Connection 状态机决定
     out += "\r\n";
     out += body;
     return out;

@@ -1,8 +1,8 @@
 // =============================================================================
 // HttpParser tests (components/http, namespace web)
 //
-// Incremental HTTP/1.1 request parsing: percent-decoded path, query params,
-// keep-alive tail parsing, header/body size limits.
+// Incremental HTTP/1.1 request parsing: raw (encoded) path, decoded query
+// params, keep-alive tail parsing, header/body size limits.
 // =============================================================================
 
 #include "domain/interface/components/http/HttpParser.h"
@@ -26,7 +26,10 @@ static void test_basic_parse() {
 }
 
 // ---------------------------------------------------------------------------
-// percent-decoded path + query params.
+// Raw (encoded) path + decoded query params.
+// Path stays raw: {param} segments are percent-decoded per-segment by
+// Router::match_segments at dispatch time, so %2F survives as data within a
+// param instead of becoming a separator.
 // ---------------------------------------------------------------------------
 static void test_decode_and_query() {
     std::string buf = "GET /api/profiles/minecraft%3Asharpness?since=5&limit=10 HTTP/1.1\r\nHost: x\r\n\r\n";
@@ -34,7 +37,7 @@ static void test_decode_and_query() {
     size_t consumed = 0;
     auto pr = parse_incremental(buf, consumed, req);
     expect(pr == ParseResult::Complete, "complete");
-    expect(req.path == "/api/profiles/minecraft:sharpness", "path decoded");
+    expect(req.path == "/api/profiles/minecraft%3Asharpness", "path stays raw (encoded)");
     expect(req.query.get("since") == "5" && req.query.get("limit") == "10", "query");
 }
 
