@@ -100,7 +100,8 @@ void test_settings(TestApp& app) {
 }
 
 void test_profiles(TestApp& app) {
-    const std::string key = app.ctx.list_profiles()[0];
+    std::string key = "builtin:vanilla";      // the guaranteed root profile
+    expect(app.ctx.profile_exists(key), "root profile present");
 
     // ── 1. list → 200 with "profiles" and "active" ──
     auto l = app.call(Method::Get, "/api/profiles");
@@ -153,6 +154,22 @@ void test_profiles(TestApp& app) {
     auto dup = app.call(Method::Post, "/api/profiles",
                         R"({"source":")" + key + R"(","dest":")" + key + R"("})");
     expect(dup.status == 409, "create existing dest 409");
+
+    // Empty dest in create/fork → 400 (was a 500 before the guard).
+    auto emptyd = app.call(Method::Post, "/api/profiles",
+                           R"({"source":")" + key + R"(","dest":""})");
+    expect(emptyd.status == 400 && emptyd.body.find("INVALID_FIELD") != std::string::npos,
+           "create empty dest 400 INVALID_FIELD");
+    auto emptyf = app.call(Method::Post, "/api/profiles/" + key + "/fork",
+                           R"({"dest":""})");
+    expect(emptyf.status == 400 && emptyf.body.find("INVALID_FIELD") != std::string::npos,
+           "fork empty dest 400 INVALID_FIELD");
+
+    // PATCH sub-resource: path segment must match the body id (was a silent 200).
+    auto mism = app.call(Method::Patch, "/api/profiles/" + key + "/equipments/minecraft:iron_sword",
+                         R"({"id":"minecraft:netherite_sword","max_durability":5000})");
+    expect(mism.status == 400 && mism.body.find("INVALID_FIELD") != std::string::npos,
+           "PATCH path/body id mismatch 400 INVALID_FIELD");
     auto bad = app.call(Method::Patch, "/api/profiles/" + key, R"({"dependencies":"x"})");
     expect(bad.status == 400, "patch bad dependencies 400");
     auto badobj = app.call(Method::Patch, "/api/profiles/" + key, "[1,2]");

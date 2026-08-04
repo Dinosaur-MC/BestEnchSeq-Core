@@ -79,6 +79,8 @@ Response ProfilesController::create(const HttpRequest&, const PathParams&, const
     } catch (const JsonException&) {
         throw WebHttpError(400, "INVALID_FIELD", "create body requires 'source' and 'dest' strings");
     }
+    if (dest.empty())
+        throw WebHttpError(400, "INVALID_FIELD", "dest must not be empty");
     if (!_ctx.profile_exists(source))
         throw WebHttpError(404, "PROFILE_NOT_FOUND", "source profile not found: " + source);
     if (_ctx.profile_exists(dest))
@@ -168,6 +170,8 @@ Response ProfilesController::fork(const HttpRequest&, const PathParams& pp, cons
     } catch (const JsonException&) {
         throw WebHttpError(400, "INVALID_FIELD", "fork body requires 'dest' string");
     }
+    if (dest.empty())
+        throw WebHttpError(400, "INVALID_FIELD", "dest must not be empty");
     if (_ctx.profile_exists(dest))
         throw WebHttpError(409, "PROFILE_EXISTS", "destination profile already exists: " + dest);
     _ctx.fork_profile(key, dest);
@@ -283,6 +287,9 @@ Response ProfilesController::updateEnch(const HttpRequest&, const PathParams& pp
     }
     if (info.id.empty())
         throw WebHttpError(400, "INVALID_BODY", "enchantment entry requires a non-empty id");
+    auto pid = path_nsid(pp.get("name"));   // path_nsid throws 404 on an invalid NSID
+    if (pid != info.id)
+        throw WebHttpError(400, "INVALID_FIELD", "path name must match body id");
     if (!_ctx.update_enchantment_to(key, info))
         throw WebHttpError(404, "ENTRY_NOT_FOUND", "enchantment not found: " + info.id.str());
     return Response::json(200, "OK", ok_json().to_string());
@@ -348,6 +355,9 @@ Response ProfilesController::updateEquip(const HttpRequest&, const PathParams& p
     }
     if (eq.id.empty())
         throw WebHttpError(400, "INVALID_BODY", "equipment entry requires a non-empty id");
+    auto pid = path_nsid(pp.get("name"));   // path_nsid throws 404 on an invalid NSID
+    if (pid != eq.id)
+        throw WebHttpError(400, "INVALID_FIELD", "path name must match body id");
     if (!_ctx.update_equipment_to(key, eq))
         throw WebHttpError(404, "ENTRY_NOT_FOUND", "equipment not found: " + eq.id.str());
     return Response::json(200, "OK", ok_json().to_string());
@@ -413,6 +423,9 @@ Response ProfilesController::updateTag(const HttpRequest&, const PathParams& pp,
     }
     if (tag.id.empty())
         throw WebHttpError(400, "INVALID_BODY", "tag entry requires a non-empty id");
+    auto pid = path_nsid(pp.get("name"));   // path_nsid throws 404 on an invalid NSID
+    if (pid != tag.id)
+        throw WebHttpError(400, "INVALID_FIELD", "path name must match body id");
     if (!_ctx.update_tag_to(key, tag))
         throw WebHttpError(404, "ENTRY_NOT_FOUND", "tag not found: " + tag.id.str());
     return Response::json(200, "OK", ok_json().to_string());
