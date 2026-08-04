@@ -269,8 +269,25 @@ endif()
 # besq-gui (guarded by BESQ_BUILD_GUI) — WebView2 GUI host (Windows-first)
 # ═══════════════════════════════════════════════════════════════════════════════
 if(BESQ_BUILD_GUI)
+    # Embedded frontend assets (single-exe distribution)
+    set(GUI_FRONTEND ${CMAKE_CURRENT_SOURCE_DIR}/gui/frontend)
+    set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js)
+    foreach(name IN LISTS GUI_ASSET_NAMES)
+        string(REPLACE "." "_" sym "frontend_${name}")
+        embed_resource(INPUT "${GUI_FRONTEND}/${name}" SYMBOL ${sym}
+                       OUTPUT "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
+        list(APPEND GUI_FRONTEND_SRCS "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
+    endforeach()
+    set(GUI_VIEW_NAMES calculator profiles algorithms logs settings status)
+    foreach(name IN LISTS GUI_VIEW_NAMES)
+        embed_resource(INPUT "${GUI_FRONTEND}/views/${name}.js" SYMBOL frontend_view_${name}
+                       OUTPUT "${BESQ_GENERATED_DIR}/Frontend_view_${name}.cpp")
+        list(APPEND GUI_FRONTEND_SRCS "${BESQ_GENERATED_DIR}/Frontend_view_${name}.cpp")
+    endforeach()
+
     add_executable(besq-gui
         ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/main.cpp
+        ${GUI_FRONTEND_SRCS}
     )
     # UNIX: the whole chain must be bracketed in one --start-group (same
     # circular static-lib rationale as the besq target above).
