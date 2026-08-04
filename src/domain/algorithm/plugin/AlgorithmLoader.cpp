@@ -357,6 +357,11 @@ const PluginAuditReport* AlgorithmLoader::get_audit_report(std::string_view name
     return it != _plugins.end() ? &it->audit : nullptr;
 }
 
+std::optional<std::string> AlgorithmLoader::plugin_path(std::string_view name) const {
+    auto it = std::find_if(_plugins.begin(), _plugins.end(), [&](const auto& p) { return p.name == name; });
+    return it != _plugins.end() ? std::optional<std::string>(it->path) : std::nullopt;
+}
+
 // ====================================================================
 // Unload
 // ====================================================================

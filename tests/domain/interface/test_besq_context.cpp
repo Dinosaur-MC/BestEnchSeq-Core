@@ -912,6 +912,102 @@ void test_besq_abort_concurrent() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: Named-profile editing variants + metadata + rename
+// ---------------------------------------------------------------------------
+
+void test_named_profile_edit_and_meta() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.load_profiles();
+
+    std::string active = ctx.active_profile();
+    auto meta = ctx.profile_metadata(active);
+    expect(meta.name == active, "meta name");
+    expect(meta.is_root, "builtin root flagged");
+    expect(meta.ench_count == ctx.profile(active).ench().size(), "ench count");
+    expect(meta.eq_count == ctx.profile(active).eq().size(), "eq count");
+
+    // rename round-trip
+    std::string new_name = active + "_renamed";
+    if (!ctx.profile_exists(new_name)) {
+        expect(ctx.rename_profile(active, new_name), "rename");
+        expect(ctx.profile_exists(new_name) && !ctx.profile_exists(active), "renamed maps");
+        expect(ctx.profile_metadata(new_name).name == new_name, "metadata reflects new identity");
+    }
+
+    TEST_PASS("BesqContext named profile edit + metadata");
+}
+
+// ---------------------------------------------------------------------------
+// Test: update_*_to named-profile variants (enchantment/equipment/tag)
+// ---------------------------------------------------------------------------
+
+void test_update_variants() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.load_profiles();
+
+    std::string key = ctx.list_profiles()[0];
+    const auto& prof = ctx.profile(key);
+
+    // enchantment update：取一个现存 ench 改 max_level
+    if (!prof.ench().empty()) {
+        auto e = *prof.ench().begin();
+        e.max_level = e.max_level + 1;
+        expect(ctx.update_enchantment_to(key, e), "update ench");
+        expect(ctx.profile(key).ench().find(e.id)->max_level == e.max_level, "updated");
+    }
+
+    // equipment update：改 max_durability
+    if (!prof.eq().empty()) {
+        auto eq = *prof.eq().begin();
+        eq.max_durability = eq.max_durability + 1;
+        expect(ctx.update_equipment_to(key, eq), "update equipment");
+        expect(ctx.profile(key).eq().find(eq.id)->max_durability == eq.max_durability, "eq updated");
+    }
+
+    // tag update：改显示名
+    if (!prof.tags().empty()) {
+        auto tag = *prof.tags().begin();
+        tag.name = tag.name + "X";
+        expect(ctx.update_tag_to(key, tag), "update tag");
+        expect(ctx.profile(key).tags().find(tag.id)->name == tag.name, "tag updated");
+    }
+
+    TEST_PASS("BesqContext update variants");
+}
+
+// ---------------------------------------------------------------------------
+// Test: algorithm detail + unload gate (builtin/unknown are never unloaded)
+// ---------------------------------------------------------------------------
+
+void test_algorithm_detail_and_unload_gate() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    auto detail = ctx.algorithm_detail("dp_merge");
+    expect(detail.name == "dp_merge", "detail name");
+    expect(detail.origin == AlgorithmOrigin::builtin, "builtin origin");
+    expect(detail.supported_mode == "direct" || detail.supported_mode == "inventory" || detail.supported_mode == "both",
+           "supported_mode valid");
+
+    // unload builtin → false
+    expect(!ctx.unload_algorithm("dp_merge"), "cannot unload builtin");
+    // 未知算法 → false
+    expect(!ctx.unload_algorithm("nope"), "unknown unload false");
+    // 未知算法 detail → 抛
+    bool threw = false;
+    try {
+        (void)ctx.algorithm_detail("nope");
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "unknown algorithm detail throws");
+
+    TEST_PASS("BesqContext algorithm detail + unload gate");
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -942,6 +1038,9 @@ int main() {
         test_c_abi_solve_inventory();
         test_c_abi_solve_unknown_ench();
         test_besq_abort_concurrent();
+        test_named_profile_edit_and_meta();
+        test_update_variants();
+        test_algorithm_detail_and_unload_gate();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

@@ -81,6 +81,10 @@ public:
     /// Returns nullptr if the plugin was not audited or not found.
     const PluginAuditReport* get_audit_report(std::string_view name) const;
 
+    /// Canonical path of the plugin that registered \p name, if any.
+    /// Returns nullopt for built-in strategies and unknown names.
+    std::optional<std::string> plugin_path(std::string_view name) const;
+
     // ── Factory ───────────────────────────────────────────────────────
 
     /// Create an algorithm instance by name. Returns nullptr if unknown.
