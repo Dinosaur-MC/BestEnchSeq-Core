@@ -1,0 +1,49 @@
+#pragma once
+#include "common/utils/EventLoop.hpp"
+#include "Connection.h"
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+
+namespace web {
+
+/// 单个 home loop：一个 EventLoop 消费线程 + 该 loop 专属的连接表。
+/// 连接事件（读/写/关闭/SSE帧）只在本 loop 线程处理 → 连接零锁。
+class Reactor {
+public:
+    using Handler = std::function<HttpResponse(const HttpRequest&)>;
+    /// fd 关闭回调（HttpServer 注入：通知 poller 注销，保证 select 不含已关闭 fd）。
+    using OnClosed = std::function<void(int)>;
+    /// fd 兴趣回调（HttpServer 注入：同步 wants_write 给 poller 的写就绪监听）。
+    using OnInterest = std::function<void(int, bool)>;
+
+    explicit Reactor(Handler h);
+    ~Reactor();
+    Reactor(const Reactor&) = delete;
+    Reactor& operator=(const Reactor&) = delete;
+
+    void set_on_closed(OnClosed fn);
+    void set_on_interest(OnInterest fn);
+
+    void start();                // 启动消费线程
+    void stop();                 // 停止并 join（优雅 drain）
+    void add_connection(int fd); // 从 poller 线程调用
+    void remove_connection(int fd);
+    void on_readable(int fd); // poller 投递
+    void on_writable(int fd);
+    void post_frame(int fd, std::string frame); // SSE 帧（solve worker 投递；Task 10 落位）
+    void close_all();                           // 优雅关闭：清空连接
+
+    size_t connection_count() const;
+    bool empty() const;
+
+private:
+    void drive(int fd); // loop 线程推进一条连接
+
+    struct Impl;
+    std::unique_ptr<Impl> _impl;
+};
+
+} // namespace web
