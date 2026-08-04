@@ -10,3 +10,6 @@ besq_test_interface(test_cli_acceptance test_cli_acceptance.cpp)
 
 
 besq_test_interface(test_besq_context test_besq_context.cpp)
+
+# Web module tests (interface domain)
+besq_test_interface(test_http_server test_http_server.cpp)
