@@ -98,7 +98,14 @@ bool is_red_flag(const std::string_view name) noexcept {
         // ── Windows process control ──
         "CreateProcessWithTokenA", "CreateProcessWithTokenW",
         "CreateProcessAsUserA", "CreateProcessAsUserW",
-        "TerminateProcess",
+        // NOTE: TerminateProcess is deliberately NOT in this list — every
+        // clang-cl/MSVC DLL imports it via the CRT's DllMain/exception stub
+        // (DisableThreadLibraryCalls/GetCurrentProcess/…/TerminateProcess).
+        // On Debug builds this shows up in every plugin's import table, so a
+        // RED entry here refuses ALL plugins in non-sandbox mode — a guaranteed
+        // false positive with no way to distinguish CRT noise from plugin
+        // intent on PE.  The "plugin kills host" threat is contained by the
+        // sandbox (Windows Job Object KILL_ON_JOB_CLOSE) instead.
         // ── Linux process / kernel interface ──
         "syscall", "prctl", "unshare", "personality",
     });

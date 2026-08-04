@@ -78,6 +78,11 @@ bool AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
             return false;
         if (_state.compare_exchange_weak(prev, new_state, std::memory_order_acq_rel, std::memory_order_acquire)) {
             _state_cv.notify_all();
+            // Wake any serialize_state() waiting on quiescence: a terminal
+            // state transition (or Paused→Running via resume) means it must
+            // give up and return {} rather than block forever.
+            if (_ctx)
+                _ctx->notify_pause_ack();
             if (!_algo_name_cache.empty()) {
                 DiagnosticsService::instance().push(DiagEventKind::StateChange, _algo_name_cache, _task_id,
                                                     DiagnosticsEvent::StatePayload{prev, new_state});
@@ -287,6 +292,8 @@ void AlgorithmExecutor::cancel() {
         }
     }
     _state_cv.notify_all();
+    if (_ctx)
+        _ctx->notify_pause_ack(); // wake a serialize_state() blocked on quiescence
 
     // Notify observer of the Running/Paused → Cancelled transition
     if (!_algo_name_cache.empty())
@@ -356,6 +363,23 @@ std::vector<uint8_t> AlgorithmExecutor::serialize_state() const {
     auto* ser = _algorithm ? _algorithm->get_serializer() : nullptr;
     if (!ser)
         return {};
+    if (_ctx) {
+        // pause() flips the executor state to Paused immediately, but the
+        // algorithm only stops at wait_if_paused() — it may still be in a long
+        // pause-ignorant phase (e.g. the greedy/dfs bound) mutating the search
+        // state.  Snapshotting then yields an inconsistent checkpoint whose
+        // resumed run starts from a broken (empty) heap → 0 solutions.  Wait
+        // for the algorithm to ack quiescence, or for the executor to leave
+        // Paused (completed/cancelled).  _set_state()/cancel() notify the ack
+        // cv on every transition, so the wait cannot miss a terminal state.
+        std::unique_lock lk(_ctx->pause_ack_mutex());
+        _ctx->pause_ack_cv().wait(lk, [&] {
+            return _ctx->is_paused_acked() ||
+                   _state.load(std::memory_order_acquire) != AlgorithmState::Paused;
+        });
+        if (_state.load(std::memory_order_acquire) != AlgorithmState::Paused)
+            return {}; // run completed/cancelled while waiting
+    }
     return ser->serialize(*_algorithm, _algorithm_input);
 }
 

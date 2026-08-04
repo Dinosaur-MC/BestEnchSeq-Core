@@ -36,6 +36,7 @@ inline void info(std::string)  {}
 inline void warn(std::string)  {}
 inline void error(std::string) {}
 inline void debug(std::string) {}
+inline void flush()            {}
 
 // ─── printf-style stubs ─────────────────────────────────────────────────
 template <typename... Args>
@@ -110,6 +111,13 @@ template <typename... Args>
 inline void printf(LogLevel level, const char* fmt, Args&&... args) {
     Logger::instance().printf(level, fmt, std::forward<Args>(args)...);
 }
+
+/// Block until the async Logger's queue is drained.  The CLI calls this before
+/// exit — the worker thread's queued WARN/ERROR console lines can otherwise be
+/// lost when the process exits right after the last log() (e.g. the plugin
+/// audit's "[Audit] REFUSED" on --list-algorithms; the DLL's static Logger
+/// destructor does not reliably drain before the runtime closes stderr).
+inline void flush() { Logger::instance().flush(); }
 
 } // namespace log
 } // namespace besq

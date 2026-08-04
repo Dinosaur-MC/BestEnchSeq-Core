@@ -13,10 +13,26 @@ void ExecutionContext::wait_if_paused() {
     if (!_paused.load(std::memory_order_acquire))
         return;
     std::unique_lock lock(_pause_mtx);
+    // About to block — announce quiescence under the ack mutex so the
+    // executor's serialize_state() cannot miss the wakeup (canonical
+    // flag-then-notify-under-lock).  It waits on this ack before snapshotting,
+    // guaranteeing the checkpoint is taken at a stable point, not mid-mutation.
+    {
+        std::lock_guard ack_lk(_pause_ack_mtx);
+        _paused_ack.store(true, std::memory_order_release);
+        _pause_ack_cv.notify_all();
+    }
     _pause_cv.wait(lock, [this] {
         return !_paused.load(std::memory_order_acquire) ||
                 _cancelled.load(std::memory_order_acquire);
     });
+    // Woke via resume()/cancel() — running again.  Clear the ack so a FUTURE
+    // pause's quiescence is detected fresh, not a stale "blocked" from this one.
+    {
+        std::lock_guard ack_lk(_pause_ack_mtx);
+        _paused_ack.store(false, std::memory_order_release);
+        _pause_ack_cv.notify_all();
+    }
 }
 
 void ExecutionContext::report_progress(uint8_t pct, ProgressStatus status) {

@@ -34,6 +34,11 @@ int main(int argc, char* argv[]) try {
         // flush was intermittently LOSING buffered output (observed on
         // --list-algorithms: the list printed only ~2/3 of runs).  Flushing
         // here, while the main thread is alive, makes CLI output reliable.
+        // The async Logger's queue is drained the same way: the process can
+        // exit before its worker thread writes queued WARN/ERROR lines (e.g.
+        // the plugin audit's "[Audit] REFUSED" — a critical signal that must
+        // not be lost), so wait for the queue to drain while alive.
+        besq::log::flush();
         std::cout.flush();
         std::cerr.flush();
         return rc;

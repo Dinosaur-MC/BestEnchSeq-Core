@@ -42,6 +42,18 @@ public:
     bool is_paused() const noexcept { return _paused.load(std::memory_order_acquire); }
     void wait_if_paused();
 
+    // ─── 暂停确认（checkpoint 一致性）────────────────────────────────
+    // pause() 把 executor 状态置为 Paused 是即时的，但算法只在
+    // wait_if_paused() 处真正停下——它可能仍处在一个不检查暂停的长阶段
+    // （如 greedy/dfs 上界搜索）里改动搜索状态。若此刻快照 checkpoint，
+    // 会得到一个不一致的状态（resume 后从空 open-set 起跑 → 0 方案）。
+    // wait_if_paused() 真正阻塞时置位该 ack，executor 的 serialize_state()
+    // 等待它，保证快照点是静止的。
+    bool is_paused_acked() const noexcept { return _paused_ack.load(std::memory_order_acquire); }
+    std::mutex &pause_ack_mutex() const noexcept { return _pause_ack_mtx; }
+    std::condition_variable &pause_ack_cv() const noexcept { return _pause_ack_cv; }
+    void notify_pause_ack() const noexcept { _pause_ack_cv.notify_all(); }
+
     // ═══════════════════════════════════════════════════════════════════
     // 🔴 热路径 — 每次展开调用, 内联, 零堆分配
     // ═══════════════════════════════════════════════════════════════════
@@ -107,6 +119,11 @@ private:
     std::atomic<bool> _paused{false};
     mutable std::mutex _pause_mtx;
     std::condition_variable _pause_cv;
+
+    // ── 暂停确认状态（见 is_paused_acked 注释）──────────────────────
+    std::atomic<bool> _paused_ack{false};
+    mutable std::mutex _pause_ack_mtx;
+    mutable std::condition_variable _pause_ack_cv;
 
     // ── 热路径计数器 ─────────────────────────────────────────────────
     std::atomic<int64_t> _nodes_visited{0};

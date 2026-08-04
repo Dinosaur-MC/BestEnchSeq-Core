@@ -226,7 +226,7 @@ private:
     }
 
     void _run(std::stop_token st) {
-        while (!st.stop_requested()) {
+        for (;;) {
             // ── Drain ALL available items before checking stop ──
             T item;
             while (_queue.try_pop(item)) {
@@ -238,6 +238,14 @@ private:
             // queue is empty when the worker terminates.  This also handles
             // the race where a producer posts between the drain loop above
             // and the stop request.
+            //
+            // IMPORTANT: this must be re-evaluated after every wake.  With an
+            // outer `while (!stop_requested())` guard, a worker blocked in
+            // _wake.wait below would — on stop() — wake, re-check the guard to
+            // FALSE and exit WITHOUT draining, silently dropping every item
+            // queued since the last drain (observed: the Logger lost WARN/ERROR
+            // lines on quick exit).  A bare `for (;;)` keeps the drain check
+            // in the loop body, so it runs after every wake.
             if (st.stop_requested()) {
                 T drain;
                 while (_queue.try_pop(drain))
