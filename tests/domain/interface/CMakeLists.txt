@@ -21,3 +21,4 @@ besq_test_interface(test_web_solve_sse test_web_solve_sse.cpp)
 # components/http framework tests
 besq_test_interface(test_http_common test_http_common.cpp)
 besq_test_interface(test_socket_nb test_socket_nb.cpp)
+besq_test_interface(test_http_parser test_http_parser.cpp)
