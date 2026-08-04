@@ -13,6 +13,7 @@
 #include <atomic>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 // ====================================================================
@@ -217,6 +218,10 @@ ProfileMeta BesqContext::profile_metadata(const std::string& name) const {
 
 bool BesqContext::rename_profile(const std::string& old_name, const std::string& new_name) {
     return _impl->profiles.rename(old_name, new_name);
+}
+
+bool BesqContext::set_dependencies(const std::string& profile, std::vector<std::string> deps) {
+    return _impl->profiles.set_dependencies(profile, std::move(deps));
 }
 
 // ====================================================================

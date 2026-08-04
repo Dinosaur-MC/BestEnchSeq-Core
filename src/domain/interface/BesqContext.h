@@ -114,6 +114,9 @@ public:
     ProfileMeta profile_metadata(const std::string& name) const;
     /// Rename a profile (active name follows). False if old unknown / new taken.
     bool rename_profile(const std::string& old_name, const std::string& new_name);
+    /// Set a profile's dependency list. False if the profile is unknown or the
+    /// change would create a dependency cycle (no mutation in either case).
+    bool set_dependencies(const std::string& profile, std::vector<std::string> deps);
 
     // ── Registry editing (active profile) ──
     bool add_enchantment(const EnchInfo& info);

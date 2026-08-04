@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace web {
@@ -121,12 +122,15 @@ Response ProfilesController::update(const HttpRequest&, const PathParams& pp, co
         for (const auto& d : deps.as_array())
             if (d.type() != JsonType::String)
                 throw WebHttpError(400, "INVALID_FIELD", "dependencies must be an array of strings");
-        // KNOWN GAP: BesqContext does NOT expose set_dependencies /
-        // update_profile_metadata (Task 13 added rename_profile but not the
-        // metadata mutator). ProfileManager::set_dependencies exists behind the
-        // facade but is unreachable from here, and ctx.profile() is const.
-        // The array is validated above and nothing is applied — reported to the
-        // coordinator so the ctx method can be added and wired in.
+        std::vector<std::string> dep_list;
+        dep_list.reserve(deps.as_array().size());
+        for (const auto& d : deps.as_array())
+            dep_list.push_back(d.as<std::string>());
+        // Profile existence is already guarded by require_profile above, so a
+        // false return here can only mean the change would create a dependency
+        // cycle (ProfileManager::set_dependencies rejects without mutating).
+        if (!_ctx.set_dependencies(key, std::move(dep_list)))
+            throw WebHttpError(409, "DEPENDENCY_CYCLE", "dependency change rejected (cycle): " + key);
     }
 
     return Response::json(200, "OK", ok_json().to_string());

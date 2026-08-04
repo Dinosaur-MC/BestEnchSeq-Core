@@ -167,6 +167,36 @@ void test_profiles(TestApp& app) {
     expect(rn.status == 200, "rename 200");
     auto rr = app.call(Method::Get, "/api/profiles/" + key + "-rd");
     expect(rr.status == 200, "renamed profile readable");
+
+    // ── 6. dependency update (on a scratch fork, so the root survives) ──
+    auto fd = app.call(Method::Post, "/api/profiles",
+                       R"({"source":")" + key + R"(","dest":")" + key + R"(-deps"})");
+    expect(fd.status == 201, "fork for dependencies");
+
+    // Empty dependency list → 200, then readback shows an empty array.
+    auto pd = app.call(Method::Patch, "/api/profiles/" + key + "-deps",
+                       R"({"dependencies":[]})");
+    expect(pd.status == 200, "patch dependencies [] 200");
+    auto gd = app.call(Method::Get, "/api/profiles/" + key + "-deps");
+    expect(gd.status == 200, "deps profile readable");
+    auto gd_json = Json::parse(gd.body);
+    expect(gd_json["dependencies"].type() == JsonType::Array &&
+               gd_json["dependencies"].as_array().empty(),
+           "dependencies empty after [] patch");
+
+    // Set an actual dependency on an existing profile; readback contains it.
+    auto ps = app.call(Method::Patch, "/api/profiles/" + key + "-deps",
+                       R"({"dependencies":[")" + key + R"("]})");
+    expect(ps.status == 200, "patch dependencies [" + key + "] 200");
+    auto gs = app.call(Method::Get, "/api/profiles/" + key + "-deps");
+    expect(gs.status == 200, "deps profile readable after set");
+    auto gs_json = Json::parse(gs.body);
+    expect(gs_json["dependencies"].type() == JsonType::Array, "dependencies array present");
+    bool has_key = false;
+    for (const auto& d : gs_json["dependencies"].as_array())
+        if (d.as<std::string>() == key)
+            has_key = true;
+    expect(has_key, "dependencies contains " + key);
 }
 } // namespace
 
