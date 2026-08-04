@@ -19,13 +19,50 @@ void Connection::close() {
 void Connection::drain_out() {
     while (!_out.empty()) {
         int n = sock_send_nb(_fd, _out);
-        if (n <= 0) break;                       // would-block 或错误，等下次推进
+        if (n == -1) { close(); return; }    // 硬错误（含对端断开）→ 关闭连接
+        if (n == 0) break;                   // would-block，等下次推进/WRITABLE
         _out.erase(0, static_cast<size_t>(n));
     }
 }
 
+void Connection::flush_stream() {
+    if (!_alive || !_stream) return;
+    auto now = std::chrono::steady_clock::now();
+    // 心跳：流缓冲空闲超过 heartbeat_interval 且无新帧 → 注入 `: ping` 注释帧，
+    // 供客户端/中间层保活，并让下一次写失败暴露对端断开。
+    if (_stream->empty() && now - _last_write >= heartbeat_interval) {
+        _stream->ping();
+    }
+    if (!_stream->empty()) {
+        _out += _stream->drain();
+        _last_write = std::chrono::steady_clock::now();
+    }
+    // 即使没有新帧也重试积压输出（被 would-block 打断的写靠后续推进补完）。
+    drain_out();
+}
+
+bool Connection::set_stream(std::shared_ptr<SseStream> sse) {
+    if (!_alive || _stream || !sse) return false;
+    _stream = std::move(sse);
+    _last_write = std::chrono::steady_clock::now();
+    return true;
+}
+
+void Connection::push_sse_frame() {
+    if (!_alive) return;
+    if (_stream) flush_stream();
+}
+
 bool Connection::process(const Router& router) {
     if (!_alive) return false;
+
+    // SSE 流模式：不再读/解析请求，只补完积压输出（写失败 → close 在 drain_out 内）。
+    if (_stream) {
+        bool had_out = !_out.empty();
+        flush_stream();
+        return had_out || !_out.empty();
+    }
+
     bool progress = false;
 
     // 解析→按需增量读→再解析 循环。HttpParser 是增量无状态解析器：每次先试
@@ -39,7 +76,16 @@ bool Connection::process(const Router& router) {
         if (pr == ParseResult::Complete) {
             _in.erase(0, consumed);
             auto resp = router(req);
-            if (resp.is_stream) { /* SSE handled by SseStream path in a later task; not expected here yet */ }
+            if (resp.is_stream) {
+                // 升级为 SSE 流模式：写响应头，连接转入只写路径（push_sse_frame）。
+                if (!_stream) {
+                    _stream = std::make_shared<SseStream>(_id);
+                    _last_write = std::chrono::steady_clock::now();
+                }
+                _out += resp.to_bytes();
+                progress = true;
+                break;                      // 流式连接脱离请求解析，不再读后续请求
+            }
             _out += resp.to_bytes();
             progress = true;
             continue;                       // pipeline: may be another complete request buffered
