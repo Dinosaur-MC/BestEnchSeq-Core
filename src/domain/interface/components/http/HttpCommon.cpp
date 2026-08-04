@@ -115,6 +115,23 @@ std::string HttpResponse::to_bytes() const {
     std::string out;
     out += "HTTP/1.1 " + std::to_string(status) + " " + reason + "\r\n";
     out += "Content-Type: " + content_type + "\r\n";
+    if (is_stream) {
+        // SSE: 无边界的打开流——不宣告 Content-Length / Transfer-Encoding，
+        // 连接保持打开直到客户端断开或服务端关闭（EventSource 标准行为）。
+        // Connection::flush_stream 在此头后直接写原始 SSE 帧（非 chunk 编码），
+        // 浏览器 EventSource 按 open-ended text/event-stream 正确解析，不会
+        // 因等待 chunk 帧而卡住（旧的 chunked 声明 + 裸帧组合会让 GUI 静默退化为轮询）。
+        for (const auto& [k, v] : headers) {
+            out += k;
+            out += ": ";
+            out += v;
+            out += "\r\n";
+        }
+        out += "Connection: keep-alive\r\n";
+        out += "Cache-Control: no-cache\r\n";
+        out += "\r\n";
+        return out;
+    }
     // 已有显式 Content-Length 头时不再自动追加（如 HEAD 的 r.body.clear() 场景），
     // 避免线上出现两个互相矛盾的 Content-Length（RFC 9112 视为请求走私）。
     bool has_content_length = false;
@@ -128,8 +145,7 @@ std::string HttpResponse::to_bytes() const {
         out += v;
         out += "\r\n";
     }
-    if (is_stream) out += "Transfer-Encoding: chunked\r\n";
-    else out += "Connection: keep-alive\r\n";   // HTTP/1.1 默认 keep-alive；是否关闭由 Connection 状态机决定
+    out += "Connection: keep-alive\r\n";   // HTTP/1.1 默认 keep-alive；是否关闭由 Connection 状态机决定
     out += "\r\n";
     out += body;
     return out;
