@@ -3,6 +3,7 @@
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/ProfileManager.h"
+#include "common/i18n/Language.h"
 #include "domain/orchestration/pipelines/ExportPipeline.h"
 #include "domain/orchestration/pipelines/ManagePipeline.h"
 #include "domain/orchestration/pipelines/SolvePipeline.h"
@@ -138,6 +139,39 @@ bool BesqContext::publish_profile(const std::string& name,
     req.publish_tag = tag;
     req.output_path = out_path;
     return ManagePipeline::run(_impl->profiles, _impl->loader, req).success;
+}
+
+// ====================================================================
+// Profile data access (by name, no activation side effect)
+// ====================================================================
+
+const Profile& BesqContext::profile(const std::string& name) const {
+    if (auto* p = _impl->profiles.find(name))
+        return *p;
+    throw std::runtime_error(tr_fmt("cli.err.profile_not_found", name));
+}
+
+// ====================================================================
+// Registry editing (named profile)
+// ====================================================================
+
+bool BesqContext::add_enchantment_to(const std::string& profile, const EnchInfo& info) {
+    return _impl->profiles.add_enchantment(profile, info);
+}
+bool BesqContext::remove_enchantment_from(const std::string& profile, const NSID& id) {
+    return _impl->profiles.remove_enchantment(profile, id);
+}
+bool BesqContext::add_equipment_to(const std::string& profile, const Equipment& eq) {
+    return _impl->profiles.add_equipment(profile, eq);
+}
+bool BesqContext::remove_equipment_from(const std::string& profile, const NSID& id) {
+    return _impl->profiles.remove_equipment(profile, id);
+}
+bool BesqContext::add_tag_to(const std::string& profile, const EquipmentTag& tag) {
+    return _impl->profiles.add_tag(profile, tag);
+}
+bool BesqContext::remove_tag_from(const std::string& profile, const NSID& id) {
+    return _impl->profiles.remove_tag(profile, id);
 }
 
 // ====================================================================

@@ -55,6 +55,22 @@ public:
     bool
     publish_profile(const std::string& name, const std::string& version, const std::string& tag, const std::string& out_path);
 
+    // ── Profile data access (by name, no activation side effect) ──
+    /// Effective view of a named profile. Throws std::runtime_error when the
+    /// profile is unknown. Does NOT change the active profile.
+    const Profile& profile(const std::string& name) const;
+
+    // ── Registry editing (named profile) ──
+    /// Stable by-name CRUD forwarded to ProfileManager's validated `_mutate`
+    /// path (real-time validation + snapshot/undo). Operates on ANY profile,
+    /// not just the active one.
+    bool add_enchantment_to(const std::string& profile, const EnchInfo& info);
+    bool remove_enchantment_from(const std::string& profile, const NSID& id);
+    bool add_equipment_to(const std::string& profile, const Equipment& eq);
+    bool remove_equipment_from(const std::string& profile, const NSID& id);
+    bool add_tag_to(const std::string& profile, const EquipmentTag& tag);
+    bool remove_tag_from(const std::string& profile, const NSID& id);
+
     // ── Registry editing (active profile) ──
     bool add_enchantment(const EnchInfo& info);
     bool remove_enchantment(const std::string& name_id);
