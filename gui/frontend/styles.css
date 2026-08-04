@@ -1,0 +1,59 @@
+/* MC-style dark theme: dirt/stone base + grass-green + diamond-blue accents. */
+:root {
+  --bg: #1d1b18;
+  --panel: #2b2823;
+  --panel-2: #3a362f;
+  --border: #524c41;
+  --text: #e8e2d5;
+  --muted: #9b937f;
+  --accent: #5cb85c;      /* grass green */
+  --accent-2: #2e9ad0;    /* diamond blue */
+  --danger: #d9534f;
+  --radius: 6px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+.app { display: flex; height: 100vh; }
+.sidebar {
+  width: 200px; background: var(--panel); border-right: 1px solid var(--border);
+  padding: 12px 8px; display: flex; flex-direction: column; gap: 4px;
+}
+.brand { font-weight: 700; font-size: 16px; padding: 8px 10px; color: var(--accent-2); }
+.nav-item {
+  display: block; padding: 8px 10px; color: var(--text);
+  text-decoration: none; border-radius: var(--radius);
+}
+.nav-item:hover { background: var(--panel-2); }
+.nav-item.active { background: var(--panel-2); border-left: 3px solid var(--accent); }
+.content { flex: 1; padding: 20px; overflow-y: auto; }
+.banner {
+  padding: 10px 14px; border-radius: var(--radius); margin-bottom: 12px;
+  background: var(--danger); color: #fff;
+}
+.banner.hidden { display: none; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; }
+button {
+  background: var(--accent); color: #fff; border: none; padding: 8px 14px;
+  border-radius: var(--radius); cursor: pointer; font-size: 14px;
+}
+button:hover { filter: brightness(1.1); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.secondary { background: var(--panel-2); color: var(--text); }
+input, select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 6px 8px; font-size: 14px;
+}
+label { display: block; margin: 8px 0 4px; color: var(--muted); }
+.progress { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin: 10px 0; }
+.progress > div { height: 100%; background: var(--accent-2); transition: width .2s; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; }
+.mono { font-family: Consolas, monospace; font-size: 13px; }
+.step { border-left: 2px solid var(--accent-2); padding: 4px 10px; margin: 6px 0; }
