@@ -64,4 +64,3 @@ th { color: var(--muted); font-weight: 600; }
 h2 { margin-top: 0; color: var(--accent-2); }
 .nav-item.active { color: var(--accent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
-.empty { color: var(--muted); font-style: italic; padding: 8px; }

@@ -18,6 +18,7 @@ export async function render(el) {
     clearError();
     try {
       const r = await http.post('/api/algorithm/load', { dir });
+      if (el.dataset.view !== myView) return; // user navigated away mid-POST
       // Success is neutral status, not an error — write it inline, not the red banner.
       document.getElementById('alg-msg').textContent = `${t('alg.loaded')}: ${r.loaded}`;
     } catch (e) { showError(e.message); }

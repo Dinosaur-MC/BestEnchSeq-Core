@@ -32,8 +32,8 @@ export async function render(el) {
       if (el.dataset.view !== myView) return; // save finished after navigation
       setLang(body.lang === 'zh_CN' ? 'zh-CN' : 'en-US');
       applyI18n();
-      document.getElementById('set-msg').textContent = t('set.saved');
       // Re-render the current view so its t() strings pick up the new language.
+      // (No "Saved" note: the synchronous re-render clears #view, so it would never paint.)
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     } catch (e) { showError(e.message); }
   });
