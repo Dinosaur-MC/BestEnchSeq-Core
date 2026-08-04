@@ -1,6 +1,8 @@
 #include "WebSolveService.h"
+#include "SseHub.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/orchestration/types/SolveRequest.h"
+#include "common/io/json.h"
 #include "common/i18n/Language.h"
 #include <chrono>
 #include <utility>
@@ -84,10 +86,15 @@ SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
     return req;
 }
 
+/// 把 JSON payload 包成一条 SSE 帧（event + data，双换行结束）。
+std::string sse_frame(const std::string& type, const Json& payload) {
+    return "event: " + type + "\ndata: " + payload.to_string() + "\n\n";
+}
+
 } // namespace
 
-WebSolveService::WebSolveService(BesqContext& ctx, std::mutex& ctx_gate)
-    : _ctx(ctx), _ctx_gate(ctx_gate) {}
+WebSolveService::WebSolveService(BesqContext& ctx, std::mutex& ctx_gate, web::SseHub* hub)
+    : _ctx(ctx), _ctx_gate(ctx_gate), _hub(hub) {}
 
 WebSolveService::~WebSolveService() {
     // Deterministic shutdown: every worker touches *this and _ctx only until
@@ -193,6 +200,18 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                     std::lock_guard<std::mutex> lock(task->mutex);
                     if (task->state == TaskState::Cancelled) return;
                 }
+                if (_hub) {
+                    // Progress exit: without a core observer hook the worker
+                    // can only sample the live atomic handle once before the
+                    // blocking solve() runs. Periodic progress will flow once
+                    // an observer is wired (later task); the frame shape is
+                    // what Task 14 establishes.
+                    auto prog = _ctx.solve_progress();
+                    Json obj = Json::object();
+                    obj["type"] = Json("progress");
+                    obj["progress"] = Json(prog.progress);
+                    _hub->publish(task->id, sse_frame("progress", obj));
+                }
                 // Single active slot is enforced above; solve() runs to
                 // completion (or cancel()). The result carries the executor's
                 // real output.
@@ -207,12 +226,34 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 std::lock_guard<std::mutex> lock(task->mutex);
                 if (task->state == TaskState::Cancelled) return;
                 task->state = TaskState::Completed;
-                task->result = std::move(result_json);
+                task->result = result_json;  // copy (not move): result_json is still needed for the SSE frame
+            }
+            if (_hub) {
+                Json obj = Json::object();
+                obj["type"] = Json("completed");
+                try {
+                    obj["result"] = Json::parse(result_json);
+                } catch (const JsonException&) {
+                    obj["result"] = Json(result_json);  // keep a valid envelope even if result isn't strict JSON
+                }
+                _hub->publish(task->id, sse_frame("completed", obj));
+                _hub->unsubscribe_all(task->id);
             }
         } catch (const std::exception& e) {
-            std::lock_guard<std::mutex> lock(task->mutex);
-            task->state = TaskState::Failed;
-            task->error = e.what();
+            std::string error_msg;
+            {
+                std::lock_guard<std::mutex> lock(task->mutex);
+                task->state = TaskState::Failed;
+                task->error = e.what();
+                error_msg = task->error;
+            }
+            if (_hub) {
+                Json obj = Json::object();
+                obj["type"] = Json("failed");
+                obj["error"] = Json(error_msg);
+                _hub->publish(task->id, sse_frame("failed", obj));
+                _hub->unsubscribe_all(task->id);
+            }
         }
     });
     return id;

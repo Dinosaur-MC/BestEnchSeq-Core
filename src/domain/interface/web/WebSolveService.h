@@ -11,6 +11,10 @@
 
 class BesqContext;
 
+namespace web {
+class SseHub;
+}
+
 namespace webhttp {
 
 enum class TaskState { Running, Completed, Failed, Cancelled };
@@ -39,7 +43,11 @@ struct TaskStatus {
 /// access would be a data race.
 class WebSolveService {
 public:
-    explicit WebSolveService(BesqContext& ctx, std::mutex& ctx_gate);
+    /// `hub` is an optional SSE frame sink (Task 14: SseHub). Null keeps the
+    /// pre-SSE behavior (polling snapshot via status()) — the 2-arg form is
+    /// still supported for backward compatibility.
+    explicit WebSolveService(BesqContext& ctx, std::mutex& ctx_gate,
+                             web::SseHub* hub = nullptr);
     ~WebSolveService();
 
     WebSolveService(const WebSolveService&) = delete;
@@ -79,6 +87,7 @@ private:
 
     BesqContext& _ctx;
     std::mutex& _ctx_gate;       // web-layer gate, shared with WebModule
+    web::SseHub* _hub;           // optional SSE frame sink; null = polling only
     mutable std::mutex _tasks_mutex;  // mutable: has_active() is const
     std::unordered_map<std::string, std::shared_ptr<Task>> _tasks;
     int64_t _next_id = 0;
