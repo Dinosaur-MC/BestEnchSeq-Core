@@ -86,6 +86,7 @@ option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
 option(BESQ_DEEP_DIAGNOSTICS "Enable per-operation diagnostic counters (profiling builds; default off = zero hot-path cost)" OFF)
 option(BESQ_BUILD_CLI "Build the besq CLI executable" ON)
 option(BESQ_BUILD_SANDBOX "Build the besq-worker sandbox executable (algorithm sandboxing for third-party plugins)" OFF)
+option(BESQ_BUILD_GUI "Build the besq-gui WebView2 GUI executable" OFF)
 option(BUILD_TESTING "Build test targets" ON)
 option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
 set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution (presets override this)")
@@ -265,6 +266,30 @@ if(BESQ_BUILD_SANDBOX)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# besq-gui (guarded by BESQ_BUILD_GUI) — WebView2 GUI host (Windows-first)
+# ═══════════════════════════════════════════════════════════════════════════════
+if(BESQ_BUILD_GUI)
+    add_executable(besq-gui
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/main.cpp
+    )
+    if(UNIX)
+        target_link_libraries(besq-gui PRIVATE
+            -Wl,--start-group besq-core besq-domain-business besq-domain-orchestration besq-domain-interface besq-algo-core -Wl,--end-group
+        )
+    else()
+        target_link_libraries(besq-gui PRIVATE besq-core besq-domain-interface)
+    endif()
+    target_include_directories(besq-gui PRIVATE
+        ${BESQ_GENERATED_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_compile_definitions(besq-gui PRIVATE
+        $<$<BOOL:${BESQ_DISABLE_DIAGNOSTICS}>:BESQ_DISABLE_DIAGNOSTICS>
+        $<$<BOOL:${BESQ_DEEP_DIAGNOSTICS}>:BESQ_DEEP_DIAGNOSTICS>
+    )
+endif()
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Install rules
 # ═══════════════════════════════════════════════════════════════════════════════
 include(GNUInstallDirs)
@@ -279,6 +304,12 @@ endif()
 
 if(BESQ_BUILD_SANDBOX)
     install(TARGETS besq-worker
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+if(BESQ_BUILD_GUI)
+    install(TARGETS besq-gui
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
 endif()
