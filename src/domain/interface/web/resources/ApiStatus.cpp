@@ -1,5 +1,6 @@
 #include "ApiStatus.h"
 #include "domain/interface/BesqContext.h"
+#include "domain/algorithm/types/AlgorithmState.h"
 #include "common/io/json.h"
 #include <chrono>
 
@@ -17,7 +18,8 @@ std::string ApiStatus::handle(const BesqContext& ctx) {
     o["active_profile"] = Json(ctx.active_profile());
     o["profile_count"] = Json(static_cast<int64_t>(ctx.list_profiles().size()));
     o["algorithm_count"] = Json(static_cast<int64_t>(ctx.list_algorithms().size()));
-    o["has_active_solve"] = Json(false); // ← replaced by ctx.solve_progress() in M2.1
+    auto prog = ctx.solve_progress();
+    o["has_active_solve"] = Json(prog.state != algorithm::AlgorithmState::Idle);
     o["uptime_ms"] = Json(uptime_ms());
     return o.to_string();
 }

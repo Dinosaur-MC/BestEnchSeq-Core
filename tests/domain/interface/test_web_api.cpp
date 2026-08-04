@@ -1,6 +1,7 @@
 // =============================================================================
 // Web API tests: BesqContext facade increments (+ per-resource handlers in M1.3+).
 // =============================================================================
+#include "domain/algorithm/types/AlgorithmState.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/web/resources/ApiAlgorithm.h"
 #include "domain/interface/web/resources/ApiHealth.h"
@@ -16,10 +17,12 @@
 #include "common/io/json.h"
 #include "BuildConfig.h"
 #include "framework/test_utils.h"
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <thread>
 
 // ── Facade increment: by-name profile read/write ──────────────────────────
 
@@ -376,6 +379,67 @@ void test_api_logs() {
     TEST_PASS("ApiLogs");
 }
 
+// ── BesqContext::solve_progress (M2.1): live solve state/progress ────────
+
+void test_solve_progress_idle() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    auto prog = ctx.solve_progress();
+    expect(prog.state == algorithm::AlgorithmState::Idle, "idle state when nothing runs");
+    expect(prog.progress == 0.0, "zero progress when idle");
+    TEST_PASS("solve_progress idle");
+}
+
+void test_solve_progress_during_run() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    // Seed a large target so bb_dp stays in flight long enough to observe.
+    // (bb_dp reports per-layer progress — dp_merge only reports 0/100, so
+    // progress > 0.0 is unobservable with dp_merge.)
+    for (int i = 0; i < 14; ++i) {
+        EnchInfo info;
+        info.id = NSID("test:ench_" + std::to_string(i));
+        info.name = "Test Ench " + std::to_string(i);
+        info.max_level = 5;
+        info.multiplier = 1;
+        info.supported_items.insert(NSID("#minecraft:swords"));
+        expect(ctx.add_enchantment(info), "add test ench");
+    }
+    EnchSet target_enchs;
+    for (int i = 0; i < 14; ++i)
+        target_enchs.emplace(NSID("test:ench_" + std::to_string(i)), 5);
+    Item target_item;
+    target_item.id = NSID("minecraft:diamond_sword");
+    target_item.enchantments = target_enchs;
+    target_item.durability = 1561;
+
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::direct;
+    request.payload = DirectPayload{};
+    request.algorithm = "bb_dp";
+    request.forge_config.platform = MCE::Java;
+    request.search_config.max_search_time = std::chrono::milliseconds(1500);
+
+    std::atomic<bool> done{false};
+    std::thread solver([&] {
+        ctx.solve(request);
+        done = true;
+    });
+
+    bool saw_running = false;
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (!done.load() && std::chrono::steady_clock::now() < deadline) {
+        auto p = ctx.solve_progress();
+        if (p.state == algorithm::AlgorithmState::Running && p.progress > 0.0)
+            saw_running = true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    solver.join();
+    expect(saw_running, "observed a Running state with progress while solving");
+    TEST_PASS("solve_progress during run");
+}
+
 int main() {
     try {
         test_facade_by_name_registry();
@@ -387,6 +451,8 @@ int main() {
         test_api_algorithm();
         test_log_ring_buffer();
         test_api_logs();
+        test_solve_progress_idle();
+        test_solve_progress_during_run();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

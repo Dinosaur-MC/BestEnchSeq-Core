@@ -312,6 +312,13 @@ SolveResult BesqContext::solve(const SolveRequest& request) {
     return result;
 }
 
+BesqContext::SolveProgress BesqContext::solve_progress() const noexcept {
+    auto exec = _impl->active_executor.load();
+    if (!exec)
+        return {};
+    return SolveProgress{exec->state(), exec->progress()};
+}
+
 void BesqContext::abort_solve() {
     // Copy the handle under synchronization: the shared_ptr copy keeps the
     // executor alive for the duration of cancel(), so a concurrent solve()

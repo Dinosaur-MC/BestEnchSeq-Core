@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "domain/orchestration/orchestration.h"
+#include "domain/algorithm/types/AlgorithmState.h"
 
 namespace algorithm {
 class IExecutor;
@@ -93,6 +94,15 @@ public:
     const EnchantmentRegistry& enchantments() const noexcept;
     const EquipmentRegistry& equipment() const noexcept;
     const TagRegistry& categories() const noexcept;
+
+    /// Live progress of the in-flight solve, read via the atomic executor
+    /// handle. Idle/0.0 when no solve is running. Designed for the Web API's
+    /// polling loop; thread-safe (reads the atomic shared_ptr handle).
+    struct SolveProgress {
+        algorithm::AlgorithmState state = algorithm::AlgorithmState::Idle;
+        double progress = 0.0;
+    };
+    SolveProgress solve_progress() const noexcept;
 
     // ── Solve ──
     SolveResult solve(const SolveRequest& request);
