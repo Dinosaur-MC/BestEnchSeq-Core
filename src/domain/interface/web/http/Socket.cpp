@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -93,6 +94,25 @@ int TcpListener::accept() {
     if (_fd < 0) return -1;
     sock_t c = ::accept(native(_fd), nullptr, nullptr);
     return c == kInvalid ? -1 : to_int(c);
+}
+
+int TcpListener::wait_ready(int timeout_ms) const {
+    if (_fd < 0) return -1;
+    fd_set rfds;
+    FD_ZERO(&rfds);
+#ifdef _WIN32
+    FD_SET(static_cast<SOCKET>(_fd), &rfds);
+#else
+    FD_SET(_fd, &rfds);
+#endif
+    timeval tv{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
+#ifdef _WIN32
+    int n = ::select(0, &rfds, nullptr, nullptr, &tv);  // nfds ignored on Winsock
+#else
+    int n = ::select(_fd + 1, &rfds, nullptr, nullptr, &tv);
+#endif
+    if (n < 0) return -1;
+    return n > 0 ? 1 : 0;
 }
 
 void TcpListener::close() noexcept {

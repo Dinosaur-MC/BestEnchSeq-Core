@@ -4,6 +4,7 @@
 // =============================================================================
 #include "domain/interface/web/http/HttpCommon.h"
 #include "domain/interface/web/http/HttpParser.h"
+#include "domain/interface/web/http/HttpServer.h"
 #include "domain/interface/web/http/Socket.h"
 #include "framework/test_utils.h"
 #include <string>
@@ -183,6 +184,83 @@ void test_socket_refused() {
     TEST_PASS("socket connect refused");
 }
 
+void test_server_round_trip() {
+    webhttp::HttpServer server;
+    server.set_handler("GET", "/health",
+        [](const webhttp::HttpRequest&) {
+            return webhttp::HttpResponse::json(200, "OK", "{\"status\":\"ok\"}");
+        });
+    server.set_handler("POST", "/api/echo",
+        [](const webhttp::HttpRequest& r) {
+            return webhttp::HttpResponse::json(200, "OK",
+                "{\"len\":" + std::to_string(r.body.size()) + "}");
+        });
+    server.set_fallback([](const webhttp::HttpRequest&) {
+        return webhttp::HttpResponse::json(404, "Not Found", "{\"ok\":false,\"error\":\"not found\"}");
+    });
+    expect(server.start("127.0.0.1", 0), "server starts on ephemeral port");
+    expect(server.port() > 0, "server reports bound port");
+
+    std::thread server_thread([&] { server.run(); });
+
+    // GET
+    int c = webhttp::sock_connect("127.0.0.1", server.port());
+    expect(c >= 0, "client connects");
+    expect(webhttp::sock_send(c,
+        "GET /health HTTP/1.1\r\nHost: x\r\n\r\n", 3000), "sends GET");
+    std::string body;
+    webhttp::sock_recv(c, body, 8192, 3000);
+    webhttp::sock_close(c);
+    expect(body.find("200 OK") != std::string::npos, "response has 200 OK");
+    expect(body.find("{\"status\":\"ok\"}") != std::string::npos, "response body echoed");
+
+    // POST with body
+    int c2 = webhttp::sock_connect("127.0.0.1", server.port());
+    expect(c2 >= 0, "second client connects");
+    std::string post = "POST /api/echo HTTP/1.1\r\nHost: x\r\n"
+                       "Content-Length: 5\r\n\r\nhello";
+    expect(webhttp::sock_send(c2, post, 3000), "sends POST");
+    std::string body2;
+    webhttp::sock_recv(c2, body2, 8192, 3000);
+    webhttp::sock_close(c2);
+    expect(body2.find("{\"len\":5}") != std::string::npos, "POST body length echoed");
+
+    // Unknown route → fallback 404
+    int c3 = webhttp::sock_connect("127.0.0.1", server.port());
+    expect(c3 >= 0, "third client connects");
+    expect(webhttp::sock_send(c3, "GET /nope HTTP/1.1\r\nHost: x\r\n\r\n", 3000), "sends GET /nope");
+    std::string body3;
+    webhttp::sock_recv(c3, body3, 8192, 3000);
+    webhttp::sock_close(c3);
+    expect(body3.find("404 Not Found") != std::string::npos, "unknown route is 404");
+
+    server.stop();
+    server_thread.join();
+    TEST_PASS("server round-trip");
+}
+
+void test_server_bad_request() {
+    webhttp::HttpServer server;
+    server.set_fallback([](const webhttp::HttpRequest&) {
+        return webhttp::HttpResponse::json(404, "Not Found", "{}");
+    });
+    expect(server.start("127.0.0.1", 0), "server starts");
+    std::thread server_thread([&] { server.run(); });
+
+    int c = webhttp::sock_connect("127.0.0.1", server.port());
+    expect(c >= 0, "client connects");
+    expect(webhttp::sock_send(c, "GARBAGE\r\n\r\n", 3000), "sends malformed request");
+    std::string body;
+    int n = webhttp::sock_recv(c, body, 8192, 3000);
+    webhttp::sock_close(c);
+    expect(n > 0, "server replies to bad request");
+    expect(body.find("400 Bad Request") != std::string::npos, "bad request gets 400");
+
+    server.stop();
+    server_thread.join();
+    TEST_PASS("server bad request");
+}
+
 int main() {
     try {
         test_parse_get();
@@ -198,6 +276,8 @@ int main() {
         test_response_serialize();
         test_socket_echo();
         test_socket_refused();
+        test_server_round_trip();
+        test_server_bad_request();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;

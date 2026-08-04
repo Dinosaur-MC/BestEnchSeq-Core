@@ -32,6 +32,11 @@ public:
     bool listen(const std::string& host, uint16_t port);
     uint16_t bound_port() const noexcept { return _port; }
 
+    /// Non-blocking readiness probe for the accept loop: 1 = a connection is
+    /// pending, 0 = timeout, -1 = error. Lets HttpServer::run() honor stop()
+    /// within timeout_ms instead of blocking forever in accept().
+    int wait_ready(int timeout_ms) const;
+
     /// Block until a client connects; returns the socket fd or -1 on error.
     int accept();
     void close() noexcept;
