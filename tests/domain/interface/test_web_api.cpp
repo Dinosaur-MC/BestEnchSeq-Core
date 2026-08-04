@@ -149,6 +149,104 @@ void test_api_settings() {
 
 // ── ApiProfiles (M1.4): profile list/actions + per-name CRUD ──────────────
 
+// Run `fn` and return the WebHttpError status it threw, or -1 when it threw
+// nothing / a different exception type.
+template <typename F> int thrown_status(F&& fn) {
+    try {
+        fn();
+    } catch (const webhttp::WebHttpError& e) {
+        return e.status;
+    } catch (...) {
+        return -1;
+    }
+    return -1;
+}
+
+void test_api_profiles_error_branches() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // Unknown action → 400.
+    expect(thrown_status([&] {
+        ApiProfiles::handle_action(ctx, Json::parse(R"({"action":"nope"})"));
+    }) == 400, "unknown action throws 400");
+
+    // Missing action → 400 (JsonException translated).
+    expect(thrown_status([&] {
+        ApiProfiles::handle_action(ctx, Json::parse(R"({})"));
+    }) == 400, "missing action throws 400");
+
+    // Unknown registry kind → 404.
+    expect(thrown_status([&] {
+        ApiProfiles::handle_read(ctx, "builtin:vanilla", "bogus");
+    }) == 404, "unknown kind throws 404");
+
+    // Activate unknown profile → 404 (domain exception mapped, not a 500).
+    expect(thrown_status([&] {
+        ApiProfiles::handle_action(ctx, Json::parse(
+            R"({"action":"activate","name":"does:not_exist"})"));
+    }) == 404, "activate unknown profile throws 404");
+
+    // Fork with unknown source → 404.
+    expect(thrown_status([&] {
+        ApiProfiles::handle_action(ctx, Json::parse(
+            R"({"action":"fork","source":"does:not_exist","dest":"mod:x"})"));
+    }) == 404, "fork unknown source throws 404");
+
+    // Fork to an existing destination → 409.
+    expect(thrown_status([&] {
+        ApiProfiles::handle_action(ctx, Json::parse(
+            R"({"action":"fork","source":"builtin:vanilla","dest":"builtin:vanilla"})"));
+    }) == 409, "fork to existing dest throws 409");
+
+    // Add to an unknown profile → 404.
+    expect(thrown_status([&] {
+        ApiProfiles::handle_add(ctx, "does:not_exist", "ench", Json::parse(
+            R"({"id":"mod:web_ench","name":"Web","max_level":3,"multiplier":1})"));
+    }) == 404, "add to unknown profile throws 404");
+
+    // Malformed entry body → 400 (ValidationError translated), no partial apply.
+    expect(thrown_status([&] {
+        ApiProfiles::handle_add(ctx, "builtin:vanilla", "ench", Json::parse(
+            R"({"id":123,"name":"X"})"));
+    }) == 400, "malformed add body throws 400");
+
+    // Fork a working scratch profile for the remaining branches.
+    auto fork = Json::parse(ApiProfiles::handle_action(ctx, Json::parse(
+        R"({"action":"fork","source":"builtin:vanilla","dest":"mod:web2"})")));
+    expect(fork["ok"] == true, "fork mod:web2 ok");
+
+    // Duplicate add → 409.
+    Json ench = Json::parse(
+        R"({"id":"mod:web_ench","name":"Web","max_level":3,"multiplier":1,"supported_items":["#minecraft:swords"]})");
+    auto add1 = Json::parse(ApiProfiles::handle_add(ctx, "mod:web2", "ench", ench));
+    expect(add1["ok"] == true, "first ench add ok");
+    expect(thrown_status([&] {
+        ApiProfiles::handle_add(ctx, "mod:web2", "ench", ench);
+    }) == 409, "duplicate add throws 409");
+
+    // Entry-not-found remove → 404.
+    expect(thrown_status([&] {
+        ApiProfiles::handle_remove(ctx, "mod:web2", "ench", "mod:missing");
+    }) == 404, "remove missing entry throws 404");
+
+    // Equip round-trip: add → read → remove.
+    auto ea = Json::parse(ApiProfiles::handle_add(ctx, "mod:web2", "equip", Json::parse(
+        R"({"id":"mod:weapon","name":"W","category":"#minecraft:sword","max_durability":100})")));
+    expect(ea["ok"] == true, "add equip ok");
+    auto er = Json::parse(ApiProfiles::handle_read(ctx, "mod:web2", "equip"));
+    bool equip_found = false;
+    for (const auto& e : er["equipments"].as_array())
+        if (e["id"].as<std::string>() == "mod:weapon") equip_found = true;
+    expect(equip_found, "read returns added equipment");
+    auto e_rm = Json::parse(ApiProfiles::handle_remove(ctx, "mod:web2", "equip", "mod:weapon"));
+    expect(e_rm["ok"] == true, "remove equip ok");
+    expect(!ctx.profile("mod:web2").eq().contains(NSID("mod:weapon")), "equip removed");
+
+    ctx.remove_profile("mod:web2");
+    TEST_PASS("ApiProfiles error branches + equip CRUD");
+}
+
 void test_api_profiles_list_and_actions() {
     BesqContext ctx;
     ctx.load_builtin();
@@ -215,6 +313,7 @@ int main() {
         test_api_status();
         test_api_settings();
         test_api_profiles_list_and_actions();
+        test_api_profiles_error_branches();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
