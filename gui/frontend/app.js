@@ -30,6 +30,7 @@ function route() {
     a.classList.toggle('active', a.dataset.route === name));
   const el = document.getElementById('view');
   el.innerHTML = '';
+  el.dataset.view = name; // stamp ownership so async renders can bail on navigation
   clearError();
   if (view.render) view.render(el, rest);
 }
