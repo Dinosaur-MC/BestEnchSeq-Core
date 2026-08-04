@@ -16,6 +16,12 @@ namespace web {
 /// 多消费者 HTTP/1.1 服务器。
 /// [Poller 线程] select 监听 + 全部连接 → 就绪事件按归属投递到对应 Reactor。
 /// [N Reactor]   每连接终生归属一个 Reactor（其 EventLoop 消费线程处理）。
+///
+/// 并发上限（Windows 差异）：kMaxConnections 是准入上限（超过拒绝新 accept），
+/// 但 poller 基于 ::select，单轮 fd 集合被 FD_SETSIZE（Windows 上 64）封顶。
+/// On Windows, ::select caps concurrent connection fds at FD_SETSIZE (64);
+/// kMaxConnections is the admission limit but the select-based poller effectively
+/// serves ≤64 concurrently. WSAPoll is the fix if >64 concurrency is needed.
 class HttpServer {
 public:
     using Handler = std::function<HttpResponse(const HttpRequest&)>;

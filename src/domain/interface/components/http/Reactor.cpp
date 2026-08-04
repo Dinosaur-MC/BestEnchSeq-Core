@@ -105,8 +105,11 @@ void Reactor::drive(int fd) {
         if (it == _impl->conns.end())
             return;
         conn = it->second;
-        conn->process(_impl->handler); // 非阻塞推进（解析/读/分发/写）
     }
+    // 锁外推进：process() 只触碰连接自身状态（解析/读/分发/写），而连接按零锁设计
+    // 仅由本 loop 线程访问。把 shared_ptr 拷出后即可释放 Reactor 互斥量，避免持锁
+    // 跨越整个 parse+dispatch+write，阻塞 poller 线程的 add_connection/remove_connection。
+    conn->process(_impl->handler);
     if (!conn->alive()) {
         remove_connection(fd); // EOF/错误 → 注销并关闭
     } else if (_impl->on_interest) {

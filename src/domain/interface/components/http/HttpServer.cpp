@@ -197,6 +197,12 @@ void HttpServer::poll_once() {
     }
 
     // ③ 连接就绪探测（非阻塞 select）→ 按归属投递。
+    // 全程持 pmutex 跨 select：fd 集合构建、select 系统调用、就绪投递三者与
+    // Reactor::remove_connection 的 unregister+close 串行化（关闭走 on_closed→
+    // unregister_fd 取同一把锁），杜绝“集合已建好、socket 已被关闭、select 仍对
+    // 已关闭 fd 执行”的竞态。kConnPollMs=0 → select 非阻塞即时返回，锁窗口极短；
+    // 持锁期间 Reactor 线程的 unregister_fd 只会短暂阻塞等待，而非死锁（锁序：
+    // poller 持 pmutex 时不取 Reactor mutex，故无环）。
     fd_set rfds, wfds;
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
@@ -206,7 +212,7 @@ void HttpServer::poll_once() {
         std::lock_guard lk(impl.pmutex);
         for (const auto& [fd, home] : impl.home_of) {
             if (fds.size() >= FD_SETSIZE)
-                break; // select 单轮 fd 数上限保护
+                break; // select 单轮 fd 数上限保护（Windows FD_SETSIZE=64）
             fds.push_back(fd);
             FD_SET(native_fd(fd), &rfds);
             auto it = impl.want_write.find(fd);
@@ -215,30 +221,27 @@ void HttpServer::poll_once() {
             if (fd > maxfd)
                 maxfd = fd;
         }
-    }
-    if (fds.empty())
-        return;
+        if (fds.empty())
+            return;
 
-    timeval tv{kConnPollMs / 1000, (kConnPollMs % 1000) * 1000};
-    int n = ::select(maxfd + 1, &rfds, &wfds, nullptr, &tv);
-    if (n <= 0)
-        return; // 超时 / EINTR / 已注销 fd → 下一轮重建
+        timeval tv{kConnPollMs / 1000, (kConnPollMs % 1000) * 1000};
+        int n = ::select(maxfd + 1, &rfds, &wfds, nullptr, &tv);
+        if (n <= 0)
+            return; // 超时 / EINTR → 下一轮重建
 
-    for (int fd : fds) {
-        size_t home;
-        {
-            std::lock_guard lk(impl.pmutex);
+        for (int fd : fds) {
+            size_t home;
             auto it = impl.home_of.find(fd);
             if (it == impl.home_of.end())
-                continue; // 已被 Reactor 注销
+                continue; // 防御：持锁跨 select，正常不应被注销
             home = it->second;
+            bool rd = FD_ISSET(fd, &rfds) != 0;
+            bool wr = FD_ISSET(fd, &wfds) != 0;
+            if (rd)
+                impl.reactors[home]->on_readable(fd);
+            else if (wr)
+                impl.reactors[home]->on_writable(fd);
         }
-        bool rd = FD_ISSET(fd, &rfds) != 0;
-        bool wr = FD_ISSET(fd, &wfds) != 0;
-        if (rd)
-            impl.reactors[home]->on_readable(fd);
-        else if (wr)
-            impl.reactors[home]->on_writable(fd);
     }
 }
 
