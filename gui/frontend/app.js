@@ -23,7 +23,8 @@ async function boot() {
 
 function route() {
   const hash = (location.hash || '#/calculator').replace(/^#\//, '');
-  const [name, ...rest] = hash.split('/');
+  const [raw, ...rest] = hash.split('/');
+  const name = raw || 'calculator';
   const view = views[name] || views.calculator;
   document.querySelectorAll('.nav-item').forEach((a) =>
     a.classList.toggle('active', a.dataset.route === name));

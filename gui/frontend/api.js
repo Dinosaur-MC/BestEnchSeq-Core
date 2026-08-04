@@ -1,11 +1,18 @@
 // api.js — fetch wrapper: {ok:false,error} → thrown Error, error banner hooks.
+import { t } from './i18n.js';
+
 export async function api(method, path, body) {
   const opts = { method, headers: {} };
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(path, opts);
+  let res;
+  try {
+    res = await fetch(path, opts);
+  } catch (_) {
+    throw new Error(t('err.network'));
+  }
   let data = null;
   try { data = await res.json(); } catch (_) { /* non-JSON */ }
   if (!res.ok || (data && data.ok === false)) {
