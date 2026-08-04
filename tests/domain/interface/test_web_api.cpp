@@ -7,6 +7,12 @@
 #include "domain/interface/web/controllers/StatusController.h"
 #include "domain/interface/web/controllers/SettingsController.h"
 #include "domain/interface/web/controllers/ProfilesController.h"
+#include "domain/interface/web/controllers/AlgorithmController.h"
+#include "domain/interface/web/controllers/CalculatorController.h"
+#include "domain/interface/web/controllers/LogsController.h"
+#include "domain/interface/web/WebSolveService.h"
+#include "domain/interface/web/SseHub.h"
+#include "domain/business/types/EnchInfo.h"
 #include "domain/interface/components/http/Router.h"
 #include "domain/interface/BesqContext.h"
 #include "common/io/json.h"
@@ -22,14 +28,27 @@ struct TestApp {
     Router router;
     std::mutex gate;
     BesqContext& ctx;
+    SseHub hub;
+    std::unique_ptr<webhttp::WebSolveService> solve;
     explicit TestApp(BesqContext& c) : ctx(c) {
+        solve = std::make_unique<webhttp::WebSolveService>(c, gate, &hub);
         router.register_controller<HealthController>();
         router.register_controller<StatusController>(c);
         router.register_controller<SettingsController>(c);
         router.register_controller<ProfilesController>(ctx, gate);
+        router.register_controller<AlgorithmController>(c, *solve);
+        router.register_controller<CalculatorController>(*solve, hub);
+        router.register_controller<LogsController>(c, hub);
     }
     HttpResponse call(Method m, std::string path, std::string body = "") {
-        HttpRequest req; req.method = m; req.path = std::move(path); req.body = std::move(body);
+        // Mirror HttpParser: split path from the ?query=... string (real requests
+        // arrive with req.query already parsed).
+        HttpRequest req;
+        req.method = m;
+        auto q = path.find('?');
+        req.path = q == std::string::npos ? std::move(path) : path.substr(0, q);
+        if (q != std::string::npos) req.query = parse_query(path.substr(q + 1));
+        req.body = std::move(body);
         return router.dispatch(req);
     }
 };
@@ -215,15 +234,132 @@ void test_profiles(TestApp& app) {
             has_key = true;
     expect(has_key, "dependencies contains " + key);
 }
+
+void test_algorithms(TestApp& app) {
+    // list → 200 array of names containing a builtin strategy.
+    auto l = app.call(Method::Get, "/api/algorithms");
+    expect(l.status == 200 && l.body.find("dp_merge") != std::string::npos,
+           "algorithms list 200 contains dp_merge");
+
+    // detail → every AlgorithmDetail field serialized.
+    auto d = app.call(Method::Get, "/api/algorithms/dp_merge");
+    expect(d.status == 200, "algorithm detail 200");
+    for (const char* f : {"name", "version", "origin", "supported_mode",
+                          "is_resumable", "plugin_path", "has_audit"})
+        expect(d.body.find(f) != std::string::npos, std::string("detail field ") + f);
+
+    // Unloading a builtin (trusted kernel) is rejected → 400 UNLOAD_REJECTED.
+    // No solve is active at this point, so the gate (409 TASK_ACTIVE) is clear.
+    auto un = app.call(Method::Post, "/api/algorithms/unload", R"({"name":"dp_merge"})");
+    expect(un.status == 400 && un.body.find("UNLOAD_REJECTED") != std::string::npos,
+           "unload builtin 400 UNLOAD_REJECTED");
+
+    // Unknown algorithm → 404.
+    auto no = app.call(Method::Get, "/api/algorithms/nope");
+    expect(no.status == 404, "unknown algorithm 404");
+}
+
+void test_calculator(TestApp& app) {
+    // Light target → 202 + task_id + Location.
+    auto light = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(light.status == 202, "light task submit 202");
+    auto lb = Json::parse(light.body);
+    expect(lb["task_id"].type() == JsonType::String, "light task_id returned");
+    expect(light.header_value("Location").find("/api/tasks/") != std::string::npos,
+           "submit Location header");
+
+    // test_profiles deletes netherite_sword from the builtin profile; restore it
+    // so the heavy target resolves (idempotent: DELETE then POST).
+    (void)app.call(Method::Delete,
+                   "/api/profiles/builtin:vanilla/equipments/minecraft:netherite_sword");
+    auto readd = app.call(Method::Post, "/api/profiles/builtin:vanilla/equipments",
+                          R"({"id":"minecraft:netherite_sword","max_durability":2031})");
+    expect(readd.status == 201, "restore netherite_sword for heavy target");
+
+    // Seed many custom sword enchantments so a dp_merge over all of them on a
+    // netherite_sword stays Running long enough to observe the single-slot 409
+    // (mirrors test_web_calculator::test_single_active_slot).
+    for (int i = 0; i < 18; ++i) {
+        EnchInfo info;
+        info.id = NSID("test:e_" + std::to_string(i));
+        info.name = "E " + std::to_string(i);
+        info.max_level = 5;
+        info.multiplier = 1;
+        info.supported_items.insert(NSID("#minecraft:swords"));
+        expect(app.ctx.add_enchantment(info), "seed ench " + std::to_string(i));
+    }
+
+    std::string heavy = R"({"target":{"item":"netherite_sword","enchants":[)";
+    for (int i = 0; i < 18; ++i) {
+        if (i) heavy += ",";
+        heavy += R"({"id":"test:e_)" + std::to_string(i) + R"(","level":5})";
+    }
+    heavy += R"(]},"algorithm":"dp_merge"})";
+
+    auto heavy_resp = app.call(Method::Post, "/api/tasks", heavy);
+    expect(heavy_resp.status == 202, "heavy task submit 202");
+    auto hb = Json::parse(heavy_resp.body);
+    std::string heavy_id = hb["task_id"].as<std::string>();
+
+    // Immediate second POST while the heavy task is Running → 409 (single slot).
+    auto dup = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(dup.status == 409, "second POST while active 409");
+
+    // Unknown task → 404 for both status and events.
+    auto no = app.call(Method::Get, "/api/tasks/nope");
+    expect(no.status == 404, "unknown task status 404");
+    auto noev = app.call(Method::Get, "/api/tasks/nope/events");
+    expect(noev.status == 404, "unknown task events 404");
+
+    // The heavy task may still be running; it is cancelled + joined when the
+    // TestApp (owning WebSolveService) is destroyed at the end of main().
+    (void)heavy_id;
+}
+
+void test_logs(TestApp& app) {
+    // The test never installs a ring buffer, so the incremental tail is empty
+    // but well-formed: {"logs":[],"next":0}.
+    auto l = app.call(Method::Get, "/api/logs?limit=5");
+    expect(l.status == 200 && l.body.find("logs") != std::string::npos,
+           "logs tail 200 contains logs");
+    expect(l.body.find("next") != std::string::npos, "logs tail carries next cursor");
+
+    // Non-numeric limit → 400 INVALID_FIELD.
+    auto bad = app.call(Method::Get, "/api/logs?limit=x");
+    expect(bad.status == 400 && bad.body.find("INVALID_FIELD") != std::string::npos,
+           "invalid limit 400 INVALID_FIELD");
+
+    // events endpoint → stream response (frame delivery is the transport task).
+    auto ev = app.call(Method::Get, "/api/logs/events");
+    expect(ev.status == 200 && ev.is_stream &&
+               ev.content_type == "text/event-stream",
+           "logs events stream response");
+}
 } // namespace
 
 int main() {
     BesqContext ctx; ctx.load_builtin(); ctx.load_profiles();
     TestApp app(ctx);
-    test_health(app);
-    test_status(app);
-    test_settings(app);
-    test_profiles(app);
-    TEST_PASS("test_web_api");
+    try {
+        test_health(app);
+        test_status(app);
+        test_settings(app);
+        test_profiles(app);
+        test_algorithms(app);
+        test_calculator(app);
+        test_logs(app);
+        TEST_PASS("test_web_api");
+    } catch (const std::exception& e) {
+        std::cerr << "\nFATAL: " << e.what() << std::endl;
+        return 1;
+    }
     return print_summary();
 }
