@@ -191,6 +191,51 @@ bool ProfileManager::remove_tag(const std::string& profile, const NSID& id) {
     return _mutate(profile, [&](Profile& p) { return p.remove_tag(id); });
 }
 
+bool ProfileManager::update_equipment(const std::string& profile, const Equipment& patch) {
+    // Profile 只暴露 const eq()；经受控代理方法在同一事务内替换（remove+add），
+    // _mutate 保证 validate-before/after + 快照/undo 语义不被破坏。
+    return _mutate(profile, [&](Profile& p) {
+        if (!p.has_equipment(patch.id)) return false;
+        p.remove_equipment(patch.id);
+        return p.add_equipment(patch);
+    });
+}
+
+bool ProfileManager::update_tag(const std::string& profile, const EquipmentTag& patch) {
+    return _mutate(profile, [&](Profile& p) {
+        if (!p.tags().contains(patch.id)) return false;
+        p.remove_tag(patch.id);
+        return p.add_tag(patch);
+    });
+}
+
+bool ProfileManager::set_dependencies(const std::string& profile, std::vector<std::string> deps) {
+    return _mutate(profile, [&](Profile& p) {
+        auto prev = p.dependencies();
+        p.set_dependencies(std::move(deps));
+        _build_graph();
+        if (is_cyclic(profile)) {   // 引入环 → 恢复原依赖并拒绝（不留脏状态）
+            p.set_dependencies(prev);
+            _build_graph();
+            return false;
+        }
+        return true;
+    });
+}
+
+bool ProfileManager::rename(const std::string& old_name, const std::string& new_name) {
+    // 改名本质是 map 键重排：直接操作 _profiles（不适用 _mutate 的
+    // "profile 内变更"模型，不记快照/不可 undo）。map 键是 profile 身份。
+    if (!exists(old_name) || exists(new_name)) return false;
+    auto node = std::move(_profiles[old_name]);
+    _profiles.erase(old_name);
+    _profiles[new_name] = std::move(node);
+    if (_active == old_name) _active = new_name;
+    _build_graph();
+    _effective_cache.clear();
+    return true;
+}
+
 bool ProfileManager::undo(const std::string& profile) {
     // 防御性顺序：先确认 profile 存在，再消费快照。
     Profile* p = _find(profile);

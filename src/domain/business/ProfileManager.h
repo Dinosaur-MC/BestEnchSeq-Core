@@ -66,6 +66,17 @@ public:
     bool remove_equipment(const std::string& profile, const NSID& id);
     bool add_tag(const std::string& profile, const EquipmentTag& tag);
     bool remove_tag(const std::string& profile, const NSID& id);
+    bool update_equipment(const std::string& profile, const Equipment& patch);
+    bool update_tag(const std::string& profile, const EquipmentTag& patch);
+
+    /// 设置 profile 的依赖列表（重建依赖图 + 有效视图缓存失效）。
+    /// 返回 false 表示 profile 未知或产生依赖环（不做变更）。
+    bool set_dependencies(const std::string& profile, std::vector<std::string> deps);
+
+    /// 重命名 profile（活动名同步；目标名已存在/源不存在 → false）。
+    /// 名字本质是 map 键重排：直接操作 _profiles，不适用 _mutate 的
+    /// "profile 内变更"模型（不记快照/不可 undo）。
+    bool rename(const std::string& old_name, const std::string& new_name);
 
     /// Roll back the most recent successful manager-level change to a profile.
     /// Returns false if there is nothing to undo for the profile.
