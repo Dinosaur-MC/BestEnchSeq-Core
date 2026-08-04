@@ -66,6 +66,19 @@ static void test_header_too_large() {
 }
 
 // ---------------------------------------------------------------------------
+// Unterminated oversized header block -> BadRequest (431 protection).
+// Unlike test_header_too_large, this buffer has NO \r\n\r\n terminator, so the
+// >64KB-unterminated-buffer guard must reject it (not wait forever).
+// ---------------------------------------------------------------------------
+static void test_unterminated_header_too_large() {
+    // >64KB header with NO \r\n\r\n terminator → parser must reject (431 protection)
+    std::string buf(80 * 1024, 'a');
+    HttpRequest req; size_t consumed = 0;
+    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest,
+           "unterminated oversized header -> BadRequest");
+}
+
+// ---------------------------------------------------------------------------
 // Content-Length body round-trip.
 // ---------------------------------------------------------------------------
 static void test_body() {
@@ -116,6 +129,7 @@ int main() {
     test_decode_and_query();
     test_keepalive_tail();
     test_header_too_large();
+    test_unterminated_header_too_large();
     test_body();
     test_incomplete();
     test_bad_method();
