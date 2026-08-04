@@ -23,6 +23,10 @@
 ///   BESQ_LOG_CONSOLE_LEVEL — Console mirror threshold (0=debug,1=info,2=warn,3=error, default: 2)
 ///   BESQ_SANDBOX         — Run algorithm plugins in a sandboxed worker (default: 0)
 ///   BESQ_WORKER_PATH     — Path to besq-worker binary (default: auto — <exe_dir>/besq-worker[.exe], then PATH)
+///   BESQ_GUI_HOST        — GUI HTTP server bind address (default: "127.0.0.1")
+///   BESQ_GUI_PORT        — GUI HTTP server port; 0 = auto-assign a free ephemeral port (default: 0)
+///   BESQ_GUI_OPEN_BROWSER— Open the default browser instead of the WebView2 window
+///                          (dev mode / when WebView2 runtime is unavailable; default: 0)
 struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
@@ -35,6 +39,9 @@ struct AppConfig {
     int32_t  log_console_level = 2;     // console threshold (0=Debug..3=Error)
     bool     sandbox_enabled   = false; // run plugins in a sandboxed worker
     std::string sandbox_worker_path;    // besq-worker binary ("" → <exe_dir>/besq-worker[.exe], then PATH)
+    std::string gui_host = "127.0.0.1"; // GUI HTTP server bind address
+    uint16_t    gui_port = 0;           // GUI HTTP server port (0 = auto-assign free port)
+    bool        gui_open_browser = false; // dev: open default browser instead of WebView2 window
 
     /// Global app configuration singleton — loads BESQ_* env vars on first
     /// use.  Consumers include AppConfig.h and read directly (no param
@@ -59,6 +66,9 @@ struct AppConfig {
         cfg.log_console_level = get_env<int32_t>("BESQ_LOG_CONSOLE_LEVEL", cfg.log_console_level);
         cfg.sandbox_enabled   = get_env<bool>   ("BESQ_SANDBOX",       cfg.sandbox_enabled);
         cfg.sandbox_worker_path = get_env_str   ("BESQ_WORKER_PATH");
+        cfg.gui_host         = get_env<std::string>("BESQ_GUI_HOST",           cfg.gui_host);
+        cfg.gui_port         = get_env<uint16_t>   ("BESQ_GUI_PORT",           cfg.gui_port);
+        cfg.gui_open_browser = get_env<bool>       ("BESQ_GUI_OPEN_BROWSER",   cfg.gui_open_browser);
         return cfg;
     }
 
