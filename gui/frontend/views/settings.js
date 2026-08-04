@@ -1,4 +1,4 @@
-// settings.js — Settings view: edit language + log level, persist via PUT.
+// settings.js — Settings view: edit language + log level, persist via PATCH.
 import { http, showError, clearError } from '../api.js';
 import { t, setLang, applyI18n } from '../i18n.js';
 
@@ -28,13 +28,13 @@ export async function render(el) {
         lang: document.getElementById('set-lang').value,
         log_level: parseInt(document.getElementById('set-loglevel').value, 10),
       };
-      await http.put('/api/settings', body);
+      await http.patch('/api/settings', body);
       if (el.dataset.view !== myView) return; // save finished after navigation
       setLang(body.lang === 'zh_CN' ? 'zh-CN' : 'en-US');
       applyI18n();
       // Re-render the current view so its t() strings pick up the new language.
       // (No "Saved" note: the synchronous re-render clears #view, so it would never paint.)
       window.dispatchEvent(new HashChangeEvent('hashchange'));
-    } catch (e) { showError(e.message); }
+    } catch (e) { showError(e.code, e.message); }
   });
 }
