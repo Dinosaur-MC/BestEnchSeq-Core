@@ -38,7 +38,8 @@ struct WebTaskSchema {
         ds::field("profile", &Type::profile, ds::string_codec{}),
         ds::field("source", &Type::source, ds::vector_codec<ds::object_codec<InvEnchSchema>>{}),
         ds::field("max_solutions", &Type::max_solutions, ds::int_codec{}),
-        ds::field("max_search_time", &Type::max_search_time_ms, ds::int_codec{}),
+        ds::field(
+            "max_search_time", &Type::max_search_time_ms, ds::int_codec{}), // wire key per spec §4.2; _ms is C++-side unit doc
         ds::field("max_threads", &Type::max_threads, ds::int_codec{}),
     };
 };

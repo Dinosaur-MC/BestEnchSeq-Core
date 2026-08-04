@@ -22,9 +22,13 @@ void test_round_trip_full() {
     expect(json["target"]["item"].as<std::string>() == "diamond_sword", "target serialized");
     expect(json["source"][0]["level"].as<int32_t>() == 2, "source serialized");
     expect(json["max_solutions"].as<int32_t>() == 3, "max_solutions serialized");
+    expect(json["max_search_time"].as<int64_t>() == 5000, "max_search_time serialized");
+    expect(json["max_threads"].as<int32_t>() == 4, "max_threads serialized");
 
     WebTaskDto out;
     WebTaskJson::parse_or_throw(json, out);
+    expect(out.algorithm == "dp_merge", "algorithm round-trips");
+    expect(out.profile == "builtin:vanilla", "profile round-trips");
     expect(out.target.item == "diamond_sword", "target round-trips");
     expect(out.target.enchants.size() == 2, "target enchants round-trip");
     expect(out.items.size() == 1, "items round-trip");
@@ -40,6 +44,7 @@ void test_inv_task_payload_is_valid_webschema() {
     // A plain InvTaskSchema payload (no source/search fields) must parse.
     auto json = Json::parse(R"({
         "profile": "builtin:vanilla",
+        "name": "task",
         "target": { "item": "diamond_sword", "enchants": [{"id":"sharpness","level":5}] },
         "items": [ { "type":"book", "enchants":[{"id":"sharpness","level":5}] } ],
         "algorithm": "dp_merge"
@@ -50,6 +55,8 @@ void test_inv_task_payload_is_valid_webschema() {
     expect(dto.algorithm == "dp_merge", "algorithm parsed");
     expect(dto.source.empty(), "source defaults empty");
     expect(dto.max_solutions == 0, "search fields default 0");
+    expect(dto.max_search_time_ms == 0, "max_search_time defaults 0");
+    expect(dto.max_threads == 0, "max_threads defaults 0");
     TEST_PASS("InvTaskSchema payload is a valid WebSchema");
 }
 
