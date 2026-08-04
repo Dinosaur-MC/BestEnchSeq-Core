@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -7,6 +8,8 @@
 #include <vector>
 
 namespace web {
+
+class StreamChannel;   // 流式响应帧投递通道（Connection 实现）；见 StreamChannel.h
 
 enum class Method : uint8_t { Get, Head, Post, Put, Patch, Delete };
 const char* method_name(Method m);
@@ -43,6 +46,8 @@ struct HttpRequest {
     QueryParams query;           // 解析后
     std::vector<std::pair<std::string, std::string>> headers;
     std::string body;
+    /// 请求所在的活跃连接（流式响应帧投递通道）；非连接上下文（如单元测试直调）为空。
+    std::shared_ptr<StreamChannel> stream;
     std::string header(const std::string& name) const;   // 大小写不敏感，缺省 ""
 };
 

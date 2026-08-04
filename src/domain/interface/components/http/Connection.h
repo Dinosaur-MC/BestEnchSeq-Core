@@ -3,6 +3,7 @@
 #include "HttpCommon.h"
 #include "HttpParser.h"
 #include "SseStream.h"
+#include "StreamChannel.h"
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -16,7 +17,13 @@ namespace web {
 /// 连接默认为 keep-alive：一个请求处理完后清空缓冲，等待下一条请求。
 /// 收到 `is_stream` 响应后连接转为 SSE 流模式：不再读请求，只经
 /// `push_sse_frame()` 把 SseStream 缓冲中的帧写出（写失败 → 关闭检测对端断开）。
-class Connection {
+///
+/// 连接同时实现 StreamChannel：SSE events handler 通过 `req.stream`（= 本连接）
+/// 把 SseHub 帧投递进来。`post_frame` 是跨线程入口（solve worker 调用），它只把帧
+/// 交给 `_frame_sink`（Reactor 注入：post 到 home loop）；真正的帧入缓冲 + 写出在
+/// `push_sse_frame(std::string)` 里，运行于 loop 线程，符合连接零锁设计。
+class Connection : public StreamChannel,
+                   public std::enable_shared_from_this<Connection> {
 public:
     using Router = std::function<HttpResponse(const HttpRequest&)>;
 
@@ -44,6 +51,13 @@ public:
     /// 把 SseStream 缓冲中的帧写出（Reactor 帧事件回调调用）。空缓冲时按
     /// `heartbeat_interval` 节流注入心跳 `: ping`。写失败 → 关闭（对端断开检测）。
     void push_sse_frame();
+    /// 追加一条完整 SSE 帧到流缓冲并立即 flush 到线（loop 线程调用；Reactor 帧事件）。
+    void push_sse_frame(std::string frame);
+
+    /// StreamChannel：把一帧交给 home-loop 帧汇（Reactor 注入）；未设置 sink 时静默丢弃。
+    void post_frame(std::string frame) override;
+    /// Reactor 注入帧汇：`[this,fd](std::string f){ post_frame(fd, std::move(f)); }`。
+    void set_frame_sink(std::function<void(std::string)> sink);
 
     /// SSE 心跳间隔：流缓冲空闲超过该时长且无新帧 → 注入 `: ping` 注释帧。
     std::chrono::milliseconds heartbeat_interval = std::chrono::milliseconds(15000);
@@ -61,6 +75,7 @@ private:
     HttpParser _parser;          // 增量解析器（内部保留半请求状态）
     std::shared_ptr<SseStream> _stream;                 // 非空 = SSE 流模式
     std::chrono::steady_clock::time_point _last_write;  // 最近一次写出帧的时间（心跳节流）
+    std::function<void(std::string)> _frame_sink;       // Reactor 注入的 home-loop 帧汇
 };
 
 } // namespace web

@@ -25,6 +25,9 @@ public:
         _buf += "\n\n";
     }
 
+    /// 追加一条已格式化好的完整 SSE 帧（SseHub 发布端直接送来的帧串）。
+    void raw(std::string frame) { _buf += std::move(frame); }
+
     /// 追加心跳注释帧：`: ping\n\n`。
     void ping() { _buf += ": ping\n\n"; }
 

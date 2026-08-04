@@ -2,6 +2,7 @@
 #include "Socket.h"
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace web {
@@ -46,7 +47,12 @@ void Reactor::add_connection(int fd) {
         if (_impl->conns.count(fd) != 0)
             return;
         set_nonblocking(fd);
-        _impl->conns.emplace(fd, std::make_shared<Connection>(fd, std::to_string(fd)));
+        auto conn = std::make_shared<Connection>(fd, std::to_string(fd));
+        // StreamChannel 帧汇：post_frame → 本 Reactor → home loop 上 push_sse_frame。
+        // 捕获 `this`（Reactor）安全：post 的任务在 loop 线程上于 Reactor 析构前
+        // （loop.stop() 会 drain 剩余任务）全部执行完。
+        conn->set_frame_sink([this, fd](std::string f) { post_frame(fd, std::move(f)); });
+        _impl->conns.emplace(fd, std::move(conn));
     }
     // 首推进：消费线程首次 process（请求可能已到达）
     _impl->loop.post([this, fd] { drive(fd); });
@@ -68,9 +74,19 @@ void Reactor::on_writable(int fd) {
 }
 
 void Reactor::post_frame(int fd, std::string frame) {
-    // SSE 帧出口：Task 10（SseStream + Connection::push_sse）落位，此处保留 API 形状。
-    (void)fd;
-    (void)frame;
+    // SSE 帧出口：把帧 post 到 home loop，loop 线程上交给连接入缓冲 + 写出。
+    // 连接可能已被关闭（_conns.erase）→ 帧静默丢弃。
+    _impl->loop.post([this, fd, frame = std::move(frame)]() mutable {
+        std::shared_ptr<Connection> conn;
+        {
+            std::lock_guard lk(_impl->mutex);
+            auto it = _impl->conns.find(fd);
+            if (it == _impl->conns.end())
+                return;
+            conn = it->second;
+        }
+        conn->push_sse_frame(std::move(frame));
+    });
 }
 
 void Reactor::close_all() {

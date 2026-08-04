@@ -1,6 +1,7 @@
 // src/domain/interface/components/http/Connection.cpp
 #include "Connection.h"
 #include "Socket.h"
+#include <memory>
 
 namespace web {
 
@@ -13,6 +14,26 @@ void Connection::close() {
         _alive = false;
         sock_close(_fd);
         _fd = -1;
+    }
+}
+
+void Connection::set_frame_sink(std::function<void(std::string)> sink) {
+    _frame_sink = std::move(sink);
+}
+
+void Connection::post_frame(std::string frame) {
+    // 跨线程入口（solve worker 经 SseHub 回调）：只把帧交给 home-loop 帧汇，
+    // 由 Reactor 把它 post 到 loop 线程再入缓冲 + 写出。未设置 sink（如单元测试
+    // 直调/连接已卸下）→ 静默丢弃。
+    if (_frame_sink)
+        _frame_sink(std::move(frame));
+}
+
+void Connection::push_sse_frame(std::string frame) {
+    if (!_alive) return;
+    if (_stream) {
+        _stream->raw(std::move(frame));
+        flush_stream();
     }
 }
 
@@ -71,6 +92,15 @@ bool Connection::process(const Router& router) {
     // 时读，导致 body 落在后续 TCP 分段时永远 Incomplete 卡死。
     for (;;) {
         HttpRequest req;
+        // 分发前把本连接挂到 req.stream：SSE events handler 用 StreamChannel 把
+        // SseHub 帧投递回来。真实传输路径上连接由 shared_ptr 持有（enable_shared_
+        // from_this 可解析）；单元测试里连接可能是栈对象 → shared_from_this 抛
+        // bad_weak_ptr，此时留空（events handler 对空 channel 静默丢弃帧）。
+        try {
+            req.stream = shared_from_this();
+        } catch (const std::bad_weak_ptr&) {
+            req.stream = nullptr;
+        }
         size_t consumed = 0;
         auto pr = _parser.parse(_in, consumed, req);
         if (pr == ParseResult::Complete) {

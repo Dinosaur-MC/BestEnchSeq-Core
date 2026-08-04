@@ -3,23 +3,22 @@
 // =============================================================================
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/web/WebModule.h"
-#include "domain/interface/web/http/HttpServer.h"
-#include "domain/interface/web/http/Socket.h"
+#include "domain/interface/components/http/HttpServer.h"
+#include "domain/interface/components/http/Socket.h"
 #include "framework/test_utils.h"
 #include <chrono>
 #include <string>
 #include <thread>
 
-using webhttp::HttpServer;
-using webhttp::WebModule;
+using namespace web;
 
 static std::string http_exchange(HttpServer& server, const std::string& raw) {
-    int c = webhttp::sock_connect("127.0.0.1", server.port());
+    int c = sock_connect("127.0.0.1", server.port());
     if (c < 0) return "";
-    webhttp::sock_send(c, raw, 3000);
+    sock_send(c, raw, 3000);
     std::string body;
-    webhttp::sock_recv(c, body, 64 * 1024, 3000);
-    webhttp::sock_close(c);
+    sock_recv(c, body, 64 * 1024, 3000);
+    sock_close(c);
     return body;
 }
 
@@ -32,15 +31,12 @@ void test_web_end_to_end() {
         {"/app.js", {"text/javascript", "console.log('hi')"}},
     });
 
-    // Route everything through WebModule: /health, /api/* and static assets
-    // all dispatch from module.dispatch with the raw method/path/body.  This
-    // mirrors exactly how besq-gui wires its server (M3.3).  The dispatch
-    // result is returned as-is so static assets keep their real Content-Type
-    // (re-wrapping via HttpResponse::json would force application/json).
+    // Route everything through WebModule: /health, /api/* and /public static
+    // assets all dispatch from module.dispatch. The dispatch result is returned
+    // as-is so static assets keep their real Content-Type (re-wrapping via
+    // HttpResponse::json would force application/json).
     HttpServer server;
-    server.set_fallback([&](const webhttp::HttpRequest& r) {
-        return module.dispatch(r.method, r.path, r.body);
-    });
+    server.set_fallback([&](const HttpRequest& r) { return module.dispatch(r); });
     expect(server.start("127.0.0.1", 0), "server starts");
     std::thread server_thread([&] { server.run(); });
 
@@ -49,17 +45,23 @@ void test_web_end_to_end() {
         auto health = http_exchange(server, "GET /health HTTP/1.1\r\nHost: x\r\n\r\n");
         expect(health.find("200 OK") != std::string::npos, "health responds 200");
 
-        // GET / → index.html
+        // GET / → 307 redirect to the SPA entry under /public.
         auto root = http_exchange(server, "GET / HTTP/1.1\r\nHost: x\r\n\r\n");
-        expect(root.find("<h1>BestEnchSeq</h1>") != std::string::npos, "root serves index");
-        expect(root.find("Content-Type: text/html") != std::string::npos,
+        expect(root.find("307") != std::string::npos, "root 307 redirect");
+        expect(root.find("Location: /public/index.html") != std::string::npos,
+               "root redirect Location");
+
+        // GET /public/index.html serves the SPA as text/html.
+        auto idx = http_exchange(server, "GET /public/index.html HTTP/1.1\r\nHost: x\r\n\r\n");
+        expect(idx.find("<h1>BestEnchSeq</h1>") != std::string::npos, "index serves SPA");
+        expect(idx.find("Content-Type: text/html") != std::string::npos,
                "index served as text/html");
 
-        // GET /api/profile
-        auto prof = http_exchange(server, "GET /api/profile HTTP/1.1\r\nHost: x\r\n\r\n");
-        expect(prof.find("builtin:vanilla") != std::string::npos, "profile list served");
+        // GET /api/profiles
+        auto prof = http_exchange(server, "GET /api/profiles HTTP/1.1\r\nHost: x\r\n\r\n");
+        expect(prof.find("builtin:vanilla") != std::string::npos, "profiles list served");
 
-        // POST /api/calculator → poll GET /api/calculator/{id} → completed.
+        // POST /api/tasks → poll GET /api/tasks/{id} → completed.
         // Exercises a request BODY + the {id} param route + the async
         // WebSolveService worker through the real stack.
         std::string calc_body =
@@ -67,7 +69,7 @@ void test_web_end_to_end() {
             "[{\"id\":\"sharpness\",\"level\":5}]},\"algorithm\":\"dp_merge\","
             "\"max_solutions\":1}";
         std::string calc_post =
-            "POST /api/calculator HTTP/1.1\r\nHost: x\r\n"
+            "POST /api/tasks HTTP/1.1\r\nHost: x\r\n"
             "Content-Type: application/json\r\n"
             "Content-Length: " + std::to_string(calc_body.size()) + "\r\n\r\n" + calc_body;
         auto cpost = http_exchange(server, calc_post);
@@ -87,7 +89,7 @@ void test_web_end_to_end() {
 
         bool completed = false;
         for (int i = 0; i < 500 && !completed; ++i) {
-            auto st = http_exchange(server, "GET /api/calculator/" + task_id +
+            auto st = http_exchange(server, "GET /api/tasks/" + task_id +
                                                 " HTTP/1.1\r\nHost: x\r\n\r\n");
             if (st.find("\"state\":\"completed\"") != std::string::npos) completed = true;
             else std::this_thread::sleep_for(std::chrono::milliseconds(10));

@@ -2,6 +2,7 @@
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/web/SseHub.h"
 #include "domain/interface/components/http/Router.h"
+#include "domain/interface/components/http/StreamChannel.h"
 #include "common/log/log.hpp"
 #include "common/log/LogRingBuffer.h"
 #include "common/io/json.h"
@@ -83,11 +84,13 @@ Response LogsController::tail(const HttpRequest& req) {
     return Response::json(200, "OK", root.to_string());
 }
 
-Response LogsController::events(const HttpRequest&) {
-    // Register an SSE subscription under the synthetic "logs" task key. The
-    // transport wiring (Task 18) pushes new ring records to the hub; this
-    // handler only validates the route and returns a stream response.
-    _hub.subscribe("logs", [](const std::string&, std::string) {});
+Response LogsController::events(const HttpRequest& req) {
+    // 订阅 SseHub 的合成 "logs" key 并把每一帧投递到请求的 StreamChannel（连接）。
+    // 真实传输路径上 req.stream 恒为连接；单元测试直调时可能为空 → 帧静默丢弃。
+    auto ch = req.stream;
+    _hub.subscribe("logs", [ch](const std::string&, std::string frame) {
+        if (ch) ch->post_frame(std::move(frame));
+    });
     return sse_stream_response();
 }
 

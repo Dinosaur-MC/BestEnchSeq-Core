@@ -12,6 +12,8 @@
 #include "domain/interface/web/controllers/LogsController.h"
 #include "domain/interface/web/WebSolveService.h"
 #include "domain/interface/web/SseHub.h"
+#include "domain/interface/web/WebModule.h"
+#include "domain/interface/components/http/StreamChannel.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/interface/components/http/Router.h"
 #include "domain/interface/BesqContext.h"
@@ -24,6 +26,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 using namespace web;
 
@@ -431,6 +435,88 @@ void test_logs(TestApp& app) {
            "limit=0 exact empty array");
     expect(zj["next"].as<int64_t>() == 0, "limit=0 next 0");
 }
+
+// ── Fake StreamChannel: captures every frame delivered to the "connection" ──
+struct FakeChannel : web::StreamChannel {
+    std::vector<std::string> frames;
+    void post_frame(std::string f) override { frames.push_back(std::move(f)); }
+};
+
+/// WebModule 组装测试：/ → 307 + Location、/public/* → 静态、其余 → Router。
+void test_web_module(BesqContext& ctx) {
+    web::WebModule module(ctx);
+    module.set_static_resources({{"/index.html", {"text/html", "<h1>hi</h1>"}}});
+
+    HttpRequest root;
+    root.method = Method::Get;
+    root.path = "/";
+    auto r0 = module.dispatch(root);
+    expect(r0.status == 307, "root 307 redirect");
+    expect(r0.header_value("Location") == "/public/index.html", "root Location header");
+
+    HttpRequest idx;
+    idx.method = Method::Get;
+    idx.path = "/public/index.html";
+    auto r1 = module.dispatch(idx);
+    expect(r1.status == 200, "public index 200");
+    expect(r1.content_type == "text/html", "public index content type");
+    expect(r1.body.find("<h1>hi</h1>") != std::string::npos, "public index body served");
+
+    HttpRequest st;
+    st.method = Method::Get;
+    st.path = "/api/status";
+    auto r2 = module.dispatch(st);
+    expect(r2.status == 200, "api/status routed to controller 200");
+
+    HttpRequest no;
+    no.method = Method::Get;
+    no.path = "/nope";
+    auto r3 = module.dispatch(no);
+    expect(r3.status == 404, "unknown api route 404");
+
+    HttpRequest pn;
+    pn.method = Method::Get;
+    pn.path = "/public/nope";
+    auto r4 = module.dispatch(pn);
+    expect(r4.status == 404, "unknown static asset 404");
+}
+
+/// StreamChannel 桥接测试：CalculatorController::events 把 req.stream 上的帧投递通道
+/// 接进 SseHub 订阅 → hub.publish 把帧送到 FakeChannel。（证明 events→hub→channel 链路。）
+void test_stream_channel(TestApp& app) {
+    // 提交一个任务：它在测试的微秒级窗口内保持 Running（dp_merge 至少耗时毫秒级），
+    // 订阅 + 手动 publish 期间不会被 worker 完成/取消订阅。
+    auto light = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(light.status == 202, "channel task submit 202");
+    auto lb = Json::parse(light.body);
+    std::string id = lb["task_id"].as<std::string>();
+
+    auto fake = std::make_shared<FakeChannel>();
+    CalculatorController ctrl(*app.solve, app.hub);
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/api/tasks/" + id + "/events";
+    req.stream = fake;
+    PathParams pp;
+    pp.kv.emplace_back("id", id);
+    auto r = ctrl.events(req, pp);
+    expect(r.status == 200 && r.is_stream, "events stream response via channel");
+    expect(app.hub.subscriber_count(id) >= 1, "hub subscription registered for channel");
+
+    app.hub.publish(id, "data: x\n\n");
+    bool delivered = false;
+    for (const auto& f : fake->frames)
+        if (f == "data: x\n\n") delivered = true;
+    expect(delivered, "published frame delivered to StreamChannel");
+
+    // 取消任务，避免占用单活动槽影响后续测试。
+    auto c = app.call(Method::Delete, "/api/tasks/" + id);
+    expect(c.status == 200, "cancel channel task");
+}
 } // namespace
 
 int main() {
@@ -442,8 +528,10 @@ int main() {
         test_settings(app);
         test_profiles(app);
         test_algorithms(app);
+        test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
         test_calculator(app);
         test_logs(app);
+        test_web_module(app.ctx);
         TEST_PASS("test_web_api");
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;

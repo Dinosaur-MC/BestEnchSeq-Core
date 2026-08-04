@@ -1,117 +1,65 @@
 #include "WebModule.h"
 #include "domain/interface/BesqContext.h"
-#include "domain/interface/web/WebHttpError.h"
-#include "domain/interface/web/resources/ApiHealth.h"
-#include "domain/interface/web/resources/ApiSettings.h"
-#include "domain/interface/web/resources/ApiAlgorithm.h"
-#include "domain/interface/web/resources/ApiLogs.h"
-#include "domain/interface/web/resources/ApiStatus.h"
-#include "domain/interface/web/resources/ApiCalculator.h"
-#include "common/log/log.hpp"          // Logger::instance() for /api/logs
-#include "common/log/LogRingBuffer.h"
-#include "common/io/json.h"
-#include <utility>                     // std::move
+#include "domain/interface/components/http/Router.h"
+#include "domain/interface/web/controllers/HealthController.h"
+#include "domain/interface/web/controllers/StatusController.h"
+#include "domain/interface/web/controllers/SettingsController.h"
+#include "domain/interface/web/controllers/ProfilesController.h"
+#include "domain/interface/web/controllers/AlgorithmController.h"
+#include "domain/interface/web/controllers/CalculatorController.h"
+#include "domain/interface/web/controllers/LogsController.h"
+#include <utility>
 
-namespace webhttp {
+namespace web {
 
-namespace {
-const char* reason_for(int status) {
-    switch (status) {
-        case 400: return "Bad Request";
-        case 404: return "Not Found";
-        case 409: return "Conflict";
-        case 500: return "Internal Server Error";
+/// WebModule 会话状态。`_ctx_gate` 序列化 solve worker（WebSolveService 持有它
+/// 覆盖整个 _ctx 访问窗口）与 server 线程上的 profile 变更——两侧都经
+/// resolve_effective() 触碰 ProfileManager 未加锁的有效视图缓存。`_solve` 声明在
+/// `_ctx_gate`/`_hub` 之后，ctor 里把两者按引用传给 WebSolveService。
+struct WebModule::Impl {
+    BesqContext& _ctx;
+    std::mutex _ctx_gate;
+    SseHub _hub;
+    webhttp::WebSolveService _solve;
+    Router _router;
+    StaticFileServer _sfs;
+
+    explicit Impl(BesqContext& ctx)
+        : _ctx(ctx), _solve(ctx, _ctx_gate, &_hub) {}
+};
+
+WebModule::WebModule(BesqContext& ctx) : _impl(std::make_unique<Impl>(ctx)) {
+    _impl->_router.register_controller<HealthController>();
+    _impl->_router.register_controller<StatusController>(ctx);
+    _impl->_router.register_controller<SettingsController>(ctx);
+    _impl->_router.register_controller<ProfilesController>(ctx, _impl->_ctx_gate);
+    _impl->_router.register_controller<AlgorithmController>(ctx, _impl->_solve);
+    _impl->_router.register_controller<CalculatorController>(_impl->_solve, _impl->_hub);
+    _impl->_router.register_controller<LogsController>(ctx, _impl->_hub);
+}
+
+WebModule::~WebModule() = default;
+
+void WebModule::set_static_resources(std::map<std::string, StaticResource> embedded) {
+    _impl->_sfs.mount_embedded("/public", std::move(embedded));
+}
+
+void WebModule::mount_res_dir(std::filesystem::path root) {
+    _impl->_sfs.mount_disk("/public", std::move(root));
+}
+
+HttpResponse WebModule::dispatch(const HttpRequest& req) {
+    // `/` → SPA 入口重定向。
+    if (req.path == "/") {
+        HttpResponse r = HttpResponse::json(307, "Temporary Redirect", "");
+        r.headers.emplace_back("Location", "/public/index.html");
+        return r;
     }
-    return "Error";
-}
-std::string error_json(const std::string& msg) {
-    Json o = Json::object();
-    o["ok"] = Json(false);
-    o["error"] = Json(msg);
-    return o.to_string();
-}
-} // namespace
-
-WebModule::WebModule(BesqContext& ctx) : _ctx(ctx), _solve(ctx, _ctx_gate) {
-    _routes = {
-        {"GET",  "/health",             [](WebModule& m, const std::vector<std::string>&, const std::string&) { (void)m; return ApiHealth::handle(); }},
-        {"GET",  "/api/settings",       [](WebModule& m, const std::vector<std::string>&, const std::string&) { return ApiSettings::handle_get(m._ctx); }},
-        {"PUT",  "/api/settings",       [](WebModule& m, const std::vector<std::string>&, const std::string& b) { return ApiSettings::handle_put(m._ctx, Json::parse(b)); }},
-        {"GET",  "/api/profile",        [](WebModule& m, const std::vector<std::string>&, const std::string&) {
-            std::lock_guard<std::mutex> lock(m._ctx_gate);
-            return ApiProfiles::handle_list(m._ctx);
-        }},
-        {"POST", "/api/profile",        [](WebModule& m, const std::vector<std::string>&, const std::string& b) {
-            std::lock_guard<std::mutex> lock(m._ctx_gate);
-            return ApiProfiles::handle_action(m._ctx, Json::parse(b));
-        }},
-        {"GET",  "/api/profile/{id}/{kind}",
-                                        [](WebModule& m, const std::vector<std::string>& p, const std::string&) {
-            std::lock_guard<std::mutex> lock(m._ctx_gate);
-            return ApiProfiles::handle_read(m._ctx, p[0], p[1]);
-        }},
-        {"POST", "/api/profile/{id}/{kind}",
-                                        [](WebModule& m, const std::vector<std::string>& p, const std::string& b) {
-            std::lock_guard<std::mutex> lock(m._ctx_gate);
-            return ApiProfiles::handle_add(m._ctx, p[0], p[1], Json::parse(b));
-        }},
-        {"DELETE", "/api/profile/{id}/{kind}/{name}",
-                                        [](WebModule& m, const std::vector<std::string>& p, const std::string&) {
-            std::lock_guard<std::mutex> lock(m._ctx_gate);
-            return ApiProfiles::handle_remove(m._ctx, p[0], p[1], p[2]);
-        }},
-        {"GET",  "/api/algorithm",      [](WebModule& m, const std::vector<std::string>&, const std::string&) { return ApiAlgorithm::handle_list(m._ctx); }},
-        {"GET",  "/api/algorithm/{name}",[](WebModule& m, const std::vector<std::string>& p, const std::string&) { return ApiAlgorithm::handle_get(m._ctx, p[0]); }},
-        {"POST", "/api/algorithm/load", [](WebModule& m, const std::vector<std::string>&, const std::string& b) { return ApiAlgorithm::handle_load(m._ctx, Json::parse(b)["dir"].as<std::string>()); }},
-        {"POST", "/api/calculator",     [](WebModule& m, const std::vector<std::string>&, const std::string& b) { return ApiCalculator::handle_post(m._solve, b); }},
-        {"GET",  "/api/calculator/{id}",[](WebModule& m, const std::vector<std::string>& p, const std::string&) { return ApiCalculator::handle_get(m._solve, p[0]); }},
-        {"DELETE", "/api/calculator/{id}",[](WebModule& m, const std::vector<std::string>& p, const std::string&) { return ApiCalculator::handle_del(m._solve, p[0]); }},
-        {"GET",  "/api/logs",           [](WebModule& m, const std::vector<std::string>&, const std::string&) {
-            (void)m;
-            auto ring = Logger::instance().ring_buffer();
-            static LogRingBuffer empty(0);
-            return ApiLogs::handle(ring ? *ring : empty, LogLevel::Debug, 200);
-        }},
-        {"GET",  "/api/status",         [](WebModule& m, const std::vector<std::string>&, const std::string&) { return ApiStatus::handle(m._ctx); }},
-    };
+    // `/public/*` → 静态资源（嵌入式优先，磁盘兜底）。
+    if (req.path.rfind("/public", 0) == 0)
+        return _impl->_sfs.serve(req.method, req.path);
+    // 其余 → 控制器路由（/health, /api/*）。
+    return _impl->_router.dispatch(req);
 }
 
-void WebModule::set_static_resources(std::map<std::string, StaticResource> resources) {
-    _static = std::move(resources);
-}
-
-HttpResponse WebModule::dispatch(const std::string& method, const std::string& path,
-                                 const std::string& body) {
-    try {
-        for (const auto& route : _routes) {
-            if (route.method != method) continue;
-            std::vector<std::string> params;
-            if (match_pattern(route.pattern, path, params)) {
-                std::string result = route.handler(*this, params, body);
-                return HttpResponse::json(200, "OK", result);
-            }
-        }
-
-        // Static assets (only for GET).
-        if (method == "GET") {
-            std::string key = path.empty() || path == "/" ? "/index.html" : path;
-            auto it = _static.find(key);
-            if (it != _static.end()) {
-                HttpResponse resp;
-                resp.status = 200;
-                resp.content_type = it->second.content_type;
-                resp.body = it->second.content;
-                return resp;
-            }
-        }
-        return HttpResponse::json(404, "Not Found", "{\"ok\":false,\"error\":\"not found\"}");
-    } catch (const WebHttpError& e) {
-        return HttpResponse::json(e.status, reason_for(e.status), error_json(e.what()));
-    } catch (const JsonException&) {
-        return HttpResponse::json(400, "Bad Request", error_json("invalid request body"));
-    } catch (const std::exception& e) {
-        return HttpResponse::json(500, "Internal Server Error", error_json(e.what()));
-    }
-}
-
-} // namespace webhttp
+} // namespace web

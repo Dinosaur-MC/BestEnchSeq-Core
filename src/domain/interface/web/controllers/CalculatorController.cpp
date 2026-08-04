@@ -3,6 +3,7 @@
 #include "domain/interface/web/SseHub.h"
 #include "domain/interface/web/WebSchema.h"
 #include "domain/interface/components/http/Router.h"
+#include "domain/interface/components/http/StreamChannel.h"
 #include "ds/Error.h"
 #include "common/io/json.h"
 #include <string>
@@ -88,14 +89,17 @@ Response CalculatorController::cancel(const HttpRequest&, const PathParams& pp) 
     return Response::json(200, "OK", o.to_string());
 }
 
-Response CalculatorController::events(const HttpRequest&, const PathParams& pp) {
+Response CalculatorController::events(const HttpRequest& req, const PathParams& pp) {
     const std::string id = pp.get("id");
     // Validate the task exists before opening a stream — unknown → 404.
     (void)bridge_service([&] { return _svc.status(id); });   // 404 when unknown
-    // Register an SSE subscription. The callback is a no-op placeholder: frame
-    // delivery to the connection is the transport's job (Task 18). The sub id
-    // is retained so that task can unsubscribe on disconnect.
-    auto sub = _hub.subscribe(id, [](const std::string&, std::string) {});
+    // 订阅 SseHub 并把每一帧投递到请求的 StreamChannel（连接）。真实传输路径上
+    // req.stream 恒为连接（Connection 实现 StreamChannel）；单元测试直调时可能为空，
+    // 此时订阅仍注册但帧被静默丢弃。
+    auto ch = req.stream;
+    auto sub = _hub.subscribe(id, [ch](const std::string&, std::string frame) {
+        if (ch) ch->post_frame(std::move(frame));
+    });
     _streams[id] = sub;
     return sse_stream_response();
 }
