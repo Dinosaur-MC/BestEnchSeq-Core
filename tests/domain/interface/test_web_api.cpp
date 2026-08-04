@@ -538,6 +538,29 @@ void test_stream_channel(TestApp& app) {
     expect(c.status == 200, "cancel channel task");
 }
 
+/// SseHub::clear()（Fix 1 的公开 API）：清空全部订阅。clear 后订阅计数归零，
+/// publish 不再送达任何通道。WebModule 析构体在 Impl 成员析构前调用它来排空 hub。
+void test_hub_clear(TestApp& app) {
+    auto fake = std::make_shared<FakeChannel>();
+    LogsController lc(app.ctx, app.hub);
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/api/logs/events";
+    req.stream = fake;
+    auto r = lc.events(req);
+    expect(r.status == 200 && r.is_stream, "logs events stream response via channel");
+    expect(app.hub.subscriber_count("logs") == 1, "logs subscription registered before clear");
+
+    app.hub.clear();
+    expect(app.hub.subscriber_count("logs") == 0, "hub cleared all subscriptions");
+
+    app.hub.publish("logs", "data: nope\n\n");
+    bool leaked = false;
+    for (const auto& f : fake->frames)
+        if (f == "data: nope\n\n") leaked = true;
+    expect(!leaked, "no frame delivered after clear");
+}
+
 /// 连接关闭钩子测试（确定性证明 on_close → 退订 的接线）：
 /// 用 "logs" 键最确定 —— 该键无任何自动退订（WebSolveService 只清任务键），
 /// 唯一能把它从 1 清零的机制就是 LogsController 注册的 on_close 回调。
@@ -584,6 +607,7 @@ int main() {
         test_algorithms(app);
         test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
         test_stream_close_hook(app); // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
+        test_hub_clear(app);        // SseHub::clear() 清空全部订阅
         test_calculator(app);
         test_logs(app);
         test_web_module(app.ctx);

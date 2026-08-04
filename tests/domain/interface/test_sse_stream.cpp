@@ -181,6 +181,44 @@ static void test_stream_response_enters_stream_mode() {
 }
 
 // ---------------------------------------------------------------------------
+// Peer FIN reaps an idle stream connection (Fix 2). A client that closes (FIN)
+// with no in-flight write must still be detected: before the fix the stream
+// branch never read, so the FIN stayed pending → select reported the fd readable
+// every poll round → drive → flush_stream no-op → busy-loop + fd/hub leak forever.
+// ---------------------------------------------------------------------------
+static void test_stream_fin_closes() {
+    TcpListener l;
+    expect(l.listen("127.0.0.1", 0), "listen");
+    int client = sock_connect("127.0.0.1", l.bound_port());
+    expect(client >= 0, "connect");
+    int fd = l.accept();
+    expect(fd >= 0, "accept");
+    set_nonblocking(fd);
+    set_nonblocking(client);
+    Connection conn(fd, "sse-fin");
+
+    auto sse = std::make_shared<SseStream>("sse-fin");
+    expect(conn.set_stream(sse), "set_stream accepted");
+    expect(conn.alive(), "stream connection alive before FIN");
+
+    bool close_fired = false;
+    conn.on_close([&] { close_fired = true; });
+
+    sock_close(client);                                    // 对端 FIN（无任何在途写）
+    bool closed = false;
+    for (int i = 0; i < 200 && conn.alive(); ++i) {
+        conn.process(StubRouter{});                        // 流模式：消费 FIN → 关闭
+        if (!conn.alive()) { closed = true; break; }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    expect(closed, "peer FIN closes the stream connection");
+    expect(!conn.alive(), "connection not alive after FIN");
+    expect(close_fired, "on_close fired after FIN close");
+
+    conn.close();
+}
+
+// ---------------------------------------------------------------------------
 // Disconnect detection: the peer goes away; the next failed write closes the
 // connection. A 2 MiB frame cannot be fully buffered by the socket, so retrying
 // the blocked write (stream-mode process) must surface a send error and close.
@@ -221,6 +259,7 @@ int main() {
     test_stream_heartbeat_ping();
     test_stream_response_enters_stream_mode();
     test_stream_disconnect_closes();
+    test_stream_fin_closes();
     TEST_PASS("test_sse_stream");
     return print_summary();
 }

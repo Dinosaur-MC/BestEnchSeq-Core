@@ -24,6 +24,12 @@ public:
     /// 清空某 task 的全部订阅（task 收尾调用）。
     void unsubscribe_all(const std::string& task_id);
 
+    /// 清空全部订阅（WebModule 关机调用）。交换出 `_subs` 到局部变量后锁外析构，
+    /// 不打断在途 publish（publish 持锁拷贝列表后锁外调用）。析构订阅回调会释放其
+    /// 捕获的 shared_ptr<Connection>，触发连接 close() → on_close（控制器退订）。
+    /// 必须在 Reactor/控制器销毁与 solve worker join 之前调用（见 WebModule.h 注释）。
+    void clear();
+
     /// 发布一帧（solve worker 调用，线程安全）。
     void publish(const std::string& task_id, std::string frame);
 

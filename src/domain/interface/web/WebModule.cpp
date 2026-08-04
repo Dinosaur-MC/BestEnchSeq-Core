@@ -38,7 +38,21 @@ WebModule::WebModule(BesqContext& ctx) : _impl(std::make_unique<Impl>(ctx)) {
     _impl->_router.register_controller<LogsController>(ctx, _impl->_hub);
 }
 
-WebModule::~WebModule() = default;
+WebModule::~WebModule() {
+    if (!_impl) return;
+    // 关机排序修复（两处潜在 UAF）：
+    //   (a) controllers 的 on_close 捕获 `this`；Impl 成员析构序 `_router`(控制器) →
+    //       `_solve`(join worker) → `_hub`。若 SseHub 仍持有订阅（捕获
+    //       shared_ptr<Connection> → 连接 on_close 捕获控制器 this），`_router` 先死
+    //       会让连接 close() 触发在已析构控制器上。
+    //   (b) Reactor::add_connection 的帧汇捕获裸 `Reactor* this`；HttpServer 在 main
+    //       中声明于 WebModule 之后 → 先析构 → Reactor 先死。`_solve` dtor join
+    //       worker 期间 worker 的 publish 会经 hub 订阅 → 连接 post_frame → 帧汇 →
+    //       已析构 Reactor 的 loop.post。
+    // 在 Impl 成员析构前清空 hub：此刻控制器与 hub 均存活，触发的 on_close 安全；
+    // 清空后 worker publish 无订阅可送达，帧汇窗口关闭。
+    _impl->_hub.clear();
+}
 
 void WebModule::set_static_resources(std::map<std::string, StaticResource> embedded) {
     _impl->_sfs.mount_embedded("/public", std::move(embedded));

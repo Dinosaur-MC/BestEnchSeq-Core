@@ -28,6 +28,18 @@ void SseHub::unsubscribe_all(const std::string& task_id) {
     _subs.erase(task_id);
 }
 
+void SseHub::clear() {
+    decltype(_subs) subs;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        subs.swap(_subs);
+    }
+    // 锁外析构：清空后 publish/unsubscribe 均为无操作。析构 Sub 释放其 FrameFn 捕获的
+    // shared_ptr<Connection> → 触发连接 close() → on_close 回调（控制器退订）。连接与
+    // 控制器在本方法调用点均存活（WebModule 析构体在 Impl 成员析构前调用），故安全。
+    subs.clear();
+}
+
 void SseHub::publish(const std::string& task_id, std::string frame) {
     // Copy the subscriber list under the lock, then invoke callbacks outside it:
     // a callback may unsubscribe / re-subscribe without deadlocking the hub.

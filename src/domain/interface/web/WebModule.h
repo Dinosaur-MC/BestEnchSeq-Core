@@ -25,6 +25,11 @@ namespace web {
 class WebModule {
 public:
     explicit WebModule(BesqContext& ctx);
+    /// 析构排序不变量：SseHub 必须在 Reactor/controller teardown 之前 drained
+    /// （clear()），也必须在 solve worker join 之前 drained。WebModule 析构体先调用
+    /// `_impl->_hub.clear()`，再释放 `_impl`（其成员按 `_router` → `_solve` → `_hub`
+    /// 逆序析构）——否则连接 on_close 会命中已析构的控制器 `this`，而 `_solve` dtor
+    /// join worker 期间的 publish 会命中已析构 Reactor 的帧汇（见 WebModule.cpp）。
     ~WebModule();
 
     WebModule(const WebModule&) = delete;

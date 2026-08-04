@@ -86,10 +86,21 @@ void Connection::push_sse_frame() {
 bool Connection::process(const Router& router) {
     if (!_alive) return false;
 
-    // SSE 流模式：不再读/解析请求，只补完积压输出（写失败 → close 在 drain_out 内）。
+    // SSE 流模式：不再解析请求，只补完积压输出（写失败 → close 在 drain_out 内）。
+    // 同时消费已就绪的输入（对端数据 / FIN）：否则对端 FIN 后 select 每轮都报告该 fd
+    // 可读，drive → flush_stream 空转 → 连接永不回收（fd + hub 订阅泄漏 + poller 忙循环）。
     if (_stream) {
         bool had_out = !_out.empty();
         flush_stream();
+        if (_alive && wait_readable(_fd, 0) != 0) {   // 就绪探测：可读或错误
+            std::string chunk;
+            int n = sock_recv_nb(_fd, chunk, 64 * 1024);
+            if (n == 0 || n == -1) {                  // 可读 + 0 字节 = 对端 FIN；错误同样收尾
+                close();                              // 触发 on_close → 控制器退订 → 无泄漏
+                return had_out;
+            }
+            // n > 0：对端发了字节（流模式下不是合法 HTTP 请求）→ 丢弃，继续流。
+        }
         return had_out || !_out.empty();
     }
 
