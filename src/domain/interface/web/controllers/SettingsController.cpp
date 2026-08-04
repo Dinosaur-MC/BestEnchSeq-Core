@@ -34,12 +34,13 @@ void apply_lang(const std::string& code) {
 }
 
 /// Bound-check before casting: out-of-range 0..3 would overflow LogLevel and
-/// corrupt the Logger singleton.
+/// corrupt the Logger singleton.  Read as int64_t so oversized integers (e.g.
+/// 2^32+2) are rejected instead of wrapping down into the valid range.
 int32_t checked_log_level(const Json& v, const char* field) {
-    int32_t lv = v.as<int32_t>();
+    int64_t lv = v.as<int64_t>();
     if (lv < 0 || lv > 3)
         throw WebHttpError(400, "INVALID_FIELD", std::string(field) + " must be 0..3");
-    return lv;
+    return static_cast<int32_t>(lv);
 }
 
 } // namespace

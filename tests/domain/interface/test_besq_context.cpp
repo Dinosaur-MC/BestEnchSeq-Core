@@ -939,6 +939,35 @@ void test_named_profile_edit_and_meta() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: add_enchantment_to / remove_enchantment_from facade (by-name CRUD)
+// ---------------------------------------------------------------------------
+
+void test_facade_by_name_registry() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.load_profiles();
+
+    std::string key = ctx.list_profiles()[0];
+
+    // Add a brand-new enchantment to the named profile via the facade.
+    EnchInfo e;
+    e.id = NSID("test:zz_ench");
+    e.name = "Zz Test Enchantment";
+    e.max_level = 1;
+    e.multiplier = 2;
+    e.supported_items.insert(NSID("#minecraft:swords"));
+    expect(ctx.add_enchantment_to(key, e), "add ench");
+    expect(ctx.profile(key).ench().find(e.id) != ctx.profile(key).ench().end(),
+           "ench present");
+
+    expect(ctx.remove_enchantment_from(key, e.id), "remove ench");
+    expect(ctx.profile(key).ench().find(e.id) == ctx.profile(key).ench().end(),
+           "ench gone");
+
+    TEST_PASS("BesqContext facade by-name registry");
+}
+
+// ---------------------------------------------------------------------------
 // Test: update_*_to named-profile variants (enchantment/equipment/tag)
 // ---------------------------------------------------------------------------
 
@@ -1039,6 +1068,7 @@ int main() {
         test_c_abi_solve_unknown_ench();
         test_besq_abort_concurrent();
         test_named_profile_edit_and_meta();
+        test_facade_by_name_registry();
         test_update_variants();
         test_algorithm_detail_and_unload_gate();
     } catch (const std::exception& e) {
