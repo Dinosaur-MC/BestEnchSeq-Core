@@ -270,6 +270,7 @@ endif()
 # ═══════════════════════════════════════════════════════════════════════════════
 if(BESQ_BUILD_GUI)
     # Embedded frontend assets (single-exe distribution)
+    # served files must match the kAssets table in src/gui/main.cpp
     set(GUI_FRONTEND ${CMAKE_CURRENT_SOURCE_DIR}/gui/frontend)
     set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js)
     foreach(name IN LISTS GUI_ASSET_NAMES)
