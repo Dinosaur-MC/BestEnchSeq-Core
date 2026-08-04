@@ -10,12 +10,16 @@ export async function render(el) {
     data.algorithms.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.mode || '')}</td></tr>`).join('') +
     `</tbody></table>
      <label>${t('alg.load_dir')}</label><input class="dir">
-     <button class="load">${t('alg.load')}</button></div>`;
+     <button class="load">${t('alg.load')}</button>
+     <div id="alg-msg" class="mono"></div></div>`;
   el.querySelector('.load').addEventListener('click', async () => {
     const dir = el.querySelector('.dir').value.trim();
     if (!dir) return;
     clearError();
-    try { const r = await http.post('/api/algorithm/load', { dir }); showError(`${t('alg.loaded')}: ${r.loaded}`); }
-    catch (e) { showError(e.message); }
+    try {
+      const r = await http.post('/api/algorithm/load', { dir });
+      // Success is neutral status, not an error — write it inline, not the red banner.
+      document.getElementById('alg-msg').textContent = `${t('alg.loaded')}: ${r.loaded}`;
+    } catch (e) { showError(e.message); }
   });
 }

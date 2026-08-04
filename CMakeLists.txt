@@ -86,7 +86,7 @@ option(BESQ_DISABLE_DIAGNOSTICS "Remove diagnostics code at compile time" OFF)
 option(BESQ_DEEP_DIAGNOSTICS "Enable per-operation diagnostic counters (profiling builds; default off = zero hot-path cost)" OFF)
 option(BESQ_BUILD_CLI "Build the besq CLI executable" ON)
 option(BESQ_BUILD_SANDBOX "Build the besq-worker sandbox executable (algorithm sandboxing for third-party plugins)" OFF)
-option(BESQ_BUILD_GUI "Build the besq-gui WebView2 GUI executable" OFF)
+option(BESQ_BUILD_GUI "Build the besq-gui Web GUI executable" OFF)
 option(BUILD_TESTING "Build test targets" ON)
 option(BUILD_BENCHMARKS "Build benchmark targets" OFF)
 set(BESQ_MAX_SOLUTIONS 32 CACHE STRING "Maximum solutions stored per algorithm execution (presets override this)")
@@ -266,7 +266,7 @@ if(BESQ_BUILD_SANDBOX)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# besq-gui (guarded by BESQ_BUILD_GUI) — WebView2 GUI host (Windows-first)
+# besq-gui (guarded by BESQ_BUILD_GUI) — Web GUI host (browser host, v1; WebView2 future work)
 # ═══════════════════════════════════════════════════════════════════════════════
 if(BESQ_BUILD_GUI)
     # Embedded frontend assets (single-exe distribution)

@@ -58,3 +58,10 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 th { color: var(--muted); font-weight: 600; }
 .mono { font-family: Consolas, monospace; font-size: 13px; }
 .step { border-left: 2px solid var(--accent-2); padding: 4px 10px; margin: 6px 0; }
+
+/* ── MC theme polish ── */
+.brand { letter-spacing: .5px; }
+h2 { margin-top: 0; color: var(--accent-2); }
+.nav-item.active { color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+.empty { color: var(--muted); font-style: italic; padding: 8px; }

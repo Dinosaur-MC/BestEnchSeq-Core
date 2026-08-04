@@ -25,8 +25,8 @@
 ///   BESQ_WORKER_PATH     — Path to besq-worker binary (default: auto — <exe_dir>/besq-worker[.exe], then PATH)
 ///   BESQ_GUI_HOST        — GUI HTTP server bind address (default: "127.0.0.1")
 ///   BESQ_GUI_PORT        — GUI HTTP server port; 0 = auto-assign a free ephemeral port (default: 0)
-///   BESQ_GUI_OPEN_BROWSER— Open the default browser instead of the WebView2 window
-///                          (dev mode / when WebView2 runtime is unavailable; default: 0)
+///   BESQ_GUI_OPEN_BROWSER— Open the default browser (v1 host; a WebView2 native window is future work)
+///                          (default: 0)
 struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
@@ -41,7 +41,7 @@ struct AppConfig {
     std::string sandbox_worker_path;    // besq-worker binary ("" → <exe_dir>/besq-worker[.exe], then PATH)
     std::string gui_host = "127.0.0.1"; // GUI HTTP server bind address
     uint16_t    gui_port = 0;           // GUI HTTP server port (0 = auto-assign free port)
-    bool        gui_open_browser = false; // dev: open default browser instead of WebView2 window
+    bool        gui_open_browser = false; // v1 host: open the default browser (a WebView2 native window is future work)
 
     /// Global app configuration singleton — loads BESQ_* env vars on first
     /// use.  Consumers include AppConfig.h and read directly (no param

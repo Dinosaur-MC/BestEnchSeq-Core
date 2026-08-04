@@ -29,6 +29,7 @@ const dicts = {
     'set.save': 'Save', 'set.saved': 'Saved',
     'status.title': 'Status', 'status.profile': 'Active profile',
     'status.algorithms': 'Algorithms', 'status.solve': 'Active solve', 'status.uptime': 'Uptime (ms)',
+    'status.solve_yes': 'Yes', 'status.solve_no': 'No',
     'err.network': 'Network error — is besq-gui running?',
   },
   'zh-CN': {
@@ -56,6 +57,7 @@ const dicts = {
     'logs.title': '日志', 'logs.tail': '条数', 'logs.level': '级别', 'logs.refresh': '刷新', 'logs.auto': '自动刷新',
     'set.title': '设置', 'set.lang': '语言', 'set.log_level': '日志级别', 'set.save': '保存', 'set.saved': '已保存',
     'status.title': '状态', 'status.profile': '当前数据', 'status.algorithms': '算法数', 'status.solve': '求解中', 'status.uptime': '运行时长（毫秒）',
+    'status.solve_yes': '是', 'status.solve_no': '否',
     'err.network': '网络错误 — besq-gui 未运行？',
   },
 };
