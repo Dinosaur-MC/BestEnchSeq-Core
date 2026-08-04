@@ -1,4 +1,5 @@
 #include "AppConfig.h"
+#include "BuildConfig.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
@@ -81,9 +82,22 @@ int main(int argc, char* argv[]) try {
     bool open_browser = cfg.gui_open_browser;
     std::string frontend_dir;   // --frontend-dir (dev hot reload)
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--browser") open_browser = true;
-        else if (std::string(argv[i]) == "--frontend-dir" && i + 1 < argc)
-            frontend_dir = argv[++i];
+        std::string a = argv[i];
+        if (a == "--help" || a == "-h") {
+            std::cout
+                << "besq-gui — BestEnchSeq Web GUI\n"
+                << "Usage: besq-gui [--browser] [--frontend-dir DIR]\n"
+                << "  --browser           open the default browser (the v1 host)\n"
+                << "  --frontend-dir DIR  serve the SPA from DIR (dev hot-reload)\n"
+                << "Environment: BESQ_GUI_HOST, BESQ_GUI_PORT, BESQ_GUI_OPEN_BROWSER, BESQ_LANG\n";
+            return 0;
+        }
+        if (a == "--version" || a == "-V") {
+            std::cout << "besq-gui " << BESQ_VERSION << "\n";
+            return 0;
+        }
+        if (a == "--browser") open_browser = true;
+        else if (a == "--frontend-dir" && i + 1 < argc) frontend_dir = argv[++i];
     }
 
     BesqContext ctx;
