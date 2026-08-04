@@ -10,7 +10,7 @@ const char* level_name(LogLevel lv) {
         case LogLevel::Warn:  return "warn";
         case LogLevel::Error: return "error";
     }
-    return "info";
+    return "unknown";
 }
 } // namespace
 

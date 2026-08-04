@@ -97,14 +97,15 @@ public:
     LogLevel console_level() const noexcept { return _console_level.load(std::memory_order_acquire); }
 
     /// Optional bounded ring buffer for /api/logs. When set, every log() call
-    /// also pushes a copy here (thread-safe, bounded).
+    /// also pushes a copy here (thread-safe, bounded). Atomic: set_ring_buffer
+    /// writes from one thread while log() reads it from any thread.
     void set_ring_buffer(std::shared_ptr<LogRingBuffer> ring) noexcept {
-        _ring_buffer = std::move(ring);
+        _ring_buffer.store(std::move(ring));
     }
     /// The configured ring buffer (may be null). WebModule reads it for
     /// /api/logs.
     std::shared_ptr<LogRingBuffer> ring_buffer() const noexcept {
-        return _ring_buffer;
+        return _ring_buffer.load();
     }
 
 private:
@@ -145,5 +146,5 @@ private:
     std::atomic<LogLevel> _console_level{LogLevel::Warn};
     std::atomic<LogLevel> _level{LogLevel::Debug};
     EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, FileHandler> _loop;
-    std::shared_ptr<LogRingBuffer> _ring_buffer;
+    std::atomic<std::shared_ptr<LogRingBuffer>> _ring_buffer;
 };

@@ -360,6 +360,9 @@ void test_log_ring_buffer() {
     auto capped = ring->snapshot(LogLevel::Debug, 100);
     expect(capped.size() == 8, "ring capped at capacity");
     expect(capped[0].message == "x4", "oldest dropped, x4 is oldest");
+
+    ring->clear();
+    expect(ring->snapshot(LogLevel::Debug, 100).empty(), "ring cleared");
     TEST_PASS("LogRingBuffer");
 }
 
@@ -368,6 +371,8 @@ void test_api_logs() {
     ring->push(LogLevel::Info, "hello web logs");
     auto json = Json::parse(ApiLogs::handle(*ring, LogLevel::Debug, 32));
     expect(json["logs"][0]["message"].as<std::string>() == "hello web logs", "log entry served");
+    expect(json["logs"][0]["level"].as<std::string>() == "info", "log level serialized");
+    expect(json["logs"][0].has("timestamp_ms"), "timestamp_ms present");
     TEST_PASS("ApiLogs");
 }
 
