@@ -56,8 +56,11 @@ public:
     publish_profile(const std::string& name, const std::string& version, const std::string& tag, const std::string& out_path);
 
     // ── Profile data access (by name, no activation side effect) ──
-    /// Effective view of a named profile. Throws std::runtime_error when the
-    /// profile is unknown. Does NOT change the active profile.
+    /// The named profile's OWN data (raw registries; inherited dependency
+    /// content is NOT merged in). Throws std::runtime_error when the profile
+    /// is unknown. Does NOT change the active profile. Callers needing the
+    /// dependency-merged view should read ProfileManager::resolve_effective
+    /// (as a value copy, not a held reference).
     const Profile& profile(const std::string& name) const;
 
     // ── Registry editing (named profile) ──

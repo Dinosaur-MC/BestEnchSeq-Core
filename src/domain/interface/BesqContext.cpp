@@ -3,13 +3,13 @@
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/ProfileManager.h"
-#include "common/i18n/Language.h"
 #include "domain/orchestration/pipelines/ExportPipeline.h"
 #include "domain/orchestration/pipelines/ManagePipeline.h"
 #include "domain/orchestration/pipelines/SolvePipeline.h"
 #include "domain/orchestration/types/ExportRequest.h"
 #include "domain/orchestration/types/ManageRequest.h"
 
+#include "common/i18n/Language.h"
 #include <atomic>
 #include <filesystem>
 #include <string>

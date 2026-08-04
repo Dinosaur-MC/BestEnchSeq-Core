@@ -1,10 +1,8 @@
 // =============================================================================
-// Web API tests: BesqContext facade increments + per-resource handlers.
+// Web API tests: BesqContext facade increments (+ per-resource handlers in M1.3+).
 // =============================================================================
 #include "domain/interface/BesqContext.h"
 #include "framework/test_utils.h"
-#include <filesystem>
-#include <fstream>
 #include <string>
 
 // ── Facade increment: by-name profile read/write ──────────────────────────
@@ -33,8 +31,20 @@ void test_facade_by_name_registry() {
     expect(ctx.remove_enchantment_from("mod:custom", NSID("mod:sword_ench")), "remove by name");
     expect(!ctx.profile("mod:custom").ench().contains(NSID("mod:sword_ench")), "ench gone by name");
 
-    // Unknown profile read must throw.
-    expect_throws([&] { ctx.profile("does:not_exist"); }, "unknown profile read throws");
+    // Failure paths: duplicate add → false; unknown profile write → false.
+    EnchInfo dup;
+    dup.id = NSID("mod:sword_ench");
+    dup.name = "Dup";
+    dup.max_level = 3;
+    dup.multiplier = 1;
+    dup.supported_items.insert(NSID("#minecraft:swords"));
+    ctx.add_enchantment_to("mod:custom", dup); // (re)add once
+    expect(!ctx.add_enchantment_to("mod:custom", dup), "duplicate add by name returns false");
+    expect(!ctx.add_enchantment_to("does:not_exist", dup), "add to unknown profile returns false");
+    expect(!ctx.remove_enchantment_from("does:not_exist", NSID("mod:sword_ench")), "remove from unknown profile returns false");
+
+    // Unknown profile read must throw std::runtime_error.
+    expect_throws_as<std::runtime_error>([&] { ctx.profile("does:not_exist"); }, "unknown profile read throws");
     TEST_PASS("facade by-name registry");
 }
 
