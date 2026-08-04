@@ -14,8 +14,8 @@ int main(int argc, char* argv[]) try {
     register_builtin_translations(LanguageManager::instance());
     setup_logger(cfg.logger_config());
 
-    // WebView2 host lands in M4; until then, run the embedded HTTP server
-    // and print the URL. --browser opens the default browser.
+    // WebView2 host and HTTP server land in later milestones (M1.7/M4.3);
+    // for now print the configured bind address as a placeholder.
     bool open_browser = cfg.gui_open_browser;
     for (int i = 1; i < argc; ++i)
         if (std::string(argv[i]) == "--browser") open_browser = true;

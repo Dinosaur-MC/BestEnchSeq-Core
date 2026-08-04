@@ -272,6 +272,8 @@ if(BESQ_BUILD_GUI)
     add_executable(besq-gui
         ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/main.cpp
     )
+    # UNIX: the whole chain must be bracketed in one --start-group (same
+    # circular static-lib rationale as the besq target above).
     if(UNIX)
         target_link_libraries(besq-gui PRIVATE
             -Wl,--start-group besq-core besq-domain-business besq-domain-orchestration besq-domain-interface besq-algo-core -Wl,--end-group
