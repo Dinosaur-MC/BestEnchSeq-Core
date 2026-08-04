@@ -2,7 +2,6 @@
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/web/WebHttpError.h"
 #include "common/io/json.h"
-#include <vector>
 
 std::string ApiAlgorithm::handle_list(const BesqContext& ctx) {
     Json arr = Json::array();
@@ -19,7 +18,12 @@ std::string ApiAlgorithm::handle_list(const BesqContext& ctx) {
 std::string ApiAlgorithm::handle_get(const BesqContext& ctx, const std::string& name) {
     auto all = ctx.list_algorithms();
     bool found = false;
-    for (const auto& n : all) found = found || (n == name);
+    for (const auto& n : all) {
+        if (n == name) {
+            found = true;
+            break;
+        }
+    }
     if (!found)
         throw webhttp::WebHttpError(404, "unknown algorithm: " + name);
     Json o = Json::object();

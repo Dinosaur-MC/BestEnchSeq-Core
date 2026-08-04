@@ -328,6 +328,9 @@ void test_api_algorithm() {
     expect_throws_as<webhttp::WebHttpError>([&] {
         ApiAlgorithm::handle_get(ctx, "nope");
     }, "unknown algorithm throws WebHttpError");
+
+    auto loaded = Json::parse(ApiAlgorithm::handle_load(ctx, "no/such/dir"));
+    expect(loaded["loaded"].as<int64_t>() == 0, "load of missing dir returns 0");
     TEST_PASS("ApiAlgorithm");
 }
 
