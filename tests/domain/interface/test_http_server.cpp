@@ -158,11 +158,18 @@ void test_socket_echo() {
     });
 
     int c = webhttp::sock_connect("127.0.0.1", listener.bound_port());
-    expect(c >= 0, "client connects");
-    expect(webhttp::sock_send(c, "ping", 3000), "client sends");
-    std::string reply;
-    expect(webhttp::sock_recv(c, reply, 1024, 3000) > 0, "client receives reply");
-    expect(reply == "ping", "echo matches");
+    try {
+        expect(c >= 0, "client connects");
+        expect(webhttp::sock_send(c, "ping", 3000), "client sends");
+        std::string reply;
+        expect(webhttp::sock_recv(c, reply, 1024, 3000) > 0, "client receives reply");
+        expect(reply == "ping", "echo matches");
+    } catch (...) {
+        webhttp::sock_close(c);
+        listener.close();  // unblocks the blocked accept → thread exits with server_fd == -1
+        server.join();
+        throw;
+    }
     webhttp::sock_close(c);
     server.join();
     if (server_fd >= 0) webhttp::sock_close(server_fd);

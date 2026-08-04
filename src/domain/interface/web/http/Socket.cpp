@@ -1,12 +1,13 @@
 #include "Socket.h"
 
+#include <cerrno>
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
-#include <cerrno>
 #include <cstring>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -34,20 +35,6 @@ void close_native(sock_t s) {
     ::close(s);
 #endif
 }
-int last_error() {
-#ifdef _WIN32
-    return WSAGetLastError();
-#else
-    return errno;
-#endif
-}
-bool is_would_block(int err) {
-#ifdef _WIN32
-    return err == WSAEWOULDBLOCK || err == WSAETIMEDOUT;
-#else
-    return err == EAGAIN || err == EWOULDBLOCK || err == EINTR;
-#endif
-}
 bool set_recv_timeout(sock_t s, int ms) {
 #ifdef _WIN32
     DWORD t = static_cast<DWORD>(ms);
@@ -70,6 +57,7 @@ void platform_init() {
 }
 
 bool TcpListener::listen(const std::string& host, uint16_t port) {
+    close();  // drop any previous listener first
     platform_init();
     sock_t fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd == kInvalid) return false;
@@ -78,10 +66,14 @@ bool TcpListener::listen(const std::string& host, uint16_t port) {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    if (host.empty() || host == "0.0.0.0")
+    if (host.empty() || host == "0.0.0.0") {
         addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    else
-        inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+    } else {
+        if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) != 1) {
+            close_native(fd);
+            return false;
+        }
+    }
     if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 ||
         ::listen(fd, 8) != 0) {
         close_native(fd);
@@ -140,7 +132,6 @@ int sock_recv(int fd, std::string& out, size_t max_bytes, int timeout_ms) {
 #endif
     if (n > 0) out.assign(buf.data(), static_cast<size_t>(n));
     if (n == 0) return 0;
-    if (n < 0 && is_would_block(last_error())) return -1;
     if (n < 0) return -1;
     return static_cast<int>(n);
 }
@@ -148,15 +139,14 @@ int sock_recv(int fd, std::string& out, size_t max_bytes, int timeout_ms) {
 bool sock_send(int fd, const std::string& data, int timeout_ms) {
     if (fd < 0) return false;
     sock_t s = native(fd);
-#ifdef _WIN32
-    set_recv_timeout(s, timeout_ms);
-    int n = ::send(s, data.data(), static_cast<int>(data.size()), 0);
-    return n == static_cast<int>(data.size());
-#else
-    (void)timeout_ms;
+    (void)timeout_ms;  // send timeout is not enforceable via SO_RCVTIMEO on Winsock
     size_t off = 0;
     while (off < data.size()) {
+#ifdef _WIN32
+        int n = ::send(s, data.data() + off, static_cast<int>(data.size() - off), 0);
+#else
         ssize_t n = ::send(s, data.data() + off, data.size() - off, MSG_NOSIGNAL);
+#endif
         if (n < 0) {
             if (errno == EINTR) continue;
             return false;
@@ -164,7 +154,6 @@ bool sock_send(int fd, const std::string& data, int timeout_ms) {
         off += static_cast<size_t>(n);
     }
     return true;
-#endif
 }
 
 void sock_close(int fd) {
