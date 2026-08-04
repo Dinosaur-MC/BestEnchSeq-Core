@@ -10,3 +10,6 @@ besq_test_interface(test_cli_acceptance test_cli_acceptance.cpp)
 
 
 besq_test_interface(test_besq_context test_besq_context.cpp)
+
+# components/http framework tests
+besq_test_interface(test_socket_nb test_socket_nb.cpp)
