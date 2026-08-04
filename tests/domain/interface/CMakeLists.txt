@@ -19,3 +19,4 @@ besq_test_interface(test_web_calculator test_web_calculator.cpp)
 
 # components/http framework tests
 besq_test_interface(test_http_common test_http_common.cpp)
+besq_test_interface(test_socket_nb test_socket_nb.cpp)
