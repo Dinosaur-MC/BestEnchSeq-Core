@@ -1,4 +1,5 @@
 #include "HttpParser.h"
+#include <cerrno>
 #include <cstdlib>
 
 namespace webhttp {
@@ -48,6 +49,8 @@ ParseResult HttpParser::parse(const std::string& buf, size_t& consumed, HttpRequ
     out.method = request_line.substr(0, sp1);
     std::string target = request_line.substr(sp1 + 1, sp2 - sp1 - 1);
     std::string version = request_line.substr(sp2 + 1);
+    if (out.method.empty() || target.empty())
+        return ParseResult::BadRequest;
     if (version != "HTTP/1.1" && version != "HTTP/1.0")
         return ParseResult::BadRequest;
 
@@ -57,7 +60,7 @@ ParseResult HttpParser::parse(const std::string& buf, size_t& consumed, HttpRequ
     out.query = q == std::string::npos ? "" : target.substr(q + 1);
 
     // ── Headers ──
-    size_t pos = first_nl == std::string::npos ? 0 : first_nl + 2;
+    size_t pos = first_nl == std::string::npos ? head.size() : first_nl + 2;
     out.headers.clear();
     while (pos <= head.size()) {
         auto nl = head.find("\r\n", pos);
@@ -74,7 +77,12 @@ ParseResult HttpParser::parse(const std::string& buf, size_t& consumed, HttpRequ
     // ── Body ──
     auto cl = out.header("Content-Length");
     if (!cl.empty()) {
-        long len = std::strtol(cl.c_str(), nullptr, 10);
+        errno = 0;
+        char* end = nullptr;
+        long len = std::strtol(cl.c_str(), &end, 10);
+        // Reject non-numeric (no digits / trailing junk) and overflow.
+        if (errno == ERANGE || end == cl.c_str() || *end != '\0')
+            return ParseResult::BadRequest;
         if (len < 0) return ParseResult::BadRequest;
         if (buf.size() < consumed + static_cast<size_t>(len))
             return ParseResult::Incomplete;

@@ -8,7 +8,7 @@ namespace webhttp {
 /// Request-line + headers + (optional) body parsed from a raw HTTP/1.1 stream.
 struct HttpRequest {
     std::string method;                       // GET / POST / PUT / DELETE
-    std::string path;                         // decoded path only, no query
+    std::string path;                         // path portion before '?'; not URL-decoded
     std::string query;                        // raw query string (no leading '?')
     std::vector<std::pair<std::string, std::string>> headers;
     std::string body;
