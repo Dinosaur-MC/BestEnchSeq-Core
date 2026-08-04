@@ -27,6 +27,8 @@
 ///   BESQ_GUI_PORT        — GUI HTTP server port; 0 = auto-assign a free ephemeral port (default: 0)
 ///   BESQ_GUI_OPEN_BROWSER— Open the default browser (v1 host; a WebView2 native window is future work)
 ///                          (default: 0)
+///   BESQ_GUI_WORKERS     — GUI HTTP server consumer threads (default: 2)
+///   BESQ_GUI_RES_DIR     — /public disk root; "" → resolved at runtime (default: <exe_dir>/res, then <cwd>/res)
 struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
@@ -42,6 +44,8 @@ struct AppConfig {
     std::string gui_host = "127.0.0.1"; // GUI HTTP server bind address
     uint16_t    gui_port = 0;           // GUI HTTP server port (0 = auto-assign free port)
     bool        gui_open_browser = false; // v1 host: open the default browser (a WebView2 native window is future work)
+    size_t      gui_workers = 2;        // GUI HTTP server consumer threads
+    std::string gui_res_dir;            // /public disk root ("" → resolved at runtime)
 
     /// Global app configuration singleton — loads BESQ_* env vars on first
     /// use.  Consumers include AppConfig.h and read directly (no param
@@ -69,6 +73,8 @@ struct AppConfig {
         cfg.gui_host         = get_env<std::string>("BESQ_GUI_HOST",           cfg.gui_host);
         cfg.gui_port         = get_env<uint16_t>   ("BESQ_GUI_PORT",           cfg.gui_port);
         cfg.gui_open_browser = get_env<bool>       ("BESQ_GUI_OPEN_BROWSER",   cfg.gui_open_browser);
+        cfg.gui_workers      = get_env<size_t>     ("BESQ_GUI_WORKERS",        cfg.gui_workers);
+        cfg.gui_res_dir      = get_env_str         ("BESQ_GUI_RES_DIR");
         return cfg;
     }
 

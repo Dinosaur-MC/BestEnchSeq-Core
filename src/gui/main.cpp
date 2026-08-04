@@ -4,7 +4,6 @@
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
 #include "common/log/LogRingBuffer.h"
-#include "common/utils/EnvUtil.hpp"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/web/WebModule.h"
@@ -103,12 +102,11 @@ static std::string current_exe_dir() {
 #endif
 }
 
-/// /public 磁盘根（可选，dev 模式）。解析序：BESQ_GUI_RES_DIR env → ./res →
-/// <exe_dir>/res；都不存在 → 空（跳过挂载）。
-static std::filesystem::path resolve_res_dir() {
-    const std::string env = get_env_str("BESQ_GUI_RES_DIR");
-    if (!env.empty() && std::filesystem::is_directory(env))
-        return std::filesystem::path(env);
+/// /public 磁盘根（可选，dev 模式）。解析序：cfg.gui_res_dir（来自
+/// BESQ_GUI_RES_DIR，"" 时跳过）→ ./res → <exe_dir>/res；都不存在 → 空（跳过挂载）。
+static std::filesystem::path resolve_res_dir(const std::string& res_dir) {
+    if (!res_dir.empty() && std::filesystem::is_directory(res_dir))
+        return std::filesystem::path(res_dir);
     if (std::filesystem::is_directory("./res"))
         return std::filesystem::path("./res");
     const std::string dir = current_exe_dir();
@@ -136,6 +134,7 @@ int main(int argc, char* argv[]) try {
                 << "  --browser           open the default browser (the v1 host)\n"
                 << "  --frontend-dir DIR  serve the SPA from DIR (dev hot-reload)\n"
                 << "Environment: BESQ_GUI_HOST, BESQ_GUI_PORT, BESQ_GUI_OPEN_BROWSER\n"
+                << "             BESQ_GUI_WORKERS (consumer threads, default 2)\n"
                 << "             BESQ_GUI_RES_DIR (optional /public disk root)\n"
                 << "             (language is set at runtime via PATCH /api/settings)\n";
             return 0;
@@ -161,7 +160,7 @@ int main(int argc, char* argv[]) try {
     // SPA 的 text/html 资产强制成 application/json。
     web::WebModule module(ctx);
     module.set_static_resources(build_static(frontend_dir));
-    auto res_dir = resolve_res_dir();
+    auto res_dir = resolve_res_dir(cfg.gui_res_dir);
     if (!res_dir.empty())
         module.mount_res_dir(res_dir);
 
@@ -170,7 +169,7 @@ int main(int argc, char* argv[]) try {
         return module.dispatch(r);
     });
 
-    if (!server.start(cfg.gui_host, cfg.gui_port, /*workers=*/2)) {
+    if (!server.start(cfg.gui_host, cfg.gui_port, cfg.gui_workers)) {
         std::cerr << "besq-gui: failed to bind " << cfg.gui_host << ":" << cfg.gui_port << "\n";
         return 1;
     }
