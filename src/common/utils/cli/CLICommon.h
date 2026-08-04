@@ -4,6 +4,8 @@
 #include <array>
 #include <cstdint>
 #include <concepts>
+#include <cstdio>
+#include <exception>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -115,25 +117,57 @@ template<typename... Entries>
 struct OptionTable {
     std::tuple<Entries...> entries;
 
+    // Duplicate-name validation runs here, not at compile time: a compile-time
+    // check would need the whole table to be a constant expression, but the
+    // tables carry `std::string` defaults (non-literal in C++20), so they are
+    // dynamically initialized.  validate() used to be consteval and never
+    // CALLED — a duplicate long_name/short_name compiled silently and the
+    // shadowed entry was unreachable.  It is invoked now, so a duplicate aborts
+    // at process startup (tables are built once) instead of silently shadowing.
     constexpr OptionTable(Entries... args) noexcept
-        : entries(std::move(args)...) {}
+        : entries(std::move(args)...) {
+        validate();
+    }
 
-    consteval void validate() const noexcept {
+    constexpr void validate() const noexcept {
         check_unique_names(std::index_sequence_for<Entries...>{});
     }
 
 private:
+    /// Uniform accessors so check_unique_names can build homogeneous arrays
+    /// over mixed entry types: Positional carries neither long_name nor
+    /// short_name (it contributes "" / '\0'), Flag/Option carry both.
+    static constexpr std::string_view entry_long(const auto& e) noexcept {
+        if constexpr (requires { e.long_name; }) return e.long_name;
+        else return {};
+    }
+    static constexpr char entry_short(const auto& e) noexcept {
+        if constexpr (requires { e.short_name; }) return e.short_name;
+        else return '\0';
+    }
+
     template<size_t... Is>
-    consteval void check_unique_names(std::index_sequence<Is...>) const noexcept {
-        constexpr auto long_names  = std::array{ std::get<Is>(entries).long_name... };
-        constexpr auto short_names = std::array{ std::get<Is>(entries).short_name... };
+    constexpr void check_unique_names(std::index_sequence<Is...>) const noexcept {
+        const auto long_names  = std::array{ entry_long(std::get<Is>(entries))... };
+        const auto short_names = std::array{ entry_short(std::get<Is>(entries))... };
         for (size_t i = 0; i < long_names.size(); ++i)
             for (size_t j = i + 1; j < long_names.size(); ++j) {
-                if (!long_names[i].empty() && long_names[i] == long_names[j])
-                    throw;  // compile error: duplicate long_name
+                // Unreachable in a correct table.  Runs at process startup (the
+                // tables are dynamically initialized — std::string defaults rule
+                // out a compile-time check), so a duplicate aborts the process
+                // with a message instead of silently shadowing an option.  The
+                // build's own test binaries construct these tables, so a newly
+                // introduced duplicate fails their startup immediately.
+                if (!long_names[i].empty() && long_names[i] == long_names[j]) {
+                    std::fprintf(stderr, "OptionTable: duplicate long_name '%.*s'\n",
+                                 static_cast<int>(long_names[i].size()), long_names[i].data());
+                    std::terminate();
+                }
                 if (short_names[i] != '\0' && short_names[j] != '\0'
-                    && short_names[i] == short_names[j])
-                    throw;  // compile error: duplicate short_name
+                    && short_names[i] == short_names[j]) {
+                    std::fprintf(stderr, "OptionTable: duplicate short_name '%c'\n", short_names[i]);
+                    std::terminate();
+                }
             }
     }
 };

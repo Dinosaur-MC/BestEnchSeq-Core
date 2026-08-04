@@ -38,6 +38,27 @@ CLIApp::CLIApp()
     _ctx.load_builtin();
 }
 
+CLIApp::~CLIApp() {
+    // RAII safety net: whatever path run() took (including exceptions thrown
+    // mid-run), flush CLI output + drain the async Logger queue while this
+    // process is still alive.  The implicit flush at process exit is
+    // unreliable here — see flush_output().  Runs after every per-feature
+    // flush, so it is normally a no-op; it exists to catch the paths where
+    // run() returns/throws without printing a banner.
+    flush_output();
+}
+
+void CLIApp::flush_output() noexcept {
+    // None of these can realistically throw (cout/cerr exceptions are disabled
+    // by default; besq::log::flush is a bounded busy-wait), but the dtor must
+    // stay noexcept, so swallow anything that does.
+    try {
+        besq::log::flush();   // async Logger's queued console mirror lines
+        std::cout.flush();    // the CLI's own buffered output
+        std::cerr.flush();    // belt-and-suspenders (cerr is unit-buffered)
+    } catch (...) {}
+}
+
 // ============================================================================
 // apply_lang — Select language from env / locale / CLI flag
 // ============================================================================
@@ -109,6 +130,7 @@ int CLIApp::run(int argc, char* argv[]) {
         std::cout << tr_fmt("cli.msg.list_algorithms", algos.size()) << "\n";
         for (const auto& name : algos)
             std::cout << "  " << name << "\n";
+        flush_output();  // make the list durable now, not at exit-time
         return 0;
     }
 
@@ -152,6 +174,7 @@ int CLIApp::run(int argc, char* argv[]) {
     if (config.export_path) {
         if (*config.export_path == "-") {
             std::cout << _ctx.export_profile_to_string() << "\n";
+            flush_output();
         } else {
             bool ok = _ctx.export_profile(*config.export_path);
             if (!ok) throw std::runtime_error(
@@ -197,6 +220,7 @@ int CLIApp::run(int argc, char* argv[]) {
         } else {
             std::cout << output;
         }
+        flush_output();
     }
 
     return 0;
@@ -470,6 +494,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
                 std::cout << tr_fmt("cli.help.usage", prog) << "\n";
                 std::cout << tr_fmt("cli.help.usage_export", prog) << "\n";
                 std::cout << tr_fmt("cli.err.try_help", prog) << "\n";
+                flush_output();
                 cfg.brief_usage = true;  // signal run() to skip further processing
             } else {
                 throw std::runtime_error(tr("cli.err.missing_target_or_export"));

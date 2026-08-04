@@ -15,6 +15,7 @@
 class CLIApp {
 public:
     CLIApp();
+    ~CLIApp();
     int run(int argc, char* argv[]);
     static std::string detect_target(int argc, char* argv[]);
 
@@ -76,6 +77,14 @@ public:
 
 private:
     struct UserI18nTranslator;
+
+    /// Flush CLI stdout + drain the async Logger queue while the process is
+    /// alive.  Exit-time static teardown ordering is unreliable in the
+    /// EXE + SHARED besq-common-log layout, so the CLI must not depend on the
+    /// implicit iostream flush at process exit.  Called after each output
+    /// feature (list/export/solve/brief-usage) and again from ~CLIApp() as the
+    /// RAII safety net (covers exceptions and any path that printed no banner).
+    static void flush_output() noexcept;
 
     static void apply_edits(const std::string& spec, BesqContext& ctx);
 

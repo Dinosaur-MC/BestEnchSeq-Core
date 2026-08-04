@@ -28,20 +28,14 @@ int main(int argc, char* argv[]) try {
     auto target = CLIApp::detect_target(argc, argv);
 
     if (target == "cli") {
-        const int rc = CLIApp().run(argc, argv);
-        // Explicitly flush stdio/iostream BEFORE the process exits.  The CLI
-        // shares stdout with the async Logger's thread, and the exit-time
-        // flush was intermittently LOSING buffered output (observed on
-        // --list-algorithms: the list printed only ~2/3 of runs).  Flushing
-        // here, while the main thread is alive, makes CLI output reliable.
-        // The async Logger's queue is drained the same way: the process can
-        // exit before its worker thread writes queued WARN/ERROR lines (e.g.
-        // the plugin audit's "[Audit] REFUSED" — a critical signal that must
-        // not be lost), so wait for the queue to drain while alive.
-        besq::log::flush();
-        std::cout.flush();
-        std::cerr.flush();
-        return rc;
+        // CLIApp owns its output flush: ~CLIApp() (the temporary is destroyed
+        // right after run() returns) flushes std::cout and drains the async
+        // Logger queue while this process is still alive.  The exit-time
+        // implicit flush was intermittently LOSING buffered output (observed
+        // on --list-algorithms: the list printed only ~2/3 of runs) because
+        // static-teardown ordering is unreliable in the EXE + SHARED
+        // besq-common-log layout — see CLIApp::flush_output().
+        return CLIApp().run(argc, argv);
     }
 
     std::cerr << "Unknown API target: " << target << "\n";
