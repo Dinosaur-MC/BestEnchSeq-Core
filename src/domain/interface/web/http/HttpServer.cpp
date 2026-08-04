@@ -17,30 +17,6 @@ void HttpServer::set_fallback(Handler h) {
     _fallback = std::move(h);
 }
 
-bool HttpServer::match_pattern(const std::string& pattern, const std::string& path,
-                               std::vector<std::string>& params) {
-    params.clear();
-    size_t pi = 0, si = 0;
-    while (pi < pattern.size() && si < path.size()) {
-        if (pattern[pi] == '{') {
-            auto close = pattern.find('}', pi);
-            if (close == std::string::npos) return false;
-            if (close == pi + 1) return false;  // empty placeholder {} not allowed
-            auto slash = path.find('/', si);
-            size_t end = slash == std::string::npos ? path.size() : slash;
-            if (end == si) return false;      // empty segment not allowed
-            params.push_back(path.substr(si, end - si));
-            pi = close + 1;
-            si = end;
-        } else {
-            if (pattern[pi] != path[si]) return false;
-            ++pi; ++si;
-        }
-    }
-    if (pi != pattern.size() || si != path.size()) return false;
-    return true;
-}
-
 HttpResponse HttpServer::dispatch(const HttpRequest& req) {
     for (const auto& route : _routes) {
         if (route.method != req.method) continue;

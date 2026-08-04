@@ -53,4 +53,28 @@ struct HttpResponse {
     }
 };
 
+/// Shared `{param}` segment matcher used by HttpServer and WebModule.
+inline bool match_pattern(const std::string& pattern, const std::string& path,
+                          std::vector<std::string>& params) {
+    params.clear();
+    size_t pi = 0, si = 0;
+    while (pi < pattern.size() && si < path.size()) {
+        if (pattern[pi] == '{') {
+            auto close = pattern.find('}', pi);
+            if (close == std::string::npos) return false;
+            if (close == pi + 1) return false;   // empty {} placeholder not allowed
+            auto slash = path.find('/', si);
+            size_t end = slash == std::string::npos ? path.size() : slash;
+            if (end == si) return false;
+            params.push_back(path.substr(si, end - si));
+            pi = close + 1;
+            si = end;
+        } else {
+            if (pattern[pi] != path[si]) return false;
+            ++pi; ++si;
+        }
+    }
+    return pi == pattern.size() && si == path.size();
+}
+
 } // namespace webhttp

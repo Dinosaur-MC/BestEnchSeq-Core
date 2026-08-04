@@ -465,13 +465,15 @@ void test_web_module_routing() {
     auto p = Json::parse(module.dispatch("GET", "/api/profile", "").body);
     expect(p["profiles"][0].as<std::string>() == "builtin:vanilla", "module routes /api/profile");
 
-    // Static resource
+    // Static resource (body + content type)
     auto st = module.dispatch("GET", "/app.js", "");
     expect(st.status == 200, "static resource served");
+    expect(st.content_type == "text/javascript", "static resource content type");
     expect(st.body == "console.log(1);", "static resource body");
 
     // Root → index.html
     auto root = module.dispatch("GET", "/", "");
+    expect(root.status == 200, "root serves index.html with 200");
     expect(root.body == "<html>hi</html>", "root serves index.html");
 
     // Unknown API → 404 JSON
@@ -491,7 +493,48 @@ void test_web_module_routing() {
     auto read = Json::parse(module.dispatch("GET", "/api/profile/mod:routed/ench", "").body);
     expect(read["enchantments"].type() == JsonType::Array, "param route resolves");
 
+    // Malformed body → 400 envelope (input error, not internal).
+    auto mal = module.dispatch("PUT", "/api/settings", "{not json");
+    expect(mal.status == 400, "malformed body maps to 400");
+    auto mj = Json::parse(mal.body);
+    expect(mj["ok"] == false, "malformed body error envelope ok=false");
+
+    // Conflict: forking to an existing destination → 409 envelope.
+    auto dup1 = Json::parse(module.dispatch("POST", "/api/profile",
+        R"({"action":"fork","source":"builtin:vanilla","dest":"mod:dup"})").body);
+    expect(dup1["ok"] == true, "first fork to mod:dup ok");
+    auto dup2_resp = module.dispatch("POST", "/api/profile",
+        R"({"action":"fork","source":"builtin:vanilla","dest":"mod:dup"})");
+    expect(dup2_resp.status == 409, "conflict maps to 409");
+    auto dup2 = Json::parse(dup2_resp.body);
+    expect(dup2["ok"] == false, "conflict envelope ok=false");
+
+    // Calculator route smoke: POST → task_id, GET → state.
+    auto calc = Json::parse(module.dispatch("POST", "/api/calculator",
+        R"({"target":{"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},)"
+        R"("algorithm":"dp_merge","max_solutions":1})").body);
+    expect(calc.has("task_id"), "calculator POST returns task_id");
+    std::string calc_id = calc["task_id"].as<std::string>();
+    auto calc_state = Json::parse(module.dispatch("GET", "/api/calculator/" + calc_id, "").body);
+    expect(calc_state.has("state"), "calculator GET has state");
+    // Poll to a terminal state so the solve worker has fully exited before the
+    // profile cleanup below: a live worker reads the profile effective-view
+    // cache (ctx.enchantments()/solve()), and remove_profile invalidates that
+    // cache — running both concurrently would be a data race.
+    bool calc_done = false;
+    for (int i = 0; i < 500 && !calc_done; ++i) {
+        auto st = Json::parse(module.dispatch("GET", "/api/calculator/" + calc_id, "").body);
+        if (st["state"].as<std::string>() != "running") calc_done = true;
+        if (!calc_done) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(calc_done, "calculator task reaches a terminal state");
+
+    // /api/logs smoke.
+    auto logs = Json::parse(module.dispatch("GET", "/api/logs", "").body);
+    expect(logs.has("logs"), "/api/logs served");
+
     ctx.remove_profile("mod:routed");
+    ctx.remove_profile("mod:dup");
     TEST_PASS("WebModule routing");
 }
 

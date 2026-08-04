@@ -24,8 +24,7 @@ const char* reason_for(int status) {
     }
     return "Error";
 }
-std::string error_json(int status, const std::string& msg) {
-    (void)status;
+std::string error_json(const std::string& msg) {
     Json o = Json::object();
     o["ok"] = Json(false);
     o["error"] = Json(msg);
@@ -62,28 +61,6 @@ WebModule::WebModule(BesqContext& ctx) : _ctx(ctx), _solve(ctx) {
     };
 }
 
-bool WebModule::match_pattern(const std::string& pattern, const std::string& path,
-                              std::vector<std::string>& params) {
-    params.clear();
-    size_t pi = 0, si = 0;
-    while (pi < pattern.size() && si < path.size()) {
-        if (pattern[pi] == '{') {
-            auto close = pattern.find('}', pi);
-            if (close == std::string::npos) return false;
-            auto slash = path.find('/', si);
-            size_t end = slash == std::string::npos ? path.size() : slash;
-            if (end == si) return false;
-            params.push_back(path.substr(si, end - si));
-            pi = close + 1;
-            si = end;
-        } else {
-            if (pattern[pi] != path[si]) return false;
-            ++pi; ++si;
-        }
-    }
-    return pi == pattern.size() && si == path.size();
-}
-
 void WebModule::set_static_resources(std::map<std::string, StaticResource> resources) {
     _static = std::move(resources);
 }
@@ -114,9 +91,11 @@ HttpResponse WebModule::dispatch(const std::string& method, const std::string& p
         }
         return HttpResponse::json(404, "Not Found", "{\"ok\":false,\"error\":\"not found\"}");
     } catch (const WebHttpError& e) {
-        return HttpResponse::json(e.status, reason_for(e.status), error_json(e.status, e.what()));
+        return HttpResponse::json(e.status, reason_for(e.status), error_json(e.what()));
+    } catch (const JsonException&) {
+        return HttpResponse::json(400, "Bad Request", error_json("invalid request body"));
     } catch (const std::exception& e) {
-        return HttpResponse::json(400, "Bad Request", error_json(400, e.what()));
+        return HttpResponse::json(500, "Internal Server Error", error_json(e.what()));
     }
 }
 

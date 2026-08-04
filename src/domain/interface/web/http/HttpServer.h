@@ -41,8 +41,6 @@ public:
 private:
     HttpResponse dispatch(const HttpRequest& req);
     void handle_connection(int fd);
-    static bool match_pattern(const std::string& pattern, const std::string& path,
-                              std::vector<std::string>& params);
 
     TcpListener _listener;
     struct Route {

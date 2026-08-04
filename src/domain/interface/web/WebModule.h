@@ -1,6 +1,5 @@
 #pragma once
 #include "domain/interface/web/http/HttpCommon.h"
-#include "domain/interface/web/WebSchema.h"
 #include "domain/interface/web/WebSolveService.h"
 #include "domain/interface/web/resources/ApiProfiles.h"
 #include <map>
@@ -42,9 +41,6 @@ private:
         std::string pattern;
         std::string (*handler)(WebModule&, const std::vector<std::string>&, const std::string&);
     };
-
-    static bool match_pattern(const std::string& pattern, const std::string& path,
-                              std::vector<std::string>& params);
 
     BesqContext& _ctx;
     WebSolveService _solve;
