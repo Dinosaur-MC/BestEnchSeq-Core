@@ -88,7 +88,8 @@ BESQ_GUI_PORT=8765 ./build/bin/besq-gui --browser --frontend-dir gui/frontend
 ```
 
 Environment: `BESQ_GUI_HOST` (default `127.0.0.1`), `BESQ_GUI_PORT` (default
-`0` = OS-assigned), `BESQ_GUI_OPEN_BROWSER`, `BESQ_LANG`.
+`0` = OS-assigned), `BESQ_GUI_OPEN_BROWSER`. Language is set at runtime via
+`PUT /api/settings`.
 Endpoints: `/health`, `/api/settings`, `/api/profile[...]`, `/api/algorithm`,
 `/api/calculator`, `/api/logs`, `/api/status`.
 

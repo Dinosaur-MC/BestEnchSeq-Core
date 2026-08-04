@@ -89,7 +89,8 @@ int main(int argc, char* argv[]) try {
                 << "Usage: besq-gui [--browser] [--frontend-dir DIR]\n"
                 << "  --browser           open the default browser (the v1 host)\n"
                 << "  --frontend-dir DIR  serve the SPA from DIR (dev hot-reload)\n"
-                << "Environment: BESQ_GUI_HOST, BESQ_GUI_PORT, BESQ_GUI_OPEN_BROWSER, BESQ_LANG\n";
+                << "Environment: BESQ_GUI_HOST, BESQ_GUI_PORT, BESQ_GUI_OPEN_BROWSER\n"
+                << "             (language is set at runtime via PUT /api/settings)\n";
             return 0;
         }
         if (a == "--version" || a == "-V") {
