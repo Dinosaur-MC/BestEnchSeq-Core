@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -11,6 +12,30 @@
 namespace algorithm {
 class IExecutor;
 }
+
+// ── Algorithm detail / unload (API value types) ────────────────────────
+enum class AlgorithmOrigin { builtin, plugin };
+
+struct AlgorithmDetail {
+    std::string name;
+    std::string version;
+    AlgorithmOrigin origin = AlgorithmOrigin::builtin;
+    std::string plugin_path;      ///< plugin 才有
+    bool is_resumable = false;
+    std::string supported_mode;   ///< "direct" / "inventory"
+    bool has_audit = false;
+};
+
+/// Named-profile metadata snapshot (profile_metadata 返回）。
+struct ProfileMeta {
+    std::string name;
+    std::vector<std::string> dependencies;
+    std::string version;      ///< 空 = 未发布
+    std::string release_tag;  ///< 空 = 未发布
+    bool is_root = false;
+    size_t ench_count = 0, eq_count = 0, tag_count = 0;
+    std::string format;       ///< native_json / csv / datapack / builtin
+};
 
 /// Main public API class for BestEnchSeq.
 /// Session facade: holds session state (active profile, algorithm loader) and
@@ -74,6 +99,21 @@ public:
     bool remove_equipment_from(const std::string& profile, const NSID& id);
     bool add_tag_to(const std::string& profile, const EquipmentTag& tag);
     bool remove_tag_from(const std::string& profile, const NSID& id);
+    /// Update variants — delegate to ProfileManager::update_*. Operates on ANY
+    /// profile. Returns false if the profile/entry is unknown or the edit
+    /// leaves the profile invalid.
+    bool update_enchantment_to(const std::string& profile, const EnchInfo& patch);
+    bool update_equipment_to(const std::string& profile, const Equipment& patch);
+    bool update_tag_to(const std::string& profile, const EquipmentTag& patch);
+
+    // ── Profile metadata & rename ──
+    /// Existence check without throwing.
+    bool profile_exists(const std::string& name) const;
+    /// Snapshot the named profile's metadata + registry sizes. Unknown → throw
+    /// std::runtime_error.
+    ProfileMeta profile_metadata(const std::string& name) const;
+    /// Rename a profile (active name follows). False if old unknown / new taken.
+    bool rename_profile(const std::string& old_name, const std::string& new_name);
 
     // ── Registry editing (active profile) ──
     bool add_enchantment(const EnchInfo& info);
@@ -113,6 +153,13 @@ public:
 
     // ── Algorithm queries ──
     std::vector<std::string> list_algorithms() const;
+
+    /// Per-strategy metadata (origin/version/mode/resume/audit/path).
+    /// Unknown name → throw std::runtime_error.
+    AlgorithmDetail algorithm_detail(const std::string& name) const;
+    /// Unload a plugin by name. Built-in / unknown → false (never unloads the
+    /// trusted kernel). Plugin instances must already be destroyed.
+    bool unload_algorithm(const std::string& name);
 
 private:
     struct Impl;

@@ -174,6 +174,49 @@ bool BesqContext::remove_tag_from(const std::string& profile, const NSID& id) {
     return _impl->profiles.remove_tag(profile, id);
 }
 
+// ---- Update variants (delegate to ProfileManager::update_*) ----
+
+bool BesqContext::update_enchantment_to(const std::string& profile, const EnchInfo& patch) {
+    return _impl->profiles.update_enchantment(profile, patch);
+}
+bool BesqContext::update_equipment_to(const std::string& profile, const Equipment& patch) {
+    return _impl->profiles.update_equipment(profile, patch);
+}
+bool BesqContext::update_tag_to(const std::string& profile, const EquipmentTag& patch) {
+    return _impl->profiles.update_tag(profile, patch);
+}
+
+// ====================================================================
+// Profile metadata & rename
+// ====================================================================
+
+bool BesqContext::profile_exists(const std::string& name) const {
+    return _impl->profiles.exists(name);
+}
+
+ProfileMeta BesqContext::profile_metadata(const std::string& name) const {
+    const auto* p = _impl->profiles.find(name);
+    if (!p)
+        throw std::runtime_error(tr_fmt("cli.err.profile_not_found", name));
+
+    ProfileMeta m;
+    const auto& meta = p->metadata();
+    m.name = meta.name;
+    m.dependencies = meta.dependencies;
+    m.version = meta.version;
+    m.release_tag = "";                     // Profile 无 release_tag 字段（未发布）
+    m.is_root = (name == "builtin:vanilla");
+    m.ench_count = p->ench().size();
+    m.eq_count = p->eq().size();
+    m.tag_count = p->tags().size();
+    m.format = m.is_root ? "builtin" : "";  // Profile 无 source 字段；根 profile 为内建
+    return m;
+}
+
+bool BesqContext::rename_profile(const std::string& old_name, const std::string& new_name) {
+    return _impl->profiles.rename(old_name, new_name);
+}
+
 // ====================================================================
 // Registry editing (active profile)
 // ====================================================================
@@ -302,6 +345,41 @@ size_t BesqContext::load_algorithms(const std::string& dir_path) {
 
 std::vector<std::string> BesqContext::list_algorithms() const {
     return _impl->algo_loader.list();
+}
+
+AlgorithmDetail BesqContext::algorithm_detail(const std::string& name) const {
+    const auto& loader = _impl->algo_loader;
+    if (!loader.contains(name))
+        throw std::runtime_error(tr_fmt("pipeline.err.unknown_algo", name, ""));
+
+    AlgorithmDetail d;
+    d.name = name;
+    auto pp = loader.plugin_path(name);
+    if (pp) {
+        d.origin = AlgorithmOrigin::plugin;
+        d.plugin_path = *pp;
+    } else {
+        d.origin = AlgorithmOrigin::builtin;
+    }
+    d.has_audit = loader.get_audit_report(name) != nullptr;
+
+    auto algo = loader.create(name);
+    if (algo) {
+        d.version = std::string(algo->version());
+        d.is_resumable = algo->is_resumable();
+        d.supported_mode = (algo->supported_mode() == AlgorithmMode::inventory) ? "inventory" : "direct";
+    }
+    return d;
+}
+
+bool BesqContext::unload_algorithm(const std::string& name) {
+    auto& loader = _impl->algo_loader;
+    if (!loader.contains(name))
+        return false;                 // 未知
+    if (!loader.plugin_path(name))
+        return false;                 // 内建（可信内核）永不卸载
+    loader.unload(name);
+    return true;
 }
 
 SolveResult BesqContext::solve(const SolveRequest& request) {
