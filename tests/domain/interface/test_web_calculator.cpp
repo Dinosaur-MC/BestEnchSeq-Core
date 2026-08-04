@@ -159,8 +159,14 @@ void test_calculator_resource() {
 
     // GET while running or completed; eventually completed with result.
     bool completed = false;
+    bool saw_running = false;
     for (int i = 0; i < 500; ++i) {
         auto st = Json::parse(ApiCalculator::handle_get(svc, id));
+        if (st["state"].as<std::string>() == "running" && !saw_running) {
+            saw_running = true;
+            expect(st["progress"].type() == JsonType::Number,
+                   "running envelope carries numeric progress");
+        }
         if (st["state"].as<std::string>() == "completed") {
             completed = true;
             expect(st["result"]["success"] == true, "result JSON has success true");
@@ -178,6 +184,25 @@ void test_calculator_resource() {
     expect_throws_as<webhttp::WebHttpError>([&] {
         ApiCalculator::handle_get(svc, "nope");
     }, "unknown task id throws 404");
+
+    // Failed envelope via the resource: an unknown enchantment fails the task.
+    auto bad_post = Json::parse(ApiCalculator::handle_post(svc, R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"nonexistent_ench","level":1}]},
+        "algorithm":"dp_merge"
+    })"));
+    std::string bad_id = bad_post["task_id"].as<std::string>();
+    bool failed = false;
+    for (int i = 0; i < 200; ++i) {
+        auto st = Json::parse(ApiCalculator::handle_get(svc, bad_id));
+        if (st["state"].as<std::string>() == "failed") {
+            failed = true;
+            expect(st.has("error") && st["error"].as<std::string>() != "",
+                   "failed envelope carries error");
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(failed, "invalid task reaches failed envelope");
     TEST_PASS("calculator resource lifecycle");
 }
 

@@ -14,15 +14,21 @@ const char* state_name(webhttp::TaskState s) {
         case webhttp::TaskState::Failed:    return "failed";
         case webhttp::TaskState::Cancelled: return "cancelled";
     }
-    return "running";
+    return "unknown";
 }
 
 } // namespace
 
 std::string ApiCalculator::handle_post(webhttp::WebSolveService& svc, const std::string& body) {
-    auto json = Json::parse(body);
     WebTaskDto dto;
-    WebTaskJson::parse_or_throw(json, dto);
+    try {
+        auto json = Json::parse(body);
+        WebTaskJson::parse_or_throw(json, dto);
+    } catch (const JsonException&) {
+        throw webhttp::WebHttpError(400, "invalid task JSON");
+    } catch (const ds::ValidationError&) {
+        throw webhttp::WebHttpError(400, "invalid task body");
+    }
     auto id = svc.start(dto);   // throws WebHttpError(409) on active conflict
     Json o = Json::object();
     o["task_id"] = Json(id);

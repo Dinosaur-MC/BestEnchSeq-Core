@@ -8,6 +8,8 @@ namespace webhttp { class WebSolveService; }
 ///   POST   /api/calculator   {WebTask JSON}        → {task_id}
 ///   GET    /api/calculator/{id}  → {state, progress} or {state:"completed", result}
 ///   DELETE /api/calculator/{id}  → {ok:true}
+///   (DELETE is idempotent — cancelling an unknown/foreign id returns ok:true;
+///    use GET to distinguish 404.)
 struct ApiCalculator {
     static std::string handle_post(webhttp::WebSolveService& svc, const std::string& body);
     static std::string handle_get(webhttp::WebSolveService& svc, const std::string& id);
