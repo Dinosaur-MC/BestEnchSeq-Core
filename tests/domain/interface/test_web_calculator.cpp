@@ -6,6 +6,8 @@
 #include "domain/interface/BesqContext.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
+#include "common/io/json.h"
+#include "domain/interface/web/resources/ApiCalculator.h"
 #include "framework/test_utils.h"
 #include <chrono>
 #include <thread>
@@ -141,6 +143,44 @@ void test_failed_and_has_active() {
     TEST_PASS("calculator failed path + has_active");
 }
 
+void test_calculator_resource() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    webhttp::WebSolveService svc(ctx);
+
+    // POST with a valid task → {task_id}
+    auto post = Json::parse(ApiCalculator::handle_post(svc, R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })"));
+    expect(post["task_id"].type() == JsonType::String, "POST returns a task_id");
+    std::string id = post["task_id"].as<std::string>();
+
+    // GET while running or completed; eventually completed with result.
+    bool completed = false;
+    for (int i = 0; i < 500; ++i) {
+        auto st = Json::parse(ApiCalculator::handle_get(svc, id));
+        if (st["state"].as<std::string>() == "completed") {
+            completed = true;
+            expect(st["result"]["success"] == true, "result JSON has success true");
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(completed, "calculator task completes");
+
+    // DELETE on the finished task is a no-op success envelope.
+    auto del = Json::parse(ApiCalculator::handle_del(svc, id));
+    expect(del["ok"] == true, "DELETE returns ok");
+
+    // Unknown task → 404.
+    expect_throws_as<webhttp::WebHttpError>([&] {
+        ApiCalculator::handle_get(svc, "nope");
+    }, "unknown task id throws 404");
+    TEST_PASS("calculator resource lifecycle");
+}
+
 int main() {
     // The Failed path surfaces a localized error message (tr_fmt), which needs
     // the translation tables registered (the real app does this in main()).
@@ -150,6 +190,7 @@ int main() {
         test_lifecycle_complete();
         test_single_active_slot();
         test_failed_and_has_active();
+        test_calculator_resource();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
