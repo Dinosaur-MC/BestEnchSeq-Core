@@ -1,5 +1,8 @@
 #include "HttpServer.h"
 
+#include <chrono>
+#include <thread>
+
 namespace webhttp {
 
 bool HttpServer::start(const std::string& host, uint16_t port) {
@@ -22,7 +25,7 @@ bool HttpServer::match_pattern(const std::string& pattern, const std::string& pa
         if (pattern[pi] == '{') {
             auto close = pattern.find('}', pi);
             if (close == std::string::npos) return false;
-            std::string name = pattern.substr(pi + 1, close - pi - 1);
+            if (close == pi + 1) return false;  // empty placeholder {} not allowed
             auto slash = path.find('/', si);
             size_t end = slash == std::string::npos ? path.size() : slash;
             if (end == si) return false;      // empty segment not allowed
@@ -80,6 +83,7 @@ void HttpServer::run() {
         // stop()).
         if (_listener.wait_ready(100) <= 0) {
             if (!_running.load(std::memory_order_acquire)) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));  // no busy-spin
             continue;  // timeout → re-check _running
         }
         int c = _listener.accept();
@@ -87,6 +91,7 @@ void HttpServer::run() {
             if (!_running.load(std::memory_order_acquire)) break;
             continue;
         }
+        set_send_timeout(c, 5000);  // bound response writes; a non-reading peer can't wedge run()
         handle_connection(c);
         sock_close(c);
     }

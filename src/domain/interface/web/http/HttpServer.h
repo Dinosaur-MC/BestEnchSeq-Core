@@ -15,6 +15,12 @@ namespace webhttp {
 /// accepted. Route patterns support `{name}` path segments, e.g.
 /// `/api/calculator/{id}`. Everything unmatched goes to the fallback handler
 /// (static resources / 404).
+///
+/// Per-connection work is bounded: each read waits up to 5s and a request gets
+/// at most 64 reads, so a stalled client ties up the single accept loop for a
+/// finite time (a silent client ~5s, a trickling one up to ~5.3 min) rather
+/// than indefinitely. Writes are bounded too (SO_SNDTIMEO 5s), so a peer that
+/// stops reading cannot wedge run() forever.
 class HttpServer {
 public:
     using Handler = std::function<HttpResponse(const HttpRequest&)>;

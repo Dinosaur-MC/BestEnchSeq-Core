@@ -156,6 +156,18 @@ int sock_recv(int fd, std::string& out, size_t max_bytes, int timeout_ms) {
     return static_cast<int>(n);
 }
 
+bool set_send_timeout(int fd, int timeout_ms) {
+    if (fd < 0) return false;
+    sock_t s = native(fd);
+#ifdef _WIN32
+    DWORD t = static_cast<DWORD>(timeout_ms);
+    return setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&t), sizeof(t)) == 0;
+#else
+    timeval tv{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
+    return setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == 0;
+#endif
+}
+
 bool sock_send(int fd, const std::string& data, int timeout_ms) {
     if (fd < 0) return false;
     sock_t s = native(fd);

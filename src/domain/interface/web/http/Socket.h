@@ -17,6 +17,11 @@ int sock_recv(int fd, std::string& out, size_t max_bytes = 1 << 20, int timeout_
 /// Send all of `data`. Returns true when every byte was sent.
 bool sock_send(int fd, const std::string& data, int timeout_ms = 5000);
 
+/// Set a send timeout (SO_SNDTIMEO) on a connected socket. Returns true on
+/// success. Bounds blocking sends so a peer that stops reading can't wedge
+/// the server thread indefinitely.
+bool set_send_timeout(int fd, int timeout_ms);
+
 /// Close a connected or listening socket.
 void sock_close(int fd);
 
