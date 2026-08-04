@@ -115,7 +115,13 @@ std::string HttpResponse::to_bytes() const {
     std::string out;
     out += "HTTP/1.1 " + std::to_string(status) + " " + reason + "\r\n";
     out += "Content-Type: " + content_type + "\r\n";
-    out += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+    // 已有显式 Content-Length 头时不再自动追加（如 HEAD 的 r.body.clear() 场景），
+    // 避免线上出现两个互相矛盾的 Content-Length（RFC 9112 视为请求走私）。
+    bool has_content_length = false;
+    for (const auto& kv : headers)
+        if (ieq(kv.first, "Content-Length")) { has_content_length = true; break; }
+    if (!has_content_length)
+        out += "Content-Length: " + std::to_string(body.size()) + "\r\n";
     for (const auto& [k, v] : headers) {
         out += k;
         out += ": ";
