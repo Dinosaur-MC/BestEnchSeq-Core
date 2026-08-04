@@ -10,6 +10,7 @@
 #include "domain/interface/web/resources/ApiSettings.h"
 #include "domain/interface/web/resources/ApiStatus.h"
 #include "domain/interface/web/WebHttpError.h"
+#include "domain/interface/web/WebModule.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
@@ -440,6 +441,60 @@ void test_solve_progress_during_run() {
     TEST_PASS("solve_progress during run");
 }
 
+// ── WebModule (M1.7): route table + dispatch + error envelopes ───────────
+
+void test_web_module_routing() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    webhttp::WebModule module(ctx);
+    module.set_static_resources({
+        {"/index.html", {"text/html", "<html>hi</html>"}},
+        {"/app.js", {"text/javascript", "console.log(1);"}},
+    });
+
+    // /health
+    auto h = Json::parse(module.dispatch("GET", "/health", "").body);
+    expect(h["status"].as<std::string>() == "ok", "module routes /health");
+
+    // /api/status
+    auto s = Json::parse(module.dispatch("GET", "/api/status", "").body);
+    expect(s["active_profile"].as<std::string>() == "builtin:vanilla", "module routes /api/status");
+
+    // /api/profile list
+    auto p = Json::parse(module.dispatch("GET", "/api/profile", "").body);
+    expect(p["profiles"][0].as<std::string>() == "builtin:vanilla", "module routes /api/profile");
+
+    // Static resource
+    auto st = module.dispatch("GET", "/app.js", "");
+    expect(st.status == 200, "static resource served");
+    expect(st.body == "console.log(1);", "static resource body");
+
+    // Root → index.html
+    auto root = module.dispatch("GET", "/", "");
+    expect(root.body == "<html>hi</html>", "root serves index.html");
+
+    // Unknown API → 404 JSON
+    auto nf = Json::parse(module.dispatch("GET", "/api/does_not_exist", "").body);
+    expect(nf["ok"] == false, "unknown api path is error envelope");
+
+    // Handler exception (unknown profile) → 404 envelope
+    auto bad = Json::parse(module.dispatch("GET", "/api/profile/nope/ench", "").body);
+    expect(bad["ok"] == false, "unknown profile gives error envelope");
+
+    // POST /api/profile action
+    auto act = Json::parse(module.dispatch("POST", "/api/profile",
+        R"({"action":"fork","source":"builtin:vanilla","dest":"mod:routed"})").body);
+    expect(act["ok"] == true, "module dispatches profile action");
+
+    // Route with {id} param: read the forked profile's ench registry.
+    auto read = Json::parse(module.dispatch("GET", "/api/profile/mod:routed/ench", "").body);
+    expect(read["enchantments"].type() == JsonType::Array, "param route resolves");
+
+    ctx.remove_profile("mod:routed");
+    TEST_PASS("WebModule routing");
+}
+
 int main() {
     try {
         test_facade_by_name_registry();
@@ -453,6 +508,7 @@ int main() {
         test_api_logs();
         test_solve_progress_idle();
         test_solve_progress_during_run();
+        test_web_module_routing();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
