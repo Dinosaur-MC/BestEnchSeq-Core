@@ -3,6 +3,7 @@
 // =============================================================================
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/web/resources/ApiHealth.h"
+#include "domain/interface/web/resources/ApiProfiles.h"
 #include "domain/interface/web/resources/ApiSettings.h"
 #include "domain/interface/web/resources/ApiStatus.h"
 #include "domain/interface/web/WebHttpError.h"
@@ -13,6 +14,7 @@
 #include "BuildConfig.h"
 #include "framework/test_utils.h"
 #include <chrono>
+#include <filesystem>
 #include <string>
 
 // ── Facade increment: by-name profile read/write ──────────────────────────
@@ -145,12 +147,74 @@ void test_api_settings() {
     TEST_PASS("ApiSettings");
 }
 
+// ── ApiProfiles (M1.4): profile list/actions + per-name CRUD ──────────────
+
+void test_api_profiles_list_and_actions() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    // List
+    auto list = Json::parse(ApiProfiles::handle_list(ctx));
+    expect(list["profiles"][0].as<std::string>() == "builtin:vanilla", "list has builtin");
+
+    // Activate
+    auto act = Json::parse(ApiProfiles::handle_action(ctx, Json::parse(
+        R"({"action":"activate","name":"builtin:vanilla"})")));
+    expect(act["ok"] == true, "activate ok");
+
+    // Fork + activate custom, then add an enchantment to it by name.
+    auto fork = Json::parse(ApiProfiles::handle_action(ctx, Json::parse(
+        R"({"action":"fork","source":"builtin:vanilla","dest":"mod:web"})")));
+    expect(fork["ok"] == true, "fork ok");
+    expect(ctx.active_profile() == "builtin:vanilla", "fork does not auto-activate");
+
+    // Add ench to the forked profile via the resource.
+    auto add = Json::parse(ApiProfiles::handle_add(ctx, "mod:web", "ench", Json::parse(
+        R"({"id":"mod:web_ench","name":"Web","max_level":3,"multiplier":1,"supported_items":["#minecraft:swords"]})")));
+    expect(add["ok"] == true, "add ench to named profile ok");
+    expect(ctx.profile("mod:web").ench().contains(NSID("mod:web_ench")), "ench present by name");
+
+    // Read it back.
+    auto read = Json::parse(ApiProfiles::handle_read(ctx, "mod:web", "ench"));
+    bool found = false;
+    for (const auto& e : read["enchantments"].as_array())
+        if (e["id"].as<std::string>() == "mod:web_ench") found = true;
+    expect(found, "read returns the added enchantment");
+
+    // Remove it.
+    auto rm = Json::parse(ApiProfiles::handle_remove(ctx, "mod:web", "ench", "mod:web_ench"));
+    expect(rm["ok"] == true, "remove ench ok");
+    expect(!ctx.profile("mod:web").ench().contains(NSID("mod:web_ench")), "ench removed");
+
+    // Publish to a temp path. Build the JSON body as a Json object (not a
+    // string) so Windows backslash paths don't corrupt the JSON escapes.
+    auto tmp = std::filesystem::temp_directory_path() / "besq_web_publish.json";
+    Json pub_body = Json::object();
+    pub_body["action"] = Json("publish");
+    pub_body["name"] = Json("mod:web");
+    pub_body["version"] = Json("1.0");
+    pub_body["tag"] = Json("v1");
+    pub_body["path"] = Json(tmp.string());
+    auto pub = Json::parse(ApiProfiles::handle_action(ctx, pub_body));
+    expect(pub["ok"] == true, "publish ok");
+    std::filesystem::remove(tmp);
+
+    // Unknown profile read → 404-ish error envelope.
+    expect_throws_as<webhttp::WebHttpError>([&] {
+        ApiProfiles::handle_read(ctx, "does:not_exist", "ench");
+    }, "unknown profile read throws WebHttpError");
+
+    ctx.remove_profile("mod:web");
+    TEST_PASS("ApiProfiles list/actions/CRUD");
+}
+
 int main() {
     try {
         test_facade_by_name_registry();
         test_api_health();
         test_api_status();
         test_api_settings();
+        test_api_profiles_list_and_actions();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
