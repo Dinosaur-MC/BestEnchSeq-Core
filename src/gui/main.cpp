@@ -114,6 +114,10 @@ int main(int argc, char* argv[]) try {
     const auto url = "http://" + cfg.gui_host + ":" + std::to_string(server.port()) + "/";
     std::cout << "besq-gui serving at " << url << "\n";
 
+    // v1 host: the default browser. A native WebView2 window (src/gui/
+    // webview_host.*) is future work — it needs the Microsoft WebView2 SDK,
+    // which is not vendored. `server.run()` keeps serving on this thread for
+    // the process lifetime; Ctrl+C exits.
     if (open_browser) {
 #ifdef _WIN32
         std::string cmd = "start \"\" \"" + url + "\"";
@@ -124,7 +128,6 @@ int main(int argc, char* argv[]) try {
 #endif
     }
 
-    // WebView2 host lands in M4. Until then, serve on this thread.
     server.run();
     return 0;
 
