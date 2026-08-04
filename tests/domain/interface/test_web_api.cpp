@@ -1,16 +1,18 @@
 // =============================================================================
-// Web API tests (modern controllers): Health/Status/Settings over web::Router.
-// Profiles/Algorithm/Calculator/Logs controllers arrive in later tasks and
+// Web API tests (modern controllers): Health/Status/Settings/Profiles over
+// web::Router. Algorithm/Calculator/Logs controllers arrive in later tasks and
 // extend this file.
 // =============================================================================
 #include "domain/interface/web/controllers/HealthController.h"
 #include "domain/interface/web/controllers/StatusController.h"
 #include "domain/interface/web/controllers/SettingsController.h"
+#include "domain/interface/web/controllers/ProfilesController.h"
 #include "domain/interface/components/http/Router.h"
 #include "domain/interface/BesqContext.h"
 #include "common/io/json.h"
 #include "framework/test_utils.h"
 #include <memory>
+#include <mutex>
 #include <string>
 
 using namespace web;
@@ -18,10 +20,13 @@ using namespace web;
 namespace {
 struct TestApp {
     Router router;
-    explicit TestApp(BesqContext& c) {
+    std::mutex gate;
+    BesqContext& ctx;
+    explicit TestApp(BesqContext& c) : ctx(c) {
         router.register_controller<HealthController>();
         router.register_controller<StatusController>(c);
         router.register_controller<SettingsController>(c);
+        router.register_controller<ProfilesController>(ctx, gate);
     }
     HttpResponse call(Method m, std::string path, std::string body = "") {
         HttpRequest req; req.method = m; req.path = std::move(path); req.body = std::move(body);
@@ -93,6 +98,76 @@ void test_settings(TestApp& app) {
     expect(arr.status == 400 && arr.body.find("INVALID_FIELD") != std::string::npos,
            "non-object body 400 INVALID_FIELD");
 }
+
+void test_profiles(TestApp& app) {
+    const std::string key = app.ctx.list_profiles()[0];
+
+    // ── 1. list → 200 with "profiles" and "active" ──
+    auto l = app.call(Method::Get, "/api/profiles");
+    expect(l.status == 200 && l.body.find("profiles") != std::string::npos
+               && l.body.find("active") != std::string::npos,
+           "profiles list 200 + fields");
+
+    // ── 2. read metadata → every ProfileMeta field present ──
+    auto r = app.call(Method::Get, "/api/profiles/" + key);
+    expect(r.status == 200, "profile metadata 200");
+    for (const char* f : {"name", "dependencies", "is_root", "format",
+                          "ench_count", "eq_count", "tag_count",
+                          "version", "release_tag"})
+        expect(r.body.find(f) != std::string::npos, std::string("metadata field ") + f);
+
+    // ── 3. equipments round-trip: delete-existing → add → read → update → read → delete ──
+    // `minecraft:netherite_sword` ships in the builtin profile, so the "add"
+    // (which must be 201, not 409) needs the pre-existing entry removed first.
+    auto pre = app.call(Method::Delete, "/api/profiles/" + key + "/equipments/minecraft:netherite_sword");
+    expect(pre.status == 204, "equip pre-delete existing 204");
+
+    auto add = app.call(Method::Post, "/api/profiles/" + key + "/equipments",
+                        R"({"id":"minecraft:netherite_sword","max_durability":2031})");
+    expect(add.status == 201, "equip add 201");
+    expect(add.header_value("Location").find("minecraft:netherite_sword") != std::string::npos,
+           "equip add Location header");
+
+    auto lst = app.call(Method::Get, "/api/profiles/" + key + "/equipments");
+    expect(lst.status == 200 && lst.body.find("netherite_sword") != std::string::npos,
+           "equip list contains added entry");
+
+    auto upd = app.call(Method::Patch, "/api/profiles/" + key + "/equipments/minecraft:netherite_sword",
+                        R"({"id":"minecraft:netherite_sword","max_durability":5000})");
+    expect(upd.status == 200, "equip update 200");
+
+    auto rd = app.call(Method::Get, "/api/profiles/" + key + "/equipments/minecraft:netherite_sword");
+    expect(rd.status == 200 && rd.body.find("5000") != std::string::npos,
+           "equip read reflects updated durability");
+
+    auto del = app.call(Method::Delete, "/api/profiles/" + key + "/equipments/minecraft:netherite_sword");
+    expect(del.status == 204, "equip delete 204");
+    auto gone = app.call(Method::Get, "/api/profiles/" + key + "/equipments/minecraft:netherite_sword");
+    expect(gone.status == 404, "equip read after delete 404");
+
+    // ── 4. errors ──
+    auto nope = app.call(Method::Get, "/api/profiles/nope");
+    expect(nope.status == 404, "unknown profile 404");
+    auto noench = app.call(Method::Get, "/api/profiles/" + key + "/enchantments/nope");
+    expect(noench.status == 404, "unknown enchantment 404");
+    auto dup = app.call(Method::Post, "/api/profiles",
+                        R"({"source":")" + key + R"(","dest":")" + key + R"("})");
+    expect(dup.status == 409, "create existing dest 409");
+    auto bad = app.call(Method::Patch, "/api/profiles/" + key, R"({"dependencies":"x"})");
+    expect(bad.status == 400, "patch bad dependencies 400");
+    auto badobj = app.call(Method::Patch, "/api/profiles/" + key, "[1,2]");
+    expect(badobj.status == 400, "patch non-object body 400");
+
+    // ── 5. rename (on a fork, so the original key survives for later) ──
+    auto fr = app.call(Method::Post, "/api/profiles",
+                       R"({"source":")" + key + R"(","dest":")" + key + R"(-rs"})");
+    expect(fr.status == 201, "fork for rename");
+    auto rn = app.call(Method::Post, "/api/profiles/" + key + "-rs/rename",
+                       R"({"name":")" + key + R"(-rd"})");
+    expect(rn.status == 200, "rename 200");
+    auto rr = app.call(Method::Get, "/api/profiles/" + key + "-rd");
+    expect(rr.status == 200, "renamed profile readable");
+}
 } // namespace
 
 int main() {
@@ -101,6 +176,7 @@ int main() {
     test_health(app);
     test_status(app);
     test_settings(app);
+    test_profiles(app);
     TEST_PASS("test_web_api");
     return print_summary();
 }
