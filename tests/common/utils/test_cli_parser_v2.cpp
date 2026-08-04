@@ -251,6 +251,49 @@ void test_duplicate_option() {
     TEST_PASS("test_duplicate_option");
 }
 
+void test_flag_with_value_rejected() {
+    {
+        // `--help=x`: a flag cannot take a value; the value used to be silently
+        // discarded and the flag still set.
+        const char* argv[] = {"prog", "--help=x"};
+        auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 2));
+        expect(has_diag(result.diagnostics, ParseErrorCode::flag_takes_no_value),
+               "--help=x should produce flag_takes_no_value");
+        expect(std::get<0>(result.value) == false,
+               "flag must NOT be set when its value was rejected");
+    }
+    {
+        // `-hs`: h is a flag, s is a value option.  The trailing 's' used to be
+        // silently dropped (help set, solutions untouched, no diagnostic).
+        const char* argv[] = {"prog", "--target", "x", "-hs"};
+        auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 4));
+        expect(has_diag(result.diagnostics, ParseErrorCode::flag_takes_no_value),
+               "-hs should produce flag_takes_no_value");
+        expect(std::get<0>(result.value) == false,
+               "-h must NOT be set when grouped with a value option");
+        expect(std::get<3>(result.value).value_or(-1) == 1,
+               "-s must NOT consume the trailing char");
+    }
+    TEST_PASS("flag with value rejected");
+}
+
+void test_empty_equals_value_rejected() {
+    const char* argv[] = {"prog", "--target="};
+    auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 2));
+    expect(has_diag(result.diagnostics, ParseErrorCode::missing_value),
+           "--target= (empty value) should produce missing_value");
+    TEST_PASS("empty --opt= rejected");
+}
+
+void test_dash_prefix_equals_value_accepted() {
+    const char* argv[] = {"prog", "--target=--foo"};
+    auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 2));
+    expect(result.diagnostics.empty(), "--target=--foo should parse cleanly");
+    expect(std::get<4>(result.value).has_value() && *std::get<4>(result.value) == "--foo",
+           "--target=--foo should bind '--foo' as the value");
+    TEST_PASS("--target=--foo accepted");
+}
+
 void test_ungrouped_fallback() {
     // TEST_OPTS has no help_group set on the Positional → should render as flat list
     std::string help = CLIParser(TEST_OPTS).format_help("prog");
@@ -291,6 +334,9 @@ int main() {
         test_grouped_help();
         test_duplicate_option();
         test_ungrouped_fallback();
+        test_flag_with_value_rejected();
+        test_empty_equals_value_rejected();
+        test_dash_prefix_equals_value_accepted();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

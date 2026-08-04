@@ -107,6 +107,7 @@
     "cli.err.missing_value": "Option '--{0}' requires a value",
     "cli.err.invalid_value": "Invalid value: '{0}'",
     "cli.err.required_missing": "Required option '--{0}' is missing",
+    "cli.err.flag_no_value": "Option '--{0}' does not take a value",
     "cli.err.parse_failed": "Failed to parse command line arguments",
     "cli.err.missing_target_or_export": "Missing --target or --export",
     "cli.msg.version": "{0} version {1}",

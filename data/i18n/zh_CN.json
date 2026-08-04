@@ -107,6 +107,7 @@
     "cli.err.missing_value": "选项 '--{0}' 需要值",
     "cli.err.invalid_value": "无效值: '{0}'",
     "cli.err.required_missing": "缺少必要选项 '--{0}'",
+    "cli.err.flag_no_value": "选项 '--{0}' 不接受值",
     "cli.err.parse_failed": "命令行参数解析失败",
     "cli.err.missing_target_or_export": "缺少 --target 或 --export",
     "cli.msg.version": "{0} version {1}",

@@ -295,16 +295,18 @@ struct CLIApp::UserI18nTranslator {
                 return tr_fmt("cli.err.unknown_option", diag.arg);
             case missing_value:
                 return tr_fmt("cli.err.missing_value",
-                              diag.option_name.value_or(std::string_view{}));
+                              diag.option_name.value_or(std::string{}));
             case invalid_value:
                 return tr_fmt("cli.err.invalid_value", diag.arg);
             case required_missing:
                 return tr_fmt("cli.err.required_missing",
-                              diag.option_name.value_or(std::string_view{}));
+                              diag.option_name.value_or(std::string{}));
             case unexpected_positional:
                 return tr_fmt("cli.err.unexpected_arg", diag.arg);
             case duplicate_option:
-                return tr_fmt("cli.err.duplicate_option", diag.option_name.value_or(std::string_view{}));
+                return tr_fmt("cli.err.duplicate_option", diag.option_name.value_or(std::string{}));
+            case flag_takes_no_value:
+                return tr_fmt("cli.err.flag_no_value", diag.option_name.value_or(std::string{}));
             default:
                 return tr("cli.err.unknown");
         }

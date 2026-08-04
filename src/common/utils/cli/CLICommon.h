@@ -45,6 +45,7 @@ enum class ParseErrorCode : uint8_t {
     required_missing,
     unexpected_positional,
     duplicate_option,
+    flag_takes_no_value,  ///< a value was given to a flag (--flag=x, or a mixed short cluster like -hs)
 };
 
 // ============================================================================
@@ -54,7 +55,11 @@ enum class ParseErrorCode : uint8_t {
 struct Diagnostic {
     ParseErrorCode code;
     std::string_view arg;
-    std::optional<std::string_view> option_name;
+    // Owning: the short-option paths build these from stack locals (`char f =
+    // sc[0]`, the loop var `c`), so a non-owning view would dangle as soon as
+    // parse() returns.  `arg` stays a view — it always points into the caller's
+    // argv, whose lifetime spans the parse and every current use of the result.
+    std::optional<std::string> option_name;
 };
 
 // ============================================================================

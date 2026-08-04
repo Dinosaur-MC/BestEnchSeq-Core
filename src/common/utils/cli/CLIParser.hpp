@@ -58,7 +58,10 @@ int find_by_short_name(const std::tuple<Entries...>& tup, char name) noexcept {
 template<typename... Entries>
 void set_value_by_index(std::tuple<OptionValue<Entries>...>& tup, size_t index,
                         std::string_view val, std::vector<Diagnostic>& diags,
-                        std::string_view opt) noexcept {
+                        std::string_view opt) {
+    // Not noexcept: the std::string overload of from_string() allocates, and a
+    // bad_alloc must propagate to the caller as an exception instead of
+    // terminating inside a noexcept frame.
     [&]<size_t... Is>(std::index_sequence<Is...>) {
         ((index == Is ? [&]() -> bool {
             using ET = std::tuple_element_t<Is, std::tuple<Entries...>>;
@@ -67,7 +70,7 @@ void set_value_by_index(std::tuple<OptionValue<Entries>...>& tup, size_t index,
                 using VT = typename OptionValueType<ET>::type::value_type;
                 VT p{};
                 if (from_string(val, p)) std::get<Is>(tup) = std::move(p);
-                else diags.push_back(Diagnostic{ParseErrorCode::invalid_value, val, opt});
+                else diags.push_back(Diagnostic{ParseErrorCode::invalid_value, val, std::string(opt)});
             }
             return true;
         }() : false) || ...);
@@ -91,7 +94,7 @@ void check_required(const std::tuple<OptionValue<Entries>...>& tup, const std::t
     [&]<size_t... Is>(std::index_sequence<Is...>) {
         (([&]{ if constexpr (requires { std::get<Is>(e).required; }) { if (std::get<Is>(e).required) {
             const auto& v = std::get<Is>(tup);
-            if constexpr (requires { v.has_value(); }) { if (!v.has_value()) d.push_back(Diagnostic{ParseErrorCode::required_missing, {}, std::get<Is>(e).long_name}); }
+            if constexpr (requires { v.has_value(); }) { if (!v.has_value()) d.push_back(Diagnostic{ParseErrorCode::required_missing, {}, std::string(std::get<Is>(e).long_name)}); }
         }}}()), ...);
     }(std::index_sequence_for<Entries...>{});
 }
@@ -179,9 +182,14 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
             bool h = eq != std::string_view::npos;
             if (h) { key = a.substr(2, eq - 2); val = a.substr(eq + 1); } else key = a.substr(2);
             int idx = detail::find_by_long_name(entries, key);
-            if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, key}); continue; }
+            if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(key)}); continue; }
             if (detail::is_flag_by_index(entries, idx)) {
-                detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, key);
+                // A flag cannot take a value: `--help=x` is a user error, not a
+                // silent no-op (the value used to be discarded).
+                if (h)
+                    r.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(key)});
+                else
+                    detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, key);
             } else {
                 // ── Duplicate check ──
                 bool already = false;
@@ -195,16 +203,24 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
                     }(), ...);
                 }(std::index_sequence_for<Entries...>{});
                 if (already)
-                    r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, key});
+                    r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string(key)});
                 // ── End duplicate check ──
-                if (h) detail::set_value_by_index<Entries...>(tup, idx, val, r.diagnostics, key);
-                else if (i + 1 < args.size()) {
+                if (h) {
+                    // `--opt=` is an empty value, i.e. a missing one.  `--opt=--foo`
+                    // stays legal: the `=` form is unambiguous (the value is
+                    // everything after the equals sign), unlike the space form
+                    // where an option-like token would be misparsed as an option.
+                    if (val.empty())
+                        r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
+                    else
+                        detail::set_value_by_index<Entries...>(tup, idx, val, r.diagnostics, key);
+                } else if (i + 1 < args.size()) {
                     std::string_view n(args[i + 1]);
                     // 单个 `-` 是合法值（Unix stdout/stdin 惯例，如 `--export -`）；
                     // 仅拒绝多字符 `-` 前缀 token（`--foo`/`-f` 是选项，不吞为值）。
                     if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, key); }
-                    else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
-                } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, key});
+                    else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
+                } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(key)});
             }
             continue;
         }
@@ -218,16 +234,22 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
                 for (char c : sc) {
                     int ix = detail::find_by_short_name(entries, c);
                     if (ix >= 0) detail::set_value_by_index<Entries...>(tup, ix, {}, r.diagnostics, {&c, 1});
-                    else r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string_view(&c, 1)});
+                    else r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(&c, 1)});
                 }
                 continue;
             }
         }
         char f = sc[0];
         int idx = detail::find_by_short_name(entries, f);
-        if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string_view(&f, 1)}); continue; }
+        if (idx < 0) { r.diagnostics.push_back(Diagnostic{ParseErrorCode::unknown_option, a, std::string(&f, 1)}); continue; }
         if (detail::is_flag_by_index(entries, idx)) {
-            detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, {&f, 1});
+            // Reached only when the cluster is NOT all flags (that path returned
+            // above).  A flag cannot take the remaining chars as a value — `-hs`
+            // used to silently drop the 's'.  Report it instead of guessing.
+            if (sc.size() > 1)
+                r.diagnostics.push_back(Diagnostic{ParseErrorCode::flag_takes_no_value, a, std::string(&f, 1)});
+            else
+                detail::set_value_by_index<Entries...>(tup, idx, {}, r.diagnostics, {&f, 1});
         } else {
             // ── Duplicate check ──
             bool already = false;
@@ -241,15 +263,15 @@ ParseResult<Entries...> CLIParser<Entries...>::parse(std::span<const char*> args
                 }(), ...);
             }(std::index_sequence_for<Entries...>{});
             if (already)
-                r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string_view(&f, 1)});
+                r.diagnostics.push_back(Diagnostic{ParseErrorCode::duplicate_option, a, std::string(&f, 1)});
             // ── End duplicate check ──
             if (sc.size() > 1) detail::set_value_by_index<Entries...>(tup, idx, sc.substr(1), r.diagnostics, {&f, 1});
             else if (i + 1 < args.size()) {
                 std::string_view n(args[i + 1]);
                 // 单个 `-` 是合法值（Unix 惯例）；仅拒绝多字符 `-` 前缀 token。
                 if (!n.empty() && !(n.size() >= 2 && n[0] == '-')) { ++i; detail::set_value_by_index<Entries...>(tup, idx, n, r.diagnostics, std::string_view(&f, 1)); }
-                else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
-            } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string_view(&f, 1)});
+                else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
+            } else r.diagnostics.push_back(Diagnostic{ParseErrorCode::missing_value, a, std::string(&f, 1)});
         }
     }
 
@@ -328,7 +350,7 @@ std::string CLIParser<Entries...>::format_help(std::string_view prog) const {
         r += '\n';
     }
 
-    // ── 4. Ungrouped options (no help_group set) ──
+    // ── 3. Ungrouped options (no help_group set) ──
     // Render these after all named groups without a header.
     bool has_ungrouped = false;
     [&]<size_t... Is>(std::index_sequence<Is...>) {
