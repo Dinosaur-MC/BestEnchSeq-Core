@@ -2,6 +2,7 @@
 // Web API tests: BesqContext facade increments (+ per-resource handlers in M1.3+).
 // =============================================================================
 #include "domain/interface/BesqContext.h"
+#include "domain/interface/web/resources/ApiAlgorithm.h"
 #include "domain/interface/web/resources/ApiHealth.h"
 #include "domain/interface/web/resources/ApiProfiles.h"
 #include "domain/interface/web/resources/ApiSettings.h"
@@ -306,6 +307,30 @@ void test_api_profiles_list_and_actions() {
     TEST_PASS("ApiProfiles list/actions/CRUD");
 }
 
+// ── ApiAlgorithm (M1.5): list/get/load ──────────────────────────────────
+
+void test_api_algorithm() {
+    BesqContext ctx;
+    ctx.load_builtin();
+
+    auto list = Json::parse(ApiAlgorithm::handle_list(ctx));
+    bool has_dp = false;
+    for (const auto& a : list["algorithms"].as_array())
+        if (a["name"].as<std::string>() == "dp_merge") has_dp = true;
+    expect(has_dp, "list includes dp_merge");
+
+    auto one = Json::parse(ApiAlgorithm::handle_get(ctx, "dp_merge"));
+    expect(one["name"].as<std::string>() == "dp_merge", "get dp_merge");
+    expect(one["mode"].as<std::string>().find("direct") != std::string::npos ||
+               one["mode"].as<std::string>().empty(),
+           "mode reported");
+
+    expect_throws_as<webhttp::WebHttpError>([&] {
+        ApiAlgorithm::handle_get(ctx, "nope");
+    }, "unknown algorithm throws WebHttpError");
+    TEST_PASS("ApiAlgorithm");
+}
+
 int main() {
     try {
         test_facade_by_name_registry();
@@ -314,6 +339,7 @@ int main() {
         test_api_settings();
         test_api_profiles_list_and_actions();
         test_api_profiles_error_branches();
+        test_api_algorithm();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
