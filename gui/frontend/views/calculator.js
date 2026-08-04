@@ -1,7 +1,7 @@
 // Calculator view — solve form, task poll, and solution timeline renderer.
 // Talks to /api/calculator (WebSolveService + ApiCalculator) and renders the
 // OutputFormatter JSON result (see OutputFormatter::format_json).
-import { http, showError, clearError } from '../api.js';
+import { http, showError, clearError, esc } from '../api.js';
 import { t } from '../i18n.js';
 
 let pollTimer = null;
@@ -38,13 +38,6 @@ function taskJSON() {
 // namespace for compact inline labels.
 function shortId(id) {
   return id && id.startsWith('minecraft:') ? id.slice('minecraft:'.length) : id;
-}
-
-// Escape a string for safe interpolation into innerHTML (single escape; the
-// output only ever lands in innerHTML, never textContent).
-function esc(s) {
-  return String(s).replace(/[&<>"']/g,
-    (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // One backend item object → short inline label: "diamond_sword[sharpness 5]",
