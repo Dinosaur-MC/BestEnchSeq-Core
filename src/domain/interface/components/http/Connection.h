@@ -8,8 +8,8 @@
 namespace web {
 
 /// 一条连接的运行状态机（归属某个 home loop 线程，单线程访问，无需锁）。
-/// process() 每次最多推进：读一块 → 增量解析 →（完整请求则）分发 → 写一块。
-/// 返回 true 表示本调用发生了推进（读到数据或写出数据），false 表示 would-block/无进展。
+/// process() 每次最多推进：解析 →（缺数据时）读一块 →（完整请求则）分发 → 写一块。
+/// 返回 true 表示本调用读了数据或分发了请求，false 表示 would-block/无进展。
 /// 连接默认为 keep-alive：一个请求处理完后清空缓冲，等待下一条请求。
 class Connection {
 public:
@@ -23,8 +23,8 @@ public:
     int fd() const { return _fd; }
     const std::string& id() const { return _id; }
     bool alive() const { return _alive; }
-    /// 无未消费输入时才需要继续读（有完整请求积压时优先处理）。
-    bool wants_read() const { return _alive && _in.empty(); }
+    /// keep-alive 连接可接受输入时即应读（对端 FIN 后不再读）。
+    bool wants_read() const { return _alive && !_pending_eof; }
     /// 有积压输出待写。
     bool wants_write() const { return !_out.empty(); }
 

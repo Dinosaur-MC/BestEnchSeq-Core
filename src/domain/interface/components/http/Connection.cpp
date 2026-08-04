@@ -26,48 +26,44 @@ void Connection::drain_out() {
 
 bool Connection::process(const Router& router) {
     if (!_alive) return false;
-    bool did = false;
+    bool progress = false;
 
-    // 读：缓冲里没有完整请求头时才尝试读（避免无限读积压）。
-    if (_in.find("\r\n\r\n") == std::string::npos) {
-        std::string chunk;
-        int n = sock_recv_nb(_fd, chunk, 64 * 1024);
-        if (n == -1) { close(); return false; }          // 错误/对端关闭
-        if (n == 0) {
-            if (_in.empty()) { close(); return false; }  // EOF 且无任何数据 → 关闭
-            // EOF 但已有半请求：交给解析，Incomplete 则关闭。
-            _pending_eof = true;
-        } else {
-            _in += chunk;
-            did = true;
-        }
-    }
-
-    // 解析循环：一次可能处理缓冲里的多条 keep-alive 请求。
+    // 解析→按需增量读→再解析 循环。HttpParser 是增量无状态解析器：每次先试
+    // 解析已缓冲字节；缺 body 或头部不完整时再从 socket 读一块、追加后重试，
+    // 直到产出完整请求、出错、或暂时无更多数据。旧实现只在“头终结符尚未到达”
+    // 时读，导致 body 落在后续 TCP 分段时永远 Incomplete 卡死。
     for (;;) {
         HttpRequest req;
         size_t consumed = 0;
         auto pr = _parser.parse(_in, consumed, req);
-        if (pr == ParseResult::Incomplete) {
-            if (_pending_eof) close();           // 对端关闭且请求不完整 → 关闭
-            break;
+        if (pr == ParseResult::Complete) {
+            _in.erase(0, consumed);
+            auto resp = router(req);
+            if (resp.is_stream) { /* SSE handled by SseStream path in a later task; not expected here yet */ }
+            _out += resp.to_bytes();
+            progress = true;
+            continue;                       // pipeline: may be another complete request buffered
         }
         if (pr == ParseResult::BadRequest) {
             _out += HttpResponse::bad_request("BAD_REQUEST", "malformed request").to_bytes();
-            did = true;
             break;
         }
-        _in.erase(0, consumed);
-        auto resp = router(req);
-        _out += resp.to_bytes();
-        did = true;
-        if (resp.is_stream) break;               // 流式连接脱离本状态机
+        // Incomplete → need more bytes from the socket. sock_recv_nb 的 0 既可能
+        // 是 would-block 也可能是对端 FIN，先做就绪探测区分：不可读 → would-block，
+        // 等下次推进；可读但 recv 仍返回 0 字节 → 真 FIN。
+        if (wait_readable(_fd, 0) == 0) break;
+        std::string chunk;
+        int n = sock_recv_nb(_fd, chunk, 64 * 1024);
+        if (n == -1) { close(); return progress; }
+        if (n == 0) { _pending_eof = true; break; }   // 可读 + 0 字节 → 对端 FIN
+        _in += chunk;
+        progress = true;
     }
 
     drain_out();
     // EOF 且输出已全部写出 → 收尾关闭（对端不会再发数据）。
     if (_pending_eof && _out.empty()) close();
-    return did;
+    return progress;
 }
 
 } // namespace web
