@@ -1419,6 +1419,70 @@ void test_load_directory_skips_equipments_csv() {
     TEST_PASS("test_load_directory_skips_equipments_csv");
 }
 
+// ─── Test: update_equipment (round-trip via _mutate) ────────────────────
+// Manager-level equipment update: patch by NSID id; missing id → false.
+
+void test_update_equipment() {
+    ProfileManager pm;
+    pm.create("p1");
+    Equipment eq; eq.id = NSID("diamond_sword"); eq.max_durability = 1561;
+    expect(pm.add_equipment("p1", eq), "add eq");
+    Equipment patch = eq; patch.max_durability = 999;
+    expect(pm.update_equipment("p1", patch), "update eq");
+    Profile* p = pm.find("p1");
+    expect(p != nullptr, "p1 exists");
+    if (p)
+        expect(p->eq().find(NSID("diamond_sword"))->max_durability == 999, "updated value");
+    // missing id → false (no change)
+    Equipment missing = patch; missing.id = NSID("netherite_sword");
+    expect(!pm.update_equipment("p1", missing), "update missing → false");
+    TEST_PASS("test_update_equipment");
+}
+
+// ─── Test: update_tag + set_dependencies (round-trip via _mutate) ───────
+
+void test_update_tag_and_deps() {
+    ProfileManager pm;
+    pm.create("p1"); pm.create("p2");
+    expect(pm.set_dependencies("p1", {"p2"}), "set deps");
+    auto deps = pm.resolve_dependencies("p1");
+    expect(deps.size() == 1 && deps[0] == "p2", "deps applied");
+    EquipmentTag tag; tag.id = NSID("minecraft:swords");
+    expect(pm.add_tag("p1", tag), "add tag");
+    tag.name = "blades";
+    expect(pm.update_tag("p1", tag), "update tag");
+    expect(pm.find("p1")->tags().find(NSID("minecraft:swords"))->name == "blades", "tag updated");
+    // unknown profile → false
+    expect(!pm.set_dependencies("nope", {"p2"}), "set deps unknown profile → false");
+    // cycle → false, dependencies unchanged
+    ProfileManager pm2;
+    pm2.create("a"); pm2.create("b");
+    expect(pm2.set_dependencies("a", {"b"}), "a→b ok");
+    expect(!pm2.set_dependencies("b", {"a"}), "b→a would cycle → rejected");
+    expect(pm2.find("b")->dependencies().empty(), "b deps unchanged after rejected set");
+    TEST_PASS("test_update_tag_and_deps");
+}
+
+// ─── Test: rename (map key reorder; active-name sync) ───────────────────
+
+void test_rename() {
+    ProfileManager pm;
+    pm.create("old");
+    expect(pm.rename("old", "new"), "rename");
+    expect(!pm.exists("old") && pm.exists("new"), "renamed");
+    expect(!pm.rename("old", "new"), "rename missing → false");
+    // target already exists → false
+    pm.create("taken");
+    expect(!pm.rename("new", "taken"), "rename onto existing → false");
+    // active-name follows the rename
+    ProfileManager pm2;
+    pm2.create("act");
+    pm2.activate("act");
+    expect(pm2.rename("act", "act2"), "rename active");
+    expect(pm2.active_name() == "act2", "active name follows rename");
+    TEST_PASS("test_rename");
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────
 
 int main() {
@@ -1466,6 +1530,9 @@ int main() {
         test_profile_loader_load_datapack_keeps_tags();
         test_format_detector_datapack();
         test_load_directory_skips_equipments_csv();
+        test_update_equipment();
+        test_update_tag_and_deps();
+        test_rename();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;
