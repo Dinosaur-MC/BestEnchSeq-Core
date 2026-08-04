@@ -32,19 +32,34 @@ std::string error_json(const std::string& msg) {
 }
 } // namespace
 
-WebModule::WebModule(BesqContext& ctx) : _ctx(ctx), _solve(ctx) {
+WebModule::WebModule(BesqContext& ctx) : _ctx(ctx), _solve(ctx, _ctx_gate) {
     _routes = {
         {"GET",  "/health",             [](WebModule& m, const std::vector<std::string>&, const std::string&) { (void)m; return ApiHealth::handle(); }},
         {"GET",  "/api/settings",       [](WebModule& m, const std::vector<std::string>&, const std::string&) { return ApiSettings::handle_get(m._ctx); }},
         {"PUT",  "/api/settings",       [](WebModule& m, const std::vector<std::string>&, const std::string& b) { return ApiSettings::handle_put(m._ctx, Json::parse(b)); }},
-        {"GET",  "/api/profile",        [](WebModule& m, const std::vector<std::string>&, const std::string&) { return ApiProfiles::handle_list(m._ctx); }},
-        {"POST", "/api/profile",        [](WebModule& m, const std::vector<std::string>&, const std::string& b) { return ApiProfiles::handle_action(m._ctx, Json::parse(b)); }},
+        {"GET",  "/api/profile",        [](WebModule& m, const std::vector<std::string>&, const std::string&) {
+            std::lock_guard<std::mutex> lock(m._ctx_gate);
+            return ApiProfiles::handle_list(m._ctx);
+        }},
+        {"POST", "/api/profile",        [](WebModule& m, const std::vector<std::string>&, const std::string& b) {
+            std::lock_guard<std::mutex> lock(m._ctx_gate);
+            return ApiProfiles::handle_action(m._ctx, Json::parse(b));
+        }},
         {"GET",  "/api/profile/{id}/{kind}",
-                                        [](WebModule& m, const std::vector<std::string>& p, const std::string&) { return ApiProfiles::handle_read(m._ctx, p[0], p[1]); }},
+                                        [](WebModule& m, const std::vector<std::string>& p, const std::string&) {
+            std::lock_guard<std::mutex> lock(m._ctx_gate);
+            return ApiProfiles::handle_read(m._ctx, p[0], p[1]);
+        }},
         {"POST", "/api/profile/{id}/{kind}",
-                                        [](WebModule& m, const std::vector<std::string>& p, const std::string& b) { return ApiProfiles::handle_add(m._ctx, p[0], p[1], Json::parse(b)); }},
+                                        [](WebModule& m, const std::vector<std::string>& p, const std::string& b) {
+            std::lock_guard<std::mutex> lock(m._ctx_gate);
+            return ApiProfiles::handle_add(m._ctx, p[0], p[1], Json::parse(b));
+        }},
         {"DELETE", "/api/profile/{id}/{kind}/{name}",
-                                        [](WebModule& m, const std::vector<std::string>& p, const std::string&) { return ApiProfiles::handle_remove(m._ctx, p[0], p[1], p[2]); }},
+                                        [](WebModule& m, const std::vector<std::string>& p, const std::string&) {
+            std::lock_guard<std::mutex> lock(m._ctx_gate);
+            return ApiProfiles::handle_remove(m._ctx, p[0], p[1], p[2]);
+        }},
         {"GET",  "/api/algorithm",      [](WebModule& m, const std::vector<std::string>&, const std::string&) { return ApiAlgorithm::handle_list(m._ctx); }},
         {"GET",  "/api/algorithm/{name}",[](WebModule& m, const std::vector<std::string>& p, const std::string&) { return ApiAlgorithm::handle_get(m._ctx, p[0]); }},
         {"POST", "/api/algorithm/load", [](WebModule& m, const std::vector<std::string>&, const std::string& b) { return ApiAlgorithm::handle_load(m._ctx, Json::parse(b)["dir"].as<std::string>()); }},

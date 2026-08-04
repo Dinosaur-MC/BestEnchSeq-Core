@@ -3,6 +3,7 @@
 #include "domain/interface/web/WebSolveService.h"
 #include "domain/interface/web/resources/ApiProfiles.h"
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,11 @@ private:
     };
 
     BesqContext& _ctx;
+    /// Web-layer context gate: serializes the solve worker (WebSolveService
+    /// holds it for its whole _ctx window) against profile mutations on the
+    /// server thread (the ApiProfiles* routes below hold it around every call).
+    /// Declared BEFORE `_solve` — the ctor passes it by reference.
+    std::mutex _ctx_gate;
     WebSolveService _solve;
     std::map<std::string, StaticResource> _static;
     std::vector<Route> _routes;

@@ -29,9 +29,17 @@ struct TaskStatus {
 /// while one runs throws WebHttpError(409). Mirrors the core's single
 /// active_executor semantics so cancel/progress stay well-defined.
 /// The BesqContext must outlive this service; workers hold a reference to it.
+///
+/// `ctx_gate` is the web-layer context gate (owned by WebModule). The solve
+/// worker holds it for its ENTIRE `_ctx` access window (build_request + solve
+/// + format), and WebModule's profile routes hold it around every ApiProfiles
+/// call. It therefore serializes a running solve against profile mutations
+/// arriving on the server thread — both sides mutate ProfileManager's
+/// unlocked effective-view cache via resolve_effective(), so overlapping
+/// access would be a data race.
 class WebSolveService {
 public:
-    explicit WebSolveService(BesqContext& ctx);
+    explicit WebSolveService(BesqContext& ctx, std::mutex& ctx_gate);
     ~WebSolveService();
 
     WebSolveService(const WebSolveService&) = delete;
@@ -70,14 +78,9 @@ private:
     };
 
     BesqContext& _ctx;
+    std::mutex& _ctx_gate;       // web-layer gate, shared with WebModule
     mutable std::mutex _tasks_mutex;  // mutable: has_active() is const
     std::unordered_map<std::string, std::shared_ptr<Task>> _tasks;
-    /// Serializes the blocking solve+format on the shared BesqContext.
-    /// BesqContext::solve()/format() rebuild the profile's effective-view cache
-    /// (ProfileManager::resolve_effective mutates a mutable cache), so two
-    /// solves may never overlap — the gate enforces that on top of the
-    /// 409 single-active-slot check.
-    std::mutex _solve_mutex;
     int64_t _next_id = 0;
 };
 

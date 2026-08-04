@@ -529,12 +529,35 @@ void test_web_module_routing() {
     }
     expect(calc_done, "calculator task reaches a terminal state");
 
+    // Coordination smoke: a profile mutation during a live solve is
+    // serialized by the context gate — the fork blocks (briefly) until the
+    // solve worker releases the gate, then succeeds. No data race, correct
+    // result.
+    auto busy = Json::parse(module.dispatch("POST", "/api/calculator",
+        R"({"target":{"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},)"
+        R"("algorithm":"dp_merge","max_solutions":1})").body);
+    std::string busy_id = busy["task_id"].as<std::string>();
+    auto fork_busy = Json::parse(module.dispatch("POST", "/api/profile",
+        R"({"action":"fork","source":"builtin:vanilla","dest":"mod:during_solve"})").body);
+    expect(fork_busy["ok"] == true, "profile fork during a live solve succeeds");
+    // Poll the busy solve to a terminal state before the direct (ungated)
+    // remove_profile cleanup below — the gate only serializes access made
+    // through the module routes, not the test's direct ctx calls.
+    bool busy_done = false;
+    for (int i = 0; i < 500 && !busy_done; ++i) {
+        auto st = Json::parse(module.dispatch("GET", "/api/calculator/" + busy_id, "").body);
+        if (st["state"].as<std::string>() != "running") busy_done = true;
+        if (!busy_done) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(busy_done, "solve started before the fork reaches a terminal state");
+
     // /api/logs smoke.
     auto logs = Json::parse(module.dispatch("GET", "/api/logs", "").body);
     expect(logs.has("logs"), "/api/logs served");
 
     ctx.remove_profile("mod:routed");
     ctx.remove_profile("mod:dup");
+    ctx.remove_profile("mod:during_solve");
     TEST_PASS("WebModule routing");
 }
 

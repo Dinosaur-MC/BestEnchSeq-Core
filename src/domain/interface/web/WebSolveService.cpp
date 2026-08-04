@@ -86,7 +86,8 @@ SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
 
 } // namespace
 
-WebSolveService::WebSolveService(BesqContext& ctx) : _ctx(ctx) {}
+WebSolveService::WebSolveService(BesqContext& ctx, std::mutex& ctx_gate)
+    : _ctx(ctx), _ctx_gate(ctx_gate) {}
 
 WebSolveService::~WebSolveService() {
     // Deterministic shutdown: every worker touches *this and _ctx only until
@@ -166,36 +167,47 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             std::shared_ptr<Task> t;
             ~DoneGuard() { t->finished.store(true, std::memory_order_release); }
         } done_guard{task};
+        std::string result_json;
         try {
-            // The gate serializes ALL access to the shared BesqContext. Its
-            // registries are reached through resolve_effective(), which rebuilds
-            // a mutable cache (ProfileManager::_effective_cache/_dep_graph), so
-            // two workers may never overlap — not even on the read-only-looking
-            // request build (ctx.enchantments()/equipment() go through it too).
-            std::lock_guard<std::mutex> gate(_solve_mutex);
-            // Re-check cancellation under the gate: cancel() may have fired
-            // while a previous task still held the gate. A cancelled task must
-            // never start a stray solve, violating the single-active-slot
-            // invariant.
             {
-                std::lock_guard<std::mutex> lock(task->mutex);
-                if (task->state == TaskState::Cancelled) return;
-            }
-            auto request = build_request(dto, _ctx);
-            {
-                std::lock_guard<std::mutex> lock(task->mutex);
-                if (task->state == TaskState::Cancelled) return;
-            }
-            // Single active slot is enforced above; solve() runs to completion
-            // (or cancel()). The result carries the executor's real output.
-            auto result = _ctx.solve(request);
-            std::string json;
+                // The shared context gate serializes ALL access to the shared
+                // BesqContext — against profile mutations on the server thread
+                // (WebModule holds the same gate around every ApiProfiles call)
+                // and against other workers. Its registries are reached through
+                // resolve_effective(), which rebuilds a mutable cache
+                // (ProfileManager::_effective_cache/_dep_graph), so overlapping
+                // access would be a data race — not even the read-only-looking
+                // request build is safe (ctx.enchantments()/equipment() go
+                // through it too).
+                std::lock_guard<std::mutex> gate_lock(_ctx_gate);
+                // Re-check cancellation under the gate: cancel() may have fired
+                // while a previous task still held the gate. A cancelled task
+                // must never start a stray solve, violating the
+                // single-active-slot invariant.
+                {
+                    std::lock_guard<std::mutex> lock(task->mutex);
+                    if (task->state == TaskState::Cancelled) return;
+                }
+                auto request = build_request(dto, _ctx);
+                {
+                    std::lock_guard<std::mutex> lock(task->mutex);
+                    if (task->state == TaskState::Cancelled) return;
+                }
+                // Single active slot is enforced above; solve() runs to
+                // completion (or cancel()). The result carries the executor's
+                // real output.
+                auto result = _ctx.solve(request);
+                result_json = _ctx.format(result, request.mode, "json");
+            }  // _ctx_gate released before the task-state write
+            // Task bookkeeping is NOT gated — commit the result under
+            // task->mutex only. A cancel that fired during format() is honored
+            // here; the worker must never report a completed task it was asked
+            // to cancel.
             {
                 std::lock_guard<std::mutex> lock(task->mutex);
                 if (task->state == TaskState::Cancelled) return;
                 task->state = TaskState::Completed;
-                json = _ctx.format(result, request.mode, "json");
-                task->result = std::move(json);
+                task->result = std::move(result_json);
             }
         } catch (const std::exception& e) {
             std::lock_guard<std::mutex> lock(task->mutex);

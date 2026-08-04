@@ -10,6 +10,7 @@
 #include "domain/interface/web/resources/ApiCalculator.h"
 #include "framework/test_utils.h"
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 static WebTaskDto make_task() {
@@ -24,7 +25,8 @@ static WebTaskDto make_task() {
 void test_lifecycle_complete() {
     BesqContext ctx;
     ctx.load_builtin();
-    webhttp::WebSolveService svc(ctx);
+    std::mutex gate;
+    webhttp::WebSolveService svc(ctx, gate);
 
     auto id = svc.start(make_task());
     expect(!id.empty(), "start returns a task id");
@@ -52,7 +54,8 @@ void test_lifecycle_complete() {
 void test_single_active_slot() {
     BesqContext ctx;
     ctx.load_builtin();
-    webhttp::WebSolveService svc(ctx);
+    std::mutex gate;
+    webhttp::WebSolveService svc(ctx, gate);
 
     // Seed a large target so the first solve stays running.
     for (int i = 0; i < 18; ++i) {
@@ -97,7 +100,8 @@ void test_single_active_slot() {
 void test_failed_and_has_active() {
     BesqContext ctx;
     ctx.load_builtin();
-    webhttp::WebSolveService svc(ctx);
+    std::mutex gate;
+    webhttp::WebSolveService svc(ctx, gate);
 
     // Unknown enchantment → task fails with a non-empty error.
     WebTaskDto bad;
@@ -146,7 +150,8 @@ void test_failed_and_has_active() {
 void test_calculator_resource() {
     BesqContext ctx;
     ctx.load_builtin();
-    webhttp::WebSolveService svc(ctx);
+    std::mutex gate;
+    webhttp::WebSolveService svc(ctx, gate);
 
     // POST with a valid task → {task_id}
     auto post = Json::parse(ApiCalculator::handle_post(svc, R"({
