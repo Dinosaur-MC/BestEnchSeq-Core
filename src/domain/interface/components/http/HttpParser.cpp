@@ -59,9 +59,11 @@ ParseResult parse_incremental(const std::string& buf, size_t& consumed, HttpRequ
     if (version != "HTTP/1.1" && version != "HTTP/1.0")
         return ParseResult::BadRequest;
 
-    // Split path / query：path percent-decode，query 走 parse_query。
+    // Split path / query：path 保持 raw（未解码；{param} 段由 Router::match_segments
+    // 捕获时逐段 percent-decode——整路径解码会把 %2F 变成分隔符并二次解码，破坏 %2F 数据），
+    // query 值走 parse_query 解码。
     auto q = target.find('?');
-    out.path = percent_decode(q == std::string::npos ? target : target.substr(0, q));
+    out.path = q == std::string::npos ? target : target.substr(0, q);
     out.query = parse_query(q == std::string::npos ? "" : target.substr(q + 1));
 
     // ── Headers ──
