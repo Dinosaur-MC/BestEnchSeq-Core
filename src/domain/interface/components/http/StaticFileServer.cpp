@@ -114,7 +114,7 @@ HttpResponse StaticFileServer::serve(Method method, std::string_view path) const
     std::string_view rel = path.substr(_prefix.size());
     if (!rel.empty() && rel[0] != '/')
         return HttpResponse::not_found();  // /publicfoo 等非挂载路径
-    if (rel.empty()) rel = "/index.html";   // 目录请求 → index
+    if (rel.empty() || rel == "/") rel = "/index.html";   // 目录请求 → index
 
     std::string key = sanitize_relative(rel);
     if (key.empty()) return HttpResponse::not_found();

@@ -41,6 +41,11 @@ int main() {
     // HEAD
     auto r5 = sfs.serve(Method::Head, "/public/index.html");
     expect(r5.status == 200 && r5.body.empty(), "head");
+    // 序列化：HEAD 必须只有一个（原始长度）Content-Length，不得出现 0 长度重复头
+    auto hd = sfs.serve(Method::Head, "/public/index.html");
+    std::string wire = hd.to_bytes();
+    expect(wire.find("Content-Length:") != std::string::npos, "HEAD has Content-Length");
+    expect(wire.find("Content-Length: 0") == std::string::npos, "no zero-length duplicate");
 
     std::filesystem::remove_all(root);
     TEST_PASS("test_static_file_server");
