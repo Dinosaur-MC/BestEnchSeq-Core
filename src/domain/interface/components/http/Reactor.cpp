@@ -1,0 +1,120 @@
+#include "Reactor.h"
+#include "Socket.h"
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace web {
+
+struct Reactor::Impl {
+    MPMCEventLoop<> loop;                                       // home loop 消费线程
+    Handler handler;                                            // 请求分发（HttpServer 注入）
+    OnClosed on_closed;                                         // fd 关闭 → poller 注销
+    OnInterest on_interest;                                     // fd → wants_write → poller 写兴趣
+    std::unordered_map<int, std::shared_ptr<Connection>> conns; // 仅经 mutex 访问
+    std::mutex mutex;                                           // 保护 conns 跨线程增删
+};
+
+Reactor::Reactor(Handler h) : _impl(std::make_unique<Impl>()) {
+    _impl->handler = std::move(h);
+}
+
+Reactor::~Reactor() {
+    if (!_impl)
+        return;
+    close_all();        // 关闭仍存活的连接
+    _impl->loop.stop(); // drain 剩余任务并 join 消费线程
+}
+
+void Reactor::set_on_closed(OnClosed fn) {
+    _impl->on_closed = std::move(fn);
+}
+void Reactor::set_on_interest(OnInterest fn) {
+    _impl->on_interest = std::move(fn);
+}
+
+void Reactor::start() {
+    _impl->loop.start();
+}
+void Reactor::stop() {
+    _impl->loop.stop();
+}
+
+void Reactor::add_connection(int fd) {
+    {
+        std::lock_guard lk(_impl->mutex);
+        if (_impl->conns.count(fd) != 0)
+            return;
+        set_nonblocking(fd);
+        _impl->conns.emplace(fd, std::make_shared<Connection>(fd, std::to_string(fd)));
+    }
+    // 首推进：消费线程首次 process（请求可能已到达）
+    _impl->loop.post([this, fd] { drive(fd); });
+}
+
+void Reactor::remove_connection(int fd) {
+    // 先注销（poller 下一轮 select 重建时不再含该 fd），后销毁连接（关闭 socket）。
+    if (_impl->on_closed)
+        _impl->on_closed(fd);
+    std::lock_guard lk(_impl->mutex);
+    _impl->conns.erase(fd);
+}
+
+void Reactor::on_readable(int fd) {
+    _impl->loop.post([this, fd] { drive(fd); });
+}
+void Reactor::on_writable(int fd) {
+    _impl->loop.post([this, fd] { drive(fd); });
+}
+
+void Reactor::post_frame(int fd, std::string frame) {
+    // SSE 帧出口：Task 10（SseStream + Connection::push_sse）落位，此处保留 API 形状。
+    (void)fd;
+    (void)frame;
+}
+
+void Reactor::close_all() {
+    std::vector<int> fds;
+    {
+        std::lock_guard lk(_impl->mutex);
+        for (const auto& [fd, conn] : _impl->conns)
+            fds.push_back(fd);
+    }
+    for (int fd : fds)
+        if (_impl->on_closed)
+            _impl->on_closed(fd);
+    std::lock_guard lk(_impl->mutex);
+    _impl->conns.clear(); // 关闭全部连接 socket
+}
+
+size_t Reactor::connection_count() const {
+    std::lock_guard lk(_impl->mutex);
+    return _impl->conns.size();
+}
+
+bool Reactor::empty() const {
+    std::lock_guard lk(_impl->mutex);
+    return _impl->conns.empty();
+}
+
+void Reactor::drive(int fd) {
+    std::shared_ptr<Connection> conn;
+    {
+        std::lock_guard lk(_impl->mutex);
+        auto it = _impl->conns.find(fd);
+        if (it == _impl->conns.end())
+            return;
+        conn = it->second;
+    }
+    // 锁外推进：process() 只触碰连接自身状态（解析/读/分发/写），而连接按零锁设计
+    // 仅由本 loop 线程访问。把 shared_ptr 拷出后即可释放 Reactor 互斥量，避免持锁
+    // 跨越整个 parse+dispatch+write，阻塞 poller 线程的 add_connection/remove_connection。
+    conn->process(_impl->handler);
+    if (!conn->alive()) {
+        remove_connection(fd); // EOF/错误 → 注销并关闭
+    } else if (_impl->on_interest) {
+        _impl->on_interest(fd, conn->wants_write()); // 同步写兴趣给 poller
+    }
+}
+
+} // namespace web
