@@ -15,7 +15,8 @@ function enchantmentsToJSON(enchantments) {
     .filter(Boolean)
     .map((s) => {
       const [id, lvl] = s.split('=');
-      return { id: id.trim(), level: parseInt(lvl || '1', 10) };
+      const level = parseInt(lvl || '1', 10);
+      return { id: id.trim(), level: Number.isFinite(level) ? level : 1 };
     });
 }
 
@@ -39,13 +40,21 @@ function shortId(id) {
   return id && id.startsWith('minecraft:') ? id.slice('minecraft:'.length) : id;
 }
 
+// Escape a string for safe interpolation into innerHTML (single escape; the
+// output only ever lands in innerHTML, never textContent).
+function esc(s) {
+  return String(s).replace(/[&<>"']/g,
+    (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 // One backend item object → short inline label: "diamond_sword[sharpness 5]",
-// or "[sharpness 3]" for a book (the "book=" operand label already names it).
+// or "[sharpness 3]" for a book. All id/name/enchant pieces are escaped here
+// (the single sink for backend strings reaching the card HTML).
 function itemLabel(item) {
   if (!item) return '?';
-  const ench = (item.enchantments || []).map((e) => `${shortId(e.id)} ${e.level}`).join(', ');
+  const ench = (item.enchantments || []).map((e) => `${esc(shortId(e.id))} ${e.level}`).join(', ');
   if (item.is_book) return ench ? `[${ench}]` : t('calc.book');
-  const base = shortId((item.equipment && (item.equipment.id || item.equipment.name))) || '?';
+  const base = esc(shortId((item.equipment && (item.equipment.id || item.equipment.name)))) || '?';
   return ench ? `${base}[${ench}]` : base;
 }
 
@@ -53,10 +62,12 @@ function renderSolution(el, sol, index) {
   const card = document.createElement('div');
   card.className = 'card';
   // Steps carry item_a/item_b (both item objects) + exp_level_cost; there is
-  // no per-step result field in the JSON, so no "→ result" arrow.
+  // no per-step result field in the JSON, so no "→ result" arrow. item_a is
+  // the target being upgraded; item_b is the book — rendered as just its label
+  // (brackets distinguish a book, avoiding a bare "book=book" operand).
   const steps = (sol.steps || []).map((s, i) =>
     `<div class="step"><b>${t('calc.step')} ${i + 1}:</b> ` +
-    `${t('calc.target')}=${itemLabel(s.item_a)} + ${t('calc.book')}=${itemLabel(s.item_b)} ` +
+    `${t('calc.target')}=${itemLabel(s.item_a)} + ${itemLabel(s.item_b)} ` +
     `(${t('calc.cost')}: ${s.exp_level_cost ?? '?'})</div>`).join('');
   // final_item only exists on Solution::to_json(), not in the OutputFormatter
   // JSON this view consumes — render it only when the backend provides it.
@@ -78,6 +89,9 @@ function startPoll(id) {
   bar.style.display = 'block';
 
   pollTimer = setInterval(async () => {
+    // The view may have been torn down by route() while we were waiting; stop
+    // polling detached nodes instead of writing errors onto the new view.
+    if (!document.body.contains(bar)) { clearInterval(pollTimer); return; }
     try {
       const st = await http.get(`/api/calculator/${id}`);
       bar.querySelector('div').style.width = `${Math.round(st.progress * 100)}%`;
@@ -142,6 +156,9 @@ export function render(el) {
       try { await http.del(`/api/calculator/${currentTask}`); } catch (e) { /* ignore */ }
       clearInterval(pollTimer);
       document.getElementById('calc-progress').style.display = 'none';
+      const st = document.getElementById('calc-status');
+      if (st) st.textContent = '';
+      currentTask = null;
     }
   });
 }
