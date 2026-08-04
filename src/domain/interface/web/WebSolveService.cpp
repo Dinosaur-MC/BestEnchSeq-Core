@@ -130,6 +130,25 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             if (t->state == TaskState::Running)
                 throw WebHttpError(409, "a solve is already running");
         }
+        // Reap terminal tasks so the table stays bounded (long-lived server;
+        // a finished task's result is no longer needed once a new solve starts).
+        // A task is erased ONLY after its worker has fully exited (`finished`)
+        // and been joined — a terminal state alone is insufficient, because the
+        // worker may still be unwinding (e.g. format() after setting Completed,
+        // or a cancelled solve() returning). Erasing earlier would let the
+        // worker's last shared_ptr release destroy its own still-joinable
+        // std::thread → std::terminate. Running tasks are kept so the 409
+        // active-check above stays authoritative.
+        for (auto it = _tasks.begin(); it != _tasks.end();) {
+            auto& t = it->second;
+            {
+                std::lock_guard<std::mutex> tl(t->mutex);
+                if (t->state == TaskState::Running) { ++it; continue; }
+            }
+            if (!t->finished.load(std::memory_order_acquire)) { ++it; continue; }
+            if (t->worker.joinable()) t->worker.join();
+            it = _tasks.erase(it);
+        }
         task = std::make_shared<Task>();
         task->numeric_id = ++_next_id;
         task->id = "task-" + std::to_string(task->numeric_id);
@@ -140,6 +159,13 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
     // Worker thread runs the blocking solve; it outlives this call. The thread
     // is joined by the destructor (not detached) so no worker outlives *this.
     task->worker = std::thread([this, task, dto]() mutable {
+        // DoneGuard sets `finished` on every exit path (early cancel returns
+        // included), so the reap loop can safely join + erase this task once
+        // the worker has stopped touching *this/_ctx.
+        struct DoneGuard {
+            std::shared_ptr<Task> t;
+            ~DoneGuard() { t->finished.store(true, std::memory_order_release); }
+        } done_guard{task};
         try {
             // The gate serializes ALL access to the shared BesqContext. Its
             // registries are reached through resolve_effective(), which rebuilds
@@ -168,7 +194,6 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 std::lock_guard<std::mutex> lock(task->mutex);
                 if (task->state == TaskState::Cancelled) return;
                 task->state = TaskState::Completed;
-                task->progress = 1.0;
                 json = _ctx.format(result, request.mode, "json");
                 task->result = std::move(json);
             }

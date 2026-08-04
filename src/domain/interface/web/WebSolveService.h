@@ -2,11 +2,12 @@
 #include "domain/interface/web/WebSchema.h"
 #include "domain/orchestration/types/SolveResult.h"
 #include "domain/interface/web/WebHttpError.h"
+#include <atomic>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
-#include <memory>
 
 class BesqContext;
 
@@ -27,6 +28,7 @@ struct TaskStatus {
 /// BesqContext::solve() per task. Single active slot — starting a new solve
 /// while one runs throws WebHttpError(409). Mirrors the core's single
 /// active_executor semantics so cancel/progress stay well-defined.
+/// The BesqContext must outlive this service; workers hold a reference to it.
 class WebSolveService {
 public:
     explicit WebSolveService(BesqContext& ctx);
@@ -53,11 +55,17 @@ private:
         std::string id;
         int64_t numeric_id = 0;
         TaskState state = TaskState::Running;
-        double progress = 0.0;
         std::string result;
         std::string error;
-        std::thread worker;   // owns a shared_ptr<Task> copy; joined by the
-                              // destructor so no worker outlives *this/_ctx
+        /// Set (release) as the worker thread's very last action, after every
+        /// access to *this/_ctx. Gates task reaping: a terminal task may only
+        /// be erased from the table once its worker has fully exited (and been
+        /// joined) — never while the worker still runs, and never by destroying
+        /// a still-joinable thread (which would std::terminate).
+        std::atomic<bool> finished{false};
+        /// The worker holds a shared_ptr<Task> copy; joined by the destructor
+        /// (or by the reap loop before erase) so no worker outlives *this/_ctx.
+        std::thread worker;
         std::mutex mutex;
     };
 

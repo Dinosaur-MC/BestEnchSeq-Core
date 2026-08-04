@@ -4,8 +4,9 @@
 #include "domain/interface/web/WebSolveService.h"
 #include "domain/interface/web/WebSchema.h"
 #include "domain/interface/BesqContext.h"
+#include "builtin/I18nLoader.h"
+#include "common/i18n/Language.h"
 #include "framework/test_utils.h"
-#include <atomic>
 #include <chrono>
 #include <thread>
 
@@ -91,10 +92,64 @@ void test_single_active_slot() {
     TEST_PASS("calculator single active slot");
 }
 
+void test_failed_and_has_active() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    webhttp::WebSolveService svc(ctx);
+
+    // Unknown enchantment → task fails with a non-empty error.
+    WebTaskDto bad;
+    bad.target.item = "diamond_sword";
+    bad.target.enchants = {{"nonexistent_ench", 1}};
+    bad.algorithm = "dp_merge";
+    auto id = svc.start(bad);
+    bool failed = false;
+    for (int i = 0; i < 200; ++i) {
+        auto s = svc.status(id);
+        if (s.state == webhttp::TaskState::Failed) {
+            failed = true;
+            expect(!s.error.empty(), "failed task carries an error message");
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(failed, "invalid task reaches Failed");
+    expect(!svc.has_active(), "has_active false after task completes");
+
+    // Start a good task → has_active true while running.
+    auto id2 = svc.start([] {
+        WebTaskDto dto;
+        dto.target.item = "diamond_sword";
+        dto.target.enchants = {{"sharpness", 5}};
+        dto.algorithm = "dp_merge";
+        dto.max_solutions = 1;
+        return dto;
+    }());
+    // The solve may race ahead of the main thread, so poll until the Running
+    // state is observed (a dp_merge on a small target can finish in microseconds).
+    bool saw_active = false;
+    for (int i = 0; i < 200 && !saw_active; ++i) {
+        saw_active = svc.has_active();
+        if (!saw_active) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(saw_active, "has_active true while a task runs");
+    // Wait for it to finish, then has_active is false again.
+    for (int i = 0; i < 500 && svc.has_active(); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    expect(!svc.has_active(), "has_active false after running task completes");
+    (void)id2;
+    TEST_PASS("calculator failed path + has_active");
+}
+
 int main() {
+    // The Failed path surfaces a localized error message (tr_fmt), which needs
+    // the translation tables registered (the real app does this in main()).
+    register_builtin_translations(LanguageManager::instance());
+    LanguageManager::instance().select("en_US");
     try {
         test_lifecycle_complete();
         test_single_active_slot();
+        test_failed_and_has_active();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
