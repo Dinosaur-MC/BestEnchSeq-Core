@@ -3,8 +3,8 @@
 
 class BesqContext;
 
-/// GET /api/status — session snapshot (active profile, algorithm count,
-/// active solve, memory, uptime).
+/// GET /api/status — session snapshot (active profile, profile count,
+/// algorithm count, active solve, uptime).
 struct ApiStatus {
     static std::string handle(const BesqContext& ctx);
 };

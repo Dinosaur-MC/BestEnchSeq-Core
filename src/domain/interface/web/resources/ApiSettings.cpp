@@ -21,12 +21,10 @@ std::string ApiSettings::handle_get(const BesqContext& ctx) {
 }
 
 std::string ApiSettings::handle_put(BesqContext& ctx, const Json& body) {
-    (void)ctx;
     if (body.type() != JsonType::Object)
         throw webhttp::WebHttpError(400, "settings body must be a JSON object");
 
     auto apply_lang = [&](const std::string& code) {
-        if (code.empty()) return;
         auto available = LanguageManager::instance().available();
         bool known = false;
         for (const auto& a : available) known = known || a == code;
@@ -35,15 +33,32 @@ std::string ApiSettings::handle_put(BesqContext& ctx, const Json& body) {
         LanguageManager::instance().select(code);
     };
 
-    if (body.has("lang"))
-        apply_lang(body["lang"].as<std::string>());
-    if (body.has("log_level"))
-        Logger::instance().set_level(static_cast<LogLevel>(body["log_level"].as<int32_t>()));
-    if (body.has("log_console"))
-        Logger::instance().set_console_enabled(body["log_console"].as<bool>());
-    if (body.has("log_console_level"))
-        Logger::instance().set_console_level(
-            static_cast<LogLevel>(body["log_console_level"].as<int32_t>()));
+    // Bound-check before casting: out-of-range 0..3 would overflow LogLevel and
+    // corrupt the Logger singleton.
+    auto checked_log_level = [](const Json& v) -> int32_t {
+        int32_t lv = v.as<int32_t>();
+        if (lv < 0 || lv > 3)
+            throw webhttp::WebHttpError(400, "log level must be 0..3");
+        return lv;
+    };
+
+    // The as<T>() accessors throw JsonException on type mismatch (e.g.
+    // {"lang":123}) — surface that as a 400, not a raw exception that
+    // WebModule would otherwise turn into a 500.
+    try {
+        if (body.has("lang"))
+            apply_lang(body["lang"].as<std::string>());
+        if (body.has("log_level"))
+            Logger::instance().set_level(
+                static_cast<LogLevel>(checked_log_level(body["log_level"])));
+        if (body.has("log_console"))
+            Logger::instance().set_console_enabled(body["log_console"].as<bool>());
+        if (body.has("log_console_level"))
+            Logger::instance().set_console_level(
+                static_cast<LogLevel>(checked_log_level(body["log_console_level"])));
+    } catch (const JsonException&) {
+        throw webhttp::WebHttpError(400, "invalid settings field type");
+    }
 
     return handle_get(ctx);
 }

@@ -104,7 +104,44 @@ void test_api_settings() {
         [&] { ApiSettings::handle_put(ctx, bad); }, "invalid lang throws");
     expect(LanguageManager::instance().active().name() == "zh_CN", "lang unchanged after bad put");
 
-    LanguageManager::instance().select("en_US");  // restore
+    // Malformed field types → 400 (JsonException translated), no partial apply.
+    expect_throws_as<webhttp::WebHttpError>([&] {
+        ApiSettings::handle_put(ctx, Json::parse(R"({"lang":123})"));
+    }, "malformed lang type throws 400");
+    expect(LanguageManager::instance().active().name() == "zh_CN", "lang unchanged after malformed put");
+
+    // Empty lang is unknown → 400 (no silent no-op).
+    expect_throws_as<webhttp::WebHttpError>([&] {
+        ApiSettings::handle_put(ctx, Json::parse(R"({"lang":""})"));
+    }, "empty lang throws 400");
+
+    // Logger settings write path (GET assert → PUT → GET assert → restore).
+    auto lg_before = Json::parse(ApiSettings::handle_get(ctx));
+    int32_t old_level = lg_before["log_level"].as<int32_t>();
+    bool old_console = lg_before["log_console"].as<bool>();
+    int32_t old_console_level = lg_before["log_console_level"].as<int32_t>();
+
+    auto put_lg = Json::parse(ApiSettings::handle_put(ctx, Json::parse(
+        R"({"log_level":3,"log_console":false,"log_console_level":0})")));
+    expect(put_lg["log_level"].as<int32_t>() == 3, "log_level updated in response");
+    expect(put_lg["log_console"].as<bool>() == false, "log_console updated in response");
+    expect(put_lg["log_console_level"].as<int32_t>() == 0, "log_console_level updated in response");
+    expect(Logger::instance().get_level() == LogLevel::Error, "Logger level actually set");
+    expect(!Logger::instance().console_enabled(), "Logger console actually disabled");
+
+    // Invalid range → 400 throw, logger unchanged.
+    expect_throws_as<webhttp::WebHttpError>([&] {
+        ApiSettings::handle_put(ctx, Json::parse(R"({"log_level":99})"));
+    }, "out-of-range log_level throws 400");
+    expect(Logger::instance().get_level() == LogLevel::Error, "Logger level unchanged after bad put");
+
+    // Restore original logger settings + language.
+    Json restore = Json::object();
+    restore["log_level"] = Json(old_level);
+    restore["log_console"] = Json(old_console);
+    restore["log_console_level"] = Json(old_console_level);
+    ApiSettings::handle_put(ctx, restore);
+    LanguageManager::instance().select("en_US");
     TEST_PASS("ApiSettings");
 }
 
