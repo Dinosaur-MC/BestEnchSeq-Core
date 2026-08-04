@@ -27,3 +27,7 @@ target_include_directories(besq-domain-interface PUBLIC
 target_compile_definitions(besq-domain-interface PUBLIC
     BESQ_MAX_SOLUTIONS=${BESQ_MAX_SOLUTIONS}
 )
+
+if(WIN32)
+    target_link_libraries(besq-domain-interface PRIVATE ws2_32)
+endif()

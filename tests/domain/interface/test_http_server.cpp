@@ -4,8 +4,10 @@
 // =============================================================================
 #include "domain/interface/web/http/HttpCommon.h"
 #include "domain/interface/web/http/HttpParser.h"
+#include "domain/interface/web/http/Socket.h"
 #include "framework/test_utils.h"
 #include <string>
+#include <thread>
 
 using webhttp::HttpRequest;
 using webhttp::HttpResponse;
@@ -140,6 +142,40 @@ void test_response_serialize() {
     TEST_PASS("serialize response");
 }
 
+void test_socket_echo() {
+    webhttp::TcpListener listener;
+    expect(listener.listen("127.0.0.1", 0), "bind+listen on ephemeral port");
+    expect(listener.bound_port() > 0, "bound port is non-zero");
+
+    int server_fd = -1;
+    std::thread server([&] {
+        server_fd = listener.accept();
+        if (server_fd >= 0) {
+            std::string data;
+            int n = webhttp::sock_recv(server_fd, data, 1024, 3000);
+            if (n > 0) webhttp::sock_send(server_fd, data, 3000);
+        }
+    });
+
+    int c = webhttp::sock_connect("127.0.0.1", listener.bound_port());
+    expect(c >= 0, "client connects");
+    expect(webhttp::sock_send(c, "ping", 3000), "client sends");
+    std::string reply;
+    expect(webhttp::sock_recv(c, reply, 1024, 3000) > 0, "client receives reply");
+    expect(reply == "ping", "echo matches");
+    webhttp::sock_close(c);
+    server.join();
+    if (server_fd >= 0) webhttp::sock_close(server_fd);
+    TEST_PASS("socket echo round-trip");
+}
+
+void test_socket_refused() {
+    // Connect to a port with nothing listening → must fail fast, not hang.
+    int c = webhttp::sock_connect("127.0.0.1", 1);
+    expect(c < 0, "connect to closed port fails");
+    TEST_PASS("socket connect refused");
+}
+
 int main() {
     try {
         test_parse_get();
@@ -153,6 +189,8 @@ int main() {
         test_parse_empty_method();
         test_parse_oversized_headers();
         test_response_serialize();
+        test_socket_echo();
+        test_socket_refused();
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
         return 1;
