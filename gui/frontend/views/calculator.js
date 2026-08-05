@@ -457,7 +457,7 @@ export async function render(el) {
     <h2>${t('calc.title')}</h2>
     <div class="card">
       <label>${t('calc.item')}</label>
-      <mdui-dropdown id="calc-item-dd">
+      <mdui-dropdown id="calc-item-dd" placement="bottom-start">
         <mdui-button slot="trigger" id="calc-item-trigger">
           <span class="item-trigger" id="calc-item-trigger-span"></span>
         </mdui-button>

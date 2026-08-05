@@ -128,3 +128,48 @@ tr.conflict { background: rgba(217, 83, 79, .12); }
 .log-debug { color: var(--muted); }
 .log-warn { color: #e6c85a; }
 .log-error { color: var(--danger); }
+
+/* ── MDUI theme alignment (mdui.css loads first; same-specificity overrides win) ──
+   Map the MDUI design tokens onto the app palette so dropdown/menu/select/switch
+   surfaces and corners match the page instead of the default near-black M3 blue. */
+:root {
+  --mdui-color-surface: 29 27 24;                    /* = --bg */
+  --mdui-color-surface-container-low: 43 40 35;      /* = --panel */
+  --mdui-color-surface-container: 43 40 35;          /* = --panel */
+  --mdui-color-surface-container-high: 58 54 47;     /* = --panel-2 */
+  --mdui-color-surface-container-highest: 66 61 53;
+  --mdui-color-surface-variant: 58 54 47;            /* = --panel-2 */
+  --mdui-color-on-surface: 232 226 213;              /* = --text */
+  --mdui-color-on-surface-variant: 155 147 127;      /* = --muted */
+  --mdui-color-on-surface-container: 232 226 213;
+  --mdui-color-outline: 82 76 65;                    /* = --border */
+  --mdui-color-primary: 92 184 92;                   /* = --accent */
+  --mdui-color-primary-container: 92 184 92;
+  --mdui-color-on-primary-container: 29 27 24;
+  --mdui-color-secondary-container: 58 54 47;
+  --mdui-color-on-secondary-container: 232 226 213;
+  --mdui-color-background: 29 27 24;
+  --mdui-color-on-background: 232 226 213;
+  --mdui-shape-corner-extra-large: 6px;              /* = --radius */
+  --mdui-shape-corner-large: 6px;
+  --mdui-shape-corner-medium: 6px;
+  --mdui-shape-corner-small: 6px;
+  --mdui-shape-corner-extra-small: 4px;
+}
+
+/* ── Calculator item dropdown ──
+   The panel is position:fixed and sized by the positioner; without a clamp the
+   89-item menu grows to 1700+px and the `auto` placement (which measures the
+   unclamped height) puts the menu to the RIGHT of the trigger. calculator.js
+   pins placement="bottom-start"; here the panel gets the app surface look and
+   a viewport-bound max-height so the last entry (enchanted book) stays
+   reachable by scrolling. */
+mdui-dropdown::part(panel) {
+  max-height: min(60vh, 400px);
+  overflow-y: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  padding: 4px;
+}
