@@ -258,6 +258,57 @@ void test_besq_default_profiles_scan() {
 }
 
 // ---------------------------------------------------------------------------
+// Test: effective_profile — dependency-merged effective view accessor
+// ---------------------------------------------------------------------------
+
+void test_effective_profile_view() {
+    // Scaffold a dependent profile in a temp dir (dependency content must be
+    // merged into the effective view).
+    auto tmp = std::filesystem::temp_directory_path() / "besq_effective_profile";
+    std::filesystem::remove_all(tmp);
+    std::filesystem::create_directories(tmp);
+    {
+        std::ofstream f(tmp / "modd.json");
+        f << R"({"name":"modd","dependencies":["builtin:vanilla"],"enchantments":[{"id":"mod:eff","name":"Eff","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})";
+    }
+
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.set_profiles_dir(tmp.string());
+    ctx.load_profiles();
+
+    // Root profile (no deps): effective view == own view.
+    const Profile& root = ctx.effective_profile("builtin:vanilla");
+    expect(root.ench().contains(NSID("minecraft:sharpness")),
+           "root effective view has vanilla enchantments");
+    expect(root.tag_resolver() != nullptr, "effective view attaches a tag resolver");
+
+    // Dependent profile: own content + dependency content merged.
+    const Profile& eff = ctx.effective_profile("modd");
+    expect(eff.ench().contains(NSID("mod:eff")),
+           "own enchantment in effective view");
+    expect(eff.ench().contains(NSID("minecraft:sharpness")),
+           "dependency content merged into effective view");
+    expect(eff.eq().contains(NSID("minecraft:diamond_sword")),
+           "dependency equipment merged into effective view");
+    expect(eff.tag_resolver() != nullptr,
+           "dependent effective view attaches a tag resolver");
+
+    // Unknown profile → std::runtime_error (accessor contract; the underlying
+    // resolve_effective would silently return an empty view).
+    bool threw = false;
+    try {
+        (void)ctx.effective_profile("nope");
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "unknown profile throws std::runtime_error");
+
+    std::filesystem::remove_all(tmp);
+    TEST_PASS("BesqContext effective_profile view");
+}
+
+// ---------------------------------------------------------------------------
 // Test: Export profile
 // ---------------------------------------------------------------------------
 
@@ -1048,6 +1099,7 @@ int main() {
         test_besq_solve_already_met();
         test_besq_registry_edit();
         test_besq_default_profiles_scan();
+        test_effective_profile_view();
         test_besq_export();
         test_besq_import_profile_invalidates_effective_cache();
         test_besq_load_file_datapack_keeps_tags();

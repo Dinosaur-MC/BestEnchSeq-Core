@@ -152,6 +152,15 @@ const Profile& BesqContext::profile(const std::string& name) const {
     throw std::runtime_error(tr_fmt("cli.err.profile_not_found", name));
 }
 
+const Profile& BesqContext::effective_profile(const std::string& name) const {
+    // resolve_effective itself returns an EMPTY view for an unknown profile
+    // (ProfileManager.cpp:418-425) instead of throwing — the accessor's
+    // contract is a hard error, so check existence first (mirrors profile()).
+    if (!_impl->profiles.exists(name))
+        throw std::runtime_error(tr_fmt("cli.err.profile_not_found", name));
+    return _impl->profiles.resolve_effective(name);
+}
+
 // ====================================================================
 // Registry editing (named profile)
 // ====================================================================

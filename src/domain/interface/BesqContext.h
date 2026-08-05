@@ -85,9 +85,15 @@ public:
     /// The named profile's OWN data (raw registries; inherited dependency
     /// content is NOT merged in). Throws std::runtime_error when the profile
     /// is unknown. Does NOT change the active profile. Callers needing the
-    /// dependency-merged view should read ProfileManager::resolve_effective
-    /// (as a value copy, not a held reference).
+    /// dependency-merged view should use effective_profile().
     const Profile& profile(const std::string& name) const;
+
+    /// Dependency-merged effective view of the named profile (mirrors what
+    /// solve consumes: ProfileManager::resolve_effective). Throws
+    /// std::runtime_error on unknown profile / dependency cycle. Reference is
+    /// stable while the manager is not mutated — controllers must hold the
+    /// context gate.
+    const Profile& effective_profile(const std::string& name) const;
 
     // ── Registry editing (named profile) ──
     /// Stable by-name CRUD forwarded to ProfileManager's validated `_mutate`
