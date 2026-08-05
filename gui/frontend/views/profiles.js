@@ -210,7 +210,7 @@ function renderMeta(meta) {
       <tr><th>equipments</th><td>${esc(meta.eq_count ?? '')}</td></tr>
       <tr><th>tags</th><td>${esc(meta.tag_count ?? '')}</td></tr>
       <tr><th>dependencies</th><td><input class="deps-input" value="${esc(deps)}">
-        <button class="deps-save">Save</button></td></tr>
+        <button class="deps-save">${t('prof.save')}</button></td></tr>
     </table>`;
   panel.querySelector('.deps-save').addEventListener('click', async () => {
     clearError();
@@ -248,8 +248,8 @@ export function render(el) {
     list.innerHTML = `<table><thead><tr><th>${t('prof.name')}</th><th></th><th></th></tr></thead><tbody>` +
       data.profiles.map((p) => `<tr><td>${esc(p)}${p === data.active ? ` (${t('prof.active')})` : ''}</td>
         <td><button data-act="${esc(p)}">${t('prof.activate')}</button>
-            <button data-view="${esc(p)}">View</button></td>
-        <td><button data-ren="${esc(p)}">Rename</button>
+            <button data-view="${esc(p)}">${t('prof.view')}</button></td>
+        <td><button data-ren="${esc(p)}">${t('prof.rename')}</button>
             <button data-rmp="${esc(p)}">${t('prof.remove')}</button></td></tr>`).join('') +
       `</tbody></table>
        <label>${t('prof.new_name')}</label><input class="fork-name">
@@ -287,7 +287,7 @@ export function render(el) {
       const oldKey = b.dataset.ren;
       const name = window.prompt('New profile name', oldKey);
       if (!name || name === oldKey) return;
-      if (/[/#?%]/.test(name)) { showError('Invalid profile name'); return; }
+      if (/[/#?%]/.test(name)) { showError(t('prof.invalid_name')); return; }
       (async () => {
         try {
           await http.post(`/api/profiles/${encSeg(oldKey)}/rename`, { name });
@@ -302,7 +302,7 @@ export function render(el) {
       if (!name) return;
       // URL-hostile characters are rejected at the input so a created profile is
       // always addressable by the registry routes below.
-      if (/[/#?%]/.test(name)) { showError('Invalid profile name'); return; }
+      if (/[/#?%]/.test(name)) { showError(t('prof.invalid_name')); return; }
       try {
         // POST /api/profiles {source,dest} → 201 fork-create
         await http.post('/api/profiles', { source: data.active, dest: name });

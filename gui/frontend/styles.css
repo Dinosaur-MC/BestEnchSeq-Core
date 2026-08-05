@@ -82,9 +82,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-2); 
   background: var(--panel-2); color: var(--text);
   border: 1px solid var(--border); border-radius: var(--radius);
   padding: 2px 9px; font-size: 12px; min-width: 28px; margin: 1px;
+  height: 24px; line-height: 1;
 }
 .lv.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .lv:disabled { opacity: .35; cursor: not-allowed; }
+/* Conflict-blocked levels: clearly disabled (dimmed + red strikethrough), the
+   inert source column keeps the plain dim state. */
+.lv[data-dis="conflict"]:disabled {
+  opacity: .3; color: var(--danger); border-color: var(--danger);
+  text-decoration: line-through;
+}
 /* Exclusive/conflict rows */
 tr.conflict { background: rgba(217, 83, 79, .12); }
 .conflict-hint { color: var(--danger); font-size: 12px; margin-top: 2px; }
@@ -183,3 +190,11 @@ mdui-dropdown::part(panel) {
   box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
   padding: 4px;
 }
+
+/* ── Control height unification (≈36px, matching the plain buttons) ── */
+mdui-button { height: 36px; }
+mdui-switch { height: 36px; }
+/* mdui-select is a text-field shell; shrink host + container + input parts. */
+mdui-select::part(text-field) { height: 36px; }
+mdui-select::part(text-field__container) { height: 36px; }
+mdui-select::part(text-field__input) { height: 36px; }

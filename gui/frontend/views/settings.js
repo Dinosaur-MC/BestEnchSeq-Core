@@ -14,10 +14,10 @@ export async function render(el) {
     </select>
     <label>${t('set.log_level')}</label>
     <select id="set-loglevel">
-      <option value="0" ${s.log_level === 0 ? 'selected' : ''}>Debug</option>
-      <option value="1" ${s.log_level === 1 ? 'selected' : ''}>Info</option>
-      <option value="2" ${s.log_level === 2 ? 'selected' : ''}>Warn</option>
-      <option value="3" ${s.log_level === 3 ? 'selected' : ''}>Error</option>
+      <option value="0" ${s.log_level === 0 ? 'selected' : ''}>${t('level.debug')}</option>
+      <option value="1" ${s.log_level === 1 ? 'selected' : ''}>${t('level.info')}</option>
+      <option value="2" ${s.log_level === 2 ? 'selected' : ''}>${t('level.warn')}</option>
+      <option value="3" ${s.log_level === 3 ? 'selected' : ''}>${t('level.error')}</option>
     </select>
     <div style="margin-top:12px"><button id="set-save">${t('set.save')}</button></div>
     <div id="set-msg"></div></div>`;

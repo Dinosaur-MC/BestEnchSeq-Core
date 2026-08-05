@@ -22,10 +22,10 @@ export async function render(el) {
     <div class="log-bar">
       <label for="log-level">${t('logs.level')}</label>
       <select id="log-level">
-        <option value="debug">Debug</option>
-        <option value="info">Info</option>
-        <option value="warn">Warn</option>
-        <option value="error">Error</option>
+        <option value="debug">${t('level.debug')}</option>
+        <option value="info">${t('level.info')}</option>
+        <option value="warn">${t('level.warn')}</option>
+        <option value="error">${t('level.error')}</option>
       </select>
       <button id="log-pause">${t('logs.pause')}</button>
       <button class="secondary" id="log-clear">${t('logs.clear')}</button>

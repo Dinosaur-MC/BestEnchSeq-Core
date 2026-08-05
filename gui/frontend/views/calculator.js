@@ -397,8 +397,13 @@ function lvButtons(short, col, blocked) {
   for (let lv = 1; lv <= ench.max_level; lv++) {
     const active = sel[col] === lv;
     const dis = blocked || (col === 'source' && !state.useSource);
+    // data-dis distinguishes "blocked by an exclusive-set conflict" from the
+    // whole column being inert (source column while "use current" is off) —
+    // the conflict ones get the stronger disabled visual in styles.css.
+    const reason = dis ? (blocked ? 'conflict' : 'column') : '';
     out += `<button type="button" class="lv${active ? ' active' : ''}" ` +
-      `data-ench="${esc(short)}" data-col="${col}" data-lv="${lv}"${dis ? ' disabled' : ''}>` +
+      `data-ench="${esc(short)}" data-col="${col}" data-lv="${lv}"` +
+      `${reason ? ` data-dis="${reason}"` : ''}${dis ? ' disabled' : ''}>` +
       `${toRoman(lv)}</button>`;
   }
   return out;
