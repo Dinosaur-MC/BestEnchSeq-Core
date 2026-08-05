@@ -2,8 +2,6 @@
 #include "domain/interface/components/http/HttpController.h"
 #include <mutex>
 
-class BesqContext;
-
 namespace web {
 
 /// GET/PATCH /api/settings. `lang`, `log_level`, `log_console`,
@@ -19,7 +17,7 @@ class SettingsController : public HttpController<SettingsController> {
 public:
     using Self = SettingsController;
 
-    explicit SettingsController(BesqContext& ctx, std::mutex& gate) : _ctx(ctx), _gate(gate) {}
+    explicit SettingsController(std::mutex& gate) : _gate(gate) {}
 
     static constexpr auto route_defs() {
         return std::array{
@@ -32,7 +30,6 @@ public:
     Response patch(const HttpRequest&, const PathParams&, const Json&);
 
 private:
-    BesqContext& _ctx;
     std::mutex& _gate;
 };
 

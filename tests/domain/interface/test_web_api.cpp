@@ -45,7 +45,7 @@ struct TestApp {
         solve = std::make_unique<web::WebSolveService>(c, gate, &hub);
         router.register_controller<HealthController>();
         router.register_controller<StatusController>(c, gate);
-        router.register_controller<SettingsController>(c, gate);
+        router.register_controller<SettingsController>(gate);
         router.register_controller<ProfilesController>(ctx, gate);
         router.register_controller<AlgorithmController>(c, *solve, gate);
         router.register_controller<CalculatorController>(*solve, hub);
