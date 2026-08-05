@@ -28,6 +28,12 @@ const dicts = {
     'calc.none': 'none',
     'calc.treasure': 'Treasure',
     'calc.weight': 'Weight',
+    'calc.step_apply': 'Apply {0} to {1}',
+    'calc.infeasible': 'Infeasible',
+    'calc.peak_cost': 'Peak level cost',
+    'calc.too_expensive': 'may be Too Expensive on anvil',
+    'calc.already_met': 'Target already met — no forging steps',
+    'calc.time_ms': 'computation time (ms)',
     'prof.title': 'Profiles', 'prof.active': 'Active',
     'prof.new_name': 'New profile name', 'prof.fork_from': 'Fork from',
     'prof.create': 'Create', 'prof.activate': 'Activate', 'prof.remove': 'Remove',
@@ -74,6 +80,13 @@ const dicts = {
     'calc.none': '无',
     'calc.treasure': '宝藏',
     'calc.weight': '权重',
+    'calc.step_apply': '把 {0} 应用到 {1}',
+    'calc.infeasible': '不可行',
+    'calc.peak_cost': '峰值等级成本',
+    'calc.too_expensive': '可能在铁砧上过于昂贵',
+    'calc.already_met': '目标已达成——无需锻造步骤',
+    'calc.algorithm': '算法',
+    'calc.time_ms': '计算耗时（毫秒）',
     'prof.title': '数据', 'prof.active': '当前',
     'prof.new_name': '新数据名', 'prof.fork_from': '分支来源',
     'prof.create': '创建', 'prof.activate': '启用', 'prof.remove': '删除',
@@ -92,7 +105,14 @@ const dicts = {
 
 let lang = 'en-US';
 export function setLang(l) { if (dicts[l]) lang = l; }
+export function langCode() { return lang; }
 export function t(key) { return (dicts[lang] && dicts[lang][key]) || key; }
+// t() with {0}/{1}… positional placeholders (no plural forms needed).
+export function tf(key, ...args) {
+  let s = t(key);
+  args.forEach((a, i) => { s = s.split(`{${i}}`).join(String(a)); });
+  return s;
+}
 
 // Apply data-i18n attributes and re-render on language change.
 export function applyI18n(root) {

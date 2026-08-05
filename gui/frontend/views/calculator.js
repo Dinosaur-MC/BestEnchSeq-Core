@@ -11,7 +11,7 @@
 //   is_treasure, exclusive_set, ...}; `enchanted_book` returns the full
 //   registry; unknown profile/item → 404.
 import { http, showError, clearError, esc } from '../api.js';
-import { t } from '../i18n.js';
+import { t, tf } from '../i18n.js';
 
 let pollTimer = null;
 let currentTask = null;
@@ -83,21 +83,40 @@ function renderSolution(el, sol, index) {
   const card = document.createElement('div');
   card.className = 'card';
   // Steps carry item_a/item_b (both item objects) + exp_level_cost; there is
-  // no per-step result field in the JSON, so no "→ result" arrow. item_a is
-  // the target being upgraded; item_b is the book — rendered as just its label
-  // (brackets distinguish a book, avoiding a bare "book=book" operand).
-  const steps = (sol.steps || []).map((s, i) =>
-    `<div class="step"><b>${t('calc.step')} ${i + 1}:</b> ` +
-    `${t('calc.target')}=${itemLabel(s.item_a)} + ${itemLabel(s.item_b)} ` +
-    `(${t('calc.cost')}: ${s.exp_level_cost ?? '?'})</div>`).join('');
-  // final_item only exists on Solution::to_json(), not in the OutputFormatter
-  // JSON this view consumes — render it only when the backend provides it.
-  const finalItem = sol.final_item
-    ? `<div class="mono">${t('calc.final_item')}: ${itemLabel(sol.final_item)}</div>` : '';
+  // no per-step result field in the OutputFormatter JSON, so no "→ result"
+  // arrow. item_a is the item being upgraded; when item_b is a book the step
+  // reads as an operation ("apply book to item") instead of a bare operand.
+  // The card header names the real JSON fields (is_success / peak_level_cost
+  // / target_item / metadata) — see OutputFormatter::format_json.
+  const steps = (sol.steps || []).map((s, i) => {
+    const a = itemLabel(s.item_a);
+    const b = itemLabel(s.item_b);
+    const op = s.item_b && s.item_b.is_book ? tf('calc.step_apply', b, a) : a + ' + ' + b;
+    return `<div class="step"><b>${t('calc.step')} ${i + 1}:</b> ${op} ` +
+      `(${t('calc.cost')}: ${s.exp_level_cost ?? '?'})</div>`;
+  }).join('');
+  // The JSON has no final_item — the target item is the goal the steps build,
+  // so it stands in for the final item (a 0-step "already met" solve shows it
+  // as the only content).
+  const finalItem = sol.target_item
+    ? `<div class="mono">${t('calc.final_item')}: ${itemLabel(sol.target_item)}</div>` : '';
+  const zeroStep = sol.is_success !== false && !(sol.steps || []).length
+    ? `<div class="mono">${t('calc.already_met')}</div>` : '';
+  const infeasible = sol.is_success === false
+    ? `<div class="diag-line diag-warn">${t('calc.infeasible')}</div>` : '';
+  const warn = (sol.peak_level_cost ?? 0) >= 39
+    ? `<div class="diag-line diag-warn">${t('calc.peak_cost')}: ${sol.peak_level_cost} — ${t('calc.too_expensive')}</div>` : '';
+  const meta = sol.metadata && sol.metadata.algorithm_name
+    ? `<div class="mono muted-line">${t('calc.algorithm')}: ${esc(sol.metadata.algorithm_name)}` +
+      (sol.metadata.computation_time != null
+        ? ` · ${t('calc.time_ms')}: ${sol.metadata.computation_time}` : '') + `</div>` : '';
   card.innerHTML = `
     <h3>#${index + 1} — ${t('calc.total_cost')}: ${sol.total_exp_level_cost ?? '?'}</h3>
-    ${steps || `<div>${t('calc.no_result')}</div>`}
-    ${finalItem}`;
+    ${infeasible}
+    ${steps || zeroStep || `<div>${t('calc.no_result')}</div>`}
+    ${warn}
+    ${finalItem}
+    ${meta}`;
   el.appendChild(card);
 }
 

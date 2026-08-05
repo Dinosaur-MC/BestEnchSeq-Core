@@ -58,6 +58,9 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 th { color: var(--muted); font-weight: 600; }
 .mono { font-family: Consolas, monospace; font-size: 13px; }
 .step { border-left: 2px solid var(--accent-2); padding: 4px 10px; margin: 6px 0; }
+.muted-line { color: var(--muted); margin-top: 4px; }
+.diag-line { margin: 2px 0; }
+.diag-warn { color: #e6c85a; }
 
 /* ── MC theme polish ── */
 .brand { letter-spacing: .5px; }
