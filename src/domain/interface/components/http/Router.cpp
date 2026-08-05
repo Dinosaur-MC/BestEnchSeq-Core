@@ -1,6 +1,7 @@
 // src/domain/interface/components/http/Router.cpp
 #include "Router.h"
 #include "common/io/json.h"
+#include "common/log/log.hpp"
 #include <string>
 
 namespace web {
@@ -49,10 +50,17 @@ HttpResponse Router::dispatch(const HttpRequest& req) {
         }
         return HttpResponse::not_found();
     } catch (const WebHttpError& e) {
+        // 4xx 属正常控制流（404/405/409 等），DEBUG 级进日志视图供排查。
+        LOG_DEBUG("%s %s -> %d %s", method_name(req.method), req.path.c_str(), e.status,
+                  e.code.c_str());
         return HttpResponse::error(e.status, e.code, e.what());
     } catch (const JsonException&) {
+        LOG_DEBUG("%s %s -> %d %s", method_name(req.method), req.path.c_str(), 400,
+                  "INVALID_BODY");
         return HttpResponse::error(400, "INVALID_BODY", "invalid request body");
     } catch (const std::exception& e) {
+        LOG_ERROR("uncaught exception dispatching %s %s: %s", method_name(req.method),
+                  req.path.c_str(), e.what());
         return HttpResponse::internal_error(e.what());
     }
 }

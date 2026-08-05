@@ -9,6 +9,7 @@
 #include <atomic>
 #include "Socket.h"
 #include "Reactor.h"
+#include "common/log/log.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -106,7 +107,11 @@ bool HttpServer::start(const std::string& host, uint16_t port, size_t workers) {
         _impl = std::make_unique<Impl>();
     _impl->workers = workers > 0 ? workers : 1;
     _impl->running.store(false, std::memory_order_release);
-    return _impl->listener.listen(host, port);
+    if (!_impl->listener.listen(host, port))
+        return false;
+    LOG_INFO("http server start: %s:%u (workers=%zu)", host.c_str(),
+             static_cast<unsigned>(_impl->listener.bound_port()), _impl->workers);
+    return true;
 }
 
 uint16_t HttpServer::port() const noexcept {
@@ -160,6 +165,7 @@ void HttpServer::run() {
     // Poller 线程：select 监听 + 连接；accept 后 round-robin 分片归属。
     std::thread poller([this] { poller_main(); });
     poller.join();
+    LOG_INFO("http server stopped");
 
     // 优雅关闭：stop accept → 各 Reactor 关闭连接 → stop（join 消费线程）。
     for (auto& r : impl.reactors) {
@@ -208,10 +214,12 @@ void HttpServer::poll_once() {
                 }
             }
             if (!ok) {
+                LOG_WARN("connection rejected: capacity cap %zu", kAdmitCap);
                 sock_close(c); // 达上限：拒绝新连接（accept 后立即关闭，无响应）
                 continue;
             }
             impl.reactors[home]->add_connection(c);
+            LOG_DEBUG("accept fd=%d -> reactor %zu", c, home);
         }
     }
 

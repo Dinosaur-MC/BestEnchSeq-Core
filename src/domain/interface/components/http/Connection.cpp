@@ -1,6 +1,7 @@
 // src/domain/interface/components/http/Connection.cpp
 #include "Connection.h"
 #include "Socket.h"
+#include "common/log/log.hpp"
 #include <memory>
 
 namespace web {
@@ -13,6 +14,7 @@ Connection::~Connection() { close(); }
 
 void Connection::close() {
     if (_alive) {
+        LOG_DEBUG("conn %s closed", _id.c_str());
         _alive = false;
         sock_close(_fd);
         _fd = -1;
@@ -135,6 +137,9 @@ bool Connection::process(const Router& router) {
             _partial = !_in.empty();
             touch();
             auto resp = router(req);
+            // 请求行日志：流升级后 process() 走流分支（_stream）不再解析请求，此句在
+            // 流连接上只在升级时执行一次（不逐帧刷屏），普通请求每请求记一次。
+            LOG_DEBUG("%s %s -> %d", method_name(req.method), req.path.c_str(), resp.status);
             if (resp.is_stream) {
                 // 升级为 SSE 流模式：写响应头，连接转入只写路径（push_sse_frame）。
                 if (!_stream) {
@@ -151,6 +156,7 @@ bool Connection::process(const Router& router) {
             continue;                       // pipeline: may be another complete request buffered
         }
         if (pr == ParseResult::BadRequest) {
+            LOG_WARN("malformed request from conn %s", _id.c_str());
             _out += HttpResponse::bad_request("BAD_REQUEST", "malformed request").to_bytes();
             _partial = true;                // 缓冲里的坏字节不会消失 → 按慢读计时
             break;

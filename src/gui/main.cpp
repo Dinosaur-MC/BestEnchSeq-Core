@@ -170,11 +170,14 @@ int main(int argc, char* argv[]) try {
     });
 
     if (!server.start(cfg.gui_host, cfg.gui_port, cfg.gui_workers)) {
+        LOG_ERROR("failed to bind %s:%u", cfg.gui_host.c_str(),
+                  static_cast<unsigned>(cfg.gui_port));
         std::cerr << "besq-gui: failed to bind " << cfg.gui_host << ":" << cfg.gui_port << "\n";
         return 1;
     }
 
     const auto url = "http://" + cfg.gui_host + ":" + std::to_string(server.port()) + "/";
+    LOG_INFO("besq-gui listening at %s", url.c_str());
     std::cout << "besq-gui serving at " << url << "\n";
 
     // v1 host: the default browser. A native WebView2 window (src/gui/
@@ -192,6 +195,8 @@ int main(int argc, char* argv[]) try {
     }
 
     server.run();
+    LOG_INFO("server shutting down");
+    besq::log::flush();
     return 0;
 
 } catch (const std::exception& e) {
