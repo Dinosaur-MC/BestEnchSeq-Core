@@ -61,6 +61,8 @@ th { color: var(--muted); font-weight: 600; }
 .muted-line { color: var(--muted); margin-top: 4px; }
 .diag-line { margin: 2px 0; }
 .diag-warn { color: #e6c85a; }
+.diag-table { margin: 4px 0 2px; }
+.diag-table td { padding: 2px 12px 2px 0; border-bottom: none; }
 
 /* ── MC theme polish ── */
 .brand { letter-spacing: .5px; }

@@ -135,6 +135,87 @@ function renderResult(result) {
     showError(t('calc.unreachable'));
 }
 
+// ── Algorithm diagnostics (T2 backend fields) ─────────────────────────────
+// GET /api/tasks/{id} carries `diagnostics` (event array) + terminal
+// `diag_exit`; the SSE stream emits `event: diag` frames with the same event
+// shapes ({kind:"progress"|"state"|"exit"}). There is no task-list endpoint,
+// so the calculator result area is the display surface: live frames are
+// appended as they arrive, and the exit summary (counters + KV) renders from
+// whichever source lands first (SSE frame or status snapshot) — a per-run
+// flag keeps the two from double-rendering.
+
+let diagExitRendered = false;
+
+function resetDiag() {
+  diagExitRendered = false;
+  const card = document.getElementById('calc-diag');
+  const body = document.getElementById('calc-diag-body');
+  if (!card || !body) return;
+  body.innerHTML = '';
+  card.style.display = 'none';
+}
+
+function showDiag() {
+  const card = document.getElementById('calc-diag');
+  if (card) card.style.display = '';
+}
+
+// Append one diag line, keeping the log bounded (drop oldest beyond 60).
+function appendDiag(line) {
+  const body = document.getElementById('calc-diag-body');
+  if (!body) return;
+  body.insertAdjacentHTML('beforeend', line);
+  while (body.children.length > 60) body.removeChild(body.firstChild);
+  showDiag();
+}
+
+// Escaped label for a backend diag value (int64 | string).
+function diagVal(v) {
+  return esc(v == null ? '' : String(v));
+}
+
+function renderDiagEvent(d) {
+  if (!d || typeof d !== 'object') return;
+  if (d.kind === 'exit') {
+    if (diagExitRendered) return;
+    diagExitRendered = true;
+    const counters = d.counters || {};
+    const kv = d.diag || {};
+    const rows = Object.keys(kv).map((k) =>
+      `<tr><td class="mono">${esc(k)}</td><td class="mono">${diagVal(kv[k])}</td></tr>`).join('');
+    appendDiag(
+      `<div class="diag-line">${t('diag.exit_status')}: <b>${esc(d.status ?? '')}</b>` +
+      ` · ${t('calc.algorithm')}: ${esc(d.algorithm ?? '')}` +
+      ` · ${t('diag.wall_ms')}: ${diagVal(d.wall_ms)}</div>` +
+      `<div class="diag-line muted-line">${t('diag.nodes_visited')}: ${diagVal(counters.nodes_visited)}` +
+      ` · ${t('diag.nodes_pruned')}: ${diagVal(counters.nodes_pruned)}` +
+      ` · ${t('diag.steps_forged')}: ${diagVal(counters.steps_forged)}</div>` +
+      (rows ? `<table class="diag-table"><tbody>${rows}</tbody></table>` : ''));
+    return;
+  }
+  if (d.kind === 'state') {
+    appendDiag(`<div class="diag-line">${t('diag.state')}: ${esc(d.from ?? '')} → ${esc(d.to ?? '')}</div>`);
+    return;
+  }
+  if (d.kind === 'progress') {
+    appendDiag(`<div class="diag-line">${t('diag.progress')}: ${esc(d.status ?? '')} ${d.pct ?? 0}%</div>`);
+  }
+}
+
+// Render the terminal diag_exit object from a GET /api/tasks/{id} snapshot
+// (idempotent via diagExitRendered, so an SSE frame that already rendered it
+// is not duplicated).
+function renderDiagExit(exit) {
+  if (exit && !diagExitRendered) renderDiagEvent(exit);
+}
+
+// Parse + render one `event: diag` SSE frame.
+function onDiagFrame(ev) {
+  let d;
+  try { d = JSON.parse(ev.data); } catch (_) { return; }
+  renderDiagEvent(d);
+}
+
 function setProgress(frac) {
   const bar = document.getElementById('calc-progress');
   if (bar) bar.querySelector('div').style.width = `${Math.round((frac || 0) * 100)}%`;
@@ -169,10 +250,12 @@ function startPoll(id) {
         clearInterval(pollTimer);
         finishProgress();
         renderResult(st.result);
+        renderDiagExit(st.diag_exit);
       } else if (st.state === 'failed') {
         clearInterval(pollTimer);
         finishProgress();
         showError(st.error || t('calc.no_result'));
+        renderDiagExit(st.diag_exit);
       } else if (st.state === 'cancelled') {
         clearInterval(pollTimer);
         finishProgress();
@@ -219,14 +302,28 @@ function startSSE(id) {
     if (!document.body.contains(bar)) { es.close(); return; } // view torn down
     let data;
     try { data = JSON.parse(ev.data); } catch (_) { return; }
-    settle(() => { finishProgress(); renderResult(data.result); });
+    settle(() => {
+      finishProgress();
+      renderResult(data.result);
+      // The completed frame carries no diagnostics — pull diag_exit from the
+      // status snapshot (idempotent; a diag exit frame may have landed first).
+      http.get(`/api/tasks/${id}`).then((st) => renderDiagExit(st.diag_exit)).catch(() => {});
+    });
   });
   es.addEventListener('failed', (ev) => {
     if (!document.body.contains(bar)) { es.close(); return; } // view torn down
     let data;
     try { data = JSON.parse(ev.data); } catch (_) { data = { error: String(ev.data) }; }
-    settle(() => { finishProgress(); showError(data.error || t('calc.no_result')); });
+    settle(() => {
+      finishProgress();
+      showError(data.error || t('calc.no_result'));
+      http.get(`/api/tasks/${id}`).then((st) => renderDiagExit(st.diag_exit)).catch(() => {});
+    });
   });
+  // Algorithm diagnostics stream (T2): progress/state/exit events appended to
+  // the diagnostics card live; the exit frame is deduped against the status
+  // snapshot by diagExitRendered.
+  es.addEventListener('diag', onDiagFrame);
   es.onerror = () => {
     es.close();
     if (currentEs === es) currentEs = null;
@@ -242,8 +339,8 @@ function startSSE(id) {
   (async () => {
     try {
       const st = await http.get(`/api/tasks/${id}`);
-      if (st.state === 'completed') settle(() => { finishProgress(); renderResult(st.result); });
-      else if (st.state === 'failed') settle(() => { finishProgress(); showError(st.error || t('calc.no_result')); });
+      if (st.state === 'completed') settle(() => { finishProgress(); renderResult(st.result); renderDiagExit(st.diag_exit); });
+      else if (st.state === 'failed') settle(() => { finishProgress(); showError(st.error || t('calc.no_result')); renderDiagExit(st.diag_exit); });
       else if (st.state === 'cancelled') settle(finishProgress);
     } catch (_) { /* leave the stream to deliver */ }
   })();
@@ -521,7 +618,11 @@ export async function render(el) {
         <div id="calc-status"></div>
       </div>
     </div>
-    <div id="calc-results"></div>`;
+    <div id="calc-results"></div>
+    <div id="calc-diag" class="card" style="display:none">
+      <h3>${t('diag.title')}</h3>
+      <div id="calc-diag-body" class="mono"></div>
+    </div>`;
   updateStatusBar();
 
   document.getElementById('calc-use-source').addEventListener('change', (ev) => {
@@ -538,6 +639,7 @@ export async function render(el) {
   });
   document.getElementById('calc-run').addEventListener('click', async () => {
     clearError();
+    resetDiag();
     try {
       // POST /api/tasks → 202 {task_id} + Location: /api/tasks/{id}
       const post = await http.post('/api/tasks', buildTask());
