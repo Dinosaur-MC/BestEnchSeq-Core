@@ -125,6 +125,10 @@ static std::filesystem::path resolve_res_dir(const std::string& res_dir) {
 int main(int argc, char* argv[]) try {
     auto& cfg = AppConfig::get();
     register_builtin_translations(LanguageManager::instance());
+    // GUI 进程覆盖 console 阈值到 Info：启动/关闭/错误进 console 可见；DEBUG
+    // 请求行仍进 ring（logs 页可查）不刷 console。仅此进程覆盖，CLI 不受影响
+    // （CLAUDE.md 的 json/compact 机器输出保护）。
+    cfg.log_console_level = 1;
     setup_logger(cfg.logger_config());
 
     bool open_browser = cfg.gui_open_browser;

@@ -113,3 +113,18 @@ tr.conflict { background: rgba(217, 83, 79, .12); }
   margin: 0; color: var(--text); cursor: pointer;
 }
 .option-row .algo-select { min-width: 160px; }
+
+/* ── Logs view: control bar + level-colored lines ── */
+.log-bar {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;
+}
+.log-bar label { margin: 0; }   /* override block label default inside the bar */
+.log-status { margin-left: auto; color: var(--muted); font-size: 12px; }
+#log-body {
+  margin: 0; max-height: 65vh; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-word;
+}
+.log-line { padding: 1px 0; }
+.log-debug { color: var(--muted); }
+.log-warn { color: #e6c85a; }
+.log-error { color: var(--danger); }
