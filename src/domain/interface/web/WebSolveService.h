@@ -1,11 +1,13 @@
 #pragma once
 #include "domain/interface/web/WebSchema.h"
+#include "common/io/json.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 class BesqContext;
 
@@ -21,6 +23,10 @@ struct TaskStatus {
     std::string result;         // formatted JSON (mode-appropriate), when Completed
     std::string error;          // human message when Failed
     int64_t task_id = 0;
+    /// 已产生的算法诊断事件（紧凑 JSON，上限 500，超出丢最旧）。
+    std::vector<Json> diagnostics;
+    /// exit 事件的结构化 KV（{"kind":"exit",...}）；尚未产生时为 null。
+    Json diag_exit = Json::null();
 };
 
 /// Async solve service: one worker thread runs the (synchronous)
@@ -68,6 +74,12 @@ private:
         TaskState state = TaskState::Running;
         std::string result;
         std::string error;
+        /// 算法诊断事件流（WebDiagObserver 转出的紧凑 JSON；worker 回调写入，
+        /// 上限 500，超出丢最旧）。task->mutex 保护。
+        std::vector<Json> diagnostics;
+        /// exit 事件的结构化 KV（{"kind":"exit",...}）；尚未产生时为 Json::null()。
+        /// task->mutex 保护。
+        Json diag_exit = Json::null();
         /// Set (release) as the worker thread's very last action, after every
         /// access to *this/_ctx. Gates task reaping: a terminal task may only
         /// be erased from the table once its worker has fully exited (and been

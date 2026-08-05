@@ -1,10 +1,12 @@
 #pragma once
+#include "domain/algorithm/diagnostics/DiagnosticsEvent.h"
 #include "domain/algorithm/types/AlgorithmState.h"
 #include "domain/algorithm/diagnostics/ProgressStatus.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/Solution.h"
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -58,6 +60,11 @@ class IAlgorithmObserver : public std::enable_shared_from_this<IAlgorithmObserve
     virtual void on_state_changed(size_t task_id, AlgorithmState prev, AlgorithmState curr) {}
     virtual void on_diagnostic(size_t task_id, const DiagnosticInfo &info) {}
     virtual void on_completed(size_t task_id, const AlgorithmOutput &output) {}
+    /// Exit 事件的结构化载荷（算法名 + 退出状态/耗时/计数器 + AlgorithmDiagnostics
+    /// KV）。默认 no-op；需要 exit 明细的观察者覆写。仅在 Exit 事件派发时调用，
+    /// 与 on_diagnostic/on_completed 同批（同一事件）。
+    virtual void on_exit(size_t task_id, std::string_view algorithm_name,
+                         const DiagnosticsEvent::ExitPayload &payload) {}
 
   protected:
     IAlgorithmObserver() = default;

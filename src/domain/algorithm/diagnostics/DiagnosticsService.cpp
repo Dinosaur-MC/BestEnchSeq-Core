@@ -78,6 +78,24 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
         case DiagEventKind::Exit: {
             auto& p = std::get<DiagnosticsEvent::ExitPayload>(event.payload);
 
+            // Notify observers FIRST — the entry moves below would leave the
+            // payload's counter entries moved-from, and on_exit reads the
+            // original counters/entries (web layer: exit structured KV).
+            if (!local.empty()) {
+                std::ostringstream oss;
+                oss << "algorithm=" << event.algorithm_name
+                    << " status=" << p.status
+                    << " wall_ms=" << p.wall_ms;
+                DiagnosticInfo info{oss.str()};
+
+                for (auto& obs : local) {
+                    if (!obs->accept_task_id(event.task_id)) continue;
+                    obs->on_exit(event.task_id, event.algorithm_name, p);
+                    obs->on_diagnostic(event.task_id, info);
+                    obs->on_completed(event.task_id, p.output);
+                }
+            }
+
             // Build all entries from all sources
             std::vector<DiagnosticsWriter::Entry> all;
             all.reserve(3 + 20);
@@ -111,21 +129,6 @@ void DiagnosticsService::DiagnosticsHandler::operator()(DiagnosticsEvent event) 
             if (persist && persist->load(std::memory_order_acquire))
                 DiagnosticsWriter::write(event.algorithm_name, all,
                                          p.wall_ms, p.status);
-
-            // Notify observers (diagnostic + completed), filtered by task_id
-            if (!local.empty()) {
-                std::ostringstream oss;
-                oss << "algorithm=" << event.algorithm_name
-                    << " status=" << p.status
-                    << " wall_ms=" << p.wall_ms;
-                DiagnosticInfo info{oss.str()};
-
-                for (auto& obs : local) {
-                    if (!obs->accept_task_id(event.task_id)) continue;
-                    obs->on_diagnostic(event.task_id, info);
-                    obs->on_completed(event.task_id, p.output);
-                }
-            }
             break;
         }
         case DiagEventKind::Progress: {

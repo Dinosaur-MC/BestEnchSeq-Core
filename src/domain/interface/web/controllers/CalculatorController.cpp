@@ -57,6 +57,14 @@ Response CalculatorController::status(const HttpRequest&, const PathParams& pp) 
         o["result"] = Json::parse(st.result);
     else if (st.state == TaskState::Failed)
         o["error"] = Json(st.error);
+    // 算法诊断事件流（T2）：diagnostics 恒为数组（可空）；diag_exit 仅在
+    // exit 事件已产生（任务结束）时出现，未产生则省略。
+    Json arr = Json::array();
+    for (const auto& d : st.diagnostics)
+        arr.push_back(d);
+    o["diagnostics"] = std::move(arr);
+    if (!st.diag_exit.is_null())
+        o["diag_exit"] = st.diag_exit;
     return Response::json(200, "OK", o.to_string());
 }
 

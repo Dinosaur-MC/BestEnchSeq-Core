@@ -1,5 +1,7 @@
 #include "WebSolveService.h"
 #include "SseHub.h"
+#include "WebDiagObserver.h"
+#include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/Router.h"
 #include "domain/orchestration/types/SolveRequest.h"
@@ -266,12 +268,55 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                         }
                     });
                 }
+                // ── 算法诊断事件流（T2）──
+                // 观察者必须在 solve() 前注册：executor 在 solve() 内部创建并
+                // start()，事件从算法执行一开始（首个 Progress）就推送。
+                // attach 前先 flush() 排空上一任务可能仍停留在诊断队列中的
+                // 尾部事件——EventLoop 是异步派发，单活动槽保证当前任务的事件
+                // 是 attach 期间唯一的事件源，但上一任务的 Exit 等事件可能在
+                // 本任务 attach 后才被派发，不排空会串任务误归属。
+                //
+                // 沙箱模式限制：BESQ_SANDBOX=1 时 executor 在 besq-worker
+                // 子进程中运行，诊断事件推送发生在子进程的 DiagnosticsService
+                // 里（沙箱无诊断 IPC 桥回父进程），因此沙箱任务不产生任何
+                // 诊断事件（diagnostics 为空、diag_exit 为 null）。
+                algorithm::DiagnosticsService::instance().flush();
+                auto diag_observer =
+                    algorithm::IAlgorithmObserver::create<WebDiagObserver>(
+                    [this, task](Json event) {
+                        // 先序列化 SSE 帧（随后 event 被 move 进 diagnostics）。
+                        std::string frame;
+                        if (_hub) frame = sse_frame("diag", event);
+                        {
+                            std::lock_guard<std::mutex> lock(task->mutex);
+                            if (task->diagnostics.size() >= 500)
+                                task->diagnostics.erase(task->diagnostics.begin());
+                            // exit 事件额外存一份结构化 KV（副本：列表各持一份）。
+                            if (event.has("kind") && event["kind"].as<std::string>() == "exit")
+                                task->diag_exit = event;
+                            task->diagnostics.push_back(std::move(event));
+                        }
+                        if (_hub) _hub->publish(task->id, std::move(frame));
+                    });
                 // Single active slot is enforced above; solve() runs to
                 // completion (or cancel()). The result carries the executor's
                 // real output. solve() 一返回就停采样（join），之后才 format 与
                 // 发布终态帧——进度帧严格先于 completed/failed。
                 auto result = _ctx.solve(request);
                 sampler_stop.stop();
+                // solve() 返回前 exit 事件必已入队（_finalize 在 wait() 内同步
+                // 执行），但 EventLoop 是异步派发——必须 flush() 到派发完成
+                // （含本观察者收到 exit）后再 detach，否则尾部事件会因 detach
+                // 而丢失。flush() 返回时所有已入队事件的 observer 回调均已执行
+                // 完毕，随后 detach 不存在在途回调。
+                algorithm::DiagnosticsService::instance().flush();
+                // 显式 detach，而不是依赖析构自动 detach：DiagnosticsService
+                // 的 _observers 持有本观察者的第二个 shared_ptr，局部变量析构
+                // 只把引用计数 2→1，析构函数（及其中断的自动 detach）根本不会
+                // 运行——不显式 detach 会让观察者永久滞留（长跑服务器累积泄漏，
+                // 且进程退出时单例析构会在 use_count==0 时触发 shared_from_this
+                // 的 bad_weak_ptr → abort）。
+                algorithm::DiagnosticsService::instance().detach_observer(diag_observer);
                 result_json = _ctx.format(result, request.mode, "json");
             }  // _ctx_gate released before the task-state write
             // Task bookkeeping is NOT gated — commit the result under
@@ -332,6 +377,9 @@ TaskStatus WebSolveService::status(const std::string& id) {
     std::lock_guard<std::mutex> lock(task->mutex);
     out.state = task->state;
     out.error = task->error;
+    // 诊断字段随快照一起拷贝（上限 500，拷贝代价有界）。
+    out.diagnostics = task->diagnostics;
+    out.diag_exit = task->diag_exit;
     if (task->state == TaskState::Completed) {
         out.progress = 1.0;
         out.result = task->result;
