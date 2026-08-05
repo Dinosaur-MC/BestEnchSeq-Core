@@ -12,6 +12,7 @@
 //   registry; unknown profile/item → 404.
 import { http, showError, clearError, esc } from '../api.js';
 import { t, tf } from '../i18n.js';
+import { displayName } from '../names_zh.js';
 
 let pollTimer = null;
 let currentTask = null;
@@ -70,12 +71,15 @@ function toRoman(n) {
 
 // One backend item object → short inline label: "diamond_sword[sharpness 5]",
 // or "[sharpness 3]" for a book. All id/name/enchant pieces are escaped here
-// (the single sink for backend strings reaching the card HTML).
+// (the single sink for backend strings reaching the card HTML). Names go
+// through displayName() so zh-CN renders 锋利 V / 钻石剑.
 function itemLabel(item) {
   if (!item) return '?';
-  const ench = (item.enchantments || []).map((e) => `${esc(shortId(e.id))} ${e.level}`).join(', ');
+  const ench = (item.enchantments || []).map((e) =>
+    `${esc(displayName(e.id, shortId(e.id)))} ${e.level}`).join(', ');
   if (item.is_book) return ench ? `[${ench}]` : t('calc.book');
-  const base = esc(shortId((item.equipment && (item.equipment.id || item.equipment.name)))) || '?';
+  const eq = item.equipment || {};
+  const base = esc(displayName(eq.id, eq.name || shortId(eq.id))) || '?';
   return ench ? `${base}[${ench}]` : base;
 }
 
@@ -283,7 +287,7 @@ function selectedConflicts() {
 function conflictNames(ids) {
   return [...ids].map((c) => {
     const e = state.enchantables.find((x) => normalizeId(x.id) === c);
-    return esc(e && e.name ? e.name : c);
+    return esc(e ? displayName(e.id, e.name) : c);
   }).join(', ');
 }
 
@@ -321,7 +325,7 @@ function renderEnchTable() {
     const hint = conf && conf.size
       ? `<div class="conflict-hint">${t('calc.exclusive')}: ${conflictNames(conf)}</div>` : '';
     return `<tr class="${conf ? 'conflict' : ''}">
-      <td>${esc(e.name || short)}${e.is_treasure ? `<span class="treasure-badge">${t('calc.treasure')}</span>` : ''}${hint}</td>
+      <td>${esc(displayName(e.id, e.name || short))}${e.is_treasure ? `<span class="treasure-badge">${t('calc.treasure')}</span>` : ''}${hint}</td>
       <td class="mono">${esc(e.multiplier ?? '')}</td>
       <td>${lvButtons(short, 'target', targetBlocked)}</td>
       <td>${lvButtons(short, 'source', !state.useSource)}</td>
@@ -372,7 +376,7 @@ function updateTrigger() {
   const span = document.getElementById('calc-item-trigger-span');
   if (!span) return;
   const entry = state.items.find((it) => String(it.id) === state.itemId);
-  const label = entry && entry.name ? entry.name : state.item;
+  const label = entry ? displayName(entry.id, entry.name) : state.item;
   const icon = `<img src="/public/assets/minecraft/textures/item/${esc(state.item)}.png" ` +
     `alt="" onerror="this.style.display='none'">`;
   span.innerHTML = `${icon}${esc(label)}`;
@@ -399,10 +403,12 @@ function fillItemMenu(el, myView, eqs) {
     .concat([{ id: 'minecraft:enchanted_book', name: t('calc.book') }]);
   menu.innerHTML = state.items.map((it) => {
     const short = normalizeId(it.id);
+    // Icon URLs switch to the embedded /public/vendor/icons set in the T3
+    // icons commit; until then the /public/assets res mount serves them.
     const icon = `<img src="/public/assets/minecraft/textures/item/${esc(short)}.png" ` +
       `alt="" onerror="this.style.display='none'">`;
     return `<mdui-menu-item value="${esc(String(it.id))}">` +
-      `<div slot="custom" class="calc-menu-item">${icon}<span>${esc(it.name || short)}</span></div>` +
+      `<div slot="custom" class="calc-menu-item">${icon}<span>${esc(displayName(it.id, it.name || short))}</span></div>` +
       `</mdui-menu-item>`;
   }).join('');
   menu.querySelectorAll('mdui-menu-item').forEach((item) => {

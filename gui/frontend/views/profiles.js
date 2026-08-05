@@ -6,6 +6,7 @@
 // carry an item icon from /public (hidden on 404).
 import { http, showError, clearError, esc } from '../api.js';
 import { t } from '../i18n.js';
+import { displayName } from '../names_zh.js';
 
 let renderSeq = 0; // guards registry renders against overlapping async re-renders
 
@@ -109,7 +110,7 @@ async function renderRegistry(el, profile, kind) {
   const rows = entries
     .map((e) => `<tr>
         <td>${icon(e.id)}${esc(e.id)}</td>
-        <td>${esc(e.name || '')}</td>
+        <td>${esc(kind === 'tag' ? (e.name || '') : displayName(e.id, e.name || ''))}</td>
         <td>${esc(e.max_level ?? e.max_durability ?? '')}</td>
         <td>
           <button data-edit="${esc(e.id)}">Edit</button>

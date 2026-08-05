@@ -33,6 +33,7 @@ std::string_view frontend_styles_css();
 std::string_view frontend_app_js();
 std::string_view frontend_api_js();
 std::string_view frontend_i18n_js();
+std::string_view frontend_names_zh_js();
 std::string_view frontend_vendor_mdui_mdui_css();
 std::string_view frontend_vendor_mdui_mdui_global_js();
 std::string_view frontend_view_calculator();
@@ -58,6 +59,7 @@ static constexpr Asset kAssets[] = {
     {"/app.js",     "text/javascript", besq::data::frontend_app_js},
     {"/api.js",     "text/javascript", besq::data::frontend_api_js},
     {"/i18n.js",    "text/javascript", besq::data::frontend_i18n_js},
+    {"/names_zh.js", "text/javascript", besq::data::frontend_names_zh_js},
     {"/vendor/mdui/mdui.css",       "text/css",        besq::data::frontend_vendor_mdui_mdui_css},
     {"/vendor/mdui/mdui.global.js", "text/javascript", besq::data::frontend_vendor_mdui_mdui_global_js},
     {"/views/calculator.js", "text/javascript", besq::data::frontend_view_calculator},
