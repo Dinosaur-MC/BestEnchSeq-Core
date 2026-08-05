@@ -1098,6 +1098,104 @@ void test_failed_frame_shape(TestApp& app) {
     expect(c.status == 200, "cancel failed-shape task");
 }
 
+/// T2: 任务算法诊断事件流——completed 任务的状态响应携带 diagnostics 数组
+/// （含 progress/exit 事件）与 diag_exit（exit 结构化 KV）；SSE 订阅收到
+/// "diag" 帧。单活动槽保证观察者绑定的任务 = 当前唯一运行任务（409 单槽
+/// 行为由 test_calculator 覆盖）。
+void test_task_diagnostics(TestApp& app) {
+    // ── 1. completed 任务的状态快照含诊断字段 ──
+    auto light = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(light.status == 202, "diag task submit 202");
+    auto lb = Json::parse(light.body);
+    std::string id = lb["task_id"].as<std::string>();
+    bool done = false;
+    for (int i = 0; i < 50 && !done; ++i) {
+        auto st = app.call(Method::Get, "/api/tasks/" + id);
+        if (st.status == 200) {
+            auto sj = Json::parse(st.body);
+            done = sj["state"].as<std::string>() != "running";
+        }
+        if (!done) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(done, "diag task reached terminal state");
+
+    auto st = app.call(Method::Get, "/api/tasks/" + id);
+    expect(st.status == 200, "diag task status 200");
+    auto body = Json::parse(st.body);
+    expect(body["diagnostics"].type() == JsonType::Array &&
+               !body["diagnostics"].as_array().empty(),
+           "status carries non-empty diagnostics array");
+    bool has_progress = false, has_exit = false;
+    for (const auto& d : body["diagnostics"].as_array()) {
+        std::string kind = d.has("kind") ? d["kind"].as<std::string>() : "";
+        if (kind == "progress") has_progress = true;
+        if (kind == "exit") has_exit = true;
+    }
+    expect(has_progress, "diagnostics contains a progress event");
+    expect(has_exit, "diagnostics contains an exit event");
+
+    expect(body.has("diag_exit"), "status carries diag_exit");
+    auto ex = body["diag_exit"];
+    for (const char* f : {"algorithm", "status", "wall_ms", "counters", "diag"})
+        expect(ex.has(f), std::string("diag_exit field ") + f);
+    expect(ex["algorithm"].as<std::string>() == "dp_merge", "diag_exit algorithm name");
+    expect(ex["counters"].has("nodes_visited") && ex["counters"].has("nodes_pruned") &&
+               ex["counters"].has("steps_forged"),
+           "diag_exit counters keys");
+    expect(ex["diag"].type() == JsonType::Object && !ex["diag"].as_object().empty(),
+           "diag_exit diag KV non-empty");
+    expect(ex["diag"].has("solution_cost") && ex["diag"].has("diag_schema_version"),
+           "diag_exit diag KV carries solution_cost + schema version");
+
+    // ── 2. SSE 订阅收到 "diag" 帧（含 exit 帧）──
+    auto light2 = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(light2.status == 202, "diag-sse task submit 202");
+    auto l2 = Json::parse(light2.body);
+    std::string id2 = l2["task_id"].as<std::string>();
+
+    auto fake = std::make_shared<FakeChannel>();
+    CalculatorController ctrl(*app.solve, app.hub);
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/api/tasks/" + id2 + "/events";
+    req.stream = fake;
+    PathParams pp;
+    pp.kv.emplace_back("id", id2);
+    auto r = ctrl.events(req, pp);
+    expect(r.status == 200 && r.is_stream, "diag-sse events stream response");
+
+    // 轮询 FakeChannel 直到出现 event: diag 帧。worker 在 solve 尾部（completed
+    // 帧之前）发布 exit 帧；轻量 dp_merge 毫秒级完成，订阅远早于首个 diag
+    // 发布落地（与 test_stream_channel 同一时序范式）。
+    bool got_diag = false, got_exit_frame = false;
+    for (int i = 0; i < 50 && !got_exit_frame; ++i) {
+        for (const auto& f : fake->snapshot()) {
+            if (f.rfind("event: diag", 0) != 0) continue;
+            got_diag = true;
+            auto d = f.find("data: ");
+            if (d == std::string::npos) continue;
+            auto dj = Json::parse(f.substr(d + 6));
+            if (dj.has("kind") && dj["kind"].as<std::string>() == "exit")
+                got_exit_frame = true;
+        }
+        if (!got_exit_frame) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(got_diag, "SSE delivered a diag frame");
+    expect(got_exit_frame, "SSE diag stream contains the exit frame");
+
+    // 释放单活动槽（任务届时多半已完成；cancel 对已完成任务是 200 no-op）。
+    auto c = app.call(Method::Delete, "/api/tasks/" + id2);
+    expect(c.status == 200, "cancel diag-sse task");
+}
+
 /// §12.1: 500 with the envelope — Router maps any non-WebHttpError
 /// std::exception to 500 INTERNAL_ERROR. No production endpoint can be forced
 /// to throw on demand (all handler throws are pre-mapped WebHttpErrors or
@@ -1144,6 +1242,7 @@ int main() {
         test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）
         test_stream_close_hook(app); // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
         test_hub_clear(app);        // SseHub::clear() 清空全部订阅
+        test_task_diagnostics(app); // T2: 任务诊断事件流（diagnostics/diag_exit + SSE diag 帧）
         test_calculator(app);       // §12.1: failed/cancelled 快照、任务字段、unload-409
         test_logs(app);             // §12.1: since 非法 → 400
         test_web_module(app.ctx);
