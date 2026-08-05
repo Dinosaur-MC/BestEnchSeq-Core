@@ -198,12 +198,6 @@ void test_penalty_cost() {
     expect(engine.penalty_cost(3) == 7, "penalty_cost(3) should be 7");
     expect(engine.penalty_cost(4) == 15, "penalty_cost(4) should be 15");
     expect(engine.penalty_cost(5) == 31, "penalty_cost(5) should be 31");
-    algorithm::ForgeConfig no_pen_cfg;
-    no_pen_cfg.ignore_penalty_cost = true;
-    no_pen_cfg.ignore_repair_cost  = false;
-    no_pen_cfg.platform            = MCE::Java;
-    algorithm::ForgeEngine no_pen{no_pen_cfg};
-    expect(no_pen.penalty_cost(5) == 0, "penalty_cost(5)+ignore should be 0");
     std::cout << "PASS: test_penalty_cost" << std::endl;
 }
 

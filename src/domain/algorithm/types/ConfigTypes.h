@@ -64,10 +64,8 @@ struct SearchConfig : IBinarySerializable {
     std::map<std::string, std::string> extra;
 
     void serialize(ByteStreamWriter &w) const noexcept override {
-        w << max_solutions << max_depth << memory_mb << max_threads
-          << initial_bound
-          << static_cast<int64_t>(max_search_time.count())
-          << max_step_cost << beam_width;
+        w << max_solutions << max_depth << memory_mb << max_threads << initial_bound
+          << static_cast<int64_t>(max_search_time.count()) << max_step_cost << beam_width;
         w << static_cast<uint32_t>(extra.size());
         for (const auto &[k, v] : extra) {
             w << k << v;
@@ -75,10 +73,10 @@ struct SearchConfig : IBinarySerializable {
     }
     void deserialize(ByteStreamReader &r) noexcept override {
         int64_t t;
-        r >> max_solutions >> max_depth >> memory_mb >> max_threads
-          >> initial_bound >> t >> max_step_cost >> beam_width;
+        r >> max_solutions >> max_depth >> memory_mb >> max_threads >> initial_bound >> t >> max_step_cost >>
+            beam_width;
         max_search_time = std::chrono::milliseconds(t);
-        uint32_t n = 0;
+        uint32_t n      = 0;
         r >> n;
         extra.clear();
         for (uint32_t i = 0; i < n; ++i) {
@@ -96,23 +94,25 @@ struct ForgeConfig : IBinarySerializable {
     MCE platform             = MCE::Java;
     bool ignore_penalty_cost = false;
     bool ignore_repair_cost  = false; // when true, skip equip+equip repair fee (+2)
+    bool ignore_imcompatible = false; // when true, skip incompatible check
 
     void serialize(ByteStreamWriter &w) const noexcept override {
-        w << static_cast<uint8_t>(platform) << static_cast<uint8_t>(ignore_penalty_cost)
-          << static_cast<uint8_t>(ignore_repair_cost);
+        w << platform << ignore_penalty_cost << ignore_repair_cost << ignore_imcompatible;
     }
     void deserialize(ByteStreamReader &r) noexcept override {
-        uint8_t p, ipc, irc;
-        r >> p >> ipc >> irc;
+        uint8_t p;
+        bool ipc, irc, ii;
+        r >> p >> ipc >> irc >> ii;
         platform            = static_cast<MCE>(p);
-        ignore_penalty_cost = ipc != 0;
-        ignore_repair_cost  = irc != 0;
+        ignore_penalty_cost = ipc;
+        ignore_repair_cost  = irc;
+        ignore_imcompatible = ii;
     }
 };
 
 // ─── Algorithm configuration — bundles mode + forge + search ──────────────
 struct AlgorithmConfig : IBinarySerializable {
-    AlgorithmMode mode  = AlgorithmMode::direct;
+    AlgorithmMode mode = AlgorithmMode::direct;
     ForgeConfig forge;
     SearchConfig search;
 

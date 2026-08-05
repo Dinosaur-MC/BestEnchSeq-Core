@@ -6,8 +6,6 @@ namespace algorithm {
 // ─── IForgeEngine sub-operations ──────────────────────────────────────────────
 
 int32_t ForgeEngine::penalty_cost(int8_t ppn) const noexcept {
-    if (_config.ignore_penalty_cost)
-        return 0;
     if (ppn < 0 || ppn > 30)
         return INT32_MAX;
     return (1 << ppn) - 1;
@@ -16,7 +14,7 @@ int32_t ForgeEngine::penalty_cost(int8_t ppn) const noexcept {
 int32_t ForgeEngine::estimate_forge_cost(
     const Item &target, const Item &sacrifice, const EnchReg &reg
 ) const noexcept {
-    int32_t cost     = penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
+    int32_t cost = _config.ignore_penalty_cost ? 0 : penalty_cost(target.ppn) + penalty_cost(sacrifice.ppn);
     bool sac_is_book = (sacrifice.type == ItemType::Book);
     for (sbit_iterator<EnchSet::mask_type, uint8_t> it(sacrifice.enchs.get_mask()); it; ++it) {
         int32_t mult = sac_is_book ? reg[*it].mul_b : reg[*it].mul;
@@ -59,15 +57,17 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
     bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
     for (auto i = it.next(); i != it.npos; i = it.next()) {
         if (target.type == ItemType::Book || reg.is_applicable(i)) {
-            auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
-            if (conflict_mask) {
-                if (plat == MCE::Java)
-                    cost += std::popcount(conflict_mask);
-                continue;
+            if (!_config.ignore_imcompatible) {
+                auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
+                if (conflict_mask) {
+                    if (plat == MCE::Java)
+                        cost += std::popcount(conflict_mask);
+                    continue;
+                }
             }
             auto lvl = sacrifice.enchs[i];
-            target.enchs.insert(i, lvl);
             cost += lvl * (sac_is_book ? reg[i].mul_b : reg[i].mul);
+            target.enchs.insert(i, lvl);
         }
     }
     it.reset(same);
@@ -82,7 +82,7 @@ int32_t ForgeEngine::forge_into(Item &target, const Item &sacrifice, const EnchR
         cost += (plat == MCE::Java ? lvl2 : lvl2 - lvl1) * (sac_is_book ? reg[i].mul_b : reg[i].mul);
     }
 
-    target.ppn = static_cast<uint8_t>(1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
+    target.ppn = static_cast<uint8_t>(1 + std::max(target.ppn, sacrifice.ppn));
 
     return cost;
 }
@@ -104,11 +104,12 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice, const Enc
     bit_iterator<EnchSet::mask_type, uint8_t> it(diff);
     for (auto i = it.next(); i < it.npos; i = it.next()) {
         if (target.type == ItemType::Book || reg.is_applicable(i)) {
-            auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
-            if (conflict_mask)
-                continue;
-            auto lvl = sacrifice.enchs[i];
-            target.enchs.insert(i, lvl);
+            if (!_config.ignore_imcompatible) {
+                auto conflict_mask = target.enchs & reg.get_conflict_mask(i);
+                if (conflict_mask)
+                    continue;
+            }
+            target.enchs.insert(i, sacrifice.enchs[i]);
         }
     }
     it.reset(same);
@@ -123,7 +124,7 @@ void ForgeEngine::pure_forge_into(Item &target, const Item &sacrifice, const Enc
     }
 
     // PPN update
-    target.ppn = static_cast<uint8_t>(1 + (target.ppn >= sacrifice.ppn ? target.ppn : sacrifice.ppn));
+    target.ppn = static_cast<uint8_t>(1 + std::max(target.ppn, sacrifice.ppn));
 }
 
 // ─── Forge (non-mutating) ───────────────────────────────────────────────────
