@@ -165,10 +165,12 @@ void DFSAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ctx) {
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
 double DFSAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // Fitted from scaling benchmark (Release, netherite_sword 9-10 enchs):
-    //   t(e) ≈ 5.664e-10 × 10.96^e   seconds   (2-point fit +30% safety)
-    // Feasible ≤ 10 in the benchmark context; 11+ exceeds the 20 s budget.
-    return 5.664e-10 * std::pow(10.96, static_cast<double>(ench_count));
+    // Fitted from best_benchmark.txt (Release, 2026-08-06): single steep
+    // measurement (sword_9, 9 enchs = 10.045 s) — unfitted, so anchored to
+    // the A* family growth at the measured ratio (dfs ≈ 2.7× A* at 9 enchs):
+    //   t(e) ≈ 1.79e-7 × 7.477^e   seconds   (+30% safety)
+    // Feasible ≤ 8 at the 10 s tier-4 budget; 9+ measured 10.0 s.
+    return 1.79e-7 * std::pow(7.477, static_cast<double>(ench_count));
 }
 
 

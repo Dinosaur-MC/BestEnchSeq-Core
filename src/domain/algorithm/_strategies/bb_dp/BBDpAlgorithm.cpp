@@ -491,12 +491,11 @@ const BBDpAlgorithm::Frontier& BBDpAlgorithm::solve(uint64_t mask,
 // ─── evaluate ─────────────────────────────────────────────────────────────
 
 double BBDpAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // Fitted from scaling benchmark (Release, netherite_sword 9-19 enchs, after
-    // the bottom-up layered rewrite):
-    //   t(e) ≈ 9.888e-10 × 3.6149^e   seconds   (R²=1.0, tail fit +30% safety)
-    // Feasible ≤ 19 (19 = 30 s measured); 20+ hits the memory-bound wall
-    // (> 300 s — layer working set exceeds L3), so never budgeted.
-    return 9.888e-10 * std::pow(3.6149, static_cast<double>(ench_count));
+    // Fitted from best_benchmark.txt (Release, 2026-08-06, sword_17-19 tail):
+    //   t(e) ≈ 1.02e-9 × 3.637^e   seconds   (R²≈1.0, tail fit +30% safety)
+    // Feasible ≤ 17 at the 10 s tier-4 budget; 18+ (12.7 s predicted) skipped,
+    // 20+ hits the memory-bound wall (layer working set exceeds L3).
+    return 1.02e-9 * std::pow(3.637, static_cast<double>(ench_count));
 }
 
 // ─── execute ──────────────────────────────────────────────────────────────

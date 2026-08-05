@@ -1,16 +1,15 @@
 {
   "astar": {
     "model": "exp",
-    "a": 2.57638231182541e-09,
-    "b": 8.625954198473282,
+    "a": 6.60406164377831e-08,
+    "b": 7.477370689655253,
     "r2": 1.0,
     "feasible": [
-      9,
-      10
+      3,
+      12
     ],
     "timeouts": [
       11,
-      12,
       13,
       14,
       15,
@@ -27,11 +26,11 @@
   },
   "bb_dp": {
     "model": "exp",
-    "a": 9.88754570805982e-10,
-    "b": 3.614867424302952,
-    "r2": 0.9999963610367227,
+    "a": 1.024727976773052e-09,
+    "b": 3.6371963959326434,
+    "r2": 0.9999986582043228,
     "feasible": [
-      9,
+      3,
       19
     ],
     "timeouts": [
@@ -44,14 +43,15 @@
   },
   "dfs": {
     "model": "exp",
-    "a": 5.663968871350594e-10,
-    "b": 10.959758551307877,
-    "r2": 1.0,
+    "a": 1.78716e-07,
+    "b": 7.4774,
+    "r2": null,
     "feasible": [
-      9,
-      10
+      3,
+      9
     ],
     "timeouts": [
+      10,
       11,
       12,
       13,
@@ -66,26 +66,27 @@
       22,
       23,
       24
-    ]
+    ],
+    "note": "manual: single steep measurement (sword_9 9 enchs = 10.045 s) -> unfitted; anchored to A* family growth (7.4774) at measured ratio, +30% safety"
   },
-  "diff_first": {
+  "difficulty_first": {
     "model": "constant",
     "a": 0.0,
     "b": 0.0,
     "r2": null,
     "feasible": [
-      9,
+      3,
       24
     ],
     "timeouts": []
   },
   "dp_merge": {
     "model": "exp",
-    "a": 4.859615974431151e-09,
-    "b": 3.5608056621165667,
-    "r2": 0.9998868337772902,
+    "a": 6.253025973064044e-09,
+    "b": 3.4910314984172977,
+    "r2": 0.9999131823912436,
     "feasible": [
-      9,
+      3,
       19
     ],
     "timeouts": [
@@ -96,27 +97,50 @@
       24
     ]
   },
+  "greedy": {
+    "model": "constant",
+    "a": 0.0,
+    "b": 0.0,
+    "r2": null,
+    "feasible": [
+      3,
+      9
+    ],
+    "timeouts": []
+  },
   "hamming": {
     "model": "constant",
     "a": 0.0,
     "b": 0.0,
     "r2": null,
     "feasible": [
-      9,
+      3,
       24
     ],
     "timeouts": []
   },
-  "idastar": {
-    "model": "unfitted",
-    "a": null,
-    "b": null,
+  "hierarchical": {
+    "model": "constant",
+    "a": 0.0,
+    "b": 0.0,
     "r2": null,
-    "feasible": null,
+    "feasible": [
+      3,
+      9
+    ],
+    "timeouts": []
+  },
+  "idastar": {
+    "model": "exp",
+    "a": 7.04193569848534e-05,
+    "b": 3.4951138106864925,
+    "r2": 1.0,
+    "feasible": [
+      3,
+      12
+    ],
     "timeouts": [
-      10,
       11,
-      12,
       13,
       14,
       15,
@@ -137,8 +161,8 @@
     "b": 0.0,
     "r2": null,
     "feasible": [
-      9,
-      24
+      3,
+      23
     ],
     "timeouts": []
   }

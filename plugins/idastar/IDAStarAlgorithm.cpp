@@ -314,11 +314,11 @@ void IDAStarAlgorithm::execute(const AlgorithmInput &input, ExecutionContext& ct
 // ─── evaluate ──────────────────────────────────────────────────────────────────
 
 double IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
-    // Same family as A* (ItemPool best-first); measured near-identical at
-    // n=9 (0.48 s vs A* 0.52 s).  Share the fitted A* curve:
-    //   t(e) ≈ 2.576e-9 × 8.626^e   seconds
-    // Feasible ≤ 9 in the benchmark context; 10+ exceeds the 20 s budget.
-    return 2.576e-9 * std::pow(8.626, static_cast<double>(ench_count));
+    // Fitted from best_benchmark.txt (Release, 2026-08-06, sword_9 9 / sword_12
+    // 12 enchs tail):
+    //   t(e) ≈ 7.04e-5 × 3.496^e   seconds   (2-point fit +30% safety)
+    // Feasible ≤ 9 at the 10 s tier-4 budget; 10+ measured no solution.
+    return 7.04e-5 * std::pow(3.496, static_cast<double>(ench_count));
 }
 
 

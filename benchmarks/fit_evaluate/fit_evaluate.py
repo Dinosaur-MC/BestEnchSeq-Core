@@ -7,6 +7,14 @@ Model:  t(e) = a * b^e   (seconds)  — log-linear regression
 
 Deterministic algorithms (all measured times ≈ 0) fit to constant 0.
 
+Fit selection: only the steep tail (points ≥ 1 s), reduced to its monotone
+envelope (a point dominated by an earlier/smaller-e point — e.g. an easy
+12-enchant case measured faster than a hard 10-enchant one — is dropped: a
+monotone exponential cannot represent it, and including it flattens b and
+under-predicts the growth that sets the tier boundary).  With fewer than 2
+envelope points the algorithm reports `unfitted`; the caller supplies a
+sibling-family curve manually (see DFSAlgorithm: anchored to the A* family).
+
 Usage:
     python fit_evaluate.py [measured.csv] [--json out.json]
 
@@ -25,7 +33,8 @@ import json
 import math
 
 # Algorithms known to be deterministic (O(n^k) construction, ~0 ms always).
-DETERMINISTIC = {"hamming", "diff_first", "difficulty_first", "penalty_balance"}
+DETERMINISTIC = {"hamming", "difficulty_first", "penalty_balance",
+                 "greedy", "hierarchical"}
 
 DEFAULT_MAX_ENCH = 40
 
@@ -35,14 +44,14 @@ SAFETY = 1.3
 
 
 def regress(rows):
-    """rows: list of (e, t_sec). Fit ln t = c0 + c1*e. Returns (a, b, r2)."""
-    n = len(rows)
+    """rows: list of (e, t_sec) with t > 0. Fit ln t = c0 + c1*e.
+    Returns (a, b, r2), or None with fewer than 2 positive points."""
+    pts = [(e, t) for e, t in rows if t > 0]
+    n = len(pts)
     if n < 2:
         return None
     sx = sy = sxx = sxy = 0.0
-    for e, t in rows:
-        if t <= 0:
-            continue
+    for e, t in pts:
         y = math.log(t)
         sx += e; sy += y; sxx += e * e; sxy += e * y
     denom = n * sxx - sx * sx
@@ -55,9 +64,7 @@ def regress(rows):
     # R²
     ymean = sy / n
     sst = ssr = 0.0
-    for e, t in rows:
-        if t <= 0:
-            continue
+    for e, t in pts:
         y = math.log(t)
         yhat = c0 + c1 * e
         sst += (y - ymean) ** 2
@@ -79,13 +86,23 @@ def fit_algorithm(alg, rows, max_e):
                                           max((e for e, _, _ in rows), default=0)),
                 "timeouts": sorted(timeouts), "predict": lambda e: 0.0}
 
-    # Prefer the steep tail (points ≥ 1 s): the noisy low-count points drag b
-    # down and under-predict the growth that actually sets the tier boundary.
-    # Fall back to all points only when the tail has < 2 samples.
-    tail = [p for p in completed if p[1] >= 1.0]
-    fit_rows = tail if len(tail) >= 2 else completed
+    # Prefer the steep tail (points ≥ 1 s), reduced to its monotone envelope:
+    # the noisy low-count / soft-dataset points drag b down and under-predict
+    # the growth that actually sets the tier boundary.  A tail point dominated
+    # by an earlier (smaller-e) point contradicts the monotone model and is
+    # dropped the same way.  Fewer than 2 envelope points → unfitted (the
+    # caller supplies a sibling-family curve manually; fitting the sub-1 s
+    # points instead under-predicts the steep tail).
+    tail = sorted(p for p in completed if p[1] >= 1.0)
+    envelope = []
+    best = 0.0
+    for e, t in tail:
+        if t > best:
+            envelope.append((e, t))
+            best = t
+    fit_rows = envelope if len(envelope) >= 2 else None
 
-    fit = regress(fit_rows)
+    fit = regress(fit_rows or [])
     if fit is None:
         # Insufficient samples (e.g. a single completed point).  Report
         # unfitted; the caller supplies a sibling-family curve manually.
