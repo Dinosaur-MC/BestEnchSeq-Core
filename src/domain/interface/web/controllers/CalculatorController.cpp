@@ -20,6 +20,12 @@ const char* state_name(TaskState s) {
     }
     return "unknown";
 }
+
+/// SSE 帧（与 WebSolveService 发布的帧同格式，spec §7）：
+/// `event: <type>\ndata: <json>\n\n`。
+std::string sse_frame(const std::string& type, const Json& payload) {
+    return "event: " + type + "\ndata: " + payload.to_string() + "\n\n";
+}
 } // namespace
 
 Response CalculatorController::submit(const HttpRequest&, const PathParams&, const Json& body) {
@@ -78,6 +84,16 @@ Response CalculatorController::events(const HttpRequest& req, const PathParams& 
         if (ch) ch->post_frame(std::move(frame));
     });
     _streams[id] = sub;
+    // 迟到订阅者（如 SPA 重连）立即收到任务的最新进度帧，而非直到下一次 publish
+    // 才有任何输出（spec §7 帧形状：{"type":"progress","progress":<p>}）。任务已完成
+    // 时 status() 返回 progress=1.0 —— 客户端随后收到 completed 帧即知终态。
+    if (ch) {
+        auto st = _svc.status(id);
+        Json obj = Json::object();
+        obj["type"] = Json("progress");
+        obj["progress"] = Json(st.progress);
+        ch->post_frame(sse_frame("progress", obj));
+    }
     // 连接关闭（客户端断开/服务端关闭）时退订：SseHub 不再持有死连接的帧回调，
     // 避免连接及其帧汇永久存活（每次 publish 白费功夫 + 长期泄漏）。不捕获 ch ——
     // on_close 存于连接自身，捕获自身会形成 shared_ptr 环；只捕获 this + id + SubId。

@@ -1,5 +1,6 @@
 #pragma once
 #include "domain/interface/components/http/HttpController.h"
+#include <mutex>
 
 class BesqContext;
 
@@ -13,12 +14,18 @@ class WebSolveService;
 /// unload handler is gated on `WebSolveService::has_active()`: a running solve
 /// may be holding the plugin's executor, so unloading mid-solve is refused with
 /// 409 TASK_ACTIVE.
+///
+/// Every handler holds _gate FIRST — the same web-layer _ctx_gate that
+/// WebSolveService holds for its whole _ctx window. list/detail/load/unload
+/// touch AlgorithmLoader's registry (and load() rebuilds it); the reactor
+/// threads run handlers concurrently and the solve worker may hold plugin
+/// executors, so unlocked access would be a data race.
 class AlgorithmController : public HttpController<AlgorithmController> {
 public:
     using Self = AlgorithmController;
 
-    AlgorithmController(BesqContext& ctx, WebSolveService& svc)
-        : _ctx(ctx), _svc(svc) {}
+    AlgorithmController(BesqContext& ctx, WebSolveService& svc, std::mutex& gate)
+        : _ctx(ctx), _svc(svc), _gate(gate) {}
 
     static constexpr auto route_defs() {
         return std::array{
@@ -37,6 +44,7 @@ public:
 private:
     BesqContext& _ctx;
     WebSolveService& _svc;
+    std::mutex& _gate;
 };
 
 } // namespace web

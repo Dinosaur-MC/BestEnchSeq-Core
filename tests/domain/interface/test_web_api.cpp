@@ -42,10 +42,10 @@ struct TestApp {
     explicit TestApp(BesqContext& c) : ctx(c) {
         solve = std::make_unique<web::WebSolveService>(c, gate, &hub);
         router.register_controller<HealthController>();
-        router.register_controller<StatusController>(c);
-        router.register_controller<SettingsController>(c);
+        router.register_controller<StatusController>(c, gate);
+        router.register_controller<SettingsController>(c, gate);
         router.register_controller<ProfilesController>(ctx, gate);
-        router.register_controller<AlgorithmController>(c, *solve);
+        router.register_controller<AlgorithmController>(c, *solve, gate);
         router.register_controller<CalculatorController>(*solve, hub);
         router.register_controller<LogsController>(c, hub);
     }
@@ -519,6 +519,28 @@ void test_stream_channel(TestApp& app) {
     auto r = ctrl.events(req, pp);
     expect(r.status == 200 && r.is_stream, "events stream response via channel");
     expect(app.hub.subscriber_count(id) >= 1, "hub subscription registered for channel");
+
+    // I-2b: subscribing immediately delivers one initial progress frame from
+    // svc.status(id) — a late subscriber sees the task's last-known progress
+    // instead of a silent window until the next hub publish. Frame shape
+    // matches the worker's (spec §7): event: progress + {"type":"progress",...}.
+    bool initial = false;
+    double initial_progress = -1.0;
+    for (const auto& f : fake->frames) {
+        if (f.rfind("event: progress", 0) == 0) {
+            auto data = f.find("data: ");
+            if (data == std::string::npos) continue;
+            auto payload = Json::parse(f.substr(data + 6));
+            if (payload.has("type") && payload["type"].as<std::string>() == "progress" &&
+                payload.has("progress")) {
+                initial = true;
+                initial_progress = payload["progress"].as<double>();
+            }
+        }
+    }
+    expect(initial, "initial progress frame delivered on subscribe");
+    expect(initial_progress >= 0.0 && initial_progress <= 1.0,
+           "initial progress in 0..1 range");
 
     app.hub.publish(id, "data: x\n\n");
     bool delivered = false;
