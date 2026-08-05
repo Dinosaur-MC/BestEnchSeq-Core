@@ -11,37 +11,14 @@
 namespace web {
 
 namespace {
-const char* state_name(webhttp::TaskState s) {
+const char* state_name(TaskState s) {
     switch (s) {
-        case webhttp::TaskState::Running:   return "running";
-        case webhttp::TaskState::Completed: return "completed";
-        case webhttp::TaskState::Failed:    return "failed";
-        case webhttp::TaskState::Cancelled: return "cancelled";
+        case TaskState::Running:   return "running";
+        case TaskState::Completed: return "completed";
+        case TaskState::Failed:    return "failed";
+        case TaskState::Cancelled: return "cancelled";
     }
     return "unknown";
-}
-
-/// The service layer throws the legacy 2-arg `webhttp::WebHttpError`
-/// (WebSolveService.h), while the Router only catches the 3-arg
-/// `web::WebHttpError` (Router.h). Without a bridge a service conflict/404
-/// would surface as a generic 500. Map the status to a stable API code and
-/// rethrow in the Router's dialect.
-[[noreturn]] void rethrow_webhttp_error(const webhttp::WebHttpError& e) {
-    const char* code = e.status == 404 ? "TASK_NOT_FOUND"
-                     : e.status == 409 ? "TASK_ACTIVE"
-                     : "REQUEST_FAILED";
-    throw WebHttpError(e.status, code, e.what());
-}
-
-/// Run a WebSolveService call, converting its legacy error type to the
-/// Router's WebHttpError on the way out.
-template <typename F>
-auto bridge_service(F&& f) -> decltype(f()) {
-    try {
-        return f();
-    } catch (const webhttp::WebHttpError& e) {
-        rethrow_webhttp_error(e);
-    }
 }
 } // namespace
 
@@ -57,22 +34,22 @@ Response CalculatorController::submit(const HttpRequest&, const PathParams&, con
     } catch (const JsonException&) {
         throw WebHttpError(400, "INVALID_TASK", "invalid task JSON");
     }
-    // start() throws webhttp::WebHttpError(409) on active-slot conflict —
-    // bridged to the Router's WebHttpError so it surfaces as 409, not a 500.
-    std::string id = bridge_service([&] { return _svc.start(dto); });
+    // start() throws WebHttpError(409, TASK_ACTIVE) on active-slot conflict;
+    // the Router's dispatch catch maps it to a 409 response.
+    std::string id = _svc.start(dto);
     Json o = Json::object();
     o["task_id"] = Json(id);
     return Response::accepted("/api/tasks/" + id, o.to_string());
 }
 
 Response CalculatorController::status(const HttpRequest&, const PathParams& pp) {
-    auto st = bridge_service([&] { return _svc.status(pp.get("id")); });  // 404 when unknown
+    auto st = _svc.status(pp.get("id"));  // 404 when unknown
     Json o = Json::object();
     o["state"] = Json(state_name(st.state));
     o["progress"] = Json(st.progress);
-    if (st.state == webhttp::TaskState::Completed)
+    if (st.state == TaskState::Completed)
         o["result"] = Json::parse(st.result);
-    else if (st.state == webhttp::TaskState::Failed)
+    else if (st.state == TaskState::Failed)
         o["error"] = Json(st.error);
     return Response::json(200, "OK", o.to_string());
 }
@@ -82,7 +59,7 @@ Response CalculatorController::cancel(const HttpRequest&, const PathParams& pp) 
     // status() distinguishes "unknown" (404) from "already finished" — the
     // service's cancel() bool alone cannot tell them apart. DELETE on a
     // finished task is a successful no-op.
-    (void)bridge_service([&] { return _svc.status(id); });   // 404 when unknown
+    (void)_svc.status(id);   // 404 when unknown
     _svc.cancel(id);
     Json o = Json::object();
     o["ok"] = Json(true);
@@ -92,7 +69,7 @@ Response CalculatorController::cancel(const HttpRequest&, const PathParams& pp) 
 Response CalculatorController::events(const HttpRequest& req, const PathParams& pp) {
     const std::string id = pp.get("id");
     // Validate the task exists before opening a stream — unknown → 404.
-    (void)bridge_service([&] { return _svc.status(id); });   // 404 when unknown
+    (void)_svc.status(id);   // 404 when unknown
     // 订阅 SseHub 并把每一帧投递到请求的 StreamChannel（连接）。真实传输路径上
     // req.stream 恒为连接（Connection 实现 StreamChannel）；单元测试直调时可能为空，
     // 此时订阅仍注册但帧被静默丢弃。

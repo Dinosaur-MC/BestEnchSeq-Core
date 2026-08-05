@@ -3,11 +3,8 @@
 
 class BesqContext;
 
-namespace webhttp {
-class WebSolveService;
-}
-
 namespace web {
+class WebSolveService;
 
 /// GET/POST /api/algorithms — list registered strategies, query one's
 /// metadata, hot-load a plugin directory, unload a plugin.
@@ -20,7 +17,7 @@ class AlgorithmController : public HttpController<AlgorithmController> {
 public:
     using Self = AlgorithmController;
 
-    AlgorithmController(BesqContext& ctx, webhttp::WebSolveService& svc)
+    AlgorithmController(BesqContext& ctx, WebSolveService& svc)
         : _ctx(ctx), _svc(svc) {}
 
     static constexpr auto route_defs() {
@@ -39,7 +36,7 @@ public:
 
 private:
     BesqContext& _ctx;
-    webhttp::WebSolveService& _svc;
+    WebSolveService& _svc;
 };
 
 } // namespace web

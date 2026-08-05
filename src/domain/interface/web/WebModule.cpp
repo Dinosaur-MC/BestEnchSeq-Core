@@ -20,7 +20,7 @@ struct WebModule::Impl {
     BesqContext& _ctx;
     std::mutex _ctx_gate;
     SseHub _hub;
-    webhttp::WebSolveService _solve;
+    web::WebSolveService _solve;
     Router _router;
     StaticFileServer _sfs;
 

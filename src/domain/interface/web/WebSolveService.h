@@ -1,7 +1,5 @@
 #pragma once
 #include "domain/interface/web/WebSchema.h"
-#include "domain/orchestration/types/SolveResult.h"
-#include "domain/interface/web/WebHttpError.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -13,9 +11,6 @@ class BesqContext;
 
 namespace web {
 class SseHub;
-}
-
-namespace webhttp {
 
 enum class TaskState { Running, Completed, Failed, Cancelled };
 
@@ -93,4 +88,4 @@ private:
     int64_t _next_id = 0;
 };
 
-} // namespace webhttp
+} // namespace web

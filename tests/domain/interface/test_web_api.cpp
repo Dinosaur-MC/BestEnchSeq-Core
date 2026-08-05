@@ -38,9 +38,9 @@ struct TestApp {
     std::mutex gate;
     BesqContext& ctx;
     SseHub hub;
-    std::unique_ptr<webhttp::WebSolveService> solve;
+    std::unique_ptr<web::WebSolveService> solve;
     explicit TestApp(BesqContext& c) : ctx(c) {
-        solve = std::make_unique<webhttp::WebSolveService>(c, gate, &hub);
+        solve = std::make_unique<web::WebSolveService>(c, gate, &hub);
         router.register_controller<HealthController>();
         router.register_controller<StatusController>(c);
         router.register_controller<SettingsController>(c);

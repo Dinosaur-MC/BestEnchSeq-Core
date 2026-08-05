@@ -4,11 +4,8 @@
 #include <string>
 #include <unordered_map>
 
-namespace webhttp {
-class WebSolveService;
-}
-
 namespace web {
+class WebSolveService;
 
 /// POST/GET/DELETE /api/tasks — async solve submission + polled status +
 /// cancel + SSE subscription. Replaces the old ApiCalculator resource
@@ -19,7 +16,7 @@ class CalculatorController : public HttpController<CalculatorController> {
 public:
     using Self = CalculatorController;
 
-    CalculatorController(webhttp::WebSolveService& svc, SseHub& hub)
+    CalculatorController(WebSolveService& svc, SseHub& hub)
         : _svc(svc), _hub(hub) {}
 
     static constexpr auto route_defs() {
@@ -37,7 +34,7 @@ public:
     Response events(const HttpRequest&, const PathParams&);
 
 private:
-    webhttp::WebSolveService& _svc;
+    WebSolveService& _svc;
     SseHub& _hub;
     /// task id → active SSE subscription id. Retained so the transport task can
     /// unsubscribe on disconnect; a second connect on the same task overwrites

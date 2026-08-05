@@ -1,6 +1,7 @@
 #include "WebSolveService.h"
 #include "SseHub.h"
 #include "domain/interface/BesqContext.h"
+#include "domain/interface/components/http/Router.h"
 #include "domain/orchestration/types/SolveRequest.h"
 #include "common/io/json.h"
 #include "common/i18n/Language.h"
@@ -8,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace webhttp {
+namespace web {
 
 namespace {
 
@@ -136,7 +137,7 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
         for (const auto& [tid, t] : _tasks) {
             std::lock_guard<std::mutex> tl(t->mutex);
             if (t->state == TaskState::Running)
-                throw WebHttpError(409, "a solve is already running");
+                throw WebHttpError(409, "TASK_ACTIVE", "a solve is already running");
         }
         // Reap terminal tasks so the table stays bounded (long-lived server;
         // a finished task's result is no longer needed once a new solve starts).
@@ -274,7 +275,7 @@ TaskStatus WebSolveService::status(const std::string& id) {
         std::lock_guard<std::mutex> lock(_tasks_mutex);
         auto it = _tasks.find(id);
         if (it == _tasks.end())
-            throw WebHttpError(404, "unknown task: " + id);
+            throw WebHttpError(404, "TASK_NOT_FOUND", "unknown task: " + id);
         task = it->second;
     }
     TaskStatus out;
@@ -309,4 +310,4 @@ bool WebSolveService::cancel(const std::string& id) {
     return true;
 }
 
-} // namespace webhttp
+} // namespace web
