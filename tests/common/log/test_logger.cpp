@@ -9,11 +9,13 @@
 
 #include "common/log/Logger.h"
 #include "common/log/LogTypes.h"
+#include "common/log/LogRingBuffer.h"
 #include "framework/test_utils.h"
 
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -109,6 +111,57 @@ void test_setters_roundtrip(Logger& logger) {
     TEST_PASS("logger: setter/getter round-trips");
 }
 
+// LogRingBuffer live listeners (I-1): add_listener/remove_listener + push
+// notification. ring->push is called synchronously on the log() caller's
+// thread, so listener invocations are directly observable.
+void test_ring_listeners() {
+    auto ring = std::make_shared<LogRingBuffer>(8);
+
+    // Backward compat: no listeners → snapshot/clear unchanged.
+    ring->push(LogLevel::Info, "seed");
+    auto snap = ring->snapshot(LogLevel::Debug, 100);
+    expect(snap.size() == 1 && snap[0].message == "seed",
+           "snapshot unchanged without listeners");
+
+    std::vector<std::string> got1, got2;
+    auto id1 = ring->add_listener([&](const LogRecord& e) {
+        got1.push_back(e.message);
+    });
+    auto id2 = ring->add_listener([&](const LogRecord& e) {
+        got2.push_back(e.message);
+    });
+
+    // 未知 id 移除是无操作（不误伤已有监听器）。
+    ring->remove_listener(9999);
+
+    ring->push(LogLevel::Warn, "live-a");
+    expect(got1.size() == 1 && got1[0] == "live-a", "listener 1 notified on push");
+    expect(got2.size() == 1 && got2[0] == "live-a", "listener 2 notified on push");
+
+    // 记录字段：level/timestamp/message 完整传递。
+    auto got = ring->snapshot(LogLevel::Debug, 100);
+    expect(got.size() >= 2, "ring retains pushed records");
+    expect(got.back().level == LogLevel::Warn && got.back().message == "live-a",
+           "record level+message preserved");
+    expect(got.back().timestamp_ms > 0, "record timestamp populated");
+
+    // 移除后不再通知。
+    ring->remove_listener(id1);
+    ring->push(LogLevel::Info, "live-b");
+    expect(got1.size() == 1, "removed listener no longer notified");
+    expect(got2.size() == 2 && got2[1] == "live-b", "remaining listener still notified");
+
+    // clear() 不动监听器（仅清缓冲）。
+    ring->clear();
+    expect(ring->snapshot(LogLevel::Debug, 100).empty(), "clear empties the buffer");
+    ring->push(LogLevel::Info, "live-c");
+    expect(got2.size() == 3, "listener survives clear()");
+
+    ring->remove_listener(id2);
+    ring->remove_listener(id2);  // 幂等
+    TEST_PASS("logger: ring buffer listeners");
+}
+
 void test_concurrent_writes(Logger& logger, const fs::path& log_dir) {
     logger.set_level(LogLevel::Debug);
     std::vector<std::thread> threads;
@@ -161,6 +214,7 @@ int main() {
         test_setters_roundtrip(logger);
         test_concurrent_writes(logger, cwd.dir());
         test_rotation_prunes(logger, cwd.dir());
+        test_ring_listeners();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
     } catch (const std::exception& e) {

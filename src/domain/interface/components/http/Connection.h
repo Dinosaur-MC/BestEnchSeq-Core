@@ -11,6 +11,13 @@
 
 namespace web {
 
+/// 慢客户端/空闲连接超时（spec §4.2 资源上限）：
+///   kStalledReadTimeout — 请求已部分到达（解析未完成）且 5s 无进展 → 关闭。
+///   kKeepAliveTimeout   — keep-alive 空闲连接 30s 无活动 → 关闭。
+/// SSE 流模式的心跳阈值复用 Connection::heartbeat_interval（默认 15s）。
+inline constexpr auto kStalledReadTimeout = std::chrono::seconds(5);
+inline constexpr auto kKeepAliveTimeout = std::chrono::seconds(30);
+
 /// 一条连接的运行状态机（归属某个 home loop 线程，单线程访问，无需锁）。
 /// process() 每次最多推进：解析 →（缺数据时）读一块 →（完整请求则）分发 → 写一块。
 /// 返回 true 表示本调用读了数据或分发了请求，false 表示 would-block/无进展。
@@ -22,8 +29,20 @@ namespace web {
 /// 把 SseHub 帧投递进来。`post_frame` 是跨线程入口（solve worker 调用），它只把帧
 /// 交给 `_frame_sink`（Reactor 注入：post 到 home loop）；真正的帧入缓冲 + 写出在
 /// `push_sse_frame(std::string)` 里，运行于 loop 线程，符合连接零锁设计。
+///
+/// 超时（I-3）：每次 recv/send 进展更新 `_last_activity`；poller 每 ~1s 清扫时经
+/// Reactor 投递 `sweep_check(now)`（home loop 线程执行，零锁）决定心跳/关闭。
 class Connection : public StreamChannel,
                    public std::enable_shared_from_this<Connection> {
+public:
+    using Router = std::function<HttpResponse(const HttpRequest&)>;
+
+    /// 超时清扫结果（Reactor::check_timeout 执行）：
+    ///   None      — 未到期，保持现状；
+    ///   Heartbeat — SSE 流空闲超 heartbeat_interval → flush 心跳 `: ping`
+    ///                （写失败 → 对端断开检测关闭）；
+    ///   Close     — 慢读/空闲 keep-alive 超时 → 关闭连接。
+    enum class SweepAction { None, Heartbeat, Close };
 public:
     using Router = std::function<HttpResponse(const HttpRequest&)>;
 
@@ -62,21 +81,29 @@ public:
     void on_close(std::function<void()> cb) override;
 
     /// SSE 心跳间隔：流缓冲空闲超过该时长且无新帧 → 注入 `: ping` 注释帧。
+    /// 也是 poller 清扫判 SSE 空闲的阈值（见 sweep_check）。
     std::chrono::milliseconds heartbeat_interval = std::chrono::milliseconds(15000);
+
+    /// 超时清扫（I-3）：在 `now` 时刻评估本连接是否到期。只在归属 loop 线程
+    /// 调用（Reactor::check_timeout）。见 SweepAction 说明。
+    SweepAction sweep_check(std::chrono::steady_clock::time_point now) const;
 
 private:
     void drain_out();            // 尽力写 _out；n==-1（硬错误/对端断开）→ 关闭
     void flush_stream();         // 心跳 + 取走流缓冲 → drain_out()
+    void touch();                // 任何 recv/send 进展 → 刷新 _last_activity
 
     int _fd;
     std::string _id;
     bool _alive = true;
     bool _pending_eof = false;   // 已读到 EOF（对端不再发数据；输出清空后关闭）
+    bool _partial = false;       // 请求已部分到达（半请求/半 body/管道残留）→ 慢读计时
     std::string _in;             // 未消费输入缓冲
     std::string _out;            // 待写输出缓冲
     HttpParser _parser;          // 增量解析器（内部保留半请求状态）
     std::shared_ptr<SseStream> _stream;                 // 非空 = SSE 流模式
     std::chrono::steady_clock::time_point _last_write;  // 最近一次写出帧的时间（心跳节流）
+    std::chrono::steady_clock::time_point _last_activity; // 最近一次 recv/send 进展
     std::function<void(std::string)> _frame_sink;       // Reactor 注入的 home-loop 帧汇
     std::function<void()> _on_close;                    // 连接关闭回调（触发一次后清空）
 };

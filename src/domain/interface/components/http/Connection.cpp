@@ -5,7 +5,9 @@
 
 namespace web {
 
-Connection::Connection(int fd, std::string id) : _fd(fd), _id(std::move(id)) {}
+Connection::Connection(int fd, std::string id) : _fd(fd), _id(std::move(id)) {
+    touch();  // 活动基准：从 accept/构造时刻起计时（空闲 keep-alive 30s 到期）
+}
 
 Connection::~Connection() { close(); }
 
@@ -52,6 +54,7 @@ void Connection::drain_out() {
         if (n == -1) { close(); return; }    // 硬错误（含对端断开）→ 关闭连接
         if (n == 0) break;                   // would-block，等下次推进/WRITABLE
         _out.erase(0, static_cast<size_t>(n));
+        touch();                             // 发出字节 = 活动（重置 30s 空闲计时）
     }
 }
 
@@ -75,6 +78,7 @@ bool Connection::set_stream(std::shared_ptr<SseStream> sse) {
     if (!_alive || _stream || !sse) return false;
     _stream = std::move(sse);
     _last_write = std::chrono::steady_clock::now();
+    touch();
     return true;
 }
 
@@ -100,6 +104,7 @@ bool Connection::process(const Router& router) {
                 return had_out;
             }
             // n > 0：对端发了字节（流模式下不是合法 HTTP 请求）→ 丢弃，继续流。
+            touch();
         }
         return had_out || !_out.empty();
     }
@@ -125,12 +130,17 @@ bool Connection::process(const Router& router) {
         auto pr = _parser.parse(_in, consumed, req);
         if (pr == ParseResult::Complete) {
             _in.erase(0, consumed);
+            // 剩余缓冲是下一条请求的起始字节（pipelining）→ 视为已部分到达；
+            // 缓冲空 → 回到空闲 keep-alive（30s 计时）。
+            _partial = !_in.empty();
+            touch();
             auto resp = router(req);
             if (resp.is_stream) {
                 // 升级为 SSE 流模式：写响应头，连接转入只写路径（push_sse_frame）。
                 if (!_stream) {
                     _stream = std::make_shared<SseStream>(_id);
                     _last_write = std::chrono::steady_clock::now();
+                    touch();
                 }
                 _out += resp.to_bytes();
                 progress = true;
@@ -142,6 +152,7 @@ bool Connection::process(const Router& router) {
         }
         if (pr == ParseResult::BadRequest) {
             _out += HttpResponse::bad_request("BAD_REQUEST", "malformed request").to_bytes();
+            _partial = true;                // 缓冲里的坏字节不会消失 → 按慢读计时
             break;
         }
         // Incomplete → need more bytes from the socket. sock_recv_nb 的 0 既可能
@@ -153,6 +164,8 @@ bool Connection::process(const Router& router) {
         if (n == -1) { close(); return progress; }
         if (n == 0) { _pending_eof = true; break; }   // 可读 + 0 字节 → 对端 FIN
         _in += chunk;
+        _partial = true;                    // 收到过字节 → 请求已部分到达（慢读计时）
+        touch();
         progress = true;
     }
 
@@ -160,6 +173,30 @@ bool Connection::process(const Router& router) {
     // EOF 且输出已全部写出 → 收尾关闭（对端不会再发数据）。
     if (_pending_eof && _out.empty()) close();
     return progress;
+}
+
+void Connection::touch() {
+    _last_activity = std::chrono::steady_clock::now();
+}
+
+Connection::SweepAction Connection::sweep_check(
+    std::chrono::steady_clock::time_point now) const {
+    if (!_alive) return SweepAction::None;
+    if (_stream) {
+        // SSE 流模式：> heartbeat_interval 无帧写出 → 心跳 ping（flush 时注入
+        // `: ping`；写失败 → drain_out 关闭，对端断开检测）。心跳本身会推进
+        // _last_write/_last_activity，把下一次到期再推后 ~15s。
+        if (now - _last_write >= heartbeat_interval)
+            return SweepAction::Heartbeat;
+        return SweepAction::None;
+    }
+    const auto idle = now - _last_activity;
+    if (_partial) {
+        // 请求已部分到达但 5s 无进展 → 慢客户端，关闭（有界服务）。
+        return idle >= kStalledReadTimeout ? SweepAction::Close : SweepAction::None;
+    }
+    // 空闲 keep-alive（含从未发过数据的连接）→ 30s 超时关闭。
+    return idle >= kKeepAliveTimeout ? SweepAction::Close : SweepAction::None;
 }
 
 } // namespace web

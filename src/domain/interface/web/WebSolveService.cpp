@@ -207,22 +207,62 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                         return;
                     }
                 }
+                double initial_progress = 0.0;
                 if (_hub) {
-                    // Progress exit: without a core observer hook the worker
-                    // can only sample the live atomic handle once before the
-                    // blocking solve() runs. Periodic progress will flow once
-                    // an observer is wired (later task); the frame shape is
-                    // what Task 14 establishes.
+                    // 初始 progress 帧（I-2b）：solve 前的原子快照。
                     auto prog = _ctx.solve_progress();
+                    initial_progress = prog.progress;
                     Json obj = Json::object();
                     obj["type"] = Json("progress");
                     obj["progress"] = Json(prog.progress);
                     _hub->publish(task->id, sse_frame("progress", obj));
                 }
+                // 周期性 progress 采样（I-2a）：solve() 阻塞本 worker 期间，短命
+                // 采样线程每 ~200ms 读一次 _ctx.solve_progress()（线程安全原子读，
+                // 专为轮询设计），进度变化即向 hub 发布
+                // {"type":"progress","progress":<p>}。采样线程在 solve() 返回的
+                // 每个退出路径（正常/异常/cancel）上被停止并 join；终态帧
+                // （completed/failed）只会在采样停止后发布。
+                struct SamplerStop {
+                    std::atomic<bool>* flag;
+                    std::thread* th;
+                    void stop() {
+                        if (!flag) return;
+                        flag->store(false, std::memory_order_release);
+                        if (th->joinable()) th->join();  // 采样线程至多晚一帧（200ms 内）
+                        flag = nullptr;                  // 幂等：已停
+                    }
+                    ~SamplerStop() { stop(); }
+                };
+                std::atomic<bool> sampling{true};
+                std::thread sampler;
+                SamplerStop sampler_stop{_hub ? &sampling : nullptr, &sampler};
+                if (_hub) {
+                    sampler = std::thread([this, task, &sampling, initial_progress] {
+                        double last = initial_progress;  // 与初始帧同基准，进度变了才发
+                        for (;;) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                            if (!sampling.load(std::memory_order_acquire)) return;
+                            const auto prog = _ctx.solve_progress();
+                            if (prog.progress == last) continue;
+                            last = prog.progress;
+                            try {
+                                Json obj = Json::object();
+                                obj["type"] = Json("progress");
+                                obj["progress"] = Json(prog.progress);
+                                _hub->publish(task->id, sse_frame("progress", obj));
+                            } catch (...) {
+                                // 采样帧丢失可接受：hub/帧构造不抛，防御兜底。
+                            }
+                        }
+                    });
+                }
                 // Single active slot is enforced above; solve() runs to
                 // completion (or cancel()). The result carries the executor's
-                // real output.
+                // real output. solve() 一返回就停采样（join），之后才 format 与
+                // 发布终态帧——进度帧严格先于 completed/failed。
                 auto result = _ctx.solve(request);
+                sampler_stop.stop();
                 result_json = _ctx.format(result, request.mode, "json");
             }  // _ctx_gate released before the task-state write
             // Task bookkeeping is NOT gated — commit the result under

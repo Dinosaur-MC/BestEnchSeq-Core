@@ -1,5 +1,6 @@
 #include "HttpServer.h"
 
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <thread>
@@ -27,6 +28,13 @@ namespace {
 constexpr size_t kMaxConnections = 256; // 同时连接上限（达上限拒绝新 accept）
 constexpr int kAcceptPollMs = 100;      // 监听就绪探测上限（同时作 stop 节拍）
 constexpr int kConnPollMs = 0;          // 连接就绪探测：非阻塞（0 超时）
+// select 单轮 fd 集合上限（Windows FD_SETSIZE=64）。准入上限取
+// min(kMaxConnections, kMaxPolled)：达上限时新 accept 立即关闭——保证每个被
+// 准入的连接都被 select 轮询，不会"准入但永不轮询 → 客户端永久挂起"（I-3）。
+constexpr size_t kMaxPolled = FD_SETSIZE;
+// 准入上限（Windows min 宏会咬 std::min，故用三元）。
+constexpr size_t kAdmitCap = (kMaxConnections < kMaxPolled) ? kMaxConnections : kMaxPolled;
+constexpr int kSweepIntervalMs = 1000;  // 超时清扫节拍（spec §4.2）
 
 #ifdef _WIN32
 using NativeFd = SOCKET;
@@ -84,6 +92,8 @@ struct HttpServer::Impl {
     std::mutex pmutex;
     std::unordered_map<int, size_t> home_of;  // fd → 归属 Reactor 索引
     std::unordered_map<int, bool> want_write; // fd → 是否监听写就绪
+    // 超时清扫节拍（仅 poller 线程读写，无需原子）
+    std::chrono::steady_clock::time_point last_sweep{std::chrono::steady_clock::now()};
 
     std::vector<std::unique_ptr<Reactor>> reactors;
 
@@ -186,7 +196,11 @@ void HttpServer::poll_once() {
             bool ok = false;
             {
                 std::lock_guard lk(impl.pmutex);
-                if (impl.home_of.size() < kMaxConnections) {
+                // 准入上限 = min(kMaxConnections, kMaxPolled)：select 单轮 fd 集合
+                // 被 FD_SETSIZE 封顶，准入超过该数目的连接会"永不轮询 → 客户端
+                // 永久挂起"。达上限拒绝新 accept（立即关闭，不响应任何字节）——
+                // 保证每个被准入的连接都被 select 轮询（I-3 accept-cap 修复）。
+                if (impl.home_of.size() < kAdmitCap) {
                     home = impl.next_reactor.fetch_add(1, std::memory_order_relaxed) % impl.workers;
                     impl.home_of.emplace(c, home);
                     impl.want_write.emplace(c, false);
@@ -194,11 +208,20 @@ void HttpServer::poll_once() {
                 }
             }
             if (!ok) {
-                sock_close(c); // 达上限：拒绝新连接
+                sock_close(c); // 达上限：拒绝新连接（accept 后立即关闭，无响应）
                 continue;
             }
             impl.reactors[home]->add_connection(c);
         }
+    }
+
+    // ③ 超时清扫（I-3）：每 ~1s 把每个连接的超时复查投递给其归属 Reactor。
+    // home loop 线程执行 Connection::sweep_check（零锁、fd 复用安全）并关闭到期
+    // 连接/注入 SSE 心跳——慢客户端、空闲 keep-alive 与半开 SSE 都有界。
+    const auto sweep_now = std::chrono::steady_clock::now();
+    if (sweep_now - impl.last_sweep >= std::chrono::milliseconds(kSweepIntervalMs)) {
+        sweep_expired();
+        impl.last_sweep = sweep_now;
     }
 
     // ③ 连接就绪探测（非阻塞 select）→ 按归属投递。
@@ -248,6 +271,16 @@ void HttpServer::poll_once() {
                 impl.reactors[home]->on_writable(fd);
         }
     }
+}
+
+void HttpServer::sweep_expired() {
+    auto& impl = *_impl;
+    // 持 pmutex 遍历注册表：与 Reactor 的 unregister_fd（on_closed → 注销）串行化，
+    // 保证不对已注销/已关闭的 fd 投递。投递本身（loop.post）是锁无关操作，不构成
+    // 锁序环（poller: pmutex → 队列；Reactor: 队列消费 → pmutex，队列锁不跨任务持有）。
+    std::lock_guard lk(impl.pmutex);
+    for (const auto& [fd, home] : impl.home_of)
+        impl.reactors[home]->check_timeout(fd);
 }
 
 void HttpServer::unregister_fd(int fd) {

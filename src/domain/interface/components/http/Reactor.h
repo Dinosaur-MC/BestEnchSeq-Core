@@ -29,6 +29,10 @@ public:
     void remove_connection(int fd);
     void on_readable(int fd); // poller 投递
     void on_writable(int fd);
+    /// 超时清扫（I-3）：poller 线程每 ~1s 对每个 fd 调用。post 到 home loop，
+    /// 在 loop 线程复查连接超时状态并按需心跳/关闭（连接零锁设计；fd 复用
+    /// 安全——复查时 conns[fd] 已是新连接则新鲜时间戳不会误伤）。
+    void check_timeout(int fd);
     void close_all();                           // 优雅关闭：清空连接
 
     size_t connection_count() const;
