@@ -458,6 +458,83 @@ void test_profile_actions(TestApp& app) {
     expect(ench_gone.status == 404, "ench read after delete 404");
 }
 
+/// §12.1: GET /api/profiles/{key}/enchantables/{item} — enchantments
+/// applicable to an item (effective-view tag resolution + platform gate,
+/// mirroring solve's CompactAdapter::apply).
+void test_enchantables(TestApp& app) {
+    const std::string key = "builtin:vanilla";
+
+    // ── 1. diamond_sword → 200: sharpness (+ full field shape) present,
+    //        efficiency/protection (wrong item category) absent ──
+    auto sw = app.call(Method::Get,
+                       "/api/profiles/" + key + "/enchantables/minecraft:diamond_sword");
+    expect(sw.status == 200, "diamond_sword enchantables 200");
+    for (const char* f : {"\"id\":", "\"name\":", "\"max_level\":", "\"is_treasure\":",
+                          "\"exclusive_set\":", "\"multiplier\":"})
+        expect(sw.body.find(f) != std::string::npos,
+               std::string("enchantables field ") + f);
+    expect(sw.body.find("minecraft:sharpness") != std::string::npos,
+           "sharpness applicable to diamond_sword");
+    expect(sw.body.find("\"max_level\":5") != std::string::npos,
+           "sharpness max_level 5 present");
+    expect(sw.body.find("\"exclusive_set\":[") != std::string::npos &&
+               sw.body.find("minecraft:smite") != std::string::npos,
+           "exclusive_set array contains smite");
+    expect(sw.body.find("minecraft:efficiency") == std::string::npos,
+           "efficiency NOT applicable to diamond_sword");
+    expect(sw.body.find("minecraft:protection") == std::string::npos,
+           "protection NOT applicable to diamond_sword");
+
+    // ── 2. enchanted_book → 200 full registry (every enchantment) ──
+    auto bk = app.call(Method::Get,
+                       "/api/profiles/" + key + "/enchantables/minecraft:enchanted_book");
+    expect(bk.status == 200, "enchanted_book enchantables 200");
+    expect(bk.body.find("minecraft:sharpness") != std::string::npos &&
+               bk.body.find("minecraft:efficiency") != std::string::npos,
+           "book returns the full registry (sharpness + efficiency)");
+
+    // ── 3. errors: unknown profile / unknown item / invalid NSID → 404 ──
+    auto noprof = app.call(Method::Get,
+                           "/api/profiles/nope/enchantables/minecraft:diamond_sword");
+    expect(noprof.status == 404 && noprof.body.find("PROFILE_NOT_FOUND") != std::string::npos,
+           "unknown profile 404 PROFILE_NOT_FOUND");
+    auto noitem = app.call(Method::Get,
+                           "/api/profiles/" + key + "/enchantables/minecraft:no_such_sword");
+    expect(noitem.status == 404 && noitem.body.find("ENTRY_NOT_FOUND") != std::string::npos,
+           "unknown item 404 ENTRY_NOT_FOUND");
+    auto badid = app.call(Method::Get, "/api/profiles/" + key + "/enchantables/bad item");
+    expect(badid.status == 404 && badid.body.find("ENTRY_NOT_FOUND") != std::string::npos,
+           "invalid NSID path segment 404 ENTRY_NOT_FOUND");
+
+    // ── 4. scaffold fork: tag membership / platform gate / nested-tag BFS ──
+    auto sc = app.call(Method::Post, "/api/profiles",
+                       R"({"source":")" + key + R"(","dest":")" + key + R"(-ench"})");
+    expect(sc.status == 201, "fork scaffold for enchantables");
+    const std::string skey = key + "-ench";
+    auto add_ench = [&](const std::string& id, const char* platform,
+                        const char* supported) {
+        const std::string body = R"({"id":")" + id + R"(","name":")" + id +
+                                 R"(","platform":")" + platform +
+                                 R"(","max_level":3,"multiplier":2,"supported_items":[")" +
+                                 supported + R"("]})";
+        auto r = app.call(Method::Post, "/api/profiles/" + skey + "/enchantments", body);
+        expect(r.status == 201, std::string("scaffold ench ") + id);
+    };
+    add_ench("test:sword_hit", "java", "#minecraft:swords");
+    add_ench("test:bedrock_only", "bedrock", "#minecraft:swords");
+    add_ench("test:nested_hit", "java", "#minecraft:enchantable/weapon");
+
+    auto sh = app.call(Method::Get,
+                       "/api/profiles/" + skey + "/enchantables/minecraft:diamond_sword");
+    expect(sh.status == 200, "scaffold diamond_sword enchantables 200");
+    expect(sh.body.find("test:sword_hit") != std::string::npos,
+           "custom tag #minecraft:swords membership hits");
+    expect(sh.body.find("test:nested_hit") != std::string::npos,
+           "nested tag #minecraft:enchantable/weapon hits via BFS");
+    expect(sh.body.find("test:bedrock_only") == std::string::npos,
+           "bedrock-only enchantment filtered by platform gate");
+}
+
 void test_algorithms(TestApp& app) {
     // list → 200 array of names containing a builtin strategy.
     auto l = app.call(Method::Get, "/api/algorithms");
@@ -1061,6 +1138,7 @@ int main() {
         test_settings(app);
         test_profiles(app);
         test_profile_actions(app);  // §12.1: actions + tags/ench round-trips
+        test_enchantables(app);     // §12.1: /enchantables/{item} 适用附魔查询
         test_algorithms(app);
         test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
         test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）

@@ -163,6 +163,20 @@ void test_profiles(HttpServer& server) {
 }
 
 // ---------------------------------------------------------------------------
+// Case 4b: GET /api/profiles/{key}/enchantables/{item} over the real socket.
+// ---------------------------------------------------------------------------
+void test_enchantables(HttpServer& server) {
+    auto sw = http_exchange(server,
+        "GET /api/profiles/builtin:vanilla/enchantables/minecraft:diamond_sword "
+        "HTTP/1.1\r\nHost: x\r\n\r\n");
+    expect(sw.find("200 OK") != std::string::npos, "enchantables responds 200");
+    expect(sw.find("minecraft:sharpness") != std::string::npos,
+           "diamond_sword enchantables contains sharpness");
+    expect(sw.find("minecraft:efficiency") == std::string::npos,
+           "diamond_sword enchantables excludes efficiency");
+}
+
+// ---------------------------------------------------------------------------
 // Case 5: POST /api/tasks → 202 + task_id + Location → poll to completed
 // ---------------------------------------------------------------------------
 void test_task_submit_and_poll(HttpServer& server) {
@@ -521,6 +535,7 @@ static void run_suite() {
         test_static_and_root(server);
         test_health_status_settings(server);
         test_profiles(server);
+        test_enchantables(server);
         test_error_envelopes(server);
         test_task_submit_and_poll(server);
         test_task_failed_snapshot(server);
