@@ -13,6 +13,7 @@
                 "CMAKE_C_COMPILER": "clang",
                 "BESQ_BUILD_CLI": "ON",
                 "BESQ_BUILD_SANDBOX": "ON",
+                "BESQ_BUILD_GUI": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "32"
@@ -30,6 +31,7 @@
                 "CMAKE_C_COMPILER": "clang",
                 "BESQ_BUILD_CLI": "ON",
                 "BESQ_BUILD_SANDBOX": "ON",
+                "BESQ_BUILD_GUI": "ON",
                 "BUILD_TESTING": "ON",
                 "BUILD_BENCHMARKS": "ON",
                 "BESQ_MAX_SOLUTIONS": "128"
@@ -85,6 +87,24 @@
                 "BUILD_BENCHMARKS": "OFF",
                 "BESQ_MAX_SOLUTIONS": "128"
             }
+        },
+        {
+            "name": "gui",
+            "displayName": "GUI (Web + frontend, debug)",
+            "description": "Build the besq-gui Web GUI executable with tests (Debug). Independent build dir so it never clashes with the CLI/tests preset.",
+            "binaryDir": "${sourceDir}/build-gui",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_C_COMPILER": "clang",
+                "BESQ_BUILD_CLI": "OFF",
+                "BESQ_BUILD_SANDBOX": "OFF",
+                "BESQ_BUILD_GUI": "ON",
+                "BUILD_TESTING": "ON",
+                "BUILD_BENCHMARKS": "OFF",
+                "BESQ_MAX_SOLUTIONS": "128"
+            }
         }
     ],
     "buildPresets": [
@@ -120,6 +140,13 @@
             "displayName": "Sandbox worker",
             "description": "Build the besq-worker sandbox executable only",
             "targets": ["besq-worker"]
+        },
+        {
+            "name": "gui",
+            "configurePreset": "gui",
+            "displayName": "GUI executable",
+            "description": "Build the besq-gui Web GUI executable only",
+            "targets": ["besq-gui"]
         }
     ],
     "testPresets": [
@@ -134,6 +161,12 @@
             "configurePreset": "debug",
             "displayName": "Run all tests (debug)",
             "description": "Run the complete test suite (debug build)"
+        },
+        {
+            "name": "gui",
+            "configurePreset": "gui",
+            "displayName": "Run tests (gui build)",
+            "description": "Run the complete test suite (gui debug build)"
         }
     ]
 }
