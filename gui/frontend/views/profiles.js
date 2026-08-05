@@ -37,51 +37,100 @@ function itemIdToFile(id) {
 }
 
 // A minimal entry the backend's validation accepts. The en/equip/tag fields the
-// registry requires differ — this posts just enough to create + list an entry
-// (the GUI has no full-form editor in v1). Vanilla-free: `category` is omitted
-// (an empty string would fail NSID validation; the field is optional) and
-// `supported_items` is an empty set.
+// registry requires differ — this seeds the add-form with just enough to
+// create + list an entry. Vanilla-free: `category` is omitted (an empty string
+// would fail NSID validation; the field is optional) and `supported_items` is
+// an empty set.
 function minimalEntry(kind, id) {
   if (kind === 'equip') return { id, name: id, max_durability: 100 };
   if (kind === 'tag') return { id, name: id };
   return { id, name: id, max_level: 1, multiplier: 1, supported_items: [] };
 }
 
-// Inline JSON editor for a single registry entry — the PATCH editor.
-// `entry` is the full entry object (from the list response); saving PATCHes it
-// back to /api/profiles/{key}/{plural}/{id} and re-renders.
-function openEditor(el, key, kind, entry) {
+// Per-kind editable fields → the form's input set. `join: true` renders an
+// array field as a comma-separated list; saving rebuilds the array. The
+// PATCH/POST body must pass the backend schema (EnchInfo/Equipment/EquipmentTag)
+// — missing fields default, wrong types reject (400).
+const EDIT_FIELDS = {
+  ench: [
+    { key: 'id', label: 'prof.id', type: 'text' },
+    { key: 'name', label: 'prof.name', type: 'text' },
+    { key: 'max_level', label: 'prof.max_level', type: 'number' },
+    { key: 'multiplier', label: 'prof.multiplier', type: 'number' },
+    { key: 'supported_items', label: 'prof.supported_items', type: 'text', join: true },
+    { key: 'is_treasure', label: 'prof.treasure', type: 'bool' },
+  ],
+  equip: [
+    { key: 'id', label: 'prof.id', type: 'text' },
+    { key: 'name', label: 'prof.name', type: 'text' },
+    { key: 'max_durability', label: 'prof.max_durability', type: 'number' },
+    { key: 'category', label: 'prof.category', type: 'text' },
+  ],
+  tag: [
+    { key: 'id', label: 'prof.id', type: 'text' },
+    { key: 'name', label: 'prof.name', type: 'text' },
+  ],
+};
+
+// Inline field form for a single registry entry — replaces the v1 JSON
+// textarea editor. `entry` is the full entry object (from the list response);
+// saving PATCHes it back to /api/profiles/{key}/{plural}/{id} and re-renders.
+// With `isNew` the form POSTs to the collection instead (add-via-form).
+function openEditor(el, key, kind, entry, isNew) {
   const card = document.createElement('div');
   card.className = 'card';
   card.style.margin = '8px 0';
-  const ta = document.createElement('textarea');
-  ta.className = 'mono';
-  ta.value = JSON.stringify(entry, null, 2);
-  ta.style.width = '100%';
-  ta.style.minHeight = '120px';
-  const row = document.createElement('div');
-  const save = document.createElement('button');
-  save.textContent = 'Save';
-  const cancel = document.createElement('button');
-  cancel.textContent = 'Cancel';
-  cancel.className = 'secondary';
-  save.addEventListener('click', async () => {
+  const fields = EDIT_FIELDS[kind];
+  let html = '';
+  for (const f of fields) {
+    const val = entry[f.key];
+    let input;
+    if (f.type === 'bool') {
+      input = `<label class="check-label"><input type="checkbox" data-f="${f.key}"${val ? ' checked' : ''}>${t(f.label)}</label>`;
+    } else if (f.type === 'number') {
+      input = `<input type="number" data-f="${f.key}" value="${esc(val ?? '')}">`;
+    } else if (f.join) {
+      input = `<input data-f="${f.key}" value="${esc((val || []).join(', '))}" placeholder="minecraft:foo, #minecraft:bar">`;
+    } else {
+      input = `<input data-f="${f.key}" value="${esc(val ?? '')}"${!isNew && f.key === 'id' ? ' readonly' : ''}>`;
+    }
+    html += `<label>${t(f.label)}</label>${input}`;
+  }
+  card.innerHTML = `<div class="form-grid">${html}</div>
+    <div class="btn-row">
+      <button data-act="save">${t('prof.save')}</button>
+      <button data-act="cancel" class="secondary">${t('prof.cancel')}</button>
+    </div>`;
+  card.querySelector('[data-act="cancel"]').addEventListener('click', () => card.remove());
+  card.querySelector('[data-act="save"]').addEventListener('click', async () => {
     clearError();
-    let patch;
-    try { patch = JSON.parse(ta.value); } catch (e) { showError('Invalid JSON'); return; }
+    const patch = {};
+    for (const f of fields) {
+      const inputEl = card.querySelector(`[data-f="${f.key}"]`);
+      if (f.type === 'bool') patch[f.key] = inputEl.checked;
+      else if (f.type === 'number') patch[f.key] = inputEl.value === '' ? 0 : Number(inputEl.value);
+      else if (f.join) patch[f.key] = inputEl.value.split(',').map((s) => s.trim()).filter(Boolean);
+      else patch[f.key] = inputEl.value.trim();
+    }
+    // Empty optional text fields (e.g. `category`) must be omitted — an empty
+    // string fails NSID validation; a missing field takes the schema default.
+    for (const f of fields) {
+      if (f.type === 'text' && f.key !== 'id' && f.key !== 'name' && patch[f.key] === '')
+        delete patch[f.key];
+    }
+    if (!patch.id) { showError(t('prof.id_required')); return; }
     try {
-      await http.patch(`/api/profiles/${encSeg(key)}/${KINDS[kind].plural}/${encSeg(entry.id)}`, patch);
+      if (isNew) {
+        await http.post(`/api/profiles/${encSeg(key)}/${KINDS[kind].plural}`, patch);
+      } else {
+        await http.patch(`/api/profiles/${encSeg(key)}/${KINDS[kind].plural}/${encSeg(entry.id)}`, patch);
+      }
       card.remove();
       await renderRegistry(el, key, kind);
     } catch (e) { showError(e.message); }
   });
-  cancel.addEventListener('click', () => card.remove());
-  row.appendChild(save);
-  row.appendChild(cancel);
-  card.appendChild(ta);
-  card.appendChild(row);
   el.appendChild(card);
-  ta.focus();
+  card.querySelector('input:not([readonly]), input[type="text"]')?.focus();
 }
 
 // Render one registry (kind ∈ ench|equip|tag) for `profile` into `el`, which
@@ -113,7 +162,7 @@ async function renderRegistry(el, profile, kind) {
         <td>${esc(kind === 'tag' ? (e.name || '') : displayName(e.id, e.name || ''))}</td>
         <td>${esc(e.max_level ?? e.max_durability ?? '')}</td>
         <td>
-          <button data-edit="${esc(e.id)}">Edit</button>
+          <button data-edit="${esc(e.id)}">${t('prof.edit')}</button>
           <button data-rm="${esc(e.id)}">${t('prof.remove')}</button>
         </td></tr>`)
     .join('');
@@ -121,16 +170,14 @@ async function renderRegistry(el, profile, kind) {
     <h3>${t('prof.' + kind)}</h3>
     <table><thead><tr><th>${t('prof.id')}</th><th>${t('prof.name')}</th><th>${t('prof.max_level')}</th><th></th></tr></thead>
     <tbody>${rows || '<tr><td colspan="4">—</td></tr>'}</tbody></table>
-    <label>${t('prof.id')}</label><input class="add-id">
+    <label>${t('prof.id')}</label><input class="add-id" placeholder="${t('prof.id_placeholder')}">
     <button class="add-row">${t('prof.add')}</button>`;
-  wrap.querySelector('.add-row').addEventListener('click', async () => {
+  wrap.querySelector('.add-row').addEventListener('click', () => {
     clearError();
+    // Add-via-form: seed the form with the typed id (may be empty), the user
+    // fills the rest, save POSTs to the collection.
     const id = wrap.querySelector('.add-id').value.trim();
-    if (!id) return;
-    try {
-      await http.post(`/api/profiles/${encSeg(profile)}/${plural}`, minimalEntry(kind, id));
-      await renderRegistry(el, profile, kind);
-    } catch (e) { showError(e.message); }
+    openEditor(el, profile, kind, minimalEntry(kind, id), true);
   });
   wrap.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', async () => {
     clearError();
@@ -143,7 +190,7 @@ async function renderRegistry(el, profile, kind) {
     clearError();
     const id = b.dataset.edit;
     const entry = entries.find((x) => x.id === id);
-    if (entry) openEditor(el, profile, kind, entry);
+    if (entry) openEditor(el, profile, kind, entry, false);
   }));
   el.appendChild(wrap);
 }
