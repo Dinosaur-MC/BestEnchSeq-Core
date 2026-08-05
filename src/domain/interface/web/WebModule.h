@@ -2,11 +2,9 @@
 #include "domain/interface/components/http/HttpCommon.h"
 #include "domain/interface/components/http/StaticFileServer.h"
 #include "domain/interface/web/WebSolveService.h"
-#include "domain/interface/web/SseHub.h"
 #include <filesystem>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 
 class BesqContext;

@@ -4,6 +4,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "common/utils/EventLoop.hpp"
+#include <mutex>
+#include "Connection.h"
 
 namespace web {
 

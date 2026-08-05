@@ -3,6 +3,7 @@
 #include "domain/interface/components/http/HttpCommon.h"
 #include "framework/test_utils.h"
 #include <string>
+#include <array>
 
 using namespace web;   // 测试内使用未限定的 Response/HttpRequest/PathParams/Method/Json
 

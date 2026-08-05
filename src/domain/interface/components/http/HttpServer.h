@@ -1,15 +1,8 @@
 #pragma once
 #include "HttpCommon.h"
-#include "Reactor.h"
-#include "Socket.h"
-#include <atomic>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <string>
-#include <thread>
-#include <unordered_map>
-#include <vector>
 
 namespace web {
 

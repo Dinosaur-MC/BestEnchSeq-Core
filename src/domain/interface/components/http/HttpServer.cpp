@@ -1,8 +1,13 @@
 #include "HttpServer.h"
 
 #include <cstdint>
+#include <mutex>
 #include <thread>
 #include <vector>
+#include <vector>
+#include <atomic>
+#include "Socket.h"
+#include "Reactor.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN

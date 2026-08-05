@@ -1,11 +1,7 @@
 #pragma once
-#include "common/utils/EventLoop.hpp"
-#include "Connection.h"
+#include "HttpCommon.h"
 #include <functional>
 #include <memory>
-#include <mutex>
-#include <string>
-#include <unordered_map>
 
 namespace web {
 
