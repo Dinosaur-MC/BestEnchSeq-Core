@@ -131,11 +131,91 @@ static void test_split_body_post() {
 }
 
 // ---------------------------------------------------------------------------
+// Timeout sweep (I-3): Connection::sweep_check(now) with fabricated `now`
+// offsets — deterministic, no sleeping. Idle keep-alive 30s → Close, partial
+// request stalled 5s → Close, SSE stream idle 15s → Heartbeat.
+// ---------------------------------------------------------------------------
+static void test_timeout_sweep() {
+    TcpListener l;
+    expect(l.listen("127.0.0.1", 0), "listen");
+    int client = sock_connect("127.0.0.1", l.bound_port());
+    expect(client >= 0, "connect");
+    int fd = l.accept();
+    expect(fd >= 0, "accept");
+    set_nonblocking(fd);
+    set_nonblocking(client);
+    Connection conn(fd, "id-sweep");
+    StubRouter router;
+
+    using Clock = std::chrono::steady_clock;
+    const auto base = Clock::now();
+
+    // 1) Fresh keep-alive connection with no data: idle → 30s close.
+    expect(conn.sweep_check(base + std::chrono::seconds(29)) ==
+               Connection::SweepAction::None,
+           "idle keep-alive at 29s: None");
+    expect(conn.sweep_check(base + std::chrono::seconds(31)) ==
+               Connection::SweepAction::Close,
+           "idle keep-alive at 31s: Close (30s cap)");
+
+    // 2) Partial request received then stalled: 5s slow-read cap.
+    const std::string partial = "GET /ping HT";  // 头未终结 → Incomplete
+    expect(sock_send(client, partial), "send partial request");
+    for (int i = 0; i < 50; ++i) {
+        conn.process(router);  // 推进到把 partial 收进缓冲（_partial=true）
+        if (conn.wants_read()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    const auto after_partial = Clock::now();
+    expect(conn.sweep_check(after_partial + std::chrono::seconds(4)) ==
+               Connection::SweepAction::None,
+           "stalled read at 4s: None");
+    expect(conn.sweep_check(after_partial + std::chrono::seconds(6)) ==
+               Connection::SweepAction::Close,
+           "stalled read at 6s: Close (5s cap)");
+
+    // 3) Completing the request resets to keep-alive idle semantics.
+    const std::string rest = "TP/1.1\r\nHost: x\r\n\r\n";
+    expect(sock_send(client, rest), "send rest of request");
+    std::string got;
+    for (int i = 0; i < 100 && got.find("pong") == std::string::npos; ++i) {
+        conn.process(router);
+        std::string c;
+        if (sock_recv_nb(client, c, 4096) > 0) got += c;
+        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    expect(got.find("pong") != std::string::npos, "completed request served");
+    expect(conn.alive(), "alive after completed request");
+    const auto after_complete = Clock::now();
+    expect(conn.sweep_check(after_complete + std::chrono::seconds(29)) ==
+               Connection::SweepAction::None,
+           "completed conn at 29s: None (keep-alive)");
+    expect(conn.sweep_check(after_complete + std::chrono::seconds(31)) ==
+               Connection::SweepAction::Close,
+           "completed conn at 31s: Close");
+
+    // 4) SSE stream mode: idle past the heartbeat interval → Heartbeat
+    //    (write-failure close happens on the ping flush, not in sweep_check).
+    auto sse = std::make_shared<SseStream>("id-sweep");
+    expect(conn.set_stream(sse), "set_stream accepted");
+    const auto after_stream = Clock::now();
+    expect(conn.sweep_check(after_stream + std::chrono::seconds(14)) ==
+               Connection::SweepAction::None,
+           "SSE idle at 14s: None (under 15s heartbeat)");
+    expect(conn.sweep_check(after_stream + std::chrono::seconds(16)) ==
+               Connection::SweepAction::Heartbeat,
+           "SSE idle at 16s: Heartbeat");
+
+    sock_close(client);
+    conn.close();
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 int main() {
     test_keepalive_two_requests();
     test_split_body_post();
+    test_timeout_sweep();
     TEST_PASS("test_connection");
     return print_summary();
 }

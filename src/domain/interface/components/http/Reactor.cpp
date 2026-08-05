@@ -84,6 +84,34 @@ void Reactor::on_writable(int fd) {
     _impl->loop.post([this, fd] { drive(fd); });
 }
 
+void Reactor::check_timeout(int fd) {
+    // 捕获裸 `this` 与帧汇同安全（add_connection 注释）：loop.stop() drain 剩余
+    // 任务，Reactor 析构前全部执行完。fd 复用安全：任务在 loop 线程复查
+    // conns[fd]——连接已注销则空操作；fd 被新连接复用则新时间戳未到期。
+    _impl->loop.post([this, fd] {
+        std::shared_ptr<Connection> conn;
+        {
+            std::lock_guard lk(_impl->mutex);
+            auto it = _impl->conns.find(fd);
+            if (it == _impl->conns.end())
+                return;
+            conn = it->second;
+        }
+        switch (conn->sweep_check(std::chrono::steady_clock::now())) {
+            case Connection::SweepAction::Heartbeat:
+                // 心跳 flush：空闲 SSE 流注入 `: ping`；写失败 → drain_out 关闭
+                // （对端断开检测）。驱动 connection 自身状态机，无锁需求。
+                conn->push_sse_frame();
+                break;
+            case Connection::SweepAction::Close:
+                remove_connection(fd);  // 注销（poller）→ 关闭 socket → on_close
+                break;
+            case Connection::SweepAction::None:
+                break;
+        }
+    });
+}
+
 void Reactor::close_all() {
     std::vector<int> fds;
     {

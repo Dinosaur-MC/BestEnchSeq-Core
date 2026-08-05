@@ -25,11 +25,14 @@
 #include "domain/interface/web/WebModule.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Socket.h"
+#include "common/log/log.hpp"
+#include "common/log/LogRingBuffer.h"
 #include "framework/test_utils.h"
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -285,6 +288,146 @@ void test_path_traversal(HttpServer& server) {
     expect(tr.find("secret") == std::string::npos, "no file content leaked");
 }
 
+// ---------------------------------------------------------------------------
+// Case 10 (I-3): stalled-read timeout over the real sweep chain.
+//
+// A client sends a partial request ("GET /api/status HT" — header terminator
+// missing → parser Incomplete → Connection::_partial) and then stalls. The
+// poller sweep (~1s cadence) → Reactor::check_timeout → sweep_check must close
+// it after the 5s slow-read cap. The client observes a clean EOF with NO
+// response bytes (bounded wait ~10s: 5s cap + sweep cadence + margins).
+// ---------------------------------------------------------------------------
+void test_slow_client_timeout(HttpServer& server) {
+    int c = sock_connect("127.0.0.1", server.port());
+    expect(c >= 0, "slow client connects");
+    set_nonblocking(c);
+    // 头未终结的半请求（无 \r\n\r\n → 解析器恒为 Incomplete → _partial=true）。
+    expect(sock_send(c, "GET /api/status HT", 3000), "partial request sent");
+
+    bool eof = false;
+    for (int i = 0; i < 1000 && !eof; ++i) {  // ≤10s
+        if (wait_readable(c, 0) == 1) {
+            std::string chunk;
+            if (sock_recv_nb(c, chunk, 4096) == 0) eof = true;  // 0 字节 = EOF
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    expect(eof, "server closed the stalled partial-request connection (5s cap)");
+    sock_close(c);
+}
+
+// ---------------------------------------------------------------------------
+// Case 11 (I-1): /api/logs/events live tail over the real SSE wire.
+//
+// Requires a LogRingBuffer installed BEFORE WebModule construction (run_suite
+// does that) so WebModule registers its one-time listener. A log() call then
+// fans out: ring push → listener → hub "logs" key → SSE subscriber connection.
+// The client must receive a `data: {"logs":[...]}` frame carrying the marker.
+// ---------------------------------------------------------------------------
+void test_logs_sse_live(HttpServer& server) {
+    int c = sock_connect("127.0.0.1", server.port());
+    expect(c >= 0, "logs SSE client connects");
+    sock_send(c, "GET /api/logs/events HTTP/1.1\r\nHost: x\r\n\r\n", 3000);
+    set_nonblocking(c);
+
+    std::string got;
+    recv_until(c, got, "text/event-stream", 200);  // 流头先就绪
+    expect(got.find("HTTP/1.1 200 OK") != std::string::npos, "logs SSE stream head 200");
+    expect(got.find("text/event-stream") != std::string::npos, "logs SSE content-type");
+
+    // 订阅建立后再写日志 → 监听器 → hub → SSE 连接。
+    Logger::instance().info("besq-live-marker-42");
+    const std::string marker = "besq-live-marker-42";
+    recv_until(c, got, marker.c_str(), 400);  // ≤4s
+    const auto pos = got.find(marker);
+    expect(pos != std::string::npos, "live log frame reaches the SSE client");
+    if (pos != std::string::npos) {
+        // 帧字段在 marker 之前（seq/level 先于 message）→ 用 rfind 从 marker 向前找。
+        expect(got.rfind("data: ", pos) != std::string::npos,
+               "live frame is an SSE data frame");
+        expect(got.rfind("\"logs\"", pos) != std::string::npos,
+               "live frame carries the {logs:[...]} envelope");
+        expect(got.rfind("\"level\"", pos) != std::string::npos,
+               "live frame record carries level");
+    }
+    sock_close(c);
+}
+
+// ---------------------------------------------------------------------------
+// Case 12 (I-2a): periodic progress frames during a long solve.
+//
+// Seeds sword-applicable enchantments via the API, submits a heavy bb_dp solve
+// (per-layer progress: k*100/n) and subscribes over a real SSE socket. The
+// sampler thread (200ms) must publish live progress frames DURING the solve —
+// all before the terminal `event: completed` frame. Initial frame may race the
+// subscription, so the assertion is: ≥1 progress frame total, then completed,
+// in that byte order.
+// ---------------------------------------------------------------------------
+void test_sse_progress_frames(HttpServer& server) {
+    // Seed sword enchantments so the solve takes seconds, not milliseconds.
+    const int kSeed = 12;
+    for (int i = 0; i < kSeed; ++i) {
+        std::string body = R"({"id":"test:p_)" + std::to_string(i) +
+                           R"(","name":"P )" + std::to_string(i) +
+                           R"(","max_level":5,"multiplier":1,"supported_items":["#minecraft:swords"]})";
+        std::string req =
+            "POST /api/profiles/builtin:vanilla/enchantments HTTP/1.1\r\nHost: x\r\n"
+            "Content-Type: application/json\r\nContent-Length: " +
+            std::to_string(body.size()) + "\r\n\r\n" + body;
+        auto r = http_exchange(server, req);
+        expect(r.find("201") != std::string::npos, "seeded enchantment " + std::to_string(i));
+    }
+
+    std::string target = R"({"target":{"item":"netherite_sword","enchants":[)";
+    for (int i = 0; i < kSeed; ++i) {
+        if (i) target += ",";
+        target += R"({"id":"test:p_)" + std::to_string(i) + R"(","level":5})";
+    }
+    target += R"(]},"algorithm":"bb_dp"})";
+    auto resp = post_task(server, target);
+    const std::string id = extract_task_id(resp);
+    expect(!id.empty(), "heavy progress task created");
+
+    int c = sock_connect("127.0.0.1", server.port());
+    expect(c >= 0, "progress SSE client connects");
+    sock_send(c, "GET /api/tasks/" + id + "/events HTTP/1.1\r\nHost: x\r\n\r\n", 3000);
+    set_nonblocking(c);
+
+    std::string got;
+    recv_until(c, got, "text/event-stream", 200);
+    expect(got.find("HTTP/1.1 200 OK") != std::string::npos, "progress stream head 200");
+
+    // 终态帧有界等待：bb_dp(12) Debug 下实测 ~3.5s；15s 预算宽裕。采样线程在
+    // 求解期间每 ~200ms 采样、进度变化即发布——所有 progress 帧都应在 completed 前。
+    recv_until(c, got, "event: completed", 1500);
+    // event 行与 data 行可能分落两个 TCP 段：再收一小段确保整帧到齐后再断言。
+    for (int i = 0; i < 50; ++i) {
+        std::string chunk;
+        if (sock_recv_nb(c, chunk, 4096) > 0) got += chunk;
+        else std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    const auto done = got.find("event: completed");
+    expect(done != std::string::npos, "terminal completed frame on the wire");
+    if (done != std::string::npos) {
+        // ≥1 个 progress 帧且全部位于 completed 之前（采样线程在 solve 期间发布）。
+        size_t progress_frames = 0;
+        size_t from = 0;
+        while ((from = got.find("event: progress", from)) != std::string::npos) {
+            expect(from < done, "progress frame precedes the terminal frame");
+            ++progress_frames;
+            ++from;
+        }
+        expect(progress_frames >= 1,
+               "at least one live progress frame published during solve");
+        expect(got.find("\"result\"", done) != std::string::npos,
+               "completed frame carries result");
+        expect(got.find("\"type\":\"completed\"", done) != std::string::npos,
+               "completed frame carries the completed type");
+    }
+    sock_close(c);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -296,6 +439,11 @@ static void run_suite() {
     BesqContext ctx;
     ctx.load_builtin();
     ctx.load_profiles();
+
+    // I-1：/api/logs/events 实时尾。ring 必须在 WebModule 构造前安装——构造期注册
+    // 一次监听器（Logger singleton 持有 ring，生命周期覆盖整个 suite）。
+    auto ring = std::make_shared<LogRingBuffer>(1024);
+    Logger::instance().set_ring_buffer(ring);
 
     WebModule module(ctx);
     module.set_static_resources({
@@ -316,6 +464,9 @@ static void run_suite() {
         test_sse_events(server);
         test_concurrent_clients(server);
         test_path_traversal(server);
+        test_slow_client_timeout(server);
+        test_logs_sse_live(server);
+        test_sse_progress_frames(server);
     } catch (...) {
         // A stray expect failure must not leave the accept-loop thread joinable.
         server.stop();

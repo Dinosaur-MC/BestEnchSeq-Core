@@ -10,11 +10,15 @@ namespace web {
 /// [Poller 线程] select 监听 + 全部连接 → 就绪事件按归属投递到对应 Reactor。
 /// [N Reactor]   每连接终生归属一个 Reactor（其 EventLoop 消费线程处理）。
 ///
-/// 并发上限（Windows 差异）：kMaxConnections 是准入上限（超过拒绝新 accept），
-/// 但 poller 基于 ::select，单轮 fd 集合被 FD_SETSIZE（Windows 上 64）封顶。
-/// On Windows, ::select caps concurrent connection fds at FD_SETSIZE (64);
-/// kMaxConnections is the admission limit but the select-based poller effectively
-/// serves ≤64 concurrently. WSAPoll is the fix if >64 concurrency is needed.
+/// 并发上限（I-3 accept-cap 修复）：poller 基于 ::select，单轮 fd 集合被
+/// FD_SETSIZE（Windows 上 64）封顶。准入上限取 min(kMaxConnections=256,
+/// FD_SETSIZE)——**每个被准入的连接都必然被 select 轮询**：达上限时新 accept
+/// 立即关闭（不响应任何字节），不再出现"已准入但永不轮询 → 客户端永久挂起"。
+/// 需要 >FD_SETSIZE 并发时改用 WSAPoll/poll（见 HttpServer.cpp 顶部注释）。
+///
+/// 资源上限（spec §4.2）：poller 每 ~1s 清扫一次连接超时——空闲 keep-alive
+/// ~30s 关闭、部分请求慢读 ~5s 关闭、SSE 流空闲 ~15s 心跳 ping（写失败即关）。
+/// 清扫事件投递到连接归属 Reactor，由 home loop 线程执行（零锁 + fd 复用安全）。
 class HttpServer {
 public:
     using Handler = std::function<HttpResponse(const HttpRequest&)>;
@@ -37,7 +41,8 @@ public:
 
 private:
     void poller_main();         // Poller 线程主体
-    void poll_once();           // 一轮 select：accept + 连接就绪投递
+    void poll_once();           // 一轮 select：accept + 连接就绪投递 + 超时清扫
+    void sweep_expired();       // 每 ~1s：把每个连接的超时复查投递给归属 Reactor
     void unregister_fd(int fd); // Reactor 关闭连接时调用（poller 注销）
     void set_fd_interest(int fd, bool want_write);
 
