@@ -62,5 +62,54 @@ th { color: var(--muted); font-weight: 600; }
 /* ── MC theme polish ── */
 .brand { letter-spacing: .5px; }
 h2 { margin-top: 0; color: var(--accent-2); }
-.nav-item.active { color: var(--accent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+
+/* ── Calculator: zero-input layout (item picker + enchantment level table) ── */
+.calc-cols { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.calc-main { flex: 2 1 0; min-width: 420px; }
+.calc-side { flex: 1 1 0; min-width: 260px; position: sticky; top: 16px; }
+.table-scroll { max-height: 60vh; overflow-y: auto; }
+/* Item picker trigger (mdui-button slot="trigger" content) */
+.item-trigger { display: inline-flex; align-items: center; gap: 8px; }
+.item-trigger img { width: 20px; height: 20px; }
+/* Enchantment table row level buttons */
+.lv {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 2px 9px; font-size: 12px; min-width: 28px; margin: 1px;
+}
+.lv.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lv:disabled { opacity: .35; cursor: not-allowed; }
+/* Exclusive/conflict rows */
+tr.conflict { background: rgba(217, 83, 79, .12); }
+.conflict-hint { color: var(--danger); font-size: 12px; margin-top: 2px; }
+/* Side column status bar: current → target counts */
+.status-bar {
+  display: flex; align-items: center; gap: 10px;
+  font-family: Consolas, monospace; font-size: 13px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px; margin-bottom: 12px;
+}
+.pill {
+  display: inline-block; padding: 1px 10px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+}
+.pill.current { color: var(--accent-2); border-color: var(--accent-2); }
+.treasure-badge {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px;
+  font-size: 11px; color: #e6c85a;
+  background: rgba(230, 200, 90, .15); border: 1px solid rgba(230, 200, 90, .4);
+}
+.btn-row { display: flex; gap: 8px; margin: 10px 0; }
+/* Item dropdown menu entries */
+.calc-menu-item { display: flex; align-items: center; gap: 8px; }
+.calc-menu-item img { width: 20px; height: 20px; }
+/* Options row: switches + algorithm select */
+.option-row {
+  display: flex; gap: 24px; flex-wrap: wrap; align-items: center; margin-top: 14px;
+}
+.option-row label {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 0; color: var(--text); cursor: pointer;
+}
+.option-row .algo-select { min-width: 160px; }

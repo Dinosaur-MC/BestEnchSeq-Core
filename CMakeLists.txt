@@ -272,9 +272,11 @@ if(BESQ_BUILD_GUI)
     # Embedded frontend assets (single-exe distribution)
     # served files must match the kAssets table in src/gui/main.cpp
     set(GUI_FRONTEND ${CMAKE_CURRENT_SOURCE_DIR}/gui/frontend)
-    set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js)
+    set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js
+                        vendor/mdui/mdui.css vendor/mdui/mdui.global.js)
     foreach(name IN LISTS GUI_ASSET_NAMES)
         string(REPLACE "." "_" sym "frontend_${name}")
+        string(REPLACE "/" "_" sym "${sym}") # vendor/mdui/mdui.css → frontend_vendor_mdui_mdui_css
         embed_resource(INPUT "${GUI_FRONTEND}/${name}" SYMBOL ${sym}
                        OUTPUT "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
         list(APPEND GUI_FRONTEND_SRCS "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
