@@ -71,7 +71,7 @@ bool AlgorithmExecutor::_set_state(AlgorithmState new_state) noexcept {
     while (true) {
         auto prev = _state.load(std::memory_order_acquire);
         // Don't transition FROM terminal states
-        if (prev == AlgorithmState::Cancelled || prev == AlgorithmState::Failed)
+        if (prev == AlgorithmState::Cancelled || prev == AlgorithmState::Failed || prev == AlgorithmState::Completed)
             return false;
         // Don't transition TO the same state (noop)
         if (prev == new_state)
