@@ -34,6 +34,92 @@ std::string_view frontend_app_js();
 std::string_view frontend_api_js();
 std::string_view frontend_i18n_js();
 std::string_view frontend_names_zh_js();
+std::string_view frontend_vendor_icons_bow_png();
+std::string_view frontend_vendor_icons_brush_png();
+std::string_view frontend_vendor_icons_carrot_on_a_stick_png();
+std::string_view frontend_vendor_icons_chainmail_boots_png();
+std::string_view frontend_vendor_icons_chainmail_chestplate_png();
+std::string_view frontend_vendor_icons_chainmail_helmet_png();
+std::string_view frontend_vendor_icons_chainmail_leggings_png();
+std::string_view frontend_vendor_icons_copper_axe_png();
+std::string_view frontend_vendor_icons_copper_boots_png();
+std::string_view frontend_vendor_icons_copper_chestplate_png();
+std::string_view frontend_vendor_icons_copper_helmet_png();
+std::string_view frontend_vendor_icons_copper_hoe_png();
+std::string_view frontend_vendor_icons_copper_leggings_png();
+std::string_view frontend_vendor_icons_copper_pickaxe_png();
+std::string_view frontend_vendor_icons_copper_shovel_png();
+std::string_view frontend_vendor_icons_copper_spear_png();
+std::string_view frontend_vendor_icons_copper_sword_png();
+std::string_view frontend_vendor_icons_crossbow_png();
+std::string_view frontend_vendor_icons_diamond_axe_png();
+std::string_view frontend_vendor_icons_diamond_boots_png();
+std::string_view frontend_vendor_icons_diamond_chestplate_png();
+std::string_view frontend_vendor_icons_diamond_helmet_png();
+std::string_view frontend_vendor_icons_diamond_hoe_png();
+std::string_view frontend_vendor_icons_diamond_leggings_png();
+std::string_view frontend_vendor_icons_diamond_pickaxe_png();
+std::string_view frontend_vendor_icons_diamond_shovel_png();
+std::string_view frontend_vendor_icons_diamond_spear_png();
+std::string_view frontend_vendor_icons_diamond_sword_png();
+std::string_view frontend_vendor_icons_elytra_png();
+std::string_view frontend_vendor_icons_enchanted_book_png();
+std::string_view frontend_vendor_icons_fishing_rod_png();
+std::string_view frontend_vendor_icons_flint_and_steel_png();
+std::string_view frontend_vendor_icons_golden_axe_png();
+std::string_view frontend_vendor_icons_golden_boots_png();
+std::string_view frontend_vendor_icons_golden_chestplate_png();
+std::string_view frontend_vendor_icons_golden_helmet_png();
+std::string_view frontend_vendor_icons_golden_hoe_png();
+std::string_view frontend_vendor_icons_golden_leggings_png();
+std::string_view frontend_vendor_icons_golden_pickaxe_png();
+std::string_view frontend_vendor_icons_golden_shovel_png();
+std::string_view frontend_vendor_icons_golden_spear_png();
+std::string_view frontend_vendor_icons_golden_sword_png();
+std::string_view frontend_vendor_icons_iron_axe_png();
+std::string_view frontend_vendor_icons_iron_boots_png();
+std::string_view frontend_vendor_icons_iron_chestplate_png();
+std::string_view frontend_vendor_icons_iron_helmet_png();
+std::string_view frontend_vendor_icons_iron_hoe_png();
+std::string_view frontend_vendor_icons_iron_leggings_png();
+std::string_view frontend_vendor_icons_iron_pickaxe_png();
+std::string_view frontend_vendor_icons_iron_shovel_png();
+std::string_view frontend_vendor_icons_iron_spear_png();
+std::string_view frontend_vendor_icons_iron_sword_png();
+std::string_view frontend_vendor_icons_leather_boots_png();
+std::string_view frontend_vendor_icons_leather_chestplate_png();
+std::string_view frontend_vendor_icons_leather_helmet_png();
+std::string_view frontend_vendor_icons_leather_leggings_png();
+std::string_view frontend_vendor_icons_mace_png();
+std::string_view frontend_vendor_icons_misc_png();
+std::string_view frontend_vendor_icons_netherite_axe_png();
+std::string_view frontend_vendor_icons_netherite_boots_png();
+std::string_view frontend_vendor_icons_netherite_chestplate_png();
+std::string_view frontend_vendor_icons_netherite_helmet_png();
+std::string_view frontend_vendor_icons_netherite_hoe_png();
+std::string_view frontend_vendor_icons_netherite_leggings_png();
+std::string_view frontend_vendor_icons_netherite_pickaxe_png();
+std::string_view frontend_vendor_icons_netherite_shovel_png();
+std::string_view frontend_vendor_icons_netherite_spear_png();
+std::string_view frontend_vendor_icons_netherite_sword_png();
+std::string_view frontend_vendor_icons_shears_png();
+std::string_view frontend_vendor_icons_shield_png();
+std::string_view frontend_vendor_icons_stone_axe_png();
+std::string_view frontend_vendor_icons_stone_hoe_png();
+std::string_view frontend_vendor_icons_stone_pickaxe_png();
+std::string_view frontend_vendor_icons_stone_shovel_png();
+std::string_view frontend_vendor_icons_stone_spear_png();
+std::string_view frontend_vendor_icons_stone_sword_png();
+std::string_view frontend_vendor_icons_trident_png();
+std::string_view frontend_vendor_icons_turtle_helmet_png();
+std::string_view frontend_vendor_icons_turtle_shell_png();
+std::string_view frontend_vendor_icons_warped_fungus_on_a_stick_png();
+std::string_view frontend_vendor_icons_wooden_axe_png();
+std::string_view frontend_vendor_icons_wooden_hoe_png();
+std::string_view frontend_vendor_icons_wooden_pickaxe_png();
+std::string_view frontend_vendor_icons_wooden_shovel_png();
+std::string_view frontend_vendor_icons_wooden_spear_png();
+std::string_view frontend_vendor_icons_wooden_sword_png();
 std::string_view frontend_vendor_mdui_mdui_css();
 std::string_view frontend_vendor_mdui_mdui_global_js();
 std::string_view frontend_view_calculator();
@@ -60,6 +146,92 @@ static constexpr Asset kAssets[] = {
     {"/api.js",     "text/javascript", besq::data::frontend_api_js},
     {"/i18n.js",    "text/javascript", besq::data::frontend_i18n_js},
     {"/names_zh.js", "text/javascript", besq::data::frontend_names_zh_js},
+    {"/vendor/icons/bow.png", "image/png", besq::data::frontend_vendor_icons_bow_png},
+    {"/vendor/icons/brush.png", "image/png", besq::data::frontend_vendor_icons_brush_png},
+    {"/vendor/icons/carrot_on_a_stick.png", "image/png", besq::data::frontend_vendor_icons_carrot_on_a_stick_png},
+    {"/vendor/icons/chainmail_boots.png", "image/png", besq::data::frontend_vendor_icons_chainmail_boots_png},
+    {"/vendor/icons/chainmail_chestplate.png", "image/png", besq::data::frontend_vendor_icons_chainmail_chestplate_png},
+    {"/vendor/icons/chainmail_helmet.png", "image/png", besq::data::frontend_vendor_icons_chainmail_helmet_png},
+    {"/vendor/icons/chainmail_leggings.png", "image/png", besq::data::frontend_vendor_icons_chainmail_leggings_png},
+    {"/vendor/icons/copper_axe.png", "image/png", besq::data::frontend_vendor_icons_copper_axe_png},
+    {"/vendor/icons/copper_boots.png", "image/png", besq::data::frontend_vendor_icons_copper_boots_png},
+    {"/vendor/icons/copper_chestplate.png", "image/png", besq::data::frontend_vendor_icons_copper_chestplate_png},
+    {"/vendor/icons/copper_helmet.png", "image/png", besq::data::frontend_vendor_icons_copper_helmet_png},
+    {"/vendor/icons/copper_hoe.png", "image/png", besq::data::frontend_vendor_icons_copper_hoe_png},
+    {"/vendor/icons/copper_leggings.png", "image/png", besq::data::frontend_vendor_icons_copper_leggings_png},
+    {"/vendor/icons/copper_pickaxe.png", "image/png", besq::data::frontend_vendor_icons_copper_pickaxe_png},
+    {"/vendor/icons/copper_shovel.png", "image/png", besq::data::frontend_vendor_icons_copper_shovel_png},
+    {"/vendor/icons/copper_spear.png", "image/png", besq::data::frontend_vendor_icons_copper_spear_png},
+    {"/vendor/icons/copper_sword.png", "image/png", besq::data::frontend_vendor_icons_copper_sword_png},
+    {"/vendor/icons/crossbow.png", "image/png", besq::data::frontend_vendor_icons_crossbow_png},
+    {"/vendor/icons/diamond_axe.png", "image/png", besq::data::frontend_vendor_icons_diamond_axe_png},
+    {"/vendor/icons/diamond_boots.png", "image/png", besq::data::frontend_vendor_icons_diamond_boots_png},
+    {"/vendor/icons/diamond_chestplate.png", "image/png", besq::data::frontend_vendor_icons_diamond_chestplate_png},
+    {"/vendor/icons/diamond_helmet.png", "image/png", besq::data::frontend_vendor_icons_diamond_helmet_png},
+    {"/vendor/icons/diamond_hoe.png", "image/png", besq::data::frontend_vendor_icons_diamond_hoe_png},
+    {"/vendor/icons/diamond_leggings.png", "image/png", besq::data::frontend_vendor_icons_diamond_leggings_png},
+    {"/vendor/icons/diamond_pickaxe.png", "image/png", besq::data::frontend_vendor_icons_diamond_pickaxe_png},
+    {"/vendor/icons/diamond_shovel.png", "image/png", besq::data::frontend_vendor_icons_diamond_shovel_png},
+    {"/vendor/icons/diamond_spear.png", "image/png", besq::data::frontend_vendor_icons_diamond_spear_png},
+    {"/vendor/icons/diamond_sword.png", "image/png", besq::data::frontend_vendor_icons_diamond_sword_png},
+    {"/vendor/icons/elytra.png", "image/png", besq::data::frontend_vendor_icons_elytra_png},
+    {"/vendor/icons/enchanted_book.png", "image/png", besq::data::frontend_vendor_icons_enchanted_book_png},
+    {"/vendor/icons/fishing_rod.png", "image/png", besq::data::frontend_vendor_icons_fishing_rod_png},
+    {"/vendor/icons/flint_and_steel.png", "image/png", besq::data::frontend_vendor_icons_flint_and_steel_png},
+    {"/vendor/icons/golden_axe.png", "image/png", besq::data::frontend_vendor_icons_golden_axe_png},
+    {"/vendor/icons/golden_boots.png", "image/png", besq::data::frontend_vendor_icons_golden_boots_png},
+    {"/vendor/icons/golden_chestplate.png", "image/png", besq::data::frontend_vendor_icons_golden_chestplate_png},
+    {"/vendor/icons/golden_helmet.png", "image/png", besq::data::frontend_vendor_icons_golden_helmet_png},
+    {"/vendor/icons/golden_hoe.png", "image/png", besq::data::frontend_vendor_icons_golden_hoe_png},
+    {"/vendor/icons/golden_leggings.png", "image/png", besq::data::frontend_vendor_icons_golden_leggings_png},
+    {"/vendor/icons/golden_pickaxe.png", "image/png", besq::data::frontend_vendor_icons_golden_pickaxe_png},
+    {"/vendor/icons/golden_shovel.png", "image/png", besq::data::frontend_vendor_icons_golden_shovel_png},
+    {"/vendor/icons/golden_spear.png", "image/png", besq::data::frontend_vendor_icons_golden_spear_png},
+    {"/vendor/icons/golden_sword.png", "image/png", besq::data::frontend_vendor_icons_golden_sword_png},
+    {"/vendor/icons/iron_axe.png", "image/png", besq::data::frontend_vendor_icons_iron_axe_png},
+    {"/vendor/icons/iron_boots.png", "image/png", besq::data::frontend_vendor_icons_iron_boots_png},
+    {"/vendor/icons/iron_chestplate.png", "image/png", besq::data::frontend_vendor_icons_iron_chestplate_png},
+    {"/vendor/icons/iron_helmet.png", "image/png", besq::data::frontend_vendor_icons_iron_helmet_png},
+    {"/vendor/icons/iron_hoe.png", "image/png", besq::data::frontend_vendor_icons_iron_hoe_png},
+    {"/vendor/icons/iron_leggings.png", "image/png", besq::data::frontend_vendor_icons_iron_leggings_png},
+    {"/vendor/icons/iron_pickaxe.png", "image/png", besq::data::frontend_vendor_icons_iron_pickaxe_png},
+    {"/vendor/icons/iron_shovel.png", "image/png", besq::data::frontend_vendor_icons_iron_shovel_png},
+    {"/vendor/icons/iron_spear.png", "image/png", besq::data::frontend_vendor_icons_iron_spear_png},
+    {"/vendor/icons/iron_sword.png", "image/png", besq::data::frontend_vendor_icons_iron_sword_png},
+    {"/vendor/icons/leather_boots.png", "image/png", besq::data::frontend_vendor_icons_leather_boots_png},
+    {"/vendor/icons/leather_chestplate.png", "image/png", besq::data::frontend_vendor_icons_leather_chestplate_png},
+    {"/vendor/icons/leather_helmet.png", "image/png", besq::data::frontend_vendor_icons_leather_helmet_png},
+    {"/vendor/icons/leather_leggings.png", "image/png", besq::data::frontend_vendor_icons_leather_leggings_png},
+    {"/vendor/icons/mace.png", "image/png", besq::data::frontend_vendor_icons_mace_png},
+    {"/vendor/icons/misc.png", "image/png", besq::data::frontend_vendor_icons_misc_png},
+    {"/vendor/icons/netherite_axe.png", "image/png", besq::data::frontend_vendor_icons_netherite_axe_png},
+    {"/vendor/icons/netherite_boots.png", "image/png", besq::data::frontend_vendor_icons_netherite_boots_png},
+    {"/vendor/icons/netherite_chestplate.png", "image/png", besq::data::frontend_vendor_icons_netherite_chestplate_png},
+    {"/vendor/icons/netherite_helmet.png", "image/png", besq::data::frontend_vendor_icons_netherite_helmet_png},
+    {"/vendor/icons/netherite_hoe.png", "image/png", besq::data::frontend_vendor_icons_netherite_hoe_png},
+    {"/vendor/icons/netherite_leggings.png", "image/png", besq::data::frontend_vendor_icons_netherite_leggings_png},
+    {"/vendor/icons/netherite_pickaxe.png", "image/png", besq::data::frontend_vendor_icons_netherite_pickaxe_png},
+    {"/vendor/icons/netherite_shovel.png", "image/png", besq::data::frontend_vendor_icons_netherite_shovel_png},
+    {"/vendor/icons/netherite_spear.png", "image/png", besq::data::frontend_vendor_icons_netherite_spear_png},
+    {"/vendor/icons/netherite_sword.png", "image/png", besq::data::frontend_vendor_icons_netherite_sword_png},
+    {"/vendor/icons/shears.png", "image/png", besq::data::frontend_vendor_icons_shears_png},
+    {"/vendor/icons/shield.png", "image/png", besq::data::frontend_vendor_icons_shield_png},
+    {"/vendor/icons/stone_axe.png", "image/png", besq::data::frontend_vendor_icons_stone_axe_png},
+    {"/vendor/icons/stone_hoe.png", "image/png", besq::data::frontend_vendor_icons_stone_hoe_png},
+    {"/vendor/icons/stone_pickaxe.png", "image/png", besq::data::frontend_vendor_icons_stone_pickaxe_png},
+    {"/vendor/icons/stone_shovel.png", "image/png", besq::data::frontend_vendor_icons_stone_shovel_png},
+    {"/vendor/icons/stone_spear.png", "image/png", besq::data::frontend_vendor_icons_stone_spear_png},
+    {"/vendor/icons/stone_sword.png", "image/png", besq::data::frontend_vendor_icons_stone_sword_png},
+    {"/vendor/icons/trident.png", "image/png", besq::data::frontend_vendor_icons_trident_png},
+    {"/vendor/icons/turtle_helmet.png", "image/png", besq::data::frontend_vendor_icons_turtle_helmet_png},
+    {"/vendor/icons/turtle_shell.png", "image/png", besq::data::frontend_vendor_icons_turtle_shell_png},
+    {"/vendor/icons/warped_fungus_on_a_stick.png", "image/png", besq::data::frontend_vendor_icons_warped_fungus_on_a_stick_png},
+    {"/vendor/icons/wooden_axe.png", "image/png", besq::data::frontend_vendor_icons_wooden_axe_png},
+    {"/vendor/icons/wooden_hoe.png", "image/png", besq::data::frontend_vendor_icons_wooden_hoe_png},
+    {"/vendor/icons/wooden_pickaxe.png", "image/png", besq::data::frontend_vendor_icons_wooden_pickaxe_png},
+    {"/vendor/icons/wooden_shovel.png", "image/png", besq::data::frontend_vendor_icons_wooden_shovel_png},
+    {"/vendor/icons/wooden_spear.png", "image/png", besq::data::frontend_vendor_icons_wooden_spear_png},
+    {"/vendor/icons/wooden_sword.png", "image/png", besq::data::frontend_vendor_icons_wooden_sword_png},
     {"/vendor/mdui/mdui.css",       "text/css",        besq::data::frontend_vendor_mdui_mdui_css},
     {"/vendor/mdui/mdui.global.js", "text/javascript", besq::data::frontend_vendor_mdui_mdui_global_js},
     {"/views/calculator.js", "text/javascript", besq::data::frontend_view_calculator},

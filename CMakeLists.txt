@@ -273,7 +273,22 @@ if(BESQ_BUILD_GUI)
     # served files must match the kAssets table in src/gui/main.cpp
     set(GUI_FRONTEND ${CMAKE_CURRENT_SOURCE_DIR}/gui/frontend)
     set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js names_zh.js
-                        vendor/mdui/mdui.css vendor/mdui/mdui.global.js)
+                        vendor/mdui/mdui.css vendor/mdui/mdui.global.js
+                        vendor/icons/bow.png vendor/icons/brush.png vendor/icons/carrot_on_a_stick.png vendor/icons/chainmail_boots.png vendor/icons/chainmail_chestplate.png vendor/icons/chainmail_helmet.png
+                        vendor/icons/chainmail_leggings.png vendor/icons/copper_axe.png vendor/icons/copper_boots.png vendor/icons/copper_chestplate.png vendor/icons/copper_helmet.png vendor/icons/copper_hoe.png
+                        vendor/icons/copper_leggings.png vendor/icons/copper_pickaxe.png vendor/icons/copper_shovel.png vendor/icons/copper_spear.png vendor/icons/copper_sword.png vendor/icons/crossbow.png
+                        vendor/icons/diamond_axe.png vendor/icons/diamond_boots.png vendor/icons/diamond_chestplate.png vendor/icons/diamond_helmet.png vendor/icons/diamond_hoe.png vendor/icons/diamond_leggings.png
+                        vendor/icons/diamond_pickaxe.png vendor/icons/diamond_shovel.png vendor/icons/diamond_spear.png vendor/icons/diamond_sword.png vendor/icons/elytra.png vendor/icons/enchanted_book.png
+                        vendor/icons/fishing_rod.png vendor/icons/flint_and_steel.png vendor/icons/golden_axe.png vendor/icons/golden_boots.png vendor/icons/golden_chestplate.png vendor/icons/golden_helmet.png
+                        vendor/icons/golden_hoe.png vendor/icons/golden_leggings.png vendor/icons/golden_pickaxe.png vendor/icons/golden_shovel.png vendor/icons/golden_spear.png vendor/icons/golden_sword.png
+                        vendor/icons/iron_axe.png vendor/icons/iron_boots.png vendor/icons/iron_chestplate.png vendor/icons/iron_helmet.png vendor/icons/iron_hoe.png vendor/icons/iron_leggings.png
+                        vendor/icons/iron_pickaxe.png vendor/icons/iron_shovel.png vendor/icons/iron_spear.png vendor/icons/iron_sword.png vendor/icons/leather_boots.png vendor/icons/leather_chestplate.png
+                        vendor/icons/leather_helmet.png vendor/icons/leather_leggings.png vendor/icons/mace.png vendor/icons/misc.png vendor/icons/netherite_axe.png vendor/icons/netherite_boots.png
+                        vendor/icons/netherite_chestplate.png vendor/icons/netherite_helmet.png vendor/icons/netherite_hoe.png vendor/icons/netherite_leggings.png vendor/icons/netherite_pickaxe.png vendor/icons/netherite_shovel.png
+                        vendor/icons/netherite_spear.png vendor/icons/netherite_sword.png vendor/icons/shears.png vendor/icons/shield.png vendor/icons/stone_axe.png vendor/icons/stone_hoe.png
+                        vendor/icons/stone_pickaxe.png vendor/icons/stone_shovel.png vendor/icons/stone_spear.png vendor/icons/stone_sword.png vendor/icons/trident.png vendor/icons/turtle_helmet.png
+                        vendor/icons/turtle_shell.png vendor/icons/warped_fungus_on_a_stick.png vendor/icons/wooden_axe.png vendor/icons/wooden_hoe.png vendor/icons/wooden_pickaxe.png vendor/icons/wooden_shovel.png
+                        vendor/icons/wooden_spear.png vendor/icons/wooden_sword.png)
     foreach(name IN LISTS GUI_ASSET_NAMES)
         string(REPLACE "." "_" sym "frontend_${name}")
         string(REPLACE "/" "_" sym "${sym}") # vendor/mdui/mdui.css → frontend_vendor_mdui_mdui_css

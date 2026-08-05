@@ -473,13 +473,15 @@ function updateSolveState() {
   hint.style.display = blocked ? '' : 'none';
 }
 
-// Current item icon + name inside the dropdown trigger button.
+// Current item icon + name inside the dropdown trigger button. Icons come
+// from the embedded 16x16 set (/public/vendor/icons); non-vanilla ids 404 and
+// the onerror handler hides the img.
 function updateTrigger() {
   const span = document.getElementById('calc-item-trigger-span');
   if (!span) return;
   const entry = state.items.find((it) => String(it.id) === state.itemId);
   const label = entry ? displayName(entry.id, entry.name) : state.item;
-  const icon = `<img src="/public/assets/minecraft/textures/item/${esc(state.item)}.png" ` +
+  const icon = `<img src="/public/vendor/icons/${esc(state.item)}.png" ` +
     `alt="" onerror="this.style.display='none'">`;
   span.innerHTML = `${icon}${esc(label)}`;
 }
@@ -505,9 +507,7 @@ function fillItemMenu(el, myView, eqs) {
     .concat([{ id: 'minecraft:enchanted_book', name: t('calc.book') }]);
   menu.innerHTML = state.items.map((it) => {
     const short = normalizeId(it.id);
-    // Icon URLs switch to the embedded /public/vendor/icons set in the T3
-    // icons commit; until then the /public/assets res mount serves them.
-    const icon = `<img src="/public/assets/minecraft/textures/item/${esc(short)}.png" ` +
+    const icon = `<img src="/public/vendor/icons/${esc(short)}.png" ` +
       `alt="" onerror="this.style.display='none'">`;
     return `<mdui-menu-item value="${esc(String(it.id))}">` +
       `<div slot="custom" class="calc-menu-item">${icon}<span>${esc(displayName(it.id, it.name || short))}</span></div>` +

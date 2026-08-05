@@ -36,6 +36,12 @@ function itemIdToFile(id) {
   return s.startsWith('minecraft:') ? s.slice('minecraft:'.length) : s;
 }
 
+// Embedded 16x16 icon URL for an equipment id (vanilla ids only; the onerror
+// handler hides the img for modded ids).
+function iconUrl(id) {
+  return `/public/vendor/icons/${esc(itemIdToFile(id))}.png`;
+}
+
 // A minimal entry the backend's validation accepts. The en/equip/tag fields the
 // registry requires differ — this seeds the add-form with just enough to
 // create + list an entry. Vanilla-free: `category` is omitted (an empty string
@@ -154,7 +160,7 @@ async function renderRegistry(el, profile, kind) {
   // object under the plural key — accept both so the view is resilient.
   const entries = Array.isArray(data) ? data : (data[plural] || []);
   const icon = kind === 'equip'
-    ? (id) => `<img src="/public/${itemIdToFile(id)}.png" alt="" style="width:20px;height:20px;vertical-align:middle;margin-right:4px" onerror="this.style.display='none'">`
+    ? (id) => `<img src="${iconUrl(id)}" alt="" style="width:20px;height:20px;vertical-align:middle;margin-right:4px" onerror="this.style.display='none'">`
     : () => '';
   const rows = entries
     .map((e) => `<tr>
