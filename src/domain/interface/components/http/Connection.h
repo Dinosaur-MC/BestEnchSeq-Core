@@ -1,4 +1,3 @@
-// src/domain/interface/components/http/Connection.h
 #pragma once
 #include "HttpCommon.h"
 #include "HttpParser.h"
@@ -43,8 +42,6 @@ public:
     ///                （写失败 → 对端断开检测关闭）；
     ///   Close     — 慢读/空闲 keep-alive 超时 → 关闭连接。
     enum class SweepAction { None, Heartbeat, Close };
-public:
-    using Router = std::function<HttpResponse(const HttpRequest&)>;
 
     Connection(int fd, std::string id);
     ~Connection();
