@@ -253,4 +253,10 @@ void sock_close(int fd) {
     if (fd >= 0) close_native(native(fd));
 }
 
+bool set_send_buffer(int fd, int bytes) {
+    if (fd < 0) return false;
+    return ::setsockopt(native(fd), SOL_SOCKET, SO_SNDBUF,
+                        reinterpret_cast<const char*>(&bytes), sizeof(bytes)) == 0;
+}
+
 } // namespace web

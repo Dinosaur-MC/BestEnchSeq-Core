@@ -232,6 +232,11 @@ static void test_stream_disconnect_closes() {
     expect(fd >= 0, "accept");
     set_nonblocking(fd);
     set_nonblocking(client);
+    // Linux 自动调优发送缓冲可以容纳整个 2 MiB 帧（write 永不失败 → 连接
+    // 永不关闭）；Windows 默认缓冲小得多。显式收窄 SO_SNDBUF 消除平台差异：
+    // 帧必然部分写入、阻塞在缓冲上，重试路径必然触发（对端 RST 后 write
+    // 失败 → 关闭），与平台发送缓冲大小无关。
+    expect(set_send_buffer(fd, 8 * 1024), "shrink sndbuf");
     Connection conn(fd, "sse-disc");
 
     auto sse = std::make_shared<SseStream>("sse-disc");
@@ -240,9 +245,12 @@ static void test_stream_disconnect_closes() {
     sock_close(client);                                  // peer disappears
     sse->frame("bulk", std::string(2 << 20, 'x'));       // exceeds the send buffer
     conn.push_sse_frame();                               // first flush fills the buffer
-
-    bool died = false;
-    for (int i = 0; i < 5000 && conn.alive(); ++i) {
+    // The peer's RST can land between two writes of the FIRST flush (Linux
+    // send buffers are larger than the shrunk Windows ones), so the write
+    // failure may close the connection inside push_sse_frame itself — both
+    // that path and the retry-in-process path satisfy the contract.
+    bool died = !conn.alive();
+    for (int i = 0; i < 5000 && conn.alive() && !died; ++i) {
         conn.process(StubRouter{});                      // stream mode -> retry blocked write
         if (!conn.alive()) { died = true; break; }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));

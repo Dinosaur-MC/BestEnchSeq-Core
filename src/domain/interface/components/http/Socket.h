@@ -24,6 +24,10 @@ bool set_send_timeout(int fd, int timeout_ms);
 
 /// Close a connected or listening socket.
 void sock_close(int fd);
+/// Shrink the socket's OS send buffer (cross-platform setsockopt wrapper).
+/// Used by tests to make a large write block regardless of platform send-buffer
+/// auto-tuning (Linux may buffer megabytes; Windows defaults are small).
+bool set_send_buffer(int fd, int bytes);
 
 /// Switch a socket to nonblocking mode (FIONBIO on Winsock / O_NONBLOCK on POSIX).
 void set_nonblocking(int fd);
