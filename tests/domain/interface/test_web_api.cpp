@@ -22,6 +22,8 @@
 #include "common/log/LogRingBuffer.h"
 #include "framework/test_utils.h"
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -125,6 +127,34 @@ void test_settings(TestApp& app) {
     auto arr = app.call(Method::Patch, "/api/settings", "[1,2]");
     expect(arr.status == 400 && arr.body.find("INVALID_FIELD") != std::string::npos,
            "non-object body 400 INVALID_FIELD");
+
+    // ── §12.1: log_console / log_console_level round-trip + unknown-field ignore ──
+
+    // PATCH both console settings → 200, GET reflects them.
+    auto sc = app.call(Method::Patch, "/api/settings",
+                       R"({"log_console":true,"log_console_level":2})");
+    expect(sc.status == 200, "patch log_console/log_console_level 200");
+    auto scg = app.call(Method::Get, "/api/settings");
+    auto scj = Json::parse(scg.body);
+    expect(scj["log_console"].as<bool>() == true, "log_console reflected by GET");
+    expect(scj["log_console_level"].as<int64_t>() == 2, "log_console_level reflected by GET");
+
+    // Wrong type for log_console_level → 400 INVALID_FIELD (same guard as log_level).
+    auto scb = app.call(Method::Patch, "/api/settings", R"({"log_console_level":"x"})");
+    expect(scb.status == 400 && scb.body.find("INVALID_FIELD") != std::string::npos,
+           "log_console_level bad type 400");
+
+    // Unknown extra field → 200 (ignored, not rejected).
+    auto scx = app.call(Method::Patch, "/api/settings", R"({"unknown_extra_field":42})");
+    expect(scx.status == 200, "unknown extra field ignored 200");
+
+    // Round-trip the other way (true → false) then restore to the benign default.
+    auto scf = app.call(Method::Patch, "/api/settings", R"({"log_console":false})");
+    expect(scf.status == 200, "patch log_console false 200");
+    auto scg2 = app.call(Method::Get, "/api/settings");
+    auto scj2 = Json::parse(scg2.body);
+    expect(scj2["log_console"].as<bool>() == false, "log_console false reflected by GET");
+    (void)app.call(Method::Patch, "/api/settings", R"({"log_console":true})");
 }
 
 void test_profiles(TestApp& app) {
@@ -244,6 +274,190 @@ void test_profiles(TestApp& app) {
     expect(has_key, "dependencies contains " + key);
 }
 
+/// §12.1 matrix rows not covered by test_profiles: the profile action endpoints
+/// (activate/fork/merge/publish/rename), DELETE 204+disappears, create error
+/// paths (unknown source / empty body), PATCH cycle → 409, and the full tags
+/// + enchantments sub-resource round-trips. Runs AFTER test_profiles so the
+/// renamed profile `builtin:vanilla-rd` exists (rename-conflict target).
+void test_profile_actions(TestApp& app) {
+    const std::string key = "builtin:vanilla";
+
+    // ── POST /api/profiles error paths ──
+    auto miss_src = app.call(Method::Post, "/api/profiles",
+                             R"({"source":"nope","dest":"builtin:vanilla-nope1"})");
+    expect(miss_src.status == 404 && miss_src.body.find("PROFILE_NOT_FOUND") != std::string::npos,
+           "create with unknown source 404 PROFILE_NOT_FOUND");
+    auto empty_body = app.call(Method::Post, "/api/profiles", "{}");
+    expect(empty_body.status == 400 && empty_body.body.find("code") != std::string::npos,
+           "create with {} body (no source/dest) 400");
+
+    // Scaffold forks (all from the root; DELETE/activate/merge/publish/fork/cycle).
+    auto scaffold = [&](const char* dest) {
+        auto r = app.call(Method::Post, "/api/profiles",
+                          std::string(R"({"source":")") + key + R"(","dest":")" + dest + R"("})");
+        expect(r.status == 201, std::string("fork scaffold ") + dest);
+    };
+
+    // ── DELETE /api/profiles/{key} → 204, then GET → 404 ──
+    scaffold("builtin:vanilla-del");
+    auto del_r = app.call(Method::Delete, "/api/profiles/builtin:vanilla-del");
+    expect(del_r.status == 204, "delete profile 204");
+    auto del_g = app.call(Method::Get, "/api/profiles/builtin:vanilla-del");
+    expect(del_g.status == 404 && del_g.body.find("PROFILE_NOT_FOUND") != std::string::npos,
+           "deleted profile read 404");
+
+    // ── POST /api/profiles/{key}/activate → 200 {ok:true}, takes effect, back ──
+    scaffold("builtin:vanilla-act");
+    auto act = app.call(Method::Post, "/api/profiles/builtin:vanilla-act/activate");
+    expect(act.status == 200 && act.body.find("\"ok\":true") != std::string::npos,
+           "activate 200 ok:true");
+    auto st = app.call(Method::Get, "/api/status");
+    expect(Json::parse(st.body)["active_profile"].as<std::string>() == "builtin:vanilla-act",
+           "activate took effect (status active_profile)");
+    auto act_back = app.call(Method::Post, "/api/profiles/builtin:vanilla/activate");
+    expect(act_back.status == 200, "reactivate root 200");
+    auto st2 = app.call(Method::Get, "/api/status");
+    expect(Json::parse(st2.body)["active_profile"].as<std::string>() == "builtin:vanilla",
+           "root reactivated (active_profile restored)");
+    auto act_nope = app.call(Method::Post, "/api/profiles/nope/activate");
+    expect(act_nope.status == 404, "activate unknown profile 404");
+
+    // ── POST /api/profiles/{key}/merge → 200; unknown source/dest → 404 ──
+    scaffold("builtin:vanilla-mg1");
+    scaffold("builtin:vanilla-mg2");
+    auto mg = app.call(Method::Post, "/api/profiles/builtin:vanilla-mg1/merge",
+                       R"({"dest":"builtin:vanilla-mg2"})");
+    expect(mg.status == 200 && mg.body.find("\"ok\":true") != std::string::npos,
+           "merge 200 ok:true");
+    auto mg_src = app.call(Method::Post, "/api/profiles/nope/merge",
+                           R"({"dest":"builtin:vanilla-mg2"})");
+    expect(mg_src.status == 404 && mg_src.body.find("PROFILE_NOT_FOUND") != std::string::npos,
+           "merge unknown source 404");
+    auto mg_dst = app.call(Method::Post, "/api/profiles/builtin:vanilla-mg1/merge",
+                           R"({"dest":"nope"})");
+    expect(mg_dst.status == 404 && mg_dst.body.find("PROFILE_NOT_FOUND") != std::string::npos,
+           "merge unknown dest 404");
+
+    // ── POST /api/profiles/{key}/publish → 200 + file on disk (version/tag) ──
+    scaffold("builtin:vanilla-pub");
+    const std::string pub_path = "besq_web_test_publish.json";
+    std::error_code ec;
+    std::filesystem::remove(pub_path, ec);   // stale file from a crashed earlier run
+    auto pub = app.call(Method::Post, "/api/profiles/builtin:vanilla-pub/publish",
+                        R"({"version":"1.2.3","tag":"rel-test","path":")" + pub_path + R"("})");
+    expect(pub.status == 200 && pub.body.find("\"ok\":true") != std::string::npos,
+           "publish 200 ok:true");
+    expect(std::filesystem::exists(pub_path), "publish wrote the profile file");
+    {
+        std::ifstream in(pub_path);
+        std::string content((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+        expect(content.find("1.2.3") != std::string::npos, "published file embeds version");
+        expect(content.find("rel-test") != std::string::npos, "published file embeds release tag");
+    }
+    std::filesystem::remove(pub_path, ec);
+    // Write failure (parent dir does not exist) → 400 PUBLISH_FAILED.
+    auto pub_bad = app.call(Method::Post, "/api/profiles/builtin:vanilla-pub/publish",
+                            R"({"path":"no_such_dir_xyz/publish.json"})");
+    expect(pub_bad.status == 400 && pub_bad.body.find("PUBLISH_FAILED") != std::string::npos,
+           "publish to unwritable path 400 PUBLISH_FAILED");
+
+    // ── POST /api/profiles/{key}/fork → 201 + Location; dest exists → 409 ──
+    auto fk = app.call(Method::Post, "/api/profiles/builtin:vanilla/fork",
+                       R"({"dest":"builtin:vanilla-fk1"})");
+    expect(fk.status == 201, "fork action 201");
+    expect(fk.header_value("Location").find("/api/profiles/builtin:vanilla-fk1") != std::string::npos,
+           "fork action Location header");
+    auto fk2 = app.call(Method::Post, "/api/profiles/builtin:vanilla/fork",
+                        R"({"dest":"builtin:vanilla-fk1"})");
+    expect(fk2.status == 409 && fk2.body.find("PROFILE_EXISTS") != std::string::npos,
+           "fork dest exists 409 PROFILE_EXISTS");
+
+    // ── POST /api/profiles/{key}/rename → target already exists → 409 ──
+    // (`builtin:vanilla-rd` was created by test_profiles' rename round-trip.)
+    auto rn = app.call(Method::Post, "/api/profiles/builtin:vanilla-fk1/rename",
+                       R"({"name":"builtin:vanilla-rd"})");
+    expect(rn.status == 409 && rn.body.find("PROFILE_EXISTS") != std::string::npos,
+           "rename to existing target 409 PROFILE_EXISTS");
+
+    // ── PATCH /api/profiles/{key} errors: unknown key → 404; cycle → 409 ──
+    auto pu = app.call(Method::Patch, "/api/profiles/nope", R"({"dependencies":[]})");
+    expect(pu.status == 404 && pu.body.find("PROFILE_NOT_FOUND") != std::string::npos,
+           "patch unknown profile 404");
+    scaffold("builtin:vanilla-cya");
+    scaffold("builtin:vanilla-cyb");
+    auto cy1 = app.call(Method::Patch, "/api/profiles/builtin:vanilla-cya",
+                        R"({"dependencies":["builtin:vanilla-cyb"]})");
+    expect(cy1.status == 200, "set dependency a→b 200");
+    auto cy2 = app.call(Method::Patch, "/api/profiles/builtin:vanilla-cyb",
+                        R"({"dependencies":["builtin:vanilla-cya"]})");
+    expect(cy2.status == 409 && cy2.body.find("DEPENDENCY_CYCLE") != std::string::npos,
+           "dependency cycle 409 DEPENDENCY_CYCLE");
+
+    // ── tags sub-resource: full round-trip + duplicate → 409 ──
+    // Tag ids are `#`-prefixed NSIDs; the test Router dispatches the raw path,
+    // so the `#` inside the path segment is handled by match_segments verbatim.
+    const std::string tag_path = key + "/tags/#minecraft:test_tag";
+    auto tag_pre = app.call(Method::Delete, "/api/profiles/" + tag_path);
+    expect(tag_pre.status == 204 || tag_pre.status == 404, "tag pre-delete tolerated");
+    auto tag_add = app.call(Method::Post, "/api/profiles/" + key + "/tags",
+                            R"({"id":"#minecraft:test_tag","name":"Test Tag"})");
+    expect(tag_add.status == 201, "tag add 201");
+    expect(tag_add.header_value("Location").find("#minecraft:test_tag") != std::string::npos,
+           "tag add Location header");
+    auto tag_dup = app.call(Method::Post, "/api/profiles/" + key + "/tags",
+                            R"({"id":"#minecraft:test_tag","name":"Test Tag"})");
+    expect(tag_dup.status == 409 && tag_dup.body.find("DUPLICATE_ENTRY") != std::string::npos,
+           "tag duplicate add 409 DUPLICATE_ENTRY");
+    auto tag_list = app.call(Method::Get, "/api/profiles/" + key + "/tags");
+    expect(tag_list.status == 200 && tag_list.body.find("test_tag") != std::string::npos,
+           "tag list contains added tag");
+    auto tag_read = app.call(Method::Get, "/api/profiles/" + tag_path);
+    expect(tag_read.status == 200 && tag_read.body.find("Test Tag") != std::string::npos,
+           "tag read 200 + name field");
+    auto tag_patch = app.call(Method::Patch, "/api/profiles/" + tag_path,
+                              R"({"id":"#minecraft:test_tag","name":"Test Tag V2"})");
+    expect(tag_patch.status == 200, "tag patch 200");
+    auto tag_read2 = app.call(Method::Get, "/api/profiles/" + tag_path);
+    expect(tag_read2.status == 200 && tag_read2.body.find("Test Tag V2") != std::string::npos,
+           "tag read reflects patched name");
+    auto tag_del = app.call(Method::Delete, "/api/profiles/" + tag_path);
+    expect(tag_del.status == 204, "tag delete 204");
+    auto tag_gone = app.call(Method::Get, "/api/profiles/" + tag_path);
+    expect(tag_gone.status == 404, "tag read after delete 404");
+
+    // ── enchantments sub-resource: success round-trip on a scratch id ──
+    // (error paths — unknown name 404 — are already covered in test_profiles.)
+    const std::string ench_path = key + "/enchantments/test:e_matrix_ench";
+    auto ench_pre = app.call(Method::Delete, "/api/profiles/" + ench_path);
+    expect(ench_pre.status == 204 || ench_pre.status == 404, "ench pre-delete tolerated");
+    const std::string ench_body =
+        R"({"id":"test:e_matrix_ench","name":"Matrix Ench","max_level":5,)"
+        R"("multiplier":1,"supported_items":["#minecraft:swords"]})";
+    auto ench_add = app.call(Method::Post, "/api/profiles/" + key + "/enchantments", ench_body);
+    expect(ench_add.status == 201, "ench add 201");
+    expect(ench_add.header_value("Location").find("test:e_matrix_ench") != std::string::npos,
+           "ench add Location header");
+    auto ench_dup = app.call(Method::Post, "/api/profiles/" + key + "/enchantments", ench_body);
+    expect(ench_dup.status == 409 && ench_dup.body.find("DUPLICATE_ENTRY") != std::string::npos,
+           "ench duplicate add 409 DUPLICATE_ENTRY");
+    auto ench_list = app.call(Method::Get, "/api/profiles/" + key + "/enchantments");
+    expect(ench_list.status == 200 && ench_list.body.find("e_matrix_ench") != std::string::npos,
+           "ench list contains added entry");
+    auto ench_patch = app.call(Method::Patch, "/api/profiles/" + ench_path,
+                               R"({"id":"test:e_matrix_ench","name":"Matrix Ench V2",)"
+                               R"("max_level":7,"multiplier":1,"supported_items":["#minecraft:swords"]})");
+    expect(ench_patch.status == 200, "ench patch 200");
+    auto ench_read = app.call(Method::Get, "/api/profiles/" + ench_path);
+    expect(ench_read.status == 200 && ench_read.body.find("Matrix Ench V2") != std::string::npos &&
+               ench_read.body.find("\"max_level\":7") != std::string::npos,
+           "ench read reflects patched name + max_level");
+    auto ench_del = app.call(Method::Delete, "/api/profiles/" + ench_path);
+    expect(ench_del.status == 204, "ench delete 204");
+    auto ench_gone = app.call(Method::Get, "/api/profiles/" + ench_path);
+    expect(ench_gone.status == 404, "ench read after delete 404");
+}
+
 void test_algorithms(TestApp& app) {
     // list → 200 array of names containing a builtin strategy.
     auto l = app.call(Method::Get, "/api/algorithms");
@@ -319,6 +533,77 @@ void test_calculator(TestApp& app) {
     expect(sdone.status == 200 && sdone.body.find("result") != std::string::npos,
            "status completed task carries result");
 
+    // ── §12.1: a deterministically failing task → snapshot state=failed + error ──
+    // Unknown enchantment id throws inside the worker's build_request (before
+    // solve), so the failure is deterministic and fast. The snapshot does not
+    // race: the task stays in the table until the next start() reaps it.
+    // (Placed here, AFTER the light-task assertions, because the next submit
+    // reaps the completed light task — the cancel-completed no-op above must
+    // see it first.)
+    auto fail = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"no_such_ench_xyz","level":1}]},
+        "algorithm":"dp_merge"
+    })");
+    expect(fail.status == 202, "failing task submit 202");
+    auto failb = Json::parse(fail.body);
+    std::string fail_id = failb["task_id"].as<std::string>();
+    bool fail_done = false;
+    for (int i = 0; i < 50 && !fail_done; ++i) {
+        auto st = app.call(Method::Get, "/api/tasks/" + fail_id);
+        if (st.status == 200) {
+            auto sj = Json::parse(st.body);
+            fail_done = sj["state"].as<std::string>() != "running";
+        }
+        if (!fail_done) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(fail_done, "failing task reached terminal state");
+    auto fs = app.call(Method::Get, "/api/tasks/" + fail_id);
+    expect(fs.status == 200 && fs.body.find("\"state\":\"failed\"") != std::string::npos,
+           "failed snapshot state=failed");
+    expect(fs.body.find("\"error\"") != std::string::npos &&
+               fs.body.find("\"progress\"") != std::string::npos,
+           "failed snapshot carries error + progress fields");
+
+    // ── §12.1: task DTO full-field validation — every optional field accepted ──
+    // One optional field per task (matrix row: 逐项); each is polled to a
+    // terminal state so the single active slot is free for the next submit.
+    const std::string dtomin = R"({"target":{"item":"diamond_sword","enchants":[)"
+                              R"({"id":"sharpness","level":5}]},"algorithm":"dp_merge")";
+    auto submit_ok = [&](const std::string& body, const char* label) {
+        auto r = app.call(Method::Post, "/api/tasks", body);
+        expect(r.status == 202, std::string("task field ") + label + " submit 202");
+        std::string id;
+        if (r.status == 202) {
+            auto b = Json::parse(r.body);
+            id = b["task_id"].as<std::string>();
+        }
+        bool done = false;
+        for (int i = 0; i < 50 && !done; ++i) {
+            auto st = app.call(Method::Get, "/api/tasks/" + id);
+            if (st.status == 200) {
+                auto sj = Json::parse(st.body);
+                done = sj["state"].as<std::string>() != "running";
+            }
+            if (!done) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        expect(done, std::string("task field ") + label + " reached terminal state");
+    };
+    submit_ok(dtomin + R"(,"max_solutions":2})", "max_solutions");
+    submit_ok(dtomin + R"(,"max_search_time":5000})", "max_search_time");
+    submit_ok(dtomin + R"(,"max_threads":2})", "max_threads");
+    submit_ok(dtomin + R"(,"profile":"builtin:vanilla"})", "profile");
+    submit_ok(dtomin + R"(,"source":[{"id":"sharpness","level":1}]})", "source");
+    submit_ok(R"({"target":{"item":"diamond_sword","enchants":[)"
+              R"({"id":"sharpness","level":5}]},"algorithm":"hamming",)"
+              R"("items":[{"type":"book","enchants":[{"id":"sharpness","level":5}],"priority":1}]})",
+              "items");
+    // Wrong type for an optional field → 400 INVALID_TASK.
+    auto badfield = app.call(Method::Post, "/api/tasks",
+                             R"({"target":{"item":"diamond_sword","enchants":)"
+                             R"([{"id":"sharpness","level":5}]},"max_threads":"x"})");
+    expect(badfield.status == 400 && badfield.body.find("INVALID_TASK") != std::string::npos,
+           "task max_threads wrong type 400 INVALID_TASK");
+
     // Submit with a missing required field ("target") → 400 INVALID_TASK.
     auto badtask = app.call(Method::Post, "/api/tasks", "{}");
     expect(badtask.status == 400 && badtask.body.find("code") != std::string::npos,
@@ -345,6 +630,34 @@ void test_calculator(TestApp& app) {
         expect(app.ctx.add_enchantment(info), "seed ench " + std::to_string(i));
     }
 
+    // ── §12.1: cancelled snapshot — heavy task cancelled immediately ──
+    // The 18-ench dp_merge stays Running for ~a second (the same window the
+    // single-slot 409 below relies on), so the DELETE fires while it is still
+    // Running and the state is deterministically "cancelled".
+    std::string heavy_cancel = R"({"target":{"item":"netherite_sword","enchants":[)";
+    for (int i = 0; i < 18; ++i) {
+        if (i) heavy_cancel += ",";
+        heavy_cancel += R"({"id":"test:e_)" + std::to_string(i) + R"(","level":5})";
+    }
+    heavy_cancel += R"(]},"algorithm":"dp_merge"})";
+    auto hc = app.call(Method::Post, "/api/tasks", heavy_cancel);
+    expect(hc.status == 202, "cancel-test task submit 202");
+    auto hcb = Json::parse(hc.body);
+    std::string hc_id = hcb["task_id"].as<std::string>();
+    auto hc_del = app.call(Method::Delete, "/api/tasks/" + hc_id);
+    expect(hc_del.status == 200 && hc_del.body.find("ok") != std::string::npos,
+           "cancel running task 200 ok");
+    bool cancelled = false;
+    for (int i = 0; i < 50 && !cancelled; ++i) {
+        auto st = app.call(Method::Get, "/api/tasks/" + hc_id);
+        if (st.status == 200) {
+            auto sj = Json::parse(st.body);
+            cancelled = sj["state"].as<std::string>() == "cancelled";
+        }
+        if (!cancelled) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(cancelled, "cancelled snapshot state=cancelled");
+
     std::string heavy = R"({"target":{"item":"netherite_sword","enchants":[)";
     for (int i = 0; i < 18; ++i) {
         if (i) heavy += ",";
@@ -352,10 +665,42 @@ void test_calculator(TestApp& app) {
     }
     heavy += R"(]},"algorithm":"dp_merge"})";
 
-    auto heavy_resp = app.call(Method::Post, "/api/tasks", heavy);
-    expect(heavy_resp.status == 202, "heavy task submit 202");
-    auto hb = Json::parse(heavy_resp.body);
-    std::string heavy_id = hb["task_id"].as<std::string>();
+    // ── §12.1: unload while a solve is active → 409 TASK_ACTIVE ──
+    // The unload handler serializes on the SAME gate the solve worker holds
+    // for its whole _ctx window (build_request + solve + format), so a plain
+    // "submit then unload" would block until the solve finishes and see
+    // Completed → 400 UNLOAD_REJECTED (that gate design makes the 409
+    // observable only while the worker has NOT yet taken the gate). We park
+    // the unload dispatch (thread B) on the gate BEFORE submitting the task,
+    // so B is the first waiter; the solve worker then parks behind it. When
+    // the test releases the gate, the OS wakes the first waiter (B), which
+    // sees has_active()==true (the task is Running and the worker is still
+    // parked) → 409 TASK_ACTIVE. The worker proceeds only after the unload
+    // handler releases the gate, so the rest of the heavy-task flow below is
+    // unchanged.
+    int unl_status = 0;
+    std::string unl_body;
+    std::string heavy_id;
+    std::thread unloader;
+    {
+        std::lock_guard<std::mutex> hold(app.gate);
+        unloader = std::thread([&] {
+            auto r = app.call(Method::Post, "/api/algorithms/unload",
+                              R"({"name":"dp_merge"})");
+            unl_status = r.status;
+            unl_body = r.body;
+        });
+        // Guarantee B is parked on the gate before the worker spawns (its
+        // dispatch takes microseconds; 20ms is a generous margin).
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        auto heavy_resp = app.call(Method::Post, "/api/tasks", heavy);
+        expect(heavy_resp.status == 202, "heavy task submit 202");
+        auto hb = Json::parse(heavy_resp.body);
+        heavy_id = hb["task_id"].as<std::string>();
+    }   // gate released here → the first waiter (the unload dispatch) wakes
+    unloader.join();
+    expect(unl_status == 409 && unl_body.find("TASK_ACTIVE") != std::string::npos,
+           "unload while solve active 409 TASK_ACTIVE");
 
     // Immediate second POST while the heavy task is Running → 409 (single slot).
     auto dup = app.call(Method::Post, "/api/tasks", R"({
@@ -435,6 +780,14 @@ void test_logs(TestApp& app) {
     expect(zj["logs"].type() == JsonType::Array && zj["logs"].as_array().empty(),
            "limit=0 exact empty array");
     expect(zj["next"].as<int64_t>() == 0, "limit=0 next 0");
+
+    // ── §12.1: invalid `since` → 400 (only `limit` was covered above) ──
+    auto bad_since = app.call(Method::Get, "/api/logs?since=abc");
+    expect(bad_since.status == 400 && bad_since.body.find("INVALID_FIELD") != std::string::npos,
+           "invalid since 400 INVALID_FIELD");
+    auto neg_since = app.call(Method::Get, "/api/logs?since=-5");
+    expect(neg_since.status == 400 && neg_since.body.find("code") != std::string::npos,
+           "negative since 400");
 }
 
 // ── Fake StreamChannel: captures every frame delivered to the "connection" ──
@@ -616,6 +969,95 @@ void test_stream_close_hook(TestApp& app) {
         if (f == "data: nope\n\n") leaked = true;
     expect(!leaked, "no frame delivered after close");
 }
+
+/// §12.1 complement: the `failed` SSE frame's byte format.
+///
+/// The worker's real failure path (state=failed + error) is deterministic and
+/// covered by the snapshot test in test_calculator, but the failed FRAME can
+/// only be observed by a subscriber that is already registered when the worker
+/// throws — and every deterministic failure (unknown ench/equip/algorithm,
+/// mode mismatch) happens inside build_request/solve within ~100µs of submit,
+/// far faster than any second HTTP request can reach the hub over the real
+/// transport. This test pins the exact frame the worker publishes
+/// (`event: failed` + `data: {"type":"failed","error":...}` — spec §7) by
+/// pushing the worker's own frame bytes through the SseHub to a subscribed
+/// StreamChannel and asserting delivery + field shape.
+void test_failed_frame_shape(TestApp& app) {
+    auto light = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(light.status == 202, "failed-shape task submit 202");
+    auto lb = Json::parse(light.body);
+    std::string id = lb["task_id"].as<std::string>();
+
+    auto fake = std::make_shared<FakeChannel>();
+    CalculatorController ctrl(*app.solve, app.hub);
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/api/tasks/" + id + "/events";
+    req.stream = fake;
+    PathParams pp;
+    pp.kv.emplace_back("id", id);
+    auto r = ctrl.events(req, pp);
+    expect(r.status == 200 && r.is_stream, "failed-shape events stream response");
+
+    // The worker's exact failed frame format (WebSolveService::sse_frame):
+    //   event: failed\ndata: {"type":"failed","error":"..."}\n\n
+    Json payload = Json::object();
+    payload["type"] = Json("failed");
+    payload["error"] = Json("forced failure");
+    const std::string frame = "event: failed\ndata: " + payload.to_string() + "\n\n";
+    app.hub.publish(id, frame);
+
+    bool got = false, has_type = false, has_err = false;
+    for (const auto& f : fake->frames) {
+        if (f != frame) continue;
+        got = true;
+        auto d = f.find("data: ");
+        if (d != std::string::npos) {
+            auto fj = Json::parse(f.substr(d + 6));
+            if (fj["type"].as<std::string>() == "failed") has_type = true;
+            if (fj["error"].as<std::string>() == "forced failure") has_err = true;
+        }
+    }
+    expect(got, "failed frame bytes delivered through hub");
+    expect(has_type && has_err, "failed frame carries type/error fields");
+
+    auto c = app.call(Method::Delete, "/api/tasks/" + id);
+    expect(c.status == 200, "cancel failed-shape task");
+}
+
+/// §12.1: 500 with the envelope — Router maps any non-WebHttpError
+/// std::exception to 500 INTERNAL_ERROR. No production endpoint can be forced
+/// to throw on demand (all handler throws are pre-mapped WebHttpErrors or
+/// JsonExceptions), so the catch path is asserted directly with a throwing
+/// test controller.
+class BoomController : public HttpController<BoomController> {
+public:
+    using Self = BoomController;
+    static constexpr auto route_defs() {
+        return std::array{ BESQ_ROUTE(Get, "/boom", boom) };
+    }
+    Response boom(const HttpRequest&) {
+        throw std::runtime_error("boom:forced");
+    }
+};
+
+void test_router_500() {
+    Router router;
+    router.register_controller<BoomController>();
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/boom";
+    auto r = router.dispatch(req);
+    expect(r.status == 500, "uncaught handler exception → 500");
+    expect(r.body.find("\"ok\":false") != std::string::npos, "500 envelope ok:false");
+    expect(r.body.find("\"code\":\"INTERNAL_ERROR\"") != std::string::npos,
+           "500 envelope code INTERNAL_ERROR");
+    expect(r.body.find("boom:forced") != std::string::npos, "500 envelope carries message");
+}
 } // namespace
 
 int main() {
@@ -626,13 +1068,16 @@ int main() {
         test_status(app);
         test_settings(app);
         test_profiles(app);
+        test_profile_actions(app);  // §12.1: actions + tags/ench round-trips
         test_algorithms(app);
         test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
+        test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）
         test_stream_close_hook(app); // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
         test_hub_clear(app);        // SseHub::clear() 清空全部订阅
-        test_calculator(app);
-        test_logs(app);
+        test_calculator(app);       // §12.1: failed/cancelled 快照、任务字段、unload-409
+        test_logs(app);             // §12.1: since 非法 → 400
         test_web_module(app.ctx);
+        test_router_500();          // §12.1: 未捕获异常 → 500 INTERNAL_ERROR envelope
         TEST_PASS("test_web_api");
     } catch (const std::exception& e) {
         std::cerr << "\nFATAL: " << e.what() << std::endl;
