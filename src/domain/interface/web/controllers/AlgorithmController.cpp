@@ -14,6 +14,9 @@ const char* origin_name(AlgorithmOrigin o) {
 } // namespace
 
 Response AlgorithmController::list(const HttpRequest&) {
+    // Serialize against the solve worker and concurrent reactor handlers:
+    // reads the AlgorithmLoader registry.
+    std::lock_guard<std::mutex> lock(_gate);
     Json arr = Json::array();
     for (const auto& name : _ctx.list_algorithms())
         arr.push_back(Json(name));
@@ -21,6 +24,8 @@ Response AlgorithmController::list(const HttpRequest&) {
 }
 
 Response AlgorithmController::detail(const HttpRequest&, const PathParams& pp) {
+    // Same gate as list(): algorithm_detail() reads the loader registry.
+    std::lock_guard<std::mutex> lock(_gate);
     const std::string name = pp.get("name");
     AlgorithmDetail d;
     try {
@@ -42,6 +47,8 @@ Response AlgorithmController::detail(const HttpRequest&, const PathParams& pp) {
 }
 
 Response AlgorithmController::load(const HttpRequest&, const PathParams&, const Json& body) {
+    // Same gate as list(): load_algorithms() mutates the loader registry.
+    std::lock_guard<std::mutex> lock(_gate);
     if (body.type() != JsonType::Object)
         throw WebHttpError(400, "INVALID_FIELD", "load body must be a JSON object");
     std::string dir;
@@ -59,6 +66,9 @@ Response AlgorithmController::load(const HttpRequest&, const PathParams&, const 
 }
 
 Response AlgorithmController::unload(const HttpRequest&, const PathParams&, const Json& body) {
+    // Same gate as list(): unload_algorithm() mutates the loader registry and
+    // the active-solve check below reads WebSolveService state.
+    std::lock_guard<std::mutex> lock(_gate);
     if (body.type() != JsonType::Object)
         throw WebHttpError(400, "INVALID_FIELD", "unload body must be a JSON object");
     std::string name;

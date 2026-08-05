@@ -30,10 +30,10 @@ struct WebModule::Impl {
 
 WebModule::WebModule(BesqContext& ctx) : _impl(std::make_unique<Impl>(ctx)) {
     _impl->_router.register_controller<HealthController>();
-    _impl->_router.register_controller<StatusController>(ctx);
-    _impl->_router.register_controller<SettingsController>(ctx);
+    _impl->_router.register_controller<StatusController>(ctx, _impl->_ctx_gate);
+    _impl->_router.register_controller<SettingsController>(ctx, _impl->_ctx_gate);
     _impl->_router.register_controller<ProfilesController>(ctx, _impl->_ctx_gate);
-    _impl->_router.register_controller<AlgorithmController>(ctx, _impl->_solve);
+    _impl->_router.register_controller<AlgorithmController>(ctx, _impl->_solve, _impl->_ctx_gate);
     _impl->_router.register_controller<CalculatorController>(_impl->_solve, _impl->_hub);
     _impl->_router.register_controller<LogsController>(ctx, _impl->_hub);
 }

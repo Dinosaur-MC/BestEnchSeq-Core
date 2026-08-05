@@ -46,10 +46,17 @@ int32_t checked_log_level(const Json& v, const char* field) {
 } // namespace
 
 Response SettingsController::get() {
+    // Same gate as patch(): reads LanguageManager/Logger state that the solve
+    // worker (tr/tr_fmt) and concurrent reactor handlers touch.
+    std::lock_guard<std::mutex> lock(_gate);
     return Response::json(200, "OK", build_settings_json().to_string());
 }
 
 Response SettingsController::patch(const HttpRequest&, const PathParams&, const Json& body) {
+    // Serialize against the solve worker and concurrent reactor handlers:
+    // select() mutates LanguageManager::_active; set_level etc. mutate the
+    // Logger singleton.
+    std::lock_guard<std::mutex> lock(_gate);
     if (body.type() != JsonType::Object)
         throw WebHttpError(400, "INVALID_FIELD", "settings body must be a JSON object");
 

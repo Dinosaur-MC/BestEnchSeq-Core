@@ -16,6 +16,9 @@ inline int64_t uptime_ms() {
 namespace web {
 
 Response StatusController::status() {
+    // Serialize against the solve worker and concurrent reactor handlers:
+    // reads ProfileManager active/_registry + AlgorithmLoader registry.
+    std::lock_guard<std::mutex> lock(_gate);
     Json o = Json::object();
     o["active_profile"] = Json(_ctx.active_profile());
     o["profile_count"] = Json(static_cast<int64_t>(_ctx.list_profiles().size()));
