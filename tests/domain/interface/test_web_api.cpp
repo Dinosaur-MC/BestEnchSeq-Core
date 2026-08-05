@@ -666,40 +666,21 @@ void test_calculator(TestApp& app) {
     heavy += R"(]},"algorithm":"dp_merge"})";
 
     // ── §12.1: unload while a solve is active → 409 TASK_ACTIVE ──
-    // The unload handler serializes on the SAME gate the solve worker holds
-    // for its whole _ctx window (build_request + solve + format), so a plain
-    // "submit then unload" would block until the solve finishes and see
-    // Completed → 400 UNLOAD_REJECTED (that gate design makes the 409
-    // observable only while the worker has NOT yet taken the gate). We park
-    // the unload dispatch (thread B) on the gate BEFORE submitting the task,
-    // so B is the first waiter; the solve worker then parks behind it. When
-    // the test releases the gate, the OS wakes the first waiter (B), which
-    // sees has_active()==true (the task is Running and the worker is still
-    // parked) → 409 TASK_ACTIVE. The worker proceeds only after the unload
-    // handler releases the gate, so the rest of the heavy-task flow below is
-    // unchanged.
-    int unl_status = 0;
-    std::string unl_body;
-    std::string heavy_id;
-    std::thread unloader;
-    {
-        std::lock_guard<std::mutex> hold(app.gate);
-        unloader = std::thread([&] {
-            auto r = app.call(Method::Post, "/api/algorithms/unload",
-                              R"({"name":"dp_merge"})");
-            unl_status = r.status;
-            unl_body = r.body;
-        });
-        // Guarantee B is parked on the gate before the worker spawns (its
-        // dispatch takes microseconds; 20ms is a generous margin).
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        auto heavy_resp = app.call(Method::Post, "/api/tasks", heavy);
-        expect(heavy_resp.status == 202, "heavy task submit 202");
-        auto hb = Json::parse(heavy_resp.body);
-        heavy_id = hb["task_id"].as<std::string>();
-    }   // gate released here → the first waiter (the unload dispatch) wakes
-    unloader.join();
-    expect(unl_status == 409 && unl_body.find("TASK_ACTIVE") != std::string::npos,
+    // Deterministic by construction: the unload handler checks has_active()
+    // BEFORE taking the gate (a gate-first check would only ever see a
+    // completed task, since the solve worker holds the gate for its whole
+    // _ctx window — the 409 would depend on racing the worker's first gate
+    // acquisition).  So a plain submit-then-unload always lands while the
+    // task is Running → 409, with no thread parking and no wake-order
+    // assumptions.  The worker proceeds (the gate stays held across the
+    // heavy solve), so the rest of the heavy-task flow below is unchanged.
+    auto heavy_resp = app.call(Method::Post, "/api/tasks", heavy);
+    expect(heavy_resp.status == 202, "heavy task submit 202");
+    auto hb = Json::parse(heavy_resp.body);
+    std::string heavy_id = hb["task_id"].as<std::string>();
+    auto un = app.call(Method::Post, "/api/algorithms/unload",
+                       R"({"name":"dp_merge"})");
+    expect(un.status == 409 && un.body.find("TASK_ACTIVE") != std::string::npos,
            "unload while solve active 409 TASK_ACTIVE");
 
     // Immediate second POST while the heavy task is Running → 409 (single slot).
@@ -792,11 +773,22 @@ void test_logs(TestApp& app) {
 
 // ── Fake StreamChannel: captures every frame delivered to the "connection" ──
 struct FakeChannel : web::StreamChannel {
+    std::mutex mtx;
     std::vector<std::string> frames;
     std::function<void()> on_close_cb;
     bool close_fired = false;
-    void post_frame(std::string f) override { frames.push_back(std::move(f)); }
+    // post_frame 可被 worker 线程经 hub publish 并发调用（初始 progress 帧/终态帧），
+    // 而测试线程会同时迭代 frames —— 必须互斥，否则 vector 迭代器并发失效
+    // （MSVC Debug 断言 "can't increment invalidated vector iterator"）。
+    void post_frame(std::string f) override {
+        std::lock_guard<std::mutex> lk(mtx);
+        frames.push_back(std::move(f));
+    }
     void on_close(std::function<void()> cb) override { on_close_cb = std::move(cb); }
+    std::vector<std::string> snapshot() {
+        std::lock_guard<std::mutex> lk(mtx);
+        return frames;
+    }
     /// 模拟连接关闭：触发控制器注册的 on_close 回调（触发一次后清空）。
     void fire_close() {
         close_fired = true;
@@ -879,7 +871,7 @@ void test_stream_channel(TestApp& app) {
     // matches the worker's (spec §7): event: progress + {"type":"progress",...}.
     bool initial = false;
     double initial_progress = -1.0;
-    for (const auto& f : fake->frames) {
+    for (const auto& f : fake->snapshot()) {
         if (f.rfind("event: progress", 0) == 0) {
             auto data = f.find("data: ");
             if (data == std::string::npos) continue;
@@ -897,7 +889,7 @@ void test_stream_channel(TestApp& app) {
 
     app.hub.publish(id, "data: x\n\n");
     bool delivered = false;
-    for (const auto& f : fake->frames)
+    for (const auto& f : fake->snapshot())
         if (f == "data: x\n\n") delivered = true;
     expect(delivered, "published frame delivered to StreamChannel");
 
@@ -931,7 +923,7 @@ void test_hub_clear(TestApp& app) {
 
     app.hub.publish("logs", "data: nope\n\n");
     bool leaked = false;
-    for (const auto& f : fake->frames)
+    for (const auto& f : fake->snapshot())
         if (f == "data: nope\n\n") leaked = true;
     expect(!leaked, "no frame delivered after clear");
 }
@@ -953,7 +945,7 @@ void test_stream_close_hook(TestApp& app) {
     // 关闭前帧投递链路正常。
     app.hub.publish("logs", "data: hi\n\n");
     bool got = false;
-    for (const auto& f : fake->frames)
+    for (const auto& f : fake->snapshot())
         if (f == "data: hi\n\n") got = true;
     expect(got, "frame delivered before close");
 
@@ -965,7 +957,7 @@ void test_stream_close_hook(TestApp& app) {
     // 退订后 publish 不再送达该通道（死连接回调已从 hub 移除）。
     app.hub.publish("logs", "data: nope\n\n");
     bool leaked = false;
-    for (const auto& f : fake->frames)
+    for (const auto& f : fake->snapshot())
         if (f == "data: nope\n\n") leaked = true;
     expect(!leaked, "no frame delivered after close");
 }
@@ -1012,7 +1004,7 @@ void test_failed_frame_shape(TestApp& app) {
     app.hub.publish(id, frame);
 
     bool got = false, has_type = false, has_err = false;
-    for (const auto& f : fake->frames) {
+    for (const auto& f : fake->snapshot()) {
         if (f != frame) continue;
         got = true;
         auto d = f.find("data: ");

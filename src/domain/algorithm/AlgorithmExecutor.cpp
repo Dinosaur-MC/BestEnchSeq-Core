@@ -186,6 +186,11 @@ void AlgorithmExecutor::start(AlgorithmInput input, std::unique_ptr<IAlgorithm> 
     _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
     _algo_name_cache = std::string(_algorithm->name());
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
+    // A pre-start cancel() (recorded in _cancel_pending) must still abort this
+    // run: poison the context so the worker bails at its first cancellation
+    // check instead of running the search to completion.
+    if (_cancel_pending.exchange(false, std::memory_order_acq_rel))
+        _ctx->cancel();
     _start_time = std::chrono::steady_clock::now();
 
     // Start timeout watcher if max_search_time > 0
@@ -241,6 +246,9 @@ void AlgorithmExecutor::start(const std::vector<uint8_t>& checkpoint) {
     _task_id = _next_task_id.fetch_add(1, std::memory_order_relaxed);
     _algo_name_cache = std::string(_algorithm->name());
     _ctx = std::make_unique<ExecutionContext>(_task_id, _algo_name_cache.c_str());
+    // Same pre-start cancel consumption as start(AlgorithmInput).
+    if (_cancel_pending.exchange(false, std::memory_order_acq_rel))
+        _ctx->cancel();
     _start_time = std::chrono::steady_clock::now();
     _start_timeout_watcher(_algorithm_input.config.search.max_search_time);
     _worker.emplace([this]() mutable {
@@ -308,9 +316,16 @@ void AlgorithmExecutor::resume() {
 void AlgorithmExecutor::cancel() {
     AlgorithmState prev = _state.exchange(AlgorithmState::Cancelled, std::memory_order_acq_rel);
     // Don't clobber Completed or Failed — results/loss would be lost/mislabeled.
-    // Idle is restored too so a pre-start cancel() cannot brick later start()s.
-    if (prev == AlgorithmState::Completed || prev == AlgorithmState::Failed || prev == AlgorithmState::Idle) {
+    // Idle is restored too so a pre-start cancel() cannot brick later start()s,
+    // but the cancel itself is recorded in _cancel_pending so the upcoming
+    // start() still aborts (see the member comment for the race this closes).
+    if (prev == AlgorithmState::Completed || prev == AlgorithmState::Failed) {
         _state.store(prev, std::memory_order_release);
+        return;
+    }
+    if (prev == AlgorithmState::Idle) {
+        _state.store(prev, std::memory_order_release);
+        _cancel_pending.store(true, std::memory_order_release);
         return;
     }
     if (prev == AlgorithmState::Running || prev == AlgorithmState::Pausing || prev == AlgorithmState::Paused) {

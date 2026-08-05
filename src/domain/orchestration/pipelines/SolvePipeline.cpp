@@ -116,14 +116,6 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(algorithm::AlgorithmInp
         throw std::runtime_error(tr_fmt("pipeline.err.unsupported_mode", algorithm, mode_str));
     }
 
-    // Feasibility gate (cheap).  The resolver (which produces the strategy's
-    // working item set) is called by the strategy itself inside execute().
-    result.algorithm_name = algorithm;
-    if (!executor->simulate(algo_input)) {
-        LOG_INFO("simulate: target not reachable");
-        return result;
-    }
-
     // Execute on the heap so a shared_ptr can publish the executor's address
     // while keeping it alive.  The handle only ever carries shared_ptr copies:
     // the stack-local `executor` keeps the object alive until this function
@@ -136,6 +128,19 @@ SolvePipeline::Stage2Result SolvePipeline::stage_execute(algorithm::AlgorithmInp
     ExecutorHandleGuard handle_guard{out_executor};
     if (out_executor)
         out_executor->store(shared);
+
+    // Feasibility gate (cheap).  The resolver (which produces the strategy's
+    // working item set) is called by the strategy itself inside execute().
+    // Published above BEFORE this gate: a concurrent abort_solve() must find
+    // the executor even while simulate()/start() have not run yet — a cancel
+    // that lands on an Idle executor is recorded as pending and still aborts
+    // the run (AlgorithmExecutor::cancel/_cancel_pending).
+    result.algorithm_name = algorithm;
+    if (!shared->simulate(algo_input)) {
+        LOG_INFO("simulate: target not reachable");
+        return result;
+    }
+
     shared->start(algo_input);
     shared->wait();
     auto end = std::chrono::steady_clock::now();

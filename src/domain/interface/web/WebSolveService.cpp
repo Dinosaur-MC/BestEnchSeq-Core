@@ -114,6 +114,15 @@ WebSolveService::~WebSolveService() {
         }
     }
     _ctx.abort_solve();
+    // Publish-window race: a worker may be inside BesqContext::solve() before
+    // the pipeline has published the executor handle (resolve_effective /
+    // create_executor), so the abort above can find no executor and be lost —
+    // the solve would then run to completion and this join would block for its
+    // full duration.  Retry once after a short grace: by then the pipeline has
+    // published, the retry's cancel() lands on an Idle executor and is recorded
+    // as pending, so the run aborts at its first cancellation check.
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    _ctx.abort_solve();
     for (const auto& t : tasks)
         if (t->worker.joinable()) t->worker.join();
 }
@@ -347,6 +356,13 @@ bool WebSolveService::cancel(const std::string& id) {
         task->state = TaskState::Cancelled;
     }
     _ctx.abort_solve();  // cancel() on the live executor is a safe no-op if idle
+    // Publish-window retry (same race as the destructor): if the worker is
+    // inside BesqContext::solve() before the pipeline published the executor
+    // handle, the first abort found nothing.  The retry lands on an Idle
+    // executor and is recorded as pending, aborting the run at its first
+    // cancellation check instead of burning the full solve.
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    _ctx.abort_solve();
     return true;
 }
 

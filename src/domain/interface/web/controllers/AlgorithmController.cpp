@@ -66,9 +66,6 @@ Response AlgorithmController::load(const HttpRequest&, const PathParams&, const 
 }
 
 Response AlgorithmController::unload(const HttpRequest&, const PathParams&, const Json& body) {
-    // Same gate as list(): unload_algorithm() mutates the loader registry and
-    // the active-solve check below reads WebSolveService state.
-    std::lock_guard<std::mutex> lock(_gate);
     if (body.type() != JsonType::Object)
         throw WebHttpError(400, "INVALID_FIELD", "unload body must be a JSON object");
     std::string name;
@@ -78,9 +75,19 @@ Response AlgorithmController::unload(const HttpRequest&, const PathParams&, cons
         throw WebHttpError(400, "INVALID_FIELD", "unload body requires a 'name' string");
     }
     // A running solve may be holding the plugin's executor instance — refuse
-    // to unload while one is active (single-slot invariant).
+    // to unload while one is active (single-slot invariant).  Checked BEFORE
+    // the gate on purpose: the solve worker holds the gate for its whole _ctx
+    // window, so a gate-first check could only ever observe a completed task
+    // (the 409 would depend on racing the worker's first gate acquisition).
+    // The check reads WebSolveService task state (mutex-guarded) and is
+    // advisory — the mutation below is still serialized on the gate, and a
+    // solve starting between check and mutation fails cleanly (its
+    // create_executor happens after ours, and the loader rejects the unloaded
+    // algorithm).
     if (_svc.has_active())
         throw WebHttpError(409, "TASK_ACTIVE", "cannot unload algorithm while a solve is running");
+    // Same gate as list(): unload_algorithm() mutates the loader registry.
+    std::lock_guard<std::mutex> lock(_gate);
     // False = builtin (trusted kernel) or unknown — never unloadable.
     if (!_ctx.unload_algorithm(name))
         throw WebHttpError(400, "UNLOAD_REJECTED", "unload rejected: " + name);

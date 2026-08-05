@@ -91,6 +91,12 @@ private:
     std::unique_ptr<ExecutionContext> _ctx;
     std::optional<std::thread> _worker;
     std::atomic<AlgorithmState> _state{AlgorithmState::Idle};
+    /// A cancel() that landed while Idle (pre-start publish-window race: the
+    /// solve pipeline can be observed through the active-executor handle
+    /// before start() flips the state) must not be lost — the next start()
+    /// consumes this flag and poisons the ExecutionContext so the run bails
+    /// at its first cancellation check.
+    std::atomic<bool> _cancel_pending{false};
     AlgorithmInput _algorithm_input; // owned by executor, passed to serializer
     std::atomic<bool> _finalized{false};
     std::mutex _state_mtx;
