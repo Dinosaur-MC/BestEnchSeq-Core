@@ -246,6 +246,10 @@ void handle_run(AlgorithmExecutor& exec,
 
     bool failed = false;
     try {
+        // The executor is reused across MsgRun frames (created once in main()).
+        // Terminal states block implicit transitions, so re-arm it explicitly
+        // before every run (no-op when Idle — e.g. the first run).
+        exec.reset();
         if (resume) {
             exec.start(payload); // opaque checkpoint blob (input is embedded)
         } else {

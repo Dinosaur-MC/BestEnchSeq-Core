@@ -344,6 +344,22 @@ void AlgorithmExecutor::cancel() {
                                             DiagnosticsEvent::StatePayload{prev, AlgorithmState::Cancelled});
 }
 
+bool AlgorithmExecutor::reset() noexcept {
+    const auto s = _state.load(std::memory_order_acquire);
+    if (s != AlgorithmState::Completed && s != AlgorithmState::Failed && s != AlgorithmState::Cancelled)
+        return false;  // running or idle — nothing to reset
+    _state.store(AlgorithmState::Idle, std::memory_order_release);
+    _finalized = false;
+    _ctx.reset();
+    _algorithm_input = AlgorithmInput{};
+    _error_message.clear();
+    _computation_time = std::chrono::milliseconds{0};
+    _computation_time_recorded = false;
+    _algo_name_cache.clear();
+    _cancel_pending.store(false, std::memory_order_release);
+    return true;
+}
+
 AlgorithmState AlgorithmExecutor::wait() {
     _join_worker();
     _finalize();

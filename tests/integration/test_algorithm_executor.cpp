@@ -139,6 +139,39 @@ void test_double_start() {
     std::cout << "PASS: test_double_start" << std::endl;
 }
 
+void test_reset_and_rerun() {
+    // A terminal executor can be re-armed explicitly via reset() and run
+    // again (the sandbox worker reuses one executor across MsgRun frames).
+    auto algo = std::make_unique<TestAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+
+    executor.start(g_test_input);
+    expect(executor.wait() == AlgorithmState::Completed, "first run completes");
+    expect(executor.reset(), "reset() after Completed returns true");
+    expect(executor.state() == AlgorithmState::Idle, "state back to Idle after reset");
+    expect(!executor.reset(), "reset() while Idle is a no-op (false)");
+
+    executor.start(g_test_input);
+    expect(executor.wait() == AlgorithmState::Completed, "re-run completes");
+    std::cout << "PASS: test_reset_and_rerun" << std::endl;
+}
+
+void test_reset_refuses_while_running() {
+    auto algo = std::make_unique<SlowAlgorithm>();
+    AlgorithmExecutor executor(std::move(algo));
+
+    executor.start(g_test_input);
+    // Poll until actually Running, then reset() must refuse.
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (executor.state() != AlgorithmState::Running &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    expect(executor.state() == AlgorithmState::Running, "should be Running");
+    expect(executor.reset() == false, "reset() while Running refused");
+    executor.wait();
+    std::cout << "PASS: test_reset_refuses_while_running" << std::endl;
+}
+
 void test_executor_cancel() {
     auto algo = std::make_unique<SlowAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
@@ -397,6 +430,8 @@ int main() {
         test_initial_state();
         test_executor_lifecycle();
         test_double_start();
+        test_reset_and_rerun();
+        test_reset_refuses_while_running();
         test_executor_cancel();
         test_executor_pause_resume();
         test_cancel_before_start_noop();

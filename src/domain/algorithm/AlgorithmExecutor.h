@@ -54,6 +54,12 @@ public:
     void pause() override;
     void resume() override;
     void cancel() override;
+    /// Explicitly return a terminal (Completed/Failed/Cancelled) executor to
+    /// Idle so the same instance can start() again (the sandbox worker reuses
+    /// one executor across MsgRun frames).  Refuses while Running/Paused —
+    /// callers must wait() first.  Implicit transitions FROM terminal states
+    /// stay blocked (_set_state), only this explicit reset re-arms the run.
+    bool reset() noexcept;
     AlgorithmState wait() override;
     AlgorithmState wait_for(std::chrono::milliseconds timeout);
 
