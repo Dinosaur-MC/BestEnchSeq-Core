@@ -26,6 +26,15 @@ bool CompactAdapter::is_supported(const EnchInfo &info, const NSID &item_id,
     return false;
 }
 
+bool CompactAdapter::is_applicable(const EnchInfo &info, const NSID &item_id,
+                                   const std::unordered_set<NSID> &item_tags,
+                                   MCE platform) {
+    if (!is_supported(info, item_id, item_tags))
+        return false;
+    return info.supported_platform == MCE::None || info.supported_platform == MCE::All ||
+           info.supported_platform == platform;
+}
+
 // ============================================================================
 // apply — Profile + SolveRequest -> AlgorithmInput
 // ============================================================================
@@ -79,20 +88,21 @@ algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const So
     for (size_t gid = 0; gid < sorted_infos.size() && gid < 64; ++gid) {
         const auto &biz = sorted_infos[gid].second;
 
-        // Platform availability: an enchantment restricted to one platform is
-        // excluded from a solve targeting the other.  None/All = everywhere.
-        // (Requested platform-incompatible enchants are then caught by the
-        // validate_enchants -> nsid_to_local lookup below.)
-        if (!(biz.supported_platform == MCE::None ||
-              biz.supported_platform == MCE::All ||
-              biz.supported_platform == request.forge_config.platform))
-            continue;
-
-        // A book target accepts every enchantment: in MC a book becomes an
-        // enchanted_book when enchanted, and an enchanted book can hold any
-        // enchantment.  Mirrors the inventory-item book exception below.
-        if (!request.target_item.is_book() &&
-            !is_supported(biz, request.target_item.id, target_tags))
+        // Applicability = platform gate (an enchantment restricted to one
+        // platform is excluded from a solve targeting the other; None/All =
+        // everywhere) AND tag-membership — shared predicate with the
+        // /enchantables web endpoint (is_applicable).  A book target accepts
+        // every enchantment: the tag-membership half is skipped for books,
+        // but the platform half still applies (a Bedrock-only enchantment
+        // cannot be applied on Java — same gate as the endpoint's non-book
+        // items).  (Requested platform-incompatible enchants are then caught
+        // by the validate_enchants -> nsid_to_local lookup below.)
+        const bool platform_ok = biz.supported_platform == MCE::None ||
+                                 biz.supported_platform == MCE::All ||
+                                 biz.supported_platform == request.forge_config.platform;
+        if (!is_applicable(biz, request.target_item.id, target_tags,
+                           request.forge_config.platform) &&
+            !(platform_ok && request.target_item.is_book()))
             continue;
 
         algorithm::EnchInfo ai;

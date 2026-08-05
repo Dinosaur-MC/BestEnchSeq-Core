@@ -46,6 +46,7 @@ public:
             BESQ_ROUTE(Get,    "/api/profiles/{key}/tags/{name}",              readTag),
             BESQ_ROUTE(Patch,  "/api/profiles/{key}/tags/{name}",              updateTag),
             BESQ_ROUTE(Delete, "/api/profiles/{key}/tags/{name}",              removeTag),
+            BESQ_ROUTE(Get,    "/api/profiles/{key}/enchantables/{item}",      listEnchantables),
         };
     }
 
@@ -81,6 +82,11 @@ public:
     Response readTag(const HttpRequest&, const PathParams&);
     Response updateTag(const HttpRequest&, const PathParams&, const Json&);
     Response removeTag(const HttpRequest&, const PathParams&);
+
+    // ── Enchantables sub-resource ──
+    /// Enchantments applicable to an item (effective-view tag resolution +
+    /// platform gate, mirroring solve).
+    Response listEnchantables(const HttpRequest&, const PathParams&);
 
 private:
     BesqContext& _ctx;

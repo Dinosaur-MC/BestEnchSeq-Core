@@ -1,8 +1,10 @@
 #include "ProfilesController.h"
 #include "domain/interface/BesqContext.h"
+#include "domain/business/components/TagResolver.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "domain/orchestration/components/CompactAdapter.h"
 #include "common/io/json.h"
 #include <algorithm>
 #include <mutex>
@@ -438,6 +440,48 @@ Response ProfilesController::removeTag(const HttpRequest&, const PathParams& pp)
     if (!_ctx.remove_tag_from(key, path_nsid(pp.get("name"))))
         throw WebHttpError(404, "ENTRY_NOT_FOUND", "tag not found: " + pp.get("name"));
     return Response::no_content();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Enchantables sub-resource
+// ══════════════════════════════════════════════════════════════════════════
+
+Response ProfilesController::listEnchantables(const HttpRequest&, const PathParams& pp) {
+    std::lock_guard<std::mutex> lock(_gate);
+    const std::string key = pp.get("key");
+    require_profile(_ctx, key);
+    const Profile& prof = _ctx.effective_profile(key);
+    const NSID item = path_nsid(pp.get("item"));
+
+    // An enchanted book can hold every enchantment — return the full registry
+    // (mirrors solve's book exception in CompactAdapter::apply).
+    if (item == NSID("minecraft:enchanted_book"))
+        return Response::json(200, "OK", registry_json(prof.ench()).to_string());
+
+    if (prof.eq().find(item) == prof.eq().end())
+        throw WebHttpError(404, "ENTRY_NOT_FOUND", "equipment not found: " + pp.get("item"));
+
+    const TagResolver* resolver = prof.tag_resolver();
+    if (!resolver)
+        throw WebHttpError(500, "INTERNAL_ERROR", "profile has no tag resolver attached");
+
+    // Applicability mirrors solve: solve is always Java (WebSolveService pins
+    // forge_config.platform = MCE::Java), so the platform gate runs against
+    // MCE::Java.  Tag membership comes from the effective view's resolver
+    // (nested tags expanded via BFS).
+    const auto item_tags = resolver->tags_of(item.str());
+    std::vector<EnchInfo> hits;
+    for (const auto& e : prof.ench())
+        if (CompactAdapter::is_applicable(e, item, item_tags, MCE::Java))
+            hits.push_back(e);
+
+    // Deterministic ordering by id (same comparator as registry_json).
+    std::sort(hits.begin(), hits.end(),
+              [](const EnchInfo& a, const EnchInfo& b) { return a.id.str() < b.id.str(); });
+    Json arr = Json::array();
+    for (const auto& e : hits)
+        arr.push_back(e.to_json());
+    return Response::json(200, "OK", arr.to_string());
 }
 
 } // namespace web
