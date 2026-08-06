@@ -7,6 +7,8 @@
 import { http, showError, clearError, esc } from '../api.js';
 import { t } from '../i18n.js';
 import { displayName } from '../names_zh.js';
+import { iconSpanHtml } from '../sprite.js';
+import { paginate, pagerHtml, bindPager } from './pager.js';
 
 let renderSeq = 0; // guards registry renders against overlapping async re-renders
 
@@ -30,17 +32,9 @@ const KINDS = {
   tag:   { plural: 'tags',         label: 'prof.tag' },
 };
 
-// "minecraft:netherite_sword" → "netherite_sword" for the /public icon file.
-function itemIdToFile(id) {
-  const s = String(id || '');
-  return s.startsWith('minecraft:') ? s.slice('minecraft:'.length) : s;
-}
-
-// Embedded 16x16 icon URL for an equipment id (vanilla ids only; the onerror
-// handler hides the img for modded ids).
-function iconUrl(id) {
-  return `/public/vendor/icons/${esc(itemIdToFile(id))}.png`;
-}
+// Registry icons come from the sprite sheet (sprite.js helpers); ids without
+// a tile (modded) render '' — same hidden semantics as the old onerror-hide
+// <img>, minus the per-id request.
 
 // A minimal entry the backend's validation accepts. The en/equip/tag fields the
 // registry requires differ — this seeds the add-form with just enough to
@@ -139,6 +133,12 @@ function openEditor(el, key, kind, entry, isNew) {
   card.querySelector('input:not([readonly]), input[type="text"]')?.focus();
 }
 
+// Local pagination: one registry page renders PAGE_SIZE rows with a
+// prev/next pager. Page state survives mutation re-renders within the same
+// (profile, kind) and resets when the tab or profile changes.
+const PAGE_SIZE = 50;
+const regPage = { profile: '', kind: '', page: 1 };
+
 // Render one registry (kind ∈ ench|equip|tag) for `profile` into `el`, which
 // must be a dedicated container: the card replaces whatever was there so the
 // add/remove/edit re-render never duplicates it.
@@ -159,10 +159,14 @@ async function renderRegistry(el, profile, kind) {
   // The new controller returns a bare array; older handlers wrapped it in an
   // object under the plural key — accept both so the view is resilient.
   const entries = Array.isArray(data) ? data : (data[plural] || []);
+  if (regPage.profile !== profile || regPage.kind !== kind) {
+    regPage.profile = profile; regPage.kind = kind; regPage.page = 1;
+  }
+  const pg = paginate(entries, regPage.page, PAGE_SIZE);
   const icon = kind === 'equip'
-    ? (id) => `<img src="${iconUrl(id)}" alt="" style="width:20px;height:20px;vertical-align:middle;margin-right:4px" onerror="this.style.display='none'">`
+    ? (id) => iconSpanHtml(id, 20, '', 'margin-right:4px')
     : () => '';
-  const rows = entries
+  const rows = pg.items
     .map((e) => `<tr>
         <td>${icon(e.id)}${esc(e.id)}</td>
         <td>${esc(kind === 'tag' ? (e.name || '') : displayName(e.id, e.name || ''))}</td>
@@ -176,8 +180,10 @@ async function renderRegistry(el, profile, kind) {
     <h3>${t('prof.' + kind)}</h3>
     <table><thead><tr><th>${t('prof.id')}</th><th>${t('prof.name')}</th><th>${t('prof.max_level')}</th><th></th></tr></thead>
     <tbody>${rows || '<tr><td colspan="4">—</td></tr>'}</tbody></table>
+    ${pagerHtml(pg.page, pg.total)}
     <label>${t('prof.id')}</label><input class="add-id" placeholder="${t('prof.id_placeholder')}">
     <button class="add-row">${t('prof.add')}</button>`;
+  bindPager(wrap, (p) => { regPage.page = p; renderRegistry(el, profile, kind); });
   wrap.querySelector('.add-row').addEventListener('click', () => {
     clearError();
     // Add-via-form: seed the form with the typed id (may be empty), the user

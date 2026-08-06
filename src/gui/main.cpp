@@ -130,6 +130,7 @@ std::string_view frontend_view_algorithms();
 std::string_view frontend_view_logs();
 std::string_view frontend_view_settings();
 std::string_view frontend_view_status();
+std::string_view frontend_view_pager();
 } // namespace besq::data
 
 static std::string read_file(const std::string& path) {
@@ -244,6 +245,7 @@ static constexpr Asset kAssets[] = {
     {"/views/logs.js",       "text/javascript", besq::data::frontend_view_logs},
     {"/views/settings.js",   "text/javascript", besq::data::frontend_view_settings},
     {"/views/status.js",     "text/javascript", besq::data::frontend_view_status},
+    {"/views/pager.js",      "text/javascript", besq::data::frontend_view_pager},
 };
 
 /// Build the static-resource table. When `frontend_dir` is non-empty (dev

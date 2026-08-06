@@ -324,6 +324,14 @@ mdui-dropdown::part(panel) {
   .res-cost { margin-left: auto; }
 }
 
+/* ── Registry pagination (views/pager.js) ── */
+.pager {
+  display: flex; align-items: center; gap: 8px;
+  margin: 10px 0 4px;
+}
+.pager-btn { padding: 4px 12px; font-size: 13px; }
+.pager-info { color: var(--muted); font-size: 13px; margin: 0 4px; }
+
 /* ── Control height unification (≈36px, matching the plain buttons) ── */
 mdui-button { height: 36px; }
 mdui-switch { height: 36px; }
