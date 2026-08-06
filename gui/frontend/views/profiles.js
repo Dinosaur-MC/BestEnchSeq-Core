@@ -351,14 +351,25 @@ export function render(el) {
   };
 
   // Select a profile: render its metadata panel + registry tabs (default ench).
+  // The tab strip is an mdui-tabs control (same variant as the calculator
+  // result area); its change event re-renders the registry below (panels are
+  // not used — the registry card lives outside the tabs element).
   const selectProfile = async (key) => {
     metaPanel.dataset.key = key;
-    tabs.innerHTML = Object.keys(KINDS)
-      .map((k) => `<button class="tab-btn" data-tab="${k}">${t(KINDS[k].label)}</button>`).join('');
-    tabs.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => {
+    const tabHost = document.createElement('mdui-tabs');
+    tabHost.setAttribute('variant', 'secondary');
+    tabHost.setAttribute('value', 'ench');
+    tabs.replaceChildren(tabHost);
+    for (const k of Object.keys(KINDS)) {
+      const tab = document.createElement('mdui-tab');
+      tab.setAttribute('value', k);
+      tab.textContent = t(KINDS[k].label);
+      tabHost.appendChild(tab);
+    }
+    tabHost.addEventListener('change', () => {
       clearError();
-      refreshRegistry(key, b.dataset.tab);
-    }));
+      refreshRegistry(key, tabHost.value);
+    });
     try {
       const meta = await http.get(`/api/profiles/${encSeg(key)}`);
       renderMeta(meta);
