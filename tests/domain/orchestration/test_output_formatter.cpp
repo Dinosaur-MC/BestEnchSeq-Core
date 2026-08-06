@@ -725,6 +725,35 @@ void test_build_json_root_schema() {
     TEST_PASS("build_json_root ds schema");
 }
 
+// ─── Test: root meta fields are a single shared tuple ─────────────────────
+// The five root-meta field descriptors live in `kRootMetaFields<T>`:
+// RootMetaSchema (C ABI besq_solve root) uses it directly, RootSchema (CLI
+// root) splices it in via std::tuple_cat.  Pin the public field-name contract
+// so a future edit that reintroduces a second hand-written tuple is caught.
+
+template<typename Tuple>
+static std::vector<std::string> schema_field_names(const Tuple& t) {
+    std::vector<std::string> names;
+    std::apply([&](const auto&... f) { (names.emplace_back(f.name), ...); }, t);
+    return names;
+}
+
+void test_root_meta_fields_shared() {
+    const auto meta = schema_field_names(RootMetaSchema::fields);
+    const auto root = schema_field_names(RootSchema::fields);
+
+    expect_eq(meta.size(), 5u, "root meta: exactly five meta fields");
+    expect_eq(root.size(), 6u, "root schema: five meta fields + solutions");
+
+    // RootSchema's leading fields must be exactly RootMetaSchema's fields.
+    std::vector<std::string> root_prefix(root.begin(), root.begin() + 5);
+    expect(root_prefix == meta,
+           "root schema prefix must match RootMetaSchema fields (shared tuple)");
+    expect(root[5] == "solutions", "root schema: trailing solutions field");
+
+    TEST_PASS("root meta fields shared via kRootMetaFields");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -745,6 +774,7 @@ int main() {
         test_json_roundtrip();
         test_format_json_schema_encode();
         test_build_json_root_schema();
+        test_root_meta_fields_shared();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

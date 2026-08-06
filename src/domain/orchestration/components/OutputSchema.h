@@ -12,7 +12,11 @@
 //
 // The wire shape is declared ONCE here as ds schemas and the output JSON is
 // assembled by `ds::json::Schema<S>::serialize` instead of hand-built Json
-// objects.  Item serialization that needs registry context (equipment lookup,
+// objects.  The five root-meta fields (schema_version … computation_time_ms)
+// are declared once in the `kRootMetaFields<T>` tuple and spliced into both
+// root schemas (RootMetaSchema direct, RootSchema via std::tuple_cat), so the
+// CLI root and the C ABI root share a single field set.
+// Item serialization that needs registry context (equipment lookup,
 // category / display-name resolution) happens while filling the *View structs
 // (see OutputFormatter::make_*_view), whose members are plain wire values;
 // the schemas themselves stay registry-free, like the inventory/web schemas.
@@ -161,8 +165,10 @@ struct SolutionSchema {
 };
 
 /// Root metadata object — shared by OutputFormatter::format_json and the C ABI
-/// besq_solve (both assemble from these field declarations so they cannot
-/// drift).
+/// besq_solve.  The five root-meta field descriptors live in the single
+/// `kRootMetaFields<T>` tuple below; RootMetaSchema uses it directly and
+/// RootSchema splices it in via std::tuple_cat, so the two roots share one
+/// field set and cannot drift.
 struct RootMetaView {
     std::string schema_version;
     std::string mode;
@@ -170,16 +176,25 @@ struct RootMetaView {
     std::string algorithm;
     int64_t computation_time_ms = 0;
 };
+
+/// Root-meta field descriptors — single source of truth shared by
+/// RootMetaSchema (C ABI besq_solve root) and RootSchema (CLI root).
+/// Templated on the view type so each schema's member pointers match its own
+/// Type exactly; RootMetaView and RootView must expose identically-named
+/// members (renaming one without the other fails to instantiate).
+template<typename T>
+inline constexpr auto kRootMetaFields = std::tuple{
+    ds::required_field("schema_version", &T::schema_version, ds::string_codec{}),
+    ds::required_field("mode", &T::mode, ds::string_codec{}),
+    ds::required_field("success", &T::success, ds::bool_codec{}),
+    ds::required_field("algorithm", &T::algorithm, ds::string_codec{}),
+    ds::required_field("computation_time_ms", &T::computation_time_ms,
+                       ds::int_codec{}),
+};
+
 struct RootMetaSchema {
     using Type = RootMetaView;
-    static constexpr auto fields = std::tuple{
-        ds::required_field("schema_version", &Type::schema_version, ds::string_codec{}),
-        ds::required_field("mode", &Type::mode, ds::string_codec{}),
-        ds::required_field("success", &Type::success, ds::bool_codec{}),
-        ds::required_field("algorithm", &Type::algorithm, ds::string_codec{}),
-        ds::required_field("computation_time_ms", &Type::computation_time_ms,
-                           ds::int_codec{}),
-    };
+    static constexpr auto fields = kRootMetaFields<RootMetaView>;
 };
 
 /// Full root object emitted by OutputFormatter::format_json.
@@ -193,14 +208,10 @@ struct RootView {
 };
 struct RootSchema {
     using Type = RootView;
-    static constexpr auto fields = std::tuple{
-        ds::required_field("schema_version", &Type::schema_version, ds::string_codec{}),
-        ds::required_field("mode", &Type::mode, ds::string_codec{}),
-        ds::required_field("success", &Type::success, ds::bool_codec{}),
-        ds::required_field("algorithm", &Type::algorithm, ds::string_codec{}),
-        ds::required_field("computation_time_ms", &Type::computation_time_ms,
-                           ds::int_codec{}),
-        ds::required_field("solutions", &Type::solutions,
-                           ds::vector_codec<ds::object_codec<SolutionSchema>>{}),
-    };
+    static constexpr auto fields = std::tuple_cat(
+        kRootMetaFields<RootView>,
+        std::tuple{
+            ds::required_field("solutions", &Type::solutions,
+                               ds::vector_codec<ds::object_codec<SolutionSchema>>{}),
+        });
 };

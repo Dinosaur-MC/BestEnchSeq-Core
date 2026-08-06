@@ -29,7 +29,7 @@ The JSON output is a single root object containing metadata and an array of solu
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `schema_version` | `string` | always | Schema version string (`"1.1"`). Incremented on breaking changes. |
+| `schema_version` | `string` | always | Schema version string (`"1.1"`). Incremented on breaking changes; 1.1 is the single non-breaking exception — the wire shape was unchanged, the bump marked the switch to schema-driven output assembly. |
 | `mode` | `string` | always | Operating mode: `"direct"` or `"inventory"`. |
 | `success` | `bool` | always | Whether the solve completed successfully. Shared with the C ABI `besq_solve` root. |
 | `algorithm` | `string` | always | Name of the algorithm used. Derived from the first solution's metadata when a bare solution set is formatted without a `SolveResult`. |
@@ -194,4 +194,4 @@ Limitations:
 |---|---|
 | 1.0 | Initial stable schema |
 | 1.0 (B-T23) | Root now carries `success` / `algorithm` / `computation_time_ms`, aligned with the C ABI `besq_solve` root via a shared `OutputFormatter::build_json_root`; `equipment.category` / `equipment.max_durability` in `ItemStack` now emit real registry data instead of `"unknown"` / `0`. |
-| 1.1 | Wire shape unchanged. Output assembly moved to the project's ds DSL schema (`OutputSchema.h`): the whole root — metadata + solutions — is encoded by `ds::json::Schema<RootSchema>::serialize`, and `build_json_root` (shared with the C ABI) by `RootMetaSchema`. Same field declarations drive both, so the two roots cannot drift by construction. `schema_version` bumped 1.0 → 1.1 to mark the schema-ized generation. |
+| 1.1 | Wire shape unchanged. Output assembly moved to the project's ds DSL schema (`OutputSchema.h`): the whole root — metadata + solutions — is encoded by `ds::json::Schema<RootSchema>::serialize`, and `build_json_root` (shared with the C ABI) by `RootMetaSchema`. The five root-meta fields are declared once (`kRootMetaFields<T>` in `OutputSchema.h`) and shared by both schemas — `RootMetaSchema` directly, `RootSchema` via `std::tuple_cat` — so the two roots' meta field set cannot drift. `schema_version` bumped 1.0 → 1.1 to mark the schema-ized generation. |
