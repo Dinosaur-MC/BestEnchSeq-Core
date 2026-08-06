@@ -10,7 +10,10 @@ namespace web {
 namespace {
 
 /// Current settings snapshot — mirrors the old ApiSettings::handle_get
-/// (field names/shape unchanged; machine format, not localized).
+/// (field names/shape unchanged; machine format, not localized).  The
+/// writable set is lang / log_level / log_console / log_console_level; the
+/// gui_* / memory_mb / sandbox_enabled fields are read-only (set at
+/// startup — the server is already bound).
 Json build_settings_json() {
     const auto& cfg = AppConfig::get();
     Json o = Json::object();
@@ -18,6 +21,21 @@ Json build_settings_json() {
     o["gui_host"] = Json(cfg.gui_host);
     o["gui_port"] = Json(static_cast<int64_t>(cfg.gui_port));
     o["gui_open_browser"] = Json(cfg.gui_open_browser);
+    o["gui_workers"] = Json(static_cast<int64_t>(cfg.gui_workers));
+    o["memory_mb"] = Json(cfg.memory_mb);
+    o["sandbox_enabled"] = Json(cfg.sandbox_enabled);
+    o["log_level"] = Json(static_cast<int64_t>(Logger::instance().get_level()));
+    o["log_console"] = Json(Logger::instance().console_enabled());
+    o["log_console_level"] = Json(static_cast<int64_t>(Logger::instance().console_level()));
+    return o;
+}
+
+/// Serialize the current runtime state of the four writable settings —
+/// exactly what config.json persists (lang is LanguageManager state, not an
+/// AppConfig field).
+Json runtime_settings_json() {
+    Json o = Json::object();
+    o["lang"] = Json(std::string(LanguageManager::instance().active().name()));
     o["log_level"] = Json(static_cast<int64_t>(Logger::instance().get_level()));
     o["log_console"] = Json(Logger::instance().console_enabled());
     o["log_console_level"] = Json(static_cast<int64_t>(Logger::instance().console_level()));

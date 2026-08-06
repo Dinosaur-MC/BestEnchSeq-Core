@@ -339,3 +339,15 @@ mdui-switch { height: 36px; }
 mdui-select::part(text-field) { height: 36px; }
 mdui-select::part(text-field__container) { height: 36px; }
 mdui-select::part(text-field__input) { height: 36px; }
+
+/* ── Settings page (batch D): grouped cards + read-only service rows ── */
+.set-group h3 { margin: 0 0 4px; font-size: 14px; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; }
+.set-row .set-label { color: var(--muted); font-size: 13px; }
+.set-row select { width: 220px; }
+.set-ro { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0; font-size: 13px; }
+.set-ro span:first-child { color: var(--muted); }
+.set-ro span:last-child { font-family: Consolas, "Cascadia Mono", monospace; }
+.set-ro-hint { color: var(--muted); font-size: 12px; font-weight: normal; margin-left: 8px; }
+.set-actions { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
+.set-msg { color: var(--accent); font-size: 13px; }

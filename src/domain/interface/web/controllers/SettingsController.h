@@ -5,8 +5,11 @@
 namespace web {
 
 /// GET/PATCH /api/settings. `lang`, `log_level`, `log_console`,
-/// `log_console_level` are writable at runtime; `gui_host`/`gui_port` are
-/// startup-only (the server is already bound).
+/// `log_console_level` are writable at runtime; `gui_host`/`gui_port`/
+/// `gui_workers`/`memory_mb`/`sandbox_enabled` are read-only (set at
+/// startup — the server is already bound).  Every successful PATCH persists
+/// the four writable fields to <cwd>/config.json (best-effort; the GUI
+/// reloads them at startup — see AppConfig).
 ///
 /// Every handler holds _gate FIRST — the same web-layer _ctx_gate that
 /// WebSolveService holds for its whole _ctx window. patch() mutates

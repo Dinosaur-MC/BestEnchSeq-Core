@@ -1,40 +1,82 @@
-// settings.js — Settings view: edit language + log level, persist via PATCH.
-import { http, showError, clearError } from '../api.js';
-import { t, setLang, applyI18n } from '../i18n.js';
+// settings.js — Settings view: edit language + log settings, persist via
+// PATCH (the backend also writes <cwd>/config.json so the values survive a
+// restart).  The service group is read-only info determined at startup.
+import { http, showError, clearError, esc } from '../api.js';
+import { t, setLang, langCode, applyI18n } from '../i18n.js';
+
+const LEVELS = [0, 1, 2, 3];
+const LEVEL_KEYS = ['level.debug', 'level.info', 'level.warn', 'level.error'];
+
+// Editable row: label + control (select / mdui-switch).
+function editableRow(label, controlHtml) {
+  return `<div class="set-row"><span class="set-label">${label}</span>${controlHtml}</div>`;
+}
+
+// Read-only key-value row (service group).
+function roRow(label, valueHtml) {
+  return `<div class="set-ro"><span>${label}</span><span>${valueHtml}</span></div>`;
+}
+
+function levelSelect(id, current) {
+  return `<select id="${id}">${LEVELS.map((lv) =>
+    `<option value="${lv}" ${current === lv ? 'selected' : ''}>${t(LEVEL_KEYS[lv])}</option>`)
+    .join('')}</select>`;
+}
 
 export async function render(el) {
   const myView = el.dataset.view; // bail if route() re-stamps ownership mid-await
   const s = await http.get('/api/settings');
   if (el.dataset.view !== myView) return;
-  el.innerHTML = `<h2>${t('set.title')}</h2><div class="card">
-    <label>${t('set.lang')}</label>
-    <select id="set-lang">
+  const langSel = `<select id="set-lang">
       <option value="en_US" ${s.lang === 'en_US' ? 'selected' : ''}>English</option>
       <option value="zh_CN" ${s.lang === 'zh_CN' ? 'selected' : ''}>中文</option>
-    </select>
-    <label>${t('set.log_level')}</label>
-    <select id="set-loglevel">
-      <option value="0" ${s.log_level === 0 ? 'selected' : ''}>${t('level.debug')}</option>
-      <option value="1" ${s.log_level === 1 ? 'selected' : ''}>${t('level.info')}</option>
-      <option value="2" ${s.log_level === 2 ? 'selected' : ''}>${t('level.warn')}</option>
-      <option value="3" ${s.log_level === 3 ? 'selected' : ''}>${t('level.error')}</option>
-    </select>
-    <div style="margin-top:12px"><button id="set-save">${t('set.save')}</button></div>
-    <div id="set-msg"></div></div>`;
+    </select>`;
+  el.innerHTML = `<h2>${t('set.title')}</h2>
+    <div class="card set-group">
+      <h3>${t('set.group_lang')}</h3>
+      ${editableRow(t('set.lang'), langSel)}
+    </div>
+    <div class="card set-group">
+      <h3>${t('set.group_log')}</h3>
+      ${editableRow(t('set.log_level'), levelSelect('set-loglevel', s.log_level))}
+      ${editableRow(t('set.log_console'),
+        `<mdui-switch id="set-log-console" ${s.log_console ? 'checked' : ''}></mdui-switch>`)}
+      ${editableRow(t('set.log_console_level'), levelSelect('set-console-level', s.log_console_level))}
+    </div>
+    <div class="card set-group">
+      <h3>${t('set.group_service')} <span class="set-ro-hint">${t('set.readonly')}</span></h3>
+      ${roRow(t('set.gui_host'), esc(s.gui_host))}
+      ${roRow(t('set.gui_port'), String(s.gui_port))}
+      ${roRow(t('set.gui_open_browser'), s.gui_open_browser ? t('set.on') : t('set.off'))}
+      ${roRow(t('set.gui_workers'), String(s.gui_workers))}
+      ${roRow(t('set.memory_mb'), String(s.memory_mb))}
+      ${roRow(t('set.sandbox_enabled'), s.sandbox_enabled ? t('set.on') : t('set.off'))}
+    </div>
+    <div class="set-actions">
+      <button id="set-save">${t('set.save')}</button>
+      <span id="set-msg" class="set-msg"></span>
+    </div>`;
   document.getElementById('set-save').addEventListener('click', async () => {
     clearError();
     try {
       const body = {
         lang: document.getElementById('set-lang').value,
         log_level: parseInt(document.getElementById('set-loglevel').value, 10),
+        log_console: document.getElementById('set-log-console').checked,
+        log_console_level: parseInt(document.getElementById('set-console-level').value, 10),
       };
       await http.patch('/api/settings', body);
       if (el.dataset.view !== myView) return; // save finished after navigation
-      setLang(body.lang === 'zh_CN' ? 'zh-CN' : 'en-US');
-      applyI18n();
-      // Re-render the current view so its t() strings pick up the new language.
-      // (No "Saved" note: the synchronous re-render clears #view, so it would never paint.)
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      const langChanged = body.lang !== (langCode() === 'zh-CN' ? 'zh_CN' : 'en_US');
+      if (langChanged) {
+        setLang(body.lang === 'zh_CN' ? 'zh-CN' : 'en-US');
+        applyI18n();
+        // Re-render the current view so its t() strings pick up the new language.
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      } else {
+        // No language switch → the view stays; show the saved note.
+        document.getElementById('set-msg').textContent = t('set.saved');
+      }
     } catch (e) { showError(e.code, e.message); }
   });
 }

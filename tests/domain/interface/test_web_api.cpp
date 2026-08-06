@@ -155,6 +155,17 @@ void test_settings(TestApp& app) {
     auto scj2 = Json::parse(scg2.body);
     expect(scj2["log_console"].as<bool>() == false, "log_console false reflected by GET");
     (void)app.call(Method::Patch, "/api/settings", R"({"log_console":true})");
+    // ── GET read-only service fields (batch D): startup-only info is exposed
+    //    so the settings page can display it ──
+    auto sg = app.call(Method::Get, "/api/settings");
+    auto sgj = Json::parse(sg.body);
+    expect(sgj.has("gui_workers") && sgj["gui_workers"].as<int64_t>() >= 1,
+           "GET carries gui_workers");
+    expect(sgj.has("memory_mb") && sgj["memory_mb"].as<int64_t>() > 0,
+           "GET carries memory_mb");
+    expect(sgj.has("sandbox_enabled") &&
+               sgj["sandbox_enabled"].type() == JsonType::Bool,
+           "GET carries sandbox_enabled");
 }
 
 void test_profiles(TestApp& app) {
