@@ -60,6 +60,10 @@ function shortId(id) {
   return id && id.startsWith('minecraft:') ? id.slice('minecraft:'.length) : id;
 }
 
+// 图标 URL：DOM <img> 与 Canvas createImageBitmap 统一同一编码
+// （encodeURIComponent；vanilla 短 id 为恒等变换）。
+function iconUrl(id) { return `/public/vendor/icons/${encodeURIComponent(id)}.png`; }
+
 // I/II/III/IV/V/VI/VII/VIII/IX/X lookup, with a light extension past 10
 // (modded profiles may exceed vanilla max_level); anything beyond 39 falls
 // back to the raw number.
@@ -112,7 +116,7 @@ function itemName(item) {
 function itemCardHtml(item, cls) {
   if (!item) return '';
   const nsid = (item.equipment && item.equipment.id) || 'minecraft:enchanted_book';
-  const icon = `<img src="/public/vendor/icons/${esc(itemIconId(item))}.png" alt="" ` +
+  const icon = `<img src="${iconUrl(itemIconId(item))}" alt="" ` +
     `title="${esc(nsid)}" onerror="this.style.display='none'">`;
   const ppn = `<span class="res-ppn">${esc(tf('res.ppn', esc(String(item.prior_penalty ?? 0))))}</span>`;
   const enchs = (item.enchantments || []).map((e) =>
@@ -175,8 +179,8 @@ function finalItemHtml(sol) {
     `</div></div>`;
 }
 
-// Algorithm info + action buttons. Copy/save are wired in T4 — this phase
-// renders the controls and binds no-op handlers (structure + styles only).
+// Algorithm info + action buttons (copy text / save image). The buttons are
+// bound to onCopy/onSave in renderSolution after insert (events-on-insert).
 function tailHtml(sol) {
   const m = sol.metadata || {};
   const metaLines = [];
@@ -271,10 +275,11 @@ async function copyToClipboard(text) {
   await legacyCopy(text);
 }
 
-// 成功反馈：按钮短暂显示 ✓ + res.copied，1.5s 后还原文案/可点状态。
-function flashBtn(btn) {
+// 成功反馈：按钮短暂显示 ✓ + 成功文案（复制 res.copied / 保存 res.saved），
+// 1.5s 后还原文案/可点状态。
+function flashBtn(btn, msgKey = 'res.copied') {
   const orig = btn.textContent;
-  btn.textContent = '✓ ' + t('res.copied');
+  btn.textContent = '✓ ' + t(msgKey);
   btn.disabled = true;
   setTimeout(() => {
     btn.textContent = orig;
@@ -300,7 +305,7 @@ async function onSave(sol, btn) {
   try {
     const canvas = await renderCanvas(sol);
     await saveCanvas(canvas);
-    flashBtn(btn);
+    flashBtn(btn, 'res.saved');
   } catch (e) {
     btn.disabled = false;
     showError(e.message || t('res.save_failed'));
@@ -321,7 +326,7 @@ async function saveCanvas(canvas) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
   try {
-    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem && window.isSecureContext)
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
   } catch (_) { /* 不支持 → 仅下载 */ }
 }
@@ -339,6 +344,12 @@ const CV_ICON = 24;
 const CV_NO_D = 28;          // 序号圆直径（1.75rem）
 const CV_OP_W = 22;          // "+"/"=" 列
 const CV_COST_W = 74;        // 右对齐成本列
+const CV_STRIP_H = 38;       // 汇总条高度（drawSummary 与 renderCanvas 布局同步）
+const CV_TAIL_LH = 19;       // 尾部算法行行距（布局与绘制同步）
+const CV_COST_2LINE = 42;    // 两行成本块预留：EXP 行底缘实测 ~40px（含 descent），
+                             // 旧 26px 会被下一行卡片顶缘裁切
+const CV_FINAL_LABEL_H = 22; // 最终物品标签行高
+const CV_FINAL_WRAP_MAX = 384; // 最终物品包装卡宽上限
 const CV_R = 6;              // 卡片圆角（--radius）
 const CV_BADGE_H = 20;
 const CV_BADGE_GAP = 4;
@@ -377,19 +388,21 @@ function cvText(ctx, text, x, y, color, font) {
 
 // 物品卡测量：头部（icon+名称+PPN 徽章）与附魔徽章网格（每行最多 3 个、超出
 // 卡片上限的徽章省略号截断，与 DOM 3 列网格同语义）。返回 {w,h,name,ppn,ppnW,rows}。
-function measureItemCard(item) {
+// 导出供 .temp/verify_t4.py 复算 canvas 布局（纯函数，无副作用）。
+export function measureItemCard(item) {
   const font15 = cvFont(15, '600');
   const font11 = cvFont(11, '400');
   const font13 = cvFont(13, '400');
   const maxInner = CV_CARD_MAX - 2 * CV_CARD_PAD_X;
-  let name = itemName(item);
-  if (cvM(name, font15) > maxInner - CV_ICON - 2 * CV_GAP) {
-    while (name.length > 1 && cvM(name + '…', font15) > maxInner - CV_ICON - 2 * CV_GAP)
-      name = name.slice(0, -1);
-    name += '…';
-  }
   const ppn = tf('res.ppn', String(item.prior_penalty ?? 0));
   const ppnW = cvM(ppn, font11) + 10;
+  // 长名截断上限并入 PPN 徽章位（审查 I2：漏减 ppnW 时长名钻到徽章下方）。
+  const nameLimit = maxInner - CV_ICON - 2 * CV_GAP - ppnW;
+  let name = itemName(item);
+  if (cvM(name, font15) > nameLimit) {
+    while (name.length > 1 && cvM(name + '…', font15) > nameLimit) name = name.slice(0, -1);
+    name += '…';
+  }
   const headW = CV_ICON + CV_GAP + cvM(name, font15) + CV_GAP + ppnW;
   const rows = [];
   let cur = [], curW = 0;
@@ -426,6 +439,12 @@ function drawItemCard(ctx, item, mc, x, y, w, over, isC, jobs) {
   ctx.strokeStyle = over ? CV_COLORS.danger : (isC ? CV_COLORS.accent : CV_COLORS.border);
   ctx.lineWidth = 1;
   ctx.stroke();
+  // 收缩适配只缩放卡片宽、不重排徽章行——内容统一裁剪在卡片边界内（审查 I2：
+  // 与 DOM 溢出裁切同语义；图标由 jobs 异步叠画、位置恒在卡内，不受影响）。
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
   const iy = y + CV_CARD_PAD_Y;
   jobs.push({
     x: x + CV_CARD_PAD_X, y: iy,
@@ -454,6 +473,7 @@ function drawItemCard(ctx, item, mc, x, y, w, over, isC, jobs) {
     }
     by += CV_BADGE_H + CV_BADGE_GAP;
   }
+  ctx.restore();
 }
 
 function drawOp(ctx, ch, x, cy) {
@@ -497,9 +517,9 @@ function drawHollowCheck(ctx, x, y) {
   ctx.textBaseline = 'top';
 }
 
-// 成本列（右对齐）：等级 N（超限红）+ EXP N。
-function drawCost(ctx, s, x2, y) {
-  const over = (s.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL;
+// 成本列（右对齐）：等级 N（超限红）+ EXP N。over 由调用方传入（measureRow
+// 单一事实源，不再重复计算阈值）。
+function drawCost(ctx, s, x2, y, over) {
   const label = t('res.level_label');
   const val = String(s.exp_level_cost ?? '?');
   const expLabel = t('res.exp_label').replace('{0}', '');
@@ -568,7 +588,8 @@ function drawSummary(ctx, tokens, anyOver, y) {
 
 // 一行步骤的几何：A+B=C 三卡 + 运算符 + 成本列。卡片总宽超出可用宽度时按
 // 比例收缩（下限 CV_CARD_MIN）；仍放不下一行则成本列换行到第二行右对齐。
-function measureRow(step) {
+// 导出供 .temp/verify_t4.py 复算布局（纯函数，无副作用）。
+export function measureRow(step) {
   const a = measureItemCard(step.item_a);
   const b = measureItemCard(step.item_b);
   const hasC = !itemEmpty(step.result);
@@ -596,7 +617,7 @@ async function iconBitmap(id) {
   if (!iconCache.has(id))
     iconCache.set(id, (async () => {
       try {
-        const res = await fetch(`/public/vendor/icons/${encodeURIComponent(id)}.png`);
+        const res = await fetch(iconUrl(id));
         if (!res.ok) return null;
         return await createImageBitmap(await res.blob());
       } catch (_) { return null; }
@@ -611,17 +632,18 @@ export async function renderCanvas(sol) {
   const m = sol.metadata || {};
   const rows = steps.map(measureRow);
   const ySummary = CV_PAD;
-  let y = ySummary + 38 + CV_ROW_GAP;
+  let y = ySummary + CV_STRIP_H + CV_ROW_GAP;
   const yRows = y;
   let blockH = 0;
-  for (const r of rows) { r.rowY = yRows + blockH; blockH += r.rowH + (r.oneLine ? 0 : 26) + CV_ROW_GAP; }
+  // 两行成本块行高预留 CV_COST_2LINE（EXP 行底缘实测 ~40px；旧 26px 被下一行卡片顶缘裁切）。
+  for (const r of rows) { r.rowY = yRows + blockH; blockH += r.rowH + (r.oneLine ? 0 : CV_COST_2LINE) + CV_ROW_GAP; }
   y = yRows + blockH;
   const yFinal = y;
   const fItem = sol.target_item;
   let fH = 0;
   if (fItem && !itemEmpty(fItem)) {
     const fc = measureItemCard(fItem);
-    fH = 22 + fc.h + 12;   // 标签行 + 包装卡
+    fH = CV_FINAL_LABEL_H + fc.h + 12;   // 标签行 + 包装卡
     y += fH + CV_ROW_GAP;
   }
   const yTail = y;
@@ -632,7 +654,7 @@ export async function renderCanvas(sol) {
   if (line) tailLines.push(line);
   if (m.computation_time != null) tailLines.push(tf('res.wall_time', String(m.computation_time)));
   const nTail = tailLines.length + (steps.length === 0 && sol.is_success !== false ? 1 : 0);
-  const H = yTail + nTail * 19 + CV_PAD;
+  const H = yTail + nTail * CV_TAIL_LH + CV_PAD;
 
   const canvas = document.createElement('canvas');
   canvas.width = CV_W;
@@ -659,34 +681,34 @@ export async function renderCanvas(sol) {
     drawItemCard(ctx, st.item_b, r.b, r.bX, rowY, r.bw, r.over, false, jobs);
     drawOp(ctx, '=', r.op2X, rowY + r.rowH / 2);
     if (r.hasC) drawItemCard(ctx, st.result, r.c, r.cX, rowY, r.cw, r.over, true, jobs);
-    drawCost(ctx, st, r.costX, r.oneLine ? rowY : rowY + r.rowH + 4);
+    drawCost(ctx, st, r.costX, r.oneLine ? rowY : rowY + r.rowH + 4, r.over);
   }
 
   if (fItem && !itemEmpty(fItem)) {
     const fc = measureItemCard(fItem);
-    const wrapW = Math.min(384, fc.w) + 16;
+    const wrapW = Math.min(CV_FINAL_WRAP_MAX, fc.w) + 16;
     const wrapH = fc.h + 12;
     cvText(ctx, t('res.forge_result'), CV_PAD, yFinal + 2, CV_COLORS.muted, cvFont(12, '400'));
     const cx0 = CV_PAD + CV_NO_D + CV_GAP;
-    const cy0 = yFinal + 22;
+    const cy0 = yFinal + CV_FINAL_LABEL_H;
     cvRR(ctx, cx0, cy0, wrapW, wrapH, CV_R);
     ctx.fillStyle = CV_COLORS.panel;
     ctx.fill();
     ctx.strokeStyle = CV_COLORS.border;
     ctx.lineWidth = 1;
     ctx.stroke();
-    drawItemCard(ctx, fItem, fc, cx0 + 8, cy0 + 6, Math.min(384, fc.w), false, false, jobs);
+    drawItemCard(ctx, fItem, fc, cx0 + 8, cy0 + 6, Math.min(CV_FINAL_WRAP_MAX, fc.w), false, false, jobs);
     drawHollowCheck(ctx, CV_PAD, cy0 + (wrapH - CV_NO_D) / 2);
   }
 
   let ty = yTail;
   if (steps.length === 0 && sol.is_success !== false) {
     cvText(ctx, t('calc.already_met'), CV_PAD, ty + 2, CV_COLORS.muted, cvFont(13, '400'));
-    ty += 19;
+    ty += CV_TAIL_LH;
   }
   for (const ln of tailLines) {
     cvText(ctx, ln, CV_PAD, ty + 2, CV_COLORS.muted, cvFont(13, '400'));
-    ty += 19;
+    ty += CV_TAIL_LH;
   }
 
   for (const j of jobs) {
@@ -1082,7 +1104,7 @@ function updateTrigger() {
   if (!span) return;
   const entry = state.items.find((it) => String(it.id) === state.itemId);
   const label = entry ? displayName(entry.id, entry.name) : state.item;
-  const icon = `<img src="/public/vendor/icons/${esc(state.item)}.png" ` +
+  const icon = `<img src="${iconUrl(state.item)}" ` +
     `alt="" onerror="this.style.display='none'">`;
   span.innerHTML = `${icon}${esc(label)}`;
 }
@@ -1108,7 +1130,7 @@ function fillItemMenu(el, myView, eqs) {
     .concat([{ id: 'minecraft:enchanted_book', name: t('calc.book') }]);
   menu.innerHTML = state.items.map((it) => {
     const short = normalizeId(it.id);
-    const icon = `<img src="/public/vendor/icons/${esc(short)}.png" ` +
+    const icon = `<img src="${iconUrl(short)}" ` +
       `alt="" onerror="this.style.display='none'">`;
     return `<mdui-menu-item value="${esc(String(it.id))}">` +
       `<div slot="custom" class="calc-menu-item">${icon}<span>${esc(displayName(it.id, it.name || short))}</span></div>` +
