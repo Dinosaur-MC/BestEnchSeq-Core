@@ -914,6 +914,10 @@ function startPoll(id) {
         finishProgress();
       }
     } catch (e) {
+      // Late-error guard (mirrors the success path above): an in-flight GET
+      // rejecting after this task was cancelled/replaced must not restore the
+      // buttons, clear the newer run's pollTimer, or surface a stale error.
+      if (id !== currentTask) return;
       clearInterval(pollTimer);
       finishProgress();
       showError(e.message);
@@ -1267,6 +1271,12 @@ export async function render(el) {
   state.sel.clear();
   state.conflicts.clear();
   state.profileVersion = '';
+  // Task lifecycle state never survives navigation: without this, an old
+  // task's safety-net snapshot / poll response could render into the new
+  // view, and a stale pollTimer could outlive the view it drives.
+  currentTask = null;
+  currentEs = null;
+  clearInterval(pollTimer);
 
   el.innerHTML = `
     <h2>${t('calc.title')}</h2>
@@ -1338,6 +1348,11 @@ export async function render(el) {
     // the running state for the duration of the task.
     if (currentEs) { currentEs.close(); currentEs = null; }
     clearInterval(pollTimer);
+    // POST in-flight has no task id yet: drop the superseded id so cancel is
+    // a no-op (it would otherwise DEL the old task and restore the buttons
+    // early), and stale late-frames hit the id guard. startSSE/startPoll set
+    // currentTask to the new id once the POST resolves.
+    currentTask = null;
     setRunning(true);
     try {
       // POST /api/tasks → 202 {task_id} + Location: /api/tasks/{id}
