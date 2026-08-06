@@ -3,6 +3,7 @@
 #include "domain/business/parsers/ParserShared.h"
 #include "common/i18n/Language.h"
 #include "common/i18n/NsidDisplay.h"
+#include "domain/orchestration/components/OutputSchema.h"
 
 bool OutputFormatter::_show_nsid = false;
 
@@ -367,20 +368,22 @@ std::string OutputFormatter::format_compact(
 // ---------------------------------------------------------------------------
 // build_json_root — shared root metadata object (CLI `--format json` + C ABI)
 //
-// Root schema (v1.0): {schema_version, mode, success, algorithm,
+// Root schema (v1.1): {schema_version, mode, success, algorithm,
 // computation_time_ms}.  Both OutputFormatter::format_json and the C ABI
-// besq_solve build this object so the two outputs share one schema.
+// besq_solve build this object so the two outputs share one schema (the same
+// ds field declarations in OutputSchema.h, assembled via
+// ds::json::Schema<RootMetaSchema>::serialize).
 // ---------------------------------------------------------------------------
 Json OutputFormatter::build_json_root(AlgorithmMode mode, bool success,
                                       const std::string &algorithm,
                                       int64_t computation_time_ms) {
-    Json root = Json::object();
-    root["schema_version"]      = Json("1.0");
-    root["mode"]                = Json(mode_to_raw(mode));
-    root["success"]             = Json(success);
-    root["algorithm"]           = Json(algorithm);
-    root["computation_time_ms"] = Json(computation_time_ms);
-    return root;
+    RootMetaView root;
+    root.schema_version      = kOutputSchemaVersion;
+    root.mode                = mode_to_raw(mode);
+    root.success             = success;
+    root.algorithm           = algorithm;
+    root.computation_time_ms = computation_time_ms;
+    return ds::json::Schema<RootMetaSchema>::serialize(root);
 }
 
 std::string OutputFormatter::format_json(
@@ -391,9 +394,8 @@ std::string OutputFormatter::format_json(
     const std::string &algorithm,
     int64_t computation_time_ms
 ) {
-    const auto &ench_reg = profile.ench();
-    const auto &cat_reg  = profile.tags();
-    const auto &eq_reg   = profile.eq();
+    const auto &cat_reg = profile.tags();
+    const auto &eq_reg  = profile.eq();
 
     // Root metadata defaults: when the caller has no SolveResult (e.g. a bare
     // solution export), derive the algorithm name / time from the first
@@ -405,70 +407,25 @@ std::string OutputFormatter::format_json(
     if (time_ms <= 0 && !solutions.empty())
         time_ms = solutions[0].metadata.computation_time.count();
 
-    Json root = OutputFormatter::build_json_root(mode, success, algo, time_ms);
-
-    Json::Array sol_arr;
+    // The whole root — metadata + solutions — is assembled by the ds output
+    // schema (OutputSchema.h).  `ench_reg` is not needed on the encode side:
+    // items resolve name/category/durability from the equipment + tag
+    // registries only (mirrors the parse side, which validates against the
+    // enchantment registry).
+    RootView root;
+    root.schema_version      = kOutputSchemaVersion;
+    root.mode                = mode_to_raw(mode);
+    root.success             = success;
+    root.algorithm           = algo;
+    root.computation_time_ms = time_ms;
+    root.solutions.reserve(solutions.size());
     for (size_t si = 0; si < solutions.size(); ++si) {
-        const auto &sol = solutions[si];
-        Json::Object s;
-        s["rank"] = Json(static_cast<int32_t>(si + 1));
-
-        // Platform
-        switch (sol.platform) {
-        case MCE::Java:    s["platform"] = Json("Java");    break;
-        case MCE::Bedrock: s["platform"] = Json("Bedrock"); break;
-        case MCE::All:     s["platform"] = Json("All");     break;
-        default:                     s["platform"] = Json("None");    break;
-        }
-
-        // Original enchantments
-        Json::Array orig_arr;
-        for (const auto &ench : sol.original_ench) {
-            Json::Object eo;
-            eo["id"]    = Json(ench.id.str());
-            eo["level"] = Json(ench.level);
-            orig_arr.push_back(Json(eo));
-        }
-        s["original_ench"] = Json(orig_arr);
-
-        // Target item
-        s["target_item"] = item_to_json(sol.target_item, ench_reg, cat_reg, eq_reg);
-
-        // Available items
-        Json::Array avail_arr;
-        for (const auto &item : sol.available_items) {
-            avail_arr.push_back(item_to_json(item, ench_reg, cat_reg, eq_reg));
-        }
-        s["available_items"] = Json(avail_arr);
-
-        // Steps
-        Json::Array steps_arr;
-        for (const auto &step : sol.steps) {
-            steps_arr.push_back(step_to_json(step, ench_reg, cat_reg, eq_reg));
-        }
-        s["steps"] = Json(steps_arr);
-
-        // Summary
-        s["total_exp_level_cost"] = Json(sol.total_exp_level_cost);
-        s["total_exp_cost"]       = Json(sol.total_exp_cost);
-        s["peak_level_cost"]      = Json(sol.get_peak_level_cost());
-        s["peak_exp_cost"]        = Json(sol.get_peak_exp_cost());
-        s["max_cost_step_index"]  = Json(static_cast<int64_t>(sol.max_cost_step_index));
-        s["is_success"]           = Json(sol.is_success);
-
-        // Metadata
-        Json::Object meta;
-        meta["algorithm_name"]   = Json(sol.metadata.algorithm_name);
-        meta["algorithm_version"] = Json(sol.metadata.algorithm_version);
-        meta["created_at"]       = Json(static_cast<int64_t>(sol.metadata.created_at.time_since_epoch().count()));
-        meta["computation_time"] = Json(static_cast<int64_t>(sol.metadata.computation_time.count()));
-        s["metadata"]            = Json(meta);
-
-        sol_arr.push_back(Json(s));
+        root.solutions.push_back(
+            make_solution_view(solutions[si], static_cast<int32_t>(si + 1),
+                               cat_reg, eq_reg));
     }
-    root["solutions"] = Json(sol_arr);
 
-    return root.to_string(Json::Pretty);
+    return ds::json::Schema<RootSchema>::serialize(root).to_string(Json::Pretty);
 }
 
 // ===========================================================================
@@ -558,23 +515,23 @@ std::vector<Solution> OutputFormatter::parse_json(
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// Item_to_json
+// make_item_view
 // ---------------------------------------------------------------------------
-Json OutputFormatter::item_to_json(
+ItemView OutputFormatter::make_item_view(
     const Item &item,
-    const EnchantmentRegistry &ench_reg,
     const TagRegistry &cat_reg,
     const EquipmentRegistry &eq_reg
 ) {
-    Json::Object obj;
+    ItemView out;
+    out.is_book = item.is_book();
 
     // Equipment
     if (!item.is_book()) {
-        Json::Object eq;
-        eq["id"]             = Json(item.id.str());
-        eq["category"]       = Json("unknown");
-        eq["name"]           = Json(item_display_name(item.id));
-        eq["max_durability"] = Json(0);
+        EquipmentView eq;
+        eq.id             = item.id.str();
+        eq.category       = "unknown";
+        eq.name           = item_display_name(item.id);
+        eq.max_durability = 0;
 
         // Fill in the real equipment data when the item id is registered.
         // `category` is the equipment's display short name (e.g. "sword"),
@@ -583,7 +540,7 @@ Json OutputFormatter::item_to_json(
         // Unknown ids keep the sensible defaults above (books are is_book:true
         // with equipment:null already).
         if (auto eq_it = eq_reg.find(item.id); eq_it != eq_reg.end()) {
-            eq["max_durability"] = Json(eq_it->max_durability);
+            eq.max_durability = eq_it->max_durability;
             std::string category_name;
             if (auto tag_it = cat_reg.find(eq_it->category);
                 tag_it != cat_reg.end()) {
@@ -594,30 +551,23 @@ Json OutputFormatter::item_to_json(
                 if (category_name.empty())
                     category_name = "unknown";
             }
-            eq["category"] = Json(std::move(category_name));
+            eq.category = std::move(category_name);
         }
-
-        obj["equipment"]     = Json(eq);
-        obj["is_book"]       = Json(false);
-    } else {
-        obj["equipment"] = Json::null();
-        obj["is_book"]   = Json(true);
+        out.equipment = std::move(eq);
     }
 
     // Enchantments
-    Json::Array ench_arr;
+    out.enchantments.reserve(item.enchantments.size());
     for (const auto &ench : item.enchantments) {
-        Json::Object eo;
-        eo["id"]    = Json(ench.id.str());
-        eo["level"] = Json(ench.level);
-        ench_arr.push_back(Json(eo));
+        EnchView eo;
+        eo.id    = ench.id.str();
+        eo.level = ench.level;
+        out.enchantments.push_back(std::move(eo));
     }
-    obj["enchantments"] = Json(ench_arr);
 
-    obj["prior_penalty"] = Json(item.prior_penalty);
-    obj["durability"]    = Json(item.durability);
-
-    return Json(obj);
+    out.prior_penalty = item.prior_penalty;
+    out.durability    = item.durability;
+    return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -676,21 +626,72 @@ Item OutputFormatter::item_from_json(
 }
 
 // ---------------------------------------------------------------------------
-// step_to_json
+// make_step_view / make_solution_view
 // ---------------------------------------------------------------------------
-Json OutputFormatter::step_to_json(
+StepView OutputFormatter::make_step_view(
     const Solution::EnchStep &step,
-    const EnchantmentRegistry &ench_reg,
     const TagRegistry &cat_reg,
     const EquipmentRegistry &eq_reg
 ) {
-    Json::Object obj;
-    obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg, eq_reg);
-    obj["item_b"]         = item_to_json(step.item_b, ench_reg, cat_reg, eq_reg);
-    obj["result"]         = item_to_json(step.result, ench_reg, cat_reg, eq_reg);
-    obj["exp_level_cost"] = Json(step.exp_level_cost);
-    obj["exp_cost"]       = Json(step.exp_cost);
-    return Json(obj);
+    StepView out;
+    out.item_a         = make_item_view(step.item_a, cat_reg, eq_reg);
+    out.item_b         = make_item_view(step.item_b, cat_reg, eq_reg);
+    out.result         = make_item_view(step.result, cat_reg, eq_reg);
+    out.exp_level_cost = step.exp_level_cost;
+    out.exp_cost       = step.exp_cost;
+    return out;
+}
+
+SolutionView OutputFormatter::make_solution_view(
+    const Solution &sol,
+    int32_t rank,
+    const TagRegistry &cat_reg,
+    const EquipmentRegistry &eq_reg
+) {
+    SolutionView out;
+    out.rank     = rank;
+    out.platform = platform_to_raw(sol.platform);
+
+    // Original enchantments
+    out.original_ench.reserve(sol.original_ench.size());
+    for (const auto &ench : sol.original_ench) {
+        EnchView eo;
+        eo.id    = ench.id.str();
+        eo.level = ench.level;
+        out.original_ench.push_back(std::move(eo));
+    }
+
+    // Target item
+    out.target_item = make_item_view(sol.target_item, cat_reg, eq_reg);
+
+    // Available items
+    out.available_items.reserve(sol.available_items.size());
+    for (const auto &item : sol.available_items) {
+        out.available_items.push_back(make_item_view(item, cat_reg, eq_reg));
+    }
+
+    // Steps
+    out.steps.reserve(sol.steps.size());
+    for (const auto &step : sol.steps) {
+        out.steps.push_back(make_step_view(step, cat_reg, eq_reg));
+    }
+
+    // Summary
+    out.total_exp_level_cost = sol.total_exp_level_cost;
+    out.total_exp_cost       = sol.total_exp_cost;
+    out.peak_level_cost      = sol.get_peak_level_cost();
+    out.peak_exp_cost        = sol.get_peak_exp_cost();
+    out.max_cost_step_index  = static_cast<int64_t>(sol.max_cost_step_index);
+    out.is_success           = sol.is_success;
+
+    // Metadata
+    out.metadata.algorithm_name    = sol.metadata.algorithm_name;
+    out.metadata.algorithm_version = sol.metadata.algorithm_version;
+    out.metadata.created_at = static_cast<int64_t>(
+        sol.metadata.created_at.time_since_epoch().count());
+    out.metadata.computation_time = static_cast<int64_t>(
+        sol.metadata.computation_time.count());
+    return out;
 }
 
 // ---------------------------------------------------------------------------

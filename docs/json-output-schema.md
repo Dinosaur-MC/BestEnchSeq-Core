@@ -1,8 +1,8 @@
 # JSON Output Schema
 
-> **Version:** 1.0  
+> **Version:** 1.1  
 > **Status:** Stable  
-> **Last updated:** 2026-07-20
+> **Last updated:** 2026-08-06
 
 This document describes the JSON output format produced by `besq --format json`. It is intended for frontend/CLI consumers who parse the output programmatically.
 
@@ -17,7 +17,7 @@ The JSON output is a single root object containing metadata and an array of solu
     "algorithm": "dp_merge",
     "computation_time_ms": 0,
     "mode": "direct",
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "solutions": [ ... ],
     "success": true
 }
@@ -29,7 +29,7 @@ The JSON output is a single root object containing metadata and an array of solu
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `schema_version` | `string` | always | Schema version string (`"1.0"`). Incremented on breaking changes. |
+| `schema_version` | `string` | always | Schema version string (`"1.1"`). Incremented on breaking changes. |
 | `mode` | `string` | always | Operating mode: `"direct"` or `"inventory"`. |
 | `success` | `bool` | always | Whether the solve completed successfully. Shared with the C ABI `besq_solve` root. |
 | `algorithm` | `string` | always | Name of the algorithm used. Derived from the first solution's metadata when a bare solution set is formatted without a `SolveResult`. |
@@ -135,7 +135,7 @@ When no feasible forge sequence exists, `solutions` is an empty array:
     "algorithm": "dp_merge",
     "computation_time_ms": 0,
     "mode": "direct",
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "solutions": [],
     "success": true
 }
@@ -194,3 +194,4 @@ Limitations:
 |---|---|
 | 1.0 | Initial stable schema |
 | 1.0 (B-T23) | Root now carries `success` / `algorithm` / `computation_time_ms`, aligned with the C ABI `besq_solve` root via a shared `OutputFormatter::build_json_root`; `equipment.category` / `equipment.max_durability` in `ItemStack` now emit real registry data instead of `"unknown"` / `0`. |
+| 1.1 | Wire shape unchanged. Output assembly moved to the project's ds DSL schema (`OutputSchema.h`): the whole root — metadata + solutions — is encoded by `ds::json::Schema<RootSchema>::serialize`, and `build_json_root` (shared with the C ABI) by `RootMetaSchema`. Same field declarations drive both, so the two roots cannot drift by construction. `schema_version` bumped 1.0 → 1.1 to mark the schema-ized generation. |

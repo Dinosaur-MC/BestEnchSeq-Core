@@ -206,7 +206,7 @@ void test_export_solution_json_metadata() {
     expect_eq(root["success"].as_bool(), false, "export_solution_json_metadata: success=false");
     expect_eq(root["algorithm"].as_string(), "dp_merge", "export_solution_json_metadata: algorithm=dp_merge");
     expect_eq(root["computation_time_ms"].as_int(), int64_t(42), "export_solution_json_metadata: computation_time_ms=42");
-    expect_eq(root["schema_version"].as_string(), "1.0", "export_solution_json_metadata: schema_version=1.0");
+    expect_eq(root["schema_version"].as_string(), "1.1", "export_solution_json_metadata: schema_version=1.1");
 
     std::cout << "PASS: test_export_solution_json_metadata" << std::endl;
 }

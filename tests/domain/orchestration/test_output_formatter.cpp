@@ -1,12 +1,15 @@
 #include "framework/test_utils.h"
 #include "framework/test_fixture.h"
 #include "domain/orchestration/orchestration.h"
+#include "domain/orchestration/components/OutputSchema.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
+#include "domain/business/parsers/ParserShared.h"
 #include "common/i18n/Language.h"
+#include "common/i18n/NsidDisplay.h"
 #include "common/io/json.h"
 #include <chrono>
 #include <iostream>
@@ -488,6 +491,240 @@ void test_json_roundtrip() {
     TEST_PASS("OutputFormatter JSON round-trip");
 }
 
+// ─── Reference builders: the frozen hand-built wire shape ────────────────
+// These mirror the pre-schema JSON assembly of OutputFormatter exactly
+// (schema_version is the only versioned field: 1.1 now).  The schema-driven
+// encode must reproduce them byte-for-byte after map-sorted serialization.
+
+Json reference_item_json(const Item &item, const TagRegistry &cat_reg,
+                         const EquipmentRegistry &eq_reg) {
+    Json::Object obj;
+
+    if (!item.is_book()) {
+        Json::Object eq;
+        eq["id"]             = Json(item.id.str());
+        eq["category"]       = Json("unknown");
+        eq["name"]           = Json(item_display_name(item.id));
+        eq["max_durability"] = Json(0);
+        if (auto eq_it = eq_reg.find(item.id); eq_it != eq_reg.end()) {
+            eq["max_durability"] = Json(eq_it->max_durability);
+            std::string category_name;
+            if (auto tag_it = cat_reg.find(eq_it->category);
+                tag_it != cat_reg.end()) {
+                category_name = tag_it->name;
+            } else {
+                category_name =
+                    business::parser_detail::category_short_name(eq_it->category);
+                if (category_name.empty())
+                    category_name = "unknown";
+            }
+            eq["category"] = Json(std::move(category_name));
+        }
+        obj["equipment"] = Json(eq);
+        obj["is_book"]   = Json(false);
+    } else {
+        obj["equipment"] = Json::null();
+        obj["is_book"]   = Json(true);
+    }
+
+    Json::Array ench_arr;
+    for (const auto &ench : item.enchantments) {
+        Json::Object eo;
+        eo["id"]    = Json(ench.id.str());
+        eo["level"] = Json(ench.level);
+        ench_arr.push_back(Json(eo));
+    }
+    obj["enchantments"] = Json(ench_arr);
+
+    obj["prior_penalty"] = Json(item.prior_penalty);
+    obj["durability"]    = Json(item.durability);
+    return Json(obj);
+}
+
+Json reference_solution_json(const Solution &sol, int32_t rank,
+                             const TagRegistry &cat_reg,
+                             const EquipmentRegistry &eq_reg) {
+    Json::Object s;
+    s["rank"] = Json(rank);
+    switch (sol.platform) {
+    case MCE::Java:    s["platform"] = Json("Java");    break;
+    case MCE::Bedrock: s["platform"] = Json("Bedrock"); break;
+    case MCE::All:     s["platform"] = Json("All");     break;
+    default:           s["platform"] = Json("None");    break;
+    }
+
+    Json::Array orig_arr;
+    for (const auto &ench : sol.original_ench) {
+        Json::Object eo;
+        eo["id"]    = Json(ench.id.str());
+        eo["level"] = Json(ench.level);
+        orig_arr.push_back(Json(eo));
+    }
+    s["original_ench"] = Json(orig_arr);
+    s["target_item"]   = reference_item_json(sol.target_item, cat_reg, eq_reg);
+
+    Json::Array avail_arr;
+    for (const auto &item : sol.available_items) {
+        avail_arr.push_back(reference_item_json(item, cat_reg, eq_reg));
+    }
+    s["available_items"] = Json(avail_arr);
+
+    Json::Array steps_arr;
+    for (const auto &step : sol.steps) {
+        Json::Object st;
+        st["item_a"]         = reference_item_json(step.item_a, cat_reg, eq_reg);
+        st["item_b"]         = reference_item_json(step.item_b, cat_reg, eq_reg);
+        st["result"]         = reference_item_json(step.result, cat_reg, eq_reg);
+        st["exp_level_cost"] = Json(step.exp_level_cost);
+        st["exp_cost"]       = Json(step.exp_cost);
+        steps_arr.push_back(Json(st));
+    }
+    s["steps"] = Json(steps_arr);
+
+    s["total_exp_level_cost"] = Json(sol.total_exp_level_cost);
+    s["total_exp_cost"]       = Json(sol.total_exp_cost);
+    s["peak_level_cost"]      = Json(sol.get_peak_level_cost());
+    s["peak_exp_cost"]        = Json(sol.get_peak_exp_cost());
+    s["max_cost_step_index"]  = Json(static_cast<int64_t>(sol.max_cost_step_index));
+    s["is_success"]           = Json(sol.is_success);
+
+    Json::Object meta;
+    meta["algorithm_name"]    = Json(sol.metadata.algorithm_name);
+    meta["algorithm_version"] = Json(sol.metadata.algorithm_version);
+    meta["created_at"] = Json(static_cast<int64_t>(
+        sol.metadata.created_at.time_since_epoch().count()));
+    meta["computation_time"] = Json(static_cast<int64_t>(
+        sol.metadata.computation_time.count()));
+    s["metadata"] = Json(meta);
+    return Json(s);
+}
+
+// ─── Test: format_json is assembled from the ds output schema ─────────────
+// 1) schema_version moved 1.0 → 1.1;
+// 2) the emitted tree equals the frozen hand-built wire shape exactly;
+// 3) the emitted JSON re-parses into RootView (all fields present + typed).
+
+void test_format_json_schema_encode() {
+    g_fx.init_chestplate_set();
+    auto profile = profile_from_fx(g_fx);
+    EnchantmentRegistry& enchants = g_fx.enchants;
+
+    EnchSet prot3;
+    const auto& prot_info = enchants.at(NSID("protection"));
+    prot3.emplace(prot_info.id, prot_info.name, 3);
+    EnchSet unbr2;
+    const auto& unbr_info = enchants.at(NSID("unbreaking"));
+    unbr2.emplace(unbr_info.id, unbr_info.name, 2);
+
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_chestplate"));
+
+    Solution solution;
+    solution.is_success = true;
+    solution.platform = MCE::Java;
+    solution.metadata.algorithm_name = "dp_merge";
+    solution.metadata.algorithm_version = "1.2.3";
+    solution.metadata.created_at =
+        std::chrono::system_clock::time_point(std::chrono::seconds(1700000000));
+    solution.metadata.computation_time = std::chrono::milliseconds(42);
+    solution.original_ench = prot3;
+    solution.target_item = Item(equip.id, EnchSet{}, 0, equip.max_durability);
+    solution.available_items = {
+        Item(NSID("minecraft:enchanted_book"), prot3, 0),
+        Item(NSID("minecraft:enchanted_book"), unbr2, 1),
+    };
+
+    Solution::EnchStep step;
+    step.exp_level_cost = 3;
+    step.exp_cost       = 3;
+    step.item_a = solution.target_item;
+    step.item_b = Item(NSID("minecraft:enchanted_book"), prot3, 0);
+    step.result = Item(equip.id, prot3, 0, equip.max_durability);
+    solution.steps.push_back(step);
+    solution.total_exp_level_cost = 3;
+    solution.total_exp_cost       = 3;
+    solution.max_cost_step_index  = 0;
+
+    const auto json_str = OutputFormatter::format_json(
+        {solution}, profile, AlgorithmMode::direct, true, "dp_merge", 42);
+    Json root = Json::parse(json_str);
+
+    // 1) schema_version bumped to 1.1
+    expect(root["schema_version"].as<std::string>() == "1.1",
+           "schema encode: schema_version 1.1");
+
+    // 2) exact equivalence with the frozen hand-built wire shape
+    Json expected = Json::object()
+        .set("schema_version", Json("1.1"))
+        .set("mode", Json("direct"))
+        .set("success", Json(true))
+        .set("algorithm", Json("dp_merge"))
+        .set("computation_time_ms", Json(int64_t(42)))
+        .set("solutions", Json(Json::Array{reference_solution_json(
+                  solution, 1, profile.tags(), profile.eq())}));
+    expect(root == expected, "schema encode: equals hand-built wire shape");
+
+    // 3) structural validation: the emitted JSON parses into RootView
+    RootView decoded;
+    ds::ErrorList err;
+    bool ok = ds::json::Schema<RootSchema>::parse(root, decoded, err);
+    expect(ok, "schema encode: root validates against RootSchema");
+    expect(err.empty(), "schema encode: parse errors: " + err.str());
+
+    // Spot-check that values flow through the schema, not just key presence.
+    expect_eq(decoded.solutions.size(), 1u, "schema decode: one solution");
+    if (decoded.solutions.empty())
+        return;  // avoid crashing on a failed parse below
+    const auto& d = decoded.solutions[0];
+    expect_eq(d.rank, 1, "schema decode: rank");
+    expect(d.platform == "Java", "schema decode: platform");
+    expect_eq(d.total_exp_level_cost, 3, "schema decode: total_exp_level_cost");
+    expect_eq(d.peak_level_cost, 3, "schema decode: peak_level_cost");
+    expect(d.is_success, "schema decode: is_success");
+    expect(d.metadata.algorithm_name == "dp_merge",
+           "schema decode: metadata.algorithm_name");
+    expect_eq(d.metadata.computation_time, 42, "schema decode: metadata.computation_time");
+    expect_eq(d.original_ench.size(), 1u, "schema decode: original_ench");
+    expect_eq(d.available_items.size(), 2u, "schema decode: available_items");
+    expect_eq(d.steps.size(), 1u, "schema decode: steps");
+    const auto& d_step = d.steps[0];
+    expect_eq(d_step.exp_level_cost, 3, "schema decode: step exp_level_cost");
+    expect(d_step.item_b.is_book, "schema decode: step item_b is a book");
+    expect(!d_step.item_b.equipment.has_value(), "schema decode: book equipment null");
+    expect(!d_step.result.is_book, "schema decode: step result is equipment");
+    expect(d_step.result.equipment.has_value(), "schema decode: result has equipment");
+    expect(d_step.result.equipment->id == "minecraft:diamond_chestplate",
+           "schema decode: result equipment id");
+    expect_eq(d_step.result.enchantments.size(), 1u,
+              "schema decode: result enchantments");
+    expect(d.target_item.equipment.has_value(), "schema decode: target equipment");
+    expect_eq(d.target_item.equipment->max_durability, 528,
+              "schema decode: target max_durability");
+    expect(d.target_item.equipment->category == "chestplate",
+           "schema decode: target category");
+
+    TEST_PASS("format_json ds schema encode");
+}
+
+// ─── Test: build_json_root (C ABI shared root) is schema-driven ──────────
+
+void test_build_json_root_schema() {
+    Json root = OutputFormatter::build_json_root(
+        AlgorithmMode::inventory, false, "bb_dp", 1234);
+
+    RootMetaView decoded;
+    ds::ErrorList err;
+    bool ok = ds::json::Schema<RootMetaSchema>::parse(root, decoded, err);
+    expect(ok, "build_json_root: validates against RootMetaSchema");
+    expect(err.empty(), "build_json_root: parse errors: " + err.str());
+    expect(decoded.schema_version == "1.1", "build_json_root: schema_version 1.1");
+    expect(decoded.mode == "inventory", "build_json_root: mode");
+    expect(!decoded.success, "build_json_root: success");
+    expect(decoded.algorithm == "bb_dp", "build_json_root: algorithm");
+    expect_eq(decoded.computation_time_ms, 1234, "build_json_root: computation_time_ms");
+
+    TEST_PASS("build_json_root ds schema");
+}
+
 } // anonymous namespace
 
 int main() {
@@ -506,6 +743,8 @@ int main() {
         test_format_json_step_result();
         test_format_compact_platform_raw();
         test_json_roundtrip();
+        test_format_json_schema_encode();
+        test_build_json_root_schema();
     } catch (const test_error& e) {
         std::cerr << "FAILED: " << e.what() << std::endl;
         return 1;

@@ -3,6 +3,7 @@
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/Profile.h"
+#include "domain/orchestration/components/OutputSchema.h"
 
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
@@ -36,15 +37,19 @@ class OutputFormatter {
     /// Build the root metadata object shared by the CLI `--format json` and the
     /// C ABI `besq_solve` so the two outputs cannot drift.
     ///
-    /// Root schema (v1.0)::
+    /// Root schema (v1.1)::
     ///   {
-    ///     "schema_version": "1.0",
+    ///     "schema_version": "1.1",
     ///     "mode": "direct" | "inventory",
     ///     "success": true|false,
     ///     "algorithm": "<algorithm name>",
     ///     "computation_time_ms": <int64 ms>,
     ///     "solutions": [ ... ]
     ///   }
+    ///
+    /// The object is assembled by `ds::json::Schema<RootMetaSchema>::serialize`
+    /// (OutputSchema.h) — the same field declarations drive the full root in
+    /// format_json, so the two outputs cannot drift by construction.
     static Json build_json_root(
         AlgorithmMode mode,
         bool success,
@@ -87,10 +92,21 @@ class OutputFormatter {
     static std::string mode_display_name(AlgorithmMode mode);
     static std::string platform_to_display(MCE p);
 
-    // JSON helpers
-    static Json item_to_json(
+    // JSON helpers — encode side fills the OutputSchema view structs
+    // (registry-dependent lookups: equipment, category, display names).
+    static ItemView make_item_view(
         const Item &item,
-        const EnchantmentRegistry &ench_reg,
+        const TagRegistry &cat_reg,
+        const EquipmentRegistry &eq_reg
+    );
+    static StepView make_step_view(
+        const Solution::EnchStep &step,
+        const TagRegistry &cat_reg,
+        const EquipmentRegistry &eq_reg
+    );
+    static SolutionView make_solution_view(
+        const Solution &sol,
+        int32_t rank,
         const TagRegistry &cat_reg,
         const EquipmentRegistry &eq_reg
     );
@@ -99,12 +115,6 @@ class OutputFormatter {
         std::vector<Equipment> &equipment_cache,
         const EnchantmentRegistry &ench_reg,
         const TagRegistry &cat_reg
-    );
-    static Json step_to_json(
-        const Solution::EnchStep &step,
-        const EnchantmentRegistry &ench_reg,
-        const TagRegistry &cat_reg,
-        const EquipmentRegistry &eq_reg
     );
     static Solution::EnchStep step_from_json(
         const Json &j,
