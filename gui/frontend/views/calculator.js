@@ -79,7 +79,7 @@ function toRoman(n) {
 // All backend strings pass through esc()/displayName() here; the innerHTML is
 // built in one pass and buttons are bound right after (events-on-insert).
 
-const TOO_EXPENSIVE_LEVEL = 39;  // anvil "Too Expensive" threshold (same as CLI)
+const TOO_EXPENSIVE_LEVEL = 39;  // anvil "Too Expensive" threshold: exp_level_cost >= 39 (same as CLI)
 
 // Is an ItemView absent or empty (no equipment id AND no enchantments)? An
 // unfilled result serializes as equipment:{id:""} with no enchantments — no C
@@ -108,14 +108,13 @@ function itemName(item) {
 
 // One item card: icon (title=NSID, hidden on 404) + name + PPN badge +
 // enchantment badge grid. `cls` adds card classes ("c" result, "over" red).
-function itemCardHtml(item, cls, iconSize) {
+// Icon size is fixed by CSS (.res-itemhead img), no inline styles.
+function itemCardHtml(item, cls) {
   if (!item) return '';
   const nsid = (item.equipment && item.equipment.id) || 'minecraft:enchanted_book';
   const icon = `<img src="/public/vendor/icons/${esc(itemIconId(item))}.png" alt="" ` +
-    `title="${esc(nsid)}"` +
-    (iconSize ? ` style="width:${iconSize}px;height:${iconSize}px"` : '') +
-    ` onerror="this.style.display='none'">`;
-  const ppn = `<span class="res-ppn">${esc(tf('res.ppn', item.prior_penalty ?? 0))}</span>`;
+    `title="${esc(nsid)}" onerror="this.style.display='none'">`;
+  const ppn = `<span class="res-ppn">${esc(tf('res.ppn', esc(String(item.prior_penalty ?? 0))))}</span>`;
   const enchs = (item.enchantments || []).map((e) =>
     `<span class="res-badge" title="${esc(e.id)}">` +
     `${esc(displayName(e.id, shortId(e.id)))} ${esc(toRoman(e.level))}</span>`).join('');
@@ -127,60 +126,52 @@ function itemCardHtml(item, cls, iconSize) {
 
 // One forge step row: 序号圆 + A + B + = + C（result 可用时）+ 成本列。
 function stepRowHtml(step, index) {
-  const over = (step.exp_level_cost ?? 0) > TOO_EXPENSIVE_LEVEL;
+  const over = (step.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL;
   const stepno = `<span class="res-stepno${over ? ' expensive' : ''}" ` +
-    `title="${esc(tf('res.step_n', index + 1))}">${index + 1}</span>`;
-  const a = itemCardHtml(step.item_a, over ? 'over' : '', 24);
-  const b = itemCardHtml(step.item_b, over ? 'over' : '', 24);
+    `title="${esc(tf('res.step_n', esc(String(index + 1))))}">${index + 1}</span>`;
+  const a = itemCardHtml(step.item_a, over ? 'over' : '');
+  const b = itemCardHtml(step.item_b, over ? 'over' : '');
   // Empty result → keep the "=" and leave the C column blank (a spacer cell
   // keeps the cost column in the 5rem track of the 7-column grid).
   const c = !itemEmpty(step.result)
-    ? itemCardHtml(step.result, (over ? 'over ' : '') + 'c', 24)
+    ? itemCardHtml(step.result, (over ? 'over ' : '') + 'c')
     : '<span class="res-item-gap" aria-hidden="true"></span>';
   const cost = `<div class="res-cost">` +
     `<div><span class="lbl">${esc(t('res.level_label'))}</span> ` +
     `<span class="val${over ? ' over' : ''}">${esc(String(step.exp_level_cost ?? '?'))}</span></div>` +
-    `<div class="exp" title="${esc(tf('res.exp_hint', step.exp_level_cost ?? 0, step.exp_cost ?? 0))}">` +
-    `${esc(tf('res.exp_label', step.exp_cost ?? 0))}</div></div>`;
+    `<div class="exp" title="${esc(tf('res.exp_hint', esc(String(step.exp_level_cost ?? 0)), esc(String(step.exp_cost ?? 0))))}">` +
+    `${esc(tf('res.exp_label', esc(String(step.exp_cost ?? 0))))}</div></div>`;
   return `<div class="res-step">${stepno}${a}<span class="res-op">+</span>${b}` +
     `<span class="res-op">=</span>${c}${cost}</div>`;
 }
 
 // Summary strip: MC platform · profile version | 步骤 N | 等级 X | EXP Y |
-// too-expensive badge (red when any step exceeds level 39).
+// too-expensive badge (red when any step reaches level 39).
+// Numeric placeholders are spliced in from the view (t() + template), never
+// passed as HTML through tf().
 function summaryRowHtml(sol, steps) {
-  const anyOver = steps.some((s) => (s.exp_level_cost ?? 0) > TOO_EXPENSIVE_LEVEL);
+  const anyOver = steps.some((s) => (s.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL);
   const parts = [
     `<span>${esc(tf('res.mc_platform', sol.platform || '—', state.profileVersion || '—'))}</span>`,
     `<span class="sep">|</span>`,
-    `<span>${tf('res.steps', `<b>${steps.length}</b>`)}</span>`,
-    `<span>${tf('res.levels', `<b>${sol.total_exp_level_cost ?? '?'}</b>`)}</span>`,
-    `<span>${tf('res.exp_total', `<b>${sol.total_exp_cost ?? '?'}</b>`)}</span>`,
+    `<span>${t('res.steps').replace('{0}', `<b>${esc(String(steps.length))}</b>`)}</span>`,
+    `<span>${t('res.levels').replace('{0}', `<b>${esc(String(sol.total_exp_level_cost ?? '?'))}</b>`)}</span>`,
+    `<span>${t('res.exp_total').replace('{0}', `<b>${esc(String(sol.total_exp_cost ?? '?'))}</b>`)}</span>`,
   ];
   if (anyOver)
     parts.push(`<span class="res-too-expensive">${esc(t('res.too_expensive'))}</span>`);
   return `<div class="res-summary">${parts.join('')}</div>`;
 }
 
-// Final item card: hollow ✓ circle + "锻造结果" label + 32px icon + PPN +
-// enchantment badges — built from the target item (the goal the steps build).
+// Final item card: hollow ✓ circle + "锻造结果" label wrapping the target
+// item card (reuses itemCardHtml — no duplicated icon/badge markup).
 function finalItemHtml(sol) {
   if (!sol.target_item || itemEmpty(sol.target_item)) return '';
-  const tgt = sol.target_item;
-  const nsid = (tgt.equipment && tgt.equipment.id) || 'minecraft:enchanted_book';
-  const icon = `<img src="/public/vendor/icons/${esc(itemIconId(tgt))}.png" alt="" ` +
-    `title="${esc(nsid)}" onerror="this.style.display='none'">`;
-  const enchs = (tgt.enchantments || []).map((e) =>
-    `<span class="res-badge" title="${esc(e.id)}">` +
-    `${esc(displayName(e.id, shortId(e.id)))} ${esc(toRoman(e.level))}</span>`).join('');
   return `<div class="res-finalwrap">` +
     `<span class="res-stepno-hollow" aria-hidden="true">✓</span>` +
     `<div class="res-final">` +
-    `<div class="fhead">${icon}` +
-    `<div><div class="flabel">${esc(t('res.forge_result'))}</div>` +
-    `<div class="fname">${esc(itemName(tgt))}</div></div>` +
-    `<span class="res-ppn">${esc(tf('res.ppn', tgt.prior_penalty ?? 0))}</span></div>` +
-    (enchs ? `<div class="res-enchs">${enchs}</div>` : '') +
+    `<div class="flabel">${esc(t('res.forge_result'))}</div>` +
+    itemCardHtml(sol.target_item, 'final') +
     `</div></div>`;
 }
 
@@ -195,7 +186,7 @@ function tailHtml(sol) {
     metaLines.push(`<div>${name}${ver}</div>`);
   }
   if (m.computation_time != null)
-    metaLines.push(`<div>${esc(tf('res.wall_time', m.computation_time))}</div>`);
+    metaLines.push(`<div>${esc(tf('res.wall_time', esc(String(m.computation_time))))}</div>`);
   if (!metaLines.length) return '';
   return `<div class="res-tail">` +
     `<div class="res-meta">${metaLines.join('')}</div>` +
@@ -205,7 +196,7 @@ function tailHtml(sol) {
     `</div></div>`;
 }
 
-function renderSolution(el, sol, index) {
+function renderSolution(el, sol) {
   const card = document.createElement('div');
   card.className = 'card res-solution';
   const steps = sol.steps || [];
@@ -213,8 +204,11 @@ function renderSolution(el, sol, index) {
     ? `<div class="diag-line diag-warn">${t('calc.infeasible')}</div>` : '';
   const zeroStep = sol.is_success !== false && !steps.length
     ? `<div class="res-already">${t('calc.already_met')}</div>` : '';
+  // Infeasible runs carry no forge plan — skip the summary strip (empty counts
+  // would be noise) and show only the 不可行 warning.
+  const summary = infeasible ? '' : summaryRowHtml(sol, steps);
   card.innerHTML = `
-    ${summaryRowHtml(sol, steps)}
+    ${summary}
     ${infeasible}
     ${steps.length ? `<div class="res-steps">${steps.map(stepRowHtml).join('')}</div>` : zeroStep}
     ${finalItemHtml(sol)}
@@ -230,7 +224,7 @@ function renderResult(result) {
   const el = document.getElementById('calc-results');
   if (!el) return;
   el.innerHTML = '';
-  (result.solutions || []).forEach((sol, i) => renderSolution(el, sol, i));
+  (result.solutions || []).forEach((sol) => renderSolution(el, sol));
   if (result.success === false && (result.solutions || []).length === 0)
     showError(t('calc.unreachable'));
 }
@@ -770,22 +764,20 @@ export async function render(el) {
     }
   });
 
-  // Boot: active profile key → algorithms + equipments → default item.
+  // Boot: active profile key → algorithms + equipments + profile metadata
+  // (version for the summary strip "MC Java · <版本>") in parallel.
   try {
     const status = await http.get('/api/status');
     if (el.dataset.view !== myView) return;
     state.key = status.active_profile;
-    // Profile metadata (version for the summary strip "MC Java · <版本>").
-    try {
-      const prof = await http.get(`/api/profiles/${encSeg(state.key)}`);
-      if (el.dataset.view !== myView) return;
-      state.profileVersion = (prof && prof.version) || '';
-    } catch (_) { /* version stays "" → renders "—" */ }
-    const [algos, eqs] = await Promise.all([
+    const [algos, eqs, prof] = await Promise.all([
       http.get('/api/algorithms'),
       http.get(`/api/profiles/${encSeg(state.key)}/equipments`),
+      // Version failure is non-fatal: stays "" → renders "—".
+      http.get(`/api/profiles/${encSeg(state.key)}`).catch(() => null),
     ]);
     if (el.dataset.view !== myView) return;
+    state.profileVersion = (prof && prof.version) || '';
     fillAlgorithms(Array.isArray(algos) ? algos : []);
     fillItemMenu(el, myView, eqs);
     const raw = Array.isArray(eqs) ? eqs : (eqs && eqs.equipments) || [];

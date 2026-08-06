@@ -57,7 +57,6 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; }
 .mono { font-family: Consolas, monospace; font-size: 13px; }
-.step { border-left: 2px solid var(--accent-2); padding: 4px 10px; margin: 6px 0; }
 .muted-line { color: var(--muted); margin-top: 4px; }
 .diag-line { margin: 2px 0; }
 .diag-warn { color: #e6c85a; }
@@ -93,7 +92,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-2); 
   text-decoration: line-through;
 }
 /* Exclusive/conflict rows */
-tr.conflict { background: rgba(217, 83, 79, .12); }
+tr.conflict { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .conflict-hint { color: var(--danger); font-size: 12px; margin-top: 2px; }
 /* Side column status bar: current → target counts */
 .status-bar {
@@ -203,7 +202,7 @@ mdui-dropdown::part(panel) {
 .res-summary b { color: var(--accent-2); }
 .res-summary .sep { color: var(--border); }
 .res-too-expensive {
-  background: rgba(217, 83, 79, .15); color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger);
   border: 1px solid var(--danger); border-radius: 10px; padding: 0 8px;
   font-size: 0.8125rem; white-space: nowrap;
 }
@@ -216,6 +215,8 @@ mdui-dropdown::part(panel) {
 /* .res-step wraps one A+B=C row; display:contents keeps the wrapper
    transparent to the grid (children land directly in the 7 columns). */
 .res-step { display: contents; }
+/* .res-item-gap — 零宽 grid 占位（空 result 的 C 列），保持 7 列对齐——勿删 */
+.res-item-gap { display: block; }
 .res-op {
   font-size: 1.25rem; color: var(--muted); font-weight: 700;
   text-align: center; align-self: center;
@@ -225,7 +226,7 @@ mdui-dropdown::part(panel) {
   padding: 0.4375rem 0.5rem; background: var(--panel-2); height: 100%;
   flex: 0 1 auto; min-width: 10rem; max-width: 18rem;
 }
-.res-item.c { border-color: var(--accent); background: rgba(92, 184, 92, .08); }
+.res-item.c { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 /* Declared after .c so a too-expensive result step shows red, not green. */
 .res-item.over { border-color: var(--danger); }
 .res-itemhead { display: flex; align-items: center; gap: 0.375rem; }
@@ -275,10 +276,8 @@ mdui-dropdown::part(panel) {
   border: 1px solid var(--border); border-radius: var(--radius);
   padding: 0.5rem 0.625rem; background: var(--panel); max-width: 24rem;
 }
-.res-final .fhead { display: flex; align-items: center; gap: 0.375rem; }
-.res-final .fhead img { width: 32px; height: 32px; image-rendering: pixelated; }
-.res-final .flabel { color: var(--muted); font-size: 0.75rem; }
-.res-final .fname { font-weight: 600; font-size: 1rem; }
+.res-final .flabel { color: var(--muted); font-size: 0.75rem; margin-bottom: 0.25rem; }
+.res-final .res-item { margin-top: 0.25rem; }
 .res-tail {
   display: flex; gap: 0.75rem; flex-wrap: wrap;
   align-items: flex-start; margin-top: 0.5rem;
