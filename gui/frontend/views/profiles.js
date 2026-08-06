@@ -266,31 +266,42 @@ export function render(el) {
     }));
     const metaOf = (p) => metas[data.profiles.indexOf(p)];
     const isRoot = (p) => { const m = metaOf(p); return !!m && m.is_root === true; };
-    list.innerHTML = `<table><thead><tr><th>${t('prof.name')}</th><th></th><th></th></tr></thead><tbody>` +
+    // Activation is single-select (the backend keeps exactly one active
+    // profile): one mdui-radio per row inside a shared mdui-radio-group —
+    // picking a radio POSTs /activate (i.e. switches the single selection).
+    // There is no "deactivate" concept backend-side, so a row has no disable
+    // affordance of its own.
+    list.innerHTML = `<mdui-radio-group class="prof-act-group" value="${esc(data.active)}">
+      <table><thead><tr><th></th><th>${t('prof.name')}</th><th></th><th></th></tr></thead><tbody>` +
       data.profiles.map((p) => {
         const root = isRoot(p);
-        return `<tr><td>${esc(p)}${p === data.active ? ` (${t('prof.active')})` : ''}</td>
-          <td><button data-act="${esc(p)}">${t('prof.activate')}</button>
-              <button data-view="${esc(p)}">${t('prof.view')}</button></td>
+        return `<tr>
+          <td><mdui-radio value="${esc(p)}"${p === data.active ? ' checked' : ''}></mdui-radio></td>
+          <td>${esc(p)}${p === data.active ? ` (${t('prof.active')})` : ''}</td>
+          <td><button data-view="${esc(p)}">${t('prof.view')}</button></td>
           <td><button data-ren="${esc(p)}">${t('prof.rename')}</button>
-              <button data-rmp="${esc(p)}"${root ? ` disabled title="${esc(t('prof.root_locked'))}"` : ''}>${t('prof.remove')}</button></td></tr>`;
+              <button data-rmp="${esc(p)}"${root ? ` disabled title="${esc(t('prof.root_locked'))}"` : ''}>${t('prof.remove')}</button></td>
+        </tr>`;
       }).join('') +
       `</tbody></table>
        <label>${t('prof.new_name')}</label><input class="fork-name">
-       <button class="fork-btn">${t('prof.create')}</button>`;
+       <button class="fork-btn">${t('prof.create')}</button></mdui-radio-group>`;
 
-
-    list.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', async () => {    list.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', async () => {
+    list.querySelector('.prof-act-group').addEventListener('change', async () => {
       clearError();
-      const key = b.dataset.act;
+      const key = list.querySelector('.prof-act-group').value;
+      if (!key || key === data.active) return;   // re-picking the active row
       try {
         await http.post(`/api/profiles/${encSeg(key)}/activate`);
         current = key;
         await load();
         await selectProfile(key);
-      } catch (e) { showError(e.message); }
-    }));
-
+      } catch (e) {
+        showError(e.message);
+        await load();   // resync the group's checked state to the real active
+      }
+    });
+    list.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', async () => {
       clearError();
       const key = b.dataset.view;
       current = key;

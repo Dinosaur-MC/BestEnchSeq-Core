@@ -340,6 +340,12 @@ mdui-select::part(text-field) { height: 36px; }
 mdui-select::part(text-field__container) { height: 36px; }
 mdui-select::part(text-field__input) { height: 36px; }
 
+/* ── Profiles: radio activation group (batch B) ──
+   mdui-radio-group hosts inline-block by default; block+100% lets the inner
+   table fill the card like the plain-table layout it replaced. */
+.prof-act-group { display: block; width: 100%; }
+.prof-act-group td { vertical-align: middle; }
+.prof-act-group mdui-radio { vertical-align: middle; }
 /* ── Settings page (batch D): grouped cards + read-only service rows ── */
 .set-group h3 { margin: 0 0 4px; font-size: 14px; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; }
