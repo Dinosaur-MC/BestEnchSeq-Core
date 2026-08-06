@@ -95,6 +95,19 @@ function itemEmpty(r) {
   return !id && en.length === 0;
 }
 
+// 最终物品 PPN：web 流程 build_target 不设 prior_penalty → target_item.ppn 恒
+// 0，回退用末步 result 的 prior_penalty（末步 result 空时保持 0）。非零
+// target_item.ppn（CLI/真实后端路径）照用。视觉卡、复制文本与截图共用此口径。
+function finalPpn(sol) {
+  const t = sol.target_item;
+  if (t && (t.prior_penalty ?? 0) !== 0) return t.prior_penalty;
+  const steps = sol.steps || [];
+  const last = steps.length ? steps[steps.length - 1] : null;
+  if (last && last.result && !itemEmpty(last.result))
+    return last.result.prior_penalty ?? 0;
+  return 0;
+}
+
 // Icon path short id: equipment id for items, enchanted_book for books (a
 // book's equipment is null). Missing icons 404 and the onerror hides the img.
 function itemIconId(item) {
@@ -168,14 +181,15 @@ function summaryRowHtml(sol, steps) {
 }
 
 // Final item card: hollow ✓ circle + "锻造结果" label wrapping the target
-// item card (reuses itemCardHtml — no duplicated icon/badge markup).
+// item card (reuses itemCardHtml — no duplicated icon/badge markup). PPN 经
+// finalPpn 回退（web 流程 target_item.ppn 恒 0 → 末步 result 的 prior_penalty）。
 function finalItemHtml(sol) {
   if (!sol.target_item || itemEmpty(sol.target_item)) return '';
   return `<div class="res-finalwrap">` +
     `<span class="res-stepno-hollow" aria-hidden="true">✓</span>` +
     `<div class="res-final">` +
     `<div class="flabel">${esc(t('res.forge_result'))}</div>` +
-    itemCardHtml(sol.target_item, 'final') +
+    itemCardHtml({ ...sol.target_item, prior_penalty: finalPpn(sol) }, 'final') +
     `</div></div>`;
 }
 
@@ -237,7 +251,9 @@ export function buildCopyText(sol) {
       `  (等级 ${s.exp_level_cost ?? '?'}, EXP ${s.exp_cost ?? '?'})`);
   }
   const tail = [];
-  if (sol.target_item && !itemEmpty(sol.target_item)) tail.push(`最终: ${itemSpec(sol.target_item)}`);
+  // PPN 与视觉卡同口径：target_item.ppn 恒 0 时回退末步 result 的 prior_penalty。
+  if (sol.target_item && !itemEmpty(sol.target_item))
+    tail.push(`最终: ${itemSpec({ ...sol.target_item, prior_penalty: finalPpn(sol) })}`);
   const algo = [];
   if (m.algorithm_name) algo.push(m.algorithm_name);
   if (m.algorithm_version) algo.push(m.algorithm_version);
@@ -639,7 +655,9 @@ export async function renderCanvas(sol) {
   for (const r of rows) { r.rowY = yRows + blockH; blockH += r.rowH + (r.oneLine ? 0 : CV_COST_2LINE) + CV_ROW_GAP; }
   y = yRows + blockH;
   const yFinal = y;
-  const fItem = sol.target_item;
+  // PPN 与视觉卡同口径：target_item.ppn 恒 0 时回退末步 result 的 prior_penalty。
+  const fItem = (sol.target_item && !itemEmpty(sol.target_item))
+    ? { ...sol.target_item, prior_penalty: finalPpn(sol) } : null;
   let fH = 0;
   if (fItem && !itemEmpty(fItem)) {
     const fc = measureItemCard(fItem);
