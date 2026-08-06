@@ -12,7 +12,7 @@
 # a dynamic-linker relocation crash (SEGV) when dlopening plugins — the
 # small worker was fine.  A shared kernel avoids -rdynamic entirely.
 
-file(GLOB_RECURSE BESQ_ALGORITHM_SRCS CONFIGURE_DEPENDS "*.cpp" "*.hpp")
+file(GLOB_RECURSE BESQ_ALGORITHM_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 list(FILTER BESQ_ALGORITHM_SRCS EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/(plugin/|_strategies/)")
 
 # ── Plugin loader (AlgorithmLoader.cpp) ──

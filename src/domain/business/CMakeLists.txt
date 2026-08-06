@@ -5,7 +5,6 @@
 
 file(GLOB_RECURSE BESQ_BUSINESS_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 
 add_library(besq-domain-business STATIC ${BESQ_BUSINESS_SRCS})

@@ -17,7 +17,6 @@ endif()
 # plus common sub-targets for i18n, CLI parsing, and logging.
 file(GLOB_RECURSE BESQ_INTERFACE_SRCS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 # components/http lives in besq-http — drop those .cpp files so each
 # translation unit is compiled exactly once.
