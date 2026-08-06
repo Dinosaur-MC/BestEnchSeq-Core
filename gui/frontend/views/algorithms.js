@@ -32,6 +32,75 @@ function detailHtml(d) {
   </table>`;
 }
 
+function fmtSize(n) {
+  if (!n) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// Open the mdui-dialog directory picker for `input`. The listing comes from
+// GET /api/fs/list, which resolves paths against the server's working
+// directory and rejects anything outside it (400 INVALID_PATH) — so the
+// picker cannot browse above the root and the Up button disables there.
+// Directories navigate (one level per click), files are shown read-only, and
+// [Select this directory] writes the current path back into `input`.
+function openPicker(input, viewEl) {
+  const dialog = document.createElement('mdui-dialog');
+  dialog.setAttribute('headline', t('fs.title'));
+  dialog.setAttribute('close-on-esc', '');
+  dialog.setAttribute('close-on-overlay-click', '');
+  const body = document.createElement('div');
+  body.className = 'fs-picker';
+  dialog.appendChild(body);
+  viewEl.appendChild(dialog);
+  let cur = '';   // path of the currently listed directory
+  let root = '';  // server root (Up is disabled at it)
+
+  const render = (r) => {
+    cur = r.path;
+    root = r.root;
+    const atRoot = cur === root;
+    const rows = r.entries.map((e) => e.is_dir
+      ? `<div class="fs-entry dir" data-fs-dir="${esc(e.name)}">${esc(e.name)}</div>`
+      : `<div class="fs-entry file"><span>${esc(e.name)}</span><span class="sz">${esc(fmtSize(e.size))}</span></div>`)
+      .join('') || `<div class="empty">${t('fs.empty')}</div>`;
+    body.innerHTML = `<div class="fs-path mono">${esc(cur)}</div>
+      <div class="fs-body">${rows}</div>
+      <div class="fs-actions">
+        <button data-fs-up class="secondary"${atRoot ? ' disabled' : ''}>${t('fs.up')}</button>
+        <button data-fs-select>${t('fs.select')}</button>
+        <button data-fs-cancel class="secondary">${t('prof.cancel')}</button>
+      </div>`;
+    body.querySelector('[data-fs-up]').addEventListener('click', () => {
+      if (atRoot) return;
+      const parts = cur.split('/');
+      parts.pop();
+      loadDir(parts.join('/'));
+    });
+    body.querySelector('[data-fs-select]').addEventListener('click', () => {
+      input.value = cur;
+      dialog.open = false;
+    });
+    body.querySelector('[data-fs-cancel]').addEventListener('click', () => { dialog.open = false; });
+    body.querySelectorAll('[data-fs-dir]').forEach((d) => d.addEventListener('click', () => {
+      loadDir(`${cur}/${d.dataset.fsDir}`);
+    }));
+  };
+
+  const loadDir = async (p) => {
+    clearError();
+    try {
+      const r = await http.get(`/api/fs/list?path=${encodeURIComponent(p)}`);
+      if (dialog.isConnected) render(r);   // user may have closed it mid-flight
+    } catch (e) { showError(e.message); }
+  };
+
+  dialog.addEventListener('closed', () => dialog.remove());
+  dialog.open = true;
+  loadDir(input.value.trim());
+}
+
 export async function render(el) {
   const myView = el.dataset.view; // bail if route() re-stamps ownership mid-await
   let names;
@@ -69,6 +138,7 @@ export async function render(el) {
         </tr>`).join('') +
     `</tbody></table>
      <label>${t('alg.load_dir')}</label><input class="dir">
+     <button class="browse">${t('alg.browse')}</button>
      <button class="load">${t('alg.load')}</button>
      <div id="alg-msg" class="mono"></div></div>`;
 
@@ -106,4 +176,6 @@ export async function render(el) {
       render(el);
     } catch (e) { showError(e.message); }
   });
+
+  el.querySelector('.browse').addEventListener('click', () => openPicker(el.querySelector('.dir'), el));
 }

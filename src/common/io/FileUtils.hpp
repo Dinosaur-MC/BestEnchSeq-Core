@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -41,6 +43,38 @@ inline std::vector<std::filesystem::path> find_files(
                 result.push_back(entry.path());
         }
     }
+    return result;
+}
+
+/// One non-recursive directory entry (powers the web directory picker).
+/// `size` is meaningful for regular files only (0 for dirs / unreadable).
+struct DirEntry {
+    std::string name;
+    bool is_dir = false;
+    uint64_t size = 0;
+};
+
+/// List the DIRECT children of `dir` (no recursion). Directories sort first,
+/// then by name — the picker's natural order. A non-directory / unreadable
+/// path yields an empty list (never throws).
+inline std::vector<DirEntry> list_directory(const std::filesystem::path& dir) {
+    std::vector<DirEntry> result;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(dir, ec) || ec) return result;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (ec) break;
+        DirEntry e;
+        e.name = entry.path().filename().string();
+        std::error_code ec2;
+        e.is_dir = entry.is_directory(ec2);
+        if (!e.is_dir && entry.is_regular_file(ec2))
+            e.size = entry.file_size(ec2);   // 0 when unreadable — fine for a picker
+        result.push_back(std::move(e));
+    }
+    std::sort(result.begin(), result.end(), [](const DirEntry& a, const DirEntry& b) {
+        if (a.is_dir != b.is_dir) return a.is_dir;   // directories first
+        return a.name < b.name;
+    });
     return result;
 }
 

@@ -9,6 +9,7 @@
 #include "domain/interface/web/controllers/ProfilesController.h"
 #include "domain/interface/web/controllers/AlgorithmController.h"
 #include "domain/interface/web/controllers/CalculatorController.h"
+#include "domain/interface/web/controllers/FsController.h"
 #include "domain/interface/web/controllers/LogsController.h"
 #include "domain/interface/web/WebSolveService.h"
 #include "domain/interface/web/SseHub.h"
@@ -49,6 +50,7 @@ struct TestApp {
         router.register_controller<ProfilesController>(ctx, gate);
         router.register_controller<AlgorithmController>(c, *solve, gate);
         router.register_controller<CalculatorController>(*solve, hub);
+        router.register_controller<FsController>();
         router.register_controller<LogsController>(c, hub);
     }
     HttpResponse call(Method m, std::string path, std::string body = "") {
@@ -554,6 +556,51 @@ void test_enchantables(TestApp& app) {
     expect(sh.body.find("test:bedrock_only") == std::string::npos,
            "bedrock-only enchantment filtered by platform gate");
 }
+/// GET /api/fs/list?path= — directory listing for the picker. Root-locked to
+/// the server cwd (= PROJECT_ROOT in the test harness): a valid directory
+/// lists; a file, a missing path, or an escape above the root → 400.
+void test_fs(TestApp& app) {
+    // ── 1. root (empty path) → 200 with path/root/entries ──
+    auto root = app.call(Method::Get, "/api/fs/list");
+    expect(root.status == 200, "fs list root 200");
+    auto rj = Json::parse(root.body);
+    expect(rj["path"].type() == JsonType::String && rj["root"].type() == JsonType::String,
+           "fs list carries path + root");
+    expect(rj["entries"].type() == JsonType::Array && !rj["entries"].as_array().empty(),
+           "fs root entries non-empty (cwd = project root)");
+    expect(rj["path"].as<std::string>() == rj["root"].as<std::string>(),
+           "empty path resolves to the root itself");
+
+    // ── 2. a known subdirectory (`data` ships in the repo) → 200, dirs-first ──
+    auto data = app.call(Method::Get, "/api/fs/list?path=data");
+    expect(data.status == 200, "fs list data 200");
+    auto dj = Json::parse(data.body);
+    expect(dj["entries"].type() == JsonType::Array && !dj["entries"].as_array().empty(),
+           "data entries non-empty");
+    // Directory entries come first and carry is_dir/size fields.
+    bool first_is_dir = dj["entries"].as_array().front()["is_dir"].as<bool>();
+    expect(first_is_dir, "entries sorted directories-first");
+    expect(dj["entries"].as_array().front().has("name") &&
+               dj["entries"].as_array().front().has("size"),
+           "entry carries name + size");
+    expect(dj["path"].as<std::string>().find("data") != std::string::npos,
+           "data path reflected in response");
+
+    // ── 3. invalid paths → 400 INVALID_PATH ──
+    auto file = app.call(Method::Get, "/api/fs/list?path=CMakeLists.txt");
+    expect(file.status == 400 && file.body.find("INVALID_PATH") != std::string::npos,
+           "fs list on a file 400 INVALID_PATH");
+    auto miss = app.call(Method::Get, "/api/fs/list?path=data%2Fno_such_dir_xyz");
+    expect(miss.status == 400 && miss.body.find("INVALID_PATH") != std::string::npos,
+           "fs list on a missing dir 400 INVALID_PATH");
+    auto esc = app.call(Method::Get, "/api/fs/list?path=..%2F..%2F..%2F..%2F..%2F..%2F");
+    expect(esc.status == 400 && esc.body.find("INVALID_PATH") != std::string::npos,
+           "fs list escaping the root 400 INVALID_PATH");
+    auto rel_esc = app.call(Method::Get, "/api/fs/list?path=data%2F..%2F..%2F");
+    expect(rel_esc.status == 400 && rel_esc.body.find("INVALID_PATH") != std::string::npos,
+           "fs list ..-escape via relative path 400 INVALID_PATH");
+}
+
 
 void test_algorithms(TestApp& app) {
     // list → 200 array of names containing a builtin strategy.
@@ -1257,6 +1304,7 @@ int main() {
         test_profiles(app);
         test_profile_actions(app);  // §12.1: actions + tags/ench round-trips
         test_enchantables(app);     // §12.1: /enchantables/{item} 适用附魔查询
+        test_fs(app);               // 目录选择器：/api/fs/list（根锁 + 非法路径 400）
         test_algorithms(app);
         test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
         test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）

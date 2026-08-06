@@ -37,6 +37,14 @@ target_include_directories(test_csv_io PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_csv_io COMMAND test_csv_io)
 set_tests_properties(test_csv_io PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# FileUtils (header-only; list_directory for the web directory picker)
+add_executable(test_file_utils
+    io/test_file_utils.cpp
+)
+target_include_directories(test_file_utils PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_file_utils COMMAND test_file_utils)
+set_tests_properties(test_file_utils PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
 # StringUtils (header-only)
 add_executable(test_string_utils
     utils/test_string_utils.cpp
