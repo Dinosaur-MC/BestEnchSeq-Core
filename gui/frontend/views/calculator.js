@@ -30,6 +30,7 @@ const state = {
   enchantables: [],     // raw /enchantables response for the current item
   sel: new Map(),       // shortId → {target, source, id}
   conflicts: new Map(), // shortId → [shortId of exclusive-set members, ...]
+  profileVersion: '',   // active profile metadata version ("1.21.6" etc.; "" → "—")
 };
 
 // Backend path params are matched literally (no URL-decoding), and profile
@@ -69,59 +70,158 @@ function toRoman(n) {
   return String(n);
 }
 
-// One backend item object → short inline label: "diamond_sword[sharpness 5]",
-// or "[sharpness 3]" for a book. All id/name/enchant pieces are escaped here
-// (the single sink for backend strings reaching the card HTML). Names go
-// through displayName() so zh-CN renders 锋利 V / 钻石剑.
-function itemLabel(item) {
+// ── Result area: A+B=C step cards (v12 layout) ───────────────────────────────
+// Backend solution JSON (schema_version 1.1, OutputFormatter): each step
+// carries item_a / item_b / result (the forged C) + exp_level_cost / exp_cost
+// (exp_cost = cumulative XP to reach that anvil level, ExpCalculator);
+// solutions carry platform / total_exp_level_cost / total_exp_cost /
+// target_item / metadata{algorithm_name, algorithm_version, computation_time}.
+// All backend strings pass through esc()/displayName() here; the innerHTML is
+// built in one pass and buttons are bound right after (events-on-insert).
+
+const TOO_EXPENSIVE_LEVEL = 39;  // anvil "Too Expensive" threshold (same as CLI)
+
+// Is an ItemView absent or empty (no equipment id AND no enchantments)? An
+// unfilled result serializes as equipment:{id:""} with no enchantments — no C
+// card is rendered for it, the step reads "A + B =" and ends there.
+function itemEmpty(r) {
+  if (!r) return true;
+  const id = (r.equipment && r.equipment.id) || '';
+  const en = r.enchantments || [];
+  return !id && en.length === 0;
+}
+
+// Icon path short id: equipment id for items, enchanted_book for books (a
+// book's equipment is null). Missing icons 404 and the onerror hides the img.
+function itemIconId(item) {
+  if (item && item.equipment && item.equipment.id) return normalizeId(item.equipment.id);
+  return 'enchanted_book';
+}
+
+// Display name for an ItemView (equipment name or the book label).
+function itemName(item) {
   if (!item) return '?';
-  const ench = (item.enchantments || []).map((e) =>
-    `${esc(displayName(e.id, shortId(e.id)))} ${e.level}`).join(', ');
-  if (item.is_book) return ench ? `[${ench}]` : t('calc.book');
-  const eq = item.equipment || {};
-  const base = esc(displayName(eq.id, eq.name || shortId(eq.id))) || '?';
-  return ench ? `${base}[${ench}]` : base;
+  if (item.equipment && item.equipment.id)
+    return displayName(item.equipment.id, item.equipment.name || shortId(item.equipment.id)) || '?';
+  return displayName('minecraft:enchanted_book', t('calc.book'));
+}
+
+// One item card: icon (title=NSID, hidden on 404) + name + PPN badge +
+// enchantment badge grid. `cls` adds card classes ("c" result, "over" red).
+function itemCardHtml(item, cls, iconSize) {
+  if (!item) return '';
+  const nsid = (item.equipment && item.equipment.id) || 'minecraft:enchanted_book';
+  const icon = `<img src="/public/vendor/icons/${esc(itemIconId(item))}.png" alt="" ` +
+    `title="${esc(nsid)}"` +
+    (iconSize ? ` style="width:${iconSize}px;height:${iconSize}px"` : '') +
+    ` onerror="this.style.display='none'">`;
+  const ppn = `<span class="res-ppn">${esc(tf('res.ppn', item.prior_penalty ?? 0))}</span>`;
+  const enchs = (item.enchantments || []).map((e) =>
+    `<span class="res-badge" title="${esc(e.id)}">` +
+    `${esc(displayName(e.id, shortId(e.id)))} ${esc(toRoman(e.level))}</span>`).join('');
+  return `<div class="res-item${cls ? ' ' + cls : ''}">` +
+    `<div class="res-itemhead">${icon}<span class="nm">${esc(itemName(item))}</span>${ppn}</div>` +
+    (enchs ? `<div class="res-enchs">${enchs}</div>` : '') +
+    `</div>`;
+}
+
+// One forge step row: 序号圆 + A + B + = + C（result 可用时）+ 成本列。
+function stepRowHtml(step, index) {
+  const over = (step.exp_level_cost ?? 0) > TOO_EXPENSIVE_LEVEL;
+  const stepno = `<span class="res-stepno${over ? ' expensive' : ''}" ` +
+    `title="${esc(tf('res.step_n', index + 1))}">${index + 1}</span>`;
+  const a = itemCardHtml(step.item_a, over ? 'over' : '', 24);
+  const b = itemCardHtml(step.item_b, over ? 'over' : '', 24);
+  // Empty result → keep the "=" and leave the C column blank (a spacer cell
+  // keeps the cost column in the 5rem track of the 7-column grid).
+  const c = !itemEmpty(step.result)
+    ? itemCardHtml(step.result, (over ? 'over ' : '') + 'c', 24)
+    : '<span class="res-item-gap" aria-hidden="true"></span>';
+  const cost = `<div class="res-cost">` +
+    `<div><span class="lbl">${esc(t('res.level_label'))}</span> ` +
+    `<span class="val${over ? ' over' : ''}">${esc(String(step.exp_level_cost ?? '?'))}</span></div>` +
+    `<div class="exp" title="${esc(tf('res.exp_hint', step.exp_level_cost ?? 0, step.exp_cost ?? 0))}">` +
+    `${esc(tf('res.exp_label', step.exp_cost ?? 0))}</div></div>`;
+  return `<div class="res-step">${stepno}${a}<span class="res-op">+</span>${b}` +
+    `<span class="res-op">=</span>${c}${cost}</div>`;
+}
+
+// Summary strip: MC platform · profile version | 步骤 N | 等级 X | EXP Y |
+// too-expensive badge (red when any step exceeds level 39).
+function summaryRowHtml(sol, steps) {
+  const anyOver = steps.some((s) => (s.exp_level_cost ?? 0) > TOO_EXPENSIVE_LEVEL);
+  const parts = [
+    `<span>${esc(tf('res.mc_platform', sol.platform || '—', state.profileVersion || '—'))}</span>`,
+    `<span class="sep">|</span>`,
+    `<span>${tf('res.steps', `<b>${steps.length}</b>`)}</span>`,
+    `<span>${tf('res.levels', `<b>${sol.total_exp_level_cost ?? '?'}</b>`)}</span>`,
+    `<span>${tf('res.exp_total', `<b>${sol.total_exp_cost ?? '?'}</b>`)}</span>`,
+  ];
+  if (anyOver)
+    parts.push(`<span class="res-too-expensive">${esc(t('res.too_expensive'))}</span>`);
+  return `<div class="res-summary">${parts.join('')}</div>`;
+}
+
+// Final item card: hollow ✓ circle + "锻造结果" label + 32px icon + PPN +
+// enchantment badges — built from the target item (the goal the steps build).
+function finalItemHtml(sol) {
+  if (!sol.target_item || itemEmpty(sol.target_item)) return '';
+  const tgt = sol.target_item;
+  const nsid = (tgt.equipment && tgt.equipment.id) || 'minecraft:enchanted_book';
+  const icon = `<img src="/public/vendor/icons/${esc(itemIconId(tgt))}.png" alt="" ` +
+    `title="${esc(nsid)}" onerror="this.style.display='none'">`;
+  const enchs = (tgt.enchantments || []).map((e) =>
+    `<span class="res-badge" title="${esc(e.id)}">` +
+    `${esc(displayName(e.id, shortId(e.id)))} ${esc(toRoman(e.level))}</span>`).join('');
+  return `<div class="res-finalwrap">` +
+    `<span class="res-stepno-hollow" aria-hidden="true">✓</span>` +
+    `<div class="res-final">` +
+    `<div class="fhead">${icon}` +
+    `<div><div class="flabel">${esc(t('res.forge_result'))}</div>` +
+    `<div class="fname">${esc(itemName(tgt))}</div></div>` +
+    `<span class="res-ppn">${esc(tf('res.ppn', tgt.prior_penalty ?? 0))}</span></div>` +
+    (enchs ? `<div class="res-enchs">${enchs}</div>` : '') +
+    `</div></div>`;
+}
+
+// Algorithm info + action buttons. Copy/save are wired in T4 — this phase
+// renders the controls and binds no-op handlers (structure + styles only).
+function tailHtml(sol) {
+  const m = sol.metadata || {};
+  const metaLines = [];
+  if (m.algorithm_name || m.algorithm_version) {
+    const name = m.algorithm_name ? esc(tf('res.algorithm', m.algorithm_name)) : '';
+    const ver = m.algorithm_version ? ` · ${esc(tf('res.version', m.algorithm_version))}` : '';
+    metaLines.push(`<div>${name}${ver}</div>`);
+  }
+  if (m.computation_time != null)
+    metaLines.push(`<div>${esc(tf('res.wall_time', m.computation_time))}</div>`);
+  if (!metaLines.length) return '';
+  return `<div class="res-tail">` +
+    `<div class="res-meta">${metaLines.join('')}</div>` +
+    `<div class="res-btns">` +
+    `<button type="button" class="copy">${esc(t('res.copy'))}</button>` +
+    `<button type="button" class="save">${esc(t('res.save_img'))}</button>` +
+    `</div></div>`;
 }
 
 function renderSolution(el, sol, index) {
   const card = document.createElement('div');
-  card.className = 'card';
-  // Steps carry item_a/item_b (both item objects) + exp_level_cost; there is
-  // no per-step result field in the OutputFormatter JSON, so no "→ result"
-  // arrow. item_a is the item being upgraded; when item_b is a book the step
-  // reads as an operation ("apply book to item") instead of a bare operand.
-  // The card header names the real JSON fields (is_success / peak_level_cost
-  // / target_item / metadata) — see OutputFormatter::format_json.
-  const steps = (sol.steps || []).map((s, i) => {
-    const a = itemLabel(s.item_a);
-    const b = itemLabel(s.item_b);
-    const op = s.item_b && s.item_b.is_book ? tf('calc.step_apply', b, a) : a + ' + ' + b;
-    return `<div class="step"><b>${t('calc.step')} ${i + 1}:</b> ${op} ` +
-      `(${t('calc.cost')}: ${s.exp_level_cost ?? '?'})</div>`;
-  }).join('');
-  // The JSON has no final_item — the target item is the goal the steps build,
-  // so it stands in for the final item (a 0-step "already met" solve shows it
-  // as the only content).
-  const finalItem = sol.target_item
-    ? `<div class="mono">${t('calc.final_item')}: ${itemLabel(sol.target_item)}</div>` : '';
-  const zeroStep = sol.is_success !== false && !(sol.steps || []).length
-    ? `<div class="mono">${t('calc.already_met')}</div>` : '';
+  card.className = 'card res-solution';
+  const steps = sol.steps || [];
   const infeasible = sol.is_success === false
     ? `<div class="diag-line diag-warn">${t('calc.infeasible')}</div>` : '';
-  const warn = (sol.peak_level_cost ?? 0) >= 39
-    ? `<div class="diag-line diag-warn">${t('calc.peak_cost')}: ${sol.peak_level_cost} — ${t('calc.too_expensive')}</div>` : '';
-  const meta = sol.metadata && sol.metadata.algorithm_name
-    ? `<div class="mono muted-line">${t('calc.algorithm')}: ${esc(sol.metadata.algorithm_name)}` +
-      (sol.metadata.computation_time != null
-        ? ` · ${t('calc.time_ms')}: ${sol.metadata.computation_time}` : '') + `</div>` : '';
+  const zeroStep = sol.is_success !== false && !steps.length
+    ? `<div class="res-already">${t('calc.already_met')}</div>` : '';
   card.innerHTML = `
-    <h3>#${index + 1} — ${t('calc.total_cost')}: ${sol.total_exp_level_cost ?? '?'}</h3>
+    ${summaryRowHtml(sol, steps)}
     ${infeasible}
-    ${steps || zeroStep || `<div>${t('calc.no_result')}</div>`}
-    ${warn}
-    ${finalItem}
-    ${meta}`;
+    ${steps.length ? `<div class="res-steps">${steps.map(stepRowHtml).join('')}</div>` : zeroStep}
+    ${finalItemHtml(sol)}
+    ${tailHtml(sol)}`;
   el.appendChild(card);
+  // T4 wires real actions; no-op placeholders keep the binding pattern in place.
+  card.querySelectorAll('.res-tail button').forEach((b) => b.addEventListener('click', () => {}));
 }
 
 // Shared terminal-state rendering for the completed `result` payload (the
@@ -579,6 +679,7 @@ export async function render(el) {
   state.enchantables = [];
   state.sel.clear();
   state.conflicts.clear();
+  state.profileVersion = '';
 
   el.innerHTML = `
     <h2>${t('calc.title')}</h2>
@@ -674,6 +775,12 @@ export async function render(el) {
     const status = await http.get('/api/status');
     if (el.dataset.view !== myView) return;
     state.key = status.active_profile;
+    // Profile metadata (version for the summary strip "MC Java · <版本>").
+    try {
+      const prof = await http.get(`/api/profiles/${encSeg(state.key)}`);
+      if (el.dataset.view !== myView) return;
+      state.profileVersion = (prof && prof.version) || '';
+    } catch (_) { /* version stays "" → renders "—" */ }
     const [algos, eqs] = await Promise.all([
       http.get('/api/algorithms'),
       http.get(`/api/profiles/${encSeg(state.key)}/equipments`),

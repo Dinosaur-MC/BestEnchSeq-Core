@@ -191,6 +191,118 @@ mdui-dropdown::part(panel) {
   padding: 4px;
 }
 
+/* ── Calculator results: A+B=C step cards (v12 layout) ──
+   Grid: 序号 3rem | A max-content | op 3rem | B max-content | op 3rem |
+   C max-content | cost 5rem — all font sizes in rem (1rem baseline). */
+.res-summary {
+  display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;
+  border: 1px solid var(--border); background: var(--panel);
+  border-radius: var(--radius); padding: 0.625rem 0.75rem;
+  margin-bottom: 0.75rem; font-size: 0.875rem;
+}
+.res-summary b { color: var(--accent-2); }
+.res-summary .sep { color: var(--border); }
+.res-too-expensive {
+  background: rgba(217, 83, 79, .15); color: var(--danger);
+  border: 1px solid var(--danger); border-radius: 10px; padding: 0 8px;
+  font-size: 0.8125rem; white-space: nowrap;
+}
+.res-steps {
+  display: grid;
+  grid-template-columns: 3rem max-content 3rem max-content 3rem max-content 5rem;
+  gap: 0.375rem;
+  align-items: stretch;
+}
+/* .res-step wraps one A+B=C row; display:contents keeps the wrapper
+   transparent to the grid (children land directly in the 7 columns). */
+.res-step { display: contents; }
+.res-op {
+  font-size: 1.25rem; color: var(--muted); font-weight: 700;
+  text-align: center; align-self: center;
+}
+.res-item {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.4375rem 0.5rem; background: var(--panel-2); height: 100%;
+  flex: 0 1 auto; min-width: 10rem; max-width: 18rem;
+}
+.res-item.c { border-color: var(--accent); background: rgba(92, 184, 92, .08); }
+/* Declared after .c so a too-expensive result step shows red, not green. */
+.res-item.over { border-color: var(--danger); }
+.res-itemhead { display: flex; align-items: center; gap: 0.375rem; }
+.res-itemhead img { width: 24px; height: 24px; image-rendering: pixelated; }
+.res-itemhead .nm { font-weight: 600; font-size: 0.9375rem; }
+.res-ppn {
+  margin-left: auto; font-size: 0.6875rem; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 4px; padding: 0.0625rem 0.3125rem;
+  white-space: nowrap; flex: none;
+}
+/* Enchantment badges: 3-column grid; short badges share a baseline width,
+   long names stretch the column naturally (never truncated). */
+.res-enchs {
+  margin-top: 0.375rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(5.5rem, max-content));
+  gap: 0.25rem;
+}
+.res-badge {
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 4px; padding: 0.1875rem 0.5rem;
+  font-size: 0.8125rem; white-space: nowrap; text-align: center;
+}
+.res-stepno {
+  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.9375rem;
+  align-self: center; margin: 0 auto;
+}
+.res-stepno.expensive { background: var(--danger); }
+.res-stepno-hollow {
+  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  border: 1px solid var(--border); color: var(--muted); background: transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 0.9375rem;
+  align-self: center; flex: none;
+}
+.res-cost { text-align: right; font-size: 0.875rem; white-space: nowrap; align-self: center; }
+.res-cost .lbl { color: var(--muted); font-size: 0.75rem; }
+.res-cost .val { color: var(--accent-2); font-weight: 700; font-size: 0.875rem; }
+.res-cost .val.over { color: var(--danger); }
+.res-cost .exp { color: var(--muted); font-size: 0.75rem; }
+.res-cost .exp b { font-size: 0.875rem; color: var(--muted); }
+.res-finalwrap { display: flex; align-items: stretch; gap: 0.375rem; margin-top: 0.625rem; }
+.res-final {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.5rem 0.625rem; background: var(--panel); max-width: 24rem;
+}
+.res-final .fhead { display: flex; align-items: center; gap: 0.375rem; }
+.res-final .fhead img { width: 32px; height: 32px; image-rendering: pixelated; }
+.res-final .flabel { color: var(--muted); font-size: 0.75rem; }
+.res-final .fname { font-weight: 600; font-size: 1rem; }
+.res-tail {
+  display: flex; gap: 0.75rem; flex-wrap: wrap;
+  align-items: flex-start; margin-top: 0.5rem;
+}
+.res-tail .res-meta {
+  font-size: 0.8125rem; color: var(--muted);
+  align-self: flex-start; margin-top: 0.25rem;
+}
+.res-tail .res-meta div { margin: 1px 0; }
+.res-tail .res-btns { margin-left: auto; align-self: flex-end; display: flex; gap: 0.5rem; }
+.res-tail button.copy { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+.res-tail button.save { background: var(--accent); color: #fff; border: none; }
+.res-already { color: var(--muted); font-style: italic; padding: 4px 2px; }
+/* Narrow screens: step rows degrade to wrapped flex (cards flow, cost right). */
+@media (max-width: 900px) {
+  .res-steps { display: block; }
+  .res-step {
+    display: flex; flex-wrap: wrap; gap: 0.375rem; align-items: stretch;
+    margin-bottom: 0.375rem;
+  }
+  .res-item { flex: 1 1 10rem; }
+  .res-cost { margin-left: auto; }
+}
+
 /* ── Control height unification (≈36px, matching the plain buttons) ── */
 mdui-button { height: 36px; }
 mdui-switch { height: 36px; }
