@@ -144,6 +144,12 @@ Response ProfilesController::remove(const HttpRequest&, const PathParams& pp) {
     std::lock_guard<std::mutex> lock(_gate);
     const std::string key = pp.get("key");
     require_profile(_ctx, key);
+    // Root guard: the builtin profile is the implicit base of every effective
+    // view (ProfileManager::resolve_effective injects it unconditionally), so
+    // deleting it would break every solve. is_root is derived by BesqContext
+    // (name == "builtin:vanilla") — the same source the metadata endpoint uses.
+    if (_ctx.profile_metadata(key).is_root)
+        throw WebHttpError(409, "PROFILE_IS_ROOT", "cannot remove the root profile: " + key);
     _ctx.remove_profile(key);
     return Response::no_content();
 }

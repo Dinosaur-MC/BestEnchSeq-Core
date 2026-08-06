@@ -316,6 +316,15 @@ void test_profile_actions(TestApp& app) {
     auto del_g = app.call(Method::Get, "/api/profiles/builtin:vanilla-del");
     expect(del_g.status == 404 && del_g.body.find("PROFILE_NOT_FOUND") != std::string::npos,
            "deleted profile read 404");
+    // ── DELETE the root profile → 409 PROFILE_IS_ROOT, and it survives ──
+    // (the builtin base is the implicit lowest-priority source of every
+    // effective view, so removing it must be impossible through the API).
+    auto del_root = app.call(Method::Delete, "/api/profiles/builtin:vanilla");
+    expect(del_root.status == 409 &&
+               del_root.body.find("PROFILE_IS_ROOT") != std::string::npos,
+           "delete root profile 409 PROFILE_IS_ROOT");
+    auto root_alive = app.call(Method::Get, "/api/profiles/builtin:vanilla");
+    expect(root_alive.status == 200, "root profile survives delete attempt");
 
     // ── POST /api/profiles/{key}/activate → 200 {ok:true}, takes effect, back ──
     scaffold("builtin:vanilla-act");

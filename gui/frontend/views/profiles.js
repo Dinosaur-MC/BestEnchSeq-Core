@@ -5,7 +5,7 @@
 // {key}), and registry tables with add / remove / PATCH-edit. Equipment rows
 // carry an item icon from /public (hidden on 404).
 import { http, showError, clearError, esc } from '../api.js';
-import { t } from '../i18n.js';
+import { t, tf } from '../i18n.js';
 import { displayName } from '../names_zh.js';
 import { iconSpanHtml } from '../sprite.js';
 import { paginate, pagerHtml, bindPager } from './pager.js';
@@ -257,17 +257,30 @@ export function render(el) {
 
   const load = async () => {
     const data = await http.get('/api/profiles');
+    // Per-profile metadata (small list) drives the delete guard: the root
+    // profile's Remove button is disabled (its backend deletion is rejected
+    // with 409 PROFILE_IS_ROOT anyway), every other profile confirms first.
+    const metas = await Promise.all(data.profiles.map(async (p) => {
+      try { return await http.get(`/api/profiles/${encSeg(p)}`); }
+      catch (_) { return null; }
+    }));
+    const metaOf = (p) => metas[data.profiles.indexOf(p)];
+    const isRoot = (p) => { const m = metaOf(p); return !!m && m.is_root === true; };
     list.innerHTML = `<table><thead><tr><th>${t('prof.name')}</th><th></th><th></th></tr></thead><tbody>` +
-      data.profiles.map((p) => `<tr><td>${esc(p)}${p === data.active ? ` (${t('prof.active')})` : ''}</td>
-        <td><button data-act="${esc(p)}">${t('prof.activate')}</button>
-            <button data-view="${esc(p)}">${t('prof.view')}</button></td>
-        <td><button data-ren="${esc(p)}">${t('prof.rename')}</button>
-            <button data-rmp="${esc(p)}">${t('prof.remove')}</button></td></tr>`).join('') +
+      data.profiles.map((p) => {
+        const root = isRoot(p);
+        return `<tr><td>${esc(p)}${p === data.active ? ` (${t('prof.active')})` : ''}</td>
+          <td><button data-act="${esc(p)}">${t('prof.activate')}</button>
+              <button data-view="${esc(p)}">${t('prof.view')}</button></td>
+          <td><button data-ren="${esc(p)}">${t('prof.rename')}</button>
+              <button data-rmp="${esc(p)}"${root ? ` disabled title="${esc(t('prof.root_locked'))}"` : ''}>${t('prof.remove')}</button></td></tr>`;
+      }).join('') +
       `</tbody></table>
        <label>${t('prof.new_name')}</label><input class="fork-name">
        <button class="fork-btn">${t('prof.create')}</button>`;
 
-    list.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', async () => {
+
+    list.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', async () => {    list.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', async () => {
       clearError();
       const key = b.dataset.act;
       try {
@@ -277,7 +290,7 @@ export function render(el) {
         await selectProfile(key);
       } catch (e) { showError(e.message); }
     }));
-    list.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', async () => {
+
       clearError();
       const key = b.dataset.view;
       current = key;
@@ -286,6 +299,8 @@ export function render(el) {
     list.querySelectorAll('[data-rmp]').forEach((b) => b.addEventListener('click', async () => {
       clearError();
       const key = b.dataset.rmp;
+      if (b.disabled) return;   // root: guarded on the backend, disabled here
+      if (!window.confirm(tf('prof.confirm_remove', key))) return;
       try {
         await http.del(`/api/profiles/${encSeg(key)}`);
         const wasCurrent = current === key;
