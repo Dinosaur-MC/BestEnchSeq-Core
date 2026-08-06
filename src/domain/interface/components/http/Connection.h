@@ -17,6 +17,10 @@ namespace web {
 inline constexpr auto kStalledReadTimeout = std::chrono::seconds(5);
 inline constexpr auto kKeepAliveTimeout = std::chrono::seconds(30);
 
+/// 输出缓冲上限：pipelining 客户端不读响应时，积压输出超过该值 → 关闭连接
+/// （内存有界，防无限推高）。
+inline constexpr size_t kMaxOutBytes = 8 * 1024 * 1024;
+
 /// 一条连接的运行状态机（归属某个 home loop 线程，单线程访问，无需锁）。
 /// process() 每次最多推进：解析 →（缺数据时）读一块 →（完整请求则）分发 → 写一块。
 /// 返回 true 表示本调用读了数据或分发了请求，false 表示 would-block/无进展。
@@ -93,8 +97,9 @@ private:
     int _fd;
     std::string _id;
     bool _alive = true;
-    bool _pending_eof = false;   // 已读到 EOF（对端不再发数据；输出清空后关闭）
+    bool _pending_eof = false;   // 输出清空后关闭（对端 FIN / Connection: close / 400/413）
     bool _partial = false;       // 请求已部分到达（半请求/半 body/管道残留）→ 慢读计时
+    bool _sent_continue = false; // 本请求已发过 `100 Continue`（防重复；Complete 时复位）
     std::string _in;             // 未消费输入缓冲
     std::string _out;            // 待写输出缓冲
     HttpParser _parser;          // 增量解析器（内部保留半请求状态）

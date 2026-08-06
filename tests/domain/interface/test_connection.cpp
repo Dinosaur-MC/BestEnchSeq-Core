@@ -131,6 +131,131 @@ static void test_split_body_post() {
 }
 
 // ---------------------------------------------------------------------------
+// Connection: close 语义（L1）：HTTP/1.0 默认关闭、HTTP/1.1 显式 `Connection:
+// close` 关闭——响应带 `Connection: close`，写完后连接关闭（不复用），缓冲中
+// 的遗留字节不再被解析。
+// ---------------------------------------------------------------------------
+static void test_connection_close_semantics() {
+    for (const std::string& req : {"GET /ping HTTP/1.0\r\n\r\n",
+                                   "GET /ping HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"}) {
+        TcpListener l;
+        expect(l.listen("127.0.0.1", 0), "listen");
+        int client = sock_connect("127.0.0.1", l.bound_port());
+        expect(client >= 0, "connect");
+        int fd = l.accept();
+        expect(fd >= 0, "accept");
+        set_nonblocking(fd);
+        set_nonblocking(client);
+        Connection conn(fd, "id-close");
+        StubRouter router;
+
+        expect(sock_send(client, req), "send close-semantics request");
+        std::string got;
+        for (int i = 0; i < 100 && conn.alive(); ++i) {
+            conn.process(router);
+            std::string c;
+            if (sock_recv_nb(client, c, 4096) > 0) got += c;
+            else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        expect(got.find("pong") != std::string::npos, "request served");
+        expect(got.find("Connection: close") != std::string::npos, "response says close");
+        expect(!conn.alive(), "connection closed after response");
+
+        sock_close(client);
+        conn.close();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BadRequest（L6）：坏请求 → 恰好一条 400，且写完后连接关闭——坏字节不再每轮
+// select 被反复解析、反复追加 400（旧的“400 刷屏”行为）。
+// ---------------------------------------------------------------------------
+static void test_bad_request_400_once_and_close() {
+    TcpListener l;
+    expect(l.listen("127.0.0.1", 0), "listen");
+    int client = sock_connect("127.0.0.1", l.bound_port());
+    expect(client >= 0, "connect");
+    int fd = l.accept();
+    expect(fd >= 0, "accept");
+    set_nonblocking(fd);
+    set_nonblocking(client);
+    Connection conn(fd, "id-bad");
+    StubRouter router;
+
+    // "NOT A REQUEST"（带空格 → 请求行解析失败）→ BadRequest。
+    expect(sock_send(client, "NOT A REQUEST\r\n\r\n"), "send garbage");
+    std::string got;
+    for (int i = 0; i < 200 && conn.alive(); ++i) {
+        conn.process(router);
+        std::string c;
+        if (sock_recv_nb(client, c, 4096) > 0) got += c;
+        else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    size_t n400 = 0;
+    size_t p = 0;
+    while ((p = got.find("HTTP/1.1 400", p)) != std::string::npos) {
+        ++n400;
+        p += 5;
+    }
+    expect(n400 == 1, "exactly one 400 (no repeated flood)");
+    expect(!conn.alive(), "connection closed after 400");
+
+    sock_close(client);
+    conn.close();
+}
+
+// ---------------------------------------------------------------------------
+// Expect: 100-continue（L2d）：头先到（Expect + Content-Length，body 未到）→ 连接
+// 发出原始 `HTTP/1.1 100 Continue` 且尚未派发最终响应；body 到达后正常响应，
+// 100 只出现一次。
+// ---------------------------------------------------------------------------
+static void test_expect_100_continue() {
+    TcpListener l;
+    expect(l.listen("127.0.0.1", 0), "listen");
+    int client = sock_connect("127.0.0.1", l.bound_port());
+    expect(client >= 0, "connect");
+    int fd = l.accept();
+    expect(fd >= 0, "accept");
+    set_nonblocking(fd);
+    set_nonblocking(client);
+    Connection conn(fd, "id-100");
+    StubRouter router;
+
+    std::string headers =
+        "POST /echo HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\n";
+    expect(sock_send(client, headers), "send headers with Expect");
+    std::string got;
+    for (int i = 0; i < 100 && got.find("100 Continue") == std::string::npos; ++i) {
+        conn.process(router);
+        std::string c;
+        if (sock_recv_nb(client, c, 4096) > 0) got += c;
+        else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    expect(got.find("HTTP/1.1 100 Continue") != std::string::npos, "100 Continue sent");
+    expect(got.find("200") == std::string::npos, "no final response before body arrives");
+
+    // 收到 100 后客户端才发 body → 最终响应。
+    expect(sock_send(client, "hello"), "send body after 100");
+    for (int i = 0; i < 200 && got.find("hello") == std::string::npos; ++i) {
+        conn.process(router);
+        std::string c;
+        if (sock_recv_nb(client, c, 4096) > 0) got += c;
+        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    expect(got.find("hello") != std::string::npos, "echo served after 100-continue");
+    size_t n100 = 0;
+    size_t p = 0;
+    while ((p = got.find("HTTP/1.1 100 Continue", p)) != std::string::npos) {
+        ++n100;
+        p += 5;
+    }
+    expect(n100 == 1, "100 Continue sent exactly once");
+
+    sock_close(client);
+    conn.close();
+}
+
+// ---------------------------------------------------------------------------
 // Timeout sweep (I-3): Connection::sweep_check(now) with fabricated `now`
 // offsets — deterministic, no sleeping. Idle keep-alive 30s → Close, partial
 // request stalled 5s → Close, SSE stream idle 15s → Heartbeat.
@@ -215,6 +340,9 @@ static void test_timeout_sweep() {
 int main() {
     test_keepalive_two_requests();
     test_split_body_post();
+    test_connection_close_semantics();
+    test_bad_request_400_once_and_close();
+    test_expect_100_continue();
     test_timeout_sweep();
     TEST_PASS("test_connection");
     return print_summary();

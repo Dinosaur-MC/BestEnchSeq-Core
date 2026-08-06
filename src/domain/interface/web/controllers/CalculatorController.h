@@ -40,10 +40,11 @@ public:
 private:
     WebSolveService& _svc;
     SseHub& _hub;
-    /// task id → active SSE subscription id. Retained so the transport task can
-    /// unsubscribe on disconnect; a second connect on the same task overwrites
-    /// the earlier subscription id (accepted for now, revisited in Task 18).
-    std::unordered_map<std::string, SseHub::SubId> _streams;
+    /// active SSE subscription id → task id. Keyed by SubId so concurrent
+    /// connections on the same task (SPA tabs/reconnects) each keep their own
+    /// cleanup record; a task-id-keyed map let a second connect overwrite the
+    /// first subscriber's entry, leaking the stale record when it closed.
+    std::unordered_map<SseHub::SubId, std::string> _streams;
 };
 
 } // namespace web

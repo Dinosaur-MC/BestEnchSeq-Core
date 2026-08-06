@@ -15,6 +15,7 @@ public:
             BESQ_ROUTE(Get, "/demo", list),
             BESQ_ROUTE(Get, "/demo/{id}", get),
             BESQ_ROUTE(Post, "/demo", create),
+            BESQ_ROUTE(Post, "/items", create),   // 无 GET 定义：HEAD 应 405
         };
     }
     Response list() { return Response::json(200, "OK", R"({"kind":"list"})"); }
@@ -70,6 +71,25 @@ void test_404_405() {
     expect(mt.status == 405 && mt.header_value("Allow").find("GET") != std::string::npos, "405 + Allow");
 }
 
+void test_head() {
+    Router r;
+    r.register_controller<DemoCtl>();
+    HttpRequest get_req; get_req.method = Method::Get; get_req.path = "/demo";
+    auto get_resp = r.dispatch(get_req);
+    HttpRequest req; req.method = Method::Head; req.path = "/demo";
+    auto resp = r.dispatch(req);
+    expect(resp.status == 200, "HEAD matches GET route");
+    expect(resp.body.empty(), "HEAD suppresses body");
+    expect(resp.header_value("Content-Length") == std::to_string(get_resp.body.size()),
+           "HEAD keeps GET Content-Length");
+    req.path = "/items";   // 仅 POST 定义的路由
+    auto mt = r.dispatch(req);
+    expect(mt.status == 405, "HEAD on non-GET-only route still 405");
+    expect(mt.header_value("Allow") == "POST", "Allow lists actual methods");
+    req.path = "/nope";
+    expect(r.dispatch(req).status == 404, "HEAD unknown path 404");
+}
+
 void test_percent_decode_path() {
     Router r;
     r.register_controller<DemoCtl>();
@@ -91,6 +111,7 @@ void test_bad_body_400() {
 int main() {
     test_ok();
     test_404_405();
+    test_head();
     test_percent_decode_path();
     test_bad_body_400();
     TEST_PASS("test_router");

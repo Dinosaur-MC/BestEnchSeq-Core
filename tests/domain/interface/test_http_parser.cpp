@@ -115,13 +115,103 @@ static void test_bad_method() {
 }
 
 // ---------------------------------------------------------------------------
-// Content-Length over the 1 MiB body cap -> BadRequest (413 semantics).
+// Content-Length over the 1 MiB body cap -> EntityTooLarge（413，与 400 区分）。
 // ---------------------------------------------------------------------------
 static void test_body_too_large() {
     std::string buf = "POST /x HTTP/1.1\r\nHost: x\r\nContent-Length: 2097152\r\n\r\n";
     HttpRequest req;
     size_t consumed = 0;
-    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest, "413");
+    expect(parse_incremental(buf, consumed, req) == ParseResult::EntityTooLarge, "413");
+}
+
+// ---------------------------------------------------------------------------
+// Host 校验（RFC 9112）：HTTP/1.1 缺 Host 或多个 Host → BadRequest；HTTP/1.0 无 Host 合法。
+// ---------------------------------------------------------------------------
+static void test_host_required() {
+    HttpRequest req;
+    size_t consumed = 0;
+    expect(parse_incremental("GET /x HTTP/1.1\r\n\r\n", consumed, req) == ParseResult::BadRequest,
+           "HTTP/1.1 without Host -> BadRequest");
+    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n", consumed, req) ==
+               ParseResult::BadRequest,
+           "duplicate Host -> BadRequest");
+    expect(parse_incremental("GET /x HTTP/1.0\r\n\r\n", consumed, req) == ParseResult::Complete,
+           "HTTP/1.0 without Host is legal");
+}
+
+// ---------------------------------------------------------------------------
+// 重复 Content-Length → BadRequest（请求走私面，值相同也拒绝）。
+// ---------------------------------------------------------------------------
+static void test_duplicate_content_length_rejected() {
+    HttpRequest req;
+    size_t consumed = 0;
+    std::string buf =
+        "POST /x HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nhello";
+    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest,
+           "duplicate Content-Length -> BadRequest");
+}
+
+// ---------------------------------------------------------------------------
+// Transfer-Encoding（任何值）→ BadRequest（本服务器不支持 chunked，显式拒绝）。
+// ---------------------------------------------------------------------------
+static void test_transfer_encoding_rejected() {
+    HttpRequest req;
+    size_t consumed = 0;
+    std::string buf = "POST /x HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n";
+    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest,
+           "Transfer-Encoding -> BadRequest");
+}
+
+// ---------------------------------------------------------------------------
+// Expect: 100-continue（大小写不敏感）→ expect_continue；其他 Expect 值 → BadRequest。
+// ---------------------------------------------------------------------------
+static void test_expect_continue() {
+    HttpRequest req;
+    size_t consumed = 0;
+    // 头已到、body 未到 → Incomplete 且 expect_continue 置位（Connection 据此发 100）。
+    std::string pending = "POST /x HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\n";
+    expect(parse_incremental(pending, consumed, req) == ParseResult::Incomplete, "waiting body");
+    expect(req.expect_continue, "expect_continue set on Incomplete");
+    // 值大小写不敏感 + 完整请求。
+    std::string full =
+        "POST /x HTTP/1.1\r\nHost: x\r\nExpect: 100-CONTINUE\r\nContent-Length: 5\r\n\r\nhello";
+    HttpRequest req2;
+    expect(parse_incremental(full, consumed, req2) == ParseResult::Complete, "full 100-continue");
+    expect(req2.expect_continue, "expect_continue case-insensitive");
+    // 无 body（CL 缺失/0）→ expect_continue 为 false。
+    std::string no_body = "POST /x HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\n\r\n";
+    HttpRequest req3;
+    expect(parse_incremental(no_body, consumed, req3) == ParseResult::Complete, "no body");
+    expect(!req3.expect_continue, "no body -> no 100 needed");
+    // 其他 Expect 值 → BadRequest。
+    HttpRequest req4;
+    expect(parse_incremental("POST /x HTTP/1.1\r\nHost: x\r\nExpect: 200-ok\r\n\r\n", consumed,
+                             req4) == ParseResult::BadRequest,
+           "unsupported Expect -> BadRequest");
+}
+
+// ---------------------------------------------------------------------------
+// keep_alive 计算：HTTP/1.1 默认保活、Connection: close 关闭；HTTP/1.0 默认关闭、
+// Connection: keep-alive（大小写不敏感）保活。
+// ---------------------------------------------------------------------------
+static void test_keep_alive_computation() {
+    HttpRequest req;
+    size_t consumed = 0;
+    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: x\r\n\r\n", consumed, req) ==
+               ParseResult::Complete &&
+               req.keep_alive,
+           "HTTP/1.1 default keep-alive");
+    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", consumed,
+                             req) == ParseResult::Complete &&
+               !req.keep_alive,
+           "HTTP/1.1 Connection: close");
+    expect(parse_incremental("GET /x HTTP/1.0\r\n\r\n", consumed, req) == ParseResult::Complete &&
+               !req.keep_alive,
+           "HTTP/1.0 default close");
+    expect(parse_incremental("GET /x HTTP/1.0\r\nConnection: Keep-Alive\r\n\r\n", consumed, req) ==
+               ParseResult::Complete &&
+               req.keep_alive,
+           "HTTP/1.0 Connection: keep-alive (case-insensitive)");
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +227,11 @@ int main() {
     test_incomplete();
     test_bad_method();
     test_body_too_large();
+    test_host_required();
+    test_duplicate_content_length_rejected();
+    test_transfer_encoding_rejected();
+    test_expect_continue();
+    test_keep_alive_computation();
     TEST_PASS("test_http_parser");
     return print_summary();
 }

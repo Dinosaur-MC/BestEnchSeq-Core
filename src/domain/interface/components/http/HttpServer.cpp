@@ -5,7 +5,6 @@
 #include <mutex>
 #include <thread>
 #include <vector>
-#include <vector>
 #include <atomic>
 #include "Socket.h"
 #include "Reactor.h"
@@ -27,12 +26,12 @@ namespace web {
 namespace {
 
 constexpr size_t kMaxConnections = 256; // 同时连接上限（达上限拒绝新 accept）
-constexpr int kAcceptPollMs = 100;      // 监听就绪探测上限（同时作 stop 节拍）
-constexpr int kConnPollMs = 0;          // 连接就绪探测：非阻塞（0 超时）
-// select 单轮 fd 集合上限（Windows FD_SETSIZE=64）。准入上限取
-// min(kMaxConnections, kMaxPolled)：达上限时新 accept 立即关闭——保证每个被
-// 准入的连接都被 select 轮询，不会"准入但永不轮询 → 客户端永久挂起"（I-3）。
-constexpr size_t kMaxPolled = FD_SETSIZE;
+constexpr int kPollTimeoutMs = 50;      // 单轮 select 有界超时（监听 + 连接就绪探测，M1）
+// select 单轮 fd 集合上限（Windows FD_SETSIZE=64）。监听 fd 与连接 fd 合并进
+// 同一个 select，给监听 fd 留一个槽位，故连接集合上限为 FD_SETSIZE - 1。准入
+// 上限取 min(kMaxConnections, kMaxPolled)：达上限时新 accept 立即关闭——保证
+// 每个被准入的连接都被 select 轮询，不会"准入但永不轮询 → 客户端永久挂起"（I-3）。
+constexpr size_t kMaxPolled = FD_SETSIZE - 1;
 // 准入上限（Windows min 宏会咬 std::min，故用三元）。
 constexpr size_t kAdmitCap = (kMaxConnections < kMaxPolled) ? kMaxConnections : kMaxPolled;
 constexpr int kSweepIntervalMs = 1000;  // 超时清扫节拍（spec §4.2）
@@ -183,72 +182,40 @@ void HttpServer::poller_main() {
 void HttpServer::poll_once() {
     auto& impl = *_impl;
 
-    // ① 监听 fd 就绪（阻塞 ≤ kAcceptPollMs；返回后立即检查 stop）。
-    int lr = impl.listener.wait_ready(kAcceptPollMs);
-    if (!impl.running.load(std::memory_order_acquire))
-        return;
-
-    // ② accept 全部待连接 → round-robin 分片归属。
-    if (lr > 0) {
-        // wait_ready(0) 非阻塞探测：无待连接即停，避免阻塞 accept 挂死 poll 循环。
-        while (impl.listener.wait_ready(0) > 0) {
-            if (!impl.running.load(std::memory_order_acquire))
-                return;
-            int c = impl.listener.accept();
-            if (c < 0)
-                break;
-            set_nonblocking(c);
-            size_t home = 0;
-            bool ok = false;
-            {
-                std::lock_guard lk(impl.pmutex);
-                // 准入上限 = min(kMaxConnections, kMaxPolled)：select 单轮 fd 集合
-                // 被 FD_SETSIZE 封顶，准入超过该数目的连接会"永不轮询 → 客户端
-                // 永久挂起"。达上限拒绝新 accept（立即关闭，不响应任何字节）——
-                // 保证每个被准入的连接都被 select 轮询（I-3 accept-cap 修复）。
-                if (impl.home_of.size() < kAdmitCap) {
-                    home = impl.next_reactor.fetch_add(1, std::memory_order_relaxed) % impl.workers;
-                    impl.home_of.emplace(c, home);
-                    impl.want_write.emplace(c, false);
-                    ok = true;
-                }
-            }
-            if (!ok) {
-                LOG_WARN("connection rejected: capacity cap %zu", kAdmitCap);
-                sock_close(c); // 达上限：拒绝新连接（accept 后立即关闭，无响应）
-                continue;
-            }
-            impl.reactors[home]->add_connection(c);
-            LOG_DEBUG("accept fd=%d -> reactor %zu", c, home);
-        }
-    }
-
-    // ③ 超时清扫（I-3）：每 ~1s 把每个连接的超时复查投递给其归属 Reactor。
-    // home loop 线程执行 Connection::sweep_check（零锁、fd 复用安全）并关闭到期
-    // 连接/注入 SSE 心跳——慢客户端、空闲 keep-alive 与半开 SSE 都有界。
+    // ① 超时清扫（I-3）：每 ~1s 复查所有连接——独立于 select 结果，空闲服务器
+    // （select 持续超时）也必须执行，否则慢读 5s 关闭 / keep-alive 30s 回收 /
+    // SSE 心跳全部失效（spec §4.2 资源上限）。清扫任务投递到连接归属 Reactor，
+    // 由 home loop 线程执行 Connection::sweep_check（零锁、fd 复用安全）。
     const auto sweep_now = std::chrono::steady_clock::now();
     if (sweep_now - impl.last_sweep >= std::chrono::milliseconds(kSweepIntervalMs)) {
         sweep_expired();
         impl.last_sweep = sweep_now;
     }
 
-    // ③ 连接就绪探测（非阻塞 select）→ 按归属投递。
-    // 全程持 pmutex 跨 select：fd 集合构建、select 系统调用、就绪投递三者与
-    // Reactor::remove_connection 的 unregister+close 串行化（关闭走 on_closed→
-    // unregister_fd 取同一把锁），杜绝“集合已建好、socket 已被关闭、select 仍对
-    // 已关闭 fd 执行”的竞态。kConnPollMs=0 → select 非阻塞即时返回，锁窗口极短；
-    // 持锁期间 Reactor 线程的 unregister_fd 只会短暂阻塞等待，而非死锁（锁序：
-    // poller 持 pmutex 时不取 Reactor mutex，故无环）。
+    // ② 监听 fd 与全部连接 fd 合并进同一个 select（单一 fd_set + 有界超时
+    // kPollTimeoutMs=50）：一轮 select 同时处理 accept 与连接就绪分发——空闲时
+    // 已建立连接上的请求发现延迟从 ≤100ms 降到 ≤50ms（M1）。全程持 pmutex 跨
+    // select：fd 集合构建、select 系统调用、accept 准入、就绪投递与 Reactor 的
+    // unregister（on_closed → unregister_fd）串行化，杜绝“集合已建好、socket 已
+    // 被关闭、select 仍对已关闭 fd 执行”的竞态。持锁期间 Reactor 线程的
+    // unregister_fd/set_fd_interest 只会短暂阻塞等待，而非死锁（锁序：poller 持
+    // pmutex 时不取 Reactor mutex，故无环）。
     fd_set rfds, wfds;
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
-    std::vector<int> fds;
+    std::vector<int> fds; // 连接 fd 快照（不含监听 fd）
     int maxfd = -1;
+    const int listener_fd = impl.listener.fd();
+    const bool have_listener = listener_fd >= 0;
     {
         std::lock_guard lk(impl.pmutex);
+        if (have_listener) {
+            FD_SET(native_fd(listener_fd), &rfds);
+            maxfd = listener_fd;
+        }
         for (const auto& [fd, home] : impl.home_of) {
-            if (fds.size() >= FD_SETSIZE)
-                break; // select 单轮 fd 数上限保护（Windows FD_SETSIZE=64）
+            if (fds.size() >= kMaxPolled)
+                break; // 连接集合上限 FD_SETSIZE-1：给监听 fd 留位（M1）
             fds.push_back(fd);
             FD_SET(native_fd(fd), &rfds);
             auto it = impl.want_write.find(fd);
@@ -257,14 +224,48 @@ void HttpServer::poll_once() {
             if (fd > maxfd)
                 maxfd = fd;
         }
-        if (fds.empty())
+        if (maxfd < 0)
             return;
 
-        timeval tv{kConnPollMs / 1000, (kConnPollMs % 1000) * 1000};
+        timeval tv{kPollTimeoutMs / 1000, (kPollTimeoutMs % 1000) * 1000};
         int n = ::select(maxfd + 1, &rfds, &wfds, nullptr, &tv);
         if (n <= 0)
-            return; // 超时 / EINTR → 下一轮重建
+            return; // 超时 / EINTR → 下一轮重建（accept 与连接就绪均未发生）
+        if (!impl.running.load(std::memory_order_acquire))
+            return; // stop 发生在 select 阻塞期 → 直接退出
 
+        // ③ 监听 fd 就绪 → accept 全部待连接 → round-robin 分片归属。
+        if (have_listener && FD_ISSET(listener_fd, &rfds)) {
+            // wait_ready(0) 非阻塞探测：无待连接即停，避免阻塞 accept 挂死 poll 循环。
+            while (impl.listener.wait_ready(0) > 0) {
+                if (!impl.running.load(std::memory_order_acquire))
+                    return;
+                int c = impl.listener.accept();
+                if (c < 0)
+                    break;
+                set_nonblocking(c);
+                size_t home = 0;
+                // 准入上限 = min(kMaxConnections, kMaxPolled)：select 单轮 fd 集合
+                // 被 FD_SETSIZE 封顶（监听 fd 占一席），准入超过该数目的连接会
+                // "永不轮询 → 客户端永久挂起"。达上限拒绝新 accept（立即关闭，
+                // 不响应任何字节）——保证每个被准入的连接都被 select 轮询（I-3
+                // accept-cap 修复）。
+                if (impl.home_of.size() < kAdmitCap) {
+                    home = impl.next_reactor.fetch_add(1, std::memory_order_relaxed) % impl.workers;
+                    impl.home_of.emplace(c, home);
+                    impl.want_write.emplace(c, false);
+                } else {
+                    LOG_WARN("connection rejected: capacity cap %zu", kAdmitCap);
+                    sock_close(c); // 达上限：拒绝新连接（accept 后立即关闭，无响应）
+                    continue;
+                }
+                impl.reactors[home]->add_connection(c);
+                LOG_DEBUG("accept fd=%d -> reactor %zu", c, home);
+            }
+        }
+
+        // ④ 连接 fd 按归属投递（与 select 同一 pmutex 作用域：就绪状态与注册表
+        // 一致，杜绝投递到 select 返回后刚被注销/关闭的 fd）。
         for (int fd : fds) {
             size_t home;
             auto it = impl.home_of.find(fd);

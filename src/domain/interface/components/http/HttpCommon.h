@@ -48,6 +48,13 @@ struct HttpRequest {
     std::string body;
     /// 请求所在的活跃连接（流式响应帧投递通道）；非连接上下文（如单元测试直调）为空。
     std::shared_ptr<StreamChannel> stream;
+    /// 连接级语义（解析器在头解析完成后计算）：
+    ///   keep_alive — HTTP/1.1 无 `Connection: close` 即 true；HTTP/1.0 需显式
+    ///                 `Connection: keep-alive`。
+    ///   expect_continue — `Expect: 100-continue`（大小写不敏感）且 Content-Length > 0；
+    ///                      Connection 在等待 body 时据此发送 `100 Continue`。
+    bool keep_alive = true;
+    bool expect_continue = false;
     std::string header(const std::string& name) const;   // 大小写不敏感，缺省 ""
 };
 
@@ -58,7 +65,9 @@ struct HttpResponse {
     std::vector<std::pair<std::string, std::string>> headers;   // 额外响应头（Allow/Location…）
     std::string body;
     bool is_stream = false;          // true → 流式（SSE），body 忽略
-    std::string to_bytes() const;    // HTTP/1.1 线格式；非流默认 Connection: keep-alive（关闭由 Connection 状态机决定）
+    /// HTTP/1.1 线格式；非流响应写 `Connection: <keep_alive ? keep-alive : close>`；
+    /// is_stream 分支恒 keep-alive（不受参数影响）。
+    std::string to_bytes(bool keep_alive = true) const;
     std::string header_value(const std::string& name) const;    // 大小写不敏感查找，缺省 ""
     static HttpResponse json(int status, const std::string& reason, const std::string& body);
     static HttpResponse created(const std::string& location, const std::string& body);  // 201+Location

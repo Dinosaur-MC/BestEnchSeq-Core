@@ -39,6 +39,8 @@ int sock_recv_nb(int fd, std::string& out, size_t max_bytes);
 /// Nonblocking write: returns bytes written (0 = would-block, -1 = error).
 /// A short count means the socket buffer filled; the caller must retry the tail.
 int sock_send_nb(int fd, const std::string& data);
+/// Pointer+length variant (avoids copying into a std::string mid-buffer).
+int sock_send_nb(int fd, const char* data, size_t len);
 
 /// Readiness probe on a single fd: 1 = readable/connectable, 0 = timeout, -1 = error.
 int wait_readable(int fd, int timeout_ms);
@@ -54,6 +56,10 @@ public:
     /// Bind+listen. port 0 -> OS-assigned. Returns true on success.
     bool listen(const std::string& host, uint16_t port);
     uint16_t bound_port() const noexcept;
+
+    /// 监听 socket 的原始 fd（-1 = 未监听）。poller 用它把监听 fd 与连接 fd
+    /// 合并进同一个 select（M1 两段式 select 合并）。
+    int fd() const noexcept { return _fd; }
 
     /// Non-blocking readiness probe for the accept loop: 1 = a connection is
     /// pending, 0 = timeout, -1 = error. Lets the server loop honor stop()

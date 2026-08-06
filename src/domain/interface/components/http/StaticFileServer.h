@@ -19,7 +19,9 @@ public:
     void mount_disk(std::string prefix, std::filesystem::path root);
 
     /// 解析 prefix 下的相对路径；GET/HEAD。非法/缺失 → 404。
-    HttpResponse serve(Method method, std::string_view path) const;
+    /// if_none_match：If-None-Match 请求头值（可为空）；ETag 匹配 → 304 空 body。
+    HttpResponse serve(Method method, std::string_view path,
+                       std::string_view if_none_match = {}) const;
 
     bool mounted() const { return !_prefix.empty(); }
 

@@ -38,8 +38,17 @@ HttpResponse Router::dispatch(const HttpRequest& req) {
                 PathParams pp;
                 if (!match_segments(def.pattern, req.path, pp)) continue;
                 path_exists = true;
-                if (def.method == req.method)
-                    return def.invoke(ctrl.get(), req, pp);
+                if (def.method == req.method ||
+                    (req.method == Method::Head && def.method == Method::Get)) {
+                    HttpResponse r = def.invoke(ctrl.get(), req, pp);
+                    // HEAD：语义同 GET 但无响应体；显式 Content-Length 保留 GET 的
+                    // 字节长度（to_bytes 对已有显式 Content-Length 不再自动追加）。
+                    if (req.method == Method::Head && !r.is_stream) {
+                        r.headers.emplace_back("Content-Length", std::to_string(r.body.size()));
+                        r.body.clear();
+                    }
+                    return r;
+                }
                 allow += method_name(def.method);
                 allow += ", ";
             }
@@ -61,7 +70,8 @@ HttpResponse Router::dispatch(const HttpRequest& req) {
     } catch (const std::exception& e) {
         LOG_ERROR("uncaught exception dispatching %s %s: %s", method_name(req.method),
                   req.path.c_str(), e.what());
-        return HttpResponse::internal_error(e.what());
+        // 500 envelope 不透出内部细节（异常文本仅服务端日志可见）。
+        return HttpResponse::internal_error("internal server error");
     }
 }
 

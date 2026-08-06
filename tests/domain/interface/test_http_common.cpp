@@ -61,12 +61,44 @@ static void test_non_stream_head_unchanged() {
     expect(wire.find("Transfer-Encoding") == std::string::npos, "non-stream no Transfer-Encoding");
 }
 
+// keep_alive=false → `Connection: close` 替换硬编码 keep-alive；默认参数不变。
+static void test_close_header() {
+    HttpResponse r;
+    r.status = 200;
+    r.reason = "OK";
+    r.content_type = "application/json";
+    r.body = "{}";
+    std::string wire = r.to_bytes(false);
+    expect(wire.find("Connection: close") != std::string::npos, "close on keep_alive=false");
+    expect(wire.find("Connection: keep-alive") == std::string::npos, "no keep-alive when closing");
+    expect(r.to_bytes().find("Connection: keep-alive") != std::string::npos, "default keep-alive");
+}
+
+// 204 No Content：省略 Content-Type 行（避免 `Content-Type: \r\n`），仍带 Content-Length: 0。
+static void test_no_content_head() {
+    HttpResponse r = HttpResponse::no_content();
+    std::string wire = r.to_bytes();
+    expect(wire.find("HTTP/1.1 204 No Content") != std::string::npos, "204 status line");
+    expect(wire.find("Content-Type") == std::string::npos, "204 omits Content-Type");
+    expect(wire.find("Content-Length: 0") != std::string::npos, "204 has Content-Length: 0");
+}
+
+// 413 状态码有标准原因短语。
+static void test_413_reason() {
+    HttpResponse r = HttpResponse::error(413, "BODY_TOO_LARGE", "request body too large");
+    std::string wire = r.to_bytes();
+    expect(wire.find("HTTP/1.1 413 Payload Too Large") != std::string::npos, "413 reason phrase");
+}
+
 int main() {
     test_percent_decode();
     test_query_parse();
     test_mime();
     test_stream_head_shape();
     test_non_stream_head_unchanged();
+    test_close_header();
+    test_no_content_head();
+    test_413_reason();
     TEST_PASS("test_http_common");
     return print_summary();
 }

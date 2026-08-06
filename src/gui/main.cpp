@@ -353,13 +353,20 @@ int main(int argc, char* argv[]) try {
     // WebModule 做全部路由（/health, /api/*, /public 静态 + SSE），HTTP 服务器只负责
     // 字节 ↔ dispatch 桥接。dispatch 结果原样返回，避免 HttpResponse::json 重包装把
     // SPA 的 text/html 资产强制成 application/json。
+    //
+    // 关机顺序依赖：server 先声明 → 逆序析构时 module 先死，其 hub.clear() 先于
+    // Reactor（server 所有）释放执行。SseHub 订阅共享持有 Connection，帧汇捕获裸
+    // Reactor*；若 Reactor 先于 hub.clear() 释放，任何日志/任务帧 publish 都会调用
+    // 已析构 Reactor 的 loop → UAF。hub 订阅的生命周期必须短于 Reactor。
+    web::HttpServer server;
+
     web::WebModule module(ctx);
     module.set_static_resources(build_static(frontend_dir));
     auto res_dir = resolve_res_dir(cfg.gui_res_dir);
     if (!res_dir.empty())
         module.mount_res_dir(res_dir);
 
-    web::HttpServer server;
+    // fallback 仅在 server 存活期内被调用；module 声明在后（后析构），引用始终有效。
     server.set_fallback([&](const web::HttpRequest& r) {
         return module.dispatch(r);
     });

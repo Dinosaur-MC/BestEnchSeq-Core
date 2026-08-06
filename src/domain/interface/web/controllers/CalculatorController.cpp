@@ -109,7 +109,7 @@ Response CalculatorController::events(const HttpRequest& req, const PathParams& 
     auto sub = _hub.subscribe(id, [ch](const std::string&, std::string frame) {
         if (ch) ch->post_frame(std::move(frame));
     });
-    _streams[id] = sub;
+    _streams.emplace(sub, id);
     // 迟到订阅者（如 SPA 重连）立即收到任务的最新进度帧，而非直到下一次 publish
     // 才有任何输出（spec §7 帧形状：{"type":"progress","progress":<p>}）。任务已完成
     // 时 status() 返回 progress=1.0 —— 客户端随后收到 completed 帧即知终态。
@@ -127,9 +127,9 @@ Response CalculatorController::events(const HttpRequest& req, const PathParams& 
     if (ch) {
         ch->on_close([this, id, sub] {
             _hub.unsubscribe(id, sub);
-            auto it = _streams.find(id);
-            if (it != _streams.end() && it->second == sub)
-                _streams.erase(it);
+            // SubId-keyed: each connection erases exactly its own record, so a
+            // second subscriber on the same task no longer orphans the first.
+            _streams.erase(sub);
         });
     }
     return sse_stream_response();

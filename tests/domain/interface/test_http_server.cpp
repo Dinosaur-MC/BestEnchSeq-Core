@@ -4,8 +4,9 @@
 // 端到端验证：
 //   - 8 个并发客户端同时 GET /health → 每个都收到 200 响应（分片 Reactor 各自
 //     处理自己归属的连接，互不阻塞）；
-//   - 准入上限 = min(256, FD_SETSIZE)（I-3 accept-cap 修复）：超过上限的连接
-//     accept 后立即关闭（不响应任何字节），恰好 1 个客户端观察到 EOF；
+//   - 准入上限 = min(256, FD_SETSIZE - 1)（I-3 accept-cap 修复；M1 合并 select
+//     后监听 fd 占一个 fd_set 槽位）：超过上限的连接 accept 后立即关闭（不响应
+//     任何字节），恰好 1 个客户端观察到 EOF；
 //   - stop() 后 run() 正常返回（优雅关闭：stop accept → 各 Reactor 关连接 → join）。
 // =============================================================================
 #include "domain/interface/components/http/HttpServer.h"
@@ -25,8 +26,10 @@
 
 using namespace web;
 
-/// 与服务端一致的准入上限：min(256, FD_SETSIZE)。
-constexpr size_t kAdmitCap = (FD_SETSIZE < 256) ? static_cast<size_t>(FD_SETSIZE) : 256;
+/// 与服务端一致的准入上限：min(256, FD_SETSIZE - 1)。M1 后监听 fd 与连接 fd
+/// 合并进同一个 select，监听 fd 占用一个 fd_set 槽位，故连接上限 = FD_SETSIZE - 1。
+constexpr size_t kAdmitCap =
+    (FD_SETSIZE - 1 < 256) ? static_cast<size_t>(FD_SETSIZE - 1) : 256;
 
 int main() {
     HttpServer server;
@@ -60,8 +63,13 @@ int main() {
 
     expect(ok.load() == 8, "all 8 concurrent clients got a 200 response");
 
-    // ── I-3 accept-cap：准入上限 = min(256, FD_SETSIZE)，超过的连接被 accept 后
-    // 立即关闭（无任何响应字节）。打开 kAdmitCap + 1 个连接，保持空闲：其中恰好
+    // 等服务端处理完 8 个客户端的 EOF（≤1 轮 select + Reactor 处理；留 200ms
+    // 余量）——残留连接仍占 home_of 会让下方准入上限判定少算容量，导致
+    // eof_count/alive 断言失稳。
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // ── I-3 accept-cap：准入上限 = min(256, FD_SETSIZE - 1)，超过的连接被 accept
+    // 后立即关闭（无任何响应字节）。打开 kAdmitCap + 1 个连接，保持空闲：其中恰好
     // 1 个会观察到 EOF（服务器拒绝），其余 kAdmitCap 个保持打开（被轮询，未挂起）。
     const size_t kTotal = kAdmitCap + 1;
     std::vector<int> cs;
@@ -72,7 +80,8 @@ int main() {
         set_nonblocking(c);
         cs.push_back(c);
     }
-    // 有界等待：服务端每 ~100ms 批处理 accept；8s 预算内必处理完 kTotal 个连接。
+    // 有界等待：服务端每 ~50ms 一轮 select（M1 合并 select）批处理 accept；
+    // 8s 预算内必处理完 kTotal 个连接。
     size_t eof_count = 0;
     bool saw_eof = false;
     for (int round = 0; round < 800 && !saw_eof; ++round) {

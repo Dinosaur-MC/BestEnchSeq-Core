@@ -10,7 +10,7 @@
 #include "domain/interface/web/controllers/FsController.h"
 #include "domain/interface/web/controllers/LogsController.h"
 #include "common/io/json.h"
-#include "common/log/log.hpp"
+#include "common/log/Logger.h"
 #include "common/log/LogRingBuffer.h"
 #include <string>
 #include <utility>
@@ -121,9 +121,10 @@ HttpResponse WebModule::dispatch(const HttpRequest& req) {
         r.headers.emplace_back("Location", "/public/index.html");
         return r;
     }
-    // `/public/*` → 静态资源（嵌入式优先，磁盘兜底）。
+    // `/public/*` → 静态资源（嵌入式优先，磁盘兜底）。条件请求（If-None-Match
+    // → ETag 304）由 StaticFileServer 处理，这里把请求头透传过去。
     if (req.path.rfind("/public", 0) == 0)
-        return _impl->_sfs.serve(req.method, req.path);
+        return _impl->_sfs.serve(req.method, req.path, req.header("If-None-Match"));
     // 其余 → 控制器路由（/health, /api/*）。
     return _impl->_router.dispatch(req);
 }

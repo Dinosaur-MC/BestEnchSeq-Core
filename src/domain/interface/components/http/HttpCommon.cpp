@@ -111,10 +111,13 @@ std::string HttpRequest::header(const std::string& name) const {
     return "";
 }
 
-std::string HttpResponse::to_bytes() const {
+std::string HttpResponse::to_bytes(bool keep_alive) const {
     std::string out;
     out += "HTTP/1.1 " + std::to_string(status) + " " + reason + "\r\n";
-    out += "Content-Type: " + content_type + "\r\n";
+    // content_type 为空（如 204 No Content）→ 省略 Content-Type 行，避免线上出现
+    // `Content-Type: \r\n` 空值头。
+    if (!content_type.empty())
+        out += "Content-Type: " + content_type + "\r\n";
     if (is_stream) {
         // SSE: 无边界的打开流——不宣告 Content-Length / Transfer-Encoding，
         // 连接保持打开直到客户端断开或服务端关闭（EventSource 标准行为）。
@@ -145,7 +148,7 @@ std::string HttpResponse::to_bytes() const {
         out += v;
         out += "\r\n";
     }
-    out += "Connection: keep-alive\r\n";   // HTTP/1.1 默认 keep-alive；是否关闭由 Connection 状态机决定
+    out += keep_alive ? "Connection: keep-alive\r\n" : "Connection: close\r\n";
     out += "\r\n";
     out += body;
     return out;
@@ -189,6 +192,7 @@ const char* reason_phrase(int status) {
         case 404: return "Not Found";
         case 405: return "Method Not Allowed";
         case 409: return "Conflict";
+        case 413: return "Payload Too Large";
         case 500: return "Internal Server Error";
     }
     return "Error";

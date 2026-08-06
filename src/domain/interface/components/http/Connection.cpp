@@ -6,6 +6,17 @@
 
 namespace web {
 
+namespace {
+// 日志消毒：请求路径是客户端可控字节，可能含 \r/\n/控制字符 → 日志注入面，
+// 记日志前把 < 0x20 的字符替换为 '_'。
+std::string sanitize_for_log(const std::string& s) {
+    std::string out = s;
+    for (char& c : out)
+        if (static_cast<unsigned char>(c) < 0x20) c = '_';
+    return out;
+}
+} // namespace
+
 Connection::Connection(int fd, std::string id) : _fd(fd), _id(std::move(id)) {
     touch();  // 活动基准：从 accept/构造时刻起计时（空闲 keep-alive 30s 到期）
 }
@@ -51,13 +62,17 @@ void Connection::push_sse_frame(std::string frame) {
 }
 
 void Connection::drain_out() {
-    while (!_out.empty()) {
-        int n = sock_send_nb(_fd, _out);
+    // 局部累计已写偏移，循环结束后一次 erase：避免每轮 send 后 `erase(0, n)` 的
+    // O(n) memmove——慢读客户端 + 大响应时反复部分写会成为 O(n²) 热点。
+    size_t off = 0;
+    while (off < _out.size()) {
+        int n = sock_send_nb(_fd, _out.data() + off, _out.size() - off);
         if (n == -1) { close(); return; }    // 硬错误（含对端断开）→ 关闭连接
         if (n == 0) break;                   // would-block，等下次推进/WRITABLE
-        _out.erase(0, static_cast<size_t>(n));
+        off += static_cast<size_t>(n);
         touch();                             // 发出字节 = 活动（重置 30s 空闲计时）
     }
+    if (off > 0) _out.erase(0, off);
 }
 
 void Connection::flush_stream() {
@@ -70,6 +85,11 @@ void Connection::flush_stream() {
     }
     if (!_stream->empty()) {
         _out += _stream->drain();
+        // 输出缓冲上限：对端不读帧（写持续 would-block）时 _out 无界增长 → 关闭。
+        if (_out.size() > kMaxOutBytes) {
+            close();
+            return;
+        }
         _last_write = std::chrono::steady_clock::now();
     }
     // 即使没有新帧也重试积压输出（被 would-block 打断的写靠后续推进补完）。
@@ -113,6 +133,15 @@ bool Connection::process(const Router& router) {
 
     bool progress = false;
 
+    // 已定“输出清空后关闭”（对端 FIN / Connection: close / 400 / 413）：不再解析
+    // 缓冲中的遗留字节，只补完输出；输出清空后关闭（L6 400 刷屏的根因修复——
+    // 坏字节不再被反复解析，每连接至多一条 400）。
+    if (_pending_eof) {
+        drain_out();
+        if (_out.empty()) close();
+        return false;
+    }
+
     // 解析→按需增量读→再解析 循环。HttpParser 是增量无状态解析器：每次先试
     // 解析已缓冲字节；缺 body 或头部不完整时再从 socket 读一块、追加后重试，
     // 直到产出完整请求、出错、或暂时无更多数据。旧实现只在“头终结符尚未到达”
@@ -135,11 +164,17 @@ bool Connection::process(const Router& router) {
             // 剩余缓冲是下一条请求的起始字节（pipelining）→ 视为已部分到达；
             // 缓冲空 → 回到空闲 keep-alive（30s 计时）。
             _partial = !_in.empty();
+            _sent_continue = false;         // 下一条请求可重新获得 `100 Continue`
             touch();
             auto resp = router(req);
             // 请求行日志：流升级后 process() 走流分支（_stream）不再解析请求，此句在
             // 流连接上只在升级时执行一次（不逐帧刷屏），普通请求每请求记一次。
-            LOG_DEBUG("%s %s -> %d", method_name(req.method), req.path.c_str(), resp.status);
+            // 路径消毒：客户端可控字节可能含控制字符 → 防日志注入。
+            LOG_DEBUG("%s %s -> %d", method_name(req.method), sanitize_for_log(req.path).c_str(),
+                      resp.status);
+            // Connection: close（HTTP/1.0 或显式 close）→ 复用 _pending_eof 机制：
+            // 停止再读，输出清空后关闭。守卫保证缓冲中的遗留字节不再被解析。
+            if (!req.keep_alive) _pending_eof = true;
             if (resp.is_stream) {
                 // 升级为 SSE 流模式：写响应头，连接转入只写路径（push_sse_frame）。
                 if (!_stream) {
@@ -149,21 +184,38 @@ bool Connection::process(const Router& router) {
                 }
                 _out += resp.to_bytes();
                 progress = true;
+                if (_out.size() > kMaxOutBytes) { close(); return progress; }
                 break;                      // 流式连接脱离请求解析，不再读后续请求
             }
-            _out += resp.to_bytes();
+            _out += resp.to_bytes(req.keep_alive);
             progress = true;
+            if (_out.size() > kMaxOutBytes) { close(); return progress; }
+            if (!req.keep_alive) break;     // 关闭语义：不再解析管道遗留字节
             continue;                       // pipeline: may be another complete request buffered
         }
         if (pr == ParseResult::BadRequest) {
             LOG_WARN("malformed request from conn %s", _id.c_str());
-            _out += HttpResponse::bad_request("BAD_REQUEST", "malformed request").to_bytes();
-            _partial = true;                // 缓冲里的坏字节不会消失 → 按慢读计时
+            _out += HttpResponse::bad_request("BAD_REQUEST", "malformed request").to_bytes(false);
+            _pending_eof = true;            // 坏字节不会消失：不再解析，输出清空后关闭
+            break;
+        }
+        if (pr == ParseResult::EntityTooLarge) {
+            LOG_WARN("request body too large from conn %s", _id.c_str());
+            _out += HttpResponse::error(413, "BODY_TOO_LARGE", "request body too large")
+                        .to_bytes(false);
+            _pending_eof = true;            // 超出上限的 body 无法消费 → 响应后关闭
             break;
         }
         // Incomplete → need more bytes from the socket. sock_recv_nb 的 0 既可能
         // 是 would-block 也可能是对端 FIN，先做就绪探测区分：不可读 → would-block，
         // 等下次推进；可读但 recv 仍返回 0 字节 → 真 FIN。
+        if (req.expect_continue && !_sent_continue) {
+            // Expect: 100-continue 且 body 尚未到齐 → 先发 100 让客户端尽快发 body。
+            // 100 是原始线格式（无 Content-Length 等头），不走 to_bytes。
+            _out += "HTTP/1.1 100 Continue\r\n\r\n";
+            _sent_continue = true;
+            drain_out();
+        }
         if (wait_readable(_fd, 0) == 0) break;
         std::string chunk;
         int n = sock_recv_nb(_fd, chunk, 64 * 1024);

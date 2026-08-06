@@ -105,7 +105,8 @@ public:
         return *this;
     }
 
-    /// 分发；方法错→405+Allow，路径未知→404，WebHttpError→对应状态，JsonException→400，其他→500。
+    /// 分发；HEAD 回退 GET 定义（体抑制、保留 Content-Length 语义）；方法错→405+Allow，
+    /// 路径未知→404，WebHttpError→对应状态，JsonException→400，其他→500。
     HttpResponse dispatch(const HttpRequest& req);
 
 private:

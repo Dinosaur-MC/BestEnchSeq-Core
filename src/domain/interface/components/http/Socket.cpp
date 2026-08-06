@@ -1,11 +1,13 @@
 #include "Socket.h"
 
 #include <cerrno>
+#include <climits>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
 #else
 #include <arpa/inet.h>
 #include <cstring>
@@ -46,6 +48,16 @@ bool set_recv_timeout(sock_t s, int ms) {
     return setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0;
 #endif
 }
+/// 防 fd/句柄泄漏到子进程（L8）：POSIX 置 FD_CLOEXEC，Windows 清
+/// HANDLE_FLAG_INHERIT。所有创建的 socket（listen/accept/connect）都调用。
+void set_no_inherit(int fd) {
+    if (fd < 0) return;
+#ifdef _WIN32
+    SetHandleInformation(reinterpret_cast<HANDLE>(native(fd)), HANDLE_FLAG_INHERIT, 0);
+#else
+    ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+}
 } // namespace
 
 void platform_init() {
@@ -74,42 +86,49 @@ int sock_recv_nb(int fd, std::string& out, size_t max_bytes) {
     out.clear();
     if (fd < 0) return -1;
     if (max_bytes == 0) return 0;
-    std::string buf(max_bytes, '\0');
+    // 栈缓冲，避免每调用一次就分配一次堆 string（L9）。一次 recv 上限取
+    // min(max_bytes, 64KB)，按实际字节数赋给 out——非阻塞读语义不变。
+    char buf[65536];
+    const size_t want = max_bytes < sizeof(buf) ? max_bytes : sizeof(buf);
 #ifdef _WIN32
-    int n = ::recv(native(fd), buf.data(), static_cast<int>(buf.size()), 0);
+    int n = ::recv(native(fd), buf, static_cast<int>(want), 0);
     if (n == SOCKET_ERROR) {
         int e = WSAGetLastError();
         if (e == WSAEWOULDBLOCK) return 0;
         return -1;
     }
 #else
-    ssize_t n = ::recv(fd, buf.data(), buf.size(), 0);
+    ssize_t n = ::recv(fd, buf, want, 0);
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
         return -1;
     }
 #endif
-    if (n > 0) out.assign(buf.data(), static_cast<size_t>(n));
+    if (n > 0) out.assign(buf, static_cast<size_t>(n));
     return static_cast<int>(n);  // 0 = clean close
 }
 
-int sock_send_nb(int fd, const std::string& data) {
-    if (fd < 0 || data.empty()) return 0;
+int sock_send_nb(int fd, const char* data, size_t len) {
+    if (fd < 0 || data == nullptr || len == 0) return 0;
 #ifdef _WIN32
-    int n = ::send(native(fd), data.data(), static_cast<int>(data.size()), 0);
+    int n = ::send(native(fd), data, static_cast<int>(len), 0);
     if (n == SOCKET_ERROR) {
         int e = WSAGetLastError();
         if (e == WSAEWOULDBLOCK) return 0;
         return -1;
     }
 #else
-    ssize_t n = ::send(fd, data.data(), data.size(), MSG_NOSIGNAL);
+    ssize_t n = ::send(fd, data, len, MSG_NOSIGNAL);
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
         return -1;
     }
 #endif
     return static_cast<int>(n);
+}
+
+int sock_send_nb(int fd, const std::string& data) {
+    return sock_send_nb(fd, data.data(), data.size());
 }
 
 int wait_readable(int fd, int timeout_ms) {
@@ -136,6 +155,7 @@ bool TcpListener::listen(const std::string& host, uint16_t port) {
     platform_init();
     sock_t fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd == kInvalid) return false;
+    set_no_inherit(to_int(fd));  // CLOEXEC：不继承到子进程（L8）
     int yes = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&yes), sizeof(yes));
     sockaddr_in addr{};
@@ -169,7 +189,17 @@ uint16_t TcpListener::bound_port() const noexcept { return _port; }
 int TcpListener::accept() {
     if (_fd < 0) return -1;
     sock_t c = ::accept(native(_fd), nullptr, nullptr);
-    return c == kInvalid ? -1 : to_int(c);
+    if (c == kInvalid) return -1;
+#ifdef _WIN32
+    // 64 位 Windows 上 SOCKET 是 64 位句柄，to_int 会截断；超 int 范围即关闭拒绝，
+    // 避免截断后 fd 与已存在 fd 撞号（L7）。
+    if (c > static_cast<sock_t>(INT_MAX)) {
+        close_native(c);
+        return -1;
+    }
+#endif
+    set_no_inherit(to_int(c));  // CLOEXEC：不继承到子进程（L8）
+    return to_int(c);
 }
 
 int TcpListener::wait_ready(int timeout_ms) const {
@@ -186,6 +216,7 @@ int sock_connect(const std::string& host, uint16_t port) {
     platform_init();
     sock_t fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd == kInvalid) return -1;
+    set_no_inherit(to_int(fd));  // CLOEXEC：不继承到子进程（L8）
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -232,7 +263,10 @@ bool set_send_timeout(int fd, int timeout_ms) {
 bool sock_send(int fd, const std::string& data, int timeout_ms) {
     if (fd < 0) return false;
     sock_t s = native(fd);
-    (void)timeout_ms;  // send timeout is not enforceable via SO_RCVTIMEO on Winsock
+    // 发送循环前设置 SO_SNDTIMEO（Windows/POSIX 均已实现）：对端停读时阻塞 send
+    // 有界（超时 → EAGAIN/WSAETIMEDOUT → 返回 false），不再无限挂起（M4）。
+    if (!set_send_timeout(fd, timeout_ms))
+        return false;
     size_t off = 0;
     while (off < data.size()) {
 #ifdef _WIN32

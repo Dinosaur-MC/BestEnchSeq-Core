@@ -12,7 +12,8 @@ namespace web {
 ///
 /// 并发上限（I-3 accept-cap 修复）：poller 基于 ::select，单轮 fd 集合被
 /// FD_SETSIZE（Windows 上 64）封顶。准入上限取 min(kMaxConnections=256,
-/// FD_SETSIZE)——**每个被准入的连接都必然被 select 轮询**：达上限时新 accept
+/// FD_SETSIZE - 1)（监听 fd 占一个 select 槽位）——**每个被准入的连接都必然
+/// 被 select 轮询**：达上限时新 accept
 /// 立即关闭（不响应任何字节），不再出现"已准入但永不轮询 → 客户端永久挂起"。
 /// 需要 >FD_SETSIZE 并发时改用 WSAPoll/poll（见 HttpServer.cpp 顶部注释）。
 ///

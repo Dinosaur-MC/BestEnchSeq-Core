@@ -1484,7 +1484,10 @@ void test_router_500() {
     expect(r.body.find("\"ok\":false") != std::string::npos, "500 envelope ok:false");
     expect(r.body.find("\"code\":\"INTERNAL_ERROR\"") != std::string::npos,
            "500 envelope code INTERNAL_ERROR");
-    expect(r.body.find("boom:forced") != std::string::npos, "500 envelope carries message");
+    expect(r.body.find("\"message\":\"internal server error\"") != std::string::npos,
+           "500 envelope generic message");
+    expect(r.body.find("boom:forced") == std::string::npos,
+           "500 envelope does not leak internal exception text");
 }
 } // namespace
 
