@@ -381,3 +381,36 @@ mdui-select::part(text-field__input) { height: 36px; }
 .set-ro-hint { color: var(--muted); font-size: 12px; font-weight: normal; margin-left: 8px; }
 .set-actions { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
 .set-msg { color: var(--accent); font-size: 13px; }
+
+/* ── Batch C: 状态栏具体魔咒预览（当前/目标 徽章列）── */
+.status-block { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.st-label { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.st-badges { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.st-badge {
+  display: inline-block; padding: 0 6px; border-radius: 4px;
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--text); font-size: 11px; white-space: nowrap;
+}
+.st-badge.none { color: var(--muted); font-style: italic; border-color: transparent; }
+.st-badge.more { color: var(--accent-2); border-color: var(--accent-2); }
+.st-arrow { color: var(--muted); align-self: center; flex: none; font-weight: 700; }
+
+/* ── Batch C: 目标等级低于当前的禁用按钮（amber 弱化，区别于冲突红）── */
+.lv[data-dis="level"]:disabled {
+  opacity: .35; color: #e6c85a; border-color: #e6c85a;
+  cursor: not-allowed;
+
+/* ── Batch C: 诊断卡 KV 表不贴满全宽 ──
+   styles.css 全局 `table { width: 100% }` 让 .diag-table 的键值对 stretch 到
+   卡片右缘；这里收回 auto 宽度 + 值列 nowrap（键宽自适应，值不飞最右）。 */
+.diag-table {
+  width: auto;
+  table-layout: auto;
+  margin: 4px 0 2px;
+}
+.diag-table td {
+  padding: 2px 12px 2px 0;
+  border-bottom: none;
+  white-space: nowrap;
+}
+.diag-table td:last-child { padding-right: 0; }
