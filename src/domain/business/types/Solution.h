@@ -40,12 +40,13 @@ struct Solution : IJsonSerializable {
         Item item_b;
         int32_t exp_level_cost;
         int32_t exp_cost;
+        Item result;  // 锻造后的结果物品（A+B=C 的 C；为空表示未填充）
 
         // Default + aggregate-emulating constructors
         EnchStep() = default;
-        EnchStep(Item a, Item b, int32_t level_cost, int32_t cost)
-            : item_a(std::move(a)), item_b(std::move(b)),
-              exp_level_cost(level_cost), exp_cost(cost) {}
+        EnchStep(Item a, Item b, int32_t level_cost, int32_t cost, Item r = Item{})
+            : item_a(std::move(a)), item_b(std::move(b)), exp_level_cost(level_cost),
+              exp_cost(cost), result(std::move(r)) {}
 
         // -- ISerializable --
         Json to_json() const override;

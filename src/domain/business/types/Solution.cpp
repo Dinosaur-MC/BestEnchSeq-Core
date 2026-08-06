@@ -13,7 +13,8 @@ Json Solution::EnchStep::to_json() const {
         .set("item_a", item_a.to_json())
         .set("item_b", item_b.to_json())
         .set("exp_level_cost", exp_level_cost)
-        .set("exp_cost", exp_cost);
+        .set("exp_cost", exp_cost)
+        .set("result", result.to_json());
 }
 
 void Solution::EnchStep::from_json(const Json& json) {
@@ -25,6 +26,8 @@ void Solution::EnchStep::from_json(const Json& json) {
         exp_level_cost = static_cast<int32_t>(json["exp_level_cost"].as<int64_t>());
     if (json.has("exp_cost"))
         exp_cost = static_cast<int32_t>(json["exp_cost"].as<int64_t>());
+    if (json.has("result"))
+        result.from_json(json["result"]);
 }
 
 // ============================================================================

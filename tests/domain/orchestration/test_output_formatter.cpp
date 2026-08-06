@@ -334,6 +334,59 @@ void test_format_json_real_equipment() {
     TEST_PASS("format_json real equipment + root metadata");
 }
 
+// ─── Test: format_json steps carry the forged result item (A+B=C) ─────
+// The calculator result area renders each step as an A+B=C card; the C
+// (forged result item) must be present in the step JSON.
+
+void test_format_json_step_result() {
+    g_fx.init_chestplate_set();
+    auto profile = profile_from_fx(g_fx);
+    EnchantmentRegistry& enchants = g_fx.enchants;
+
+    // Protection 3 sacrifice book
+    EnchSet prot3;
+    const auto& prot_info = enchants.at(NSID("protection"));
+    prot3.emplace(prot_info.id, prot_info.name, 3);
+
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_chestplate"));
+
+    Solution solution;
+    solution.is_success = true;
+    solution.platform    = MCE::Java;
+    solution.target_item = Item(equip.id, EnchSet{}, 0, equip.max_durability);
+    solution.total_exp_level_cost = 3;
+    solution.total_exp_cost       = 3;
+
+    Solution::EnchStep step;
+    step.exp_level_cost = 3;
+    step.exp_cost       = 3;
+    step.item_a = solution.target_item;
+    step.item_b = Item(NSID("minecraft:enchanted_book"), prot3, 0);
+    // Forged result: the chestplate now carries protection 3
+    step.result = Item(equip.id, prot3, 0, equip.max_durability);
+    solution.steps.push_back(step);
+
+    const auto json = OutputFormatter::format_json({solution}, profile, AlgorithmMode::direct);
+    Json root = Json::parse(json);
+    Json step0 = root["solutions"][0]["steps"][0];
+
+    expect(step0.has("result"), "format_json: step carries result item (A+B=C)");
+    if (!step0.has("result"))
+        return;  // avoid crashing below when result is missing
+
+    Json res = step0["result"];
+    expect(res["is_book"].as<bool>() == false,
+           "format_json: step result is forged equipment, not a book");
+    expect(res["equipment"]["id"].as<std::string>() == "minecraft:diamond_chestplate",
+           "format_json: step result keeps the target equipment id");
+    expect(res["enchantments"].as_array().size() == 1,
+           "format_json: step result carries the forged enchantments");
+    expect(res["enchantments"][0]["id"].as<std::string>() == prot_info.id.str(),
+           "format_json: step result carries the forged enchantment id");
+
+    TEST_PASS("format_json step result item");
+}
+
 // ─── Test: compact #PLATFORM uses raw enum name (never localized) ─────
 // B-T25: compact output is machine-readable and must NOT localize the
 // platform name.  Register a zh_CN table where the display string is
@@ -404,14 +457,17 @@ void test_json_roundtrip() {
     solution.total_exp_cost       = 5;
     solution.metadata.algorithm_name = "hamming";
 
+    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
+
     Solution::EnchStep step;
     step.exp_level_cost = 5;
     step.exp_cost       = 5;
     step.item_a = Item(NSID("minecraft:enchanted_book"), EnchSet{}, 0);
     step.item_b = Item(NSID("minecraft:enchanted_book"), EnchSet{}, 0);
+    // Forged result: the sword with prior penalty 1
+    step.result = Item(equip.id, EnchSet{}, 1, 1561);
     solution.steps.push_back(step);
 
-    const auto& equip = g_fx.equipment.at(NSID("minecraft:diamond_sword"));
     solution.target_item = Item(equip.id, EnchSet{}, 0, 1561);
 
     const auto json = OutputFormatter::format_json({solution}, profile, AlgorithmMode::direct);
@@ -422,6 +478,10 @@ void test_json_roundtrip() {
         return;  // avoid crashing on a malformed parse below
     expect(parsed[0].is_success, "round-trip: is_success preserved");
     expect_eq(parsed[0].steps.size(), 1u, "round-trip: step count preserved");
+    expect(parsed[0].steps[0].result.id == NSID("minecraft:diamond_sword"),
+           "round-trip: step result item preserved");
+    expect_eq(parsed[0].steps[0].result.prior_penalty, 1,
+              "round-trip: step result prior penalty preserved");
     expect_eq(parsed[0].total_exp_level_cost, 5, "round-trip: total level cost");
     expect(parsed[0].target_item.id == NSID("minecraft:diamond_sword"),
            "round-trip: target equipment preserved");
@@ -443,6 +503,7 @@ int main() {
         test_format_verbose_final_item();
         test_format_verbose_too_expensive();
         test_format_json_real_equipment();
+        test_format_json_step_result();
         test_format_compact_platform_raw();
         test_json_roundtrip();
     } catch (const test_error& e) {

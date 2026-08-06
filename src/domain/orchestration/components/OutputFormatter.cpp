@@ -687,6 +687,7 @@ Json OutputFormatter::step_to_json(
     Json::Object obj;
     obj["item_a"]         = item_to_json(step.item_a, ench_reg, cat_reg, eq_reg);
     obj["item_b"]         = item_to_json(step.item_b, ench_reg, cat_reg, eq_reg);
+    obj["result"]         = item_to_json(step.result, ench_reg, cat_reg, eq_reg);
     obj["exp_level_cost"] = Json(step.exp_level_cost);
     obj["exp_cost"]       = Json(step.exp_cost);
     return Json(obj);
@@ -704,6 +705,8 @@ Solution::EnchStep OutputFormatter::step_from_json(
     Solution::EnchStep step;
     step.item_a         = item_from_json(j["item_a"], equipment_cache, ench_reg, cat_reg);
     step.item_b         = item_from_json(j["item_b"], equipment_cache, ench_reg, cat_reg);
+    if (j.has("result"))
+        step.result     = item_from_json(j["result"], equipment_cache, ench_reg, cat_reg);
     step.exp_level_cost = json_int(j["exp_level_cost"]);
     step.exp_cost       = json_int(j["exp_cost"]);
     return step;

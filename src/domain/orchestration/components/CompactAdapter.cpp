@@ -325,10 +325,12 @@ CompactAdapter::recall(const algorithm::AlgorithmOutput &output, const algorithm
         for (const auto &s : csol.steps) {
             auto base = to_domain(s.base, input.registry);
             auto sac  = to_domain(s.sacrifice, input.registry);
+            auto res  = to_domain(s.result, input.registry);
 
             domain_steps.push_back(
                 Solution::EnchStep{
-                    std::move(base), std::move(sac), s.cost, ExpCalculator::level_to_exp(s.cost)
+                    std::move(base), std::move(sac), s.cost,
+                    ExpCalculator::level_to_exp(s.cost), std::move(res)
                 }
             );
         }
