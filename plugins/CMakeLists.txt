@@ -45,6 +45,16 @@ if(BESQ_HOST_BUILD_TYPE AND CMAKE_BUILD_TYPE
         "-DCMAKE_BUILD_TYPE=${BESQ_HOST_BUILD_TYPE}.")
 endif()
 
+# 3. CXX compiler must match the host — on Windows a mismatch breaks the link
+#    (_ITERATOR_DEBUG_LEVEL); on Linux it prevents ABI drift.
+if(HOST_CMAKE_CXX_COMPILER AND CMAKE_CXX_COMPILER
+   AND NOT CMAKE_CXX_COMPILER STREQUAL HOST_CMAKE_CXX_COMPILER)
+    message(FATAL_ERROR
+        "Plugin CXX compiler '${CMAKE_CXX_COMPILER}' must match the host "
+        "'${HOST_CMAKE_CXX_COMPILER}'. Reconfigure with "
+        "-DCMAKE_CXX_COMPILER=${HOST_CMAKE_CXX_COMPILER}.")
+endif()
+
 # Strip include dirs from the imported target — they contain host-platform
 # absolute paths (e.g. Windows F:/... when building from WSL) that would
 # cause "non-existent path" errors.  Plugins add their own include dirs

@@ -6,6 +6,7 @@ get_filename_component(_besq_src "${_besq_build}/.." ABSOLUTE)
 
 # Host build type — plugins must match it (Windows _ITERATOR_DEBUG_LEVEL).
 set(BESQ_HOST_BUILD_TYPE "@CMAKE_BUILD_TYPE@")
+set(HOST_CMAKE_CXX_COMPILER "@CMAKE_CXX_COMPILER@")
 
 # ── besq-algo-core — the SHARED algorithm kernel (纯净扩展) ────────────
 # The parent (via besq-core), the sandbox worker, AND plugins all link this
