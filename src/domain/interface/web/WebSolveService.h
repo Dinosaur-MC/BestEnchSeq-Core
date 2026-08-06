@@ -14,7 +14,7 @@ class BesqContext;
 namespace web {
 class SseHub;
 
-enum class TaskState { Running, Completed, Failed, Cancelled };
+enum class TaskState { Running, Paused, Completed, Failed, Cancelled };
 
 /// Polled snapshot of one solve task.
 struct TaskStatus {
@@ -64,7 +64,22 @@ public:
     /// Cancel the active task (no-op when the task already finished).
     bool cancel(const std::string& id);
 
-    /// True while any task is Running (drives /api/status + 409).
+    /// Pause the running task (batch C): the executor quiesces at its next
+    /// pause point and the task state flips to Paused. Throws WebHttpError(404)
+    /// for an unknown task and WebHttpError(409, TASK_NOT_PAUSABLE) when the
+    /// task is not Running. A pause that races the solve's publish window (the
+    /// executor handle is not yet published) is a lost no-op — the task simply
+    /// completes instead (single-slot semantics stay intact either way).
+    bool pause(const std::string& id);
+
+    /// Resume a paused task: the executor continues and the task state flips
+    /// back to Running. Throws WebHttpError(404) for an unknown task and
+    /// WebHttpError(409, TASK_NOT_RESUMABLE) when the task is not Paused.
+    bool resume(const std::string& id);
+
+    /// True while any task is Running or Paused (drives /api/status + 409).
+    /// A paused task still occupies the single active slot — the executor is
+    /// live and blocked at a pause point, so a new solve must not start.
     bool has_active() const;
 
 private:

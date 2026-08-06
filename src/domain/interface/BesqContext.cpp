@@ -432,3 +432,21 @@ void BesqContext::abort_solve() {
         exec->cancel();
     }
 }
+
+void BesqContext::pause_solve() {
+    // Same handle-copy discipline as abort_solve. IExecutor::pause() on an
+    // Idle/Completed/Paused executor is a safe no-op (the executor's own
+    // state CAS guards it), so a pause racing the publish window simply
+    // loses — the solve then runs to completion.
+    auto exec = _impl->active_executor.load();
+    if (exec) {
+        exec->pause();
+    }
+}
+
+void BesqContext::resume_solve() {
+    auto exec = _impl->active_executor.load();
+    if (exec) {
+        exec->resume();
+    }
+}

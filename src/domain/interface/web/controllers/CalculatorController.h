@@ -24,6 +24,8 @@ public:
             BESQ_ROUTE(Post,   "/api/tasks",             submit),
             BESQ_ROUTE(Get,    "/api/tasks/{id}",        status),
             BESQ_ROUTE(Delete, "/api/tasks/{id}",        cancel),
+            BESQ_ROUTE(Post,   "/api/tasks/{id}/pause",  pause),
+            BESQ_ROUTE(Post,   "/api/tasks/{id}/resume", resume),
             BESQ_ROUTE(Get,    "/api/tasks/{id}/events", events),
         };
     }
@@ -31,6 +33,8 @@ public:
     Response submit(const HttpRequest&, const PathParams&, const Json&);
     Response status(const HttpRequest&, const PathParams&);
     Response cancel(const HttpRequest&, const PathParams&);
+    Response pause(const HttpRequest&, const PathParams&);
+    Response resume(const HttpRequest&, const PathParams&);
     Response events(const HttpRequest&, const PathParams&);
 
 private:

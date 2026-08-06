@@ -157,6 +157,16 @@ public:
     SolveResult solve(const SolveRequest& request);
     void abort_solve();
 
+    /// Pause the in-flight solve at its next pause point (batch C). Follows the
+    /// abort_solve pattern: copies the atomic executor handle and calls
+    /// IExecutor::pause() (which returns once the algorithm has quiesced). No-op
+    /// when nothing is running / the handle is not yet published.
+    void pause_solve();
+
+    /// Resume a paused solve (batch C): IExecutor::resume() on the live handle.
+    /// No-op when nothing is running.
+    void resume_solve();
+
     // ── Format ──
     std::string format(const SolveResult& result, AlgorithmMode mode, std::string_view fmt) const;
 

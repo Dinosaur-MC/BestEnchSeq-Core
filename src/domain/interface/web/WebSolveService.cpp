@@ -83,6 +83,9 @@ SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
     req.algorithm = dto.algorithm.empty() ? (inventory ? "hamming" : "dp_merge")
                                           : dto.algorithm;
     req.forge_config.platform = MCE::Java;
+    // "允许不兼容" 接通（batch C）：wire 键 ignore_incompatible → ForgeConfig 的
+    // ignore_imcompatible（内部拼写保留）。默认 false = 严格冲突。
+    req.forge_config.ignore_imcompatible = dto.ignore_incompatible;
     if (dto.max_solutions > 0) req.search_config.max_solutions = dto.max_solutions;
     if (dto.max_search_time_ms > 0) req.search_config.max_search_time = std::chrono::milliseconds(dto.max_search_time_ms);
     if (dto.max_threads > 0) req.search_config.max_threads = dto.max_threads;
@@ -111,7 +114,9 @@ WebSolveService::~WebSolveService() {
         tasks.reserve(_tasks.size());
         for (const auto& [id, t] : _tasks) {
             std::lock_guard<std::mutex> tl(t->mutex);
-            if (t->state == TaskState::Running) t->state = TaskState::Cancelled;
+            // Paused 同样算活动槽（batch C）：executor 仍活着，需先取消才能退出。
+            if (t->state == TaskState::Running || t->state == TaskState::Paused)
+                t->state = TaskState::Cancelled;
             tasks.push_back(t);
         }
     }
@@ -133,7 +138,9 @@ bool WebSolveService::has_active() const {
     std::lock_guard<std::mutex> lock(_tasks_mutex);
     for (const auto& [id, t] : _tasks) {
         std::lock_guard<std::mutex> tl(t->mutex);
-        if (t->state == TaskState::Running) return true;
+        // Paused 仍占单活动槽（batch C）：executor 活着、求解未结束。
+        if (t->state == TaskState::Running || t->state == TaskState::Paused)
+            return true;
     }
     return false;
 }
@@ -145,9 +152,10 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
         std::lock_guard<std::mutex> lock(_tasks_mutex);
         // Inline the active check — has_active() would re-lock the same mutex.
         // Each task's mutex guards its state against the worker's writes.
+        // Paused counts as active too (batch C): the executor is still live.
         for (const auto& [tid, t] : _tasks) {
             std::lock_guard<std::mutex> tl(t->mutex);
-            if (t->state == TaskState::Running)
+            if (t->state == TaskState::Running || t->state == TaskState::Paused)
                 throw WebHttpError(409, "TASK_ACTIVE", "a solve is already running");
         }
         // Reap terminal tasks so the table stays bounded (long-lived server;
@@ -163,7 +171,8 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             auto& t = it->second;
             {
                 std::lock_guard<std::mutex> tl(t->mutex);
-                if (t->state == TaskState::Running) { ++it; continue; }
+                // Paused 同 Running 保留（batch C）：非终态，不能回收。
+                if (t->state == TaskState::Running || t->state == TaskState::Paused) { ++it; continue; }
             }
             if (!t->finished.load(std::memory_order_acquire)) { ++it; continue; }
             if (t->worker.joinable()) t->worker.join();
@@ -383,7 +392,8 @@ TaskStatus WebSolveService::status(const std::string& id) {
     if (task->state == TaskState::Completed) {
         out.progress = 1.0;
         out.result = task->result;
-    } else if (task->state == TaskState::Running) {
+    } else if (task->state == TaskState::Running || task->state == TaskState::Paused) {
+        // Paused 时 executor 冻结在暂停点，progress() 返回冻结值（batch C）。
         auto prog = _ctx.solve_progress();
         out.progress = prog.progress;
     }
@@ -400,10 +410,13 @@ bool WebSolveService::cancel(const std::string& id) {
     }
     {
         std::lock_guard<std::mutex> lock(task->mutex);
-        if (task->state != TaskState::Running) return false;
+        // Paused 也可取消（batch C）：abort_solve 的 exec->cancel() 会唤醒
+        // 冻结在暂停点的算法线程。
+        if (task->state != TaskState::Running && task->state != TaskState::Paused)
+            return false;
         task->state = TaskState::Cancelled;
     }
-    _ctx.abort_solve();  // cancel() on the live executor is a safe no-op if idle
+        _ctx.abort_solve();  // cancel() on the live executor is a safe no-op if idle
     // Publish-window retry (same race as the destructor): if the worker is
     // inside BesqContext::solve() before the pipeline published the executor
     // handle, the first abort found nothing.  The retry lands on an Idle
@@ -411,6 +424,53 @@ bool WebSolveService::cancel(const std::string& id) {
     // cancellation check instead of burning the full solve.
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     _ctx.abort_solve();
+    return true;
+}
+
+bool WebSolveService::pause(const std::string& id) {
+    std::shared_ptr<Task> task;
+    {
+        std::lock_guard<std::mutex> lock(_tasks_mutex);
+        auto it = _tasks.find(id);
+        if (it == _tasks.end())
+            throw WebHttpError(404, "TASK_NOT_FOUND", "unknown task: " + id);
+        task = it->second;
+    }
+    {
+        std::lock_guard<std::mutex> lock(task->mutex);
+                if (task->state != TaskState::Running)
+            throw WebHttpError(409, "TASK_NOT_PAUSABLE",
+                               task->state == TaskState::Paused ? "task is already paused"
+                                                                : "task is not running");
+        task->state = TaskState::Paused;
+    }
+    // 触发 executor 暂停。与 cancel 相同的发布窗口竞态：executor 句柄未发布时
+    // pause_solve 是空操作，任务直接跑完（web 层状态随后被 worker 提交为
+    // Completed）——单槽语义在两条路径下都成立。20ms 后重试一次：此刻管线已
+    // 发布 executor，第二次 pause 落在 Running 的 executor 上并真正冻结（对
+    // 已冻结/已完成的 executor 是安全空操作），避免慢求解任务上暂停永久落空。
+    _ctx.pause_solve();
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    _ctx.pause_solve();
+    return true;
+}
+
+bool WebSolveService::resume(const std::string& id) {
+    std::shared_ptr<Task> task;
+    {
+        std::lock_guard<std::mutex> lock(_tasks_mutex);
+        auto it = _tasks.find(id);
+        if (it == _tasks.end())
+            throw WebHttpError(404, "TASK_NOT_FOUND", "unknown task: " + id);
+        task = it->second;
+    }
+    {
+        std::lock_guard<std::mutex> lock(task->mutex);
+                if (task->state != TaskState::Paused)
+            throw WebHttpError(409, "TASK_NOT_RESUMABLE", "task is not paused");
+        task->state = TaskState::Running;
+    }
+    _ctx.resume_solve();
     return true;
 }
 

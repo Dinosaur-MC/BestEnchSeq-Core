@@ -28,6 +28,7 @@ const dicts = {
     'calc.weight': 'Weight',
     'calc.infeasible': 'Infeasible',
     'calc.already_met': 'Target already met — no forging steps',
+    'calc.pause': 'Pause', 'calc.resume': 'Resume', 'calc.paused': 'Paused',
     'calc.level_below_source': 'Target level cannot be below current',
     // Result area (A+B=C step cards, v12 layout)
     'res.mc_platform': 'MC {0} · {1}',
@@ -129,6 +130,7 @@ const dicts = {
     'calc.weight': '权重',
     'calc.infeasible': '不可行',
     'calc.already_met': '目标已达成——无需锻造步骤',
+    'calc.pause': '暂停', 'calc.resume': '继续', 'calc.paused': '已暂停',
     'calc.level_below_source': '目标等级不能低于当前',
     // 结果区（A+B=C 步骤卡片，v12 布局）
     'res.mc_platform': 'MC {0} · {1}',

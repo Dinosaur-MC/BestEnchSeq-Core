@@ -833,6 +833,8 @@ void test_calculator(TestApp& app) {
     }
     expect(cancelled, "cancelled snapshot state=cancelled");
 
+    // 共享重任务（18-ench dp_merge 保持 Running ~1s）：pause/resume 测试与
+    // 下面的 unload-409 单槽测试都用它。
     std::string heavy = R"({"target":{"item":"netherite_sword","enchants":[)";
     for (int i = 0; i < 18; ++i) {
         if (i) heavy += ",";
@@ -889,6 +891,110 @@ void test_calculator(TestApp& app) {
            "task ignore_incompatible wrong type 400 INVALID_TASK");
 
     {
+        // ── Batch C: 暂停/继续 —— 用 executor 状态做确定性观测 ──
+        // 18-ench dp_merge 的完整求解很长（>40s，原测试从不等待其自然完成），故
+        // 本测试不等待 completed：pause → 算法真正冻结（solve_progress().state ==
+        // Paused，executor 冻结在暂停点）→ has_active 仍 true + 新提交 409 + status
+        // state:"paused" → resume → 算法恢复（state == Running，web 回 running）→
+        // DELETE 取消（继续后的慢求解仍可取消）。重试循环吸收 pause 落在 executor
+        // 发布窗口的竞态（pause_solve 空操作 → 求解跑完）：该情形下取消当前任务
+        // 释放单槽后换新任务。
+        std::string paused_id;
+        bool paused_observed = false;
+        for (int attempt = 0; attempt < 3 && !paused_observed; ++attempt) {
+            auto r = app.call(Method::Post, "/api/tasks", heavy);
+            expect(r.status == 202, "pause-resume task submit 202");
+            paused_id = Json::parse(r.body)["task_id"].as<std::string>();
+            auto pa = app.call(Method::Post, "/api/tasks/" + paused_id + "/pause");
+            expect(pa.status == 200 && pa.body.find("ok") != std::string::npos,
+                   "pause 200 ok");
+            for (int i = 0; i < 30 && !paused_observed; ++i) {
+                if (app.ctx.solve_progress().state == algorithm::AlgorithmState::Paused) {
+                    paused_observed = true;
+                    break;
+                }
+                auto st = app.call(Method::Get, "/api/tasks/" + paused_id);
+                if (st.status != 200) break;
+                auto sj = Json::parse(st.body);
+                // pause 未命中（发布窗口竞态）→ 求解直接跑完 → 取消并重试。
+                if (sj["state"].as<std::string>() == "completed" ||
+                    sj["state"].as<std::string>() == "failed")
+                    break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (!paused_observed) {
+                // 释放单槽：取消竞态任务的慢求解。
+                (void)app.call(Method::Delete, "/api/tasks/" + paused_id);
+                bool gone = false;
+                for (int i = 0; i < 50 && !gone; ++i) {
+                    auto st = app.call(Method::Get, "/api/tasks/" + paused_id);
+                    if (st.status == 200) {
+                        auto sj = Json::parse(st.body);
+                        gone = sj["state"].as<std::string>() == "cancelled";
+                    }
+                    if (!gone) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+        }
+        expect(paused_observed, "executor reached Paused state");
+
+        // 暂停中：web 状态 paused；has_active 仍 true（executor 占着单活动槽）。
+        auto st_p = app.call(Method::Get, "/api/tasks/" + paused_id);
+        expect(st_p.status == 200 && st_p.body.find("\"state\":\"paused\"") != std::string::npos,
+               "status while paused state=paused");
+        expect(app.solve->has_active(), "has_active true while paused");
+        auto dup_paused = app.call(Method::Post, "/api/tasks", R"({
+            "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+            "algorithm":"dp_merge",
+            "max_solutions":1
+        })");
+        expect(dup_paused.status == 409, "second POST while paused 409");
+
+        // 主流程：resume → executor 回到 Running → web 回 running。
+        auto rs = app.call(Method::Post, "/api/tasks/" + paused_id + "/resume");
+        expect(rs.status == 200 && rs.body.find("ok") != std::string::npos,
+               "resume 200 ok");
+        bool resumed = false;
+        for (int i = 0; i < 30 && !resumed; ++i) {
+            if (app.ctx.solve_progress().state == algorithm::AlgorithmState::Running) {
+                resumed = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        expect(resumed, "executor resumed to Running");
+        auto st_r = app.call(Method::Get, "/api/tasks/" + paused_id);
+        expect(st_r.status == 200 && st_r.body.find("\"state\":\"running\"") != std::string::npos,
+               "status after resume state=running");
+
+        // 继续后的慢求解可正常取消（不等待自然完成）。
+        auto canc_paused = app.call(Method::Delete, "/api/tasks/" + paused_id);
+        expect(canc_paused.status == 200, "cancel resumed task 200");
+        bool canc_done = false;
+        for (int i = 0; i < 50 && !canc_done; ++i) {
+            auto st = app.call(Method::Get, "/api/tasks/" + paused_id);
+            if (st.status == 200) {
+                auto sj = Json::parse(st.body);
+                canc_done = sj["state"].as<std::string>() == "cancelled";
+            }
+            if (!canc_done) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        expect(canc_done, "resumed task cancelled");
+
+        // 状态校验：resume 非 paused → 409；pause 非 running → 409；未知 → 404。
+        auto bad_rs = app.call(Method::Post, "/api/tasks/" + paused_id + "/resume");
+        expect(bad_rs.status == 409 && bad_rs.body.find("TASK_NOT_RESUMABLE") != std::string::npos,
+               "resume cancelled task 409 TASK_NOT_RESUMABLE");
+        auto bad_pa = app.call(Method::Post, "/api/tasks/" + paused_id + "/pause");
+        expect(bad_pa.status == 409 && bad_pa.body.find("TASK_NOT_PAUSABLE") != std::string::npos,
+               "pause cancelled task 409 TASK_NOT_PAUSABLE");
+        auto no_pa = app.call(Method::Post, "/api/tasks/nope/pause");
+        expect(no_pa.status == 404 && no_pa.body.find("TASK_NOT_FOUND") != std::string::npos,
+               "pause unknown task 404");
+        auto no_rs = app.call(Method::Post, "/api/tasks/nope/resume");
+        expect(no_rs.status == 404, "resume unknown task 404");
+    }
+
     // ── §12.1: unload while a solve is active → 409 TASK_ACTIVE ──
     // Deterministic by construction: the unload handler checks has_active()
     // BEFORE taking the gate (a gate-first check would only ever see a

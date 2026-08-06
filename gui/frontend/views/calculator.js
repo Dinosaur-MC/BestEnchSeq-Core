@@ -18,6 +18,7 @@ import { SPRITE_URL, ICON_SIZE, ICON_COLS, iconIndex, iconSpanHtml } from '../sp
 let pollTimer = null;
 let currentTask = null;
 let currentEs = null;   // live EventSource, so cancel() can close it
+let isPaused = false;   // batch C: pause button shows 暂停/继续 by this flag
 
 // ── Zero-input state (module level; render() resets) ────────────────
 const state = {
@@ -931,7 +932,10 @@ function startPoll(id) {
       // cancelled/replaced must not drive the view a newer run owns.
       if (id !== currentTask) return;
       setProgress(st.progress);
-      if (st.state === 'completed') {
+      if (st.state === 'paused') {
+        // Batch C: paused — keep polling; sync the pause button + status label.
+        syncPausedUi();
+      } else if (st.state === 'completed') {
         clearInterval(pollTimer);
         finishProgress();
         renderResult(st.result);
@@ -1048,8 +1052,18 @@ function startSSE(id) {
       if (st.state === 'completed') settle(() => { finishProgress(); renderResult(st.result); renderDiagExit(st.diag_exit); });
       else if (st.state === 'failed') settle(() => { finishProgress(); showError(st.error || t('calc.no_result')); renderDiagExit(st.diag_exit); });
       else if (st.state === 'cancelled') settle(finishProgress);
+      else if (st.state === 'paused') syncPausedUi();  // batch C: reconnect sees paused
     } catch (_) { /* leave the stream to deliver */ }
   })();
+}
+
+// Sync the pause button + status label from a "paused" task snapshot (batch C).
+function syncPausedUi() {
+  isPaused = true;
+  const btn = document.getElementById('calc-pause');
+  const label = document.getElementById('calc-status');
+  if (btn) btn.textContent = t('calc.resume');
+  if (label) label.textContent = t('calc.paused');
 }
 
 // ── Zero-input helpers ───────────────────────────────────────────────
@@ -1374,6 +1388,7 @@ export async function render(el) {
   // view, and a stale pollTimer could outlive the view it drives.
   currentTask = null;
   currentEs = null;
+  isPaused = false;
   clearInterval(pollTimer);
 
   el.innerHTML = `
@@ -1412,6 +1427,7 @@ export async function render(el) {
         <div class="btn-row">
           <button id="calc-run">${t('calc.run')}</button>
           <button id="calc-clear" class="secondary">${t('calc.clear')}</button>
+          <button id="calc-pause" class="secondary" disabled>${t('calc.pause')}</button>
           <button id="calc-cancel" class="secondary" disabled>${t('calc.cancel')}</button>
         </div>
         <div id="calc-solve-hint" class="conflict-hint" style="display:none"></div>
@@ -1476,6 +1492,31 @@ export async function render(el) {
       clearInterval(pollTimer);
       finishProgress();
       currentTask = null;
+    }
+  });
+  // Pause/resume (batch C): POST /api/tasks/{id}/pause|resume; the button
+  // toggles 暂停/继续 by the API response. While paused the SSE stream simply
+  // stops producing progress frames and the status label shows 已暂停. A 409
+  // (task already finished in the race window) just surfaces the error — the
+  // stream/poll delivers the terminal frame.
+  document.getElementById('calc-pause').addEventListener('click', async () => {
+    if (!currentTask) return;
+    const btn = document.getElementById('calc-pause');
+    const label = document.getElementById('calc-status');
+    try {
+      if (isPaused) {
+        await http.post(`/api/tasks/${currentTask}/resume`);
+        isPaused = false;
+        if (btn) btn.textContent = t('calc.pause');
+        if (label) label.textContent = t('calc.progress');
+      } else {
+        await http.post(`/api/tasks/${currentTask}/pause`);
+        isPaused = true;
+        if (btn) btn.textContent = t('calc.resume');
+        if (label) label.textContent = t('calc.paused');
+      }
+    } catch (e) {
+      showError(e.message);
     }
   });
 

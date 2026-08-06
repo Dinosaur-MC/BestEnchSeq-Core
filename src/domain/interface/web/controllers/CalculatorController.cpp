@@ -14,6 +14,7 @@ namespace {
 const char* state_name(TaskState s) {
     switch (s) {
         case TaskState::Running:   return "running";
+        case TaskState::Paused:    return "paused";
         case TaskState::Completed: return "completed";
         case TaskState::Failed:    return "failed";
         case TaskState::Cancelled: return "cancelled";
@@ -75,6 +76,23 @@ Response CalculatorController::cancel(const HttpRequest&, const PathParams& pp) 
     // finished task is a successful no-op.
     (void)_svc.status(id);   // 404 when unknown
     _svc.cancel(id);
+    Json o = Json::object();
+    o["ok"] = Json(true);
+    return Response::json(200, "OK", o.to_string());
+}
+
+Response CalculatorController::pause(const HttpRequest&, const PathParams& pp) {
+    // _svc.pause 抛出：未知任务 404 TASK_NOT_FOUND；非 Running 409
+    // TASK_NOT_PAUSABLE（Router 映射为对应响应）。
+    _svc.pause(pp.get("id"));
+    Json o = Json::object();
+    o["ok"] = Json(true);
+    return Response::json(200, "OK", o.to_string());
+}
+
+Response CalculatorController::resume(const HttpRequest&, const PathParams& pp) {
+    // _svc.resume 抛出：未知任务 404；非 Paused 409 TASK_NOT_RESUMABLE。
+    _svc.resume(pp.get("id"));
     Json o = Json::object();
     o["ok"] = Json(true);
     return Response::json(200, "OK", o.to_string());
