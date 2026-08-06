@@ -13,6 +13,7 @@
 import { http, showError, clearError, esc } from '../api.js';
 import { t, tf } from '../i18n.js';
 import { displayName } from '../names_zh.js';
+import { SPRITE_URL, ICON_SIZE, ICON_COLS, iconIndex, iconSpanHtml } from '../sprite.js';
 
 let pollTimer = null;
 let currentTask = null;
@@ -61,9 +62,9 @@ function shortId(id) {
   return id && id.startsWith('minecraft:') ? id.slice('minecraft:'.length) : id;
 }
 
-// 图标 URL：DOM <img> 与 Canvas createImageBitmap 统一同一编码
-// （encodeURIComponent；vanilla 短 id 为恒等变换）。
-function iconUrl(id) { return `/public/vendor/icons/${encodeURIComponent(id)}.png`; }
+// 物品图标统一走 sprite sheet（gui/frontend/vendor/icons/sprite.png 单请求，
+// sprite.js 提供 tile 定位）：DOM 用 iconSpanHtml（background 裁剪），Canvas
+// 用 iconIndex + drawImage 源矩形。modded 缺 tile 的 id → 无图标（'' / 跳过）。
 
 // I/II/III/IV/V/VI/VII/VIII/IX/X lookup, with a light extension past 10
 // (modded profiles may exceed vanilla max_level); anything beyond 39 falls
@@ -125,14 +126,14 @@ function itemName(item) {
 }
 
 // Item card body (shared by step cards and the final card): icon
-// (title=NSID, hidden on 404) + name + PPN badge + enchantment badge grid.
-// `cls` adds classes ("c" result, "over" red, "final" inside the final card).
-// Icon size is fixed by CSS (.res-itemhead img), no inline styles.
+// (title=NSID, '' when the id has no sprite tile) + name + PPN badge +
+// enchantment badge grid. `cls` adds classes ("c" result, "over" red,
+// "final" inside the final card). Icon size is fixed inline (24px,
+// sprite.js) — no CSS img rules anymore.
 function itemBodyHtml(item, cls) {
   if (!item) return '';
   const nsid = (item.equipment && item.equipment.id) || 'minecraft:enchanted_book';
-  const icon = `<img src="${iconUrl(itemIconId(item))}" alt="" ` +
-    `title="${esc(nsid)}" onerror="this.style.display='none'">`;
+  const icon = iconSpanHtml(itemIconId(item), 24, esc(nsid));
   const ppn = `<span class="res-ppn">${esc(tf('res.ppn', esc(String(item.prior_penalty ?? 0))))}</span>`;
   const enchs = (item.enchantments || []).map((e) =>
     `<span class="res-badge" title="${esc(e.id)}">` +
@@ -227,8 +228,8 @@ function tailHtml(sol) {
 // buildCopyText 产出可回贴 CLI 的纯数据文本（不本地化——与 CLI 机器格式一致，
 // 物品段完全符合 ItemParser.h 语法，可被 --target 直接解析）。renderCanvas 按
 // v12 布局 2D 自绘 PNG：汇总条 + 步骤（序号圆/物品卡/成本列）+ 最终物品 +
-// 算法行；图标经 createImageBitmap 加载同源 /public/vendor/icons/{id}.png，
-// 加载失败跳过（名称徽章仍传达信息）。
+// 算法行；图标经 createImageBitmap 加载 sprite 单图后按源矩形裁剪叠画
+// （缺 tile 的 id 跳过——名称徽章仍传达信息）。
 
 // 物品 ItemParser 规格：`{shortId}[{ench}={level},...]{prior_penalty:N}`
 // （PPN 非 0 才带后缀；书 → enchanted_book；魔咒按后端顺序，与 DOM 徽章一致；
@@ -636,18 +637,18 @@ export function measureRow(step) {
   return { over: (step.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL, a, b, c, hasC, aw, bw, cw, aX, bX, cX, op1X, op2X, costX, rowH, oneLine };
 }
 
-// 图标位图缓存（同 id 只 fetch 一次）。
-const iconCache = new Map();
-async function iconBitmap(id) {
-  if (!iconCache.has(id))
-    iconCache.set(id, (async () => {
+// Sprite 位图缓存（单图只 fetch 一次；tile 裁剪在叠画时按 sprite.js 布局做）。
+const spriteCache = new Map();
+async function spriteBitmap() {
+  if (!spriteCache.has('sheet'))
+    spriteCache.set('sheet', (async () => {
       try {
-        const res = await fetch(iconUrl(id));
+        const res = await fetch(SPRITE_URL);
         if (!res.ok) return null;
         return await createImageBitmap(await res.blob());
       } catch (_) { return null; }
     })());
-  return iconCache.get(id);
+  return spriteCache.get('sheet');
 }
 
 // 渲染一张截图画布：先纯测量布局（固定宽 720，高按内容），再绘制；图标
@@ -739,10 +740,14 @@ export async function renderCanvas(sol) {
   }
 
   for (const j of jobs) {
-    const bmp = await iconBitmap(j.id);
+    const bmp = await spriteBitmap();
     if (!bmp) continue;
+    const idx = iconIndex(j.id);
+    if (idx < 0) continue;               // 缺 tile（modded）→ 跳过
+    const sx = (idx % ICON_COLS) * ICON_SIZE;
+    const sy = Math.floor(idx / ICON_COLS) * ICON_SIZE;
     ctx.imageSmoothingEnabled = false;   // 16px 原图放大保持像素风（同 DOM）
-    ctx.drawImage(bmp, j.x, j.y, CV_ICON, CV_ICON);
+    ctx.drawImage(bmp, sx, sy, ICON_SIZE, ICON_SIZE, j.x, j.y, CV_ICON, CV_ICON);
     ctx.imageSmoothingEnabled = true;
   }
   return canvas;
@@ -1192,16 +1197,15 @@ function updateSolveState() {
 }
 
 // Current item icon + name inside the dropdown trigger button. Icons come
-// from the embedded 16x16 set (/public/vendor/icons); non-vanilla ids 404 and
-// the onerror handler hides the img.
+// from the sprite sheet (/public/vendor/icons/sprite.png); ids without a
+// tile (modded) render no icon ('' — same hidden semantics as the old
+// onerror-hide <img>).
 function updateTrigger() {
   const span = document.getElementById('calc-item-trigger-span');
   if (!span) return;
   const entry = state.items.find((it) => String(it.id) === state.itemId);
   const label = entry ? displayName(entry.id, entry.name) : state.item;
-  const icon = `<img src="${iconUrl(state.item)}" ` +
-    `alt="" onerror="this.style.display='none'">`;
-  span.innerHTML = `${icon}${esc(label)}`;
+  span.innerHTML = `${iconSpanHtml(state.item, 20)}${esc(label)}`;
 }
 
 // Algorithm picker: dp_merge first, then the backend order.
@@ -1214,8 +1218,8 @@ function fillAlgorithms(list) {
   state.algorithm = 'dp_merge';
 }
 
-// Item picker: equipments + enchanted_book, each with its icon from /public
-// (hidden on 404/embedded so the name remains). Clicks re-load the table.
+// Item picker: equipments + enchanted_book, each with its sprite tile ('' for
+// ids without one, so the name remains). Clicks re-load the table.
 function fillItemMenu(el, myView, eqs) {
   const menu = document.getElementById('calc-item-menu');
   if (!menu) return;
@@ -1225,8 +1229,7 @@ function fillItemMenu(el, myView, eqs) {
     .concat([{ id: 'minecraft:enchanted_book', name: t('calc.book') }]);
   menu.innerHTML = state.items.map((it) => {
     const short = normalizeId(it.id);
-    const icon = `<img src="${iconUrl(short)}" ` +
-      `alt="" onerror="this.style.display='none'">`;
+    const icon = iconSpanHtml(short, 20);
     return `<mdui-menu-item value="${esc(String(it.id))}">` +
       `<div slot="custom" class="calc-menu-item">${icon}<span>${esc(displayName(it.id, it.name || short))}</span></div>` +
       `</mdui-menu-item>`;

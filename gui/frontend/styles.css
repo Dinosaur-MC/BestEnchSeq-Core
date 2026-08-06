@@ -81,7 +81,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent-2); 
 .table-scroll { max-height: 60vh; overflow-y: auto; }
 /* Item picker trigger (mdui-button slot="trigger" content) */
 .item-trigger { display: inline-flex; align-items: center; gap: 8px; }
-.item-trigger img { width: 20px; height: 20px; }
+/* Sprite icon tile: a span sized inline by sprite.js (iconSpanHtml); the
+   sheet is fetched once and the tile cropped via inline background-size/
+   background-position. Sizes are set inline (20px picker, 24px result
+   cards), matching the old per-id <img> fill semantics. */
+.icon-sprite {
+  display: inline-block;
+  vertical-align: middle;
+  image-rendering: pixelated;
+  flex: none;
+}
 /* Enchantment table row level buttons */
 .lv {
   background: var(--panel-2); color: var(--text);
@@ -120,7 +129,6 @@ tr.conflict { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .btn-row { display: flex; gap: 8px; margin: 10px 0; }
 /* Item dropdown menu entries */
 .calc-menu-item { display: flex; align-items: center; gap: 8px; }
-.calc-menu-item img { width: 20px; height: 20px; }
 /* Options row: switches + algorithm select */
 .option-row {
   display: flex; gap: 24px; flex-wrap: wrap; align-items: center; margin-top: 14px;
@@ -240,7 +248,6 @@ mdui-dropdown::part(panel) {
 /* Declared after .c so a too-expensive result step shows red, not green. */
 .res-item.over { border-color: var(--danger); }
 .res-itemhead { display: flex; align-items: center; gap: 0.375rem; }
-.res-itemhead img { width: 24px; height: 24px; image-rendering: pixelated; }
 .res-itemhead .nm { font-weight: 600; font-size: 0.9375rem; }
 .res-ppn {
   margin-left: auto; font-size: 0.6875rem; color: var(--muted);

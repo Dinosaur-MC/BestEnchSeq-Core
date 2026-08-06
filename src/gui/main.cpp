@@ -34,6 +34,7 @@ std::string_view frontend_app_js();
 std::string_view frontend_api_js();
 std::string_view frontend_i18n_js();
 std::string_view frontend_names_zh_js();
+std::string_view frontend_sprite_js();
 std::string_view frontend_vendor_icons_bow_png();
 std::string_view frontend_vendor_icons_brush_png();
 std::string_view frontend_vendor_icons_carrot_on_a_stick_png();
@@ -120,6 +121,7 @@ std::string_view frontend_vendor_icons_wooden_pickaxe_png();
 std::string_view frontend_vendor_icons_wooden_shovel_png();
 std::string_view frontend_vendor_icons_wooden_spear_png();
 std::string_view frontend_vendor_icons_wooden_sword_png();
+std::string_view frontend_vendor_icons_sprite_png();
 std::string_view frontend_vendor_mdui_mdui_css();
 std::string_view frontend_vendor_mdui_mdui_global_js();
 std::string_view frontend_view_calculator();
@@ -146,6 +148,7 @@ static constexpr Asset kAssets[] = {
     {"/api.js",     "text/javascript", besq::data::frontend_api_js},
     {"/i18n.js",    "text/javascript", besq::data::frontend_i18n_js},
     {"/names_zh.js", "text/javascript", besq::data::frontend_names_zh_js},
+    {"/sprite.js",  "text/javascript", besq::data::frontend_sprite_js},
     {"/vendor/icons/bow.png", "image/png", besq::data::frontend_vendor_icons_bow_png},
     {"/vendor/icons/brush.png", "image/png", besq::data::frontend_vendor_icons_brush_png},
     {"/vendor/icons/carrot_on_a_stick.png", "image/png", besq::data::frontend_vendor_icons_carrot_on_a_stick_png},
@@ -232,6 +235,7 @@ static constexpr Asset kAssets[] = {
     {"/vendor/icons/wooden_shovel.png", "image/png", besq::data::frontend_vendor_icons_wooden_shovel_png},
     {"/vendor/icons/wooden_spear.png", "image/png", besq::data::frontend_vendor_icons_wooden_spear_png},
     {"/vendor/icons/wooden_sword.png", "image/png", besq::data::frontend_vendor_icons_wooden_sword_png},
+    {"/vendor/icons/sprite.png", "image/png", besq::data::frontend_vendor_icons_sprite_png},
     {"/vendor/mdui/mdui.css",       "text/css",        besq::data::frontend_vendor_mdui_mdui_css},
     {"/vendor/mdui/mdui.global.js", "text/javascript", besq::data::frontend_vendor_mdui_mdui_global_js},
     {"/views/calculator.js", "text/javascript", besq::data::frontend_view_calculator},

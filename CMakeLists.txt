@@ -272,7 +272,7 @@ if(BESQ_BUILD_GUI)
     # Embedded frontend assets (single-exe distribution)
     # served files must match the kAssets table in src/gui/main.cpp
     set(GUI_FRONTEND ${CMAKE_CURRENT_SOURCE_DIR}/gui/frontend)
-    set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js names_zh.js
+    set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js names_zh.js sprite.js
                         vendor/mdui/mdui.css vendor/mdui/mdui.global.js
                         vendor/icons/bow.png vendor/icons/brush.png vendor/icons/carrot_on_a_stick.png vendor/icons/chainmail_boots.png vendor/icons/chainmail_chestplate.png vendor/icons/chainmail_helmet.png
                         vendor/icons/chainmail_leggings.png vendor/icons/copper_axe.png vendor/icons/copper_boots.png vendor/icons/copper_chestplate.png vendor/icons/copper_helmet.png vendor/icons/copper_hoe.png
@@ -288,7 +288,8 @@ if(BESQ_BUILD_GUI)
                         vendor/icons/netherite_spear.png vendor/icons/netherite_sword.png vendor/icons/shears.png vendor/icons/shield.png vendor/icons/stone_axe.png vendor/icons/stone_hoe.png
                         vendor/icons/stone_pickaxe.png vendor/icons/stone_shovel.png vendor/icons/stone_spear.png vendor/icons/stone_sword.png vendor/icons/trident.png vendor/icons/turtle_helmet.png
                         vendor/icons/turtle_shell.png vendor/icons/warped_fungus_on_a_stick.png vendor/icons/wooden_axe.png vendor/icons/wooden_hoe.png vendor/icons/wooden_pickaxe.png vendor/icons/wooden_shovel.png
-                        vendor/icons/wooden_spear.png vendor/icons/wooden_sword.png)
+                        vendor/icons/wooden_spear.png vendor/icons/wooden_sword.png
+                        vendor/icons/sprite.png)
     foreach(name IN LISTS GUI_ASSET_NAMES)
         string(REPLACE "." "_" sym "frontend_${name}")
         string(REPLACE "/" "_" sym "${sym}") # vendor/mdui/mdui.css → frontend_vendor_mdui_mdui_css
