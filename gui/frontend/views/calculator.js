@@ -1065,19 +1065,24 @@ function buildConflicts() {
   }
 }
 
-function selTarget(id) {
+// A pick counts as "selected" when its target level is set, or its source
+// level while the current-enchantments column is enabled. The source column
+// participates in conflict detection (batch C): a target pick plus an
+// exclusive partner's source pick is a conflict too.
+function isSelectedAny(id) {
   const s = state.sel.get(id);
-  return s ? s.target : 0;
+  if (!s) return false;
+  return s.target > 0 || (state.useSource && s.source > 0);
 }
 
-// Selected target pairs that violate the exclusive sets: shortId → Set of
-// conflicting shortIds (both members have a selected target level).
+// Selected pairs that violate the exclusive sets: shortId → Set of conflicting
+// shortIds (both members have a target and/or source selection).
 function selectedConflicts() {
   const pairs = new Map();
   for (const [id, s] of state.sel) {
-    if (!s.target) continue;
+    if (!isSelectedAny(id)) continue;
     for (const c of state.conflicts.get(id) || []) {
-      if (selTarget(c) > 0) {
+      if (isSelectedAny(c)) {
         if (!pairs.has(id)) pairs.set(id, new Set());
         pairs.get(id).add(c);
       }
@@ -1095,21 +1100,33 @@ function conflictNames(ids) {
 }
 
 // One level-button group (I..max_level) for `col` ∈ target|source.
+// `blocked` marks exclusive-set conflicts; a target level below the current
+// one (batch C) is disabled with reason "level" (amber visual + title hint).
 function lvButtons(short, col, blocked) {
   const ench = state.enchantables.find((e) => normalizeId(e.id) === short);
   if (!ench) return '';
   const sel = state.sel.get(short) || {};
+  // source 列在"使用当前附魔"关闭时整列惰性（reason "column"，弱化视觉）；
+  // blocked 冲突优先显示 "conflict"（强化视觉）。
+  const colInert = col === 'source' && !state.useSource;
   let out = '';
   for (let lv = 1; lv <= ench.max_level; lv++) {
     const active = sel[col] === lv;
-    const dis = blocked || (col === 'source' && !state.useSource);
+    let dis = blocked || colInert;
     // data-dis distinguishes "blocked by an exclusive-set conflict" from the
-    // whole column being inert (source column while "use current" is off) —
-    // the conflict ones get the stronger disabled visual in styles.css.
-    const reason = dis ? (blocked ? 'conflict' : 'column') : '';
+    // whole column being inert (source column while "use current" is off) and
+    // from a target level below the current one — conflict/level get stronger
+    // disabled visuals in styles.css.
+    let reason = dis ? (blocked ? 'conflict' : 'column') : '';
+    if (!dis && col === 'target' && state.useSource && sel.source > 0 && lv < sel.source) {
+      dis = true;
+      reason = 'level';
+    }
     out += `<button type="button" class="lv${active ? ' active' : ''}" ` +
       `data-ench="${esc(short)}" data-col="${col}" data-lv="${lv}"` +
-      `${reason ? ` data-dis="${reason}"` : ''}${dis ? ' disabled' : ''}>` +
+      `${reason ? ` data-dis="${reason}"` : ''}` +
+      `${reason === 'level' ? ` title="${esc(t('calc.level_below_source'))}"` : ''}` +
+      `${dis ? ' disabled' : ''}>` +
       `${toRoman(lv)}</button>`;
   }
   return out;
@@ -1123,20 +1140,20 @@ function renderEnchTable() {
     const short = normalizeId(e.id);
     const sel = state.sel.get(short) || {};
     const conf = pairs.get(short);
-    const isSelected = sel.target > 0;
     // Without "allow incompatible", an unselected enchant whose exclusive
-    // partner is already selected cannot be picked — its target buttons are
-    // disabled until the conflict is resolved (the selected side stays
-    // clickable so the user can deselect it).
-    const targetBlocked = !state.allowIncompat && !isSelected &&
-      (state.conflicts.get(short) || []).some((c) => selTarget(c) > 0);
+    // partner is already selected (target OR source — batch C) cannot be
+    // picked — its target AND source buttons are disabled until the conflict
+    // is resolved (the selected side stays clickable so the user can
+    // deselect it).
+    const partnerPicked = (state.conflicts.get(short) || []).some((c) => isSelectedAny(c));
+    const conflictBlocked = !state.allowIncompat && !isSelectedAny(short) && partnerPicked;
     const hint = conf && conf.size
       ? `<div class="conflict-hint">${t('calc.exclusive')}: ${conflictNames(conf)}</div>` : '';
     return `<tr class="${conf ? 'conflict' : ''}">
       <td>${esc(displayName(e.id, e.name || short))}${e.is_treasure ? `<span class="treasure-badge">${t('calc.treasure')}</span>` : ''}${hint}</td>
       <td class="mono">${esc(e.multiplier ?? '')}</td>
-      <td>${lvButtons(short, 'target', targetBlocked)}</td>
-      <td>${lvButtons(short, 'source', !state.useSource)}</td>
+      <td>${lvButtons(short, 'target', conflictBlocked)}</td>
+      <td>${lvButtons(short, 'source', conflictBlocked)}</td>
     </tr>`;
   }).join('');
   body.innerHTML = rows ||
@@ -1148,6 +1165,17 @@ function renderEnchTable() {
 
 function toggleLevel(short, col, lv) {
   const s = state.sel.get(short) || { target: 0, source: 0, id: short };
+  // 目标等级不能低于当前（batch C）：target 选中低于 source 的等级拒绝；反向
+  // （source 高于已有 target）同样拒绝——任一方向都会产生不可达状态。按钮层
+  // 已禁用可见路径，这里是点击/状态兜底。
+  if (col === 'target' && state.useSource && s.source > 0 && lv < s.source) {
+    showError(t('calc.level_below_source'));
+    return;
+  }
+  if (col === 'source' && s.target > 0 && lv > s.target) {
+    showError(t('calc.level_below_source'));
+    return;
+  }
   s[col] = s[col] === lv ? 0 : lv;
   state.sel.set(short, s);
   renderEnchTable();  // re-render reflects highlights / disabled / conflict rows
@@ -1271,7 +1299,17 @@ async function selectItem(el, myView, fullId) {
 
 // Build the task body from the current selections. Full NSIDs are kept so
 // modded namespaces survive; no profile field — the backend doesn't use it.
+// Returns null (with an error banner) when a level check fails — a target
+// level below the current one is never submitted (batch C backstop).
 function buildTask() {
+  if (state.useSource) {
+    for (const s of state.sel.values()) {
+      if (s.target > 0 && s.source > 0 && s.target < s.source) {
+        showError(t('calc.level_below_source'));
+        return null;
+      }
+    }
+  }
   const enchants = [];
   const source = [];
   for (const [short, s] of state.sel) {
@@ -1388,9 +1426,11 @@ export async function render(el) {
     // currentTask to the new id once the POST resolves.
     currentTask = null;
     setRunning(true);
+    const task = buildTask();
+    if (!task) { setRunning(false); return; }   // 等级兜底拒绝（batch C）
     try {
       // POST /api/tasks → 202 {task_id} + Location: /api/tasks/{id}
-      const post = await http.post('/api/tasks', buildTask());
+      const post = await http.post('/api/tasks', task);
       startSSE(post.task_id || post.id);
     } catch (e) {
       setRunning(false);
