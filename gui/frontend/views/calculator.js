@@ -1183,31 +1183,57 @@ function toggleLevel(short, col, lv) {
   updateSolveState();
 }
 
-// "Current (n) → target (m)" summary; 0 counts render as t('calc.none').
+// One status-bar side: up to MAX_ST_BADGES concrete enchant badges
+// (display name + roman level); more → a "+N" overflow badge. Empty → "none".
+const MAX_ST_BADGES = 5;
+function statusBadges(col) {
+  const items = [...state.sel.values()].filter((s) => s[col] > 0);
+  if (!items.length) return `<span class="st-badge none">${esc(t('calc.none'))}</span>`;
+  const shown = items.slice(0, MAX_ST_BADGES);
+  const rest = items.length - shown.length;
+  let out = shown.map((s) => {
+    const e = state.enchantables.find((x) => normalizeId(x.id) === s.id);
+    const name = e ? displayName(e.id, e.name) : shortId(s.id);
+    return `<span class="st-badge">${esc(name)} ${esc(toRoman(s[col]))}</span>`;
+  }).join('');
+  if (rest > 0) out += `<span class="st-badge more">+${rest}</span>`;
+  return out;
+}
+
+// "当前 (n) [锋利 V, …] → 目标 (m) [经验修补 I, …]" — concrete preview with
+// counts retained in the labels (batch C: specific enchants, not just counts).
 function updateStatusBar() {
   const bar = document.getElementById('calc-status-bar');
   if (!bar) return;
   const n = [...state.sel.values()].filter((s) => s.target > 0).length;
   const m = [...state.sel.values()].filter((s) => s.source > 0).length;
   bar.innerHTML =
-    `<span class="pill current">${t('calc.current')} (${m || t('calc.none')})</span>` +
-    `<span>→</span>` +
-    `<span class="pill">${t('calc.target')} (${n || t('calc.none')})</span>`;
+    `<div class="status-block"><div class="st-label">${t('calc.current')} (${m || t('calc.none')})</div>` +
+    `<div class="st-badges">${statusBadges('source')}</div></div>` +
+    `<span class="st-arrow">→</span>` +
+    `<div class="status-block"><div class="st-label">${t('calc.target')} (${n || t('calc.none')})</div>` +
+    `<div class="st-badges">${statusBadges('target')}</div></div>`;
 }
 
 // Running-state buttons: while a task is in flight #calc-run and #calc-clear
-// are disabled and #calc-cancel is the only live action. Restoring re-runs
-// updateSolveState so a conflict block on #calc-run (selections changed
-// mid-solve) survives the restore.
+// are disabled and #calc-cancel / #calc-pause are the live actions (batch C:
+// pause toggles 暂停/继续). Restoring re-runs updateSolveState so a conflict
+// block on #calc-run (selections changed mid-solve) survives the restore.
 function setRunning(on) {
   const clear = document.getElementById('calc-clear');
   const cancel = document.getElementById('calc-cancel');
+  const pause = document.getElementById('calc-pause');
   if (clear) clear.disabled = on;
   if (cancel) cancel.disabled = !on;
+  if (pause) {
+    pause.disabled = !on;
+    pause.textContent = t('calc.pause');   // 终态恢复初始标签（暂停态由点击切换）
+  }
   if (on) {
     const run = document.getElementById('calc-run');
     if (run) run.disabled = true;
   } else {
+    isPaused = false;
     updateSolveState();
   }
 }
