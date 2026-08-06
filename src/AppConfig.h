@@ -1,15 +1,30 @@
 #pragma once
 
+#include "common/io/json.h"
+#include "common/log/log.hpp"
 #include "common/log/LogTypes.h"
 #include "common/utils/EnvUtil.hpp"
 #include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 /// Application-level configuration backed by environment variables.
 ///
-/// Values are loaded from environment variables at construction time, with
-/// sensible hard-coded defaults.  This is the bottom configuration layer;
-/// CLI arguments (CLIConfig) override these at a higher level.
+/// Values are loaded at construction time with the following precedence
+/// (highest first):
+///   1. Environment variables (BESQ_*)
+///   2. <cwd>/config.json — the runtime-persisted settings file written by
+///      PATCH /api/settings (lang / log_level / log_console /
+///      log_console_level)
+///   3. Hard-coded defaults
+///
+/// The config file lives in the working directory (not <exe_dir>/): cwd is
+/// already the app's data base (data_dir "data/builtin", log_dir "logs" are
+/// cwd-relative), and <exe_dir> may be read-only (installed locations) or a
+/// shared build tree that a runtime PATCH must not pollute.  Env vars still
+/// win so a command-line override always beats the file.  Every consumer of
+/// AppConfig::load() (CLI + GUI) applies the same precedence.
 ///
 /// Environment variable reference:
 ///   BESQ_MEMORY_MB       — Memory budget in MB for A* search          (default: 2048)
@@ -29,6 +44,7 @@
 ///                          (default: 0)
 ///   BESQ_GUI_WORKERS     — GUI HTTP server consumer threads (default: 2)
 ///   BESQ_GUI_RES_DIR     — /public disk root; "" → resolved at runtime (default: <exe_dir>/res, then <cwd>/res)
+///   BESQ_LANG            — Language code for the GUI (default: config.json lang, else en_US)
 struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
@@ -46,6 +62,7 @@ struct AppConfig {
     bool        gui_open_browser = false; // v1 host: open the default browser (a WebView2 native window is future work)
     size_t      gui_workers = 2;        // GUI HTTP server consumer threads
     std::string gui_res_dir;            // /public disk root ("" → resolved at runtime)
+    std::string runtime_lang;           // language from config.json / BESQ_LANG (the GUI applies it at startup)
 
     /// Global app configuration singleton — loads BESQ_* env vars on first
     /// use.  Consumers include AppConfig.h and read directly (no param
@@ -55,10 +72,38 @@ struct AppConfig {
         return cfg;
     }
 
+    /// Path of the runtime-persisted config file (<cwd>/config.json — the
+    /// same base directory as data_dir/log_dir; <exe_dir> may be read-only
+    /// or a shared build tree, and PATCH must be able to write it).
+    static std::string config_file_path() noexcept { return "config.json"; }
+
     /// Load configuration from environment variables, applying defaults
-    /// for any variables that are not set.
+    /// for any variables that are not set.  Precedence: env > config.json
+    /// > default (the config file is read first; env vars override it
+    /// per-field below).
     static AppConfig load() noexcept {
         AppConfig cfg;
+
+        // ── config.json layer (lowest of the three) ──
+        // A missing file is silent; a corrupt one (or one carrying garbage
+        // field types / out-of-range levels) is ignored per-field with a
+        // LOG_WARN and falls back to the defaults.
+        const Json file = load_config_file();
+        if (file.is_valid() && file.type() == JsonType::Object) {
+            if (file.has("lang") && file["lang"].type() == JsonType::String)
+                cfg.runtime_lang = file["lang"].as<std::string>();
+            if (file.has("log_level"))
+                cfg.log_level = checked_level(file["log_level"], "log_level",
+                                              cfg.log_level);
+            if (file.has("log_console") && file["log_console"].type() == JsonType::Bool)
+                cfg.log_console = file["log_console"].as<bool>();
+            if (file.has("log_console_level"))
+                cfg.log_console_level = checked_level(file["log_console_level"],
+                                                      "log_console_level",
+                                                      cfg.log_console_level);
+        }
+
+        // ── env layer (overrides config.json per-field) ──
         cfg.memory_mb     = get_env<int64_t> ("BESQ_MEMORY_MB",     cfg.memory_mb);
         cfg.verbose       = get_env<bool>    ("BESQ_VERBOSE",       cfg.verbose);
         cfg.data_dir      = get_env<std::string>("BESQ_DATA_DIR",  cfg.data_dir);
@@ -75,11 +120,71 @@ struct AppConfig {
         cfg.gui_open_browser = get_env<bool>       ("BESQ_GUI_OPEN_BROWSER",   cfg.gui_open_browser);
         cfg.gui_workers      = get_env<size_t>     ("BESQ_GUI_WORKERS",        cfg.gui_workers);
         cfg.gui_res_dir      = get_env_str         ("BESQ_GUI_RES_DIR");
+        const std::string env_lang = get_env_str("BESQ_LANG");
+        if (!env_lang.empty())
+            cfg.runtime_lang = env_lang;    // env beats config.json for lang too
         return cfg;
+    }
+
+    /// Read `path` (default <cwd>/config.json) and parse it.  Returns the
+    /// parsed Json, or an invalid Json when the file is missing (silent —
+    /// the default layer applies) or corrupt (LOG_WARN + invalid).
+    static Json load_config_file(const std::string& path = config_file_path()) noexcept {
+        Json empty;
+        std::ifstream in(path, std::ios::binary);
+        if (!in)
+            return empty;
+        std::string content((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+        std::string error;
+        Json parsed = Json::parse(content, error);
+        if (!parsed.is_valid()) {
+            LOG_WARN("%s ignored (invalid JSON: %s)", path.c_str(), error.c_str());
+            return empty;
+        }
+        return parsed;
+    }
+
+    /// Best-effort persist `obj` to `path` (default <cwd>/config.json).
+    /// Returns false (with LOG_WARN) on write failure — callers keep the
+    /// in-memory state regardless (persistence is best-effort).
+    static bool save_config_file(const Json& obj,
+                                 const std::string& path = config_file_path()) noexcept {
+        try {
+            std::ofstream out(path, std::ios::trunc);
+            if (!out) {
+                LOG_WARN("failed to write %s", path.c_str());
+                return false;
+            }
+            out << obj.to_string();
+            return static_cast<bool>(out);
+        } catch (const std::exception& e) {
+            LOG_WARN("failed to write %s: %s", path.c_str(), e.what());
+            return false;
+        }
     }
 
     /// Produce the Logger's typed config from this AppConfig.
     LoggerConfig logger_config() const noexcept {
         return {log_level, log_retention, log_console, log_console_level};
+    }
+
+private:
+    /// Bound-check a JSON level value (0..3) before it enters the Logger:
+    /// hand-edited config files may carry out-of-range numbers that would
+    /// otherwise overflow LogLevel.  Out-of-range / non-numeric → the
+    /// field's own default (`def`) with a LOG_WARN.
+    static int32_t checked_level(const Json& v, const char* field,
+                                 int32_t def) noexcept {
+        try {
+            int64_t lv = v.as<int64_t>();
+            if (lv >= 0 && lv <= 3)
+                return static_cast<int32_t>(lv);
+            LOG_WARN("config.json %s out of range (%lld), using default %d",
+                     field, static_cast<long long>(lv), def);
+        } catch (const JsonException&) {
+            LOG_WARN("config.json %s is not a number, using default %d", field, def);
+        }
+        return def;
     }
 };

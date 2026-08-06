@@ -108,8 +108,10 @@ target_link_libraries(test_exp_calculator PRIVATE besq-core)
 add_test(NAME test_exp_calculator COMMAND test_exp_calculator)
 set_tests_properties(test_exp_calculator PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# AppConfig (config.json persistence needs Json + Logger → besq-core link)
 add_executable(test_app_config config/test_app_config.cpp)
-target_include_directories(test_app_config PRIVATE ${TEST_INCLUDE})
+target_include_directories(test_app_config PRIVATE ${TEST_INCLUDE} ${PROJECT_ROOT}/include)
+target_link_libraries(test_app_config PRIVATE besq-core)
 add_test(NAME test_app_config COMMAND test_app_config)
 set_tests_properties(test_app_config PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 

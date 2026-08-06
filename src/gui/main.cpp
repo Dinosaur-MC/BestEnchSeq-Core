@@ -305,6 +305,10 @@ static std::filesystem::path resolve_res_dir(const std::string& res_dir) {
 int main(int argc, char* argv[]) try {
     auto& cfg = AppConfig::get();
     register_builtin_translations(LanguageManager::instance());
+    // 持久化语言（config.json / BESQ_LANG，env > config > 默认）在 PATCH 之外
+    // 启动即生效；未知 code 由 select() 回退 en_US。
+    if (!cfg.runtime_lang.empty())
+        LanguageManager::instance().select(cfg.runtime_lang);
     // GUI 进程覆盖 console 阈值到 Info：启动/关闭/错误进 console 可见；DEBUG
     // 请求行仍进 ring（logs 页可查）不刷 console。仅此进程覆盖，CLI 不受影响
     // （CLAUDE.md 的 json/compact 机器输出保护）。
@@ -324,7 +328,10 @@ int main(int argc, char* argv[]) try {
                 << "Environment: BESQ_GUI_HOST, BESQ_GUI_PORT, BESQ_GUI_OPEN_BROWSER\n"
                 << "             BESQ_GUI_WORKERS (consumer threads, default 2)\n"
                 << "             BESQ_GUI_RES_DIR (optional /public disk root)\n"
-                << "             (language is set at runtime via PATCH /api/settings)\n";
+                << "             BESQ_LANG (language; config.json lang otherwise)\n"
+                << "Runtime settings (lang/log_level/log_console/log_console_level) are\n"
+                << "persisted to <cwd>/config.json by PATCH /api/settings and reloaded\n"
+                << "at startup (env vars still win: env > config.json > default)\n";
             return 0;
         }
         if (a == "--version" || a == "-V") {

@@ -168,6 +168,37 @@ void test_settings(TestApp& app) {
     expect(sgj.has("sandbox_enabled") &&
                sgj["sandbox_enabled"].type() == JsonType::Bool,
            "GET carries sandbox_enabled");
+    // ── config.json persistence (batch D): a successful PATCH writes the
+    //    four runtime fields to <cwd>/config.json (best-effort) ──
+    const std::string cfg_path = "config.json";
+    std::error_code ec;
+    std::filesystem::remove(cfg_path, ec);   // stale file from an earlier run
+    auto persist = app.call(Method::Patch, "/api/settings",
+                            R"({"log_level":1,"log_console":false,"log_console_level":3})");
+    expect(persist.status == 200, "persistence patch 200");
+    expect(std::filesystem::exists(cfg_path), "PATCH wrote config.json");
+    bool cfg_shape = false, cfg_lang = false;
+    bool cfg_lv = false, cfg_cc = false, cfg_cl = false;
+    if (std::filesystem::exists(cfg_path)) {
+        std::ifstream in(cfg_path);
+        std::string content((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+        auto cj = Json::parse(content);
+        cfg_shape = cj.has("lang") && cj.has("log_level") &&
+                    cj.has("log_console") && cj.has("log_console_level");
+        // lang is whatever the LanguageManager currently has active (no
+        // translations are registered in the test process, so the name is
+        // "" there) — assert the field exists as a string, not its value.
+        cfg_lang = cj["lang"].type() == JsonType::String;
+        cfg_lv = cj["log_level"].as<int64_t>() == 1;
+        cfg_cc = cj["log_console"].as<bool>() == false;
+        cfg_cl = cj["log_console_level"].as<int64_t>() == 3;
+    }
+    expect(cfg_shape, "config.json carries all 4 runtime fields");
+    expect(cfg_lang, "config.json carries a non-empty lang");
+    expect(cfg_lv, "config.json log_level persisted as 1");
+    expect(cfg_cc, "config.json log_console persisted as false");
+    expect(cfg_cl, "config.json log_console_level persisted as 3");
 }
 
 void test_profiles(TestApp& app) {
