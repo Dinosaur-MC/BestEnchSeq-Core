@@ -157,6 +157,7 @@ void test_settings(TestApp& app) {
     auto scj2 = Json::parse(scg2.body);
     expect(scj2["log_console"].as<bool>() == false, "log_console false reflected by GET");
     (void)app.call(Method::Patch, "/api/settings", R"({"log_console":true})");
+
     // ── GET read-only service fields (batch D): startup-only info is exposed
     //    so the settings page can display it ──
     auto sg = app.call(Method::Get, "/api/settings");
@@ -168,6 +169,7 @@ void test_settings(TestApp& app) {
     expect(sgj.has("sandbox_enabled") &&
                sgj["sandbox_enabled"].type() == JsonType::Bool,
            "GET carries sandbox_enabled");
+
     // ── config.json persistence (batch D): a successful PATCH writes the
     //    four runtime fields to <cwd>/config.json (best-effort) ──
     const std::string cfg_path = "config.json";
@@ -199,6 +201,11 @@ void test_settings(TestApp& app) {
     expect(cfg_lv, "config.json log_level persisted as 1");
     expect(cfg_cc, "config.json log_console persisted as false");
     expect(cfg_cl, "config.json log_console_level persisted as 3");
+    // Restore the benign state the earlier cases established (the restore
+    // PATCH rewrites config.json), then drop the file.
+    (void)app.call(Method::Patch, "/api/settings",
+                   R"({"log_level":2,"log_console":true,"log_console_level":2})");
+    std::filesystem::remove(cfg_path, ec);
 }
 
 void test_profiles(TestApp& app) {
@@ -349,6 +356,7 @@ void test_profile_actions(TestApp& app) {
     auto del_g = app.call(Method::Get, "/api/profiles/builtin:vanilla-del");
     expect(del_g.status == 404 && del_g.body.find("PROFILE_NOT_FOUND") != std::string::npos,
            "deleted profile read 404");
+
     // ── DELETE the root profile → 409 PROFILE_IS_ROOT, and it survives ──
     // (the builtin base is the implicit lowest-priority source of every
     // effective view, so removing it must be impossible through the API).
@@ -587,6 +595,7 @@ void test_enchantables(TestApp& app) {
     expect(sh.body.find("test:bedrock_only") == std::string::npos,
            "bedrock-only enchantment filtered by platform gate");
 }
+
 /// GET /api/fs/list?path= — directory listing for the picker. Root-locked to
 /// the server cwd (= PROJECT_ROOT in the test harness): a valid directory
 /// lists; a file, a missing path, or an escape above the root → 400.
@@ -631,7 +640,6 @@ void test_fs(TestApp& app) {
     expect(rel_esc.status == 400 && rel_esc.body.find("INVALID_PATH") != std::string::npos,
            "fs list ..-escape via relative path 400 INVALID_PATH");
 }
-
 
 void test_algorithms(TestApp& app) {
     // list → 200 array of names containing a builtin strategy.
