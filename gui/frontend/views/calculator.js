@@ -30,7 +30,8 @@ const state = {
   enchantables: [],     // raw /enchantables response for the current item
   sel: new Map(),       // shortId → {target, source, id}
   conflicts: new Map(), // shortId → [shortId of exclusive-set members, ...]
-  profileVersion: '',   // active profile metadata version ("1.21.6" etc.; "" → "—")
+  profileVersion: '',   // active profile metadata version (data schema ver; "" → "—")
+  mcVersion: '',        // MC data version from /public/version.json ("26.2"; "" → "—")
 };
 
 // Backend path params are matched literally (no URL-decoding), and profile
@@ -123,10 +124,11 @@ function itemName(item) {
   return displayName('minecraft:enchanted_book', t('calc.book'));
 }
 
-// One item card: icon (title=NSID, hidden on 404) + name + PPN badge +
-// enchantment badge grid. `cls` adds card classes ("c" result, "over" red).
+// Item card body (shared by step cards and the final card): icon
+// (title=NSID, hidden on 404) + name + PPN badge + enchantment badge grid.
+// `cls` adds classes ("c" result, "over" red, "final" inside the final card).
 // Icon size is fixed by CSS (.res-itemhead img), no inline styles.
-function itemCardHtml(item, cls) {
+function itemBodyHtml(item, cls) {
   if (!item) return '';
   const nsid = (item.equipment && item.equipment.id) || 'minecraft:enchanted_book';
   const icon = `<img src="${iconUrl(itemIconId(item))}" alt="" ` +
@@ -135,10 +137,14 @@ function itemCardHtml(item, cls) {
   const enchs = (item.enchantments || []).map((e) =>
     `<span class="res-badge" title="${esc(e.id)}">` +
     `${esc(displayName(e.id, shortId(e.id)))} ${esc(toRoman(e.level))}</span>`).join('');
-  return `<div class="res-item${cls ? ' ' + cls : ''}">` +
-    `<div class="res-itemhead">${icon}<span class="nm">${esc(itemName(item))}</span>${ppn}</div>` +
-    (enchs ? `<div class="res-enchs">${enchs}</div>` : '') +
-    `</div>`;
+  return `<div class="res-itemhead${cls ? ' ' + cls : ''}">${icon}<span class="nm">${esc(itemName(item))}</span>${ppn}</div>` +
+    (enchs ? `<div class="res-enchs">${enchs}</div>` : '');
+}
+
+// One item card (step rows): bordered card wrapping the shared body.
+function itemCardHtml(item, cls) {
+  if (!item) return '';
+  return `<div class="res-item${cls ? ' ' + cls : ''}">${itemBodyHtml(item, cls)}</div>`;
 }
 
 // One forge step row: 序号圆 + A + B + = + C（result 可用时）+ 成本列。
@@ -169,7 +175,7 @@ function stepRowHtml(step, index) {
 function summaryRowHtml(sol, steps) {
   const anyOver = steps.some((s) => (s.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL);
   const parts = [
-    `<span>${esc(tf('res.mc_platform', sol.platform || '—', state.profileVersion || '—'))}</span>`,
+    `<span>${esc(tf('res.mc_platform', sol.platform || '—', state.mcVersion || state.profileVersion || '—'))}</span>`,
     `<span class="sep">|</span>`,
     `<span>${t('res.steps').replace('{0}', `<b>${esc(String(steps.length))}</b>`)}</span>`,
     `<span>${t('res.levels').replace('{0}', `<b>${esc(String(sol.total_exp_level_cost ?? '?'))}</b>`)}</span>`,
@@ -180,16 +186,19 @@ function summaryRowHtml(sol, steps) {
   return `<div class="res-summary">${parts.join('')}</div>`;
 }
 
-// Final item card: hollow ✓ circle + "锻造结果" label wrapping the target
-// item card (reuses itemCardHtml — no duplicated icon/badge markup). PPN 经
-// finalPpn 回退（web 流程 target_item.ppn 恒 0 → 末步 result 的 prior_penalty）。
+// Final item card: hollow ✓ circle + "锻造结果" label + the item body laid
+// out FLAT inside the card (no nested card — a nested .res-item with its own
+// min-width/max-content can overflow the 24rem final card and push content
+// out of frame). PPN 经 finalPpn 回退（web 流程 target_item.ppn 恒 0 → 末步
+// result 的 prior_penalty）。
 function finalItemHtml(sol) {
   if (!sol.target_item || itemEmpty(sol.target_item)) return '';
+  const body = itemBodyHtml({ ...sol.target_item, prior_penalty: finalPpn(sol) }, 'final');
   return `<div class="res-finalwrap">` +
     `<span class="res-stepno-hollow" aria-hidden="true">✓</span>` +
     `<div class="res-final">` +
     `<div class="flabel">${esc(t('res.forge_result'))}</div>` +
-    itemCardHtml({ ...sol.target_item, prior_penalty: finalPpn(sol) }, 'final') +
+    body +
     `</div></div>`;
 }
 
@@ -241,7 +250,7 @@ export function buildCopyText(sol) {
   const steps = sol.steps || [];
   const m = sol.metadata || {};
   const lines = [];
-  lines.push(`MC ${sol.platform || '—'} · ${state.profileVersion || '—'} · ` +
+  lines.push(`MC ${sol.platform || '—'} · ${state.mcVersion || state.profileVersion || '—'} · ` +
     `${steps.length} 步 · 等级 ${sol.total_exp_level_cost ?? '?'} · ` +
     `EXP ${sol.total_exp_cost ?? '?'}`);
   for (let i = 0; i < steps.length; i++) {
@@ -550,7 +559,7 @@ function drawCost(ctx, s, x2, y, over) {
 // 汇总条文本段（与 DOM summaryRowHtml 同源：t()/tf()，数值蓝色加粗）。
 function summaryTokens(sol, steps) {
   const tok = (text, c, b) => ({ t: text, c, b });
-  const out = [tok(tf('res.mc_platform', sol.platform || '—', state.profileVersion || '—'), CV_COLORS.text, false)];
+  const out = [tok(tf('res.mc_platform', sol.platform || '—', state.mcVersion || state.profileVersion || '—'), CV_COLORS.text, false)];
   const addPair = (label, n) => {
     out.push(tok(' | ', CV_COLORS.border, false));
     out.push(tok(label, CV_COLORS.text, false));
@@ -1289,6 +1298,7 @@ export async function render(el) {
   state.sel.clear();
   state.conflicts.clear();
   state.profileVersion = '';
+  state.mcVersion = '';
   // Task lifecycle state never survives navigation: without this, an old
   // task's safety-net snapshot / poll response could render into the new
   // view, and a stale pollTimer could outlive the view it drives.
@@ -1403,14 +1413,19 @@ export async function render(el) {
     const status = await http.get('/api/status');
     if (el.dataset.view !== myView) return;
     state.key = status.active_profile;
-    const [algos, eqs, prof] = await Promise.all([
+    const [algos, eqs, prof, mcVer] = await Promise.all([
       http.get('/api/algorithms'),
       http.get(`/api/profiles/${encSeg(state.key)}/equipments`),
-      // Version failure is non-fatal: stays "" → renders "—".
+      // Version failures are non-fatal: stay "" → renders "—".
       http.get(`/api/profiles/${encSeg(state.key)}`).catch(() => null),
+      // MC data version (dev mode: res/vanilla is mounted at /public, so
+      // /public/version.json carries {"name":"26.2"}). Profile metadata
+      // version is the DATA schema version, not the MC version — prefer this.
+      http.get('/public/version.json').catch(() => null),
     ]);
     if (el.dataset.view !== myView) return;
     state.profileVersion = (prof && prof.version) || '';
+    state.mcVersion = (mcVer && mcVer.name) || '';
     fillAlgorithms(Array.isArray(algos) ? algos : []);
     fillItemMenu(el, myView, eqs);
     const raw = Array.isArray(eqs) ? eqs : (eqs && eqs.equipments) || [];
