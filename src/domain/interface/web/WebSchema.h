@@ -27,6 +27,10 @@ struct WebTaskDto {
     int32_t max_solutions = 0;      // 0 = strategy default
     int64_t max_search_time_ms = 0; // 0 = SearchConfig default (180s)
     uint32_t max_threads = 0;       // 0 = hardware concurrency
+
+    /// 允许不兼容（batch C）：转发到 ForgeConfig.ignore_imcompatible（内部拼写
+    /// 保留），wire 键用正确的 incompatible 拼写。false = 严格冲突（默认）。
+    bool ignore_incompatible = false;
 };
 
 struct WebTaskSchema {
@@ -41,6 +45,7 @@ struct WebTaskSchema {
         ds::field(
             "max_search_time", &Type::max_search_time_ms, ds::int_codec{}), // wire key per spec §4.2; _ms is C++-side unit doc
         ds::field("max_threads", &Type::max_threads, ds::int_codec{}),
+        ds::field("ignore_incompatible", &Type::ignore_incompatible, ds::bool_codec{}),
     };
 };
 

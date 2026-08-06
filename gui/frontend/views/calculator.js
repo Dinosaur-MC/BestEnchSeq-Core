@@ -1284,6 +1284,9 @@ function buildTask() {
     algorithm: state.algorithm,
   };
   if (source.length) task.source = source;
+  // "允许不兼容" 接通后端（batch C）：wire 键 ignore_incompatible 由
+  // build_request 映射到 ForgeConfig.ignore_imcompatible。
+  if (state.allowIncompat) task.ignore_incompatible = true;
   return task;
 }
 

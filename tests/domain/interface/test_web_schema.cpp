@@ -17,6 +17,7 @@ void test_round_trip_full() {
     dto.max_solutions = 3;
     dto.max_search_time_ms = 5000;
     dto.max_threads = 4;
+    dto.ignore_incompatible = true;
 
     auto json = WebTaskJson::serialize(dto);
     expect(json["target"]["item"].as<std::string>() == "diamond_sword", "target serialized");
@@ -24,6 +25,7 @@ void test_round_trip_full() {
     expect(json["max_solutions"].as<int32_t>() == 3, "max_solutions serialized");
     expect(json["max_search_time"].as<int64_t>() == 5000, "max_search_time serialized");
     expect(json["max_threads"].as<int32_t>() == 4, "max_threads serialized");
+    expect(json["ignore_incompatible"].as<bool>() == true, "ignore_incompatible serialized");
 
     WebTaskDto out;
     WebTaskJson::parse_or_throw(json, out);
@@ -37,6 +39,7 @@ void test_round_trip_full() {
     expect(out.max_solutions == 3, "max_solutions round-trips");
     expect(out.max_search_time_ms == 5000, "max_search_time round-trips");
     expect(out.max_threads == 4, "max_threads round-trips");
+    expect(out.ignore_incompatible == true, "ignore_incompatible round-trips");
     TEST_PASS("WebSchema full round-trip");
 }
 
@@ -57,6 +60,7 @@ void test_inv_task_payload_is_valid_webschema() {
     expect(dto.max_solutions == 0, "search fields default 0");
     expect(dto.max_search_time_ms == 0, "max_search_time defaults 0");
     expect(dto.max_threads == 0, "max_threads defaults 0");
+    expect(dto.ignore_incompatible == false, "ignore_incompatible defaults false");
     TEST_PASS("InvTaskSchema payload is a valid WebSchema");
 }
 

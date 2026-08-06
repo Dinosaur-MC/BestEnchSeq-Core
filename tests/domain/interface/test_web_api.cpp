@@ -840,6 +840,55 @@ void test_calculator(TestApp& app) {
     }
     heavy += R"(]},"algorithm":"dp_merge"})";
 
+    // ── Batch C: ignore_incompatible 接通 —— 冲突目标（sharpness+smite 同
+    // target）默认严格冲突（completed + result.success:false），带
+    // ignore_incompatible:true 后可达（completed + result.success:true）。──
+    // 两任务都须跑到终态（快），单活动槽此时空闲（heavy_cancel 已取消）。
+    const std::string conflict_min = R"({"target":{"item":"diamond_sword","enchants":[)"
+                                     R"({"id":"sharpness","level":5},{"id":"smite","level":5}]},)"
+                                     R"("algorithm":"dp_merge","max_solutions":1)";
+    auto submit_conflict = [&](const std::string& body, const char* label) {
+        auto r = app.call(Method::Post, "/api/tasks", body);
+        expect(r.status == 202, std::string("conflict task ") + label + " submit 202");
+        std::string tid;
+        if (r.status == 202) {
+            auto b = Json::parse(r.body);
+            tid = b["task_id"].as<std::string>();
+        }
+        bool done = false;
+        for (int i = 0; i < 50 && !done; ++i) {
+            auto st = app.call(Method::Get, "/api/tasks/" + tid);
+            if (st.status == 200) {
+                auto sj = Json::parse(st.body);
+                done = sj["state"].as<std::string>() != "running";
+            }
+            if (!done) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        expect(done, std::string("conflict task ") + label + " reached terminal state");
+        auto st = app.call(Method::Get, "/api/tasks/" + tid);
+        return Json::parse(st.body);
+    };
+    auto strict_j = submit_conflict(conflict_min + "}", "strict");
+    expect(strict_j["state"].as<std::string>() == "completed",
+           "strict conflict task completed (infeasible, not crashed)");
+    expect(strict_j["result"].has("success") &&
+               strict_j["result"]["success"].as<bool>() == false,
+           "strict conflict result success:false");
+    auto lax_j = submit_conflict(conflict_min + R"(,"ignore_incompatible":true})", "lax");
+    expect(lax_j["state"].as<std::string>() == "completed",
+           "ignore_incompatible task completed");
+    expect(lax_j["result"].has("success") &&
+               lax_j["result"]["success"].as<bool>() == true,
+           "ignore_incompatible result success:true");
+
+    // 错误类型 → 400 INVALID_TASK（与 max_threads 同一校验路径）。
+    auto badii = app.call(Method::Post, "/api/tasks",
+                          R"({"target":{"item":"diamond_sword","enchants":)"
+                          R"([{"id":"sharpness","level":5}]},"ignore_incompatible":"x"})");
+    expect(badii.status == 400 && badii.body.find("INVALID_TASK") != std::string::npos,
+           "task ignore_incompatible wrong type 400 INVALID_TASK");
+
+    {
     // ── §12.1: unload while a solve is active → 409 TASK_ACTIVE ──
     // Deterministic by construction: the unload handler checks has_active()
     // BEFORE taking the gate (a gate-first check would only ever see a
