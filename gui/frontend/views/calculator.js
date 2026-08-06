@@ -196,6 +196,509 @@ function tailHtml(sol) {
     `</div></div>`;
 }
 
+// ── T4: 复制文本（ItemParser 语法）+ Canvas 截图导出 ────────────────────────
+// buildCopyText 产出可回贴 CLI 的纯数据文本（不本地化——与 CLI 机器格式一致，
+// 物品段完全符合 ItemParser.h 语法，可被 --target 直接解析）。renderCanvas 按
+// v12 布局 2D 自绘 PNG：汇总条 + 步骤（序号圆/物品卡/成本列）+ 最终物品 +
+// 算法行；图标经 createImageBitmap 加载同源 /public/vendor/icons/{id}.png，
+// 加载失败跳过（名称徽章仍传达信息）。
+
+// 物品 ItemParser 规格：`{shortId}[{ench}={level},...]{prior_penalty:N}`
+// （PPN 非 0 才带后缀；书 → enchanted_book；魔咒按后端顺序，与 DOM 徽章一致；
+// id 用短 id——ItemParser 的 minecraft: 前缀可选，与 CLI 示例一致）。
+function itemSpec(item) {
+  if (!item) return '';
+  const id = (item.equipment && item.equipment.id)
+    ? normalizeId(item.equipment.id) : 'enchanted_book';
+  const enchs = (item.enchantments || [])
+    .map((e) => `${normalizeId(e.id)}=${e.level}`).join(',');
+  const ppn = (item.prior_penalty ?? 0) > 0
+    ? `{prior_penalty:${item.prior_penalty}}` : '';
+  return enchs ? `${id}[${enchs}]${ppn}` : `${id}${ppn}`;
+}
+
+// 完整复制文本：头部汇总 + 每步 A+B=C + 最终行（含算法元数据）。头部/尾部
+// 模板固定（不随 UI 语言变化，机器可回贴）；result 空（A+B= 无 C）省略 " = C"。
+export function buildCopyText(sol) {
+  const steps = sol.steps || [];
+  const m = sol.metadata || {};
+  const lines = [];
+  lines.push(`MC ${sol.platform || '—'} · ${state.profileVersion || '—'} · ` +
+    `${steps.length} 步 · 等级 ${sol.total_exp_level_cost ?? '?'} · ` +
+    `EXP ${sol.total_exp_cost ?? '?'}`);
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const c = !itemEmpty(s.result) ? ` = ${itemSpec(s.result)}` : '';
+    lines.push(`${i + 1}: ${itemSpec(s.item_a)} + ${itemSpec(s.item_b)}${c}` +
+      `  (等级 ${s.exp_level_cost ?? '?'}, EXP ${s.exp_cost ?? '?'})`);
+  }
+  const tail = [];
+  if (sol.target_item && !itemEmpty(sol.target_item)) tail.push(`最终: ${itemSpec(sol.target_item)}`);
+  const algo = [];
+  if (m.algorithm_name) algo.push(m.algorithm_name);
+  if (m.algorithm_version) algo.push(m.algorithm_version);
+  if (algo.length) tail.push(`算法 ${algo.join(' ')}`);
+  if (m.computation_time != null) tail.push(`耗时 ${m.computation_time}ms`);
+  if (tail.length) lines.push(tail.join(' · '));
+  return lines.join('\n');
+}
+
+// 剪贴板：navigator.clipboard 优先，失败回退 execCommand('copy')（临时
+// textarea + select；非安全上下文/权限拒绝时仍可用）。
+function legacyCopy(text) {
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.left = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { /* 某些引擎抛错 */ }
+    document.body.removeChild(ta);
+    if (ok) resolve(); else reject(new Error(t('res.copy_failed')));
+  });
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return; }
+    catch (_) { /* 权限拒绝等 → 走回退 */ }
+  }
+  await legacyCopy(text);
+}
+
+// 成功反馈：按钮短暂显示 ✓ + res.copied，1.5s 后还原文案/可点状态。
+function flashBtn(btn) {
+  const orig = btn.textContent;
+  btn.textContent = '✓ ' + t('res.copied');
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.textContent = orig;
+    btn.disabled = false;
+  }, 1500);
+}
+
+async function onCopy(sol, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    await copyToClipboard(buildCopyText(sol));
+    flashBtn(btn);
+  } catch (e) {
+    btn.disabled = false;
+    showError(e.message || t('res.copy_failed'));
+  }
+}
+
+async function onSave(sol, btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const canvas = await renderCanvas(sol);
+    await saveCanvas(canvas);
+    flashBtn(btn);
+  } catch (e) {
+    btn.disabled = false;
+    showError(e.message || t('res.save_failed'));
+  }
+}
+
+// 截图保存：PNG blob → <a download> 点击下载；同一 blob 尽力复制图片到剪贴板
+//（ClipboardItem 不支持时仅下载——下载已成功，复制失败不报错）。
+async function saveCanvas(canvas) {
+  const blob = await new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('res.save_failed')))), 'image/png'));
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'besq-solution.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  try {
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  } catch (_) { /* 不支持 → 仅下载 */ }
+}
+
+// ── Canvas 自绘（暗色主题，色值与 styles.css :root 变量一致）────────────────
+const CV_W = 720;            // 固定宽；高按内容
+const CV_PAD = 16;
+const CV_GAP = 6;
+const CV_ROW_GAP = 10;
+const CV_CARD_MIN = 160;     // 与 DOM .res-item min-width 10rem 一致
+const CV_CARD_MAX = 288;     // 与 DOM .res-item max-width 18rem 一致
+const CV_CARD_PAD_X = 8;
+const CV_CARD_PAD_Y = 7;
+const CV_ICON = 24;
+const CV_NO_D = 28;          // 序号圆直径（1.75rem）
+const CV_OP_W = 22;          // "+"/"=" 列
+const CV_COST_W = 74;        // 右对齐成本列
+const CV_R = 6;              // 卡片圆角（--radius）
+const CV_BADGE_H = 20;
+const CV_BADGE_GAP = 4;
+const CV_COLORS = {
+  bg: '#1d1b18',             // --bg
+  panel: '#2b2823',          // --panel
+  panel2: '#3a362f',         // --panel-2
+  border: '#524c41',         // --border
+  text: '#e8e2d5',           // --text
+  muted: '#9b937f',          // --muted
+  accent: '#5cb85c',         // --accent
+  accent2: '#2e9ad0',        // --accent-2
+  danger: '#d9534f',         // --danger
+};
+const CV_FONT = '"Segoe UI", system-ui, sans-serif';
+const cvScratch = document.createElement('canvas').getContext('2d');
+
+function cvFont(px, weight) { return `${weight || ''} ${px}px ${CV_FONT}`.trim(); }
+function cvM(text, font) { cvScratch.font = font; return cvScratch.measureText(text).width; }
+function cvRR(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function cvText(ctx, text, x, y, color, font) {
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillText(text, x, y);
+}
+
+// 物品卡测量：头部（icon+名称+PPN 徽章）与附魔徽章网格（每行最多 3 个、超出
+// 卡片上限的徽章省略号截断，与 DOM 3 列网格同语义）。返回 {w,h,name,ppn,ppnW,rows}。
+function measureItemCard(item) {
+  const font15 = cvFont(15, '600');
+  const font11 = cvFont(11, '400');
+  const font13 = cvFont(13, '400');
+  const maxInner = CV_CARD_MAX - 2 * CV_CARD_PAD_X;
+  let name = itemName(item);
+  if (cvM(name, font15) > maxInner - CV_ICON - 2 * CV_GAP) {
+    while (name.length > 1 && cvM(name + '…', font15) > maxInner - CV_ICON - 2 * CV_GAP)
+      name = name.slice(0, -1);
+    name += '…';
+  }
+  const ppn = tf('res.ppn', String(item.prior_penalty ?? 0));
+  const ppnW = cvM(ppn, font11) + 10;
+  const headW = CV_ICON + CV_GAP + cvM(name, font15) + CV_GAP + ppnW;
+  const rows = [];
+  let cur = [], curW = 0;
+  for (const e of item.enchantments || []) {
+    let text = `${displayName(e.id, shortId(e.id))} ${toRoman(e.level)}`;
+    let w = cvM(text, font13) + 16;
+    if (w > maxInner) {          // 单个超长附魔名 → 省略号截断
+      while (text.length > 1 && cvM(text + '…', font13) + 16 > maxInner) text = text.slice(0, -1);
+      text += '…';
+      w = cvM(text, font13) + 16;
+    }
+    if (cur.length === 3 || (cur.length && curW + CV_GAP + w > maxInner)) {
+      rows.push(cur); cur = []; curW = 0;
+    }
+    cur.push({ text, w });
+    curW += cur.length > 1 ? CV_GAP + w : w;
+  }
+  if (cur.length) rows.push(cur);
+  const rowsW = rows.reduce((m, r) =>
+    Math.max(m, r.reduce((s, b) => s + b.w + CV_BADGE_GAP, -CV_BADGE_GAP)), 0);
+  const w = Math.min(CV_CARD_MAX, Math.max(CV_CARD_MIN, headW, rowsW) + 2 * CV_CARD_PAD_X);
+  const h = 2 * CV_CARD_PAD_Y + CV_ICON +
+    (rows.length ? CV_GAP + rows.length * CV_BADGE_H + (rows.length - 1) * CV_BADGE_GAP : 0);
+  return { w, h, name, ppn, ppnW, rows };
+}
+
+// 画一张物品卡（x,y 左上角；w 画布宽度；over → 红描边，isC → 绿描边+淡绿底）。
+// 图标只记录位置（jobs），异步加载完成后统一叠画。
+function drawItemCard(ctx, item, mc, x, y, w, over, isC, jobs) {
+  const h = mc.h;
+  cvRR(ctx, x, y, w, h, CV_R);
+  ctx.fillStyle = isC && !over ? 'rgba(92,184,92,0.08)' : CV_COLORS.panel2;
+  ctx.fill();
+  ctx.strokeStyle = over ? CV_COLORS.danger : (isC ? CV_COLORS.accent : CV_COLORS.border);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const iy = y + CV_CARD_PAD_Y;
+  jobs.push({
+    x: x + CV_CARD_PAD_X, y: iy,
+    id: (item.equipment && item.equipment.id) ? normalizeId(item.equipment.id) : 'enchanted_book',
+  });
+  cvText(ctx, mc.name, x + CV_CARD_PAD_X + CV_ICON + CV_GAP, iy + 3, CV_COLORS.text, cvFont(15, '600'));
+  const py = iy + (CV_ICON - 16) / 2;
+  const px = x + w - CV_CARD_PAD_X - mc.ppnW;
+  cvRR(ctx, px, py, mc.ppnW, 16, 4);
+  ctx.strokeStyle = CV_COLORS.border;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  cvText(ctx, mc.ppn, px + 5, py + 2, CV_COLORS.muted, cvFont(11, '400'));
+  let by = iy + CV_ICON + CV_GAP;
+  for (const row of mc.rows) {
+    let bx = x + CV_CARD_PAD_X;
+    for (const b of row) {
+      cvRR(ctx, bx, by, b.w, CV_BADGE_H, 4);
+      ctx.fillStyle = CV_COLORS.panel2;
+      ctx.fill();
+      ctx.strokeStyle = CV_COLORS.border;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      cvText(ctx, b.text, bx + 8, by + 3, CV_COLORS.text, cvFont(13, '400'));
+      bx += b.w + CV_BADGE_GAP;
+    }
+    by += CV_BADGE_H + CV_BADGE_GAP;
+  }
+}
+
+function drawOp(ctx, ch, x, cy) {
+  ctx.font = cvFont(20, '700');
+  ctx.fillStyle = CV_COLORS.muted;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ch, x + CV_OP_W / 2, cy + 1);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+}
+
+function drawStepNo(ctx, n, x, y, over) {
+  const r = CV_NO_D / 2;
+  ctx.beginPath();
+  ctx.arc(x + r, y + r, r, 0, Math.PI * 2);
+  ctx.fillStyle = over ? CV_COLORS.danger : CV_COLORS.accent;
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = cvFont(15, '700');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(n), x + r, y + r + 1);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+}
+
+function drawHollowCheck(ctx, x, y) {
+  const r = CV_NO_D / 2;
+  ctx.beginPath();
+  ctx.arc(x + r, y + r, r, 0, Math.PI * 2);
+  ctx.strokeStyle = CV_COLORS.border;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = CV_COLORS.muted;
+  ctx.font = cvFont(15, '700');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('✓', x + r, y + r + 1);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+}
+
+// 成本列（右对齐）：等级 N（超限红）+ EXP N。
+function drawCost(ctx, s, x2, y) {
+  const over = (s.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL;
+  const label = t('res.level_label');
+  const val = String(s.exp_level_cost ?? '?');
+  const expLabel = t('res.exp_label').replace('{0}', '');
+  const exp = String(s.exp_cost ?? '?');
+  const vf = cvFont(14, '700');
+  cvText(ctx, label, x2 - cvM(label, cvFont(12, '400')) - cvM(val, vf), y + 4, CV_COLORS.muted, cvFont(12, '400'));
+  cvText(ctx, val, x2 - cvM(val, vf), y + 2, over ? CV_COLORS.danger : CV_COLORS.accent2, vf);
+  const ef = cvFont(12, '400');
+  cvText(ctx, expLabel + exp, x2 - cvM(expLabel + exp, ef), y + 24, CV_COLORS.muted, ef);
+}
+
+// 汇总条文本段（与 DOM summaryRowHtml 同源：t()/tf()，数值蓝色加粗）。
+function summaryTokens(sol, steps) {
+  const tok = (text, c, b) => ({ t: text, c, b });
+  const out = [tok(tf('res.mc_platform', sol.platform || '—', state.profileVersion || '—'), CV_COLORS.text, false)];
+  const addPair = (label, n) => {
+    out.push(tok(' | ', CV_COLORS.border, false));
+    out.push(tok(label, CV_COLORS.text, false));
+    out.push(tok(String(n), CV_COLORS.accent2, true));
+  };
+  addPair(t('res.steps').replace('{0}', ''), steps.length);
+  addPair(t('res.levels').replace('{0}', ''), sol.total_exp_level_cost ?? '?');
+  addPair(t('res.exp_total').replace('{0}', ''), sol.total_exp_cost ?? '?');
+  return out;
+}
+
+function drawSummary(ctx, tokens, anyOver, y) {
+  const stripW = CV_W - 2 * CV_PAD;
+  const stripH = 38;
+  cvRR(ctx, CV_PAD, y, stripW, stripH, CV_R);
+  ctx.fillStyle = CV_COLORS.panel;
+  ctx.fill();
+  ctx.strokeStyle = CV_COLORS.border;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  let x = CV_PAD + 12;
+  const ty = y + 10;
+  for (const tok of tokens) {
+    const font = cvFont(14, tok.b ? '700' : '400');
+    ctx.font = font;
+    ctx.fillStyle = tok.c;
+    ctx.textBaseline = 'top';
+    ctx.fillText(tok.t, x, ty);
+    x += ctx.measureText(tok.t).width;
+  }
+  if (anyOver) {
+    const txt = t('res.too_expensive');
+    const bw = cvM(txt, cvFont(12, '600')) + 16;
+    const bh = 20;
+    const bx = x + 10;
+    const by = ty + (18 - bh) / 2;
+    cvRR(ctx, bx, by, bw, bh, 10);
+    ctx.fillStyle = 'rgba(217,83,79,0.15)';
+    ctx.fill();
+    ctx.strokeStyle = CV_COLORS.danger;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.font = cvFont(12, '600');
+    ctx.fillStyle = CV_COLORS.danger;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(txt, bx + bw / 2, by + 4);
+    ctx.textAlign = 'left';
+  }
+}
+
+// 一行步骤的几何：A+B=C 三卡 + 运算符 + 成本列。卡片总宽超出可用宽度时按
+// 比例收缩（下限 CV_CARD_MIN）；仍放不下一行则成本列换行到第二行右对齐。
+function measureRow(step) {
+  const a = measureItemCard(step.item_a);
+  const b = measureItemCard(step.item_b);
+  const hasC = !itemEmpty(step.result);
+  const c = hasC ? measureItemCard(step.result) : null;
+  const rowH = Math.max(CV_NO_D, a.h, b.h, c ? c.h : 0);
+  const cardsW = a.w + b.w + (c ? c.w : 0);
+  const avail = CV_W - 2 * CV_PAD - CV_NO_D - 3 * CV_GAP - 2 * CV_OP_W;
+  const sw = cardsW > avail ? avail / cardsW : 1;
+  const aw = Math.max(CV_CARD_MIN, a.w * sw);
+  const bw = Math.max(CV_CARD_MIN, b.w * sw);
+  const cw = c ? Math.max(CV_CARD_MIN, c.w * sw) : 0;
+  const aX = CV_PAD + CV_NO_D + CV_GAP;
+  const op1X = aX + aw + CV_GAP;
+  const bX = op1X + CV_OP_W + CV_GAP;
+  const op2X = bX + bw + CV_GAP;
+  const cX = op2X + CV_OP_W + CV_GAP;
+  const costX = CV_W - CV_PAD - CV_COST_W;
+  const oneLine = cX + cw + CV_GAP + CV_COST_W <= CV_W - CV_PAD;
+  return { over: (step.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL, a, b, c, hasC, aw, bw, cw, aX, bX, cX, op1X, op2X, costX, rowH, oneLine };
+}
+
+// 图标位图缓存（同 id 只 fetch 一次）。
+const iconCache = new Map();
+async function iconBitmap(id) {
+  if (!iconCache.has(id))
+    iconCache.set(id, (async () => {
+      try {
+        const res = await fetch(`/public/vendor/icons/${encodeURIComponent(id)}.png`);
+        if (!res.ok) return null;
+        return await createImageBitmap(await res.blob());
+      } catch (_) { return null; }
+    })());
+  return iconCache.get(id);
+}
+
+// 渲染一张截图画布：先纯测量布局（固定宽 720，高按内容），再绘制；图标
+// 异步加载完成后叠画（加载失败/404 跳过）。返回 HTMLCanvasElement。
+export async function renderCanvas(sol) {
+  const steps = sol.steps || [];
+  const m = sol.metadata || {};
+  const rows = steps.map(measureRow);
+  const ySummary = CV_PAD;
+  let y = ySummary + 38 + CV_ROW_GAP;
+  const yRows = y;
+  let blockH = 0;
+  for (const r of rows) { r.rowY = yRows + blockH; blockH += r.rowH + (r.oneLine ? 0 : 26) + CV_ROW_GAP; }
+  y = yRows + blockH;
+  const yFinal = y;
+  const fItem = sol.target_item;
+  let fH = 0;
+  if (fItem && !itemEmpty(fItem)) {
+    const fc = measureItemCard(fItem);
+    fH = 22 + fc.h + 12;   // 标签行 + 包装卡
+    y += fH + CV_ROW_GAP;
+  }
+  const yTail = y;
+  const tailLines = [];
+  let line = '';
+  if (m.algorithm_name) line += tf('res.algorithm', m.algorithm_name);
+  if (m.algorithm_version) line += (line ? ' · ' : '') + tf('res.version', m.algorithm_version);
+  if (line) tailLines.push(line);
+  if (m.computation_time != null) tailLines.push(tf('res.wall_time', String(m.computation_time)));
+  const nTail = tailLines.length + (steps.length === 0 && sol.is_success !== false ? 1 : 0);
+  const H = yTail + nTail * 19 + CV_PAD;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = CV_W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = CV_COLORS.bg;
+  ctx.fillRect(0, 0, CV_W, H);
+  const jobs = [];
+
+  if (sol.is_success === false) {
+    cvText(ctx, t('calc.infeasible'), CV_PAD, ySummary + 10, CV_COLORS.danger, cvFont(14, '600'));
+  } else {
+    drawSummary(ctx, summaryTokens(sol, steps),
+      steps.some((s) => (s.exp_level_cost ?? 0) >= TOO_EXPENSIVE_LEVEL), ySummary);
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const st = steps[i];
+    const rowY = r.rowY;
+    drawStepNo(ctx, i + 1, CV_PAD, rowY + (r.rowH - CV_NO_D) / 2, r.over);
+    drawItemCard(ctx, st.item_a, r.a, r.aX, rowY, r.aw, r.over, false, jobs);
+    drawOp(ctx, '+', r.op1X, rowY + r.rowH / 2);
+    drawItemCard(ctx, st.item_b, r.b, r.bX, rowY, r.bw, r.over, false, jobs);
+    drawOp(ctx, '=', r.op2X, rowY + r.rowH / 2);
+    if (r.hasC) drawItemCard(ctx, st.result, r.c, r.cX, rowY, r.cw, r.over, true, jobs);
+    drawCost(ctx, st, r.costX, r.oneLine ? rowY : rowY + r.rowH + 4);
+  }
+
+  if (fItem && !itemEmpty(fItem)) {
+    const fc = measureItemCard(fItem);
+    const wrapW = Math.min(384, fc.w) + 16;
+    const wrapH = fc.h + 12;
+    cvText(ctx, t('res.forge_result'), CV_PAD, yFinal + 2, CV_COLORS.muted, cvFont(12, '400'));
+    const cx0 = CV_PAD + CV_NO_D + CV_GAP;
+    const cy0 = yFinal + 22;
+    cvRR(ctx, cx0, cy0, wrapW, wrapH, CV_R);
+    ctx.fillStyle = CV_COLORS.panel;
+    ctx.fill();
+    ctx.strokeStyle = CV_COLORS.border;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawItemCard(ctx, fItem, fc, cx0 + 8, cy0 + 6, Math.min(384, fc.w), false, false, jobs);
+    drawHollowCheck(ctx, CV_PAD, cy0 + (wrapH - CV_NO_D) / 2);
+  }
+
+  let ty = yTail;
+  if (steps.length === 0 && sol.is_success !== false) {
+    cvText(ctx, t('calc.already_met'), CV_PAD, ty + 2, CV_COLORS.muted, cvFont(13, '400'));
+    ty += 19;
+  }
+  for (const ln of tailLines) {
+    cvText(ctx, ln, CV_PAD, ty + 2, CV_COLORS.muted, cvFont(13, '400'));
+    ty += 19;
+  }
+
+  for (const j of jobs) {
+    const bmp = await iconBitmap(j.id);
+    if (!bmp) continue;
+    ctx.imageSmoothingEnabled = false;   // 16px 原图放大保持像素风（同 DOM）
+    ctx.drawImage(bmp, j.x, j.y, CV_ICON, CV_ICON);
+    ctx.imageSmoothingEnabled = true;
+  }
+  return canvas;
+}
+
 function renderSolution(el, sol) {
   const card = document.createElement('div');
   card.className = 'card res-solution';
@@ -214,8 +717,12 @@ function renderSolution(el, sol) {
     ${finalItemHtml(sol)}
     ${tailHtml(sol)}`;
   el.appendChild(card);
-  // T4 wires real actions; no-op placeholders keep the binding pattern in place.
-  card.querySelectorAll('.res-tail button').forEach((b) => b.addEventListener('click', () => {}));
+  // T4: real copy/save actions; each button is disabled while its operation is
+  // in flight so a double-click cannot fire two writes.
+  const copyBtn = card.querySelector('.res-tail button.copy');
+  const saveBtn = card.querySelector('.res-tail button.save');
+  if (copyBtn) copyBtn.addEventListener('click', () => onCopy(sol, copyBtn));
+  if (saveBtn) saveBtn.addEventListener('click', () => onSave(sol, saveBtn));
 }
 
 // Shared terminal-state rendering for the completed `result` payload (the
