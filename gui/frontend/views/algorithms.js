@@ -1,6 +1,8 @@
-// algorithms.js — Algorithms view: list loaded algorithms with per-row detail
-// (GET /api/algorithms/{name}) and plugin unload (POST /api/algorithms/unload
-// {name}), plus load a plugin dir.
+// algorithms.js — Algorithms view: list loaded algorithms with version /
+// supported-mode / origin shown inline, a per-entry expandable detail row
+// (GET /api/algorithms/{name} fields) and plugin unload (POST
+// /api/algorithms/unload {name}), plus plugin-dir loading with a directory
+// picker (GET /api/fs/list?path=).
 import { http, showError, clearError, esc } from '../api.js';
 import { t } from '../i18n.js';
 
@@ -11,6 +13,23 @@ function encSeg(s) {
   let out = '';
   for (const ch of String(s)) out += URL_SAFE_RE.test(ch) ? ch : encodeURIComponent(ch);
   return out;
+}
+
+// supported_mode wire values ("direct" / "inventory" / "both") → labels.
+const MODE_KEYS = { direct: 'alg.mode_direct', inventory: 'alg.mode_inventory', both: 'alg.mode_both' };
+function modeLabel(m) { return (m && MODE_KEYS[m]) ? t(MODE_KEYS[m]) : (m || ''); }
+
+// The full detail meta table (every AlgorithmDetail field) — rendered into
+// the inline expansion row directly under the algorithm's entry.
+function detailHtml(d) {
+  return `<table class="meta-table">
+    <tr><th>${t('alg.origin')}</th><td>${esc(d.origin === 'plugin' ? t('alg.plugin') : t('alg.builtin'))}</td></tr>
+    <tr><th>${t('alg.version')}</th><td>${esc(d.version || '')}</td></tr>
+    <tr><th>${t('alg.mode')}</th><td>${esc(modeLabel(d.supported_mode))}</td></tr>
+    <tr><th>${t('alg.resumable')}</th><td>${d.is_resumable ? t('status.solve_yes') : t('status.solve_no')}</td></tr>
+    <tr><th>${t('alg.audit')}</th><td>${d.has_audit ? t('status.solve_yes') : t('status.solve_no')}</td></tr>
+    <tr><th>${t('alg.plugin_path')}</th><td class="mono">${esc(d.plugin_path || '')}</td></tr>
+  </table>`;
 }
 
 export async function render(el) {
@@ -24,7 +43,8 @@ export async function render(el) {
   }
   if (el.dataset.view !== myView) return;
   // Per-row detail (small list; N+1 is fine) — origin decides the unload
-  // affordance (builtin strategies are never unloadable).
+  // affordance (builtin strategies are never unloadable), version/mode feed
+  // the inline columns, and the cached payload feeds the expansion row.
   const rows = await Promise.all(names.map(async (n) => {
     let d = null;
     try { d = await http.get(`/api/algorithms/${encSeg(n)}`); } catch (_) { /* list-only */ }
@@ -33,42 +53,33 @@ export async function render(el) {
   if (el.dataset.view !== myView) return;
 
   el.innerHTML = `<h2>${t('alg.title')}</h2><div class="card">
-    <table><thead><tr><th>${t('alg.name')}</th><th>${t('alg.origin')}</th><th></th></tr></thead><tbody>` +
+    <table><thead><tr><th>${t('alg.name')}</th><th>${t('alg.version')}</th><th>${t('alg.mode')}</th><th>${t('alg.origin')}</th><th></th></tr></thead><tbody>` +
     rows.map((r) => `<tr>
         <td>${esc(r.name)}</td>
+        <td>${r.d ? esc(r.d.version || '') : ''}</td>
+        <td>${r.d ? esc(modeLabel(r.d.supported_mode)) : ''}</td>
         <td>${r.d ? esc(r.d.origin === 'plugin' ? t('alg.plugin') : t('alg.builtin')) : ''}</td>
         <td>
           <button data-detail="${esc(r.name)}">${t('alg.detail')}</button>
           ${r.d && r.d.origin === 'plugin'
             ? `<button class="secondary" data-unload="${esc(r.name)}">${t('alg.unload')}</button>` : ''}
-        </td></tr>`).join('') +
+        </td></tr>
+        <tr class="alg-detail-row" data-detailrow="${esc(r.name)}" hidden>
+          <td colspan="5">${r.d ? detailHtml(r.d) : ''}</td>
+        </tr>`).join('') +
     `</tbody></table>
-     <div id="alg-detail"></div>
      <label>${t('alg.load_dir')}</label><input class="dir">
      <button class="load">${t('alg.load')}</button>
      <div id="alg-msg" class="mono"></div></div>`;
 
-  // Detail expander: toggles a meta table with every field the backend
-  // detail endpoint provides ({name, version, origin, plugin_path,
-  // is_resumable, supported_mode, has_audit}).
-  const detailPanel = document.getElementById('alg-detail');
-  el.querySelectorAll('[data-detail]').forEach((b) => b.addEventListener('click', async () => {
+  // Detail expander: toggles the inline row right under the entry (the row
+  // was already populated at render time — no refetch on toggle).
+  el.querySelectorAll('[data-detail]').forEach((b) => b.addEventListener('click', () => {
     clearError();
     const name = b.dataset.detail;
-    if (detailPanel.dataset.name === name) { detailPanel.innerHTML = ''; delete detailPanel.dataset.name; return; }
-    try {
-      const d = await http.get(`/api/algorithms/${encSeg(name)}`);
-      if (el.dataset.view !== myView) return;
-      detailPanel.dataset.name = name;
-      detailPanel.innerHTML = `<h4>${esc(name)}</h4><table class="meta-table">
-        <tr><th>${t('alg.origin')}</th><td>${esc(d.origin === 'plugin' ? t('alg.plugin') : t('alg.builtin'))}</td></tr>
-        <tr><th>${t('alg.version')}</th><td>${esc(d.version || '')}</td></tr>
-        <tr><th>${t('alg.mode')}</th><td>${esc(d.supported_mode || '')}</td></tr>
-        <tr><th>${t('alg.resumable')}</th><td>${d.is_resumable ? t('status.solve_yes') : t('status.solve_no')}</td></tr>
-        <tr><th>${t('alg.audit')}</th><td>${d.has_audit ? t('status.solve_yes') : t('status.solve_no')}</td></tr>
-        <tr><th>${t('alg.plugin_path')}</th><td class="mono">${esc(d.plugin_path || '')}</td></tr>
-      </table>`;
-    } catch (e) { showError(e.message); }
+    let row = null;
+    el.querySelectorAll('[data-detailrow]').forEach((r) => { if (r.dataset.detailrow === name) row = r; });
+    if (row) row.hidden = !row.hidden;
   }));
 
   // Unload (plugins only — the button is hidden for builtin origins; a race
@@ -79,7 +90,6 @@ export async function render(el) {
     try {
       await http.post('/api/algorithms/unload', { name });
       if (el.dataset.view !== myView) return;
-      detailPanel.innerHTML = '';
       render(el);
     } catch (e) { showError(e.message); }
   }));
