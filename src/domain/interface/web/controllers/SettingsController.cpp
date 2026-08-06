@@ -96,6 +96,12 @@ Response SettingsController::patch(const HttpRequest&, const PathParams&, const 
         throw WebHttpError(400, "INVALID_FIELD", "invalid settings field type");
     }
 
+    // Persist the current runtime settings to <cwd>/config.json so they
+    // survive a restart.  Best-effort: the in-memory state above is already
+    // applied — a failed write only LOG_WARNs (inside save_config_file) and
+    // the PATCH still succeeds.
+    AppConfig::save_config_file(runtime_settings_json());
+
     return Response::json(200, "OK", build_settings_json().to_string());
 }
 

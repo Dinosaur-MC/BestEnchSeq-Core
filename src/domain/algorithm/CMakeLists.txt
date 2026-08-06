@@ -33,6 +33,7 @@ target_link_libraries(besq-algo-core PUBLIC
 )
 target_link_libraries(besq-algo-core PRIVATE
     besq-common-log           # internal logging (optional with BESQ_DISABLE_LOGGER)
+    besq-common-io            # Json — via AppConfig.h in SandboxedExecutor/AlgorithmLoader
 )
 target_include_directories(besq-algo-core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>            # → #include "domain/algorithm/types/Enchantment.h"
