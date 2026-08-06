@@ -749,12 +749,38 @@ function renderSolution(el, sol) {
 
 // Shared terminal-state rendering for the completed `result` payload (the
 // OutputFormatter JSON), whether it arrives over SSE or via the poll fallback.
+// Multiple solutions (result.solutions.length > 1) render inside an mdui-tabs
+// control — one "方案 N" tab + panel per solution — while a single solution
+// keeps the plain stacked card (existing v12 layout). Panels carry the
+// `slot="panel"` required by the mdui-tabs contract (tabs in the default slot,
+// panels in the "panel" slot; value-paired).
 function renderResult(result) {
   const el = document.getElementById('calc-results');
   if (!el) return;
   el.innerHTML = '';
-  (result.solutions || []).forEach((sol) => renderSolution(el, sol));
-  if (result.success === false && (result.solutions || []).length === 0)
+  const sols = result.solutions || [];
+  if (sols.length > 1) {
+    const tabs = document.createElement('mdui-tabs');
+    tabs.setAttribute('variant', 'secondary');
+    tabs.setAttribute('value', 'sol-1');
+    sols.forEach((_, i) => {
+      const tab = document.createElement('mdui-tab');
+      tab.setAttribute('value', `sol-${i + 1}`);
+      tab.textContent = tf('res.solution_n', i + 1);
+      tabs.appendChild(tab);
+    });
+    sols.forEach((sol, i) => {
+      const panel = document.createElement('mdui-tab-panel');
+      panel.setAttribute('slot', 'panel');
+      panel.setAttribute('value', `sol-${i + 1}`);
+      renderSolution(panel, sol);
+      tabs.appendChild(panel);
+    });
+    el.appendChild(tabs);
+  } else {
+    sols.forEach((sol) => renderSolution(el, sol));
+  }
+  if (result.success === false && sols.length === 0)
     showError(t('calc.unreachable'));
 }
 
@@ -849,6 +875,7 @@ function finishProgress() {
   if (bar) bar.style.display = 'none';
   const label = document.getElementById('calc-status');
   if (label) label.textContent = '';
+  setRunning(false);   // terminal state (completed/failed/cancelled/error) → restore run/clear
 }
 
 // Polling fallback: drives the same progress bar + terminal rendering as SSE,
@@ -868,6 +895,9 @@ function startPoll(id) {
     if (!document.body.contains(bar)) { clearInterval(pollTimer); return; }
     try {
       const st = await http.get(`/api/tasks/${id}`);
+      // Late-frame guard: an in-flight snapshot dispatched before this task was
+      // cancelled/replaced must not drive the view a newer run owns.
+      if (id !== currentTask) return;
       setProgress(st.progress);
       if (st.state === 'completed') {
         clearInterval(pollTimer);
@@ -907,9 +937,15 @@ function startSSE(id) {
   const settle = (fn) => {
     if (settled) return;
     settled = true;
-    clearInterval(pollTimer); // a terminal render supersedes any poll fallback
-    es.close();
+    es.close();              // own stream cleanup is always safe
     if (currentEs === es) currentEs = null;
+    // Late-frame guard: a completed/failed frame from a superseded task (its
+    // in-flight status snapshot / poll response resolving after cancel or a
+    // newer run) must not overwrite the current result area. The own-stream
+    // cleanup above still runs, but nothing renders and the newer run's
+    // pollTimer is left untouched.
+    if (id !== currentTask) return;
+    clearInterval(pollTimer); // a terminal render supersedes any poll fallback
     fn();
   };
   const es = new EventSource(`/api/tasks/${id}/events`);
@@ -930,7 +966,11 @@ function startSSE(id) {
       renderResult(data.result);
       // The completed frame carries no diagnostics — pull diag_exit from the
       // status snapshot (idempotent; a diag exit frame may have landed first).
-      http.get(`/api/tasks/${id}`).then((st) => renderDiagExit(st.diag_exit)).catch(() => {});
+      // The same currentTask guard applies: a diag pull resolving after a
+      // newer run started must not pollute its diagnostics card.
+      http.get(`/api/tasks/${id}`)
+        .then((st) => { if (id === currentTask) renderDiagExit(st.diag_exit); })
+        .catch(() => {});
     });
   });
   es.addEventListener('failed', (ev) => {
@@ -940,7 +980,9 @@ function startSSE(id) {
     settle(() => {
       finishProgress();
       showError(data.error || t('calc.no_result'));
-      http.get(`/api/tasks/${id}`).then((st) => renderDiagExit(st.diag_exit)).catch(() => {});
+      http.get(`/api/tasks/${id}`)
+        .then((st) => { if (id === currentTask) renderDiagExit(st.diag_exit); })
+        .catch(() => {});
     });
   });
   // Algorithm diagnostics stream (T2): progress/state/exit events appended to
@@ -951,8 +993,9 @@ function startSSE(id) {
     es.close();
     if (currentEs === es) currentEs = null;
     // SSE unavailable/dropped → fall back to polling (status snapshot retained
-    // on GET /api/tasks/{id} for exactly this reason).
-    if (!settled) startPoll(id);
+    // on GET /api/tasks/{id} for exactly this reason). Only when this task is
+    // still the current one — a stale stream error must not hijack the view.
+    if (!settled && id === currentTask) startPoll(id);
   };
 
   // Safety net: an instant solve ("目标已达成" 0-step) may emit its terminal
@@ -962,6 +1005,10 @@ function startSSE(id) {
   (async () => {
     try {
       const st = await http.get(`/api/tasks/${id}`);
+      // Late-frame guard: the snapshot may resolve after this task was
+      // cancelled/replaced — a completed status for a superseded task must
+      // not overwrite the current run's result area.
+      if (id !== currentTask) return;
       if (st.state === 'completed') settle(() => { finishProgress(); renderResult(st.result); renderDiagExit(st.diag_exit); });
       else if (st.state === 'failed') settle(() => { finishProgress(); showError(st.error || t('calc.no_result')); renderDiagExit(st.diag_exit); });
       else if (st.state === 'cancelled') settle(finishProgress);
@@ -1082,6 +1129,23 @@ function updateStatusBar() {
     `<span class="pill current">${t('calc.current')} (${m || t('calc.none')})</span>` +
     `<span>→</span>` +
     `<span class="pill">${t('calc.target')} (${n || t('calc.none')})</span>`;
+}
+
+// Running-state buttons: while a task is in flight #calc-run and #calc-clear
+// are disabled and #calc-cancel is the only live action. Restoring re-runs
+// updateSolveState so a conflict block on #calc-run (selections changed
+// mid-solve) survives the restore.
+function setRunning(on) {
+  const clear = document.getElementById('calc-clear');
+  const cancel = document.getElementById('calc-cancel');
+  if (clear) clear.disabled = on;
+  if (cancel) cancel.disabled = !on;
+  if (on) {
+    const run = document.getElementById('calc-run');
+    if (run) run.disabled = true;
+  } else {
+    updateSolveState();
+  }
 }
 
 // Solve button + conflict hint: a selected exclusive pair blocks solving
@@ -1240,7 +1304,7 @@ export async function render(el) {
         <div class="btn-row">
           <button id="calc-run">${t('calc.run')}</button>
           <button id="calc-clear" class="secondary">${t('calc.clear')}</button>
-          <button id="calc-cancel" class="secondary">${t('calc.cancel')}</button>
+          <button id="calc-cancel" class="secondary" disabled>${t('calc.cancel')}</button>
         </div>
         <div id="calc-solve-hint" class="conflict-hint" style="display:none"></div>
         <div id="calc-progress" class="progress" style="display:none"><div style="width:0%"></div></div>
@@ -1269,11 +1333,18 @@ export async function render(el) {
   document.getElementById('calc-run').addEventListener('click', async () => {
     clearError();
     resetDiag();
+    // A stale stream/poll must never outlive its run (cancel closes them, but
+    // keep the ordering safe for any edge state) — then take the buttons to
+    // the running state for the duration of the task.
+    if (currentEs) { currentEs.close(); currentEs = null; }
+    clearInterval(pollTimer);
+    setRunning(true);
     try {
       // POST /api/tasks → 202 {task_id} + Location: /api/tasks/{id}
       const post = await http.post('/api/tasks', buildTask());
       startSSE(post.task_id || post.id);
     } catch (e) {
+      setRunning(false);
       showError(e.message);
     }
   });
