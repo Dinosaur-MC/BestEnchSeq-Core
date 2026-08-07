@@ -11,14 +11,14 @@
 
 #define BESQ_TEST_MAIN
 
-#include "framework/test_framework.h"
-#include "domain/orchestration/pipelines/SolvePipeline.h"
-#include "domain/algorithm/plugin/AlgorithmLoader.h"
-#include "domain/interface/cli/ItemParser.h"
-#include "domain/business/types/Profile.h"
 #include "builtin/DataLoader.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
+#include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/business/types/Profile.h"
+#include "domain/interface/cli/ItemParser.h"
+#include "domain/orchestration/pipelines/SolvePipeline.h"
+#include "framework/test_framework.h"
 #include <string>
 
 namespace {
@@ -35,8 +35,7 @@ Profile make_builtin_profile() {
     return profile;
 }
 
-SolveRequest direct_request(const Profile& profile, const std::string& target,
-                            const std::string& algo) {
+SolveRequest direct_request(const Profile& profile, const std::string& target, const std::string& algo) {
     SolveRequest req;
     req.target_item = ItemParser::parse(target, profile.ench(), profile.eq());
     req.mode = AlgorithmMode::direct;
@@ -102,13 +101,13 @@ void test_conflicting_target_not_solvable() {
     TEST_PASS("solve pipeline: conflicting target not solvable");
 }
 
-}  // anonymous namespace
+} // anonymous namespace
 
 TEST_CASE("test_solve_pipeline") {
     register_builtin_translations(LanguageManager::instance());
     LanguageManager::instance().select("en_US");
 
     test_unknown_algo();
-        test_unsupported_mode();
-        test_conflicting_target_not_solvable();
+    test_unsupported_mode();
+    test_conflicting_target_not_solvable();
 }

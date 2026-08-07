@@ -68,7 +68,7 @@ TEST_CASE("test_interleaved_push_pop") {
 }
 
 TEST_CASE("test_fifo_order") {
-    constexpr int N = 1024;  // match capacity exactly
+    constexpr int N = 1024; // match capacity exactly
     BoundedMPMCQueue<int, 1024> q;
 
     for (int i = 0; i < N; ++i)
@@ -113,7 +113,8 @@ TEST_CASE("test_two_producers_one_consumer") {
     std::thread p1([&] {
         for (int i = 0; i < PRODUCE_PER; ++i) {
             uint64_t v = static_cast<uint64_t>(i) * 2;
-            while (!q.try_push(v)) {}  // spin until slot available
+            while (!q.try_push(v)) {
+            } // spin until slot available
             sum_in.fetch_add(v);
         }
     });
@@ -121,7 +122,8 @@ TEST_CASE("test_two_producers_one_consumer") {
     std::thread p2([&] {
         for (int i = 0; i < PRODUCE_PER; ++i) {
             uint64_t v = static_cast<uint64_t>(i) * 2 + 1;
-            while (!q.try_push(v)) {}
+            while (!q.try_push(v)) {
+            }
             sum_in.fetch_add(v);
         }
     });
@@ -149,12 +151,9 @@ TEST_CASE("test_two_producers_one_consumer") {
     p2.join();
     consumer.join();
 
-    expect(consumed.load() == TOTAL,
-           "should consume all items. Got: " + std::to_string(consumed.load()));
-    expect(sum_in.load() == sum_out.load(),
-           "sum in should equal sum out");
-    std::cout << "PASS: test_two_producers_one_consumer ("
-              << consumed.load() << "/" << TOTAL << " items)" << std::endl;
+    expect(consumed.load() == TOTAL, "should consume all items. Got: " + std::to_string(consumed.load()));
+    expect(sum_in.load() == sum_out.load(), "sum in should equal sum out");
+    std::cout << "PASS: test_two_producers_one_consumer (" << consumed.load() << "/" << TOTAL << " items)" << std::endl;
 }
 
 TEST_CASE("test_one_producer_two_consumers") {
@@ -166,7 +165,8 @@ TEST_CASE("test_one_producer_two_consumers") {
 
     std::thread producer([&] {
         for (int i = 0; i < N; ++i) {
-            while (!q.try_push(i)) {}
+            while (!q.try_push(i)) {
+            }
         }
         done.store(true);
     });
@@ -179,7 +179,8 @@ TEST_CASE("test_one_producer_two_consumers") {
             if (q.try_pop(val)) {
                 counter.fetch_add(1);
             } else {
-                if (Clock::now() >= deadline) break;
+                if (Clock::now() >= deadline)
+                    break;
                 std::this_thread::yield();
             }
         }
@@ -194,11 +195,9 @@ TEST_CASE("test_one_producer_two_consumers") {
 
     int total = consumed_a.load() + consumed_b.load();
     expect(total > 0, "consumers should read at least some data");
-    expect(consumed_a.load() > 0 && consumed_b.load() > 0,
-           "both consumers should read items");
+    expect(consumed_a.load() > 0 && consumed_b.load() > 0, "both consumers should read items");
     expect(total <= N, "should not consume more than produced");
-    std::cout << "PASS: test_one_producer_two_consumers (A="
-              << consumed_a.load() << " B=" << consumed_b.load()
+    std::cout << "PASS: test_one_producer_two_consumers (A=" << consumed_a.load() << " B=" << consumed_b.load()
               << " total=" << total << ")" << std::endl;
 }
 
@@ -220,7 +219,8 @@ TEST_CASE("test_multi_producer_multi_consumer_stress") {
         producers.emplace_back([&, t] {
             for (int i = 0; i < PER_PRODUCER; ++i) {
                 uint64_t v = static_cast<uint64_t>(t) * 1000000 + i;
-                while (!q.try_push(v)) {}
+                while (!q.try_push(v)) {
+                }
                 sum_in.fetch_add(v);
             }
         });
@@ -248,23 +248,22 @@ TEST_CASE("test_multi_producer_multi_consumer_stress") {
         });
     }
 
-    for (auto& p : producers) p.join();
+    for (auto& p : producers)
+        p.join();
 
     // Ensure consumers drain remaining items
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(100ms);
     done.store(true);
 
-    for (auto& c : consumers) c.join();
+    for (auto& c : consumers)
+        c.join();
 
     expect(consumed.load() > 0, "should consume items");
     expect(consumed.load() <= TOTAL, "should not over-consume");
     expect(sum_in.load() == sum_out.load(),
-           "sum in should equal sum out (got " +
-           std::to_string(sum_in.load()) + " vs " +
-           std::to_string(sum_out.load()) + ")");
-    std::cout << "PASS: test_multi_producer_multi_consumer_stress ("
-              << consumed.load() << "/" << TOTAL << " items, "
+           "sum in should equal sum out (got " + std::to_string(sum_in.load()) + " vs " + std::to_string(sum_out.load()) + ")");
+    std::cout << "PASS: test_multi_producer_multi_consumer_stress (" << consumed.load() << "/" << TOTAL << " items, "
               << PRODUCERS << "P/" << CONSUMERS << "C)" << std::endl;
 }
 
@@ -294,4 +293,3 @@ TEST_CASE("test_move_only_type") {
 
     std::cout << "PASS: test_move_only_type" << std::endl;
 }
-

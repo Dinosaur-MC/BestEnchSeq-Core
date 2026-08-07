@@ -13,7 +13,8 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
+#include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
+#include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
@@ -21,10 +22,9 @@
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
 #include "domain/algorithm/types/Item.h"
-#include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
-#include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "framework/test_framework.h"
 
 #include <algorithm>
 #include <memory>
@@ -35,30 +35,25 @@ namespace {
 
 // Compact ids after sorting the registry by NSID id part:
 //   0 = bane_of_arthropods, 1 = knockback, 2 = sharpness, 3 = unbreaking
-constexpr int16_t ID_BANE       = 0;
-constexpr int16_t ID_KNOCKBACK  = 1;
-constexpr int16_t ID_SHARPNESS  = 2;
+constexpr int16_t ID_BANE = 0;
+constexpr int16_t ID_KNOCKBACK = 1;
+constexpr int16_t ID_SHARPNESS = 2;
 constexpr int16_t ID_UNBREAKING = 3;
 
 // Ench with explicit value_type casts (avoid narrowing in braced init).
 algorithm::Ench E(int16_t id, int16_t lvl) {
-    return algorithm::Ench{static_cast<algorithm::Ench::value_type>(id),
-                           static_cast<algorithm::Ench::value_type>(lvl)};
+    return algorithm::Ench{static_cast<algorithm::Ench::value_type>(id), static_cast<algorithm::Ench::value_type>(lvl)};
 }
 
 void build_reg(algorithm::EnchReg& reg) {
     std::vector<EnchInfo> dom;
-    dom.emplace_back(NSID("bane_of_arthropods"), "Bane", MCE::All, 5, 5, 1, false,
-                     std::unordered_set<NSID>{NSID("sharpness")},
+    dom.emplace_back(NSID("bane_of_arthropods"), "Bane", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{NSID("sharpness")},
                      std::unordered_set<NSID>{EquipmentTag::sword()});
-    dom.emplace_back(NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false,
-                     std::unordered_set<NSID>{},
+    dom.emplace_back(NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false, std::unordered_set<NSID>{},
                      std::unordered_set<NSID>{EquipmentTag::sword()});
     dom.emplace_back(NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                     std::unordered_set<NSID>{NSID("bane_of_arthropods")},
-                     std::unordered_set<NSID>{EquipmentTag::sword()});
-    dom.emplace_back(NSID("unbreaking"), "Unbreaking", MCE::All, 3, 3, 1, false,
-                     std::unordered_set<NSID>{},
+                     std::unordered_set<NSID>{NSID("bane_of_arthropods")}, std::unordered_set<NSID>{EquipmentTag::sword()});
+    dom.emplace_back(NSID("unbreaking"), "Unbreaking", MCE::All, 3, 3, 1, false, std::unordered_set<NSID>{},
                      std::unordered_set<NSID>{EquipmentTag::sword()});
 
     // Sort by NSID id part for stable compact ids.
@@ -68,8 +63,7 @@ void build_reg(algorithm::EnchReg& reg) {
         const auto p = s.find(':');
         sorted.emplace_back(p != std::string::npos ? s.substr(p + 1) : s, i);
     }
-    std::sort(sorted.begin(), sorted.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
     algorithm::Equipment eq;
     eq.id = "test";
@@ -98,11 +92,11 @@ void build_reg(algorithm::EnchReg& reg) {
     for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
         const auto& ei = sorted[i].second;
         algorithm::EnchInfo info;
-        info.id         = static_cast<uint8_t>(i);
-        info.mul        = static_cast<uint8_t>(ei.multiplier);
-        info.mul_b      = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
-        info.max_lvl    = static_cast<uint8_t>(ei.max_level);
-        info.exc_mask   = exc[i];
+        info.id = static_cast<uint8_t>(i);
+        info.mul = static_cast<uint8_t>(ei.multiplier);
+        info.mul_b = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
+        info.max_lvl = static_cast<uint8_t>(ei.max_level);
+        info.exc_mask = exc[i];
         info.applicable = ei.supported_items.count(EquipmentTag::sword()) > 0;
         compact.push_back(std::move(info));
     }
@@ -111,29 +105,35 @@ void build_reg(algorithm::EnchReg& reg) {
 
 algorithm::Item make_target(const std::vector<algorithm::Ench>& wanted) {
     algorithm::Item t{algorithm::ItemType::Equip, 1561, 0, {}};
-    for (const auto& e : wanted) t.enchs.insert(e);
+    for (const auto& e : wanted)
+        t.enchs.insert(e);
     return t;
 }
 
 int32_t run_algo(std::unique_ptr<algorithm::IAlgorithm> algo,
-                 const algorithm::EnchReg& reg, const algorithm::Item& target,
+                 const algorithm::EnchReg& reg,
+                 const algorithm::Item& target,
                  const algorithm::EnchCollection& source = {},
                  int32_t max_solutions = 0) {
     algorithm::AlgorithmExecutor executor(std::move(algo));
     algorithm::AlgorithmInput input;
     input.config.forge.platform = MCE::Java;
     input.config.mode = AlgorithmMode::direct;
-    if (max_solutions > 0) input.config.search.max_solutions = max_solutions;
+    if (max_solutions > 0)
+        input.config.search.max_solutions = max_solutions;
     input.registry = reg;
-    input.target   = target;
-    input.data     = algorithm::DirectPayload{source};
+    input.target = target;
+    input.data = algorithm::DirectPayload{source};
 
     executor.start(std::move(input));
     auto state = executor.wait();
-    if (state != algorithm::AlgorithmState::Completed) return -1;
+    if (state != algorithm::AlgorithmState::Completed)
+        return -1;
     auto out = executor.output();
-    if (out.solutions.empty()) return -1;
-    if (out.solutions[0].steps.empty()) return 0;
+    if (out.solutions.empty())
+        return -1;
+    if (out.solutions[0].steps.empty())
+        return 0;
     return out.solutions[0].total_cost;
 }
 
@@ -144,9 +144,7 @@ void check_equivalence(const algorithm::EnchReg& reg,
     const auto dp = run_algo(std::make_unique<algorithm::DPMergeAlgorithm>(), reg, target, source);
     const auto bb = run_algo(std::make_unique<algorithm::BBDpAlgorithm>(), reg, target, source);
     expect_eq(dp, bb, "dp_merge == bb_dp optimal cost: " + label);
-    std::cout << "  [" << label << "] cost="
-              << (dp < 0 ? std::string("unreachable") : std::to_string(dp))
-              << std::endl;
+    std::cout << "  [" << label << "] cost=" << (dp < 0 ? std::string("unreachable") : std::to_string(dp)) << std::endl;
 }
 
 void test_equivalence_corpus(const algorithm::EnchReg& reg) {
@@ -154,17 +152,12 @@ void test_equivalence_corpus(const algorithm::EnchReg& reg) {
     check_equivalence(reg, make_target({E(ID_KNOCKBACK, 2)}), {}, "knock2");
     check_equivalence(reg, make_target({E(ID_UNBREAKING, 3)}), {}, "unbreak3");
     check_equivalence(reg, make_target({E(ID_BANE, 5)}), {}, "bane5");
-    check_equivalence(reg, make_target({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}), {},
-                      "sharp5+knock2");
-    check_equivalence(reg,
-                      make_target({E(ID_SHARPNESS, 3), E(ID_UNBREAKING, 3), E(ID_KNOCKBACK, 2)}),
-                      {}, "3-enchant");
-    check_equivalence(reg, make_target({E(ID_SHARPNESS, 5), E(ID_BANE, 5)}), {},
-                      "conflict-unreachable");
-    check_equivalence(reg, make_target({E(ID_SHARPNESS, 3)}), {E(ID_SHARPNESS, 2)},
-                      "pre-enchanted base");
-    check_equivalence(reg, make_target({E(ID_SHARPNESS, 3), E(ID_KNOCKBACK, 2)}),
-                      {E(ID_SHARPNESS, 2), E(ID_KNOCKBACK, 1)}, "pre-enchanted base 2");
+    check_equivalence(reg, make_target({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}), {}, "sharp5+knock2");
+    check_equivalence(reg, make_target({E(ID_SHARPNESS, 3), E(ID_UNBREAKING, 3), E(ID_KNOCKBACK, 2)}), {}, "3-enchant");
+    check_equivalence(reg, make_target({E(ID_SHARPNESS, 5), E(ID_BANE, 5)}), {}, "conflict-unreachable");
+    check_equivalence(reg, make_target({E(ID_SHARPNESS, 3)}), {E(ID_SHARPNESS, 2)}, "pre-enchanted base");
+    check_equivalence(reg, make_target({E(ID_SHARPNESS, 3), E(ID_KNOCKBACK, 2)}), {E(ID_SHARPNESS, 2), E(ID_KNOCKBACK, 1)},
+                      "pre-enchanted base 2");
     TEST_PASS("dp_merge == bb_dp optimal cost (deterministic corpus)");
 }
 
@@ -185,7 +178,7 @@ void test_max_solutions_invariance(const algorithm::EnchReg& reg) {
     TEST_PASS("dp_merge best-cost invariance to max_solutions");
 }
 
-}  // anonymous namespace
+} // anonymous namespace
 
 TEST_CASE("test_dp_merge_correctness") {
     algorithm::EnchReg reg;

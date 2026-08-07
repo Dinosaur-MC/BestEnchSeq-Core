@@ -1,12 +1,20 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/business/components/RegistryHelper.h"
+#include "framework/test_framework.h"
 
 namespace {
 
 Profile make_p(const std::string& name, int base_level) {
     Profile p(name);
-    p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, base_level, base_level, 1, false, {}, {NSID("#minecraft:swords")}});
+    p.add_enchantment({NSID("minecraft:sharpness"),
+                       "Sharpness",
+                       MCE::All,
+                       base_level,
+                       base_level,
+                       1,
+                       false,
+                       {},
+                       {NSID("#minecraft:swords")}});
     return p;
 }
 
@@ -88,9 +96,11 @@ TEST_CASE("test_registry_helper_builder") {
 
     // filter predicate
     RegistryHelper fbuilder;
-    auto filtered = fbuilder.load(a).filter([](const EnchInfo& e) {
-        return e.id == NSID("minecraft:smite");  // not present in a → empty
-    }).build("f");
+    auto filtered = fbuilder.load(a)
+                        .filter([](const EnchInfo& e) {
+                            return e.id == NSID("minecraft:smite"); // not present in a → empty
+                        })
+                        .build("f");
     expect_eq(filtered.ench().size(), 0u, "builder filter drops everything");
     TEST_PASS("registry_helper builder chain");
 }
@@ -107,11 +117,20 @@ TEST_CASE("test_registry_helper_validate") {
     Profile p("v");
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
     // smite exclusive-refs sharpness (exists) → valid
-    p.add_enchantment({NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false, {NSID("minecraft:sharpness")}, {NSID("#minecraft:swords")}});
+    p.add_enchantment({NSID("minecraft:smite"),
+                       "Smite",
+                       MCE::All,
+                       5,
+                       5,
+                       1,
+                       false,
+                       {NSID("minecraft:sharpness")},
+                       {NSID("#minecraft:swords")}});
     expect(RegistryHelper::validate(p), "valid profile passes");
     // bad: exclusive refs a nonexistent enchant
     Profile bad("bad");
-    bad.add_enchantment({NSID("minecraft:x"), "X", MCE::All, 1, 1, 1, false, {NSID("minecraft:missing")}, {NSID("#minecraft:swords")}});
+    bad.add_enchantment(
+        {NSID("minecraft:x"), "X", MCE::All, 1, 1, 1, false, {NSID("minecraft:missing")}, {NSID("#minecraft:swords")}});
     expect(!RegistryHelper::validate(bad), "exclusive ref to missing enchant fails");
     TEST_PASS("test_registry_helper_validate");
 }

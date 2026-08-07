@@ -9,8 +9,8 @@
 
 #define BESQ_TEST_MAIN
 #include "common/log/Logger.h"
-#include "common/log/LogTypes.h"
 #include "common/log/LogRingBuffer.h"
+#include "common/log/LogTypes.h"
 #include "framework/test_framework.h"
 
 #include <filesystem>
@@ -63,7 +63,8 @@ size_t count_run_files(const fs::path& log_dir) {
     std::error_code ec;
     for (auto& e : fs::directory_iterator(log_dir / "logs", ec)) {
         const auto name = e.path().filename().string();
-        if (name.rfind("run_", 0) == 0 && name.size() > 8) ++n;
+        if (name.rfind("run_", 0) == 0 && name.size() > 8)
+            ++n;
     }
     return n;
 }
@@ -93,10 +94,8 @@ void test_level_filtering(Logger& logger, const fs::path& log_dir) {
     logger.flush();
 
     auto c = read_latest(log_dir);
-    expect(c.find("filtered_info_marker") == std::string::npos,
-           "info dropped below Warn file level");
-    expect(c.find("visible_warn_marker") != std::string::npos,
-           "warn passes at Warn file level");
+    expect(c.find("filtered_info_marker") == std::string::npos, "info dropped below Warn file level");
+    expect(c.find("visible_warn_marker") != std::string::npos, "warn passes at Warn file level");
     TEST_PASS("logger: file-level filtering");
 }
 
@@ -121,16 +120,11 @@ void test_ring_listeners() {
     // Backward compat: no listeners → snapshot/clear unchanged.
     ring->push(LogLevel::Info, "seed");
     auto snap = ring->snapshot(LogLevel::Debug, 100);
-    expect(snap.size() == 1 && snap[0].message == "seed",
-           "snapshot unchanged without listeners");
+    expect(snap.size() == 1 && snap[0].message == "seed", "snapshot unchanged without listeners");
 
     std::vector<std::string> got1, got2;
-    auto id1 = ring->add_listener([&](const LogRecord& e) {
-        got1.push_back(e.message);
-    });
-    auto id2 = ring->add_listener([&](const LogRecord& e) {
-        got2.push_back(e.message);
-    });
+    auto id1 = ring->add_listener([&](const LogRecord& e) { got1.push_back(e.message); });
+    auto id2 = ring->add_listener([&](const LogRecord& e) { got2.push_back(e.message); });
 
     // 未知 id 移除是无操作（不误伤已有监听器）。
     ring->remove_listener(9999);
@@ -142,8 +136,7 @@ void test_ring_listeners() {
     // 记录字段：level/timestamp/message 完整传递。
     auto got = ring->snapshot(LogLevel::Debug, 100);
     expect(got.size() >= 2, "ring retains pushed records");
-    expect(got.back().level == LogLevel::Warn && got.back().message == "live-a",
-           "record level+message preserved");
+    expect(got.back().level == LogLevel::Warn && got.back().message == "live-a", "record level+message preserved");
     expect(got.back().timestamp_ms > 0, "record timestamp populated");
 
     // 移除后不再通知。
@@ -159,7 +152,7 @@ void test_ring_listeners() {
     expect(got2.size() == 3, "listener survives clear()");
 
     ring->remove_listener(id2);
-    ring->remove_listener(id2);  // 幂等
+    ring->remove_listener(id2); // 幂等
     TEST_PASS("logger: ring buffer listeners");
 }
 
@@ -172,7 +165,8 @@ void test_concurrent_writes(Logger& logger, const fs::path& log_dir) {
                 logger.info("conc_" + std::to_string(t) + "_" + std::to_string(i));
         });
     }
-    for (auto& th : threads) th.join();
+    for (auto& th : threads)
+        th.join();
     logger.flush();
 
     auto c = read_latest(log_dir);
@@ -191,7 +185,7 @@ void test_rotation_prunes(Logger& logger, const fs::path& log_dir) {
     TEST_PASS("logger: rotation pruning");
 }
 
-}  // anonymous namespace
+} // anonymous namespace
 
 TEST_CASE("test_logger") {
     CwdGuard cwd;
@@ -207,7 +201,7 @@ TEST_CASE("test_logger") {
     }
 
     auto& logger = Logger::instance();
-    logger.set_console_enabled(false);  // keep the console mirror quiet
+    logger.set_console_enabled(false); // keep the console mirror quiet
 
     test_basic_logging(logger, cwd.dir());
     test_level_filtering(logger, cwd.dir());

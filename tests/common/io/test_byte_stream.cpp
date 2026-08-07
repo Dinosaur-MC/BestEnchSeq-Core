@@ -94,7 +94,7 @@ TEST_CASE("test_operator_shift_writer") {
     expect(data[0] == 0x78, "operator<< writer: u32 LE byte 0");
     expect(data[4] == 0xBB, "operator<< writer: u16 LE byte 0");
     expect(data[6] == 0xFF, "operator<< writer: u8");
-    expect(data[7] == 1,    "operator<< writer: bool true = 1");
+    expect(data[7] == 1, "operator<< writer: bool true = 1");
     std::cout << "  PASS: test_operator_shift_writer" << std::endl;
 }
 
@@ -189,18 +189,16 @@ TEST_CASE("test_read_bool") {
     ByteStreamReader r(buf, sizeof(buf));
     bool v1, v2, v3;
     r >> v1 >> v2 >> v3;
-    expect(v1 == true,  "read bool: 1 → true");
+    expect(v1 == true, "read bool: 1 → true");
     expect(v2 == false, "read bool: 0 → false");
-    expect(v3 == true,  "read bool: 0xFF → true (non-zero)");
+    expect(v3 == true, "read bool: 0xFF → true (non-zero)");
     expect(r.ok(), "read bool: ok after valid reads");
     std::cout << "  PASS: test_read_bool" << std::endl;
 }
 
 TEST_CASE("test_read_string") {
-    uint8_t buf[] = {
-        5, 0, 0, 0, 0, 0, 0, 0,  // size_t length prefix = 5
-        'h', 'e', 'l', 'l', 'o'
-    };
+    uint8_t buf[] = {5,   0,   0,   0,   0,  0, 0, 0, // size_t length prefix = 5
+                     'h', 'e', 'l', 'l', 'o'};
     ByteStreamReader r(buf, sizeof(buf));
     auto s = r.string();
     expect(s == "hello", "read string: content = 'hello'");
@@ -210,10 +208,10 @@ TEST_CASE("test_read_string") {
 
 TEST_CASE("test_operator_shift_reader") {
     uint8_t buf[] = {
-        0x78, 0x56, 0x34, 0x12,  // u32 = 0x12345678
-        0xBB, 0xAA,              // u16 = 0xAABB
-        0xFF,                     // u8  = 0xFF
-        1                         // bool = true
+        0x78, 0x56, 0x34, 0x12, // u32 = 0x12345678
+        0xBB, 0xAA,             // u16 = 0xAABB
+        0xFF,                   // u8  = 0xFF
+        1                       // bool = true
     };
     ByteStreamReader r(buf, sizeof(buf));
     uint32_t a;
@@ -222,24 +220,24 @@ TEST_CASE("test_operator_shift_reader") {
     bool d;
     r >> a >> b >> c >> d;
     expect(a == 0x12345678, "operator>>: u32");
-    expect(b == 0xAABB,     "operator>>: u16");
-    expect(c == 0xFF,       "operator>>: u8");
-    expect(d == true,       "operator>>: bool");
+    expect(b == 0xAABB, "operator>>: u16");
+    expect(c == 0xFF, "operator>>: u8");
+    expect(d == true, "operator>>: bool");
     expect(r.ok(), "operator>>: ok after all reads");
     std::cout << "  PASS: test_operator_shift_reader" << std::endl;
 }
 
 TEST_CASE("test_read_vector") {
     uint8_t buf[] = {
-        3, 0, 0, 0, 0, 0, 0, 0,  // count = 3
-        0x11, 0x11, 0x11, 0x11,  // elem[0] = 0x11111111
-        0x22, 0x22, 0x22, 0x22,  // elem[1] = 0x22222222
-        0x33, 0x33, 0x33, 0x33,  // elem[2] = 0x33333333
+        3,    0,    0,    0,    0, 0, 0, 0, // count = 3
+        0x11, 0x11, 0x11, 0x11,             // elem[0] = 0x11111111
+        0x22, 0x22, 0x22, 0x22,             // elem[1] = 0x22222222
+        0x33, 0x33, 0x33, 0x33,             // elem[2] = 0x33333333
     };
     ByteStreamReader r(buf, sizeof(buf));
     std::vector<uint32_t> vec;
     r >> vec;
-    expect(r.ok(),          "read vector: ok");
+    expect(r.ok(), "read vector: ok");
     expect(vec.size() == 3, "read vector: size = 3");
     expect(vec[0] == 0x11111111, "read vector: elem[0]");
     expect(vec[1] == 0x22222222, "read vector: elem[1]");
@@ -248,14 +246,12 @@ TEST_CASE("test_read_vector") {
 }
 
 TEST_CASE("test_read_blob") {
-    uint8_t buf[] = {
-        4, 0, 0, 0, 0, 0, 0, 0,  // count = 4
-        10, 20, 30, 40
-    };
+    uint8_t buf[] = {4,  0,  0,  0, 0, 0, 0, 0, // count = 4
+                     10, 20, 30, 40};
     ByteStreamReader r(buf, sizeof(buf));
     std::vector<uint8_t> blob;
     r >> blob;
-    expect(r.ok(),          "read blob: ok");
+    expect(r.ok(), "read blob: ok");
     expect(blob.size() == 4, "read blob: size = 4");
     expect(blob[0] == 10 && blob[3] == 40, "read blob: values");
     std::cout << "  PASS: test_read_blob" << std::endl;
@@ -285,7 +281,8 @@ TEST_CASE("test_has_more") {
     uint8_t buf[] = {1, 2};
     ByteStreamReader r(buf, sizeof(buf));
     expect(r.has_more() == true, "has_more: before reads");
-    r.u8(); r.u8();
+    r.u8();
+    r.u8();
     expect(r.has_more() == false, "has_more: after consuming all");
     std::cout << "  PASS: test_has_more" << std::endl;
 }
@@ -305,23 +302,27 @@ TEST_CASE("test_pos") {
 
 TEST_CASE("test_roundtrip_basic") {
     ByteStreamWriter w;
-    w << uint8_t(0x12) << uint16_t(0x3456) << uint32_t(0x789ABCDE)
-      << uint64_t(0xFEDCBA9876543210ULL) << true << false;
+    w << uint8_t(0x12) << uint16_t(0x3456) << uint32_t(0x789ABCDE) << uint64_t(0xFEDCBA9876543210ULL) << true << false;
 
     auto data = w.data();
     ByteStreamReader r(data);
 
-    uint8_t  a; uint16_t b; uint32_t c; uint64_t d; bool e; bool f;
+    uint8_t a;
+    uint16_t b;
+    uint32_t c;
+    uint64_t d;
+    bool e;
+    bool f;
     r >> a >> b >> c >> d >> e >> f;
 
-    expect(a == 0x12,                   "roundtrip: u8");
-    expect(b == 0x3456,                 "roundtrip: u16");
-    expect(c == 0x789ABCDE,             "roundtrip: u32");
-    expect(d == 0xFEDCBA9876543210ULL,  "roundtrip: u64");
-    expect(e == true,                   "roundtrip: bool true");
-    expect(f == false,                  "roundtrip: bool false");
-    expect(r.ok(),                      "roundtrip: ok");
-    expect(!r.has_more(),               "roundtrip: fully consumed");
+    expect(a == 0x12, "roundtrip: u8");
+    expect(b == 0x3456, "roundtrip: u16");
+    expect(c == 0x789ABCDE, "roundtrip: u32");
+    expect(d == 0xFEDCBA9876543210ULL, "roundtrip: u64");
+    expect(e == true, "roundtrip: bool true");
+    expect(f == false, "roundtrip: bool false");
+    expect(r.ok(), "roundtrip: ok");
+    expect(!r.has_more(), "roundtrip: fully consumed");
     std::cout << "  PASS: test_roundtrip_basic" << std::endl;
 }
 
@@ -373,22 +374,24 @@ TEST_CASE("test_roundtrip_blob") {
 
 TEST_CASE("test_roundtrip_mixed") {
     ByteStreamWriter w;
-    w << uint8_t(1) << std::string_view("mix")
-      << uint32_t(100) << true
-      << std::vector<uint8_t>{7, 8, 9};
+    w << uint8_t(1) << std::string_view("mix") << uint32_t(100) << true << std::vector<uint8_t>{7, 8, 9};
 
     ByteStreamReader r(w.data());
-    uint8_t a; std::string b; uint32_t c; bool d; std::vector<uint8_t> e;
+    uint8_t a;
+    std::string b;
+    uint32_t c;
+    bool d;
+    std::vector<uint8_t> e;
     r >> a >> b >> c >> d >> e;
 
-    expect(a == 1,           "roundtrip mixed: u8");
-    expect(b == "mix",       "roundtrip mixed: string");
-    expect(c == 100,         "roundtrip mixed: u32");
-    expect(d == true,        "roundtrip mixed: bool");
-    expect(e.size() == 3,    "roundtrip mixed: blob size");
-    expect(e[2] == 9,        "roundtrip mixed: blob[2]");
-    expect(r.ok(),           "roundtrip mixed: ok");
-    expect(!r.has_more(),    "roundtrip mixed: fully consumed");
+    expect(a == 1, "roundtrip mixed: u8");
+    expect(b == "mix", "roundtrip mixed: string");
+    expect(c == 100, "roundtrip mixed: u32");
+    expect(d == true, "roundtrip mixed: bool");
+    expect(e.size() == 3, "roundtrip mixed: blob size");
+    expect(e[2] == 9, "roundtrip mixed: blob[2]");
+    expect(r.ok(), "roundtrip mixed: ok");
+    expect(!r.has_more(), "roundtrip mixed: fully consumed");
     std::cout << "  PASS: test_roundtrip_mixed" << std::endl;
 }
 
@@ -399,9 +402,9 @@ TEST_CASE("test_roundtrip_mixed") {
 TEST_CASE("test_read_beyond_eof") {
     uint8_t buf[] = {1, 2};
     ByteStreamReader r(buf, sizeof(buf));
-    r.u32();  // need 4 bytes, only 2 available
+    r.u32(); // need 4 bytes, only 2 available
     expect(r.fail() == true, "read beyond EOF: fail set");
-    expect(r.ok() == false,  "read beyond EOF: ok false");
+    expect(r.ok() == false, "read beyond EOF: ok false");
     std::cout << "  PASS: test_read_beyond_eof" << std::endl;
 }
 
@@ -424,10 +427,8 @@ TEST_CASE("test_skip_beyond_eof") {
 
 TEST_CASE("test_string_beyond_eof") {
     // Length says 100 bytes, but buffer is shorter
-    uint8_t buf[] = {
-        100, 0, 0, 0, 0, 0, 0, 0,  // size_t length prefix = 100
-        'a', 'b', 'c'
-    };
+    uint8_t buf[] = {100, 0,   0,  0, 0, 0, 0, 0, // size_t length prefix = 100
+                     'a', 'b', 'c'};
     ByteStreamReader r(buf, sizeof(buf));
     auto s = r.string();
     expect(s.empty(), "string beyond EOF: returns empty");
@@ -438,9 +439,9 @@ TEST_CASE("test_string_beyond_eof") {
 TEST_CASE("test_empty_buffer") {
     ByteStreamReader r(nullptr, 0);
     expect(r.has_more() == false, "empty buffer: has_more false");
-    expect(r.remaining() == 0,    "empty buffer: remaining 0");
-    expect(r.u8() == 0,           "empty buffer: u8 returns 0");
-    expect(r.fail(),              "empty buffer: fail set");
+    expect(r.remaining() == 0, "empty buffer: remaining 0");
+    expect(r.u8() == 0, "empty buffer: u8 returns 0");
+    expect(r.fail(), "empty buffer: fail set");
     std::cout << "  PASS: test_empty_buffer" << std::endl;
 }
 
@@ -460,12 +461,15 @@ TEST_CASE("test_i8_i16_i32_i64") {
     w << int8_t(-1) << int16_t(-128) << int32_t(-100000) << kNeg2Pow40;
 
     ByteStreamReader r(w.data());
-    int8_t  a; int16_t b; int32_t c; int64_t d;
+    int8_t a;
+    int16_t b;
+    int32_t c;
+    int64_t d;
     r >> a >> b >> c >> d;
 
-    expect(a == -1,       "i8: -1");
-    expect(b == -128,     "i16: -128");
-    expect(c == -100000,  "i32: -100000");
+    expect(a == -1, "i8: -1");
+    expect(b == -128, "i16: -128");
+    expect(c == -100000, "i32: -100000");
     expect(d == kNeg2Pow40, "i64: -2^40");
     expect(r.ok(), "signed ints: ok");
     std::cout << "  PASS: test_i8_i16_i32_i64" << std::endl;
@@ -489,9 +493,9 @@ TEST_CASE("test_signed_convenience_wrappers") {
     w.i64(-9000000000000000000LL);
 
     ByteStreamReader r(w.data());
-    expect(r.i8()  == -1,                  "i8 wrapper");
-    expect(r.i16() == -20000,              "i16 wrapper");
-    expect(r.i32() == -2000000000,         "i32 wrapper");
+    expect(r.i8() == -1, "i8 wrapper");
+    expect(r.i16() == -20000, "i16 wrapper");
+    expect(r.i32() == -2000000000, "i32 wrapper");
     expect(r.i64() == -9000000000000000000LL, "i64 wrapper");
     expect(r.ok(), "signed wrappers: ok");
     std::cout << "  PASS: test_signed_convenience_wrappers" << std::endl;
@@ -505,13 +509,12 @@ TEST_CASE("test_u8_convenience_wrappers_writer") {
     w.u64(0xFEDCBA9876543210ULL);
 
     ByteStreamReader r(w.data());
-    expect(r.u8()  == 0x12,                   "u8 wrapper");
-    expect(r.u16() == 0x3456,                 "u16 wrapper");
-    expect(r.u32() == 0x789ABCDE,             "u32 wrapper");
-    expect(r.u64() == 0xFEDCBA9876543210ULL,  "u64 wrapper");
+    expect(r.u8() == 0x12, "u8 wrapper");
+    expect(r.u16() == 0x3456, "u16 wrapper");
+    expect(r.u32() == 0x789ABCDE, "u32 wrapper");
+    expect(r.u64() == 0xFEDCBA9876543210ULL, "u64 wrapper");
     expect(r.ok(), "unsigned wrappers: ok");
     std::cout << "  PASS: test_u8_convenience_wrappers_writer" << std::endl;
 }
 
 } // anonymous namespace
-

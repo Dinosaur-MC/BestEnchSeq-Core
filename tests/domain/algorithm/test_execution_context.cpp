@@ -1,14 +1,12 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/algorithm/ExecutionContext.h"
-#include "domain/algorithm/types/Enchantment.h"
-#include "domain/algorithm/types/Item.h"
+#include "framework/test_framework.h"
 
 using namespace algorithm;
 
+#include <atomic>
 #include <chrono>
 #include <thread>
-#include <atomic>
 
 TEST_CASE("test_cancel") {
     algorithm::ExecutionContext ctx(1, "test");
@@ -104,8 +102,8 @@ TEST_CASE("test_wait_if_paused_resume") {
 
 // ─── Mock observer + observer dispatch tests ─────────────────────────────────
 
-#include "domain/algorithm/diagnostics/IAlgorithmObserver.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/algorithm/diagnostics/IAlgorithmObserver.h"
 
 struct MockObserver : IAlgorithmObserver {
     virtual ~MockObserver() = default;
@@ -121,27 +119,36 @@ struct MockObserver : IAlgorithmObserver {
     AlgorithmOutput last_output{};
     std::optional<size_t> accept_only;
 
-    bool accept_task_id(size_t t) const override {
-        return !accept_only.has_value() || t == *accept_only;
-    }
+    bool accept_task_id(size_t t) const override { return !accept_only.has_value() || t == *accept_only; }
     void on_progress(size_t task_id, uint8_t pct, ProgressStatus) override {
-        ++progress_cnt; seen_task = task_id; last_pct = pct;
+        ++progress_cnt;
+        seen_task = task_id;
+        last_pct = pct;
     }
     void on_solution_found(size_t task_id, const std::vector<algorithm::EnchStep>&) override {
-        ++solution_cnt; seen_task = task_id;
+        ++solution_cnt;
+        seen_task = task_id;
     }
     void on_state_changed(size_t task_id, AlgorithmState p, AlgorithmState c) override {
-        ++state_cnt; seen_task = task_id; last_prev = p; last_curr = c;
+        ++state_cnt;
+        seen_task = task_id;
+        last_prev = p;
+        last_curr = c;
     }
     void on_diagnostic(size_t task_id, const DiagnosticInfo&) override {
-        ++diagnostic_cnt; seen_task = task_id;
+        ++diagnostic_cnt;
+        seen_task = task_id;
     }
     void on_completed(size_t task_id, const AlgorithmOutput& o) override {
-        ++completed_cnt; seen_task = task_id; last_output = o;
+        ++completed_cnt;
+        seen_task = task_id;
+        last_output = o;
     }
 };
 
-static void drain_events() { DiagnosticsService::instance().flush(); }
+static void drain_events() {
+    DiagnosticsService::instance().flush();
+}
 
 TEST_CASE("test_observer_progress") {
     DiagnosticsService::instance().set_persist(false);
@@ -200,9 +207,8 @@ TEST_CASE("test_observer_state_change") {
     auto obs = std::make_shared<MockObserver>();
     DiagnosticsService::instance().attach_observer(obs);
 
-    DiagnosticsService::instance().push(
-        DiagEventKind::StateChange, "test", 99,
-        DiagnosticsEvent::StatePayload{AlgorithmState::Running, AlgorithmState::Completed});
+    DiagnosticsService::instance().push(DiagEventKind::StateChange, "test", 99,
+                                        DiagnosticsEvent::StatePayload{AlgorithmState::Running, AlgorithmState::Completed});
     drain_events();
 
     expect(obs->state_cnt == 1, "on_state_changed called once");
@@ -227,17 +233,16 @@ TEST_CASE("test_observer_exit") {
     AlgorithmOutput out;
     out.algorithm_name = "test_exit";
     out.task_id = 33;
-    DiagnosticsService::instance().push(
-        DiagEventKind::Exit, "test_exit", 33,
-        DiagnosticsEvent::ExitPayload{
-            ctx.consume_exit_diagnostics(),
-            std::move(out),
-            "Complete",
-            100,
-            {"nodes_visited", 1000},
-            {"nodes_pruned",  500},
-            {"steps_forged",  200},
-        });
+    DiagnosticsService::instance().push(DiagEventKind::Exit, "test_exit", 33,
+                                        DiagnosticsEvent::ExitPayload{
+                                            ctx.consume_exit_diagnostics(),
+                                            std::move(out),
+                                            "Complete",
+                                            100,
+                                            {"nodes_visited", 1000},
+                                            {"nodes_pruned", 500},
+                                            {"steps_forged", 200},
+                                        });
     drain_events();
 
     expect(obs->diagnostic_cnt == 1, "on_diagnostic called once");
@@ -254,15 +259,13 @@ TEST_CASE("test_observer_task_id_filter") {
     obs->accept_only = 42;
     DiagnosticsService::instance().attach_observer(obs);
 
-    DiagnosticsService::instance().push(
-        DiagEventKind::StateChange, "test", 42,
-        DiagnosticsEvent::StatePayload{AlgorithmState::Idle, AlgorithmState::Running});
+    DiagnosticsService::instance().push(DiagEventKind::StateChange, "test", 42,
+                                        DiagnosticsEvent::StatePayload{AlgorithmState::Idle, AlgorithmState::Running});
     drain_events();
     expect(obs->state_cnt == 1, "accepted matching task_id");
 
-    DiagnosticsService::instance().push(
-        DiagEventKind::StateChange, "test", 99,
-        DiagnosticsEvent::StatePayload{AlgorithmState::Running, AlgorithmState::Completed});
+    DiagnosticsService::instance().push(DiagEventKind::StateChange, "test", 99,
+                                        DiagnosticsEvent::StatePayload{AlgorithmState::Running, AlgorithmState::Completed});
     drain_events();
     expect(obs->state_cnt == 1, "filtered non-matching task_id (count unchanged)");
 

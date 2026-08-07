@@ -1,8 +1,8 @@
 #define BESQ_TEST_MAIN
 
-#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "framework/test_framework.h"
 
 #include <iostream>
 
@@ -10,8 +10,7 @@ namespace {
 
 TEST_CASE("test_registry_contains_bare") {
     std::vector<EnchInfo> infos;
-    infos.push_back({NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                     std::unordered_set<NSID>{},
+    infos.push_back({NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                      std::unordered_set<NSID>{EquipmentTag::sword()}});
     EnchantmentRegistry reg(infos);
 
@@ -24,8 +23,7 @@ TEST_CASE("test_registry_contains_bare") {
 
 TEST_CASE("test_registry_contains_namespaced") {
     std::vector<EnchInfo> infos;
-    infos.push_back({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                     std::unordered_set<NSID>{},
+    infos.push_back({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                      std::unordered_set<NSID>{EquipmentTag::sword()}});
     EnchantmentRegistry reg(infos);
 

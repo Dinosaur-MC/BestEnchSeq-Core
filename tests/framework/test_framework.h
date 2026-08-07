@@ -60,7 +60,7 @@ namespace besq_test {
 struct TestCase {
     std::string name;
     std::function<void()> fn;
-    int timeout_sec = 0;  // 0 = 使用 kDefaultTimeoutSec
+    int timeout_sec = 0; // 0 = 使用 kDefaultTimeoutSec
 };
 
 inline std::vector<TestCase>& registry() {
@@ -69,9 +69,7 @@ inline std::vector<TestCase>& registry() {
 }
 
 struct Registrar {
-    Registrar(const char* name, void (*fn)(), int timeout_sec) {
-        registry().push_back(TestCase{name, fn, timeout_sec});
-    }
+    Registrar(const char* name, void (*fn)(), int timeout_sec) { registry().push_back(TestCase{name, fn, timeout_sec}); }
 };
 
 // 默认超时 30s（用户指定：当前最慢用例集为 8s+ 的 test_web_integration）。
@@ -90,14 +88,14 @@ inline int skipped_count = 0;
 namespace detail {
 inline std::string lower(std::string s) {
     for (char& c : s)
-        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+        if (c >= 'A' && c <= 'Z')
+            c = static_cast<char>(c - 'A' + 'a');
     return s;
 }
 } // namespace detail
 
 inline void print_usage(const char* prog) {
-    std::cout << "usage: " << prog
-              << " [--list] [--filter <substr>] [--repeat N] [--verbose]"
+    std::cout << "usage: " << prog << " [--list] [--filter <substr>] [--repeat N] [--verbose]"
               << " [--timeout <sec>] [--help]\n";
 }
 
@@ -105,29 +103,51 @@ inline int run_tests(int argc, char** argv) {
     std::string filter;
     bool list_only = false;
     int repeat = 1;
-    int cli_timeout = 0;  // 0 = 未指定（用 per-case / 默认）
+    int cli_timeout = 0; // 0 = 未指定（用 per-case / 默认）
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        if (a == "--help" || a == "-h") { print_usage(argv[0]); return 0; }
-        else if (a == "--list") list_only = true;
-        else if (a == "--verbose") test_verbose = true;
+        if (a == "--help" || a == "-h") {
+            print_usage(argv[0]);
+            return 0;
+        } else if (a == "--list")
+            list_only = true;
+        else if (a == "--verbose")
+            test_verbose = true;
         else if (a == "--filter") {
-            if (i + 1 < argc) filter = argv[++i];
-            else { print_usage(argv[0]); return 1; }
+            if (i + 1 < argc)
+                filter = argv[++i];
+            else {
+                print_usage(argv[0]);
+                return 1;
+            }
         } else if (a == "--repeat") {
-            if (i + 1 < argc) { repeat = std::atoi(argv[++i]); if (repeat < 1) repeat = 1; }
-            else { print_usage(argv[0]); return 1; }
+            if (i + 1 < argc) {
+                repeat = std::atoi(argv[++i]);
+                if (repeat < 1)
+                    repeat = 1;
+            } else {
+                print_usage(argv[0]);
+                return 1;
+            }
         } else if (a == "--timeout") {
-            if (i + 1 < argc) { cli_timeout = std::atoi(argv[++i]); if (cli_timeout < 1) cli_timeout = 1; }
-            else { print_usage(argv[0]); return 1; }
-        } else { print_usage(argv[0]); return 1; }
+            if (i + 1 < argc) {
+                cli_timeout = std::atoi(argv[++i]);
+                if (cli_timeout < 1)
+                    cli_timeout = 1;
+            } else {
+                print_usage(argv[0]);
+                return 1;
+            }
+        } else {
+            print_usage(argv[0]);
+            return 1;
+        }
     }
 
     if (list_only) {
         // --list 与 --filter 可组合：只列出名字含子串的 case（代码质量审查建议 3）。
         for (const auto& c : registry())
-            if (filter.empty() ||
-                detail::lower(c.name).find(detail::lower(filter)) != std::string::npos)
+            if (filter.empty() || detail::lower(c.name).find(detail::lower(filter)) != std::string::npos)
                 std::cout << c.name << "\n";
         return 0;
     }
@@ -139,9 +159,7 @@ inline int run_tests(int argc, char** argv) {
             continue;
         ++matched;
         // 有效超时：CLI > per-case > 默认（30s）。
-        const int secs = cli_timeout > 0
-            ? cli_timeout
-            : (c.timeout_sec > 0 ? c.timeout_sec : kDefaultTimeoutSec);
+        const int secs = cli_timeout > 0 ? cli_timeout : (c.timeout_sec > 0 ? c.timeout_sec : kDefaultTimeoutSec);
         for (int r = 0; r < repeat; ++r) {
             // 计数增量检测（原语义保留）：case 正常返回但 tests_failed 有增量 =
             // 内部吞掉了断言失败（RUN_TEST 模式）→ case 行如实标 FAIL，不重复计数。
@@ -186,8 +204,7 @@ inline int run_tests(int argc, char** argv) {
                     cv.notify_one();
                 });
                 std::unique_lock<std::mutex> lk(m);
-                const bool finished = cv.wait_for(lk, std::chrono::seconds(secs),
-                                                  [&] { return done; });
+                const bool finished = cv.wait_for(lk, std::chrono::seconds(secs), [&] { return done; });
                 if (finished) {
                     worker.join();
                 } else {
@@ -198,43 +215,37 @@ inline int run_tests(int argc, char** argv) {
 #else
                     pthread_cancel(worker.native_handle());
 #endif
-                    worker.join();  // 被杀后立即返回
+                    worker.join(); // 被杀后立即返回
                     ++tests_failed;
-                    std::cout << "TIMEOUT: " << c.name << ": exceeded " << secs
-                              << "s (thread killed)" << std::endl;
+                    std::cout << "TIMEOUT: " << c.name << ": exceeded " << secs << "s (thread killed)" << std::endl;
                     continue;
                 }
             }
             switch (outcome->kind) {
-                case Outcome::Kind::Skip:
-                    ++skipped_count;
-                    std::cout << "SKIP: " << c.name << ": " << outcome->message
-                              << std::endl;
-                    break;
-                case Outcome::Kind::Fail:
-                    // expect 系列失败已计入 tests_failed；这里只打印，避免重复计数。
-                    std::cout << "FAIL: " << c.name << ": " << outcome->message
-                              << std::endl;
-                    break;
-                case Outcome::Kind::StdException:
-                    ++tests_failed;
-                    std::cout << "UNEXPECTED: " << c.name << ": " << outcome->message
-                              << std::endl;
-                    break;
-                case Outcome::Kind::Unknown:
-                    ++tests_failed;
-                    std::cout << "UNEXPECTED: " << c.name << ": unknown exception"
-                              << std::endl;
-                    break;
-                case Outcome::Kind::Ok:
-                    if (tests_failed.load() > failed_before) {
-                        std::cout << "FAIL: " << c.name << ": "
-                                  << (tests_failed.load() - failed_before)
-                                  << " assertion(s) failed inside" << std::endl;
-                    } else {
-                        std::cout << "PASS: " << c.name << std::endl;
-                    }
-                    break;
+            case Outcome::Kind::Skip:
+                ++skipped_count;
+                std::cout << "SKIP: " << c.name << ": " << outcome->message << std::endl;
+                break;
+            case Outcome::Kind::Fail:
+                // expect 系列失败已计入 tests_failed；这里只打印，避免重复计数。
+                std::cout << "FAIL: " << c.name << ": " << outcome->message << std::endl;
+                break;
+            case Outcome::Kind::StdException:
+                ++tests_failed;
+                std::cout << "UNEXPECTED: " << c.name << ": " << outcome->message << std::endl;
+                break;
+            case Outcome::Kind::Unknown:
+                ++tests_failed;
+                std::cout << "UNEXPECTED: " << c.name << ": unknown exception" << std::endl;
+                break;
+            case Outcome::Kind::Ok:
+                if (tests_failed.load() > failed_before) {
+                    std::cout << "FAIL: " << c.name << ": " << (tests_failed.load() - failed_before)
+                              << " assertion(s) failed inside" << std::endl;
+                } else {
+                    std::cout << "PASS: " << c.name << std::endl;
+                }
+                break;
             }
         }
     }
@@ -244,8 +255,7 @@ inline int run_tests(int argc, char** argv) {
     if (!filter.empty() && matched == 0) {
         // 质量审查 Important #1：--filter 无匹配 = 拼写错误或粒度不匹配，
         // 静默 0 断言 + exit 0 会呈现假绿灯——警告并以 1 退出。
-        std::cout << "warning: --filter \"" << filter << "\" matched no test case"
-                  << std::endl;
+        std::cout << "warning: --filter \"" << filter << "\" matched no test case" << std::endl;
         return 1;
     }
     return rc;
@@ -256,15 +266,15 @@ inline int run_tests(int argc, char** argv) {
 #define BESQ_CAT2(a, b) a##b
 #define BESQ_CAT(a, b) BESQ_CAT2(a, b)
 
-#define TEST_CASE(name) \
-    static void BESQ_CAT(besq_case_, __LINE__)(); \
-    static const ::besq_test::Registrar BESQ_CAT(besq_reg_, __LINE__)(name, &BESQ_CAT(besq_case_, __LINE__), 0); \
+#define TEST_CASE(name)                                                                                                        \
+    static void BESQ_CAT(besq_case_, __LINE__)();                                                                              \
+    static const ::besq_test::Registrar BESQ_CAT(besq_reg_, __LINE__)(name, &BESQ_CAT(besq_case_, __LINE__), 0);               \
     static void BESQ_CAT(besq_case_, __LINE__)()
 
 // 带 per-case 超时（秒）的注册：慢用例放宽用（如 TEST_CASE_TIMEOUT("x", 120)）。
-#define TEST_CASE_TIMEOUT(name, secs) \
-    static void BESQ_CAT(besq_case_, __LINE__)(); \
-    static const ::besq_test::Registrar BESQ_CAT(besq_reg_, __LINE__)(name, &BESQ_CAT(besq_case_, __LINE__), (secs)); \
+#define TEST_CASE_TIMEOUT(name, secs)                                                                                          \
+    static void BESQ_CAT(besq_case_, __LINE__)();                                                                              \
+    static const ::besq_test::Registrar BESQ_CAT(besq_reg_, __LINE__)(name, &BESQ_CAT(besq_case_, __LINE__), (secs));          \
     static void BESQ_CAT(besq_case_, __LINE__)()
 
 #define SKIP(reason) throw ::besq_test::skip_error(reason)

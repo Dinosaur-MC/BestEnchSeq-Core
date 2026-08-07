@@ -77,9 +77,9 @@ static void test_header_too_large() {
 static void test_unterminated_header_too_large() {
     // >64KB header with NO \r\n\r\n terminator → parser must reject (431 protection)
     std::string buf(80 * 1024, 'a');
-    HttpRequest req; size_t consumed = 0;
-    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest,
-           "unterminated oversized header -> BadRequest");
+    HttpRequest req;
+    size_t consumed = 0;
+    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest, "unterminated oversized header -> BadRequest");
 }
 
 // ---------------------------------------------------------------------------
@@ -133,8 +133,7 @@ static void test_host_required() {
     size_t consumed = 0;
     expect(parse_incremental("GET /x HTTP/1.1\r\n\r\n", consumed, req) == ParseResult::BadRequest,
            "HTTP/1.1 without Host -> BadRequest");
-    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n", consumed, req) ==
-               ParseResult::BadRequest,
+    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n", consumed, req) == ParseResult::BadRequest,
            "duplicate Host -> BadRequest");
     expect(parse_incremental("GET /x HTTP/1.0\r\n\r\n", consumed, req) == ParseResult::Complete,
            "HTTP/1.0 without Host is legal");
@@ -146,10 +145,8 @@ static void test_host_required() {
 static void test_duplicate_content_length_rejected() {
     HttpRequest req;
     size_t consumed = 0;
-    std::string buf =
-        "POST /x HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nhello";
-    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest,
-           "duplicate Content-Length -> BadRequest");
+    std::string buf = "POST /x HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nhello";
+    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest, "duplicate Content-Length -> BadRequest");
 }
 
 // ---------------------------------------------------------------------------
@@ -159,8 +156,7 @@ static void test_transfer_encoding_rejected() {
     HttpRequest req;
     size_t consumed = 0;
     std::string buf = "POST /x HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n";
-    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest,
-           "Transfer-Encoding -> BadRequest");
+    expect(parse_incremental(buf, consumed, req) == ParseResult::BadRequest, "Transfer-Encoding -> BadRequest");
 }
 
 // ---------------------------------------------------------------------------
@@ -174,8 +170,7 @@ static void test_expect_continue() {
     expect(parse_incremental(pending, consumed, req) == ParseResult::Incomplete, "waiting body");
     expect(req.expect_continue, "expect_continue set on Incomplete");
     // 值大小写不敏感 + 完整请求。
-    std::string full =
-        "POST /x HTTP/1.1\r\nHost: x\r\nExpect: 100-CONTINUE\r\nContent-Length: 5\r\n\r\nhello";
+    std::string full = "POST /x HTTP/1.1\r\nHost: x\r\nExpect: 100-CONTINUE\r\nContent-Length: 5\r\n\r\nhello";
     HttpRequest req2;
     expect(parse_incremental(full, consumed, req2) == ParseResult::Complete, "full 100-continue");
     expect(req2.expect_continue, "expect_continue case-insensitive");
@@ -186,8 +181,8 @@ static void test_expect_continue() {
     expect(!req3.expect_continue, "no body -> no 100 needed");
     // 其他 Expect 值 → BadRequest。
     HttpRequest req4;
-    expect(parse_incremental("POST /x HTTP/1.1\r\nHost: x\r\nExpect: 200-ok\r\n\r\n", consumed,
-                             req4) == ParseResult::BadRequest,
+    expect(parse_incremental("POST /x HTTP/1.1\r\nHost: x\r\nExpect: 200-ok\r\n\r\n", consumed, req4) ==
+               ParseResult::BadRequest,
            "unsupported Expect -> BadRequest");
 }
 
@@ -198,19 +193,15 @@ static void test_expect_continue() {
 static void test_keep_alive_computation() {
     HttpRequest req;
     size_t consumed = 0;
-    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: x\r\n\r\n", consumed, req) ==
-               ParseResult::Complete &&
-               req.keep_alive,
+    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: x\r\n\r\n", consumed, req) == ParseResult::Complete && req.keep_alive,
            "HTTP/1.1 default keep-alive");
-    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", consumed,
-                             req) == ParseResult::Complete &&
+    expect(parse_incremental("GET /x HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", consumed, req) ==
+                   ParseResult::Complete &&
                !req.keep_alive,
            "HTTP/1.1 Connection: close");
-    expect(parse_incremental("GET /x HTTP/1.0\r\n\r\n", consumed, req) == ParseResult::Complete &&
-               !req.keep_alive,
+    expect(parse_incremental("GET /x HTTP/1.0\r\n\r\n", consumed, req) == ParseResult::Complete && !req.keep_alive,
            "HTTP/1.0 default close");
-    expect(parse_incremental("GET /x HTTP/1.0\r\nConnection: Keep-Alive\r\n\r\n", consumed, req) ==
-               ParseResult::Complete &&
+    expect(parse_incremental("GET /x HTTP/1.0\r\nConnection: Keep-Alive\r\n\r\n", consumed, req) == ParseResult::Complete &&
                req.keep_alive,
            "HTTP/1.0 Connection: keep-alive (case-insensitive)");
 }

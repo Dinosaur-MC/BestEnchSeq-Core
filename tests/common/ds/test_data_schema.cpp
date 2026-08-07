@@ -1,11 +1,11 @@
 #define BESQ_TEST_MAIN
-#include "ds/ds.h"
-#include "ds/Field.h"
+#include "common/CommonTypes.h" // NSID（引擎不依赖，测试引入以证明可接入）
 #include "ds/codec/Codecs.h"
 #include "ds/codec/Converter.h"
-#include "ds/json/JsonBinder.h"
 #include "ds/csv/CsvBinder.h"
-#include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
+#include "ds/ds.h"
+#include "ds/Field.h"
+#include "ds/json/JsonBinder.h"
 #include "framework/test_framework.h"
 #include <optional>
 #include <sstream>
@@ -34,13 +34,10 @@ TEST_CASE("test_validation_error_aggregates") {
     err.add("y", "e2");
     ds::ValidationError ve(std::move(err));
     std::string s = ve.what();
-    expect(s.find("x") != std::string::npos && s.find("e1") != std::string::npos,
-           "validation error aggregates path+message");
-    expect(s.find("y") != std::string::npos && s.find("e2") != std::string::npos,
-           "second error also aggregated");
+    expect(s.find("x") != std::string::npos && s.find("e1") != std::string::npos, "validation error aggregates path+message");
+    expect(s.find("y") != std::string::npos && s.find("e2") != std::string::npos, "second error also aggregated");
     expect(ve.errors().size() == 2, "structured errors survive move into exception");
-    expect(ve.errors().errors()[0].path == "x" && ve.errors().errors()[0].message == "e1",
-           "first error retained");
+    expect(ve.errors().errors()[0].path == "x" && ve.errors().errors()[0].message == "e1", "first error retained");
     TEST_PASS("ValidationError aggregates");
 }
 
@@ -65,8 +62,7 @@ TEST_CASE("test_field_descriptor") {
     TEST_PASS("field descriptor get/set");
 }
 TEST_CASE("test_field_emit_predicate") {
-    auto f = ds::field("level", &Demo::level, DummyCodec{},
-                       [](const Demo& o) { return o.level > 0; });
+    auto f = ds::field("level", &Demo::level, DummyCodec{}, [](const Demo& o) { return o.level > 0; });
     Demo d{"a", 0};
     expect(!f.should_emit(d), "emit false when predicate false");
     d.level = 7;
@@ -75,8 +71,7 @@ TEST_CASE("test_field_emit_predicate") {
 }
 TEST_CASE("test_field_aliases_and_required") {
     auto fa = ds::field("id", &Demo::id, DummyCodec{}, "old_id");
-    expect(fa.aliases.size() == 1 && std::string(fa.aliases[0]) == "old_id",
-           "single alias lands in aliases, not emit");
+    expect(fa.aliases.size() == 1 && std::string(fa.aliases[0]) == "old_id", "single alias lands in aliases, not emit");
     auto fb = ds::field("id", &Demo::id, DummyCodec{}, "a", "b");
     expect(fb.aliases.size() == 2 && std::string(fb.aliases[1]) == "b", "multi alias");
     auto fr = ds::required_field("id", &Demo::id, DummyCodec{});
@@ -87,98 +82,126 @@ TEST_CASE("test_field_aliases_and_required") {
 // ── 3. 基础标量 codec 往返 + 校验 ──────────────────────────────────
 TEST_CASE("test_scalar_codecs") {
     // string
-    Json j1; ds::string_codec{}.to_json(std::string("hi"), j1);
-    std::string s1; ds::ErrorList e1;
-    expect(ds::string_codec{}.from_json(j1, s1, e1, "s") && s1 == "hi",
-           "string roundtrip");
+    Json j1;
+    ds::string_codec{}.to_json(std::string("hi"), j1);
+    std::string s1;
+    ds::ErrorList e1;
+    expect(ds::string_codec{}.from_json(j1, s1, e1, "s") && s1 == "hi", "string roundtrip");
     // int
-    Json j2; ds::int_codec{}.to_json(42, j2);
-    int i2 = 0; ds::ErrorList e2;
+    Json j2;
+    ds::int_codec{}.to_json(42, j2);
+    int i2 = 0;
+    ds::ErrorList e2;
     expect(ds::int_codec{}.from_json(j2, i2, e2, "i") && i2 == 42, "int roundtrip");
     // float
-    Json j3; ds::float_codec{}.to_json(1.5f, j3);
-    float f3 = 0; ds::ErrorList e3;
+    Json j3;
+    ds::float_codec{}.to_json(1.5f, j3);
+    float f3 = 0;
+    ds::ErrorList e3;
     expect(ds::float_codec{}.from_json(j3, f3, e3, "f") && f3 == 1.5f, "float roundtrip");
     // bool
-    Json j4; ds::bool_codec{}.to_json(true, j4);
-    bool b4 = false; ds::ErrorList e4;
+    Json j4;
+    ds::bool_codec{}.to_json(true, j4);
+    bool b4 = false;
+    ds::ErrorList e4;
     expect(ds::bool_codec{}.from_json(j4, b4, e4, "b") && b4, "bool roundtrip");
     TEST_PASS("scalar codecs roundtrip");
 }
 TEST_CASE("test_int_range_validation") {
-    Json j; j = Json(int64_t{99});
-    int v = 0; ds::ErrorList e;
-    expect(!ds::int_codec{0, 10}.from_json(j, v, e, "level"),
-           "int out of range rejected");
+    Json j;
+    j = Json(int64_t{99});
+    int v = 0;
+    ds::ErrorList e;
+    expect(!ds::int_codec{0, 10}.from_json(j, v, e, "level"), "int out of range rejected");
     expect(e.size() == 1 && e.errors()[0].path == "level", "range error path");
     TEST_PASS("int range validation");
 }
 TEST_CASE("test_type_mismatch") {
-    Json j; j = Json(std::string("x"));   // string where number expected
-    int v = 0; ds::ErrorList e;
+    Json j;
+    j = Json(std::string("x")); // string where number expected
+    int v = 0;
+    ds::ErrorList e;
     expect(!ds::int_codec{}.from_json(j, v, e, "n"), "type mismatch rejected");
     TEST_PASS("type mismatch rejected");
 }
 TEST_CASE("test_scalar_csv_roundtrip") {
-    std::string c1; ds::string_codec{}.to_csv(std::string("hi"), c1);
-    std::string s1; ds::ErrorList e1;
+    std::string c1;
+    ds::string_codec{}.to_csv(std::string("hi"), c1);
+    std::string s1;
+    ds::ErrorList e1;
     expect(ds::string_codec{}.from_csv(c1, s1, e1, "s") && s1 == "hi", "string csv roundtrip");
-    std::string c2; ds::int_codec{}.to_csv(42, c2);
-    int i2 = 0; ds::ErrorList e2;
+    std::string c2;
+    ds::int_codec{}.to_csv(42, c2);
+    int i2 = 0;
+    ds::ErrorList e2;
     expect(ds::int_codec{}.from_csv(c2, i2, e2, "i") && i2 == 42, "int csv roundtrip");
-    std::string c3; ds::float_codec{}.to_csv(1.5f, c3);
-    float f3 = 0; ds::ErrorList e3;
+    std::string c3;
+    ds::float_codec{}.to_csv(1.5f, c3);
+    float f3 = 0;
+    ds::ErrorList e3;
     expect(ds::float_codec{}.from_csv(c3, f3, e3, "f") && f3 == 1.5f, "float csv roundtrip");
-    std::string c4; ds::bool_codec{}.to_csv(true, c4);
-    bool b4 = false; ds::ErrorList e4;
+    std::string c4;
+    ds::bool_codec{}.to_csv(true, c4);
+    bool b4 = false;
+    ds::ErrorList e4;
     expect(ds::bool_codec{}.from_csv(c4, b4, e4, "b") && b4, "bool csv roundtrip");
     TEST_PASS("scalar csv roundtrip");
 }
 TEST_CASE("test_csv_range_and_partial_rejected") {
-    int v = 0; ds::ErrorList e;
+    int v = 0;
+    ds::ErrorList e;
     expect(!ds::int_codec{0, 10}.from_csv("500", v, e, "lv"), "csv range rejected");
     expect(e.size() == 1, "csv range error");
-    int v2 = 0; ds::ErrorList e2;
+    int v2 = 0;
+    ds::ErrorList e2;
     expect(!ds::int_codec{}.from_csv("42abc", v2, e2, "lv"), "csv partial parse rejected");
     TEST_PASS("csv range + partial rejected");
 }
 TEST_CASE("test_int_narrow_type_guard") {
     // int32_t 目标收到超出 int32 范围的值 → 拒绝，而非静默截断（review M2）
-    Json j; j = Json(int64_t{3000000000LL});
-    int32_t v = 0; ds::ErrorList e;
+    Json j;
+    j = Json(int64_t{3000000000LL});
+    int32_t v = 0;
+    ds::ErrorList e;
     expect(!ds::int_codec{}.from_json(j, v, e, "n"), "value beyond int32 rejected");
     expect(e.size() == 1 && e.errors()[0].path == "n", "narrow error path");
     // CSV 侧同样拒绝
-    int32_t v2 = 0; ds::ErrorList e2;
+    int32_t v2 = 0;
+    ds::ErrorList e2;
     expect(!ds::int_codec{}.from_csv("3000000000", v2, e2, "n"), "csv beyond int32 rejected");
     // 正常值仍通过
-    Json j2; j2 = Json(int64_t{42});
-    int32_t ok = 0; ds::ErrorList e3;
+    Json j2;
+    j2 = Json(int64_t{42});
+    int32_t ok = 0;
+    ds::ErrorList e3;
     expect(ds::int_codec{}.from_json(j2, ok, e3, "n") && ok == 42, "in-range int32 still ok");
     TEST_PASS("int_codec narrow-type guard");
 }
 TEST_CASE("test_int_double_bounds_no_ub") {
     // 超大 double（1e300，超出 int64）→ cast 前拦截（防 [conv.fpint] UB，review M1）
     Json j = Json::parse("{\"x\": 1e300}");
-    int v = 0; ds::ErrorList e;
+    int v = 0;
+    ds::ErrorList e;
     expect(!ds::int_codec{}.from_json(j["x"], v, e, "x"), "1e300 rejected");
     expect(e.size() == 1 && e.errors()[0].path == "x", "huge double error path");
     // 2^63（> INT64_MAX）拒绝
     Json j2 = Json::parse("{\"x\": 9223372036854775808.0}");
-    int v2 = 0; ds::ErrorList e2;
+    int v2 = 0;
+    ds::ErrorList e2;
     expect(!ds::int_codec{}.from_json(j2["x"], v2, e2, "x"), "2^63 rejected");
     // -2^63 与 < 2^63 的最大可表示 double，用 int64_t 目标精确解析
     Json j3 = Json::parse("{\"x\": -9223372036854775808.0}");
-    int64_t v3 = 0; ds::ErrorList e3;
-    expect(ds::int_codec{}.from_json(j3["x"], v3, e3, "x") && v3 == INT64_MIN,
-           "-2^63 representable in int64_t");
-    Json j4 = Json::parse("{\"x\": 9223372036854774784.0}");   // 2^63 - 1024
-    int64_t v4 = 0; ds::ErrorList e4;
-    expect(ds::int_codec{}.from_json(j4["x"], v4, e4, "x") && v4 == 9223372036854774784LL,
-           "largest double < 2^63 parses");
+    int64_t v3 = 0;
+    ds::ErrorList e3;
+    expect(ds::int_codec{}.from_json(j3["x"], v3, e3, "x") && v3 == INT64_MIN, "-2^63 representable in int64_t");
+    Json j4 = Json::parse("{\"x\": 9223372036854774784.0}"); // 2^63 - 1024
+    int64_t v4 = 0;
+    ds::ErrorList e4;
+    expect(ds::int_codec{}.from_json(j4["x"], v4, e4, "x") && v4 == 9223372036854774784LL, "largest double < 2^63 parses");
     // 小数 double 仍报 expected integer
     Json j5 = Json::parse("{\"x\": 3.5}");
-    int v5 = 0; ds::ErrorList e5;
+    int v5 = 0;
+    ds::ErrorList e5;
     expect(!ds::int_codec{}.from_json(j5["x"], v5, e5, "x"), "fractional double rejected");
     TEST_PASS("int_codec double bounds no UB");
 }
@@ -198,8 +221,7 @@ TEST_CASE("test_csv_trailing_separator_no_spurious") {
     std::unordered_set<std::string> s;
     ds::ErrorList e3;
     ds::set_codec<ds::string_codec>{}.from_csv("x;y;", s, e3, "s");
-    expect(s.size() == 2 && s.count("x") == 1 && s.count("y") == 1,
-           "set trailing sep no empty element");
+    expect(s.size() == 2 && s.count("x") == 1 && s.count("y") == 1, "set trailing sep no empty element");
     TEST_PASS("csv trailing separator no spurious element");
 }
 TEST_CASE("test_float_csv_roundtrip_exact") {
@@ -211,7 +233,8 @@ TEST_CASE("test_float_csv_roundtrip_exact") {
         ds::float_codec{}.to_csv(d, c);
         double back = 0;
         ds::ErrorList e;
-        if (!ds::float_codec{}.from_csv(c, back, e, "f") || back != d) all_ok = false;
+        if (!ds::float_codec{}.from_csv(c, back, e, "f") || back != d)
+            all_ok = false;
     }
     expect(all_ok, "float csv to_chars roundtrip exact");
     TEST_PASS("float csv exact roundtrip");
@@ -226,7 +249,7 @@ struct PersonSchema {
     using Type = Person;
     static constexpr auto fields = std::tuple{
         ds::required_field("name", &Person::name, ds::string_codec{}),
-        ds::field("age",  &Person::age,  ds::int_codec{0, 150}),
+        ds::field("age", &Person::age, ds::int_codec{0, 150}),
         ds::field("active", &Person::active, ds::bool_codec{}),
     };
 };
@@ -244,22 +267,22 @@ TEST_CASE("test_json_roundtrip") {
     TEST_PASS("json roundtrip");
 }
 TEST_CASE("test_json_required_missing") {
-    Json j = Json::object().set("age", Json(int64_t{5}));   // name missing
-    Person out; ds::ErrorList e;
+    Json j = Json::object().set("age", Json(int64_t{5})); // name missing
+    Person out;
+    ds::ErrorList e;
     expect(!PersonJson::parse(j, out, e), "required missing fails");
     expect(e.size() == 1 && e.errors()[0].path == "name", "missing required path");
     TEST_PASS("json required missing");
 }
 TEST_CASE("test_json_unknown_key_tolerant_vs_strict") {
-    Json j = Json::object()
-        .set("name", Json(std::string("bob")))
-        .set("age", Json(int64_t{1}))
-        .set("extra", Json(int64_t{999}));
-    Person out; ds::ErrorList e;
+    Json j = Json::object().set("name", Json(std::string("bob"))).set("age", Json(int64_t{1})).set("extra", Json(int64_t{999}));
+    Person out;
+    ds::ErrorList e;
     expect(PersonJson::parse(j, out, e), "unknown key tolerated by default");
     expect(e.empty(), "no errors when tolerant");
     using StrictPersonJson = ds::json::Schema<PersonSchema, true>;
-    Person out2; ds::ErrorList e2;
+    Person out2;
+    ds::ErrorList e2;
     expect(!StrictPersonJson::parse(j, out2, e2), "strict rejects unknown key");
     expect(e2.size() == 1 && e2.errors()[0].path == "extra", "unknown key path");
     TEST_PASS("json unknown key tolerant/strict");
@@ -268,66 +291,88 @@ TEST_CASE("test_json_parse_or_throw") {
     Json j = Json::object().set("age", Json(int64_t{5}));
     Person out;
     bool threw = false;
-    try { PersonJson::parse_or_throw(j, out); }
-    catch (const ds::ValidationError& ve) { threw = true; expect(ve.errors().size() == 1, "aggregated"); }
+    try {
+        PersonJson::parse_or_throw(j, out);
+    } catch (const ds::ValidationError& ve) {
+        threw = true;
+        expect(ve.errors().size() == 1, "aggregated");
+    }
     expect(threw, "parse_or_throw throws on errors");
     TEST_PASS("json parse_or_throw");
 }
 TEST_CASE("test_json_collective_multi_error") {
     // name missing (required) AND age wrong type (string where int expected) AND active wrong type
-    Json j = Json::object()
-        .set("age", Json(std::string("oops")))
-        .set("active", Json(int64_t{5}));
-    Person out; ds::ErrorList e;
+    Json j = Json::object().set("age", Json(std::string("oops"))).set("active", Json(int64_t{5}));
+    Person out;
+    ds::ErrorList e;
     expect(!PersonJson::parse(j, out, e), "multi-error parse fails");
-    expect(e.size() == 3, "all three errors collected");   // name + age + active
+    expect(e.size() == 3, "all three errors collected"); // name + age + active
     bool has_name = false, has_age = false, has_active = false;
     for (const auto& fe : e.errors()) {
-        if (fe.path == "name") has_name = true;
-        if (fe.path == "age") has_age = true;
-        if (fe.path == "active") has_active = true;
+        if (fe.path == "name")
+            has_name = true;
+        if (fe.path == "age")
+            has_age = true;
+        if (fe.path == "active")
+            has_active = true;
     }
     expect(has_name && has_age && has_active, "errors carry distinct paths");
     TEST_PASS("json collective multi-error");
 }
 
 // ── 5. Converter 适配（引擎零领域依赖）────────────────────────────
-struct NSIDConverter {                      // 用户定义，测试内建
+struct NSIDConverter { // 用户定义，测试内建
     using value_type = NSID;
     static std::string to_string(const NSID& id) { return id.str(); }
     // NSID(s) 会抛异常（非法标识符）——text_codec 内部 try/catch 防御，无需在此兜底。
     static std::optional<NSID> from_string(std::string_view s) { return NSID(s); }
 };
-struct PlatformConv {                       // enum ↔ 字符串
+struct PlatformConv { // enum ↔ 字符串
     using value_type = MCE;
     static std::string to_string(MCE p) {
-        switch (p) { case MCE::Java: return "java"; case MCE::Bedrock: return "bedrock";
-                     case MCE::All: return "all"; default: return "none"; }
+        switch (p) {
+        case MCE::Java:
+            return "java";
+        case MCE::Bedrock:
+            return "bedrock";
+        case MCE::All:
+            return "all";
+        default:
+            return "none";
+        }
     }
     static std::optional<MCE> from_string(std::string_view s) {
-        if (s == "java") return MCE::Java;
-        if (s == "bedrock") return MCE::Bedrock;
-        if (s == "all") return MCE::All;
-        if (s == "none") return MCE::None;
+        if (s == "java")
+            return MCE::Java;
+        if (s == "bedrock")
+            return MCE::Bedrock;
+        if (s == "all")
+            return MCE::All;
+        if (s == "none")
+            return MCE::None;
         return std::nullopt;
     }
 };
 
 // json_codec：富类型 ↔ Json（CSV 无自然表示 → from_csv 报错、to_csv 抛异常）。
-struct Point { int x = 0; int y = 0; };
+struct Point {
+    int x = 0;
+    int y = 0;
+};
 struct PointConv {
     using value_type = Point;
-    static Json to_json(const Point& p) {
-        return Json::object().set("x", Json(int64_t{p.x})).set("y", Json(int64_t{p.y}));
-    }
+    static Json to_json(const Point& p) { return Json::object().set("x", Json(int64_t{p.x})).set("y", Json(int64_t{p.y})); }
     static bool from_json(const Json& j, Point& p) {
-        if (j.type() != JsonType::Object || !j.has("x") || !j.has("y")) return false;
+        if (j.type() != JsonType::Object || !j.has("x") || !j.has("y"))
+            return false;
         p.x = static_cast<int>(j["x"].as<int64_t>());
         p.y = static_cast<int>(j["y"].as<int64_t>());
         return true;
     }
 };
-struct Holder { Point pt; };
+struct Holder {
+    Point pt;
+};
 struct HolderSchema {
     using Type = Holder;
     static constexpr auto fields = std::tuple{
@@ -354,7 +399,8 @@ using EquipJson = ds::json::Schema<EquipSchema>;
 TEST_CASE("test_text_codec_roundtrip") {
     Equip eq{NSID("minecraft:diamond_sword"), MCE::Java, 1561};
     Json j = EquipJson::serialize(eq);
-    Equip out; ds::ErrorList e;
+    Equip out;
+    ds::ErrorList e;
     expect(EquipJson::parse(j, out, e), "equip parse ok");
     expect(out.id == eq.id, "NSID roundtrip");
     expect(out.platform == MCE::Java, "enum roundtrip via converter");
@@ -363,7 +409,8 @@ TEST_CASE("test_text_codec_roundtrip") {
 }
 TEST_CASE("test_text_codec_invalid_rejected") {
     Json j = Json::object().set("id", Json(std::string("BadID!"))).set("durability", Json(int64_t{1}));
-    Equip out; ds::ErrorList e;
+    Equip out;
+    ds::ErrorList e;
     expect(!EquipJson::parse(j, out, e), "invalid NSID rejected");
     expect(e.size() == 1 && e.errors()[0].path == "id", "NSID invalid error path");
     TEST_PASS("text_codec invalid value rejected");
@@ -371,16 +418,23 @@ TEST_CASE("test_text_codec_invalid_rejected") {
 TEST_CASE("test_json_codec") {
     Holder h{{3, 4}};
     Json j = HolderJson::serialize(h);
-    Holder out; ds::ErrorList e;
+    Holder out;
+    ds::ErrorList e;
     expect(HolderJson::parse(j, out, e), "json_codec roundtrip");
     expect(out.pt.x == 3 && out.pt.y == 4, "json_codec values");
     // from_csv rejects loudly
-    Point p; ds::ErrorList e2;
+    Point p;
+    ds::ErrorList e2;
     expect(!ds::json_codec<PointConv>{}.from_csv("3;4", p, e2, "pt"), "json_codec from_csv rejects");
     expect(e2.size() == 1, "from_csv error recorded");
     // to_csv throws
-    std::string cell; bool threw = false;
-    try { ds::json_codec<PointConv>{}.to_csv(h.pt, cell); } catch (const std::logic_error&) { threw = true; }
+    std::string cell;
+    bool threw = false;
+    try {
+        ds::json_codec<PointConv>{}.to_csv(h.pt, cell);
+    } catch (const std::logic_error&) {
+        threw = true;
+    }
     expect(threw, "json_codec to_csv throws");
     TEST_PASS("json_codec roundtrip + CSV rejection");
 }
@@ -394,8 +448,8 @@ struct Vals {
 struct ValsSchema {
     using Type = Vals;
     static constexpr auto fields = std::tuple{
-        ds::field("nums",  &Vals::nums,  ds::vector_codec<ds::int_codec>{}),
-        ds::field("tags",  &Vals::tags,  ds::set_codec<ds::string_codec>{}),
+        ds::field("nums", &Vals::nums, ds::vector_codec<ds::int_codec>{}),
+        ds::field("tags", &Vals::tags, ds::set_codec<ds::string_codec>{}),
         ds::field("maybe", &Vals::maybe, ds::optional_codec<ds::int_codec>{}),
     };
 };
@@ -404,7 +458,8 @@ using ValsJson = ds::json::Schema<ValsSchema>;
 TEST_CASE("test_vector_codec") {
     Vals v{{1, 2, 3}, {}, std::nullopt};
     Json j = ValsJson::serialize(v);
-    Vals out; ds::ErrorList e;
+    Vals out;
+    ds::ErrorList e;
     expect(ValsJson::parse(j, out, e), "vector parse ok");
     expect(out.nums.size() == 3 && out.nums[0] == 1 && out.nums[2] == 3, "vector roundtrip");
     TEST_PASS("vector codec roundtrip");
@@ -412,29 +467,31 @@ TEST_CASE("test_vector_codec") {
 TEST_CASE("test_set_codec") {
     Vals v{{}, {"b", "a", "c"}, std::nullopt};
     Json j = ValsJson::serialize(v);
-    Vals out; ds::ErrorList e;
+    Vals out;
+    ds::ErrorList e;
     expect(ValsJson::parse(j, out, e), "set parse ok");
-    expect(out.tags.count("a") && out.tags.count("b") && out.tags.count("c"),
-           "set roundtrip (order-independent)");
+    expect(out.tags.count("a") && out.tags.count("b") && out.tags.count("c"), "set roundtrip (order-independent)");
     // deterministic sorted emission
     Json j2 = ValsJson::serialize(Vals{{}, {"b", "a", "c"}, std::nullopt});
     auto tags_json = j2.has("tags") ? j2["tags"] : Json();
     expect(tags_json.type() == JsonType::Array, "tags emitted as array");
     auto tag_arr = tags_json.as<Json::Array>();
-    expect(tag_arr.size() == 3 && tag_arr[0].as<std::string>() == "a" &&
-           tag_arr[1].as<std::string>() == "b" && tag_arr[2].as<std::string>() == "c",
+    expect(tag_arr.size() == 3 && tag_arr[0].as<std::string>() == "a" && tag_arr[1].as<std::string>() == "b" &&
+               tag_arr[2].as<std::string>() == "c",
            "set emitted deterministically sorted");
     TEST_PASS("set codec roundtrip");
 }
 TEST_CASE("test_optional_codec") {
     Vals v{{}, {}, 42};
     Json j = ValsJson::serialize(v);
-    Vals out; ds::ErrorList e;
+    Vals out;
+    ds::ErrorList e;
     expect(ValsJson::parse(j, out, e), "optional parse ok");
     expect(out.maybe.has_value() && *out.maybe == 42, "optional present roundtrip");
     Vals v2{{}, {}, std::nullopt};
     Json j2 = ValsJson::serialize(v2);
-    Vals out2; ds::ErrorList e2;
+    Vals out2;
+    ds::ErrorList e2;
     expect(ValsJson::parse(j2, out2, e2), "optional absent parse ok");
     expect(!out2.maybe.has_value(), "optional absent roundtrip");
     TEST_PASS("optional codec present/absent");
@@ -449,10 +506,11 @@ struct Cond {
 struct CondSchema {
     using Type = Cond;
     static constexpr auto fields = std::tuple{
-        ds::field("limited_level", &Cond::limited_level, ds::int_codec{},
-                  [](const Cond& c) { return c.provided; }),
-        ds::field("min_cost_base", &Cond::min_cost_base, ds::int_codec{},
-                  "min_cost.base"),                    // 别名：嵌套形态
+        ds::field("limited_level", &Cond::limited_level, ds::int_codec{}, [](const Cond& c) { return c.provided; }),
+        ds::field("min_cost_base",
+                  &Cond::min_cost_base,
+                  ds::int_codec{},
+                  "min_cost.base"), // 别名：嵌套形态
     };
 };
 using CondJson = ds::json::Schema<CondSchema>;
@@ -467,9 +525,9 @@ TEST_CASE("test_conditional_emit") {
     TEST_PASS("conditional emit predicate");
 }
 TEST_CASE("test_alias_nested_form") {
-    Json j = Json::object()
-        .set("min_cost", Json::object().set("base", Json(int64_t{10})));
-    Cond out; ds::ErrorList e;
+    Json j = Json::object().set("min_cost", Json::object().set("base", Json(int64_t{10})));
+    Cond out;
+    ds::ErrorList e;
     expect(CondJson::parse(j, out, e), "nested alias parse ok");
     expect(out.min_cost_base == 10, "alias sources value from nested path");
     TEST_PASS("alias nested path (min_cost.base)");
@@ -481,9 +539,9 @@ TEST_CASE("test_csv_header_and_roundtrip") {
     expect(hdr.size() == 3 && hdr[0] == "name" && hdr[1] == "age", "header order");
     Person p{"alice", 30, true};
     auto row = PersonCsv::serialize_row(p);
-    expect(row.size() == 3 && row[0] == "alice" && row[1] == "30" && row[2] == "true",
-           "row serialized");
-    Person out; ds::ErrorList e;
+    expect(row.size() == 3 && row[0] == "alice" && row[1] == "30" && row[2] == "true", "row serialized");
+    Person out;
+    ds::ErrorList e;
     expect(PersonCsv::parse_row(hdr, row, out, e), "row parse ok");
     expect(out.name == "alice" && out.age == 30 && out.active, "csv roundtrip");
     TEST_PASS("csv header + row roundtrip");
@@ -491,10 +549,12 @@ TEST_CASE("test_csv_header_and_roundtrip") {
 TEST_CASE("test_csv_column_missing_optional") {
     // 缺 age 列（可选）→ 保持默认；缺 name 列（必填）→ 报错
     auto hdr = PersonCsv::header();
-    Person out; ds::ErrorList e;
+    Person out;
+    ds::ErrorList e;
     expect(PersonCsv::parse_row({"name"}, {"bob"}, out, e), "missing optional col tolerated");
     expect(e.empty(), "no errors");
-    Person out2; ds::ErrorList e2;
+    Person out2;
+    ds::ErrorList e2;
     expect(!PersonCsv::parse_row({"age"}, {"5"}, out2, e2), "missing required col fails");
     expect(e2.size() == 1 && e2.errors()[0].path == "name", "missing required col path");
     TEST_PASS("csv missing optional vs required column");
@@ -504,7 +564,8 @@ TEST_CASE("test_csv_set_join_and_quotes") {
     using ValsCsv = ds::csv::Schema<ValsSchema>;
     auto row = ValsCsv::serialize_row(v);
     expect(row[1] == "a;x", "set ;-joined and sorted");
-    Vals out; ds::ErrorList e;
+    Vals out;
+    ds::ErrorList e;
     expect(ValsCsv::parse_row(ValsCsv::header(), row, out, e), "set row parse ok");
     expect(out.tags.count("a") && out.tags.count("x"), "set csv roundtrip");
     // 含逗号的值 → format_row 加引号
@@ -514,7 +575,10 @@ TEST_CASE("test_csv_set_join_and_quotes") {
 }
 
 // 全文本层往返（format_row → split_line）所需：label 必填，验证空串可往返。
-struct Note { std::string label; int n = 0; };
+struct Note {
+    std::string label;
+    int n = 0;
+};
 struct NoteSchema {
     using Type = Note;
     static constexpr auto fields = std::tuple{
@@ -534,20 +598,23 @@ TEST_CASE("test_csv_full_text_roundtrip") {
     std::istringstream ss(text);
     std::string line;
     while (std::getline(ss, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
         parsed.push_back(csv::split_line(line));
     }
     expect(parsed.size() == 2, "header + one data row");
-    Person out; ds::ErrorList e;
+    Person out;
+    ds::ErrorList e;
     expect(PersonCsv::parse_row(parsed[0], parsed[1], out, e), "full text roundtrip parse");
     expect(out.name == "alice, bob" && out.age == 30 && out.active, "full text roundtrip values");
     TEST_PASS("csv full text roundtrip");
 }
 TEST_CASE("test_csv_required_empty_string_roundtrip") {
-    Note note{std::string{}, 7};   // required label is empty
+    Note note{std::string{}, 7}; // required label is empty
     auto row = NoteCsv::serialize_row(note);
     expect(row[0].empty(), "empty label cell");
-    Note out; ds::ErrorList e;
+    Note out;
+    ds::ErrorList e;
     expect(NoteCsv::parse_row(NoteCsv::header(), row, out, e), "empty required string roundtrips");
     expect(out.label.empty() && out.n == 7, "empty label + int retained");
     TEST_PASS("csv required empty-string roundtrip");
@@ -556,7 +623,10 @@ TEST_CASE("test_csv_required_empty_string_roundtrip") {
 // ── 9. 验收：min_cost 双形态 + EnchInfoLike 端到端（spec §6.5/6.6） ──
 
 // ── 9a. 双形态：嵌套 min_cost 对象 → 两个扁平字段（经别名） ────────
-struct CostHolder { int min_cost_base = 0; int min_cost_per_level = 0; };
+struct CostHolder {
+    int min_cost_base = 0;
+    int min_cost_per_level = 0;
+};
 struct CostSchema {
     using Type = CostHolder;
     static constexpr auto fields = std::tuple{
@@ -568,18 +638,16 @@ using CostJson = ds::json::Schema<CostSchema>;
 
 TEST_CASE("test_min_cost_dual_form") {
     // 嵌套形态（MC 官方）
-    Json nested = Json::object()
-        .set("min_cost", Json::object()
-            .set("base", Json(int64_t{10}))
-            .set("per_level_above_first", Json(int64_t{5})));
-    CostHolder c; ds::ErrorList e;
+    Json nested = Json::object().set(
+        "min_cost", Json::object().set("base", Json(int64_t{10})).set("per_level_above_first", Json(int64_t{5})));
+    CostHolder c;
+    ds::ErrorList e;
     expect(CostJson::parse(nested, c, e), "nested form parses");
     expect(c.min_cost_base == 10 && c.min_cost_per_level == 5, "nested values extracted");
     // 扁平形态（native）
-    Json flat = Json::object()
-        .set("min_cost_base", Json(int64_t{7}))
-        .set("min_cost_per_level", Json(int64_t{3}));
-    CostHolder c2; ds::ErrorList e2;
+    Json flat = Json::object().set("min_cost_base", Json(int64_t{7})).set("min_cost_per_level", Json(int64_t{3}));
+    CostHolder c2;
+    ds::ErrorList e2;
     expect(CostJson::parse(flat, c2, e2), "flat form parses");
     expect(c2.min_cost_base == 7 && c2.min_cost_per_level == 3, "flat values extracted");
     // 序列化 → 扁平（canonical）
@@ -613,9 +681,12 @@ struct EnchInfoLikeSchema {
         ds::field("max_level", &Type::max_level, ds::int_codec{.min = 1}),
         ds::field("multiplier", &Type::multiplier, ds::int_codec{.min = 1}),
         ds::field("is_treasure", &Type::is_treasure, ds::bool_codec{}),
-        ds::field("limited_level", &Type::limited_level, ds::int_codec{},
-                  [](const Type& t) { return t.limited_level_provided; },
-                  ds::presence_flag<&Type::limited_level_provided>{}),
+        ds::field(
+            "limited_level",
+            &Type::limited_level,
+            ds::int_codec{},
+            [](const Type& t) { return t.limited_level_provided; },
+            ds::presence_flag<&Type::limited_level_provided>{}),
         ds::field("min_cost_base", &Type::min_cost_base, ds::int_codec{}, "min_cost.base"),
         ds::field("min_cost_per_level", &Type::min_cost_per_level, ds::int_codec{}, "min_cost.per_level_above_first"),
         ds::field("exclusive_set", &Type::exclusive_set, ds::set_codec<ds::string_codec>{}),
@@ -623,14 +694,20 @@ struct EnchInfoLikeSchema {
     };
 };
 using EnchJson = ds::json::Schema<EnchInfoLikeSchema>;
-using EnchCsv  = ds::csv::Schema<EnchInfoLikeSchema>;
+using EnchCsv = ds::csv::Schema<EnchInfoLikeSchema>;
 
 EnchInfoLike make_ench() {
     EnchInfoLike e;
-    e.id = "minecraft:sharpness"; e.name = "Sharpness"; e.platform = "java";
-    e.max_level = 5; e.multiplier = 1; e.is_treasure = true;
-    e.limited_level = 5; e.limited_level_provided = true;
-    e.min_cost_base = 1; e.min_cost_per_level = 11;
+    e.id = "minecraft:sharpness";
+    e.name = "Sharpness";
+    e.platform = "java";
+    e.max_level = 5;
+    e.multiplier = 1;
+    e.is_treasure = true;
+    e.limited_level = 5;
+    e.limited_level_provided = true;
+    e.min_cost_base = 1;
+    e.min_cost_per_level = 11;
     e.exclusive_set = {"minecraft:smite"};
     e.supported_items = {"#minecraft:sword", "#minecraft:axe"};
     return e;
@@ -642,7 +719,8 @@ TEST_CASE("test_enchlike_json_roundtrip") {
     std::string s = j.to_string();
     expect(s.find("\"platform\":\"java\"") != std::string::npos, "platform key canonical");
     expect(s.find("limited_level") != std::string::npos, "conditional emitted when provided");
-    EnchInfoLike out; ds::ErrorList err;
+    EnchInfoLike out;
+    ds::ErrorList err;
     expect(EnchJson::parse(j, out, err), "ench json parse ok");
     expect(out.id == e.id && out.platform == e.platform && out.max_level == 5, "basic fields");
     expect(out.exclusive_set == e.exclusive_set, "exclusive_set roundtrip");
@@ -659,10 +737,11 @@ TEST_CASE("test_enchlike_json_roundtrip") {
 
 TEST_CASE("test_presence_flag_absent") {
     Json j = Json::object()
-        .set("id", Json(std::string("minecraft:sharpness")))
-        .set("max_level", Json(int64_t{5}))
-        .set("multiplier", Json(int64_t{1}));
-    EnchInfoLike out; ds::ErrorList err;
+                 .set("id", Json(std::string("minecraft:sharpness")))
+                 .set("max_level", Json(int64_t{5}))
+                 .set("multiplier", Json(int64_t{1}));
+    EnchInfoLike out;
+    ds::ErrorList err;
     expect(EnchJson::parse(j, out, err), "parse without limited_level ok");
     expect(!out.limited_level_provided, "presence flag false when key absent");
     TEST_PASS("presence flag false when field absent");
@@ -672,17 +751,17 @@ TEST_CASE("test_presence_flag_cleared_on_failed_parse") {
     EnchInfoLike o;
     ds::ErrorList err;
     Json okj = Json::object()
-        .set("id", Json(std::string("minecraft:sharpness")))
-        .set("max_level", Json(int64_t{5}))
-        .set("multiplier", Json(int64_t{1}))
-        .set("limited_level", Json(int64_t{5}));
+                   .set("id", Json(std::string("minecraft:sharpness")))
+                   .set("max_level", Json(int64_t{5}))
+                   .set("multiplier", Json(int64_t{1}))
+                   .set("limited_level", Json(int64_t{5}));
     expect(EnchJson::parse(okj, o, err), "valid parse");
     expect(o.limited_level_provided, "flag true after valid parse");
     Json bad = Json::object()
-        .set("id", Json(std::string("minecraft:sharpness")))
-        .set("max_level", Json(int64_t{5}))
-        .set("multiplier", Json(int64_t{1}))
-        .set("limited_level", Json(std::string("not-a-number")));  // codec fails
+                   .set("id", Json(std::string("minecraft:sharpness")))
+                   .set("max_level", Json(int64_t{5}))
+                   .set("multiplier", Json(int64_t{1}))
+                   .set("limited_level", Json(std::string("not-a-number"))); // codec fails
     ds::ErrorList err2;
     expect(!EnchJson::parse(bad, o, err2), "invalid parse fails");
     expect(!o.limited_level_provided, "stale flag cleared on codec failure");
@@ -690,11 +769,12 @@ TEST_CASE("test_presence_flag_cleared_on_failed_parse") {
 }
 TEST_CASE("test_enchlike_platform_legacy_alias") {
     Json j = Json::object()
-        .set("id", Json(std::string("minecraft:sharpness")))
-        .set("max_level", Json(int64_t{5}))
-        .set("multiplier", Json(int64_t{1}))
-        .set("supported_platform", Json(std::string("bedrock")));  // 旧键名
-    EnchInfoLike out; ds::ErrorList err;
+                 .set("id", Json(std::string("minecraft:sharpness")))
+                 .set("max_level", Json(int64_t{5}))
+                 .set("multiplier", Json(int64_t{1}))
+                 .set("supported_platform", Json(std::string("bedrock"))); // 旧键名
+    EnchInfoLike out;
+    ds::ErrorList err;
     expect(EnchJson::parse(j, out, err), "legacy supported_platform alias accepted");
     expect(out.platform == "bedrock", "legacy alias sourced");
     TEST_PASS("legacy platform alias (supported_platform)");
@@ -704,7 +784,8 @@ TEST_CASE("test_enchlike_csv_roundtrip") {
     auto hdr = EnchCsv::header();
     expect(hdr[2] == "platform", "csv header third col is platform");
     auto row = EnchCsv::serialize_row(e);
-    EnchInfoLike out; ds::ErrorList err;
+    EnchInfoLike out;
+    ds::ErrorList err;
     expect(EnchCsv::parse_row(hdr, row, out, err), "ench csv parse ok");
     expect(out.id == e.id && out.platform == "java" && out.max_level == 5, "csv basic fields");
     expect(out.supported_items == e.supported_items, "csv supported_items roundtrip");
@@ -717,9 +798,10 @@ TEST_CASE("test_enchlike_csv_roundtrip") {
 
 TEST_CASE("test_csv_presence_zero_counts_as_present") {
     EnchInfoLike e = make_ench();
-    e.limited_level_provided = false;   // limited_level stays 0
+    e.limited_level_provided = false; // limited_level stays 0
     auto row = EnchCsv::serialize_row(e);
-    EnchInfoLike out; ds::ErrorList err;
+    EnchInfoLike out;
+    ds::ErrorList err;
     expect(EnchCsv::parse_row(EnchCsv::header(), row, out, err), "csv parse ok");
     // CSV structurally cannot express "int field absent": cell "0" counts as present.
     expect(out.limited_level_provided, "csv non-empty cell counts as present (documented CSV limitation)");
@@ -728,7 +810,9 @@ TEST_CASE("test_csv_presence_zero_counts_as_present") {
 
 // ── 10. set_codec<int> 数值往返（非字符串内层，Task 6 review fold-in） ──
 // 注：schema 与类型必须在命名空间作用域——局部类不能含 static constexpr 数据成员（C++20）。
-struct IntSet { std::unordered_set<int> values; };
+struct IntSet {
+    std::unordered_set<int> values;
+};
 struct IntSetSchema {
     using Type = IntSet;
     static constexpr auto fields = std::tuple{
@@ -745,7 +829,8 @@ TEST_CASE("test_set_codec_int_roundtrip") {
     expect(arr.size() == 3, "int set size");
     expect(arr[0].as<int64_t>() == 1 && arr[1].as<int64_t>() == 3 && arr[2].as<int64_t>() == 5,
            "int set emitted sorted numeric");
-    IntSet out; ds::ErrorList e;
+    IntSet out;
+    ds::ErrorList e;
     expect(IntSetJson::parse(j, out, e), "int set parse ok");
     expect(out.values.count(1) && out.values.count(3) && out.values.count(5), "int set roundtrip");
     TEST_PASS("set_codec<int> numeric roundtrip");
@@ -754,7 +839,9 @@ TEST_CASE("test_set_codec_int_roundtrip") {
 // ── 11. Task 8 验收 review fold-ins ──────────────────────────────────────
 // 11a. set_codec<text_codec<NSIDConverter>>：真实 EnchInfo 的 exclusive_set /
 //      supported_items 是 unordered_set<NSID>，需该组合——此前从未组合往返验证。
-struct NsidSet { std::unordered_set<NSID> ids; };
+struct NsidSet {
+    std::unordered_set<NSID> ids;
+};
 struct NsidSetSchema {
     using Type = NsidSet;
     static constexpr auto fields = std::tuple{
@@ -762,19 +849,20 @@ struct NsidSetSchema {
     };
 };
 using NsidSetJson = ds::json::Schema<NsidSetSchema>;
-using NsidSetCsv  = ds::csv::Schema<NsidSetSchema>;
+using NsidSetCsv = ds::csv::Schema<NsidSetSchema>;
 
 TEST_CASE("test_nsid_set_roundtrip") {
-    NsidSet s{ {NSID("minecraft:sharpness"), NSID("minecraft:knockback")} };
+    NsidSet s{{NSID("minecraft:sharpness"), NSID("minecraft:knockback")}};
     // JSON
     Json j = NsidSetJson::serialize(s);
-    NsidSet out; ds::ErrorList e;
+    NsidSet out;
+    ds::ErrorList e;
     expect(NsidSetJson::parse(j, out, e), "nsid set json parse");
-    expect(out.ids.count(NSID("minecraft:sharpness")) && out.ids.count(NSID("minecraft:knockback")),
-           "nsid set json roundtrip");
+    expect(out.ids.count(NSID("minecraft:sharpness")) && out.ids.count(NSID("minecraft:knockback")), "nsid set json roundtrip");
     // CSV (;-joined, sorted)
     auto row = NsidSetCsv::serialize_row(s);
-    NsidSet out2; ds::ErrorList e2;
+    NsidSet out2;
+    ds::ErrorList e2;
     expect(NsidSetCsv::parse_row(NsidSetCsv::header(), row, out2, e2), "nsid set csv parse");
     expect(out2.ids.count(NSID("minecraft:knockback")) && out2.ids.count(NSID("minecraft:sharpness")),
            "nsid set csv roundtrip");
@@ -786,12 +874,14 @@ TEST_CASE("test_nsid_set_roundtrip") {
 //      本字段值，无法触达 provided）。重建需 presence_flag 机制（Task 10 已实现，
 //      见 §9b EnchInfoLikeSchema 的 limited_level 字段）。本测试固定：无 presence_flag
 //      时值往返 + 发射谓词生效。
-struct HintCarrier { int limited_level = 0; bool provided = false; };
+struct HintCarrier {
+    int limited_level = 0;
+    bool provided = false;
+};
 struct HintSchema {
     using Type = HintCarrier;
     static constexpr auto fields = std::tuple{
-        ds::field("limited_level", &HintCarrier::limited_level, ds::int_codec{},
-                  [](const Type& t) { return t.provided; }),
+        ds::field("limited_level", &HintCarrier::limited_level, ds::int_codec{}, [](const Type& t) { return t.provided; }),
     };
 };
 using HintJson = ds::json::Schema<HintSchema>;
@@ -817,7 +907,10 @@ TEST_CASE("test_custom_codec_value_roundtrip_with_conditional_emit") {
 }
 
 // ── 12. Task 10: schema 级 validate 钩子（spec §5 跨字段校验） ──────────
-struct Invariant { int max_level = 0; int multiplier = 0; };
+struct Invariant {
+    int max_level = 0;
+    int multiplier = 0;
+};
 struct InvariantSchema {
     using Type = Invariant;
     static constexpr auto fields = std::tuple{
@@ -832,14 +925,14 @@ struct InvariantSchema {
 using InvariantJson = ds::json::Schema<InvariantSchema>;
 
 TEST_CASE("test_validate_hook") {
-    Json okj = Json::object()
-        .set("max_level", Json(int64_t{5})).set("multiplier", Json(int64_t{2}));
-    Invariant ok; ds::ErrorList eok;
+    Json okj = Json::object().set("max_level", Json(int64_t{5})).set("multiplier", Json(int64_t{2}));
+    Invariant ok;
+    ds::ErrorList eok;
     expect(InvariantJson::parse(okj, ok, eok), "valid cross-field parse ok");
     expect(eok.empty(), "no errors when invariant holds");
-    Json bad = Json::object()
-        .set("max_level", Json(int64_t{1})).set("multiplier", Json(int64_t{5}));
-    Invariant bado; ds::ErrorList eb;
+    Json bad = Json::object().set("max_level", Json(int64_t{1})).set("multiplier", Json(int64_t{5}));
+    Invariant bado;
+    ds::ErrorList eb;
     expect(!InvariantJson::parse(bad, bado, eb), "invariant violation fails parse");
     expect(eb.size() == 1 && eb.errors()[0].path == "max_level", "validate error path");
     TEST_PASS("schema validate hook cross-field");
@@ -847,10 +940,10 @@ TEST_CASE("test_validate_hook") {
 
 TEST_CASE("test_validate_hook_csv") {
     using InvariantCsv = ds::csv::Schema<InvariantSchema>;
-    auto row = InvariantCsv::serialize_row(Invariant{1, 5});   // violates invariant
-    Invariant out; ds::ErrorList err;
-    expect(!InvariantCsv::parse_row(InvariantCsv::header(), row, out, err),
-           "csv validate hook catches invariant violation");
+    auto row = InvariantCsv::serialize_row(Invariant{1, 5}); // violates invariant
+    Invariant out;
+    ds::ErrorList err;
+    expect(!InvariantCsv::parse_row(InvariantCsv::header(), row, out, err), "csv validate hook catches invariant violation");
     TEST_PASS("csv schema validate hook");
 }
 
@@ -870,7 +963,7 @@ using AddrJson = ds::json::Schema<AddrSchema>;
 
 struct Employee {
     std::string name;
-    Addr home;                       // 嵌套对象字段
+    Addr home; // 嵌套对象字段
 };
 struct EmployeeSchema {
     using Type = Employee;
@@ -887,7 +980,8 @@ TEST_CASE("test_object_codec_roundtrip") {
     expect(j.has("home") && j["home"].type() == JsonType::Object, "nested field serialized as object");
     expect(j["home"]["street"].as<std::string>() == "1 Main St", "nested street serialized");
     expect(j["home"]["city"].as<std::string>() == "Springfield", "nested city serialized");
-    Employee out; ds::ErrorList err;
+    Employee out;
+    ds::ErrorList err;
     expect(EmployeeJson::parse(j, out, err), "nested object parse ok");
     expect(out.name == "alice" && out.home.street == "1 Main St" && out.home.city == "Springfield",
            "nested object roundtrip equal");
@@ -924,14 +1018,13 @@ TEST_CASE("test_object_codec_array_roundtrip") {
     Json j = CareerJson::serialize(c);
     auto arr = j["jobs"].as<Json::Array>();
     expect(arr.size() == 2, "array of objects serialized");
-    expect(arr[0]["title"].as<std::string>() == "dev" && arr[0]["years"].as<int64_t>() == 3,
-           "first element serialized");
-    expect(arr[1]["title"].as<std::string>() == "lead" && arr[1]["years"].as<int64_t>() == 5,
-           "second element serialized");
-    Career out; ds::ErrorList err;
+    expect(arr[0]["title"].as<std::string>() == "dev" && arr[0]["years"].as<int64_t>() == 3, "first element serialized");
+    expect(arr[1]["title"].as<std::string>() == "lead" && arr[1]["years"].as<int64_t>() == 5, "second element serialized");
+    Career out;
+    ds::ErrorList err;
     expect(CareerJson::parse(j, out, err), "array of objects parse ok");
-    expect(out.jobs.size() == 2 && out.jobs[0].title == "dev" && out.jobs[0].years == 3 &&
-           out.jobs[1].title == "lead" && out.jobs[1].years == 5,
+    expect(out.jobs.size() == 2 && out.jobs[0].title == "dev" && out.jobs[0].years == 3 && out.jobs[1].title == "lead" &&
+               out.jobs[1].years == 5,
            "array of objects roundtrip equal");
     TEST_PASS("vector_codec<object_codec> array roundtrip");
 }
@@ -939,26 +1032,31 @@ TEST_CASE("test_object_codec_array_roundtrip") {
 TEST_CASE("test_object_codec_required_nested_missing") {
     // 外层必填嵌套字段整体缺省 → 错误路径为外层字段名 "home"
     Json j = Json::object().set("name", Json(std::string("alice")));
-    Employee out; ds::ErrorList err;
+    Employee out;
+    ds::ErrorList err;
     expect(!EmployeeJson::parse(j, out, err), "missing required nested field fails");
     expect(err.size() == 1 && err.errors()[0].path == "home", "missing nested path is home");
     // 嵌套对象在场但内部必填子字段缺省 → 嵌套 parse 失败；内层错误路径带外层前缀
     Json j2 = Json::object()
-        .set("name", Json(std::string("alice")))
-        .set("home", Json::object().set("city", Json(std::string("Springfield"))));  // street 缺省
-    Employee out2; ds::ErrorList err2;
+                  .set("name", Json(std::string("alice")))
+                  .set("home", Json::object().set("city", Json(std::string("Springfield")))); // street 缺省
+    Employee out2;
+    ds::ErrorList err2;
     expect(!EmployeeJson::parse(j2, out2, err2), "missing inner required field fails");
     bool has_street = false;
-    for (const auto& fe : err2.errors()) if (fe.path == "home.street") has_street = true;
+    for (const auto& fe : err2.errors())
+        if (fe.path == "home.street")
+            has_street = true;
     expect(has_street, "inner required error recorded (prefixed path)");
     TEST_PASS("object_codec required nested field missing");
 }
 
 TEST_CASE("test_object_codec_wrong_type") {
     Json j = Json::object()
-        .set("name", Json(std::string("alice")))
-        .set("home", Json(std::string("not-an-object")));   // 字符串而非对象
-    Employee out; ds::ErrorList err;
+                 .set("name", Json(std::string("alice")))
+                 .set("home", Json(std::string("not-an-object"))); // 字符串而非对象
+    Employee out;
+    ds::ErrorList err;
     expect(!EmployeeJson::parse(j, out, err), "nested field with wrong type fails");
     expect(err.size() == 1 && err.errors()[0].path == "home", "wrong-type error path is home");
     expect(err.errors()[0].message.find("object") != std::string::npos, "error mentions object");
@@ -967,12 +1065,13 @@ TEST_CASE("test_object_codec_wrong_type") {
 
 TEST_CASE("test_object_codec_nested_unknown_key_tolerant") {
     Json j = Json::object()
-        .set("name", Json(std::string("alice")))
-        .set("home", Json::object()
-            .set("street", Json(std::string("1 Main St")))
-            .set("city", Json(std::string("Springfield")))
-            .set("extra", Json(int64_t{999})));    // 嵌套对象内的未知键
-    Employee out; ds::ErrorList err;
+                 .set("name", Json(std::string("alice")))
+                 .set("home", Json::object()
+                                  .set("street", Json(std::string("1 Main St")))
+                                  .set("city", Json(std::string("Springfield")))
+                                  .set("extra", Json(int64_t{999}))); // 嵌套对象内的未知键
+    Employee out;
+    ds::ErrorList err;
     expect(EmployeeJson::parse(j, out, err), "unknown key inside nested object tolerated (non-Strict)");
     expect(err.empty(), "no errors");
     TEST_PASS("object_codec nested unknown keys tolerated");
@@ -990,7 +1089,8 @@ struct NestedInvSchema {
         ds::field("hi", &NestedInv::hi, ds::int_codec{}),
     };
     static void validate(Type& o, ds::ErrorList& err) {
-        if (o.lo > o.hi) err.add("lo", "lo must be <= hi");
+        if (o.lo > o.hi)
+            err.add("lo", "lo must be <= hi");
     }
 };
 struct NestedHolder {
@@ -1008,32 +1108,38 @@ using NestedHolderJson = ds::json::Schema<NestedHolderSchema>;
 
 TEST_CASE("test_object_codec_nested_validate_hook") {
     Json okj = Json::object()
-        .set("tag", Json(std::string("x")))
-        .set("range", Json::object().set("lo", Json(int64_t{1})).set("hi", Json(int64_t{5})));
-    NestedHolder ok; ds::ErrorList eok;
+                   .set("tag", Json(std::string("x")))
+                   .set("range", Json::object().set("lo", Json(int64_t{1})).set("hi", Json(int64_t{5})));
+    NestedHolder ok;
+    ds::ErrorList eok;
     expect(NestedHolderJson::parse(okj, ok, eok), "valid nested object parse ok");
     expect(eok.empty(), "no errors when nested invariant holds");
     expect(ok.range.lo == 1 && ok.range.hi == 5, "nested values roundtrip");
     Json badj = Json::object()
-        .set("tag", Json(std::string("x")))
-        .set("range", Json::object().set("lo", Json(int64_t{9})).set("hi", Json(int64_t{2})));
-    NestedHolder bado; ds::ErrorList eb;
+                    .set("tag", Json(std::string("x")))
+                    .set("range", Json::object().set("lo", Json(int64_t{9})).set("hi", Json(int64_t{2})));
+    NestedHolder bado;
+    ds::ErrorList eb;
     expect(!NestedHolderJson::parse(badj, bado, eb), "nested validate hook fails parse");
     bool has_lo = false;
-    for (const auto& fe : eb.errors()) if (fe.path == "lo") has_lo = true;
+    for (const auto& fe : eb.errors())
+        if (fe.path == "lo")
+            has_lo = true;
     expect(has_lo, "nested validate error recorded");
     TEST_PASS("object_codec nested validate hook invoked");
 }
 
 TEST_CASE("test_object_codec_csv_rejected") {
     // CSV 无嵌套对象表示：to_csv 抛错防静默丢失（同 json_codec）；from_csv 记错拒绝。
-    expect_throws_as<std::logic_error>([&] {
-        std::string cell;
-        ds::object_codec<AddrSchema>{}.to_csv(Addr{"a", "b"}, cell);
-    }, "to_csv throws (no silent placeholder)");
-    Addr out; ds::ErrorList err;
-    expect(!ds::object_codec<AddrSchema>{}.from_csv("a;b", out, err, "home"),
-           "from_csv rejects nested object");
+    expect_throws_as<std::logic_error>(
+        [&] {
+            std::string cell;
+            ds::object_codec<AddrSchema>{}.to_csv(Addr{"a", "b"}, cell);
+        },
+        "to_csv throws (no silent placeholder)");
+    Addr out;
+    ds::ErrorList err;
+    expect(!ds::object_codec<AddrSchema>{}.from_csv("a;b", out, err, "home"), "from_csv rejects nested object");
     expect(err.size() == 1 && err.errors()[0].path == "home", "from_csv error path");
     TEST_PASS("object_codec CSV rejection");
 }
@@ -1056,14 +1162,14 @@ TEST_CASE("test_object_codec_optional_nested") {
     EmpOpt e{"bob", Addr{"2 Oak", "Metropolis"}};
     Json j = EmpOptJson::serialize(e);
     expect(j.has("home") && j["home"].type() == JsonType::Object, "optional nested serialized as object");
-    EmpOpt out; ds::ErrorList err;
-    expect(EmpOptJson::parse(j, out, err) && out.home.has_value() &&
-           out.home->street == "2 Oak", "optional nested roundtrip");
+    EmpOpt out;
+    ds::ErrorList err;
+    expect(EmpOptJson::parse(j, out, err) && out.home.has_value() && out.home->street == "2 Oak", "optional nested roundtrip");
     // 显式 null → 空 optional
     Json jn = Json::parse("{\"name\":\"bob\",\"home\":null}");
-    EmpOpt out2; ds::ErrorList err2;
-    expect(EmpOptJson::parse(jn, out2, err2) && !out2.home.has_value(),
-           "null → empty optional");
+    EmpOpt out2;
+    ds::ErrorList err2;
+    expect(EmpOptJson::parse(jn, out2, err2) && !out2.home.has_value(), "null → empty optional");
     TEST_PASS("object_codec nested in optional");
 }
 
@@ -1100,9 +1206,9 @@ using DeepOuterJson = ds::json::Schema<DeepOuterSchema>;
 TEST_CASE("test_object_codec_deep_nesting") {
     DeepOuter d{{{42}}};
     Json j = DeepOuterJson::serialize(d);
-    expect(j.has("mid") && j["mid"].has("leaf") && j["mid"]["leaf"]["v"].as<int64_t>() == 42,
-           "deep nested serialized");
-    DeepOuter out; ds::ErrorList err;
+    expect(j.has("mid") && j["mid"].has("leaf") && j["mid"]["leaf"]["v"].as<int64_t>() == 42, "deep nested serialized");
+    DeepOuter out;
+    ds::ErrorList err;
     expect(DeepOuterJson::parse(j, out, err) && out.mid.leaf.v == 42, "deep nested roundtrip");
     TEST_PASS("object_codec deep nesting");
 }
@@ -1130,11 +1236,13 @@ using GridJson = ds::json::Schema<GridSchema>;
 
 TEST_CASE("test_object_codec_array_error_path_prefix") {
     Json j = Json::parse(R"({"rows":[{"name":"a"},{}]})");
-    Grid out; ds::ErrorList err;
+    Grid out;
+    ds::ErrorList err;
     expect(!GridJson::parse(j, out, err), "element missing required fails");
     bool has_ix = false;
-    for (const auto& fe : err.errors()) if (fe.path == "rows[1].name") has_ix = true;
+    for (const auto& fe : err.errors())
+        if (fe.path == "rows[1].name")
+            has_ix = true;
     expect(has_ix, "array element error path is rows[1].name");
     TEST_PASS("object_codec array element error path prefixed");
 }
-

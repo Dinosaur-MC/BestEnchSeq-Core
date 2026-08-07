@@ -1,19 +1,31 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
+#include "common/utils/ExpCalculator.hpp"
 #include "domain/business/types/Ench.h"
 #include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
-#include "common/utils/ExpCalculator.hpp"
+#include "framework/test_framework.h"
 
 #include <string>
 
 // ─── Ench ───────────────────────────────────────────────────────────────
 
-static const NSID& SHARPNESS() { static const NSID id("minecraft:sharpness"); return id; }
-static const NSID& SMITE()     { static const NSID id("minecraft:smite");     return id; }
-static const NSID& UNBREAKING(){ static const NSID id("minecraft:unbreaking");return id; }
-static const NSID& BOOK()      { static const NSID id("minecraft:book");      return id; }
+static const NSID& SHARPNESS() {
+    static const NSID id("minecraft:sharpness");
+    return id;
+}
+static const NSID& SMITE() {
+    static const NSID id("minecraft:smite");
+    return id;
+}
+static const NSID& UNBREAKING() {
+    static const NSID id("minecraft:unbreaking");
+    return id;
+}
+static const NSID& BOOK() {
+    static const NSID id("minecraft:book");
+    return id;
+}
 
 TEST_CASE("test_ench_construct") {
     Ench e(SHARPNESS(), "Sharpness", 3);
@@ -140,8 +152,7 @@ TEST_CASE("test_solution_derived_metrics") {
 
     Solution sol = Solution::make(MCE::Java, EnchSet{}, Item{}, {}, {s1, s2});
     expect_eq(sol.total_exp_level_cost, 8, "make: total level cost = 5+3");
-    expect_eq(sol.total_exp_cost,
-              ExpCalculator::level_to_exp(5) + ExpCalculator::level_to_exp(3),
+    expect_eq(sol.total_exp_cost, ExpCalculator::level_to_exp(5) + ExpCalculator::level_to_exp(3),
               "make: total exp cost = sum of level_to_exp");
     expect_eq(sol.max_cost_step_index, 0u, "make: peak step is the cost-5 step");
     expect(sol.is_feasible(), "make: feasible with steps");
@@ -155,9 +166,9 @@ TEST_CASE("test_solution_derived_metrics") {
     expect(!not_ok.is_feasible(), "is_success=false → not feasible");
 
     Solution bad;
-    bad.is_success          = true;
-    bad.steps               = {s1};
-    bad.max_cost_step_index = 5;  // out of range
+    bad.is_success = true;
+    bad.steps = {s1};
+    bad.max_cost_step_index = 5; // out of range
     expect_eq(bad.get_peak_level_cost(), 0, "out-of-range peak index → 0");
 
     std::cout << "PASS: test_solution_derived_metrics" << std::endl;

@@ -57,8 +57,10 @@ static void test_keepalive_two_requests() {
     for (int i = 0; i < 100 && got.find("pong") == std::string::npos; ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     expect(got.find("pong") != std::string::npos, "resp 1");
     expect(got.find("Connection: close") == std::string::npos, "keep-alive (no close)");
@@ -69,8 +71,10 @@ static void test_keepalive_two_requests() {
     for (int i = 0; i < 100 && conn.alive() && got.find("pong", p1 + 1) == std::string::npos; ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     expect(got.find("pong", p1 + 1) != std::string::npos, "resp 2 on same conn");
 
@@ -104,15 +108,16 @@ static void test_split_body_post() {
 
     // 阶段 1：只发请求头（Content-Length: 5 但 body 尚未到达），并反复推进，
     // 让服务器只读到头部 → 解析必须停在 Incomplete，且不产生任何响应。
-    std::string headers =
-        "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\n";
+    std::string headers = "POST /echo HTTP/1.1\r\nHost: x\r\nContent-Length: 5\r\n\r\n";
     expect(sock_send(client, headers), "send headers only");
     std::string got;
     for (int i = 0; i < 50; ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     expect(got.empty(), "no response before body arrives");
 
@@ -121,8 +126,10 @@ static void test_split_body_post() {
     for (int i = 0; i < 200 && got.find("hello") == std::string::npos; ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     expect(got.find("hello") != std::string::npos, "response echoes split body");
     expect(conn.alive(), "conn alive after split body");
@@ -137,8 +144,8 @@ static void test_split_body_post() {
 // 的遗留字节不再被解析。
 // ---------------------------------------------------------------------------
 static void test_connection_close_semantics() {
-    for (const std::string& req : {"GET /ping HTTP/1.0\r\n\r\n",
-                                   "GET /ping HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"}) {
+    for (const std::string& req :
+         {"GET /ping HTTP/1.0\r\n\r\n", "GET /ping HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"}) {
         TcpListener l;
         expect(l.listen("127.0.0.1", 0), "listen");
         int client = sock_connect("127.0.0.1", l.bound_port());
@@ -155,8 +162,10 @@ static void test_connection_close_semantics() {
         for (int i = 0; i < 100 && conn.alive(); ++i) {
             conn.process(router);
             std::string c;
-            if (sock_recv_nb(client, c, 4096) > 0) got += c;
-            else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            if (sock_recv_nb(client, c, 4096) > 0)
+                got += c;
+            else
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         expect(got.find("pong") != std::string::npos, "request served");
         expect(got.find("Connection: close") != std::string::npos, "response says close");
@@ -189,8 +198,10 @@ static void test_bad_request_400_once_and_close() {
     for (int i = 0; i < 200 && conn.alive(); ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     size_t n400 = 0;
     size_t p = 0;
@@ -222,15 +233,16 @@ static void test_expect_100_continue() {
     Connection conn(fd, "id-100");
     StubRouter router;
 
-    std::string headers =
-        "POST /echo HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\n";
+    std::string headers = "POST /echo HTTP/1.1\r\nHost: x\r\nExpect: 100-continue\r\nContent-Length: 5\r\n\r\n";
     expect(sock_send(client, headers), "send headers with Expect");
     std::string got;
     for (int i = 0; i < 100 && got.find("100 Continue") == std::string::npos; ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     expect(got.find("HTTP/1.1 100 Continue") != std::string::npos, "100 Continue sent");
     expect(got.find("200") == std::string::npos, "no final response before body arrives");
@@ -240,8 +252,10 @@ static void test_expect_100_continue() {
     for (int i = 0; i < 200 && got.find("hello") == std::string::npos; ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     expect(got.find("hello") != std::string::npos, "echo served after 100-continue");
     size_t n100 = 0;
@@ -277,26 +291,22 @@ static void test_timeout_sweep() {
     const auto base = Clock::now();
 
     // 1) Fresh keep-alive connection with no data: idle → 30s close.
-    expect(conn.sweep_check(base + std::chrono::seconds(29)) ==
-               Connection::SweepAction::None,
-           "idle keep-alive at 29s: None");
-    expect(conn.sweep_check(base + std::chrono::seconds(31)) ==
-               Connection::SweepAction::Close,
+    expect(conn.sweep_check(base + std::chrono::seconds(29)) == Connection::SweepAction::None, "idle keep-alive at 29s: None");
+    expect(conn.sweep_check(base + std::chrono::seconds(31)) == Connection::SweepAction::Close,
            "idle keep-alive at 31s: Close (30s cap)");
 
     // 2) Partial request received then stalled: 5s slow-read cap.
-    const std::string partial = "GET /ping HT";  // 头未终结 → Incomplete
+    const std::string partial = "GET /ping HT"; // 头未终结 → Incomplete
     expect(sock_send(client, partial), "send partial request");
     for (int i = 0; i < 50; ++i) {
-        conn.process(router);  // 推进到把 partial 收进缓冲（_partial=true）
-        if (conn.wants_read()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        conn.process(router); // 推进到把 partial 收进缓冲（_partial=true）
+        if (conn.wants_read())
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     const auto after_partial = Clock::now();
-    expect(conn.sweep_check(after_partial + std::chrono::seconds(4)) ==
-               Connection::SweepAction::None,
+    expect(conn.sweep_check(after_partial + std::chrono::seconds(4)) == Connection::SweepAction::None,
            "stalled read at 4s: None");
-    expect(conn.sweep_check(after_partial + std::chrono::seconds(6)) ==
-               Connection::SweepAction::Close,
+    expect(conn.sweep_check(after_partial + std::chrono::seconds(6)) == Connection::SweepAction::Close,
            "stalled read at 6s: Close (5s cap)");
 
     // 3) Completing the request resets to keep-alive idle semantics.
@@ -306,17 +316,17 @@ static void test_timeout_sweep() {
     for (int i = 0; i < 100 && got.find("pong") == std::string::npos; ++i) {
         conn.process(router);
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     expect(got.find("pong") != std::string::npos, "completed request served");
     expect(conn.alive(), "alive after completed request");
     const auto after_complete = Clock::now();
-    expect(conn.sweep_check(after_complete + std::chrono::seconds(29)) ==
-               Connection::SweepAction::None,
+    expect(conn.sweep_check(after_complete + std::chrono::seconds(29)) == Connection::SweepAction::None,
            "completed conn at 29s: None (keep-alive)");
-    expect(conn.sweep_check(after_complete + std::chrono::seconds(31)) ==
-               Connection::SweepAction::Close,
+    expect(conn.sweep_check(after_complete + std::chrono::seconds(31)) == Connection::SweepAction::Close,
            "completed conn at 31s: Close");
 
     // 4) SSE stream mode: idle past the heartbeat interval → Heartbeat
@@ -324,11 +334,9 @@ static void test_timeout_sweep() {
     auto sse = std::make_shared<SseStream>("id-sweep");
     expect(conn.set_stream(sse), "set_stream accepted");
     const auto after_stream = Clock::now();
-    expect(conn.sweep_check(after_stream + std::chrono::seconds(14)) ==
-               Connection::SweepAction::None,
+    expect(conn.sweep_check(after_stream + std::chrono::seconds(14)) == Connection::SweepAction::None,
            "SSE idle at 14s: None (under 15s heartbeat)");
-    expect(conn.sweep_check(after_stream + std::chrono::seconds(16)) ==
-               Connection::SweepAction::Heartbeat,
+    expect(conn.sweep_check(after_stream + std::chrono::seconds(16)) == Connection::SweepAction::Heartbeat,
            "SSE idle at 16s: Heartbeat");
 
     sock_close(client);

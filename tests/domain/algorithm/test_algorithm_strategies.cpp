@@ -1,20 +1,20 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
-#include "framework/test_fixture.h"
-#include "domain/algorithm/components/SearchUtils.h"
-#include "domain/algorithm/registries/EnchReg.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/types/EquipmentTag.h"
-#include "domain/algorithm/plugin/AlgorithmLoader.h"
-#include "domain/algorithm/AlgorithmExecutor.h"
 #include "astar/AStarAlgorithm.h"
-#include "idastar/IDAStarAlgorithm.h"
-#include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
 #include "dfs/DFSAlgorithm.h"
+#include "domain/algorithm/_strategies/bb_dp/BBDpAlgorithm.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/_strategies/hamming/HammingAlgorithm.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/components/SearchUtils.h"
+#include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/resolvers/DefaultResolver.h"
 #include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/types/EquipmentTag.h"
+#include "framework/test_fixture.h"
+#include "framework/test_framework.h"
+#include "idastar/IDAStarAlgorithm.h"
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -23,45 +23,33 @@
 namespace {
 
 // ─── Namespace aliases for algorithm types ────────────────────────────
-using algorithm::DFSAlgorithm;
-using algorithm::AStarAlgorithm;
-using algorithm::HammingAlgorithm;
-using algorithm::BBDpAlgorithm;
-using algorithm::DPMergeAlgorithm;
 using algorithm::AlgorithmLoader;
+using algorithm::AStarAlgorithm;
+using algorithm::BBDpAlgorithm;
+using algorithm::DFSAlgorithm;
+using algorithm::DPMergeAlgorithm;
 using algorithm::EnchCollection;
+using algorithm::HammingAlgorithm;
 
 // ─── Setup helpers (shared across all strategy tests) ─────────────────
 
 constexpr int16_t ID_SHARPNESS = 0;
 constexpr int16_t ID_KNOCKBACK = 1;
-constexpr int16_t ID_BANE       = 2;  // bane_of_arthropods (conflicts with sharpness)
+constexpr int16_t ID_BANE = 2; // bane_of_arthropods (conflicts with sharpness)
 
 TestFixture fx_global;
 
 void setup_registries() {
     fx_global.enchants = EnchantmentRegistry({
-        {
-            NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
-            1, false,
-            // Vanilla declares sharpness ↔ bane_of_arthropods bidirectionally;
-            // the compact conflict-mask builder only sees exclusivity declared
-            // by the later-sorted enchant, so both sides must declare it.
-            std::unordered_set<NSID>{NSID("bane_of_arthropods")},
-            std::unordered_set<NSID>{EquipmentTag::sword()}
-        },
-        {
-            NSID("knockback"), "Knockback", MCE::All, 2, 2,
-            2, false,
-            std::unordered_set<NSID>{},
-            std::unordered_set<NSID>{EquipmentTag::sword()}
-        },
-        {
-            NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5,
-            1, false,
-            std::unordered_set<NSID>{NSID("sharpness")},
-            std::unordered_set<NSID>{EquipmentTag::sword()}
-        },
+        {NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
+         // Vanilla declares sharpness ↔ bane_of_arthropods bidirectionally;
+         // the compact conflict-mask builder only sees exclusivity declared
+         // by the later-sorted enchant, so both sides must declare it.
+         std::unordered_set<NSID>{NSID("bane_of_arthropods")}, std::unordered_set<NSID>{EquipmentTag::sword()}},
+        {NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false, std::unordered_set<NSID>{},
+         std::unordered_set<NSID>{EquipmentTag::sword()}},
+        {NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5, 1, false,
+         std::unordered_set<NSID>{NSID("sharpness")}, std::unordered_set<NSID>{EquipmentTag::sword()}},
     });
 }
 
@@ -70,10 +58,9 @@ struct TestContext {
     algorithm::ItemCollection items;
     algorithm::Item target_item;
 
-    explicit TestContext(const std::vector<algorithm::Item>& extra_items,
-                        const std::vector<algorithm::Ench>& wanted) {
+    explicit TestContext(const std::vector<algorithm::Item>& extra_items, const std::vector<algorithm::Ench>& wanted) {
         algorithm::Equipment eq;
-        eq.id             = "test";
+        eq.id = "test";
         eq.max_durability = 1561;
 
         // Build compact EnchReg from domain enchantment registry
@@ -82,8 +69,7 @@ struct TestContext {
         sorted_enchs.reserve(fx_global.enchants.size());
         for (const auto& [nsid, info] : fx_global.enchants.data())
             sorted_enchs.emplace_back(nsid.str(), info);
-        std::sort(sorted_enchs.begin(), sorted_enchs.end(),
-                  [](const auto& a, const auto& b) { return a.first < b.first; });
+        std::sort(sorted_enchs.begin(), sorted_enchs.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<NSID> global_ids;
@@ -135,7 +121,8 @@ struct TestContext {
 
 algorithm::Item book(int16_t id, int16_t level) {
     algorithm::Item b{algorithm::ItemType::Book, 0, 0, {}};
-    b.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(id), static_cast<algorithm::Ench::value_type>(level)});
+    b.enchs.insert(
+        algorithm::Ench{static_cast<algorithm::Ench::value_type>(id), static_cast<algorithm::Ench::value_type>(level)});
     return b;
 }
 
@@ -149,7 +136,7 @@ int32_t run_strategy(std::unique_ptr<algorithm::IAlgorithm> algo,
     algorithm::AlgorithmInput input;
     input.config.forge.platform = MCE::Java;
     input.registry = ctx.ench_reg;
-    input.target   = ctx.target_item;
+    input.target = ctx.target_item;
     input.config.mode = AlgorithmMode::direct;
     // Direct mode: the resolver builds the base equipment from target + this
     // source and generates the needed books.
@@ -172,17 +159,18 @@ int32_t run_strategy(std::unique_ptr<algorithm::IAlgorithm> algo,
 
 /// Like run_strategy, but lets a test tweak the AlgorithmConfig first.
 int32_t run_strategy_cfg(std::unique_ptr<algorithm::IAlgorithm> algo,
-                         const TestContext &ctx,
-                         const std::function<void(algorithm::AlgorithmConfig &)> &cfg_fn,
-                         const algorithm::EnchCollection &source = {}) {
+                         const TestContext& ctx,
+                         const std::function<void(algorithm::AlgorithmConfig&)>& cfg_fn,
+                         const algorithm::EnchCollection& source = {}) {
     algorithm::AlgorithmExecutor executor(std::move(algo));
 
     algorithm::AlgorithmInput input;
     input.config.forge.platform = MCE::Java;
     input.registry = ctx.ench_reg;
-    input.target   = ctx.target_item;
+    input.target = ctx.target_item;
     input.config.mode = AlgorithmMode::direct;
-    if (cfg_fn) cfg_fn(input.config);
+    if (cfg_fn)
+        cfg_fn(input.config);
     input.data = algorithm::DirectPayload{source};
 
     executor.start(std::move(input));
@@ -206,14 +194,21 @@ int32_t run_strategy_cfg(std::unique_ptr<algorithm::IAlgorithm> algo,
 // Test runner (catches exceptions so one failure doesn't crash everything)
 // ========================================================================
 
-#define RUN_TEST(name) do { \
-    try { name(); } catch (const test_error& e) { \
-        /* expect() already counted; print so failures stay visible (质量审查 Important #1) */ \
-        std::cout << "  FAIL: " << e.what() << std::endl; \
-    } \
-    catch (const std::exception& e) { std::cerr << "UNEXPECTED: " << e.what() << std::endl; tests_failed++; } \
-    catch (...) { std::cerr << "UNEXPECTED: unknown exception" << std::endl; tests_failed++; } \
-} while(0)
+#define RUN_TEST(name)                                                                                                         \
+    do {                                                                                                                       \
+        try {                                                                                                                  \
+            name();                                                                                                            \
+        } catch (const test_error& e) {                                                                                        \
+            /* expect() already counted; print so failures stay visible (质量审查 Important #1) */                             \
+            std::cout << "  FAIL: " << e.what() << std::endl;                                                                  \
+        } catch (const std::exception& e) {                                                                                    \
+            std::cerr << "UNEXPECTED: " << e.what() << std::endl;                                                              \
+            tests_failed++;                                                                                                    \
+        } catch (...) {                                                                                                        \
+            std::cerr << "UNEXPECTED: unknown exception" << std::endl;                                                         \
+            tests_failed++;                                                                                                    \
+        }                                                                                                                      \
+    } while (0)
 
 // ========================================================================
 // DFSAlgorithm tests
@@ -227,9 +222,7 @@ void test_dfs_simple() {
 }
 
 void test_dfs_two_books() {
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)},
-        {{ID_SHARPNESS, 4}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)}, {{ID_SHARPNESS, 4}});
     auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx);
     expect(cost > 0, "dfs: two books should produce positive cost");
     std::cout << "PASS: test_dfs_two_books (cost=" << cost << ")" << std::endl;
@@ -288,9 +281,7 @@ void test_hamming_simple() {
 }
 
 void test_hamming_two_books() {
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)},
-        {{ID_SHARPNESS, 4}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)}, {{ID_SHARPNESS, 4}});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
     expect(cost > 0, "hamming: two books should produce positive cost");
     std::cout << "PASS: test_hamming_two_books (cost=" << cost << ")" << std::endl;
@@ -345,9 +336,7 @@ void test_bbdp_simple() {
 }
 
 void test_bbdp_two_books() {
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)},
-        {{ID_SHARPNESS, 4}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)}, {{ID_SHARPNESS, 4}});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
     expect(cost > 0, "bb_dp: two books should produce positive cost");
     std::cout << "PASS: test_bbdp_two_books (cost=" << cost << ")" << std::endl;
@@ -385,24 +374,18 @@ void test_bbdp_pre_enchanted_equip() {
 
 void test_bbdp_matches_astar() {
     // Two distinct books: both exact solvers must agree on the optimal cost.
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
-        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
     auto astar_cost = run_strategy(std::make_unique<AStarAlgorithm>(), ctx);
-    auto bbdp_cost  = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
-    expect(astar_cost > 0 && bbdp_cost == astar_cost,
-           "bb_dp: optimal cost should match astar");
-    std::cout << "PASS: test_bbdp_matches_astar (cost=" << bbdp_cost
-              << ", astar=" << astar_cost << ")" << std::endl;
+    auto bbdp_cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
+    expect(astar_cost > 0 && bbdp_cost == astar_cost, "bb_dp: optimal cost should match astar");
+    std::cout << "PASS: test_bbdp_matches_astar (cost=" << bbdp_cost << ", astar=" << astar_cost << ")" << std::endl;
 }
 
 void test_bbdp_max_step_cost() {
     // Default (max_step_cost=39): the solver must still produce a valid
     // result — the feasible optimum if one exists, else the relaxed optimum
     // via the Pass B fallback.
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
-        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
     expect(cost > 0, "bb_dp: default max_step_cost should still solve");
     std::cout << "PASS: test_bbdp_max_step_cost (cost=" << cost << ")" << std::endl;
@@ -410,11 +393,9 @@ void test_bbdp_max_step_cost() {
 
 void test_bbdp_max_step_cost_disabled() {
     // max_step_cost=0 → pure total-cost optimization, no feasibility preference.
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
-        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
     auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
-        [](algorithm::AlgorithmConfig &c) { c.search.max_step_cost = 0; });
+                                 [](algorithm::AlgorithmConfig& c) { c.search.max_step_cost = 0; });
     expect(cost > 0, "bb_dp: max_step_cost=0 should still solve");
     std::cout << "PASS: test_bbdp_max_step_cost_disabled (cost=" << cost << ")" << std::endl;
 }
@@ -422,11 +403,9 @@ void test_bbdp_max_step_cost_disabled() {
 void test_bbdp_beam_width() {
     // Beam-width 4 keeps only the 4 cheapest frontier entries per subset.
     // Result may be sub-optimal but must still meet the target.
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
-        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
     auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
-        [](algorithm::AlgorithmConfig &c) { c.search.beam_width = 4; });
+                                 [](algorithm::AlgorithmConfig& c) { c.search.beam_width = 4; });
     expect(cost > 0, "bb_dp: beam_width=4 should produce a valid solution");
     std::cout << "PASS: test_bbdp_beam_width (cost=" << cost << ")" << std::endl;
 }
@@ -435,11 +414,9 @@ void test_bbdp_cap_infeasible_fallback() {
     // max_step_cost=1 is stricter than any real step (a sharpness V book costs 5),
     // so no fully ≤cap solution exists.  The solver must fall back to the
     // unconstrained optimum instead of reporting "no solution" (cap is SOFT).
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
-        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
     auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
-        [](algorithm::AlgorithmConfig &c) { c.search.max_step_cost = 1; });
+                                 [](algorithm::AlgorithmConfig& c) { c.search.max_step_cost = 1; });
     expect(cost > 0, "bb_dp: infeasible cap should fall back to the optimum");
     std::cout << "PASS: test_bbdp_cap_infeasible_fallback (cost=" << cost << ")" << std::endl;
 }
@@ -448,26 +425,22 @@ void test_bbdp_final_item_meets_target() {
     // A multi-book solution (equipment + 2 distinct books) must replay through
     // IAlgorithm::process() to a final_item that meets the target — guards the
     // balanced-tree replay path used for AlgorithmOutput::final_item.
-    auto ctx = TestContext(
-        {book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)},
-        {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
+    auto ctx = TestContext({book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
     algorithm::AlgorithmExecutor executor(std::make_unique<BBDpAlgorithm>());
     algorithm::AlgorithmInput input;
     input.config.forge.platform = MCE::Java;
     input.registry = ctx.ench_reg;
-    input.target   = ctx.target_item;
+    input.target = ctx.target_item;
     input.config.mode = AlgorithmMode::direct;
     input.data = algorithm::DirectPayload{};
     executor.start(std::move(input));
     auto state = executor.wait();
     auto out = executor.output();
-    const bool meets = state == algorithm::AlgorithmState::Completed
-        && !out.solutions.empty()
-        && meets_target(out.final_item, ctx.target_item);
+    const bool meets = state == algorithm::AlgorithmState::Completed && !out.solutions.empty() &&
+                       meets_target(out.final_item, ctx.target_item);
     expect(meets, "bb_dp: final_item should meet the target");
-    std::cout << "PASS: test_bbdp_final_item_meets_target (cost="
-              << (out.solutions.empty() ? -1 : out.solutions[0].total_cost) << ")"
-              << std::endl;
+    std::cout << "PASS: test_bbdp_final_item_meets_target (cost=" << (out.solutions.empty() ? -1 : out.solutions[0].total_cost)
+              << ")" << std::endl;
 }
 
 // ─── Book target: an enchanted_book accepts any enchantment; with an empty
@@ -481,7 +454,7 @@ void test_bbdp_book_target() {
     algorithm::AlgorithmInput input;
     input.config.forge.platform = MCE::Java;
     input.registry = ctx.ench_reg;
-    input.target   = algorithm::Item{algorithm::ItemType::Book, 0, 0, {}};
+    input.target = algorithm::Item{algorithm::ItemType::Book, 0, 0, {}};
     input.target.enchs.insert(algorithm::Ench{ID_SHARPNESS, 5});
     input.target.enchs.insert(algorithm::Ench{ID_KNOCKBACK, 2});
     input.config.mode = AlgorithmMode::direct;
@@ -490,19 +463,14 @@ void test_bbdp_book_target() {
     executor.start(std::move(input));
     auto state = executor.wait();
     auto out = executor.output();
-    expect(state == algorithm::AlgorithmState::Completed,
-           "book target solve completed");
+    expect(state == algorithm::AlgorithmState::Completed, "book target solve completed");
     expect(!out.solutions.empty(), "book target produced a solution");
     if (!out.solutions.empty()) {
-        expect(out.solutions[0].total_cost == 2,
-               "book merge cost should be 2 (knockback onto sharpness)");
-        expect(out.final_item.type == algorithm::ItemType::Book,
-               "final item is a book");
-        expect(meets_target(out.final_item, target_copy),
-               "final book meets the book target");
+        expect(out.solutions[0].total_cost == 2, "book merge cost should be 2 (knockback onto sharpness)");
+        expect(out.final_item.type == algorithm::ItemType::Book, "final item is a book");
+        expect(meets_target(out.final_item, target_copy), "final book meets the book target");
     }
-    std::cout << "PASS: test_bbdp_book_target (cost="
-              << (out.solutions.empty() ? -1 : out.solutions[0].total_cost) << ")"
+    std::cout << "PASS: test_bbdp_book_target (cost=" << (out.solutions.empty() ? -1 : out.solutions[0].total_cost) << ")"
               << std::endl;
 }
 
@@ -541,20 +509,15 @@ void test_simulate_direct_already_met() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
     algorithm::AlgorithmInput input;
     input.config.mode = AlgorithmMode::direct;
-    input.registry    = ctx.ench_reg;
-    input.target      = ctx.target_item;
-    input.data        = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 5}}};
+    input.registry = ctx.ench_reg;
+    input.target = ctx.target_item;
+    input.data = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 5}}};
 
-    expect(DFSAlgorithm{}.simulate(input),
-           "simulate: source == target direct should be reachable (dfs)");
-    expect(AStarAlgorithm{}.simulate(input),
-           "simulate: source == target direct should be reachable (astar)");
-    expect(HammingAlgorithm{}.simulate(input),
-           "simulate: source == target direct should be reachable (hamming)");
-    expect(BBDpAlgorithm{}.simulate(input),
-           "simulate: source == target direct should be reachable (bb_dp)");
-    expect(DPMergeAlgorithm{}.simulate(input),
-           "simulate: source == target direct should be reachable (dp_merge)");
+    expect(DFSAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (dfs)");
+    expect(AStarAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (astar)");
+    expect(HammingAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (hamming)");
+    expect(BBDpAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (bb_dp)");
+    expect(DPMergeAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (dp_merge)");
     std::cout << "PASS: test_simulate_direct_already_met" << std::endl;
 }
 
@@ -563,12 +526,11 @@ void test_simulate_direct_source_exceeds() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 3}});
     algorithm::AlgorithmInput input;
     input.config.mode = AlgorithmMode::direct;
-    input.registry    = ctx.ench_reg;
-    input.target      = ctx.target_item;
-    input.data        = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 5}}};
+    input.registry = ctx.ench_reg;
+    input.target = ctx.target_item;
+    input.data = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 5}}};
 
-    expect(DFSAlgorithm{}.simulate(input),
-           "simulate: source level > target level should be reachable");
+    expect(DFSAlgorithm{}.simulate(input), "simulate: source level > target level should be reachable");
     std::cout << "PASS: test_simulate_direct_source_exceeds" << std::endl;
 }
 
@@ -577,12 +539,11 @@ void test_simulate_direct_below_target() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
     algorithm::AlgorithmInput input;
     input.config.mode = AlgorithmMode::direct;
-    input.registry    = ctx.ench_reg;
-    input.target      = ctx.target_item;
-    input.data        = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 2}}};
+    input.registry = ctx.ench_reg;
+    input.target = ctx.target_item;
+    input.data = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 2}}};
 
-    expect(DFSAlgorithm{}.simulate(input),
-           "simulate: source below target should be reachable");
+    expect(DFSAlgorithm{}.simulate(input), "simulate: source below target should be reachable");
     std::cout << "PASS: test_simulate_direct_below_target" << std::endl;
 }
 
@@ -591,12 +552,11 @@ void test_simulate_inventory_empty_pool() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
     algorithm::AlgorithmInput input;
     input.config.mode = AlgorithmMode::inventory;
-    input.registry    = ctx.ench_reg;
-    input.target      = ctx.target_item;
-    input.data        = algorithm::InventoryPayload{algorithm::ItemCollection{}, {}};
+    input.registry = ctx.ench_reg;
+    input.target = ctx.target_item;
+    input.data = algorithm::InventoryPayload{algorithm::ItemCollection{}, {}};
 
-    expect(!DFSAlgorithm{}.simulate(input),
-           "simulate: empty inventory pool should be unreachable");
+    expect(!DFSAlgorithm{}.simulate(input), "simulate: empty inventory pool should be unreachable");
     std::cout << "PASS: test_simulate_inventory_empty_pool" << std::endl;
 }
 
@@ -605,13 +565,12 @@ void test_simulate_inventory_equip_no_book() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
     algorithm::AlgorithmInput input;
     input.config.mode = AlgorithmMode::inventory;
-    input.registry    = ctx.ench_reg;
-    input.target      = ctx.target_item;
+    input.registry = ctx.ench_reg;
+    input.target = ctx.target_item;
     algorithm::Item empty_book{algorithm::ItemType::Book, 0, 0, {}};
     input.data = algorithm::InventoryPayload{algorithm::ItemCollection{empty_book}, {0}};
 
-    expect(!DFSAlgorithm{}.simulate(input),
-           "simulate: equipment target without a non-empty book should be unreachable");
+    expect(!DFSAlgorithm{}.simulate(input), "simulate: equipment target without a non-empty book should be unreachable");
     std::cout << "PASS: test_simulate_inventory_equip_no_book" << std::endl;
 }
 
@@ -620,14 +579,13 @@ void test_simulate_inventory_with_book() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
     algorithm::AlgorithmInput input;
     input.config.mode = AlgorithmMode::inventory;
-    input.registry    = ctx.ench_reg;
-    input.target      = ctx.target_item;
+    input.registry = ctx.ench_reg;
+    input.target = ctx.target_item;
     algorithm::Item book_item{algorithm::ItemType::Book, 0, 0, {}};
     book_item.enchs.insert(algorithm::Ench{ID_SHARPNESS, 5});
     input.data = algorithm::InventoryPayload{algorithm::ItemCollection{book_item}, {0}};
 
-    expect(DFSAlgorithm{}.simulate(input),
-           "simulate: inventory with a non-empty book should be reachable");
+    expect(DFSAlgorithm{}.simulate(input), "simulate: inventory with a non-empty book should be reachable");
     std::cout << "PASS: test_simulate_inventory_with_book" << std::endl;
 }
 
@@ -641,37 +599,41 @@ void test_simulate_inventory_with_book() {
 // fixture's sharpness/knockback/bane registry.
 enum ResolverEnch : uint8_t {
     RE_UNBREAKING = 0,
-    RE_MENDING    = 1,
-    RE_SHARPNESS  = 2,
-    RE_THORNS     = 3,
-    RE_SMITE      = 4,
+    RE_MENDING = 1,
+    RE_SHARPNESS = 2,
+    RE_THORNS = 3,
+    RE_SMITE = 4,
 };
 
 algorithm::EnchReg make_resolver_registry() {
     std::vector<algorithm::EnchInfo> infos(5);
     for (uint8_t i = 0; i < infos.size(); ++i) {
-        infos[i].id          = i;
-        infos[i].mul         = 1;
-        infos[i].mul_b       = 1;
-        infos[i].max_lvl     = 3;
-        infos[i].applicable  = true;
+        infos[i].id = i;
+        infos[i].mul = 1;
+        infos[i].mul_b = 1;
+        infos[i].max_lvl = 3;
+        infos[i].applicable = true;
     }
-    infos[RE_UNBREAKING].mul_b = 1; infos[RE_UNBREAKING].max_lvl = 3;
-    infos[RE_MENDING].mul_b    = 2; infos[RE_MENDING].max_lvl    = 1;
-    infos[RE_SHARPNESS].mul_b  = 1; infos[RE_SHARPNESS].max_lvl  = 5;
-    infos[RE_THORNS].mul_b     = 1; infos[RE_THORNS].max_lvl     = 3;
-    infos[RE_SMITE].mul_b      = 1; infos[RE_SMITE].max_lvl      = 5;
+    infos[RE_UNBREAKING].mul_b = 1;
+    infos[RE_UNBREAKING].max_lvl = 3;
+    infos[RE_MENDING].mul_b = 2;
+    infos[RE_MENDING].max_lvl = 1;
+    infos[RE_SHARPNESS].mul_b = 1;
+    infos[RE_SHARPNESS].max_lvl = 5;
+    infos[RE_THORNS].mul_b = 1;
+    infos[RE_THORNS].max_lvl = 3;
+    infos[RE_SMITE].mul_b = 1;
+    infos[RE_SMITE].max_lvl = 5;
     // sharpness ↔ smite mutually exclusive.  The compact conflict-matrix builder
     // ORs both directions (EnchReg::_build_mask_cache), so declare on both sides
     // so is_conflict(sharpness, smite) is symmetric.
     infos[RE_SHARPNESS].exc_mask |= (algorithm::mask_type{1} << RE_SMITE);
-    infos[RE_SMITE].exc_mask     |= (algorithm::mask_type{1} << RE_SHARPNESS);
+    infos[RE_SMITE].exc_mask |= (algorithm::mask_type{1} << RE_SHARPNESS);
 
-    std::vector<NSID> gids = {NSID("unbreaking"), NSID("mending"),
-                              NSID("sharpness"), NSID("thorns"), NSID("smite")};
+    std::vector<NSID> gids = {NSID("unbreaking"), NSID("mending"), NSID("sharpness"), NSID("thorns"), NSID("smite")};
     algorithm::Equipment eq;
     eq.id = "test";
-    eq.max_durability   = 1561;
+    eq.max_durability = 1561;
     eq.applicable_enchs = {RE_UNBREAKING, RE_MENDING, RE_SHARPNESS, RE_THORNS, RE_SMITE};
 
     algorithm::EnchReg reg;
@@ -694,40 +656,38 @@ algorithm::Item re_equip_with(uint8_t id, uint8_t lvl, uint8_t ppn = 0) {
 }
 
 /// Run the DefaultResolver inventory pass on a compact input built from \p pool.
-algorithm::ResolverOutput run_resolver(algorithm::EnchReg &reg,
-                                       const algorithm::Item &target,
-                                       std::vector<algorithm::Item> pool) {
+algorithm::ResolverOutput
+run_resolver(algorithm::EnchReg& reg, const algorithm::Item& target, std::vector<algorithm::Item> pool) {
     algorithm::AlgorithmInput input;
     input.config.mode = AlgorithmMode::inventory;
-    input.registry    = reg;
-    input.target      = target;
-    input.data        = algorithm::InventoryPayload{std::move(pool), {}};
+    input.registry = reg;
+    input.target = target;
+    input.data = algorithm::InventoryPayload{std::move(pool), {}};
     return algorithm::DefaultResolver{}.resolve(input);
 }
 
-bool has_book_with(const algorithm::ResolverOutput &out, uint8_t id, uint8_t lvl) {
-    for (const auto &it : out)
-        if (it.type == algorithm::ItemType::Book && it.enchs.contains(id) &&
-            it.enchs[id] == lvl)
+bool has_book_with(const algorithm::ResolverOutput& out, uint8_t id, uint8_t lvl) {
+    for (const auto& it : out)
+        if (it.type == algorithm::ItemType::Book && it.enchs.contains(id) && it.enchs[id] == lvl)
             return true;
     return false;
 }
-bool has_book_ppn(const algorithm::ResolverOutput &out, uint8_t ppn) {
-    for (const auto &it : out)
+bool has_book_ppn(const algorithm::ResolverOutput& out, uint8_t ppn) {
+    for (const auto& it : out)
         if (it.type == algorithm::ItemType::Book && it.ppn == ppn)
             return true;
     return false;
 }
-size_t count_books(const algorithm::ResolverOutput &out) {
+size_t count_books(const algorithm::ResolverOutput& out) {
     size_t n = 0;
-    for (const auto &it : out)
+    for (const auto& it : out)
         if (it.type == algorithm::ItemType::Book)
             ++n;
     return n;
 }
-size_t count_equips(const algorithm::ResolverOutput &out) {
+size_t count_equips(const algorithm::ResolverOutput& out) {
     size_t n = 0;
-    for (const auto &it : out)
+    for (const auto& it : out)
         if (it.type == algorithm::ItemType::Equip)
             ++n;
     return n;
@@ -738,19 +698,14 @@ void test_resolver_irrelevant_book_dropped() {
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
     target.enchs.insert(RE_MENDING, 1);
-    auto out = run_resolver(reg, target, {
-        re_equip(), re_book(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 3),
-        re_book(RE_MENDING, 1), re_book(RE_SHARPNESS, 5)});
-    expect(!has_book_with(out, RE_SHARPNESS, 5),
-           "resolver: irrelevant sharpness book dropped");
-    expect(has_book_with(out, RE_MENDING, 1),
-           "resolver: mending book kept");
-    expect(has_book_with(out, RE_UNBREAKING, 3),
-           "resolver: unbreaking 3 kept (dominates redundant 2)");
-    expect(!has_book_with(out, RE_UNBREAKING, 2),
-           "resolver: redundant unbreaking 2 dropped");
-    expect(count_equips(out) == 1,
-           "resolver: single equipment kept");
+    auto out = run_resolver(
+        reg, target,
+        {re_equip(), re_book(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 3), re_book(RE_MENDING, 1), re_book(RE_SHARPNESS, 5)});
+    expect(!has_book_with(out, RE_SHARPNESS, 5), "resolver: irrelevant sharpness book dropped");
+    expect(has_book_with(out, RE_MENDING, 1), "resolver: mending book kept");
+    expect(has_book_with(out, RE_UNBREAKING, 3), "resolver: unbreaking 3 kept (dominates redundant 2)");
+    expect(!has_book_with(out, RE_UNBREAKING, 2), "resolver: redundant unbreaking 2 dropped");
+    expect(count_equips(out) == 1, "resolver: single equipment kept");
     TEST_PASS("resolver: irrelevant book dropped (unbreaking+mending target)");
 }
 
@@ -760,17 +715,13 @@ void test_resolver_diff_aware_base() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
-    auto out = run_resolver(reg, target, {
-        re_equip_with(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 2),
-        re_book(RE_UNBREAKING, 3), re_book(RE_SHARPNESS, 5)});
-    expect(has_book_with(out, RE_UNBREAKING, 2),
-           "resolver: u2 book kept (suffices from a u2 base)");
-    expect(!has_book_with(out, RE_UNBREAKING, 3),
-           "resolver: redundant u3 book dropped");
-    expect(!has_book_with(out, RE_SHARPNESS, 5),
-           "resolver: irrelevant sharpness dropped");
-    expect(out.size() == 2,
-           "resolver: base equipment + one book");
+    auto out = run_resolver(
+        reg, target,
+        {re_equip_with(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 3), re_book(RE_SHARPNESS, 5)});
+    expect(has_book_with(out, RE_UNBREAKING, 2), "resolver: u2 book kept (suffices from a u2 base)");
+    expect(!has_book_with(out, RE_UNBREAKING, 3), "resolver: redundant u3 book dropped");
+    expect(!has_book_with(out, RE_SHARPNESS, 5), "resolver: irrelevant sharpness dropped");
+    expect(out.size() == 2, "resolver: base equipment + one book");
     TEST_PASS("resolver: diff-aware — u2 suffices from a u2 base");
 }
 
@@ -779,14 +730,10 @@ void test_resolver_prefer_higher_level_book() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
-    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 2),
-                                          re_book(RE_UNBREAKING, 3)});
-    expect(has_book_with(out, RE_UNBREAKING, 3),
-           "resolver: u3 book kept (higher level dominates)");
-    expect(!has_book_with(out, RE_UNBREAKING, 2),
-           "resolver: u2 book dropped as dominated");
-    expect(count_books(out) == 1,
-           "resolver: exactly one book kept");
+    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 3)});
+    expect(has_book_with(out, RE_UNBREAKING, 3), "resolver: u3 book kept (higher level dominates)");
+    expect(!has_book_with(out, RE_UNBREAKING, 2), "resolver: u2 book dropped as dominated");
+    expect(count_books(out) == 1, "resolver: exactly one book kept");
     TEST_PASS("resolver: prefer level 3 over 2 on a clean base");
 }
 
@@ -795,12 +742,9 @@ void test_resolver_same_level_lower_ppn() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
-    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 3, 2),
-                                          re_book(RE_UNBREAKING, 3, 0)});
-    expect(count_books(out) == 1,
-           "resolver: exactly one u3 book kept");
-    expect(has_book_with(out, RE_UNBREAKING, 3) && !has_book_ppn(out, 2),
-           "resolver: lower-ppn u3 book kept");
+    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 3, 2), re_book(RE_UNBREAKING, 3, 0)});
+    expect(count_books(out) == 1, "resolver: exactly one u3 book kept");
+    expect(has_book_with(out, RE_UNBREAKING, 3) && !has_book_ppn(out, 2), "resolver: lower-ppn u3 book kept");
     TEST_PASS("resolver: equal level keeps the lower-ppn book");
 }
 
@@ -812,12 +756,9 @@ void test_resolver_best_base_selection() {
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
     target.enchs.insert(RE_MENDING, 1);
-    auto out = run_resolver(reg, target, {
-        re_equip(), re_equip_with(RE_UNBREAKING, 3), re_book(RE_MENDING, 1)});
-    expect(count_equips(out) == 1,
-           "resolver: one equipment kept");
-    expect(!out.empty() && out[0].type == algorithm::ItemType::Equip &&
-               out[0].enchs[RE_UNBREAKING] == 3,
+    auto out = run_resolver(reg, target, {re_equip(), re_equip_with(RE_UNBREAKING, 3), re_book(RE_MENDING, 1)});
+    expect(count_equips(out) == 1, "resolver: one equipment kept");
+    expect(!out.empty() && out[0].type == algorithm::ItemType::Equip && out[0].enchs[RE_UNBREAKING] == 3,
            "resolver: u3 equipment chosen as best base (first)");
     expect(count_books(out) == 1 && has_book_with(out, RE_MENDING, 1),
            "resolver: only the mending book kept for the remaining gap");
@@ -832,18 +773,14 @@ void test_resolver_retain_equipment_only_ench() {
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
     target.enchs.insert(RE_THORNS, 1);
-    auto out = run_resolver(reg, target, {
-        re_equip(), re_equip_with(RE_THORNS, 1, 4), re_book(RE_UNBREAKING, 3)});
-    expect(count_equips(out) == 2,
-           "resolver: thorns-carrying equipment retained");
+    auto out = run_resolver(reg, target, {re_equip(), re_equip_with(RE_THORNS, 1, 4), re_book(RE_UNBREAKING, 3)});
+    expect(count_equips(out) == 2, "resolver: thorns-carrying equipment retained");
     bool has_thorns_equip = false;
-    for (const auto &it : out)
+    for (const auto& it : out)
         if (it.type == algorithm::ItemType::Equip && it.enchs[RE_THORNS] == 1)
             has_thorns_equip = true;
-    expect(has_thorns_equip,
-           "resolver: retained equipment carries thorns");
-    expect(has_book_with(out, RE_UNBREAKING, 3),
-           "resolver: u3 book still kept for the unbreaking gap");
+    expect(has_thorns_equip, "resolver: retained equipment carries thorns");
+    expect(has_book_with(out, RE_UNBREAKING, 3), "resolver: u3 book still kept for the unbreaking gap");
     TEST_PASS("resolver: equipment-only enchant retains the second equip");
 }
 
@@ -853,17 +790,11 @@ void test_resolver_book_target_pure_book_pool() {
     auto reg = make_resolver_registry();
     algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
     target.enchs.insert(RE_SHARPNESS, 3);
-    auto out = run_resolver(reg, target, {re_book(RE_SHARPNESS, 2),
-                                          re_book(RE_SHARPNESS, 3),
-                                          re_book(RE_MENDING, 1)});
-    expect(!out.empty(),
-           "resolver: book target + pure-book pool is reachable");
-    expect(has_book_with(out, RE_SHARPNESS, 3),
-           "resolver: u3 book kept for the book target");
-    expect(!has_book_with(out, RE_SHARPNESS, 2),
-           "resolver: redundant u2 book dropped for the book target");
-    expect(!has_book_with(out, RE_MENDING, 1),
-           "resolver: irrelevant mending dropped for the book target");
+    auto out = run_resolver(reg, target, {re_book(RE_SHARPNESS, 2), re_book(RE_SHARPNESS, 3), re_book(RE_MENDING, 1)});
+    expect(!out.empty(), "resolver: book target + pure-book pool is reachable");
+    expect(has_book_with(out, RE_SHARPNESS, 3), "resolver: u3 book kept for the book target");
+    expect(!has_book_with(out, RE_SHARPNESS, 2), "resolver: redundant u2 book dropped for the book target");
+    expect(!has_book_with(out, RE_MENDING, 1), "resolver: irrelevant mending dropped for the book target");
     TEST_PASS("resolver: book target + pure-book pool reachable");
 }
 
@@ -872,10 +803,8 @@ void test_resolver_book_target_multi_ench() {
     algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
     target.enchs.insert(RE_SHARPNESS, 3);
     target.enchs.insert(RE_MENDING, 1);
-    auto out = run_resolver(reg, target, {re_book(RE_SHARPNESS, 3),
-                                          re_book(RE_MENDING, 1)});
-    expect(count_books(out) == 2 && has_book_with(out, RE_SHARPNESS, 3) &&
-               has_book_with(out, RE_MENDING, 1),
+    auto out = run_resolver(reg, target, {re_book(RE_SHARPNESS, 3), re_book(RE_MENDING, 1)});
+    expect(count_books(out) == 2 && has_book_with(out, RE_SHARPNESS, 3) && has_book_with(out, RE_MENDING, 1),
            "resolver: both enchant books kept for multi-enchant book target");
     TEST_PASS("resolver: multi-enchant book target keeps needed books");
 }
@@ -885,10 +814,8 @@ void test_resolver_equip_target_pure_book_pool() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
-    auto out = run_resolver(reg, target, {re_book(RE_UNBREAKING, 2),
-                                          re_book(RE_UNBREAKING, 3)});
-    expect(out.empty(),
-           "resolver: equipment target + pure-book pool is unreachable (empty)");
+    auto out = run_resolver(reg, target, {re_book(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 3)});
+    expect(out.empty(), "resolver: equipment target + pure-book pool is unreachable (empty)");
     TEST_PASS("resolver: equip target + pure-book pool unreachable (regression)");
 }
 
@@ -897,10 +824,8 @@ void test_resolver_accumulate_books_for_combine() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
-    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 2),
-                                          re_book(RE_UNBREAKING, 2)});
-    expect(count_books(out) == 2 && has_book_with(out, RE_UNBREAKING, 2),
-           "resolver: two u2 books kept to combine into u3");
+    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 2), re_book(RE_UNBREAKING, 2)});
+    expect(count_books(out) == 2 && has_book_with(out, RE_UNBREAKING, 2), "resolver: two u2 books kept to combine into u3");
     TEST_PASS("resolver: accumulate u2+u2 books to reach u3");
 }
 
@@ -912,16 +837,12 @@ void test_resolver_output_order() {
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
     target.enchs.insert(RE_MENDING, 1);
-    auto out = run_resolver(reg, target, {
-        re_equip(), re_book(RE_UNBREAKING, 3, 2), re_book(RE_MENDING, 1, 1)});
+    auto out = run_resolver(reg, target, {re_equip(), re_book(RE_UNBREAKING, 3, 2), re_book(RE_MENDING, 1, 1)});
     expect(out.size() == 3, "resolver: 3 items in output");
-    expect(out[0].type == algorithm::ItemType::Equip,
-           "resolver: equipment first (best base)");
-    expect(out[1].type == algorithm::ItemType::Book &&
-               out[1].enchs[RE_UNBREAKING] == 3,
+    expect(out[0].type == algorithm::ItemType::Equip, "resolver: equipment first (best base)");
+    expect(out[1].type == algorithm::ItemType::Book && out[1].enchs[RE_UNBREAKING] == 3,
            "resolver: unbreaking III (higher level) book first among books");
-    expect(out[2].type == algorithm::ItemType::Book &&
-               out[2].enchs[RE_MENDING] == 1,
+    expect(out[2].type == algorithm::ItemType::Book && out[2].enchs[RE_MENDING] == 1,
            "resolver: mending I (lower level) book last");
     TEST_PASS("resolver: output ordering — equip first, books by (level desc, ppn asc)");
 }
@@ -935,21 +856,16 @@ void test_resolver_retain_equip_when_books_cannot_reach() {
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
     target.enchs.insert(RE_THORNS, 3);
-    auto out = run_resolver(reg, target, {
-        re_equip(), re_equip_with(RE_THORNS, 3, 4), re_book(RE_UNBREAKING, 3),
-        re_book(RE_THORNS, 1)});
-    expect(count_equips(out) == 2,
-           "resolver: thorns-3 equipment retained (thorns-1 book can't reach 3)");
+    auto out = run_resolver(reg, target,
+                            {re_equip(), re_equip_with(RE_THORNS, 3, 4), re_book(RE_UNBREAKING, 3), re_book(RE_THORNS, 1)});
+    expect(count_equips(out) == 2, "resolver: thorns-3 equipment retained (thorns-1 book can't reach 3)");
     bool has_thorns_equip = false;
-    for (const auto &it : out)
+    for (const auto& it : out)
         if (it.type == algorithm::ItemType::Equip && it.enchs[RE_THORNS] == 3)
             has_thorns_equip = true;
-    expect(has_thorns_equip,
-           "resolver: retained equipment carries thorns 3");
-    expect(!has_book_with(out, RE_THORNS, 1),
-           "resolver: thorns-1 book dropped (equipment already covers thorns 3)");
-    expect(has_book_with(out, RE_UNBREAKING, 3),
-           "resolver: unbreaking book still kept");
+    expect(has_thorns_equip, "resolver: retained equipment carries thorns 3");
+    expect(!has_book_with(out, RE_THORNS, 1), "resolver: thorns-1 book dropped (equipment already covers thorns 3)");
+    expect(has_book_with(out, RE_UNBREAKING, 3), "resolver: unbreaking book still kept");
     TEST_PASS("resolver: equip retained when books can't reach target level");
 }
 
@@ -963,23 +879,19 @@ void test_resolver_conflict_aware_base() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_SHARPNESS, 5);
-    auto out = run_resolver(reg, target, {
-        re_equip_with(RE_SHARPNESS, 4, 6),  // correct base, high ppn
-        re_equip_with(RE_SMITE, 5, 0),      // low ppn but conflicts with sharpness
-        re_book(RE_SHARPNESS, 5)});
-    expect(!out.empty(),
-           "resolver: conflict-aware base keeps the pool non-empty/solvable");
-    expect(count_equips(out) == 1 && out[0].type == algorithm::ItemType::Equip &&
-               out[0].enchs[RE_SHARPNESS] == 4,
+    auto out = run_resolver(reg, target,
+                            {re_equip_with(RE_SHARPNESS, 4, 6), // correct base, high ppn
+                             re_equip_with(RE_SMITE, 5, 0),     // low ppn but conflicts with sharpness
+                             re_book(RE_SHARPNESS, 5)});
+    expect(!out.empty(), "resolver: conflict-aware base keeps the pool non-empty/solvable");
+    expect(count_equips(out) == 1 && out[0].type == algorithm::ItemType::Equip && out[0].enchs[RE_SHARPNESS] == 4,
            "resolver: sharpness-4 sword chosen as base (not the smite sword)");
-    expect(has_book_with(out, RE_SHARPNESS, 5),
-           "resolver: sharpness-5 book kept");
+    expect(has_book_with(out, RE_SHARPNESS, 5), "resolver: sharpness-5 book kept");
     bool has_smite_equip = false;
-    for (const auto &it : out)
+    for (const auto& it : out)
         if (it.type == algorithm::ItemType::Equip && it.enchs[RE_SMITE] > 0)
             has_smite_equip = true;
-    expect(!has_smite_equip,
-           "resolver: smite sword dropped (base-infeasible, not a target)");
+    expect(!has_smite_equip, "resolver: smite sword dropped (base-infeasible, not a target)");
     TEST_PASS("resolver: conflict-aware base selection fixes false unreachable");
 }
 
@@ -988,10 +900,8 @@ void test_resolver_conflict_aware_base_control() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_SHARPNESS, 5);
-    auto out = run_resolver(reg, target, {
-        re_equip_with(RE_SHARPNESS, 4, 6), re_book(RE_SHARPNESS, 5)});
-    expect(!out.empty() && count_equips(out) == 1 &&
-               out[0].type == algorithm::ItemType::Equip &&
+    auto out = run_resolver(reg, target, {re_equip_with(RE_SHARPNESS, 4, 6), re_book(RE_SHARPNESS, 5)});
+    expect(!out.empty() && count_equips(out) == 1 && out[0].type == algorithm::ItemType::Equip &&
                out[0].enchs[RE_SHARPNESS] == 4,
            "resolver: control — sharpness-4 base + sharpness-5 book solves");
     TEST_PASS("resolver: control without smite still solves");
@@ -1007,33 +917,29 @@ void test_resolver_retention_conflict_aware() {
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_SHARPNESS, 5);
     target.enchs.insert(RE_THORNS, 3);
-    auto out = run_resolver(reg, target, {
-        re_equip_with(RE_SHARPNESS, 4, 6),        // best base (sharpness gap)
-        re_equip_with(RE_THORNS, 3, 0),           // retained: thorns only here
-        re_book(RE_SHARPNESS, 5)});
+    auto out = run_resolver(reg, target,
+                            {re_equip_with(RE_SHARPNESS, 4, 6), // best base (sharpness gap)
+                             re_equip_with(RE_THORNS, 3, 0),    // retained: thorns only here
+                             re_book(RE_SHARPNESS, 5)});
     // Also carry smite on the thorns sword: it must still be retained.
-    auto out2 = run_resolver(reg, target, {
-        re_equip_with(RE_SHARPNESS, 4, 6),
-        [] {
-            algorithm::Item e{algorithm::ItemType::Equip, 1561, 0, {}};
-            e.enchs.insert(RE_THORNS, 3);
-            e.enchs.insert(RE_SMITE, 5);
-            return e;
-        }(),
-        re_book(RE_SHARPNESS, 5)});
-    expect(count_equips(out2) == 2,
-           "resolver: conflicting smite enchant does not drop the thorns equip");
+    auto out2 = run_resolver(reg, target,
+                             {re_equip_with(RE_SHARPNESS, 4, 6),
+                              [] {
+                                  algorithm::Item e{algorithm::ItemType::Equip, 1561, 0, {}};
+                                  e.enchs.insert(RE_THORNS, 3);
+                                  e.enchs.insert(RE_SMITE, 5);
+                                  return e;
+                              }(),
+                              re_book(RE_SHARPNESS, 5)});
+    expect(count_equips(out2) == 2, "resolver: conflicting smite enchant does not drop the thorns equip");
     bool has_thorns_equip = false;
-    for (const auto &it : out2)
+    for (const auto& it : out2)
         if (it.type == algorithm::ItemType::Equip && it.enchs[RE_THORNS] == 3)
             has_thorns_equip = true;
-    expect(has_thorns_equip,
-           "resolver: thorns-3 equipment retained despite carrying smite");
-    expect(!out2.empty() && out2[0].type == algorithm::ItemType::Equip &&
-               out2[0].enchs[RE_SHARPNESS] == 4,
+    expect(has_thorns_equip, "resolver: thorns-3 equipment retained despite carrying smite");
+    expect(!out2.empty() && out2[0].type == algorithm::ItemType::Equip && out2[0].enchs[RE_SHARPNESS] == 4,
            "resolver: sharpness-4 base chosen, pool solvable");
-    expect(has_book_with(out2, RE_SHARPNESS, 5),
-           "resolver: sharpness-5 book kept");
+    expect(has_book_with(out2, RE_SHARPNESS, 5), "resolver: sharpness-5 book kept");
     TEST_PASS("resolver: retention is conflict-aware (pool stays solvable)");
 }
 
@@ -1056,22 +962,19 @@ void test_hamming_inventory_conflict_retained_equip() {
     input.registry = reg;
     input.target = target;
     algorithm::ItemCollection pool;
-    pool.push_back(re_equip_with(RE_SHARPNESS, 4));       // correct base (resolver choice)
+    pool.push_back(re_equip_with(RE_SHARPNESS, 4)); // correct base (resolver choice)
     algorithm::Item conflict_equip = re_equip_with(RE_THORNS, 3);
-    conflict_equip.enchs.insert(RE_SMITE, 5);             // retained + conflicting
+    conflict_equip.enchs.insert(RE_SMITE, 5); // retained + conflicting
     pool.push_back(std::move(conflict_equip));
     pool.push_back(re_book(RE_SHARPNESS, 5));
     input.data = algorithm::InventoryPayload{std::move(pool), {}};
 
-    algorithm::AlgorithmExecutor executor(
-        std::make_unique<algorithm::HammingAlgorithm>());
+    algorithm::AlgorithmExecutor executor(std::make_unique<algorithm::HammingAlgorithm>());
     executor.start(std::move(input));
     auto state = executor.wait();
-    expect(state == algorithm::AlgorithmState::Completed,
-           "hamming: inventory conflict solve should complete");
+    expect(state == algorithm::AlgorithmState::Completed, "hamming: inventory conflict solve should complete");
     auto out = executor.output();
-    expect(!out.solutions.empty(),
-           "hamming: retained conflicting equip must not cause false unreachable");
+    expect(!out.solutions.empty(), "hamming: retained conflicting equip must not cause false unreachable");
     TEST_PASS("hamming: inventory conflict retained equip does not displace base");
 }
 
@@ -1093,22 +996,19 @@ void test_hamming_inventory_cross_tier_conflict() {
     input.registry = reg;
     input.target = target;
     algorithm::ItemCollection pool;
-    pool.push_back(re_equip_with(RE_SHARPNESS, 4, 2));   // base at ppn 2
+    pool.push_back(re_equip_with(RE_SHARPNESS, 4, 2)); // base at ppn 2
     algorithm::Item conflict_equip = re_equip_with(RE_THORNS, 3, 0);
-    conflict_equip.enchs.insert(RE_SMITE, 5);            // ppn 0, conflicting
+    conflict_equip.enchs.insert(RE_SMITE, 5); // ppn 0, conflicting
     pool.push_back(std::move(conflict_equip));
-    pool.push_back(re_book(RE_SHARPNESS, 5));            // ppn 0, needed book
+    pool.push_back(re_book(RE_SHARPNESS, 5)); // ppn 0, needed book
     input.data = algorithm::InventoryPayload{std::move(pool), {}};
 
-    algorithm::AlgorithmExecutor executor(
-        std::make_unique<algorithm::HammingAlgorithm>());
+    algorithm::AlgorithmExecutor executor(std::make_unique<algorithm::HammingAlgorithm>());
     executor.start(std::move(input));
     auto state = executor.wait();
-    expect(state == algorithm::AlgorithmState::Completed,
-           "hamming: cross-tier conflict solve should complete");
+    expect(state == algorithm::AlgorithmState::Completed, "hamming: cross-tier conflict solve should complete");
     auto out = executor.output();
-    expect(!out.solutions.empty(),
-           "hamming: cross-tier conflicting retained equip must not cause false unreachable");
+    expect(!out.solutions.empty(), "hamming: cross-tier conflicting retained equip must not cause false unreachable");
     TEST_PASS("hamming: cross-tier conflict retained equip resolves at base tier");
 }
 
@@ -1124,10 +1024,10 @@ void test_hamming_inventory_cross_tier_conflict() {
 /// Run HammingAlgorithm in direct mode against a book target carrying
 /// \p target_sharpness, with source enchantments \p source.  Returns the
 /// solution's step count (or -1 on failure) and fills \p final_out.
-int32_t run_hamming_book_direct(algorithm::EnchReg &reg,
-                                const algorithm::EnchCollection &source,
+int32_t run_hamming_book_direct(algorithm::EnchReg& reg,
+                                const algorithm::EnchCollection& source,
                                 uint8_t target_sharpness,
-                                algorithm::Item &final_out) {
+                                algorithm::Item& final_out) {
     algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
     target.enchs.insert(RE_SHARPNESS, target_sharpness);
 
@@ -1138,8 +1038,7 @@ int32_t run_hamming_book_direct(algorithm::EnchReg &reg,
     input.target = target;
     input.data = algorithm::DirectPayload{source};
 
-    algorithm::AlgorithmExecutor executor(
-        std::make_unique<algorithm::HammingAlgorithm>());
+    algorithm::AlgorithmExecutor executor(std::make_unique<algorithm::HammingAlgorithm>());
     executor.start(std::move(input));
     auto state = executor.wait();
     if (state != algorithm::AlgorithmState::Completed)
@@ -1166,13 +1065,13 @@ int32_t run_hamming_book_direct(algorithm::EnchReg &reg,
 /// \p final_out.  Generalized over the target enchantment set so the SAME
 /// scenario can be asserted across every in-process algorithm (cross-algorithm
 /// regression / negative control).
-int32_t run_algorithm_book_direct_target(const std::function<std::unique_ptr<algorithm::IAlgorithm>()> &make_algo,
-                                         algorithm::EnchReg &reg,
-                                         const algorithm::EnchCollection &source,
-                                         const algorithm::EnchCollection &target_enchs,
-                                         algorithm::Item &final_out) {
+int32_t run_algorithm_book_direct_target(const std::function<std::unique_ptr<algorithm::IAlgorithm>()>& make_algo,
+                                         algorithm::EnchReg& reg,
+                                         const algorithm::EnchCollection& source,
+                                         const algorithm::EnchCollection& target_enchs,
+                                         algorithm::Item& final_out) {
     algorithm::Item target{algorithm::ItemType::Book, 0, 0, {}};
-    for (const auto &ench : target_enchs)
+    for (const auto& ench : target_enchs)
         target.enchs.insert(ench);
 
     algorithm::AlgorithmInput input;
@@ -1196,14 +1095,13 @@ int32_t run_algorithm_book_direct_target(const std::function<std::unique_ptr<alg
 
 /// Single-target-enchant convenience wrapper over
 /// run_algorithm_book_direct_target (kept for the existing callers).
-int32_t run_algorithm_book_direct(const std::function<std::unique_ptr<algorithm::IAlgorithm>()> &make_algo,
-                                  algorithm::EnchReg &reg,
-                                  const algorithm::EnchCollection &source,
+int32_t run_algorithm_book_direct(const std::function<std::unique_ptr<algorithm::IAlgorithm>()>& make_algo,
+                                  algorithm::EnchReg& reg,
+                                  const algorithm::EnchCollection& source,
                                   uint8_t target_sharpness,
-                                  algorithm::Item &final_out) {
-    return run_algorithm_book_direct_target(make_algo, reg, source,
-        algorithm::EnchCollection{algorithm::Ench{RE_SHARPNESS, target_sharpness}},
-        final_out);
+                                  algorithm::Item& final_out) {
+    return run_algorithm_book_direct_target(
+        make_algo, reg, source, algorithm::EnchCollection{algorithm::Ench{RE_SHARPNESS, target_sharpness}}, final_out);
 }
 
 void test_astar_book_target_conflict_source() {
@@ -1211,13 +1109,10 @@ void test_astar_book_target_conflict_source() {
     algorithm::Item final_item;
     algorithm::EnchCollection source;
     source.push_back(algorithm::Ench{RE_SMITE, 5});
-    int32_t steps = run_algorithm_book_direct(
-        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
-        reg, source, /*sharpness*/ 3, final_item);
-    expect(steps == 1,
-           "astar: book target + smite-5 source needs exactly 1 forge (not unreachable)");
-    expect(final_item.type == algorithm::ItemType::Book &&
-               final_item.enchs[RE_SHARPNESS] == 3,
+    int32_t steps = run_algorithm_book_direct([] { return std::make_unique<algorithm::AStarAlgorithm>(); }, reg, source,
+                                              /*sharpness*/ 3, final_item);
+    expect(steps == 1, "astar: book target + smite-5 source needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3,
            "astar: final item is the sharpness-3 book");
     TEST_PASS("astar: book target + conflict source forges smite into sharpness book");
 }
@@ -1227,13 +1122,10 @@ void test_astar_book_target_conflict_source_low_level() {
     algorithm::Item final_item;
     algorithm::EnchCollection source;
     source.push_back(algorithm::Ench{RE_SMITE, 2});
-    int32_t steps = run_algorithm_book_direct(
-        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
-        reg, source, /*sharpness*/ 3, final_item);
-    expect(steps == 1,
-           "astar: book target + smite-2 source needs exactly 1 forge (not unreachable)");
-    expect(final_item.type == algorithm::ItemType::Book &&
-               final_item.enchs[RE_SHARPNESS] == 3,
+    int32_t steps = run_algorithm_book_direct([] { return std::make_unique<algorithm::AStarAlgorithm>(); }, reg, source,
+                                              /*sharpness*/ 3, final_item);
+    expect(steps == 1, "astar: book target + smite-2 source needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3,
            "astar: final item is the sharpness-3 book");
     TEST_PASS("astar: book target + lower-level conflict source still forges");
 }
@@ -1243,13 +1135,10 @@ void test_idastar_book_target_conflict_source() {
     algorithm::Item final_item;
     algorithm::EnchCollection source;
     source.push_back(algorithm::Ench{RE_SMITE, 5});
-    int32_t steps = run_algorithm_book_direct(
-        [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); },
-        reg, source, /*sharpness*/ 3, final_item);
-    expect(steps == 1,
-           "idastar: book target + smite-5 source needs exactly 1 forge (not unreachable)");
-    expect(final_item.type == algorithm::ItemType::Book &&
-               final_item.enchs[RE_SHARPNESS] == 3,
+    int32_t steps = run_algorithm_book_direct([] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }, reg, source,
+                                              /*sharpness*/ 3, final_item);
+    expect(steps == 1, "idastar: book target + smite-5 source needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3,
            "idastar: final item is the sharpness-3 book");
     TEST_PASS("idastar: book target + conflict source forges smite into sharpness book");
 }
@@ -1263,14 +1152,14 @@ void test_idastar_book_target_conflict_source() {
 /// Run \p make_algo in direct mode against an EQUIPMENT target carrying
 /// \p target_enchs, with source enchantments \p source on \p platform.
 /// Returns the solution's step count (or -1 on failure) and fills \p final_out.
-int32_t run_algorithm_equip_direct(const std::function<std::unique_ptr<algorithm::IAlgorithm>()> &make_algo,
-                                   algorithm::EnchReg &reg,
-                                   const algorithm::EnchCollection &source,
-                                   const algorithm::EnchCollection &target_enchs,
+int32_t run_algorithm_equip_direct(const std::function<std::unique_ptr<algorithm::IAlgorithm>()>& make_algo,
+                                   algorithm::EnchReg& reg,
+                                   const algorithm::EnchCollection& source,
+                                   const algorithm::EnchCollection& target_enchs,
                                    MCE platform,
-                                   algorithm::Item &final_out) {
+                                   algorithm::Item& final_out) {
     algorithm::Item target{algorithm::ItemType::Equip, 1561, 0, {}};
-    for (const auto &ench : target_enchs)
+    for (const auto& ench : target_enchs)
         target.enchs.insert(ench);
 
     algorithm::AlgorithmInput input;
@@ -1299,13 +1188,10 @@ void test_astar_bedrock_same_merge_upgrade() {
     source.push_back(algorithm::Ench{RE_SHARPNESS, 2});
     algorithm::EnchCollection target_enchs;
     target_enchs.push_back(algorithm::Ench{RE_SHARPNESS, 5});
-    int32_t steps = run_algorithm_equip_direct(
-        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
-        reg, source, target_enchs, MCE::Bedrock, final_item);
-    expect(steps == 1,
-           "astar: bedrock same-merge upgrade (sh2→sh5) needs exactly 1 forge (not unreachable)");
-    expect(final_item.type == algorithm::ItemType::Equip &&
-               final_item.enchs[RE_SHARPNESS] == 5,
+    int32_t steps = run_algorithm_equip_direct([] { return std::make_unique<algorithm::AStarAlgorithm>(); }, reg, source,
+                                               target_enchs, MCE::Bedrock, final_item);
+    expect(steps == 1, "astar: bedrock same-merge upgrade (sh2→sh5) needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Equip && final_item.enchs[RE_SHARPNESS] == 5,
            "astar: bedrock final item carries sharpness 5");
     TEST_PASS("astar: bedrock same-enchant upgrade forges equip sh2 + book sh5");
 }
@@ -1317,13 +1203,10 @@ void test_idastar_bedrock_same_merge_upgrade() {
     source.push_back(algorithm::Ench{RE_SHARPNESS, 2});
     algorithm::EnchCollection target_enchs;
     target_enchs.push_back(algorithm::Ench{RE_SHARPNESS, 5});
-    int32_t steps = run_algorithm_equip_direct(
-        [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); },
-        reg, source, target_enchs, MCE::Bedrock, final_item);
-    expect(steps == 1,
-           "idastar: bedrock same-merge upgrade (sh2→sh5) needs exactly 1 forge (not unreachable)");
-    expect(final_item.type == algorithm::ItemType::Equip &&
-               final_item.enchs[RE_SHARPNESS] == 5,
+    int32_t steps = run_algorithm_equip_direct([] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }, reg, source,
+                                               target_enchs, MCE::Bedrock, final_item);
+    expect(steps == 1, "idastar: bedrock same-merge upgrade (sh2→sh5) needs exactly 1 forge (not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Equip && final_item.enchs[RE_SHARPNESS] == 5,
            "idastar: bedrock final item carries sharpness 5");
     TEST_PASS("idastar: bedrock same-enchant upgrade forges equip sh2 + book sh5");
 }
@@ -1334,10 +1217,8 @@ void test_hamming_book_target_conflict_source() {
     algorithm::EnchCollection source;
     source.push_back(algorithm::Ench{RE_SMITE, 5});
     int32_t steps = run_hamming_book_direct(reg, source, /*sharpness*/ 3, final_item);
-    expect(steps == 1,
-           "hamming: book target + smite-5 source needs exactly 1 forge (not 0, not unreachable)");
-    expect(final_item.type == algorithm::ItemType::Book &&
-               final_item.enchs[RE_SHARPNESS] == 3,
+    expect(steps == 1, "hamming: book target + smite-5 source needs exactly 1 forge (not 0, not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3,
            "hamming: final item is the sharpness-3 book");
     TEST_PASS("hamming: book target + conflict source forges smite into sharpness book");
 }
@@ -1348,10 +1229,8 @@ void test_hamming_book_target_conflict_source_low_level() {
     algorithm::EnchCollection source;
     source.push_back(algorithm::Ench{RE_SMITE, 2});
     int32_t steps = run_hamming_book_direct(reg, source, /*sharpness*/ 3, final_item);
-    expect(steps == 1,
-           "hamming: book target + smite-2 source needs exactly 1 forge (not 0, not unreachable)");
-    expect(final_item.type == algorithm::ItemType::Book &&
-               final_item.enchs[RE_SHARPNESS] == 3,
+    expect(steps == 1, "hamming: book target + smite-2 source needs exactly 1 forge (not 0, not unreachable)");
+    expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3,
            "hamming: final item is the sharpness-3 book");
     TEST_PASS("hamming: book target + lower-level conflict source still forges");
 }
@@ -1365,23 +1244,22 @@ void test_hamming_book_target_conflict_source_low_level() {
 
 void test_all_algorithms_book_target_conflict_source() {
     auto reg = make_resolver_registry();
-    const std::vector<std::pair<const char *, std::function<std::unique_ptr<algorithm::IAlgorithm>()>>> algos = {
-        {"hamming",  [] { return std::make_unique<algorithm::HammingAlgorithm>(); }},
+    const std::vector<std::pair<const char*, std::function<std::unique_ptr<algorithm::IAlgorithm>()>>> algos = {
+        {"hamming", [] { return std::make_unique<algorithm::HammingAlgorithm>(); }},
         {"dp_merge", [] { return std::make_unique<algorithm::DPMergeAlgorithm>(); }},
-        {"bb_dp",    [] { return std::make_unique<algorithm::BBDpAlgorithm>(); }},
-        {"astar",    [] { return std::make_unique<algorithm::AStarAlgorithm>(); }},
-        {"dfs",      [] { return std::make_unique<algorithm::DFSAlgorithm>(); }},
-        {"idastar",  [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }},
+        {"bb_dp", [] { return std::make_unique<algorithm::BBDpAlgorithm>(); }},
+        {"astar", [] { return std::make_unique<algorithm::AStarAlgorithm>(); }},
+        {"dfs", [] { return std::make_unique<algorithm::DFSAlgorithm>(); }},
+        {"idastar", [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }},
     };
-    for (const auto &[name, make] : algos) {
+    for (const auto& [name, make] : algos) {
         algorithm::Item final_item;
         algorithm::EnchCollection source;
         source.push_back(algorithm::Ench{RE_SMITE, 5});
         int32_t steps = run_algorithm_book_direct(make, reg, source, /*sharpness*/ 3, final_item);
         expect(steps == 1,
                std::string(name) + ": book target + smite-5 source needs exactly 1 forge (not unreachable / 0-step)");
-        expect(final_item.type == algorithm::ItemType::Book &&
-                   final_item.enchs[RE_SHARPNESS] == 3,
+        expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3,
                std::string(name) + ": final item is the sharpness-3 book");
     }
     TEST_PASS("all algorithms: book target + conflict source solves in 1 step");
@@ -1392,15 +1270,15 @@ void test_all_algorithms_book_target_internally_conflicting() {
     // target itself is contradictory (sharpness 3 + smite 3 are mutually
     // exclusive) → every algorithm must report NO solution (unreachable).
     auto reg = make_resolver_registry();
-    const std::vector<std::pair<const char *, std::function<std::unique_ptr<algorithm::IAlgorithm>()>>> algos = {
-        {"hamming",  [] { return std::make_unique<algorithm::HammingAlgorithm>(); }},
+    const std::vector<std::pair<const char*, std::function<std::unique_ptr<algorithm::IAlgorithm>()>>> algos = {
+        {"hamming", [] { return std::make_unique<algorithm::HammingAlgorithm>(); }},
         {"dp_merge", [] { return std::make_unique<algorithm::DPMergeAlgorithm>(); }},
-        {"bb_dp",    [] { return std::make_unique<algorithm::BBDpAlgorithm>(); }},
-        {"astar",    [] { return std::make_unique<algorithm::AStarAlgorithm>(); }},
-        {"dfs",      [] { return std::make_unique<algorithm::DFSAlgorithm>(); }},
-        {"idastar",  [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }},
+        {"bb_dp", [] { return std::make_unique<algorithm::BBDpAlgorithm>(); }},
+        {"astar", [] { return std::make_unique<algorithm::AStarAlgorithm>(); }},
+        {"dfs", [] { return std::make_unique<algorithm::DFSAlgorithm>(); }},
+        {"idastar", [] { return std::make_unique<algorithm::IDAStarAlgorithm>(); }},
     };
-    for (const auto &[name, make] : algos) {
+    for (const auto& [name, make] : algos) {
         algorithm::Item final_item;
         algorithm::EnchCollection source;
         source.push_back(algorithm::Ench{RE_SMITE, 5});
@@ -1408,8 +1286,7 @@ void test_all_algorithms_book_target_internally_conflicting() {
         target_enchs.push_back(algorithm::Ench{RE_SHARPNESS, 3});
         target_enchs.push_back(algorithm::Ench{RE_SMITE, 3});
         int32_t steps = run_algorithm_book_direct_target(make, reg, source, target_enchs, final_item);
-        expect(steps == -1,
-               std::string(name) + ": internally-contradictory book target must be unreachable");
+        expect(steps == -1, std::string(name) + ": internally-contradictory book target must be unreachable");
     }
     TEST_PASS("all algorithms: internally-contradictory book target is unreachable");
 }
@@ -1428,10 +1305,8 @@ void test_hamming_book_target_multi_ench_source() {
     source.push_back(algorithm::Ench{RE_SMITE, 5});
     source.push_back(algorithm::Ench{RE_UNBREAKING, 1});
     int32_t steps = run_hamming_book_direct(reg, source, /*sharpness*/ 3, final_item);
-    expect(steps == 1,
-           "hamming: book target + {smite5, unbreaking1} source needs exactly 1 forge");
-    expect(final_item.type == algorithm::ItemType::Book &&
-               final_item.enchs[RE_SHARPNESS] == 3 &&
+    expect(steps == 1, "hamming: book target + {smite5, unbreaking1} source needs exactly 1 forge");
+    expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3 &&
                final_item.enchs[RE_UNBREAKING] == 1,
            "hamming: final book carries sharpness 3 AND unbreaking 1 (smite dropped)");
     TEST_PASS("hamming: multi-enchant conflict source keeps the compatible enchant");
@@ -1443,13 +1318,10 @@ void test_astar_book_target_multi_ench_source() {
     algorithm::EnchCollection source;
     source.push_back(algorithm::Ench{RE_SMITE, 5});
     source.push_back(algorithm::Ench{RE_UNBREAKING, 1});
-    int32_t steps = run_algorithm_book_direct(
-        [] { return std::make_unique<algorithm::AStarAlgorithm>(); },
-        reg, source, /*sharpness*/ 3, final_item);
-    expect(steps == 1,
-           "astar: book target + {smite5, unbreaking1} source needs exactly 1 forge");
-    expect(final_item.type == algorithm::ItemType::Book &&
-               final_item.enchs[RE_SHARPNESS] == 3 &&
+    int32_t steps = run_algorithm_book_direct([] { return std::make_unique<algorithm::AStarAlgorithm>(); }, reg, source,
+                                              /*sharpness*/ 3, final_item);
+    expect(steps == 1, "astar: book target + {smite5, unbreaking1} source needs exactly 1 forge");
+    expect(final_item.type == algorithm::ItemType::Book && final_item.enchs[RE_SHARPNESS] == 3 &&
                final_item.enchs[RE_UNBREAKING] == 1,
            "astar: final book carries sharpness 3 AND unbreaking 1 (smite dropped)");
     TEST_PASS("astar: multi-enchant conflict source keeps the compatible enchant");
@@ -1465,7 +1337,7 @@ void test_astar_book_target_multi_ench_source() {
 
 void test_hamming_book_target_conflict_ppn2_source() {
     auto reg = make_resolver_registry();
-    algorithm::Item target{algorithm::ItemType::Book, 0, 2, {}};  // ppn 2
+    algorithm::Item target{algorithm::ItemType::Book, 0, 2, {}}; // ppn 2
     target.enchs.insert(RE_SHARPNESS, 3);
 
     algorithm::AlgorithmInput input;
@@ -1480,16 +1352,12 @@ void test_hamming_book_target_conflict_ppn2_source() {
     algorithm::AlgorithmExecutor executor(std::make_unique<algorithm::HammingAlgorithm>());
     executor.start(std::move(input));
     auto state = executor.wait();
-    expect(state == algorithm::AlgorithmState::Completed,
-           "hamming: ppn-2 conflict source solve should complete");
+    expect(state == algorithm::AlgorithmState::Completed, "hamming: ppn-2 conflict source solve should complete");
     auto out = executor.output();
-    expect(!out.solutions.empty(),
-           "hamming: ppn-2 conflict source must not be false-unreachable");
+    expect(!out.solutions.empty(), "hamming: ppn-2 conflict source must not be false-unreachable");
     if (!out.solutions.empty()) {
-        expect(out.solutions[0].steps.size() == 1,
-               "hamming: ppn-2 conflict source forges in exactly 1 step (not 0-step)");
-        expect(out.final_item.type == algorithm::ItemType::Book &&
-                   out.final_item.enchs[RE_SHARPNESS] == 3,
+        expect(out.solutions[0].steps.size() == 1, "hamming: ppn-2 conflict source forges in exactly 1 step (not 0-step)");
+        expect(out.final_item.type == algorithm::ItemType::Book && out.final_item.enchs[RE_SHARPNESS] == 3,
                "hamming: final item is the sharpness-3 book");
     }
     TEST_PASS("hamming: ppn-2 conflicting source book still solves in 1 step");
@@ -1519,23 +1387,17 @@ void test_hamming_book_target_non_wasteful_not_swapped() {
     algorithm::AlgorithmExecutor executor(std::make_unique<algorithm::HammingAlgorithm>());
     executor.start(std::move(input));
     auto state = executor.wait();
-    expect(state == algorithm::AlgorithmState::Completed,
-           "hamming: non-wasteful book merge should complete");
+    expect(state == algorithm::AlgorithmState::Completed, "hamming: non-wasteful book merge should complete");
     auto out = executor.output();
-    expect(!out.solutions.empty(),
-           "hamming: non-wasteful book merge produces a solution");
+    expect(!out.solutions.empty(), "hamming: non-wasteful book merge produces a solution");
     if (!out.solutions.empty()) {
-        expect(out.solutions[0].steps.size() == 1,
-               "hamming: non-wasteful merge is a single forge (not 0-step)");
-        const auto &step = out.solutions[0].steps[0];
-        expect(step.base.type == algorithm::ItemType::Book &&
-                   step.base.enchs[RE_UNBREAKING] == 1,
+        expect(out.solutions[0].steps.size() == 1, "hamming: non-wasteful merge is a single forge (not 0-step)");
+        const auto& step = out.solutions[0].steps[0];
+        expect(step.base.type == algorithm::ItemType::Book && step.base.enchs[RE_UNBREAKING] == 1,
                "hamming: natural base is the unbreaking book (NOT swapped)");
-        expect(step.sacrifice.type == algorithm::ItemType::Book &&
-                   step.sacrifice.enchs[RE_SHARPNESS] == 3,
+        expect(step.sacrifice.type == algorithm::ItemType::Book && step.sacrifice.enchs[RE_SHARPNESS] == 3,
                "hamming: sacrifice is the sharpness book (natural orientation)");
-        expect(out.final_item.type == algorithm::ItemType::Book &&
-                   out.final_item.enchs[RE_SHARPNESS] == 3 &&
+        expect(out.final_item.type == algorithm::ItemType::Book && out.final_item.enchs[RE_SHARPNESS] == 3 &&
                    out.final_item.enchs[RE_UNBREAKING] == 1,
                "hamming: final book carries sharpness 3 + unbreaking 1");
     }
@@ -1548,15 +1410,11 @@ void test_resolver_preenchanted_equip_reaches_target() {
     auto reg = make_resolver_registry();
     algorithm::Item target = re_equip();
     target.enchs.insert(RE_UNBREAKING, 3);
-    auto out = run_resolver(reg, target, {re_equip_with(RE_UNBREAKING, 3),
-                                          re_book(RE_SHARPNESS, 5)});
-    expect(!out.empty() && out[0].type == algorithm::ItemType::Equip &&
-               out[0].enchs[RE_UNBREAKING] == 3,
+    auto out = run_resolver(reg, target, {re_equip_with(RE_UNBREAKING, 3), re_book(RE_SHARPNESS, 5)});
+    expect(!out.empty() && out[0].type == algorithm::ItemType::Equip && out[0].enchs[RE_UNBREAKING] == 3,
            "resolver: pre-enchanted base retained and meets target");
-    expect(count_books(out) == 0,
-           "resolver: no books needed (gap already met)");
-    expect(!has_book_with(out, RE_SHARPNESS, 5),
-           "resolver: irrelevant sharpness book dropped");
+    expect(count_books(out) == 0, "resolver: no books needed (gap already met)");
+    expect(!has_book_with(out, RE_SHARPNESS, 5), "resolver: irrelevant sharpness book dropped");
     TEST_PASS("resolver: pre-enchanted equipment meets target, pool non-empty");
 }
 
@@ -1584,7 +1442,8 @@ void test_loader_registration() {
 
     std::cout << "PASS: test_loader_registration (strategies: ";
     for (size_t i = 0; i < names.size(); ++i) {
-        if (i > 0) std::cout << ", ";
+        if (i > 0)
+            std::cout << ", ";
         std::cout << names[i];
     }
     std::cout << ")" << std::endl;

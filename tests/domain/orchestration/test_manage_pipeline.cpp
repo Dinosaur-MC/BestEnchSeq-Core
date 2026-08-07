@@ -1,17 +1,17 @@
 #define BESQ_TEST_MAIN
 
-#include "framework/test_framework.h"
-#include "domain/orchestration/pipelines/ManagePipeline.h"
-#include "domain/orchestration/types/ManageRequest.h"
-#include "domain/orchestration/types/ManageResult.h"
-#include "domain/business/ProfileManager.h"
+#include "common/io/FileUtils.hpp"
+#include "common/io/json.h"
 #include "domain/business/loaders/ProfileLoader.h"
+#include "domain/business/ProfileManager.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
 #include "domain/business/types/Profile.h"
-#include "common/io/json.h"
-#include "common/io/FileUtils.hpp"
+#include "domain/orchestration/pipelines/ManagePipeline.h"
+#include "domain/orchestration/types/ManageRequest.h"
+#include "domain/orchestration/types/ManageResult.h"
+#include "framework/test_framework.h"
 
 #include <filesystem>
 #include <fstream>
@@ -82,8 +82,7 @@ TEST_CASE("test_manage_load_file_merges") {
     // Prime the effective-view cache BEFORE the merge: without notify_mutated
     // a later resolve_effective would return this stale view.
     const auto& eff0 = pm.resolve_effective("builtin:vanilla");
-    expect(!eff0.ench().contains(NSID("minecraft:leeching")),
-           "no leeching before load");
+    expect(!eff0.ench().contains(NSID("minecraft:leeching")), "no leeching before load");
 
     auto dir = std::filesystem::temp_directory_path() / "besq_manage_loadfile";
     std::filesystem::create_directories(dir);
@@ -95,13 +94,11 @@ TEST_CASE("test_manage_load_file_merges") {
     load.file_path = path.string();
     auto res = ManagePipeline::run(pm, loader, load);
     expect(res.success, "LoadFile succeeds");
-    expect(pm.active().ench().contains(NSID("minecraft:leeching")),
-           "active profile contains merged enchantment");
+    expect(pm.active().ench().contains(NSID("minecraft:leeching")), "active profile contains merged enchantment");
 
     // notify_mutated invalidated the cache — the fresh view sees the merge.
     const auto& eff1 = pm.resolve_effective("builtin:vanilla");
-    expect(eff1.ench().contains(NSID("minecraft:leeching")),
-           "effective view refreshed after notify_mutated");
+    expect(eff1.ench().contains(NSID("minecraft:leeching")), "effective view refreshed after notify_mutated");
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_manage_load_file_merges");
@@ -128,8 +125,7 @@ TEST_CASE("test_manage_load_data_exists_guard") {
     req.filters = {(dir / "missing.json").string(), path.string()};
     auto res = ManagePipeline::run(pm, loader, req);
     expect(res.success, "LoadData with a missing filter does not throw");
-    expect(pm.active().ench().contains(NSID("minecraft:leeching")),
-           "existing filter's content merged in");
+    expect(pm.active().ench().contains(NSID("minecraft:leeching")), "existing filter's content merged in");
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_manage_load_data_exists_guard");
@@ -139,15 +135,13 @@ TEST_CASE("test_manage_load_data_exists_guard") {
 
 TEST_CASE("test_manage_load_directory") {
     static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_manage_dir_" + std::to_string(++counter));
+    auto dir = std::filesystem::temp_directory_path() / ("besq_manage_dir_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
 
     // A CSV profile (established load_directory pattern from
     // test_load_directory_skips_equipments_csv).
-    std::ofstream(dir / "pack.csv") <<
-        "id,name,max_level,multiplier,exclusive_set,supported_items\n"
-        "mod:sharp,Sharp,5,1,,\"#minecraft:swords\"\n";
+    std::ofstream(dir / "pack.csv") << "id,name,max_level,multiplier,exclusive_set,supported_items\n"
+                                       "mod:sharp,Sharp,5,1,,\"#minecraft:swords\"\n";
 
     ProfileManager pm;
     ProfileLoader loader;
@@ -228,8 +222,7 @@ TEST_CASE("test_manage_registry_edit") {
     // AddEnchantment — succeeds, duplicate rejected.
     ManageRequest add;
     add.action = ManageRequest::Action::AddEnchantment;
-    add.ench_info = EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5,
-                             1, false, {}, {}};
+    add.ench_info = EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {}};
     auto r = ManagePipeline::run(pm, loader, add);
     expect(r.success, "AddEnchantment succeeds");
     r = ManagePipeline::run(pm, loader, add);
@@ -239,18 +232,15 @@ TEST_CASE("test_manage_registry_edit") {
     ManageRequest mod;
     mod.action = ManageRequest::Action::ModifyEnchantment;
     mod.profile_name = "sharpness";
-    mod.ench_info = EnchInfo{NSID("minecraft:sharpness"), "", MCE::None, 7, -1, 0,
-                             false, {}, {}};
+    mod.ench_info = EnchInfo{NSID("minecraft:sharpness"), "", MCE::None, 7, -1, 0, false, {}, {}};
     r = ManagePipeline::run(pm, loader, mod);
     expect(r.success, "ModifyEnchantment succeeds");
-    expect(pm.active().ench().at(NSID("minecraft:sharpness")).max_level == 7,
-           "max_level raised to 7");
+    expect(pm.active().ench().at(NSID("minecraft:sharpness")).max_level == 7, "max_level raised to 7");
 
     // AddEquipment — succeeds, duplicate rejected.
     ManageRequest add_eq;
     add_eq.action = ManageRequest::Action::AddEquipment;
-    add_eq.equip = Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
-                             EquipmentTag::sword(), 1561};
+    add_eq.equip = Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561};
     r = ManagePipeline::run(pm, loader, add_eq);
     expect(r.success, "AddEquipment succeeds");
     r = ManagePipeline::run(pm, loader, add_eq);
@@ -262,8 +252,7 @@ TEST_CASE("test_manage_registry_edit") {
     rm_eq.profile_name = "minecraft:diamond_sword";
     r = ManagePipeline::run(pm, loader, rm_eq);
     expect(r.success, "RemoveEquipment succeeds");
-    expect(!pm.active().has_equipment(NSID("minecraft:diamond_sword")),
-           "equipment removed");
+    expect(!pm.active().has_equipment(NSID("minecraft:diamond_sword")), "equipment removed");
 
     // RemoveEnchantment.
     ManageRequest rm_ench;
@@ -271,8 +260,7 @@ TEST_CASE("test_manage_registry_edit") {
     rm_ench.profile_name = "sharpness";
     r = ManagePipeline::run(pm, loader, rm_ench);
     expect(r.success, "RemoveEnchantment succeeds");
-    expect(!pm.active().has_enchantment(NSID("minecraft:sharpness")),
-           "enchantment removed");
+    expect(!pm.active().has_enchantment(NSID("minecraft:sharpness")), "enchantment removed");
 
     // AddCategory — succeeds, duplicate rejected.
     ManageRequest add_cat;
@@ -309,8 +297,8 @@ TEST_CASE("test_manage_publish_profile") {
 
     ManageRequest add;
     add.action = ManageRequest::Action::AddEnchantment;
-    add.ench_info = EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5,
-                             1, false, {}, {NSID("#minecraft:swords")}};
+    add.ench_info =
+        EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}};
     auto r = ManagePipeline::run(pm, loader, add);
     expect(r.success, "AddEnchantment before publish");
 
@@ -326,10 +314,8 @@ TEST_CASE("test_manage_publish_profile") {
     expect(std::filesystem::exists(out), "publish file written");
 
     auto json = Json::parse(file_utils::read_file(out));
-    expect(json.has("version") && json["version"].as<std::string>() == "1.0.0",
-           "version embedded");
-    expect(json.has("release_tag") && json["release_tag"].as<std::string>() == "stable",
-           "tag embedded");
+    expect(json.has("version") && json["version"].as<std::string>() == "1.0.0", "version embedded");
+    expect(json.has("release_tag") && json["release_tag"].as<std::string>() == "stable", "tag embedded");
     expect(json.has("enchantments"), "published file carries enchantments");
     expect(!r.message.empty(), "publish success carries a message");
 
@@ -373,8 +359,7 @@ TEST_CASE("test_manage_import_registry") {
 
     // Prime the effective-view cache before import.
     const auto& eff0 = pm.resolve_effective("imp");
-    expect(!eff0.ench().contains(NSID("minecraft:leeching")),
-           "no leeching before import");
+    expect(!eff0.ench().contains(NSID("minecraft:leeching")), "no leeching before import");
 
     auto dir = std::filesystem::temp_directory_path() / "besq_manage_import";
     std::filesystem::create_directories(dir);
@@ -386,13 +371,11 @@ TEST_CASE("test_manage_import_registry") {
     imp.file_path = path.string();
     auto r = ManagePipeline::run(pm, loader, imp);
     expect(r.success, "ImportRegistry succeeds");
-    expect(pm.active().ench().contains(NSID("minecraft:leeching")),
-           "active profile contains imported enchantment");
+    expect(pm.active().ench().contains(NSID("minecraft:leeching")), "active profile contains imported enchantment");
 
     // notify_mutated invalidated the cache — the fresh view sees the merge.
     const auto& eff1 = pm.resolve_effective("imp");
-    expect(eff1.ench().contains(NSID("minecraft:leeching")),
-           "effective view refreshed after notify_mutated");
+    expect(eff1.ench().contains(NSID("minecraft:leeching")), "effective view refreshed after notify_mutated");
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_manage_import_registry");

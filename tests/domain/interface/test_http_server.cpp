@@ -29,8 +29,7 @@ using namespace web;
 
 /// 与服务端一致的准入上限：min(256, FD_SETSIZE - 1)。M1 后监听 fd 与连接 fd
 /// 合并进同一个 select，监听 fd 占用一个 fd_set 槽位，故连接上限 = FD_SETSIZE - 1。
-constexpr size_t kAdmitCap =
-    (FD_SETSIZE - 1 < 256) ? static_cast<size_t>(FD_SETSIZE - 1) : 256;
+constexpr size_t kAdmitCap = (FD_SETSIZE - 1 < 256) ? static_cast<size_t>(FD_SETSIZE - 1) : 256;
 
 TEST_CASE("test_http_server") {
     HttpServer server;
@@ -91,11 +90,14 @@ TEST_CASE("test_http_server") {
             // wait_readable==1（可读/错误）+ recv 0 字节 = 对端 EOF。
             if (wait_readable(c, 0) == 1) {
                 std::string chunk;
-                if (sock_recv_nb(c, chunk, 4096) == 0) ++eof_count;  // EOF，无字节
+                if (sock_recv_nb(c, chunk, 4096) == 0)
+                    ++eof_count; // EOF，无字节
             }
         }
-        if (eof_count > 0) saw_eof = true;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        if (eof_count > 0)
+            saw_eof = true;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     expect(saw_eof, "server rejected the over-cap connection (EOF observed)");
     expect(eof_count == 1, "exactly one over-cap connection was closed");
@@ -105,12 +107,14 @@ TEST_CASE("test_http_server") {
     for (int c : cs) {
         if (wait_readable(c, 0) == 1) {
             std::string chunk;
-            if (sock_recv_nb(c, chunk, 4096) == 0) continue;  // EOF → 被拒连接
+            if (sock_recv_nb(c, chunk, 4096) == 0)
+                continue; // EOF → 被拒连接
         }
         ++alive;
     }
     expect(alive == kAdmitCap, "all admitted connections remain open and polled");
-    for (int c : cs) sock_close(c);
+    for (int c : cs)
+        sock_close(c);
 
     server.stop();
     srv.join();

@@ -44,8 +44,7 @@ TEST_CASE("test_fifo_order") {
 
     int expected = 0, val{};
     while (q.try_pop(val)) {
-        expect(val == expected, "FIFO order violation. Got " +
-               std::to_string(val) + " expected " + std::to_string(expected));
+        expect(val == expected, "FIFO order violation. Got " + std::to_string(val) + " expected " + std::to_string(expected));
         ++expected;
     }
     expect(expected == N, "should pop all N items");
@@ -62,8 +61,8 @@ TEST_CASE("test_large_push_pop") {
 
     int expected = 0, val{};
     while (q.try_pop(val)) {
-        expect(val == expected, "FIFO order across blocks. Got " +
-               std::to_string(val) + " expected " + std::to_string(expected));
+        expect(val == expected,
+               "FIFO order across blocks. Got " + std::to_string(val) + " expected " + std::to_string(expected));
         ++expected;
     }
     expect(expected == N, "should pop all N items across blocks");
@@ -136,12 +135,9 @@ TEST_CASE("test_two_producers_one_consumer") {
 
     consumer.join();
 
-    expect(consumed.load() == TOTAL,
-           "should consume all items. Got: " + std::to_string(consumed.load()));
-    expect(sum_in.load() == sum_out.load(),
-           "sum in should equal sum out");
-    std::cout << "PASS: test_two_producers_one_consumer ("
-              << consumed.load() << "/" << TOTAL << " items)" << std::endl;
+    expect(consumed.load() == TOTAL, "should consume all items. Got: " + std::to_string(consumed.load()));
+    expect(sum_in.load() == sum_out.load(), "sum in should equal sum out");
+    std::cout << "PASS: test_two_producers_one_consumer (" << consumed.load() << "/" << TOTAL << " items)" << std::endl;
 }
 
 TEST_CASE("test_one_producer_two_consumers") {
@@ -159,9 +155,7 @@ TEST_CASE("test_one_producer_two_consumers") {
         done.store(true);
     });
 
-    auto consumer_fn = [&](std::atomic<int>& counter,
-                           std::atomic<int>& last,
-                           std::atomic<bool>& order_ok) {
+    auto consumer_fn = [&](std::atomic<int>& counter, std::atomic<int>& last, std::atomic<bool>& order_ok) {
         using Clock = std::chrono::steady_clock;
         auto deadline = Clock::now() + std::chrono::seconds(5);
         int val{};
@@ -174,28 +168,24 @@ TEST_CASE("test_one_producer_two_consumers") {
                 }
                 last.store(val);
             } else {
-                if (Clock::now() >= deadline) break;
+                if (Clock::now() >= deadline)
+                    break;
                 std::this_thread::yield();
             }
         }
     };
 
-    std::thread c1(consumer_fn, std::ref(consumed_a),
-                   std::ref(last_a), std::ref(order_ok_a));
-    std::thread c2(consumer_fn, std::ref(consumed_b),
-                   std::ref(last_b), std::ref(order_ok_b));
+    std::thread c1(consumer_fn, std::ref(consumed_a), std::ref(last_a), std::ref(order_ok_a));
+    std::thread c2(consumer_fn, std::ref(consumed_b), std::ref(last_b), std::ref(order_ok_b));
 
     producer.join();
     c1.join();
     c2.join();
 
     int total = consumed_a.load() + consumed_b.load();
-    expect(total == N, "consumers should read all items. Got " +
-           std::to_string(total) + "/" + std::to_string(N));
-    expect(consumed_a.load() > 0 && consumed_b.load() > 0,
-           "both consumers should read items");
-    std::cout << "PASS: test_one_producer_two_consumers (A="
-              << consumed_a.load() << " B=" << consumed_b.load()
+    expect(total == N, "consumers should read all items. Got " + std::to_string(total) + "/" + std::to_string(N));
+    expect(consumed_a.load() > 0 && consumed_b.load() > 0, "both consumers should read items");
+    std::cout << "PASS: test_one_producer_two_consumers (A=" << consumed_a.load() << " B=" << consumed_b.load()
               << " total=" << total << ")" << std::endl;
 }
 
@@ -240,7 +230,8 @@ TEST_CASE("test_multi_producer_multi_consumer_stress") {
         });
     }
 
-    for (auto& p : producers) p.join();
+    for (auto& p : producers)
+        p.join();
 
     // Drain
     using namespace std::chrono_literals;
@@ -249,17 +240,14 @@ TEST_CASE("test_multi_producer_multi_consumer_stress") {
         std::this_thread::sleep_for(10ms);
     }
 
-    for (auto& c : consumers) c.join();
+    for (auto& c : consumers)
+        c.join();
 
     expect(consumed.load() == TOTAL,
-           "should consume all items. Got " + std::to_string(consumed.load()) +
-           "/" + std::to_string(TOTAL));
+           "should consume all items. Got " + std::to_string(consumed.load()) + "/" + std::to_string(TOTAL));
     expect(sum_in.load() == sum_out.load(),
-           "sum in should equal sum out (got " +
-           std::to_string(sum_in.load()) + " vs " +
-           std::to_string(sum_out.load()) + ")");
-    std::cout << "PASS: test_multi_producer_multi_consumer_stress ("
-              << consumed.load() << "/" << TOTAL << " items, "
+           "sum in should equal sum out (got " + std::to_string(sum_in.load()) + " vs " + std::to_string(sum_out.load()) + ")");
+    std::cout << "PASS: test_multi_producer_multi_consumer_stress (" << consumed.load() << "/" << TOTAL << " items, "
               << PRODUCERS << "P/" << CONSUMERS << "C)" << std::endl;
 }
 
@@ -289,4 +277,3 @@ TEST_CASE("test_move_only_type") {
 
     std::cout << "PASS: test_move_only_type" << std::endl;
 }
-

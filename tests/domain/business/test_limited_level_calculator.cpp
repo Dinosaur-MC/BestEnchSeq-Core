@@ -169,10 +169,8 @@ TEST_CASE("test_ll_serializer_csv_columns") {
     EnchInfo info{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 0, 1, false, {}, tag_set("#minecraft:swords"), 10, 7};
 
     std::string csv_str = EnchSerializer::to_csv({info}, tag_reg);
-    expect(csv_str.find("min_cost_base") != std::string::npos,
-           "CSV header carries min_cost_base");
-    expect(csv_str.find("min_cost_per_level") != std::string::npos,
-           "CSV header carries min_cost_per_level");
+    expect(csv_str.find("min_cost_base") != std::string::npos, "CSV header carries min_cost_base");
+    expect(csv_str.find("min_cost_per_level") != std::string::npos, "CSV header carries min_cost_per_level");
     // The cost values appear in the data row.
     expect(csv_str.find(",10,") != std::string::npos, "CSV row carries min_cost_base value");
     expect(csv_str.find(",7,") != std::string::npos, "CSV row carries min_cost_per_level value");
@@ -193,8 +191,7 @@ TEST_CASE("test_ll_builtin_vanilla_data") {
     expect(sharp.min_cost_base > 0, "sharpness: min_cost_base carried from vanilla.json");
     expect(sharp.min_cost_per_level > 0, "sharpness: min_cost_per_level carried");
     expect(!sharp.is_treasure, "sharpness: not treasure");
-    expect(sharp.limited_level > 0,
-           "sharpness: COMPUTED limited_level > 0 (no longer a stored field)");
+    expect(sharp.limited_level > 0, "sharpness: COMPUTED limited_level > 0 (no longer a stored field)");
 
     const auto& mending = p.ench().at(NSID("minecraft:mending"));
     expect(mending.is_treasure, "mending: is_treasure from vanilla.json");

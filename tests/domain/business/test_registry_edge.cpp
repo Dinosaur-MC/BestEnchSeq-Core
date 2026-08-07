@@ -1,8 +1,8 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
+#include "framework/test_framework.h"
 
 namespace {
 
@@ -13,11 +13,10 @@ namespace {
 TEST_CASE("test_insert_with_exclusive") {
     EnchantmentRegistry reg;
 
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{NSID("minecraft:smite")},
-                   std::unordered_set<NSID>{}};
-    EnchInfo smite{NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{},
+    EnchInfo sharp{
+        NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{NSID("minecraft:smite")},
+        std::unordered_set<NSID>{}};
+    EnchInfo smite{NSID("minecraft:smite"),   "Smite", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                    std::unordered_set<NSID>{}};
 
     reg.insert(sharp);
@@ -33,8 +32,7 @@ TEST_CASE("test_insert_with_exclusive") {
 TEST_CASE("test_insert_or_assign_new") {
     EnchantmentRegistry reg;
 
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{},
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                    std::unordered_set<NSID>{}};
 
     auto [it, inserted] = reg.insert_or_assign(sharp);
@@ -48,11 +46,10 @@ TEST_CASE("test_insert_or_assign_new") {
 TEST_CASE("test_insert_or_assign_update_exclusive") {
     EnchantmentRegistry reg;
 
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{NSID("minecraft:smite")},
-                   std::unordered_set<NSID>{}};
-    EnchInfo smite{NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{},
+    EnchInfo sharp{
+        NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{NSID("minecraft:smite")},
+        std::unordered_set<NSID>{}};
+    EnchInfo smite{NSID("minecraft:smite"),   "Smite", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                    std::unordered_set<NSID>{}};
 
     reg.insert(sharp);
@@ -61,12 +58,17 @@ TEST_CASE("test_insert_or_assign_update_exclusive") {
            "initially sharpness and smite should be incompatible");
 
     // insert_or_assign sharpness with a new exclusive_set {bane}
-    EnchInfo sharp_updated{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
+    EnchInfo sharp_updated{NSID("minecraft:sharpness"),
+                           "Sharpness",
+                           MCE::All,
+                           5,
+                           5,
+                           1,
+                           false,
                            std::unordered_set<NSID>{NSID("minecraft:bane_of_arthropods")},
                            std::unordered_set<NSID>{}};
-    EnchInfo bane{NSID("minecraft:bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5, 1, false,
-                  std::unordered_set<NSID>{},
-                  std::unordered_set<NSID>{}};
+    EnchInfo bane{NSID("minecraft:bane_of_arthropods"), "Bane of Arthropods",      MCE::All, 5, 5, 1, false,
+                  std::unordered_set<NSID>{},           std::unordered_set<NSID>{}};
     reg.insert(bane);
 
     auto [it, assigned] = reg.insert_or_assign(sharp_updated);
@@ -85,17 +87,16 @@ TEST_CASE("test_insert_or_assign_update_exclusive") {
 TEST_CASE("test_update_exclusive_set") {
     EnchantmentRegistry reg;
 
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{NSID("minecraft:smite")},
-                   std::unordered_set<NSID>{}};
-    EnchInfo smite{NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{NSID("minecraft:sharpness")},
-                   std::unordered_set<NSID>{}};
+    EnchInfo sharp{
+        NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{NSID("minecraft:smite")},
+        std::unordered_set<NSID>{}};
+    EnchInfo smite{
+        NSID("minecraft:smite"),   "Smite", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{NSID("minecraft:sharpness")},
+        std::unordered_set<NSID>{}};
 
     reg.insert(sharp);
     reg.insert(smite);
-    expect(reg.is_incompatible(NSID("minecraft:sharpness"), NSID("minecraft:smite")),
-           "initially incompatible");
+    expect(reg.is_incompatible(NSID("minecraft:sharpness"), NSID("minecraft:smite")), "initially incompatible");
 
     // Update sharpness with empty exclusive_set
     EnchInfo sharp_patched = sharp;
@@ -113,22 +114,25 @@ TEST_CASE("test_update_exclusive_set") {
 TEST_CASE("test_erase_cascades") {
     EnchantmentRegistry reg;
 
-    EnchInfo enchA{NSID("minecraft:ench_a"), "Ench A", MCE::All, 5, 5, 1, false,
+    EnchInfo enchA{NSID("minecraft:ench_a"),
+                   "Ench A",
+                   MCE::All,
+                   5,
+                   5,
+                   1,
+                   false,
                    std::unordered_set<NSID>{NSID("minecraft:ench_b"), NSID("minecraft:ench_c")},
                    std::unordered_set<NSID>{}};
-    EnchInfo enchB{NSID("minecraft:ench_b"), "Ench B", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{},
+    EnchInfo enchB{NSID("minecraft:ench_b"),  "Ench B", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                    std::unordered_set<NSID>{}};
-    EnchInfo enchC{NSID("minecraft:ench_c"), "Ench C", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{},
+    EnchInfo enchC{NSID("minecraft:ench_c"),  "Ench C", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                    std::unordered_set<NSID>{}};
 
     reg.insert(enchA);
     reg.insert(enchB);
     reg.insert(enchC);
 
-    expect(reg.is_incompatible(NSID("minecraft:ench_a"), NSID("minecraft:ench_b")),
-           "A should be incompatible with B");
+    expect(reg.is_incompatible(NSID("minecraft:ench_a"), NSID("minecraft:ench_b")), "A should be incompatible with B");
     expect(reg.is_incompatible(NSID("minecraft:ench_b"), NSID("minecraft:ench_a")),
            "B should be incompatible with A (symmetric)");
 
@@ -145,11 +149,10 @@ TEST_CASE("test_erase_cascades") {
 TEST_CASE("test_clear_resets_incompatible") {
     EnchantmentRegistry reg;
 
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{NSID("minecraft:smite")},
-                   std::unordered_set<NSID>{}};
-    EnchInfo smite{NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{},
+    EnchInfo sharp{
+        NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{NSID("minecraft:smite")},
+        std::unordered_set<NSID>{}};
+    EnchInfo smite{NSID("minecraft:smite"),   "Smite", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
                    std::unordered_set<NSID>{}};
 
     reg.insert(sharp);
@@ -182,8 +185,7 @@ TEST_CASE("test_insert_or_assign_equipment") {
     (void)it2;
     expect(!assigned, "insert_or_assign existing should assign (not insert)");
     expect(reg.size() == 1, "size should still be 1");
-    expect(reg.at(NSID("minecraft:test")).name == "Overwritten",
-           "name should be updated to 'Overwritten'");
+    expect(reg.at(NSID("minecraft:test")).name == "Overwritten", "name should be updated to 'Overwritten'");
     TEST_PASS("test_insert_or_assign_equipment");
 }
 
@@ -201,8 +203,7 @@ TEST_CASE("test_insert_or_assign_tag") {
     auto [it2, assigned] = reg.insert_or_assign(tag2);
     (void)it2;
     expect(!assigned, "insert_or_assign existing tag should assign (not insert)");
-    expect(reg.at(EquipmentTag::sword()).name == "updated_sword",
-           "tag name should be updated to 'updated_sword'");
+    expect(reg.at(EquipmentTag::sword()).name == "updated_sword", "tag name should be updated to 'updated_sword'");
     TEST_PASS("test_insert_or_assign_tag");
 }
 
@@ -221,10 +222,10 @@ TEST_CASE("test_empty_registry") {
 TEST_CASE("test_clear_and_refill") {
     EnchantmentRegistry reg;
 
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
-    EnchInfo smite{NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
+    EnchInfo smite{NSID("minecraft:smite"),   "Smite", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
 
     reg.insert(sharp);
     reg.insert(smite);
@@ -245,8 +246,8 @@ TEST_CASE("test_iterator_walk") {
     EnchantmentRegistry reg;
     for (int i = 1; i <= 5; ++i) {
         std::string nsid = "minecraft:ench_" + std::to_string(i);
-        reg.insert(EnchInfo{NSID(nsid), "Ench " + std::to_string(i), MCE::All, 5, 5, 1, false,
-                            std::unordered_set<NSID>{}, std::unordered_set<NSID>{}});
+        reg.insert(EnchInfo{NSID(nsid), "Ench " + std::to_string(i), MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                            std::unordered_set<NSID>{}});
     }
 
     int count = 0;
@@ -261,8 +262,8 @@ TEST_CASE("test_iterator_walk") {
 TEST_CASE("test_reinsert_after_erase") {
     EnchantmentRegistry reg;
 
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                   std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
 
     reg.insert(sharp);
     expect(reg.size() == 1, "size should be 1 after insert");
@@ -290,8 +291,7 @@ TEST_CASE("test_eq_update") {
     Equipment updated{NSID("minecraft:diamond_sword"), "Diamond Sword X", EquipmentTag::sword(), 1561};
     bool ok = reg.update(updated);
     expect(ok, "update should succeed");
-    expect(reg.at(NSID("minecraft:diamond_sword")).name == "Diamond Sword X",
-           "at() should return updated name");
+    expect(reg.at(NSID("minecraft:diamond_sword")).name == "Diamond Sword X", "at() should return updated name");
     expect(reg.size() == 1, "size should remain unchanged after update");
     TEST_PASS("test_eq_update");
 }
@@ -303,9 +303,7 @@ TEST_CASE("test_eq_create_subset") {
     reg.insert(Equipment{NSID("minecraft:iron_sword"), "Iron Sword", EquipmentTag::sword(), 250});
     reg.insert(Equipment{NSID("minecraft:diamond_pickaxe"), "Diamond Pickaxe", EquipmentTag::pickaxe(), 1561});
 
-    auto subset = reg.create_subset([](const Equipment& eq) {
-        return eq.category == EquipmentTag::sword();
-    });
+    auto subset = reg.create_subset([](const Equipment& eq) { return eq.category == EquipmentTag::sword(); });
 
     expect(subset.size() == 2, "sword subset should have 2 items");
     expect(subset.contains(NSID("minecraft:diamond_sword")), "subset should contain diamond_sword");
@@ -334,10 +332,8 @@ TEST_CASE("test_eq_data_access") {
 
     const auto& map = reg.data();
     expect(map.size() == 2, "data map size should be 2");
-    expect(map.at(NSID("minecraft:diamond_sword")).name == "Diamond Sword",
-           "data map key access for diamond_sword");
-    expect(map.at(NSID("minecraft:iron_sword")).name == "Iron Sword",
-           "data map key access for iron_sword");
+    expect(map.at(NSID("minecraft:diamond_sword")).name == "Diamond Sword", "data map key access for diamond_sword");
+    expect(map.at(NSID("minecraft:iron_sword")).name == "Iron Sword", "data map key access for iron_sword");
     TEST_PASS("test_eq_data_access");
 }
 
@@ -353,9 +349,12 @@ TEST_CASE("test_eq_iterator") {
     bool found_iron_sword = false;
     bool found_pickaxe = false;
     for (const auto& eq : reg) {
-        if (eq.id == NSID("minecraft:diamond_sword")) found_diamond_sword = true;
-        if (eq.id == NSID("minecraft:iron_sword")) found_iron_sword = true;
-        if (eq.id == NSID("minecraft:diamond_pickaxe")) found_pickaxe = true;
+        if (eq.id == NSID("minecraft:diamond_sword"))
+            found_diamond_sword = true;
+        if (eq.id == NSID("minecraft:iron_sword"))
+            found_iron_sword = true;
+        if (eq.id == NSID("minecraft:diamond_pickaxe"))
+            found_pickaxe = true;
         ++count;
     }
     expect(count == 3, "range-for should visit exactly 3 items");
@@ -392,8 +391,7 @@ TEST_CASE("test_tag_update") {
     EquipmentTag updated{EquipmentTag::sword(), "weapon_sword"};
     bool ok = reg.update(updated);
     expect(ok, "update should succeed");
-    expect(reg.at(EquipmentTag::sword()).name == "weapon_sword",
-           "name should be updated via at()");
+    expect(reg.at(EquipmentTag::sword()).name == "weapon_sword", "name should be updated via at()");
     TEST_PASS("test_tag_update");
 }
 
@@ -405,9 +403,7 @@ TEST_CASE("test_tag_create_subset") {
     reg.insert(EquipmentTag{NSID("#minecraft:pickaxe"), "pickaxe"});
     reg.insert(EquipmentTag{NSID("#minecraft:axe"), "axe"});
 
-    auto subset = reg.create_subset([](const EquipmentTag& tag) {
-        return tag.name.find("sword") != std::string::npos;
-    });
+    auto subset = reg.create_subset([](const EquipmentTag& tag) { return tag.name.find("sword") != std::string::npos; });
 
     expect(subset.size() == 2, "subset should have 2 tags matching 'sword'");
     expect(subset.contains(NSID("#minecraft:sword")), "subset should contain sword");
@@ -437,10 +433,8 @@ TEST_CASE("test_tag_data") {
 
     const auto& map = reg.data();
     expect(map.size() == 2, "data map size should be 2");
-    expect(map.at(EquipmentTag::sword()).name == "sword",
-           "data map key access for sword");
-    expect(map.at(EquipmentTag::pickaxe()).name == "pickaxe",
-           "data map key access for pickaxe");
+    expect(map.at(EquipmentTag::sword()).name == "sword", "data map key access for sword");
+    expect(map.at(EquipmentTag::pickaxe()).name == "pickaxe", "data map key access for pickaxe");
     TEST_PASS("test_tag_data");
 }
 

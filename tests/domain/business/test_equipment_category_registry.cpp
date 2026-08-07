@@ -1,6 +1,6 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/business/registries/TagRegistry.h"
+#include "framework/test_framework.h"
 #include <stdexcept>
 
 // All 14 vanilla equipment tags for testing
@@ -26,12 +26,9 @@ static std::vector<EquipmentTag> all_builtin_tags() {
 TEST_CASE("test_builtins_present") {
     TagRegistry categories(all_builtin_tags());
 
-    expect(categories.size() == 14,
-           "builtins: should have 14 builtin tags");
-    expect(categories.contains(NSID("#minecraft:sword")),
-           "builtins: sword should be present");
-    expect(!categories.contains(NSID("#minecraft:any")),
-           "builtins: 'any' is not a builtin tag");
+    expect(categories.size() == 14, "builtins: should have 14 builtin tags");
+    expect(categories.contains(NSID("#minecraft:sword")), "builtins: sword should be present");
+    expect(!categories.contains(NSID("#minecraft:any")), "builtins: 'any' is not a builtin tag");
 
     std::cout << "PASS: test_builtins_present" << std::endl;
 }
@@ -67,13 +64,10 @@ TEST_CASE("test_custom_categories") {
     base.push_back({NSID("#minecraft:wand"), "wand"});
     TagRegistry categories(base);
 
-    expect(categories.size() == 16,
-           "custom: size should be 16 (14 builtin + 2 custom)");
+    expect(categories.size() == 16, "custom: size should be 16 (14 builtin + 2 custom)");
 
-    expect(categories.contains(NSID("#minecraft:mace")),
-           "custom: mace should be present");
-    expect(categories.contains(NSID("#minecraft:wand")),
-           "custom: wand should be present");
+    expect(categories.contains(NSID("#minecraft:mace")), "custom: mace should be present");
+    expect(categories.contains(NSID("#minecraft:wand")), "custom: wand should be present");
 
     std::cout << "PASS: test_custom_categories" << std::endl;
 }
@@ -85,12 +79,10 @@ TEST_CASE("test_duplicate_custom_skipped") {
     TagRegistry categories(base);
     categories.insert({EquipmentTag::boots(), "boots"});
 
-    expect(categories.size() == 15,
-           "duplicate: size should be 15 (boots insert rejected)");
+    expect(categories.size() == 15, "duplicate: size should be 15 (boots insert rejected)");
 
     // boots should still be present
-    expect(categories.contains(NSID("#minecraft:boots")),
-           "duplicate: boots should still be present");
+    expect(categories.contains(NSID("#minecraft:boots")), "duplicate: boots should still be present");
 
     std::cout << "PASS: test_duplicate_custom_skipped" << std::endl;
 }

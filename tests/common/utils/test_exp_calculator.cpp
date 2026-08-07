@@ -1,6 +1,6 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/business/types/Solution.h"
+#include "framework/test_framework.h"
 #include "utils/ExpCalculator.hpp"
 #include <vector>
 
@@ -36,4 +36,3 @@ TEST_CASE("test_peak_analysis") {
            "peak exp cost should match level_to_exp(10)");
     std::cout << "PASS: test_peak_analysis" << std::endl;
 }
-

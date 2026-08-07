@@ -1,11 +1,11 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "common/io/ByteStream.h"
 #include "domain/algorithm/components/StepTree.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
 #include "domain/algorithm/types/Solution.h"
+#include "framework/test_framework.h"
 #include <cstring>
 
 namespace {
@@ -23,8 +23,7 @@ TEST_CASE("test_ench_roundtrip") {
 
     expect(r.ok(), "deserialize should succeed");
     expect(result.id == original.id, "Ench id should match after round-trip");
-    expect(result.level == original.level,
-           "Ench level should match after round-trip");
+    expect(result.level == original.level, "Ench level should match after round-trip");
     TEST_PASS("test_ench_roundtrip");
 }
 
@@ -69,8 +68,7 @@ TEST_CASE("test_item_roundtrip") {
     expect(original.type == result.type, "Item type should match after round-trip");
     expect(original.dur == result.dur, "Item dur should match after round-trip");
     expect(original.ppn == result.ppn, "Item ppn should match after round-trip");
-    expect(original.enchs.size() == result.enchs.size(),
-           "Item enchs size should match after round-trip");
+    expect(original.enchs.size() == result.enchs.size(), "Item enchs size should match after round-trip");
     TEST_PASS("test_item_roundtrip");
 }
 
@@ -99,16 +97,11 @@ TEST_CASE("test_step_roundtrip") {
     r >> result;
 
     expect(r.ok(), "deserialize should succeed");
-    expect(original.base.type == result.base.type,
-           "Step base type should match after round-trip");
-    expect(original.base.dur == result.base.dur,
-           "Step base dur should match after round-trip");
-    expect(original.base.ppn == result.base.ppn,
-           "Step base ppn should match after round-trip");
-    expect(original.sacrifice.type == result.sacrifice.type,
-           "Step sacrifice type should match after round-trip");
-    expect(original.cost == result.cost,
-           "Step cost should match after round-trip");
+    expect(original.base.type == result.base.type, "Step base type should match after round-trip");
+    expect(original.base.dur == result.base.dur, "Step base dur should match after round-trip");
+    expect(original.base.ppn == result.base.ppn, "Step base ppn should match after round-trip");
+    expect(original.sacrifice.type == result.sacrifice.type, "Step sacrifice type should match after round-trip");
+    expect(original.cost == result.cost, "Step cost should match after round-trip");
     TEST_PASS("test_step_roundtrip");
 }
 
@@ -156,15 +149,11 @@ TEST_CASE("test_solution_roundtrip") {
     r >> result;
 
     expect(r.ok(), "deserialize should succeed");
-    expect(original.total_cost == result.total_cost,
-           "Solution total_cost should match after round-trip");
-    expect(original.steps.size() == result.steps.size(),
-           "Solution steps size should match after round-trip");
+    expect(original.total_cost == result.total_cost, "Solution total_cost should match after round-trip");
+    expect(original.steps.size() == result.steps.size(), "Solution steps size should match after round-trip");
     for (size_t i = 0; i < original.steps.size(); ++i) {
-        expect(original.steps[i].cost == result.steps[i].cost,
-               "Step cost should match after round-trip");
-        expect(original.steps[i].base.type == result.steps[i].base.type,
-               "Step base type should match after round-trip");
+        expect(original.steps[i].cost == result.steps[i].cost, "Step cost should match after round-trip");
+        expect(original.steps[i].base.type == result.steps[i].base.type, "Step base type should match after round-trip");
     }
     TEST_PASS("test_solution_roundtrip");
 }
@@ -189,9 +178,9 @@ TEST_CASE("test_truncated_ench_set_rejected") {
     // New EnchSet format: u64 mask (8 bytes) + u8 lvls[64] (64 bytes) = 72 bytes.
     // Write valid mask but incomplete level data to trigger read failure.
     ByteStreamWriter w;
-    w.u64(1);             // mask: bit 0 set → id=0 present
+    w.u64(1); // mask: bit 0 set → id=0 present
     uint8_t partial[] = {1, 2, 3};
-    w.bytes(partial, 3);  // only 3 level bytes out of 64 needed
+    w.bytes(partial, 3); // only 3 level bytes out of 64 needed
     ByteStreamReader r(w.data());
     algorithm::EnchSet result;
     r >> result;
@@ -213,8 +202,7 @@ TEST_CASE("test_overflow_count_solution") {
     algorithm::EnchSolution result;
     r >> result;
     // Should not crash. Result may be empty or partial.
-    expect(r.fail() || true,
-           "overflow count should not crash");
+    expect(r.fail() || true, "overflow count should not crash");
     TEST_PASS("test_overflow_count_solution");
 }
 
@@ -302,25 +290,33 @@ TEST_CASE("test_compact_ench_info_roundtrip") {
 // ─── StepTree ↔ flat-steps lossless round-trip ───────────────────────────
 
 TEST_CASE("test_step_tree_roundtrip") {
+    using algorithm::EnchStep;
     using algorithm::Item;
     using algorithm::ItemType;
-    using algorithm::EnchStep;
 
     // Balanced merge tree materialized in post-order (book+book merges
     // interleaved with equipment merges):
     //   S1: eq + b1 → eq1 ;  S2: b2 + b3 → b23 ;  S3: eq1 + b23 → fin
     Item eq{ItemType::Equip, 1561, 0, {}};
-    Item b1{ItemType::Book, 0, 0, {}};  b1.enchs.insert({0, 5});
-    Item b2{ItemType::Book, 0, 0, {}};  b2.enchs.insert({1, 2});
-    Item b3{ItemType::Book, 0, 0, {}};  b3.enchs.insert({2, 3});
-    Item eq1{ItemType::Equip, 1561, 0, {}}; eq1.enchs.insert({0, 5});
-    Item b23{ItemType::Book, 0, 0, {}}; b23.enchs.insert({1, 2}); b23.enchs.insert({2, 3});
+    Item b1{ItemType::Book, 0, 0, {}};
+    b1.enchs.insert({0, 5});
+    Item b2{ItemType::Book, 0, 0, {}};
+    b2.enchs.insert({1, 2});
+    Item b3{ItemType::Book, 0, 0, {}};
+    b3.enchs.insert({2, 3});
+    Item eq1{ItemType::Equip, 1561, 0, {}};
+    eq1.enchs.insert({0, 5});
+    Item b23{ItemType::Book, 0, 0, {}};
+    b23.enchs.insert({1, 2});
+    b23.enchs.insert({2, 3});
     Item fin{ItemType::Equip, 1561, 0, {}};
-    fin.enchs.insert({0, 5}); fin.enchs.insert({1, 2}); fin.enchs.insert({2, 3});
+    fin.enchs.insert({0, 5});
+    fin.enchs.insert({1, 2});
+    fin.enchs.insert({2, 3});
 
     std::vector<EnchStep> flat = {
-        {eq,  b1,  eq1, 3},
-        {b2,  b3,  b23, 4},
+        {eq, b1, eq1, 3},
+        {b2, b3, b23, 4},
         {eq1, b23, fin, 5},
     };
 
@@ -331,8 +327,8 @@ TEST_CASE("test_step_tree_roundtrip") {
     expect(back.size() == flat.size(), "round-trip should preserve step count");
     bool same = back.size() == flat.size();
     for (size_t i = 0; same && i < back.size(); ++i) {
-        if (!(back[i].base == flat[i].base) || !(back[i].sacrifice == flat[i].sacrifice)
-            || !(back[i].result == flat[i].result) || back[i].cost != flat[i].cost)
+        if (!(back[i].base == flat[i].base) || !(back[i].sacrifice == flat[i].sacrifice) ||
+            !(back[i].result == flat[i].result) || back[i].cost != flat[i].cost)
             same = false;
     }
     expect(same, "materialize(from_steps(flat)) should equal flat (lossless)");

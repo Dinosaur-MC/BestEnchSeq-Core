@@ -8,14 +8,14 @@
 struct Point {
     float x, y, z;
     int lifetime;
-    Point(float x_, float y_, float z_, int lt = 100)
-        : x(x_), y(y_), z(z_), lifetime(lt) {}
+    Point(float x_, float y_, float z_, int lt = 100) : x(x_), y(y_), z(z_), lifetime(lt) {}
 };
 
 struct ThrowOnConstruct {
     static bool should_throw;
     ThrowOnConstruct() {
-        if (should_throw) throw std::runtime_error("ctor fail");
+        if (should_throw)
+            throw std::runtime_error("ctor fail");
     }
     ~ThrowOnConstruct() = default;
 };
@@ -47,7 +47,7 @@ TEST_CASE("test_object_pool") {
 
     // ── Test 3: acquire beyond one block ────────────────────────────────
     {
-        ObjectPool<int> pool(2);  // 2^2 = 4, then 8, 16...
+        ObjectPool<int> pool(2); // 2^2 = 4, then 8, 16...
         std::vector<int*> ptrs;
         for (int i = 0; i < 20; ++i) {
             int* p = pool.acquire(i);
@@ -62,7 +62,8 @@ TEST_CASE("test_object_pool") {
     // ── Test 4: clear frees all blocks ──────────────────────────────────
     {
         ObjectPool<int> pool;
-        for (int i = 0; i < 100; ++i) (void)pool.acquire(i);
+        for (int i = 0; i < 100; ++i)
+            (void)pool.acquire(i);
         expect(pool.capacity() > 0, "non-zero before clear");
         pool.clear();
         expect(pool.capacity() == 0, "zero after clear");
@@ -74,8 +75,10 @@ TEST_CASE("test_object_pool") {
     {
         ObjectPool<int> pool;
         std::vector<int*> ptrs;
-        for (int i = 0; i < 50; ++i) ptrs.push_back(pool.acquire(i));
-        for (auto* p : ptrs) pool.release(p);
+        for (int i = 0; i < 50; ++i)
+            ptrs.push_back(pool.acquire(i));
+        for (auto* p : ptrs)
+            pool.release(p);
         expect(pool.available() == pool.capacity(), "all freed");
         // Re-acquire
         for (int i = 0; i < 50; ++i) {
@@ -94,8 +97,7 @@ TEST_CASE("test_object_pool") {
             (void)pool.acquire();
             expect(false, "should have thrown");
         } catch (const std::runtime_error&) {
-            expect(pool.available() == pool.capacity(),
-                   "node returned to free list after exception");
+            expect(pool.available() == pool.capacity(), "node returned to free list after exception");
         }
         ThrowOnConstruct::should_throw = false;
         // Pool should still be usable
@@ -124,5 +126,4 @@ TEST_CASE("test_object_pool") {
         pool.release(p);
         TEST_PASS("non_default_constructible");
     }
-
 }

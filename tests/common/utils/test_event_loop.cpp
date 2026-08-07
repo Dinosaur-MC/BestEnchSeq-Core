@@ -13,16 +13,12 @@
 
 /// Spin-wait for an atomic to reach a value, with timeout.
 template <typename T>
-void wait_for(const std::atomic<T>& var, T expected,
-              std::chrono::milliseconds timeout = std::chrono::seconds(5))
-{
+void wait_for(const std::atomic<T>& var, T expected, std::chrono::milliseconds timeout = std::chrono::seconds(5)) {
     auto deadline = std::chrono::steady_clock::now() + timeout;
     while (var.load(std::memory_order_acquire) != expected) {
         if (std::chrono::steady_clock::now() >= deadline) {
-            throw test_error("wait_for timed out waiting for " +
-                             std::to_string(static_cast<int>(expected)) +
-                             ", current=" +
-                             std::to_string(static_cast<int>(var.load())));
+            throw test_error("wait_for timed out waiting for " + std::to_string(static_cast<int>(expected)) +
+                             ", current=" + std::to_string(static_cast<int>(var.load())));
         }
         std::this_thread::yield();
     }
@@ -30,8 +26,7 @@ void wait_for(const std::atomic<T>& var, T expected,
 
 /// Drain barrier: post a no-op task and wait for completion.
 /// Ensures all previously posted tasks have been consumed.
-template <typename Loop>
-static void drain(Loop& loop) {
+template <typename Loop> static void drain(Loop& loop) {
     std::atomic<bool> done{false};
     loop.post([&done] { done.store(true, std::memory_order_release); });
     while (!done.load(std::memory_order_acquire))
@@ -62,7 +57,7 @@ TEST_CASE("test_start_stop") {
 TEST_CASE("test_start_twice") {
     MPMCEventLoop<> loop;
     loop.start();
-    loop.start();   // should be no-op
+    loop.start(); // should be no-op
     expect(loop.is_running(), "still running");
     loop.stop();
     std::cout << "PASS: test_start_twice" << std::endl;
@@ -72,14 +67,14 @@ TEST_CASE("test_stop_twice") {
     MPMCEventLoop<> loop;
     loop.start();
     loop.stop();
-    loop.stop();    // should be no-op
+    loop.stop(); // should be no-op
     expect(!loop.is_running(), "still stopped");
     std::cout << "PASS: test_stop_twice" << std::endl;
 }
 
 TEST_CASE("test_stop_without_start") {
     MPMCEventLoop<> loop;
-    loop.stop();    // should not crash
+    loop.stop(); // should not crash
     expect(!loop.is_running(), "not running");
     std::cout << "PASS: test_stop_without_start" << std::endl;
 }
@@ -214,8 +209,7 @@ TEST_CASE("test_bounded_batch_partial") {
 
     // Don't start — test raw capacity limit via try_post_batch
     size_t posted = loop.try_post_batch(batch.begin(), batch.end());
-    expect(posted <= 4, "at most 4 batched items accepted (got " +
-                        std::to_string(posted) + ")");
+    expect(posted <= 4, "at most 4 batched items accepted (got " + std::to_string(posted) + ")");
     expect(posted > 0, "at least 1 batched item accepted");
     loop.stop();
     std::cout << "PASS: test_bounded_batch_partial" << std::endl;
@@ -246,8 +240,8 @@ TEST_CASE("test_spsc_basic") {
 // ============================================================================
 
 TEST_CASE("test_concurrent_producers") {
-    constexpr int kProducers  = 4;
-    constexpr int kTasksEach  = 5000;
+    constexpr int kProducers = 4;
+    constexpr int kTasksEach = 5000;
     constexpr int kTotalTasks = kProducers * kTasksEach;
     MPMCEventLoop<> loop;
     std::atomic<int64_t> sum{0};
@@ -275,9 +269,7 @@ TEST_CASE("test_concurrent_producers") {
 
     expect(sum.load() == expected, "all concurrent tasks accounted for");
     loop.stop();
-    std::cout << "PASS: test_concurrent_producers ("
-              << kTotalTasks << " tasks from " << kProducers << " threads)"
-              << std::endl;
+    std::cout << "PASS: test_concurrent_producers (" << kTotalTasks << " tasks from " << kProducers << " threads)" << std::endl;
 }
 
 // ============================================================================
@@ -347,7 +339,7 @@ TEST_CASE("test_move_only_task") {
 
     loop.start();
     loop.post(std::move(task));
-    fut.wait();                         // wait for execution
+    fut.wait(); // wait for execution
     expect(val.load() == 42, "move-only task executed via post()");
     loop.stop();
     std::cout << "PASS: test_move_only_task" << std::endl;
@@ -384,4 +376,3 @@ TEST_CASE("test_destroy_on_stop") {
 // ============================================================================
 // main
 // ============================================================================
-

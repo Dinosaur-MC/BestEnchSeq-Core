@@ -1,11 +1,11 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
-#include "domain/algorithm/_strategies/dp_merge/DPMergeStateSerializer.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
+#include "domain/algorithm/_strategies/dp_merge/DPMergeStateSerializer.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
+#include "framework/test_framework.h"
 #include <memory>
 #include <span>
 using namespace algorithm;
@@ -92,31 +92,30 @@ namespace {
 // section against the same state.
 AlgorithmInput run_small_solve(DPMergeAlgorithm& algo) {
     std::vector<EnchInfo> infos(2);
-    infos[0].id         = 0;
-    infos[0].mul        = 1;
-    infos[0].mul_b      = 1;
-    infos[0].max_lvl    = 5;
-    infos[0].exc_mask   = 0;
+    infos[0].id = 0;
+    infos[0].mul = 1;
+    infos[0].mul_b = 1;
+    infos[0].max_lvl = 5;
+    infos[0].exc_mask = 0;
     infos[0].applicable = true;
-    infos[1].id         = 1;
-    infos[1].mul        = 2;
-    infos[1].mul_b      = 1;
-    infos[1].max_lvl    = 2;
-    infos[1].exc_mask   = 0;
+    infos[1].id = 1;
+    infos[1].mul = 2;
+    infos[1].mul_b = 1;
+    infos[1].max_lvl = 2;
+    infos[1].exc_mask = 0;
     infos[1].applicable = true;
 
     Equipment eq;
-    eq.id             = NSID("test");
+    eq.id = NSID("test");
     eq.max_durability = 1561;
     eq.applicable_enchs.insert(0);
     eq.applicable_enchs.insert(1);
 
     AlgorithmInput input;
     input.config.forge.platform = MCE::Java;
-    input.config.mode           = AlgorithmMode::direct;
-    input.registry.init(std::move(infos),
-                        {NSID("sharpness"), NSID("knockback")}, eq);
-    input.data = DirectPayload{};  // empty source → resolver generates all books
+    input.config.mode = AlgorithmMode::direct;
+    input.registry.init(std::move(infos), {NSID("sharpness"), NSID("knockback")}, eq);
+    input.data = DirectPayload{}; // empty source → resolver generates all books
     input.target.type = ItemType::Equip;
     input.target.enchs.insert(Ench{0, 5});
     input.target.enchs.insert(Ench{1, 2});
@@ -153,15 +152,13 @@ TEST_CASE("test_dp_merge_populated_cache_roundtrip") {
     // so the two serialize() calls may legitimately straddle a millisecond
     // boundary and differ by 1ms.  Zero it in both blobs so the comparison
     // asserts state fidelity rather than process timing.
-    constexpr size_t kTimestampOffset = 4 + 2 + 2 + 4;   // past magic/version/flags/num_sections
-    constexpr size_t kTimestampSize   = sizeof(int64_t); // MetaHeader::timestamp
+    constexpr size_t kTimestampOffset = 4 + 2 + 2 + 4; // past magic/version/flags/num_sections
+    constexpr size_t kTimestampSize = sizeof(int64_t); // MetaHeader::timestamp
     auto without_timestamp = [](std::vector<uint8_t> b) {
-        for (size_t i = kTimestampOffset;
-             i < kTimestampOffset + kTimestampSize && i < b.size(); ++i)
+        for (size_t i = kTimestampOffset; i < kTimestampOffset + kTimestampSize && i < b.size(); ++i)
             b[i] = 0;
         return b;
     };
-    expect(without_timestamp(blob1) == without_timestamp(blob2),
-           "restore must be faithful (re-serialize identical)");
+    expect(without_timestamp(blob1) == without_timestamp(blob2), "restore must be faithful (re-serialize identical)");
     TEST_PASS("test_dp_merge_populated_cache_roundtrip");
 }

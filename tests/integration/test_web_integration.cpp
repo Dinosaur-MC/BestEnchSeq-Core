@@ -25,19 +25,17 @@
 // All waits are bounded loops; nothing can hang the suite indefinitely.
 // =============================================================================
 
+#include "common/log/logger.h"
+#include "common/log/LogRingBuffer.h"
 #include "domain/interface/BesqContext.h"
-#include "domain/interface/web/WebModule.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Socket.h"
-#include "common/log/log.hpp"
-#include "common/log/LogRingBuffer.h"
+#include "domain/interface/web/WebModule.h"
 #define BESQ_TEST_MAIN
 
 #include "framework/test_framework.h"
 #include <atomic>
 #include <chrono>
-#include <cstdint>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -58,7 +56,8 @@ constexpr const char* kIndexHtml = "<h1>hi</h1>";
 /// bounded timeout captures the full reply.
 std::string http_exchange(HttpServer& server, const std::string& raw) {
     int c = sock_connect("127.0.0.1", server.port());
-    if (c < 0) return "";
+    if (c < 0)
+        return "";
     sock_send(c, raw, 3000);
     std::string body;
     sock_recv(c, body, 64 * 1024, 3000);
@@ -72,8 +71,10 @@ std::string http_exchange(HttpServer& server, const std::string& raw) {
 void recv_until(int client, std::string& got, const char* needle, int max_tries) {
     for (int i = 0; i < max_tries && got.find(needle) == std::string::npos; ++i) {
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
@@ -81,22 +82,26 @@ void recv_until(int client, std::string& got, const char* needle, int max_tries)
 /// serializer's exact spacing: finds the key, then the quoted value).
 std::string extract_task_id(const std::string& resp) {
     const auto tid = resp.find("\"task_id\"");
-    if (tid == std::string::npos) return "";
+    if (tid == std::string::npos)
+        return "";
     const auto colon = resp.find(':', tid);
-    if (colon == std::string::npos) return "";
+    if (colon == std::string::npos)
+        return "";
     const auto open = resp.find('"', colon);
-    if (open == std::string::npos) return "";
+    if (open == std::string::npos)
+        return "";
     const auto close = resp.find('"', open + 1);
-    if (close == std::string::npos) return "";
+    if (close == std::string::npos)
+        return "";
     return resp.substr(open + 1, close - open - 1);
 }
 
 /// POST a task body and return the full HTTP response.
 std::string post_task(HttpServer& server, const std::string& body) {
-    std::string req =
-        "POST /api/tasks HTTP/1.1\r\nHost: x\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body;
+    std::string req = "POST /api/tasks HTTP/1.1\r\nHost: x\r\n"
+                      "Content-Type: application/json\r\n"
+                      "Content-Length: " +
+                      std::to_string(body.size()) + "\r\n\r\n" + body;
     return http_exchange(server, req);
 }
 
@@ -107,14 +112,12 @@ void test_static_and_root(HttpServer& server) {
     // GET / → 307 + Location: /public/index.html
     auto root = http_exchange(server, "GET / HTTP/1.1\r\nHost: x\r\n\r\n");
     expect(root.find("307") != std::string::npos, "root redirects 307");
-    expect(root.find("Location: /public/index.html") != std::string::npos,
-           "root Location header");
+    expect(root.find("Location: /public/index.html") != std::string::npos, "root Location header");
 
     // GET /public/index.html → 200 text/html, embedded body
     auto idx = http_exchange(server, "GET /public/index.html HTTP/1.1\r\nHost: x\r\n\r\n");
     expect(idx.find("200 OK") != std::string::npos, "index serves 200");
-    expect(idx.find("Content-Type: text/html") != std::string::npos,
-           "index content-type text/html");
+    expect(idx.find("Content-Type: text/html") != std::string::npos, "index content-type text/html");
     expect(idx.find(kIndexHtml) != std::string::npos, "index body served");
 }
 
@@ -146,12 +149,10 @@ void test_health_status_settings(HttpServer& server) {
 void test_profiles(HttpServer& server) {
     auto prof = http_exchange(server, "GET /api/profiles HTTP/1.1\r\nHost: x\r\n\r\n");
     expect(prof.find("200 OK") != std::string::npos, "profiles list 200");
-    expect(prof.find("builtin:vanilla") != std::string::npos,
-           "profiles list contains builtin:vanilla");
+    expect(prof.find("builtin:vanilla") != std::string::npos, "profiles list contains builtin:vanilla");
     expect(prof.find("\"active\"") != std::string::npos, "profiles active field");
 
-    auto meta = http_exchange(
-        server, "GET /api/profiles/builtin:vanilla HTTP/1.1\r\nHost: x\r\n\r\n");
+    auto meta = http_exchange(server, "GET /api/profiles/builtin:vanilla HTTP/1.1\r\nHost: x\r\n\r\n");
     expect(meta.find("200 OK") != std::string::npos, "profile metadata 200");
     expect(meta.find("\"name\"") != std::string::npos, "meta name");
     expect(meta.find("\"dependencies\"") != std::string::npos, "meta dependencies");
@@ -168,24 +169,20 @@ void test_profiles(HttpServer& server) {
 // Case 4b: GET /api/profiles/{key}/enchantables/{item} over the real socket.
 // ---------------------------------------------------------------------------
 void test_enchantables(HttpServer& server) {
-    auto sw = http_exchange(server,
-        "GET /api/profiles/builtin:vanilla/enchantables/minecraft:diamond_sword "
-        "HTTP/1.1\r\nHost: x\r\n\r\n");
+    auto sw = http_exchange(server, "GET /api/profiles/builtin:vanilla/enchantables/minecraft:diamond_sword "
+                                    "HTTP/1.1\r\nHost: x\r\n\r\n");
     expect(sw.find("200 OK") != std::string::npos, "enchantables responds 200");
-    expect(sw.find("minecraft:sharpness") != std::string::npos,
-           "diamond_sword enchantables contains sharpness");
-    expect(sw.find("minecraft:efficiency") == std::string::npos,
-           "diamond_sword enchantables excludes efficiency");
+    expect(sw.find("minecraft:sharpness") != std::string::npos, "diamond_sword enchantables contains sharpness");
+    expect(sw.find("minecraft:efficiency") == std::string::npos, "diamond_sword enchantables excludes efficiency");
 }
 
 // ---------------------------------------------------------------------------
 // Case 5: POST /api/tasks → 202 + task_id + Location → poll to completed
 // ---------------------------------------------------------------------------
 void test_task_submit_and_poll(HttpServer& server) {
-    const std::string body =
-        "{\"target\":{\"item\":\"diamond_sword\",\"enchants\":"
-        "[{\"id\":\"sharpness\",\"level\":5}]},\"algorithm\":\"dp_merge\","
-        "\"max_solutions\":1}";
+    const std::string body = "{\"target\":{\"item\":\"diamond_sword\",\"enchants\":"
+                             "[{\"id\":\"sharpness\",\"level\":5}]},\"algorithm\":\"dp_merge\","
+                             "\"max_solutions\":1}";
     auto cpost = post_task(server, body);
 
     expect(cpost.find("202") != std::string::npos, "task submit returns 202 Accepted");
@@ -198,13 +195,12 @@ void test_task_submit_and_poll(HttpServer& server) {
     // couple of iterations.
     bool completed = false;
     for (int i = 0; i < 50 && !completed; ++i) {
-        auto st = http_exchange(server, "GET /api/tasks/" + id +
-                                            " HTTP/1.1\r\nHost: x\r\n\r\n");
+        auto st = http_exchange(server, "GET /api/tasks/" + id + " HTTP/1.1\r\nHost: x\r\n\r\n");
         if (st.find("\"state\":\"completed\"") != std::string::npos) {
             completed = true;
             expect(st.find("result") != std::string::npos, "completed task has result");
         } else if (st.find("\"state\":\"failed\"") != std::string::npos) {
-            break;  // surfaced by the completed assertion below
+            break; // surfaced by the completed assertion below
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -236,9 +232,8 @@ void test_task_submit_and_poll(HttpServer& server) {
 //   failure path is covered here by the snapshot below.
 // ---------------------------------------------------------------------------
 void test_task_failed_snapshot(HttpServer& server) {
-    const std::string body =
-        "{\"target\":{\"item\":\"diamond_sword\",\"enchants\":"
-        "[{\"id\":\"no_such_ench_xyz\",\"level\":1}]},\"algorithm\":\"dp_merge\"}";
+    const std::string body = "{\"target\":{\"item\":\"diamond_sword\",\"enchants\":"
+                             "[{\"id\":\"no_such_ench_xyz\",\"level\":1}]},\"algorithm\":\"dp_merge\"}";
     auto resp = post_task(server, body);
     expect(resp.find("202") != std::string::npos, "failing task accepted 202");
     const std::string id = extract_task_id(resp);
@@ -246,12 +241,10 @@ void test_task_failed_snapshot(HttpServer& server) {
 
     bool failed = false;
     for (int i = 0; i < 50 && !failed; ++i) {
-        auto st = http_exchange(server, "GET /api/tasks/" + id +
-                                            " HTTP/1.1\r\nHost: x\r\n\r\n");
+        auto st = http_exchange(server, "GET /api/tasks/" + id + " HTTP/1.1\r\nHost: x\r\n\r\n");
         if (st.find("\"state\":\"failed\"") != std::string::npos) {
             failed = true;
-            expect(st.find("\"error\"") != std::string::npos,
-                   "failed snapshot carries error field");
+            expect(st.find("\"error\"") != std::string::npos, "failed snapshot carries error field");
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -271,12 +264,11 @@ void test_task_failed_snapshot(HttpServer& server) {
 // place long before the completed publish. The stream head (200 + text/event-
 // stream) and the completed frame are both read from the live socket.
 void test_sse_events(HttpServer& server) {
-    const std::string body =
-        "{\"target\":{\"item\":\"diamond_chestplate\",\"enchants\":["
-        "{\"id\":\"protection\",\"level\":4},{\"id\":\"thorns\",\"level\":3},"
-        "{\"id\":\"unbreaking\",\"level\":3},{\"id\":\"mending\",\"level\":1}]},"
-        "\"source\":[{\"id\":\"protection\",\"level\":3},"
-        "{\"id\":\"thorns\",\"level\":2}],\"algorithm\":\"dp_merge\"}";
+    const std::string body = "{\"target\":{\"item\":\"diamond_chestplate\",\"enchants\":["
+                             "{\"id\":\"protection\",\"level\":4},{\"id\":\"thorns\",\"level\":3},"
+                             "{\"id\":\"unbreaking\",\"level\":3},{\"id\":\"mending\",\"level\":1}]},"
+                             "\"source\":[{\"id\":\"protection\",\"level\":3},"
+                             "{\"id\":\"thorns\",\"level\":2}],\"algorithm\":\"dp_merge\"}";
     auto resp = post_task(server, body);
     const std::string id = extract_task_id(resp);
     expect(!id.empty(), "SSE task created");
@@ -293,8 +285,7 @@ void test_sse_events(HttpServer& server) {
     recv_until(c, got, "text/event-stream", 200);
     expect(got.find("HTTP/1.1 200 OK") != std::string::npos, "SSE stream head status 200");
     expect(got.find("text/event-stream") != std::string::npos, "SSE content-type");
-    expect(got.find("Content-Length") == std::string::npos,
-           "SSE head has no Content-Length (open-ended stream)");
+    expect(got.find("Content-Length") == std::string::npos, "SSE head has no Content-Length (open-ended stream)");
 
     // Completed frame: the solve finishes ~100ms+ after the task was submitted;
     // 3s budget covers it with a wide margin.
@@ -302,8 +293,7 @@ void test_sse_events(HttpServer& server) {
     const auto pos = got.find("event: completed");
     expect(pos != std::string::npos, "SSE completed event frame on the wire");
     if (pos != std::string::npos) {
-        expect(got.find("data: ", pos) != std::string::npos,
-               "SSE completed frame carries a data payload");
+        expect(got.find("data: ", pos) != std::string::npos, "SSE completed frame carries a data payload");
     }
 
     sock_close(c);
@@ -339,12 +329,12 @@ void test_concurrent_clients(HttpServer& server) {
         clients.emplace_back([&] {
             for (int attempt = 0; attempt < 3 && ok.load() < 4; ++attempt) {
                 int c = sock_connect("127.0.0.1", server.port());
-                if (c < 0) continue;
+                if (c < 0)
+                    continue;
                 sock_send(c, "GET /health HTTP/1.1\r\nHost: x\r\n\r\n", 3000);
                 std::string got;
                 sock_recv(c, got, 16 * 1024, 3000);
-                bool good = got.find("200 OK") != std::string::npos &&
-                            got.find("status") != std::string::npos;
+                bool good = got.find("200 OK") != std::string::npos && got.find("status") != std::string::npos;
                 sock_close(c);
                 if (good) {
                     ++ok;
@@ -353,7 +343,8 @@ void test_concurrent_clients(HttpServer& server) {
             }
         });
     }
-    for (auto& t : clients) t.join();
+    for (auto& t : clients)
+        t.join();
     expect(ok.load() == 4, "all 4 concurrent clients got a 200 response");
 }
 
@@ -383,10 +374,11 @@ void test_slow_client_timeout(HttpServer& server) {
     expect(sock_send(c, "GET /api/status HT", 3000), "partial request sent");
 
     bool eof = false;
-    for (int i = 0; i < 1000 && !eof; ++i) {  // ≤10s
+    for (int i = 0; i < 1000 && !eof; ++i) { // ≤10s
         if (wait_readable(c, 0) == 1) {
             std::string chunk;
-            if (sock_recv_nb(c, chunk, 4096) == 0) eof = true;  // 0 字节 = EOF
+            if (sock_recv_nb(c, chunk, 4096) == 0)
+                eof = true; // 0 字节 = EOF
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -410,24 +402,21 @@ void test_logs_sse_live(HttpServer& server) {
     set_nonblocking(c);
 
     std::string got;
-    recv_until(c, got, "text/event-stream", 200);  // 流头先就绪
+    recv_until(c, got, "text/event-stream", 200); // 流头先就绪
     expect(got.find("HTTP/1.1 200 OK") != std::string::npos, "logs SSE stream head 200");
     expect(got.find("text/event-stream") != std::string::npos, "logs SSE content-type");
 
     // 订阅建立后再写日志 → 监听器 → hub → SSE 连接。
     Logger::instance().info("besq-live-marker-42");
     const std::string marker = "besq-live-marker-42";
-    recv_until(c, got, marker.c_str(), 400);  // ≤4s
+    recv_until(c, got, marker.c_str(), 400); // ≤4s
     const auto pos = got.find(marker);
     expect(pos != std::string::npos, "live log frame reaches the SSE client");
     if (pos != std::string::npos) {
         // 帧字段在 marker 之前（seq/level 先于 message）→ 用 rfind 从 marker 向前找。
-        expect(got.rfind("data: ", pos) != std::string::npos,
-               "live frame is an SSE data frame");
-        expect(got.rfind("\"logs\"", pos) != std::string::npos,
-               "live frame carries the {logs:[...]} envelope");
-        expect(got.rfind("\"level\"", pos) != std::string::npos,
-               "live frame record carries level");
+        expect(got.rfind("data: ", pos) != std::string::npos, "live frame is an SSE data frame");
+        expect(got.rfind("\"logs\"", pos) != std::string::npos, "live frame carries the {logs:[...]} envelope");
+        expect(got.rfind("\"level\"", pos) != std::string::npos, "live frame record carries level");
     }
     sock_close(c);
 }
@@ -446,20 +435,19 @@ void test_sse_progress_frames(HttpServer& server) {
     // Seed sword enchantments so the solve takes seconds, not milliseconds.
     const int kSeed = 12;
     for (int i = 0; i < kSeed; ++i) {
-        std::string body = R"({"id":"test:p_)" + std::to_string(i) +
-                           R"(","name":"P )" + std::to_string(i) +
+        std::string body = R"({"id":"test:p_)" + std::to_string(i) + R"(","name":"P )" + std::to_string(i) +
                            R"(","max_level":5,"multiplier":1,"supported_items":["#minecraft:swords"]})";
-        std::string req =
-            "POST /api/profiles/builtin:vanilla/enchantments HTTP/1.1\r\nHost: x\r\n"
-            "Content-Type: application/json\r\nContent-Length: " +
-            std::to_string(body.size()) + "\r\n\r\n" + body;
+        std::string req = "POST /api/profiles/builtin:vanilla/enchantments HTTP/1.1\r\nHost: x\r\n"
+                          "Content-Type: application/json\r\nContent-Length: " +
+                          std::to_string(body.size()) + "\r\n\r\n" + body;
         auto r = http_exchange(server, req);
         expect(r.find("201") != std::string::npos, "seeded enchantment " + std::to_string(i));
     }
 
     std::string target = R"({"target":{"item":"netherite_sword","enchants":[)";
     for (int i = 0; i < kSeed; ++i) {
-        if (i) target += ",";
+        if (i)
+            target += ",";
         target += R"({"id":"test:p_)" + std::to_string(i) + R"(","level":5})";
     }
     target += R"(]},"algorithm":"bb_dp"})";
@@ -482,8 +470,10 @@ void test_sse_progress_frames(HttpServer& server) {
     // event 行与 data 行可能分落两个 TCP 段：再收一小段确保整帧到齐后再断言。
     for (int i = 0; i < 50; ++i) {
         std::string chunk;
-        if (sock_recv_nb(c, chunk, 4096) > 0) got += chunk;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        if (sock_recv_nb(c, chunk, 4096) > 0)
+            got += chunk;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     const auto done = got.find("event: completed");
     expect(done != std::string::npos, "terminal completed frame on the wire");
@@ -496,12 +486,9 @@ void test_sse_progress_frames(HttpServer& server) {
             ++progress_frames;
             ++from;
         }
-        expect(progress_frames >= 1,
-               "at least one live progress frame published during solve");
-        expect(got.find("\"result\"", done) != std::string::npos,
-               "completed frame carries result");
-        expect(got.find("\"type\":\"completed\"", done) != std::string::npos,
-               "completed frame carries the completed type");
+        expect(progress_frames >= 1, "at least one live progress frame published during solve");
+        expect(got.find("\"result\"", done) != std::string::npos, "completed frame carries result");
+        expect(got.find("\"type\":\"completed\"", done) != std::string::npos, "completed frame carries the completed type");
     }
     sock_close(c);
 }

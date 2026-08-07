@@ -15,9 +15,9 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "domain/interface/components/http/SseStream.h"
 #include "domain/interface/components/http/Connection.h"
 #include "domain/interface/components/http/Socket.h"
+#include "domain/interface/components/http/SseStream.h"
 #include "framework/test_framework.h"
 #include <chrono>
 #include <memory>
@@ -31,7 +31,8 @@ namespace {
 class StubRouter {
 public:
     HttpResponse operator()(const HttpRequest& req) const {
-        if (req.path == "/events") return sse_stream_response();
+        if (req.path == "/events")
+            return sse_stream_response();
         return HttpResponse::not_found();
     }
 };
@@ -40,8 +41,10 @@ public:
 void recv_until(int client, std::string& got, const char* needle, int max_tries = 100) {
     for (int i = 0; i < max_tries && got.find(needle) == std::string::npos; ++i) {
         std::string c;
-        if (sock_recv_nb(client, c, 4096) > 0) got += c;
-        else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (sock_recv_nb(client, c, 4096) > 0)
+            got += c;
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 }
 } // namespace
@@ -59,8 +62,7 @@ static void test_frame_and_heartbeat() {
     expect(data.find("data: {\"progress\":0.5}") != std::string::npos, "progress frame");
     expect(data.find("data: {\"result\":{}}") != std::string::npos, "completed frame");
     expect(data.find(": ping") != std::string::npos, "heartbeat comment");
-    expect(data.find("event:") != std::string::npos || data.find("data:") != std::string::npos,
-           "has frames");
+    expect(data.find("event:") != std::string::npos || data.find("data:") != std::string::npos, "has frames");
     expect(data.find("event: progress") != std::string::npos, "progress event type present");
     expect(data.find("event: completed") != std::string::npos, "completed event type present");
     expect(data.find("\n\n") != std::string::npos, "frames blank-line terminated");
@@ -138,9 +140,9 @@ static void test_stream_heartbeat_ping() {
 
     auto sse = std::make_shared<SseStream>("sse-hb");
     expect(conn.set_stream(sse), "set_stream accepted");
-    conn.heartbeat_interval = std::chrono::milliseconds(0);   // force immediate heartbeat
+    conn.heartbeat_interval = std::chrono::milliseconds(0); // force immediate heartbeat
 
-    conn.push_sse_frame();   // idle stream -> ping comment frame flushed
+    conn.push_sse_frame(); // idle stream -> ping comment frame flushed
     std::string got;
     recv_until(client, got, ": ping");
     expect(got.find(": ping") != std::string::npos, "heartbeat ping flushed on idle stream");
@@ -167,7 +169,8 @@ static void test_stream_response_enters_stream_mode() {
     StubRouter router;
 
     expect(sock_send(client, "GET /events HTTP/1.1\r\nHost: x\r\n\r\n"), "send GET /events");
-    for (int i = 0; i < 100 && !conn.streaming(); ++i) conn.process(router);
+    for (int i = 0; i < 100 && !conn.streaming(); ++i)
+        conn.process(router);
     expect(conn.streaming(), "is_stream response enters stream mode");
     expect(!conn.wants_read(), "stream mode stops reading requests");
     expect(conn.alive(), "connection stays open in stream mode");
@@ -205,11 +208,14 @@ static void test_stream_fin_closes() {
     bool close_fired = false;
     conn.on_close([&] { close_fired = true; });
 
-    sock_close(client);                                    // 对端 FIN（无任何在途写）
+    sock_close(client); // 对端 FIN（无任何在途写）
     bool closed = false;
     for (int i = 0; i < 200 && conn.alive(); ++i) {
-        conn.process(StubRouter{});                        // 流模式：消费 FIN → 关闭
-        if (!conn.alive()) { closed = true; break; }
+        conn.process(StubRouter{}); // 流模式：消费 FIN → 关闭
+        if (!conn.alive()) {
+            closed = true;
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     expect(closed, "peer FIN closes the stream connection");
@@ -243,17 +249,20 @@ static void test_stream_disconnect_closes() {
     auto sse = std::make_shared<SseStream>("sse-disc");
     expect(conn.set_stream(sse), "set_stream accepted");
 
-    sock_close(client);                                  // peer disappears
-    sse->frame("bulk", std::string(2 << 20, 'x'));       // exceeds the send buffer
-    conn.push_sse_frame();                               // first flush fills the buffer
+    sock_close(client);                            // peer disappears
+    sse->frame("bulk", std::string(2 << 20, 'x')); // exceeds the send buffer
+    conn.push_sse_frame();                         // first flush fills the buffer
     // The peer's RST can land between two writes of the FIRST flush (Linux
     // send buffers are larger than the shrunk Windows ones), so the write
     // failure may close the connection inside push_sse_frame itself — both
     // that path and the retry-in-process path satisfy the contract.
     bool died = !conn.alive();
     for (int i = 0; i < 5000 && conn.alive() && !died; ++i) {
-        conn.process(StubRouter{});                      // stream mode -> retry blocked write
-        if (!conn.alive()) { died = true; break; }
+        conn.process(StubRouter{}); // stream mode -> retry blocked write
+        if (!conn.alive()) {
+            died = true;
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     expect(died, "write failure after client disconnect closes the connection");

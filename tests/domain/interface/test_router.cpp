@@ -1,7 +1,7 @@
 // tests/domain/interface/test_router.cpp
 #define BESQ_TEST_MAIN
-#include "domain/interface/components/http/Router.h"
 #include "domain/interface/components/http/HttpController.h"
+#include "domain/interface/components/http/Router.h"
 #include "framework/test_framework.h"
 #include <string>
 
@@ -16,7 +16,7 @@ public:
             BESQ_ROUTE(Get, "/demo", list),
             BESQ_ROUTE(Get, "/demo/{id}", get),
             BESQ_ROUTE(Post, "/demo", create),
-            BESQ_ROUTE(Post, "/items", create),   // 无 GET 定义：HEAD 应 405
+            BESQ_ROUTE(Post, "/items", create), // 无 GET 定义：HEAD 应 405
         };
     }
     Response list() { return Response::json(200, "OK", R"({"kind":"list"})"); }
@@ -28,42 +28,53 @@ public:
 
 // 编译期负面用例（consteval 求值）
 static_assert(validate_routes(std::array{
-    ConstRouteDef{Method::Get, "/x/{id}", nullptr},
-    ConstRouteDef{Method::Get, "/x/detail", nullptr},
-}) == false, "param+literal same level (same method) rejected");
+                  ConstRouteDef{Method::Get, "/x/{id}", nullptr},
+                  ConstRouteDef{Method::Get, "/x/detail", nullptr},
+              }) == false,
+              "param+literal same level (same method) rejected");
 static_assert(validate_routes(std::array{
-    ConstRouteDef{Method::Get, "/x/{id}", nullptr},
-    ConstRouteDef{Method::Post, "/x/detail", nullptr},
-}) == true, "cross-method same level allowed");
+                  ConstRouteDef{Method::Get, "/x/{id}", nullptr},
+                  ConstRouteDef{Method::Post, "/x/detail", nullptr},
+              }) == true,
+              "cross-method same level allowed");
 static_assert(validate_routes(std::array{
-    ConstRouteDef{Method::Get, "/dup", nullptr},
-    ConstRouteDef{Method::Get, "/dup", nullptr},
-}) == false, "duplicate rejected");
+                  ConstRouteDef{Method::Get, "/dup", nullptr},
+                  ConstRouteDef{Method::Get, "/dup", nullptr},
+              }) == false,
+              "duplicate rejected");
 static_assert(validate_routes(std::array{
-    ConstRouteDef{Method::Get, "/a/{id}/sub", nullptr},
-    ConstRouteDef{Method::Get, "/a/{id}/other", nullptr},
-}) == true, "same-level literals under param OK");
+                  ConstRouteDef{Method::Get, "/a/{id}/sub", nullptr},
+                  ConstRouteDef{Method::Get, "/a/{id}/other", nullptr},
+              }) == true,
+              "same-level literals under param OK");
 static_assert(validate_routes(std::array{
-    ConstRouteDef{Method::Get, "/demo/{}", nullptr},
-}) == false, "empty param name rejected");
+                  ConstRouteDef{Method::Get, "/demo/{}", nullptr},
+              }) == false,
+              "empty param name rejected");
 
 void test_ok() {
     Router r;
     r.register_controller<DemoCtl>();
-    HttpRequest req; req.method = Method::Get; req.path = "/demo";
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/demo";
     auto resp = r.dispatch(req);
     expect(resp.status == 200 && resp.body.find("list") != std::string::npos, "list");
     req.path = "/demo/42";
     auto resp2 = r.dispatch(req);
     expect(resp2.status == 200 && resp2.body.find("\"id\":\"42\"") != std::string::npos, "param");
-    req.method = Method::Post; req.path = "/demo"; req.body = "{}";
+    req.method = Method::Post;
+    req.path = "/demo";
+    req.body = "{}";
     expect(r.dispatch(req).status == 201, "create");
 }
 
 void test_404_405() {
     Router r;
     r.register_controller<DemoCtl>();
-    HttpRequest req; req.method = Method::Get; req.path = "/nope";
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/nope";
     auto nf = r.dispatch(req);
     expect(nf.status == 404, "unknown path 404");
     req.path = "/demo";
@@ -75,15 +86,18 @@ void test_404_405() {
 void test_head() {
     Router r;
     r.register_controller<DemoCtl>();
-    HttpRequest get_req; get_req.method = Method::Get; get_req.path = "/demo";
+    HttpRequest get_req;
+    get_req.method = Method::Get;
+    get_req.path = "/demo";
     auto get_resp = r.dispatch(get_req);
-    HttpRequest req; req.method = Method::Head; req.path = "/demo";
+    HttpRequest req;
+    req.method = Method::Head;
+    req.path = "/demo";
     auto resp = r.dispatch(req);
     expect(resp.status == 200, "HEAD matches GET route");
     expect(resp.body.empty(), "HEAD suppresses body");
-    expect(resp.header_value("Content-Length") == std::to_string(get_resp.body.size()),
-           "HEAD keeps GET Content-Length");
-    req.path = "/items";   // 仅 POST 定义的路由
+    expect(resp.header_value("Content-Length") == std::to_string(get_resp.body.size()), "HEAD keeps GET Content-Length");
+    req.path = "/items"; // 仅 POST 定义的路由
     auto mt = r.dispatch(req);
     expect(mt.status == 405, "HEAD on non-GET-only route still 405");
     expect(mt.header_value("Allow") == "POST", "Allow lists actual methods");
@@ -94,7 +108,9 @@ void test_head() {
 void test_percent_decode_path() {
     Router r;
     r.register_controller<DemoCtl>();
-    HttpRequest req; req.method = Method::Get; req.path = "/demo/42%2F7";
+    HttpRequest req;
+    req.method = Method::Get;
+    req.path = "/demo/42%2F7";
     auto resp = r.dispatch(req);
     expect(resp.status == 200 && resp.body.find("42/7") != std::string::npos, "decoded param");
 }
@@ -102,7 +118,10 @@ void test_percent_decode_path() {
 void test_bad_body_400() {
     Router r;
     r.register_controller<DemoCtl>();
-    HttpRequest req; req.method = Method::Post; req.path = "/demo"; req.body = "{not json";
+    HttpRequest req;
+    req.method = Method::Post;
+    req.path = "/demo";
+    req.body = "{not json";
     auto resp = r.dispatch(req);
     expect(resp.status == 400, "malformed body -> 400");
     expect(resp.body.find("INVALID_BODY") != std::string::npos, "code INVALID_BODY");

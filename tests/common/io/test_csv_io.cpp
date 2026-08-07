@@ -3,8 +3,8 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "common/io/CsvIO.h"
+#include "framework/test_framework.h"
 
 #include <filesystem>
 #include <string>
@@ -43,4 +43,3 @@ TEST_CASE("test_csv_write_roundtrip") {
     std::filesystem::remove(path, ec);
     TEST_PASS("csv write/parse round-trip");
 }
-

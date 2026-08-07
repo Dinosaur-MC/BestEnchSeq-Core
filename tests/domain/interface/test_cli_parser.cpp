@@ -1,10 +1,10 @@
 #define BESQ_TEST_MAIN
-#include "domain/interface/cli/CLIApp.h"
-#include "domain/interface/cli/EnchParser.h"
-#include "domain/interface/cli/ItemParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/EnchInfo.h"
+#include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/cli/EnchParser.h"
+#include "domain/interface/cli/ItemParser.h"
 #include "framework/test_framework.h"
 
 #include <iostream>
@@ -20,20 +20,15 @@ struct TestRegistries {
     EnchantmentRegistry ench_reg;
 
     TestRegistries() {
-        eq_reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
-                                NSID("#minecraft:sword"), 1561});
-        eq_reg.insert(Equipment{NSID("minecraft:sword"), "Sword",
-                                NSID("#minecraft:sword"), 250});
+        eq_reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561});
+        eq_reg.insert(Equipment{NSID("minecraft:sword"), "Sword", NSID("#minecraft:sword"), 250});
 
-        ench_reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness",
-                                 MCE::All, 5, 5, 1, false, {},
-                                 {NSID("#minecraft:sword")}});
-        ench_reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback",
-                                 MCE::All, 2, 2, 2, false, {},
-                                 {NSID("#minecraft:sword")}});
-        ench_reg.insert(EnchInfo{NSID("thermalfoundation:excavate"), "Excavate",
-                                 MCE::All, 3, 3, 2, false, {},
-                                 {NSID("#minecraft:sword")}});
+        ench_reg.insert(
+            EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:sword")}});
+        ench_reg.insert(
+            EnchInfo{NSID("minecraft:knockback"), "Knockback", MCE::All, 2, 2, 2, false, {}, {NSID("#minecraft:sword")}});
+        ench_reg.insert(
+            EnchInfo{NSID("thermalfoundation:excavate"), "Excavate", MCE::All, 3, 3, 2, false, {}, {NSID("#minecraft:sword")}});
     }
 };
 
@@ -42,9 +37,9 @@ struct TestRegistries {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_basic_args") {
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=5"};
+    const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=5"};
 
-    auto config = CLIApp::parse(5, const_cast<char **>(argv));
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
 
     expect(config.mode == "direct", "mode should default to direct");
     expect(config.target == "diamond_sword", "target should be diamond_sword");
@@ -96,8 +91,7 @@ TEST_CASE("test_colon_shorthand") {
 
 TEST_CASE("test_target_with_inline") {
     TestRegistries regs;
-    auto target = ItemParser::parse("diamond_sword[sharpness=3]",
-                                    regs.ench_reg, regs.eq_reg);
+    auto target = ItemParser::parse("diamond_sword[sharpness=3]", regs.ench_reg, regs.eq_reg);
     expect(!target.id.str().empty(), "id should be set");
     expect(target.enchantments.size() == 1, "should have one enchant");
 
@@ -118,22 +112,22 @@ TEST_CASE("test_parse_target_no_brackets") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_help_flag") {
-    const char *argv[] = {"besq", "--help"};
-    auto config = CLIApp::parse(2, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "--help"};
+    auto config = CLIApp::parse(2, const_cast<char**>(argv));
     expect(config.help == true, "--help should be true");
     std::cout << "  PASS: test_help_flag" << std::endl;
 }
 
 TEST_CASE("test_help_short_flag") {
-    const char *argv[] = {"besq", "-h"};
-    auto config = CLIApp::parse(2, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "-h"};
+    auto config = CLIApp::parse(2, const_cast<char**>(argv));
     expect(config.help == true, "-h should be true");
     std::cout << "  PASS: test_help_short_flag" << std::endl;
 }
 
 TEST_CASE("test_verbose_short_flag") {
-    const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "-v"};
-    auto config = CLIApp::parse(6, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "-v"};
+    auto config = CLIApp::parse(6, const_cast<char**>(argv));
     expect(config.verbose == true, "-v should set verbose");
     expect(config.target == "sword", "target still parsed");
     std::cout << "  PASS: test_verbose_short_flag" << std::endl;
@@ -144,13 +138,12 @@ TEST_CASE("test_verbose_short_flag") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_default_values") {
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=5"};
-    auto config = CLIApp::parse(5, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=5"};
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
     expect(config.mode == "direct", "default mode should be direct");
     expect(config.format == "text", "default format should be text");
     expect(config.solutions == 1, "default solutions should be 1");
-    expect(config.profile.has_value() && *config.profile == "builtin:vanilla",
-           "default profile should be builtin:vanilla");
+    expect(config.profile.has_value() && *config.profile == "builtin:vanilla", "default profile should be builtin:vanilla");
     expect(!config.profile_explicit, "profile_explicit false when --profile omitted");
     std::cout << "  PASS: test_default_values" << std::endl;
 }
@@ -162,22 +155,21 @@ TEST_CASE("test_default_values") {
 
 TEST_CASE("test_profile_explicit_flag") {
     {
-        const char *argv[] = {"besq", "--target", "diamond_sword", "--profile", "modpack"};
-        auto config = CLIApp::parse(5, const_cast<char **>(argv));
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--profile", "modpack"};
+        auto config = CLIApp::parse(5, const_cast<char**>(argv));
         expect(config.profile_explicit, "profile_explicit true when --profile passed");
-        expect(config.profile.has_value() && *config.profile == "modpack",
-               "profile value set to modpack");
+        expect(config.profile.has_value() && *config.profile == "modpack", "profile value set to modpack");
     }
     {
-        const char *argv[] = {"besq", "--target", "diamond_sword", "--profile=builtin:vanilla"};
-        auto config = CLIApp::parse(4, const_cast<char **>(argv));
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--profile=builtin:vanilla"};
+        auto config = CLIApp::parse(4, const_cast<char**>(argv));
         expect(config.profile_explicit, "--profile= form also sets profile_explicit");
         expect(config.profile.has_value() && *config.profile == "builtin:vanilla",
                "explicit --profile=builtin:vanilla keeps the value");
     }
     {
-        const char *argv[] = {"besq", "--target", "diamond_sword"};
-        auto config = CLIApp::parse(3, const_cast<char **>(argv));
+        const char* argv[] = {"besq", "--target", "diamond_sword"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
         expect(!config.profile_explicit, "profile_explicit false when --profile omitted");
     }
     std::cout << "  PASS: test_profile_explicit_flag" << std::endl;
@@ -188,11 +180,11 @@ TEST_CASE("test_profile_explicit_flag") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_unknown_flag_throws") {
-    const char *argv[] = {"besq", "--unknown_flag", "value"};
+    const char* argv[] = {"besq", "--unknown_flag", "value"};
     bool threw = false;
     try {
-        CLIApp::parse(3, const_cast<char **>(argv));
-    } catch (const std::runtime_error &) {
+        CLIApp::parse(3, const_cast<char**>(argv));
+    } catch (const std::runtime_error&) {
         threw = true;
     }
     expect(threw, "unknown flag should throw std::runtime_error");
@@ -215,8 +207,8 @@ TEST_CASE("test_enchantment_list") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_key_value_equals_form") {
-    const char *argv[] = {"besq", "--target=diamond_sword", "--source=sharpness=5"};
-    auto config = CLIApp::parse(3, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "--target=diamond_sword", "--source=sharpness=5"};
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
     expect(config.target == "diamond_sword", "target via --key=value form");
     expect(config.source == "sharpness=5", "source via --key=value form");
     std::cout << "  PASS: test_key_value_equals_form" << std::endl;
@@ -233,7 +225,7 @@ TEST_CASE("test_empty_enchantment_list") {
     bool threw = false;
     try {
         EnchParser::parse("", empty_reg);
-    } catch (const std::runtime_error &) {
+    } catch (const std::runtime_error&) {
         threw = true;
     }
     expect(threw, "empty source string should throw cli.err.empty_source");
@@ -246,8 +238,7 @@ TEST_CASE("test_empty_enchantment_list") {
 
 TEST_CASE("test_target_multiple_inline") {
     TestRegistries regs;
-    auto target = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]",
-                                    regs.ench_reg, regs.eq_reg);
+    auto target = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]", regs.ench_reg, regs.eq_reg);
     expect(!target.id.str().empty(), "equipment should be set");
     expect(target.enchantments.size() == 2, "two inline enchants");
     std::cout << "  PASS: test_target_multiple_inline" << std::endl;
@@ -259,8 +250,7 @@ TEST_CASE("test_target_multiple_inline") {
 
 TEST_CASE("test_target_with_ns_inline") {
     TestRegistries regs;
-    auto target = ItemParser::parse("diamond_sword[minecraft:sharpness=3]",
-                                    regs.ench_reg, regs.eq_reg);
+    auto target = ItemParser::parse("diamond_sword[minecraft:sharpness=3]", regs.ench_reg, regs.eq_reg);
     expect(!target.id.str().empty(), "equipment should be set");
     expect(target.enchantments.size() == 1, "one inline enchant");
     std::cout << "  PASS: test_target_with_ns_inline" << std::endl;
@@ -272,13 +262,13 @@ TEST_CASE("test_target_with_ns_inline") {
 
 TEST_CASE("test_solutions_flag") {
     {
-        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "0"};
-        auto config = CLIApp::parse(7, const_cast<char **>(argv));
+        const char* argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "0"};
+        auto config = CLIApp::parse(7, const_cast<char**>(argv));
         expect(config.solutions == 0, "--solutions 0");
     }
     {
-        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions=10"};
-        auto config = CLIApp::parse(6, const_cast<char **>(argv));
+        const char* argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions=10"};
+        auto config = CLIApp::parse(6, const_cast<char**>(argv));
         expect(config.solutions == 10, "--solutions=10");
     }
     std::cout << "  PASS: test_solutions_flag" << std::endl;
@@ -289,11 +279,11 @@ TEST_CASE("test_solutions_flag") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_missing_target_throws") {
-    const char *argv[] = {"besq", "--source", "sharpness=5"};
+    const char* argv[] = {"besq", "--source", "sharpness=5"};
     bool threw = false;
     try {
-        CLIApp::parse(3, const_cast<char **>(argv));
-    } catch (const std::runtime_error &) {
+        CLIApp::parse(3, const_cast<char**>(argv));
+    } catch (const std::runtime_error&) {
         threw = true;
     }
     expect(threw, "missing --target should throw");
@@ -301,8 +291,8 @@ TEST_CASE("test_missing_target_throws") {
 }
 
 TEST_CASE("test_source_not_required") {
-    const char *argv[] = {"besq", "--target", "diamond_sword"};
-    auto config = CLIApp::parse(3, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "--target", "diamond_sword"};
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
     expect(config.source.empty(), "--source should be empty when not provided");
     std::cout << "  PASS: test_source_not_required" << std::endl;
 }
@@ -312,20 +302,17 @@ TEST_CASE("test_source_not_required") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_input_alone_valid") {
-    const char *argv[] = {"besq", "--input", "inv.json"};
-    auto config = CLIApp::parse(3, const_cast<char **>(argv));
-    expect(config.input.has_value() && *config.input == "inv.json",
-           "--input should be set");
-    expect(config.target.empty(),
-           "--input alone must not trigger the missing-target error");
+    const char* argv[] = {"besq", "--input", "inv.json"};
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
+    expect(config.input.has_value() && *config.input == "inv.json", "--input should be set");
+    expect(config.target.empty(), "--input alone must not trigger the missing-target error");
     std::cout << "  PASS: test_input_alone_valid" << std::endl;
 }
 
 TEST_CASE("test_input_with_verbosity") {
-    const char *argv[] = {"besq", "--input", "inv.json", "--verbose"};
-    auto config = CLIApp::parse(4, const_cast<char **>(argv));
-    expect(config.input.has_value() && *config.input == "inv.json",
-           "--input preserved alongside --verbose");
+    const char* argv[] = {"besq", "--input", "inv.json", "--verbose"};
+    auto config = CLIApp::parse(4, const_cast<char**>(argv));
+    expect(config.input.has_value() && *config.input == "inv.json", "--input preserved alongside --verbose");
     expect(config.verbose, "--verbose still parsed");
     expect(config.target.empty(), "no --target required with --input present");
     std::cout << "  PASS: test_input_with_verbosity" << std::endl;
@@ -370,7 +357,7 @@ TEST_CASE("test_ench_invalid_level_throws") {
     bool threw = false;
     try {
         EnchParser::parse("sharpness=abc", empty_reg);
-    } catch (const std::runtime_error &) {
+    } catch (const std::runtime_error&) {
         threw = true;
     }
     expect(threw, "invalid level 'abc' after '=' should throw");
@@ -383,21 +370,21 @@ TEST_CASE("test_ench_invalid_level_throws") {
 
 TEST_CASE("test_solutions_invalid_throws") {
     {
-        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "abc"};
+        const char* argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "abc"};
         bool threw = false;
         try {
-            CLIApp::parse(7, const_cast<char **>(argv));
-        } catch (const std::runtime_error &) {
+            CLIApp::parse(7, const_cast<char**>(argv));
+        } catch (const std::runtime_error&) {
             threw = true;
         }
         expect(threw, "invalid --solutions 'abc' should throw");
     }
     {
-        const char *argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "-1"};
+        const char* argv[] = {"besq", "--target", "sword", "--source", "sharp=5", "--solutions", "-1"};
         bool threw = false;
         try {
-            CLIApp::parse(7, const_cast<char **>(argv));
-        } catch (const std::runtime_error &) {
+            CLIApp::parse(7, const_cast<char**>(argv));
+        } catch (const std::runtime_error&) {
             threw = true;
         }
         expect(threw, "negative --solutions should throw");
@@ -410,8 +397,8 @@ TEST_CASE("test_solutions_invalid_throws") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_double_dash_stops_parsing") {
-    const char *argv[] = {"besq", "--target", "sword", "--", "--source", "sharpness=5"};
-    auto config = CLIApp::parse(6, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "--target", "sword", "--", "--source", "sharpness=5"};
+    auto config = CLIApp::parse(6, const_cast<char**>(argv));
     expect(config.target == "sword", "target parsed before --");
     expect(config.source.empty(), "source should be empty because -- stops parsing");
     std::cout << "  PASS: test_double_dash_stops_parsing" << std::endl;
@@ -422,14 +409,10 @@ TEST_CASE("test_double_dash_stops_parsing") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_all_options") {
-    const char *argv[] = {
-        "besq", "--target", "sword", "--source", "sharp=5",
-        "--mode", "inventory", "--platform", "bedrock",
-        "--format", "json", "--solutions", "3",
-        "--input", "in.json", "--output", "out.json",
-        "--import", "myreg,custom:v1"
-    };
-    auto config = CLIApp::parse(19, const_cast<char **>(argv));
+    const char* argv[] = {"besq",       "--target", "sword",    "--source", "sharp=5",        "--mode", "inventory",
+                          "--platform", "bedrock",  "--format", "json",     "--solutions",    "3",      "--input",
+                          "in.json",    "--output", "out.json", "--import", "myreg,custom:v1"};
+    auto config = CLIApp::parse(19, const_cast<char**>(argv));
     expect(config.target == "sword", "target");
     expect(config.source == "sharp=5", "source");
     expect(config.mode == "inventory", "mode");
@@ -447,8 +430,8 @@ TEST_CASE("test_all_options") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_source_flag") {
-    const char *argv[] = {"besq", "--target", "diamond_sword", "--source", "efficiency=4,unbreaking=3"};
-    auto config = CLIApp::parse(5, const_cast<char **>(argv));
+    const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "efficiency=4,unbreaking=3"};
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
     expect(config.target == "diamond_sword", "target should be diamond_sword");
     expect(config.source == "efficiency=4,unbreaking=3", "source should be efficiency=4,unbreaking=3");
     std::cout << "  PASS: test_source_flag" << std::endl;
@@ -459,10 +442,9 @@ TEST_CASE("test_source_flag") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("test_import_default_nullopt") {
-    const char *argv[] = {"besq", "--target", "sword"};
-    auto config = CLIApp::parse(3, const_cast<char **>(argv));
-    expect(!config.import_files.has_value(),
-           "--import should be nullopt when not specified");
+    const char* argv[] = {"besq", "--target", "sword"};
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
+    expect(!config.import_files.has_value(), "--import should be nullopt when not specified");
     std::cout << "  PASS: test_import_default_nullopt" << std::endl;
 }
 

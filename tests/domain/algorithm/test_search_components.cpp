@@ -9,7 +9,6 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/algorithm/components/Heuristic.h"
 #include "domain/algorithm/components/ItemPool.h"
 #include "domain/algorithm/components/SearchUtils.h"
@@ -21,6 +20,7 @@
 #include "domain/algorithm/types/Item.h"
 #include "domain/business/types/Enchantment.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "framework/test_framework.h"
 
 #include <cstdint>
 #include <string>
@@ -30,26 +30,22 @@ namespace {
 
 // Compact ids after sorting by NSID id part:
 //   0 = bane_of_arthropods, 1 = knockback, 2 = sharpness
-constexpr int16_t ID_BANE       = 0;
-constexpr int16_t ID_KNOCKBACK  = 1;
-constexpr int16_t ID_SHARPNESS  = 2;
+constexpr int16_t ID_BANE = 0;
+constexpr int16_t ID_KNOCKBACK = 1;
+constexpr int16_t ID_SHARPNESS = 2;
 
 algorithm::Ench E(int16_t id, int16_t lvl) {
-    return algorithm::Ench{static_cast<algorithm::Ench::value_type>(id),
-                           static_cast<algorithm::Ench::value_type>(lvl)};
+    return algorithm::Ench{static_cast<algorithm::Ench::value_type>(id), static_cast<algorithm::Ench::value_type>(lvl)};
 }
 
 void build_reg(algorithm::EnchReg& reg) {
     std::vector<EnchInfo> dom;
-    dom.emplace_back(NSID("bane_of_arthropods"), "Bane", MCE::All, 5, 5, 1, false,
-                     std::unordered_set<NSID>{NSID("sharpness")},
+    dom.emplace_back(NSID("bane_of_arthropods"), "Bane", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{NSID("sharpness")},
                      std::unordered_set<NSID>{EquipmentTag::sword()});
-    dom.emplace_back(NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false,
-                     std::unordered_set<NSID>{},
+    dom.emplace_back(NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false, std::unordered_set<NSID>{},
                      std::unordered_set<NSID>{EquipmentTag::sword()});
     dom.emplace_back(NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-                     std::unordered_set<NSID>{NSID("bane_of_arthropods")},
-                     std::unordered_set<NSID>{EquipmentTag::sword()});
+                     std::unordered_set<NSID>{NSID("bane_of_arthropods")}, std::unordered_set<NSID>{EquipmentTag::sword()});
 
     std::vector<std::pair<std::string, EnchInfo>> sorted;
     for (const auto& i : dom) {
@@ -57,8 +53,7 @@ void build_reg(algorithm::EnchReg& reg) {
         const auto p = s.find(':');
         sorted.emplace_back(p != std::string::npos ? s.substr(p + 1) : s, i);
     }
-    std::sort(sorted.begin(), sorted.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
     algorithm::Equipment eq;
     eq.id = "test";
@@ -86,11 +81,11 @@ void build_reg(algorithm::EnchReg& reg) {
     for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
         const auto& ei = sorted[i].second;
         algorithm::EnchInfo info;
-        info.id         = static_cast<uint8_t>(i);
-        info.mul        = static_cast<uint8_t>(ei.multiplier);
-        info.mul_b      = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
-        info.max_lvl    = static_cast<uint8_t>(ei.max_level);
-        info.exc_mask   = exc[i];
+        info.id = static_cast<uint8_t>(i);
+        info.mul = static_cast<uint8_t>(ei.multiplier);
+        info.mul_b = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
+        info.max_lvl = static_cast<uint8_t>(ei.max_level);
+        info.exc_mask = exc[i];
         info.applicable = ei.supported_items.count(EquipmentTag::sword()) > 0;
         compact.push_back(std::move(info));
     }
@@ -99,13 +94,15 @@ void build_reg(algorithm::EnchReg& reg) {
 
 algorithm::Item equip(std::initializer_list<algorithm::Ench> enchs) {
     algorithm::Item it{algorithm::ItemType::Equip, 1561, 0, {}};
-    for (auto& e : enchs) it.enchs.insert(e);
+    for (auto& e : enchs)
+        it.enchs.insert(e);
     return it;
 }
 
 algorithm::Item book(std::initializer_list<algorithm::Ench> enchs) {
     algorithm::Item it{algorithm::ItemType::Book, 0, 0, {}};
-    for (auto& e : enchs) it.enchs.insert(e);
+    for (auto& e : enchs)
+        it.enchs.insert(e);
     return it;
 }
 
@@ -130,8 +127,7 @@ TEST_CASE("test_heuristic_basic") {
 
     // sharpness 2 (miss 3×1) + knockback 1 (miss 1×1) = 4
     std::vector<algorithm::Item> two{equip({E(ID_SHARPNESS, 2), E(ID_KNOCKBACK, 1)})};
-    expect(algorithm::HeuristicBasic::compute(
-               two, reg, {E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}, buf, dirty) == 4,
+    expect(algorithm::HeuristicBasic::compute(two, reg, {E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}, buf, dirty) == 4,
            "HeuristicBasic: multi-enchant h");
     TEST_PASS("HeuristicBasic::compute");
 }
@@ -146,12 +142,10 @@ TEST_CASE("test_heuristic_pool") {
     std::vector<int16_t> buf, dirty;
     std::vector<algorithm::ItemPool::ItemID> ids{id};
 
-    expect(algorithm::Heuristic::compute(ids, pool, reg, {E(ID_SHARPNESS, 5)}, buf, dirty) == 3,
-           "Heuristic: sharp2 → h=3");
+    expect(algorithm::Heuristic::compute(ids, pool, reg, {E(ID_SHARPNESS, 5)}, buf, dirty) == 3, "Heuristic: sharp2 → h=3");
 
     std::vector<algorithm::ItemPool::ItemID> none;
-    expect(algorithm::Heuristic::compute(none, pool, reg, {E(ID_SHARPNESS, 5)}, buf, dirty) == 0,
-           "Heuristic: empty ids → 0");
+    expect(algorithm::Heuristic::compute(none, pool, reg, {E(ID_SHARPNESS, 5)}, buf, dirty) == 0, "Heuristic: empty ids → 0");
     TEST_PASS("Heuristic::compute");
 }
 
@@ -161,20 +155,20 @@ TEST_CASE("test_item_pool") {
     algorithm::ItemPool pool;
     pool.set_max(2);
 
-    const auto a = pool.add(equip({E(ID_SHARPNESS, 5)}));  // id 0, size 1
-    const auto b = pool.add(equip({E(ID_SHARPNESS, 5)}));  // identical → dedup
+    const auto a = pool.add(equip({E(ID_SHARPNESS, 5)})); // id 0, size 1
+    const auto b = pool.add(equip({E(ID_SHARPNESS, 5)})); // identical → dedup
     expect_eq(a, b, "ItemPool: identical items dedup to the same id");
     expect(pool.size() == 1, "ItemPool: size 1 after dedup");
 
-    const auto c = pool.add(equip({E(ID_KNOCKBACK, 2)}));  // id 1, size 2
+    const auto c = pool.add(equip({E(ID_KNOCKBACK, 2)})); // id 1, size 2
     expect(c != algorithm::ItemPool::INVALID_ITEM_ID, "ItemPool: second distinct item fits");
-    const auto d = pool.add(equip({E(ID_KNOCKBACK, 1)}));  // full (size 2 ≥ max 2)
+    const auto d = pool.add(equip({E(ID_KNOCKBACK, 1)})); // full (size 2 ≥ max 2)
     expect_eq(d, algorithm::ItemPool::INVALID_ITEM_ID, "ItemPool: full → INVALID_ITEM_ID");
     expect(pool.size() == 2, "ItemPool: size 2 at capacity");
 
     std::vector<algorithm::ItemPool::ItemID> v1{a};
     expect_eq(pool.hash_ids(v1), pool.hash_ids(v1), "ItemPool: hash_ids deterministic");
-    const auto v2 = pool.add(equip({E(ID_KNOCKBACK, 2)}));  // dedup → id 1
+    const auto v2 = pool.add(equip({E(ID_KNOCKBACK, 2)})); // dedup → id 1
     expect_eq(c, v2, "ItemPool: re-adding identical content returns the same id");
 
     pool.clear();
@@ -190,16 +184,11 @@ TEST_CASE("test_meets_target") {
     algorithm::EnchReg reg;
     build_reg(reg);
     const algorithm::Item t = equip({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)});
-    expect(algorithm::meets_target(equip({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}), t),
-           "meets_target: exact");
-    expect(algorithm::meets_target(equip({E(ID_SHARPNESS, 6), E(ID_KNOCKBACK, 2)}), t),
-           "meets_target: over-level");
-    expect(!algorithm::meets_target(equip({E(ID_SHARPNESS, 4), E(ID_KNOCKBACK, 2)}), t),
-           "meets_target: under-level");
-    expect(!algorithm::meets_target(equip({E(ID_SHARPNESS, 5)}), t),
-           "meets_target: missing enchant");
-    expect(!algorithm::meets_target(book({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}), t),
-           "meets_target: wrong item type");
+    expect(algorithm::meets_target(equip({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}), t), "meets_target: exact");
+    expect(algorithm::meets_target(equip({E(ID_SHARPNESS, 6), E(ID_KNOCKBACK, 2)}), t), "meets_target: over-level");
+    expect(!algorithm::meets_target(equip({E(ID_SHARPNESS, 4), E(ID_KNOCKBACK, 2)}), t), "meets_target: under-level");
+    expect(!algorithm::meets_target(equip({E(ID_SHARPNESS, 5)}), t), "meets_target: missing enchant");
+    expect(!algorithm::meets_target(book({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)}), t), "meets_target: wrong item type");
     TEST_PASS("meets_target");
 }
 
@@ -210,14 +199,13 @@ TEST_CASE("test_merge_wastes_target") {
 
     // base has sharpness, sac carries bane (conflicts with sharpness) → wasted.
     const algorithm::Item base = equip({E(ID_SHARPNESS, 3)});
-    const algorithm::Item sac  = book({E(ID_BANE, 2)});
+    const algorithm::Item sac = book({E(ID_BANE, 2)});
     expect(algorithm::merge_wastes_target(base, sac, target, reg),
            "merge_wastes_target: sac has a target enchant conflicting with base");
 
     // base has knockback (no conflict with bane) → not wasted.
     const algorithm::Item base2 = equip({E(ID_KNOCKBACK, 1)});
-    expect(!algorithm::merge_wastes_target(base2, sac, target, reg),
-           "merge_wastes_target: no conflict → not wasted");
+    expect(!algorithm::merge_wastes_target(base2, sac, target, reg), "merge_wastes_target: no conflict → not wasted");
     TEST_PASS("merge_wastes_target");
 }
 
@@ -231,9 +219,9 @@ TEST_CASE("test_admissible_forge_cost") {
     // target has sharpness; sac book has bane (conflict).  estimate over-charges
     // bane (4×mul_b); admissible subtracts it → 0 ≤ real forge cost (popcount=1).
     const algorithm::Item target = equip({E(ID_SHARPNESS, 5)});
-    const algorithm::Item sac    = book({E(ID_BANE, 4)});
-    const int32_t est  = engine.estimate_forge_cost(target, sac, reg);
-    const int32_t adm  = algorithm::admissible_forge_cost(engine, target, sac, reg);
+    const algorithm::Item sac = book({E(ID_BANE, 4)});
+    const int32_t est = engine.estimate_forge_cost(target, sac, reg);
+    const int32_t adm = algorithm::admissible_forge_cost(engine, target, sac, reg);
     const int32_t real = engine.forge(target, sac, reg).second;
     expect(adm == 0, "admissible_forge_cost: conflict subtracts the full bane cost");
     expect(adm <= real, "admissible_forge_cost ≤ real forge cost (admissible)");
@@ -257,17 +245,17 @@ TEST_CASE("test_dfs_bound") {
     // 1-step bound: empty base + sharpness 5 book → cost 5.
     int64_t limit = 1000;
     std::vector<algorithm::Item> items{equip({}), book({E(ID_SHARPNESS, 5)})};
-    const int32_t bound = algorithm::search_utils::dfs_bound(
-        items, 0, INT32_MAX, limit, engine, reg, equip({E(ID_SHARPNESS, 5)}), hbuf, hdirty);
+    const int32_t bound =
+        algorithm::search_utils::dfs_bound(items, 0, INT32_MAX, limit, engine, reg, equip({E(ID_SHARPNESS, 5)}), hbuf, hdirty);
     expect_eq(bound, 5, "dfs_bound finds the 1-step bound (cost 5)");
 
     // node_limit exhausted → returns best_cost unchanged.
     int64_t zero = 0;
     const int32_t before = 12345;
-    const int32_t out = algorithm::search_utils::dfs_bound(
-        items, 0, before, zero, engine, reg, equip({E(ID_SHARPNESS, 5)}), hbuf, hdirty);
+    const int32_t out =
+        algorithm::search_utils::dfs_bound(items, 0, before, zero, engine, reg, equip({E(ID_SHARPNESS, 5)}), hbuf, hdirty);
     expect_eq(out, before, "dfs_bound: node_limit ≤ 0 returns best_cost unchanged");
     TEST_PASS("dfs_bound");
 }
 
-}  // anonymous namespace
+} // anonymous namespace

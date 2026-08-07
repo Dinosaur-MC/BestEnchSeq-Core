@@ -17,7 +17,10 @@ TEST_CASE("test_static_file_server") {
     auto root = std::filesystem::temp_directory_path() / "besq_static_test";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "icons");
-    { std::ofstream f(root / "icons" / "sword.png"); f << "PNGDATA"; }
+    {
+        std::ofstream f(root / "icons" / "sword.png");
+        f << "PNGDATA";
+    }
 
     StaticFileServer sfs;
     std::map<std::string, StaticResource> emb = {
@@ -55,30 +58,22 @@ TEST_CASE("test_static_file_server") {
     auto r7 = sfs.serve(Method::Get, "/public/index.html", etag6);
     expect(r7.status == 304 && r7.body.empty(), "If-None-Match match -> 304");
     expect(r7.header_value("ETag") == etag6, "304 carries same ETag");
-    expect(sfs.serve(Method::Get, "/public/index.html", "\"0-0\"").status == 200,
-           "If-None-Match mismatch -> 200");
-    expect(sfs.serve(Method::Get, "/public/index.html", "*").status == 304,
-           "If-None-Match * -> 304");
-    expect(sfs.serve(Method::Head, "/public/index.html", etag6).status == 304,
-           "HEAD + match -> 304");
-    expect(sfs.serve(Method::Get, "/public/index.html", "").status == 200,
-           "empty If-None-Match -> 200");
+    expect(sfs.serve(Method::Get, "/public/index.html", "\"0-0\"").status == 200, "If-None-Match mismatch -> 200");
+    expect(sfs.serve(Method::Get, "/public/index.html", "*").status == 304, "If-None-Match * -> 304");
+    expect(sfs.serve(Method::Head, "/public/index.html", etag6).status == 304, "HEAD + match -> 304");
+    expect(sfs.serve(Method::Get, "/public/index.html", "").status == 200, "empty If-None-Match -> 200");
 
     // ETag + 条件请求（磁盘）
     auto r8 = sfs.serve(Method::Get, "/public/icons/sword.png");
     expect(!r8.header_value("ETag").empty(), "disk response has ETag");
-    expect(sfs.serve(Method::Get, "/public/icons/sword.png",
-                     "W/" + r8.header_value("ETag")).status == 304,
+    expect(sfs.serve(Method::Get, "/public/icons/sword.png", "W/" + r8.header_value("ETag")).status == 304,
            "weak If-None-Match -> 304");
-    expect(sfs.serve(Method::Get, "/public/icons/sword.png",
-                     "\"x\", " + r8.header_value("ETag")).status == 304,
+    expect(sfs.serve(Method::Get, "/public/icons/sword.png", "\"x\", " + r8.header_value("ETag")).status == 304,
            "list If-None-Match -> 304");
 
     // %2F 归一化拒绝（解码前检查，编码斜杠不再变成路径分隔符）
-    expect(sfs.serve(Method::Get, "/public/icons%2Fsword.png").status == 404,
-           "encoded slash rejected");
-    expect(sfs.serve(Method::Get, "/public/icons%2fsword.png").status == 404,
-           "encoded slash (lower) rejected");
+    expect(sfs.serve(Method::Get, "/public/icons%2Fsword.png").status == 404, "encoded slash rejected");
+    expect(sfs.serve(Method::Get, "/public/icons%2fsword.png").status == 404, "encoded slash (lower) rejected");
 
     std::filesystem::remove_all(root);
     TEST_PASS("test_static_file_server");

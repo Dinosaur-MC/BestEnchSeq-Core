@@ -26,9 +26,7 @@ namespace chrono = std::chrono;
 // ============================================================================
 
 /// Spin-wait (with timeout) until a predicate becomes true.
-template <typename Pred>
-void spin_wait(Pred&& pred,
-               chrono::milliseconds timeout = chrono::seconds(10)) {
+template <typename Pred> void spin_wait(Pred&& pred, chrono::milliseconds timeout = chrono::seconds(10)) {
     auto deadline = chrono::steady_clock::now() + timeout;
     while (!pred()) {
         if (chrono::steady_clock::now() >= deadline) {
@@ -89,9 +87,7 @@ TEST_CASE("test_submit_return_value") {
 TEST_CASE("test_submit_string") {
     ThreadPool pool(2);
 
-    auto fut = pool.submit([] {
-        return std::string("hello from thread");
-    });
+    auto fut = pool.submit([] { return std::string("hello from thread"); });
     auto result = fut.get();
 
     expect(result == "hello from thread", "should return correct string");
@@ -106,11 +102,10 @@ TEST_CASE("test_submit_multiple_tasks") {
     std::vector<std::future<void>> futures;
     futures.reserve(N);
     for (int i = 0; i < N; ++i) {
-        futures.push_back(pool.submit([&counter] {
-            counter.fetch_add(1, std::memory_order_relaxed);
-        }));
+        futures.push_back(pool.submit([&counter] { counter.fetch_add(1, std::memory_order_relaxed); }));
     }
-    for (auto& f : futures) f.get();
+    for (auto& f : futures)
+        f.get();
 
     expect(counter.load() == N, "all tasks should have run");
     TEST_PASS("test_submit_multiple_tasks");
@@ -145,13 +140,12 @@ TEST_CASE("test_parallel_for_basic") {
     constexpr std::size_t N = 10'000;
     std::vector<int> data(N, 0);
 
-    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) {
-        data[i] = static_cast<int>(i);
-    });
+    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) { data[i] = static_cast<int>(i); });
 
     bool ok = true;
     for (std::size_t i = 0; i < N && ok; ++i) {
-        if (data[i] != static_cast<int>(i)) ok = false;
+        if (data[i] != static_cast<int>(i))
+            ok = false;
     }
     expect(ok, "parallel_for should fill all elements correctly");
     TEST_PASS("test_parallel_for_basic");
@@ -160,8 +154,7 @@ TEST_CASE("test_parallel_for_basic") {
 TEST_CASE("test_parallel_for_empty_range") {
     ThreadPool pool(2);
     // Should not crash or hang
-    parallel_for(pool, std::size_t{0}, std::size_t{0},
-                 [&](std::size_t) {});
+    parallel_for(pool, std::size_t{0}, std::size_t{0}, [&](std::size_t) {});
     TEST_PASS("test_parallel_for_empty_range");
 }
 
@@ -180,14 +173,13 @@ TEST_CASE("test_parallel_for_exception") {
 
     bool threw = false;
     try {
-        parallel_for(pool, std::size_t{0}, std::size_t{100},
-                     [&](std::size_t i) {
-            if (i == 42) throw std::runtime_error("test error");
+        parallel_for(pool, std::size_t{0}, std::size_t{100}, [&](std::size_t i) {
+            if (i == 42)
+                throw std::runtime_error("test error");
         });
     } catch (const std::runtime_error& e) {
         threw = true;
-        expect(std::string(e.what()) == "test error",
-               "exception message should be preserved");
+        expect(std::string(e.what()) == "test error", "exception message should be preserved");
     }
     expect(threw, "parallel_for should propagate exception");
     TEST_PASS("test_parallel_for_exception");
@@ -198,12 +190,11 @@ TEST_CASE("test_parallel_for_large_batch") {
     constexpr std::size_t N = 100'000;
     std::vector<uint64_t> data(N);
 
-    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) {
-        data[i] = static_cast<uint64_t>(i) * i;
-    });
+    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) { data[i] = static_cast<uint64_t>(i) * i; });
 
     uint64_t checksum = 0;
-    for (auto v : data) checksum += v;
+    for (auto v : data)
+        checksum += v;
 
     // Sum of i^2 for i=0..N-1 = (N-1)*N*(2N-1)/6
     uint64_t expected = (N - 1) * static_cast<uint64_t>(N) * (2 * N - 1) / 6;
@@ -217,9 +208,7 @@ TEST_CASE("test_parallel_for_worker_count_respected") {
     constexpr std::size_t N = 1000;
     std::vector<int> data(N, 0);
 
-    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) {
-        data[i] = 1;
-    });
+    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) { data[i] = 1; });
 
     int sum = std::accumulate(data.begin(), data.end(), 0);
     expect(sum == static_cast<int>(N), "single-worker parallel_for should still work");
@@ -232,12 +221,11 @@ TEST_CASE("test_parallel_for_custom_chunk_size") {
     std::vector<int> data(N, 0);
 
     // Use a large explicit chunk size (all in one task)
-    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) {
-        data[i] = 1;
-    }, N);
+    parallel_for(pool, std::size_t{0}, N, [&](std::size_t i) { data[i] = 1; }, N);
 
     int sum = 0;
-    for (auto v : data) sum += v;
+    for (auto v : data)
+        sum += v;
     expect(sum == static_cast<int>(N), "custom chunk size should work");
     TEST_PASS("test_parallel_for_custom_chunk_size");
 }
@@ -259,8 +247,7 @@ TEST_CASE("test_exception_propagation") {
         fut.get();
     } catch (const std::runtime_error& e) {
         caught = true;
-        expect(std::string(e.what()) == "boom",
-               "exception message should be preserved");
+        expect(std::string(e.what()) == "boom", "exception message should be preserved");
     }
     expect(caught, "exception should propagate through future");
     TEST_PASS("test_exception_propagation");
@@ -308,8 +295,7 @@ TEST_CASE("test_drain_on_stop") {
         // pool destructor will drain and join
     }
 
-    expect(counter.load() == N,
-           "all tasks should complete on pool destruction");
+    expect(counter.load() == N, "all tasks should complete on pool destruction");
     TEST_PASS("test_drain_on_stop");
 }
 
@@ -342,17 +328,15 @@ TEST_CASE("test_concurrent_submission") {
     for (int p = 0; p < kProducers; ++p) {
         producers.emplace_back([&pool, &counter] {
             for (int i = 0; i < kTasksPerProducer; ++i) {
-                pool.submit([&counter] {
-                    counter.fetch_add(1, std::memory_order_relaxed);
-                });
+                pool.submit([&counter] { counter.fetch_add(1, std::memory_order_relaxed); });
             }
         });
     }
-    for (auto& t : producers) t.join();
+    for (auto& t : producers)
+        t.join();
 
     pool.wait();
-    expect(counter.load() == kProducers * kTasksPerProducer,
-           "all concurrently-submitted tasks should complete");
+    expect(counter.load() == kProducers * kTasksPerProducer, "all concurrently-submitted tasks should complete");
     TEST_PASS("test_concurrent_submission");
 }
 
@@ -366,16 +350,13 @@ TEST_CASE("test_large_batch") {
     std::atomic<int64_t> sum{0};
 
     for (int i = 0; i < N; ++i) {
-        pool.submit([&sum, i] {
-            sum.fetch_add(i, std::memory_order_relaxed);
-        });
+        pool.submit([&sum, i] { sum.fetch_add(i, std::memory_order_relaxed); });
     }
 
     pool.wait();
 
     int64_t expected = static_cast<int64_t>(N) * (N - 1) / 2;
-    expect(sum.load() == expected,
-           "large batch sum should match");
+    expect(sum.load() == expected, "large batch sum should match");
     TEST_PASS("test_large_batch");
 }
 
@@ -401,13 +382,10 @@ TEST_CASE("test_many_short_tasks") {
     std::atomic<int64_t> sum{0};
 
     for (int i = 0; i < N; ++i) {
-        pool.submit([&sum] {
-            sum.fetch_add(1, std::memory_order_relaxed);
-        });
+        pool.submit([&sum] { sum.fetch_add(1, std::memory_order_relaxed); });
     }
 
     pool.wait();
     expect(sum.load() == N, "all short tasks should complete");
     TEST_PASS("test_many_short_tasks");
 }
-

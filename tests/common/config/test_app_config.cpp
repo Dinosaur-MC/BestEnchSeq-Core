@@ -1,6 +1,6 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "AppConfig.h"
+#include "framework/test_framework.h"
 #include "utils/EnvUtil.hpp"
 
 #include <cstdlib>
@@ -40,7 +40,7 @@ void clear_runtime_env() {
 TEST_CASE("test_default_values") {
     // Unset our test env vars to ensure defaults apply
     clear_runtime_env();
-    ConfigFileGuard guard(AppConfig::config_file_path());   // no config.json
+    ConfigFileGuard guard(AppConfig::config_file_path()); // no config.json
 
     auto cfg = AppConfig::load();
 
@@ -51,8 +51,7 @@ TEST_CASE("test_default_values") {
     expect(cfg.log_level == 0, "default log_level 0");
     expect(cfg.log_console == true, "default log_console true");
     expect(cfg.runtime_lang.empty(), "default runtime_lang empty");
-    expect(AppConfig::config_file_path() == "config.json",
-           "config file path is <cwd>/config.json");
+    expect(AppConfig::config_file_path() == "config.json", "config file path is <cwd>/config.json");
 
     std::cout << "  PASS: test_default_values" << std::endl;
 }
@@ -181,8 +180,7 @@ TEST_CASE("test_save_roundtrip") {
 
 TEST_CASE("test_save_failure") {
     // Unwritable path (parent dir does not exist) → false, no throw.
-    expect(!AppConfig::save_config_file(Json::object(), "no_such_dir_xyz/config.json"),
-           "unwritable path returns false");
+    expect(!AppConfig::save_config_file(Json::object(), "no_such_dir_xyz/config.json"), "unwritable path returns false");
     // A missing config file yields an empty (non-object) Json — load() treats
     // that as "use the defaults", exactly like an invalid file.
     auto missing = AppConfig::load_config_file("no_such_dir_xyz/config.json");
@@ -192,4 +190,3 @@ TEST_CASE("test_save_failure") {
 }
 
 } // anonymous namespace
-

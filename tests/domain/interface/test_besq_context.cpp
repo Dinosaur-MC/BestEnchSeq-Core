@@ -5,13 +5,13 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "domain/interface/cli/EnchParser.h"
-#include "domain/interface/cli/ItemParser.h"
-#include "domain/interface/cli/CLIApp.h"
-#include "domain/interface/BesqContext.h"
+#include "besq/besq.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
-#include "besq/besq.h"
+#include "domain/interface/BesqContext.h"
+#include "domain/interface/cli/CLIApp.h"
+#include "domain/interface/cli/EnchParser.h"
+#include "domain/interface/cli/ItemParser.h"
 #include "framework/test_framework.h"
 
 #include <atomic>
@@ -73,18 +73,15 @@ TEST_CASE("test_fork_merge") {
     bool added = ctx.add_enchantment(custom);
     expect(added, "add custom enchantment to modded profile");
 
-    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
-           "custom ench exists in modded after add");
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")), "custom ench exists in modded after add");
 
     // Default profile should NOT have custom
     ctx.activate_profile("builtin:vanilla");
-    expect(!ctx.enchantments().contains(NSID("custom:test_ench")),
-           "custom ench NOT in default profile");
+    expect(!ctx.enchantments().contains(NSID("custom:test_ench")), "custom ench NOT in default profile");
 
     // Merge modded -> default
     ctx.merge_profile("minecraft:modded", "builtin:vanilla");
-    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
-           "custom ench merged to default");
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")), "custom ench merged to default");
 
     // Cleanup
     ctx.remove_profile("minecraft:modded");
@@ -106,8 +103,7 @@ TEST_CASE("test_besq_solve") {
     auto config = CLIApp::parse(3, const_cast<char**>(argv));
 
     // Parse target item using the context's registries
-    Item target_item = ItemParser::parse(config.target,
-                                         ctx.enchantments(), ctx.equipment());
+    Item target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
 
     SolveRequest request;
     request.target_item = target_item;
@@ -126,8 +122,7 @@ TEST_CASE("test_besq_solve") {
 
     // Verify formatting works via BesqContext
     auto json_out = ctx.format(result, AlgorithmMode::direct, "json");
-    expect(json_out.find("sharpness") != std::string::npos,
-           "JSON output should mention sharpness");
+    expect(json_out.find("sharpness") != std::string::npos, "JSON output should mention sharpness");
 
     auto text_out = ctx.format(result, AlgorithmMode::direct, "text");
     expect(!text_out.empty(), "text output should be non-empty");
@@ -145,19 +140,15 @@ TEST_CASE("test_besq_solve_already_met") {
 
     // Source == target: the current state already meets the goal.  This must
     // produce a 0-step solution, NOT "目标不可达".
-    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
-                          "--source", "sharpness=5"};
+    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]", "--source", "sharpness=5"};
     auto config = CLIApp::parse(5, const_cast<char**>(argv));
 
-    Item target_item = ItemParser::parse(config.target,
-                                         ctx.enchantments(), ctx.equipment());
+    Item target_item = ItemParser::parse(config.target, ctx.enchantments(), ctx.equipment());
 
     SolveRequest request;
     request.target_item = target_item;
     request.mode = AlgorithmMode::direct;
-    request.payload = DirectPayload{
-        EnchParser::parse(config.source, ctx.enchantments())
-    };
+    request.payload = DirectPayload{EnchParser::parse(config.source, ctx.enchantments())};
     request.algorithm = "dp_merge";
     request.forge_config.platform = MCE::Java;
     request.search_config.max_solutions = 1;
@@ -167,8 +158,7 @@ TEST_CASE("test_besq_solve_already_met") {
     expect(!result.solutions.empty(), "already-met solve should produce a solution");
     expect(result.solutions[0].is_success, "already-met solution should succeed");
     expect(result.solutions[0].steps.empty(), "already-met solve should be 0 steps");
-    expect(result.solutions[0].total_exp_level_cost == 0,
-           "already-met solve cost should be 0");
+    expect(result.solutions[0].total_exp_level_cost == 0, "already-met solve cost should be 0");
 
     auto text_out = ctx.format(result, AlgorithmMode::direct, "text");
     expect(!text_out.empty(), "already-met text output should be non-empty");
@@ -185,11 +175,9 @@ TEST_CASE("test_besq_registry_edit") {
     ctx.load_builtin();
 
     // Verify known enchantments exist
-    expect(ctx.enchantments().contains(NSID("minecraft:sharpness")),
-           "sharpness should exist in builtin data");
+    expect(ctx.enchantments().contains(NSID("minecraft:sharpness")), "sharpness should exist in builtin data");
 
-    expect(ctx.equipment().contains(NSID("minecraft:diamond_sword")),
-           "diamond_sword should exist");
+    expect(ctx.equipment().contains(NSID("minecraft:diamond_sword")), "diamond_sword should exist");
 
     // ── Add custom enchantment ──
     EnchInfo custom;
@@ -201,8 +189,7 @@ TEST_CASE("test_besq_registry_edit") {
     bool added = ctx.add_enchantment(custom);
     expect(added, "add custom enchantment");
 
-    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
-           "custom enchantment findable after add");
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")), "custom enchantment findable after add");
 
     // ── Modify enchantment ──
     EnchInfo patch;
@@ -210,14 +197,12 @@ TEST_CASE("test_besq_registry_edit") {
     bool modded = ctx.modify_enchantment("custom:test_ench", patch);
     expect(modded, "modify custom enchantment");
     // Verify still findable after modify
-    expect(ctx.enchantments().contains(NSID("custom:test_ench")),
-           "custom enchantment still findable after modify");
+    expect(ctx.enchantments().contains(NSID("custom:test_ench")), "custom enchantment still findable after modify");
 
     // ── Remove enchantment ──
     bool removed = ctx.remove_enchantment("custom:test_ench");
     expect(removed, "remove custom enchantment");
-    expect(!ctx.enchantments().contains(NSID("custom:test_ench")),
-           "custom enchantment gone after remove");
+    expect(!ctx.enchantments().contains(NSID("custom:test_ench")), "custom enchantment gone after remove");
 
     // ── Duplicate add should fail ──
     added = ctx.add_enchantment(custom);
@@ -251,8 +236,7 @@ TEST_CASE("test_besq_default_profiles_scan") {
     ctx.set_profiles_dir(tmp.string());
     ctx.load_profiles();
     ctx.activate_profile("moda");
-    expect(ctx.enchantments().contains(NSID("mod:x")),
-           "active profile effective view loaded");
+    expect(ctx.enchantments().contains(NSID("mod:x")), "active profile effective view loaded");
 
     std::filesystem::remove_all(tmp);
     TEST_PASS("BesqContext default profiles scan");
@@ -280,20 +264,15 @@ TEST_CASE("test_effective_profile_view") {
 
     // Root profile (no deps): effective view == own view.
     const Profile& root = ctx.effective_profile("builtin:vanilla");
-    expect(root.ench().contains(NSID("minecraft:sharpness")),
-           "root effective view has vanilla enchantments");
+    expect(root.ench().contains(NSID("minecraft:sharpness")), "root effective view has vanilla enchantments");
     expect(root.tag_resolver() != nullptr, "effective view attaches a tag resolver");
 
     // Dependent profile: own content + dependency content merged.
     const Profile& eff = ctx.effective_profile("modd");
-    expect(eff.ench().contains(NSID("mod:eff")),
-           "own enchantment in effective view");
-    expect(eff.ench().contains(NSID("minecraft:sharpness")),
-           "dependency content merged into effective view");
-    expect(eff.eq().contains(NSID("minecraft:diamond_sword")),
-           "dependency equipment merged into effective view");
-    expect(eff.tag_resolver() != nullptr,
-           "dependent effective view attaches a tag resolver");
+    expect(eff.ench().contains(NSID("mod:eff")), "own enchantment in effective view");
+    expect(eff.ench().contains(NSID("minecraft:sharpness")), "dependency content merged into effective view");
+    expect(eff.eq().contains(NSID("minecraft:diamond_sword")), "dependency equipment merged into effective view");
+    expect(eff.tag_resolver() != nullptr, "dependent effective view attaches a tag resolver");
 
     // Unknown profile → std::runtime_error (accessor contract; the underlying
     // resolve_effective would silently return an empty view).
@@ -338,8 +317,7 @@ TEST_CASE("test_besq_import_profile_invalidates_effective_cache") {
     ctx.load_builtin();
 
     // Prime the effective-view cache.
-    expect(ctx.enchantments().contains(NSID("minecraft:sharpness")),
-           "effective cache primed");
+    expect(ctx.enchantments().contains(NSID("minecraft:sharpness")), "effective cache primed");
 
     // import_profile mutates the active profile directly (bypassing manager
     // _mutate); the effective-view cache must be invalidated so the imported
@@ -352,8 +330,7 @@ TEST_CASE("test_besq_import_profile_invalidates_effective_cache") {
     ctx.import_profile(tmp.string());
     std::filesystem::remove(tmp);
 
-    expect(ctx.enchantments().contains(NSID("extra:y")),
-           "imported enchantment visible via effective view");
+    expect(ctx.enchantments().contains(NSID("extra:y")), "imported enchantment visible via effective view");
 
     TEST_PASS("BesqContext import invalidates effective cache");
 }
@@ -388,10 +365,8 @@ TEST_CASE("test_besq_load_file_datapack_keeps_tags") {
     ctx.load_builtin();
     ctx.load_file(dir.string());
 
-    expect(ctx.enchantments().contains(NSID("mypack:leeching")),
-           "load_file on a datapack keeps the #mypack:* enchantment");
-    expect(ctx.categories().contains(NSID("#mypack:swords")),
-           "datapack item tag lands in the active profile's tag registry");
+    expect(ctx.enchantments().contains(NSID("mypack:leeching")), "load_file on a datapack keeps the #mypack:* enchantment");
+    expect(ctx.categories().contains(NSID("#mypack:swords")), "datapack item tag lands in the active profile's tag registry");
 
     std::filesystem::remove_all(dir);
     TEST_PASS("BesqContext load_file datapack keeps tags");
@@ -438,8 +413,7 @@ TEST_CASE("test_c_abi") {
     const char* json_result = besq_solve(ctx, json_input);
     if (json_result) {
         std::string result(json_result);
-        expect(result.find("solutions") != std::string::npos,
-               "c abi solve returns solutions");
+        expect(result.find("solutions") != std::string::npos, "c abi solve returns solutions");
         // Should also contain cost info
         expect(result.find("exp") != std::string::npos || result.find("cost") != std::string::npos,
                "c abi solve result contains cost info");
@@ -457,8 +431,7 @@ TEST_CASE("test_c_abi") {
     rc = besq_export_profile(ctx, "besq_abi_test_export.json");
     expect(rc == 0, "c abi export_profile");
     if (std::filesystem::exists("besq_abi_test_export.json")) {
-        expect(std::filesystem::file_size("besq_abi_test_export.json") > 0,
-               "c abi export file not empty");
+        expect(std::filesystem::file_size("besq_abi_test_export.json") > 0, "c abi export file not empty");
         std::filesystem::remove("besq_abi_test_export.json");
     }
 
@@ -490,12 +463,10 @@ TEST_CASE("test_c_abi_solve_default_algo") {
     expect(json_result != nullptr, "c abi solve with omitted algorithm should succeed");
     if (json_result) {
         std::string result(json_result);
-        expect(result.find("\"success\": true") != std::string::npos,
-               "c abi solve (default algo) should report success");
+        expect(result.find("\"success\": true") != std::string::npos, "c abi solve (default algo) should report success");
         expect(result.find("\"algorithm\": \"dp_merge\"") != std::string::npos,
                "c abi solve (default algo) should use dp_merge");
-        expect(result.find("\"solutions\"") != std::string::npos,
-               "c abi solve (default algo) returns solutions");
+        expect(result.find("\"solutions\"") != std::string::npos, "c abi solve (default algo) returns solutions");
         besq_free_string(json_result);
     }
 
@@ -533,12 +504,10 @@ TEST_CASE("test_c_abi_solve_inventory") {
     expect(json_result != nullptr, "c abi solve inventory mode should succeed");
     if (json_result) {
         std::string result(json_result);
-        expect(result.find("\"success\": true") != std::string::npos,
-               "c abi inventory solve should report success");
+        expect(result.find("\"success\": true") != std::string::npos, "c abi inventory solve should report success");
         expect(result.find("\"algorithm\": \"hamming\"") != std::string::npos,
                "c abi inventory solve should default to hamming");
-        expect(result.find("\"solutions\"") != std::string::npos,
-               "c abi inventory solve returns solutions");
+        expect(result.find("\"solutions\"") != std::string::npos, "c abi inventory solve returns solutions");
         besq_free_string(json_result);
     }
 
@@ -564,13 +533,13 @@ TEST_CASE("test_c_abi_solve_unknown_ench") {
         "\"max_solutions\":1}";
     char* json_result = besq_solve(ctx, json_input);
     expect(json_result == nullptr, "c abi solve with unknown enchant id should error");
-    if (json_result) besq_free_string(json_result);
+    if (json_result)
+        besq_free_string(json_result);
     const char* err = besq_last_error(ctx);
     expect(err != nullptr, "c abi solve unknown ench should set last_error");
     if (err) {
         std::string msg(err);
-        expect(msg.find("unknown") != std::string::npos ||
-                   msg.find("cli.err.unknown_ench") != std::string::npos,
+        expect(msg.find("unknown") != std::string::npos || msg.find("cli.err.unknown_ench") != std::string::npos,
                "c abi solve unknown ench error mentions unknown enchant");
     }
 
@@ -597,12 +566,14 @@ class TempProfileFile {
 public:
     explicit TempProfileFile(const std::string& content) {
         static int counter = 0;
-        _path = (std::filesystem::temp_directory_path() /
-                 ("besq_abi_prof_" + std::to_string(++counter) + ".json")).string();
+        _path = (std::filesystem::temp_directory_path() / ("besq_abi_prof_" + std::to_string(++counter) + ".json")).string();
         std::ofstream f(_path);
         f << content;
     }
-    ~TempProfileFile() { std::error_code ec; std::filesystem::remove(_path, ec); }
+    ~TempProfileFile() {
+        std::error_code ec;
+        std::filesystem::remove(_path, ec);
+    }
     const char* c_str() const { return _path.c_str(); }
 
 private:
@@ -619,7 +590,8 @@ TEST_CASE("test_c_abi_load_file") {
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
 
-    TempProfileFile f(R"({"name":"abi_extra","enchantments":[{"id":"mod:cabi","name":"Cabi","platform":"java","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]}]})");
+    TempProfileFile f(
+        R"({"name":"abi_extra","enchantments":[{"id":"mod:cabi","name":"Cabi","platform":"java","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]}]})");
     int rc = besq_load_file(ctx, f.c_str());
     expect_eq(rc, 0, "c abi load_file returns 0");
 
@@ -644,7 +616,8 @@ TEST_CASE("test_c_abi_load_data") {
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
 
-    TempProfileFile f(R"({"name":"abi_data","enchantments":[{"id":"mod:cabid","name":"CabiD","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})");
+    TempProfileFile f(
+        R"({"name":"abi_data","enchantments":[{"id":"mod:cabid","name":"CabiD","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})");
     int rc = besq_load_data(ctx, f.c_str());
     expect_eq(rc, 0, "c abi load_data returns 0");
 
@@ -669,7 +642,8 @@ TEST_CASE("test_c_abi_import_profile") {
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
 
-    TempProfileFile f(R"({"name":"abi_import","enchantments":[{"id":"mod:cabiimp","name":"CabiImp","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})");
+    TempProfileFile f(
+        R"({"name":"abi_import","enchantments":[{"id":"mod:cabiimp","name":"CabiImp","platform":"java","max_level":2,"multiplier":1,"supported_items":["#minecraft:swords"]}]})");
     int rc = besq_import_profile(ctx, f.c_str());
     expect_eq(rc, 0, "c abi import_profile returns 0");
 
@@ -698,8 +672,8 @@ TEST_CASE("test_c_abi_merge_profile") {
     expect(besq_fork_profile(ctx, "builtin:vanilla", "minecraft:dst") == 0, "fork dst");
     expect(besq_activate_profile(ctx, "minecraft:src") == 0, "activate src");
 
-    int rc = besq_add_enchantment(ctx,
-        R"({"id":"mod:mrg","name":"Mrg","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
+    int rc = besq_add_enchantment(
+        ctx, R"({"id":"mod:mrg","name":"Mrg","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
     expect_eq(rc, 0, "c abi add_enchantment to src");
 
     expect(besq_merge_profile(ctx, "minecraft:src", "minecraft:dst") == 0, "merge src into dst");
@@ -708,8 +682,7 @@ TEST_CASE("test_c_abi_merge_profile") {
     char* list = besq_list_enchantments(ctx);
     expect(list != nullptr, "c abi list_enchantments non-null after merge");
     if (list) {
-        expect(std::string(list).find("mod:mrg") != std::string::npos,
-               "c abi merged enchantment is present in dest");
+        expect(std::string(list).find("mod:mrg") != std::string::npos, "c abi merged enchantment is present in dest");
         besq_free_string(list);
     }
 
@@ -728,12 +701,12 @@ TEST_CASE("test_c_abi_ench_edit") {
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
 
-    int rc = besq_add_enchantment(ctx,
-        R"({"id":"mod:edit","name":"Edit","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
+    int rc = besq_add_enchantment(
+        ctx, R"({"id":"mod:edit","name":"Edit","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
     expect_eq(rc, 0, "c abi add_enchantment");
 
-    rc = besq_add_enchantment(ctx,
-        R"({"id":"mod:edit","name":"Edit","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
+    rc = besq_add_enchantment(
+        ctx, R"({"id":"mod:edit","name":"Edit","max_level":3,"multiplier":2,"supported_items":["#minecraft:swords"]})");
     expect_eq(rc, -1, "c abi duplicate add_enchantment fails");
     expect(besq_last_error(ctx) != nullptr, "c abi last_error set on duplicate add");
 
@@ -762,12 +735,10 @@ TEST_CASE("test_c_abi_equipment_edit") {
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
 
-    int rc = besq_add_equipment(ctx,
-        R"({"id":"mod:weapon","name":"Weapon","category":"sword","max_durability":1561})");
+    int rc = besq_add_equipment(ctx, R"({"id":"mod:weapon","name":"Weapon","category":"sword","max_durability":1561})");
     expect_eq(rc, 0, "c abi add_equipment");
 
-    rc = besq_add_equipment(ctx,
-        R"({"id":"mod:weapon","name":"Weapon","category":"sword","max_durability":1561})");
+    rc = besq_add_equipment(ctx, R"({"id":"mod:weapon","name":"Weapon","category":"sword","max_durability":1561})");
     expect_eq(rc, -1, "c abi duplicate add_equipment fails");
 
     rc = besq_remove_equipment(ctx, "mod:weapon");
@@ -798,8 +769,7 @@ TEST_CASE("test_c_abi_category") {
     char* cats = besq_list_categories(ctx);
     expect(cats != nullptr, "c abi list_categories non-null");
     if (cats) {
-        expect(std::string(cats).find("mycat") != std::string::npos,
-               "c abi list_categories contains the added category");
+        expect(std::string(cats).find("mycat") != std::string::npos, "c abi list_categories contains the added category");
         besq_free_string(cats);
     }
 
@@ -819,22 +789,21 @@ TEST_CASE("test_c_abi_lists") {
     char* ench = besq_list_enchantments(ctx);
     expect(ench != nullptr, "c abi list_enchantments non-null");
     if (ench) {
-        expect(std::string(ench).find("sharpness") != std::string::npos,
-               "c abi list_enchantments has sharpness");
+        expect(std::string(ench).find("sharpness") != std::string::npos, "c abi list_enchantments has sharpness");
         besq_free_string(ench);
     }
 
     char* eq = besq_list_equipment(ctx);
     expect(eq != nullptr, "c abi list_equipment non-null");
     if (eq) {
-        expect(std::string(eq).find("diamond_sword") != std::string::npos,
-               "c abi list_equipment has diamond_sword");
+        expect(std::string(eq).find("diamond_sword") != std::string::npos, "c abi list_equipment has diamond_sword");
         besq_free_string(eq);
     }
 
     char* cat = besq_list_categories(ctx);
     expect(cat != nullptr, "c abi list_categories non-null");
-    if (cat) besq_free_string(cat);
+    if (cat)
+        besq_free_string(cat);
 
     besq_destroy(ctx);
     TEST_PASS("C ABI lists");
@@ -855,7 +824,8 @@ TEST_CASE("test_c_abi_list_algorithms") {
     expect(n >= 3, "c abi list_algorithms has at least the 3 built-ins");
     bool has_dp = false;
     for (int i = 0; i < n; ++i)
-        if (algos[i] && std::string(algos[i]) == "dp_merge") has_dp = true;
+        if (algos[i] && std::string(algos[i]) == "dp_merge")
+            has_dp = true;
     expect(has_dp, "c abi list_algorithms contains dp_merge");
     besq_free_string_list(algos, n);
 
@@ -902,8 +872,7 @@ TEST_CASE("test_besq_abort_concurrent") {
         info.max_level = 5;
         info.multiplier = 1;
         info.supported_items.insert(NSID("#minecraft:swords"));
-        expect(ctx.add_enchantment(info),
-               "add custom enchantment test:ench_" + std::to_string(i));
+        expect(ctx.add_enchantment(info), "add custom enchantment test:ench_" + std::to_string(i));
     }
 
     // Target: diamond_sword with all custom enchants at level 5, no source.
@@ -913,8 +882,7 @@ TEST_CASE("test_besq_abort_concurrent") {
     Item target_item;
     target_item.id = NSID("minecraft:diamond_sword");
     target_item.enchantments = target_enchs;
-    if (auto eq_it = ctx.equipment().find(NSID("minecraft:diamond_sword"));
-        eq_it != ctx.equipment().end()) {
+    if (auto eq_it = ctx.equipment().find(NSID("minecraft:diamond_sword")); eq_it != ctx.equipment().end()) {
         target_item.durability = eq_it->max_durability;
     }
 
@@ -956,10 +924,8 @@ TEST_CASE("test_besq_abort_concurrent") {
     // slipped through before the abort reports success=true with solutions.
     // Either outcome is fine — the invariant is the two must never disagree
     // (and there must be no crash / UB).
-    expect(!result.success || !result.solutions.empty(),
-           "completed solve must produce solutions");
-    expect(result.success || result.solutions.empty(),
-           "cancelled solve must report no solutions");
+    expect(!result.success || !result.solutions.empty(), "completed solve must produce solutions");
+    expect(result.success || result.solutions.empty(), "cancelled solve must report no solutions");
     TEST_PASS("BesqContext concurrent abort (B-T22)");
 }
 
@@ -1009,12 +975,10 @@ TEST_CASE("test_facade_by_name_registry") {
     e.multiplier = 2;
     e.supported_items.insert(NSID("#minecraft:swords"));
     expect(ctx.add_enchantment_to(key, e), "add ench");
-    expect(ctx.profile(key).ench().find(e.id) != ctx.profile(key).ench().end(),
-           "ench present");
+    expect(ctx.profile(key).ench().find(e.id) != ctx.profile(key).ench().end(), "ench present");
 
     expect(ctx.remove_enchantment_from(key, e.id), "remove ench");
-    expect(ctx.profile(key).ench().find(e.id) == ctx.profile(key).ench().end(),
-           "ench gone");
+    expect(ctx.profile(key).ench().find(e.id) == ctx.profile(key).ench().end(), "ench gone");
 
     TEST_PASS("BesqContext facade by-name registry");
 }

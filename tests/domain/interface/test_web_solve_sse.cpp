@@ -6,7 +6,6 @@
 #include "framework/test_framework.h"
 #include <atomic>
 #include <string>
-#include <thread>
 
 using namespace web;
 

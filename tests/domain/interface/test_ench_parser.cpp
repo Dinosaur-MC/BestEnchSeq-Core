@@ -1,19 +1,15 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
-#include "domain/interface/cli/EnchParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/interface/cli/EnchParser.h"
+#include "framework/test_framework.h"
 
 // ============================================================================
 // Helper: minimal registry with common enchantments
 // ============================================================================
 static EnchantmentRegistry make_test_registry() {
     EnchantmentRegistry reg;
-    reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness",
-                        MCE::All, 5, 5, 1, false, {},
-                        {NSID("#minecraft:sword")}});
-    reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback",
-                        MCE::All, 2, 2, 2, false, {},
-                        {NSID("#minecraft:sword")}});
+    reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:sword")}});
+    reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback", MCE::All, 2, 2, 2, false, {}, {NSID("#minecraft:sword")}});
     return reg;
 }
 
@@ -163,14 +159,12 @@ TEST_CASE("test_ench_parser_uppercase_maps_to_unknown") {
     auto reg = make_test_registry();
     bool threw = false;
     try {
-        EnchParser::parse("Sharpness=5", reg);  // uppercase → invalid NSID
+        EnchParser::parse("Sharpness=5", reg); // uppercase → invalid NSID
     } catch (const std::exception& e) {
         threw = true;
         std::string msg(e.what());
-        expect(msg.find("The NSID") == std::string::npos,
-               "raw NSID validator text must not surface");
-        expect(msg.find("cli.err.unknown_ench") != std::string::npos ||
-                   msg.find("Unknown enchantment") != std::string::npos,
+        expect(msg.find("The NSID") == std::string::npos, "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_ench") != std::string::npos || msg.find("Unknown enchantment") != std::string::npos,
                "uppercase id maps to friendly unknown-enchantment error");
     }
     expect(threw, "uppercase enchantment id should throw");
@@ -181,14 +175,12 @@ TEST_CASE("test_ench_parser_dot_segment_maps_to_unknown") {
     auto reg = make_test_registry();
     bool threw = false;
     try {
-        EnchParser::parse("minecraft:..=3", reg);  // `..` segment → invalid NSID
+        EnchParser::parse("minecraft:..=3", reg); // `..` segment → invalid NSID
     } catch (const std::exception& e) {
         threw = true;
         std::string msg(e.what());
-        expect(msg.find("The NSID") == std::string::npos,
-               "raw NSID validator text must not surface");
-        expect(msg.find("cli.err.unknown_ench") != std::string::npos ||
-                   msg.find("Unknown enchantment") != std::string::npos,
+        expect(msg.find("The NSID") == std::string::npos, "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_ench") != std::string::npos || msg.find("Unknown enchantment") != std::string::npos,
                "dot-segment id maps to friendly unknown-enchantment error");
     }
     expect(threw, "dot-segment enchantment id should throw");

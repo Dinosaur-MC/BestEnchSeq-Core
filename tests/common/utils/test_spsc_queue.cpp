@@ -135,8 +135,7 @@ TEST_CASE("test_concurrent_push_pop") {
                 last_val.store(val);
             } else {
                 if (Clock::now() >= deadline) {
-                    std::cerr << "WARNING: SPSC concurrent consumer timed out"
-                              << std::endl;
+                    std::cerr << "WARNING: SPSC concurrent consumer timed out" << std::endl;
                     break;
                 }
                 std::this_thread::yield();
@@ -149,7 +148,5 @@ TEST_CASE("test_concurrent_push_pop") {
 
     expect(consumed.load() == N, "SPSC: should consume exactly all pushed items");
     expect(order_ok.load(), "SPSC: items should be in FIFO order");
-    std::cout << "PASS: test_concurrent_push_pop (consumed "
-              << consumed.load() << "/" << N << " items)" << std::endl;
+    std::cout << "PASS: test_concurrent_push_pop (consumed " << consumed.load() << "/" << N << " items)" << std::endl;
 }
-

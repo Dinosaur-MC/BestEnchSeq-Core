@@ -118,28 +118,24 @@ TEST_CASE("test_get_env_double") {
 
 TEST_CASE("test_get_env_with_converter") {
     set_env("BESQ_TEST_CONV", "42");
-    auto val = get_env<int>("BESQ_TEST_CONV", -1,
-        [](std::string_view sv) { return std::stoi(std::string(sv)); });
+    auto val = get_env<int>("BESQ_TEST_CONV", -1, [](std::string_view sv) { return std::stoi(std::string(sv)); });
     expect_eq(val, 42, "converter translates string to int");
     unset_env("BESQ_TEST_CONV");
 }
 
 TEST_CASE("test_get_env_with_converter_throws") {
     set_env("BESQ_TEST_CONV", "invalid");
-    auto val = get_env<int>("BESQ_TEST_CONV", -1,
-        [](std::string_view sv) -> int {
-            // This will throw std::invalid_argument
-            return std::stoi(std::string(sv));
-        });
+    auto val = get_env<int>("BESQ_TEST_CONV", -1, [](std::string_view sv) -> int {
+        // This will throw std::invalid_argument
+        return std::stoi(std::string(sv));
+    });
     expect_eq(val, -1, "converter exception returns default");
     unset_env("BESQ_TEST_CONV");
 }
 
 TEST_CASE("test_get_env_with_converter_unset") {
-    auto val = get_env<int>("BESQ_TEST_VAR_THAT_DOES_NOT_EXIST_XYZ", 99,
-        [](std::string_view) { return 42; });
+    auto val = get_env<int>("BESQ_TEST_VAR_THAT_DOES_NOT_EXIST_XYZ", 99, [](std::string_view) { return 42; });
     expect_eq(val, 99, "converter not called when var is unset");
 }
 
 } // anonymous namespace
-

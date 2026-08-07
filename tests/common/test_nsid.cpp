@@ -203,12 +203,9 @@ TEST_CASE("test_valid_ids") {
     // Various valid NSID formats
     expect_eq(NSID("minecraft:sharpness").str(), "minecraft:sharpness", "basic id");
     expect_eq(NSID("minecraft:fire_aspect").str(), "minecraft:fire_aspect", "underscore in id");
-    expect_eq(NSID("minecraft:_start_with_underscore").str(),
-              "minecraft:_start_with_underscore",
+    expect_eq(NSID("minecraft:_start_with_underscore").str(), "minecraft:_start_with_underscore",
               "id can start with underscore");
-    expect_eq(NSID("somerig:custom_enchant").str(),
-              "somerig:custom_enchant",
-              "custom namespace");
+    expect_eq(NSID("somerig:custom_enchant").str(), "somerig:custom_enchant", "custom namespace");
 
     // Dots are allowed (MC identifier charset includes '.')
     expect_eq(NSID("minecraft:foo.bar").str(), "minecraft:foo.bar", "dot in id");
@@ -222,9 +219,7 @@ TEST_CASE("test_valid_ids") {
     expect_eq(NSID("minecraft:1x").str(), "minecraft:1x", "leading digit id");
 
     // '/' is allowed in the path (e.g. tag paths)
-    expect_eq(NSID("#minecraft:enchantable/sharp_weapon").str(),
-              "#minecraft:enchantable/sharp_weapon",
-              "slash in tag path");
+    expect_eq(NSID("#minecraft:enchantable/sharp_weapon").str(), "#minecraft:enchantable/sharp_weapon", "slash in tag path");
 
     std::cout << "  PASS: test_valid_ids" << std::endl;
 }
@@ -243,8 +238,7 @@ TEST_CASE("test_mc_identifier_rules") {
     expect_throws([] { NSID("minecraft:SharpNess"); }, "uppercase id should throw");
 
     // '/' is a path-only character: namespace must reject it.
-    expect_throws([] { NSID("minecraft/enchantable:sharpness"); },
-                  "slash in namespace should throw");
+    expect_throws([] { NSID("minecraft/enchantable:sharpness"); }, "slash in namespace should throw");
 
     // Filesystem-safety: '.' and '..' as whole segments are rejected.
     expect_throws([] { NSID(".:x"); }, "'.' namespace should throw");
@@ -262,4 +256,3 @@ TEST_CASE("test_mc_identifier_rules") {
 }
 
 } // anonymous namespace
-

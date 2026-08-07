@@ -1,8 +1,8 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "framework/test_framework.h"
 
 #include <stdexcept>
 #include <string>
@@ -12,18 +12,9 @@
 // ---------------------------------------------------------------------------
 std::vector<Equipment> make_test_equipment() {
     std::vector<Equipment> eqs;
-    eqs.emplace_back(Equipment{
-        NSID("minecraft:diamond_sword"), "Diamond Sword",
-        EquipmentTag::sword(), 1561
-    });
-    eqs.emplace_back(Equipment{
-        NSID("minecraft:diamond_pickaxe"), "Diamond Pickaxe",
-        EquipmentTag::pickaxe(), 1561
-    });
-    eqs.emplace_back(Equipment{
-        NSID("minecraft:iron_sword"), "Iron Sword",
-        EquipmentTag::sword(), 250
-    });
+    eqs.emplace_back(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
+    eqs.emplace_back(Equipment{NSID("minecraft:diamond_pickaxe"), "Diamond Pickaxe", EquipmentTag::pickaxe(), 1561});
+    eqs.emplace_back(Equipment{NSID("minecraft:iron_sword"), "Iron Sword", EquipmentTag::sword(), 250});
     return eqs;
 }
 
@@ -90,8 +81,10 @@ TEST_CASE("test_get_by_category") {
     bool found_diamond = false;
     bool found_iron = false;
     for (const auto& s : swords) {
-        if (s.id.str() == "minecraft:diamond_sword") found_diamond = true;
-        if (s.id.str() == "minecraft:iron_sword") found_iron = true;
+        if (s.id.str() == "minecraft:diamond_sword")
+            found_diamond = true;
+        if (s.id.str() == "minecraft:iron_sword")
+            found_iron = true;
     }
     expect(found_diamond, "diamond_sword found in swords");
     expect(found_iron, "iron_sword found in swords");

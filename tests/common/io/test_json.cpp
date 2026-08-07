@@ -1,7 +1,7 @@
 #define BESQ_TEST_MAIN
-#include "io/json.h"
 #include "common/serialization/IJsonSerializable.h"
 #include "framework/test_framework.h"
+#include "io/json.h"
 
 #include <iostream>
 #include <sstream>
@@ -144,11 +144,11 @@ TEST_CASE("test_copy_equality") {
 TEST_CASE("test_path_queries") {
     Json root = Json(Json::Object{
         {"data", Json(Json::Object{
-            {"enchantments", Json(Json::Array{})},
-            {"name", Json(Json::String("sheet"))},
-            {"count", Json(static_cast<int32_t>(3))},
-            {"active", Json(true)},
-        })},
+                     {"enchantments", Json(Json::Array{})},
+                     {"name", Json(Json::String("sheet"))},
+                     {"count", Json(static_cast<int32_t>(3))},
+                     {"active", Json(true)},
+                 })},
     });
 
     expect(root.type("data") == JsonType::Object, "path data is Object");
@@ -206,21 +206,20 @@ TEST_CASE("test_parse_scalars") {
     // String
     expect(Json::parse("\"\"").to_string() == "\"\"", "empty string round-trips");
     expect(Json::parse("\"hello\"").to_string() == "\"hello\"", "simple string round-trips");
-    expect(Json::parse("\"line\\nfeed\"").to_string() == "\"line\\nfeed\"",
-           "escaped newline should round-trip");
+    expect(Json::parse("\"line\\nfeed\"").to_string() == "\"line\\nfeed\"", "escaped newline should round-trip");
 
     std::cout << "  PASS: test_parse_scalars" << std::endl;
 }
 
 TEST_CASE("test_parse_unicode") {
-    std::string input  = "\"\\u00E9\"";
+    std::string input = "\"\\u00E9\"";
     std::string expected_utf8 = "\"";
     expected_utf8.push_back(static_cast<char>(0xC3));
     expected_utf8.push_back(static_cast<char>(0xA9));
     expected_utf8.push_back('"');
     expect(Json::parse(input).to_string() == expected_utf8, "Unicode escape \\u00E9 decodes to UTF-8");
 
-    std::string input2  = "\"\\u4E2D\\u6587\"";
+    std::string input2 = "\"\\u4E2D\\u6587\"";
     std::string expected2 = "\"\\u4E2D\\u6587\"";
     // Depending on implementation, may output the actual UTF-8 or keep the escape.
     // Just verify it parses without error.
@@ -276,16 +275,10 @@ TEST_CASE("test_parse_objects") {
 
 TEST_CASE("test_pretty_print") {
     Json arr = Json::parse("[1,2]");
-    expect(
-        arr.to_string(Json::Pretty) == "[\n    1,\n    2\n]",
-        "pretty array uses 4-space indent"
-    );
+    expect(arr.to_string(Json::Pretty) == "[\n    1,\n    2\n]", "pretty array uses 4-space indent");
 
     Json obj = Json::parse("{\"name\":\"sheet\"}");
-    expect(
-        obj.to_string(Json::Pretty) == "{\n    \"name\": \"sheet\"\n}",
-        "pretty object uses 4-space indent"
-    );
+    expect(obj.to_string(Json::Pretty) == "{\n    \"name\": \"sheet\"\n}", "pretty object uses 4-space indent");
 
     // Verify compact still works
     expect(arr.to_string(Json::Compact) == "[1,2]", "compact after pretty still works");
@@ -320,7 +313,7 @@ TEST_CASE("test_parse_errors") {
         bool threw = false;
         try {
             Json::parse("\"unterminated");
-        } catch (const JsonException &) {
+        } catch (const JsonException&) {
             threw = true;
         }
         expect(threw, "unterminated string throws JsonException");
@@ -329,7 +322,7 @@ TEST_CASE("test_parse_errors") {
         bool threw = false;
         try {
             Json::parse("{\"name\" \"sheet\"}");
-        } catch (const JsonException &) {
+        } catch (const JsonException&) {
             threw = true;
         }
         expect(threw, "missing colon throws JsonException");
@@ -338,7 +331,7 @@ TEST_CASE("test_parse_errors") {
         bool threw = false;
         try {
             Json::parse("{invalid}");
-        } catch (const JsonException &) {
+        } catch (const JsonException&) {
             threw = true;
         }
         expect(threw, "invalid token throws JsonException");
@@ -441,7 +434,8 @@ TEST_CASE("test_accessors") {
     try {
         Json("hello").as_int();
         expect(false, "as_int() on String should throw");
-    } catch (const JsonException&) {}
+    } catch (const JsonException&) {
+    }
 
     // as_double on Number
     Json pi(3.14159);
@@ -455,7 +449,8 @@ TEST_CASE("test_accessors") {
     try {
         Json(true).as_double();
         expect(false, "as_double() on Bool should throw");
-    } catch (const JsonException&) {}
+    } catch (const JsonException&) {
+    }
 
     // as_string on String
     Json s("test");
@@ -465,7 +460,8 @@ TEST_CASE("test_accessors") {
     try {
         Json(42).as_string();
         expect(false, "as_string() on Number should throw");
-    } catch (const JsonException&) {}
+    } catch (const JsonException&) {
+    }
 
     // as_bool on Bool
     Json t(true);
@@ -477,7 +473,8 @@ TEST_CASE("test_accessors") {
     try {
         Json::null().as_bool();
         expect(false, "as_bool() on Null should throw");
-    } catch (const JsonException&) {}
+    } catch (const JsonException&) {
+    }
 
     std::cout << "  PASS: test_accessors" << std::endl;
 }
@@ -594,9 +591,7 @@ TEST_CASE("test_chainable_set") {
     expect(j.type() == JsonType::Object, "set() auto-converts to Object");
 
     // Chained construction pattern
-    auto cfg = Json::object()
-        .set("host", "localhost")
-        .set("port", 8080);
+    auto cfg = Json::object().set("host", "localhost").set("port", 8080);
     expect(cfg["host"].as_string() == "localhost", "factory chain host");
     expect(cfg["port"].as_int() == 8080, "factory chain port");
 
@@ -638,25 +633,17 @@ TEST_CASE("test_mutable_subscript") {
     try {
         arr[10] = Json(0);
         expect(false, "OOB array assignment should throw");
-    } catch (const JsonException&) {}
+    } catch (const JsonException&) {
+    }
 
     std::cout << "  PASS: test_mutable_subscript" << std::endl;
 }
 
 TEST_CASE("test_json_path") {
     // Build a complex JSON structure using the new API
-    auto data = Json::object()
-        .set("solutions", Json::array()
-            .push_back(Json::object()
-                .set("rank", 1)
-                .set("steps", Json::array()
-                    .push_back(Json::object()
-                        .set("item_a", "diamond_sword")
-                        .set("cost", 5)
-                    )
-                )
-            )
-        );
+    auto data = Json::object().set(
+        "solutions", Json::array().push_back(Json::object().set("rank", 1).set(
+                         "steps", Json::array().push_back(Json::object().set("item_a", "diamond_sword").set("cost", 5)))));
 
     // at() with dot notation
     expect(data.at("solutions").type() == JsonType::Array, "at('solutions') is Array");
@@ -667,22 +654,19 @@ TEST_CASE("test_json_path") {
     expect(first["rank"].as_int() == 1, "at('solutions[0]') rank");
 
     // Deep path
-    expect(data.at("solutions[0].steps[0].item_a").as_string() == "diamond_sword",
-           "deep path solutions[0].steps[0].item_a");
-    expect(data.at("solutions[0].steps[0].cost").as_int() == 5,
-           "deep path solutions[0].steps[0].cost");
+    expect(data.at("solutions[0].steps[0].item_a").as_string() == "diamond_sword", "deep path solutions[0].steps[0].item_a");
+    expect(data.at("solutions[0].steps[0].cost").as_int() == 5, "deep path solutions[0].steps[0].cost");
 
     // at() throws on missing key
     try {
         data.at("nonexistent");
         expect(false, "at() on missing key should throw");
-    } catch (const JsonException&) {}
+    } catch (const JsonException&) {
+    }
 
     // at() with default
-    expect(data.at("missing", Json("fallback")).as_string() == "fallback",
-           "at() with default on missing returns default");
-    expect(data.at("solutions[0].rank", Json(0)).as_int() == 1,
-           "at() with default on existing returns actual value");
+    expect(data.at("missing", Json("fallback")).as_string() == "fallback", "at() with default on missing returns default");
+    expect(data.at("solutions[0].rank", Json(0)).as_int() == 1, "at() with default on existing returns actual value");
 
     std::cout << "  PASS: test_json_path" << std::endl;
 }
@@ -705,29 +689,21 @@ struct TestSerializable : IJsonSerializable {
     std::string name;
     int32_t value = 0;
 
-    Json to_json() const override {
-        return Json::object()
-            .set("name", name)
-            .set("value", value);
-    }
+    Json to_json() const override { return Json::object().set("name", name).set("value", value); }
 
     void from_json(const Json& json) override {
-        name  = json["name"].as<std::string>();
+        name = json["name"].as<std::string>();
         value = static_cast<int32_t>(json["value"].as<int64_t>());
     }
 
-    bool operator==(const TestSerializable& o) const {
-        return name == o.name && value == o.value;
-    }
+    bool operator==(const TestSerializable& o) const { return name == o.name && value == o.value; }
 };
 
-} // anonymous namespace (for TestSerializable)
+} // namespace
 
 TEST_CASE("test_iserializable_concept") {
-    static_assert(JsonSerializable<TestSerializable>,
-                  "TestSerializable should satisfy JsonSerializable concept");
-    static_assert(!JsonSerializable<int>,
-                  "int should NOT satisfy JsonSerializable concept");
+    static_assert(JsonSerializable<TestSerializable>, "TestSerializable should satisfy JsonSerializable concept");
+    static_assert(!JsonSerializable<int>, "int should NOT satisfy JsonSerializable concept");
 
     std::cout << "  PASS: test_iserializable_concept" << std::endl;
 }
@@ -745,9 +721,7 @@ TEST_CASE("test_iserializable_serialize") {
 }
 
 TEST_CASE("test_iserializable_deserialize") {
-    Json j = Json::object()
-        .set("name", "unbreaking")
-        .set("value", 3);
+    Json j = Json::object().set("name", "unbreaking").set("value", 3);
 
     TestSerializable obj;
     json::deserialize(obj, j);
@@ -777,9 +751,12 @@ TEST_CASE("test_iserializable_roundtrip") {
 
 TEST_CASE("test_iserializable_vector") {
     TestSerializable a, b, c;
-    a.name = "a"; a.value = 1;
-    b.name = "b"; b.value = 2;
-    c.name = "c"; c.value = 3;
+    a.name = "a";
+    a.value = 1;
+    b.name = "b";
+    b.value = 2;
+    c.name = "c";
+    c.value = 3;
     std::vector<TestSerializable> vec = {a, b, c};
     Json arr = json::serialize_vector(vec);
 
@@ -792,4 +769,3 @@ TEST_CASE("test_iserializable_vector") {
 }
 
 } // anonymous namespace
-

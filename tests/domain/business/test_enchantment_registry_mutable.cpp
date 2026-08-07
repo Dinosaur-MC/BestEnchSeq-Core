@@ -7,10 +7,12 @@
 namespace {
 
 TEST_CASE("test_add_new_enchantment") {
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
-    EnchInfo new_ench{NSID("minecraft:custom_ench"), "Custom", MCE::All, 3, 3, 2, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo new_ench{NSID("minecraft:custom_ench"), "Custom", MCE::All, 3, 3, 2, false, std::unordered_set<NSID>{},
+                      std::unordered_set<NSID>{}};
     bool ok = reg.insert(new_ench).second;
     expect(ok, "insert should succeed for new enchantment");
     expect(reg.size() == 2, "registry should have 2 entries after insert");
@@ -19,7 +21,8 @@ TEST_CASE("test_add_new_enchantment") {
 }
 
 TEST_CASE("test_add_duplicate_fails") {
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
     bool ok = reg.insert(sharp).second;
@@ -28,7 +31,8 @@ TEST_CASE("test_add_duplicate_fails") {
 }
 
 TEST_CASE("test_remove_existing") {
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
     bool ok = reg.erase(NSID("minecraft:sharpness"));
@@ -38,7 +42,8 @@ TEST_CASE("test_remove_existing") {
 }
 
 TEST_CASE("test_remove_nonexistent_fails") {
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
     bool ok = reg.erase(NSID("minecraft:nonexistent"));
@@ -48,7 +53,8 @@ TEST_CASE("test_remove_nonexistent_fails") {
 
 TEST_CASE("test_modify_max_level") {
     EnchantmentRegistry reg;
-    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                   std::unordered_set<NSID>{}};
     reg = EnchantmentRegistry({sharp});
 
     auto modified = reg.at(NSID("minecraft:sharpness"));
@@ -65,7 +71,8 @@ TEST_CASE("test_modify_max_level") {
 
 TEST_CASE("test_modify_nonexistent_fails") {
     EnchantmentRegistry reg;
-    EnchInfo nonexistent{NSID("minecraft:nonexistent"), "Nonexistent", MCE::All, 1, 1, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    EnchInfo nonexistent{NSID("minecraft:nonexistent"), "Nonexistent", MCE::All, 1, 1, 1, false, std::unordered_set<NSID>{},
+                         std::unordered_set<NSID>{}};
     bool ok = reg.update(nonexistent);
     expect(!ok, "update should fail for nonexistent entry");
     TEST_PASS("test_modify_nonexistent_fails");

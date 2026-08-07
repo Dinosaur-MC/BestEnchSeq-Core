@@ -1,7 +1,7 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
+#include "framework/test_framework.h"
 #include <stdexcept>
 
 // ---------------------------------------------------------------------------
@@ -9,18 +9,10 @@
 // ---------------------------------------------------------------------------
 std::vector<EnchInfo> make_valid_enchants() {
     std::vector<EnchInfo> infos;
-    infos.emplace_back(
-        NSID("minecraft:sharpness"), "Sharpness", MCE::Java,
-        5, 5, 1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
-    infos.emplace_back(
-        NSID("minecraft:smite"), "Smite", MCE::Java,
-        5, 5, 1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
+    infos.emplace_back(NSID("minecraft:sharpness"), "Sharpness", MCE::Java, 5, 5, 1, false, std::unordered_set<NSID>{},
+                       std::unordered_set<NSID>{});
+    infos.emplace_back(NSID("minecraft:smite"), "Smite", MCE::Java, 5, 5, 1, false, std::unordered_set<NSID>{},
+                       std::unordered_set<NSID>{});
     return infos;
 }
 
@@ -83,52 +75,31 @@ TEST_CASE("test_check_validation") {
 
     // Empty NSID
     std::vector<EnchInfo> bad_name;
-    bad_name.emplace_back(
-        NSID(), "Empty", MCE::Java,
-        1, 1, 1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
+    bad_name.emplace_back(NSID(), "Empty", MCE::Java, 1, 1, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{});
     expect(!EnchantmentRegistry::check_validation(bad_name), "empty NSID should fail validation");
 
     // max_level <= 0
     std::vector<EnchInfo> bad_max;
-    bad_max.emplace_back(
-        NSID("test"), "Test", MCE::Java,
-        0, 0, 1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
+    bad_max.emplace_back(NSID("test"), "Test", MCE::Java, 0, 0, 1, false, std::unordered_set<NSID>{},
+                         std::unordered_set<NSID>{});
     expect(!EnchantmentRegistry::check_validation(bad_max), "max_level <= 0 should fail");
 
     // multiplier <= 0
     std::vector<EnchInfo> bad_mult;
-    bad_mult.emplace_back(
-        NSID("test"), "Test", MCE::Java,
-        1, 1, 0, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
+    bad_mult.emplace_back(NSID("test"), "Test", MCE::Java, 1, 1, 0, false, std::unordered_set<NSID>{},
+                          std::unordered_set<NSID>{});
     expect(!EnchantmentRegistry::check_validation(bad_mult), "multiplier <= 0 should fail");
 
     // limited_level > max_level
     std::vector<EnchInfo> bad_limited;
-    bad_limited.emplace_back(
-        NSID("test"), "Test", MCE::Java,
-        1, 5, 1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
+    bad_limited.emplace_back(NSID("test"), "Test", MCE::Java, 1, 5, 1, false, std::unordered_set<NSID>{},
+                             std::unordered_set<NSID>{});
     expect(!EnchantmentRegistry::check_validation(bad_limited), "limited > max should fail");
 
     // exclusive_set references non-existent enchantment
     std::vector<EnchInfo> bad_excl;
-    bad_excl.emplace_back(
-        NSID("test"), "Test", MCE::Java,
-        1, 1, 1, false,
-        std::unordered_set<NSID>{NSID("nonexistent_ench")},
-        std::unordered_set<NSID>{}
-    );
+    bad_excl.emplace_back(NSID("test"), "Test", MCE::Java, 1, 1, 1, false, std::unordered_set<NSID>{NSID("nonexistent_ench")},
+                          std::unordered_set<NSID>{});
     expect(!EnchantmentRegistry::check_validation(bad_excl), "bad exclusive ref should fail");
 
     std::cout << "PASS: test_check_validation" << std::endl;
@@ -139,38 +110,22 @@ TEST_CASE("test_check_validation") {
 // ---------------------------------------------------------------------------
 TEST_CASE("test_is_incompatible") {
     std::vector<EnchInfo> infos;
-    infos.emplace_back(
-        NSID("sharpness"), "Sharpness", MCE::Java,
-        5, 5, 1, false,
-        std::unordered_set<NSID>{NSID("smite"), NSID("bane_of_arthropods")},
-        std::unordered_set<NSID>{}
-    );
-    infos.emplace_back(
-        NSID("smite"), "Smite", MCE::Java,
-        5, 5, 1, false,
-        std::unordered_set<NSID>{NSID("sharpness")},
-        std::unordered_set<NSID>{}
-    );
-    infos.emplace_back(
-        NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::Java,
-        5, 5, 1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
-    infos.emplace_back(
-        NSID("unbreaking"), "Unbreaking", MCE::Java,
-        3, 3, 1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{}
-    );
+    infos.emplace_back(NSID("sharpness"), "Sharpness", MCE::Java, 5, 5, 1, false,
+                       std::unordered_set<NSID>{NSID("smite"), NSID("bane_of_arthropods")}, std::unordered_set<NSID>{});
+    infos.emplace_back(NSID("smite"), "Smite", MCE::Java, 5, 5, 1, false, std::unordered_set<NSID>{NSID("sharpness")},
+                       std::unordered_set<NSID>{});
+    infos.emplace_back(NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::Java, 5, 5, 1, false, std::unordered_set<NSID>{},
+                       std::unordered_set<NSID>{});
+    infos.emplace_back(NSID("unbreaking"), "Unbreaking", MCE::Java, 3, 3, 1, false, std::unordered_set<NSID>{},
+                       std::unordered_set<NSID>{});
 
     EnchantmentRegistry reg(infos);
 
     // Use NSID-based lookup instead of numeric index
     auto sharp_it = reg.find(NSID("sharpness"));
     auto smite_it = reg.find(NSID("smite"));
-    auto bane_it  = reg.find(NSID("bane_of_arthropods"));
-    auto ub_it    = reg.find(NSID("unbreaking"));
+    auto bane_it = reg.find(NSID("bane_of_arthropods"));
+    auto ub_it = reg.find(NSID("unbreaking"));
 
     expect(sharp_it != reg.end(), "sharpness should be in registry");
     expect(smite_it != reg.end(), "smite should be in registry");
@@ -203,18 +158,10 @@ TEST_CASE("test_is_incompatible") {
 // ---------------------------------------------------------------------------
 TEST_CASE("test_exclusive_set_access") {
     std::vector<EnchInfo> infos;
-    infos.emplace_back(
-        NSID("sharpness"), "Sharpness", MCE::Java,
-        5, 5, 1, false,
-        std::unordered_set<NSID>{NSID("smite")},
-        std::unordered_set<NSID>{}
-    );
-    infos.emplace_back(
-        NSID("smite"), "Smite", MCE::Java,
-        5, 5, 1, false,
-        std::unordered_set<NSID>{NSID("sharpness")},
-        std::unordered_set<NSID>{}
-    );
+    infos.emplace_back(NSID("sharpness"), "Sharpness", MCE::Java, 5, 5, 1, false, std::unordered_set<NSID>{NSID("smite")},
+                       std::unordered_set<NSID>{});
+    infos.emplace_back(NSID("smite"), "Smite", MCE::Java, 5, 5, 1, false, std::unordered_set<NSID>{NSID("sharpness")},
+                       std::unordered_set<NSID>{});
 
     EnchantmentRegistry reg(infos);
 

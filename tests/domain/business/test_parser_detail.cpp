@@ -1,8 +1,8 @@
 #define BESQ_TEST_MAIN
 #include "framework/test_framework.h"
 
-#include "domain/business/parsers/ParserShared.h"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/parsers/ParserShared.h"
 
 #include <filesystem>
 #include <fstream>
@@ -29,8 +29,7 @@ TEST_CASE("test_make_id_namespaced") {
 
 TEST_CASE("test_make_id_custom_ns") {
     NSID id = business::parser_detail::make_id("excavate", "thermalfoundation");
-    expect(id == NSID("thermalfoundation:excavate"),
-           "make_id custom ns -> thermalfoundation:excavate");
+    expect(id == NSID("thermalfoundation:excavate"), "make_id custom ns -> thermalfoundation:excavate");
     std::cout << "PASS: test_make_id_custom_ns" << std::endl;
 }
 
@@ -44,8 +43,7 @@ TEST_CASE("test_derive_display_name") {
     expect_eq(d2, std::string("Fire aspect"), "derive_display_name fire_aspect -> Fire aspect");
 
     std::string d3 = business::parser_detail::derive_display_name("minecraft:sharpness");
-    expect_eq(d3, std::string("Sharpness"),
-              "derive_display_name minecraft:sharpness -> Sharpness");
+    expect_eq(d3, std::string("Sharpness"), "derive_display_name minecraft:sharpness -> Sharpness");
 
     std::cout << "PASS: test_derive_display_name" << std::endl;
 }
@@ -63,8 +61,7 @@ TEST_CASE("test_get_category_suffix") {
     expect_eq(s3, std::string("pickaxe"), "get_category_suffix diamond_pickaxe -> pickaxe");
 
     std::string s4 = business::parser_detail::get_category_suffix("unknown_item");
-    expect_eq(s4, std::string("unknown_item"),
-              "get_category_suffix unknown_item -> unknown_item");
+    expect_eq(s4, std::string("unknown_item"), "get_category_suffix unknown_item -> unknown_item");
 
     std::cout << "PASS: test_get_category_suffix" << std::endl;
 }
@@ -131,11 +128,13 @@ TEST_CASE("test_format_detector_mc_official_carries_item_tags") {
     }
 
     auto result = FormatDetector::parse(dir);
-    expect(!result.item_tags.empty(),
-           "McOfficial branch of FormatDetector carries datapack item_tags");
+    expect(!result.item_tags.empty(), "McOfficial branch of FormatDetector carries datapack item_tags");
     bool has_swords = false;
     for (const auto& tag : result.item_tags) {
-        if (tag.key == "mypack:swords") { has_swords = true; break; }
+        if (tag.key == "mypack:swords") {
+            has_swords = true;
+            break;
+        }
     }
     expect(has_swords, "item_tags contains the mypack:swords definition");
     // Sanity: enchantment + equipment still carried alongside.

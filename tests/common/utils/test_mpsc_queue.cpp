@@ -4,8 +4,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <mutex>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_set>
@@ -99,8 +99,7 @@ struct MoveOnlyPayload {
     int id;
     std::string name;
 
-    MoveOnlyPayload(int id, std::string name)
-        : id(id), name(std::move(name)) {}
+    MoveOnlyPayload(int id, std::string name) : id(id), name(std::move(name)) {}
     MoveOnlyPayload(MoveOnlyPayload&&) = default;
     MoveOnlyPayload& operator=(MoveOnlyPayload&&) = default;
     ~MoveOnlyPayload() = default;
@@ -218,12 +217,9 @@ TEST_CASE("test_two_producers_one_consumer") {
     p2.join();
     consumer.join();
 
-    expect(consumed.load() == TOTAL,
-           "should consume all items. Got: " + std::to_string(consumed.load()));
-    expect(sum_in.load() == sum_out.load(),
-           "sum in should equal sum out");
-    std::cout << "PASS: test_two_producers_one_consumer ("
-              << consumed.load() << "/" << TOTAL << " items)" << std::endl;
+    expect(consumed.load() == TOTAL, "should consume all items. Got: " + std::to_string(consumed.load()));
+    expect(sum_in.load() == sum_out.load(), "sum in should equal sum out");
+    std::cout << "PASS: test_two_producers_one_consumer (" << consumed.load() << "/" << TOTAL << " items)" << std::endl;
 }
 
 TEST_CASE("test_multi_producer_stress") {
@@ -271,19 +267,17 @@ TEST_CASE("test_multi_producer_stress") {
         }
     });
 
-    for (auto& p : producers) p.join();
+    for (auto& p : producers)
+        p.join();
     producers_done.store(true);
 
     consumer.join();
 
     expect(consumed.load() == TOTAL,
-           "should consume all items. Got: " + std::to_string(consumed.load())
-           + " / " + std::to_string(TOTAL));
-    expect(sum_in.load() == sum_out.load(),
-           "sum in should equal sum out");
-    std::cout << "PASS: test_multi_producer_stress ("
-              << consumed.load() << "/" << TOTAL << " items, "
-              << PRODUCERS << " producers)" << std::endl;
+           "should consume all items. Got: " + std::to_string(consumed.load()) + " / " + std::to_string(TOTAL));
+    expect(sum_in.load() == sum_out.load(), "sum in should equal sum out");
+    std::cout << "PASS: test_multi_producer_stress (" << consumed.load() << "/" << TOTAL << " items, " << PRODUCERS
+              << " producers)" << std::endl;
 }
 
 TEST_CASE("test_sequence_uniqueness") {
@@ -319,8 +313,7 @@ TEST_CASE("test_sequence_uniqueness") {
             if (q.try_pop(val)) {
                 {
                     std::lock_guard<std::mutex> lock(seen_mutex);
-                    expect(seen.find(val) == seen.end(),
-                           "duplicate value detected: " + std::to_string(val));
+                    expect(seen.find(val) == seen.end(), "duplicate value detected: " + std::to_string(val));
                     seen.insert(val);
                 }
                 consumed.fetch_add(1);
@@ -334,32 +327,28 @@ TEST_CASE("test_sequence_uniqueness") {
         while (q.try_pop(val)) {
             {
                 std::lock_guard<std::mutex> lock(seen_mutex);
-                expect(seen.find(val) == seen.end(),
-                       "duplicate value detected: " + std::to_string(val));
+                expect(seen.find(val) == seen.end(), "duplicate value detected: " + std::to_string(val));
                 seen.insert(val);
             }
             consumed.fetch_add(1);
         }
     });
 
-    for (auto& p : producers) p.join();
+    for (auto& p : producers)
+        p.join();
     producers_done.store(true);
 
     consumer.join();
 
-    expect(consumed.load() == TOTAL,
-           "should consume all unique items. Got: " + std::to_string(consumed.load()));
-    expect(seen.size() == static_cast<size_t>(TOTAL),
-           "set size should match total. Got: " + std::to_string(seen.size()));
-    std::cout << "PASS: test_sequence_uniqueness ("
-              << seen.size() << "/" << TOTAL << " unique)" << std::endl;
+    expect(consumed.load() == TOTAL, "should consume all unique items. Got: " + std::to_string(consumed.load()));
+    expect(seen.size() == static_cast<size_t>(TOTAL), "set size should match total. Got: " + std::to_string(seen.size()));
+    std::cout << "PASS: test_sequence_uniqueness (" << seen.size() << "/" << TOTAL << " unique)" << std::endl;
 }
 
 // ─── QueueType concept check ───
 
 TEST_CASE("test_queue_type_concept") {
-    static_assert(QueueType<SegmentedMPSCQueue<int>, int>,
-                  "SegmentedMPSCQueue<int> must satisfy QueueType<int>");
+    static_assert(QueueType<SegmentedMPSCQueue<int>, int>, "SegmentedMPSCQueue<int> must satisfy QueueType<int>");
     static_assert(QueueType<SegmentedMPSCQueue<std::string>, std::string>,
                   "SegmentedMPSCQueue<string> must satisfy QueueType<string>");
 
@@ -394,4 +383,3 @@ TEST_CASE("test_queue_adaptor_integration") {
 
     std::cout << "PASS: test_queue_adaptor_integration" << std::endl;
 }
-

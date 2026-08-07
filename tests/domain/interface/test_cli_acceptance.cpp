@@ -7,12 +7,12 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "domain/interface/cli/CLIApp.h"
-#include "domain/interface/BesqContext.h"
-#include "domain/algorithm/types/ConfigTypes.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
 #include "common/utils/EnvUtil.hpp"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/interface/BesqContext.h"
+#include "domain/interface/cli/CLIApp.h"
 #include "framework/test_framework.h"
 
 #include <filesystem>
@@ -29,12 +29,14 @@ class TempInvFile {
 public:
     explicit TempInvFile(const std::string& content) {
         static int counter = 0;
-        _path = (std::filesystem::temp_directory_path() /
-                 ("besq_cli_inv_" + std::to_string(++counter) + ".json")).string();
+        _path = (std::filesystem::temp_directory_path() / ("besq_cli_inv_" + std::to_string(++counter) + ".json")).string();
         std::ofstream f(_path);
         f << content;
     }
-    ~TempInvFile() { std::error_code ec; std::filesystem::remove(_path, ec); }
+    ~TempInvFile() {
+        std::error_code ec;
+        std::filesystem::remove(_path, ec);
+    }
 
     const char* c_str() const { return _path.c_str(); }
 
@@ -78,8 +80,7 @@ TEST_CASE("test_missing_target_and_export_errors") {
     }
     {
         const char* argv[] = {"besq", "--verbose", "--format", "json"};
-        expect_throws([&] { CLIApp::parse(4, const_cast<char**>(argv)); },
-                      "Must throw with flags only, no target");
+        expect_throws([&] { CLIApp::parse(4, const_cast<char**>(argv)); }, "Must throw with flags only, no target");
         TEST_PASS("flags only (no target/export) throws");
     }
 }
@@ -92,34 +93,29 @@ TEST_CASE("test_max_time_parsing") {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "30"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.max_time.has_value() && *config.max_time == 30,
-               "max_time should be 30 when provided");
+        expect(config.max_time.has_value() && *config.max_time == 30, "max_time should be 30 when provided");
         TEST_PASS("--max-time 30");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "0"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.max_time.has_value() && *config.max_time == 0,
-               "max_time should be 0 (unlimited)");
+        expect(config.max_time.has_value() && *config.max_time == 0, "max_time should be 0 (unlimited)");
         TEST_PASS("--max-time 0");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword"};
         auto config = CLIApp::parse(3, const_cast<char**>(argv));
-        expect(!config.max_time.has_value(),
-               "max_time should be unset when --max-time omitted");
+        expect(!config.max_time.has_value(), "max_time should be unset when --max-time omitted");
         TEST_PASS("--max-time omitted (SearchConfig keeps 180s default)");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "-1"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Negative --max-time should throw");
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Negative --max-time should throw");
         TEST_PASS("--max-time negative throws");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "abc"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Non-numeric --max-time should throw");
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Non-numeric --max-time should throw");
         TEST_PASS("--max-time non-numeric throws");
     }
 }
@@ -134,53 +130,43 @@ TEST_CASE("test_solve_request_config_wiring") {
 
     // --max-time 0 → unlimited (max_search_time == 0 ms)
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--source", "sharpness=2", "--max-time", "0"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=2", "--max-time", "0"};
         auto config = CLIApp::parse(7, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
-        expect(req.search_config.max_search_time.count() == 0,
-               "--max-time 0 should set max_search_time to 0 (unlimited)");
+        expect(req.search_config.max_search_time.count() == 0, "--max-time 0 should set max_search_time to 0 (unlimited)");
         TEST_PASS("wiring: --max-time 0 = unlimited");
     }
     // --max-time omitted → SearchConfig default 180s untouched
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--source", "sharpness=2"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=2"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
-        expect(req.search_config.max_search_time.count() == 180'000,
-               "omitted --max-time should keep 180s default");
+        expect(req.search_config.max_search_time.count() == 180'000, "omitted --max-time should keep 180s default");
         TEST_PASS("wiring: omitted --max-time keeps 180s default");
     }
     // --max-time 5 → 5000 ms
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--source", "sharpness=2", "--max-time", "5"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=2", "--max-time", "5"};
         auto config = CLIApp::parse(7, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
-        expect(req.search_config.max_search_time.count() == 5000,
-               "--max-time 5 should set max_search_time to 5000 ms");
+        expect(req.search_config.max_search_time.count() == 5000, "--max-time 5 should set max_search_time to 5000 ms");
         TEST_PASS("wiring: --max-time 5 = 5000 ms");
     }
     // --memory 2048 → memory_mb == 2048
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--source", "sharpness=2", "--memory", "2048"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=2", "--memory", "2048"};
         auto config = CLIApp::parse(7, const_cast<char**>(argv));
         expect(config.memory_mb == 2048, "--memory 2048 parsed");
         auto req = CLIApp::build_solve_request(config, ctx);
-        expect(req.search_config.memory_mb == 2048,
-               "--memory 2048 should be wired to search_config.memory_mb");
+        expect(req.search_config.memory_mb == 2048, "--memory 2048 should be wired to search_config.memory_mb");
         TEST_PASS("wiring: --memory 2048");
     }
     // --memory omitted → memory_mb stays 0 (A* uses its own 2048 fallback)
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--source", "sharpness=2"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=2"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
-        expect(req.search_config.memory_mb == 0,
-               "omitted --memory should leave memory_mb 0");
+        expect(req.search_config.memory_mb == 0, "omitted --memory should leave memory_mb 0");
         TEST_PASS("wiring: omitted --memory stays 0");
     }
 }
@@ -192,15 +178,14 @@ TEST_CASE("test_solve_request_config_wiring") {
 TEST_CASE("test_config_parsing") {
     // Valid configs
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "ignore-repair-cost=true,ignore-penalty-cost=false"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--config",
+                              "ignore-repair-cost=true,ignore-penalty-cost=false"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         expect(!config.config_pairs.empty(), "multi-config should be non-empty");
         TEST_PASS("--config multiple pairs");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "ignore-repair-cost=true"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--config", "ignore-repair-cost=true"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         expect(!config.config_pairs.empty(), "repair-cost config should be valid");
         TEST_PASS("--config ignore-repair-cost=true");
@@ -208,31 +193,23 @@ TEST_CASE("test_config_parsing") {
 
     // Invalid configs
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", ""};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Empty --config should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--config", ""};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Empty --config should throw");
         TEST_PASS("--config empty throws");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "unknown-key=true"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Unknown --config key should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--config", "unknown-key=true"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Unknown --config key should throw");
         TEST_PASS("--config unknown key throws");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "ignore-repair-cost=maybe"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Invalid --config value should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--config", "ignore-repair-cost=maybe"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Invalid --config value should throw");
         TEST_PASS("--config invalid value throws");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--config", "badformat"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Malformed --config should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--config", "badformat"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Malformed --config should throw");
         TEST_PASS("--config malformed throws");
     }
 }
@@ -243,32 +220,27 @@ TEST_CASE("test_config_parsing") {
 
 TEST_CASE("test_edit_parsing") {
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--edit", "ench:mod,sharpness,max_level=10"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit", "ench:mod,sharpness,max_level=10"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         expect(config.edit_ops.has_value(), "edit_ops should be set");
         TEST_PASS("--edit valid ench:mod");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--edit", "ench:add,custom:foo,multiplier=3,max_level=5;eq:rm,diamond_sword"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit",
+                              "ench:add,custom:foo,multiplier=3,max_level=5;eq:rm,diamond_sword"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         expect(config.edit_ops.has_value(), "multi-edit should be set");
         TEST_PASS("--edit multiple ops");
     }
     {
         // Missing colon in operation header
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--edit", "badformat"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Invalid --edit format should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit", "badformat"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Invalid --edit format should throw");
         TEST_PASS("--edit bad format throws");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--edit", ""};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Empty --edit should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--edit", ""};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Empty --edit should throw");
         TEST_PASS("--edit empty throws");
     }
 }
@@ -282,11 +254,9 @@ TEST_CASE("test_edit_parsing") {
 // test_besq_solve_already_met).
 
 TEST_CASE("test_already_met_args_parse") {
-    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
-                          "--source", "sharpness=5"};
+    const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]", "--source", "sharpness=5"};
     auto config = CLIApp::parse(5, const_cast<char**>(argv));
-    expect(config.target == "diamond_sword[sharpness=5]",
-           "target should be the bracketed inline item");
+    expect(config.target == "diamond_sword[sharpness=5]", "target should be the bracketed inline item");
     expect(config.source == "sharpness=5", "source should be sharpness=5");
     expect(config.algorithm == "dp_merge", "default algorithm should be dp_merge");
     TEST_PASS("already-met args parse");
@@ -341,15 +311,13 @@ TEST_CASE("test_memory_parsing") {
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--memory", "-1"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Negative --memory should throw");
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Negative --memory should throw");
         TEST_PASS("--memory negative throws");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--memory", "999999999"};
         // This is > 1048576
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Too-large --memory should throw");
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Too-large --memory should throw");
         TEST_PASS("--memory too large throws");
     }
 }
@@ -362,27 +330,21 @@ TEST_CASE("test_profile_publish_parsing") {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--profile", "modpack"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.profile.has_value() && *config.profile == "modpack",
-               "profile should be 'modpack'");
+        expect(config.profile.has_value() && *config.profile == "modpack", "profile should be 'modpack'");
         TEST_PASS("--profile modpack");
     }
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--profile-dir", "/tmp/p"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
-        expect(config.profile_dir.has_value() && *config.profile_dir == "/tmp/p",
-               "profile_dir should be '/tmp/p'");
+        expect(config.profile_dir.has_value() && *config.profile_dir == "/tmp/p", "profile_dir should be '/tmp/p'");
         TEST_PASS("--profile-dir /tmp/p");
     }
     {
-        const char* argv[] = {"besq", "--publish", "mypack",
-                              "--publish-version", "1.0", "--publish-tag", "stable"};
+        const char* argv[] = {"besq", "--publish", "mypack", "--publish-version", "1.0", "--publish-tag", "stable"};
         auto config = CLIApp::parse(7, const_cast<char**>(argv));
-        expect(config.publish.has_value() && *config.publish == "mypack",
-               "publish should be 'mypack'");
-        expect(config.publish_version.has_value() && *config.publish_version == "1.0",
-               "publish_version should be '1.0'");
-        expect(config.publish_tag.has_value() && *config.publish_tag == "stable",
-               "publish_tag should be 'stable'");
+        expect(config.publish.has_value() && *config.publish == "mypack", "publish should be 'mypack'");
+        expect(config.publish_version.has_value() && *config.publish_version == "1.0", "publish_version should be '1.0'");
+        expect(config.publish_tag.has_value() && *config.publish_tag == "stable", "publish_tag should be 'stable'");
         TEST_PASS("--publish mypack --publish-version 1.0 --publish-tag stable");
     }
 }
@@ -394,10 +356,8 @@ TEST_CASE("test_profile_publish_parsing") {
 TEST_CASE("test_input_alone_valid") {
     const char* argv[] = {"besq", "--input", "some.json"};
     auto config = CLIApp::parse(3, const_cast<char**>(argv));
-    expect(config.input.has_value() && *config.input == "some.json",
-           "--input should be set");
-    expect(config.target.empty(),
-           "--input alone must not require --target");
+    expect(config.input.has_value() && *config.input == "some.json", "--input should be set");
+    expect(config.target.empty(), "--input alone must not require --target");
     TEST_PASS("--input alone parses cleanly (gate exemption)");
 }
 
@@ -451,8 +411,7 @@ TEST_CASE("test_inventory_solve_request_wiring") {
         }
         expect(threw, "JSON without target + no --target should throw");
         // en_US pinned above → resolved "Inventory task requires a target item ..."
-        expect(msg.find("target item") != std::string::npos,
-               "error is inventory_requires_target (resolved en_US)");
+        expect(msg.find("target item") != std::string::npos, "error is inventory_requires_target (resolved en_US)");
         TEST_PASS("inventory wiring: missing target throws");
     }
 
@@ -463,15 +422,12 @@ TEST_CASE("test_inventory_solve_request_wiring") {
             "items": [],
             "algorithm": "dp_merge"
         })");
-        const char* argv[] = {"besq", "--input", f.c_str(),
-                              "--target", "diamond_sword[knockback=2]",
-                              "--algorithm", "bb_dp"};
+        const char* argv[] = {"besq", "--input", f.c_str(), "--target", "diamond_sword[knockback=2]", "--algorithm", "bb_dp"};
         auto config = CLIApp::parse(7, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
         expect(req.algorithm == "bb_dp", "CLI explicit algorithm beats JSON algorithm");
         expect(req.target_item.enchantments.size() == 1 &&
-                   req.target_item.enchantments.find(NSID("minecraft:knockback")) !=
-                       req.target_item.enchantments.end(),
+                   req.target_item.enchantments.find(NSID("minecraft:knockback")) != req.target_item.enchantments.end(),
                "CLI --target overrides JSON target");
         TEST_PASS("inventory wiring: CLI --target/--algorithm override JSON");
     }
@@ -510,8 +466,7 @@ TEST_CASE("test_inventory_profile_switch") {
     ctx.load_builtin();
     ctx.set_profiles_dir(tmp);
     ctx.load_profiles();
-    expect(!ctx.enchantments().contains(NSID("mod:ember")),
-           "mod:ember absent while vanilla is active");
+    expect(!ctx.enchantments().contains(NSID("mod:ember")), "mod:ember absent while vanilla is active");
 
     // The task names modded_sword; mod:ember is only valid under that profile.
     TempInvFile f(R"({
@@ -522,10 +477,8 @@ TEST_CASE("test_inventory_profile_switch") {
     const char* argv[] = {"besq", "--input", f.c_str()};
     auto config = CLIApp::parse(3, const_cast<char**>(argv));
     auto req = CLIApp::build_solve_request(config, ctx);
-    expect(ctx.active_profile() == "modded_sword",
-           "JSON profile activated on the context");
-    expect(req.target_item.enchantments.size() == 1,
-           "profile switch lets JSON target use the mod enchantment");
+    expect(ctx.active_profile() == "modded_sword", "JSON profile activated on the context");
+    expect(req.target_item.enchantments.size() == 1, "profile switch lets JSON target use the mod enchantment");
 
     std::filesystem::remove_all(tmp);
     TEST_PASS("inventory wiring: JSON profile switches registries before cross-validation");
@@ -568,10 +521,8 @@ TEST_CASE("test_inventory_explicit_profile_overrides_json") {
     // The only error that names the enchantment here is cli.err.unknown_ench
     // (resolved per active locale), proving cross-validation ran against
     // vanilla rather than the JSON's modded_sword.
-    expect(msg.find("mod:ember") != std::string::npos,
-           "cross-validation ran against vanilla (mod:ember unknown)");
-    expect(ctx.active_profile() == "builtin:vanilla",
-           "active profile unchanged by the JSON field when --profile explicit");
+    expect(msg.find("mod:ember") != std::string::npos, "cross-validation ran against vanilla (mod:ember unknown)");
+    expect(ctx.active_profile() == "builtin:vanilla", "active profile unchanged by the JSON field when --profile explicit");
 
     std::filesystem::remove_all(tmp);
     TEST_PASS("inventory wiring: explicit --profile overrides JSON profile");
@@ -605,8 +556,7 @@ TEST_CASE("test_inventory_source_rejection") {
         msg = e.what();
     }
     expect(threw, "inventory + --source should throw in build_solve_request");
-    expect(msg.find("cli.err.inventory_rejects_source") != std::string::npos ||
-               msg.find("--source") != std::string::npos,
+    expect(msg.find("cli.err.inventory_rejects_source") != std::string::npos || msg.find("--source") != std::string::npos,
            "error is inventory_rejects_source");
     TEST_PASS("inventory wiring: --source rejected with inventory message");
 }
@@ -617,8 +567,7 @@ TEST_CASE("test_inventory_source_rejection") {
 
 TEST_CASE("test_inventory_invalid_mode_throws") {
     const char* argv[] = {"besq", "--input", "inv.json", "--mode", "banana"};
-    expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                  "--input with invalid --mode should throw invalid_mode");
+    expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "--input with invalid --mode should throw invalid_mode");
     TEST_PASS("inventory wiring: --input --mode banana throws invalid_mode");
 }
 
@@ -661,8 +610,7 @@ TEST_CASE("test_book_target_parsing") {
         auto config = CLIApp::parse(3, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
         expect(req.target_item.is_book(), "enchanted_book target flagged as book");
-        expect(req.target_item.id.str() == "minecraft:enchanted_book",
-               "enchanted_book id preserved");
+        expect(req.target_item.id.str() == "minecraft:enchanted_book", "enchanted_book id preserved");
         expect(req.target_item.enchantments.size() == 1, "one enchantment");
         expect(req.target_item.durability == 0, "books have no durability");
         TEST_PASS("book target: enchanted_book parses");
@@ -672,8 +620,7 @@ TEST_CASE("test_book_target_parsing") {
         const char* argv[] = {"besq", "--target", "book[sharpness=5]"};
         auto config = CLIApp::parse(3, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
-        expect(req.target_item.id.str() == "minecraft:enchanted_book",
-               "book normalises to enchanted_book");
+        expect(req.target_item.id.str() == "minecraft:enchanted_book", "book normalises to enchanted_book");
         expect(req.target_item.is_book(), "book flagged as book");
         TEST_PASS("book target: book normalises to enchanted_book");
     }
@@ -698,22 +645,23 @@ TEST_CASE("test_algo_opt_wiring") {
 
     // Valid: comma-separated key=value pairs land in search_config.extra
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--source", "sharpness=2",
-                              "--algo-opt", "bb_dp.chunk_bits=12,idastar.threshold=1.5"};
+        const char* argv[] = {"besq",
+                              "--target",
+                              "diamond_sword",
+                              "--source",
+                              "sharpness=2",
+                              "--algo-opt",
+                              "bb_dp.chunk_bits=12,idastar.threshold=1.5"};
         auto config = CLIApp::parse(7, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
         expect(req.search_config.extra.size() == 2, "two algo-opt pairs wired");
-        expect(req.search_config.extra.at("bb_dp.chunk_bits") == "12",
-               "bb_dp.chunk_bits value");
-        expect(req.search_config.extra.at("idastar.threshold") == "1.5",
-               "idastar.threshold value");
+        expect(req.search_config.extra.at("bb_dp.chunk_bits") == "12", "bb_dp.chunk_bits value");
+        expect(req.search_config.extra.at("idastar.threshold") == "1.5", "idastar.threshold value");
         TEST_PASS("--algo-opt pairs wired to extra");
     }
     // Omitted → extra stays empty
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--source", "sharpness=2"};
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--source", "sharpness=2"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
         auto req = CLIApp::build_solve_request(config, ctx);
         expect(req.search_config.extra.empty(), "omitted --algo-opt leaves extra empty");
@@ -721,32 +669,24 @@ TEST_CASE("test_algo_opt_wiring") {
     }
     // Empty value → parse throws
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--algo-opt", ""};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Empty --algo-opt should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--algo-opt", ""};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Empty --algo-opt should throw");
         TEST_PASS("--algo-opt empty throws");
     }
     // Malformed pair (no '=' / empty key / empty value) → parse throws
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--algo-opt", "bb_dp.chunk_bits"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Malformed --algo-opt should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--algo-opt", "bb_dp.chunk_bits"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Malformed --algo-opt should throw");
         TEST_PASS("--algo-opt malformed throws");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--algo-opt", "=8"};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Empty --algo-opt key should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--algo-opt", "=8"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Empty --algo-opt key should throw");
         TEST_PASS("--algo-opt empty key throws");
     }
     {
-        const char* argv[] = {"besq", "--target", "diamond_sword",
-                              "--algo-opt", "bb_dp.chunk_bits="};
-        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
-                      "Empty --algo-opt value should throw");
+        const char* argv[] = {"besq", "--target", "diamond_sword", "--algo-opt", "bb_dp.chunk_bits="};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); }, "Empty --algo-opt value should throw");
         TEST_PASS("--algo-opt empty value throws");
     }
     // apply_algo_opts functional (mirror of apply_config_pairs test)
@@ -772,23 +712,20 @@ TEST_CASE("test_apply_lang") {
     {
         const char* argv[] = {"besq", "--lang", "en_US"};
         CLIApp::apply_lang(3, const_cast<char**>(argv));
-        expect_eq(lang_mgr.active().name(), std::string("en_US"),
-                  "apply_lang: --lang en_US");
+        expect_eq(lang_mgr.active().name(), std::string("en_US"), "apply_lang: --lang en_US");
     }
     // --lang zh_CN
     {
         const char* argv[] = {"besq", "--lang", "zh_CN"};
         CLIApp::apply_lang(3, const_cast<char**>(argv));
-        expect_eq(lang_mgr.active().name(), std::string("zh_CN"),
-                  "apply_lang: --lang zh_CN");
+        expect_eq(lang_mgr.active().name(), std::string("zh_CN"), "apply_lang: --lang zh_CN");
     }
     // BESQ_LANG env (no --lang)
     {
         set_env("BESQ_LANG", "zh_CN");
         const char* argv[] = {"besq"};
         CLIApp::apply_lang(1, const_cast<char**>(argv));
-        expect_eq(lang_mgr.active().name(), std::string("zh_CN"),
-                  "apply_lang: BESQ_LANG env selected");
+        expect_eq(lang_mgr.active().name(), std::string("zh_CN"), "apply_lang: BESQ_LANG env selected");
         unset_env("BESQ_LANG");
     }
     // --lang flag overrides env
@@ -796,8 +733,7 @@ TEST_CASE("test_apply_lang") {
         set_env("BESQ_LANG", "zh_CN");
         const char* argv[] = {"besq", "--lang", "en_US"};
         CLIApp::apply_lang(3, const_cast<char**>(argv));
-        expect_eq(lang_mgr.active().name(), std::string("en_US"),
-                  "apply_lang: --lang overrides env");
+        expect_eq(lang_mgr.active().name(), std::string("en_US"), "apply_lang: --lang overrides env");
         unset_env("BESQ_LANG");
     }
     // Invalid --lang prints a stderr warning and keeps the base language
@@ -805,8 +741,7 @@ TEST_CASE("test_apply_lang") {
         set_env("BESQ_LANG", "en_US");
         const char* argv[] = {"besq", "--lang", "xx_YY"};
         CLIApp::apply_lang(3, const_cast<char**>(argv));
-        expect_eq(lang_mgr.active().name(), std::string("en_US"),
-                  "apply_lang: invalid --lang keeps base");
+        expect_eq(lang_mgr.active().name(), std::string("en_US"), "apply_lang: invalid --lang keeps base");
         unset_env("BESQ_LANG");
     }
 
@@ -820,18 +755,16 @@ TEST_CASE("test_apply_lang") {
 TEST_CASE("test_detect_target") {
     {
         const char* argv[] = {"besq"};
-        expect_eq(CLIApp::detect_target(1, const_cast<char**>(argv)),
-                  std::string("cli"), "detect_target: default is cli");
+        expect_eq(CLIApp::detect_target(1, const_cast<char**>(argv)), std::string("cli"), "detect_target: default is cli");
     }
     {
         const char* argv[] = {"besq", "--api", "gui"};
-        expect_eq(CLIApp::detect_target(3, const_cast<char**>(argv)),
-                  std::string("gui"), "detect_target: --api gui");
+        expect_eq(CLIApp::detect_target(3, const_cast<char**>(argv)), std::string("gui"), "detect_target: --api gui");
     }
     {
         const char* argv[] = {"besq", "--api", "gui", "--target", "diamond_sword"};
-        expect_eq(CLIApp::detect_target(5, const_cast<char**>(argv)),
-                  std::string("gui"), "detect_target: --api found anywhere");
+        expect_eq(CLIApp::detect_target(5, const_cast<char**>(argv)), std::string("gui"),
+                  "detect_target: --api found anywhere");
     }
     TEST_PASS("CLIApp detect_target");
 }
@@ -848,8 +781,7 @@ TEST_CASE("test_help_text") {
     expect(text.find("Usage:") != std::string::npos, "help_text has Usage header");
     expect(text.find("--target") != std::string::npos, "help_text lists --target");
     expect(text.find("--export") != std::string::npos, "help_text lists --export");
-    expect(text.find("--list-algorithms") != std::string::npos,
-           "help_text lists --list-algorithms");
+    expect(text.find("--list-algorithms") != std::string::npos, "help_text lists --list-algorithms");
     expect(text.find("--profile") != std::string::npos, "help_text lists --profile");
 
     TEST_PASS("CLIApp help_text");

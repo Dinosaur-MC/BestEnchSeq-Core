@@ -1,19 +1,19 @@
 #define BESQ_TEST_MAIN
 
-#include "framework/test_framework.h"
-#include "domain/orchestration/pipelines/ExportPipeline.h"
-#include "domain/orchestration/components/EnchSerializer.h"
-#include "domain/orchestration/types/ExportRequest.h"
-#include "domain/orchestration/types/ExportResult.h"
-#include "domain/business/types/Profile.h"
+#include "common/io/json.h"
+#include "domain/business/components/FormatDetector.h"
 #include "domain/business/types/EnchInfo.h"
+#include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
-#include "domain/business/types/Solution.h"
 #include "domain/business/types/Item.h"
-#include "domain/business/types/EnchSet.h"
-#include "domain/business/components/FormatDetector.h"
-#include "common/io/json.h"
+#include "domain/business/types/Profile.h"
+#include "domain/business/types/Solution.h"
+#include "domain/orchestration/components/EnchSerializer.h"
+#include "domain/orchestration/pipelines/ExportPipeline.h"
+#include "domain/orchestration/types/ExportRequest.h"
+#include "domain/orchestration/types/ExportResult.h"
+#include "framework/test_framework.h"
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -32,17 +32,12 @@ TEST_CASE("test_export_registry_json") {
 
     // Add an enchantment
     profile.add_enchantment(EnchInfo{
-        NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
-        1, false,
-        std::unordered_set<NSID>{},                           // no exclusive set
-        std::unordered_set<NSID>{EquipmentTag::sword()}       // applicable to swords
+        NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, // no exclusive set
+        std::unordered_set<NSID>{EquipmentTag::sword()}                                       // applicable to swords
     });
 
     // Add an equipment piece
-    profile.add_equipment(Equipment{
-        NSID("minecraft:diamond_sword"), "Diamond Sword",
-        EquipmentTag::sword(), 1561
-    });
+    profile.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
 
     ExportRequest req;
     req.target = ExportRequest::TargetType::Registry;
@@ -65,12 +60,8 @@ TEST_CASE("test_export_registry_csv") {
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
 
     // Add an enchantment
-    profile.add_enchantment(EnchInfo{
-        NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
-        1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{EquipmentTag::sword()}
-    });
+    profile.add_enchantment(EnchInfo{NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                                     std::unordered_set<NSID>{EquipmentTag::sword()}});
 
     ExportRequest req;
     req.target = ExportRequest::TargetType::Registry;
@@ -93,10 +84,7 @@ TEST_CASE("test_export_solution") {
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
 
     // Add the sword equipment (needed by OutputFormatter for name resolution)
-    profile.add_equipment(Equipment{
-        NSID("minecraft:diamond_sword"), "Diamond Sword",
-        EquipmentTag::sword(), 1561
-    });
+    profile.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
 
     // Build a trivial solution
     Solution solution;
@@ -104,9 +92,7 @@ TEST_CASE("test_export_solution") {
     solution.platform = MCE::Java;
     solution.total_exp_level_cost = 5;
     solution.total_exp_cost = 5;
-    solution.target_item = Item(
-        NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561
-    );
+    solution.target_item = Item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
 
     Solution::EnchStep step;
     step.exp_level_cost = 5;
@@ -140,11 +126,9 @@ TEST_CASE("test_csv_export_import_roundtrip") {
     Profile profile("test_rt");
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
     // MCE::All：旧 platform_to_string 导出 "unknown"（往返损坏）；修复后导出 "all"。
-    profile.add_enchantment(EnchInfo{
-        NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
-        std::unordered_set<NSID>{}, std::unordered_set<NSID>{EquipmentTag::sword()}});
-    profile.add_equipment(Equipment{
-        NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
+    profile.add_enchantment(EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
+                                     std::unordered_set<NSID>{}, std::unordered_set<NSID>{EquipmentTag::sword()}});
+    profile.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
     bool ok = EnchSerializer::export_csv(csv_path.string(), profile);
     expect(ok, "csv_rt: export ok");
     expect(fs::exists(dir / "equipments_reg.csv"), "csv_rt: companion file written");
@@ -168,10 +152,7 @@ TEST_CASE("test_export_solution_json_metadata") {
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
 
     // Add the sword equipment (needed by OutputFormatter for name resolution)
-    profile.add_equipment(Equipment{
-        NSID("minecraft:diamond_sword"), "Diamond Sword",
-        EquipmentTag::sword(), 1561
-    });
+    profile.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
 
     // Build a trivial solution
     Solution solution;
@@ -179,9 +160,7 @@ TEST_CASE("test_export_solution_json_metadata") {
     solution.platform = MCE::Java;
     solution.total_exp_level_cost = 5;
     solution.total_exp_cost = 5;
-    solution.target_item = Item(
-        NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561
-    );
+    solution.target_item = Item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
 
     Solution::EnchStep step;
     step.exp_level_cost = 5;
@@ -216,16 +195,12 @@ TEST_CASE("test_export_solution_json_metadata") {
 // ─── Test 13: format_for_path 扩展名推断 ──────────────────────────────
 
 TEST_CASE("test_export_format_for_path") {
-    expect_eq(ExportPipeline::format_for_path("a.csv"), ExportRequest::Format::Csv,
-              "format_for_path: .csv → Csv");
+    expect_eq(ExportPipeline::format_for_path("a.csv"), ExportRequest::Format::Csv, "format_for_path: .csv → Csv");
     expect_eq(ExportPipeline::format_for_path("a.CSV"), ExportRequest::Format::Csv,
               "format_for_path: .CSV → Csv (case-insensitive)");
-    expect_eq(ExportPipeline::format_for_path("a.json"), ExportRequest::Format::Json,
-              "format_for_path: .json → Json");
-    expect_eq(ExportPipeline::format_for_path("a.txt"), ExportRequest::Format::Json,
-              "format_for_path: .txt → Json (default)");
-    expect_eq(ExportPipeline::format_for_path("noext"), ExportRequest::Format::Json,
-              "format_for_path: noext → Json (default)");
+    expect_eq(ExportPipeline::format_for_path("a.json"), ExportRequest::Format::Json, "format_for_path: .json → Json");
+    expect_eq(ExportPipeline::format_for_path("a.txt"), ExportRequest::Format::Json, "format_for_path: .txt → Json (default)");
+    expect_eq(ExportPipeline::format_for_path("noext"), ExportRequest::Format::Json, "format_for_path: noext → Json (default)");
 
     std::cout << "PASS: test_export_format_for_path" << std::endl;
 }
@@ -235,17 +210,13 @@ TEST_CASE("test_export_format_for_path") {
 TEST_CASE("test_export_registry_mc_official_file") {
     namespace fs = std::filesystem;
     auto dir = fs::temp_directory_path() / "besq_mc_official_p22";
-    fs::remove_all(dir);  // clean slate
+    fs::remove_all(dir); // clean slate
     fs::create_directories(dir);
 
     Profile profile("test");
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
-    profile.add_enchantment(EnchInfo{
-        NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5,
-        1, false,
-        std::unordered_set<NSID>{},
-        std::unordered_set<NSID>{EquipmentTag::sword()}
-    });
+    profile.add_enchantment(EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
+                                     std::unordered_set<NSID>{}, std::unordered_set<NSID>{EquipmentTag::sword()}});
 
     ExportRequest req;
     req.target = ExportRequest::TargetType::Registry;
@@ -256,10 +227,8 @@ TEST_CASE("test_export_registry_mc_official_file") {
     expect(result.success, "export_registry_mc_official_file: should succeed");
 
     auto sharpness = dir / "data" / "minecraft" / "enchantment" / "sharpness.json";
-    expect(fs::exists(sharpness),
-           "export_registry_mc_official_file: data/minecraft/enchantment/sharpness.json exists");
-    expect(fs::file_size(sharpness) > 0,
-           "export_registry_mc_official_file: sharpness.json non-empty");
+    expect(fs::exists(sharpness), "export_registry_mc_official_file: data/minecraft/enchantment/sharpness.json exists");
+    expect(fs::file_size(sharpness) > 0, "export_registry_mc_official_file: sharpness.json non-empty");
 
     fs::remove_all(dir);
     std::cout << "PASS: test_export_registry_mc_official_file" << std::endl;
@@ -275,19 +244,14 @@ TEST_CASE("test_export_solution_verbose_file") {
 
     Profile profile("test");
     profile.add_tag(EquipmentTag{EquipmentTag::sword(), "sword"});
-    profile.add_equipment(Equipment{
-        NSID("minecraft:diamond_sword"), "Diamond Sword",
-        EquipmentTag::sword(), 1561
-    });
+    profile.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
 
     Solution solution;
     solution.is_success = true;
     solution.platform = MCE::Java;
     solution.total_exp_level_cost = 5;
     solution.total_exp_cost = 5;
-    solution.target_item = Item(
-        NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561
-    );
+    solution.target_item = Item(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
 
     Solution::EnchStep step;
     step.exp_level_cost = 5;

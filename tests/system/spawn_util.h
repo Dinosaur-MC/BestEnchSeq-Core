@@ -30,19 +30,19 @@
 #include <vector>
 
 #if defined(_WIN32)
-#include <cstdlib>  // _putenv_s, _dupenv_s, free
+#include <cstdlib> // _putenv_s, _dupenv_s, free
 #include <windows.h>
 #else
-#include <cctype>    // std::isspace (POSIX rc-trim)
+#include <cctype> // std::isspace (POSIX rc-trim)
 #include <sys/types.h>
-#include <sys/wait.h>  // WIFEXITED / WEXITSTATUS / WIFSIGNALED / WTERMSIG
-#include <unistd.h>    // getpid, popen, pclose
+#include <sys/wait.h> // WIFEXITED / WEXITSTATUS / WIFSIGNALED / WTERMSIG
+#include <unistd.h>   // getpid, popen, pclose
 #endif
 
 namespace besq_test {
 
 struct RunResult {
-    int exit_code = -1;  // -1 = spawn failed
+    int exit_code = -1; // -1 = spawn failed
     // NOTE: named `out`/`err` (not stdout/stderr) — those are stdio macros.
     std::string out;
     std::string err;
@@ -58,9 +58,8 @@ inline std::filesystem::path temp_path(const char* tag, int seq) {
 #else
     const long pid = static_cast<long>(::getpid());
 #endif
-    return std::filesystem::temp_directory_path()
-         / ("besq_" + std::string(tag) + "_" + std::to_string(pid) + "_"
-            + std::to_string(seq) + ".tmp");
+    return std::filesystem::temp_directory_path() /
+           ("besq_" + std::string(tag) + "_" + std::to_string(pid) + "_" + std::to_string(seq) + ".tmp");
 }
 
 struct TempFiles {
@@ -83,7 +82,8 @@ inline std::string read_file_norm(const std::filesystem::path& p) {
     std::string out;
     out.reserve(s.size());
     for (size_t i = 0; i < s.size(); ++i) {
-        if (s[i] == '\r' && i + 1 < s.size() && s[i + 1] == '\n') continue;
+        if (s[i] == '\r' && i + 1 < s.size() && s[i + 1] == '\n')
+            continue;
         out += s[i];
     }
     return out;
@@ -96,8 +96,10 @@ inline std::string read_file_norm(const std::filesystem::path& p) {
 inline std::string sh_quote(const std::string& arg) {
     std::string out = "'";
     for (char c : arg) {
-        if (c == '\'') out += "'\\''";
-        else out += c;
+        if (c == '\'')
+            out += "'\\''";
+        else
+            out += c;
     }
     return out + "'";
 }
@@ -114,10 +116,12 @@ inline std::string build_sh_cmd(const std::vector<std::string>& args,
 
     std::string cmd = env;
     for (size_t i = 0; i < args.size(); ++i) {
-        if (i) cmd += " ";
+        if (i)
+            cmd += " ";
         cmd += sh_quote(args[i]);
     }
-    if (!in_path.empty()) cmd += " < " + sh_quote(in_path);
+    if (!in_path.empty())
+        cmd += " < " + sh_quote(in_path);
     cmd += " 1> " + sh_quote(out_path);
     cmd += " 2> " + sh_quote(err_path);
     cmd += "; echo $? > " + sh_quote(rc_path);
@@ -128,39 +132,41 @@ inline RunResult run_cli_posix(const std::vector<std::string>& args,
                                const std::string& stdin_input,
                                const std::vector<std::pair<std::string, std::string>>& extra_env,
                                const TempFiles& tf) {
-    const std::string cmd = build_sh_cmd(
-        args, stdin_input.empty() ? std::string{} : tf.in.string(),
-        tf.out.string(), tf.err.string(), tf.rc.string(), extra_env);
+    const std::string cmd = build_sh_cmd(args, stdin_input.empty() ? std::string{} : tf.in.string(), tf.out.string(),
+                                         tf.err.string(), tf.rc.string(), extra_env);
 
     RunResult r;
     FILE* p = ::popen(cmd.c_str(), "r");
-    if (!p) return r;
+    if (!p)
+        return r;
     char buf[4096];
-    while (::fgets(buf, sizeof(buf), p)) {}  // drain until EOF == shell exit
+    while (::fgets(buf, sizeof(buf), p)) {
+    } // drain until EOF == shell exit
     int st = ::pclose(p);
 
-    {  // rc.tmp authoritative; pclose fallback
+    { // rc.tmp authoritative; pclose fallback
         std::string rc = read_file_norm(tf.rc);
         while (!rc.empty() && std::isspace(static_cast<unsigned char>(rc.back())))
             rc.pop_back();
         if (!rc.empty()) {
-            try { r.exit_code = std::stoi(rc); }
-            catch (...) { r.exit_code = -1; }
+            try {
+                r.exit_code = std::stoi(rc);
+            } catch (...) {
+                r.exit_code = -1;
+            }
         }
     }
     if (r.exit_code < 0 && st != -1) {
         // WIFEXITED/WEXITSTATUS/WIFSIGNALED/WTERMSIG are MACROS (sys/wait.h) —
         // never qualify them with `::` (that is invalid on a macro).
-        r.exit_code = WIFEXITED(st)   ? WEXITSTATUS(st)
-                    : WIFSIGNALED(st) ? 128 + WTERMSIG(st)
-                                      : -1;
+        r.exit_code = WIFEXITED(st) ? WEXITSTATUS(st) : WIFSIGNALED(st) ? 128 + WTERMSIG(st) : -1;
     }
     r.out = read_file_norm(tf.out);
     r.err = read_file_norm(tf.err);
     return r;
 }
 
-#endif  // !_WIN32
+#endif // !_WIN32
 
 // ── Windows backend (CreateProcessA + handle redirection) ───────────────
 
@@ -170,7 +176,8 @@ inline RunResult run_cli_posix(const std::vector<std::string>& args,
 // rules).  Args without spaces/tabs/quotes pass through unchanged.
 inline std::string win_quote_arg(const std::string& arg) {
     const bool needs = arg.find_first_of(" \t\"") != std::string::npos;
-    if (!needs) return arg;
+    if (!needs)
+        return arg;
     std::string out = "\"";
     int backslashes = 0;
     for (char c : arg) {
@@ -186,7 +193,8 @@ inline std::string win_quote_arg(const std::string& arg) {
             out += c;
         }
     }
-    if (backslashes) out.append(static_cast<size_t>(backslashes) * 2, '\\');
+    if (backslashes)
+        out.append(static_cast<size_t>(backslashes) * 2, '\\');
     out += '"';
     return out;
 }
@@ -228,25 +236,23 @@ inline RunResult run_cli_win(const std::vector<std::string>& args,
     // Build the command line: <exe> <arg...>.
     std::string cmdline;
     for (size_t i = 0; i < args.size(); ++i) {
-        if (i) cmdline += " ";
+        if (i)
+            cmdline += " ";
         cmdline += win_quote_arg(args[i]);
     }
     std::vector<char> cmd_buf(cmdline.begin(), cmdline.end());
     cmd_buf.push_back('\0');
 
-    SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};  // inheritable handles
+    SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE}; // inheritable handles
 
-    HANDLE h_out = ::CreateFileA(tf.out.string().c_str(), GENERIC_WRITE,
-                                 FILE_SHARE_READ, &sa, CREATE_ALWAYS,
+    HANDLE h_out = ::CreateFileA(tf.out.string().c_str(), GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS,
                                  FILE_ATTRIBUTE_NORMAL, nullptr);
-    HANDLE h_err = ::CreateFileA(tf.err.string().c_str(), GENERIC_WRITE,
-                                 FILE_SHARE_READ, &sa, CREATE_ALWAYS,
+    HANDLE h_err = ::CreateFileA(tf.err.string().c_str(), GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS,
                                  FILE_ATTRIBUTE_NORMAL, nullptr);
     HANDLE h_in = nullptr;
     if (!stdin_input.empty()) {
-        h_in = ::CreateFileA(tf.in.string().c_str(), GENERIC_READ,
-                             FILE_SHARE_READ, &sa, OPEN_EXISTING,
-                             FILE_ATTRIBUTE_NORMAL, nullptr);
+        h_in = ::CreateFileA(tf.in.string().c_str(), GENERIC_READ, FILE_SHARE_READ, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                             nullptr);
     }
 
     STARTUPINFOA si{};
@@ -258,15 +264,14 @@ inline RunResult run_cli_win(const std::vector<std::string>& args,
 
     PROCESS_INFORMATION pi{};
     RunResult r;
-    const BOOL ok = ::CreateProcessA(
-        nullptr, cmd_buf.data(), nullptr, nullptr, /*bInheritHandles=*/TRUE,
-        0, nullptr, nullptr, &si, &pi);
-    if (h_in) ::CloseHandle(h_in);
+    const BOOL ok =
+        ::CreateProcessA(nullptr, cmd_buf.data(), nullptr, nullptr, /*bInheritHandles=*/TRUE, 0, nullptr, nullptr, &si, &pi);
+    if (h_in)
+        ::CloseHandle(h_in);
     if (!ok) {
         ::CloseHandle(h_out);
         ::CloseHandle(h_err);
-        std::fprintf(stderr, "[spawn] CreateProcess failed (code %lu)\n",
-                     static_cast<unsigned long>(::GetLastError()));
+        std::fprintf(stderr, "[spawn] CreateProcess failed (code %lu)\n", static_cast<unsigned long>(::GetLastError()));
         return r;
     }
 
@@ -286,17 +291,16 @@ inline RunResult run_cli_win(const std::vector<std::string>& args,
     return r;
 }
 
-#endif  // _WIN32
+#endif // _WIN32
 
-}  // namespace detail
+} // namespace detail
 
 // Run `besq <args...>` (args = argv[1..]) with optional stdin injection and
 // extra environment overrides.  Returns captured stdout/stderr (LF-normalized)
 // and the exit code (0/1 semantics; -1 if the spawn itself failed).
-inline RunResult run_cli(
-    const std::vector<std::string>& args,
-    const std::string& stdin_input = {},
-    const std::vector<std::pair<std::string, std::string>>& extra_env = {}) {
+inline RunResult run_cli(const std::vector<std::string>& args,
+                         const std::string& stdin_input = {},
+                         const std::vector<std::pair<std::string, std::string>>& extra_env = {}) {
     static std::atomic<int> g_seq{0};
     const int seq = ++g_seq;
 
@@ -319,4 +323,4 @@ inline RunResult run_cli(
 #endif
 }
 
-}  // namespace besq_test
+} // namespace besq_test

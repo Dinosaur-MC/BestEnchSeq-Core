@@ -1,9 +1,9 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
-#include "astar/AStarStateSerializer.h"
 #include "astar/AStarAlgorithm.h"
+#include "astar/AStarStateSerializer.h"
 #include "dfs/DFSAlgorithm.h"
 #include "domain/algorithm/serialization/Checkpoint.h"
+#include "framework/test_framework.h"
 #include <memory>
 #include <span>
 using namespace algorithm;

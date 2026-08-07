@@ -45,7 +45,7 @@ TEST_CASE("test_memory_pool") {
 
     // ── Test 4: allocate larger than initial chunk size ─────────────────
     {
-        MemoryPool pool(128);  // tiny initial chunk
+        MemoryPool pool(128); // tiny initial chunk
         // Allocate 4 KB — forces new chunk
         void* lp = pool.allocate(4096, alignof(std::max_align_t));
         expect(lp != nullptr, "large alloc");
@@ -63,8 +63,7 @@ TEST_CASE("test_memory_pool") {
             addrs.insert(p);
         }
         expect(addrs.size() == 100, "100 distinct allocs");
-        expect(pool.chunk_count() > 1 || pool.total_allocated() >= 6400,
-               "multiple chunks or large enough single chunk");
+        expect(pool.chunk_count() > 1 || pool.total_allocated() >= 6400, "multiple chunks or large enough single chunk");
         TEST_PASS("multiple_chunks");
     }
 
@@ -129,5 +128,4 @@ TEST_CASE("test_memory_pool") {
         expect(b > a && c > b && d > c, "monotonic addresses");
         TEST_PASS("sequential_sizes");
     }
-
 }

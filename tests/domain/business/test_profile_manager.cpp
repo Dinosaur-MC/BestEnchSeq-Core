@@ -1,15 +1,15 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
+#include "common/io/FileUtils.hpp"
+#include "common/io/json.h"
+#include "domain/business/components/FormatDetector.h"
+#include "domain/business/components/TagResolver.h"
+#include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/ProfileManager.h"
-#include "domain/business/types/Profile.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/components/TagResolver.h"
-#include "domain/business/components/FormatDetector.h"
-#include "domain/business/loaders/ProfileLoader.h"
-#include "common/io/json.h"
-#include "common/io/FileUtils.hpp"
+#include "domain/business/types/Profile.h"
+#include "framework/test_framework.h"
 
 #include <filesystem>
 #include <fstream>
@@ -18,8 +18,8 @@
 // ─── Helper: create an enchantment info for testing ─────────────────────
 
 static EnchInfo make_ench(const std::string& id_str, const std::string& name, int max_level) {
-    return EnchInfo{NSID(id_str), name, MCE::All, max_level, max_level, 1, false,
-                    std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
+    return EnchInfo{
+        NSID(id_str), name, MCE::All, max_level, max_level, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
 }
 
 // ─── Test: Create Profile ───────────────────────────────────────────────
@@ -120,9 +120,8 @@ TEST_CASE("test_activate_nonexistent_throws") {
     ProfileManager mgr;
     mgr.create("test:a");
 
-    expect_throws_as<std::runtime_error>([&]() {
-        mgr.activate("test:nonexistent");
-    }, "activate() should throw for nonexistent profile");
+    expect_throws_as<std::runtime_error>([&]() { mgr.activate("test:nonexistent"); },
+                                         "activate() should throw for nonexistent profile");
 
     std::cout << "PASS: test_activate_nonexistent_throws" << std::endl;
 }
@@ -130,11 +129,9 @@ TEST_CASE("test_activate_nonexistent_throws") {
 // ─── Test: Empty Active Throws ──────────────────────────────────────────
 
 TEST_CASE("test_empty_active_throws") {
-    ProfileManager mgr;  // no profiles
+    ProfileManager mgr; // no profiles
 
-    expect_throws_as<std::runtime_error>([&]() {
-        mgr.active();
-    }, "active() should throw when manager is empty");
+    expect_throws_as<std::runtime_error>([&]() { mgr.active(); }, "active() should throw when manager is empty");
 
     std::cout << "PASS: test_empty_active_throws" << std::endl;
 }
@@ -153,12 +150,15 @@ TEST_CASE("test_list") {
     // Each of the expected names must be in the list
     bool found_alpha = false, found_beta = false, found_gamma = false;
     for (const auto& n : names) {
-        if (n == "test:alpha")   found_alpha = true;
-        if (n == "test:beta")    found_beta  = true;
-        if (n == "test:gamma")   found_gamma = true;
+        if (n == "test:alpha")
+            found_alpha = true;
+        if (n == "test:beta")
+            found_beta = true;
+        if (n == "test:gamma")
+            found_gamma = true;
     }
     expect(found_alpha, "list should contain alpha");
-    expect(found_beta,  "list should contain beta");
+    expect(found_beta, "list should contain beta");
     expect(found_gamma, "list should contain gamma");
 
     std::cout << "PASS: test_list" << std::endl;
@@ -265,10 +265,8 @@ TEST_CASE("test_pm_merge_missing_throws") {
     ProfileManager pm;
     pm.create("base");
 
-    expect_throws_as<std::runtime_error>([&]() { pm.merge("missing", "base"); },
-        "merge with missing source throws");
-    expect_throws_as<std::runtime_error>([&]() { pm.merge("base", "missing"); },
-        "merge with missing dest throws");
+    expect_throws_as<std::runtime_error>([&]() { pm.merge("missing", "base"); }, "merge with missing source throws");
+    expect_throws_as<std::runtime_error>([&]() { pm.merge("base", "missing"); }, "merge with missing dest throws");
 
     TEST_PASS("test_pm_merge_missing_throws");
 }
@@ -337,8 +335,7 @@ TEST_CASE("test_pm_dependency_cycle_throws") {
     expect(pm.is_cyclic("a"), "a is cyclic");
     expect(pm.is_cyclic("b"), "b is cyclic");
     expect(!pm.is_cyclic("nonexistent"), "nonexistent profile is NOT cyclic");
-    expect_throws_as<std::runtime_error>([&]() { pm.resolve_effective("a"); },
-        "resolve_effective on a cyclic profile throws");
+    expect_throws_as<std::runtime_error>([&]() { pm.resolve_effective("a"); }, "resolve_effective on a cyclic profile throws");
 
     TEST_PASS("test_pm_dependency_cycle_throws");
 }
@@ -348,8 +345,7 @@ TEST_CASE("test_pm_dependency_cycle_throws") {
 TEST_CASE("test_pm_cross_validate") {
     ProfileManager pm;
     auto& vanilla = pm.create("builtin:vanilla");
-    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
-                                    NSID("#minecraft:sword"), 1561});
+    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561});
     vanilla.add_tag(EquipmentTag{NSID("#minecraft:sword"), "sword"});
 
     auto& mod = pm.create("mod");
@@ -357,8 +353,7 @@ TEST_CASE("test_pm_cross_validate") {
 
     // Valid refs (tag + concrete item from vanilla) plus one unknown item.
     EnchInfo sharp = make_ench("minecraft:sharpness", "Sharpness", 5);
-    sharp.supported_items = {NSID("#minecraft:sword"), NSID("minecraft:diamond_sword"),
-                             NSID("minecraft:stone")};
+    sharp.supported_items = {NSID("#minecraft:sword"), NSID("minecraft:diamond_sword"), NSID("minecraft:stone")};
     mod.add_enchantment(sharp);
 
     // All refs unknown → enchantment must be removed entirely.
@@ -389,8 +384,7 @@ TEST_CASE("test_pm_load_directory") {
 
     // Temp directory with one native-JSON profile.
     static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_dir_" + std::to_string(++counter));
+    auto dir = std::filesystem::temp_directory_path() / ("besq_pm_dir_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
     auto path = dir / "bare_mod.json";
     {
@@ -414,8 +408,7 @@ TEST_CASE("test_pm_load_directory") {
     expect(loaded_mod != nullptr, "loaded bare_mod findable");
     if (loaded_mod) {
         const auto& deps = loaded_mod->dependencies();
-        expect(deps.size() == 1 && deps[0] == "builtin:vanilla",
-               "dependencies parsed from JSON root");
+        expect(deps.size() == 1 && deps[0] == "builtin:vanilla", "dependencies parsed from JSON root");
     }
 
     // Cleanup temp files.
@@ -452,8 +445,7 @@ TEST_CASE("test_pm_effective_view") {
 
 TEST_CASE("test_pm_load_directory_json_name_key") {
     static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_name_key_" + std::to_string(++counter));
+    auto dir = std::filesystem::temp_directory_path() / ("besq_pm_name_key_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
 
     auto with_name = dir / "a.json";
@@ -527,10 +519,8 @@ TEST_CASE("test_pm_tag_merge_direction") {
         const auto* m = tr->get_tag("minecraft", "swords");
         expect(m != nullptr, "merged tag present in effective resolver");
         if (m) {
-            expect(m->count("minecraft:netherite_sword") == 1,
-                   "higher-priority B's member wins");
-            expect(m->count("minecraft:diamond_sword") == 0,
-                   "lower-priority A's member overridden");
+            expect(m->count("minecraft:netherite_sword") == 1, "higher-priority B's member wins");
+            expect(m->count("minecraft:diamond_sword") == 0, "lower-priority A's member overridden");
         }
     }
     TEST_PASS("test_pm_tag_merge_direction");
@@ -544,19 +534,16 @@ TEST_CASE("test_pm_tag_merge_direction") {
 TEST_CASE("test_pm_effective_injects_vanilla") {
     ProfileManager pm;
     auto& vanilla = pm.create("builtin:vanilla");
-    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
-                                    NSID("#minecraft:sword"), 1561});
+    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561});
     vanilla.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
-    pm.create("mypack");   // no declared dependencies
+    pm.create("mypack"); // no declared dependencies
 
     const Profile& eff = pm.resolve_effective("mypack");
-    expect(eff.has_equipment(NSID("minecraft:diamond_sword")),
-           "effective view includes vanilla equipment");
+    expect(eff.has_equipment(NSID("minecraft:diamond_sword")), "effective view includes vanilla equipment");
     if (eff.has_equipment(NSID("minecraft:diamond_sword")))
         expect_eq(eff.eq().at(NSID("minecraft:diamond_sword")).max_durability, 1561,
                   "vanilla equipment has real max_durability (not a 0 placeholder)");
-    expect(eff.has_enchantment(NSID("minecraft:sharpness")),
-           "effective view includes vanilla enchant");
+    expect(eff.has_enchantment(NSID("minecraft:sharpness")), "effective view includes vanilla enchant");
     TEST_PASS("test_pm_effective_injects_vanilla");
 }
 
@@ -566,7 +553,15 @@ TEST_CASE("test_pm_edit_snapshot_undo") {
     ProfileManager pm;
     auto& p = pm.create("test:edit");
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
-    p.add_enchantment({NSID("minecraft:smite"), "Smite", MCE::All, 5, 5, 1, false, {NSID("minecraft:sharpness")}, {NSID("#minecraft:swords")}});
+    p.add_enchantment({NSID("minecraft:smite"),
+                       "Smite",
+                       MCE::All,
+                       5,
+                       5,
+                       1,
+                       false,
+                       {NSID("minecraft:sharpness")},
+                       {NSID("#minecraft:swords")}});
 
     // 实时校验：给 smite 加不存在的 exclusive 引用 → 拒绝（不应用、无快照）
     EnchInfo bad = p.ench().at(NSID("minecraft:smite"));
@@ -665,7 +660,8 @@ TEST_CASE("test_pm_publish") {
     expect(json.has("enchantments"), "published file has enchantments");
     bool sharp = false;
     for (const auto& e : json["enchantments"].as_array())
-        if (e.as<Json::Object>().at("id").as<std::string>() == "minecraft:sharpness") sharp = true;
+        if (e.as<Json::Object>().at("id").as<std::string>() == "minecraft:sharpness")
+            sharp = true;
     expect(sharp, "published file contains merged dep enchantment");
     expect(json.has("version") && json["version"].as<std::string>() == "1.0.0", "version embedded");
     expect(json.has("release_tag") && json["release_tag"].as<std::string>() == "stable", "tag embedded");
@@ -681,7 +677,7 @@ TEST_CASE("test_pm_load_datapack") {
     // B-T14 M-4: profile key prefers the FOLDER STEM verbatim.  Use a folder
     // name with spaces + a dot so the verbatim behavior is observable.
     auto dir = std::filesystem::temp_directory_path() / "More Enchants 1.4";
-    std::filesystem::remove_all(dir);  // stale cleanup from prior runs
+    std::filesystem::remove_all(dir); // stale cleanup from prior runs
     std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
     std::filesystem::create_directories(dir / "data" / "minecraft" / "tags" / "item");
 
@@ -719,8 +715,7 @@ TEST_CASE("test_pm_load_datapack") {
     ProfileManager pm;
     bool ok = pm.load_datapack(dir);
     expect(ok, "load_datapack returns true for a valid datapack");
-    expect(pm.exists("More Enchants 1.4"),
-           "profile name derived from FOLDER STEM verbatim (spaces + dot)");
+    expect(pm.exists("More Enchants 1.4"), "profile name derived from FOLDER STEM verbatim (spaces + dot)");
     expect(pm.exists("builtin:vanilla"), "builtin:vanilla root injected");
 
     const Profile* dp = pm.find("More Enchants 1.4");
@@ -729,8 +724,7 @@ TEST_CASE("test_pm_load_datapack") {
         // Content ids stay NSIDs — only the profile key became a plain string.
         expect(dp->has_enchantment(NSID("mytest:leeching")), "leeching loaded into profile");
         const auto& supp = dp->ench().at(NSID("mytest:leeching")).supported_items;
-        expect(supp.count(NSID("#minecraft:swords")) == 1,
-               "leeching keeps #minecraft:swords after cross_validate");
+        expect(supp.count(NSID("#minecraft:swords")) == 1, "leeching keeps #minecraft:swords after cross_validate");
         expect(dp->tag_resolver() != nullptr, "datapack profile carries vanilla∪datapack TagResolver");
     }
 
@@ -779,8 +773,7 @@ TEST_CASE("test_pm_load_datapack_computes_limited_level") {
         const auto& leech = dp->ench().at(NSID("mytest:leeching"));
         expect(leech.min_cost_base == 5, "min_cost.base carried into EnchInfo");
         expect(leech.min_cost_per_level == 5, "min_cost.per_level carried into EnchInfo");
-        expect_eq(leech.limited_level, 3,
-                  "limited_level computed by LimitedLevelCalculator (not lost by parser removal)");
+        expect_eq(leech.limited_level, 3, "limited_level computed by LimitedLevelCalculator (not lost by parser removal)");
     }
 
     std::filesystem::remove_all(dir);
@@ -844,16 +837,13 @@ TEST_CASE("test_pm_load_datapack_treasure_tag") {
     if (dp) {
         expect(dp->has_enchantment(NSID("mytest:wind_glide")), "wind_glide loaded");
         const auto& glide = dp->ench().at(NSID("mytest:wind_glide"));
-        expect(glide.is_treasure,
-               "wind_glide: is_treasure derived from datapack treasure tag");
-        expect_eq(glide.limited_level, 0,
-                  "treasure member → limited_level 0");
+        expect(glide.is_treasure, "wind_glide: is_treasure derived from datapack treasure tag");
+        expect_eq(glide.limited_level, 0, "treasure member → limited_level 0");
 
         expect(dp->has_enchantment(NSID("mytest:plain_power")), "plain_power loaded");
         const auto& plain = dp->ench().at(NSID("mytest:plain_power"));
         expect(!plain.is_treasure, "plain_power: not a treasure member");
-        expect(plain.limited_level > 0,
-               "non-treasure → computed limited_level > 0");
+        expect(plain.limited_level > 0, "non-treasure → computed limited_level > 0");
     }
 
     std::filesystem::remove_all(dir);
@@ -897,13 +887,10 @@ TEST_CASE("test_pm_load_datapack_custom_tag") {
     const Profile* dp = pm.find("Magic Staff Pack");
     expect(dp != nullptr, "datapack profile findable");
     if (dp) {
-        expect(dp->has_enchantment(NSID("mypack:staff_power")),
-               "staff_power survives load (datapack tag in profile universe)");
+        expect(dp->has_enchantment(NSID("mypack:staff_power")), "staff_power survives load (datapack tag in profile universe)");
         const auto& supp = dp->ench().at(NSID("mypack:staff_power")).supported_items;
-        expect(supp.count(NSID("#mypack:magic_staffs")) == 1,
-               "staff_power keeps #mypack:magic_staffs after cross_validate");
-        expect(dp->tags().contains(NSID("#mypack:magic_staffs")),
-               "datapack item tag present in profile tag universe");
+        expect(supp.count(NSID("#mypack:magic_staffs")) == 1, "staff_power keeps #mypack:magic_staffs after cross_validate");
+        expect(dp->tags().contains(NSID("#mypack:magic_staffs")), "datapack item tag present in profile tag universe");
 
         // tags_of applicability at solve time — direct resolver + effective view.
         const TagResolver* tr = dp->tag_resolver();
@@ -1012,15 +999,12 @@ TEST_CASE("test_pm_load_datapack_skips_invalid_tag_key") {
     const Profile* dp = pm.find("Valid And Odd Tags");
     expect(dp != nullptr, "datapack profile findable");
     if (dp) {
-        expect(dp->has_enchantment(NSID("mypack:staff_power")),
-               "staff_power survives load");
-        expect(dp->tags().contains(NSID("#mypack:magic_staffs")),
-               "valid item tag present");
+        expect(dp->has_enchantment(NSID("mypack:staff_power")), "staff_power survives load");
+        expect(dp->tags().contains(NSID("#mypack:magic_staffs")), "valid item tag present");
         const TagResolver* tr = dp->tag_resolver();
         expect(tr != nullptr, "resolver attached");
         if (tr)
-            expect(tr->tags_of("mypack:magic_staff").count(NSID("#mypack:magic_staffs")) == 1,
-                   "valid tag drives tags_of");
+            expect(tr->tags_of("mypack:magic_staff").count(NSID("#mypack:magic_staffs")) == 1, "valid tag drives tags_of");
     }
 
     std::filesystem::remove_all(dir);
@@ -1038,8 +1022,7 @@ TEST_CASE("test_pm_direct_set_dependencies_invalidates_effective") {
 
     // Populate the effective-view cache: mypack with no deps → no sharpness.
     const Profile& eff0 = pm.resolve_effective("mypack");
-    expect(!eff0.ench().contains(NSID("minecraft:sharpness")),
-           "before dep, effective view has no sharpness");
+    expect(!eff0.ench().contains(NSID("minecraft:sharpness")), "before dep, effective view has no sharpness");
 
     // Bypass the manager: mutate dependencies directly on the Profile.
     pack.set_dependencies({"base"});
@@ -1056,8 +1039,7 @@ TEST_CASE("test_pm_direct_set_dependencies_invalidates_effective") {
 
 TEST_CASE("test_pm_load_directory_with_datapack") {
     static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_dir_dp_" + std::to_string(++counter));
+    auto dir = std::filesystem::temp_directory_path() / ("besq_pm_dir_dp_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
 
     // Native JSON profile in the root.
@@ -1101,8 +1083,7 @@ TEST_CASE("test_pm_load_directory_with_datapack") {
     pm.load_directory(dir);
 
     expect(pm.exists("bare_mod"), "native profile loaded from file");
-    expect(pm.exists("My Pack"),
-           "datapack subdirectory loaded as profile (directory stem verbatim)");
+    expect(pm.exists("My Pack"), "datapack subdirectory loaded as profile (directory stem verbatim)");
     expect(pm.exists("builtin:vanilla"), "builtin:vanilla base auto-created");
 
     const Profile* dp_p = pm.find("My Pack");
@@ -1118,8 +1099,7 @@ TEST_CASE("test_pm_load_directory_with_datapack") {
 
 TEST_CASE("test_pm_load_datapack_no_mcmeta") {
     static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_pm_nomcmeta_" + std::to_string(++counter));
+    auto dir = std::filesystem::temp_directory_path() / ("besq_pm_nomcmeta_" + std::to_string(++counter));
     // Datapack-like data dir, but NO pack.mcmeta → not a datapack.
     std::filesystem::create_directories(dir / "data" / "x" / "enchantment");
 
@@ -1164,11 +1144,9 @@ TEST_CASE("test_pm_load_datapack_vanilla_name") {
     bool ok = pm.load_datapack(dir);
     expect(ok, "load_datapack succeeds for a pack named vanilla");
     expect(pm.exists("builtin:vanilla"), "builtin:vanilla base profile preserved");
-    expect(pm.exists("vanilla_datapack"),
-           "datapack name disambiguated to vanilla_datapack");
+    expect(pm.exists("vanilla_datapack"), "datapack name disambiguated to vanilla_datapack");
     const Profile* v = pm.find("builtin:vanilla");
-    expect(v != nullptr && !v->has_enchantment(NSID("vdp:leeching")),
-           "builtin:vanilla base not replaced by datapack content");
+    expect(v != nullptr && !v->has_enchantment(NSID("vdp:leeching")), "builtin:vanilla base not replaced by datapack content");
     const Profile* dp = pm.find("vanilla_datapack");
     expect(dp != nullptr && dp->has_enchantment(NSID("vdp:leeching")),
            "datapack enchantment lives under the disambiguated name");
@@ -1208,22 +1186,19 @@ TEST_CASE("test_pm_load_datapack_builtin_vanilla_name") {
     ProfileManager pm;
     // Pre-seed the injected root with content so "not replaced" is observable.
     auto& root = pm.create("builtin:vanilla");
-    root.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5,
-                          1, false, {}, {NSID("#minecraft:swords")}});
+    root.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
 
     bool ok = pm.load_datapack(dir);
     expect(ok, "load_datapack succeeds");
     expect(pm.exists("builtin:vanilla"), "builtin:vanilla base profile preserved");
-    expect(pm.exists("My Vanilla Replacer"),
-           "profile key = folder stem, NOT pack.id (M-4)");
+    expect(pm.exists("My Vanilla Replacer"), "profile key = folder stem, NOT pack.id (M-4)");
     const Profile* v = pm.find("builtin:vanilla");
     expect(v != nullptr && v->has_enchantment(NSID("minecraft:sharpness")),
            "builtin:vanilla base content intact (not replaced by datapack)");
     expect(v != nullptr && !v->has_enchantment(NSID("vdp:leeching")),
            "builtin:vanilla base does not contain datapack enchantment");
     const Profile* dp = pm.find("My Vanilla Replacer");
-    expect(dp != nullptr && dp->has_enchantment(NSID("vdp:leeching")),
-           "datapack enchantment lives under the folder-stem name");
+    expect(dp != nullptr && dp->has_enchantment(NSID("vdp:leeching")), "datapack enchantment lives under the folder-stem name");
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_pm_load_datapack_builtin_vanilla_name");
@@ -1256,15 +1231,13 @@ TEST_CASE("test_pm_name_derive") {
         std::ofstream f(vanilla_dir / "pack.mcmeta");
         f << R"({"pack": {"pack_format": 15, "id": "8a3c7f5b-0000-4b1a-9d7e-abc123def456"}})";
     }
-    expect_eq(derive_datapack_name(vanilla_dir), std::string("vanilla_datapack"),
-              "folder stem 'vanilla' is disambiguated");
+    expect_eq(derive_datapack_name(vanilla_dir), std::string("vanilla_datapack"), "folder stem 'vanilla' is disambiguated");
 
     // No pack.mcmeta at all → directory stem verbatim.
     auto bare_dir = root / "bare_stem";
     std::filesystem::remove_all(bare_dir);
     std::filesystem::create_directories(bare_dir);
-    expect_eq(derive_datapack_name(bare_dir), std::string("bare_stem"),
-              "no pack.mcmeta → directory stem verbatim");
+    expect_eq(derive_datapack_name(bare_dir), std::string("bare_stem"), "no pack.mcmeta → directory stem verbatim");
 
     // Malformed pack.mcmeta → directory stem verbatim.
     auto malformed_dir = root / "malformed_stem";
@@ -1278,8 +1251,7 @@ TEST_CASE("test_pm_name_derive") {
               "malformed pack.mcmeta → directory stem verbatim");
 
     // A directory with no stem falls back to a non-empty name.
-    expect_eq(derive_datapack_name(std::filesystem::current_path().root_path()),
-              std::string("datapack"),
+    expect_eq(derive_datapack_name(std::filesystem::current_path().root_path()), std::string("datapack"),
               "directory with no stem → 'datapack' fallback");
 
     std::filesystem::remove_all(stem_dir);
@@ -1295,14 +1267,10 @@ TEST_CASE("test_pm_empty_key_rejected") {
     ProfileManager pm;
     pm.create("base");
 
-    expect_throws_as<std::invalid_argument>([&]() { pm.create(""); },
-        "create with empty name throws");
-    expect_throws_as<std::invalid_argument>([&]() { pm.create_from("base", ""); },
-        "create_from with empty dest throws");
-    expect_throws_as<std::invalid_argument>([&]() { pm.snapshot("base", ""); },
-        "snapshot with empty name throws");
-    expect_throws_as<std::invalid_argument>([&]() { pm.branch("base", ""); },
-        "branch with empty name throws");
+    expect_throws_as<std::invalid_argument>([&]() { pm.create(""); }, "create with empty name throws");
+    expect_throws_as<std::invalid_argument>([&]() { pm.create_from("base", ""); }, "create_from with empty dest throws");
+    expect_throws_as<std::invalid_argument>([&]() { pm.snapshot("base", ""); }, "snapshot with empty name throws");
+    expect_throws_as<std::invalid_argument>([&]() { pm.branch("base", ""); }, "branch with empty name throws");
 
     TEST_PASS("test_pm_empty_key_rejected");
 }
@@ -1341,13 +1309,10 @@ TEST_CASE("test_profile_loader_load_datapack_keeps_tags") {
 
     ProfileLoader loader;
     Profile p = loader.load(dir);
-    expect(p.has_enchantment(NSID("mypack:leeching")),
-           "leeching with #mypack:* supported_items survives ProfileLoader::load");
+    expect(p.has_enchantment(NSID("mypack:leeching")), "leeching with #mypack:* supported_items survives ProfileLoader::load");
     const auto& supp = p.ench().at(NSID("mypack:leeching")).supported_items;
-    expect(supp.count(NSID("#mypack:swords")) == 1,
-           "leeching keeps #mypack:swords after load");
-    expect(p.tags().contains(NSID("#mypack:swords")),
-           "datapack item tag #mypack:swords lands in the profile's tag registry");
+    expect(supp.count(NSID("#mypack:swords")) == 1, "leeching keeps #mypack:swords after load");
+    expect(p.tags().contains(NSID("#mypack:swords")), "datapack item tag #mypack:swords lands in the profile's tag registry");
 
     std::filesystem::remove_all(dir);
     TEST_PASS("test_profile_loader_load_datapack_keeps_tags");
@@ -1357,20 +1322,17 @@ TEST_CASE("test_format_detector_datapack") {
     static int counter = 0;
 
     // Directory with pack.mcmeta → McOfficial (new primary check).
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_fmt_dp_" + std::to_string(++counter));
+    auto dir = std::filesystem::temp_directory_path() / ("besq_fmt_dp_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
     {
         std::ofstream f(dir / "pack.mcmeta");
         f << R"({"pack": {"pack_format": 15}})";
     }
-    expect(FormatDetector::detect(dir) == DataFormat::McOfficial,
-           "dir with pack.mcmeta detected as McOfficial");
+    expect(FormatDetector::detect(dir) == DataFormat::McOfficial, "dir with pack.mcmeta detected as McOfficial");
 
     // Directory WITHOUT pack.mcmeta but with data/<ns>/enchantment → still
     // McOfficial via the secondary data/ scan.
-    auto alt = std::filesystem::temp_directory_path() /
-               ("besq_fmt_dp2_" + std::to_string(counter));
+    auto alt = std::filesystem::temp_directory_path() / ("besq_fmt_dp2_" + std::to_string(counter));
     std::filesystem::create_directories(alt / "data" / "ns" / "enchantment");
     expect(FormatDetector::detect(alt) == DataFormat::McOfficial,
            "dir with data/<ns>/enchantment still detected as McOfficial");
@@ -1388,32 +1350,26 @@ TEST_CASE("test_format_detector_datapack") {
 
 TEST_CASE("test_load_directory_skips_equipments_csv") {
     static int counter = 0;
-    auto dir = std::filesystem::temp_directory_path() /
-               ("besq_prof_dir_" + std::to_string(++counter));
+    auto dir = std::filesystem::temp_directory_path() / ("besq_prof_dir_" + std::to_string(++counter));
     std::filesystem::create_directories(dir);
 
-    std::ofstream(dir / "pack.csv") <<
-        "id,name,max_level,multiplier,exclusive_set,supported_items\n"
-        "mod:sharp,Sharp,5,1,,\"#minecraft:swords\"\n";
-    std::ofstream(dir / "equipments_pack.csv") <<
-        "id,name,category,max_durability\n"
-        "minecraft:diamond_sword,Diamond Sword,sword,1561\n";
+    std::ofstream(dir / "pack.csv") << "id,name,max_level,multiplier,exclusive_set,supported_items\n"
+                                       "mod:sharp,Sharp,5,1,,\"#minecraft:swords\"\n";
+    std::ofstream(dir / "equipments_pack.csv") << "id,name,category,max_durability\n"
+                                                  "minecraft:diamond_sword,Diamond Sword,sword,1561\n";
 
     ProfileManager pm;
     pm.load_directory(dir);
     expect(pm.exists("pack"), "pack profile loaded");
-    expect(!pm.exists("equipments_pack"),
-           "equipments_* companion NOT a standalone profile");
+    expect(!pm.exists("equipments_pack"), "equipments_* companion NOT a standalone profile");
     // The enchantment survives cross-validation (#minecraft:swords is a real
     // vanilla tag) and the companion equipment flows into the main profile
     // (Step 1 read-back).
     const Profile* pack = pm.find("pack");
     expect(pack != nullptr, "pack profile findable");
     if (pack) {
-        expect_eq(static_cast<int>(pack->ench().size()), 1,
-                  "pack profile carries the enchantment from the main CSV");
-        expect_eq(static_cast<int>(pack->eq().size()), 1,
-                  "pack profile carries companion equipment");
+        expect_eq(static_cast<int>(pack->ench().size()), 1, "pack profile carries the enchantment from the main CSV");
+        expect_eq(static_cast<int>(pack->eq().size()), 1, "pack profile carries companion equipment");
     }
 
     std::filesystem::remove_all(dir);
@@ -1426,16 +1382,20 @@ TEST_CASE("test_load_directory_skips_equipments_csv") {
 TEST_CASE("test_update_equipment") {
     ProfileManager pm;
     pm.create("p1");
-    Equipment eq; eq.id = NSID("diamond_sword"); eq.max_durability = 1561;
+    Equipment eq;
+    eq.id = NSID("diamond_sword");
+    eq.max_durability = 1561;
     expect(pm.add_equipment("p1", eq), "add eq");
-    Equipment patch = eq; patch.max_durability = 999;
+    Equipment patch = eq;
+    patch.max_durability = 999;
     expect(pm.update_equipment("p1", patch), "update eq");
     Profile* p = pm.find("p1");
     expect(p != nullptr, "p1 exists");
     if (p)
         expect(p->eq().find(NSID("diamond_sword"))->max_durability == 999, "updated value");
     // missing id → false (no change)
-    Equipment missing = patch; missing.id = NSID("netherite_sword");
+    Equipment missing = patch;
+    missing.id = NSID("netherite_sword");
     expect(!pm.update_equipment("p1", missing), "update missing → false");
     TEST_PASS("test_update_equipment");
 }
@@ -1444,11 +1404,13 @@ TEST_CASE("test_update_equipment") {
 
 TEST_CASE("test_update_tag_and_deps") {
     ProfileManager pm;
-    pm.create("p1"); pm.create("p2");
+    pm.create("p1");
+    pm.create("p2");
     expect(pm.set_dependencies("p1", {"p2"}), "set deps");
     auto deps = pm.resolve_dependencies("p1");
     expect(deps.size() == 1 && deps[0] == "p2", "deps applied");
-    EquipmentTag tag; tag.id = NSID("minecraft:swords");
+    EquipmentTag tag;
+    tag.id = NSID("minecraft:swords");
     expect(pm.add_tag("p1", tag), "add tag");
     tag.name = "blades";
     expect(pm.update_tag("p1", tag), "update tag");
@@ -1457,7 +1419,8 @@ TEST_CASE("test_update_tag_and_deps") {
     expect(!pm.set_dependencies("nope", {"p2"}), "set deps unknown profile → false");
     // cycle → false, dependencies unchanged
     ProfileManager pm2;
-    pm2.create("a"); pm2.create("b");
+    pm2.create("a");
+    pm2.create("b");
     expect(pm2.set_dependencies("a", {"b"}), "a→b ok");
     expect(!pm2.set_dependencies("b", {"a"}), "b→a would cycle → rejected");
     expect(pm2.find("b")->dependencies().empty(), "b deps unchanged after rejected set");

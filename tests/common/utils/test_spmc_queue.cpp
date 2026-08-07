@@ -25,11 +25,15 @@ TEST_CASE("test_push_read") {
 
 TEST_CASE("test_overflow_drops_oldest") {
     SPMCQueue<int, 4> q;
-    q.try_push(1); q.try_push(2); q.try_push(3); q.try_push(4);
+    q.try_push(1);
+    q.try_push(2);
+    q.try_push(3);
+    q.try_push(4);
     expect(q.count() == 4, "4 pushes = 4 count");
 
     auto old_cursor = q.read_cursor();
-    q.try_push(5); q.try_push(6);  // overwrites slots 0, 1
+    q.try_push(5);
+    q.try_push(6); // overwrites slots 0, 1
 
     int val{};
     expect(!q.read(old_cursor, val), "old cursor should skip overwritten data");
@@ -39,7 +43,9 @@ TEST_CASE("test_overflow_drops_oldest") {
 
 TEST_CASE("test_read_all_caught_up") {
     SPMCQueue<int, 8> q;
-    q.try_push(10); q.try_push(20); q.try_push(30);
+    q.try_push(10);
+    q.try_push(20);
+    q.try_push(30);
     auto cursor = q.read_cursor();
     int val{};
     expect(q.read(cursor, val) && val == 10, "first item");
@@ -51,13 +57,16 @@ TEST_CASE("test_read_all_caught_up") {
 
 TEST_CASE("test_multiple_cursors") {
     SPMCQueue<int, 16> q;
-    for (int i = 0; i < 10; i++) q.try_push(i * 10);
+    for (int i = 0; i < 10; i++)
+        q.try_push(i * 10);
 
     auto ca = q.read_cursor(), cb = q.read_cursor();
     std::vector<int> a, b;
     int val{};
-    while (q.read(ca, val)) a.push_back(val);
-    while (q.read(cb, val)) b.push_back(val);
+    while (q.read(ca, val))
+        a.push_back(val);
+    while (q.read(cb, val))
+        b.push_back(val);
     expect(a.size() == 10 && b.size() == 10, "both cursors read all");
     expect(a == b, "both cursors see same data");
     std::cout << "PASS: test_multiple_cursors" << std::endl;
@@ -78,8 +87,7 @@ TEST_CASE("test_producer_then_consumer") {
     int val{};
     while (q.read(cursor, val)) {
         if (val <= last) {
-            std::cerr << "FAIL: order broken at count=" << count
-                      << " last=" << last << " val=" << val << std::endl;
+            std::cerr << "FAIL: order broken at count=" << count << " last=" << last << " val=" << val << std::endl;
             expect(false, "SPMC: values should be in order");
         }
         last = val;
@@ -111,8 +119,7 @@ TEST_CASE("test_spmc_two_consumers") {
                 counter.fetch_add(1);
             } else {
                 if (Clock::now() >= deadline) {
-                    std::cerr << "WARNING: consumer spin-loop timed out after 2s"
-                              << std::endl;
+                    std::cerr << "WARNING: consumer spin-loop timed out after 2s" << std::endl;
                     break;
                 }
                 std::this_thread::yield();
@@ -131,11 +138,9 @@ TEST_CASE("test_spmc_two_consumers") {
 
     int total = consumed_a.load() + consumed_b.load();
     expect(total > 0, "consumers should read at least some data");
-    expect(consumed_a.load() > 0 && consumed_b.load() > 0,
-           "both consumers should read items");
-    std::cout << "PASS: test_spmc_two_consumers (A="
-              << consumed_a.load() << " B=" << consumed_b.load()
-              << " total=" << total << ")" << std::endl;
+    expect(consumed_a.load() > 0 && consumed_b.load() > 0, "both consumers should read items");
+    std::cout << "PASS: test_spmc_two_consumers (A=" << consumed_a.load() << " B=" << consumed_b.load() << " total=" << total
+              << ")" << std::endl;
 }
 
 TEST_CASE("test_overflow_with_producer_lead") {
@@ -157,18 +162,18 @@ TEST_CASE("test_overflow_with_producer_lead") {
     int min_val = std::numeric_limits<int>::max();
     int max_val = std::numeric_limits<int>::min();
     while (q.read(cursor, val)) {
-        if (val < min_val) min_val = val;
-        if (val > max_val) max_val = val;
+        if (val < min_val)
+            min_val = val;
+        if (val > max_val)
+            max_val = val;
         count++;
     }
     expect(count > 0, "should recover values after overflow");
     // All recovered values should be from the most recent push region
-    expect(min_val >= 0 && max_val <= 99,
-           "recovered values must be within the pushed range");
+    expect(min_val >= 0 && max_val <= 99, "recovered values must be within the pushed range");
     // At most capacity items can be recovered
     expect(count <= 16, "cannot recover more items than queue capacity");
-    std::cout << "PASS: test_overflow_with_producer_lead ("
-              << count << " items in [" << min_val << ", " << max_val << "])"
+    std::cout << "PASS: test_overflow_with_producer_lead (" << count << " items in [" << min_val << ", " << max_val << "])"
               << std::endl;
 }
 
@@ -201,8 +206,7 @@ TEST_CASE("test_concurrent_push_pop") {
                 last_val.store(val);
             } else {
                 if (Clock::now() >= deadline) {
-                    std::cerr << "WARNING: concurrent consumer timed out"
-                              << std::endl;
+                    std::cerr << "WARNING: concurrent consumer timed out" << std::endl;
                     break;
                 }
                 std::this_thread::yield();
@@ -221,7 +225,5 @@ TEST_CASE("test_concurrent_push_pop") {
     if (consumed.load() == N) {
         expect(order_ok.load(), "if all items delivered, must be FIFO");
     }
-    std::cout << "PASS: test_concurrent_push_pop (consumed "
-              << consumed.load() << "/" << N << " items)" << std::endl;
+    std::cout << "PASS: test_concurrent_push_pop (consumed " << consumed.load() << "/" << N << " items)" << std::endl;
 }
-

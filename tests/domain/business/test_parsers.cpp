@@ -1,14 +1,14 @@
 #define BESQ_TEST_MAIN
 #include "framework/test_framework.h"
 
-#include "domain/business/parsers/NativeJsonParser.h"
-#include "domain/business/parsers/NativeCsvParser.h"
+#include "common/io/FileUtils.hpp"
+#include "domain/business/components/FormatDetector.h"
+#include "domain/business/components/TagResolver.h"
 #include "domain/business/parsers/McOfficialParser.h"
+#include "domain/business/parsers/NativeCsvParser.h"
+#include "domain/business/parsers/NativeJsonParser.h"
 #include "domain/business/types/dto/EnchantmentData.h"
 #include "domain/business/types/dto/EquipmentData.h"
-#include "domain/business/components/TagResolver.h"
-#include "domain/business/components/FormatDetector.h"
-#include "common/io/FileUtils.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -49,32 +49,19 @@ TEST_CASE("test_json_parse_basic") {
 
     auto result = NativeJsonParser::parse_string(json_str);
     const auto& enchantments = result.first;
-    const auto& equipment    = result.second;
+    const auto& equipment = result.second;
 
     // Enchantment checks
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "json_basic: 1 enchantment");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "json_basic: ench id");
-    expect_eq(enchantments[0].display_name,
-              std::string("Sharpness"),
-              "json_basic: ench display_name");
-    expect_eq(enchantments[0].max_level, 5,
-              "json_basic: ench max_level");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "json_basic: 1 enchantment");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "json_basic: ench id");
+    expect_eq(enchantments[0].display_name, std::string("Sharpness"), "json_basic: ench display_name");
+    expect_eq(enchantments[0].max_level, 5, "json_basic: ench max_level");
 
     // Equipment checks
-    expect_eq(static_cast<int>(equipment.size()), 1,
-              "json_basic: 1 equipment");
-    expect_eq(equipment[0].id,
-              std::string("minecraft:diamond_sword"),
-              "json_basic: eq id");
-    expect_eq(equipment[0].display_name,
-              std::string("Diamond Sword"),
-              "json_basic: eq display_name");
-    expect_eq(equipment[0].category,
-              std::string("sword"),
-              "json_basic: eq category");
+    expect_eq(static_cast<int>(equipment.size()), 1, "json_basic: 1 equipment");
+    expect_eq(equipment[0].id, std::string("minecraft:diamond_sword"), "json_basic: eq id");
+    expect_eq(equipment[0].display_name, std::string("Diamond Sword"), "json_basic: eq display_name");
+    expect_eq(equipment[0].category, std::string("sword"), "json_basic: eq category");
 
     std::cout << "PASS: test_json_parse_basic" << std::endl;
 }
@@ -96,17 +83,17 @@ TEST_CASE("test_json_parse_with_exclusive") {
     auto result = NativeJsonParser::parse_string(json_str);
     const auto& enchantments = result.first;
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "json_exclusive: 1 enchantment");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "json_exclusive: ench id");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "json_exclusive: 1 enchantment");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "json_exclusive: ench id");
 
     // exclusive_set value "minecraft:smite" has no '#' prefix, so
     // TagResolver::resolve() returns it as-is.
     bool has_smite = false;
     for (const auto& excl : enchantments[0].exclusive_with) {
-        if (excl == "minecraft:smite") { has_smite = true; break; }
+        if (excl == "minecraft:smite") {
+            has_smite = true;
+            break;
+        }
     }
     expect(has_smite, "json_exclusive: exclusive_with contains smite");
 
@@ -130,21 +117,20 @@ TEST_CASE("test_json_parse_with_applicable") {
     auto result = NativeJsonParser::parse_string(json_str);
     const auto& enchantments = result.first;
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "json_applicable: 1 enchantment");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "json_applicable: ench id");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "json_applicable: 1 enchantment");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "json_applicable: ench id");
 
     // The supported_items field is passed through RAW (T5/T10): the
     // "#minecraft:sword" tag reference is preserved verbatim, not expanded by
     // the parser. The loader (T6) performs the cross-validation later.
     bool has_tag = false;
     for (const auto& a : enchantments[0].applicable_to) {
-        if (a == "#minecraft:sword") { has_tag = true; break; }
+        if (a == "#minecraft:sword") {
+            has_tag = true;
+            break;
+        }
     }
-    expect(has_tag,
-           "json_applicable: applicable_to contains raw #minecraft:sword");
+    expect(has_tag, "json_applicable: applicable_to contains raw #minecraft:sword");
 
     std::cout << "PASS: test_json_parse_with_applicable" << std::endl;
 }
@@ -164,14 +150,10 @@ TEST_CASE("test_json_parse_min_cost_flat") {
     auto result = NativeJsonParser::parse_string(json_str);
     const auto& enchantments = result.first;
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "min_cost_flat: 1 enchantment");
-    expect_eq(enchantments[0].min_cost_base, 10,
-              "min_cost_flat: min_cost_base");
-    expect_eq(enchantments[0].min_cost_per_level, 7,
-              "min_cost_flat: min_cost_per_level");
-    expect(enchantments[0].limited_level_provided == false,
-           "min_cost_flat: no limited_level hint");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "min_cost_flat: 1 enchantment");
+    expect_eq(enchantments[0].min_cost_base, 10, "min_cost_flat: min_cost_base");
+    expect_eq(enchantments[0].min_cost_per_level, 7, "min_cost_flat: min_cost_per_level");
+    expect(enchantments[0].limited_level_provided == false, "min_cost_flat: no limited_level hint");
 
     std::cout << "PASS: test_json_parse_min_cost_flat" << std::endl;
 }
@@ -192,14 +174,10 @@ TEST_CASE("test_json_parse_min_cost_nested") {
     auto result = NativeJsonParser::parse_string(json_str);
     const auto& enchantments = result.first;
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "min_cost_nested: 1 enchantment");
-    expect_eq(enchantments[0].min_cost_base, 5,
-              "min_cost_nested: min_cost.base");
-    expect_eq(enchantments[0].min_cost_per_level, 9,
-              "min_cost_nested: min_cost.per_level_above_first");
-    expect(enchantments[0].limited_level_provided == false,
-           "min_cost_nested: no limited_level hint");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "min_cost_nested: 1 enchantment");
+    expect_eq(enchantments[0].min_cost_base, 5, "min_cost_nested: min_cost.base");
+    expect_eq(enchantments[0].min_cost_per_level, 9, "min_cost_nested: min_cost.per_level_above_first");
+    expect(enchantments[0].limited_level_provided == false, "min_cost_nested: no limited_level hint");
 
     std::cout << "PASS: test_json_parse_min_cost_nested" << std::endl;
 }
@@ -218,16 +196,11 @@ TEST_CASE("test_json_parse_min_cost_default") {
     auto result = NativeJsonParser::parse_string(json_str);
     const auto& enchantments = result.first;
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "min_cost_default: 1 enchantment");
-    expect_eq(enchantments[0].min_cost_base, 0,
-              "min_cost_default: base defaults 0");
-    expect_eq(enchantments[0].min_cost_per_level, 0,
-              "min_cost_default: per_level defaults 0");
-    expect_eq(enchantments[0].limited_level, 0,
-              "min_cost_default: limited_level defaults 0");
-    expect(enchantments[0].limited_level_provided == false,
-           "min_cost_default: no hint (fallback → max_level)");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "min_cost_default: 1 enchantment");
+    expect_eq(enchantments[0].min_cost_base, 0, "min_cost_default: base defaults 0");
+    expect_eq(enchantments[0].min_cost_per_level, 0, "min_cost_default: per_level defaults 0");
+    expect_eq(enchantments[0].limited_level, 0, "min_cost_default: limited_level defaults 0");
+    expect(enchantments[0].limited_level_provided == false, "min_cost_default: no hint (fallback → max_level)");
 
     std::cout << "PASS: test_json_parse_min_cost_default" << std::endl;
 }
@@ -247,16 +220,11 @@ TEST_CASE("test_json_parse_limited_level_hint") {
     auto result = NativeJsonParser::parse_string(json_str);
     const auto& enchantments = result.first;
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "ll_hint: 1 enchantment");
-    expect_eq(enchantments[0].limited_level, 4,
-              "ll_hint: limited_level value kept");
-    expect(enchantments[0].limited_level_provided == true,
-           "ll_hint: limited_level_provided true");
-    expect_eq(enchantments[0].min_cost_base, 0,
-              "ll_hint: min_cost_base 0 (no min_cost)");
-    expect_eq(enchantments[0].min_cost_per_level, 0,
-              "ll_hint: min_cost_per_level 0 (no min_cost)");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "ll_hint: 1 enchantment");
+    expect_eq(enchantments[0].limited_level, 4, "ll_hint: limited_level value kept");
+    expect(enchantments[0].limited_level_provided == true, "ll_hint: limited_level_provided true");
+    expect_eq(enchantments[0].min_cost_base, 0, "ll_hint: min_cost_base 0 (no min_cost)");
+    expect_eq(enchantments[0].min_cost_per_level, 0, "ll_hint: min_cost_per_level 0 (no min_cost)");
 
     std::cout << "PASS: test_json_parse_limited_level_hint" << std::endl;
 }
@@ -302,10 +270,8 @@ TEST_CASE("test_json_parse_malformed_tolerated") {
     })";
     auto result = NativeJsonParser::parse_string(json_str);
     // malformed 条目被跳过，合法条目保留——解析不抛异常
-    expect_eq(static_cast<int>(result.first.size()), 1,
-              "malformed_tolerated: malformed entry dropped, valid kept");
-    expect_eq(result.first[0].id, std::string("minecraft:sharpness"),
-              "malformed_tolerated: valid entry retained");
+    expect_eq(static_cast<int>(result.first.size()), 1, "malformed_tolerated: malformed entry dropped, valid kept");
+    expect_eq(result.first[0].id, std::string("minecraft:sharpness"), "malformed_tolerated: valid entry retained");
     TEST_PASS("test_json_parse_malformed_tolerated");
 }
 
@@ -315,10 +281,10 @@ TEST_CASE("test_json_parse_malformed_tolerated") {
 TEST_CASE("test_json_parse_empty") {
     auto result = NativeJsonParser::parse_string("{}");
     const auto& enchantments = result.first;
-    const auto& equipment    = result.second;
+    const auto& equipment = result.second;
 
     expect(enchantments.empty(), "json_empty: no enchantments");
-    expect(equipment.empty(),    "json_empty: no equipment");
+    expect(equipment.empty(), "json_empty: no equipment");
 
     std::cout << "PASS: test_json_parse_empty" << std::endl;
 }
@@ -335,11 +301,11 @@ TEST_CASE("test_json_parse_via_Json") {
     Json enchs = Json::array();
     {
         Json ench = Json::object();
-        ench.set("id",             Json("minecraft:sharpness"));
-        ench.set("name",           Json("Sharpness"));
-        ench.set("max_level",      Json(5));
-        ench.set("limited_level",  Json(5));
-        ench.set("multiplier",     Json(1));
+        ench.set("id", Json("minecraft:sharpness"));
+        ench.set("name", Json("Sharpness"));
+        ench.set("max_level", Json(5));
+        ench.set("limited_level", Json(5));
+        ench.set("multiplier", Json(1));
         enchs.push_back(ench);
     }
     root.set("enchantments", enchs);
@@ -348,10 +314,10 @@ TEST_CASE("test_json_parse_via_Json") {
     Json eqs = Json::array();
     {
         Json eq = Json::object();
-        eq.set("id",              Json("minecraft:diamond_sword"));
-        eq.set("name",            Json("Diamond Sword"));
-        eq.set("category",        Json("sword"));
-        eq.set("max_durability",  Json(1561));
+        eq.set("id", Json("minecraft:diamond_sword"));
+        eq.set("name", Json("Diamond Sword"));
+        eq.set("category", Json("sword"));
+        eq.set("max_durability", Json(1561));
         eqs.push_back(eq);
     }
     root.set("equipments", eqs);
@@ -359,32 +325,19 @@ TEST_CASE("test_json_parse_via_Json") {
     // Parse via the Json DOM overload
     auto result = NativeJsonParser::parse(root);
     const auto& enchantments = result.first;
-    const auto& equipment    = result.second;
+    const auto& equipment = result.second;
 
     // Enchantment checks
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "json_manual: 1 enchantment");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "json_manual: ench id");
-    expect_eq(enchantments[0].display_name,
-              std::string("Sharpness"),
-              "json_manual: ench display_name");
-    expect_eq(enchantments[0].max_level, 5,
-              "json_manual: ench max_level");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "json_manual: 1 enchantment");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "json_manual: ench id");
+    expect_eq(enchantments[0].display_name, std::string("Sharpness"), "json_manual: ench display_name");
+    expect_eq(enchantments[0].max_level, 5, "json_manual: ench max_level");
 
     // Equipment checks
-    expect_eq(static_cast<int>(equipment.size()), 1,
-              "json_manual: 1 equipment");
-    expect_eq(equipment[0].id,
-              std::string("minecraft:diamond_sword"),
-              "json_manual: eq id");
-    expect_eq(equipment[0].display_name,
-              std::string("Diamond Sword"),
-              "json_manual: eq display_name");
-    expect_eq(equipment[0].category,
-              std::string("sword"),
-              "json_manual: eq category");
+    expect_eq(static_cast<int>(equipment.size()), 1, "json_manual: 1 equipment");
+    expect_eq(equipment[0].id, std::string("minecraft:diamond_sword"), "json_manual: eq id");
+    expect_eq(equipment[0].display_name, std::string("Diamond Sword"), "json_manual: eq display_name");
+    expect_eq(equipment[0].category, std::string("sword"), "json_manual: eq category");
 
     std::cout << "PASS: test_json_parse_via_Json" << std::endl;
 }
@@ -402,24 +355,16 @@ TEST_CASE("test_json_parse_via_Json") {
 // quoted (contains comma-safe characters, but demonstrates quoting).
 
 TEST_CASE("test_csv_parse_basic") {
-    std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
-        "minecraft:sharpness,Sharpness,5,5,1,,\"#minecraft:sword\"\n";
+    std::string csv = "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
+                      "minecraft:sharpness,Sharpness,5,5,1,,\"#minecraft:sword\"\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "csv_basic: 1 enchantment");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "csv_basic: ench id");
-    expect_eq(enchantments[0].display_name,
-              std::string("Sharpness"),
-              "csv_basic: ench display_name");
-    expect_eq(enchantments[0].max_level, 5,
-              "csv_basic: ench max_level");
-    expect_eq(enchantments[0].multiplier, 1,
-              "csv_basic: ench multiplier");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "csv_basic: 1 enchantment");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "csv_basic: ench id");
+    expect_eq(enchantments[0].display_name, std::string("Sharpness"), "csv_basic: ench display_name");
+    expect_eq(enchantments[0].max_level, 5, "csv_basic: ench max_level");
+    expect_eq(enchantments[0].multiplier, 1, "csv_basic: ench multiplier");
 
     std::cout << "PASS: test_csv_parse_basic" << std::endl;
 }
@@ -430,21 +375,20 @@ TEST_CASE("test_csv_parse_basic") {
 // value does not need a semicolon.
 
 TEST_CASE("test_csv_parse_with_exclusive") {
-    std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
-        "minecraft:sharpness,Sharpness,5,5,1,minecraft:smite,#minecraft:sword\n";
+    std::string csv = "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
+                      "minecraft:sharpness,Sharpness,5,5,1,minecraft:smite,#minecraft:sword\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "csv_exclusive: 1 enchantment");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "csv_exclusive: ench id");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "csv_exclusive: 1 enchantment");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "csv_exclusive: ench id");
 
     bool has_smite = false;
     for (const auto& excl : enchantments[0].exclusive_with) {
-        if (excl == "minecraft:smite") { has_smite = true; break; }
+        if (excl == "minecraft:smite") {
+            has_smite = true;
+            break;
+        }
     }
     expect(has_smite, "csv_exclusive: exclusive_with contains smite");
 
@@ -455,8 +399,7 @@ TEST_CASE("test_csv_parse_with_exclusive") {
 // Only the header row — no data rows. Verify empty result.
 
 TEST_CASE("test_csv_parse_empty_header_only") {
-    std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n";
+    std::string csv = "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
 
@@ -469,25 +412,17 @@ TEST_CASE("test_csv_parse_empty_header_only") {
 // Three data rows. Verify all are parsed and have correct IDs.
 
 TEST_CASE("test_csv_parse_multiple_rows") {
-    std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
-        "minecraft:sharpness,Sharpness,5,5,1,,\n"
-        "minecraft:smite,Smite,5,5,1,,\n"
-        "minecraft:unbreaking,Unbreaking,3,3,1,,\n";
+    std::string csv = "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
+                      "minecraft:sharpness,Sharpness,5,5,1,,\n"
+                      "minecraft:smite,Smite,5,5,1,,\n"
+                      "minecraft:unbreaking,Unbreaking,3,3,1,,\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
 
-    expect_eq(static_cast<int>(enchantments.size()), 3,
-              "csv_multi: 3 enchantments");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "csv_multi: ench[0].id");
-    expect_eq(enchantments[1].id,
-              std::string("minecraft:smite"),
-              "csv_multi: ench[1].id");
-    expect_eq(enchantments[2].id,
-              std::string("minecraft:unbreaking"),
-              "csv_multi: ench[2].id");
+    expect_eq(static_cast<int>(enchantments.size()), 3, "csv_multi: 3 enchantments");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "csv_multi: ench[0].id");
+    expect_eq(enchantments[1].id, std::string("minecraft:smite"), "csv_multi: ench[1].id");
+    expect_eq(enchantments[2].id, std::string("minecraft:unbreaking"), "csv_multi: ench[2].id");
 
     std::cout << "PASS: test_csv_parse_multiple_rows" << std::endl;
 }
@@ -497,15 +432,13 @@ TEST_CASE("test_csv_parse_multiple_rows") {
 // CSV round-trip preserves the treasure flag instead of defaulting to false.
 
 TEST_CASE("test_csv_parse_is_treasure") {
-    std::string csv =
-        "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
-        "minecraft:mending,Mending,1,1,4,true,infinity,#minecraft:durability\n"
-        "minecraft:sharpness,Sharpness,5,5,1,false,,\n";
+    std::string csv = "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
+                      "minecraft:mending,Mending,1,1,4,true,infinity,#minecraft:durability\n"
+                      "minecraft:sharpness,Sharpness,5,5,1,false,,\n";
 
     auto enchantments = NativeCsvParser::parse(csv);
 
-    expect_eq(static_cast<int>(enchantments.size()), 2,
-              "csv_treasure: 2 enchantments");
+    expect_eq(static_cast<int>(enchantments.size()), 2, "csv_treasure: 2 enchantments");
     expect(enchantments[0].is_treasure, "csv_treasure: mending is_treasure true");
     expect(!enchantments[1].is_treasure, "csv_treasure: sharpness is_treasure false");
 
@@ -518,10 +451,10 @@ TEST_CASE("test_csv_parse_is_treasure") {
 // defaulting.
 
 TEST_CASE("test_csv_parse_platform") {
-    std::string csv =
-        "id,name,platform,max_level,limited_level,min_cost_base,min_cost_per_level,multiplier,is_treasure,exclusive_set,supported_items\n"
-        "minecraft:sharpness,Sharpness,java,5,5,1,11,1,false,,\"#minecraft:sword\"\n"
-        "minecraft:mending,Mending,all,1,1,2,5,4,true,,\"#minecraft:durability\"\n";
+    std::string csv = "id,name,platform,max_level,limited_level,min_cost_base,min_cost_per_level,multiplier,is_treasure,"
+                      "exclusive_set,supported_items\n"
+                      "minecraft:sharpness,Sharpness,java,5,5,1,11,1,false,,\"#minecraft:sword\"\n"
+                      "minecraft:mending,Mending,all,1,1,2,5,4,true,,\"#minecraft:durability\"\n";
     auto enchantments = NativeCsvParser::parse(csv);
     expect_eq(static_cast<int>(enchantments.size()), 2, "csv_platform: 2 enchants");
     expect(enchantments[0].platform == "java", "csv_platform: platform column read");
@@ -535,10 +468,9 @@ TEST_CASE("test_csv_parse_platform") {
 // 旧 parse_csv_string 不处理 "" 转义——回归：逗号字段用引号包裹，内含引号转义为 ""
 
 TEST_CASE("test_csv_parse_escaped_quotes") {
-    std::string csv =
-        "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
-        "\"minecraft:sharpness\",\"Sharp, Comma\",5,5,1,,\"#minecraft:sword\"\n"
-        "\"minecraft:unbreaking\",\"Un\"\"broken\"\"\",3,3,1,,\n";
+    std::string csv = "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
+                      "\"minecraft:sharpness\",\"Sharp, Comma\",5,5,1,,\"#minecraft:sword\"\n"
+                      "\"minecraft:unbreaking\",\"Un\"\"broken\"\"\",3,3,1,,\n";
     auto enchantments = NativeCsvParser::parse(csv);
     expect_eq(static_cast<int>(enchantments.size()), 2, "csv_escaped: 2 enchants");
     expect(enchantments[0].display_name == "Sharp, Comma", "csv_escaped: comma inside quotes");
@@ -551,10 +483,9 @@ TEST_CASE("test_csv_parse_escaped_quotes") {
 // EquipmentDataSchema.
 
 TEST_CASE("test_csv_parse_equipment_companion") {
-    std::string csv =
-        "id,name,category,max_durability\n"
-        "minecraft:diamond_sword,Diamond Sword,sword,1561\n"
-        "minecraft:iron_pickaxe,Iron Pickaxe,pickaxe,250\n";
+    std::string csv = "id,name,category,max_durability\n"
+                      "minecraft:diamond_sword,Diamond Sword,sword,1561\n"
+                      "minecraft:iron_pickaxe,Iron Pickaxe,pickaxe,250\n";
     auto eqs = NativeCsvParser::parse_equipment(csv);
     expect_eq(static_cast<int>(eqs.size()), 2, "csv_eq: 2 equipments");
     expect_eq(eqs[0].id, std::string("minecraft:diamond_sword"), "csv_eq: id");
@@ -570,15 +501,12 @@ TEST_CASE("test_csv_parse_equipment_companion") {
 // "缺列"（缺失可选字段默认），不承诺"列在但空"。本测试锁定此刻意行为。
 
 TEST_CASE("test_csv_empty_scalar_cell_drops_row") {
-    std::string csv =
-        "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
-        "minecraft:bad_empty,Bad,5,,1,,,\n"                    // limited_level 空 + is_treasure 空 → 行丢弃
-        "minecraft:sharpness,Sharpness,5,5,1,false,,\n";       // 合法行保留
+    std::string csv = "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
+                      "minecraft:bad_empty,Bad,5,,1,,,\n"              // limited_level 空 + is_treasure 空 → 行丢弃
+                      "minecraft:sharpness,Sharpness,5,5,1,false,,\n"; // 合法行保留
     auto enchantments = NativeCsvParser::parse(csv);
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "empty_cell: malformed row dropped, valid kept");
-    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"),
-              "empty_cell: valid row retained");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "empty_cell: malformed row dropped, valid kept");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "empty_cell: valid row retained");
     TEST_PASS("test_csv_empty_scalar_cell_drops_row");
 }
 
@@ -593,29 +521,21 @@ TEST_CASE("test_format_detector_csv_companion") {
     auto dir = fs::temp_directory_path() / "besq_csv_comp";
     fs::remove_all(dir);
     fs::create_directories(dir);
-    std::ofstream(dir / "custom.csv") <<
-        "id,name,platform,max_level,multiplier,exclusive_set,supported_items\n"
-        "mod:sharp,Sharp,java,5,1,,\"#minecraft:swords\"\n";
-    std::ofstream(dir / "equipments_custom.csv") <<
-        "id,name,category,max_durability\n"
-        "minecraft:diamond_sword,Diamond Sword,sword,1561\n";
+    std::ofstream(dir / "custom.csv") << "id,name,platform,max_level,multiplier,exclusive_set,supported_items\n"
+                                         "mod:sharp,Sharp,java,5,1,,\"#minecraft:swords\"\n";
+    std::ofstream(dir / "equipments_custom.csv") << "id,name,category,max_durability\n"
+                                                    "minecraft:diamond_sword,Diamond Sword,sword,1561\n";
     auto result = FormatDetector::parse(dir / "custom.csv");
-    expect_eq(static_cast<int>(result.enchantments.size()), 1,
-              "csv_comp: 1 ench");
-    expect_eq(static_cast<int>(result.equipment.size()), 1,
-              "csv_comp: 1 eq from companion");
-    expect(result.equipment[0].id == "minecraft:diamond_sword",
-           "csv_comp: eq id");
-    expect(result.enchantments[0].platform == "java",
-           "csv_comp: platform read");
+    expect_eq(static_cast<int>(result.enchantments.size()), 1, "csv_comp: 1 ench");
+    expect_eq(static_cast<int>(result.equipment.size()), 1, "csv_comp: 1 eq from companion");
+    expect(result.equipment[0].id == "minecraft:diamond_sword", "csv_comp: eq id");
+    expect(result.enchantments[0].platform == "java", "csv_comp: platform read");
 
     // Negative: a CSV WITHOUT a companion file → empty equipment vector.
-    std::ofstream(dir / "naked.csv") <<
-        "id,name,max_level,multiplier\n"
-        "mod:plain,Plain,1,1\n";
+    std::ofstream(dir / "naked.csv") << "id,name,max_level,multiplier\n"
+                                        "mod:plain,Plain,1,1\n";
     auto no_comp = FormatDetector::parse(dir / "naked.csv");
-    expect_eq(static_cast<int>(no_comp.equipment.size()), 0,
-              "csv_comp: no companion → empty equipment");
+    expect_eq(static_cast<int>(no_comp.equipment.size()), 0, "csv_comp: no companion → empty equipment");
 
     fs::remove_all(dir);
     TEST_PASS("test_format_detector_csv_companion");
@@ -651,30 +571,26 @@ TEST_CASE("test_mc_single_enchantment_basic") {
         "supported_items": ["#minecraft:sword"]
     })";
 
-    auto ench = McOfficialParser::parse_single_enchantment(
-        "minecraft", "sharpness", content, tag_resolver);
+    auto ench = McOfficialParser::parse_single_enchantment("minecraft", "sharpness", content, tag_resolver);
 
-    expect_eq(ench.id, std::string("minecraft:sharpness"),
-              "mc_single_basic: ench id");
-    expect_eq(ench.max_level, 5,
-              "mc_single_basic: max_level");
-    expect_eq(ench.display_name, std::string("Sharpness"),
-              "mc_single_basic: display_name");
-    expect(ench.multiplier > 0,
-           "mc_single_basic: multiplier > 0");
+    expect_eq(ench.id, std::string("minecraft:sharpness"), "mc_single_basic: ench id");
+    expect_eq(ench.max_level, 5, "mc_single_basic: max_level");
+    expect_eq(ench.display_name, std::string("Sharpness"), "mc_single_basic: display_name");
+    expect(ench.multiplier > 0, "mc_single_basic: multiplier > 0");
 
     // applicable_to is passed through RAW (T5): the "#minecraft:sword" tag
     // reference survives verbatim for the loader to resolve later.
     bool has_tag = false;
     for (const auto& a : ench.applicable_to) {
-        if (a == "#minecraft:sword") { has_tag = true; break; }
+        if (a == "#minecraft:sword") {
+            has_tag = true;
+            break;
+        }
     }
-    expect(has_tag,
-           "mc_single_basic: applicable_to contains raw #minecraft:sword");
+    expect(has_tag, "mc_single_basic: applicable_to contains raw #minecraft:sword");
 
     // exclusive_set should be empty
-    expect(ench.exclusive_with.empty(),
-           "mc_single_basic: exclusive_with empty");
+    expect(ench.exclusive_with.empty(), "mc_single_basic: exclusive_with empty");
 
     TEST_PASS("test_mc_single_enchantment_basic");
 }
@@ -694,31 +610,31 @@ TEST_CASE("test_mc_single_enchantment_with_exclusive") {
         "supported_items": ["minecraft:diamond_sword"]
     })";
 
-    auto ench = McOfficialParser::parse_single_enchantment(
-        "minecraft", "sharpness", content, tag_resolver);
+    auto ench = McOfficialParser::parse_single_enchantment("minecraft", "sharpness", content, tag_resolver);
 
-    expect_eq(ench.id, std::string("minecraft:sharpness"),
-              "mc_single_exclusive: ench id");
-    expect_eq(ench.max_level, 5,
-              "mc_single_exclusive: max_level");
-    expect_eq(ench.multiplier, 2,
-              "mc_single_exclusive: multiplier");
+    expect_eq(ench.id, std::string("minecraft:sharpness"), "mc_single_exclusive: ench id");
+    expect_eq(ench.max_level, 5, "mc_single_exclusive: max_level");
+    expect_eq(ench.multiplier, 2, "mc_single_exclusive: multiplier");
 
     // exclusive_set should contain "minecraft:smite"
     bool has_smite = false;
     for (const auto& e : ench.exclusive_with) {
-        if (e == "minecraft:smite") { has_smite = true; break; }
+        if (e == "minecraft:smite") {
+            has_smite = true;
+            break;
+        }
     }
-    expect(has_smite,
-           "mc_single_exclusive: exclusive_with contains smite");
+    expect(has_smite, "mc_single_exclusive: exclusive_with contains smite");
 
     // Concrete supported_items pass through resolve() unchanged
     bool has_sword = false;
     for (const auto& a : ench.applicable_to) {
-        if (a == "minecraft:diamond_sword") { has_sword = true; break; }
+        if (a == "minecraft:diamond_sword") {
+            has_sword = true;
+            break;
+        }
     }
-    expect(has_sword,
-           "mc_single_exclusive: applicable_to contains diamond_sword");
+    expect(has_sword, "mc_single_exclusive: applicable_to contains diamond_sword");
 
     TEST_PASS("test_mc_single_enchantment_with_exclusive");
 }
@@ -733,8 +649,7 @@ TEST_CASE("test_mc_single_enchantment_with_exclusive") {
 
 TEST_CASE("test_mc_limited_level_tag_resolved") {
     TagResolver tag_resolver;
-    tag_resolver.load_tag_content("minecraft:sword",
-        R"({"values": ["minecraft:diamond_sword", "minecraft:iron_sword"]})");
+    tag_resolver.load_tag_content("minecraft:sword", R"({"values": ["minecraft:diamond_sword", "minecraft:iron_sword"]})");
 
     std::string content = R"({
         "anvil_cost": 1,
@@ -744,28 +659,25 @@ TEST_CASE("test_mc_limited_level_tag_resolved") {
         "min_cost": {"base": 10, "per_level_above_first": 5}
     })";
 
-    auto ench = McOfficialParser::parse_single_enchantment(
-        "minecraft", "sharpness", content, tag_resolver);
+    auto ench = McOfficialParser::parse_single_enchantment("minecraft", "sharpness", content, tag_resolver);
 
     // applicable_to stays raw (pass-through, T5)
     bool has_tag = false;
     for (const auto& a : ench.applicable_to) {
-        if (a == "#minecraft:sword") { has_tag = true; break; }
+        if (a == "#minecraft:sword") {
+            has_tag = true;
+            break;
+        }
     }
-    expect(has_tag,
-           "mc_limited_tag: applicable_to raw #minecraft:sword");
+    expect(has_tag, "mc_limited_tag: applicable_to raw #minecraft:sword");
 
     // No `limited_level` field in the JSON → DTO defaults to max_level.
-    expect_eq(ench.limited_level, ench.max_level,
-              "mc_limited_tag: limited_level defaults to max_level");
-    expect(!ench.limited_level_provided,
-           "mc_limited_tag: limited_level not marked provided");
+    expect_eq(ench.limited_level, ench.max_level, "mc_limited_tag: limited_level defaults to max_level");
+    expect(!ench.limited_level_provided, "mc_limited_tag: limited_level not marked provided");
 
     // min_cost is carried as raw fields for the LimitedLevelCalculator.
-    expect_eq(ench.min_cost_base, 10,
-              "mc_limited_tag: min_cost_base carried raw");
-    expect_eq(ench.min_cost_per_level, 5,
-              "mc_limited_tag: min_cost_per_level carried raw");
+    expect_eq(ench.min_cost_base, 10, "mc_limited_tag: min_cost_base carried raw");
+    expect_eq(ench.min_cost_per_level, 5, "mc_limited_tag: min_cost_per_level carried raw");
 
     TEST_PASS("test_mc_limited_level_tag_resolved");
 }
@@ -778,16 +690,14 @@ TEST_CASE("test_mc_limited_level_tag_resolved") {
 
 TEST_CASE("test_mc_single_enchantment_treasure_tag") {
     TagResolver tag_resolver;
-    tag_resolver.load_tag_content("minecraft:enchantment/treasure",
-        R"({"values": ["minecraft:mending"]})");
+    tag_resolver.load_tag_content("minecraft:enchantment/treasure", R"({"values": ["minecraft:mending"]})");
 
     std::string mending = R"({
         "anvil_cost": 4,
         "max_level": 1,
         "supported_items": "#minecraft:durability"
     })";
-    auto ench = McOfficialParser::parse_single_enchantment(
-        "minecraft", "mending", mending, tag_resolver);
+    auto ench = McOfficialParser::parse_single_enchantment("minecraft", "mending", mending, tag_resolver);
     expect(ench.is_treasure, "mending: treasure member → is_treasure true");
 
     std::string sharpness = R"({
@@ -795,8 +705,7 @@ TEST_CASE("test_mc_single_enchantment_treasure_tag") {
         "max_level": 5,
         "supported_items": "#minecraft:sharp_weapon"
     })";
-    auto sharp = McOfficialParser::parse_single_enchantment(
-        "minecraft", "sharpness", sharpness, tag_resolver);
+    auto sharp = McOfficialParser::parse_single_enchantment("minecraft", "sharpness", sharpness, tag_resolver);
     expect(!sharp.is_treasure, "sharpness: not a treasure member → is_treasure false");
 
     TEST_PASS("test_mc_single_enchantment_treasure_tag");
@@ -823,21 +732,14 @@ TEST_CASE("test_mc_parse_files_basic") {
 
     auto result = McOfficialParser::parse_files(files);
     const auto& enchantments = result.enchantments;
-    const auto& equipment    = result.equipment;
+    const auto& equipment = result.equipment;
 
-    expect_eq(static_cast<int>(enchantments.size()), 1,
-              "mc_files_basic: 1 enchantment");
-    expect_eq(enchantments[0].id,
-              std::string("minecraft:sharpness"),
-              "mc_files_basic: ench id");
-    expect_eq(enchantments[0].max_level, 5,
-              "mc_files_basic: max_level");
+    expect_eq(static_cast<int>(enchantments.size()), 1, "mc_files_basic: 1 enchantment");
+    expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "mc_files_basic: ench id");
+    expect_eq(enchantments[0].max_level, 5, "mc_files_basic: max_level");
 
-    expect_eq(static_cast<int>(equipment.size()), 1,
-              "mc_files_basic: 1 equipment");
-    expect_eq(equipment[0].id,
-              std::string("minecraft:diamond_sword"),
-              "mc_files_basic: eq id");
+    expect_eq(static_cast<int>(equipment.size()), 1, "mc_files_basic: 1 equipment");
+    expect_eq(equipment[0].id, std::string("minecraft:diamond_sword"), "mc_files_basic: eq id");
 
     TEST_PASS("test_mc_parse_files_basic");
 }
@@ -850,10 +752,10 @@ TEST_CASE("test_mc_parse_files_empty") {
 
     auto result = McOfficialParser::parse_files(files);
     const auto& enchantments = result.enchantments;
-    const auto& equipment    = result.equipment;
+    const auto& equipment = result.equipment;
 
     expect(enchantments.empty(), "mc_files_empty: no enchantments");
-    expect(equipment.empty(),    "mc_files_empty: no equipment");
+    expect(equipment.empty(), "mc_files_empty: no equipment");
 
     TEST_PASS("test_mc_parse_files_empty");
 }
@@ -868,26 +770,23 @@ TEST_CASE("test_mc_parse_files_empty") {
 TEST_CASE("test_mc_official_single_string_supported") {
     TagResolver tag_resolver;
 
-    std::string content = file_utils::read_file(
-        "data/tests/datapack/attack_speed.json");
+    std::string content = file_utils::read_file("data/tests/datapack/attack_speed.json");
 
-    auto ench = McOfficialParser::parse_single_enchantment(
-        "enchantments", "attack_speed", content, tag_resolver);
+    auto ench = McOfficialParser::parse_single_enchantment("enchantments", "attack_speed", content, tag_resolver);
 
-    expect_eq(ench.id, std::string("enchantments:attack_speed"),
-              "mc_single_string: ench id");
-    expect_eq(ench.multiplier, 7,
-              "mc_single_string: anvil_cost -> multiplier");
-    expect_eq(ench.max_level, 3,
-              "mc_single_string: max_level");
+    expect_eq(ench.id, std::string("enchantments:attack_speed"), "mc_single_string: ench id");
+    expect_eq(ench.multiplier, 7, "mc_single_string: anvil_cost -> multiplier");
+    expect_eq(ench.max_level, 3, "mc_single_string: max_level");
 
     // supported_items was a single string "#minecraft:swords" — passed through RAW
     bool has_swords = false;
     for (const auto& a : ench.applicable_to) {
-        if (a == "#minecraft:swords") { has_swords = true; break; }
+        if (a == "#minecraft:swords") {
+            has_swords = true;
+            break;
+        }
     }
-    expect(has_swords,
-           "mc_single_string: applicable_to contains raw #minecraft:swords");
+    expect(has_swords, "mc_single_string: applicable_to contains raw #minecraft:swords");
 
     TEST_PASS("test_mc_official_single_string_supported");
 }
@@ -901,25 +800,22 @@ TEST_CASE("test_mc_official_single_string_supported") {
 TEST_CASE("test_mc_official_array_supported_items") {
     TagResolver tag_resolver;
 
-    std::string content = file_utils::read_file(
-        "data/tests/datapack/moonwalk.json");
+    std::string content = file_utils::read_file("data/tests/datapack/moonwalk.json");
 
-    auto ench = McOfficialParser::parse_single_enchantment(
-        "enchantencore", "moonwalk", content, tag_resolver);
+    auto ench = McOfficialParser::parse_single_enchantment("enchantencore", "moonwalk", content, tag_resolver);
 
-    expect_eq(ench.id, std::string("enchantencore:moonwalk"),
-              "mc_array_supp: ench id");
-    expect_eq(ench.multiplier, 4,
-              "mc_array_supp: anvil_cost -> multiplier");
-    expect_eq(ench.max_level, 3,
-              "mc_array_supp: max_level");
+    expect_eq(ench.id, std::string("enchantencore:moonwalk"), "mc_array_supp: ench id");
+    expect_eq(ench.multiplier, 4, "mc_array_supp: anvil_cost -> multiplier");
+    expect_eq(ench.max_level, 3, "mc_array_supp: max_level");
 
     bool has_elytra = false;
     for (const auto& a : ench.applicable_to) {
-        if (a == "minecraft:elytra") { has_elytra = true; break; }
+        if (a == "minecraft:elytra") {
+            has_elytra = true;
+            break;
+        }
     }
-    expect(has_elytra,
-           "mc_array_supp: applicable_to contains minecraft:elytra");
+    expect(has_elytra, "mc_array_supp: applicable_to contains minecraft:elytra");
 
     TEST_PASS("test_mc_official_array_supported_items");
 }
@@ -939,13 +835,10 @@ TEST_CASE("test_mc_single_string_exclusive_set") {
         "supported_items": "#minecraft:sword"
     })";
 
-    auto ench = McOfficialParser::parse_single_enchantment(
-        "minecraft", "sharpness", content, tag_resolver);
+    auto ench = McOfficialParser::parse_single_enchantment("minecraft", "sharpness", content, tag_resolver);
 
-    expect_eq(ench.id, std::string("minecraft:sharpness"),
-              "mc_single_excl: ench id");
-    expect(ench.exclusive_with.empty(),
-           "mc_single_excl: unresolved tag resolves to empty exclusive_with");
+    expect_eq(ench.id, std::string("minecraft:sharpness"), "mc_single_excl: ench id");
+    expect(ench.exclusive_with.empty(), "mc_single_excl: unresolved tag resolves to empty exclusive_with");
 
     TEST_PASS("test_mc_single_string_exclusive_set");
 }
@@ -959,26 +852,19 @@ TEST_CASE("test_mc_tag_replace_semantics") {
     TagResolver resolver;
 
     // First definition for the tag
-    resolver.load_tag_content("minecraft:swords",
-        R"({"values": ["minecraft:stone_sword", "minecraft:wooden_sword"]})");
+    resolver.load_tag_content("minecraft:swords", R"({"values": ["minecraft:stone_sword", "minecraft:wooden_sword"]})");
 
     // Without "replace", a second definition MERGES with the first
-    resolver.load_tag_content("minecraft:swords",
-        R"({"values": ["minecraft:iron_sword"]})");
+    resolver.load_tag_content("minecraft:swords", R"({"values": ["minecraft:iron_sword"]})");
     auto merged = resolver.resolve("#minecraft:swords");
-    expect(merged.contains("minecraft:stone_sword"),
-           "tag_replace: merge keeps first tag's values");
-    expect(merged.contains("minecraft:iron_sword"),
-           "tag_replace: merge adds second tag's values");
+    expect(merged.contains("minecraft:stone_sword"), "tag_replace: merge keeps first tag's values");
+    expect(merged.contains("minecraft:iron_sword"), "tag_replace: merge adds second tag's values");
 
     // With "replace": true, the tag is replaced entirely
-    resolver.load_tag_content("minecraft:swords",
-        R"({"replace": true, "values": ["minecraft:diamond_sword"]})");
+    resolver.load_tag_content("minecraft:swords", R"({"replace": true, "values": ["minecraft:diamond_sword"]})");
     auto replaced = resolver.resolve("#minecraft:swords");
-    expect_eq(static_cast<int>(replaced.size()), 1,
-              "tag_replace: replaced tag has only the new value");
-    expect(replaced.contains("minecraft:diamond_sword"),
-           "tag_replace: replaced tag contains the new value");
+    expect_eq(static_cast<int>(replaced.size()), 1, "tag_replace: replaced tag has only the new value");
+    expect(replaced.contains("minecraft:diamond_sword"), "tag_replace: replaced tag contains the new value");
 
     TEST_PASS("test_mc_tag_replace_semantics");
 }
@@ -1001,22 +887,25 @@ TEST_CASE("test_mc_tag_object_entry") {
     auto result = McOfficialParser::parse_files(files);
 
     // item_tags: the object entry id must survive into the tag definition
-    expect_eq(static_cast<int>(result.item_tags.size()), 1,
-              "mc_tag_object: one item tag definition");
-    expect_eq(result.item_tags[0].key, std::string("minecraft:swords"),
-              "mc_tag_object: tag key");
+    expect_eq(static_cast<int>(result.item_tags.size()), 1, "mc_tag_object: one item tag definition");
+    expect_eq(result.item_tags[0].key, std::string("minecraft:swords"), "mc_tag_object: tag key");
     bool has_diamond = false, has_stone = false;
     for (const auto& v : result.item_tags[0].values) {
-        if (v == "minecraft:diamond_sword") has_diamond = true;
-        if (v == "minecraft:stone_sword")   has_stone   = true;
+        if (v == "minecraft:diamond_sword")
+            has_diamond = true;
+        if (v == "minecraft:stone_sword")
+            has_stone = true;
     }
     expect(has_diamond, "mc_tag_object: object entry id present in item_tags values");
-    expect(has_stone,   "mc_tag_object: plain string entry preserved");
+    expect(has_stone, "mc_tag_object: plain string entry preserved");
 
     // equipment: the object entry id contributes to derived equipment
     bool eq_diamond = false;
     for (const auto& e : result.equipment) {
-        if (e.id == "minecraft:diamond_sword") { eq_diamond = true; break; }
+        if (e.id == "minecraft:diamond_sword") {
+            eq_diamond = true;
+            break;
+        }
     }
     expect(eq_diamond, "mc_tag_object: object entry id in derived equipment");
 
@@ -1024,10 +913,8 @@ TEST_CASE("test_mc_tag_object_entry") {
     TagResolver resolver;
     McOfficialParser::load_item_tags_into(resolver, result.item_tags);
     auto resolved = resolver.resolve("#minecraft:swords");
-    expect(resolved.contains("minecraft:diamond_sword"),
-           "mc_tag_object: resolver resolves object entry id");
-    expect(resolved.contains("minecraft:stone_sword"),
-           "mc_tag_object: resolver keeps plain string entry");
+    expect(resolved.contains("minecraft:diamond_sword"), "mc_tag_object: resolver resolves object entry id");
+    expect(resolved.contains("minecraft:stone_sword"), "mc_tag_object: resolver keeps plain string entry");
 
     TEST_PASS("test_mc_tag_object_entry");
 }

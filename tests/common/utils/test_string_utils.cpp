@@ -3,8 +3,8 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "common/utils/StringUtils.hpp"
+#include "framework/test_framework.h"
 
 #include <iostream>
 #include <string>
@@ -34,4 +34,3 @@ TEST_CASE("test_string_utils_split_join") {
     expect(chars[0] == "a" && chars[1] == "b", "char split tokens");
     TEST_PASS("string_utils split/join");
 }
-

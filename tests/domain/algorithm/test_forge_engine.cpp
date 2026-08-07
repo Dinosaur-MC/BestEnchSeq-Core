@@ -26,22 +26,14 @@ struct TestFixture {
 
     TestFixture() {
         std::vector<EnchInfo> infos;
-        infos.push_back(
-            {NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
-             std::unordered_set<NSID>{EquipmentTag::sword()}}
-        );
-        infos.push_back(
-            {NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false, std::unordered_set<NSID>{},
-             std::unordered_set<NSID>{EquipmentTag::sword()}}
-        );
-        infos.push_back(
-            {NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5, 1, false,
-             std::unordered_set<NSID>{NSID("sharpness")}, std::unordered_set<NSID>{EquipmentTag::sword()}}
-        );
-        infos.push_back(
-            {NSID("protection"), "Protection", MCE::All, 4, 4, 1, false, std::unordered_set<NSID>{},
-             std::unordered_set<NSID>{EquipmentTag::chestplate()}}
-        );
+        infos.push_back({NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+                         std::unordered_set<NSID>{EquipmentTag::sword()}});
+        infos.push_back({NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false, std::unordered_set<NSID>{},
+                         std::unordered_set<NSID>{EquipmentTag::sword()}});
+        infos.push_back({NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5, 1, false,
+                         std::unordered_set<NSID>{NSID("sharpness")}, std::unordered_set<NSID>{EquipmentTag::sword()}});
+        infos.push_back({NSID("protection"), "Protection", MCE::All, 4, 4, 1, false, std::unordered_set<NSID>{},
+                         std::unordered_set<NSID>{EquipmentTag::chestplate()}});
         enchants = EnchantmentRegistry(infos);
 
         // Collect items in deterministic order (sorted by NSID id part) so
@@ -49,21 +41,19 @@ struct TestFixture {
         // so extract just the id part for sorting and lookup.
         std::vector<std::pair<std::string, EnchInfo>> sorted;
         sorted.reserve(enchants.size());
-        for (const auto &[nsid, info] : enchants.data()) {
+        for (const auto& [nsid, info] : enchants.data()) {
             auto s = nsid.str();
             auto p = s.find(':');
             sorted.emplace_back(p != std::string::npos ? s.substr(p + 1) : s, info);
         }
-        std::sort(sorted.begin(), sorted.end(), [](const auto &a, const auto &b) {
-            return a.first < b.first;
-        });
+        std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
         // After sorting: 0=bane, 1=knockback, 2=protection, 3=sharpness
         for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i)
             name_to_local_id_[sorted[i].first] = static_cast<int16_t>(i);
 
         algorithm::Equipment target_equip;
-        target_equip.id             = "test";
+        target_equip.id = "test";
         target_equip.max_durability = 1561;
         // Populate applicable_enchs BEFORE reg.init() — sorted is ready now.
         for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
@@ -87,8 +77,7 @@ struct TestFixture {
             for (int32_t j = i + 1; j < static_cast<int32_t>(sorted.size()); ++j) {
                 auto id_i = NSID(sorted[i].first);
                 auto id_j = NSID(sorted[j].first);
-                bool conflict = sorted[i].second.exclusive_set.count(id_j) ||
-                                sorted[j].second.exclusive_set.count(id_i);
+                bool conflict = sorted[i].second.exclusive_set.count(id_j) || sorted[j].second.exclusive_set.count(id_i);
                 if (conflict) {
                     exc_masks[i] |= (algorithm::mask_type(1) << j);
                     exc_masks[j] |= (algorithm::mask_type(1) << i);
@@ -97,21 +86,21 @@ struct TestFixture {
         }
 
         for (int32_t i = 0; i < static_cast<int32_t>(sorted.size()); ++i) {
-            const auto &ei  = sorted[i].second;
+            const auto& ei = sorted[i].second;
             bool applicable = ei.supported_items.count(EquipmentTag::sword()) > 0;
             algorithm::EnchInfo info;
-            info.id         = static_cast<uint8_t>(i);
-            info.mul        = static_cast<uint8_t>(ei.multiplier);
-            info.mul_b      = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
-            info.max_lvl    = static_cast<uint8_t>(ei.max_level);
-            info.exc_mask   = exc_masks[i];
+            info.id = static_cast<uint8_t>(i);
+            info.mul = static_cast<uint8_t>(ei.multiplier);
+            info.mul_b = static_cast<uint8_t>(std::max(1, ei.multiplier >> 1));
+            info.max_lvl = static_cast<uint8_t>(ei.max_level);
+            info.exc_mask = exc_masks[i];
             info.applicable = applicable;
             compact_infos.push_back(std::move(info));
         }
         reg.init(compact_infos, global_ids, target_equip);
     }
 
-    int16_t id(const std::string &name_id) const {
+    int16_t id(const std::string& name_id) const {
         auto it = name_to_local_id_.find(name_id);
         return it != name_to_local_id_.end() ? it->second : -1;
     }
@@ -148,7 +137,7 @@ TEST_CASE("test_forge_books") {
 
 TEST_CASE("test_forge_equipment_with_book") {
     TestFixture fx;
-    auto eq   = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
+    auto eq = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
     auto book = fx.make_book(fx.id("sharpness"), 5);
     algorithm::ForgeEngine engine;
     auto [result, cost] = engine.forge(eq, book, fx.reg);
@@ -162,8 +151,8 @@ TEST_CASE("test_forge_equipment_with_book") {
 TEST_CASE("test_forge_incompatible_rejected") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-    auto eq             = fx.make_equip(fx.id("sharpness"), 5);
-    auto book           = fx.make_book(fx.id("bane_of_arthropods"), 4);
+    auto eq = fx.make_equip(fx.id("sharpness"), 5);
+    auto book = fx.make_book(fx.id("bane_of_arthropods"), 4);
     auto [result, cost] = engine.forge(eq, book, fx.reg);
     {
         auto bid = static_cast<algorithm::Ench::value_type>(fx.id("bane_of_arthropods"));
@@ -171,10 +160,8 @@ TEST_CASE("test_forge_incompatible_rejected") {
     }
     {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
-        expect(
-            result.enchs.contains(sid) && result.enchs[sid] == 5,
-            "non-conflicting sharpness 5 should be preserved after incompatible forge"
-        );
+        expect(result.enchs.contains(sid) && result.enchs[sid] == 5,
+               "non-conflicting sharpness 5 should be preserved after incompatible forge");
     }
     expect(cost == 1, "incompatible penalty cost should be 1 (JE)");
     std::cout << "PASS: test_forge_incompatible_rejected (cost=" << cost << ")" << std::endl;
@@ -205,13 +192,13 @@ TEST_CASE("test_penalty_cost") {
 TEST_CASE("test_estimate_forge_cost") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-    auto eq     = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
-    auto book   = fx.make_book(fx.id("sharpness"), 5);
+    auto eq = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
+    auto book = fx.make_book(fx.id("sharpness"), 5);
     int32_t est = engine.estimate_forge_cost(eq, book, fx.reg);
     expect(est == 5, "estimate_forge_cost: equip+sharp5 should be 5");
 
     algorithm::Item eq_ppn{algorithm::ItemType::Equip, 1561, 2, {}};
-    auto book2   = fx.make_book(fx.id("knockback"), 2);
+    auto book2 = fx.make_book(fx.id("knockback"), 2);
     int32_t est2 = engine.estimate_forge_cost(eq_ppn, book2, fx.reg);
     expect(est2 == 5, "estimate_forge_cost: equip(ppn2)+knock2 should be 5");
     std::cout << "PASS: test_estimate_forge_cost" << std::endl;
@@ -223,17 +210,17 @@ TEST_CASE("test_be_forge_cost") {
     TestFixture fx;
     algorithm::ForgeConfig be_cfg;
     be_cfg.ignore_penalty_cost = false;
-    be_cfg.ignore_repair_cost  = false;
-    be_cfg.platform            = MCE::Bedrock;
+    be_cfg.ignore_repair_cost = false;
+    be_cfg.platform = MCE::Bedrock;
     algorithm::ForgeEngine be_engine{be_cfg};
     algorithm::ForgeConfig je_cfg;
     je_cfg.ignore_penalty_cost = false;
-    je_cfg.ignore_repair_cost  = false;
-    je_cfg.platform            = MCE::Java;
+    je_cfg.ignore_repair_cost = false;
+    je_cfg.platform = MCE::Java;
     algorithm::ForgeEngine je_engine{je_cfg};
 
-    auto eq                   = fx.make_equip(fx.id("sharpness"), 3);
-    auto book                 = fx.make_book(fx.id("sharpness"), 4);
+    auto eq = fx.make_equip(fx.id("sharpness"), 3);
+    auto book = fx.make_book(fx.id("sharpness"), 4);
     auto [be_result, be_cost] = be_engine.forge(eq, book, fx.reg);
     expect(be_cost == 1, "BE forge: sharpness 3+4 should cost 1");
 
@@ -246,17 +233,17 @@ TEST_CASE("test_be_conflict_cost") {
     TestFixture fx;
     algorithm::ForgeConfig be_cfg2;
     be_cfg2.ignore_penalty_cost = false;
-    be_cfg2.ignore_repair_cost  = false;
-    be_cfg2.platform            = MCE::Bedrock;
+    be_cfg2.ignore_repair_cost = false;
+    be_cfg2.platform = MCE::Bedrock;
     algorithm::ForgeEngine be_engine{be_cfg2};
     algorithm::ForgeConfig je_cfg2;
     je_cfg2.ignore_penalty_cost = false;
-    je_cfg2.ignore_repair_cost  = false;
-    je_cfg2.platform            = MCE::Java;
+    je_cfg2.ignore_repair_cost = false;
+    je_cfg2.platform = MCE::Java;
     algorithm::ForgeEngine je_engine{je_cfg2};
 
-    auto eq                   = fx.make_equip(fx.id("sharpness"), 5);
-    auto book                 = fx.make_book(fx.id("bane_of_arthropods"), 4);
+    auto eq = fx.make_equip(fx.id("sharpness"), 5);
+    auto book = fx.make_book(fx.id("bane_of_arthropods"), 4);
     auto [be_result, be_cost] = be_engine.forge(eq, book, fx.reg);
     expect(be_cost == 0, "BE forge: conflict should cost 0");
 
@@ -270,16 +257,16 @@ TEST_CASE("test_be_conflict_cost") {
 TEST_CASE("test_ppn_recalculation") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-    auto book_a         = fx.make_book(fx.id("sharpness"), 3);
-    book_a.ppn          = 0;
-    auto book_b         = fx.make_book(fx.id("knockback"), 2);
-    book_b.ppn          = 2;
+    auto book_a = fx.make_book(fx.id("sharpness"), 3);
+    book_a.ppn = 0;
+    auto book_b = fx.make_book(fx.id("knockback"), 2);
+    book_b.ppn = 2;
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
     expect(result.ppn == 3, "PPN after forge(0, 2) should be 3");
 
     algorithm::Item equip{algorithm::ItemType::Equip, 1561, 3, {}};
     auto book_c = fx.make_book(fx.id("sharpness"), 1);
-    book_c.ppn  = 0;
+    book_c.ppn = 0;
     (void)engine.forge_into(equip, book_c, fx.reg);
     expect(equip.ppn == 4, "PPN after equip(3)+book(0) should be 4");
     std::cout << "PASS: test_ppn_recalculation" << std::endl;
@@ -288,18 +275,16 @@ TEST_CASE("test_ppn_recalculation") {
 TEST_CASE("test_same_level_upgrade") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-    auto book_a         = fx.make_book(fx.id("sharpness"), 4);
-    auto book_b         = fx.make_book(fx.id("sharpness"), 4);
+    auto book_a = fx.make_book(fx.id("sharpness"), 4);
+    auto book_b = fx.make_book(fx.id("sharpness"), 4);
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
     {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
-        expect(
-            result.enchs.contains(sid) && result.enchs[sid] == 5,
-            "same level combine: 4+4 should become 5 (max_level of sharpness)"
-        );
+        expect(result.enchs.contains(sid) && result.enchs[sid] == 5,
+               "same level combine: 4+4 should become 5 (max_level of sharpness)");
     }
-    auto book_c           = fx.make_book(fx.id("sharpness"), 5);
-    auto book_d           = fx.make_book(fx.id("sharpness"), 5);
+    auto book_c = fx.make_book(fx.id("sharpness"), 5);
+    auto book_d = fx.make_book(fx.id("sharpness"), 5);
     auto [result2, cost2] = engine.forge(book_c, book_d, fx.reg);
     {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
@@ -311,8 +296,8 @@ TEST_CASE("test_same_level_upgrade") {
 TEST_CASE("test_different_level_max") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-    auto book_a         = fx.make_book(fx.id("sharpness"), 5);
-    auto book_b         = fx.make_book(fx.id("sharpness"), 3);
+    auto book_a = fx.make_book(fx.id("sharpness"), 5);
+    auto book_b = fx.make_book(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(book_a, book_b, fx.reg);
     {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
@@ -332,14 +317,12 @@ TEST_CASE("test_invalid_enchant_level_rejected") {
 
     // Forging with an empty book leaves the equipment unchanged
     algorithm::ForgeEngine engine;
-    auto eq             = fx.make_equip(fx.id("sharpness"), 3);
+    auto eq = fx.make_equip(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(eq, book, fx.reg);
     {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
-        expect(
-            result.enchs.contains(sid) && result.enchs[sid] == 3,
-            "book with rejected enchant should not reduce equipment's level"
-        );
+        expect(result.enchs.contains(sid) && result.enchs[sid] == 3,
+               "book with rejected enchant should not reduce equipment's level");
     }
     std::cout << "PASS: test_invalid_enchant_level_rejected (cost=" << cost << ")" << std::endl;
 }
@@ -352,14 +335,12 @@ TEST_CASE("test_zero_level_enchant_rejected") {
 
     // Forge book (empty) onto equipment → equipment unchanged
     algorithm::ForgeEngine engine;
-    auto eq             = fx.make_equip(fx.id("sharpness"), 3);
+    auto eq = fx.make_equip(fx.id("sharpness"), 3);
     auto [result, cost] = engine.forge(eq, book, fx.reg);
     {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
-        expect(
-            result.enchs.contains(sid) && result.enchs[sid] == 3,
-            "book with zero-level enchant should not affect equipment"
-        );
+        expect(result.enchs.contains(sid) && result.enchs[sid] == 3,
+               "book with zero-level enchant should not affect equipment");
     }
     std::cout << "PASS: test_zero_level_enchant_rejected (cost=" << cost << ")" << std::endl;
 }
@@ -376,8 +357,8 @@ TEST_CASE("test_penalty_cost_bounds") {
 TEST_CASE("test_is_forgeable_combinations") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
-    auto book        = fx.make_book(fx.id("sharpness"), 1);
-    auto book2       = fx.make_book(fx.id("sharpness"), 1);
+    auto book = fx.make_book(fx.id("sharpness"), 1);
+    auto book2 = fx.make_book(fx.id("sharpness"), 1);
     algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
     algorithm::Item eq2{algorithm::ItemType::Equip, 1561, 0, {}};
 
@@ -391,8 +372,8 @@ TEST_CASE("test_is_forgeable_combinations") {
 TEST_CASE("test_forge_into_repair_cost") {
     algorithm::ForgeConfig cfg;
     cfg.ignore_penalty_cost = false;
-    cfg.ignore_repair_cost  = false;
-    cfg.platform            = MCE::Java;
+    cfg.ignore_repair_cost = false;
+    cfg.platform = MCE::Java;
     algorithm::ForgeEngine engine{cfg};
 
     // equip (damaged) + equip sacrifice → +2 repair cost + durability increase
@@ -440,19 +421,18 @@ TEST_CASE("test_pure_forge_into") {
     algorithm::ForgeEngine engine;
 
     // book + book: same-level upgrade + ppn update (no cost arithmetic)
-    auto a   = fx.make_book(fx.id("sharpness"), 4);
-    a.ppn    = 0;
-    auto b   = fx.make_book(fx.id("sharpness"), 4);
-    b.ppn    = 1;
+    auto a = fx.make_book(fx.id("sharpness"), 4);
+    a.ppn = 0;
+    auto b = fx.make_book(fx.id("sharpness"), 4);
+    b.ppn = 1;
     engine.pure_forge_into(a, b, fx.reg);
     auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
-    expect(a.enchs.contains(sid) && a.enchs[sid] == 5,
-           "pure_forge: 4+4 should upgrade to 5");
+    expect(a.enchs.contains(sid) && a.enchs[sid] == 5, "pure_forge: 4+4 should upgrade to 5");
     expect(a.ppn == 2, "pure_forge: ppn(0,1) should become 2");
 
     // equip + equip: repair applied (durability increases), still cost-free
     algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
-    eq.dur  = 800;
+    eq.dur = 800;
     algorithm::Item eq2{algorithm::ItemType::Equip, 1561, 0, {}};
     eq2.dur = 100;
     engine.pure_forge_into(eq, eq2, fx.reg);
@@ -467,13 +447,12 @@ TEST_CASE("test_estimate_forge_cost_equip_sacrifice") {
     // Equipment sacrifice uses mul (not mul_b): knockback mul=2.
     algorithm::Item eq{algorithm::ItemType::Equip, 1561, 0, {}};
     algorithm::Item sac{algorithm::ItemType::Equip, 1561, 0, {}};
-    sac.enchs.insert(algorithm::Ench{
-        static_cast<algorithm::Ench::value_type>(fx.id("knockback")), 2});
+    sac.enchs.insert(algorithm::Ench{static_cast<algorithm::Ench::value_type>(fx.id("knockback")), 2});
     int32_t est = engine.estimate_forge_cost(eq, sac, fx.reg);
     expect(est == 4, "estimate equip-sacrifice: knockback 2 × mul(2) = 4");
 
     // Book sacrifice uses mul_b (knockback mul_b = 1) — discriminates the path
-    auto book      = fx.make_book(fx.id("knockback"), 2);
+    auto book = fx.make_book(fx.id("knockback"), 2);
     int32_t est_bk = engine.estimate_forge_cost(eq, book, fx.reg);
     expect(est_bk == 2, "estimate book-sacrifice: knockback 2 × mul_b(1) = 2");
     TEST_PASS("estimate_forge_cost equipment sacrifice");

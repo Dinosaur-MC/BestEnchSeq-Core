@@ -1,32 +1,24 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
-#include "domain/interface/cli/ItemParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/interface/cli/ItemParser.h"
+#include "framework/test_framework.h"
 
 // ============================================================================
 // Helper: minimal registries
 // ============================================================================
 static EquipmentRegistry make_eq_reg() {
     EquipmentRegistry reg;
-    reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
-                         NSID("#minecraft:sword"), 1561});
-    reg.insert(Equipment{NSID("minecraft:netherite_helmet"), "Netherite Helmet",
-                         NSID("#minecraft:helmet"), 407});
+    reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561});
+    reg.insert(Equipment{NSID("minecraft:netherite_helmet"), "Netherite Helmet", NSID("#minecraft:helmet"), 407});
     return reg;
 }
 
 static EnchantmentRegistry make_ench_reg() {
     EnchantmentRegistry reg;
-    reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness",
-                        MCE::All, 5, 5, 1, false, {},
-                        {NSID("#minecraft:sword")}});
-    reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback",
-                        MCE::All, 2, 2, 2, false, {},
-                        {NSID("#minecraft:sword")}});
-    reg.insert(EnchInfo{NSID("minecraft:protection"), "Protection",
-                        MCE::All, 4, 4, 1, false, {},
-                        {NSID("#minecraft:helmet")}});
+    reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:sword")}});
+    reg.insert(EnchInfo{NSID("minecraft:knockback"), "Knockback", MCE::All, 2, 2, 2, false, {}, {NSID("#minecraft:sword")}});
+    reg.insert(EnchInfo{NSID("minecraft:protection"), "Protection", MCE::All, 4, 4, 1, false, {}, {NSID("#minecraft:helmet")}});
     return reg;
 }
 
@@ -38,8 +30,7 @@ TEST_CASE("test_item_parser_bare") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword", ench_reg, eq_reg);
-    expect(result.id.str() == "minecraft:diamond_sword",
-           "id should be diamond_sword");
+    expect(result.id.str() == "minecraft:diamond_sword", "id should be diamond_sword");
     expect(result.enchantments.empty(), "no enchantments");
     expect(result.prior_penalty == 0, "default prior_penalty should be 0");
     expect(result.durability == 1561, "default durability = max_durability 1561");
@@ -49,8 +40,7 @@ TEST_CASE("test_item_parser_bare") {
 TEST_CASE("test_item_parser_with_enchants") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]", ench_reg, eq_reg);
     expect(!result.id.str().empty(), "id should be set");
     expect(result.enchantments.size() == 2, "should have 2 enchants");
     expect(result.prior_penalty == 0, "default prior_penalty");
@@ -106,14 +96,12 @@ TEST_CASE("test_item_parser_uppercase_maps_to_unknown") {
     auto ench_reg = make_ench_reg();
     bool threw = false;
     try {
-        ItemParser::parse("Diamond_Sword", ench_reg, eq_reg);  // uppercase → invalid NSID
+        ItemParser::parse("Diamond_Sword", ench_reg, eq_reg); // uppercase → invalid NSID
     } catch (const std::exception& e) {
         threw = true;
         std::string msg(e.what());
-        expect(msg.find("The NSID") == std::string::npos,
-               "raw NSID validator text must not surface");
-        expect(msg.find("cli.err.unknown_equipment") != std::string::npos ||
-                   msg.find("Unknown equipment") != std::string::npos,
+        expect(msg.find("The NSID") == std::string::npos, "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_equipment") != std::string::npos || msg.find("Unknown equipment") != std::string::npos,
                "uppercase equipment id maps to friendly unknown-equipment error");
     }
     expect(threw, "uppercase equipment id should throw");
@@ -125,14 +113,12 @@ TEST_CASE("test_item_parser_dot_segment_maps_to_unknown") {
     auto ench_reg = make_ench_reg();
     bool threw = false;
     try {
-        ItemParser::parse("minecraft:..", ench_reg, eq_reg);  // `..` segment → invalid NSID
+        ItemParser::parse("minecraft:..", ench_reg, eq_reg); // `..` segment → invalid NSID
     } catch (const std::exception& e) {
         threw = true;
         std::string msg(e.what());
-        expect(msg.find("The NSID") == std::string::npos,
-               "raw NSID validator text must not surface");
-        expect(msg.find("cli.err.unknown_equipment") != std::string::npos ||
-                   msg.find("Unknown equipment") != std::string::npos,
+        expect(msg.find("The NSID") == std::string::npos, "raw NSID validator text must not surface");
+        expect(msg.find("cli.err.unknown_equipment") != std::string::npos || msg.find("Unknown equipment") != std::string::npos,
                "dot-segment equipment id maps to friendly unknown-equipment error");
     }
     expect(threw, "dot-segment equipment id should throw");
@@ -146,8 +132,7 @@ TEST_CASE("test_item_parser_dot_segment_maps_to_unknown") {
 TEST_CASE("test_item_parser_prior_penalty") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("diamond_sword{prior_penalty:3}",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword{prior_penalty:3}", ench_reg, eq_reg);
     expect(result.prior_penalty == 3, "prior_penalty should be 3");
     expect(result.durability == 1561, "durability defaults to max_durability");
     expect(result.enchantments.empty(), "no enchants");
@@ -161,8 +146,7 @@ TEST_CASE("test_item_parser_prior_penalty") {
 TEST_CASE("test_item_parser_durability_explicit") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("diamond_sword{durability:500}",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword{durability:500}", ench_reg, eq_reg);
     expect(result.durability == 500, "explicit durability override");
     expect(result.prior_penalty == 0, "prior_penalty default");
     TEST_PASS("test_item_parser_durability_explicit");
@@ -194,8 +178,7 @@ TEST_CASE("test_item_parser_durability_exceeds_max_throws") {
 TEST_CASE("test_item_parser_durability_at_max_ok") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("diamond_sword{durability:1561}",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword{durability:1561}", ench_reg, eq_reg);
     expect(result.durability == 1561, "durability at max is allowed");
     TEST_PASS("test_item_parser_durability_at_max_ok");
 }
@@ -203,8 +186,7 @@ TEST_CASE("test_item_parser_durability_at_max_ok") {
 TEST_CASE("test_item_parser_durability_zero_allowed") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("diamond_sword{durability:0}",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword{durability:0}", ench_reg, eq_reg);
     expect(result.durability == 0, "durability 0 is allowed");
     TEST_PASS("test_item_parser_durability_zero_allowed");
 }
@@ -216,9 +198,7 @@ TEST_CASE("test_item_parser_durability_zero_allowed") {
 TEST_CASE("test_item_parser_both_properties") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse(
-        "diamond_sword[sharpness=5]{prior_penalty:2,durability:1000}",
-        ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword[sharpness=5]{prior_penalty:2,durability:1000}", ench_reg, eq_reg);
     expect(result.enchantments.size() == 1, "one enchant");
     expect(result.prior_penalty == 2, "prior_penalty should be 2");
     expect(result.durability == 1000, "durability should be 1000");
@@ -228,9 +208,7 @@ TEST_CASE("test_item_parser_both_properties") {
 TEST_CASE("test_item_parser_properties_only") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse(
-        "diamond_sword{prior_penalty:1,durability:250}",
-        ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword{prior_penalty:1,durability:250}", ench_reg, eq_reg);
     expect(result.enchantments.empty(), "no enchants");
     expect(result.prior_penalty == 1, "prior_penalty should be 1");
     expect(result.durability == 250, "durability should be 250");
@@ -320,8 +298,7 @@ TEST_CASE("test_item_parser_prior_penalty_overflow_throws") {
 TEST_CASE("test_item_parser_prior_penalty_at_max_ok") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("diamond_sword{prior_penalty:255}",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("diamond_sword{prior_penalty:255}", ench_reg, eq_reg);
     expect(result.prior_penalty == 255, "prior_penalty at max 255 is allowed");
     TEST_PASS("test_item_parser_prior_penalty_at_max_ok");
 }
@@ -336,8 +313,7 @@ TEST_CASE("test_item_parser_book_bare") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("book", ench_reg, eq_reg);
-    expect(result.id.str() == "minecraft:enchanted_book",
-           "plain book normalises to enchanted_book");
+    expect(result.id.str() == "minecraft:enchanted_book", "plain book normalises to enchanted_book");
     expect(result.is_book(), "should be flagged as book");
     expect(result.enchantments.empty(), "no enchantments");
     expect(result.durability == 0, "books have no durability");
@@ -349,8 +325,7 @@ TEST_CASE("test_item_parser_book_with_enchants") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("book[sharpness=5]", ench_reg, eq_reg);
-    expect(result.id.str() == "minecraft:enchanted_book",
-           "book normalises to enchanted_book when enchanted");
+    expect(result.id.str() == "minecraft:enchanted_book", "book normalises to enchanted_book when enchanted");
     expect(result.is_book(), "should be flagged as book");
     expect(result.enchantments.size() == 1, "one enchant");
     expect(result.durability == 0, "books have no durability");
@@ -361,8 +336,7 @@ TEST_CASE("test_item_parser_enchanted_book_direct") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("enchanted_book[sharpness=5]", ench_reg, eq_reg);
-    expect(result.id.str() == "minecraft:enchanted_book",
-           "enchanted_book id preserved");
+    expect(result.id.str() == "minecraft:enchanted_book", "enchanted_book id preserved");
     expect(result.is_book(), "should be flagged as book");
     expect(result.enchantments.size() == 1, "one enchant");
     expect(result.durability == 0, "books have no durability");
@@ -372,8 +346,7 @@ TEST_CASE("test_item_parser_enchanted_book_direct") {
 TEST_CASE("test_item_parser_book_namespaced") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("minecraft:enchanted_book[sharpness=5]",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("minecraft:enchanted_book[sharpness=5]", ench_reg, eq_reg);
     expect(result.id.str() == "minecraft:enchanted_book", "namespaced book ok");
     expect(result.is_book(), "should be flagged as book");
     TEST_PASS("test_item_parser_book_namespaced");
@@ -382,8 +355,7 @@ TEST_CASE("test_item_parser_book_namespaced") {
 TEST_CASE("test_item_parser_book_prior_penalty_ok") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
-    auto result = ItemParser::parse("enchanted_book[sharpness=5]{prior_penalty:2}",
-                                    ench_reg, eq_reg);
+    auto result = ItemParser::parse("enchanted_book[sharpness=5]{prior_penalty:2}", ench_reg, eq_reg);
     expect(result.prior_penalty == 2, "books carry prior penalty");
     expect(result.durability == 0, "books have no durability");
     TEST_PASS("test_item_parser_book_prior_penalty_ok");

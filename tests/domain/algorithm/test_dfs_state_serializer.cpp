@@ -1,7 +1,7 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
-#include "dfs/DFSStateSerializer.h"
 #include "dfs/DFSAlgorithm.h"
+#include "dfs/DFSStateSerializer.h"
+#include "framework/test_framework.h"
 #include <memory>
 #include <span>
 using namespace algorithm;

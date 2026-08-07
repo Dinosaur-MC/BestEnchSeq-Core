@@ -33,7 +33,8 @@ TEST_CASE("skip: conditional") {
 }
 
 TEST_CASE_TIMEOUT("timeout: infinite loop", 1) {
-    for (;;);  // 忙循环：验证杀线程路径（async cancel / TerminateThread）
+    for (;;)
+        ; // 忙循环：验证杀线程路径（async cancel / TerminateThread）
 }
 
 TEST_CASE_TIMEOUT("timeout: deadlock", 1) {

@@ -1,14 +1,13 @@
 #define BESQ_TEST_MAIN
-#include "framework/test_framework.h"
 #include "domain/algorithm/registries/EnchReg.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/EnchSet.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
-#include "domain/algorithm/types/EnchSet.h"
-#include "domain/algorithm/types/Enchantment.h"
+#include "framework/test_framework.h"
 #include <algorithm>
 #include <stdexcept>
-#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -20,30 +19,14 @@ struct TestFixture {
 
     TestFixture() {
         enchants = EnchantmentRegistry({
-            {
-                NSID("sharpness"), "Sharpness", MCE::All, 5, 5,
-                1, false,
-                std::unordered_set<NSID>{},
-                std::unordered_set<NSID>{EquipmentTag::sword()}
-            },
-            {
-                NSID("knockback"), "Knockback", MCE::All, 2, 2,
-                2, false,
-                std::unordered_set<NSID>{},
-                std::unordered_set<NSID>{EquipmentTag::sword()}
-            },
-            {
-                NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5,
-                1, false,
-                std::unordered_set<NSID>{NSID("sharpness")},
-                std::unordered_set<NSID>{EquipmentTag::sword()}
-            },
-            {
-                NSID("protection"), "Protection", MCE::All, 4, 4,
-                1, false,
-                std::unordered_set<NSID>{},
-                std::unordered_set<NSID>{EquipmentTag::chestplate()}
-            },
+            {NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{},
+             std::unordered_set<NSID>{EquipmentTag::sword()}},
+            {NSID("knockback"), "Knockback", MCE::All, 2, 2, 2, false, std::unordered_set<NSID>{},
+             std::unordered_set<NSID>{EquipmentTag::sword()}},
+            {NSID("bane_of_arthropods"), "Bane of Arthropods", MCE::All, 5, 5, 1, false,
+             std::unordered_set<NSID>{NSID("sharpness")}, std::unordered_set<NSID>{EquipmentTag::sword()}},
+            {NSID("protection"), "Protection", MCE::All, 4, 4, 1, false, std::unordered_set<NSID>{},
+             std::unordered_set<NSID>{EquipmentTag::chestplate()}},
         });
 
         algorithm::Equipment target_equip;
@@ -56,7 +39,7 @@ struct TestFixture {
         for (const auto& [nsid, info] : enchants.data())
             sorted_enchs.emplace_back(nsid, info);
         std::sort(sorted_enchs.begin(), sorted_enchs.end(),
-            [](const auto& a, const auto& b) { return a.first.str() < b.first.str(); });
+                  [](const auto& a, const auto& b) { return a.first.str() < b.first.str(); });
 
         std::vector<algorithm::EnchInfo> compact_infos;
         std::vector<NSID> global_ids;
@@ -98,8 +81,7 @@ TEST_CASE("test_basic_init_and_size") {
     TestFixture fx;
 
     expect(fx.reg.size() == 4, "size: should have 4 enchantments");
-    expect(fx.reg.get_target_equip().id == NSID("test"),
-           "target: should be equipment id test");
+    expect(fx.reg.get_target_equip().id == NSID("test"), "target: should be equipment id test");
 
     std::cout << "PASS: test_basic_init_and_size" << std::endl;
 }
@@ -210,10 +192,8 @@ TEST_CASE("test_enchset_mutable_iterator_write") {
     expect(h1 == h2, "hash should be consistent after mutation");
 
     // Verify find still works after mutation
-    expect(set.contains(2) && set[2] == 4,
-           "find(2) should return updated level 4");
-    expect(set.contains(0) && set[0] == 5,
-           "find(0) should return unchanged level 5");
+    expect(set.contains(2) && set[2] == 4, "find(2) should return updated level 4");
+    expect(set.contains(0) && set[0] == 5, "find(0) should return unchanged level 5");
 
     std::cout << "PASS: test_enchset_mutable_iterator_write" << std::endl;
 }
@@ -232,8 +212,7 @@ TEST_CASE("test_enchset_empty_and_single") {
 
     single.insert({3, 2});
     expect(single.size() == 1, "enchset single: update same id, size still 1");
-    expect(single.contains(3) && single[3] == 2,
-           "enchset single: find(3) level updated to 2");
+    expect(single.contains(3) && single[3] == 2, "enchset single: find(3) level updated to 2");
 
     std::cout << "PASS: test_enchset_empty_and_single" << std::endl;
 }

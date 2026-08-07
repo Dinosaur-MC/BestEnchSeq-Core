@@ -1,15 +1,15 @@
 #define BESQ_TEST_MAIN
 
-#include "framework/test_framework.h"
-#include "domain/algorithm/IAlgorithm.h"
-#include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
-#include "domain/algorithm/types/Item.h"
+#include "domain/algorithm/AlgorithmExecutor.h"
+#include "domain/algorithm/diagnostics/ProgressStatus.h"
+#include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
-#include "domain/algorithm/diagnostics/ProgressStatus.h"
+#include "domain/algorithm/types/Item.h"
+#include "framework/test_framework.h"
 #include <chrono>
 #include <stdexcept>
 #include <thread>
@@ -24,13 +24,14 @@ static AlgorithmInput g_test_input;
 namespace {
 struct TestForgeEngine : IForgeEngine {
     ForgeConfig _cfg;
-    const ForgeConfig &get_config() const noexcept override { return _cfg; }
-    void set_config(const ForgeConfig &c) noexcept override { _cfg = c; }
-    int32_t forge_into(Item &, const Item &, const EnchReg &) const override { return 0; }
-    std::pair<Item, int32_t> forge(const Item &t, const Item &s, const EnchReg &r) const override {
-        Item c = t; return {std::move(c), forge_into(c, s, r)};
+    const ForgeConfig& get_config() const noexcept override { return _cfg; }
+    void set_config(const ForgeConfig& c) noexcept override { _cfg = c; }
+    int32_t forge_into(Item&, const Item&, const EnchReg&) const override { return 0; }
+    std::pair<Item, int32_t> forge(const Item& t, const Item& s, const EnchReg& r) const override {
+        Item c = t;
+        return {std::move(c), forge_into(c, s, r)};
     }
-    bool is_forgeable(const Item &, const Item &) const noexcept override { return true; }
+    bool is_forgeable(const Item&, const Item&) const noexcept override { return true; }
 };
 } // namespace
 
@@ -39,13 +40,12 @@ public:
     std::string_view name() const noexcept override { return "test"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0; }
-    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
-        return std::make_unique<TestForgeEngine>();
-    }
+    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override { return std::make_unique<TestForgeEngine>(); }
 
-    void execute(const AlgorithmInput &, ExecutionContext& ctx) override {
+    void execute(const AlgorithmInput&, ExecutionContext& ctx) override {
         for (int i = 0; i < 5; i++) {
-            if (ctx.is_cancelled()) return;
+            if (ctx.is_cancelled())
+                return;
             ctx.wait_if_paused();
             ctx.report_progress(static_cast<uint8_t>((i + 1) * 20), ProgressStatus::Exploring);
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -61,13 +61,12 @@ public:
     std::string_view name() const noexcept override { return "slow"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0; }
-    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
-        return std::make_unique<TestForgeEngine>();
-    }
+    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override { return std::make_unique<TestForgeEngine>(); }
 
-    void execute(const AlgorithmInput &, ExecutionContext& ctx) override {
+    void execute(const AlgorithmInput&, ExecutionContext& ctx) override {
         for (int i = 0; i < 20; i++) {
-            if (ctx.is_cancelled()) return;
+            if (ctx.is_cancelled())
+                return;
             ctx.wait_if_paused();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
@@ -81,13 +80,9 @@ public:
     std::string_view name() const noexcept override { return "throwing"; }
     std::string_view version() const noexcept override { return "1.0.0"; }
     double evaluate(int16_t) const noexcept override { return 0; }
-    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override {
-        return std::make_unique<TestForgeEngine>();
-    }
+    std::unique_ptr<IForgeEngine> get_forge_engine() const noexcept override { return std::make_unique<TestForgeEngine>(); }
 
-    void execute(const AlgorithmInput &, ExecutionContext&) override {
-        throw std::runtime_error("simulated failure");
-    }
+    void execute(const AlgorithmInput&, ExecutionContext&) override { throw std::runtime_error("simulated failure"); }
 };
 
 // ─── Tests ───
@@ -165,8 +160,7 @@ void test_reset_refuses_while_running() {
     executor.start(g_test_input);
     // Poll until actually Running, then reset() must refuse.
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (executor.state() != AlgorithmState::Running &&
-           std::chrono::steady_clock::now() < deadline)
+    while (executor.state() != AlgorithmState::Running && std::chrono::steady_clock::now() < deadline)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     expect(executor.state() == AlgorithmState::Running, "should be Running");
     expect(executor.reset() == false, "reset() while Running refused");
@@ -182,8 +176,7 @@ void test_executor_cancel() {
 
     // Poll until executor is actually running
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (executor.state() != AlgorithmState::Running &&
-           std::chrono::steady_clock::now() < deadline)
+    while (executor.state() != AlgorithmState::Running && std::chrono::steady_clock::now() < deadline)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     expect(executor.state() == AlgorithmState::Running, "should be Running after start");
 
@@ -203,8 +196,7 @@ void test_executor_pause_resume() {
 
     // Poll until executor is running
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (executor.state() != AlgorithmState::Running &&
-           std::chrono::steady_clock::now() < deadline)
+    while (executor.state() != AlgorithmState::Running && std::chrono::steady_clock::now() < deadline)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     executor.pause();
@@ -228,13 +220,11 @@ void test_cancel_before_start_noop() {
 
     // cancel() before start() must not brick the executor — stays Idle
     executor.cancel();
-    expect(executor.state() == AlgorithmState::Idle,
-           "state should stay Idle after pre-start cancel()");
+    expect(executor.state() == AlgorithmState::Idle, "state should stay Idle after pre-start cancel()");
 
     executor.start(g_test_input);
     executor.wait();
-    expect(executor.state() == AlgorithmState::Completed,
-           "executor should still run after pre-start cancel()");
+    expect(executor.state() == AlgorithmState::Completed, "executor should still run after pre-start cancel()");
     std::cout << "PASS: test_cancel_before_start_noop" << std::endl;
 }
 
@@ -245,13 +235,11 @@ void test_pause_resume_before_start_noop() {
     // pause()/resume() before start() must be safe no-ops (no null deref)
     executor.pause();
     executor.resume();
-    expect(executor.state() == AlgorithmState::Idle,
-           "state should stay Idle after pre-start pause/resume");
+    expect(executor.state() == AlgorithmState::Idle, "state should stay Idle after pre-start pause/resume");
 
     executor.start(g_test_input);
     executor.wait();
-    expect(executor.state() == AlgorithmState::Completed,
-           "executor should still run after pre-start pause/resume");
+    expect(executor.state() == AlgorithmState::Completed, "executor should still run after pre-start pause/resume");
     std::cout << "PASS: test_pause_resume_before_start_noop" << std::endl;
 }
 
@@ -316,10 +304,8 @@ void test_executor_throwing_algorithm() {
     executor.start(g_test_input);
 
     auto final_state = executor.wait();
-    expect(final_state == AlgorithmState::Failed,
-           "throwing algorithm should result in Failed state");
-    expect(executor.state() == AlgorithmState::Failed,
-           "state should be Failed after throwing algorithm");
+    expect(final_state == AlgorithmState::Failed, "throwing algorithm should result in Failed state");
+    expect(executor.state() == AlgorithmState::Failed, "state should be Failed after throwing algorithm");
     std::cout << "PASS: test_executor_throwing_algorithm" << std::endl;
 }
 
@@ -330,20 +316,19 @@ void test_executor_throwing_algorithm() {
 // rather than bailing to "no solution" instantly.
 
 namespace {
-AlgorithmInput make_direct_input(int n, uint8_t max_lvl, uint8_t level,
-                                 std::chrono::milliseconds timeout) {
+AlgorithmInput make_direct_input(int n, uint8_t max_lvl, uint8_t level, std::chrono::milliseconds timeout) {
     std::vector<EnchInfo> infos(static_cast<size_t>(n));
     for (int i = 0; i < n; ++i) {
-        infos[static_cast<size_t>(i)].id         = static_cast<uint8_t>(i);
-        infos[static_cast<size_t>(i)].mul        = 1;
-        infos[static_cast<size_t>(i)].mul_b      = 1;
-        infos[static_cast<size_t>(i)].max_lvl    = max_lvl;
-        infos[static_cast<size_t>(i)].exc_mask   = 0;
+        infos[static_cast<size_t>(i)].id = static_cast<uint8_t>(i);
+        infos[static_cast<size_t>(i)].mul = 1;
+        infos[static_cast<size_t>(i)].mul_b = 1;
+        infos[static_cast<size_t>(i)].max_lvl = max_lvl;
+        infos[static_cast<size_t>(i)].exc_mask = 0;
         infos[static_cast<size_t>(i)].applicable = true;
     }
 
     Equipment eq;
-    eq.id             = NSID("test");
+    eq.id = NSID("test");
     eq.max_durability = 1561;
     for (int i = 0; i < n; ++i)
         eq.applicable_enchs.insert(static_cast<uint8_t>(i));
@@ -354,8 +339,8 @@ AlgorithmInput make_direct_input(int n, uint8_t max_lvl, uint8_t level,
         global_ids.emplace_back(std::string("ench_") + std::to_string(i));
 
     AlgorithmInput input;
-    input.config.forge.platform         = MCE::Java;
-    input.config.mode                   = AlgorithmMode::direct;
+    input.config.forge.platform = MCE::Java;
+    input.config.mode = AlgorithmMode::direct;
     input.config.search.max_search_time = timeout;
     input.registry.init(std::move(infos), std::move(global_ids), eq);
     input.data = DirectPayload{};
@@ -371,8 +356,7 @@ AlgorithmInput make_large_direct_input() {
     // search runs until the 200ms Executor timeout cancels it.  The
     // stoppable parallel_for makes the post-cancel drain prompt even at this
     // size (previously ~4 minutes of unwinding the 2^26 mask range).
-    return make_direct_input(26, /*max_lvl=*/5, /*level=*/5,
-                             std::chrono::milliseconds(200));
+    return make_direct_input(26, /*max_lvl=*/5, /*level=*/5, std::chrono::milliseconds(200));
 }
 
 // A REACHABLE input that completes quickly, proving dp_merge still finds real
@@ -381,7 +365,7 @@ AlgorithmInput make_large_direct_input() {
 // Pareto pruning, so even n=15 takes ~3 minutes of exact DP.
 AlgorithmInput make_reachable_large_input() {
     return make_direct_input(9, /*max_lvl=*/1, /*level=*/1,
-                             std::chrono::milliseconds(0));  // unlimited
+                             std::chrono::milliseconds(0)); // unlimited
 }
 } // anonymous namespace
 
@@ -391,10 +375,8 @@ void test_dp_merge_large_n_timeout_cancel() {
 
     auto final_state = executor.wait();
     auto out = executor.output();
-    expect(final_state == AlgorithmState::Cancelled,
-           "dp_merge with >20 items should be cancellable mid-search");
-    expect(executor.output().solutions.empty(),
-           "a cancelled dp_merge search should not produce a fake solution");
+    expect(final_state == AlgorithmState::Cancelled, "dp_merge with >20 items should be cancellable mid-search");
+    expect(executor.output().solutions.empty(), "a cancelled dp_merge search should not produce a fake solution");
     std::cout << "PASS: test_dp_merge_large_n_timeout_cancel" << std::endl;
 }
 
@@ -404,10 +386,8 @@ void test_dp_merge_large_n_completes() {
 
     auto final_state = executor.wait();
     auto out = executor.output();
-    expect(final_state == AlgorithmState::Completed,
-           "dp_merge with a reachable input should complete with a solution");
-    expect(!out.solutions.empty(),
-           "dp_merge large-N solution should be non-empty");
+    expect(final_state == AlgorithmState::Completed, "dp_merge with a reachable input should complete with a solution");
+    expect(!out.solutions.empty(), "dp_merge large-N solution should be non-empty");
     std::cout << "PASS: test_dp_merge_large_n_completes" << std::endl;
 }
 
@@ -428,21 +408,21 @@ void test_timeout_with_slow_algorithm() {
 
 TEST_CASE("test_algorithm_executor") {
     test_constructor_null();
-        test_initial_state();
-        test_executor_lifecycle();
-        test_double_start();
-        test_reset_and_rerun();
-        test_reset_refuses_while_running();
-        test_executor_cancel();
-        test_executor_pause_resume();
-        test_cancel_before_start_noop();
-        test_pause_resume_before_start_noop();
-        test_executor_progress();
-        test_output_not_valid_before_completion();
-        test_output_has_steps_after_completion();
-        test_serialization_stubs();
-        test_executor_throwing_algorithm();
-        test_timeout_with_slow_algorithm();
-        test_dp_merge_large_n_completes();
-        test_dp_merge_large_n_timeout_cancel();
+    test_initial_state();
+    test_executor_lifecycle();
+    test_double_start();
+    test_reset_and_rerun();
+    test_reset_refuses_while_running();
+    test_executor_cancel();
+    test_executor_pause_resume();
+    test_cancel_before_start_noop();
+    test_pause_resume_before_start_noop();
+    test_executor_progress();
+    test_output_not_valid_before_completion();
+    test_output_has_steps_after_completion();
+    test_serialization_stubs();
+    test_executor_throwing_algorithm();
+    test_timeout_with_slow_algorithm();
+    test_dp_merge_large_n_completes();
+    test_dp_merge_large_n_timeout_cancel();
 }
