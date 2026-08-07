@@ -14,10 +14,18 @@
 #include <thread>
 #include <vector>
 #ifdef _WIN32
+// NOMINMAX + #undef：本头被每个测试文件首个 include，windows.h 的 min/max
+// 函数宏会泄漏进所有后续头（std::max/std::numeric_limits::max 全被砸）——
+// 本次事故即因此（fix(test): windows.h 宏泄漏）。
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#undef min
+#undef max
 #else
 #include <pthread.h>
 #endif
