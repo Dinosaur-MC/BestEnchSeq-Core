@@ -479,9 +479,17 @@ inline const char* status_name(RunStatus s) {
     return "failed";
 }
 
+/// 多次运行的 Executor 内置 computation_time 中位数（用户指示：以 Executor
+/// 计时为基准指标，2026-08-07）。
+inline int64_t comp_median_ms(std::vector<int64_t>& comps) {
+    std::sort(comps.begin(), comps.end());
+    return comps[comps.size() / 2];
+}
+
 /// 单次算法运行的完整记录（JSON 输出行；文本输出行保持字节兼容——
-/// bench_report.py 的回退解析只认 ✅/SKIP/no solution 行，wall 行与
-/// note 行均不与其正则碰撞）。
+/// bench_report.py 的回退解析只认 ✅/SKIP/no solution 行，note 行不与其
+/// 正则碰撞）。计时以 Executor 内置 computation_time 为基准（用户指示，
+/// 2026-08-07）：wall-clock 含线程 spawn/join 开销，非算法真实耗时。
 struct JsonRow {
     std::string dataset;    // 展示名（bench_report 回退解析的 dataset key 同源）
     int ench_count = 0;
@@ -489,8 +497,7 @@ struct JsonRow {
     std::string algo;
     RunStatus status = RunStatus::Failed;
     int L = 0;              // ok 时的总成本（print_result 同源）
-    int64_t comp_ms = 0;    // ok 时的算法内部计算时间
-    bench::Stats wall;      // harness 墙钟统计（每次迭代都跑；1 次时 median=单次）
+    int64_t comp_ms = 0;    // ok 时的 Executor 内置计算时间（最后一次迭代）
     std::string note;       // skip 原因 / failed 错误消息
 };
 
@@ -672,7 +679,7 @@ void run_case(const TestCase& tc, const Profile& profile,
                 std::cout << "no such algorithm" << std::endl;
                 rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                                 tc.max_cost, main_name, RunStatus::Failed, 0, 0,
-                                {}, "no such algorithm"});
+                                "no such algorithm"});
                 continue;
             }
             if (should_skip(*main_algo, static_cast<int>(tc.wanted.size()),
@@ -683,19 +690,21 @@ void run_case(const TestCase& tc, const Profile& profile,
                 std::cout << note << std::endl;
                 rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                                 tc.max_cost, main_name, RunStatus::Skip, 0, 0,
-                                {}, note});
+                                note});
                 continue;
             }
             try {
-                // 链式（warmup+main）：wall 计时包裹整段执行。
+                // 链式（warmup+main）：计时以 Executor 内置 computation_time
+                // 为基准（用户指示，2026-08-07——wall-clock 含线程 spawn/join
+                // 开销，非算法真实耗时）。warmup 恒 0：算法确定性、首轮即预热。
                 AlgoRunResult last;
+                std::vector<int64_t> comps;  // 每次迭代的 Executor 计时（ms）
                 bench::Case bc{main_name,
                                [&] {
+                                   last = {RunStatus::Failed, std::nullopt};
                                    auto a = loader.create(main_name);
-                                   if (!a) {
-                                       last = {RunStatus::Failed, std::nullopt};
+                                   if (!a)
                                        return;
-                                   }
                                    algorithm::AlgorithmExecutor ex(std::move(a));
                                    algorithm::AlgorithmInput ri = algo_input;
                                    ex.start(std::move(ri),
@@ -717,12 +726,14 @@ void run_case(const TestCase& tc, const Profile& profile,
                                            last = {RunStatus::Failed, std::nullopt};
                                            break;
                                    }
+                                   if (last.status == RunStatus::Ok && last.out)
+                                       comps.push_back(last.out->computation_time.count());
                                },
                                {}, {}, iterations};
-                const int eff_warmup = iterations > 1 ? warmup : 0;
-                const auto st = bench::run_case(bc, iterations, eff_warmup);
+                bench::run_case(bc, iterations, 0);
                 // 先完成算法前缀行（bench_report 解析 `<algo> <L>L ✅ <ms>ms`
-                // 整行结构），再输出独立 wall 行（不与报告正则碰撞）。
+                // 整行结构）；iterations > 1 时追加 comp 中位数行（Executor
+                // 计时聚合，不与报告正则碰撞）。
                 int64_t comp_ms = 0;
                 if (last.status == RunStatus::Ok && last.out &&
                     !last.out->solutions.empty()) {
@@ -731,22 +742,21 @@ void run_case(const TestCase& tc, const Profile& profile,
                 } else {
                     std::cout << "no solution" << std::endl;
                 }
-                std::cout << "    " << main_name << " wall median "
-                          << bench::fmt_dur(st.median_ns) << "  p95 "
-                          << bench::fmt_dur(st.p95_ns) << "  best "
-                          << bench::fmt_dur(st.best_ns) << "  ("
-                          << st.iterations << " iters)" << std::endl;
+                if (iterations > 1 && !comps.empty())
+                    std::cout << "    " << main_name << " comp median "
+                              << comp_median_ms(comps) << "ms (" << comps.size()
+                              << " iters)" << std::endl;
                 rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                                 tc.max_cost, main_name, last.status,
                                 last.out && !last.out->solutions.empty()
                                     ? last.out->solutions[0].total_cost
                                     : 0,
-                                comp_ms, st, {}});
+                                comp_ms, {}});
             } catch (const std::exception& e) {
                 std::cout << "ERROR: " << e.what() << std::endl;
                 rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                                 tc.max_cost, main_name, RunStatus::Failed, 0, 0,
-                                {}, e.what()});
+                                e.what()});
             }
             continue;
         }
@@ -756,7 +766,7 @@ void run_case(const TestCase& tc, const Profile& profile,
             std::cout << "no such algorithm" << std::endl;
             rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                             tc.max_cost, algo_name, RunStatus::Failed, 0, 0,
-                            {}, "no such algorithm"});
+                            "no such algorithm"});
             continue;
         }
         if (should_skip(*algo, static_cast<int>(tc.wanted.size()), tier, no_skip)) {
@@ -766,21 +776,26 @@ void run_case(const TestCase& tc, const Profile& profile,
             std::cout << note << std::endl;
             rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                             tc.max_cost, algo_name, RunStatus::Skip, 0, 0,
-                            {}, note});
+                            note});
             continue;
         }
         try {
-            // wall 计时（harness 统一方法论）：单次 = 旧行为 + wall 行；
-            // iterations > 1 = median/p95/best 统计。print_result 行保持
-            // 字节兼容（bench_report.py 依赖其格式）。
+            // 计时以 Executor 内置 computation_time 为基准（用户指示，
+            // 2026-08-07——wall-clock 含线程 spawn/join 开销，非算法真实
+            // 耗时）。warmup 恒 0；iterations > 1 时聚合 comp 中位数。
             AlgoRunResult last;
+            std::vector<int64_t> comps;  // 每次迭代的 Executor 计时（ms）
             bench::Case bc{algo_name,
-                           [&] { last = run_algo_once(loader, algo_name, algo_input); },
+                           [&] {
+                               last = run_algo_once(loader, algo_name, algo_input);
+                               if (last.status == RunStatus::Ok && last.out)
+                                   comps.push_back(last.out->computation_time.count());
+                           },
                            {}, {}, iterations};
-            const int eff_warmup = iterations > 1 ? warmup : 0;
-            const auto st = bench::run_case(bc, iterations, eff_warmup);
+            bench::run_case(bc, iterations, 0);
             // 先完成算法前缀行（bench_report 解析 `<algo> <L>L ✅ <ms>ms`
-            // 整行结构），再输出独立 wall 行（不与报告正则碰撞）。
+            // 整行结构）；iterations > 1 时追加 comp 中位数行（Executor
+            // 计时聚合，不与报告正则碰撞）。
             int64_t comp_ms = 0;
             if (last.status == RunStatus::Ok && last.out &&
                 !last.out->solutions.empty()) {
@@ -789,22 +804,21 @@ void run_case(const TestCase& tc, const Profile& profile,
             } else {
                 std::cout << "no solution" << std::endl;
             }
-            std::cout << "    " << algo_name << " wall median "
-                      << bench::fmt_dur(st.median_ns) << "  p95 "
-                      << bench::fmt_dur(st.p95_ns) << "  best "
-                      << bench::fmt_dur(st.best_ns) << "  ("
-                      << st.iterations << " iters)" << std::endl;
+            if (iterations > 1 && !comps.empty())
+                std::cout << "    " << algo_name << " comp median "
+                          << comp_median_ms(comps) << "ms (" << comps.size()
+                          << " iters)" << std::endl;
             rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                             tc.max_cost, algo_name, last.status,
                             last.out && !last.out->solutions.empty()
                                 ? last.out->solutions[0].total_cost
                                 : 0,
-                            comp_ms, st, {}});
+                            comp_ms, {}});
         } catch (const std::exception& e) {
             std::cout << "ERROR: " << e.what() << std::endl;
             rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                             tc.max_cost, algo_name, RunStatus::Failed, 0, 0,
-                            {}, e.what()});
+                            e.what()});
         }
     }
 }
@@ -965,12 +979,6 @@ int main(int argc, char* argv[]) {
                     std::cout << ", \"L\": " << r.L
                               << ", \"comp_ms\": " << r.comp_ms;
                 }
-                std::cout << ", \"wall\": {\"iterations\": "
-                          << r.wall.iterations << ", \"median_ns\": "
-                          << r.wall.median_ns << ", \"p95_ns\": "
-                          << r.wall.p95_ns << ", \"best_ns\": "
-                          << r.wall.best_ns << ", \"total_ns\": "
-                          << r.wall.total_ns << "}";
                 if (!r.note.empty())
                     std::cout << ", \"note\": \"" << r.note << "\"";
                 std::cout << "}";
