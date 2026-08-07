@@ -89,10 +89,12 @@ bool etag_matches(std::string_view inm, const std::string& etag) {
     }
 }
 
+#ifdef _WIN32
 /// ASCII 小写；非字母原样（避免 `| 0x20` 把 '\\' 等非字母映射错位）。
 char ascii_lower(char c) {
     return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
 }
+#endif
 
 /// 前缀比较：Windows 大小写不敏感（挂载根 vs weakly_canonical 结果可能大小写不同），
 /// POSIX 精确。
