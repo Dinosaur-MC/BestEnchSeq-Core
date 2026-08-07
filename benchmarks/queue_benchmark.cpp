@@ -1,3 +1,18 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// Lock-Free Queue benchmarks
+//
+// Migrated to the shared benchmark harness (benchmarks/framework/
+// bench_framework.h): one BENCH_CASE is one measurement unit (a full
+// push/pop batch, a single push+pop round trip, or one N-producer run);
+// the harness owns warmup / iterations / statistics / CLI
+// (--list / --filter / --iterations / --warmup / --json / --help).
+//
+// Run: build/bin/queue_benchmark [options]
+// ═══════════════════════════════════════════════════════════════════════════
+
+#define BESQ_BENCH_MAIN
+#include "framework/bench_framework.h"
+
 #include "utils/queue/SPSCQueue.hpp"
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include "utils/queue/SegmentedMPMCQueue.hpp"
@@ -5,53 +20,28 @@
 #include "utils/queue/BoundedMPSCQueue.hpp"
 #include "utils/queue/IQueue.h"
 
-#include <algorithm>
-#include <chrono>
+#include <atomic>
 #include <cstdint>
-#include <cstdio>
-#include <iostream>
-#include <numeric>
 #include <thread>
 #include <vector>
 
-#ifndef _WIN32
-#include <sys/wait.h>
-#include <unistd.h>
-static void fork_isolated(auto fn) {
-    std::cout.flush();  // flush before fork so buffered banner isn't duplicated
-    pid_t pid = fork();
-    if (pid == 0) { fn(); _exit(0); }
-    int status;
-    waitpid(pid, &status, 0);
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
-        std::cerr << "WARN: child exit status " << WEXITSTATUS(status) << '\n';
-}
-#else
-static void fork_isolated(auto fn) { fn(); }
-#endif
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  Configuration
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ─── Configuration ─────────────────────────────────────────────────────────
 // Operation counts — Release needs more work for stable timing.
 // Segmented queues use a lower count: being unbounded they never
 // free blocks until destruction (~12 KB per 1024 items × OPS).
 #ifdef NDEBUG
-constexpr int64_t OPS_SEQ    = 600'000'000;  // push-pop pairs (bounded queues)
-constexpr int64_t OPS_SEG    =  60'000'000;  // Segmented*Queue (unbounded)
-constexpr int64_t OPS_VIRT   = 150'000'000;  // pairs for virtual-dispatch test
-constexpr int64_t OPS_MP     =  60'000'000;  // items for multi-producer test
+constexpr int64_t OPS_SEQ  = 600'000'000;  // push-pop pairs (bounded queues)
+constexpr int64_t OPS_SEG  =  60'000'000;  // Segmented*Queue (unbounded)
+constexpr int64_t OPS_VIRT = 150'000'000;  // pairs for virtual-dispatch test
+constexpr int64_t OPS_MP   =  60'000'000;  // items for multi-producer test
 #else
-constexpr int64_t OPS_SEQ    =   5'000'000;
-constexpr int64_t OPS_SEG    =   1'000'000;
-constexpr int64_t OPS_VIRT   =   2'000'000;
-constexpr int64_t OPS_MP     =   1'000'000;
+constexpr int64_t OPS_SEQ  =   5'000'000;
+constexpr int64_t OPS_SEG  =   1'000'000;
+constexpr int64_t OPS_VIRT =   2'000'000;
+constexpr int64_t OPS_MP   =   1'000'000;
 #endif
-constexpr int64_t WARM_SEQ   =     500'000;  // warm-up pairs
-constexpr int     N_LATENCY  =      10'000;  // latency samples
 
-// ─── Performance-sink helper ────────────────────────────────────────────
+// ─── Performance-sink helper ───────────────────────────────────────────────
 // Accumulates checksum from popped values so the compiler cannot eliminate
 // push/pop as dead code.  A volatile write at the end enforces the side
 // effect across all optimisation levels.
@@ -63,44 +53,16 @@ struct Sink {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Timer
-// ═══════════════════════════════════════════════════════════════════════════
-
-using Clock = std::chrono::high_resolution_clock;
-
-struct Timer {
-    Clock::time_point start = Clock::now();
-    double elapsed_s() const {
-        return std::chrono::duration_cast<std::chrono::microseconds>(
-                   Clock::now() - start).count() / 1'000'000.0;
-    }
-};
-
-static void print_result(const char* label, double elapsed_s, int64_t items) {
-    double rate = static_cast<double>(items) / elapsed_s / 1'000'000.0;
-    char buf[128];
-    std::snprintf(buf, sizeof(buf), "  %-42s %8.2f M/s  (%5.2f s)",
-                  label, rate, elapsed_s);
-    std::cout << buf << std::endl;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 //  Sequential throughput  (push-pop pairs)
+//  One measurement unit = one full n_pairs push/pop batch.  Every push is
+//  matched by a pop, so the queue is empty again at the end of the unit.
 // ═══════════════════════════════════════════════════════════════════════════
 
 template <typename Queue>
-static void bench_seq(Queue& q, int64_t n_pairs, int64_t warmup,
-                      const char* label)
-{
+static void bench_seq(Queue& q, int64_t n_pairs) {
     Sink sink;
     int v;
 
-    for (int64_t i = 0; i < warmup; ++i) {
-        while (!q.try_push(static_cast<int>(i))) {}
-        q.try_pop(v);
-    }
-
-    auto t0 = Clock::now();
     for (int64_t i = 0; i < n_pairs; ++i) {
         int val = static_cast<int>(i & 0x7FFFFFFF);
         while (!q.try_push(val)) {}
@@ -108,263 +70,182 @@ static void bench_seq(Queue& q, int64_t n_pairs, int64_t warmup,
         sink.add(v);
     }
     sink.flush();
+}
 
-    double sec = std::chrono::duration_cast<std::chrono::microseconds>(
-                     Clock::now() - t0).count() / 1'000'000.0;
-    print_result(label, sec, n_pairs);
+BENCH_CASE("spsc push/pop") {
+    static SPSCQueue<int, 4096> q;
+    bench_seq(q, OPS_SEQ);
+}
+
+BENCH_CASE("bounded-mpmc push/pop") {
+    static BoundedMPMCQueue<int, 4096> q;
+    bench_seq(q, OPS_SEQ);
+}
+
+BENCH_CASE("segmented-mpmc push/pop") {
+    static SegmentedMPMCQueue<int, 1024> q;
+    bench_seq(q, OPS_SEG);
+}
+
+BENCH_CASE("bounded-mpsc push/pop") {
+    static BoundedMPSCQueue<int, 4096> q;
+    bench_seq(q, OPS_SEQ);
+}
+
+BENCH_CASE("segmented-mpsc push/pop") {
+    static SegmentedMPSCQueue<int> q;
+    bench_seq(q, OPS_SEG);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Round-trip latency
+//  One measurement unit = a single push+pop round trip on an empty queue;
+//  the harness turns the per-round-trip latency distribution into
+//  median / p95 / best across iterations (previously: 10k internal samples
+//  collected inside the benchmark).
 // ═══════════════════════════════════════════════════════════════════════════
 
-template <typename Queue>
-static void bench_latency(Queue& q, int64_t n, const char* label) {
+BENCH_CASE("spsc round-trip latency") {
+    static SPSCQueue<int, 64> q;
     int v;
-    for (int i = 0; i < 2000; ++i) {
-        while (!q.try_push(i)) {}
-        q.try_pop(v);
-    }
+    while (!q.try_push(42)) {}
+    q.try_pop(v);
+}
 
-    std::vector<double> samples;
-    samples.reserve(static_cast<size_t>(n));
-    for (int64_t i = 0; i < n; ++i) {
-        auto t0 = Clock::now();
-        while (!q.try_push(42)) {}
-        q.try_pop(v);
-        auto t1 = Clock::now();
-        samples.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                              t1 - t0).count());
-    }
+BENCH_CASE("bounded-mpmc round-trip latency") {
+    static BoundedMPMCQueue<int, 64> q;
+    int v;
+    while (!q.try_push(42)) {}
+    q.try_pop(v);
+}
 
-    std::sort(samples.begin(), samples.end());
-    double median = samples[static_cast<size_t>(n) / 2];
-    double mean   = std::accumulate(samples.begin(), samples.end(), 0.0) / static_cast<double>(n);
-    char buf[128];
-    std::snprintf(buf, sizeof(buf), "  %-42s %6.1f ns median  (mean %6.1f ns)",
-                  label, median, mean);
-    std::cout << buf << std::endl;
+BENCH_CASE("segmented-mpmc round-trip latency") {
+    static SegmentedMPMCQueue<int, 64> q;
+    int v;
+    while (!q.try_push(42)) {}
+    q.try_pop(v);
+}
+
+BENCH_CASE("bounded-mpsc round-trip latency") {
+    static BoundedMPSCQueue<int, 64> q;
+    int v;
+    while (!q.try_push(42)) {}
+    q.try_pop(v);
+}
+
+BENCH_CASE("segmented-mpsc round-trip latency") {
+    static SegmentedMPSCQueue<int> q;
+    int v;
+    while (!q.try_push(42)) {}
+    q.try_pop(v);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Multi-producer throughput  (N producers, 1 consumer)
+//  One measurement unit = n items through the queue with N producer threads
+//  plus one consumer thread (all threads created and joined inside the
+//  unit; the queue is drained empty before the unit ends).
 // ═══════════════════════════════════════════════════════════════════════════
 
 template <typename Queue>
-static void bench_concurrent_mp(int64_t n, int64_t warmup, int n_producers,
-                                const char* label)
-{
+static void bench_concurrent_mp(int64_t n, int n_producers) {
     Queue q;
 
-    // Warm-up: each producer pushes, consumer pops
     std::atomic<int64_t> consumed{0};
-    std::atomic<int64_t> warm_count{0};
-    int64_t per_warm = warmup / n_producers;
-    {
-        std::vector<std::thread> pw;
-        for (int t = 0; t < n_producers; ++t)
-            pw.emplace_back([&, t] {
-                int64_t base = static_cast<int64_t>(t) * 1'000'000;
-                for (int64_t i = 0; i < per_warm; ++i) {
-                    // Spin-loop for bounded queues; no-op for unbounded
-                    while (!q.try_push(static_cast<int>(base + i))) {}
-                }
-            });
-        std::thread consumer([&] {
-            int v;
-            while (warm_count.load() < warmup) {
-                if (q.try_pop(v))
-                    warm_count.fetch_add(1);
-                else
-                    std::this_thread::yield();
-            }
-            // Drain remainder
-            while (q.try_pop(v)) {}
-        });
-        for (auto& t : pw) t.join();
-        consumer.join();
-    }
-
-    consumed.store(0);
     int64_t per = n / n_producers;
 
-    auto t0 = Clock::now();
-    {
-        std::vector<std::thread> producers;
-        for (int t = 0; t < n_producers; ++t)
-            producers.emplace_back([&, t] {
-                int64_t base = static_cast<int64_t>(t) * 1'000'000;
-                for (int64_t i = 0; i < per; ++i)
-                    // Spin-loop for bounded queues; no-op for unbounded
-                    while (!q.try_push(static_cast<int>(base + i))) {}
-            });
-
-        std::thread consumer([&] {
-            Sink sink;
-            while (consumed.load() < n) {
-                int v;
-                if (q.try_pop(v)) {
-                    consumed.fetch_add(1);
-                    sink.add(v);
-                } else {
-                    std::this_thread::yield();
-                }
-            }
-            // Drain any stragglers
-            int v;
-            while (q.try_pop(v)) { sink.add(v); }
-            sink.flush();
+    std::vector<std::thread> producers;
+    for (int t = 0; t < n_producers; ++t)
+        producers.emplace_back([&, t] {
+            int64_t base = static_cast<int64_t>(t) * 1'000'000;
+            for (int64_t i = 0; i < per; ++i)
+                // Spin-loop for bounded queues; no-op for unbounded
+                while (!q.try_push(static_cast<int>(base + i))) {}
         });
 
-        for (auto& t : producers) t.join();
-        consumer.join();
-    }
-    double sec = std::chrono::duration_cast<std::chrono::microseconds>(
-                     Clock::now() - t0).count() / 1'000'000.0;
+    std::thread consumer([&] {
+        Sink sink;
+        while (consumed.load() < n) {
+            int v;
+            if (q.try_pop(v)) {
+                consumed.fetch_add(1);
+                sink.add(v);
+            } else {
+                std::this_thread::yield();
+            }
+        }
+        // Drain any stragglers
+        int v;
+        while (q.try_pop(v)) { sink.add(v); }
+        sink.flush();
+    });
 
-    char buf[128];
-    std::snprintf(buf, sizeof(buf), "  %-42s %8.2f M items/s  (%5.2f s, %dP)",
-                  label, static_cast<double>(n) / sec / 1'000'000.0, sec, n_producers);
-    std::cout << buf << std::endl;
+    for (auto& t : producers) t.join();
+    consumer.join();
+}
+
+BENCH_CASE("bounded-mpmc 2-producer push/pop") {
+    bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, 2);
+}
+BENCH_CASE("segmented-mpmc 2-producer push/pop") {
+    bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, 2);
+}
+BENCH_CASE("bounded-mpsc 2-producer push/pop") {
+    bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, 2);
+}
+BENCH_CASE("segmented-mpsc 2-producer push/pop") {
+    bench_concurrent_mp<SegmentedMPSCQueue<int>>(OPS_MP, 2);
+}
+BENCH_CASE("bounded-mpmc 4-producer push/pop") {
+    bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, 4);
+}
+BENCH_CASE("segmented-mpmc 4-producer push/pop") {
+    bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, 4);
+}
+BENCH_CASE("bounded-mpsc 4-producer push/pop") {
+    bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, 4);
+}
+BENCH_CASE("segmented-mpsc 4-producer push/pop") {
+    bench_concurrent_mp<SegmentedMPSCQueue<int>>(OPS_MP, 4);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Virtual-dispatch overhead  (IQueue vs direct)
 // ═══════════════════════════════════════════════════════════════════════════
 
-static void bench_virtual(int64_t n_pairs, int64_t warmup) {
+BENCH_CASE("spsc direct push/pop (virtual baseline)") {
+    static SPSCQueue<int, 4096> q;
+    Sink sink;
     int v;
-
-    // 1. Direct SPSCQueue (baseline)
-    {
-        Sink sink;
-        SPSCQueue<int, 4096> q;
-        for (int64_t i = 0; i < warmup; ++i) {
-            while (!q.try_push(static_cast<int>(i))) {}
-            q.try_pop(v);
-        }
-        auto t0 = Clock::now();
-        for (int64_t i = 0; i < n_pairs; ++i) {
-            while (!q.try_push(i)) {}
-            q.try_pop(v);
-            sink.add(v);
-        }
-        sink.flush();
-        double sec = std::chrono::duration_cast<std::chrono::microseconds>(
-                         Clock::now() - t0).count() / 1'000'000.0;
-        print_result("SPSCQueue direct (baseline)", sec, n_pairs);
+    for (int64_t i = 0; i < OPS_VIRT; ++i) {
+        while (!q.try_push(static_cast<int>(i))) {}
+        q.try_pop(v);
+        sink.add(v);
     }
-
-    // 2. QueueAdaptor::underlying() — no virtual dispatch
-    {
-        Sink sink;
-        QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
-        for (int64_t i = 0; i < warmup; ++i) {
-            while (!adapted.underlying().try_push(i)) {}
-            adapted.underlying().try_pop(v);
-        }
-        auto t0 = Clock::now();
-        for (int64_t i = 0; i < n_pairs; ++i) {
-            while (!adapted.underlying().try_push(i)) {}
-            adapted.underlying().try_pop(v);
-            sink.add(v);
-        }
-        sink.flush();
-        double sec = std::chrono::duration_cast<std::chrono::microseconds>(
-                         Clock::now() - t0).count() / 1'000'000.0;
-        print_result("QueueAdaptor::underlying()", sec, n_pairs);
-    }
-
-    // 3. Virtual dispatch through IQueue<T>
-    {
-        Sink sink;
-        QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
-        IQueue<int>& virt = adapted;
-        for (int64_t i = 0; i < warmup; ++i) {
-            while (!virt.try_push(static_cast<int>(i))) {}
-            virt.try_pop(v);
-        }
-        auto t0 = Clock::now();
-        for (int64_t i = 0; i < n_pairs; ++i) {
-            while (!virt.try_push(static_cast<int>(i))) {}
-            virt.try_pop(v);
-            sink.add(v);
-        }
-        sink.flush();
-        double sec = std::chrono::duration_cast<std::chrono::microseconds>(
-                         Clock::now() - t0).count() / 1'000'000.0;
-        print_result("IQueue virtual dispatch", sec, n_pairs);
-    }
+    sink.flush();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  main
-// ═══════════════════════════════════════════════════════════════════════════
+BENCH_CASE("spsc push/pop via QueueAdaptor::underlying()") {
+    static QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
+    Sink sink;
+    int v;
+    for (int64_t i = 0; i < OPS_VIRT; ++i) {
+        while (!adapted.underlying().try_push(static_cast<int>(i))) {}
+        adapted.underlying().try_pop(v);
+        sink.add(v);
+    }
+    sink.flush();
+}
 
-int main() {
-    Timer total;
-
-    std::cout << "╔══════════════════════════════════════════════════════════╗\n"
-              << "║            Lock-Free Queue Benchmarks                    ║\n"
-              << "╚══════════════════════════════════════════════════════════╝\n"
-              << "  Pairs per test: " << OPS_SEQ / 1'000'000 << "M"
-              << "  (segmented: " << OPS_SEG / 1'000'000 << "M)"
-              << "  warm-up: " << WARM_SEQ / 1'000'000 << "M\n"
-              << "  Multi-producer items: " << OPS_MP / 1'000'000 << "M"
-              << "  (per producer)\n"
-              << "  Hardware concurrency: "
-              << std::thread::hardware_concurrency() << "\n\n";
-
-    // ── Sequential throughput ─────────────────────────────────────────
-    fork_isolated([] {
-        Timer sec;
-        std::cout << "── Sequential throughput ────────────────────────\n";
-        { SPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "SPSCQueue"); }
-        { BoundedMPMCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "BoundedMPMCQueue"); }
-        { SegmentedMPMCQueue<int, 1024> q; bench_seq(q, OPS_SEG, WARM_SEQ, "SegmentedMPMCQueue"); }
-        { BoundedMPSCQueue<int, 4096> q; bench_seq(q, OPS_SEQ, WARM_SEQ, "BoundedMPSCQueue"); }
-        { SegmentedMPSCQueue<int> q; bench_seq(q, OPS_SEG, WARM_SEQ, "SegmentedMPSCQueue"); }
-        std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    });
-
-    // ── Round-trip latency ───────────────────────────────────────────
-    fork_isolated([] {
-        Timer sec;
-        std::cout << "── Round-trip latency ───────────────────────────\n";
-        { SPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SPSCQueue"); }
-        { BoundedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "BoundedMPMCQueue"); }
-        { SegmentedMPMCQueue<int, 64> q; bench_latency(q, N_LATENCY, "SegmentedMPMCQueue"); }
-        { BoundedMPSCQueue<int, 64> q; bench_latency(q, N_LATENCY, "BoundedMPSCQueue"); }
-        { SegmentedMPSCQueue<int> q; bench_latency(q, N_LATENCY, "SegmentedMPSCQueue"); }
-        std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    });
-
-    // ── Multi-producer throughput ──────────────────────────────────────
-    fork_isolated([] {
-        Timer sec;
-        std::cout << "── Multi-producer throughput ─────────────────────\n";
-        bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 2,   "BoundedMPMCQueue");
-        bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, OPS_MP / 10, 2, "SegmentedMPMCQueue");
-        bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 2,   "BoundedMPSCQueue");
-        bench_concurrent_mp<SegmentedMPSCQueue<int>>(OPS_MP, OPS_MP / 10, 2,               "SegmentedMPSCQueue");
-        std::cout << "  ──\n";
-        bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 4,   "BoundedMPMCQueue");
-        bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, OPS_MP / 10, 4, "SegmentedMPMCQueue");
-        bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, OPS_MP / 10, 4,   "BoundedMPSCQueue");
-        bench_concurrent_mp<SegmentedMPSCQueue<int>>(OPS_MP, OPS_MP / 10, 4,               "SegmentedMPSCQueue");
-        std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    });
-
-    // ── Virtual dispatch overhead ────────────────────────────────────
-    fork_isolated([] {
-        Timer sec;
-        std::cout << "── Virtual dispatch overhead ────────────────────\n";
-        bench_virtual(OPS_VIRT, WARM_SEQ);
-        std::cout << "  ── section: " << sec.elapsed_s() << " s ──\n\n";
-    });
-
-    std::cout << "════════════════════════════════════════════════════════\n"
-              << "  Total: " << total.elapsed_s() << " s\n"
-              << "════════════════════════════════════════════════════════\n";
-    return 0;
+BENCH_CASE("spsc push/pop via IQueue virtual dispatch") {
+    static QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
+    IQueue<int>& virt = adapted;
+    Sink sink;
+    int v;
+    for (int64_t i = 0; i < OPS_VIRT; ++i) {
+        while (!virt.try_push(static_cast<int>(i))) {}
+        virt.try_pop(v);
+        sink.add(v);
+    }
+    sink.flush();
 }

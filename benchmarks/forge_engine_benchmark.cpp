@@ -5,9 +5,18 @@
 // pure_forge_into, estimate_forge_cost) across a matrix of input sizes,
 // operation types, and configurations.
 //
+// Migrated to the shared benchmark harness (benchmarks/framework/
+// bench_framework.h): one BENCH_CASE per (config × op × size) point; each
+// body is a single operation call (the old bench() warmup/calibration/
+// rounds machinery is replaced by the harness's adaptive warmup/iterations/
+// statistics).  The 102 points are registered data-driven at static init.
+//
 // Build: cmake --build build --target forge_engine_benchmark
-// Run:   build/bin/forge_engine_benchmark [--config ...]
+// Run:   build/bin/forge_engine_benchmark [--list|--filter ...|--json ...]
 // =============================================================================
+
+#define BESQ_BENCH_MAIN
+#include "framework/bench_framework.h"
 
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/registries/EnchReg.h"
@@ -16,19 +25,14 @@
 #include "domain/algorithm/types/ConfigTypes.h"
 
 #include <algorithm>
-#include <chrono>
-#include <cmath>
 #include <cstdint>
-#include <cstdio>
-#include <iomanip>
-#include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
 
 using namespace algorithm;
-using Clock = std::chrono::steady_clock;
 
 // Optimization barrier: prevents dead-code elimination of benchmark results
 static volatile int64_t bench_sink = 0;
@@ -123,69 +127,6 @@ EnchSet generate_enchants(int16_t base, int16_t count, int16_t max_level = 3) {
     for (int16_t i = 0; i < count; ++i)
         s.insert(Ench{static_cast<Ench::value_type>(base + i), static_cast<Ench::value_type>(1 + (i %max_level))});
     return s;
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// Benchmark harness
-// ══════════════════════════════════════════════════════════════════════════
-
-struct BenchResult {
-    std::string name;
-    int64_t ns_per_op;
-    double  ops_per_sec;  // million ops/sec
-    double  rel_stddev;   // coefficient of variation (%)
-    int     iterations;   // per-round iteration count
-};
-
-template <typename Fn>
-BenchResult bench(const std::string& name, Fn&& fn) {
-    // ── Warmup: run for ~50ms to stabilize CPU freq + caches ─
-    auto wstart = Clock::now();
-    int64_t welapsed = 0;
-    int wcount = 0;
-    while (welapsed < 50'000'000) {
-        fn();
-        ++wcount;
-        welapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            Clock::now() - wstart).count();
-    }
-
-    // ── Calibrate iterations per round (~80ms each) ──────────
-    int64_t single_ns = welapsed / std::max(1, wcount);
-    int iters = static_cast<int>(80'000'000.0 / single_ns);
-    iters = std::clamp(iters, 10, 5'000'000);
-
-    // ── Multiple rounds for statistical stability ────────────
-    constexpr int ROUNDS = 5;
-    int64_t round_ns[ROUNDS] = {};
-
-    for (int r = 0; r < ROUNDS; ++r) {
-        auto start = Clock::now();
-        for (int i = 0; i < iters; ++i)
-            fn();
-        auto end = Clock::now();
-        round_ns[r] = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    }
-
-    // ── Statistics (sorted → median) ─────────────────────────
-    std::sort(round_ns, round_ns + ROUNDS);
-    int64_t median_ns = round_ns[ROUNDS / 2];
-    int64_t ns_per_op = median_ns / iters;
-
-    double mean = 0;
-    for (auto t : round_ns) mean += static_cast<double>(t);
-    mean /= ROUNDS;
-    double variance = 0;
-    for (auto t : round_ns) {
-        double d = static_cast<double>(t) - mean;
-        variance += d * d;
-    }
-    variance /= ROUNDS;
-    double rel_stddev = (mean > 0) ? std::sqrt(variance) / mean * 100.0 : 0.0;
-
-    double ops_per_sec = (iters * 1'000'000'000.0) / double(median_ns) / 1'000'000.0;
-
-    return {name, ns_per_op, ops_per_sec, rel_stddev, iters};
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -319,7 +260,8 @@ TestPair make_pair(OpType op, const SizeSpec& size, int16_t reg_n, ItemPair pair
 // ══════════════════════════════════════════════════════════════════════════
 
 // Each runner returns a lambda that mutates its captures each call, so the
-// compiler cannot fold the operation across iterations.
+// compiler cannot fold the operation across iterations.  One invocation of
+// the runner is one harness measurement unit.
 
 auto make_forge_into_runner(const ForgeEngine& engine, const EnchReg& reg,
                              const Item& target, const Item& sacrifice) {
@@ -355,242 +297,119 @@ auto make_estimate_runner(const ForgeEngine& engine, const EnchReg& reg,
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Reporting
+// Per-configuration context — built once at static init.
+// One ForgeEngine per (platform × item-pair) config, plus every test pair
+// prebuilt.  The runners hold references into this stable context.
 // ══════════════════════════════════════════════════════════════════════════
 
-void print_header(const std::string& config_label) {
-    std::cout << "\n[" << config_label << "]\n";
-    std::cout << std::left << std::setw(22) << "Benchmark"
-              << std::right << std::setw(8) << "Iters"
-              << std::setw(12) << "ns/op"
-              << std::setw(14) << "M ops/s"
-              << std::setw(10) << "CV%" << std::endl;
-    std::cout << std::string(66, '-') << std::endl;
-}
-
-std::string format_iters(int n) {
-    if (n >= 1'000'000)
-        return std::to_string(n / 1'000'000) + "." +
-               std::to_string((n % 1'000'000) / 100'000) + "M";
-    if (n >= 1'000)
-        return std::to_string(n / 1'000) + "." +
-               std::to_string((n % 1'000) / 100) + "K";
-    return std::to_string(n);
-}
-
-void print_result(const BenchResult& r) {
-    std::cout << std::left << std::setw(22) << r.name
-              << std::right << std::setw(8) << format_iters(r.iterations)
-              << std::setw(12) << r.ns_per_op
-              << std::setw(14) << std::fixed << std::setprecision(2) << r.ops_per_sec
-              << std::setw(10) << std::fixed << std::setprecision(2) << r.rel_stddev
-              << std::endl;
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// Configuration
-// ══════════════════════════════════════════════════════════════════════════
-
-struct Config {
-    bool run_java         = true;
-    bool run_bedrock      = true;
-    bool run_book_book    = true;
-    bool run_book_eq      = true;
-    bool run_eq_eq        = true;
-    bool show_summary     = true;  // default: summary on
+struct PerfConfig {
+    ForgeEngine engine;
+    ItemPair pair_type;
+    std::string label;
+    TestPair pair[4][3];       // [op][size]
+    TestPair estimate_pair;    // Merge/S
+    TestPair copy_pair;        // Merge/M
 };
 
-Config parse_cli(int argc, char* argv[]) {
-    Config cfg;
-    bool any_filter = false;
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        if (a == "--help") {
-            std::cout << "ForgeEngine Benchmark\n";
-            std::cout << "Usage: forge_engine_benchmark [options]\n";
-            std::cout << "  (no args)     All configs with summary table (default)\n";
-            std::cout << "  --no-summary  Suppress summary table\n";
-            std::cout << "  --java        Java platform only\n";
-            std::cout << "  --bedrock     Bedrock platform only\n";
-            std::cout << "  --book-book   Book+book only\n";
-            std::cout << "  --book        Equip+book only\n";
-            std::cout << "  --equip       Equip->equip only\n";
-            std::cout << "  --help        This help\n";
-            exit(0);
-        } else if (a == "--no-summary")  { cfg.show_summary = false; }
-        else if (a == "--java")          { cfg.run_bedrock = false; any_filter = true; }
-        else if (a == "--bedrock")       { cfg.run_java = false; any_filter = true; }
-        else if (a == "--book-book")     { cfg.run_book_eq = false; cfg.run_eq_eq = false; any_filter = true; }
-        else if (a == "--book")          { cfg.run_book_book = false; cfg.run_eq_eq = false; any_filter = true; }
-        else if (a == "--equip")         { cfg.run_book_book = false; cfg.run_book_eq = false; any_filter = true; }
-    }
-    if (any_filter) cfg.show_summary = false;
-    return cfg;
+struct BenchContext {
+    EnchReg reg;
+    int16_t reg_n = 0;
+    std::vector<PerfConfig> configs;
+};
+
+static const BenchContext& bench_context() {
+    static const std::unique_ptr<const BenchContext> ctx = [] {
+        auto c = std::make_unique<BenchContext>();
+
+        // Synthetic registry: 32 enchants gives enough range for all sizes
+        auto [reg, reg_n] = make_test_registry(32);
+        c->reg = std::move(reg);
+        c->reg_n = reg_n;
+
+        for (auto plat : {MCE::Java, MCE::Bedrock}) {
+            for (auto pt : {ItemPair::BookBook, ItemPair::EquipBook, ItemPair::EquipEquip}) {
+                ForgeConfig fcfg;
+                fcfg.platform = plat;
+                fcfg.ignore_penalty_cost = false;
+                fcfg.ignore_repair_cost = false;
+
+                PerfConfig cfg;
+                cfg.engine = ForgeEngine(fcfg);
+                cfg.pair_type = pt;
+                cfg.label = (plat == MCE::Java ? "Java" : "Bedrock")
+                          + std::string(", ") + pair_label(pt);
+                for (int op = 0; op < 4; ++op)
+                    for (int sz = 0; sz < 3; ++sz)
+                        cfg.pair[op][sz] = make_pair(static_cast<OpType>(op), SIZES[sz], reg_n, pt);
+                cfg.estimate_pair = make_pair(OpType::Merge, SIZES[0], reg_n, pt);
+                cfg.copy_pair     = make_pair(OpType::Merge, SIZES[1], reg_n, pt);
+                c->configs.push_back(std::move(cfg));
+            }
+        }
+        return c;
+    }();
+    return *ctx;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Main
+// Registration — the operation matrix (6 configs × 17 points = 102 cases)
+// is data-driven: the BENCH_CASE macro registers free functions only, so a
+// compile-time matrix is expressed by pushing into the harness registry
+// (the same registry the macro feeds).  Names keep the old point semantics:
+//   "<config> forge_into/<Op>/<Size>" / pure_forge_into / estimate_forge_cost
+//   / forge(copy).
+//
+// One measurement unit = a fixed batch of K_OPS runner calls (the old
+// bench() also timed a loop of runner calls, with its iters calibration
+// replaced by the harness's adaptive iteration count).  A single runner
+// call (~10-300 ns) is far below the timer granularity, so batching keeps
+// the reported medians meaningful; per-op time = reported median / K_OPS.
 // ══════════════════════════════════════════════════════════════════════════
 
-} // anonymous namespace
+constexpr int64_t K_OPS = 1000;
 
-int main(int argc, char* argv[]) {
-    auto cfg = parse_cli(argc, argv);
-
-    // Build synthetic registry: 32 enchants gives enough range for all sizes
-    auto [reg, reg_n] = make_test_registry(32);
-
-    std::cout << "=== ForgeEngine Benchmark ===\n"
-              << "Registry: " << reg_n << " enchants\n"
-              << "Configurations: "
-              << (cfg.run_java ? "Java " : "")
-              << (cfg.run_bedrock ? "Bedrock " : "")
-              << (cfg.run_book_book ? "book+book " : "")
-              << (cfg.run_book_eq ? "equip+book " : "")
-              << (cfg.run_eq_eq ? "equip+equip " : "")
-              << std::endl;
-
-    // ── Configurations to run ──────────────────────────────────────────
-    struct RunConfig {
-        std::string label;
-        ForgeConfig fcfg;
-        ItemPair pair_type;
+static std::function<void()> make_batch_runner(std::function<void()> single) {
+    return [r = std::move(single)]() {
+        for (int64_t i = 0; i < K_OPS; ++i)
+            r();
     };
+}
 
-    std::vector<RunConfig> configs;
-    for (auto plat : {MCE::Java, MCE::Bedrock}) {
-        if (plat == MCE::Java && !cfg.run_java) continue;
-        if (plat == MCE::Bedrock && !cfg.run_bedrock) continue;
-        for (auto pt : {ItemPair::BookBook, ItemPair::EquipBook, ItemPair::EquipEquip}) {
-            if (pt == ItemPair::BookBook   && !cfg.run_book_book) continue;
-            if (pt == ItemPair::EquipBook  && !cfg.run_book_eq) continue;
-            if (pt == ItemPair::EquipEquip && !cfg.run_eq_eq) continue;
+[[maybe_unused]] static const bool s_registered = [] {
+    const BenchContext& b = bench_context();
+    auto& reg = ::bench::registry();
 
-            ForgeConfig fcfg;
-            fcfg.platform = plat;
-            fcfg.ignore_penalty_cost = false;
-            fcfg.ignore_repair_cost = false;
+    const char* op_names[] = {"Merge", "Upgrade", "Conflict", "Mixed"};
+    const std::string batch_suffix = " (batch " + std::to_string(K_OPS) + " ops)";
 
-            std::string label = (plat == MCE::Java ? "Java" : "Bedrock")
-                              + std::string(", ") + pair_label(pt);
-
-            configs.push_back({label, fcfg, pt});
-        }
-    }
-
-    std::cout << "Sizes:  S(1+1)  M(5+5)  L(7+10)  (target enchants + sacrifice enchants)\n";
-    std::cout << "Each benchmark: 50ms warmup + 5 rounds (median, CV = stability indicator)\n\n";
-
-    // ── Results storage (avoids re-running for the summary) ──────────
-    struct PerfRow {
-        std::string config;
-        int64_t merge_s_ns = 0, merge_m_ns = 0, merge_l_ns = 0;
-        int64_t pure_s_ns = 0, pure_m_ns = 0, pure_l_ns = 0;
-        int64_t upgrade_m_ns = 0, conflict_m_ns = 0, mixed_m_ns = 0;
-        int64_t estimate_ns = 0;
-        int64_t forge_copy_ns = 0;
-    };
-    std::vector<PerfRow> perf_rows;
-
-    // ── Run each configuration ────────────────────────────────────────
-    for (auto& rc : configs) {
-        ForgeEngine engine(rc.fcfg);
-        print_header(rc.label);
-
-        PerfRow pr;
-        pr.config = rc.label;
-
-        for (auto op : {OpType::Merge, OpType::Upgrade, OpType::Conflict, OpType::Mixed}) {
-            for (auto& size : SIZES) {
-                auto pair = make_pair(op, size, reg_n, rc.pair_type);
-
-                // forge_into
-                {
-                    auto runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
-                    auto r = bench("forge_into/" + pair.label, runner);
-                    print_result(r);
-                    if (op == OpType::Merge) {
-                        if (&size == &SIZES[0]) pr.merge_s_ns = r.ns_per_op;
-                        else if (&size == &SIZES[1]) pr.merge_m_ns = r.ns_per_op;
-                        else pr.merge_l_ns = r.ns_per_op;
-                    }
-                    if (op == OpType::Upgrade && &size == &SIZES[1]) pr.upgrade_m_ns = r.ns_per_op;
-                    if (op == OpType::Conflict && &size == &SIZES[1]) pr.conflict_m_ns = r.ns_per_op;
-                    if (op == OpType::Mixed && &size == &SIZES[1]) pr.mixed_m_ns = r.ns_per_op;
-                }
-
-                // pure_forge_into (only for merge)
-                if (op == OpType::Merge) {
-                    auto runner = make_pure_forge_runner(engine, reg, pair.target, pair.sacrifice);
-                    auto r = bench("pure_frge/" + pair.label, runner);
-                    print_result(r);
-                    if (&size == &SIZES[0]) pr.pure_s_ns = r.ns_per_op;
-                    else if (&size == &SIZES[1]) pr.pure_m_ns = r.ns_per_op;
-                    else pr.pure_l_ns = r.ns_per_op;
+    for (const auto& cfg : b.configs) {
+        for (int op = 0; op < 4; ++op) {
+            for (int sz = 0; sz < 3; ++sz) {
+                const TestPair& pair = cfg.pair[op][sz];
+                reg.push_back(bench::Case{
+                    cfg.label + " forge_into/" + op_names[op] + "/" + SIZES[sz].label + batch_suffix,
+                    make_batch_runner(make_forge_into_runner(cfg.engine, b.reg, pair.target, pair.sacrifice)),
+                    {}, {}, 0});
+                // pure_forge_into is measured for Merge only
+                if (op == 0) {
+                    reg.push_back(bench::Case{
+                        cfg.label + " pure_forge_into/" + SIZES[sz].label + batch_suffix,
+                        make_batch_runner(make_pure_forge_runner(cfg.engine, b.reg, pair.target, pair.sacrifice)),
+                        {}, {}, 0});
                 }
             }
         }
-
-        // estimate_forge_cost — use the Merge/S pair (fast)
-        {
-            auto pair = make_pair(OpType::Merge, SIZES[0], reg_n, rc.pair_type);
-            auto runner = make_estimate_runner(engine, reg, pair.target, pair.sacrifice);
-            auto r = bench("estimate/S", runner);
-            print_result(r);
-            pr.estimate_ns = r.ns_per_op;
-        }
-
-        // forge() copy overhead — compare with forge_into for Merge/M
-        {
-            auto pair = make_pair(OpType::Merge, SIZES[1], reg_n, rc.pair_type);
-            auto into_runner = make_forge_into_runner(engine, reg, pair.target, pair.sacrifice);
-            auto forge_runner = make_forge_runner(engine, reg, pair.target, pair.sacrifice);
-            auto r_into  = bench("forge_into/M", into_runner);
-            auto r_forge = bench("forge(copy)/M", forge_runner);
-            print_result(r_into);
-            print_result(r_forge);
-            pr.forge_copy_ns = r_forge.ns_per_op;
-            double copy_overhead = (r_forge.ns_per_op - r_into.ns_per_op) * 100.0 / r_into.ns_per_op;
-            std::cout << std::left << std::setw(22) << "  copy overhead"
-                      << std::right << std::setw(20)
-                      << "+" + std::to_string(static_cast<int>(copy_overhead)) + "%"
-                      << std::endl;
-        }
-
-        perf_rows.push_back(std::move(pr));
+        reg.push_back(bench::Case{
+            cfg.label + " estimate_forge_cost/S" + batch_suffix,
+            make_batch_runner(make_estimate_runner(cfg.engine, b.reg, cfg.estimate_pair.target, cfg.estimate_pair.sacrifice)),
+            {}, {}, 0});
+        // forge() copy overhead — compare with forge_into/Merge/M
+        reg.push_back(bench::Case{
+            cfg.label + " forge(copy)/Merge/M" + batch_suffix,
+            make_batch_runner(make_forge_runner(cfg.engine, b.reg, cfg.copy_pair.target, cfg.copy_pair.sacrifice)),
+            {}, {}, 0});
     }
+    return true;
+}();
 
-    // ── Summary table ─────────────────────────────────────────────────
-    if (cfg.show_summary && perf_rows.size() >= 4) {
-        std::cout << std::endl;
-        std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
-        std::cout << "| ForgeEngine Summary       |  forge_into (ns/op)  | pure_forge (ns/op)  | Overhead vs Merge (/M) |\n";
-        std::cout << "| Config                    |    S     M     L     |    S     M     L    | upgr  cnfl  mix  copy  |\n";
-        std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
-
-        for (auto& row : perf_rows) {
-            double up_penalty  = (row.merge_m_ns > 0) ? (double)row.upgrade_m_ns / row.merge_m_ns : 0;
-            double cf_penalty  = (row.merge_m_ns > 0) ? (double)row.conflict_m_ns / row.merge_m_ns : 0;
-            double mx_penalty  = (row.merge_m_ns > 0) ? (double)row.mixed_m_ns / row.merge_m_ns : 0;
-            double copy_ov     = (row.merge_m_ns > 0) ? (double)(row.forge_copy_ns - row.merge_m_ns) / row.merge_m_ns : 0;
-
-            char buf[256];
-            snprintf(buf, sizeof(buf),
-                     "| %-25s |   %2lld   %3lld   %3lld     |   %2lld   %3lld   %3lld    | %3.0f%%  %3.0f%% %3.0f%%  %3.0f%%  |",
-                     row.config.c_str(),
-                     (long long)row.merge_s_ns, (long long)row.merge_m_ns, (long long)row.merge_l_ns,
-                     (long long)row.pure_s_ns, (long long)row.pure_m_ns, (long long)row.pure_l_ns,
-                     up_penalty * 100.0 - 100.0,
-                     cf_penalty * 100.0 - 100.0,
-                     mx_penalty * 100.0 - 100.0,
-                     copy_ov * 100.0);
-            std::cout << buf << std::endl;
-        }
-
-        std::cout << "+---------------------------+----------------------+---------------------+------------------------+\n";
-        std::cout << "  upgr=Upgrade cnfl=Conflict mix=Mixed copy=forge() vs forge_into()\n";
-    }
-
-    std::cout << "\n=== Done ===\n";
-    return 0;
-}
+} // namespace

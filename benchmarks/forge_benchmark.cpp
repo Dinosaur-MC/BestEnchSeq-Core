@@ -1,3 +1,4 @@
+#include "framework/bench_framework.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/components/SearchUtils.h"
@@ -16,6 +17,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -277,6 +279,9 @@ struct BenchConfig {
     std::string algo_dir;                       // plugin dir, empty = none
     int tier = DEFAULT_TIER;                    // 0..6 permissiveness level
     int max_time_sec = 600;                     // per-algorithm search budget (seconds)
+    int iterations = 1;                         // 每次算法运行重复次数（harness 计时；1 = 单次，行为同旧版）
+    int warmup = 1;                             // harness warmup 次数
+    bool json = false;                          // 机器可解析输出（opt-in；bench_report 不受影响）
     bool list_only = false;
     bool no_skip = false;
 };
@@ -294,6 +299,9 @@ BenchConfig parse_cli(int argc, char* argv[]) {
                   << "  --algo-dir <dir>      Load algorithm plugins from directory\n"
                   << "  --tier <num>          Algorithm permissiveness level (0-" << TIER_LEVELS - 1 << ", default " << DEFAULT_TIER << ")\n"
                   << "  --no-skip             Run all algorithms without enchant limits\n"
+                  << "  --iterations <num>    Repeat each algorithm run for wall-time stats (default 1)\n"
+                  << "  --warmup <num>        Harness warmup iterations (default 1)\n"
+                  << "  --json                Machine-readable JSON summary (after === Done ===)\n"
                   << "  --help                This help" << std::endl;
         std::exit(1);
     };
@@ -342,6 +350,18 @@ BenchConfig parse_cli(int argc, char* argv[]) {
             int s = std::atoi(argv[++i]);
             if (s <= 0) die("--max-time must be a positive integer (seconds)");
             cfg.max_time_sec = s;
+        } else if (arg == "--iterations") {
+            if (i + 1 >= argc) die("--iterations requires a value");
+            int n = std::atoi(argv[++i]);
+            if (n < 1) die("--iterations must be a positive integer");
+            cfg.iterations = n;
+        } else if (arg == "--warmup") {
+            if (i + 1 >= argc) die("--warmup requires a value");
+            int n = std::atoi(argv[++i]);
+            if (n < 0) die("--warmup must be >= 0");
+            cfg.warmup = n;
+        } else if (arg == "--json") {
+            cfg.json = true;
         } else if (arg == "--help") {
             std::cout << "Usage: forge_benchmark [options]\n"
                       << "  --list                List test cases, groups & algorithm limits\n"
@@ -443,10 +463,39 @@ void print_result(const algorithm::AlgorithmOutput& out,
               << "ms" << std::endl;
 }
 
+/// 单次算法运行的墙钟统计（harness 统一方法论）。wall 输出行与
+/// print_result 的报告行（algo L ✅ ms）独立——bench_report.py 的解析
+/// 正则不匹配 wall 行，保持字节兼容。
+struct WallRow {
+    std::string algo;
+    bench::Stats stats;
+};
+
+/// 单次算法执行：创建实例 → start → wait → 校验 → 返回输出；失败返回 nullopt。
+/// 每次调用创建全新实例（迭代计时场景每轮独立）。
+std::optional<algorithm::AlgorithmOutput> run_algo_once(
+    const algorithm::AlgorithmLoader& loader, const std::string& algo_name,
+    const algorithm::AlgorithmInput& input) {
+    auto algo = loader.create(algo_name);
+    if (!algo)
+        return std::nullopt;
+    algorithm::AlgorithmExecutor executor(std::move(algo));
+    algorithm::AlgorithmInput ri = input;
+    executor.start(std::move(ri));
+    executor.wait();
+    if (executor.state() != algorithm::AlgorithmState::Completed)
+        return std::nullopt;
+    auto out = executor.output();
+    if (out.solutions.empty())
+        return std::nullopt;
+    return out;
+}
+
 void run_case(const TestCase& tc, const Profile& profile,
               const std::vector<std::string>& algos,
               const algorithm::AlgorithmLoader& loader,
-              int tier, bool no_skip, int max_time_sec) {
+              int tier, bool no_skip, int max_time_sec,
+              int iterations, int warmup, std::vector<WallRow>& wall_rows) {
     const auto& G_ENCH = profile.ench();
     const auto& G_EQ   = profile.eq();
 
@@ -594,19 +643,40 @@ void run_case(const TestCase& tc, const Profile& profile,
                 continue;
             }
             try {
-                algorithm::AlgorithmExecutor executor(std::move(main_algo));
-                algorithm::AlgorithmInput run_input = algo_input;
-                executor.start(std::move(run_input),
-                               loader.create(warmup_name));
-                executor.wait();
-                if (executor.state() != algorithm::AlgorithmState::Completed) {
-                    std::cout << "no solution" << std::endl; continue;
-                }
-                algorithm::AlgorithmOutput out = executor.output();
-                if (out.solutions.empty()) {
-                    std::cout << "no solution" << std::endl; continue;
-                }
-                print_result(out, algo_input.target, tc.max_cost);
+                // 链式（warmup+main）：wall 计时包裹整段执行。
+                std::optional<algorithm::AlgorithmOutput> out;
+                bench::Case bc{main_name,
+                               [&] {
+                                   auto a = loader.create(main_name);
+                                   if (!a)
+                                       return;
+                                   algorithm::AlgorithmExecutor ex(std::move(a));
+                                   algorithm::AlgorithmInput ri = algo_input;
+                                   ex.start(std::move(ri),
+                                            loader.create(warmup_name));
+                                   ex.wait();
+                                   if (ex.state() !=
+                                       algorithm::AlgorithmState::Completed)
+                                       return;
+                                   auto o = ex.output();
+                                   if (!o.solutions.empty())
+                                       out = std::move(o);
+                               },
+                               {}, {}, iterations};
+                const int eff_warmup = iterations > 1 ? warmup : 0;
+                const auto st = bench::run_case(bc, iterations, eff_warmup);
+                wall_rows.push_back({main_name, st});
+                // 先完成算法前缀行（bench_report 解析 `<algo> <L>L ✅ <ms>ms`
+                // 整行结构），再输出独立 wall 行（不与报告正则碰撞）。
+                if (out && !out->solutions.empty())
+                    print_result(*out, algo_input.target, tc.max_cost);
+                else
+                    std::cout << "no solution" << std::endl;
+                std::cout << "    " << main_name << " wall median "
+                          << bench::fmt_dur(st.median_ns) << "  p95 "
+                          << bench::fmt_dur(st.p95_ns) << "  best "
+                          << bench::fmt_dur(st.best_ns) << "  ("
+                          << st.iterations << " iters)" << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "ERROR: " << e.what() << std::endl;
             }
@@ -626,19 +696,27 @@ void run_case(const TestCase& tc, const Profile& profile,
             continue;
         }
         try {
-            algorithm::AlgorithmExecutor executor(std::move(algo));
-            algorithm::AlgorithmInput run_input = algo_input;
-            executor.start(std::move(run_input));
-            executor.wait();
-
-            if (executor.state() != algorithm::AlgorithmState::Completed) {
-                std::cout << "no solution" << std::endl; continue;
-            }
-            algorithm::AlgorithmOutput out = executor.output();
-            if (out.solutions.empty()) {
-                std::cout << "no solution" << std::endl; continue;
-            }
-            print_result(out, algo_input.target, tc.max_cost);
+            // wall 计时（harness 统一方法论）：单次 = 旧行为 + wall 行；
+            // iterations > 1 = median/p95/best 统计。print_result 行保持
+            // 字节兼容（bench_report.py 依赖其格式）。
+            std::optional<algorithm::AlgorithmOutput> out;
+            bench::Case bc{algo_name,
+                           [&] { out = run_algo_once(loader, algo_name, algo_input); },
+                           {}, {}, iterations};
+            const int eff_warmup = iterations > 1 ? warmup : 0;
+            const auto st = bench::run_case(bc, iterations, eff_warmup);
+            wall_rows.push_back({algo_name, st});
+            // 先完成算法前缀行（bench_report 解析 `<algo> <L>L ✅ <ms>ms`
+            // 整行结构），再输出独立 wall 行（不与报告正则碰撞）。
+            if (out && !out->solutions.empty())
+                print_result(*out, algo_input.target, tc.max_cost);
+            else
+                std::cout << "no solution" << std::endl;
+            std::cout << "    " << algo_name << " wall median "
+                      << bench::fmt_dur(st.median_ns) << "  p95 "
+                      << bench::fmt_dur(st.p95_ns) << "  best "
+                      << bench::fmt_dur(st.best_ns) << "  ("
+                      << st.iterations << " iters)" << std::endl;
         } catch (const std::exception& e) {
             std::cout << "ERROR: " << e.what() << std::endl;
         }
@@ -765,17 +843,33 @@ int main(int argc, char* argv[]) {
     }
 
     // ── Run each test case ────────────────────────────────────────────
+    std::vector<WallRow> wall_rows;
     for (auto& qc : queue) {
         std::cout << "\n" << qc.tc->name << " (" << qc.tc->wanted.size()
                   << " enchants, max " << qc.tc->max_cost << "L):" << std::endl;
         try {
             run_case(*qc.tc, *qc.profile, algos, loader, cfg.tier, cfg.no_skip,
-                     cfg.max_time_sec);
+                     cfg.max_time_sec, cfg.iterations, cfg.warmup, wall_rows);
         } catch (const std::exception& e) {
             std::cerr << "  ERROR: " << e.what() << std::endl;
         }
     }
 
     std::cout << "\n=== Done ===" << std::endl;
+    if (cfg.json) {
+        // 机器可解析汇总（opt-in；bench_report.py 不解析此段，其解析止于
+        // "=== Done ===" 的块边界后即忽略后续行）。
+        std::cout << "{\n  \"cases\": [";
+        for (size_t i = 0; i < wall_rows.size(); ++i) {
+            const auto& r = wall_rows[i];
+            std::cout << (i ? ",\n    " : "\n    ")
+                      << "{\"algo\": \"" << r.algo << "\", \"iterations\": "
+                      << r.stats.iterations << ", \"median_ns\": "
+                      << r.stats.median_ns << ", \"p95_ns\": " << r.stats.p95_ns
+                      << ", \"best_ns\": " << r.stats.best_ns
+                      << ", \"total_ns\": " << r.stats.total_ns << "}";
+        }
+        std::cout << (wall_rows.empty() ? "" : "\n  ") << "]\n}\n";
+    }
     return 0;
 }

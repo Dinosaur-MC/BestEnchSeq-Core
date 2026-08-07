@@ -1,54 +1,53 @@
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 // ThreadPool benchmark — throughput, scalability, parallel_for
-// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Migrated to the shared benchmark harness (benchmarks/framework/
+// bench_framework.h): one case per (workload × thread-count) point; the
+// thread pool (and the parallel_for data vector) is rebuilt per iteration
+// by the case's setup/teardown hooks (untimed), and the harness owns
+// warmup / iterations / statistics / CLI
+// (--list / --filter / --iterations / --warmup / --json).
+//
+// Run: build/bin/thread_pool_benchmark [options]
+// ═══════════════════════════════════════════════════════════════════════════
+
+#define BESQ_BENCH_MAIN
+#include "framework/bench_framework.h"
 
 #include "utils/thread/ThreadPool.h"
 
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <thread>
 #include <vector>
 
 using namespace besq;
-namespace chrono = std::chrono;
-using Clock = chrono::steady_clock;
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 
 #ifdef NDEBUG
-constexpr int64_t OPS_BATCH      =     500'000;   // tasks per throughput test
-constexpr int64_t OPS_PAR_FOR    =  10'000'000;  // indices per parallel_for test
-constexpr int64_t OPS_HEAVY      =     100'000;  // heavy tasks (each does real work)
+constexpr int64_t OPS_BATCH   =     500'000;   // tasks per throughput test
+constexpr int64_t OPS_PAR_FOR =  10'000'000;  // indices per parallel_for test
+constexpr int64_t OPS_HEAVY   =     100'000;  // heavy tasks (each does real work)
 #else
-constexpr int64_t OPS_BATCH      =     100'000;
-constexpr int64_t OPS_PAR_FOR    =   1'000'000;
-constexpr int64_t OPS_HEAVY      =       5'000;
+constexpr int64_t OPS_BATCH   =     100'000;
+constexpr int64_t OPS_PAR_FOR =   1'000'000;
+constexpr int64_t OPS_HEAVY   =       5'000;
 #endif
 
-constexpr int64_t WARMUP_TASKS   =      10'000;
+// ─── Performance sink & workload generators ────────────────────────────────
 
-// Timer helper
-struct Timer {
-    Clock::time_point start = Clock::now();
-    double elapsed() const {
-        return chrono::duration<double>(Clock::now() - start).count();
-    }
-    void reset() { start = Clock::now(); }
-};
-
-// Performance sink: prevents compiler from eliminating dead stores
+// Prevents compiler from eliminating dead stores
 struct Sink {
     int64_t val = 0;
     void add(int64_t x) { val += x; }
     // Force a side-effect that the optimiser cannot bypass.
     void escape() { volatile int64_t v = val; (void)v; }
 };
-
-// ─── Workload generators ───────────────────────────────────────────────────
 
 // Busy-loop for ~`cycles` iterations — calibrated to ~1 µs on modern HW.
 // Using a volatile sink prevents the loop from being eliminated.
@@ -59,179 +58,137 @@ inline void busy_work(int64_t cycles, Sink* sink = nullptr) {
     else { volatile int64_t dummy = x; (void)dummy; }
 }
 
-// ─── Benchmark: task submission throughput ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+//  Measurement units (one unit per harness iteration; no internal timing —
+//  the harness times the whole call)
+// ═══════════════════════════════════════════════════════════════════════════
 
-// Measures how many empty (fast) tasks per second the pool can drain.
-struct ThroughputResult {
-    int      threads;
-    int64_t  tasks;
-    double   elapsed_ms;
-    double   throughput;   // M tasks / s
-
-    void print(const char* label) const {
-        std::printf("  %-22s  %4d threads  %7.1f M/s  (%6.0f ms)\n",
-                    label, threads, throughput, elapsed_ms);
-    }
-};
-
-ThroughputResult bench_throughput(ThreadPool& pool, int64_t n_tasks,
-                                  const char* label) {
+// Task submission throughput: submit n_tasks and wait for the pool to drain.
+// Verifies the completion counter as a sanity check.
+static void bench_throughput(ThreadPool& pool, int64_t n_tasks) {
     std::atomic<int64_t> counter{0};
 
-    Timer t;
     for (int64_t i = 0; i < n_tasks; ++i) {
         pool.submit([&counter] { counter.fetch_add(1, std::memory_order_relaxed); });
     }
     pool.wait();
 
-    double elapsed = t.elapsed() * 1000.0;  // ms
-    double thru = static_cast<double>(n_tasks) / (elapsed / 1000.0) / 1.0e6;
-
-    // Verify correctness
     if (counter.load() != n_tasks)
         std::fprintf(stderr, "  WARN: expected %lld, got %lld\n",
                      (long long)n_tasks, (long long)counter.load());
-
-    return {static_cast<int>(pool.size()), n_tasks, elapsed, thru};
 }
 
-// ─── Benchmark: parallel_for throughput ─────────────────────────────────────
-
-struct ParForResult {
-    int      threads;
-    int64_t  elements;
-    int64_t  work_per_element;
-    double   elapsed_ms;
-    double   throughput;   // M elements / s
-
-    void print(const char* label) const {
-        std::printf("  %-22s  %4d threads  %7.1f M/s  (%6.0f ms)  work=%lld\n",
-                    label, threads, throughput, elapsed_ms,
-                    (long long)work_per_element);
-    }
-};
-
+// parallel_for throughput: run body over [0, n).
 template <typename Body>
-ParForResult bench_parallel_for(ThreadPool& pool, int64_t n, Body&& body,
-                                const char* label, int64_t work = 0) {
-    Timer t;
+static void bench_parallel_for(ThreadPool& pool, int64_t n, Body&& body) {
     parallel_for(pool, int64_t{0}, n, std::forward<Body>(body));
-    double elapsed = t.elapsed() * 1000.0;
-    double thru = static_cast<double>(n) / (elapsed / 1000.0) / 1.0e6;
-    return {static_cast<int>(pool.size()), n, work, elapsed, thru};
 }
 
-// ─── Main ──────────────────────────────────────────────────────────────────
+// ─── Per-iteration fixture ─────────────────────────────────────────────────
+// The thread pool (and, for parallel_for cases, the data vector) is rebuilt
+// by the case setup hook so pool construction never lands inside the timed
+// region.  These are file-scope statics referenced by the case lambdas.
+static std::unique_ptr<ThreadPool> g_pool;
+static std::vector<int64_t> g_data_i64;
+static std::vector<double> g_data_f64;
 
-int main(int argc, char* argv[]) {
-    // Parse optional thread list
-    std::vector<int> thread_counts;
-    if (argc > 1) {
-        for (int i = 1; i < argc; ++i) {
-            thread_counts.push_back(std::atoi(argv[i]));
-        }
-    } else {
-        thread_counts = {1, 2, 4, 8,
-                         static_cast<int>(std::thread::hardware_concurrency())};
-        // Remove duplicates and sort
-        std::sort(thread_counts.begin(), thread_counts.end());
-        thread_counts.erase(
-            std::unique(thread_counts.begin(), thread_counts.end()),
-            thread_counts.end());
-    }
+static void fixture_pool_setup(int tc) {
+    g_pool = std::make_unique<ThreadPool>(static_cast<std::size_t>(tc));
+}
+static void fixture_pool_teardown() {
+    g_pool.reset();
+}
+static void fixture_i64_setup(int tc) {
+    fixture_pool_setup(tc);
+    g_data_i64.resize(static_cast<std::size_t>(OPS_PAR_FOR)); // body rewrites every index
+}
+static void fixture_f64_setup(int tc) {
+    fixture_pool_setup(tc);
+    g_data_f64.resize(static_cast<std::size_t>(OPS_PAR_FOR));
+}
+static void fixture_i64_teardown() {
+    g_data_i64.clear();
+    g_data_f64.clear();
+    fixture_pool_teardown();
+}
+static void fixture_f64_teardown() {
+    g_data_f64.clear();
+    fixture_pool_teardown();
+}
 
-    std::printf("╔══════════════════════════════════════════════════════════════╗\n");
-    std::printf("║             ThreadPool Benchmark                             ║\n");
-    std::printf("╚══════════════════════════════════════════════════════════════╝\n");
-    std::printf("  Hardware concurrency: %zu\n", static_cast<std::size_t>(std::thread::hardware_concurrency()));
-    std::printf("  Task batch size:      %lld\n", (long long)OPS_BATCH);
-    std::printf("  parallel_for size:    %lld\n", (long long)OPS_PAR_FOR);
-    std::printf("\n");
+// ═══════════════════════════════════════════════════════════════════════════
+//  Case registration — data-driven: (workload × thread-count) matrix.
+//  Thread counts: 1, 2, 4, 8, hardware_concurrency (dedup, sorted).
+// ═══════════════════════════════════════════════════════════════════════════
 
-    // ── Warm-up (cold start, first allocation, thread setup) ─────────
-    {
-        ThreadPool warmup(thread_counts.back());
-        for (int64_t i = 0; i < WARMUP_TASKS; ++i)
-            warmup.submit([] { busy_work(5); });
-        warmup.wait();
-    }
-    std::printf("  Warm-up complete (%lld tasks)\n\n", (long long)WARMUP_TASKS);
+namespace {
+std::vector<int> make_thread_counts() {
+    std::vector<int> tc = {1, 2, 4, 8,
+                           static_cast<int>(std::thread::hardware_concurrency())};
+    std::sort(tc.begin(), tc.end());
+    tc.erase(std::unique(tc.begin(), tc.end()), tc.end());
+    return tc;
+}
+std::string thread_label(int tc) {
+    return std::to_string(tc) + (tc == 1 ? " thread" : " threads");
+}
+} // namespace
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  1. Task throughput — fine-grained (empty tasks)
-    // ═══════════════════════════════════════════════════════════════════
-    std::printf("── Fine-grained task throughput ───────────────────────────\n");
-    for (int tc : thread_counts) {
+[[maybe_unused]] static const bool s_registered = [] {
+    auto& reg = ::bench::registry();
+    const std::vector<int> counts = make_thread_counts();
+
+    auto add_case = [&reg](std::string name, std::function<void()> setup,
+                           std::function<void()> teardown,
+                           std::function<void()> body) {
+        reg.push_back(bench::Case{std::move(name), std::move(body),
+                                  std::move(setup), std::move(teardown), 0});
+    };
+
+    // ── 1. Fine-grained task throughput (empty tasks; tc <= 4) ──────────
+    for (int tc : counts) {
         if (tc > 4) continue;
-        ThreadPool pool(tc);
-        auto r = bench_throughput(pool, OPS_BATCH, "empty task");
-        r.print("empty task");
+        add_case("empty task throughput (" + thread_label(tc) + ")",
+                 [tc] { fixture_pool_setup(tc); }, fixture_pool_teardown,
+                 [] { bench_throughput(*g_pool, OPS_BATCH); });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  2. Heavy task throughput (~100 µs work per task)
-    // ═══════════════════════════════════════════════════════════════════
-    std::printf("\n── Heavy task throughput (≈100 µs work) ──────────────────\n");
-    for (int tc : thread_counts) {
+    // ── 2. Heavy task throughput (~100 µs work per task; tc <= 8) ───────
+    for (int tc : counts) {
         if (tc > 8) continue;
-        ThreadPool pool(tc);
-        auto r = bench_throughput(pool, OPS_HEAVY, "100 µs task");
-        r.print("100 µs task");
+        add_case("heavy task throughput (" + thread_label(tc) + ")",
+                 [tc] { fixture_pool_setup(tc); }, fixture_pool_teardown,
+                 [] { bench_throughput(*g_pool, OPS_HEAVY); });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  3. parallel_for — tiny work (just store)
-    // ═══════════════════════════════════════════════════════════════════
-    std::printf("\n── parallel_for throughput (store only) ──────────────────\n");
-    for (int tc : thread_counts) {
-        ThreadPool pool(tc);
-        std::vector<int64_t> data(OPS_PAR_FOR);
-        auto r = bench_parallel_for(pool, OPS_PAR_FOR,
-            [&](int64_t i) { data[i] = i; }, "store only");
-        r.print("store only");
+    // ── 3. parallel_for — tiny work (just store) ────────────────────────
+    for (int tc : counts) {
+        add_case("parallel_for store only (" + thread_label(tc) + ")",
+                 [tc] { fixture_i64_setup(tc); }, fixture_i64_teardown,
+                 [] { bench_parallel_for(*g_pool, OPS_PAR_FOR,
+                                          [](int64_t i) { g_data_i64[i] = i; }); });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  4. parallel_for — medium work (sqrt + write)
-    // ═══════════════════════════════════════════════════════════════════
-    std::printf("\n── parallel_for throughput (sqrt + write) ────────────────\n");
-    for (int tc : thread_counts) {
-        ThreadPool pool(tc);
-        std::vector<double> data(OPS_PAR_FOR);
-        auto r = bench_parallel_for(pool, OPS_PAR_FOR,
-            [&](int64_t i) { data[i] = std::sqrt(static_cast<double>(i)); },
-            "sqrt + write");
-        r.print("sqrt + write");
+    // ── 4. parallel_for — medium work (sqrt + write) ────────────────────
+    for (int tc : counts) {
+        add_case("parallel_for sqrt (" + thread_label(tc) + ")",
+                 [tc] { fixture_f64_setup(tc); }, fixture_f64_teardown,
+                 [] { bench_parallel_for(*g_pool, OPS_PAR_FOR,
+                                          [](int64_t i) {
+                                              g_data_f64[i] = std::sqrt(static_cast<double>(i));
+                                          }); });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  5. parallel_for scalability (sqrt, speedup vs 1 thread)
-    // ═══════════════════════════════════════════════════════════════════
-    std::printf("\n── parallel_for scalability (200 log work, speedup vs 1 thread) ─\n");
-    {
-        ThreadPool pool1(1);
-        std::vector<double> base_data(OPS_PAR_FOR);
-        auto base = bench_parallel_for(pool1, OPS_PAR_FOR,
-            [&](int64_t i) { base_data[i] = std::sqrt(static_cast<double>(i)); busy_work(250); },
-            "baseline (1T)");
-        double base_thru = base.throughput;
-
-        for (int tc : thread_counts) {
-            if (tc == 1) continue;
-            ThreadPool pool(tc);
-            std::vector<double> data(OPS_PAR_FOR);
-            auto r = bench_parallel_for(pool, OPS_PAR_FOR,
-                [&](int64_t i) { data[i] = std::sqrt(static_cast<double>(i)); busy_work(250); },
-                "scalability");
-            double speedup = r.throughput / base_thru;
-            std::printf("  scalability           %4d threads  %6.2fx speedup  (%7.1f M/s)\n",
-                        tc, speedup, r.throughput);
-        }
+    // ── 5. parallel_for scalability (sqrt + log work) ───────────────────
+    for (int tc : counts) {
+        add_case("parallel_for scalability (" + thread_label(tc) + ")",
+                 [tc] { fixture_f64_setup(tc); }, fixture_f64_teardown,
+                 [] { bench_parallel_for(*g_pool, OPS_PAR_FOR,
+                                          [](int64_t i) {
+                                              g_data_f64[i] = std::sqrt(static_cast<double>(i));
+                                              busy_work(250);
+                                          }); });
     }
 
-    std::printf("\n══════════════════════════════════════════════════════════════\n");
-    std::printf("  Done.\n");
-    std::printf("══════════════════════════════════════════════════════════════\n");
-
-    return 0;
-}
+    return true;
+}();
