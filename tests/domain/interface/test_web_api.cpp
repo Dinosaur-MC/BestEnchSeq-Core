@@ -3,6 +3,7 @@
 // web::Router. Algorithm/Calculator/Logs controllers arrive in later tasks and
 // extend this file.
 // =============================================================================
+#define BESQ_TEST_MAIN
 #include "domain/interface/web/controllers/HealthController.h"
 #include "domain/interface/web/controllers/StatusController.h"
 #include "domain/interface/web/controllers/SettingsController.h"
@@ -21,7 +22,7 @@
 #include "common/io/json.h"
 #include "common/log/log.hpp"
 #include "common/log/LogRingBuffer.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -1491,31 +1492,25 @@ void test_router_500() {
 }
 } // namespace
 
-int main() {
+TEST_CASE("test_web_api") {
     BesqContext ctx; ctx.load_builtin(); ctx.load_profiles();
     TestApp app(ctx);
-    try {
-        test_health(app);
-        test_status(app);
-        test_settings(app);
-        test_profiles(app);
-        test_profile_actions(app);  // §12.1: actions + tags/ench round-trips
-        test_enchantables(app);     // §12.1: /enchantables/{item} 适用附魔查询
-        test_fs(app);               // 目录选择器：/api/fs/list（根锁 + 非法路径 400）
-        test_algorithms(app);
-        test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
-        test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）
-        test_stream_close_hook(app); // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
-        test_hub_clear(app);        // SseHub::clear() 清空全部订阅
-        test_task_diagnostics(app); // T2: 任务诊断事件流（diagnostics/diag_exit + SSE diag 帧）
-        test_calculator(app);       // §12.1: failed/cancelled 快照、任务字段、unload-409
-        test_logs(app);             // §12.1: since 非法 → 400
-        test_web_module(app.ctx);
-        test_router_500();          // §12.1: 未捕获异常 → 500 INTERNAL_ERROR envelope
+    test_health(app);
+    test_status(app);
+    test_settings(app);
+    test_profiles(app);
+    test_profile_actions(app);  // §12.1: actions + tags/ench round-trips
+    test_enchantables(app);     // §12.1: /enchantables/{item} 适用附魔查询
+    test_fs(app);               // 目录选择器：/api/fs/list（根锁 + 非法路径 400）
+    test_algorithms(app);
+    test_stream_channel(app);   // 须在 test_calculator 之前（单活动槽）
+    test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）
+    test_stream_close_hook(app); // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
+    test_hub_clear(app);        // SseHub::clear() 清空全部订阅
+    test_task_diagnostics(app); // T2: 任务诊断事件流（diagnostics/diag_exit + SSE diag 帧）
+    test_calculator(app);       // §12.1: failed/cancelled 快照、任务字段、unload-409
+    test_logs(app);             // §12.1: since 非法 → 400
+    test_web_module(app.ctx);
+    test_router_500();          // §12.1: 未捕获异常 → 500 INTERNAL_ERROR envelope
         TEST_PASS("test_web_api");
-    } catch (const std::exception& e) {
-        std::cerr << "\nFATAL: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
 }

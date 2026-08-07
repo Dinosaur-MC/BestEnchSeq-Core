@@ -1,4 +1,6 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include "framework/test_fixture.h"
 #include "domain/orchestration/orchestration.h"
 #include "domain/orchestration/components/OutputSchema.h"
@@ -31,7 +33,7 @@ Profile profile_from_fx(const TestFixture& fx) {
 
 // ─── Test 1: format a simple book solution ─────────────────────────
 
-void test_format_book_solution() {
+TEST_CASE("test_format_book_solution") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -64,7 +66,7 @@ void test_format_book_solution() {
 
 // ─── Test 2: format a combined solution with raw adapter ────────────
 
-void test_format_combined_solution() {
+TEST_CASE("test_format_combined_solution") {
     g_fx.init_chestplate_set();
     auto profile = profile_from_fx(g_fx);
     EnchantmentRegistry& enchants = g_fx.enchants;
@@ -101,7 +103,7 @@ void test_format_combined_solution() {
 
 // ─── Test 3: format with no steps (edge case) ──────────────────────
 
-void test_format_no_steps() {
+TEST_CASE("test_format_no_steps") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -123,7 +125,7 @@ void test_format_no_steps() {
 
 // ─── Test 4: format with unsuccesful solution (zero steps) ─────────
 
-void test_format_unsuccessful() {
+TEST_CASE("test_format_unsuccessful") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -145,7 +147,7 @@ void test_format_unsuccessful() {
 
 // ─── Test 5: format with multiple steps ─────────────────────────────
 
-void test_format_multi_step() {
+TEST_CASE("test_format_multi_step") {
     g_fx.init_chestplate_set();
     auto profile = profile_from_fx(g_fx);
     EnchantmentRegistry& enchants = g_fx.enchants;
@@ -197,7 +199,7 @@ void test_format_multi_step() {
 
 // ─── Test 6: verbose item format with new simplified format ──────────
 
-void test_verbose_item_format() {
+TEST_CASE("test_verbose_item_format") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -234,7 +236,7 @@ void test_verbose_item_format() {
 
 // ─── Test 8: verbose format with final_item ──────────────────────────
 
-void test_format_verbose_final_item() {
+TEST_CASE("test_format_verbose_final_item") {
     g_fx.init_chestplate_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -268,7 +270,7 @@ void test_format_verbose_final_item() {
 
 // ─── Test 9: verbose format with too expensive warning ───────────────
 
-void test_format_verbose_too_expensive() {
+TEST_CASE("test_format_verbose_too_expensive") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -298,7 +300,7 @@ void test_format_verbose_too_expensive() {
 
 // ─── Test: format_json emits real equipment data + C ABI-aligned root ──
 
-void test_format_json_real_equipment() {
+TEST_CASE("test_format_json_real_equipment") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -341,7 +343,7 @@ void test_format_json_real_equipment() {
 // The calculator result area renders each step as an A+B=C card; the C
 // (forged result item) must be present in the step JSON.
 
-void test_format_json_step_result() {
+TEST_CASE("test_format_json_step_result") {
     g_fx.init_chestplate_set();
     auto profile = profile_from_fx(g_fx);
     EnchantmentRegistry& enchants = g_fx.enchants;
@@ -395,7 +397,7 @@ void test_format_json_step_result() {
 // platform name.  Register a zh_CN table where the display string is
 // "Java版" to prove the compact output still emits `#PLATFORM=Java`.
 
-void test_format_compact_platform_raw() {
+TEST_CASE("test_format_compact_platform_raw") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -449,7 +451,7 @@ void test_format_compact_platform_raw() {
 
 // ─── JSON round-trip: format_json → parse_json ─────────────────────────
 
-void test_json_roundtrip() {
+TEST_CASE("test_json_roundtrip") {
     g_fx.init_sword_set();
     auto profile = profile_from_fx(g_fx);
 
@@ -604,7 +606,7 @@ Json reference_solution_json(const Solution &sol, int32_t rank,
 // 2) the emitted tree equals the frozen hand-built wire shape exactly;
 // 3) the emitted JSON re-parses into RootView (all fields present + typed).
 
-void test_format_json_schema_encode() {
+TEST_CASE("test_format_json_schema_encode") {
     g_fx.init_chestplate_set();
     auto profile = profile_from_fx(g_fx);
     EnchantmentRegistry& enchants = g_fx.enchants;
@@ -707,7 +709,7 @@ void test_format_json_schema_encode() {
 
 // ─── Test: build_json_root (C ABI shared root) is schema-driven ──────────
 
-void test_build_json_root_schema() {
+TEST_CASE("test_build_json_root_schema") {
     Json root = OutputFormatter::build_json_root(
         AlgorithmMode::inventory, false, "bb_dp", 1234);
 
@@ -738,7 +740,7 @@ static std::vector<std::string> schema_field_names(const Tuple& t) {
     return names;
 }
 
-void test_root_meta_fields_shared() {
+TEST_CASE("test_root_meta_fields_shared") {
     const auto meta = schema_field_names(RootMetaSchema::fields);
     const auto root = schema_field_names(RootSchema::fields);
 
@@ -755,32 +757,3 @@ void test_root_meta_fields_shared() {
 }
 
 } // anonymous namespace
-
-int main() {
-    try {
-        g_fx.init_sword_set();  // Initialize default registries
-
-        test_format_book_solution();
-        test_format_combined_solution();
-        test_format_no_steps();
-        test_format_unsuccessful();
-        test_format_multi_step();
-        test_verbose_item_format();
-        test_format_verbose_final_item();
-        test_format_verbose_too_expensive();
-        test_format_json_real_equipment();
-        test_format_json_step_result();
-        test_format_compact_platform_raw();
-        test_json_roundtrip();
-        test_format_json_schema_encode();
-        test_build_json_root_schema();
-        test_root_meta_fields_shared();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

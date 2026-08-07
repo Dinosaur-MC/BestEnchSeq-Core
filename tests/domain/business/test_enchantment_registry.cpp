@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
 #include <stdexcept>
@@ -26,7 +27,7 @@ std::vector<EnchInfo> make_valid_enchants() {
 // ---------------------------------------------------------------------------
 // test_initialize_and_get
 // ---------------------------------------------------------------------------
-void test_initialize_and_get() {
+TEST_CASE("test_initialize_and_get") {
     auto infos = make_valid_enchants();
     EnchantmentRegistry reg(infos);
 
@@ -50,7 +51,7 @@ void test_initialize_and_get() {
 // ---------------------------------------------------------------------------
 // test_get_bounds
 // ---------------------------------------------------------------------------
-void test_get_bounds() {
+TEST_CASE("test_get_bounds") {
     auto infos = make_valid_enchants();
     EnchantmentRegistry reg(infos);
 
@@ -75,7 +76,7 @@ void test_get_bounds() {
 // ---------------------------------------------------------------------------
 // test_check_validation
 // ---------------------------------------------------------------------------
-void test_check_validation() {
+TEST_CASE("test_check_validation") {
     // Valid data
     auto valid = make_valid_enchants();
     expect(EnchantmentRegistry::check_validation(valid), "valid data passes validation");
@@ -136,7 +137,7 @@ void test_check_validation() {
 // ---------------------------------------------------------------------------
 // test_is_incompatible
 // ---------------------------------------------------------------------------
-void test_is_incompatible() {
+TEST_CASE("test_is_incompatible") {
     std::vector<EnchInfo> infos;
     infos.emplace_back(
         NSID("sharpness"), "Sharpness", MCE::Java,
@@ -200,7 +201,7 @@ void test_is_incompatible() {
 // ---------------------------------------------------------------------------
 // test_exclusive_set_access
 // ---------------------------------------------------------------------------
-void test_exclusive_set_access() {
+TEST_CASE("test_exclusive_set_access") {
     std::vector<EnchInfo> infos;
     infos.emplace_back(
         NSID("sharpness"), "Sharpness", MCE::Java,
@@ -231,17 +232,3 @@ void test_exclusive_set_access() {
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
-int main() {
-    try {
-        test_initialize_and_get();
-        test_get_bounds();
-        test_check_validation();
-        test_is_incompatible();
-        test_exclusive_set_access();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

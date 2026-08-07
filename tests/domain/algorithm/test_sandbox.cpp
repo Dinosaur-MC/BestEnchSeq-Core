@@ -17,10 +17,11 @@
 /// $BESQ_TEST_MALICIOUS_PLUGIN / $BESQ_WORKER_PATH or build-tree defaults.
 /// If no plugin binaries are present, the plugin-dependent tests SKIP.
 
+#define BESQ_TEST_MAIN
 #include "domain/algorithm/sandbox/SandboxedExecutor.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 #include "domain/algorithm/types/EnchSet.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <atomic>
 #include <chrono>
@@ -397,68 +398,57 @@ void test_stress_pause_resume(const std::string& plugin) {
 
 } // anonymous namespace
 
-int main() {
+TEST_CASE("test_sandbox") {
     const std::string plugin = find_plugin();
     if (plugin.empty()) {
-        std::cout << "SKIP: malicious test plugin not built (set BESQ_TEST_MALICIOUS_PLUGIN)" << std::endl;
-        return 0;
+        SKIP("malicious test plugin not built (set BESQ_TEST_MALICIOUS_PLUGIN)");
     }
 
-    try {
-        // ── Spawn the worker with the malicious plugin ─────────────────
-        // Linux: dlopen → seccomp → construct (open EPERM'd).  Windows:
-        // CreateProcess + Job Object, no seccomp.
-        SandboxedExecutor se(plugin, find_worker());
+    // ── Spawn the worker with the malicious plugin ─────────────────
+    // Linux: dlopen → seccomp → construct (open EPERM'd).  Windows:
+    // CreateProcess + Job Object, no seccomp.
+    SandboxedExecutor se(plugin, find_worker());
 
-        // ── Worker survived + metadata query works ────────────────────
-        expect(std::string(se.name()) == "malicious", "sandbox: worker reports name");
-        expect(std::string(se.version()) == "1.0.0", "sandbox: worker reports version");
+    // ── Worker survived + metadata query works ────────────────────
+    expect(std::string(se.name()) == "malicious", "sandbox: worker reports name");
+    expect(std::string(se.version()) == "1.0.0", "sandbox: worker reports version");
 
 #if defined(__linux__)
-        // ── seccomp isolation: the plugin's open("/etc/passwd") was EPERM'd ──
-        const std::string stderr_out = se.take_worker_stderr();
-        expect(stderr_out.find("OPEN BLOCKED") != std::string::npos, "sandbox: plugin open() blocked (seccomp EPERM)");
-        expect(stderr_out.find("OPEN OK") == std::string::npos, "sandbox: plugin must NOT have read the file");
+    // ── seccomp isolation: the plugin's open("/etc/passwd") was EPERM'd ──
+    const std::string stderr_out = se.take_worker_stderr();
+    expect(stderr_out.find("OPEN BLOCKED") != std::string::npos, "sandbox: plugin open() blocked (seccomp EPERM)");
+    expect(stderr_out.find("OPEN OK") == std::string::npos, "sandbox: plugin must NOT have read the file");
 #else
-        // ── Windows smoke test: binary IPC integrity ──────────────────
-        // The request payload for evaluate(26) is the int16 bytes {0x1A, 0x00}.
-        // A worker with CRT TEXT-mode stdin/stdout would mangle this (0x1A =
-        // Ctrl-Z EOF) and fail to respond.  Verifies the _O_BINARY fix.
-        std::cout << "SKIP seccomp assertion on Windows (no seccomp); "
-                     "checking binary IPC with evaluate(26)..."
-                  << std::endl;
-        const double v = se.evaluate(26);
-        expect(v >= 0.0, "sandbox: worker responded to evaluate(0x1A payload) — binary IPC ok");
+    // ── Windows smoke test: binary IPC integrity ──────────────────
+    // The request payload for evaluate(26) is the int16 bytes {0x1A, 0x00}.
+    // A worker with CRT TEXT-mode stdin/stdout would mangle this (0x1A =
+    // Ctrl-Z EOF) and fail to respond.  Verifies the _O_BINARY fix.
+    std::cout << "SKIP seccomp assertion on Windows (no seccomp); "
+                 "checking binary IPC with evaluate(26)..."
+              << std::endl;
+    const double v = se.evaluate(26);
+    expect(v >= 0.0, "sandbox: worker responded to evaluate(0x1A payload) — binary IPC ok");
 #endif
 
-        // ── Bad plugin path throws + cleans up the worker (fix 3) ──────
-        test_bad_plugin_path();
+    // ── Bad plugin path throws + cleans up the worker (fix 3) ──────
+    test_bad_plugin_path();
 
-        // ── Malicious plugin's execute runs to completion (no solutions) ──
-        test_malicious_run(plugin);
+    // ── Malicious plugin's execute runs to completion (no solutions) ──
+    test_malicious_run(plugin);
 
-        // ── Pause/resume + checkpoint + stress (needs a search plugin) ──
-        const std::string search_plugin = find_search_plugin();
-        if (search_plugin.empty()) {
-            std::cout << "SKIP: pause/checkpoint/races tests — no search plugin built" << std::endl;
-        } else {
-            test_pause_resume(search_plugin);
-            test_checkpoint_roundtrip(search_plugin);
-            test_destroy_mid_run(search_plugin);        // fix 2
-            test_reuse_after_completed(search_plugin);  // re-run from Completed
-            test_cancel_races_serialize(search_plugin); // fix 1/9
-            test_serialize_only_when_paused(search_plugin);
-            test_garbage_checkpoint_fails(search_plugin);
-            test_preflight_during_run_guarded(search_plugin);
-            test_stress_pause_resume(search_plugin);
-            test_metadata(search_plugin, plugin);
-        }
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return print_summary();
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return print_summary();
+    // ── Pause/resume + checkpoint + stress (needs a search plugin) ──
+    const std::string search_plugin = find_search_plugin();
+    if (search_plugin.empty()) {
+        SKIP("pause/checkpoint/races tests — no search plugin built");
     }
-    return print_summary();
+    test_pause_resume(search_plugin);
+    test_checkpoint_roundtrip(search_plugin);
+    test_destroy_mid_run(search_plugin);        // fix 2
+    test_reuse_after_completed(search_plugin);  // re-run from Completed
+    test_cancel_races_serialize(search_plugin); // fix 1/9
+    test_serialize_only_when_paused(search_plugin);
+    test_garbage_checkpoint_fails(search_plugin);
+    test_preflight_during_run_guarded(search_plugin);
+    test_stress_pause_resume(search_plugin);
+    test_metadata(search_plugin, plugin);
 }

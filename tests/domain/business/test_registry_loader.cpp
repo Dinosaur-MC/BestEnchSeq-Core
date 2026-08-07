@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/components/TagResolver.h"
@@ -31,7 +32,7 @@ namespace {
 // 1. DTO to EnchantmentRegistry: verify size, contains, incompatibility,
 //    exclusive_set, applicable_to, and field mapping.
 // ---------------------------------------------------------------------------
-void test_loader_ench_dto_to_reg() {
+TEST_CASE("test_loader_ench_dto_to_reg") {
     // -- Prepare TagRegistry with known categories ---------------
     TagRegistry tag_reg;
     tag_reg.insert({NSID("#minecraft:sword"), "sword"});
@@ -146,7 +147,7 @@ void test_loader_ench_dto_to_reg() {
 // ---------------------------------------------------------------------------
 // 2. DTO to EquipmentRegistry: verify size, contains, category resolution.
 // ---------------------------------------------------------------------------
-void test_loader_eq_dto_to_reg() {
+TEST_CASE("test_loader_eq_dto_to_reg") {
     // -- Prepare TagRegistry -------------------------------------
     TagRegistry tag_reg;
     tag_reg.insert({NSID("#minecraft:sword"),    "sword"});
@@ -204,7 +205,7 @@ void test_loader_eq_dto_to_reg() {
 // ---------------------------------------------------------------------------
 // 3. JSON roundtrip: registry -> Json -> registry, then verify contents.
 // ---------------------------------------------------------------------------
-void test_loader_json_roundtrip() {
+TEST_CASE("test_loader_json_roundtrip") {
     // -- Build original registries ----------------------------------------
     EnchantmentRegistry orig_ench;
     orig_ench.insert({
@@ -287,7 +288,7 @@ void test_loader_json_roundtrip() {
 // ---------------------------------------------------------------------------
 // 4. Full resolve pipeline: DTOs -> all three registries.
 // ---------------------------------------------------------------------------
-void test_loader_resolve_full() {
+TEST_CASE("test_loader_resolve_full") {
     // -- Build Equipment DTOs (two categories: sword, helmet) ------------
     std::vector<business::loader::EquipmentData> eq_data;
     eq_data.push_back({"minecraft:diamond_sword",  "Diamond Sword",  "sword",  1561});
@@ -414,7 +415,7 @@ void test_loader_resolve_full() {
 //    reference when the tag is defined in the base tag registry, and drops
 //    references that cannot resolve.
 // ---------------------------------------------------------------------------
-void test_loader_supported_items_resolution() {
+TEST_CASE("test_loader_supported_items_resolution") {
     // Mod enchant references vanilla item tag `#minecraft:swords` — base_tags
     // provides the definition.
     std::vector<business::loader::EquipmentData> no_eq;
@@ -442,7 +443,7 @@ void test_loader_supported_items_resolution() {
 // 6b. Concrete item-ID references resolve against the profile's own equipment
 //     registry; references that cannot resolve are dropped entirely.
 // ---------------------------------------------------------------------------
-void test_loader_supported_items_concrete_and_drop() {
+TEST_CASE("test_loader_supported_items_concrete_and_drop") {
     std::vector<business::loader::EquipmentData> eq_data;
     eq_data.push_back({"minecraft:diamond_sword", "Diamond Sword", "sword", 1561});
 
@@ -487,7 +488,7 @@ void test_loader_supported_items_concrete_and_drop() {
 // 7. Parser-level vanilla tag fallback: a mod profile referencing a VANILLA
 //    tag (`#minecraft:...`) resolves even though the profile defines no tags.
 // ---------------------------------------------------------------------------
-void test_loader_vanilla_tag_fallback() {
+TEST_CASE("test_loader_vanilla_tag_fallback") {
     // Native-JSON profile whose enchant references the vanilla curse tag and
     // the vanilla "sword" category, with no equipments/tags of its own.
     const std::string content = R"({
@@ -536,7 +537,7 @@ void test_loader_vanilla_tag_fallback() {
 //     universe (vanilla tags/equipment). A concrete vanilla item reference
 //     resolves even though the profile defines no equipment of its own.
 // ---------------------------------------------------------------------------
-void test_loader_resolve_with_base() {
+TEST_CASE("test_loader_resolve_with_base") {
     // Universe (vanilla): elytra equipment + its category tag.
     std::vector<business::loader::EquipmentData> vanilla_eq;
     vanilla_eq.push_back({"minecraft:elytra", "Elytra", "elytra", 432});
@@ -567,7 +568,7 @@ void test_loader_resolve_with_base() {
 //     though the profile defines no equipment; the vanilla universe provides
 //     the validation fallback.
 // ---------------------------------------------------------------------------
-void test_loader_concrete_item_vanilla_universe() {
+TEST_CASE("test_loader_concrete_item_vanilla_universe") {
     const std::string content = R"({
         "name": "glide_mod",
         "enchantments": [
@@ -611,7 +612,7 @@ void test_loader_concrete_item_vanilla_universe() {
 //    object) shapes flow through the loader into the registry. Absent fields
 //    stay 0.
 // ---------------------------------------------------------------------------
-void test_loader_native_min_cost() {
+TEST_CASE("test_loader_native_min_cost") {
     static int counter = 0;
 
     auto write_and_load = [&](const std::string& content) {
@@ -705,7 +706,7 @@ void test_loader_native_min_cost() {
 //     carries a legacy pre-computed `limited_level` field (and no min_cost),
 //     the EnchInfo keeps the value and marks limited_level_provided = true.
 // ---------------------------------------------------------------------------
-void test_loader_native_limited_level_hint() {
+TEST_CASE("test_loader_native_limited_level_hint") {
     static int counter = 0;
 
     auto write_and_load = [&](const std::string& content) {
@@ -749,7 +750,7 @@ void test_loader_native_limited_level_hint() {
 //    string is read literally ("bedrock" → MCE::Bedrock), empty defaults to
 //    MCE::All, and to_dto writes it back via mce_to_string for round-trips.
 // ---------------------------------------------------------------------------
-void test_loader_platform_mapping() {
+TEST_CASE("test_loader_platform_mapping") {
     RegistryLoader loader;
     std::vector<business::loader::EnchantmentData> data;
     // platform="bedrock" → MCE::Bedrock（按数据字面读取）
@@ -790,7 +791,7 @@ void test_loader_platform_mapping() {
 // ---------------------------------------------------------------------------
 // 5. Resolve a single tag with concrete items.
 // ---------------------------------------------------------------------------
-void test_tag_resolve_basic() {
+TEST_CASE("test_tag_resolve_basic") {
     TagResolver resolver;
 
     // Register a tag: "minecraft:swords" -> {diamond_sword, iron_sword}
@@ -815,7 +816,7 @@ void test_tag_resolve_basic() {
 // ---------------------------------------------------------------------------
 // 6. Resolve chained (composite) tags with transitive references.
 // ---------------------------------------------------------------------------
-void test_tag_resolve_composite() {
+TEST_CASE("test_tag_resolve_composite") {
     TagResolver resolver;
 
     // weapons -> sharpness + #melee (tag reference)
@@ -840,7 +841,7 @@ void test_tag_resolve_composite() {
 // ---------------------------------------------------------------------------
 // 7. Resolve a tag that does not exist -- should return empty set.
 // ---------------------------------------------------------------------------
-void test_tag_unknown_tag() {
+TEST_CASE("test_tag_unknown_tag") {
     TagResolver resolver;
 
     // No tags registered at all
@@ -864,7 +865,7 @@ void test_tag_unknown_tag() {
 // ---------------------------------------------------------------------------
 // 8. Resolve a simple tag with concrete items (standalone, no registry init).
 // ---------------------------------------------------------------------------
-void test_tag_resolver_basic() {
+TEST_CASE("test_tag_resolver_basic") {
     TagResolver resolver;
     resolver.add_tag("minecraft:swords",
         {"minecraft:diamond_sword", "minecraft:iron_sword"});
@@ -881,7 +882,7 @@ void test_tag_resolver_basic() {
 // ---------------------------------------------------------------------------
 // 9. Resolve a composite tag with transitive (nested) tag references.
 // ---------------------------------------------------------------------------
-void test_tag_resolver_nested() {
+TEST_CASE("test_tag_resolver_nested") {
     TagResolver resolver;
 
     // swords -> #minecraft:all_swords (tag reference)
@@ -902,7 +903,7 @@ void test_tag_resolver_nested() {
 // ---------------------------------------------------------------------------
 // 10. Resolve a tag that does not exist in the resolver.
 // ---------------------------------------------------------------------------
-void test_tag_resolver_unknown() {
+TEST_CASE("test_tag_resolver_unknown") {
     TagResolver resolver;
 
     auto result = resolver.resolve("#minecraft:nonexistent");
@@ -914,7 +915,7 @@ void test_tag_resolver_unknown() {
 // ---------------------------------------------------------------------------
 // 11. Resolve a bare ID (no '#') returns a set containing the ID itself.
 // ---------------------------------------------------------------------------
-void test_tag_resolver_no_hash() {
+TEST_CASE("test_tag_resolver_no_hash") {
     TagResolver resolver;
 
     auto result = resolver.resolve("minecraft:sharpness");
@@ -929,7 +930,7 @@ void test_tag_resolver_no_hash() {
 // 12. Reverse lookup: given a concrete item ID, return the set of tags that
 //     contain it, as `#`-prefixed NSIDs (matches supported_items form).
 // ---------------------------------------------------------------------------
-void test_tag_tags_of() {
+TEST_CASE("test_tag_tags_of") {
     TagResolver resolver;
     resolver.add_tag("minecraft:swords",
         {"minecraft:diamond_sword", "minecraft:iron_sword"});
@@ -955,7 +956,7 @@ void test_tag_tags_of() {
 // ---------------------------------------------------------------------------
 // 12. Serialize a Profile to JSON and verify expected fields.
 // ---------------------------------------------------------------------------
-void test_serialize_profile() {
+TEST_CASE("test_serialize_profile") {
     Profile profile("test:profile");
     profile.set_description("Test description");
     profile.set_version("1.0.0");
@@ -984,7 +985,7 @@ void test_serialize_profile() {
 // ---------------------------------------------------------------------------
 // 13. Profile serialization roundtrip: serialize, deserialize, verify.
 // ---------------------------------------------------------------------------
-void test_serialize_profile_roundtrip() {
+TEST_CASE("test_serialize_profile_roundtrip") {
     Profile original("test:roundtrip");
     original.set_description("Roundtrip test");
 
@@ -1016,7 +1017,7 @@ void test_serialize_profile_roundtrip() {
 // ---------------------------------------------------------------------------
 // 14. Load a tag from a Json DOM object and verify resolution.
 // ---------------------------------------------------------------------------
-void test_tag_load_tag_json() {
+TEST_CASE("test_tag_load_tag_json") {
     TagResolver resolver;
 
     // Build Json with values array
@@ -1047,7 +1048,7 @@ void test_tag_load_tag_json() {
 // ---------------------------------------------------------------------------
 // 15. Load a tag from a raw JSON string and verify resolution.
 // ---------------------------------------------------------------------------
-void test_tag_load_tag_content() {
+TEST_CASE("test_tag_load_tag_content") {
     TagResolver resolver;
 
     // Load via load_tag_content with raw JSON string
@@ -1071,45 +1072,3 @@ void test_tag_load_tag_content() {
 // =============================================================================
 // main
 // =============================================================================
-int main() {
-    try {
-        // Section A -- RegistryLoader
-        test_loader_ench_dto_to_reg();
-        test_loader_eq_dto_to_reg();
-        test_loader_json_roundtrip();
-        test_loader_resolve_full();
-        test_loader_supported_items_resolution();
-        test_loader_supported_items_concrete_and_drop();
-        test_loader_vanilla_tag_fallback();
-        test_loader_resolve_with_base();
-        test_loader_concrete_item_vanilla_universe();
-        test_loader_native_min_cost();
-        test_loader_native_limited_level_hint();
-        test_loader_platform_mapping();
-
-        // Section B -- TagResolver
-        test_tag_resolve_basic();
-        test_tag_resolve_composite();
-        test_tag_unknown_tag();
-
-        // Section B (continued) -- TagResolver standalone
-        test_tag_resolver_basic();
-        test_tag_resolver_nested();
-        test_tag_resolver_unknown();
-        test_tag_resolver_no_hash();
-        test_tag_tags_of();
-
-        // Section C -- Serializer
-        test_serialize_profile();
-        test_serialize_profile_roundtrip();
-
-        // Section D -- Tag loading
-        test_tag_load_tag_json();
-        test_tag_load_tag_content();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

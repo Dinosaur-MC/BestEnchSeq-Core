@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "common/utils/bit_iterator.hpp"
 
 #include <cstdint>
@@ -10,7 +11,7 @@ namespace {
 // bit_iterator — next()-based iteration
 // ===========================================================================
 
-void test_bit_iterator_empty() {
+TEST_CASE("test_bit_iterator_empty") {
     bit_iterator<uint64_t, uint8_t> it(uint64_t{0});
     expect_eq(it.next(), it.npos, "empty iterator returns npos immediately");
     expect_eq(it.next(), it.npos, "second next() on empty still returns npos");
@@ -18,7 +19,7 @@ void test_bit_iterator_empty() {
     std::cout << "  PASS: test_bit_iterator_empty" << std::endl;
 }
 
-void test_bit_iterator_single_bit_low() {
+TEST_CASE("test_bit_iterator_single_bit_low") {
     // Bit 0 set
     bit_iterator<uint64_t, uint8_t> it(uint64_t{1});
     expect_eq(it.next(), uint8_t{0}, "bit 0 -> index 0");
@@ -27,7 +28,7 @@ void test_bit_iterator_single_bit_low() {
     std::cout << "  PASS: test_bit_iterator_single_bit_low" << std::endl;
 }
 
-void test_bit_iterator_single_bit_high() {
+TEST_CASE("test_bit_iterator_single_bit_high") {
     // Bit 63 set (MSB of uint64_t)
     bit_iterator<uint64_t, uint8_t> it(uint64_t{1} << 63);
     expect_eq(it.next(), uint8_t{63}, "bit 63 -> index 63");
@@ -36,7 +37,7 @@ void test_bit_iterator_single_bit_high() {
     std::cout << "  PASS: test_bit_iterator_single_bit_high" << std::endl;
 }
 
-void test_bit_iterator_single_bit_mid() {
+TEST_CASE("test_bit_iterator_single_bit_mid") {
     // Bit 31 set
     bit_iterator<uint64_t, uint8_t> it(uint64_t{1} << 31);
     expect_eq(it.next(), uint8_t{31}, "bit 31 -> index 31");
@@ -45,7 +46,7 @@ void test_bit_iterator_single_bit_mid() {
     std::cout << "  PASS: test_bit_iterator_single_bit_mid" << std::endl;
 }
 
-void test_bit_iterator_consecutive_bits() {
+TEST_CASE("test_bit_iterator_consecutive_bits") {
     // 4 LSBs set: 0b1111
     bit_iterator<uint64_t, uint8_t> it(uint64_t{0b1111});
     expect_eq(it.next(), uint8_t{0}, "bit 0");
@@ -57,7 +58,7 @@ void test_bit_iterator_consecutive_bits() {
     std::cout << "  PASS: test_bit_iterator_consecutive_bits" << std::endl;
 }
 
-void test_bit_iterator_sparse_bits() {
+TEST_CASE("test_bit_iterator_sparse_bits") {
     // Bits 0, 4, 7 set: 0b10010001 = 0x91
     bit_iterator<uint32_t, uint8_t> it(uint32_t{0b10010001});
     expect_eq(it.next(), uint8_t{0}, "bit 0");
@@ -68,7 +69,7 @@ void test_bit_iterator_sparse_bits() {
     std::cout << "  PASS: test_bit_iterator_sparse_bits" << std::endl;
 }
 
-void test_bit_iterator_reset() {
+TEST_CASE("test_bit_iterator_reset") {
     bit_iterator<uint64_t, uint8_t> it(uint64_t{0b1010});  // bits 1, 3
     expect_eq(it.next(), uint8_t{1}, "first pass: bit 1");
     expect_eq(it.next(), uint8_t{3}, "first pass: bit 3");
@@ -81,7 +82,7 @@ void test_bit_iterator_reset() {
     std::cout << "  PASS: test_bit_iterator_reset" << std::endl;
 }
 
-void test_bit_iterator_all_64_bits() {
+TEST_CASE("test_bit_iterator_all_64_bits") {
     uint64_t all = std::numeric_limits<uint64_t>::max();
     bit_iterator<uint64_t, uint8_t> it(all);
     for (uint8_t i = 0; i < 64; ++i) {
@@ -99,7 +100,7 @@ void test_bit_iterator_all_64_bits() {
     std::cout << "  PASS: test_bit_iterator_all_64_bits" << std::endl;
 }
 
-void test_bit_iterator_alternating_bits() {
+TEST_CASE("test_bit_iterator_alternating_bits") {
     uint64_t pattern = 0xAAAAAAAAAAAAAAAAULL;  // 1010...1010 — odd bits set
     bit_iterator<uint64_t, uint8_t> it(pattern);
     for (uint8_t i = 1; i < 64; i += 2) {
@@ -116,7 +117,7 @@ void test_bit_iterator_alternating_bits() {
     std::cout << "  PASS: test_bit_iterator_alternating_bits" << std::endl;
 }
 
-void test_bit_iterator_uint8_storage() {
+TEST_CASE("test_bit_iterator_uint8_storage") {
     // Template parameter T can be uint8_t
     bit_iterator<uint8_t, uint8_t> it(uint8_t{0b00100100});  // bits 2, 5
     expect_eq(it.next(), uint8_t{2}, "uint8: bit 2");
@@ -126,7 +127,7 @@ void test_bit_iterator_uint8_storage() {
     std::cout << "  PASS: test_bit_iterator_uint8_storage" << std::endl;
 }
 
-void test_bit_iterator_uint16_storage() {
+TEST_CASE("test_bit_iterator_uint16_storage") {
     bit_iterator<uint16_t, uint8_t> it(uint16_t{0x8100});  // bits 8, 15
     expect_eq(it.next(), uint8_t{8},  "uint16: bit 8");
     expect_eq(it.next(), uint8_t{15}, "uint16: bit 15");
@@ -135,7 +136,7 @@ void test_bit_iterator_uint16_storage() {
     std::cout << "  PASS: test_bit_iterator_uint16_storage" << std::endl;
 }
 
-void test_bit_iterator_default_construct() {
+TEST_CASE("test_bit_iterator_default_construct") {
     bit_iterator<uint64_t> it;  // default: starts at 0 with remaining_=0
     expect_eq(it.next(), it.npos, "default-constructed iterator returns npos");
 
@@ -146,7 +147,7 @@ void test_bit_iterator_default_construct() {
 // sbit_iterator — iterator-style iteration (operator*, ++, bool)
 // ===========================================================================
 
-void test_sbit_iterator_empty() {
+TEST_CASE("test_sbit_iterator_empty") {
     sbit_iterator<uint64_t, uint8_t> it(uint64_t{0});
     expect(!static_cast<bool>(it), "empty sbit_iterator is falsy");
     expect_eq(it.get(), it.npos, "empty sbit_iterator::get() == npos");
@@ -154,7 +155,7 @@ void test_sbit_iterator_empty() {
     std::cout << "  PASS: test_sbit_iterator_empty" << std::endl;
 }
 
-void test_sbit_iterator_single_bit() {
+TEST_CASE("test_sbit_iterator_single_bit") {
     sbit_iterator<uint64_t, uint8_t> it(uint64_t{1} << 5);  // bit 5
     expect(static_cast<bool>(it), "sbit_iterator with bit 5 is truthy");
     expect_eq(*it, uint8_t{5}, "operator* returns current index (5)");
@@ -167,7 +168,7 @@ void test_sbit_iterator_single_bit() {
     std::cout << "  PASS: test_sbit_iterator_single_bit" << std::endl;
 }
 
-void test_sbit_iterator_multiple_bits() {
+TEST_CASE("test_sbit_iterator_multiple_bits") {
     // Bits 2, 5, 7: 0b10100100
     sbit_iterator<uint64_t, uint8_t> it(uint64_t{0b10100100});
     expect(static_cast<bool>(it), "truthy before first deref");
@@ -183,7 +184,7 @@ void test_sbit_iterator_multiple_bits() {
     std::cout << "  PASS: test_sbit_iterator_multiple_bits" << std::endl;
 }
 
-void test_sbit_iterator_post_increment() {
+TEST_CASE("test_sbit_iterator_post_increment") {
     sbit_iterator<uint64_t, uint8_t> it(uint64_t{0b001100});  // bits 2, 3
     uint8_t val = it++;  // post-increment returns previous value
     expect_eq(val, uint8_t{2}, "post-increment returns bit 2");
@@ -192,7 +193,7 @@ void test_sbit_iterator_post_increment() {
     std::cout << "  PASS: test_sbit_iterator_post_increment" << std::endl;
 }
 
-void test_sbit_iterator_reset() {
+TEST_CASE("test_sbit_iterator_reset") {
     sbit_iterator<uint64_t, uint8_t> it(uint64_t{0b1010});  // bits 1, 3
     expect_eq(*it, uint8_t{1}, "first pass: bit 1"); ++it;
     expect_eq(*it, uint8_t{3}, "first pass: bit 3"); ++it;
@@ -207,7 +208,7 @@ void test_sbit_iterator_reset() {
     std::cout << "  PASS: test_sbit_iterator_reset" << std::endl;
 }
 
-void test_sbit_iterator_default_construct() {
+TEST_CASE("test_sbit_iterator_default_construct") {
     sbit_iterator<uint64_t, uint8_t> it;
     expect(!static_cast<bool>(it), "default-constructed sbit_iterator is falsy");
     expect_eq(it.get(), it.npos, "default-constructed get() == npos");
@@ -215,7 +216,7 @@ void test_sbit_iterator_default_construct() {
     std::cout << "  PASS: test_sbit_iterator_default_construct" << std::endl;
 }
 
-void test_sbit_iterator_for_loop_pattern() {
+TEST_CASE("test_sbit_iterator_for_loop_pattern") {
     // Emulate the common usage pattern: for (sbit_iterator it(mask); it; ++it)
     uint64_t mask = 0b100010001;  // bits 0, 4, 8
     uint8_t expected[] = {0, 4, 8};
@@ -238,7 +239,7 @@ void test_sbit_iterator_for_loop_pattern() {
     std::cout << "  PASS: test_sbit_iterator_for_loop_pattern" << std::endl;
 }
 
-void test_sbit_iterator_for_range() {
+TEST_CASE("test_sbit_iterator_for_range") {
     // Range-for loop using Sentinels (begin()/end())
     uint64_t mask = 0b10000100001;  // bits 0, 5, 10
     uint8_t expected[] = {0, 5, 10};
@@ -261,7 +262,7 @@ void test_sbit_iterator_for_range() {
     std::cout << "  PASS: test_sbit_iterator_for_range" << std::endl;
 }
 
-void test_sbit_iterator_all_64_bits() {
+TEST_CASE("test_sbit_iterator_all_64_bits") {
     sbit_iterator<uint64_t, uint8_t> it(std::numeric_limits<uint64_t>::max());
     for (uint8_t i = 0; i < 64; ++i, ++it) {
         if (*it != i) {
@@ -276,7 +277,7 @@ void test_sbit_iterator_all_64_bits() {
     std::cout << "  PASS: test_sbit_iterator_all_64_bits" << std::endl;
 }
 
-void test_sbit_iterator_npos_constexpr() {
+TEST_CASE("test_sbit_iterator_npos_constexpr") {
     // Verify npos is the expected sentinel value
     constexpr auto npos = sbit_iterator<uint64_t, uint8_t>::npos;
     expect_eq(npos, uint8_t{255}, "sbit_iterator::npos == 255 (max of uint8_t)");
@@ -288,7 +289,7 @@ void test_sbit_iterator_npos_constexpr() {
 // Edge cases and stress
 // ===========================================================================
 
-void test_sbit_iterator_single_bit_63_then_reset() {
+TEST_CASE("test_sbit_iterator_single_bit_63_then_reset") {
     // Bit 63 then reset to bit 0
     sbit_iterator<uint64_t, uint8_t> it(uint64_t{1} << 63);
     expect_eq(*it, uint8_t{63}, "bit 63");
@@ -302,7 +303,7 @@ void test_sbit_iterator_single_bit_63_then_reset() {
     std::cout << "  PASS: test_sbit_iterator_single_bit_63_then_reset" << std::endl;
 }
 
-void test_bit_iterator_default_construct_npos() {
+TEST_CASE("test_bit_iterator_default_construct_npos") {
     // Verify bit_iterator::npos is consistent with sbit_iterator::npos
     static_assert(bit_iterator<uint64_t>::npos ==
                   sbit_iterator<uint64_t>::npos,
@@ -312,40 +313,3 @@ void test_bit_iterator_default_construct_npos() {
 
 } // anonymous namespace
 
-int main() {
-    std::cout << "\n=== bit_iterator tests ===\n" << std::endl;
-
-    // ── bit_iterator (next-based) ──
-    test_bit_iterator_empty();
-    test_bit_iterator_single_bit_low();
-    test_bit_iterator_single_bit_high();
-    test_bit_iterator_single_bit_mid();
-    test_bit_iterator_consecutive_bits();
-    test_bit_iterator_sparse_bits();
-    test_bit_iterator_reset();
-    test_bit_iterator_all_64_bits();
-    test_bit_iterator_alternating_bits();
-    test_bit_iterator_uint8_storage();
-    test_bit_iterator_uint16_storage();
-    test_bit_iterator_default_construct();
-
-    std::cout << "\n=== sbit_iterator tests ===\n" << std::endl;
-
-    test_sbit_iterator_empty();
-    test_sbit_iterator_single_bit();
-    test_sbit_iterator_multiple_bits();
-    test_sbit_iterator_post_increment();
-    test_sbit_iterator_reset();
-    test_sbit_iterator_default_construct();
-    test_sbit_iterator_for_loop_pattern();
-    test_sbit_iterator_for_range();
-    test_sbit_iterator_all_64_bits();
-    test_sbit_iterator_npos_constexpr();
-
-    std::cout << "\n=== Edge cases ===\n" << std::endl;
-
-    test_sbit_iterator_single_bit_63_then_reset();
-    test_bit_iterator_default_construct_npos();
-
-    return print_summary();
-}

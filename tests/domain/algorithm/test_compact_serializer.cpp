@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "common/io/ByteStream.h"
 #include "domain/algorithm/components/StepTree.h"
 #include "domain/algorithm/types/ConfigTypes.h"
@@ -11,7 +12,7 @@ namespace {
 
 // ─── Round-trip: algorithm::Ench ──────────────────────────────────────────
 
-void test_ench_roundtrip() {
+TEST_CASE("test_ench_roundtrip") {
     algorithm::Ench original{42, 5};
     ByteStreamWriter w;
     w << original;
@@ -29,7 +30,7 @@ void test_ench_roundtrip() {
 
 // ─── Round-trip: algorithm::EnchSet ───────────────────────────────────────
 
-void test_ench_set_roundtrip() {
+TEST_CASE("test_ench_set_roundtrip") {
     algorithm::EnchSet original;
     original.insert({1, 3});
     original.insert({2, 5});
@@ -49,7 +50,7 @@ void test_ench_set_roundtrip() {
 
 // ─── Round-trip: algorithm::Item ──────────────────────────────────────────
 
-void test_item_roundtrip() {
+TEST_CASE("test_item_roundtrip") {
     algorithm::Item original;
     original.type = algorithm::ItemType::Equip;
     original.dur = 1561;
@@ -75,7 +76,7 @@ void test_item_roundtrip() {
 
 // ─── Round-trip: algorithm::EnchStep ──────────────────────────────────────
 
-void test_step_roundtrip() {
+TEST_CASE("test_step_roundtrip") {
     algorithm::Item base;
     base.type = algorithm::ItemType::Equip;
     base.dur = 1561;
@@ -113,7 +114,7 @@ void test_step_roundtrip() {
 
 // ─── Round-trip: algorithm::EnchSolution ──────────────────────────────────
 
-void test_solution_roundtrip() {
+TEST_CASE("test_solution_roundtrip") {
     algorithm::EnchSolution original;
     original.total_cost = 42;
 
@@ -170,7 +171,7 @@ void test_solution_roundtrip() {
 
 // ─── Security boundary: set_fail rejection ─────────────────────────────
 
-void test_set_fail_rejection() {
+TEST_CASE("test_set_fail_rejection") {
     uint8_t data[4] = {1, 2, 3, 4};
     ByteStreamReader r(data, 4);
     expect(r.ok(), "fresh reader ok");
@@ -184,7 +185,7 @@ void test_set_fail_rejection() {
 
 // ─── Security boundary: truncated EnchSet data rejected ───────────────
 
-void test_truncated_ench_set_rejected() {
+TEST_CASE("test_truncated_ench_set_rejected") {
     // New EnchSet format: u64 mask (8 bytes) + u8 lvls[64] (64 bytes) = 72 bytes.
     // Write valid mask but incomplete level data to trigger read failure.
     ByteStreamWriter w;
@@ -201,7 +202,7 @@ void test_truncated_ench_set_rejected() {
 
 // ─── Security boundary: overflow count in Solution ────────────────────────
 
-void test_overflow_count_solution() {
+TEST_CASE("test_overflow_count_solution") {
     // Just verify the reader survives a large count without OOM/crash.
     // The serializer reads the count then attempts to read that many EnchSteps,
     // which will fail on truncated data — that's acceptable.
@@ -217,7 +218,7 @@ void test_overflow_count_solution() {
     TEST_PASS("test_overflow_count_solution");
 }
 
-void test_forge_config_roundtrip() {
+TEST_CASE("test_forge_config_roundtrip") {
     algorithm::ForgeConfig original;
     original.ignore_penalty_cost = true;
     original.ignore_repair_cost = false;
@@ -237,7 +238,7 @@ void test_forge_config_roundtrip() {
     TEST_PASS("test_forge_config_roundtrip");
 }
 
-void test_search_config_roundtrip() {
+TEST_CASE("test_search_config_roundtrip") {
     algorithm::SearchConfig original;
     original.max_solutions = 10;
     original.max_depth = 20;
@@ -272,7 +273,7 @@ void test_search_config_roundtrip() {
     TEST_PASS("test_search_config_roundtrip");
 }
 
-void test_compact_ench_info_roundtrip() {
+TEST_CASE("test_compact_ench_info_roundtrip") {
     algorithm::EnchInfo original;
     original.id = 3;
     original.mul = 1;
@@ -300,7 +301,7 @@ void test_compact_ench_info_roundtrip() {
 
 // ─── StepTree ↔ flat-steps lossless round-trip ───────────────────────────
 
-void test_step_tree_roundtrip() {
+TEST_CASE("test_step_tree_roundtrip") {
     using algorithm::Item;
     using algorithm::ItemType;
     using algorithm::EnchStep;
@@ -336,26 +337,4 @@ void test_step_tree_roundtrip() {
     }
     expect(same, "materialize(from_steps(flat)) should equal flat (lossless)");
     TEST_PASS("test_step_tree_roundtrip");
-}
-
-int main() {
-    try {
-        test_ench_roundtrip();
-        test_ench_set_roundtrip();
-        test_item_roundtrip();
-        test_step_roundtrip();
-        test_solution_roundtrip();
-        test_step_tree_roundtrip();
-        test_set_fail_rejection();
-        test_truncated_ench_set_rejected();
-        test_overflow_count_solution();
-        test_forge_config_roundtrip();
-        test_search_config_roundtrip();
-        test_compact_ench_info_roundtrip();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

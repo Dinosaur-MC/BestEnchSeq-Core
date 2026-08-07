@@ -6,13 +6,14 @@
 // --target, --max-time, --edit, --config) parse correctly.
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/cli/CLIApp.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
 #include "common/utils/EnvUtil.hpp"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <filesystem>
 #include <fstream>
@@ -45,7 +46,7 @@ private:
 // Test: --export without --target is valid
 // ---------------------------------------------------------------------------
 
-void test_export_only_valid() {
+TEST_CASE("test_export_only_valid") {
     {
         const char* argv[] = {"besq", "--export", "out.json"};
         auto config = CLIApp::parse(3, const_cast<char**>(argv));
@@ -68,7 +69,7 @@ void test_export_only_valid() {
 // Test: Missing both --target and --export is an error
 // ---------------------------------------------------------------------------
 
-void test_missing_target_and_export_errors() {
+TEST_CASE("test_missing_target_and_export_errors") {
     {
         const char* argv[] = {"besq", "--algorithm", "greedy"};
         expect_throws([&] { CLIApp::parse(3, const_cast<char**>(argv)); },
@@ -87,7 +88,7 @@ void test_missing_target_and_export_errors() {
 // Test: --max-time parsing
 // ---------------------------------------------------------------------------
 
-void test_max_time_parsing() {
+TEST_CASE("test_max_time_parsing") {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--max-time", "30"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
@@ -127,7 +128,7 @@ void test_max_time_parsing() {
 // Test: CLI option → SolveRequest.search_config wiring
 // ---------------------------------------------------------------------------
 
-void test_solve_request_config_wiring() {
+TEST_CASE("test_solve_request_config_wiring") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -188,7 +189,7 @@ void test_solve_request_config_wiring() {
 // Test: --config validation
 // ---------------------------------------------------------------------------
 
-void test_config_parsing() {
+TEST_CASE("test_config_parsing") {
     // Valid configs
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
@@ -240,7 +241,7 @@ void test_config_parsing() {
 // Test: --edit parsing
 // ---------------------------------------------------------------------------
 
-void test_edit_parsing() {
+TEST_CASE("test_edit_parsing") {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword",
                               "--edit", "ench:mod,sharpness,max_level=10"};
@@ -280,7 +281,7 @@ void test_edit_parsing() {
 // must be accepted (the full 0-step solve behaviour is covered by
 // test_besq_solve_already_met).
 
-void test_already_met_args_parse() {
+TEST_CASE("test_already_met_args_parse") {
     const char* argv[] = {"besq", "--target", "diamond_sword[sharpness=5]",
                           "--source", "sharpness=5"};
     auto config = CLIApp::parse(5, const_cast<char**>(argv));
@@ -295,7 +296,7 @@ void test_already_met_args_parse() {
 // Test: --algorithm unknown name
 // ---------------------------------------------------------------------------
 
-void test_algorithm_name() {
+TEST_CASE("test_algorithm_name") {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--algorithm", "astar"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
@@ -314,7 +315,7 @@ void test_algorithm_name() {
 // Test: no args shows usage (sets help flag, doesn't throw)
 // ---------------------------------------------------------------------------
 
-void test_no_args_shows_usage() {
+TEST_CASE("test_no_args_shows_usage") {
     const char* argv[] = {"besq"};
     auto config = CLIApp::parse(1, const_cast<char**>(argv));
     expect(config.brief_usage, "no args should set brief_usage flag (not throw)");
@@ -325,7 +326,7 @@ void test_no_args_shows_usage() {
 // Test: --memory validation
 // ---------------------------------------------------------------------------
 
-void test_memory_parsing() {
+TEST_CASE("test_memory_parsing") {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--memory", "auto"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
@@ -357,7 +358,7 @@ void test_memory_parsing() {
 // Test: --profile / --profile-dir / --publish parsing
 // ---------------------------------------------------------------------------
 
-void test_profile_publish_parsing() {
+TEST_CASE("test_profile_publish_parsing") {
     {
         const char* argv[] = {"besq", "--target", "diamond_sword", "--profile", "modpack"};
         auto config = CLIApp::parse(5, const_cast<char**>(argv));
@@ -390,7 +391,7 @@ void test_profile_publish_parsing() {
 // Test: --input alone is a valid invocation (gate exemption)
 // ---------------------------------------------------------------------------
 
-void test_input_alone_valid() {
+TEST_CASE("test_input_alone_valid") {
     const char* argv[] = {"besq", "--input", "some.json"};
     auto config = CLIApp::parse(3, const_cast<char**>(argv));
     expect(config.input.has_value() && *config.input == "some.json",
@@ -404,7 +405,7 @@ void test_input_alone_valid() {
 // Test: build_solve_request — --input drives the whole inventory solve config
 // ---------------------------------------------------------------------------
 
-void test_inventory_solve_request_wiring() {
+TEST_CASE("test_inventory_solve_request_wiring") {
     // Pin the locale so resolved i18n error text is deterministic.
     register_builtin_translations(LanguageManager::instance());
     LanguageManager::instance().select("en_US");
@@ -499,7 +500,7 @@ static std::string make_modded_profiles_dir() {
 // cross-validation, so profile-only content resolves
 // ---------------------------------------------------------------------------
 
-void test_inventory_profile_switch() {
+TEST_CASE("test_inventory_profile_switch") {
     // Temp profiles dir: a modded profile depending on vanilla that adds a
     // custom enchantment. If the JSON "profile" does not switch the active
     // registry before cross-validation, the mod enchantment is unknown.
@@ -535,7 +536,7 @@ void test_inventory_profile_switch() {
 // profile field, so the JSON profile is NOT activated (F1)
 // ---------------------------------------------------------------------------
 
-void test_inventory_explicit_profile_overrides_json() {
+TEST_CASE("test_inventory_explicit_profile_overrides_json") {
     std::string tmp = make_modded_profiles_dir();
 
     BesqContext ctx;
@@ -581,7 +582,7 @@ void test_inventory_explicit_profile_overrides_json() {
 // message, not the generic source_without_target (F3)
 // ---------------------------------------------------------------------------
 
-void test_inventory_source_rejection() {
+TEST_CASE("test_inventory_source_rejection") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -614,7 +615,7 @@ void test_inventory_source_rejection() {
 // Test: --input with an invalid --mode throws invalid_mode (F4)
 // ---------------------------------------------------------------------------
 
-void test_inventory_invalid_mode_throws() {
+TEST_CASE("test_inventory_invalid_mode_throws") {
     const char* argv[] = {"besq", "--input", "inv.json", "--mode", "banana"};
     expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
                   "--input with invalid --mode should throw invalid_mode");
@@ -625,7 +626,7 @@ void test_inventory_invalid_mode_throws() {
 // Test: --CLIApp::apply_config_pairs functional test
 // ---------------------------------------------------------------------------
 
-void test_apply_config_pairs() {
+TEST_CASE("test_apply_config_pairs") {
     algorithm::ForgeConfig cfg;
     cfg.ignore_penalty_cost = false;
     cfg.ignore_repair_cost = false;
@@ -650,7 +651,7 @@ void test_apply_config_pairs() {
 // enchantments (a plain book becomes an enchanted_book when enchanted).
 // ---------------------------------------------------------------------------
 
-void test_book_target_parsing() {
+TEST_CASE("test_book_target_parsing") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -691,7 +692,7 @@ void test_book_target_parsing() {
 // Test: --algo-opt → SearchConfig::extra (strategy-specific knob escape hatch)
 // ---------------------------------------------------------------------------
 
-void test_algo_opt_wiring() {
+TEST_CASE("test_algo_opt_wiring") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -763,7 +764,7 @@ void test_algo_opt_wiring() {
 // Test: CLIApp::apply_lang — env / flag precedence and invalid fallback
 // ---------------------------------------------------------------------------
 
-void test_apply_lang() {
+TEST_CASE("test_apply_lang") {
     register_builtin_translations(LanguageManager::instance());
     auto& lang_mgr = LanguageManager::instance();
 
@@ -816,7 +817,7 @@ void test_apply_lang() {
 // Test: CLIApp::detect_target
 // ---------------------------------------------------------------------------
 
-void test_detect_target() {
+TEST_CASE("test_detect_target") {
     {
         const char* argv[] = {"besq"};
         expect_eq(CLIApp::detect_target(1, const_cast<char**>(argv)),
@@ -839,7 +840,7 @@ void test_detect_target() {
 // Test: CLIApp::help_text — grouped option help
 // ---------------------------------------------------------------------------
 
-void test_help_text() {
+TEST_CASE("test_help_text") {
     register_builtin_translations(LanguageManager::instance());
     LanguageManager::instance().select("en_US");
 
@@ -852,37 +853,4 @@ void test_help_text() {
     expect(text.find("--profile") != std::string::npos, "help_text lists --profile");
 
     TEST_PASS("CLIApp help_text");
-}
-
-int main() {
-    try {
-        test_no_args_shows_usage();
-        test_export_only_valid();
-        test_missing_target_and_export_errors();
-        test_max_time_parsing();
-        test_solve_request_config_wiring();
-        test_book_target_parsing();
-        test_config_parsing();
-        test_edit_parsing();
-        test_algorithm_name();
-        test_already_met_args_parse();
-        test_memory_parsing();
-        test_apply_config_pairs();
-        test_profile_publish_parsing();
-        test_algo_opt_wiring();
-        test_input_alone_valid();
-        test_inventory_solve_request_wiring();
-        test_inventory_profile_switch();
-        test_inventory_explicit_profile_overrides_json();
-        test_inventory_source_rejection();
-        test_inventory_invalid_mode_throws();
-        test_apply_lang();
-        test_detect_target();
-        test_help_text();
-    } catch (const std::exception& e) {
-        std::cerr << "\nFATAL: " << e.what() << std::endl;
-        return 1;
-    }
-
-    return print_summary();
 }

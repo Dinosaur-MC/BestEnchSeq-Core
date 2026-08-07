@@ -9,9 +9,10 @@
 //     任何字节），恰好 1 个客户端观察到 EOF；
 //   - stop() 后 run() 正常返回（优雅关闭：stop accept → 各 Reactor 关连接 → join）。
 // =============================================================================
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Socket.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -31,7 +32,7 @@ using namespace web;
 constexpr size_t kAdmitCap =
     (FD_SETSIZE - 1 < 256) ? static_cast<size_t>(FD_SETSIZE - 1) : 256;
 
-int main() {
+TEST_CASE("test_http_server") {
     HttpServer server;
     server.set_handler(Method::Get, "/health",
                        [](const HttpRequest&) { return HttpResponse::json(200, "OK", R"({"status":"ok"})"); });
@@ -114,5 +115,4 @@ int main() {
     server.stop();
     srv.join();
     TEST_PASS("test_http_server");
-    return print_summary();
 }

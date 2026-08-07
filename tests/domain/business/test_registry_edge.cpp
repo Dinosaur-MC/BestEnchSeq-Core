@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
@@ -9,7 +10,7 @@ namespace {
 // Section A — Incompatibility table consistency
 // ══════════════════════════════════════════════════════════════════════════
 
-void test_insert_with_exclusive() {
+TEST_CASE("test_insert_with_exclusive") {
     EnchantmentRegistry reg;
 
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -29,7 +30,7 @@ void test_insert_with_exclusive() {
     TEST_PASS("test_insert_with_exclusive");
 }
 
-void test_insert_or_assign_new() {
+TEST_CASE("test_insert_or_assign_new") {
     EnchantmentRegistry reg;
 
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -44,7 +45,7 @@ void test_insert_or_assign_new() {
     TEST_PASS("test_insert_or_assign_new");
 }
 
-void test_insert_or_assign_update_exclusive() {
+TEST_CASE("test_insert_or_assign_update_exclusive") {
     EnchantmentRegistry reg;
 
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -81,7 +82,7 @@ void test_insert_or_assign_update_exclusive() {
     TEST_PASS("test_insert_or_assign_update_exclusive");
 }
 
-void test_update_exclusive_set() {
+TEST_CASE("test_update_exclusive_set") {
     EnchantmentRegistry reg;
 
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -109,7 +110,7 @@ void test_update_exclusive_set() {
     TEST_PASS("test_update_exclusive_set");
 }
 
-void test_erase_cascades() {
+TEST_CASE("test_erase_cascades") {
     EnchantmentRegistry reg;
 
     EnchInfo enchA{NSID("minecraft:ench_a"), "Ench A", MCE::All, 5, 5, 1, false,
@@ -141,7 +142,7 @@ void test_erase_cascades() {
     TEST_PASS("test_erase_cascades");
 }
 
-void test_clear_resets_incompatible() {
+TEST_CASE("test_clear_resets_incompatible") {
     EnchantmentRegistry reg;
 
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -166,7 +167,7 @@ void test_clear_resets_incompatible() {
 // Section B — insert_or_assign on all three registries
 // ══════════════════════════════════════════════════════════════════════════
 
-void test_insert_or_assign_equipment() {
+TEST_CASE("test_insert_or_assign_equipment") {
     EquipmentRegistry reg;
 
     Equipment eq{NSID("minecraft:test"), "Original", NSID(), 100};
@@ -186,7 +187,7 @@ void test_insert_or_assign_equipment() {
     TEST_PASS("test_insert_or_assign_equipment");
 }
 
-void test_insert_or_assign_tag() {
+TEST_CASE("test_insert_or_assign_tag") {
     TagRegistry reg;
 
     EquipmentTag tag{EquipmentTag::sword(), "sword"};
@@ -209,7 +210,7 @@ void test_insert_or_assign_tag() {
 // Section C — clear / empty / iterator edge cases
 // ══════════════════════════════════════════════════════════════════════════
 
-void test_empty_registry() {
+TEST_CASE("test_empty_registry") {
     EnchantmentRegistry reg;
     expect(reg.empty(), "default constructed EnchantmentRegistry should be empty");
     expect(reg.size() == 0, "size should be 0");
@@ -217,7 +218,7 @@ void test_empty_registry() {
     TEST_PASS("test_empty_registry");
 }
 
-void test_clear_and_refill() {
+TEST_CASE("test_clear_and_refill") {
     EnchantmentRegistry reg;
 
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -240,7 +241,7 @@ void test_clear_and_refill() {
     TEST_PASS("test_clear_and_refill");
 }
 
-void test_iterator_walk() {
+TEST_CASE("test_iterator_walk") {
     EnchantmentRegistry reg;
     for (int i = 1; i <= 5; ++i) {
         std::string nsid = "minecraft:ench_" + std::to_string(i);
@@ -257,7 +258,7 @@ void test_iterator_walk() {
     TEST_PASS("test_iterator_walk");
 }
 
-void test_reinsert_after_erase() {
+TEST_CASE("test_reinsert_after_erase") {
     EnchantmentRegistry reg;
 
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -280,7 +281,7 @@ void test_reinsert_after_erase() {
 // Section D — EquipmentRegistry gaps
 // ══════════════════════════════════════════════════════════════════════════
 
-void test_eq_update() {
+TEST_CASE("test_eq_update") {
     EquipmentRegistry reg;
 
     reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
@@ -295,7 +296,7 @@ void test_eq_update() {
     TEST_PASS("test_eq_update");
 }
 
-void test_eq_create_subset() {
+TEST_CASE("test_eq_create_subset") {
     EquipmentRegistry reg;
 
     reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
@@ -312,7 +313,7 @@ void test_eq_create_subset() {
     TEST_PASS("test_eq_create_subset");
 }
 
-void test_eq_clear() {
+TEST_CASE("test_eq_clear") {
     EquipmentRegistry reg;
 
     reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
@@ -325,7 +326,7 @@ void test_eq_clear() {
     TEST_PASS("test_eq_clear");
 }
 
-void test_eq_data_access() {
+TEST_CASE("test_eq_data_access") {
     EquipmentRegistry reg;
 
     reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
@@ -340,7 +341,7 @@ void test_eq_data_access() {
     TEST_PASS("test_eq_data_access");
 }
 
-void test_eq_iterator() {
+TEST_CASE("test_eq_iterator") {
     EquipmentRegistry reg;
 
     reg.insert(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", EquipmentTag::sword(), 1561});
@@ -368,7 +369,7 @@ void test_eq_iterator() {
 // Section E — TagRegistry gaps
 // ══════════════════════════════════════════════════════════════════════════
 
-void test_tag_erase() {
+TEST_CASE("test_tag_erase") {
     TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
@@ -383,7 +384,7 @@ void test_tag_erase() {
     TEST_PASS("test_tag_erase");
 }
 
-void test_tag_update() {
+TEST_CASE("test_tag_update") {
     TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
@@ -396,7 +397,7 @@ void test_tag_update() {
     TEST_PASS("test_tag_update");
 }
 
-void test_tag_create_subset() {
+TEST_CASE("test_tag_create_subset") {
     TagRegistry reg;
 
     reg.insert(EquipmentTag{NSID("#minecraft:sword"), "sword"});
@@ -414,7 +415,7 @@ void test_tag_create_subset() {
     TEST_PASS("test_tag_create_subset");
 }
 
-void test_tag_clear() {
+TEST_CASE("test_tag_clear") {
     TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
@@ -428,7 +429,7 @@ void test_tag_clear() {
     TEST_PASS("test_tag_clear");
 }
 
-void test_tag_data() {
+TEST_CASE("test_tag_data") {
     TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::sword(), "sword"});
@@ -443,7 +444,7 @@ void test_tag_data() {
     TEST_PASS("test_tag_data");
 }
 
-void test_tag_iterator() {
+TEST_CASE("test_tag_iterator") {
     TagRegistry reg;
 
     reg.insert(EquipmentTag{EquipmentTag::dummy(), "dummy"});
@@ -472,47 +473,3 @@ void test_tag_iterator() {
 }
 
 } // anonymous namespace
-
-int main() {
-    try {
-        // Section A — Incompatibility table consistency
-        test_insert_with_exclusive();
-        test_insert_or_assign_new();
-        test_insert_or_assign_update_exclusive();
-        test_update_exclusive_set();
-        test_erase_cascades();
-        test_clear_resets_incompatible();
-
-        // Section B — insert_or_assign on all three registries
-        test_insert_or_assign_equipment();
-        test_insert_or_assign_tag();
-
-        // Section C — clear / empty / iterator edge cases
-        test_empty_registry();
-        test_clear_and_refill();
-        test_iterator_walk();
-        test_reinsert_after_erase();
-
-        // Section D — EquipmentRegistry gaps
-        test_eq_update();
-        test_eq_create_subset();
-        test_eq_clear();
-        test_eq_data_access();
-        test_eq_iterator();
-
-        // Section E — TagRegistry gaps
-        test_tag_erase();
-        test_tag_update();
-        test_tag_create_subset();
-        test_tag_clear();
-        test_tag_data();
-        test_tag_iterator();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
@@ -106,7 +107,7 @@ std::vector<EquipmentTag> make_tag_list() {
 // EnchantmentRegistry
 // ============================================================================
 
-void test_ench_copy_construction() {
+TEST_CASE("test_ench_copy_construction") {
     auto infos = make_incompatible_enchants();
     EnchantmentRegistry reg1(infos);
 
@@ -155,7 +156,7 @@ void test_ench_copy_construction() {
     std::cout << "PASS: test_ench_copy_construction" << std::endl;
 }
 
-void test_ench_copy_assignment() {
+TEST_CASE("test_ench_copy_assignment") {
     auto infos = make_incompatible_enchants();
     EnchantmentRegistry reg1(infos);
     EnchantmentRegistry reg2;
@@ -178,7 +179,7 @@ void test_ench_copy_assignment() {
     std::cout << "PASS: test_ench_copy_assignment" << std::endl;
 }
 
-void test_ench_move_construction() {
+TEST_CASE("test_ench_move_construction") {
     auto infos = make_incompatible_enchants();
     EnchantmentRegistry reg1(infos);
 
@@ -213,7 +214,7 @@ void test_ench_move_construction() {
     std::cout << "PASS: test_ench_move_construction" << std::endl;
 }
 
-void test_ench_move_assignment() {
+TEST_CASE("test_ench_move_assignment") {
     auto infos = make_incompatible_enchants();
     EnchantmentRegistry reg1(infos);
     EnchantmentRegistry reg2;
@@ -232,7 +233,7 @@ void test_ench_move_assignment() {
     std::cout << "PASS: test_ench_move_assignment" << std::endl;
 }
 
-void test_ench_self_assignment() {
+TEST_CASE("test_ench_self_assignment") {
     auto infos = make_incompatible_enchants();
     EnchantmentRegistry reg(infos);
 
@@ -259,7 +260,7 @@ void test_ench_self_assignment() {
 // EquipmentRegistry
 // ============================================================================
 
-void test_eq_copy_construction() {
+TEST_CASE("test_eq_copy_construction") {
     auto eqs = make_equipment_list();
     EquipmentRegistry reg1(eqs);
 
@@ -290,7 +291,7 @@ void test_eq_copy_construction() {
     std::cout << "PASS: test_eq_copy_construction" << std::endl;
 }
 
-void test_eq_move_construction() {
+TEST_CASE("test_eq_move_construction") {
     auto eqs = make_equipment_list();
     EquipmentRegistry reg1(eqs);
 
@@ -317,7 +318,7 @@ void test_eq_move_construction() {
 // TagRegistry
 // ============================================================================
 
-void test_tag_copy() {
+TEST_CASE("test_tag_copy") {
     auto tags = make_tag_list();
     TagRegistry reg1(tags);
 
@@ -364,7 +365,7 @@ void test_tag_copy() {
     std::cout << "PASS: test_tag_copy" << std::endl;
 }
 
-void test_tag_move() {
+TEST_CASE("test_tag_move") {
     auto tags = make_tag_list();
     TagRegistry reg1(tags);
 
@@ -403,24 +404,3 @@ void test_tag_move() {
 // ============================================================================
 // main
 // ============================================================================
-
-int main() {
-    try {
-        test_ench_copy_construction();
-        test_ench_copy_assignment();
-        test_ench_move_construction();
-        test_ench_move_assignment();
-        test_ench_self_assignment();
-        test_eq_copy_construction();
-        test_eq_move_construction();
-        test_tag_copy();
-        test_tag_move();
-    } catch (const test_error& e) {
-        std::cerr << "TEST FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED EXCEPTION: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

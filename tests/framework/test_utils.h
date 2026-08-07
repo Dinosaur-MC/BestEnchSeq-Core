@@ -17,6 +17,9 @@ public:
 inline int tests_passed = 0;
 inline int tests_failed = 0;
 
+// Assertion-level verbose flag (--verbose from the shared main).
+inline bool test_verbose = false;
+
 namespace detail {
 
 // Convert a value to a human-readable string for error messages
@@ -48,6 +51,7 @@ inline void expect(bool condition, const std::string& message) {
             throw test_error(message);
         }
         tests_passed++;
+        if (test_verbose) std::cout << "  OK: " << message << std::endl;
     } catch (const test_error&) {
         throw;
     } catch (...) {
@@ -67,6 +71,7 @@ void expect_eq(const T& actual, const U& expected, const std::string& message) {
             throw test_error(msg);
         }
         tests_passed++;
+        if (test_verbose) std::cout << "  OK: " << message << std::endl;
     } catch (const test_error&) {
         throw;
     } catch (...) {
@@ -86,6 +91,7 @@ void expect_throws(F&& expr, const std::string& message) {
         throw; // propagate test assertion failures
     } catch (...) {
         tests_passed++; // caught any exception — success
+        if (test_verbose) std::cout << "  OK: " << message << std::endl;
     }
 }
 
@@ -100,6 +106,7 @@ void expect_throws_as(F&& expr, const std::string& message) {
         throw;  // Always re-throw test errors first (before E catch)
     } catch (const E&) {
         tests_passed++;
+        if (test_verbose) std::cout << "  OK: " << message << std::endl;
     } catch (const std::exception& e) {
         tests_failed++;
         std::string msg = message + " - expected " + typeid(E).name()
@@ -123,6 +130,7 @@ inline void expect_approx(double actual, double expected, double epsilon,
             throw test_error(msg);
         }
         tests_passed++;
+        if (test_verbose) std::cout << "  OK: " << message << std::endl;
     } catch (const test_error&) {
         throw;
     } catch (...) {

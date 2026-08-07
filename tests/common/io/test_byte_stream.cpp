@@ -1,5 +1,6 @@
+#define BESQ_TEST_MAIN
 #include "common/io/ByteStream.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <cstdint>
 #include <cstring>
@@ -12,7 +13,7 @@ namespace {
 // ByteStreamWriter — 常规写入语义
 // ===========================================================================
 
-void test_write_u8() {
+TEST_CASE("test_write_u8") {
     ByteStreamWriter w;
     w.write(uint8_t(0xAB));
     auto data = std::move(w).take();
@@ -21,7 +22,7 @@ void test_write_u8() {
     std::cout << "  PASS: test_write_u8" << std::endl;
 }
 
-void test_write_u16() {
+TEST_CASE("test_write_u16") {
     ByteStreamWriter w;
     w.write(uint16_t(0x1234));
     auto data = std::move(w).take();
@@ -31,7 +32,7 @@ void test_write_u16() {
     std::cout << "  PASS: test_write_u16" << std::endl;
 }
 
-void test_write_u32() {
+TEST_CASE("test_write_u32") {
     ByteStreamWriter w;
     w.write(uint32_t(0xDEADBEEF));
     auto data = std::move(w).take();
@@ -41,7 +42,7 @@ void test_write_u32() {
     std::cout << "  PASS: test_write_u32" << std::endl;
 }
 
-void test_write_u64() {
+TEST_CASE("test_write_u64") {
     ByteStreamWriter w;
     w.write(uint64_t(0x0102030405060708ULL));
     auto data = std::move(w).take();
@@ -51,7 +52,7 @@ void test_write_u64() {
     std::cout << "  PASS: test_write_u64" << std::endl;
 }
 
-void test_write_bool() {
+TEST_CASE("test_write_bool") {
     ByteStreamWriter w;
     w.write(true);
     w.write(false);
@@ -62,7 +63,7 @@ void test_write_bool() {
     std::cout << "  PASS: test_write_bool" << std::endl;
 }
 
-void test_write_bytes() {
+TEST_CASE("test_write_bytes") {
     ByteStreamWriter w;
     uint8_t src[] = {10, 20, 30};
     w.bytes(src, 3);
@@ -72,7 +73,7 @@ void test_write_bytes() {
     std::cout << "  PASS: test_write_bytes" << std::endl;
 }
 
-void test_write_string() {
+TEST_CASE("test_write_string") {
     ByteStreamWriter w;
     w.string("hello");
     auto data = std::move(w).take();
@@ -85,7 +86,7 @@ void test_write_string() {
     std::cout << "  PASS: test_write_string" << std::endl;
 }
 
-void test_operator_shift_writer() {
+TEST_CASE("test_operator_shift_writer") {
     ByteStreamWriter w;
     w << uint32_t(0x12345678) << uint16_t(0xAABB) << uint8_t(0xFF) << true;
     auto data = std::move(w).take();
@@ -97,7 +98,7 @@ void test_operator_shift_writer() {
     std::cout << "  PASS: test_operator_shift_writer" << std::endl;
 }
 
-void test_write_vector() {
+TEST_CASE("test_write_vector") {
     std::vector<uint32_t> vec = {0x11111111, 0x22222222, 0x33333333};
     ByteStreamWriter w;
     w << vec;
@@ -113,7 +114,7 @@ void test_write_vector() {
     std::cout << "  PASS: test_write_vector" << std::endl;
 }
 
-void test_write_blob() {
+TEST_CASE("test_write_blob") {
     std::vector<uint8_t> blob = {10, 20, 30, 40};
     ByteStreamWriter w;
     w << blob;
@@ -126,7 +127,7 @@ void test_write_blob() {
     std::cout << "  PASS: test_write_blob" << std::endl;
 }
 
-void test_writer_clear() {
+TEST_CASE("test_writer_clear") {
     ByteStreamWriter w;
     w << uint32_t(0xDEADBEEF);
     expect(w.data().size() == 4, "writer clear: has data before clear");
@@ -135,7 +136,7 @@ void test_writer_clear() {
     std::cout << "  PASS: test_writer_clear" << std::endl;
 }
 
-void test_writer_take() {
+TEST_CASE("test_writer_take") {
     ByteStreamWriter w;
     w << uint32_t(42);
     auto d1 = std::move(w).take();
@@ -148,7 +149,7 @@ void test_writer_take() {
 // ByteStreamReader — 常规读取语义
 // ===========================================================================
 
-void test_read_u8() {
+TEST_CASE("test_read_u8") {
     uint8_t buf[] = {0xAB, 0xCD};
     ByteStreamReader r(buf, sizeof(buf));
     expect(r.u8() == 0xAB, "read u8: first byte");
@@ -157,7 +158,7 @@ void test_read_u8() {
     std::cout << "  PASS: test_read_u8" << std::endl;
 }
 
-void test_read_u16() {
+TEST_CASE("test_read_u16") {
     uint8_t buf[] = {0x34, 0x12, 0x78, 0x56};
     ByteStreamReader r(buf, sizeof(buf));
     expect(r.u16() == 0x1234, "read u16: LE 0x1234");
@@ -166,7 +167,7 @@ void test_read_u16() {
     std::cout << "  PASS: test_read_u16" << std::endl;
 }
 
-void test_read_u32() {
+TEST_CASE("test_read_u32") {
     uint8_t buf[] = {0xEF, 0xBE, 0xAD, 0xDE, 0x01, 0x00, 0x00, 0x00};
     ByteStreamReader r(buf, sizeof(buf));
     expect(r.u32() == 0xDEADBEEF, "read u32: LE 0xDEADBEEF");
@@ -175,7 +176,7 @@ void test_read_u32() {
     std::cout << "  PASS: test_read_u32" << std::endl;
 }
 
-void test_read_u64() {
+TEST_CASE("test_read_u64") {
     uint8_t buf[] = {0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01};
     ByteStreamReader r(buf, sizeof(buf));
     expect(r.u64() == 0x0102030405060708ULL, "read u64: LE value");
@@ -183,7 +184,7 @@ void test_read_u64() {
     std::cout << "  PASS: test_read_u64" << std::endl;
 }
 
-void test_read_bool() {
+TEST_CASE("test_read_bool") {
     uint8_t buf[] = {1, 0, 0xFF};
     ByteStreamReader r(buf, sizeof(buf));
     bool v1, v2, v3;
@@ -195,7 +196,7 @@ void test_read_bool() {
     std::cout << "  PASS: test_read_bool" << std::endl;
 }
 
-void test_read_string() {
+TEST_CASE("test_read_string") {
     uint8_t buf[] = {
         5, 0, 0, 0, 0, 0, 0, 0,  // size_t length prefix = 5
         'h', 'e', 'l', 'l', 'o'
@@ -207,7 +208,7 @@ void test_read_string() {
     std::cout << "  PASS: test_read_string" << std::endl;
 }
 
-void test_operator_shift_reader() {
+TEST_CASE("test_operator_shift_reader") {
     uint8_t buf[] = {
         0x78, 0x56, 0x34, 0x12,  // u32 = 0x12345678
         0xBB, 0xAA,              // u16 = 0xAABB
@@ -228,7 +229,7 @@ void test_operator_shift_reader() {
     std::cout << "  PASS: test_operator_shift_reader" << std::endl;
 }
 
-void test_read_vector() {
+TEST_CASE("test_read_vector") {
     uint8_t buf[] = {
         3, 0, 0, 0, 0, 0, 0, 0,  // count = 3
         0x11, 0x11, 0x11, 0x11,  // elem[0] = 0x11111111
@@ -246,7 +247,7 @@ void test_read_vector() {
     std::cout << "  PASS: test_read_vector" << std::endl;
 }
 
-void test_read_blob() {
+TEST_CASE("test_read_blob") {
     uint8_t buf[] = {
         4, 0, 0, 0, 0, 0, 0, 0,  // count = 4
         10, 20, 30, 40
@@ -260,7 +261,7 @@ void test_read_blob() {
     std::cout << "  PASS: test_read_blob" << std::endl;
 }
 
-void test_read_bytes() {
+TEST_CASE("test_read_bytes") {
     uint8_t buf[] = {10, 20, 30, 40, 50};
     ByteStreamReader r(buf, sizeof(buf));
     auto chunk = r.read_bytes(3);
@@ -271,7 +272,7 @@ void test_read_bytes() {
     std::cout << "  PASS: test_read_bytes" << std::endl;
 }
 
-void test_skip() {
+TEST_CASE("test_skip") {
     uint8_t buf[] = {1, 2, 3, 4, 5};
     ByteStreamReader r(buf, sizeof(buf));
     r.skip(3);
@@ -280,7 +281,7 @@ void test_skip() {
     std::cout << "  PASS: test_skip" << std::endl;
 }
 
-void test_has_more() {
+TEST_CASE("test_has_more") {
     uint8_t buf[] = {1, 2};
     ByteStreamReader r(buf, sizeof(buf));
     expect(r.has_more() == true, "has_more: before reads");
@@ -289,7 +290,7 @@ void test_has_more() {
     std::cout << "  PASS: test_has_more" << std::endl;
 }
 
-void test_pos() {
+TEST_CASE("test_pos") {
     uint8_t buf[] = {10, 20, 30};
     ByteStreamReader r(buf, sizeof(buf));
     expect(r.pos() == buf, "pos: starts at beginning");
@@ -302,7 +303,7 @@ void test_pos() {
 // ByteStreamWriter → ByteStreamReader Round-trip
 // ===========================================================================
 
-void test_roundtrip_basic() {
+TEST_CASE("test_roundtrip_basic") {
     ByteStreamWriter w;
     w << uint8_t(0x12) << uint16_t(0x3456) << uint32_t(0x789ABCDE)
       << uint64_t(0xFEDCBA9876543210ULL) << true << false;
@@ -324,7 +325,7 @@ void test_roundtrip_basic() {
     std::cout << "  PASS: test_roundtrip_basic" << std::endl;
 }
 
-void test_roundtrip_string() {
+TEST_CASE("test_roundtrip_string") {
     ByteStreamWriter w;
     w << std::string_view("你好世界");
 
@@ -336,7 +337,7 @@ void test_roundtrip_string() {
     std::cout << "  PASS: test_roundtrip_string" << std::endl;
 }
 
-void test_roundtrip_vector() {
+TEST_CASE("test_roundtrip_vector") {
     std::vector<int32_t> src = {-100, 0, 42, 999999};
 
     ByteStreamWriter w;
@@ -353,7 +354,7 @@ void test_roundtrip_vector() {
     std::cout << "  PASS: test_roundtrip_vector" << std::endl;
 }
 
-void test_roundtrip_blob() {
+TEST_CASE("test_roundtrip_blob") {
     std::vector<uint8_t> src = {0, 1, 2, 255, 128, 64};
 
     ByteStreamWriter w;
@@ -370,7 +371,7 @@ void test_roundtrip_blob() {
     std::cout << "  PASS: test_roundtrip_blob" << std::endl;
 }
 
-void test_roundtrip_mixed() {
+TEST_CASE("test_roundtrip_mixed") {
     ByteStreamWriter w;
     w << uint8_t(1) << std::string_view("mix")
       << uint32_t(100) << true
@@ -395,7 +396,7 @@ void test_roundtrip_mixed() {
 // 边界与错误处理
 // ===========================================================================
 
-void test_read_beyond_eof() {
+TEST_CASE("test_read_beyond_eof") {
     uint8_t buf[] = {1, 2};
     ByteStreamReader r(buf, sizeof(buf));
     r.u32();  // need 4 bytes, only 2 available
@@ -404,7 +405,7 @@ void test_read_beyond_eof() {
     std::cout << "  PASS: test_read_beyond_eof" << std::endl;
 }
 
-void test_read_bytes_beyond_eof() {
+TEST_CASE("test_read_bytes_beyond_eof") {
     uint8_t buf[] = {10, 20};
     ByteStreamReader r(buf, sizeof(buf));
     auto chunk = r.read_bytes(10);
@@ -413,7 +414,7 @@ void test_read_bytes_beyond_eof() {
     std::cout << "  PASS: test_read_bytes_beyond_eof" << std::endl;
 }
 
-void test_skip_beyond_eof() {
+TEST_CASE("test_skip_beyond_eof") {
     uint8_t buf[] = {1};
     ByteStreamReader r(buf, sizeof(buf));
     r.skip(100);
@@ -421,7 +422,7 @@ void test_skip_beyond_eof() {
     std::cout << "  PASS: test_skip_beyond_eof" << std::endl;
 }
 
-void test_string_beyond_eof() {
+TEST_CASE("test_string_beyond_eof") {
     // Length says 100 bytes, but buffer is shorter
     uint8_t buf[] = {
         100, 0, 0, 0, 0, 0, 0, 0,  // size_t length prefix = 100
@@ -434,7 +435,7 @@ void test_string_beyond_eof() {
     std::cout << "  PASS: test_string_beyond_eof" << std::endl;
 }
 
-void test_empty_buffer() {
+TEST_CASE("test_empty_buffer") {
     ByteStreamReader r(nullptr, 0);
     expect(r.has_more() == false, "empty buffer: has_more false");
     expect(r.remaining() == 0,    "empty buffer: remaining 0");
@@ -443,7 +444,7 @@ void test_empty_buffer() {
     std::cout << "  PASS: test_empty_buffer" << std::endl;
 }
 
-void test_take_empties_writer() {
+TEST_CASE("test_take_empties_writer") {
     ByteStreamWriter w;
     w << uint32_t(0x12345678);
     auto d1 = std::move(w).take();
@@ -453,7 +454,7 @@ void test_take_empties_writer() {
     std::cout << "  PASS: test_take_empties_writer" << std::endl;
 }
 
-void test_i8_i16_i32_i64() {
+TEST_CASE("test_i8_i16_i32_i64") {
     ByteStreamWriter w;
     constexpr int64_t kNeg2Pow40 = int64_t(uint64_t(1) << 40) * -1;
     w << int8_t(-1) << int16_t(-128) << int32_t(-100000) << kNeg2Pow40;
@@ -470,7 +471,7 @@ void test_i8_i16_i32_i64() {
     std::cout << "  PASS: test_i8_i16_i32_i64" << std::endl;
 }
 
-void test_multiple_writes_accumulate() {
+TEST_CASE("test_multiple_writes_accumulate") {
     ByteStreamWriter w;
     w << uint8_t(1);
     w << uint8_t(2);
@@ -480,7 +481,7 @@ void test_multiple_writes_accumulate() {
     std::cout << "  PASS: test_multiple_writes_accumulate" << std::endl;
 }
 
-void test_signed_convenience_wrappers() {
+TEST_CASE("test_signed_convenience_wrappers") {
     ByteStreamWriter w;
     w.i8(-1);
     w.i16(-20000);
@@ -496,7 +497,7 @@ void test_signed_convenience_wrappers() {
     std::cout << "  PASS: test_signed_convenience_wrappers" << std::endl;
 }
 
-void test_u8_convenience_wrappers_writer() {
+TEST_CASE("test_u8_convenience_wrappers_writer") {
     ByteStreamWriter w;
     w.u8(0x12);
     w.u16(0x3456);
@@ -514,54 +515,3 @@ void test_u8_convenience_wrappers_writer() {
 
 } // anonymous namespace
 
-int main() {
-    std::cout << "=== ByteStream Writer Tests ===" << std::endl;
-    test_write_u8();
-    test_write_u16();
-    test_write_u32();
-    test_write_u64();
-    test_write_bool();
-    test_write_bytes();
-    test_write_string();
-    test_operator_shift_writer();
-    test_write_vector();
-    test_write_blob();
-    test_writer_clear();
-    test_writer_take();
-
-    std::cout << "\n=== ByteStream Reader Tests ===" << std::endl;
-    test_read_u8();
-    test_read_u16();
-    test_read_u32();
-    test_read_u64();
-    test_read_bool();
-    test_read_string();
-    test_operator_shift_reader();
-    test_read_vector();
-    test_read_blob();
-    test_read_bytes();
-    test_skip();
-    test_has_more();
-    test_pos();
-
-    std::cout << "\n=== ByteStream Round-trip Tests ===" << std::endl;
-    test_roundtrip_basic();
-    test_roundtrip_string();
-    test_roundtrip_vector();
-    test_roundtrip_blob();
-    test_roundtrip_mixed();
-
-    std::cout << "\n=== ByteStream Edge Cases ===" << std::endl;
-    test_read_beyond_eof();
-    test_read_bytes_beyond_eof();
-    test_skip_beyond_eof();
-    test_string_beyond_eof();
-    test_empty_buffer();
-    test_take_empties_writer();
-    test_i8_i16_i32_i64();
-    test_multiple_writes_accumulate();
-    test_signed_convenience_wrappers();
-    test_u8_convenience_wrappers_writer();
-
-    return print_summary();
-}

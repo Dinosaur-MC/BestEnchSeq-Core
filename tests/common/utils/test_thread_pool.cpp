@@ -7,7 +7,8 @@
 // submission from multiple threads, and edge cases (empty pool, large
 // batches).
 
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/thread/ThreadPool.h"
 
 #include <atomic>
@@ -41,20 +42,20 @@ void spin_wait(Pred&& pred,
 // 1. Basic lifecycle
 // ============================================================================
 
-void test_default_constructed() {
+TEST_CASE("test_default_constructed") {
     ThreadPool pool(1);
     expect(pool.size() == 1, "pool should have 1 worker");
     expect(pool.pending() == 0, "no pending tasks initially");
     TEST_PASS("test_default_constructed");
 }
 
-void test_multi_worker_count() {
+TEST_CASE("test_multi_worker_count") {
     ThreadPool pool(4);
     expect(pool.size() == 4, "pool should have 4 workers");
     TEST_PASS("test_multi_worker_count");
 }
 
-void test_zero_threads_auto() {
+TEST_CASE("test_zero_threads_auto") {
     ThreadPool pool(0);
     expect(pool.size() > 0, "pool with 0 should auto-detect");
     TEST_PASS("test_zero_threads_auto");
@@ -64,7 +65,7 @@ void test_zero_threads_auto() {
 // 2. Submit with simple tasks
 // ============================================================================
 
-void test_submit_void() {
+TEST_CASE("test_submit_void") {
     ThreadPool pool(2);
     std::atomic<int> counter{0};
 
@@ -75,7 +76,7 @@ void test_submit_void() {
     TEST_PASS("test_submit_void");
 }
 
-void test_submit_return_value() {
+TEST_CASE("test_submit_return_value") {
     ThreadPool pool(2);
 
     auto fut = pool.submit([] { return 42; });
@@ -85,7 +86,7 @@ void test_submit_return_value() {
     TEST_PASS("test_submit_return_value");
 }
 
-void test_submit_string() {
+TEST_CASE("test_submit_string") {
     ThreadPool pool(2);
 
     auto fut = pool.submit([] {
@@ -97,7 +98,7 @@ void test_submit_string() {
     TEST_PASS("test_submit_string");
 }
 
-void test_submit_multiple_tasks() {
+TEST_CASE("test_submit_multiple_tasks") {
     ThreadPool pool(4);
     std::atomic<int> counter{0};
     constexpr int N = 100;
@@ -119,7 +120,7 @@ void test_submit_multiple_tasks() {
 // 3. wait()
 // ============================================================================
 
-void test_wait_basic() {
+TEST_CASE("test_wait_basic") {
     ThreadPool pool(2);
     std::atomic<int> counter{0};
 
@@ -139,7 +140,7 @@ void test_wait_basic() {
 // 4. parallel_for
 // ============================================================================
 
-void test_parallel_for_basic() {
+TEST_CASE("test_parallel_for_basic") {
     ThreadPool pool(4);
     constexpr std::size_t N = 10'000;
     std::vector<int> data(N, 0);
@@ -156,7 +157,7 @@ void test_parallel_for_basic() {
     TEST_PASS("test_parallel_for_basic");
 }
 
-void test_parallel_for_empty_range() {
+TEST_CASE("test_parallel_for_empty_range") {
     ThreadPool pool(2);
     // Should not crash or hang
     parallel_for(pool, std::size_t{0}, std::size_t{0},
@@ -164,7 +165,7 @@ void test_parallel_for_empty_range() {
     TEST_PASS("test_parallel_for_empty_range");
 }
 
-void test_parallel_for_single_element() {
+TEST_CASE("test_parallel_for_single_element") {
     ThreadPool pool(2);
     int value = 0;
 
@@ -174,7 +175,7 @@ void test_parallel_for_single_element() {
     TEST_PASS("test_parallel_for_single_element");
 }
 
-void test_parallel_for_exception() {
+TEST_CASE("test_parallel_for_exception") {
     ThreadPool pool(2);
 
     bool threw = false;
@@ -192,7 +193,7 @@ void test_parallel_for_exception() {
     TEST_PASS("test_parallel_for_exception");
 }
 
-void test_parallel_for_large_batch() {
+TEST_CASE("test_parallel_for_large_batch") {
     ThreadPool pool(4);
     constexpr std::size_t N = 100'000;
     std::vector<uint64_t> data(N);
@@ -210,7 +211,7 @@ void test_parallel_for_large_batch() {
     TEST_PASS("test_parallel_for_large_batch");
 }
 
-void test_parallel_for_worker_count_respected() {
+TEST_CASE("test_parallel_for_worker_count_respected") {
     // With 1 worker, tasks run sequentially (still correct)
     ThreadPool pool(1);
     constexpr std::size_t N = 1000;
@@ -225,7 +226,7 @@ void test_parallel_for_worker_count_respected() {
     TEST_PASS("test_parallel_for_worker_count_respected");
 }
 
-void test_parallel_for_custom_chunk_size() {
+TEST_CASE("test_parallel_for_custom_chunk_size") {
     ThreadPool pool(4);
     constexpr std::size_t N = 1000;
     std::vector<int> data(N, 0);
@@ -245,7 +246,7 @@ void test_parallel_for_custom_chunk_size() {
 // 5. Exception propagation
 // ============================================================================
 
-void test_exception_propagation() {
+TEST_CASE("test_exception_propagation") {
     ThreadPool pool(2);
 
     auto fut = pool.submit([]() -> int {
@@ -269,7 +270,7 @@ void test_exception_propagation() {
 // 6. Move-only callable
 // ============================================================================
 
-void test_move_only_callable() {
+TEST_CASE("test_move_only_callable") {
     ThreadPool pool(2);
 
     // A move-only type
@@ -292,7 +293,7 @@ void test_move_only_callable() {
 // 7. Drain on stop / destruction
 // ============================================================================
 
-void test_drain_on_stop() {
+TEST_CASE("test_drain_on_stop") {
     std::atomic<int> counter{0};
     constexpr int N = 50;
 
@@ -312,7 +313,7 @@ void test_drain_on_stop() {
     TEST_PASS("test_drain_on_stop");
 }
 
-void test_explicit_stop_then_submit_throws() {
+TEST_CASE("test_explicit_stop_then_submit_throws") {
     ThreadPool pool(2);
     pool.stop();
 
@@ -331,7 +332,7 @@ void test_explicit_stop_then_submit_throws() {
 // 8. Concurrent submission from multiple threads
 // ============================================================================
 
-void test_concurrent_submission() {
+TEST_CASE("test_concurrent_submission") {
     ThreadPool pool(4);
     constexpr int kProducers = 4;
     constexpr int kTasksPerProducer = 250;
@@ -359,7 +360,7 @@ void test_concurrent_submission() {
 // 9. Large batch of fine-grained tasks
 // ============================================================================
 
-void test_large_batch() {
+TEST_CASE("test_large_batch") {
     ThreadPool pool(4);
     constexpr int N = 10'000;
     std::atomic<int64_t> sum{0};
@@ -382,7 +383,7 @@ void test_large_batch() {
 // 10. Shared pool singleton
 // ============================================================================
 
-void test_shared_pool_api() {
+TEST_CASE("test_shared_pool_api") {
     // Verify the singleton compiles and links — don't actually create
     // the 32-thread pool here (that happens on first access and is
     // expensive on WSL).  Just check the declaration exists.
@@ -394,7 +395,7 @@ void test_shared_pool_api() {
 // 11. Stress: many short tasks
 // ============================================================================
 
-void test_many_short_tasks() {
+TEST_CASE("test_many_short_tasks") {
     ThreadPool pool(4);
     constexpr int N = 10'000;
     std::atomic<int64_t> sum{0};
@@ -410,64 +411,3 @@ void test_many_short_tasks() {
     TEST_PASS("test_many_short_tasks");
 }
 
-// ============================================================================
-// Main
-// ============================================================================
-
-int main() {
-    try {
-        // 1. Basic lifecycle
-        test_default_constructed();
-        test_multi_worker_count();
-        test_zero_threads_auto();
-
-        // 2. Submit with simple tasks
-        test_submit_void();
-        test_submit_return_value();
-        test_submit_string();
-        test_submit_multiple_tasks();
-
-        // 3. wait()
-        test_wait_basic();
-
-        // 4. parallel_for
-        test_parallel_for_basic();
-        test_parallel_for_empty_range();
-        test_parallel_for_single_element();
-        test_parallel_for_exception();
-        test_parallel_for_large_batch();
-        test_parallel_for_worker_count_respected();
-        test_parallel_for_custom_chunk_size();
-
-        // 5. Exception propagation
-        test_exception_propagation();
-
-        // 6. Move-only callable
-        test_move_only_callable();
-
-        // 7. Drain on stop / destruction
-        test_drain_on_stop();
-        test_explicit_stop_then_submit_throws();
-
-        // 8. Concurrent submission
-        test_concurrent_submission();
-
-        // 9. Large batch
-        test_large_batch();
-
-        // 10. Shared pool API
-        test_shared_pool_api();
-
-        // 11. Stress
-        test_many_short_tasks();
-
-    } catch (const test_error& e) {
-        std::cerr << "FAIL: " << e.what() << std::endl;
-        return print_summary();
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-
-    return print_summary();
-}

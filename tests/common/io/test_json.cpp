@@ -1,6 +1,7 @@
+#define BESQ_TEST_MAIN
 #include "io/json.h"
 #include "common/serialization/IJsonSerializable.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <iostream>
 #include <sstream>
@@ -13,7 +14,7 @@ namespace {
 // Default construction and type queries
 // ===========================================================================
 
-void test_default_json_is_null() {
+TEST_CASE("test_default_json_is_null") {
     Json j;
     expect(j.is_valid(), "default Json should be valid");
     expect(j.type() == JsonType::Empty, "default Json should report Empty type");
@@ -22,7 +23,7 @@ void test_default_json_is_null() {
     std::cout << "  PASS: test_default_json_is_null" << std::endl;
 }
 
-void test_null_static() {
+TEST_CASE("test_null_static") {
     Json j = Json::null();
     expect(j.is_valid(), "Json::null() should be valid");
     expect(j.type() == JsonType::Null, "Json::null() type is Null");
@@ -35,7 +36,7 @@ void test_null_static() {
 // Value construction from C++ types
 // ===========================================================================
 
-void test_construct_bool() {
+TEST_CASE("test_construct_bool") {
     Json t(true);
     expect(t.type() == JsonType::Bool, "Json(true) type is Bool");
     expect(t.to_string() == "true", "Json(true) serializes");
@@ -46,7 +47,7 @@ void test_construct_bool() {
     std::cout << "  PASS: test_construct_bool" << std::endl;
 }
 
-void test_construct_number() {
+TEST_CASE("test_construct_number") {
     Json i32(static_cast<int32_t>(42));
     expect(i32.type() == JsonType::Number, "Json(int32_t) type is Number");
     expect(i32.to_string() == "42", "Json(int32_t) serializes");
@@ -65,7 +66,7 @@ void test_construct_number() {
     std::cout << "  PASS: test_construct_number" << std::endl;
 }
 
-void test_construct_string() {
+TEST_CASE("test_construct_string") {
     Json s(Json::String("hello"));
     expect(s.type() == JsonType::String, "Json(String) type is String");
     expect(s.to_string() == "\"hello\"", "Json(String) serializes with quotes");
@@ -81,7 +82,7 @@ void test_construct_string() {
     std::cout << "  PASS: test_construct_string" << std::endl;
 }
 
-void test_construct_array() {
+TEST_CASE("test_construct_array") {
     Json arr = Json(Json::Array{
         Json(static_cast<int32_t>(1)),
         Json(Json::String("two")),
@@ -98,7 +99,7 @@ void test_construct_array() {
     std::cout << "  PASS: test_construct_array" << std::endl;
 }
 
-void test_construct_object() {
+TEST_CASE("test_construct_object") {
     Json obj = Json(Json::Object{
         {"name", Json(Json::String("test"))},
         {"value", Json(static_cast<int32_t>(42))},
@@ -117,7 +118,7 @@ void test_construct_object() {
 // Copy and equality
 // ===========================================================================
 
-void test_copy_equality() {
+TEST_CASE("test_copy_equality") {
     Json a = Json::parse("{\"key\":\"value\"}");
     Json b(a);
     expect(a == b, "copy-constructed Json should be equal");
@@ -140,7 +141,7 @@ void test_copy_equality() {
 // Path-based type queries
 // ===========================================================================
 
-void test_path_queries() {
+TEST_CASE("test_path_queries") {
     Json root = Json(Json::Object{
         {"data", Json(Json::Object{
             {"enchantments", Json(Json::Array{})},
@@ -168,7 +169,7 @@ void test_path_queries() {
 // get_value access
 // ===========================================================================
 
-void test_get_value() {
+TEST_CASE("test_get_value") {
     Json bool_json = Json::parse("true");
     Json::Value val = bool_json.get_value();
     expect(std::holds_alternative<Json::Bool>(val), "get_value should expose the stored bool");
@@ -189,7 +190,7 @@ void test_get_value() {
 // Parsing scalars
 // ===========================================================================
 
-void test_parse_scalars() {
+TEST_CASE("test_parse_scalars") {
     expect(Json::parse("null").type() == JsonType::Null, "null parses to Null");
     expect(Json::parse("true").type() == JsonType::Bool, "true parses to Bool");
     expect(Json::parse("false").type() == JsonType::Bool, "false parses to Bool");
@@ -211,7 +212,7 @@ void test_parse_scalars() {
     std::cout << "  PASS: test_parse_scalars" << std::endl;
 }
 
-void test_parse_unicode() {
+TEST_CASE("test_parse_unicode") {
     std::string input  = "\"\\u00E9\"";
     std::string expected_utf8 = "\"";
     expected_utf8.push_back(static_cast<char>(0xC3));
@@ -233,7 +234,7 @@ void test_parse_unicode() {
 // Parsing structural types
 // ===========================================================================
 
-void test_parse_arrays() {
+TEST_CASE("test_parse_arrays") {
     Json empty = Json::parse("[]");
     expect(empty.type() == JsonType::Array, "[] is Array");
     expect(empty.to_string() == "[]", "[] serializes");
@@ -248,7 +249,7 @@ void test_parse_arrays() {
     std::cout << "  PASS: test_parse_arrays" << std::endl;
 }
 
-void test_parse_objects() {
+TEST_CASE("test_parse_objects") {
     Json empty = Json::parse("{}");
     expect(empty.type() == JsonType::Object, "{} is Object");
     expect(empty.to_string() == "{}", "{} serializes");
@@ -273,7 +274,7 @@ void test_parse_objects() {
 // Pretty printing
 // ===========================================================================
 
-void test_pretty_print() {
+TEST_CASE("test_pretty_print") {
     Json arr = Json::parse("[1,2]");
     expect(
         arr.to_string(Json::Pretty) == "[\n    1,\n    2\n]",
@@ -296,7 +297,7 @@ void test_pretty_print() {
 // Parse error handling
 // ===========================================================================
 
-void test_parse_errors() {
+TEST_CASE("test_parse_errors") {
     // Error overload (returns null + populates error message)
     // parse(const string&, string&) accepts const or non-const strings
     {
@@ -350,7 +351,7 @@ void test_parse_errors() {
 // Round-trip fidelity
 // ===========================================================================
 
-void test_round_trip() {
+TEST_CASE("test_round_trip") {
     // Object with mixed types
     Json original = Json::parse("{\"data\":{\"enchantments\":[1,true,null],\"name\":\"sheet\"}}");
     Json round_trip = Json::parse(original.to_string());
@@ -373,7 +374,7 @@ void test_round_trip() {
 // Stream-based parsing
 // ===========================================================================
 
-void test_stream_parsing() {
+TEST_CASE("test_stream_parsing") {
     std::stringstream ss("{\"ok\":true}");
     Json stream_json = Json::parse(ss);
     expect(stream_json.type("ok") == JsonType::Bool, "istream parses object content");
@@ -393,7 +394,7 @@ void test_stream_parsing() {
 // New API: convenience constructors, accessors, subscript, query
 // ===========================================================================
 
-void test_convenience_constructors() {
+TEST_CASE("test_convenience_constructors") {
     // Json(int32_t) stores as Number
     Json i32(static_cast<int32_t>(42));
     expect(i32.type() == JsonType::Number, "Json(int32_t) type is Number");
@@ -429,7 +430,7 @@ void test_convenience_constructors() {
     std::cout << "  PASS: test_convenience_constructors" << std::endl;
 }
 
-void test_accessors() {
+TEST_CASE("test_accessors") {
     // as_int on Number
     Json num(42);
     expect(num.as_int() == 42, "as_int() on Number returns value");
@@ -481,7 +482,7 @@ void test_accessors() {
     std::cout << "  PASS: test_accessors" << std::endl;
 }
 
-void test_subscript_operators() {
+TEST_CASE("test_subscript_operators") {
     // operator[] on Object
     Json obj = Json::parse("{\"a\":1,\"b\":\"two\",\"c\":true}");
     expect(obj["a"].as_int() == 1, "obj[\"a\"] returns int");
@@ -513,7 +514,7 @@ void test_subscript_operators() {
     std::cout << "  PASS: test_subscript_operators" << std::endl;
 }
 
-void test_query_methods() {
+TEST_CASE("test_query_methods") {
     // is_null
     expect(Json::null().is_null(), "Json::null() is null");
     expect(!Json(42).is_null(), "Json(42) is not null");
@@ -542,7 +543,7 @@ void test_query_methods() {
 //           subscript, JSON Path
 // ===========================================================================
 
-void test_template_as() {
+TEST_CASE("test_template_as") {
     // as<bool>
     expect(Json(true).as<bool>() == true, "as<bool>() on Bool");
     expect(Json(false).as<bool>() == false, "as<bool>() on false Bool");
@@ -567,7 +568,7 @@ void test_template_as() {
     std::cout << "  PASS: test_template_as" << std::endl;
 }
 
-void test_factories() {
+TEST_CASE("test_factories") {
     auto obj = Json::object();
     expect(obj.type() == JsonType::Object, "Json::object() creates Object");
     expect(obj.to_string() == "{}", "Json::object() serializes");
@@ -579,7 +580,7 @@ void test_factories() {
     std::cout << "  PASS: test_factories" << std::endl;
 }
 
-void test_chainable_set() {
+TEST_CASE("test_chainable_set") {
     auto obj = Json::object();
     obj.set("name", "test").set("value", 42).set("active", true);
 
@@ -602,7 +603,7 @@ void test_chainable_set() {
     std::cout << "  PASS: test_chainable_set" << std::endl;
 }
 
-void test_chainable_push_back() {
+TEST_CASE("test_chainable_push_back") {
     auto arr = Json::array();
     arr.push_back(1).push_back(2).push_back(3);
 
@@ -618,7 +619,7 @@ void test_chainable_push_back() {
     std::cout << "  PASS: test_chainable_push_back" << std::endl;
 }
 
-void test_mutable_subscript() {
+TEST_CASE("test_mutable_subscript") {
     // Mutable object subscript
     Json obj = Json::object();
     obj["name"] = Json("test");
@@ -642,7 +643,7 @@ void test_mutable_subscript() {
     std::cout << "  PASS: test_mutable_subscript" << std::endl;
 }
 
-void test_json_path() {
+TEST_CASE("test_json_path") {
     // Build a complex JSON structure using the new API
     auto data = Json::object()
         .set("solutions", Json::array()
@@ -686,7 +687,7 @@ void test_json_path() {
     std::cout << "  PASS: test_json_path" << std::endl;
 }
 
-void test_empty_path() {
+TEST_CASE("test_empty_path") {
     Json obj = Json::parse("{\"a\":1}");
     expect(obj.at("").type() == JsonType::Object, "at('') returns root");
     expect(obj.at("", Json::null()).type() == JsonType::Object, "at('', default) returns root");
@@ -722,7 +723,7 @@ struct TestSerializable : IJsonSerializable {
 
 } // anonymous namespace (for TestSerializable)
 
-void test_iserializable_concept() {
+TEST_CASE("test_iserializable_concept") {
     static_assert(JsonSerializable<TestSerializable>,
                   "TestSerializable should satisfy JsonSerializable concept");
     static_assert(!JsonSerializable<int>,
@@ -731,7 +732,7 @@ void test_iserializable_concept() {
     std::cout << "  PASS: test_iserializable_concept" << std::endl;
 }
 
-void test_iserializable_serialize() {
+TEST_CASE("test_iserializable_serialize") {
     TestSerializable obj;
     obj.name = "sharpness";
     obj.value = 5;
@@ -743,7 +744,7 @@ void test_iserializable_serialize() {
     std::cout << "  PASS: test_iserializable_serialize" << std::endl;
 }
 
-void test_iserializable_deserialize() {
+TEST_CASE("test_iserializable_deserialize") {
     Json j = Json::object()
         .set("name", "unbreaking")
         .set("value", 3);
@@ -762,7 +763,7 @@ void test_iserializable_deserialize() {
     std::cout << "  PASS: test_iserializable_deserialize" << std::endl;
 }
 
-void test_iserializable_roundtrip() {
+TEST_CASE("test_iserializable_roundtrip") {
     TestSerializable original;
     original.name = "fortune";
     original.value = 3;
@@ -774,7 +775,7 @@ void test_iserializable_roundtrip() {
     std::cout << "  PASS: test_iserializable_roundtrip" << std::endl;
 }
 
-void test_iserializable_vector() {
+TEST_CASE("test_iserializable_vector") {
     TestSerializable a, b, c;
     a.name = "a"; a.value = 1;
     b.name = "b"; b.value = 2;
@@ -792,48 +793,3 @@ void test_iserializable_vector() {
 
 } // anonymous namespace
 
-int main() {
-    std::cout << "=== Json Tests ===" << std::endl;
-
-    try {
-        test_default_json_is_null();
-        test_null_static();
-        test_construct_bool();
-        test_construct_number();
-        test_construct_string();
-        test_construct_array();
-        test_construct_object();
-        test_copy_equality();
-        test_path_queries();
-        test_get_value();
-        test_parse_scalars();
-        test_parse_unicode();
-        test_parse_arrays();
-        test_parse_objects();
-        test_pretty_print();
-        test_parse_errors();
-        test_round_trip();
-        test_stream_parsing();
-        test_convenience_constructors();
-        test_accessors();
-        test_subscript_operators();
-        test_query_methods();
-        test_template_as();
-        test_factories();
-        test_chainable_set();
-        test_chainable_push_back();
-        test_mutable_subscript();
-        test_json_path();
-        test_empty_path();
-        test_iserializable_concept();
-        test_iserializable_serialize();
-        test_iserializable_deserialize();
-        test_iserializable_roundtrip();
-        test_iserializable_vector();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

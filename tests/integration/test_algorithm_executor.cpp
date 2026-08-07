@@ -1,4 +1,6 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
@@ -424,9 +426,8 @@ void test_timeout_with_slow_algorithm() {
     std::cout << "PASS: test_timeout_with_slow_algorithm" << std::endl;
 }
 
-int main() {
-    try {
-        test_constructor_null();
+TEST_CASE("test_algorithm_executor") {
+    test_constructor_null();
         test_initial_state();
         test_executor_lifecycle();
         test_double_start();
@@ -444,10 +445,4 @@ int main() {
         test_timeout_with_slow_algorithm();
         test_dp_merge_large_n_completes();
         test_dp_merge_large_n_timeout_cancel();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

@@ -12,7 +12,8 @@
 //   * best-cost invariance to max_solutions.
 // =============================================================================
 
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/algorithm/AlgorithmExecutor.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
@@ -186,17 +187,10 @@ void test_max_solutions_invariance(const algorithm::EnchReg& reg) {
 
 }  // anonymous namespace
 
-int main() {
-    try {
-        algorithm::EnchReg reg;
-        build_reg(reg);
-        test_equivalence_corpus(reg);
-        test_determinism(reg);
-        test_max_solutions_invariance(reg);
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
+TEST_CASE("test_dp_merge_correctness") {
+    algorithm::EnchReg reg;
+    build_reg(reg);
+    test_equivalence_corpus(reg);
+    test_determinism(reg);
+    test_max_solutions_invariance(reg);
 }

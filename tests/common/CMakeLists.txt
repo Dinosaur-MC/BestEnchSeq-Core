@@ -13,13 +13,13 @@ set_tests_properties(test_nsid PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
 # --- I/O layer tests ---
 
-add_executable(json_tests
-    io/json_tests.cpp
+add_executable(test_json
+    io/test_json.cpp
     ${PROJECT_ROOT}/src/common/io/json.cpp
 )
-target_include_directories(json_tests PRIVATE ${TEST_INCLUDE})
-add_test(NAME json_tests COMMAND json_tests)
-set_tests_properties(json_tests PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+target_include_directories(test_json PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_json COMMAND test_json)
+set_tests_properties(test_json PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
 add_executable(test_byte_stream
     io/test_byte_stream.cpp
@@ -28,7 +28,7 @@ target_include_directories(test_byte_stream PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_byte_stream COMMAND test_byte_stream)
 set_tests_properties(test_byte_stream PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
-# CSV I/O (compiles CsvIO.cpp directly, mirroring json_tests)
+# CSV I/O (compiles CsvIO.cpp directly, mirroring test_json)
 add_executable(test_csv_io
     io/test_csv_io.cpp
     ${PROJECT_ROOT}/src/common/io/CsvIO.cpp
@@ -79,12 +79,12 @@ add_test(NAME test_thread_pool COMMAND test_thread_pool)
 set_tests_properties(test_thread_pool PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
 # MemoryPool / ObjectPool
-add_executable(test_memory_pool utils/MemoryPoolTest.cpp)
+add_executable(test_memory_pool utils/test_memory_pool.cpp)
 target_include_directories(test_memory_pool PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_memory_pool COMMAND test_memory_pool)
 set_tests_properties(test_memory_pool PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
-add_executable(test_object_pool utils/ObjectPoolTest.cpp)
+add_executable(test_object_pool utils/test_object_pool.cpp)
 target_include_directories(test_object_pool PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_object_pool COMMAND test_object_pool)
 set_tests_properties(test_object_pool PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})

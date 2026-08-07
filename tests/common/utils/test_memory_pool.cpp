@@ -1,11 +1,12 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/MemoryPool.hpp"
 #include <cstdint>
 #include <set>
 #include <string>
 #include <vector>
 
-int main() {
+TEST_CASE("test_memory_pool") {
     // ── Test 1: basic alloc-dealloc (no-op) ─────────────────────────────
     {
         MemoryPool pool;
@@ -129,5 +130,4 @@ int main() {
         TEST_PASS("sequential_sizes");
     }
 
-    return print_summary();
 }

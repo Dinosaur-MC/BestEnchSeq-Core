@@ -1,7 +1,8 @@
 // tests/domain/interface/test_route_def.cpp
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/RouteDef.h"
 #include "domain/interface/components/http/HttpCommon.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <string>
 #include <array>
 
@@ -45,8 +46,7 @@ void test_invoke_all_forms() {
 }
 } // namespace
 
-int main() {
+TEST_CASE("test_route_def") {
     test_invoke_all_forms();
     TEST_PASS("test_route_def");
-    return print_summary();
 }

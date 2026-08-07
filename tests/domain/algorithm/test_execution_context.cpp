@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Item.h"
@@ -9,7 +10,7 @@ using namespace algorithm;
 #include <thread>
 #include <atomic>
 
-void test_cancel() {
+TEST_CASE("test_cancel") {
     algorithm::ExecutionContext ctx(1, "test");
     expect(!ctx.is_cancelled(), "initially not cancelled");
     ctx.cancel();
@@ -17,7 +18,7 @@ void test_cancel() {
     std::cout << "PASS: test_cancel" << std::endl;
 }
 
-void test_pause_resume() {
+TEST_CASE("test_pause_resume") {
     algorithm::ExecutionContext ctx(1, "test");
     std::atomic<bool> paused{false};
     bool resumed = false;
@@ -38,14 +39,14 @@ void test_pause_resume() {
     std::cout << "PASS: test_pause_resume" << std::endl;
 }
 
-void test_progress() {
+TEST_CASE("test_progress") {
     algorithm::ExecutionContext ctx(1, "test");
     ctx.report_progress(50, ProgressStatus::Exploring);
     expect(ctx.progress() == 0.5, "progress should be 0.5");
     std::cout << "PASS: test_progress" << std::endl;
 }
 
-void test_diagnostic_log() {
+TEST_CASE("test_diagnostic_log") {
     algorithm::ExecutionContext ctx(1, "test");
 
     auto diag = std::make_unique<SearchDiagnostics>();
@@ -65,7 +66,7 @@ void test_diagnostic_log() {
     std::cout << "PASS: test_diagnostic_log" << std::endl;
 }
 
-void test_solution_accumulation() {
+TEST_CASE("test_solution_accumulation") {
     algorithm::ExecutionContext ctx(1, "test");
 
     std::vector<algorithm::EnchStep> steps;
@@ -79,7 +80,7 @@ void test_solution_accumulation() {
     std::cout << "PASS: test_solution_accumulation" << std::endl;
 }
 
-void test_wait_if_paused_resume() {
+TEST_CASE("test_wait_if_paused_resume") {
     algorithm::ExecutionContext ctx(1, "test");
     std::atomic<bool> paused{false};
     bool resumed = false;
@@ -142,7 +143,7 @@ struct MockObserver : IAlgorithmObserver {
 
 static void drain_events() { DiagnosticsService::instance().flush(); }
 
-void test_observer_progress() {
+TEST_CASE("test_observer_progress") {
     DiagnosticsService::instance().set_persist(false);
     auto obs = std::make_shared<MockObserver>();
     DiagnosticsService::instance().attach_observer(obs);
@@ -158,7 +159,7 @@ void test_observer_progress() {
     std::cout << "PASS: test_observer_progress" << std::endl;
 }
 
-void test_observer_solution() {
+TEST_CASE("test_observer_solution") {
     auto obs = std::make_shared<MockObserver>();
     DiagnosticsService::instance().attach_observer(obs);
 
@@ -175,7 +176,7 @@ void test_observer_solution() {
     std::cout << "PASS: test_observer_solution" << std::endl;
 }
 
-void test_observer_solution_rvalue() {
+TEST_CASE("test_observer_solution_rvalue") {
     auto obs = std::make_shared<MockObserver>();
     DiagnosticsService::instance().attach_observer(obs);
 
@@ -195,7 +196,7 @@ void test_observer_solution_rvalue() {
     std::cout << "PASS: test_observer_solution_rvalue" << std::endl;
 }
 
-void test_observer_state_change() {
+TEST_CASE("test_observer_state_change") {
     auto obs = std::make_shared<MockObserver>();
     DiagnosticsService::instance().attach_observer(obs);
 
@@ -212,7 +213,7 @@ void test_observer_state_change() {
     std::cout << "PASS: test_observer_state_change" << std::endl;
 }
 
-void test_observer_exit() {
+TEST_CASE("test_observer_exit") {
     DiagnosticsService::instance().set_persist(false);
     auto obs = std::make_shared<MockObserver>();
     DiagnosticsService::instance().attach_observer(obs);
@@ -248,7 +249,7 @@ void test_observer_exit() {
     std::cout << "PASS: test_observer_exit" << std::endl;
 }
 
-void test_observer_task_id_filter() {
+TEST_CASE("test_observer_task_id_filter") {
     auto obs = std::make_shared<MockObserver>();
     obs->accept_only = 42;
     DiagnosticsService::instance().attach_observer(obs);
@@ -267,29 +268,4 @@ void test_observer_task_id_filter() {
 
     DiagnosticsService::instance().detach_observer(obs);
     std::cout << "PASS: test_observer_task_id_filter" << std::endl;
-}
-
-// ─── Main ────────────────────────────────────────────────────────────────────
-
-int main() {
-    try {
-        test_cancel();
-        test_pause_resume();
-        test_progress();
-        test_diagnostic_log();
-        test_solution_accumulation();
-        test_wait_if_paused_resume();
-
-        test_observer_progress();
-        test_observer_solution();
-        test_observer_solution_rvalue();
-        test_observer_state_change();
-        test_observer_exit();
-        test_observer_task_id_filter();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

@@ -1,12 +1,13 @@
 // =============================================================================
 // WebSchema round-trip tests (reuse InventorySchema test pattern).
 // =============================================================================
+#define BESQ_TEST_MAIN
 #include "domain/interface/web/WebSchema.h"
 #include "ds/ds.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <string>
 
-void test_round_trip_full() {
+TEST_CASE("test_round_trip_full") {
     WebTaskDto dto;
     dto.target.item = "diamond_sword";
     dto.target.enchants = {{"sharpness", 5}, {"knockback", 2}};
@@ -43,7 +44,7 @@ void test_round_trip_full() {
     TEST_PASS("WebSchema full round-trip");
 }
 
-void test_inv_task_payload_is_valid_webschema() {
+TEST_CASE("test_inv_task_payload_is_valid_webschema") {
     // A plain InvTaskSchema payload (no source/search fields) must parse.
     auto json = Json::parse(R"({
         "profile": "builtin:vanilla",
@@ -62,15 +63,4 @@ void test_inv_task_payload_is_valid_webschema() {
     expect(dto.max_threads == 0, "max_threads defaults 0");
     expect(dto.ignore_incompatible == false, "ignore_incompatible defaults false");
     TEST_PASS("InvTaskSchema payload is a valid WebSchema");
-}
-
-int main() {
-    try {
-        test_round_trip_full();
-        test_inv_task_payload_is_valid_webschema();
-    } catch (const std::exception& e) {
-        std::cerr << "\nFATAL: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
 }

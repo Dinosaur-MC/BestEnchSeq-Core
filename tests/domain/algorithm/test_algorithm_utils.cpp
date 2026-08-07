@@ -1,7 +1,8 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/HashUtils.hpp"
 
-void test_hash_combine() {
+TEST_CASE("test_hash_combine") {
     size_t h = 0;
     hash_combine(h, 42);
     expect(h != 0, "hash combine should produce non-zero result");
@@ -25,16 +26,4 @@ void test_hash_combine() {
     expect(ha != hb, "hash combine should be order-sensitive");
 
     std::cout << "PASS: test_hash_combine" << std::endl;
-}
-
-int main() {
-    std::cout << "=== AlgorithmUtils Tests ===" << std::endl;
-    try {
-        test_hash_combine();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

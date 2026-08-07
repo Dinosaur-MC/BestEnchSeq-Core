@@ -2,8 +2,9 @@
 // HttpCommon base types tests: percent-decode / query parse / MIME.
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/HttpCommon.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <string>
 
 using namespace web;
@@ -90,7 +91,7 @@ static void test_413_reason() {
     expect(wire.find("HTTP/1.1 413 Payload Too Large") != std::string::npos, "413 reason phrase");
 }
 
-int main() {
+TEST_CASE("test_http_common") {
     test_percent_decode();
     test_query_parse();
     test_mime();
@@ -100,5 +101,4 @@ int main() {
     test_no_content_head();
     test_413_reason();
     TEST_PASS("test_http_common");
-    return print_summary();
 }

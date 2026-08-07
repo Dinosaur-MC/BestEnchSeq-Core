@@ -1,14 +1,15 @@
 // test_file_utils.cpp — file_utils::list_directory (non-recursive listing,
 // directories-first ordering, size capture, missing-dir tolerance).
+#define BESQ_TEST_MAIN
 #include "common/io/FileUtils.hpp"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <filesystem>
 #include <fstream>
 #include <string>
 
 namespace fs = std::filesystem;
 
-int main() {
+TEST_CASE("test_file_utils") {
     // Scratch tree under the test cwd (cleaned on exit; stale dirs from a
     // crashed run are removed first so the entry count is deterministic).
     const fs::path base = fs::current_path() / "besq_file_utils_test_dir";
@@ -49,5 +50,4 @@ int main() {
 
     fs::remove_all(base, ec);
     TEST_PASS("test_file_utils");
-    return print_summary();
 }

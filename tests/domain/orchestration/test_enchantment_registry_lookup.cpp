@@ -1,4 +1,6 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
 
@@ -6,7 +8,7 @@
 
 namespace {
 
-void test_registry_contains_bare() {
+TEST_CASE("test_registry_contains_bare") {
     std::vector<EnchInfo> infos;
     infos.push_back({NSID("sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
                      std::unordered_set<NSID>{},
@@ -20,7 +22,7 @@ void test_registry_contains_bare() {
     std::cout << "  PASS: test_registry_contains_bare" << std::endl;
 }
 
-void test_registry_contains_namespaced() {
+TEST_CASE("test_registry_contains_namespaced") {
     std::vector<EnchInfo> infos;
     infos.push_back({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
                      std::unordered_set<NSID>{},
@@ -40,17 +42,3 @@ void test_registry_contains_namespaced() {
 }
 
 } // anonymous namespace
-
-int main() {
-    std::cout << "=== EnchantmentRegistry Lookup Tests ===" << std::endl;
-
-    try {
-        test_registry_contains_bare();
-        test_registry_contains_namespaced();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

@@ -1,11 +1,12 @@
+#define BESQ_TEST_MAIN
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/Equipment.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <iostream>
 
 namespace {
 
-void test_add_new_equipment() {
+TEST_CASE("test_add_new_equipment") {
     Equipment sword{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID(), 1561};
     EquipmentRegistry reg({sword});
 
@@ -16,7 +17,7 @@ void test_add_new_equipment() {
     TEST_PASS("test_add_new_equipment");
 }
 
-void test_add_duplicate_fails() {
+TEST_CASE("test_add_duplicate_fails") {
     Equipment sword{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID(), 1561};
     EquipmentRegistry reg({sword});
 
@@ -25,7 +26,7 @@ void test_add_duplicate_fails() {
     TEST_PASS("test_add_duplicate_fails");
 }
 
-void test_remove_existing() {
+TEST_CASE("test_remove_existing") {
     Equipment sword{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID(), 1561};
     EquipmentRegistry reg({sword});
 
@@ -36,19 +37,3 @@ void test_remove_existing() {
 }
 
 } // namespace
-
-int main() {
-    std::cout << "=== EquipmentRegistry Mutable API Tests ===" << std::endl;
-    try {
-        test_add_new_equipment();
-        test_add_duplicate_fails();
-        test_remove_existing();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

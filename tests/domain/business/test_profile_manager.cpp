@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/ProfileManager.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/Equipment.h"
@@ -23,7 +24,7 @@ static EnchInfo make_ench(const std::string& id_str, const std::string& name, in
 
 // ─── Test: Create Profile ───────────────────────────────────────────────
 
-void test_create_profile() {
+TEST_CASE("test_create_profile") {
     ProfileManager mgr;
     auto& p = mgr.create("test:profile_a");
 
@@ -40,7 +41,7 @@ void test_create_profile() {
 
 // ─── Test: Create From ──────────────────────────────────────────────────
 
-void test_create_from() {
+TEST_CASE("test_create_from") {
     ProfileManager mgr;
 
     // Create profile A and add an enchantment
@@ -66,7 +67,7 @@ void test_create_from() {
 
 // ─── Test: Remove Profile ───────────────────────────────────────────────
 
-void test_remove_profile() {
+TEST_CASE("test_remove_profile") {
     ProfileManager mgr;
     mgr.create("test:a");
     mgr.create("test:b");
@@ -82,7 +83,7 @@ void test_remove_profile() {
 
 // ─── Test: Remove Nonexistent ───────────────────────────────────────────
 
-void test_remove_nonexistent() {
+TEST_CASE("test_remove_nonexistent") {
     ProfileManager mgr;
     mgr.create("test:a");
 
@@ -95,7 +96,7 @@ void test_remove_nonexistent() {
 
 // ─── Test: Activate and Active ──────────────────────────────────────────
 
-void test_activate_and_active() {
+TEST_CASE("test_activate_and_active") {
     ProfileManager mgr;
     auto& a = mgr.create("test:a");
     mgr.create("test:b");
@@ -115,7 +116,7 @@ void test_activate_and_active() {
 
 // ─── Test: Activate Nonexistent Throws ──────────────────────────────────
 
-void test_activate_nonexistent_throws() {
+TEST_CASE("test_activate_nonexistent_throws") {
     ProfileManager mgr;
     mgr.create("test:a");
 
@@ -128,7 +129,7 @@ void test_activate_nonexistent_throws() {
 
 // ─── Test: Empty Active Throws ──────────────────────────────────────────
 
-void test_empty_active_throws() {
+TEST_CASE("test_empty_active_throws") {
     ProfileManager mgr;  // no profiles
 
     expect_throws_as<std::runtime_error>([&]() {
@@ -140,7 +141,7 @@ void test_empty_active_throws() {
 
 // ─── Test: List ─────────────────────────────────────────────────────────
 
-void test_list() {
+TEST_CASE("test_list") {
     ProfileManager mgr;
     mgr.create("test:alpha");
     mgr.create("test:beta");
@@ -165,7 +166,7 @@ void test_list() {
 
 // ─── Test: Find ─────────────────────────────────────────────────────────
 
-void test_find() {
+TEST_CASE("test_find") {
     ProfileManager mgr;
     mgr.create("test:found_me");
 
@@ -180,7 +181,7 @@ void test_find() {
 
 // ─── Test: Snapshot ─────────────────────────────────────────────────────
 
-void test_snapshot() {
+TEST_CASE("test_snapshot") {
     ProfileManager mgr;
 
     // Create profile A with an enchantment
@@ -208,7 +209,7 @@ void test_snapshot() {
 
 // ─── Test: Branch ───────────────────────────────────────────────────────
 
-void test_branch() {
+TEST_CASE("test_branch") {
     ProfileManager mgr;
 
     // Create profile A
@@ -232,7 +233,7 @@ void test_branch() {
 
 // ─── Test: Merge ────────────────────────────────────────────────────────
 
-void test_merge() {
+TEST_CASE("test_merge") {
     ProfileManager mgr;
 
     // Create profile A with enchantment X (sharpness)
@@ -260,7 +261,7 @@ void test_merge() {
 
 // ─── Test: Merge with missing source/dest throws (I-2 regression) ────────
 
-void test_pm_merge_missing_throws() {
+TEST_CASE("test_pm_merge_missing_throws") {
     ProfileManager pm;
     pm.create("base");
 
@@ -274,7 +275,7 @@ void test_pm_merge_missing_throws() {
 
 // ─── Test: Create Empty Profile Structure ───────────────────────────────
 
-void test_create_empty_profile_structure() {
+TEST_CASE("test_create_empty_profile_structure") {
     ProfileManager mgr;
     auto& p = mgr.create("test:empty");
 
@@ -290,7 +291,7 @@ void test_create_empty_profile_structure() {
 
 // ─── Test: Dependency Chain (transitive topological resolution) ──────
 
-void test_pm_dependency_chain() {
+TEST_CASE("test_pm_dependency_chain") {
     ProfileManager pm;
     pm.create("builtin:vanilla");
     auto& mod = pm.create("enchantencore");
@@ -309,7 +310,7 @@ void test_pm_dependency_chain() {
 
 // ─── Test: Dependency Cycle Detection ────────────────────────────────
 
-void test_pm_dependency_cycle() {
+TEST_CASE("test_pm_dependency_cycle") {
     ProfileManager pm;
     auto& a = pm.create("a");
     auto& b = pm.create("b");
@@ -326,7 +327,7 @@ void test_pm_dependency_cycle() {
 // is_cyclic distinguishes a cycle from a not-found profile; resolve_effective
 // throws on a cyclic profile instead of silently degrading to a self-only view.
 
-void test_pm_dependency_cycle_throws() {
+TEST_CASE("test_pm_dependency_cycle_throws") {
     ProfileManager pm;
     auto& a = pm.create("a");
     auto& b = pm.create("b");
@@ -344,7 +345,7 @@ void test_pm_dependency_cycle_throws() {
 
 // ─── Test: Cross-validate supported_items against dependency universe ─
 
-void test_pm_cross_validate() {
+TEST_CASE("test_pm_cross_validate") {
     ProfileManager pm;
     auto& vanilla = pm.create("builtin:vanilla");
     vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
@@ -380,7 +381,7 @@ void test_pm_cross_validate() {
 
 // ─── Test: Load Directory ────────────────────────────────────────────
 
-void test_pm_load_directory() {
+TEST_CASE("test_pm_load_directory") {
     // Nonexistent directory is a safe no-op.
     ProfileManager pm;
     pm.load_directory(std::filesystem::temp_directory_path() / "besq_no_such_dir_xyz");
@@ -425,7 +426,7 @@ void test_pm_load_directory() {
 
 // ─── Test: Effective View (topological merge + TagResolver + cache) ────
 
-void test_pm_effective_view() {
+TEST_CASE("test_pm_effective_view") {
     ProfileManager pm;
     pm.create("builtin:vanilla");
     auto& mod = pm.create("enchantencore");
@@ -449,7 +450,7 @@ void test_pm_effective_view() {
 // ProfileLoader::load.  JSON top-level `name` wins when present and non-empty;
 // otherwise the file stem is used.
 
-void test_pm_load_directory_json_name_key() {
+TEST_CASE("test_pm_load_directory_json_name_key") {
     static int counter = 0;
     auto dir = std::filesystem::temp_directory_path() /
                ("besq_pm_name_key_" + std::to_string(++counter));
@@ -504,7 +505,7 @@ void test_pm_load_directory_json_name_key() {
 // source that defines a tag, matching the effective-view merge direction
 // (upper overrides lower).
 
-void test_pm_tag_merge_direction() {
+TEST_CASE("test_pm_tag_merge_direction") {
     ProfileManager pm;
     auto& a = pm.create("a");
     auto ra = std::make_shared<TagResolver>();
@@ -540,7 +541,7 @@ void test_pm_tag_merge_direction() {
 // max_durability, not a 0 placeholder) and a vanilla enchant in its effective
 // view.
 
-void test_pm_effective_injects_vanilla() {
+TEST_CASE("test_pm_effective_injects_vanilla") {
     ProfileManager pm;
     auto& vanilla = pm.create("builtin:vanilla");
     vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
@@ -561,7 +562,7 @@ void test_pm_effective_injects_vanilla() {
 
 // ─── Test: Manager-level edit (real-time validation) + snapshot/undo ────
 
-void test_pm_edit_snapshot_undo() {
+TEST_CASE("test_pm_edit_snapshot_undo") {
     ProfileManager pm;
     auto& p = pm.create("test:edit");
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
@@ -591,7 +592,7 @@ void test_pm_edit_snapshot_undo() {
 
 // ─── Test: rejected edit / undo preserve the attached TagResolver ──────
 
-void test_pm_edit_preserves_tag_resolver() {
+TEST_CASE("test_pm_edit_preserves_tag_resolver") {
     ProfileManager pm;
     auto& p = pm.create("test:resolver");
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
@@ -616,7 +617,7 @@ void test_pm_edit_preserves_tag_resolver() {
 
 // ─── Test: Manager-level add/remove (enchantment/equipment/tag) + undo ──
 
-void test_pm_crud_full() {
+TEST_CASE("test_pm_crud_full") {
     ProfileManager pm;
     auto& p = pm.create("test:crud");
 
@@ -649,7 +650,7 @@ void test_pm_crud_full() {
 
 // ─── Test: Versioned publish (flatten effective view + version/tag) ──────
 
-void test_pm_publish() {
+TEST_CASE("test_pm_publish") {
     ProfileManager pm;
     pm.create("builtin:vanilla");
     auto& pack = pm.create("mypack");
@@ -674,7 +675,7 @@ void test_pm_publish() {
 
 // ─── Test: Load Datapack (pack.mcmeta detection + load_datapack) ─────────
 
-void test_pm_load_datapack() {
+TEST_CASE("test_pm_load_datapack") {
     // Build a minimal datapack inline in a temp dir (NO res/ fixtures —
     // everything must be committed or runtime-built).
     // B-T14 M-4: profile key prefers the FOLDER STEM verbatim.  Use a folder
@@ -744,7 +745,7 @@ void test_pm_load_datapack() {
 // diamond_sword (enchantability 10): power = round((31+4)*1.15) = 40,
 // level = (40-5)/5+1 = 8 → clamped to max_level 3 → 3.
 
-void test_pm_load_datapack_computes_limited_level() {
+TEST_CASE("test_pm_load_datapack_computes_limited_level") {
     auto dir = std::filesystem::temp_directory_path() / "LL Datapack";
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
@@ -792,7 +793,7 @@ void test_pm_load_datapack_computes_limited_level() {
 // datapack's own treasure-tag override.  A treasure member gets limited_level 0
 // from the calculator; a non-member keeps its computed level.
 
-void test_pm_load_datapack_treasure_tag() {
+TEST_CASE("test_pm_load_datapack_treasure_tag") {
     auto dir = std::filesystem::temp_directory_path() / "Treasure Datapack";
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "data" / "mytest" / "enchantment");
@@ -861,7 +862,7 @@ void test_pm_load_datapack_treasure_tag() {
 
 // ─── Test: Datapack-defined item tags survive load (B-T14 I-1) ───────────
 
-void test_pm_load_datapack_custom_tag() {
+TEST_CASE("test_pm_load_datapack_custom_tag") {
     // A datapack that defines its OWN item tag (#mypack:magic_staffs) and an
     // enchantment referencing it.  Previously the enchantment was dropped
     // entirely at from_dto because the tag wasn't in the vanilla universe.
@@ -925,7 +926,7 @@ void test_pm_load_datapack_custom_tag() {
 
 // ─── Test: Vanilla-tag override honored (replace + merge) (B-T14 I-1) ─────
 
-void test_pm_load_datapack_vanilla_tag_override() {
+TEST_CASE("test_pm_load_datapack_vanilla_tag_override") {
     // A datapack that REPLACES #minecraft:swords with a custom sword item.
     // The override must drive tags_of at solve time (direct + effective view).
     auto dir = std::filesystem::temp_directory_path() / "Vanilla Swords Override";
@@ -970,7 +971,7 @@ void test_pm_load_datapack_vanilla_tag_override() {
 
 // ─── Test: invalid tag key is skipped, not fatal (B-T14 follow-up) ───────
 
-void test_pm_load_datapack_skips_invalid_tag_key() {
+TEST_CASE("test_pm_load_datapack_skips_invalid_tag_key") {
     // A tag file whose path contains a space and uppercase → tag id
     // "mypack:My Tag" is invalid (NSID rejects spaces and uppercase).  It must
     // be skipped, NOT abort the whole datapack load; valid tags are still
@@ -1028,7 +1029,7 @@ void test_pm_load_datapack_skips_invalid_tag_key() {
 
 // ─── Test: direct Profile::set_dependencies invalidates effective view (M-1) ──
 
-void test_pm_direct_set_dependencies_invalidates_effective() {
+TEST_CASE("test_pm_direct_set_dependencies_invalidates_effective") {
     ProfileManager pm;
     pm.create("builtin:vanilla");
     auto& base = pm.create("base");
@@ -1053,7 +1054,7 @@ void test_pm_direct_set_dependencies_invalidates_effective() {
 
 // ─── Test: Load Directory detects datapack subdirectories ───────────────
 
-void test_pm_load_directory_with_datapack() {
+TEST_CASE("test_pm_load_directory_with_datapack") {
     static int counter = 0;
     auto dir = std::filesystem::temp_directory_path() /
                ("besq_pm_dir_dp_" + std::to_string(++counter));
@@ -1115,7 +1116,7 @@ void test_pm_load_directory_with_datapack() {
 
 // ─── Test: load_datapack on a dir WITHOUT pack.mcmeta ───────────────────
 
-void test_pm_load_datapack_no_mcmeta() {
+TEST_CASE("test_pm_load_datapack_no_mcmeta") {
     static int counter = 0;
     auto dir = std::filesystem::temp_directory_path() /
                ("besq_pm_nomcmeta_" + std::to_string(++counter));
@@ -1133,7 +1134,7 @@ void test_pm_load_datapack_no_mcmeta() {
 
 // ─── Test: datapack whose name would collide with the root key ──────────
 
-void test_pm_load_datapack_vanilla_name() {
+TEST_CASE("test_pm_load_datapack_vanilla_name") {
     // A datapack whose FOLDER STEM is "vanilla" (legacy alias of the injected
     // root key) must be disambiguated so it never replaces the base profile.
     auto dir = std::filesystem::temp_directory_path() / "vanilla";
@@ -1178,7 +1179,7 @@ void test_pm_load_datapack_vanilla_name() {
 
 // ─── Test: datapack whose name equals the current root key (builtin:vanilla) ──
 
-void test_pm_load_datapack_builtin_vanilla_name() {
+TEST_CASE("test_pm_load_datapack_builtin_vanilla_name") {
     // B-T14 M-4: `pack.id` is a FALLBACK only — even a pack.id of
     // "builtin:vanilla" must not rename the profile away from the folder stem.
     auto dir = std::filesystem::temp_directory_path() / "My Vanilla Replacer";
@@ -1230,7 +1231,7 @@ void test_pm_load_datapack_builtin_vanilla_name() {
 
 // ─── Test: datapack name derivation (verbatim, B-T13) ───────────────────
 
-void test_pm_name_derive() {
+TEST_CASE("test_pm_name_derive") {
     // B-T13: profile keys are plain std::string.  B-T14 M-4: derive_datapack_name
     // prefers the FOLDER STEM verbatim — spaces/dots are preserved, no NSID
     // charset sanitization; pack.id is used ONLY when the folder has no stem.
@@ -1290,7 +1291,7 @@ void test_pm_name_derive() {
 
 // ─── Test: empty profile keys are rejected at manager entry points ──────
 
-void test_pm_empty_key_rejected() {
+TEST_CASE("test_pm_empty_key_rejected") {
     ProfileManager pm;
     pm.create("base");
 
@@ -1314,7 +1315,7 @@ void test_pm_empty_key_rejected() {
 // registry so a `#mypack:*`-referencing enchantment survives (previously the
 // FormatDetector dropped item_tags, so the enchantment was silently removed).
 
-void test_profile_loader_load_datapack_keeps_tags() {
+TEST_CASE("test_profile_loader_load_datapack_keeps_tags") {
     auto dir = std::filesystem::temp_directory_path() / "Loader Custom Pack";
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
@@ -1352,7 +1353,7 @@ void test_profile_loader_load_datapack_keeps_tags() {
     TEST_PASS("test_profile_loader_load_datapack_keeps_tags");
 }
 
-void test_format_detector_datapack() {
+TEST_CASE("test_format_detector_datapack") {
     static int counter = 0;
 
     // Directory with pack.mcmeta → McOfficial (new primary check).
@@ -1385,7 +1386,7 @@ void test_format_detector_datapack() {
 // companion equipment still round-trips into the main profile via
 // FormatDetector's NativeCsv branch.
 
-void test_load_directory_skips_equipments_csv() {
+TEST_CASE("test_load_directory_skips_equipments_csv") {
     static int counter = 0;
     auto dir = std::filesystem::temp_directory_path() /
                ("besq_prof_dir_" + std::to_string(++counter));
@@ -1422,7 +1423,7 @@ void test_load_directory_skips_equipments_csv() {
 // ─── Test: update_equipment (round-trip via _mutate) ────────────────────
 // Manager-level equipment update: patch by NSID id; missing id → false.
 
-void test_update_equipment() {
+TEST_CASE("test_update_equipment") {
     ProfileManager pm;
     pm.create("p1");
     Equipment eq; eq.id = NSID("diamond_sword"); eq.max_durability = 1561;
@@ -1441,7 +1442,7 @@ void test_update_equipment() {
 
 // ─── Test: update_tag + set_dependencies (round-trip via _mutate) ───────
 
-void test_update_tag_and_deps() {
+TEST_CASE("test_update_tag_and_deps") {
     ProfileManager pm;
     pm.create("p1"); pm.create("p2");
     expect(pm.set_dependencies("p1", {"p2"}), "set deps");
@@ -1465,7 +1466,7 @@ void test_update_tag_and_deps() {
 
 // ─── Test: rename (map key reorder; active-name sync) ───────────────────
 
-void test_rename() {
+TEST_CASE("test_rename") {
     ProfileManager pm;
     pm.create("old");
     expect(pm.rename("old", "new"), "rename");
@@ -1484,61 +1485,3 @@ void test_rename() {
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────
-
-int main() {
-    try {
-        test_create_profile();
-        test_create_from();
-        test_remove_profile();
-        test_remove_nonexistent();
-        test_activate_and_active();
-        test_activate_nonexistent_throws();
-        test_empty_active_throws();
-        test_list();
-        test_find();
-        test_snapshot();
-        test_branch();
-        test_merge();
-        test_pm_merge_missing_throws();
-        test_create_empty_profile_structure();
-        test_pm_dependency_chain();
-        test_pm_dependency_cycle();
-        test_pm_dependency_cycle_throws();
-        test_pm_cross_validate();
-        test_pm_load_directory();
-        test_pm_load_directory_json_name_key();
-        test_pm_effective_view();
-        test_pm_tag_merge_direction();
-        test_pm_effective_injects_vanilla();
-        test_pm_edit_snapshot_undo();
-        test_pm_edit_preserves_tag_resolver();
-        test_pm_crud_full();
-        test_pm_publish();
-        test_pm_load_datapack();
-        test_pm_load_datapack_computes_limited_level();
-        test_pm_load_datapack_treasure_tag();
-        test_pm_load_datapack_custom_tag();
-        test_pm_load_datapack_vanilla_tag_override();
-        test_pm_load_datapack_skips_invalid_tag_key();
-        test_pm_direct_set_dependencies_invalidates_effective();
-        test_pm_load_directory_with_datapack();
-        test_pm_load_datapack_no_mcmeta();
-        test_pm_load_datapack_vanilla_name();
-        test_pm_load_datapack_builtin_vanilla_name();
-        test_pm_name_derive();
-        test_pm_empty_key_rejected();
-        test_profile_loader_load_datapack_keeps_tags();
-        test_format_detector_datapack();
-        test_load_directory_skips_equipments_csv();
-        test_update_equipment();
-        test_update_tag_and_deps();
-        test_rename();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

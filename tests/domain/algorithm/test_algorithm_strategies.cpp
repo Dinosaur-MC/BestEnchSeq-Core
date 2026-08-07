@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "framework/test_fixture.h"
 #include "domain/algorithm/components/SearchUtils.h"
 #include "domain/algorithm/registries/EnchReg.h"
@@ -206,7 +207,10 @@ int32_t run_strategy_cfg(std::unique_ptr<algorithm::IAlgorithm> algo,
 // ========================================================================
 
 #define RUN_TEST(name) do { \
-    try { name(); } catch (const test_error&) { /* expect() already counted */ } \
+    try { name(); } catch (const test_error& e) { \
+        /* expect() already counted; print so failures stay visible (质量审查 Important #1) */ \
+        std::cout << "  FAIL: " << e.what() << std::endl; \
+    } \
     catch (const std::exception& e) { std::cerr << "UNEXPECTED: " << e.what() << std::endl; tests_failed++; } \
     catch (...) { std::cerr << "UNEXPECTED: unknown exception" << std::endl; tests_failed++; } \
 } while(0)
@@ -1590,7 +1594,7 @@ void test_loader_registration() {
 // Main
 // ========================================================================
 
-int main() {
+TEST_CASE("test_algorithm_strategies") {
     std::cout << "=== Algorithm Strategy Tests ===\n\n";
 
     setup_registries();
@@ -1678,9 +1682,4 @@ int main() {
 
     // AlgorithmLoader validation
     RUN_TEST(test_loader_registration);
-
-    std::cout << "\nResults: " << tests_passed << " passed, "
-              << tests_failed << " failed, "
-              << (tests_passed + tests_failed) << " total" << std::endl;
-    return tests_failed > 0 ? 1 : 0;
 }

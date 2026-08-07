@@ -1,7 +1,8 @@
+#define BESQ_TEST_MAIN
 #include "ds/ds.h"
 #include "domain/business/schemas/EnchInfoSchema.h"
 #include "domain/business/schemas/EquipmentSchema.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <string>
 #include <unordered_set>
@@ -25,7 +26,7 @@ EnchInfo make_ench() {
     return e;
 }
 
-void test_enchinfo_json_roundtrip() {
+TEST_CASE("test_enchinfo_json_roundtrip") {
     EnchInfo e = make_ench();
     Json j = EnchJson::serialize(e);
     std::string s = j.to_string();
@@ -55,7 +56,7 @@ void test_enchinfo_json_roundtrip() {
     TEST_PASS("EnchInfo JSON roundtrip");
 }
 
-void test_enchinfo_platform_legacy_alias() {
+TEST_CASE("test_enchinfo_platform_legacy_alias") {
     Json j = Json::object()
         .set("id", Json(std::string("minecraft:sharpness")))
         .set("max_level", Json(int64_t{5}))
@@ -67,7 +68,7 @@ void test_enchinfo_platform_legacy_alias() {
     TEST_PASS("EnchInfo legacy platform alias (supported_platform)");
 }
 
-void test_enchinfo_min_cost_conditional() {
+TEST_CASE("test_enchinfo_min_cost_conditional") {
     EnchInfo e = make_ench();
     e.min_cost_base      = 0;
     e.min_cost_per_level = 0;
@@ -84,7 +85,7 @@ void test_enchinfo_min_cost_conditional() {
     TEST_PASS("EnchInfo min_cost conditional emit");
 }
 
-void test_enchinfo_csv_roundtrip() {
+TEST_CASE("test_enchinfo_csv_roundtrip") {
     EnchInfo e = make_ench();
     auto hdr = EnchCsv::header();
     expect(hdr.size() == 11, "11 csv columns");
@@ -104,7 +105,7 @@ void test_enchinfo_csv_roundtrip() {
     TEST_PASS("EnchInfo CSV roundtrip");
 }
 
-void test_enchantment_data_json_min_cost_dual() {
+TEST_CASE("test_enchantment_data_json_min_cost_dual") {
     // 嵌套形态（MC 官方）
     Json nested = Json::object()
         .set("min_cost", Json::object()
@@ -123,7 +124,7 @@ void test_enchantment_data_json_min_cost_dual() {
     TEST_PASS("EnchantmentData min_cost dual-form (nested + flat)");
 }
 
-void test_enchantment_data_platform() {
+TEST_CASE("test_enchantment_data_platform") {
     Json j = Json::object().set("platform", Json(std::string("java")));
     business::loader::EnchantmentData d1; ds::ErrorList e1;
     expect(DataJson::parse(j, d1, e1), "dto platform key parses");
@@ -135,7 +136,7 @@ void test_enchantment_data_platform() {
     TEST_PASS("EnchantmentData platform canonical + alias");
 }
 
-void test_equipment_tag_roundtrip() {
+TEST_CASE("test_equipment_tag_roundtrip") {
     EquipmentTag t{NSID("#minecraft:sword"), "sword"};
     Json j = EquipTagJson::serialize(t);
     EquipmentTag out; ds::ErrorList err;
@@ -145,7 +146,7 @@ void test_equipment_tag_roundtrip() {
     TEST_PASS("EquipmentTag JSON roundtrip");
 }
 
-void test_equipment_schema_roundtrip() {
+TEST_CASE("test_equipment_schema_roundtrip") {
     Equipment eq{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561};
     Json j = EquipJson::serialize(eq);
     Equipment out; ds::ErrorList err;
@@ -155,16 +156,4 @@ void test_equipment_schema_roundtrip() {
     expect(out.category == eq.category, "equipment category roundtrip");
     expect(out.max_durability == 1561, "equipment max_durability roundtrip");
     TEST_PASS("Equipment JSON roundtrip");
-}
-
-int main() {
-    test_enchinfo_json_roundtrip();
-    test_enchinfo_platform_legacy_alias();
-    test_enchinfo_min_cost_conditional();
-    test_enchinfo_csv_roundtrip();
-    test_enchantment_data_json_min_cost_dual();
-    test_enchantment_data_platform();
-    test_equipment_tag_roundtrip();
-    test_equipment_schema_roundtrip();
-    return print_summary();
 }

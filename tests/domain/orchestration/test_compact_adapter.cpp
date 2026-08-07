@@ -1,4 +1,6 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include "domain/orchestration/orchestration.h"
 #include "domain/business/types/Profile.h"
 #include "domain/business/types/EquipmentTag.h"
@@ -59,7 +61,7 @@ SolveRequest make_request(const Item& target_item, EnchSet source_enchs = {}) {
 }
 
 // ─── Test 1: minimal valid input produces correct AlgorithmInput ───
-void test_apply_valid_input() {
+TEST_CASE("test_apply_valid_input") {
     auto profile = make_sword_profile();
     // Direct mode requires a non-empty target enchant set.
     EnchSet target_enchs;
@@ -77,7 +79,7 @@ void test_apply_valid_input() {
 }
 
 // ─── Test 2: target enchantments are forwarded ───
-void test_apply_with_target() {
+TEST_CASE("test_apply_with_target") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -92,7 +94,7 @@ void test_apply_with_target() {
 }
 
 // ─── Test 3: unknown enchant ID is silently dropped (no throw) ───
-void test_apply_invalid_enchant_id() {
+TEST_CASE("test_apply_invalid_enchant_id") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("minecraft:nonexistent"), "Nonexistent", 1);
@@ -108,7 +110,7 @@ void test_apply_invalid_enchant_id() {
 
 // ─── Test 4: target level exceeding max_level throws ───
 //     (sharpness max_level is 5 in make_sword_registry)
-void test_apply_level_exceeds_max_throws() {
+TEST_CASE("test_apply_level_exceeds_max_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 99);
@@ -123,7 +125,7 @@ void test_apply_level_exceeds_max_throws() {
 }
 
 // ─── Test 5: inapplicable enchant is excluded from EnchReg ───
-void test_apply_inapplicable_enchant() {
+TEST_CASE("test_apply_inapplicable_enchant") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -140,7 +142,7 @@ void test_apply_inapplicable_enchant() {
 }
 
 // ─── Test 6: prior_penalty is forwarded as-is ───
-void test_apply_penalty_forward() {
+TEST_CASE("test_apply_penalty_forward") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -155,7 +157,7 @@ void test_apply_penalty_forward() {
 }
 
 // ─── Test 7: ench_reg is pruned to only applicable enchantments ───
-void test_pruning_only_applicable() {
+TEST_CASE("test_pruning_only_applicable") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -171,7 +173,7 @@ void test_pruning_only_applicable() {
 }
 
 // ─── Test 8: domain → compact preserves data ───
-void test_from_domain() {
+TEST_CASE("test_from_domain") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -198,7 +200,7 @@ void test_from_domain() {
 }
 
 // ─── Test 9: recall returns empty for invalid output ───
-void test_recall_empty_output() {
+TEST_CASE("test_recall_empty_output") {
     algorithm::AlgorithmOutput output;
     output.is_valid = false;
 
@@ -213,7 +215,7 @@ void test_recall_empty_output() {
 }
 
 // ─── Test 10: inapplicable target enchant throws (was silently dropped) ───
-void test_apply_inapplicable_target_throws() {
+TEST_CASE("test_apply_inapplicable_target_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("protection"), "Protection", 4);  // chestplate-only
@@ -228,7 +230,7 @@ void test_apply_inapplicable_target_throws() {
 }
 
 // ─── Test 11: mixed applicable + inapplicable target enchants throw ───
-void test_apply_mixed_target_throws() {
+TEST_CASE("test_apply_mixed_target_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);   // applicable
@@ -244,7 +246,7 @@ void test_apply_mixed_target_throws() {
 }
 
 // ─── Test 12: inapplicable source enchant throws (direct mode) ───
-void test_apply_inapplicable_source_throws() {
+TEST_CASE("test_apply_inapplicable_source_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -263,7 +265,7 @@ void test_apply_inapplicable_source_throws() {
 
 // ─── Test 13: a book carrying an enchant inapplicable to the target still
 //     works — books accept any enchantment (no applicability check) ───
-void test_apply_inventory_inapplicable_extra_ok() {
+TEST_CASE("test_apply_inventory_inapplicable_extra_ok") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -289,7 +291,7 @@ void test_apply_inventory_inapplicable_extra_ok() {
 }
 
 // ─── Test 14: over-level source enchant throws (direct mode) ───
-void test_apply_source_level_exceeds_max_throws() {
+TEST_CASE("test_apply_source_level_exceeds_max_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -308,7 +310,7 @@ void test_apply_source_level_exceeds_max_throws() {
 
 // ─── Test 15: over-level enchant on inventory extra book throws ───
 //     (inventory items are validated like direct mode: level ≤ max_level)
-void test_apply_inventory_extra_over_level_throws() {
+TEST_CASE("test_apply_inventory_extra_over_level_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -334,7 +336,7 @@ void test_apply_inventory_extra_over_level_throws() {
 }
 
 // ─── Test 16: inventory mode forwards all items into available ───
-void test_apply_inventory_equipment_split() {
+TEST_CASE("test_apply_inventory_equipment_split") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);  // goal
@@ -372,7 +374,7 @@ void test_apply_inventory_equipment_split() {
 }
 
 // ─── Test 17: inventory equipment carrying an inapplicable enchant throws ───
-void test_apply_inventory_equipment_inapplicable_throws() {
+TEST_CASE("test_apply_inventory_equipment_inapplicable_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -399,7 +401,7 @@ void test_apply_inventory_equipment_inapplicable_throws() {
 }
 
 // ─── Test 18: inventory equipment with over-level enchant throws ───
-void test_apply_inventory_equipment_over_level_throws() {
+TEST_CASE("test_apply_inventory_equipment_over_level_throws") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -431,7 +433,7 @@ void test_apply_inventory_equipment_over_level_throws() {
 // any category match.  Inventory mode (empty target enchants, book sacrifice)
 // lets the assertion reach the registry content directly — direct mode would
 // throw "ench_not_applicable" from the old logic before the assertion runs.
-void test_apply_supported_items_tag_intersection() {
+TEST_CASE("test_apply_supported_items_tag_intersection") {
     Profile p("test:tagapp");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
                      NSID("#minecraft:sword"), 1561});
@@ -466,7 +468,7 @@ void test_apply_supported_items_tag_intersection() {
 // ─── Test 19b: platform filter ───
 // An enchantment restricted to one platform is excluded from a solve targeting
 // the other, even when the tag intersection would admit it.
-void test_apply_platform_filter() {
+TEST_CASE("test_apply_platform_filter") {
     Profile p("test:plat");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
                      NSID("#minecraft:sword"), 1561});
@@ -497,7 +499,7 @@ void test_apply_platform_filter() {
 // A book (→ enchanted_book) can hold enchantments from any category: neither
 // sharpness (sword-only) nor protection (chestplate-only) is applicable to a
 // book via the tag system, yet both must enter the compact registry.
-void test_apply_book_target_all_enchants_applicable() {
+TEST_CASE("test_apply_book_target_all_enchants_applicable") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -526,7 +528,7 @@ void test_apply_book_target_all_enchants_applicable() {
 //     sword first (SRS: pool = books + same-id equipment only), so the inapplicable
 //     enchant never reaches validation — no throw, empty pool.  Matching-id
 //     equipment still validates (see test_apply_inventory_equipment_inapplicable_throws). ───
-void test_apply_inventory_hetero_equipment_skips_validation() {
+TEST_CASE("test_apply_inventory_hetero_equipment_skips_validation") {
     Profile p("test:invbad");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword",
                      NSID("#minecraft:sword"), 1561});
@@ -562,7 +564,7 @@ void test_apply_inventory_hetero_equipment_skips_validation() {
 }
 
 // ─── Test 21: matching-id equipment is kept in the pool ───
-void test_apply_inventory_same_id_equipment_kept() {
+TEST_CASE("test_apply_inventory_same_id_equipment_kept") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -588,7 +590,7 @@ void test_apply_inventory_same_id_equipment_kept() {
 }
 
 // ─── Test 22: mismatched-id equipment is excluded and its priority dropped ───
-void test_apply_inventory_hetero_equipment_excluded() {
+TEST_CASE("test_apply_inventory_hetero_equipment_excluded") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -620,7 +622,7 @@ void test_apply_inventory_hetero_equipment_excluded() {
 }
 
 // ─── Test 23: book target excludes ALL equipment, books kept ───
-void test_apply_inventory_book_target_excludes_equipment() {
+TEST_CASE("test_apply_inventory_book_target_excludes_equipment") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -652,7 +654,7 @@ void test_apply_inventory_book_target_excludes_equipment() {
 }
 
 // ─── Test 24: empty book is still dropped (regression) ───
-void test_apply_inventory_empty_book_dropped() {
+TEST_CASE("test_apply_inventory_empty_book_dropped") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -678,7 +680,7 @@ void test_apply_inventory_empty_book_dropped() {
 
 // ─── Test 25: mixed pool — matching equipment kept, mismatched excluded,
 //     books kept, priorities stay parallel to available ───
-void test_apply_inventory_mixed_pool_parallel_priorities() {
+TEST_CASE("test_apply_inventory_mixed_pool_parallel_priorities") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
@@ -717,7 +719,7 @@ void test_apply_inventory_mixed_pool_parallel_priorities() {
     TEST_PASS("test_apply_inventory_mixed_pool_parallel_priorities");
 }
 
-void test_apply_inventory_empty_target_throws() {
+TEST_CASE("test_apply_inventory_empty_target_throws") {
     auto profile = make_sword_profile();
     SolveRequest request;
     request.mode = AlgorithmMode::inventory;
@@ -737,41 +739,3 @@ void test_apply_inventory_empty_target_throws() {
 }
 
 } // anonymous namespace
-
-int main() {
-    try {
-        test_apply_valid_input();
-        test_apply_with_target();
-        test_apply_invalid_enchant_id();
-        test_apply_level_exceeds_max_throws();
-        test_apply_inapplicable_enchant();
-        test_apply_penalty_forward();
-        test_pruning_only_applicable();
-        test_from_domain();
-        test_recall_empty_output();
-        test_apply_inapplicable_target_throws();
-        test_apply_mixed_target_throws();
-        test_apply_inapplicable_source_throws();
-        test_apply_inventory_inapplicable_extra_ok();
-        test_apply_source_level_exceeds_max_throws();
-        test_apply_inventory_extra_over_level_throws();
-        test_apply_inventory_equipment_split();
-        test_apply_inventory_equipment_inapplicable_throws();
-        test_apply_inventory_equipment_over_level_throws();
-        test_apply_supported_items_tag_intersection();
-        test_apply_platform_filter();
-        test_apply_book_target_all_enchants_applicable();
-        test_apply_inventory_hetero_equipment_skips_validation();
-        test_apply_inventory_same_id_equipment_kept();
-        test_apply_inventory_hetero_equipment_excluded();
-        test_apply_inventory_book_target_excludes_equipment();
-        test_apply_inventory_empty_book_dropped();
-        test_apply_inventory_mixed_pool_parallel_priorities();
-        test_apply_inventory_empty_target_throws();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

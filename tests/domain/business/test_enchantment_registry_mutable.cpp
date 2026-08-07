@@ -1,11 +1,12 @@
+#define BESQ_TEST_MAIN
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/Enchantment.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <iostream>
 
 namespace {
 
-void test_add_new_enchantment() {
+TEST_CASE("test_add_new_enchantment") {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
@@ -17,7 +18,7 @@ void test_add_new_enchantment() {
     TEST_PASS("test_add_new_enchantment");
 }
 
-void test_add_duplicate_fails() {
+TEST_CASE("test_add_duplicate_fails") {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
@@ -26,7 +27,7 @@ void test_add_duplicate_fails() {
     TEST_PASS("test_add_duplicate_fails");
 }
 
-void test_remove_existing() {
+TEST_CASE("test_remove_existing") {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
@@ -36,7 +37,7 @@ void test_remove_existing() {
     TEST_PASS("test_remove_existing");
 }
 
-void test_remove_nonexistent_fails() {
+TEST_CASE("test_remove_nonexistent_fails") {
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     EnchantmentRegistry reg({sharp});
 
@@ -45,7 +46,7 @@ void test_remove_nonexistent_fails() {
     TEST_PASS("test_remove_nonexistent_fails");
 }
 
-void test_modify_max_level() {
+TEST_CASE("test_modify_max_level") {
     EnchantmentRegistry reg;
     EnchInfo sharp{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     reg = EnchantmentRegistry({sharp});
@@ -62,7 +63,7 @@ void test_modify_max_level() {
     TEST_PASS("test_modify_max_level");
 }
 
-void test_modify_nonexistent_fails() {
+TEST_CASE("test_modify_nonexistent_fails") {
     EnchantmentRegistry reg;
     EnchInfo nonexistent{NSID("minecraft:nonexistent"), "Nonexistent", MCE::All, 1, 1, 1, false, std::unordered_set<NSID>{}, std::unordered_set<NSID>{}};
     bool ok = reg.update(nonexistent);
@@ -71,22 +72,3 @@ void test_modify_nonexistent_fails() {
 }
 
 } // namespace
-
-int main() {
-    std::cout << "=== EnchantmentRegistry Mutable API Tests ===" << std::endl;
-    try {
-        test_add_new_enchantment();
-        test_add_duplicate_fails();
-        test_remove_existing();
-        test_remove_nonexistent_fails();
-        test_modify_max_level();
-        test_modify_nonexistent_fails();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

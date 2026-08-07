@@ -1,3 +1,4 @@
+#define BESQ_TEST_MAIN
 #include "builtin/ItemProperties.h"
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
@@ -9,7 +10,7 @@
 #include "domain/business/types/EnchInfo.h"
 #include "domain/business/types/Profile.h"
 #include "domain/orchestration/components/EnchSerializer.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <string>
 #include <unordered_map>
@@ -28,7 +29,7 @@ std::unordered_set<NSID> tag_set(const std::string& s) {
 //   power = round((30+1+2·⌊10/4⌋)·1.15) = round((31+4)·1.15) = round(40.25) = 40
 //   level = (40−1)/11 + 1 = 39/11 + 1 = 3 + 1 = 4, clamped to max_level 5 → 4.
 
-void test_ll_compute_from_min_cost() {
+TEST_CASE("test_ll_compute_from_min_cost") {
     TagResolver resolver;
     resolver.load_tag_content("minecraft:swords", R"({"values": ["minecraft:diamond_sword"]})");
 
@@ -48,7 +49,7 @@ void test_ll_compute_from_min_cost() {
 
 // ─── Test: treasure → 0 (highest priority, even with min_cost) ──────────
 
-void test_ll_treasure() {
+TEST_CASE("test_ll_treasure") {
     TagResolver resolver;
     resolver.load_tag_content("minecraft:swords", R"({"values": ["minecraft:diamond_sword"]})");
 
@@ -64,7 +65,7 @@ void test_ll_treasure() {
 
 // ─── Test: fallback — no min_cost but provided hint keeps stored value ──
 
-void test_ll_keep_provided() {
+TEST_CASE("test_ll_keep_provided") {
     EnchantmentRegistry reg;
     EnchInfo ench{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 4, 1, false, {}, tag_set("#minecraft:swords")};
     ench.limited_level = 4;
@@ -80,7 +81,7 @@ void test_ll_keep_provided() {
 
 // ─── Test: fallback — no min_cost, not provided → max_level ─────────────
 
-void test_ll_fallback_max_level() {
+TEST_CASE("test_ll_fallback_max_level") {
     EnchantmentRegistry reg;
     reg.insert(EnchInfo{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 0, 1, false, {}, tag_set("#minecraft:swords")});
 
@@ -94,7 +95,7 @@ void test_ll_fallback_max_level() {
 // ─── Test: min_cost present but no contributing item → conservative 1 ───
 // A mod item without item_props contributes nothing → limited_level = 1.
 
-void test_ll_no_contributing_item() {
+TEST_CASE("test_ll_no_contributing_item") {
     TagResolver resolver;
     resolver.load_tag_content("mypack:staffs", R"({"values": ["mypack:magic_staff"]})");
 
@@ -114,7 +115,7 @@ void test_ll_no_contributing_item() {
 // ─── Test: EnchSerializer JSON mirror — min_cost round-trips, no bogus
 //    limited_level when the hint is absent (B-T18 roundtrip fix). ────────
 
-void test_ll_serializer_json_roundtrip() {
+TEST_CASE("test_ll_serializer_json_roundtrip") {
     TagRegistry tag_reg;
     EnchInfo info{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 0, 1, false, {}, tag_set("#minecraft:swords"), 1, 11};
 
@@ -146,7 +147,7 @@ void test_ll_serializer_json_roundtrip() {
 
 // ─── Test: EnchSerializer JSON emits limited_level when hint present ─────
 
-void test_ll_serializer_json_hint() {
+TEST_CASE("test_ll_serializer_json_hint") {
     TagRegistry tag_reg;
     EnchInfo info{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 4, 1, false, {}, tag_set("#minecraft:swords")};
     info.limited_level = 4;
@@ -163,7 +164,7 @@ void test_ll_serializer_json_hint() {
 
 // ─── Test: EnchSerializer CSV export carries the min_cost columns (B-T18) ──
 
-void test_ll_serializer_csv_columns() {
+TEST_CASE("test_ll_serializer_csv_columns") {
     TagRegistry tag_reg;
     EnchInfo info{NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 0, 1, false, {}, tag_set("#minecraft:swords"), 10, 7};
 
@@ -184,7 +185,7 @@ void test_ll_serializer_csv_columns() {
 // pre-computed `limited_level`; the registry-level calculator must back-fill it
 // at load time: sharpness → computed > 0; mending → treasure → 0.
 
-void test_ll_builtin_vanilla_data() {
+TEST_CASE("test_ll_builtin_vanilla_data") {
     ProfileLoader loader;
     Profile p = loader.load_builtin();
 
@@ -203,24 +204,3 @@ void test_ll_builtin_vanilla_data() {
 }
 
 } // namespace
-
-int main() {
-    try {
-        test_ll_compute_from_min_cost();
-        test_ll_treasure();
-        test_ll_keep_provided();
-        test_ll_fallback_max_level();
-        test_ll_no_contributing_item();
-        test_ll_serializer_json_roundtrip();
-        test_ll_serializer_json_hint();
-        test_ll_serializer_csv_columns();
-        test_ll_builtin_vanilla_data();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

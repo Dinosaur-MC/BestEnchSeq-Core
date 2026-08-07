@@ -1,10 +1,11 @@
+#define BESQ_TEST_MAIN
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Equipment.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <algorithm>
 #include <cstdint>
 #include <unordered_map>
@@ -132,7 +133,7 @@ struct TestFixture {
 
 // ─── Basic forge tests ─────────────────────────────────────────────
 
-void test_forge_books() {
+TEST_CASE("test_forge_books") {
     TestFixture fx;
     auto book_a = fx.make_book(fx.id("sharpness"), 4);
     auto book_b = fx.make_book(fx.id("sharpness"), 3);
@@ -145,7 +146,7 @@ void test_forge_books() {
     std::cout << "PASS: test_forge_books (cost=" << cost << ")" << std::endl;
 }
 
-void test_forge_equipment_with_book() {
+TEST_CASE("test_forge_equipment_with_book") {
     TestFixture fx;
     auto eq   = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
     auto book = fx.make_book(fx.id("sharpness"), 5);
@@ -158,7 +159,7 @@ void test_forge_equipment_with_book() {
     std::cout << "PASS: test_forge_equipment_with_book (cost=" << cost << ")" << std::endl;
 }
 
-void test_forge_incompatible_rejected() {
+TEST_CASE("test_forge_incompatible_rejected") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     auto eq             = fx.make_equip(fx.id("sharpness"), 5);
@@ -179,7 +180,7 @@ void test_forge_incompatible_rejected() {
     std::cout << "PASS: test_forge_incompatible_rejected (cost=" << cost << ")" << std::endl;
 }
 
-void test_forge_not_forgeable() {
+TEST_CASE("test_forge_not_forgeable") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     algorithm::Item mat{algorithm::ItemType::Material, 0, 0, {}};
@@ -190,7 +191,7 @@ void test_forge_not_forgeable() {
 
 // ─── Sub-operation tests ──────────────────────────────────────────
 
-void test_penalty_cost() {
+TEST_CASE("test_penalty_cost") {
     algorithm::ForgeEngine engine;
     expect(engine.penalty_cost(0) == 0, "penalty_cost(0) should be 0");
     expect(engine.penalty_cost(1) == 1, "penalty_cost(1) should be 1");
@@ -201,7 +202,7 @@ void test_penalty_cost() {
     std::cout << "PASS: test_penalty_cost" << std::endl;
 }
 
-void test_estimate_forge_cost() {
+TEST_CASE("test_estimate_forge_cost") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     auto eq     = algorithm::Item{algorithm::ItemType::Equip, 1561, 0, {}};
@@ -218,7 +219,7 @@ void test_estimate_forge_cost() {
 
 // ─── BE platform tests ────────────────────────────────────────────
 
-void test_be_forge_cost() {
+TEST_CASE("test_be_forge_cost") {
     TestFixture fx;
     algorithm::ForgeConfig be_cfg;
     be_cfg.ignore_penalty_cost = false;
@@ -241,7 +242,7 @@ void test_be_forge_cost() {
     std::cout << "PASS: test_be_forge_cost (BE=" << be_cost << ", JE=" << je_cost << ")" << std::endl;
 }
 
-void test_be_conflict_cost() {
+TEST_CASE("test_be_conflict_cost") {
     TestFixture fx;
     algorithm::ForgeConfig be_cfg2;
     be_cfg2.ignore_penalty_cost = false;
@@ -266,7 +267,7 @@ void test_be_conflict_cost() {
 
 // ─── forge_into mutation tests ────────────────────────────────────
 
-void test_ppn_recalculation() {
+TEST_CASE("test_ppn_recalculation") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     auto book_a         = fx.make_book(fx.id("sharpness"), 3);
@@ -284,7 +285,7 @@ void test_ppn_recalculation() {
     std::cout << "PASS: test_ppn_recalculation" << std::endl;
 }
 
-void test_same_level_upgrade() {
+TEST_CASE("test_same_level_upgrade") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     auto book_a         = fx.make_book(fx.id("sharpness"), 4);
@@ -307,7 +308,7 @@ void test_same_level_upgrade() {
     std::cout << "PASS: test_same_level_upgrade" << std::endl;
 }
 
-void test_different_level_max() {
+TEST_CASE("test_different_level_max") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     auto book_a         = fx.make_book(fx.id("sharpness"), 5);
@@ -322,7 +323,7 @@ void test_different_level_max() {
 
 // ─── Malformed item / error path tests ─────────────────────────────
 
-void test_invalid_enchant_level_rejected() {
+TEST_CASE("test_invalid_enchant_level_rejected") {
     TestFixture fx;
     // level <= 0 is rejected by the new EnchSet (uint8_t storage)
     algorithm::Item book{algorithm::ItemType::Book, 0, 0, {}};
@@ -343,7 +344,7 @@ void test_invalid_enchant_level_rejected() {
     std::cout << "PASS: test_invalid_enchant_level_rejected (cost=" << cost << ")" << std::endl;
 }
 
-void test_zero_level_enchant_rejected() {
+TEST_CASE("test_zero_level_enchant_rejected") {
     TestFixture fx;
     // make_book with level 0 → insert() returns false, book stays empty
     auto book = fx.make_book(fx.id("sharpness"), 0);
@@ -365,14 +366,14 @@ void test_zero_level_enchant_rejected() {
 
 // ─── Additional sub-operation boundary tests ─────────────────────────
 
-void test_penalty_cost_bounds() {
+TEST_CASE("test_penalty_cost_bounds") {
     algorithm::ForgeEngine engine;
     expect(engine.penalty_cost(-1) == INT32_MAX, "penalty_cost(-1) should be INT32_MAX");
     expect(engine.penalty_cost(31) == INT32_MAX, "penalty_cost(31) should be INT32_MAX");
     TEST_PASS("penalty_cost bounds");
 }
 
-void test_is_forgeable_combinations() {
+TEST_CASE("test_is_forgeable_combinations") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     auto book        = fx.make_book(fx.id("sharpness"), 1);
@@ -387,7 +388,7 @@ void test_is_forgeable_combinations() {
     TEST_PASS("is_forgeable combinations");
 }
 
-void test_forge_into_repair_cost() {
+TEST_CASE("test_forge_into_repair_cost") {
     algorithm::ForgeConfig cfg;
     cfg.ignore_penalty_cost = false;
     cfg.ignore_repair_cost  = false;
@@ -419,7 +420,7 @@ void test_forge_into_repair_cost() {
     TEST_PASS("forge_into repair cost");
 }
 
-void test_forge_into_inapplicable_ench_skipped() {
+TEST_CASE("test_forge_into_inapplicable_ench_skipped") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     // protection is only applicable to chestplate — not to the sword target
@@ -434,7 +435,7 @@ void test_forge_into_inapplicable_ench_skipped() {
     TEST_PASS("forge_into inapplicable enchant skip");
 }
 
-void test_pure_forge_into() {
+TEST_CASE("test_pure_forge_into") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
 
@@ -460,7 +461,7 @@ void test_pure_forge_into() {
     TEST_PASS("pure_forge_into");
 }
 
-void test_estimate_forge_cost_equip_sacrifice() {
+TEST_CASE("test_estimate_forge_cost_equip_sacrifice") {
     TestFixture fx;
     algorithm::ForgeEngine engine;
     // Equipment sacrifice uses mul (not mul_b): knockback mul=2.
@@ -479,32 +480,3 @@ void test_estimate_forge_cost_equip_sacrifice() {
 }
 
 } // anonymous namespace
-
-int main() {
-    try {
-        test_penalty_cost();
-        test_forge_not_forgeable();
-        test_forge_books();
-        test_forge_equipment_with_book();
-        test_forge_incompatible_rejected();
-        test_estimate_forge_cost();
-        test_be_forge_cost();
-        test_be_conflict_cost();
-        test_ppn_recalculation();
-        test_same_level_upgrade();
-        test_different_level_max();
-        test_invalid_enchant_level_rejected();
-        test_zero_level_enchant_rejected();
-        test_penalty_cost_bounds();
-        test_is_forgeable_combinations();
-        test_forge_into_repair_cost();
-        test_forge_into_inapplicable_ench_skipped();
-        test_pure_forge_into();
-        test_estimate_forge_cost_equip_sacrifice();
-    } catch (const test_error &e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception &e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

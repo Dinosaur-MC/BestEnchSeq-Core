@@ -4,6 +4,7 @@
 // Tests the public C++ API: profile lifecycle, registry editing, solve pipeline.
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/interface/cli/CLIApp.h"
@@ -11,7 +12,7 @@
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "besq/besq.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <atomic>
 #include <chrono>
@@ -25,7 +26,7 @@
 // Test: Context lifecycle
 // ---------------------------------------------------------------------------
 
-void test_context_lifecycle() {
+TEST_CASE("test_context_lifecycle") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -54,7 +55,7 @@ void test_context_lifecycle() {
 // Test: Fork / merge correctness
 // ---------------------------------------------------------------------------
 
-void test_fork_merge() {
+TEST_CASE("test_fork_merge") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -95,7 +96,7 @@ void test_fork_merge() {
 // Test: Solve via BesqContext
 // ---------------------------------------------------------------------------
 
-void test_besq_solve() {
+TEST_CASE("test_besq_solve") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -138,7 +139,7 @@ void test_besq_solve() {
 // Test: Solve when source already satisfies the target (goal already met)
 // ---------------------------------------------------------------------------
 
-void test_besq_solve_already_met() {
+TEST_CASE("test_besq_solve_already_met") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -179,7 +180,7 @@ void test_besq_solve_already_met() {
 // Test: Registry editing (add / modify / remove)
 // ---------------------------------------------------------------------------
 
-void test_besq_registry_edit() {
+TEST_CASE("test_besq_registry_edit") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -236,7 +237,7 @@ void test_besq_registry_edit() {
 // Test: default profiles-dir scan + activate → effective view
 // ---------------------------------------------------------------------------
 
-void test_besq_default_profiles_scan() {
+TEST_CASE("test_besq_default_profiles_scan") {
     // Temporary directory containing a single profile that depends on vanilla.
     auto tmp = std::filesystem::temp_directory_path() / "besq_profiles_scan";
     std::filesystem::remove_all(tmp);
@@ -261,7 +262,7 @@ void test_besq_default_profiles_scan() {
 // Test: effective_profile — dependency-merged effective view accessor
 // ---------------------------------------------------------------------------
 
-void test_effective_profile_view() {
+TEST_CASE("test_effective_profile_view") {
     // Scaffold a dependent profile in a temp dir (dependency content must be
     // merged into the effective view).
     auto tmp = std::filesystem::temp_directory_path() / "besq_effective_profile";
@@ -312,7 +313,7 @@ void test_effective_profile_view() {
 // Test: Export profile
 // ---------------------------------------------------------------------------
 
-void test_besq_export() {
+TEST_CASE("test_besq_export") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -332,7 +333,7 @@ void test_besq_export() {
 // Test: import_profile invalidates the effective-view cache
 // ---------------------------------------------------------------------------
 
-void test_besq_import_profile_invalidates_effective_cache() {
+TEST_CASE("test_besq_import_profile_invalidates_effective_cache") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -365,7 +366,7 @@ void test_besq_import_profile_invalidates_effective_cache() {
 // removed during cross-validation.  The datapack item tags now seed the
 // validation universe and land in the active profile's tag registry.
 
-void test_besq_load_file_datapack_keeps_tags() {
+TEST_CASE("test_besq_load_file_datapack_keeps_tags") {
     auto dir = std::filesystem::temp_directory_path() / "besq_load_file_dp";
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir / "data" / "mypack" / "enchantment");
@@ -400,7 +401,7 @@ void test_besq_load_file_datapack_keeps_tags() {
 // Test: C ABI bindings
 // ---------------------------------------------------------------------------
 
-void test_c_abi() {
+TEST_CASE("test_c_abi") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
 
@@ -470,7 +471,7 @@ void test_c_abi() {
 // Test: C ABI solve — omitted algorithm must resolve to a real strategy
 // ---------------------------------------------------------------------------
 
-void test_c_abi_solve_default_algo() {
+TEST_CASE("test_c_abi_solve_default_algo") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     int rc = besq_load_builtin(ctx);
@@ -506,7 +507,7 @@ void test_c_abi_solve_default_algo() {
 // Test: C ABI solve — inventory mode parses the "items" array
 // ---------------------------------------------------------------------------
 
-void test_c_abi_solve_inventory() {
+TEST_CASE("test_c_abi_solve_inventory") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     int rc = besq_load_builtin(ctx);
@@ -549,7 +550,7 @@ void test_c_abi_solve_inventory() {
 // Test: C ABI solve — unknown enchantment id must error (not silently drop)
 // ---------------------------------------------------------------------------
 
-void test_c_abi_solve_unknown_ench() {
+TEST_CASE("test_c_abi_solve_unknown_ench") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     int rc = besq_load_builtin(ctx);
@@ -581,7 +582,7 @@ void test_c_abi_solve_unknown_ench() {
 // Test: C ABI version
 // ---------------------------------------------------------------------------
 
-void test_c_abi_version() {
+TEST_CASE("test_c_abi_version") {
     const char* v = besq_get_version();
     expect(v != nullptr, "c abi get_version: non-null");
     expect(v && *v != '\0', "c abi get_version: non-empty");
@@ -613,7 +614,7 @@ private:
 // profile (visible via besq_list_enchantments)
 // ---------------------------------------------------------------------------
 
-void test_c_abi_load_file() {
+TEST_CASE("test_c_abi_load_file") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -638,7 +639,7 @@ void test_c_abi_load_file() {
 // Test: C ABI load_data — same merge path via the filters routing
 // ---------------------------------------------------------------------------
 
-void test_c_abi_load_data() {
+TEST_CASE("test_c_abi_load_data") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -663,7 +664,7 @@ void test_c_abi_load_data() {
 // Test: C ABI import_profile — merges into the active profile
 // ---------------------------------------------------------------------------
 
-void test_c_abi_import_profile() {
+TEST_CASE("test_c_abi_import_profile") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -688,7 +689,7 @@ void test_c_abi_import_profile() {
 // Test: C ABI merge_profile — content added to source lands in dest
 // ---------------------------------------------------------------------------
 
-void test_c_abi_merge_profile() {
+TEST_CASE("test_c_abi_merge_profile") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -722,7 +723,7 @@ void test_c_abi_merge_profile() {
 // Test: C ABI enchantment add / modify / remove (incl. error paths)
 // ---------------------------------------------------------------------------
 
-void test_c_abi_ench_edit() {
+TEST_CASE("test_c_abi_ench_edit") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -756,7 +757,7 @@ void test_c_abi_ench_edit() {
 // Test: C ABI equipment add / remove (incl. error paths)
 // ---------------------------------------------------------------------------
 
-void test_c_abi_equipment_edit() {
+TEST_CASE("test_c_abi_equipment_edit") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -783,7 +784,7 @@ void test_c_abi_equipment_edit() {
 // Test: C ABI add_category + list_categories
 // ---------------------------------------------------------------------------
 
-void test_c_abi_category() {
+TEST_CASE("test_c_abi_category") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -810,7 +811,7 @@ void test_c_abi_category() {
 // Test: C ABI list_enchantments / list_equipment / list_categories
 // ---------------------------------------------------------------------------
 
-void test_c_abi_lists() {
+TEST_CASE("test_c_abi_lists") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -843,7 +844,7 @@ void test_c_abi_lists() {
 // Test: C ABI list_algorithms — built-in strategies enumerated
 // ---------------------------------------------------------------------------
 
-void test_c_abi_list_algorithms() {
+TEST_CASE("test_c_abi_list_algorithms") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -866,7 +867,7 @@ void test_c_abi_list_algorithms() {
 // Test: C ABI abort_solve when idle is a safe no-op
 // ---------------------------------------------------------------------------
 
-void test_c_abi_abort_idle() {
+TEST_CASE("test_c_abi_abort_idle") {
     auto* ctx = besq_create();
     expect(ctx != nullptr, "c abi create");
     expect(besq_load_builtin(ctx) == 0, "c abi load_builtin");
@@ -882,7 +883,7 @@ void test_c_abi_abort_idle() {
 // Test: concurrent abort_solve (B-T22)
 // ---------------------------------------------------------------------------
 
-void test_besq_abort_concurrent() {
+TEST_CASE("test_besq_abort_concurrent") {
     // B-T22: BesqContext::active_executor is now an atomic shared_ptr handle.
     // Calling abort_solve() from another thread while solve() runs must be
     // safe — the old raw executor pointer was raced (data race, UB) and could
@@ -966,7 +967,7 @@ void test_besq_abort_concurrent() {
 // Test: Named-profile editing variants + metadata + rename
 // ---------------------------------------------------------------------------
 
-void test_named_profile_edit_and_meta() {
+TEST_CASE("test_named_profile_edit_and_meta") {
     BesqContext ctx;
     ctx.load_builtin();
     ctx.load_profiles();
@@ -993,7 +994,7 @@ void test_named_profile_edit_and_meta() {
 // Test: add_enchantment_to / remove_enchantment_from facade (by-name CRUD)
 // ---------------------------------------------------------------------------
 
-void test_facade_by_name_registry() {
+TEST_CASE("test_facade_by_name_registry") {
     BesqContext ctx;
     ctx.load_builtin();
     ctx.load_profiles();
@@ -1022,7 +1023,7 @@ void test_facade_by_name_registry() {
 // Test: update_*_to named-profile variants (enchantment/equipment/tag)
 // ---------------------------------------------------------------------------
 
-void test_update_variants() {
+TEST_CASE("test_update_variants") {
     BesqContext ctx;
     ctx.load_builtin();
     ctx.load_profiles();
@@ -1061,7 +1062,7 @@ void test_update_variants() {
 // Test: algorithm detail + unload gate (builtin/unknown are never unloaded)
 // ---------------------------------------------------------------------------
 
-void test_algorithm_detail_and_unload_gate() {
+TEST_CASE("test_algorithm_detail_and_unload_gate") {
     BesqContext ctx;
     ctx.load_builtin();
 
@@ -1090,43 +1091,3 @@ void test_algorithm_detail_and_unload_gate() {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-
-int main() {
-    try {
-        test_context_lifecycle();
-        test_fork_merge();
-        test_besq_solve();
-        test_besq_solve_already_met();
-        test_besq_registry_edit();
-        test_besq_default_profiles_scan();
-        test_effective_profile_view();
-        test_besq_export();
-        test_besq_import_profile_invalidates_effective_cache();
-        test_besq_load_file_datapack_keeps_tags();
-        test_c_abi();
-        test_c_abi_version();
-        test_c_abi_load_file();
-        test_c_abi_load_data();
-        test_c_abi_import_profile();
-        test_c_abi_merge_profile();
-        test_c_abi_ench_edit();
-        test_c_abi_equipment_edit();
-        test_c_abi_category();
-        test_c_abi_lists();
-        test_c_abi_list_algorithms();
-        test_c_abi_abort_idle();
-        test_c_abi_solve_default_algo();
-        test_c_abi_solve_inventory();
-        test_c_abi_solve_unknown_ench();
-        test_besq_abort_concurrent();
-        test_named_profile_edit_and_meta();
-        test_facade_by_name_registry();
-        test_update_variants();
-        test_algorithm_detail_and_unload_gate();
-    } catch (const std::exception& e) {
-        std::cerr << "\nFATAL: " << e.what() << std::endl;
-        return 1;
-    }
-
-    return print_summary();
-}

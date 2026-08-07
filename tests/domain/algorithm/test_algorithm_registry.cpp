@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/algorithm/registries/AlgorithmRegistry.h"
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
@@ -36,7 +37,7 @@ public:
 
 // ─── Tests ─────────────────────────────────────────────────────────
 
-void test_basic_register_create() {
+TEST_CASE("test_basic_register_create") {
     AlgorithmRegistry reg;
 
     reg.register_algorithm("test", []{ return std::make_unique<TestAlgorithm>(); });
@@ -54,7 +55,7 @@ void test_basic_register_create() {
     std::cout << "PASS: test_basic_register_create" << std::endl;
 }
 
-void test_list_and_size() {
+TEST_CASE("test_list_and_size") {
     AlgorithmRegistry reg;
 
     expect(reg.size() == 0, "size: empty initially");
@@ -70,7 +71,7 @@ void test_list_and_size() {
     std::cout << "PASS: test_list_and_size" << std::endl;
 }
 
-void test_unregister() {
+TEST_CASE("test_unregister") {
     AlgorithmRegistry reg;
 
     reg.register_algorithm("temp_algo", []{ return std::make_unique<TestAlgorithm>(); });
@@ -86,7 +87,7 @@ void test_unregister() {
     std::cout << "PASS: test_unregister" << std::endl;
 }
 
-void test_unregister_preserves_others() {
+TEST_CASE("test_unregister_preserves_others") {
     AlgorithmRegistry reg;
 
     reg.register_algorithm("keep_a", []{ return std::make_unique<TestAlgorithm>(); });
@@ -108,7 +109,7 @@ void test_unregister_preserves_others() {
     std::cout << "PASS: test_unregister_preserves_others" << std::endl;
 }
 
-void test_contains_and_list() {
+TEST_CASE("test_contains_and_list") {
     AlgorithmRegistry reg;
 
     reg.register_algorithm("legacy", []{ return std::make_unique<TestAlgorithm>(); });
@@ -122,7 +123,7 @@ void test_contains_and_list() {
     std::cout << "PASS: test_contains_and_list" << std::endl;
 }
 
-void test_duplicate_registration() {
+TEST_CASE("test_duplicate_registration") {
     AlgorithmRegistry reg;
 
     reg.register_algorithm("dup_test", []{ return std::make_unique<TestAlgorithm>(); });
@@ -136,20 +137,4 @@ void test_duplicate_registration() {
     expect(algo != nullptr, "duplicate: create returns non-null after second registration");
 
     std::cout << "PASS: test_duplicate_registration" << std::endl;
-}
-
-int main() {
-    try {
-        test_basic_register_create();
-        test_list_and_size();
-        test_unregister();
-        test_unregister_preserves_others();
-        test_contains_and_list();
-        test_duplicate_registration();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

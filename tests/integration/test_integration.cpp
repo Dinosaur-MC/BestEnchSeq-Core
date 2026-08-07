@@ -15,7 +15,9 @@
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "builtin/DataLoader.h"
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 
 #include <iostream>
 
@@ -277,18 +279,11 @@ void test_full_pipeline_execute() {
 
 } // anonymous namespace
 
-int main() {
-    try {
+TEST_CASE("test_integration") {
         test_full_pipeline_direct();
         test_full_pipeline_inventory();
         test_builtin_enchantment_lookup();
         test_builtin_equipment_lookup();
         test_output_formatting_empty();
         test_full_pipeline_execute();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

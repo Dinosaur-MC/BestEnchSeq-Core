@@ -1,4 +1,6 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include "domain/orchestration/pipelines/ExportPipeline.h"
 #include "domain/orchestration/components/EnchSerializer.h"
 #include "domain/orchestration/types/ExportRequest.h"
@@ -22,7 +24,7 @@ namespace {
 
 // ─── Test 8: export registry as JSON ───────────────────────────────
 
-void test_export_registry_json() {
+TEST_CASE("test_export_registry_json") {
     Profile profile("test");
 
     // Set up a sword equipment tag
@@ -56,7 +58,7 @@ void test_export_registry_json() {
 
 // ─── Test 9: export registry as CSV ────────────────────────────────
 
-void test_export_registry_csv() {
+TEST_CASE("test_export_registry_csv") {
     Profile profile("test");
 
     // Set up a sword equipment tag
@@ -84,7 +86,7 @@ void test_export_registry_csv() {
 
 // ─── Test 10: export solution ──────────────────────────────────────
 
-void test_export_solution() {
+TEST_CASE("test_export_solution") {
     Profile profile("test");
 
     // Set up a sword equipment tag
@@ -128,7 +130,7 @@ void test_export_solution() {
 
 // ─── Test 11: CSV export → import roundtrip ────────────────────────
 
-void test_csv_export_import_roundtrip() {
+TEST_CASE("test_csv_export_import_roundtrip") {
     namespace fs = std::filesystem;
     auto dir = fs::temp_directory_path() / "besq_csv_rt";
     fs::create_directories(dir);
@@ -159,7 +161,7 @@ void test_csv_export_import_roundtrip() {
 
 // ─── Test 12: Solution+Json 元数据透传到 JSON root ────────────────────
 
-void test_export_solution_json_metadata() {
+TEST_CASE("test_export_solution_json_metadata") {
     Profile profile("test");
 
     // Set up a sword equipment tag
@@ -213,7 +215,7 @@ void test_export_solution_json_metadata() {
 
 // ─── Test 13: format_for_path 扩展名推断 ──────────────────────────────
 
-void test_export_format_for_path() {
+TEST_CASE("test_export_format_for_path") {
     expect_eq(ExportPipeline::format_for_path("a.csv"), ExportRequest::Format::Csv,
               "format_for_path: .csv → Csv");
     expect_eq(ExportPipeline::format_for_path("a.CSV"), ExportRequest::Format::Csv,
@@ -230,7 +232,7 @@ void test_export_format_for_path() {
 
 // ─── Test 14: Registry+McOfficial 文件导出到临时目录 ─────────────────
 
-void test_export_registry_mc_official_file() {
+TEST_CASE("test_export_registry_mc_official_file") {
     namespace fs = std::filesystem;
     auto dir = fs::temp_directory_path() / "besq_mc_official_p22";
     fs::remove_all(dir);  // clean slate
@@ -265,7 +267,7 @@ void test_export_registry_mc_official_file() {
 
 // ─── Test 15: Solution+Verbose 文件导出到临时文件 ─────────────────────
 
-void test_export_solution_verbose_file() {
+TEST_CASE("test_export_solution_verbose_file") {
     namespace fs = std::filesystem;
     auto dir = fs::temp_directory_path() / "besq_sol_verbose_p22";
     fs::create_directories(dir);
@@ -310,23 +312,3 @@ void test_export_solution_verbose_file() {
 }
 
 } // anonymous namespace
-
-int main() {
-    try {
-        test_export_registry_json();
-        test_export_registry_csv();
-        test_export_solution();
-        test_csv_export_import_roundtrip();
-        test_export_solution_json_metadata();
-        test_export_format_for_path();
-        test_export_registry_mc_official_file();
-        test_export_solution_verbose_file();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

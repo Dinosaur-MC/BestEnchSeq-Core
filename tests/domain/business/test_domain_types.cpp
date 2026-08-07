@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/types/Ench.h"
 #include "domain/business/types/EnchSet.h"
 #include "domain/business/types/Item.h"
@@ -14,21 +15,21 @@ static const NSID& SMITE()     { static const NSID id("minecraft:smite");     re
 static const NSID& UNBREAKING(){ static const NSID id("minecraft:unbreaking");return id; }
 static const NSID& BOOK()      { static const NSID id("minecraft:book");      return id; }
 
-void test_ench_construct() {
+TEST_CASE("test_ench_construct") {
     Ench e(SHARPNESS(), "Sharpness", 3);
     expect(e.id == SHARPNESS(), "ench id sharpness");
     expect(e.level == 3, "ench level 3");
     std::cout << "PASS: test_ench_construct" << std::endl;
 }
 
-void test_ench_default() {
+TEST_CASE("test_ench_default") {
     Ench e;
     expect(e.id.empty(), "default id empty");
     expect(e.level == 1, "default level 1");
     std::cout << "PASS: test_ench_default" << std::endl;
 }
 
-void test_ench_equality() {
+TEST_CASE("test_ench_equality") {
     Ench a(SHARPNESS(), "Sharpness", 2);
     Ench b(SHARPNESS(), "Sharpness", 2);
     Ench c(SHARPNESS(), "Sharpness", 3);
@@ -38,7 +39,7 @@ void test_ench_equality() {
     std::cout << "PASS: test_ench_equality" << std::endl;
 }
 
-void test_ench_hash() {
+TEST_CASE("test_ench_hash") {
     Ench a(SHARPNESS(), "Sharpness", 4);
     Ench b(SHARPNESS(), "Sharpness", 4);
     Ench c(SMITE(), "Smite", 4);
@@ -52,14 +53,14 @@ void test_ench_hash() {
 
 // ─── EnchSet ────────────────────────────────────────────────────────────
 
-void test_enchset_empty() {
+TEST_CASE("test_enchset_empty") {
     EnchSet s;
     expect(s.empty(), "default empty");
     expect(s.size() == 0, "size 0");
     std::cout << "PASS: test_enchset_empty" << std::endl;
 }
 
-void test_enchset_insert_and_find() {
+TEST_CASE("test_enchset_insert_and_find") {
     EnchSet s;
     s.emplace(SHARPNESS(), "Sharpness", 2);
     s.emplace(SMITE(), "Smite", 5);
@@ -73,7 +74,7 @@ void test_enchset_insert_and_find() {
     std::cout << "PASS: test_enchset_insert_and_find" << std::endl;
 }
 
-void test_enchset_erase() {
+TEST_CASE("test_enchset_erase") {
     EnchSet s;
     s.emplace(SHARPNESS(), "Sharpness", 1);
     s.emplace(SMITE(), "Smite", 3);
@@ -86,7 +87,7 @@ void test_enchset_erase() {
 
 // ─── Item ───────────────────────────────────────────────────────────────
 
-void test_item_default() {
+TEST_CASE("test_item_default") {
     Item stack;
     expect(stack.enchantments.empty(), "default item has no enchants");
     expect(stack.prior_penalty == 0, "default penalty 0");
@@ -94,7 +95,7 @@ void test_item_default() {
     std::cout << "PASS: test_item_default" << std::endl;
 }
 
-void test_item_book() {
+TEST_CASE("test_item_book") {
     EnchSet enchants;
     enchants.emplace(SHARPNESS(), "Sharpness", 3);
     enchants.emplace(SMITE(), "Smite", 2);
@@ -107,7 +108,7 @@ void test_item_book() {
 
 // ─── Item boundaries ─────────────────────────────────────────────────────
 
-void test_item_boundaries() {
+TEST_CASE("test_item_boundaries") {
     bool threw = false;
     try {
         Item(NSID("minecraft:diamond_sword"), EnchSet{}, -1);
@@ -133,7 +134,7 @@ void test_item_boundaries() {
 
 // ─── Solution derived metrics ───────────────────────────────────────────
 
-void test_solution_derived_metrics() {
+TEST_CASE("test_solution_derived_metrics") {
     Solution::EnchStep s1{Item{}, Item{}, 5, 100};
     Solution::EnchStep s2{Item{}, Item{}, 3, 60};
 
@@ -163,29 +164,3 @@ void test_solution_derived_metrics() {
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────
-
-int main() {
-    try {
-        test_ench_construct();
-        test_ench_default();
-        test_ench_equality();
-        test_ench_hash();
-
-        test_enchset_empty();
-        test_enchset_insert_and_find();
-        test_enchset_erase();
-
-        test_item_default();
-        test_item_book();
-
-        test_item_boundaries();
-        test_solution_derived_metrics();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

@@ -1,10 +1,15 @@
+#define BESQ_TEST_MAIN
 #include "common/i18n/Language.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <iostream>
 
 namespace {
 
-void test_language_get_found() {
+// 前置声明：ensure_test_languages 定义于文件后部（注册语言表），
+// 顺序依赖的 case（resolve_locale/available）需在定义前调用。
+void ensure_test_languages();
+
+TEST_CASE("test_language_get_found") {
     Language::Table table;
     table["hello"] = "你好";
     Language lang("zh_CN", std::move(table));
@@ -14,7 +19,7 @@ void test_language_get_found() {
     std::cout << "PASS: test_language_get_found" << std::endl;
 }
 
-void test_language_get_fallback() {
+TEST_CASE("test_language_get_fallback") {
     Language::Table table;
     table["existing"] = "存在";
     Language lang("zh_CN", std::move(table));
@@ -24,7 +29,7 @@ void test_language_get_fallback() {
     std::cout << "PASS: test_language_get_fallback" << std::endl;
 }
 
-void test_language_format() {
+TEST_CASE("test_language_format") {
     Language::Table table;
     table["welcome"] = "你好, {0}! 你有 {1} 条新消息。";
     Language lang("zh_CN", std::move(table));
@@ -35,7 +40,7 @@ void test_language_format() {
     std::cout << "PASS: test_language_format" << std::endl;
 }
 
-void test_language_format_no_args() {
+TEST_CASE("test_language_format_no_args") {
     Language::Table table;
     table["simple"] = "简单文本";
     Language lang("zh_CN", std::move(table));
@@ -46,7 +51,7 @@ void test_language_format_no_args() {
     std::cout << "PASS: test_language_format_no_args" << std::endl;
 }
 
-void test_language_format_int_arg() {
+TEST_CASE("test_language_format_int_arg") {
     Language::Table table;
     table["count"] = "数量: {0}";
     Language lang("en_US", std::move(table));
@@ -57,7 +62,7 @@ void test_language_format_int_arg() {
     std::cout << "PASS: test_language_format_int_arg" << std::endl;
 }
 
-void test_language_get_section() {
+TEST_CASE("test_language_get_section") {
     Language::Table table;
     table["cli.help.usage"] = "用法...";
     table["cli.help.options_header"] = "选项:";
@@ -71,7 +76,7 @@ void test_language_get_section() {
     std::cout << "PASS: test_language_get_section" << std::endl;
 }
 
-void test_language_manager_select() {
+TEST_CASE("test_language_manager_select") {
     auto& lm = LanguageManager::instance();
 
     // Register languages (skip if already registered)
@@ -103,8 +108,12 @@ void test_language_manager_select() {
     std::cout << "PASS: test_language_manager_select" << std::endl;
 }
 
-void test_language_manager_resolve_locale() {
+TEST_CASE("test_language_manager_resolve_locale") {
     auto& lm = LanguageManager::instance();
+
+    // 顺序依赖修复（代码质量审查 Minor 2）：旧 main 依赖前序 case 注册语言，
+    // 单独 --filter 运行本 case 时需幂等自注册。
+    ensure_test_languages();
 
     // Exact match
     std::string resolved = lm.resolve_locale("zh_CN");
@@ -124,8 +133,10 @@ void test_language_manager_resolve_locale() {
     std::cout << "PASS: test_language_manager_resolve_locale" << std::endl;
 }
 
-void test_language_manager_available() {
+TEST_CASE("test_language_manager_available") {
     auto& lm = LanguageManager::instance();
+    // 顺序依赖修复（代码质量审查 Minor 2）：同 resolve_locale，自注册保证可独立运行。
+    ensure_test_languages();
     auto avail = lm.available();
     expect(!avail.empty(),
         "should have at least one language registered");
@@ -154,7 +165,7 @@ void ensure_test_languages() {
     }
 }
 
-void test_language_manager_available_no_padding() {
+TEST_CASE("test_language_manager_available_no_padding") {
     auto& lm = LanguageManager::instance();
     ensure_test_languages();
 
@@ -172,7 +183,7 @@ void test_language_manager_available_no_padding() {
     std::cout << "PASS: test_language_manager_available_no_padding" << std::endl;
 }
 
-void test_language_manager_select_nonexistent_keeps_base() {
+TEST_CASE("test_language_manager_select_nonexistent_keeps_base") {
     auto& lm = LanguageManager::instance();
     ensure_test_languages();
 
@@ -184,7 +195,7 @@ void test_language_manager_select_nonexistent_keeps_base() {
     std::cout << "PASS: test_language_manager_select_nonexistent_keeps_base" << std::endl;
 }
 
-void test_language_manager_select_nonexistent_no_base() {
+TEST_CASE("test_language_manager_select_nonexistent_no_base") {
     auto& lm = LanguageManager::instance();
     ensure_test_languages();
 
@@ -199,7 +210,7 @@ void test_language_manager_select_nonexistent_no_base() {
     std::cout << "PASS: test_language_manager_select_nonexistent_no_base" << std::endl;
 }
 
-void test_active_fallback_when_no_languages() {
+TEST_CASE("test_active_fallback_when_no_languages") {
     // Fresh singleton access test: active() should not crash
     // even before any language is registered
     // (We can't easily reset the singleton, but we can verify
@@ -213,27 +224,3 @@ void test_active_fallback_when_no_languages() {
 
 } // anonymous namespace
 
-int main() {
-    try {
-        test_language_get_found();
-        test_language_get_fallback();
-        test_language_format();
-        test_language_format_no_args();
-        test_language_format_int_arg();
-        test_language_get_section();
-        test_language_manager_select();
-        test_language_manager_resolve_locale();
-        test_language_manager_available();
-        test_language_manager_available_no_padding();
-        test_language_manager_select_nonexistent_keeps_base();
-        test_language_manager_select_nonexistent_no_base();
-        test_active_fallback_when_no_languages();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

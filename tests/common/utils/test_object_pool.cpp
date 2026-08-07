@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/ObjectPool.hpp"
 #include <string>
 #include <utility>
@@ -20,7 +21,7 @@ struct ThrowOnConstruct {
 };
 bool ThrowOnConstruct::should_throw = false;
 
-int main() {
+TEST_CASE("test_object_pool") {
     // ── Test 1: basic acquire/release ───────────────────────────────────
     {
         ObjectPool<Point> pool;
@@ -124,5 +125,4 @@ int main() {
         TEST_PASS("non_default_constructible");
     }
 
-    return print_summary();
 }

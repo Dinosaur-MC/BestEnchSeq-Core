@@ -3,16 +3,16 @@
 // HEAD semantics.
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/StaticFileServer.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <filesystem>
 #include <fstream>
 #include <string>
 
 using namespace web;
 
-int main() {
-    try {
+TEST_CASE("test_static_file_server") {
     // 临时磁盘根
     auto root = std::filesystem::temp_directory_path() / "besq_static_test";
     std::filesystem::remove_all(root);
@@ -82,11 +82,4 @@ int main() {
 
     std::filesystem::remove_all(root);
     TEST_PASS("test_static_file_server");
-    return print_summary();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

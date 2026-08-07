@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "astar/AStarStateSerializer.h"
 #include "astar/AStarAlgorithm.h"
 #include "dfs/DFSAlgorithm.h"
@@ -7,14 +8,14 @@
 #include <span>
 using namespace algorithm;
 
-void test_serializer_name() {
+TEST_CASE("test_serializer_name") {
     AStarStateSerializer ser;
     expect(ser.algorithm_name() == "astar", "algorithm_name should be astar");
     expect(ser.algorithm_version() == "2.0.0", "algorithm_version should be 2.0.0");
     TEST_PASS("test_serializer_name");
 }
 
-void test_serializer_interface() {
+TEST_CASE("test_serializer_interface") {
     auto ser = std::make_unique<AStarStateSerializer>();
     auto* base = dynamic_cast<IAlgorithmSerializer*>(ser.get());
     expect(base != nullptr, "AStarStateSerializer implements IAlgorithmSerializer");
@@ -23,7 +24,7 @@ void test_serializer_interface() {
     TEST_PASS("test_serializer_interface");
 }
 
-void test_astar_state_empty_rejected() {
+TEST_CASE("test_astar_state_empty_rejected") {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
     AlgorithmInput out;
@@ -32,7 +33,7 @@ void test_astar_state_empty_rejected() {
     TEST_PASS("test_astar_state_empty_rejected");
 }
 
-void test_astar_state_bad_magic_rejected() {
+TEST_CASE("test_astar_state_bad_magic_rejected") {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
     uint8_t bad_data[8] = {0, 0, 0, 0, 1, 0, 0, 0};
@@ -42,7 +43,7 @@ void test_astar_state_bad_magic_rejected() {
     TEST_PASS("test_astar_state_bad_magic_rejected");
 }
 
-void test_astar_state_bad_tag() {
+TEST_CASE("test_astar_state_bad_tag") {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
 
@@ -62,7 +63,7 @@ void test_astar_state_bad_tag() {
     TEST_PASS("test_astar_state_bad_tag");
 }
 
-void test_cross_algorithm_checkpoint_rejected() {
+TEST_CASE("test_cross_algorithm_checkpoint_rejected") {
     AStarStateSerializer ser;
     AStarAlgorithm astar;
 
@@ -84,7 +85,7 @@ void test_cross_algorithm_checkpoint_rejected() {
     TEST_PASS("test_cross_algorithm_checkpoint_rejected");
 }
 
-void test_crc_roundtrip() {
+TEST_CASE("test_crc_roundtrip") {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
 
@@ -108,7 +109,7 @@ void test_crc_roundtrip() {
     TEST_PASS("test_crc_roundtrip");
 }
 
-void test_crc_tamper_detected() {
+TEST_CASE("test_crc_tamper_detected") {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
 
@@ -127,7 +128,7 @@ void test_crc_tamper_detected() {
     TEST_PASS("test_crc_tamper_detected");
 }
 
-void test_checkpoint_min_size_rejected() {
+TEST_CASE("test_checkpoint_min_size_rejected") {
     AStarStateSerializer ser;
     AStarAlgorithm algo;
     AlgorithmInput out;
@@ -138,23 +139,4 @@ void test_checkpoint_min_size_rejected() {
     expect(!ok, "5-byte data should be rejected");
 
     TEST_PASS("test_checkpoint_min_size_rejected");
-}
-
-int main() {
-    try {
-        test_serializer_name();
-        test_serializer_interface();
-        test_astar_state_empty_rejected();
-        test_astar_state_bad_magic_rejected();
-        test_astar_state_bad_tag();
-        test_cross_algorithm_checkpoint_rejected();
-        test_crc_roundtrip();
-        test_crc_tamper_detected();
-        test_checkpoint_min_size_rejected();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

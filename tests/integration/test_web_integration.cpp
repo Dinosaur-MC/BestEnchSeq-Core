@@ -31,7 +31,9 @@
 #include "domain/interface/components/http/Socket.h"
 #include "common/log/log.hpp"
 #include "common/log/LogRingBuffer.h"
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -556,13 +558,7 @@ static void run_suite() {
     server_thread.join();
 }
 
-int main() {
-    try {
-        run_suite();
-    } catch (const std::exception& e) {
-        std::cerr << "\nFATAL: " << e.what() << std::endl;
-        return 1;
-    }
+TEST_CASE("test_web_integration") {
+    run_suite();
     TEST_PASS("test_web_integration");
-    return print_summary();
 }

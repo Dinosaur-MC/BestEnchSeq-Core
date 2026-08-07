@@ -5,8 +5,9 @@
 // params, keep-alive tail parsing, header/body size limits.
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/HttpParser.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <string>
 
 using namespace web;
@@ -217,7 +218,7 @@ static void test_keep_alive_computation() {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-int main() {
+TEST_CASE("test_http_parser") {
     test_basic_parse();
     test_decode_and_query();
     test_keepalive_tail();
@@ -233,5 +234,4 @@ int main() {
     test_expect_continue();
     test_keep_alive_computation();
     TEST_PASS("test_http_parser");
-    return print_summary();
 }

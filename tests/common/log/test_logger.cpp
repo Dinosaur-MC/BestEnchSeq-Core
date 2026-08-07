@@ -7,10 +7,11 @@
 // files so the FileHandler constructor's rotate() must prune them.
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "common/log/Logger.h"
 #include "common/log/LogTypes.h"
 #include "common/log/LogRingBuffer.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <filesystem>
 #include <fstream>
@@ -192,7 +193,7 @@ void test_rotation_prunes(Logger& logger, const fs::path& log_dir) {
 
 }  // anonymous namespace
 
-int main() {
+TEST_CASE("test_logger") {
     CwdGuard cwd;
 
     // Pre-create 8 fake historic runs BEFORE the first instance() call so the
@@ -208,17 +209,10 @@ int main() {
     auto& logger = Logger::instance();
     logger.set_console_enabled(false);  // keep the console mirror quiet
 
-    try {
-        test_basic_logging(logger, cwd.dir());
-        test_level_filtering(logger, cwd.dir());
-        test_setters_roundtrip(logger);
-        test_concurrent_writes(logger, cwd.dir());
-        test_rotation_prunes(logger, cwd.dir());
-        test_ring_listeners();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
+    test_basic_logging(logger, cwd.dir());
+    test_level_filtering(logger, cwd.dir());
+    test_setters_roundtrip(logger);
+    test_concurrent_writes(logger, cwd.dir());
+    test_rotation_prunes(logger, cwd.dir());
+    test_ring_listeners();
 }

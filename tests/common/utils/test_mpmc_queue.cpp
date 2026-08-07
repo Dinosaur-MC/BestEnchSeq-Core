@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/queue/BoundedMPMCQueue.hpp"
 #include <atomic>
 #include <chrono>
@@ -9,7 +10,7 @@
 
 // ─── Single-threaded basics ───
 
-void test_push_pop() {
+TEST_CASE("test_push_pop") {
     BoundedMPMCQueue<int, 4> q;
     expect(q.size() == 0, "empty initially");
     expect(q.empty(), "empty() initially");
@@ -27,7 +28,7 @@ void test_push_pop() {
     std::cout << "PASS: test_push_pop" << std::endl;
 }
 
-void test_drop_on_full() {
+TEST_CASE("test_drop_on_full") {
     BoundedMPMCQueue<int, 4> q;
 
     expect(q.try_push(1), "push 1");
@@ -47,14 +48,14 @@ void test_drop_on_full() {
     std::cout << "PASS: test_drop_on_full" << std::endl;
 }
 
-void test_empty_pop_returns_false() {
+TEST_CASE("test_empty_pop_returns_false") {
     BoundedMPMCQueue<int, 4> q;
     int val{};
     expect(!q.try_pop(val), "pop on empty returns false");
     std::cout << "PASS: test_empty_pop_returns_false" << std::endl;
 }
 
-void test_interleaved_push_pop() {
+TEST_CASE("test_interleaved_push_pop") {
     BoundedMPMCQueue<int, 8> q;
     for (int i = 0; i < 1000; ++i) {
         expect(q.try_push(i), "push should succeed");
@@ -66,7 +67,7 @@ void test_interleaved_push_pop() {
     std::cout << "PASS: test_interleaved_push_pop" << std::endl;
 }
 
-void test_fifo_order() {
+TEST_CASE("test_fifo_order") {
     constexpr int N = 1024;  // match capacity exactly
     BoundedMPMCQueue<int, 1024> q;
 
@@ -82,7 +83,7 @@ void test_fifo_order() {
     std::cout << "PASS: test_fifo_order (" << N << " items)" << std::endl;
 }
 
-void test_wrap_around() {
+TEST_CASE("test_wrap_around") {
     // Fill, drain, fill, drain multiple times to exercise sequence wrapping
     BoundedMPMCQueue<int, 4> q;
 
@@ -100,7 +101,7 @@ void test_wrap_around() {
 
 // ─── Multi-threaded tests ───
 
-void test_two_producers_one_consumer() {
+TEST_CASE("test_two_producers_one_consumer") {
     constexpr int PRODUCE_PER = 50000;
     constexpr int TOTAL = PRODUCE_PER * 2;
     BoundedMPMCQueue<uint64_t, 1024> q;
@@ -156,7 +157,7 @@ void test_two_producers_one_consumer() {
               << consumed.load() << "/" << TOTAL << " items)" << std::endl;
 }
 
-void test_one_producer_two_consumers() {
+TEST_CASE("test_one_producer_two_consumers") {
     constexpr int N = 100000;
     BoundedMPMCQueue<int, 256> q;
 
@@ -201,7 +202,7 @@ void test_one_producer_two_consumers() {
               << " total=" << total << ")" << std::endl;
 }
 
-void test_multi_producer_multi_consumer_stress() {
+TEST_CASE("test_multi_producer_multi_consumer_stress") {
     constexpr int PRODUCERS = 4;
     constexpr int CONSUMERS = 4;
     constexpr int PER_PRODUCER = 25000;
@@ -279,7 +280,7 @@ struct MoveOnly {
     ~MoveOnly() = default;
 };
 
-void test_move_only_type() {
+TEST_CASE("test_move_only_type") {
     BoundedMPMCQueue<MoveOnly, 8> q;
     expect(q.try_push(MoveOnly(1, "alice")), "push move-only");
     expect(q.try_push(MoveOnly(2, "bob")), "push move-only");
@@ -294,26 +295,3 @@ void test_move_only_type() {
     std::cout << "PASS: test_move_only_type" << std::endl;
 }
 
-int main() {
-    std::cout << "=== BoundedMPMCQueue Tests ===" << std::endl;
-    try {
-        std::cout << "--- Single-threaded ---" << std::endl;
-        test_push_pop();
-        test_drop_on_full();
-        test_empty_pop_returns_false();
-        test_interleaved_push_pop();
-        test_fifo_order();
-        test_wrap_around();
-        test_move_only_type();
-
-        std::cout << "--- Multi-threaded ---" << std::endl;
-        test_two_producers_one_consumer();
-        test_one_producer_two_consumers();
-        test_multi_producer_multi_consumer_stress();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

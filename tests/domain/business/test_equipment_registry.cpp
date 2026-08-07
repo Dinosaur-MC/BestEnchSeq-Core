@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
@@ -29,7 +30,7 @@ std::vector<Equipment> make_test_equipment() {
 // ---------------------------------------------------------------------------
 // test_initialize_and_get
 // ---------------------------------------------------------------------------
-void test_initialize_and_get() {
+TEST_CASE("test_initialize_and_get") {
     auto eqs = make_test_equipment();
     EquipmentRegistry reg(eqs);
 
@@ -52,7 +53,7 @@ void test_initialize_and_get() {
 // ---------------------------------------------------------------------------
 // test_get_bounds
 // ---------------------------------------------------------------------------
-void test_get_bounds() {
+TEST_CASE("test_get_bounds") {
     auto eqs = make_test_equipment();
     EquipmentRegistry reg(eqs);
 
@@ -77,7 +78,7 @@ void test_get_bounds() {
 // ---------------------------------------------------------------------------
 // test_get_by_category
 // ---------------------------------------------------------------------------
-void test_get_by_category() {
+TEST_CASE("test_get_by_category") {
     auto eqs = make_test_equipment();
     EquipmentRegistry reg(eqs);
 
@@ -110,7 +111,7 @@ void test_get_by_category() {
 // ---------------------------------------------------------------------------
 // test_data_access
 // ---------------------------------------------------------------------------
-void test_data_access() {
+TEST_CASE("test_data_access") {
     auto eqs = make_test_equipment();
     EquipmentRegistry reg(eqs);
 
@@ -133,16 +134,3 @@ void test_data_access() {
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
-int main() {
-    try {
-        test_initialize_and_get();
-        test_get_bounds();
-        test_get_by_category();
-        test_data_access();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

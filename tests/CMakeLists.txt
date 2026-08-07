@@ -1,6 +1,9 @@
 # ─── Test targets for BestEnchSeq-Core ───
 #
-# Each test is a standalone executable with its own main() - no test framework.
+# Each test is a standalone executable; the shared main() comes from
+# tests/framework/test_framework.h (TEST_CASE auto-registration, #define
+# BESQ_TEST_MAIN + include). framework/test_framework_test.cpp is the
+# framework's own self-test.
 #
 # Tests that exercise project code link the besq-core library and only
 # list the test source file.  Truly standalone tests (queues, pools,
@@ -40,7 +43,8 @@ else()
 endif()
 
 function(besq_test_common_props NAME)
-    add_test(NAME ${NAME} COMMAND ${NAME})
+    # ARGN: 可选的测试命令参数（如 test_framework_test 的 --filter "positive:"）
+    add_test(NAME ${NAME} COMMAND ${NAME} ${ARGN})
     if(BESQ_TEST_ENV)
         set_tests_properties(${NAME} PROPERTIES
             WORKING_DIRECTORY ${PROJECT_ROOT}
@@ -106,3 +110,10 @@ add_subdirectory(integration)
 # system/ spawns the real besq CLI binary (skipped internally when
 # BESQ_BUILD_CLI=OFF — no besq target to invoke).
 add_subdirectory(system)
+
+# ── Test framework self-test ────────────────────────────────────────
+# 只注册正用例子集（--filter "positive:" 保证 exit 0）；负用例/异常兜底/
+# SKIP 路径由实施计划的验证步骤显式执行（裸跑该二进制 exit 1 属预期）。
+add_executable(test_framework_test framework/test_framework_test.cpp)
+target_include_directories(test_framework_test PRIVATE ${TEST_INCLUDE})
+besq_test_common_props(test_framework_test --filter "positive:")

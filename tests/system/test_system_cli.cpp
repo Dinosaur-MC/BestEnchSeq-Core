@@ -2,12 +2,15 @@
 // System tests: spawn the real `besq` CLI binary and assert stdout/stderr/exit.
 //
 // SKIP layering (mirrors tests/domain/algorithm/test_sandbox.cpp):
-//   - besq binary missing        → whole file SKIPs (return 0)
-//   - plugin files missing       → plugin cases SKIP
-//   - besq-worker missing        → sandbox cases SKIP
+//   - besq binary missing        → whole file SKIP()（框架计数跳过）
+//   - plugin files missing       → 局部 cout-SKIP 提前 return（SKIP() 会中止整个
+//                                   合一 case，故保留非中止式跳过，见 case 体）
+//   - besq-worker missing        → 同插件分支
 // =============================================================================
 
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include "spawn_util.h"
 
 #include "common/utils/EnvUtil.hpp"
@@ -425,18 +428,15 @@ void test_sandbox_worker_missing_fallback(const std::string& bin) {
 
 }  // anonymous namespace
 
-int main() {
+TEST_CASE("test_system_cli") {
     const std::string bin = find_besq();
     if (bin.empty()) {
-        std::cout << "SKIP: besq binary not found (build with "
-                     "BESQ_BUILD_CLI=ON or set BESQ_BIN_PATH)"
-                  << std::endl;
-        return 0;
+        SKIP("besq binary not found (build with BESQ_BUILD_CLI=ON or set "
+             "BESQ_BIN_PATH)");
     }
 
-    try {
-        // core
-        test_no_args(bin);
+    // core
+    test_no_args(bin);
         test_help(bin);
         test_version(bin);
         test_list_algorithms(bin);
@@ -460,13 +460,7 @@ int main() {
         test_plugin_solve(bin);
         test_plugin_malicious_refused(bin);
         // sandbox (self-skip)
-        test_sandbox_astar(bin);
-        test_sandbox_malicious_listed(bin);
-        test_sandbox_worker_missing_fallback(bin);
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
+    test_sandbox_astar(bin);
+    test_sandbox_malicious_listed(bin);
+    test_sandbox_worker_missing_fallback(bin);
 }

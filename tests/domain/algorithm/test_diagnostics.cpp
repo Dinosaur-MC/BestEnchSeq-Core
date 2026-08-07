@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/diagnostics/DiagnosticsWriter.h"
 #include "astar/AStarDiagnostics.h"
@@ -18,7 +19,7 @@ using namespace algorithm;
 // Verify that the base diagnostics flush writes "status" and
 // "solution_cost" entries.
 
-void test_algorithm_diagnostics_flush() {
+TEST_CASE("test_algorithm_diagnostics_flush") {
     AlgorithmDiagnostics diag;
     diag.algorithm_name = "test_algo";
     diag.status = "Complete";
@@ -64,7 +65,7 @@ void test_algorithm_diagnostics_flush() {
 // Verify that SearchDiagnostics flush adds initial_bound, final_bound,
 // solutions_found, and max_depth on top of the base entries.
 
-void test_search_diagnostics_flush() {
+TEST_CASE("test_search_diagnostics_flush") {
     SearchDiagnostics diag;
     diag.status = "Cancelled";
     diag.solution_cost = 10;
@@ -120,7 +121,7 @@ void test_search_diagnostics_flush() {
 // Verify that PoolSearchDiagnostics flush adds pool capacity entries on
 // top of Search + base entries.
 
-void test_pool_search_diagnostics_flush() {
+TEST_CASE("test_pool_search_diagnostics_flush") {
     PoolSearchDiagnostics diag;
     diag.status = "Complete";
     diag.solution_cost = 5;
@@ -181,7 +182,7 @@ void test_pool_search_diagnostics_flush() {
 // The real implementation writes to files (logs/diag/*), so we skip that
 // path and do a lightweight smoke call instead.
 
-void test_diagnostics_writer_skip_short() {
+TEST_CASE("test_diagnostics_writer_skip_short") {
     // Call write with wall_ms < 10 — the real implementation returns early
     // in this case. Under BESQ_DISABLE_DIAGNOSTICS this is a no-op anyway.
     std::vector<DiagnosticsWriter::Entry> entries;
@@ -199,7 +200,7 @@ void test_diagnostics_writer_skip_short() {
 //
 // Verify Entry construction and variant access.
 
-void test_diagnostics_writer_entry() {
+TEST_CASE("test_diagnostics_writer_entry") {
     // Default construction
     DiagnosticsWriter::Entry default_entry;
     expect(default_entry.key == nullptr,
@@ -243,7 +244,7 @@ void test_diagnostics_writer_entry() {
 // sentinel.  flush() must omit them, so algorithms that don't track the
 // value (e.g. DP inheriting SearchDiagnostics for bounds) emit no noise.
 
-void test_search_diagnostics_skip_unreported() {
+TEST_CASE("test_search_diagnostics_skip_unreported") {
     SearchDiagnostics diag;
     diag.status        = "Complete";
     diag.solution_cost = 42;
@@ -277,7 +278,7 @@ void test_search_diagnostics_skip_unreported() {
 // solutions_found / max_depth (default -1) and dp_pass_b_ran (false, disabled)
 // are suppressed — they are not applicable to DP.
 
-void test_partition_dp_diagnostics_flush() {
+TEST_CASE("test_partition_dp_diagnostics_flush") {
     PartitionDpDiagnostics diag;
     diag.status               = "Complete";
     diag.solution_cost        = 150;
@@ -381,7 +382,7 @@ size_t count_diag_files(const std::filesystem::path& dir) {
 }
 }  // anonymous namespace
 
-void test_diagnostics_writer_writes_file() {
+TEST_CASE("test_diagnostics_writer_writes_file") {
     DiagCwdGuard cwd;
     std::vector<DiagnosticsWriter::Entry> entries;
     entries.emplace_back("found_solutions", int64_t(7));
@@ -409,7 +410,7 @@ void test_diagnostics_writer_writes_file() {
     TEST_PASS("diagnostics writer file output");
 }
 
-void test_diagnostics_writer_short_creates_nothing() {
+TEST_CASE("test_diagnostics_writer_short_creates_nothing") {
     DiagCwdGuard cwd;
     std::vector<DiagnosticsWriter::Entry> entries;
     entries.emplace_back("k", int64_t(1));
@@ -420,7 +421,7 @@ void test_diagnostics_writer_short_creates_nothing() {
     TEST_PASS("diagnostics writer short-run skip");
 }
 
-void test_diagnostics_writer_trims() {
+TEST_CASE("test_diagnostics_writer_trims") {
     DiagCwdGuard cwd;
     // Pre-create 130 fake diagnostic logs (over MAX_DIAG_FILES = 128).
     std::filesystem::create_directories(cwd.dir() / "logs" / "diag");
@@ -440,7 +441,7 @@ void test_diagnostics_writer_trims() {
 
 // ─── Plugin diagnostics flush ───────────────────────────────────────────
 
-void test_astar_diagnostics_flush() {
+TEST_CASE("test_astar_diagnostics_flush") {
     algorithm::AStarDiagnostics diag;
     diag.status           = "Complete";
     diag.solution_cost    = 10;
@@ -467,7 +468,7 @@ void test_astar_diagnostics_flush() {
     TEST_PASS("AStarDiagnostics flush");
 }
 
-void test_idastar_diagnostics_flush() {
+TEST_CASE("test_idastar_diagnostics_flush") {
     algorithm::IDAStarDiagnostics diag;
     diag.status            = "Complete";
     diag.solution_cost     = 4;
@@ -491,26 +492,4 @@ void test_idastar_diagnostics_flush() {
     expect(stores, "IDAStar flush emits tt_stores");
     expect(path_len, "IDAStar flush emits solution_path_len");
     TEST_PASS("IDAStarDiagnostics flush");
-}
-
-int main() {
-    try {
-        test_algorithm_diagnostics_flush();
-        test_search_diagnostics_flush();
-        test_search_diagnostics_skip_unreported();
-        test_pool_search_diagnostics_flush();
-        test_partition_dp_diagnostics_flush();
-        test_diagnostics_writer_skip_short();
-        test_diagnostics_writer_entry();
-        test_diagnostics_writer_writes_file();
-        test_diagnostics_writer_short_creates_nothing();
-        test_diagnostics_writer_trims();
-        test_astar_diagnostics_flush();
-        test_idastar_diagnostics_flush();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

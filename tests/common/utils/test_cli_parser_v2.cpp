@@ -1,9 +1,10 @@
 // tests/common/utils/test_cli_parser_v2.cpp
 // Tests for the new C++20 CLI parser in common/utils/cli/
 
+#define BESQ_TEST_MAIN
 #include "common/utils/cli/CLIParser.hpp"
 #include "common/utils/cli/CLIFormatter.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 using namespace cli;
 
@@ -36,7 +37,7 @@ bool has_diag(const std::vector<Diagnostic>& diags, ParseErrorCode code) {
 // Tests
 // ============================================================================
 
-void test_empty_args() {
+TEST_CASE("test_empty_args") {
     const char* argv[] = {"program"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 1));
     expect(has_diag(result.diagnostics, ParseErrorCode::required_missing),
@@ -44,7 +45,7 @@ void test_empty_args() {
     TEST_PASS("empty args");
 }
 
-void test_basic_key_value() {
+TEST_CASE("test_basic_key_value") {
     const char* argv[] = {"prog", "--target", "diamond_sword", "--source", "sharpness=5"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 5));
     expect(result.diagnostics.empty(), "basic args should parse cleanly");
@@ -53,7 +54,7 @@ void test_basic_key_value() {
     TEST_PASS("basic key=value");
 }
 
-void test_key_equals_value() {
+TEST_CASE("test_key_equals_value") {
     const char* argv[] = {"prog", "--target=diamond_sword", "--source=sharpness=5"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 3));
     expect(result.diagnostics.empty(), "--key=value should parse cleanly");
@@ -62,7 +63,7 @@ void test_key_equals_value() {
     TEST_PASS("--key=value form");
 }
 
-void test_flags() {
+TEST_CASE("test_flags") {
     {
         const char* argv[] = {"prog", "--target", "x", "--help"};
         auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 4));
@@ -78,7 +79,7 @@ void test_flags() {
     TEST_PASS("flags");
 }
 
-void test_short_flag_expansion() {
+TEST_CASE("test_short_flag_expansion") {
     const char* argv[] = {"prog", "--target", "x", "-hVv"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 4));
     expect(result.diagnostics.empty(), "-hVv should expand cleanly");
@@ -88,7 +89,7 @@ void test_short_flag_expansion() {
     TEST_PASS("-abc flag expansion");
 }
 
-void test_short_option_with_value() {
+TEST_CASE("test_short_option_with_value") {
     const char* argv[] = {"prog", "-t", "diamond_sword", "-s", "3"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 5));
     expect(result.diagnostics.empty(), "-t value should parse");
@@ -98,7 +99,7 @@ void test_short_option_with_value() {
     TEST_PASS("short option with value");
 }
 
-void test_inline_short_value() {
+TEST_CASE("test_inline_short_value") {
     const char* argv[] = {"prog", "-t", "x", "-s5"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 4));
     expect(result.diagnostics.empty(), "-s5 (inline value) should parse");
@@ -106,7 +107,7 @@ void test_inline_short_value() {
     TEST_PASS("inline short value -xN");
 }
 
-void test_default_values() {
+TEST_CASE("test_default_values") {
     const char* argv[] = {"prog", "--target", "sword"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 3));
     expect(result.diagnostics.empty(), "args with defaults should parse");
@@ -115,7 +116,7 @@ void test_default_values() {
     TEST_PASS("default values");
 }
 
-void test_positional_arg() {
+TEST_CASE("test_positional_arg") {
     const char* argv[] = {"prog", "--target", "x", "myfile.json"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 4));
     expect(result.diagnostics.empty(), "positional should parse");
@@ -124,7 +125,7 @@ void test_positional_arg() {
     TEST_PASS("positional argument");
 }
 
-void test_double_dash_terminator() {
+TEST_CASE("test_double_dash_terminator") {
     const char* argv[] = {"prog", "--target", "x", "--", "--unknown-flag", "file.txt"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 6));
     expect(
@@ -137,7 +138,7 @@ void test_double_dash_terminator() {
     TEST_PASS("-- terminator");
 }
 
-void test_error_unknown_option() {
+TEST_CASE("test_error_unknown_option") {
     const char* argv[] = {"prog", "--target", "x", "--bad-option"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 4));
     expect(has_diag(result.diagnostics, ParseErrorCode::unknown_option),
@@ -145,7 +146,7 @@ void test_error_unknown_option() {
     TEST_PASS("unknown option error");
 }
 
-void test_error_missing_value() {
+TEST_CASE("test_error_missing_value") {
     const char* argv[] = {"prog", "--target"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 2));
     expect(has_diag(result.diagnostics, ParseErrorCode::missing_value),
@@ -153,7 +154,7 @@ void test_error_missing_value() {
     TEST_PASS("missing value error");
 }
 
-void test_bare_dash_as_value() {
+TEST_CASE("test_bare_dash_as_value") {
     // 单个 `-` 是合法值（Unix stdout/stdin 惯例，如 `--export -`）——
     // 解析器只拒绝多字符 `-` 前缀 token（--foo / -f 是选项，不吞为值）。
     const char* argv[] = {"prog", "--target", "-"};
@@ -169,7 +170,7 @@ void test_bare_dash_as_value() {
     TEST_PASS("bare dash as value");
 }
 
-void test_error_invalid_value() {
+TEST_CASE("test_error_invalid_value") {
     const char* argv[] = {"prog", "--target", "x", "--solutions", "abc"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 5));
     expect(has_diag(result.diagnostics, ParseErrorCode::invalid_value),
@@ -177,7 +178,7 @@ void test_error_invalid_value() {
     TEST_PASS("invalid value error");
 }
 
-void test_error_required_missing() {
+TEST_CASE("test_error_required_missing") {
     const char* argv[] = {"prog", "--verbose"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 2));
     expect(has_diag(result.diagnostics, ParseErrorCode::required_missing),
@@ -185,7 +186,7 @@ void test_error_required_missing() {
     TEST_PASS("required missing error");
 }
 
-void test_error_accumulation() {
+TEST_CASE("test_error_accumulation") {
     const char* argv[] = {"prog", "--bad1", "--bad2", "--solutions", "notanumber"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 5));
     expect(result.diagnostics.size() >= 3,
@@ -193,7 +194,7 @@ void test_error_accumulation() {
     TEST_PASS("error accumulation");
 }
 
-void test_default_diagnostic_formatter() {
+TEST_CASE("test_default_diagnostic_formatter") {
     DefaultDiagnosticFormatter fmt;
     Diagnostic d{ParseErrorCode::unknown_option, "--bad", "--bad"};
     std::string msg = fmt(d);
@@ -202,7 +203,7 @@ void test_default_diagnostic_formatter() {
     TEST_PASS("default diagnostic formatter");
 }
 
-void test_format_help() {
+TEST_CASE("test_format_help") {
     std::string help = CLIParser(TEST_OPTS).format_help("testprog");
     expect(help.find("testprog") != std::string::npos,
            "help should contain program name");
@@ -217,7 +218,7 @@ void test_format_help() {
     TEST_PASS("format_help");
 }
 
-void test_format_help_with_translator() {
+TEST_CASE("test_format_help_with_translator") {
     struct CapsTranslator {
         std::string operator()(std::string_view key) const {
             return "TRANSLATED: " + std::string(key);
@@ -230,7 +231,7 @@ void test_format_help_with_translator() {
     TEST_PASS("format_help with translator");
 }
 
-void test_grouped_help() {
+TEST_CASE("test_grouped_help") {
     const auto GROUPED_OPTS = OptionTable{
         Flag    {.long_name = "help", .short_name = 'h', .help_key = "Show help", .help_group = "Info"},
         Option<std::string>{.long_name = "target", .help_key = "Target item", .help_group = "Basic"},
@@ -243,7 +244,7 @@ void test_grouped_help() {
     TEST_PASS("test_grouped_help");
 }
 
-void test_duplicate_option() {
+TEST_CASE("test_duplicate_option") {
     const char* argv[] = {"prog", "--target", "x", "--target", "y"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 5));
     expect(has_diag(result.diagnostics, ParseErrorCode::duplicate_option),
@@ -251,7 +252,7 @@ void test_duplicate_option() {
     TEST_PASS("test_duplicate_option");
 }
 
-void test_flag_with_value_rejected() {
+TEST_CASE("test_flag_with_value_rejected") {
     {
         // `--help=x`: a flag cannot take a value; the value used to be silently
         // discarded and the flag still set.
@@ -277,7 +278,7 @@ void test_flag_with_value_rejected() {
     TEST_PASS("flag with value rejected");
 }
 
-void test_empty_equals_value_rejected() {
+TEST_CASE("test_empty_equals_value_rejected") {
     const char* argv[] = {"prog", "--target="};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 2));
     expect(has_diag(result.diagnostics, ParseErrorCode::missing_value),
@@ -285,7 +286,7 @@ void test_empty_equals_value_rejected() {
     TEST_PASS("empty --opt= rejected");
 }
 
-void test_dash_prefix_equals_value_accepted() {
+TEST_CASE("test_dash_prefix_equals_value_accepted") {
     const char* argv[] = {"prog", "--target=--foo"};
     auto result = CLIParser(TEST_OPTS).parse(std::span<const char*>(argv, 2));
     expect(result.diagnostics.empty(), "--target=--foo should parse cleanly");
@@ -294,7 +295,7 @@ void test_dash_prefix_equals_value_accepted() {
     TEST_PASS("--target=--foo accepted");
 }
 
-void test_ungrouped_fallback() {
+TEST_CASE("test_ungrouped_fallback") {
     // TEST_OPTS has no help_group set on the Positional → should render as flat list
     std::string help = CLIParser(TEST_OPTS).format_help("prog");
     expect(help.find("--target") != std::string::npos,
@@ -304,43 +305,3 @@ void test_ungrouped_fallback() {
     TEST_PASS("test_ungrouped_fallback");
 }
 
-// ============================================================================
-// Main
-// ============================================================================
-
-int main() {
-    std::cout << "=== CLIParser v2 Tests ===" << std::endl;
-
-    try {
-        test_empty_args();
-        test_basic_key_value();
-        test_key_equals_value();
-        test_flags();
-        test_short_flag_expansion();
-        test_short_option_with_value();
-        test_inline_short_value();
-        test_default_values();
-        test_positional_arg();
-        test_double_dash_terminator();
-        test_error_unknown_option();
-        test_error_missing_value();
-        test_bare_dash_as_value();
-        test_error_invalid_value();
-        test_error_required_missing();
-        test_error_accumulation();
-        test_default_diagnostic_formatter();
-        test_format_help();
-        test_format_help_with_translator();
-        test_grouped_help();
-        test_duplicate_option();
-        test_ungrouped_fallback();
-        test_flag_with_value_rejected();
-        test_empty_equals_value_rejected();
-        test_dash_prefix_equals_value_accepted();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

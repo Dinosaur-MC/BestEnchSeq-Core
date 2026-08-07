@@ -5,8 +5,9 @@
 // nonblocking read/write primitives plus would-block semantics.
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/Socket.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <iostream>
 #include <string>
@@ -17,7 +18,7 @@ using namespace web;
 // Test: local pair + nonblocking recv/send + would-block probe
 // ---------------------------------------------------------------------------
 
-static void test_pair() {
+TEST_CASE("test_pair") {
     // Create a local socket pair (TcpListener + connect) and verify nb recv/send.
     TcpListener l;
     expect(l.listen("127.0.0.1", 0), "listen");
@@ -45,14 +46,3 @@ static void test_pair() {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-
-int main() {
-    try {
-        test_pair();
-    } catch (const std::exception& e) {
-        std::cerr << "\nFATAL: " << e.what() << std::endl;
-        return 1;
-    }
-
-    return print_summary();
-}

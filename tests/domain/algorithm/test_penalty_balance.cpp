@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "penalty_balance/DynamicPenaltyBalancingAlgorithm.h"
 #include "domain/algorithm/ExecutionContext.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
@@ -18,7 +19,7 @@ using namespace algorithm;
 // `max_solutions` merge STEPS, so with the CLI default --solutions 1 any target
 // needing ≥2 merges reported CompleteNoSolution and the target was "unreachable".
 
-void test_penalty_balance_multi_step_with_max_solutions_1() {
+TEST_CASE("test_penalty_balance_multi_step_with_max_solutions_1") {
     std::vector<EnchInfo> infos(2);
     infos[0].id         = 0;
     infos[0].mul        = 1;
@@ -77,7 +78,7 @@ void test_penalty_balance_multi_step_with_max_solutions_1() {
 // The reverse-orientation guard must swap the pair when the chosen direction
 // wastes a target enchant and both items are books and the reverse doesn't.
 
-void test_penalty_balance_book_target_wasteful_merge_reversed() {
+TEST_CASE("test_penalty_balance_book_target_wasteful_merge_reversed") {
     std::vector<EnchInfo> infos(2);
     infos[0].id         = 0;  // sharpness
     infos[0].mul        = 1;
@@ -128,16 +129,4 @@ void test_penalty_balance_book_target_wasteful_merge_reversed() {
     expect(sols[0].steps[0].sacrifice.enchs.contains(1),
            "forge sacrifice must be the smite book");
     TEST_PASS("test_penalty_balance_book_target_wasteful_merge_reversed");
-}
-
-int main() {
-    try {
-        test_penalty_balance_multi_step_with_max_solutions_1();
-        test_penalty_balance_book_target_wasteful_merge_reversed();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

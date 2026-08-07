@@ -8,9 +8,10 @@
 //     (the body is consumed by a later read, not stalled forever).
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/Connection.h"
 #include "domain/interface/components/http/Socket.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <chrono>
 #include <string>
 #include <thread>
@@ -337,7 +338,7 @@ static void test_timeout_sweep() {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-int main() {
+TEST_CASE("test_connection") {
     test_keepalive_two_requests();
     test_split_body_post();
     test_connection_close_semantics();
@@ -345,5 +346,4 @@ int main() {
     test_expect_100_continue();
     test_timeout_sweep();
     TEST_PASS("test_connection");
-    return print_summary();
 }

@@ -8,7 +8,8 @@
 // admissible_forge_cost ≤ real forge cost on a conflict-drop case.
 // =============================================================================
 
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/algorithm/components/Heuristic.h"
 #include "domain/algorithm/components/ItemPool.h"
 #include "domain/algorithm/components/SearchUtils.h"
@@ -110,7 +111,7 @@ algorithm::Item book(std::initializer_list<algorithm::Ench> enchs) {
 
 // ─── HeuristicBasic (item-vector based) ───────────────────────────────
 
-void test_heuristic_basic() {
+TEST_CASE("test_heuristic_basic") {
     algorithm::EnchReg reg;
     build_reg(reg);
     std::vector<int16_t> buf, dirty;
@@ -137,7 +138,7 @@ void test_heuristic_basic() {
 
 // ─── Heuristic (pool-based) ───────────────────────────────────────────
 
-void test_heuristic_pool() {
+TEST_CASE("test_heuristic_pool") {
     algorithm::EnchReg reg;
     build_reg(reg);
     algorithm::ItemPool pool;
@@ -156,7 +157,7 @@ void test_heuristic_pool() {
 
 // ─── ItemPool ─────────────────────────────────────────────────────────
 
-void test_item_pool() {
+TEST_CASE("test_item_pool") {
     algorithm::ItemPool pool;
     pool.set_max(2);
 
@@ -185,7 +186,7 @@ void test_item_pool() {
 
 // ─── SearchUtils ──────────────────────────────────────────────────────
 
-void test_meets_target() {
+TEST_CASE("test_meets_target") {
     algorithm::EnchReg reg;
     build_reg(reg);
     const algorithm::Item t = equip({E(ID_SHARPNESS, 5), E(ID_KNOCKBACK, 2)});
@@ -202,7 +203,7 @@ void test_meets_target() {
     TEST_PASS("meets_target");
 }
 
-void test_merge_wastes_target() {
+TEST_CASE("test_merge_wastes_target") {
     algorithm::EnchReg reg;
     build_reg(reg);
     const algorithm::Item target = equip({E(ID_SHARPNESS, 5), E(ID_BANE, 2)});
@@ -220,7 +221,7 @@ void test_merge_wastes_target() {
     TEST_PASS("merge_wastes_target");
 }
 
-void test_admissible_forge_cost() {
+TEST_CASE("test_admissible_forge_cost") {
     algorithm::EnchReg reg;
     build_reg(reg);
     algorithm::ForgeConfig cfg;
@@ -245,7 +246,7 @@ void test_admissible_forge_cost() {
     TEST_PASS("admissible_forge_cost");
 }
 
-void test_dfs_bound() {
+TEST_CASE("test_dfs_bound") {
     algorithm::EnchReg reg;
     build_reg(reg);
     algorithm::ForgeConfig cfg;
@@ -270,20 +271,3 @@ void test_dfs_bound() {
 }
 
 }  // anonymous namespace
-
-int main() {
-    try {
-        test_heuristic_basic();
-        test_heuristic_pool();
-        test_item_pool();
-        test_meets_target();
-        test_merge_wastes_target();
-        test_admissible_forge_cost();
-        test_dfs_bound();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

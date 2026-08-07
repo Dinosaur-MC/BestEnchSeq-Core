@@ -1,8 +1,9 @@
 // tests/domain/interface/test_web_solve_sse.cpp
 // SseHub 发布/订阅路由 + WebSolveService 可选 SseHub 出口（向后兼容）。
+#define BESQ_TEST_MAIN
 #include "domain/interface/web/SseHub.h"
 #include "domain/interface/web/WebSolveService.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <atomic>
 #include <string>
 #include <thread>
@@ -49,10 +50,9 @@ static void test_unknown_task_publish_is_noop() {
     expect(a.load() == 0, "no delivery to unrelated task");
 }
 
-int main() {
+TEST_CASE("test_web_solve_sse") {
     test_hub();
     test_multiple_subscribers();
     test_unknown_task_publish_is_noop();
     TEST_PASS("web solve sse hub");
-    return print_summary();
 }

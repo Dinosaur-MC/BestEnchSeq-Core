@@ -14,10 +14,11 @@
 //   - a peer that disappears is detected on the next failed write (close).
 // =============================================================================
 
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/SseStream.h"
 #include "domain/interface/components/http/Connection.h"
 #include "domain/interface/components/http/Socket.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <chrono>
 #include <memory>
 #include <string>
@@ -260,7 +261,7 @@ static void test_stream_disconnect_closes() {
     conn.close();
 }
 
-int main() {
+TEST_CASE("test_sse_stream") {
     test_frame_and_heartbeat();
     test_set_stream_semantics();
     test_stream_frames_on_wire();
@@ -269,5 +270,4 @@ int main() {
     test_stream_disconnect_closes();
     test_stream_fin_closes();
     TEST_PASS("test_sse_stream");
-    return print_summary();
 }

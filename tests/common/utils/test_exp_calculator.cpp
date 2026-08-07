@@ -1,9 +1,10 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/types/Solution.h"
 #include "utils/ExpCalculator.hpp"
 #include <vector>
 
-void test_level_to_exp() {
+TEST_CASE("test_level_to_exp") {
     // Level 0 → 0
     expect(ExpCalculator::level_to_exp(0) == 0, "level 0 → 0 exp");
     // Level 16 → 16² + 6×16 = 256 + 96 = 352
@@ -17,7 +18,7 @@ void test_level_to_exp() {
     std::cout << "PASS: test_level_to_exp" << std::endl;
 }
 
-void test_peak_analysis() {
+TEST_CASE("test_peak_analysis") {
     std::vector<Solution::EnchStep> steps;
     // Empty
     expect(ExpCalculator::peak_level_cost(steps.begin(), steps.end()) == 0, "empty → peak 0");
@@ -36,14 +37,3 @@ void test_peak_analysis() {
     std::cout << "PASS: test_peak_analysis" << std::endl;
 }
 
-int main() {
-    try {
-        test_level_to_exp();
-        test_peak_analysis();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

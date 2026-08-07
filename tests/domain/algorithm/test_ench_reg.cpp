@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/algorithm/registries/EnchReg.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/TagRegistry.h"
@@ -93,7 +94,7 @@ struct TestFixture {
     }
 };
 
-void test_basic_init_and_size() {
+TEST_CASE("test_basic_init_and_size") {
     TestFixture fx;
 
     expect(fx.reg.size() == 4, "size: should have 4 enchantments");
@@ -103,7 +104,7 @@ void test_basic_init_and_size() {
     std::cout << "PASS: test_basic_init_and_size" << std::endl;
 }
 
-void test_safe_get_bounds() {
+TEST_CASE("test_safe_get_bounds") {
     TestFixture fx;
 
     expect(fx.reg.get(0).mul > 0, "get(0): multiplier should be > 0");
@@ -127,7 +128,7 @@ void test_safe_get_bounds() {
     std::cout << "PASS: test_safe_get_bounds" << std::endl;
 }
 
-void test_conflict_detection() {
+TEST_CASE("test_conflict_detection") {
     TestFixture fx;
 
     // After NSID-sorted ordering:
@@ -146,7 +147,7 @@ void test_conflict_detection() {
     std::cout << "PASS: test_conflict_detection" << std::endl;
 }
 
-void test_multiplier_and_max_level() {
+TEST_CASE("test_multiplier_and_max_level") {
     TestFixture fx;
 
     // sharpness: mult=1, max_lvl=5
@@ -162,7 +163,7 @@ void test_multiplier_and_max_level() {
 
 // ─── algorithm::EnchSet dedicated tests ────────────────────────────
 
-void test_enchset_hash_consistency() {
+TEST_CASE("test_enchset_hash_consistency") {
     algorithm::EnchSet set;
     set.insert({0, 5});
     set.insert({1, 2});
@@ -186,7 +187,7 @@ void test_enchset_hash_consistency() {
     std::cout << "PASS: test_enchset_hash_consistency" << std::endl;
 }
 
-void test_enchset_mutable_iterator_write() {
+TEST_CASE("test_enchset_mutable_iterator_write") {
     algorithm::EnchSet set;
     set.insert({0, 5});
     set.insert({2, 3});
@@ -217,7 +218,7 @@ void test_enchset_mutable_iterator_write() {
     std::cout << "PASS: test_enchset_mutable_iterator_write" << std::endl;
 }
 
-void test_enchset_empty_and_single() {
+TEST_CASE("test_enchset_empty_and_single") {
     algorithm::EnchSet empty;
     expect(empty.size() == 0, "enchset empty: size 0");
     expect(empty.empty(), "enchset empty: empty() true");
@@ -238,20 +239,3 @@ void test_enchset_empty_and_single() {
 }
 
 } // anonymous namespace
-
-int main() {
-    try {
-        test_basic_init_and_size();
-        test_safe_get_bounds();
-        test_conflict_detection();
-        test_multiplier_and_max_level();
-        test_enchset_hash_consistency();
-        test_enchset_mutable_iterator_write();
-        test_enchset_empty_and_single();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

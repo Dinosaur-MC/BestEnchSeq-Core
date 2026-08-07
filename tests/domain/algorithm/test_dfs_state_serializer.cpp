@@ -1,25 +1,26 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "dfs/DFSStateSerializer.h"
 #include "dfs/DFSAlgorithm.h"
 #include <memory>
 #include <span>
 using namespace algorithm;
 
-void test_dfs_serializer_name() {
+TEST_CASE("test_dfs_serializer_name") {
     DFSStateSerializer ser;
     expect(ser.algorithm_name() == "dfs", "algorithm_name should be dfs");
     expect(ser.algorithm_version() == "1.0.0", "algorithm_version should be 1.0.0");
     TEST_PASS("test_dfs_serializer_name");
 }
 
-void test_dfs_serializer_interface() {
+TEST_CASE("test_dfs_serializer_interface") {
     auto ser = std::make_unique<DFSStateSerializer>();
     auto* base = dynamic_cast<IAlgorithmSerializer*>(ser.get());
     expect(base != nullptr, "DFSStateSerializer implements IAlgorithmSerializer");
     TEST_PASS("test_dfs_serializer_interface");
 }
 
-void test_dfs_roundtrip() {
+TEST_CASE("test_dfs_roundtrip") {
     DFSStateSerializer ser;
     DFSAlgorithm algo;
 
@@ -41,7 +42,7 @@ void test_dfs_roundtrip() {
     TEST_PASS("test_dfs_roundtrip");
 }
 
-void test_dfs_tamper_detected() {
+TEST_CASE("test_dfs_tamper_detected") {
     DFSStateSerializer ser;
     DFSAlgorithm algo;
 
@@ -61,26 +62,11 @@ void test_dfs_tamper_detected() {
     TEST_PASS("test_dfs_tamper_detected");
 }
 
-void test_dfs_empty_rejected() {
+TEST_CASE("test_dfs_empty_rejected") {
     DFSStateSerializer ser;
     DFSAlgorithm algo;
     AlgorithmInput out;
     bool ok = ser.deserialize(algo, out, std::span<const uint8_t>());
     expect(!ok, "empty checkpoint should return false");
     TEST_PASS("test_dfs_empty_rejected");
-}
-
-int main() {
-    try {
-        test_dfs_serializer_name();
-        test_dfs_serializer_interface();
-        test_dfs_roundtrip();
-        test_dfs_tamper_detected();
-        test_dfs_empty_rejected();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

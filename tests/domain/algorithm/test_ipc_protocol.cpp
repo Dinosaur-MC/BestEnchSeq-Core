@@ -4,8 +4,9 @@
 /// Verifies IpcProtocol framing: write_frame → read_frame over a pipe,
 /// type + payload round-trip, and large-payload handling.
 
+#define BESQ_TEST_MAIN
 #include "domain/algorithm/sandbox/IpcProtocol.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <chrono>
 #include <cstdint>
@@ -70,7 +71,7 @@ struct TestPipe {
 
 } // anonymous namespace
 
-void test_roundtrip_basic() {
+TEST_CASE("test_roundtrip_basic") {
     TestPipe p;
     expect(p.valid(), "ipc: pipe created");
 
@@ -85,7 +86,7 @@ void test_roundtrip_basic() {
     std::cout << "PASS: test_roundtrip_basic" << std::endl;
 }
 
-void test_roundtrip_empty() {
+TEST_CASE("test_roundtrip_empty") {
     TestPipe p;
     expect(p.valid(), "ipc: pipe created");
 
@@ -98,7 +99,7 @@ void test_roundtrip_empty() {
     std::cout << "PASS: test_roundtrip_empty" << std::endl;
 }
 
-void test_roundtrip_large() {
+TEST_CASE("test_roundtrip_large") {
     TestPipe p;
     expect(p.valid(), "ipc: pipe created");
 
@@ -121,7 +122,7 @@ void test_roundtrip_large() {
 
 /// AlgorithmOutput codec round-trip: the worker's final result must survive
 /// encode → decode losslessly (solutions with steps, final_item, timestamps).
-void test_algorithm_output_roundtrip() {
+TEST_CASE("test_algorithm_output_roundtrip") {
     AlgorithmOutput out;
     out.algorithm_name = "astar";
     out.algorithm_version = "1.0.0";
@@ -153,7 +154,7 @@ void test_algorithm_output_roundtrip() {
     std::cout << "PASS: test_algorithm_output_roundtrip" << std::endl;
 }
 
-void test_multiple_frames_order() {
+TEST_CASE("test_multiple_frames_order") {
     TestPipe p;
     expect(p.valid(), "ipc: pipe created");
 
@@ -176,7 +177,7 @@ void test_multiple_frames_order() {
 /// must be split into 1 MiB frames by write_frame and transparently reassembled
 /// by read_frame.  This is the path MB–GB checkpoints depend on.  The reader
 /// drains on a thread so the writer never blocks on a full pipe.
-void test_chunked_roundtrip() {
+TEST_CASE("test_chunked_roundtrip") {
     TestPipe p;
     expect(p.valid(), "ipc: pipe created");
 
@@ -198,20 +199,4 @@ void test_chunked_roundtrip() {
     expect(got_type == ipc::MsgType::MsgCheckpoint, "chunked: type round-trips");
     expect(got.size() == n && got == payload, "chunked: payload transparently reassembled");
     std::cout << "PASS: test_chunked_roundtrip (" << (n >> 20) << " MiB+)" << std::endl;
-}
-
-int main() {
-    try {
-        test_roundtrip_basic();
-        test_roundtrip_empty();
-        test_roundtrip_large();
-        test_multiple_frames_order();
-        test_algorithm_output_roundtrip();
-        test_chunked_roundtrip();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

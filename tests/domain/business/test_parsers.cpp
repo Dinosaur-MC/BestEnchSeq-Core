@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 
 #include "domain/business/parsers/NativeJsonParser.h"
 #include "domain/business/parsers/NativeCsvParser.h"
@@ -33,7 +34,7 @@
 // Parse a minimal JSON string matching the vanilla.json structure via
 // parse_string(). Verify enchantments and equipment are parsed correctly.
 
-void test_json_parse_basic() {
+TEST_CASE("test_json_parse_basic") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "limited_level": 5, "multiplier": 1}
@@ -82,7 +83,7 @@ void test_json_parse_basic() {
 // Include exclusive_set field. Concrete IDs (no "#" prefix) pass through
 // resolve_references unchanged. Verify the value is present.
 
-void test_json_parse_with_exclusive() {
+TEST_CASE("test_json_parse_with_exclusive") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "limited_level": 5, "multiplier": 1, "exclusive_set": ["minecraft:smite"]}
@@ -116,7 +117,7 @@ void test_json_parse_with_exclusive() {
 // Include supported_items (the T2/T10 field name). The value "#minecraft:sword"
 // is a tag reference passed through raw. Verify parsing completes without error.
 
-void test_json_parse_with_applicable() {
+TEST_CASE("test_json_parse_with_applicable") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "limited_level": 5, "multiplier": 1, "supported_items": ["#minecraft:sword"]}
@@ -151,7 +152,7 @@ void test_json_parse_with_applicable() {
 // ─── test_json_parse_min_cost_flat ─────────────────────────────────────
 // B-T17: flat min_cost_base / min_cost_per_level fields populate the DTO.
 
-void test_json_parse_min_cost_flat() {
+TEST_CASE("test_json_parse_min_cost_flat") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "multiplier": 1,
@@ -179,7 +180,7 @@ void test_json_parse_min_cost_flat() {
 // B-T17: MC-nested min_cost object { base, per_level_above_first } populates
 // the DTO.
 
-void test_json_parse_min_cost_nested() {
+TEST_CASE("test_json_parse_min_cost_nested") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "multiplier": 1,
@@ -206,7 +207,7 @@ void test_json_parse_min_cost_nested() {
 // ─── test_json_parse_min_cost_default ──────────────────────────────────
 // B-T17: neither min_cost nor limited_level → all default to 0, hint false.
 
-void test_json_parse_min_cost_default() {
+TEST_CASE("test_json_parse_min_cost_default") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "multiplier": 1}
@@ -235,7 +236,7 @@ void test_json_parse_min_cost_default() {
 // B-T17: legacy pre-computed `limited_level` field (no min_cost) → DTO keeps
 // the value and marks limited_level_provided = true.
 
-void test_json_parse_limited_level_hint() {
+TEST_CASE("test_json_parse_limited_level_hint") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "max_level": 5, "limited_level": 4, "multiplier": 1}
@@ -264,7 +265,7 @@ void test_json_parse_limited_level_hint() {
 // T4: the native JSON parser reads the `platform` field into the DTO.
 // Primary key `platform`, legacy alias `supported_platform` both accepted.
 
-void test_json_parse_platform() {
+TEST_CASE("test_json_parse_platform") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:sharpness", "name": "Sharpness", "platform": "java",
@@ -291,7 +292,7 @@ void test_json_parse_platform() {
 // T4: 新容错语义。旧行为：max_level 为字符串抛 JsonException 中止整次解析；
 // 新行为：schema 记录错误 → WARN → 该条目跳过，其余条目继续（容错）。
 
-void test_json_parse_malformed_tolerated() {
+TEST_CASE("test_json_parse_malformed_tolerated") {
     std::string json_str = R"({
         "enchantments": [
             {"id": "minecraft:bad", "name": "Bad", "max_level": "five", "multiplier": 1},
@@ -311,7 +312,7 @@ void test_json_parse_malformed_tolerated() {
 // ─── test_json_parse_empty ─────────────────────────────────────────────
 // parse_string("{}"). Verify empty results, no crash.
 
-void test_json_parse_empty() {
+TEST_CASE("test_json_parse_empty") {
     auto result = NativeJsonParser::parse_string("{}");
     const auto& enchantments = result.first;
     const auto& equipment    = result.second;
@@ -326,7 +327,7 @@ void test_json_parse_empty() {
 // Construct a Json DOM manually using the builder API (Json::object(),
 // Json::array(), set(), push_back()), then call parse(json). Verify results.
 
-void test_json_parse_via_Json() {
+TEST_CASE("test_json_parse_via_Json") {
     // Build the JSON DOM manually
     Json root = Json::object();
 
@@ -400,7 +401,7 @@ void test_json_parse_via_Json() {
 // Simple CSV with one data row. exclusive_set empty, supported_items
 // quoted (contains comma-safe characters, but demonstrates quoting).
 
-void test_csv_parse_basic() {
+TEST_CASE("test_csv_parse_basic") {
     std::string csv =
         "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
         "minecraft:sharpness,Sharpness,5,5,1,,\"#minecraft:sword\"\n";
@@ -428,7 +429,7 @@ void test_csv_parse_basic() {
 // uses semicolons as delimiters inside the exclusive_set cell; a single
 // value does not need a semicolon.
 
-void test_csv_parse_with_exclusive() {
+TEST_CASE("test_csv_parse_with_exclusive") {
     std::string csv =
         "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
         "minecraft:sharpness,Sharpness,5,5,1,minecraft:smite,#minecraft:sword\n";
@@ -453,7 +454,7 @@ void test_csv_parse_with_exclusive() {
 // ─── test_csv_parse_empty_header_only ──────────────────────────────────
 // Only the header row — no data rows. Verify empty result.
 
-void test_csv_parse_empty_header_only() {
+TEST_CASE("test_csv_parse_empty_header_only") {
     std::string csv =
         "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n";
 
@@ -467,7 +468,7 @@ void test_csv_parse_empty_header_only() {
 // ─── test_csv_parse_multiple_rows ──────────────────────────────────────
 // Three data rows. Verify all are parsed and have correct IDs.
 
-void test_csv_parse_multiple_rows() {
+TEST_CASE("test_csv_parse_multiple_rows") {
     std::string csv =
         "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
         "minecraft:sharpness,Sharpness,5,5,1,,\n"
@@ -495,7 +496,7 @@ void test_csv_parse_multiple_rows() {
 // B-T19: the is_treasure column (exported by EnchSerializer) is read back so a
 // CSV round-trip preserves the treasure flag instead of defaulting to false.
 
-void test_csv_parse_is_treasure() {
+TEST_CASE("test_csv_parse_is_treasure") {
     std::string csv =
         "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
         "minecraft:mending,Mending,1,1,4,true,infinity,#minecraft:durability\n"
@@ -516,7 +517,7 @@ void test_csv_parse_is_treasure() {
 // EnchSerializer emits, so a CSV round-trip preserves them instead of
 // defaulting.
 
-void test_csv_parse_platform() {
+TEST_CASE("test_csv_parse_platform") {
     std::string csv =
         "id,name,platform,max_level,limited_level,min_cost_base,min_cost_per_level,multiplier,is_treasure,exclusive_set,supported_items\n"
         "minecraft:sharpness,Sharpness,java,5,5,1,11,1,false,,\"#minecraft:sword\"\n"
@@ -533,7 +534,7 @@ void test_csv_parse_platform() {
 // ─── test_csv_parse_escaped_quotes ─────────────────────────────────────
 // 旧 parse_csv_string 不处理 "" 转义——回归：逗号字段用引号包裹，内含引号转义为 ""
 
-void test_csv_parse_escaped_quotes() {
+TEST_CASE("test_csv_parse_escaped_quotes") {
     std::string csv =
         "id,name,max_level,limited_level,multiplier,exclusive_set,supported_items\n"
         "\"minecraft:sharpness\",\"Sharp, Comma\",5,5,1,,\"#minecraft:sword\"\n"
@@ -549,7 +550,7 @@ void test_csv_parse_escaped_quotes() {
 // Equipment companion CSV (equipments_<stem>.csv) is parsed via the
 // EquipmentDataSchema.
 
-void test_csv_parse_equipment_companion() {
+TEST_CASE("test_csv_parse_equipment_companion") {
     std::string csv =
         "id,name,category,max_durability\n"
         "minecraft:diamond_sword,Diamond Sword,sword,1561\n"
@@ -568,7 +569,7 @@ void test_csv_parse_equipment_companion() {
 // 空数值格 = codec 错误 → parse_row 失败 → 该行丢弃（WARN）。向后兼容仅承诺
 // "缺列"（缺失可选字段默认），不承诺"列在但空"。本测试锁定此刻意行为。
 
-void test_csv_empty_scalar_cell_drops_row() {
+TEST_CASE("test_csv_empty_scalar_cell_drops_row") {
     std::string csv =
         "id,name,max_level,limited_level,multiplier,is_treasure,exclusive_set,supported_items\n"
         "minecraft:bad_empty,Bad,5,,1,,,\n"                    // limited_level 空 + is_treasure 空 → 行丢弃
@@ -587,7 +588,7 @@ void test_csv_empty_scalar_cell_drops_row() {
 // parse result's `equipment` vector; without a companion the vector stays
 // empty.
 
-void test_format_detector_csv_companion() {
+TEST_CASE("test_format_detector_csv_companion") {
     namespace fs = std::filesystem;
     auto dir = fs::temp_directory_path() / "besq_csv_comp";
     fs::remove_all(dir);
@@ -640,7 +641,7 @@ void test_format_detector_csv_companion() {
 // a tag reference and is not expanded by the parser.
 // Verify id, max_level, display_name, raw applicable_to.
 
-void test_mc_single_enchantment_basic() {
+TEST_CASE("test_mc_single_enchantment_basic") {
     TagResolver tag_resolver;
 
     std::string content = R"({
@@ -683,7 +684,7 @@ void test_mc_single_enchantment_basic() {
 // enchantment ID ("minecraft:smite"). Also verify concrete supported_items
 // pass through resolve() unchanged.
 
-void test_mc_single_enchantment_with_exclusive() {
+TEST_CASE("test_mc_single_enchantment_with_exclusive") {
     TagResolver tag_resolver;
 
     std::string content = R"({
@@ -730,7 +731,7 @@ void test_mc_single_enchantment_with_exclusive() {
 // back-fills the real value at registry load). This pins the parser's
 // current behavior: raw pass-through of supported_items and raw min_cost.
 
-void test_mc_limited_level_tag_resolved() {
+TEST_CASE("test_mc_limited_level_tag_resolved") {
     TagResolver tag_resolver;
     tag_resolver.load_tag_content("minecraft:sword",
         R"({"values": ["minecraft:diamond_sword", "minecraft:iron_sword"]})");
@@ -775,7 +776,7 @@ void test_mc_limited_level_tag_resolved() {
 // canonical full-path key resolves).  A member gets is_treasure=true; a
 // non-member stays false.
 
-void test_mc_single_enchantment_treasure_tag() {
+TEST_CASE("test_mc_single_enchantment_treasure_tag") {
     TagResolver tag_resolver;
     tag_resolver.load_tag_content("minecraft:enchantment/treasure",
         R"({"values": ["minecraft:mending"]})");
@@ -806,7 +807,7 @@ void test_mc_single_enchantment_treasure_tag() {
 // item tag file. Verify the enchantment is parsed and equipment is derived
 // from the tag's item IDs.
 
-void test_mc_parse_files_basic() {
+TEST_CASE("test_mc_parse_files_basic") {
     std::unordered_map<std::string, std::string> files;
 
     files["data/minecraft/enchantment/sharpness.json"] = R"({
@@ -844,7 +845,7 @@ void test_mc_parse_files_basic() {
 // ─── test_mc_parse_files_empty ─────────────────────────────────────────
 // parse_files() with an empty file map. Verify empty results with no crash.
 
-void test_mc_parse_files_empty() {
+TEST_CASE("test_mc_parse_files_empty") {
     std::unordered_map<std::string, std::string> files;
 
     auto result = McOfficialParser::parse_files(files);
@@ -864,7 +865,7 @@ void test_mc_parse_files_empty() {
 // git-ignored res/More Enchants 1.4/...): data/tests/datapack/attack_speed.json.
 // Verify it does NOT throw and the raw tag reference survives in applicable_to.
 
-void test_mc_official_single_string_supported() {
+TEST_CASE("test_mc_official_single_string_supported") {
     TagResolver tag_resolver;
 
     std::string content = file_utils::read_file(
@@ -897,7 +898,7 @@ void test_mc_official_single_string_supported() {
 // res/enchantments-encore-4.6/...): data/tests/datapack/moonwalk.json.
 // Verify the array form still parses and concrete IDs pass through unchanged.
 
-void test_mc_official_array_supported_items() {
+TEST_CASE("test_mc_official_array_supported_items") {
     TagResolver tag_resolver;
 
     std::string content = file_utils::read_file(
@@ -928,7 +929,7 @@ void test_mc_official_array_supported_items() {
 // collect_strings helper). Empty TagResolver → tag resolves to nothing, but
 // parsing must NOT throw.
 
-void test_mc_single_string_exclusive_set() {
+TEST_CASE("test_mc_single_string_exclusive_set") {
     TagResolver tag_resolver;
 
     std::string content = R"({
@@ -954,7 +955,7 @@ void test_mc_single_string_exclusive_set() {
 // any existing tag with the same key instead of merging. Absent / false → the
 // definitions MERGE (datapack semantics).
 
-void test_mc_tag_replace_semantics() {
+TEST_CASE("test_mc_tag_replace_semantics") {
     TagResolver resolver;
 
     // First definition for the tag
@@ -988,7 +989,7 @@ void test_mc_tag_replace_semantics() {
 // alongside plain strings.  The object's `id` must be preserved so the member
 // is not silently dropped from item_tags / derived equipment / the resolver.
 
-void test_mc_tag_object_entry() {
+TEST_CASE("test_mc_tag_object_entry") {
     std::unordered_map<std::string, std::string> files;
     files["data/minecraft/tags/item/swords.json"] = R"({
         "values": [
@@ -1034,52 +1035,3 @@ void test_mc_tag_object_entry() {
 // ============================================================================
 // Main
 // ============================================================================
-
-int main() {
-    try {
-        // Section A — NativeJsonParser
-        test_json_parse_basic();
-        test_json_parse_with_exclusive();
-        test_json_parse_with_applicable();
-        test_json_parse_min_cost_flat();
-        test_json_parse_min_cost_nested();
-        test_json_parse_min_cost_default();
-        test_json_parse_limited_level_hint();
-        test_json_parse_platform();
-        test_json_parse_malformed_tolerated();
-        test_json_parse_empty();
-        test_json_parse_via_Json();
-
-        // Section B — NativeCsvParser
-        test_csv_parse_basic();
-        test_csv_parse_with_exclusive();
-        test_csv_parse_empty_header_only();
-        test_csv_parse_multiple_rows();
-        test_csv_parse_is_treasure();
-        test_csv_parse_platform();
-        test_csv_parse_escaped_quotes();
-        test_csv_parse_equipment_companion();
-        test_csv_empty_scalar_cell_drops_row();
-        test_format_detector_csv_companion();
-
-        // Section C — McOfficialParser
-        test_mc_single_enchantment_basic();
-        test_mc_single_enchantment_with_exclusive();
-        test_mc_limited_level_tag_resolved();
-        test_mc_single_enchantment_treasure_tag();
-        test_mc_parse_files_basic();
-        test_mc_parse_files_empty();
-        test_mc_official_single_string_supported();
-        test_mc_official_array_supported_items();
-        test_mc_single_string_exclusive_set();
-        test_mc_tag_replace_semantics();
-        test_mc_tag_object_entry();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

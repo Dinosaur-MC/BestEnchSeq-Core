@@ -1,9 +1,10 @@
+#define BESQ_TEST_MAIN
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/interface/cli/InventoryParser.h"
 #include "domain/interface/cli/InventorySchema.h"
 #include "ds/ds.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -54,7 +55,7 @@ static std::string task_json(const std::string& items, const std::string& extra 
 // Tests
 // ============================================================================
 
-void test_parse_valid() {
+TEST_CASE("test_parse_valid") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto path = write_temp(task_json(
@@ -83,7 +84,7 @@ void test_parse_valid() {
     TEST_PASS("test_parse_valid");
 }
 
-void test_parse_empty_items() {
+TEST_CASE("test_parse_empty_items") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto path = write_temp(task_json(""));
@@ -93,7 +94,7 @@ void test_parse_empty_items() {
     TEST_PASS("test_parse_empty_items");
 }
 
-void test_unknown_equipment_throws() {
+TEST_CASE("test_unknown_equipment_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto path = write_temp(task_json(R"({ "type": "equipment", "id": "not_a_real_sword", "enchants": [] })"));
@@ -107,7 +108,7 @@ void test_unknown_equipment_throws() {
     TEST_PASS("test_unknown_equipment_throws");
 }
 
-void test_unknown_ench_throws() {
+TEST_CASE("test_unknown_ench_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto path = write_temp(task_json(R"({ "type": "book", "enchants": [{"id":"nonexistent","level":1}] })"));
@@ -121,7 +122,7 @@ void test_unknown_ench_throws() {
     TEST_PASS("test_unknown_ench_throws");
 }
 
-void test_book_over_level_ench_throws() {
+TEST_CASE("test_book_over_level_ench_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto path = write_temp(task_json(R"({ "type": "book", "enchants": [{"id":"sharpness","level":10}] })"));
@@ -136,7 +137,7 @@ void test_book_over_level_ench_throws() {
     TEST_PASS("test_book_over_level_ench_throws");
 }
 
-void test_equipment_over_level_ench_throws() {
+TEST_CASE("test_equipment_over_level_ench_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto path = write_temp(task_json(
@@ -153,7 +154,7 @@ void test_equipment_over_level_ench_throws() {
     TEST_PASS("test_equipment_over_level_ench_throws");
 }
 
-void test_bad_type_throws() {
+TEST_CASE("test_bad_type_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto path = write_temp(task_json(R"({ "type": "sword", "enchants": [] })"));
@@ -167,7 +168,7 @@ void test_bad_type_throws() {
     TEST_PASS("test_bad_type_throws");
 }
 
-void test_missing_file_throws() {
+TEST_CASE("test_missing_file_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -182,7 +183,7 @@ void test_missing_file_throws() {
 
 // ── target parsing ─────────────────────────────────────────────────────
 
-void test_target_equipment() {
+TEST_CASE("test_target_equipment") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -197,7 +198,7 @@ void test_target_equipment() {
     TEST_PASS("test_target_equipment");
 }
 
-void test_target_book() {
+TEST_CASE("test_target_book") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -211,7 +212,7 @@ void test_target_book() {
     TEST_PASS("test_target_book");
 }
 
-void test_target_unknown_equipment_throws() {
+TEST_CASE("test_target_unknown_equipment_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -228,7 +229,7 @@ void test_target_unknown_equipment_throws() {
     TEST_PASS("test_target_unknown_equipment_throws");
 }
 
-void test_target_over_level_ench_throws() {
+TEST_CASE("test_target_over_level_ench_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -245,7 +246,7 @@ void test_target_over_level_ench_throws() {
     TEST_PASS("test_target_over_level_ench_throws");
 }
 
-void test_target_missing_entirely() {
+TEST_CASE("test_target_missing_entirely") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -259,7 +260,7 @@ void test_target_missing_entirely() {
 
 // ── algorithm / profile parsing ────────────────────────────────────────
 
-void test_algorithm_present() {
+TEST_CASE("test_algorithm_present") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -272,7 +273,7 @@ void test_algorithm_present() {
     TEST_PASS("test_algorithm_present");
 }
 
-void test_algorithm_absent() {
+TEST_CASE("test_algorithm_absent") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -284,7 +285,7 @@ void test_algorithm_absent() {
     TEST_PASS("test_algorithm_absent");
 }
 
-void test_profile_present() {
+TEST_CASE("test_profile_present") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -299,7 +300,7 @@ void test_profile_present() {
 
 // ── stdin path (parse_string is the shared core parse_file("-") delegates to) ──
 
-void test_parse_string_roundtrip() {
+TEST_CASE("test_parse_string_roundtrip") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -318,7 +319,7 @@ void test_parse_string_roundtrip() {
 
 // Direct ds-level verification (independent of i18n): `required_field` on a
 // nested `object_codec` must report a missing `target`.
-void test_ds_reports_missing_target() {
+TEST_CASE("test_ds_reports_missing_target") {
     Json root = Json::parse(R"({ "items": [] })");
     InvTaskDto dto;
     ds::ErrorList err;
@@ -328,7 +329,7 @@ void test_ds_reports_missing_target() {
     TEST_PASS("test_ds_reports_missing_target");
 }
 
-void test_missing_target_key_throws() {
+TEST_CASE("test_missing_target_key_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -347,7 +348,7 @@ void test_missing_target_key_throws() {
     TEST_PASS("test_missing_target_key_throws");
 }
 
-void test_wrong_target_type_throws() {
+TEST_CASE("test_wrong_target_type_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -364,7 +365,7 @@ void test_wrong_target_type_throws() {
     TEST_PASS("test_wrong_target_type_throws");
 }
 
-void test_unknown_root_keys_tolerated() {
+TEST_CASE("test_unknown_root_keys_tolerated") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -380,7 +381,7 @@ void test_unknown_root_keys_tolerated() {
 
 // ── item bounds / duplicates ───────────────────────────────────────────
 
-void test_durability_exceeds_max_throws() {
+TEST_CASE("test_durability_exceeds_max_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -397,7 +398,7 @@ void test_durability_exceeds_max_throws() {
     TEST_PASS("test_durability_exceeds_max_throws");
 }
 
-void test_prior_penalty_negative_throws() {
+TEST_CASE("test_prior_penalty_negative_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -414,7 +415,7 @@ void test_prior_penalty_negative_throws() {
     TEST_PASS("test_prior_penalty_negative_throws");
 }
 
-void test_prior_penalty_over_255_throws() {
+TEST_CASE("test_prior_penalty_over_255_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -431,7 +432,7 @@ void test_prior_penalty_over_255_throws() {
     TEST_PASS("test_prior_penalty_over_255_throws");
 }
 
-void test_prior_penalty_255_ok() {
+TEST_CASE("test_prior_penalty_255_ok") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -443,7 +444,7 @@ void test_prior_penalty_255_ok() {
     TEST_PASS("test_prior_penalty_255_ok");
 }
 
-void test_duplicate_ench_throws() {
+TEST_CASE("test_duplicate_ench_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -461,7 +462,7 @@ void test_duplicate_ench_throws() {
     TEST_PASS("test_duplicate_ench_throws");
 }
 
-void test_duplicate_target_ench_throws() {
+TEST_CASE("test_duplicate_target_ench_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -481,7 +482,7 @@ void test_duplicate_target_ench_throws() {
 
 // ── schema shape ───────────────────────────────────────────────────────
 
-void test_items_key_absent() {
+TEST_CASE("test_items_key_absent") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -495,7 +496,7 @@ void test_items_key_absent() {
 
 // Empty target item string drops any listed enchants (documented behaviour —
 // the parser skips target construction entirely).
-void test_target_empty_item_with_enchants() {
+TEST_CASE("test_target_empty_item_with_enchants") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto inv = InventoryParser::parse_string(R"({
@@ -510,40 +511,3 @@ void test_target_empty_item_with_enchants() {
 // ============================================================================
 // main
 // ============================================================================
-int main() {
-    try {
-        test_parse_valid();
-        test_parse_empty_items();
-        test_unknown_equipment_throws();
-        test_unknown_ench_throws();
-        test_book_over_level_ench_throws();
-        test_equipment_over_level_ench_throws();
-        test_bad_type_throws();
-        test_missing_file_throws();
-        test_target_equipment();
-        test_target_book();
-        test_target_unknown_equipment_throws();
-        test_target_over_level_ench_throws();
-        test_target_missing_entirely();
-        test_algorithm_present();
-        test_algorithm_absent();
-        test_profile_present();
-        test_parse_string_roundtrip();
-        test_ds_reports_missing_target();
-        test_missing_target_key_throws();
-        test_wrong_target_type_throws();
-        test_unknown_root_keys_tolerated();
-        test_durability_exceeds_max_throws();
-        test_prior_penalty_negative_throws();
-        test_prior_penalty_over_255_throws();
-        test_prior_penalty_255_ok();
-        test_duplicate_ench_throws();
-        test_duplicate_target_ench_throws();
-        test_items_key_absent();
-        test_target_empty_item_with_enchants();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

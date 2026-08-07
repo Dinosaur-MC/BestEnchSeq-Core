@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 
@@ -19,7 +20,7 @@ static EnchantmentRegistry make_test_registry() {
 // ============================================================================
 // Basic "id=level" syntax
 // ============================================================================
-void test_ench_parser_simple() {
+TEST_CASE("test_ench_parser_simple") {
     auto reg = make_test_registry();
     auto result = EnchParser::parse("sharpness=5", reg);
     expect(result.size() == 1, "should parse one enchantment");
@@ -33,7 +34,7 @@ void test_ench_parser_simple() {
 // ============================================================================
 // Multiple enchantments (comma-separated)
 // ============================================================================
-void test_ench_parser_multiple() {
+TEST_CASE("test_ench_parser_multiple") {
     auto reg = make_test_registry();
     auto result = EnchParser::parse("sharpness=5,knockback=2", reg);
     expect(result.size() == 2, "should parse two enchantments");
@@ -43,7 +44,7 @@ void test_ench_parser_multiple() {
 // ============================================================================
 // Colon shorthand: "id:level"
 // ============================================================================
-void test_ench_parser_colon_shorthand() {
+TEST_CASE("test_ench_parser_colon_shorthand") {
     auto reg = make_test_registry();
     auto result = EnchParser::parse("sharpness:5", reg);
     expect(result.size() == 1, "should parse one");
@@ -57,7 +58,7 @@ void test_ench_parser_colon_shorthand() {
 // ============================================================================
 // Negative level rejected
 // ============================================================================
-void test_ench_parser_negative_level_rejected() {
+TEST_CASE("test_ench_parser_negative_level_rejected") {
     EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
@@ -72,7 +73,7 @@ void test_ench_parser_negative_level_rejected() {
 // ============================================================================
 // Empty id rejected (e.g. "=5")
 // ============================================================================
-void test_ench_parser_empty_id_rejected() {
+TEST_CASE("test_ench_parser_empty_id_rejected") {
     EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
@@ -87,7 +88,7 @@ void test_ench_parser_empty_id_rejected() {
 // ============================================================================
 // Empty token between commas is rejected
 // ============================================================================
-void test_ench_parser_empty_token_rejected() {
+TEST_CASE("test_ench_parser_empty_token_rejected") {
     EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
@@ -99,7 +100,7 @@ void test_ench_parser_empty_token_rejected() {
     TEST_PASS("test_ench_parser_empty_token_rejected");
 }
 
-void test_ench_parser_level_too_high_rejected() {
+TEST_CASE("test_ench_parser_level_too_high_rejected") {
     EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
@@ -114,7 +115,7 @@ void test_ench_parser_level_too_high_rejected() {
 // ============================================================================
 // Unknown enchantment throws
 // ============================================================================
-void test_ench_parser_blank_input_rejected() {
+TEST_CASE("test_ench_parser_blank_input_rejected") {
     EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
@@ -126,7 +127,7 @@ void test_ench_parser_blank_input_rejected() {
     TEST_PASS("test_ench_parser_blank_input_rejected");
 }
 
-void test_ench_parser_trailing_comma_rejected() {
+TEST_CASE("test_ench_parser_trailing_comma_rejected") {
     EnchantmentRegistry empty_reg;
     bool threw = false;
     try {
@@ -138,7 +139,7 @@ void test_ench_parser_trailing_comma_rejected() {
     TEST_PASS("test_ench_parser_trailing_comma_rejected");
 }
 
-void test_ench_parser_unknown_throws() {
+TEST_CASE("test_ench_parser_unknown_throws") {
     auto reg = make_test_registry();
     bool threw = false;
     try {
@@ -158,7 +159,7 @@ void test_ench_parser_unknown_throws() {
 // actionable cli.err.unknown_ench error.
 // ============================================================================
 
-void test_ench_parser_uppercase_maps_to_unknown() {
+TEST_CASE("test_ench_parser_uppercase_maps_to_unknown") {
     auto reg = make_test_registry();
     bool threw = false;
     try {
@@ -176,7 +177,7 @@ void test_ench_parser_uppercase_maps_to_unknown() {
     TEST_PASS("test_ench_parser_uppercase_maps_to_unknown");
 }
 
-void test_ench_parser_dot_segment_maps_to_unknown() {
+TEST_CASE("test_ench_parser_dot_segment_maps_to_unknown") {
     auto reg = make_test_registry();
     bool threw = false;
     try {
@@ -194,7 +195,7 @@ void test_ench_parser_dot_segment_maps_to_unknown() {
     TEST_PASS("test_ench_parser_dot_segment_maps_to_unknown");
 }
 
-void test_ench_parser_duplicate_rejected() {
+TEST_CASE("test_ench_parser_duplicate_rejected") {
     auto reg = make_test_registry();
     bool threw = false;
     try {
@@ -209,24 +210,3 @@ void test_ench_parser_duplicate_rejected() {
 // ============================================================================
 // main
 // ============================================================================
-int main() {
-    try {
-        test_ench_parser_simple();
-        test_ench_parser_multiple();
-        test_ench_parser_colon_shorthand();
-        test_ench_parser_negative_level_rejected();
-        test_ench_parser_empty_id_rejected();
-        test_ench_parser_empty_token_rejected();
-        test_ench_parser_level_too_high_rejected();
-        test_ench_parser_unknown_throws();
-        test_ench_parser_uppercase_maps_to_unknown();
-        test_ench_parser_dot_segment_maps_to_unknown();
-        test_ench_parser_blank_input_rejected();
-        test_ench_parser_trailing_comma_rejected();
-        test_ench_parser_duplicate_rejected();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

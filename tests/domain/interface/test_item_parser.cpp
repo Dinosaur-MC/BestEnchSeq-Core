@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
@@ -33,7 +34,7 @@ static EnchantmentRegistry make_ench_reg() {
 // Tests
 // ============================================================================
 
-void test_item_parser_bare() {
+TEST_CASE("test_item_parser_bare") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword", ench_reg, eq_reg);
@@ -45,7 +46,7 @@ void test_item_parser_bare() {
     TEST_PASS("test_item_parser_bare");
 }
 
-void test_item_parser_with_enchants() {
+TEST_CASE("test_item_parser_with_enchants") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword[sharpness=5,knockback=2]",
@@ -57,7 +58,7 @@ void test_item_parser_with_enchants() {
     TEST_PASS("test_item_parser_with_enchants");
 }
 
-void test_item_parser_no_bracket_close() {
+TEST_CASE("test_item_parser_no_bracket_close") {
     EquipmentRegistry empty_eq;
     EnchantmentRegistry empty_ench;
     bool threw = false;
@@ -70,7 +71,7 @@ void test_item_parser_no_bracket_close() {
     TEST_PASS("test_item_parser_no_bracket_close");
 }
 
-void test_item_parser_trailing_content() {
+TEST_CASE("test_item_parser_trailing_content") {
     EquipmentRegistry empty_eq;
     EnchantmentRegistry empty_ench;
     bool threw = false;
@@ -83,7 +84,7 @@ void test_item_parser_trailing_content() {
     TEST_PASS("test_item_parser_trailing_content");
 }
 
-void test_item_parser_unknown_equip_throws() {
+TEST_CASE("test_item_parser_unknown_equip_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -100,7 +101,7 @@ void test_item_parser_unknown_equip_throws() {
 // Invalid NSID input maps to the friendly unknown-equipment error (#22)
 // ============================================================================
 
-void test_item_parser_uppercase_maps_to_unknown() {
+TEST_CASE("test_item_parser_uppercase_maps_to_unknown") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -119,7 +120,7 @@ void test_item_parser_uppercase_maps_to_unknown() {
     TEST_PASS("test_item_parser_uppercase_maps_to_unknown");
 }
 
-void test_item_parser_dot_segment_maps_to_unknown() {
+TEST_CASE("test_item_parser_dot_segment_maps_to_unknown") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -142,7 +143,7 @@ void test_item_parser_dot_segment_maps_to_unknown() {
 // Properties block { } — prior_penalty
 // ============================================================================
 
-void test_item_parser_prior_penalty() {
+TEST_CASE("test_item_parser_prior_penalty") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword{prior_penalty:3}",
@@ -157,7 +158,7 @@ void test_item_parser_prior_penalty() {
 // Properties block { } — durability
 // ============================================================================
 
-void test_item_parser_durability_explicit() {
+TEST_CASE("test_item_parser_durability_explicit") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword{durability:500}",
@@ -167,7 +168,7 @@ void test_item_parser_durability_explicit() {
     TEST_PASS("test_item_parser_durability_explicit");
 }
 
-void test_item_parser_durability_default_max() {
+TEST_CASE("test_item_parser_durability_default_max") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     // netherite_helmet has max_durability=407
@@ -176,7 +177,7 @@ void test_item_parser_durability_default_max() {
     TEST_PASS("test_item_parser_durability_default_max");
 }
 
-void test_item_parser_durability_exceeds_max_throws() {
+TEST_CASE("test_item_parser_durability_exceeds_max_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -190,7 +191,7 @@ void test_item_parser_durability_exceeds_max_throws() {
     TEST_PASS("test_item_parser_durability_exceeds_max_throws");
 }
 
-void test_item_parser_durability_at_max_ok() {
+TEST_CASE("test_item_parser_durability_at_max_ok") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword{durability:1561}",
@@ -199,7 +200,7 @@ void test_item_parser_durability_at_max_ok() {
     TEST_PASS("test_item_parser_durability_at_max_ok");
 }
 
-void test_item_parser_durability_zero_allowed() {
+TEST_CASE("test_item_parser_durability_zero_allowed") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword{durability:0}",
@@ -212,7 +213,7 @@ void test_item_parser_durability_zero_allowed() {
 // Properties block { } — combined and edge cases
 // ============================================================================
 
-void test_item_parser_both_properties() {
+TEST_CASE("test_item_parser_both_properties") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse(
@@ -224,7 +225,7 @@ void test_item_parser_both_properties() {
     TEST_PASS("test_item_parser_both_properties");
 }
 
-void test_item_parser_properties_only() {
+TEST_CASE("test_item_parser_properties_only") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse(
@@ -236,7 +237,7 @@ void test_item_parser_properties_only() {
     TEST_PASS("test_item_parser_properties_only");
 }
 
-void test_item_parser_missing_brace_throws() {
+TEST_CASE("test_item_parser_missing_brace_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -249,7 +250,7 @@ void test_item_parser_missing_brace_throws() {
     TEST_PASS("test_item_parser_missing_brace_throws");
 }
 
-void test_item_parser_unknown_property_throws() {
+TEST_CASE("test_item_parser_unknown_property_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -262,7 +263,7 @@ void test_item_parser_unknown_property_throws() {
     TEST_PASS("test_item_parser_unknown_property_throws");
 }
 
-void test_item_parser_trailing_after_brace_throws() {
+TEST_CASE("test_item_parser_trailing_after_brace_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -275,7 +276,7 @@ void test_item_parser_trailing_after_brace_throws() {
     TEST_PASS("test_item_parser_trailing_after_brace_throws");
 }
 
-void test_item_parser_negative_prior_penalty_throws() {
+TEST_CASE("test_item_parser_negative_prior_penalty_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -288,7 +289,7 @@ void test_item_parser_negative_prior_penalty_throws() {
     TEST_PASS("test_item_parser_negative_prior_penalty_throws");
 }
 
-void test_item_parser_durability_overflow_throws() {
+TEST_CASE("test_item_parser_durability_overflow_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -302,7 +303,7 @@ void test_item_parser_durability_overflow_throws() {
     TEST_PASS("test_item_parser_durability_overflow_throws");
 }
 
-void test_item_parser_prior_penalty_overflow_throws() {
+TEST_CASE("test_item_parser_prior_penalty_overflow_throws") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -316,7 +317,7 @@ void test_item_parser_prior_penalty_overflow_throws() {
     TEST_PASS("test_item_parser_prior_penalty_overflow_throws");
 }
 
-void test_item_parser_prior_penalty_at_max_ok() {
+TEST_CASE("test_item_parser_prior_penalty_at_max_ok") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("diamond_sword{prior_penalty:255}",
@@ -331,7 +332,7 @@ void test_item_parser_prior_penalty_at_max_ok() {
 // normalises to `enchanted_book`.
 // ============================================================================
 
-void test_item_parser_book_bare() {
+TEST_CASE("test_item_parser_book_bare") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("book", ench_reg, eq_reg);
@@ -344,7 +345,7 @@ void test_item_parser_book_bare() {
     TEST_PASS("test_item_parser_book_bare");
 }
 
-void test_item_parser_book_with_enchants() {
+TEST_CASE("test_item_parser_book_with_enchants") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("book[sharpness=5]", ench_reg, eq_reg);
@@ -356,7 +357,7 @@ void test_item_parser_book_with_enchants() {
     TEST_PASS("test_item_parser_book_with_enchants");
 }
 
-void test_item_parser_enchanted_book_direct() {
+TEST_CASE("test_item_parser_enchanted_book_direct") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("enchanted_book[sharpness=5]", ench_reg, eq_reg);
@@ -368,7 +369,7 @@ void test_item_parser_enchanted_book_direct() {
     TEST_PASS("test_item_parser_enchanted_book_direct");
 }
 
-void test_item_parser_book_namespaced() {
+TEST_CASE("test_item_parser_book_namespaced") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("minecraft:enchanted_book[sharpness=5]",
@@ -378,7 +379,7 @@ void test_item_parser_book_namespaced() {
     TEST_PASS("test_item_parser_book_namespaced");
 }
 
-void test_item_parser_book_prior_penalty_ok() {
+TEST_CASE("test_item_parser_book_prior_penalty_ok") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     auto result = ItemParser::parse("enchanted_book[sharpness=5]{prior_penalty:2}",
@@ -388,7 +389,7 @@ void test_item_parser_book_prior_penalty_ok() {
     TEST_PASS("test_item_parser_book_prior_penalty_ok");
 }
 
-void test_item_parser_book_durability_rejected() {
+TEST_CASE("test_item_parser_book_durability_rejected") {
     auto eq_reg = make_eq_reg();
     auto ench_reg = make_ench_reg();
     bool threw = false;
@@ -399,45 +400,4 @@ void test_item_parser_book_durability_rejected() {
     }
     expect(threw, "non-zero durability on a book should throw");
     TEST_PASS("test_item_parser_book_durability_rejected");
-}
-
-int main() {
-    try {
-        test_item_parser_bare();
-        test_item_parser_with_enchants();
-        test_item_parser_no_bracket_close();
-        test_item_parser_trailing_content();
-        test_item_parser_unknown_equip_throws();
-        test_item_parser_uppercase_maps_to_unknown();
-        test_item_parser_dot_segment_maps_to_unknown();
-        // prior_penalty
-        test_item_parser_prior_penalty();
-        // durability defaults and validation
-        test_item_parser_durability_explicit();
-        test_item_parser_durability_default_max();
-        test_item_parser_durability_exceeds_max_throws();
-        test_item_parser_durability_at_max_ok();
-        test_item_parser_durability_zero_allowed();
-        // combined + edge
-        test_item_parser_both_properties();
-        test_item_parser_properties_only();
-        test_item_parser_missing_brace_throws();
-        test_item_parser_unknown_property_throws();
-        test_item_parser_trailing_after_brace_throws();
-        test_item_parser_negative_prior_penalty_throws();
-        test_item_parser_durability_overflow_throws();
-        test_item_parser_prior_penalty_overflow_throws();
-        test_item_parser_prior_penalty_at_max_ok();
-        // book targets
-        test_item_parser_book_bare();
-        test_item_parser_book_with_enchants();
-        test_item_parser_enchanted_book_direct();
-        test_item_parser_book_namespaced();
-        test_item_parser_book_prior_penalty_ok();
-        test_item_parser_book_durability_rejected();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
 }

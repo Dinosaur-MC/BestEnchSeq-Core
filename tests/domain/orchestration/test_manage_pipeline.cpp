@@ -1,4 +1,6 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+
+#include "framework/test_framework.h"
 #include "domain/orchestration/pipelines/ManagePipeline.h"
 #include "domain/orchestration/types/ManageRequest.h"
 #include "domain/orchestration/types/ManageResult.h"
@@ -46,7 +48,7 @@ void write_extra_json(const std::filesystem::path& path) {
 
 // ─── Test 1: LoadBuiltin is idempotent ───────────────────────────────
 
-void test_manage_load_builtin_idempotent() {
+TEST_CASE("test_manage_load_builtin_idempotent") {
     ProfileManager pm;
     ProfileLoader loader;
 
@@ -67,7 +69,7 @@ void test_manage_load_builtin_idempotent() {
 
 // ─── Test 2: LoadFile merges into the active profile + invalidates cache ──
 
-void test_manage_load_file_merges() {
+TEST_CASE("test_manage_load_file_merges") {
     ProfileManager pm;
     ProfileLoader loader;
 
@@ -107,7 +109,7 @@ void test_manage_load_file_merges() {
 
 // ─── Test 3: LoadData skips nonexistent filters (exists guard) ────────
 
-void test_manage_load_data_exists_guard() {
+TEST_CASE("test_manage_load_data_exists_guard") {
     ProfileManager pm;
     ProfileLoader loader;
 
@@ -135,7 +137,7 @@ void test_manage_load_data_exists_guard() {
 
 // ─── Test 4: LoadDirectory loads a CSV profile ────────────────────────
 
-void test_manage_load_directory() {
+TEST_CASE("test_manage_load_directory") {
     static int counter = 0;
     auto dir = std::filesystem::temp_directory_path() /
                ("besq_manage_dir_" + std::to_string(++counter));
@@ -163,7 +165,7 @@ void test_manage_load_directory() {
 
 // ─── Test 5: Profile CRUD actions ─────────────────────────────────────
 
-void test_manage_profile_crud() {
+TEST_CASE("test_manage_profile_crud") {
     ProfileManager pm;
     ProfileLoader loader;
 
@@ -210,7 +212,7 @@ void test_manage_profile_crud() {
 
 // ─── Test 6: Registry editing actions (incl. duplicate failure branches) ──
 
-void test_manage_registry_edit() {
+TEST_CASE("test_manage_registry_edit") {
     ProfileManager pm;
     ProfileLoader loader;
 
@@ -286,7 +288,7 @@ void test_manage_registry_edit() {
 
 // ─── Test 7: PublishProfile writes a versioned/tagged file ─────────────
 
-void test_manage_publish_profile() {
+TEST_CASE("test_manage_publish_profile") {
     ProfileManager pm;
     ProfileLoader loader;
 
@@ -348,7 +350,7 @@ void test_manage_publish_profile() {
 
 // ─── Test 8: ImportRegistry merges + invalidates the effective cache ────
 
-void test_manage_import_registry() {
+TEST_CASE("test_manage_import_registry") {
     ProfileManager pm;
     ProfileLoader loader;
 
@@ -397,23 +399,3 @@ void test_manage_import_registry() {
 }
 
 } // anonymous namespace
-
-int main() {
-    try {
-        test_manage_load_builtin_idempotent();
-        test_manage_load_file_merges();
-        test_manage_load_data_exists_guard();
-        test_manage_load_directory();
-        test_manage_profile_crud();
-        test_manage_registry_edit();
-        test_manage_publish_profile();
-        test_manage_import_registry();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

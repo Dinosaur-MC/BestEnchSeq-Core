@@ -1,10 +1,11 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/queue/SPSCQueue.hpp"
 #include <atomic>
 #include <chrono>
 #include <thread>
 
-void test_push_pop() {
+TEST_CASE("test_push_pop") {
     SPSCQueue<int, 4> q;
     expect(q.empty(), "empty initially");
     expect(q.size() == 0, "size 0 initially");
@@ -21,7 +22,7 @@ void test_push_pop() {
     std::cout << "PASS: test_push_pop" << std::endl;
 }
 
-void test_drop_on_full() {
+TEST_CASE("test_drop_on_full") {
     SPSCQueue<int, 4> q;
 
     // Fill queue
@@ -45,7 +46,7 @@ void test_drop_on_full() {
     std::cout << "PASS: test_drop_on_full" << std::endl;
 }
 
-void test_sequential_producer_consumer() {
+TEST_CASE("test_sequential_producer_consumer") {
     constexpr int N = 100000;
     SPSCQueue<int, 64> q;
 
@@ -62,7 +63,7 @@ void test_sequential_producer_consumer() {
     std::cout << "PASS: test_sequential_producer_consumer" << std::endl;
 }
 
-void test_consumer_catch_up() {
+TEST_CASE("test_consumer_catch_up") {
     // Producer finishes, then consumer reads all — matches real usage
     constexpr int N = 100000;
     SPSCQueue<int, 256> q;
@@ -83,7 +84,7 @@ void test_consumer_catch_up() {
     std::cout << "PASS: test_consumer_catch_up" << std::endl;
 }
 
-void test_peek() {
+TEST_CASE("test_peek") {
     SPSCQueue<int, 8> q;
 
     int val{};
@@ -100,7 +101,7 @@ void test_peek() {
     std::cout << "PASS: test_peek" << std::endl;
 }
 
-void test_concurrent_push_pop() {
+TEST_CASE("test_concurrent_push_pop") {
     // Concurrent producer and consumer — verify no lost/duplicated items
     // and exact FIFO ordering.
     constexpr int N = 100000;
@@ -152,19 +153,3 @@ void test_concurrent_push_pop() {
               << consumed.load() << "/" << N << " items)" << std::endl;
 }
 
-int main() {
-    std::cout << "=== SPSCQueue Tests ===" << std::endl;
-    try {
-        test_push_pop();
-        test_drop_on_full();
-        test_sequential_producer_consumer();
-        test_consumer_catch_up();
-        test_peek();
-        test_concurrent_push_pop();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

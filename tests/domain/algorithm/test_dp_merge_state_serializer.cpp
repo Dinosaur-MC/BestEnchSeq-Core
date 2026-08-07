@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeStateSerializer.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/ExecutionContext.h"
@@ -9,21 +10,21 @@
 #include <span>
 using namespace algorithm;
 
-void test_dp_merge_serializer_name() {
+TEST_CASE("test_dp_merge_serializer_name") {
     DPMergeStateSerializer ser;
     expect(ser.algorithm_name() == "dp_merge", "algorithm_name should be dp_merge");
     expect(ser.algorithm_version() == "1.0.0", "algorithm_version should be 1.0.0");
     TEST_PASS("test_dp_merge_serializer_name");
 }
 
-void test_dp_merge_serializer_interface() {
+TEST_CASE("test_dp_merge_serializer_interface") {
     auto ser = std::make_unique<DPMergeStateSerializer>();
     auto* base = dynamic_cast<IAlgorithmSerializer*>(ser.get());
     expect(base != nullptr, "DPMergeStateSerializer implements IAlgorithmSerializer");
     TEST_PASS("test_dp_merge_serializer_interface");
 }
 
-void test_dp_merge_roundtrip() {
+TEST_CASE("test_dp_merge_roundtrip") {
     DPMergeStateSerializer ser;
     DPMergeAlgorithm algo;
 
@@ -45,7 +46,7 @@ void test_dp_merge_roundtrip() {
     TEST_PASS("test_dp_merge_roundtrip");
 }
 
-void test_dp_merge_tamper_detected() {
+TEST_CASE("test_dp_merge_tamper_detected") {
     DPMergeStateSerializer ser;
     DPMergeAlgorithm algo;
 
@@ -65,7 +66,7 @@ void test_dp_merge_tamper_detected() {
     TEST_PASS("test_dp_merge_tamper_detected");
 }
 
-void test_dp_merge_empty_rejected() {
+TEST_CASE("test_dp_merge_empty_rejected") {
     DPMergeStateSerializer ser;
     DPMergeAlgorithm algo;
     AlgorithmInput out;
@@ -128,7 +129,7 @@ AlgorithmInput run_small_solve(DPMergeAlgorithm& algo) {
 
 } // anonymous namespace
 
-void test_dp_merge_populated_cache_roundtrip() {
+TEST_CASE("test_dp_merge_populated_cache_roundtrip") {
     DPMergeStateSerializer ser;
     DPMergeAlgorithm algo;
     AlgorithmInput input = run_small_solve(algo);
@@ -163,20 +164,4 @@ void test_dp_merge_populated_cache_roundtrip() {
     expect(without_timestamp(blob1) == without_timestamp(blob2),
            "restore must be faithful (re-serialize identical)");
     TEST_PASS("test_dp_merge_populated_cache_roundtrip");
-}
-
-int main() {
-    try {
-        test_dp_merge_serializer_name();
-        test_dp_merge_serializer_interface();
-        test_dp_merge_roundtrip();
-        test_dp_merge_tamper_detected();
-        test_dp_merge_empty_rejected();
-        test_dp_merge_populated_cache_roundtrip();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

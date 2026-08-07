@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/registries/TagRegistry.h"
 #include <stdexcept>
 
@@ -22,7 +23,7 @@ static std::vector<EquipmentTag> all_builtin_tags() {
     };
 }
 
-void test_builtins_present() {
+TEST_CASE("test_builtins_present") {
     TagRegistry categories(all_builtin_tags());
 
     expect(categories.size() == 14,
@@ -35,7 +36,7 @@ void test_builtins_present() {
     std::cout << "PASS: test_builtins_present" << std::endl;
 }
 
-void test_lookup_throwing() {
+TEST_CASE("test_lookup_throwing") {
     TagRegistry categories(all_builtin_tags());
 
     bool threw = false;
@@ -60,7 +61,7 @@ void test_lookup_throwing() {
     std::cout << "PASS: test_lookup_throwing" << std::endl;
 }
 
-void test_custom_categories() {
+TEST_CASE("test_custom_categories") {
     auto base = all_builtin_tags();
     base.push_back({NSID("#minecraft:mace"), "mace"});
     base.push_back({NSID("#minecraft:wand"), "wand"});
@@ -77,7 +78,7 @@ void test_custom_categories() {
     std::cout << "PASS: test_custom_categories" << std::endl;
 }
 
-void test_duplicate_custom_skipped() {
+TEST_CASE("test_duplicate_custom_skipped") {
     auto base = all_builtin_tags();
     base.push_back({NSID("#minecraft:custom_item"), "custom_item"});
     // boots already exists in builtins, but insert() will reject duplicates
@@ -92,18 +93,4 @@ void test_duplicate_custom_skipped() {
            "duplicate: boots should still be present");
 
     std::cout << "PASS: test_duplicate_custom_skipped" << std::endl;
-}
-
-int main() {
-    try {
-        test_builtins_present();
-        test_lookup_throwing();
-        test_custom_categories();
-        test_duplicate_custom_skipped();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

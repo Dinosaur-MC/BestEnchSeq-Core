@@ -1,13 +1,14 @@
+#define BESQ_TEST_MAIN
 #include "domain/algorithm/IAlgorithm.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/plugin/PluginAudit.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 using namespace algorithm;
 
 // ─── Tests ─────────────────────────────────────────────────────────
 
-void test_loader_builtin_list() {
+TEST_CASE("test_loader_builtin_list") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -17,7 +18,7 @@ void test_loader_builtin_list() {
     std::cout << "PASS: test_loader_builtin_list" << std::endl;
 }
 
-void test_loader_contains() {
+TEST_CASE("test_loader_contains") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -29,7 +30,7 @@ void test_loader_contains() {
     std::cout << "PASS: test_loader_contains" << std::endl;
 }
 
-void test_loader_create() {
+TEST_CASE("test_loader_create") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -54,7 +55,7 @@ void test_loader_create() {
     std::cout << "PASS: test_loader_create" << std::endl;
 }
 
-void test_loader_size() {
+TEST_CASE("test_loader_size") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -64,7 +65,7 @@ void test_loader_size() {
     std::cout << "PASS: test_loader_size" << std::endl;
 }
 
-void test_loader_double_load() {
+TEST_CASE("test_loader_double_load") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -88,7 +89,7 @@ void test_loader_double_load() {
 
 // ─── Audit tests ───────────────────────────────────────────────────
 
-void test_audit_default_state() {
+TEST_CASE("test_audit_default_state") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -98,7 +99,7 @@ void test_audit_default_state() {
     std::cout << "PASS: test_audit_default_state" << std::endl;
 }
 
-void test_audit_static_method() {
+TEST_CASE("test_audit_static_method") {
     // Scan a non-existent file — should return passed=false
     auto report = audit_plugin_binary("nonexistent_plugin.so");
     expect(!report.passed, "audit: nonexistent file returns passed=false");
@@ -111,7 +112,7 @@ void test_audit_static_method() {
     std::cout << "PASS: test_audit_static_method" << std::endl;
 }
 
-void test_audit_report_defaults() {
+TEST_CASE("test_audit_report_defaults") {
     PluginAuditReport r;
 
     expect(r.passed, "audit: default report has passed=true");
@@ -121,22 +122,4 @@ void test_audit_report_defaults() {
     expect(r.linked_libraries.empty(), "audit: default report has no linked libs");
 
     std::cout << "PASS: test_audit_report_defaults" << std::endl;
-}
-
-int main() {
-    try {
-        test_loader_builtin_list();
-        test_loader_contains();
-        test_loader_create();
-        test_loader_size();
-        test_loader_double_load();
-        test_audit_default_state();
-        test_audit_static_method();
-        test_audit_report_defaults();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }

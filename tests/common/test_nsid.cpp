@@ -1,5 +1,6 @@
+#define BESQ_TEST_MAIN
 #include "common/CommonTypes.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <string>
 #include <unordered_set>
@@ -10,7 +11,7 @@ namespace {
 // Default construction
 // ===========================================================================
 
-void test_default_construction() {
+TEST_CASE("test_default_construction") {
     NSID id;
     expect(id.empty(), "default NSID should be empty");
     expect(!id.is_tag(), "default NSID should not be a tag");
@@ -25,7 +26,7 @@ void test_default_construction() {
 // Two-arg construction (namespace + id)
 // ===========================================================================
 
-void test_two_arg_construction() {
+TEST_CASE("test_two_arg_construction") {
     NSID id("minecraft", "sharpness");
     expect(!id.empty(), "two-arg NSID should not be empty");
     expect(!id.is_tag(), "two-arg NSID should not be a tag");
@@ -36,7 +37,7 @@ void test_two_arg_construction() {
     std::cout << "  PASS: test_two_arg_construction" << std::endl;
 }
 
-void test_two_arg_default_namespace() {
+TEST_CASE("test_two_arg_default_namespace") {
     // When ns is empty, it defaults to "minecraft"
     NSID id("", "sharpness");
     expect(!id.empty(), "NSID with default ns should not be empty");
@@ -47,7 +48,7 @@ void test_two_arg_default_namespace() {
     std::cout << "  PASS: test_two_arg_default_namespace" << std::endl;
 }
 
-void test_two_arg_tag_construction() {
+TEST_CASE("test_two_arg_tag_construction") {
     // ns with "#" prefix makes it a tag
     NSID id("#minecraft", "sword");
     expect(id.is_tag(), "NSID with # prefix should be a tag");
@@ -62,7 +63,7 @@ void test_two_arg_tag_construction() {
 // String construction ("ns:id" format)
 // ===========================================================================
 
-void test_string_full() {
+TEST_CASE("test_string_full") {
     NSID id("minecraft:sharpness");
     expect(!id.empty(), "string NSID should not be empty");
     expect(!id.is_tag(), "string NSID should not be a tag");
@@ -73,7 +74,7 @@ void test_string_full() {
     std::cout << "  PASS: test_string_full" << std::endl;
 }
 
-void test_string_bare_id() {
+TEST_CASE("test_string_bare_id") {
     // Bare "sharpness" defaults ns to "minecraft"
     NSID id("sharpness");
     expect(!id.empty(), "bare id NSID should not be empty");
@@ -84,7 +85,7 @@ void test_string_bare_id() {
     std::cout << "  PASS: test_string_bare_id" << std::endl;
 }
 
-void test_string_tag() {
+TEST_CASE("test_string_tag") {
     NSID id("#minecraft:sword");
     expect(id.is_tag(), "tag string NSID should be a tag");
     expect_eq(id.get_ns(), "minecraft", "tag namespace");
@@ -94,7 +95,7 @@ void test_string_tag() {
     std::cout << "  PASS: test_string_tag" << std::endl;
 }
 
-void test_string_invalid() {
+TEST_CASE("test_string_invalid") {
     // Three tokens → invalid
     expect_throws([] { NSID("a:b:c"); }, "three-part string should throw");
     // Empty string → invalid
@@ -107,7 +108,7 @@ void test_string_invalid() {
 // Assignment from string
 // ===========================================================================
 
-void test_assignment_from_string() {
+TEST_CASE("test_assignment_from_string") {
     NSID id;
     id = "minecraft:sharpness";
     expect_eq(id.get_ns(), "minecraft", "assigned namespace");
@@ -126,7 +127,7 @@ void test_assignment_from_string() {
 // operator==
 // ===========================================================================
 
-void test_equality_same() {
+TEST_CASE("test_equality_same") {
     NSID a("minecraft", "sharpness");
     NSID b("minecraft", "sharpness");
     expect(a == b, "identical NSIDs should be equal");
@@ -136,7 +137,7 @@ void test_equality_same() {
     std::cout << "  PASS: test_equality_same" << std::endl;
 }
 
-void test_equality_different() {
+TEST_CASE("test_equality_different") {
     NSID a("minecraft", "sharpness");
     NSID b("minecraft", "protection");
     expect(!(a == b), "different ids should not be equal");
@@ -148,7 +149,7 @@ void test_equality_different() {
     std::cout << "  PASS: test_equality_different" << std::endl;
 }
 
-void test_equality_tag_vs_non_tag() {
+TEST_CASE("test_equality_tag_vs_non_tag") {
     NSID tag("#minecraft:sword");
     NSID plain("minecraft:sword");
     expect(!(tag == plain), "tag and non-tag with same ns:id should not be equal");
@@ -156,7 +157,7 @@ void test_equality_tag_vs_non_tag() {
     std::cout << "  PASS: test_equality_tag_vs_non_tag" << std::endl;
 }
 
-void test_equality_empty() {
+TEST_CASE("test_equality_empty") {
     NSID a;
     NSID b;
     expect(a == b, "two default NSIDs should be equal");
@@ -168,7 +169,7 @@ void test_equality_empty() {
 // unordered_set<NSID>
 // ===========================================================================
 
-void test_unordered_set() {
+TEST_CASE("test_unordered_set") {
     std::unordered_set<NSID> ids;
     ids.insert(NSID("minecraft:sharpness"));
     ids.insert(NSID("minecraft:protection"));
@@ -182,7 +183,7 @@ void test_unordered_set() {
     std::cout << "  PASS: test_unordered_set" << std::endl;
 }
 
-void test_unordered_set_with_tags() {
+TEST_CASE("test_unordered_set_with_tags") {
     std::unordered_set<NSID> ids;
     ids.insert(NSID("#minecraft:sword"));
     ids.insert(NSID("minecraft:sword")); // different from the tag version
@@ -198,7 +199,7 @@ void test_unordered_set_with_tags() {
 // edge cases: valid and invalid IDs
 // ===========================================================================
 
-void test_valid_ids() {
+TEST_CASE("test_valid_ids") {
     // Various valid NSID formats
     expect_eq(NSID("minecraft:sharpness").str(), "minecraft:sharpness", "basic id");
     expect_eq(NSID("minecraft:fire_aspect").str(), "minecraft:fire_aspect", "underscore in id");
@@ -228,7 +229,7 @@ void test_valid_ids() {
     std::cout << "  PASS: test_valid_ids" << std::endl;
 }
 
-void test_invalid_ids() {
+TEST_CASE("test_invalid_ids") {
     // Invalid characters
     expect_throws([] { NSID("minecraft:sharpness!"); }, "id with special chars should throw");
     expect_throws([] { NSID("minecraft:sharp ness"); }, "id with spaces should throw");
@@ -236,7 +237,7 @@ void test_invalid_ids() {
     std::cout << "  PASS: test_invalid_ids" << std::endl;
 }
 
-void test_mc_identifier_rules() {
+TEST_CASE("test_mc_identifier_rules") {
     // Uppercase is rejected (MC identifiers are lowercase-only).
     expect_throws([] { NSID("Minecraft:sharpness"); }, "uppercase namespace should throw");
     expect_throws([] { NSID("minecraft:SharpNess"); }, "uppercase id should throw");
@@ -262,45 +263,3 @@ void test_mc_identifier_rules() {
 
 } // anonymous namespace
 
-int main() {
-    try {
-        // Default construction
-        test_default_construction();
-
-        // Two-arg construction
-        test_two_arg_construction();
-        test_two_arg_default_namespace();
-        test_two_arg_tag_construction();
-
-        // String construction
-        test_string_full();
-        test_string_bare_id();
-        test_string_tag();
-        test_string_invalid();
-
-        // Assignment
-        test_assignment_from_string();
-
-        // Equality
-        test_equality_same();
-        test_equality_different();
-        test_equality_tag_vs_non_tag();
-        test_equality_empty();
-
-        // unordered_set
-        test_unordered_set();
-        test_unordered_set_with_tags();
-
-        // Edge cases
-        test_valid_ids();
-        test_invalid_ids();
-        test_mc_identifier_rules();
-    } catch (const test_error &e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return print_summary();
-    } catch (const std::exception &e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return print_summary();
-    }
-    return print_summary();
-}

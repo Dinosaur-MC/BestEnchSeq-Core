@@ -1,3 +1,4 @@
+#define BESQ_TEST_MAIN
 #include "ds/ds.h"
 #include "ds/Field.h"
 #include "ds/codec/Codecs.h"
@@ -5,7 +6,7 @@
 #include "ds/json/JsonBinder.h"
 #include "ds/csv/CsvBinder.h"
 #include "common/CommonTypes.h"   // NSID（引擎不依赖，测试引入以证明可接入）
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -16,7 +17,7 @@
 #include <vector>
 
 // ── 1. ErrorList 收集 + ValidationError 聚合 ──────────────────────────
-void test_error_collection() {
+TEST_CASE("test_error_collection") {
     ds::ErrorList err;
     expect(err.empty(), "fresh ErrorList empty");
     err.add("a.b", "bad");
@@ -27,7 +28,7 @@ void test_error_collection() {
     expect(err.errors()[0].message == "bad", "message recorded");
     TEST_PASS("ErrorList collects");
 }
-void test_validation_error_aggregates() {
+TEST_CASE("test_validation_error_aggregates") {
     ds::ErrorList err;
     err.add("x", "e1");
     err.add("y", "e2");
@@ -53,7 +54,7 @@ struct Demo {
 // 真实标量 codec（string_codec/int_codec）在 Task 3 引入。
 struct DummyCodec {};
 
-void test_field_descriptor() {
+TEST_CASE("test_field_descriptor") {
     auto f = ds::field("id", &Demo::id, DummyCodec{});
     Demo d{"abc", 5};
     expect(f.name == std::string("id"), "field name carried");
@@ -63,7 +64,7 @@ void test_field_descriptor() {
     expect(f.should_emit(d), "default emit predicate always true");
     TEST_PASS("field descriptor get/set");
 }
-void test_field_emit_predicate() {
+TEST_CASE("test_field_emit_predicate") {
     auto f = ds::field("level", &Demo::level, DummyCodec{},
                        [](const Demo& o) { return o.level > 0; });
     Demo d{"a", 0};
@@ -72,7 +73,7 @@ void test_field_emit_predicate() {
     expect(f.should_emit(d), "emit true when predicate true");
     TEST_PASS("field custom emit predicate");
 }
-void test_field_aliases_and_required() {
+TEST_CASE("test_field_aliases_and_required") {
     auto fa = ds::field("id", &Demo::id, DummyCodec{}, "old_id");
     expect(fa.aliases.size() == 1 && std::string(fa.aliases[0]) == "old_id",
            "single alias lands in aliases, not emit");
@@ -84,7 +85,7 @@ void test_field_aliases_and_required() {
     TEST_PASS("field aliases + required");
 }
 // ── 3. 基础标量 codec 往返 + 校验 ──────────────────────────────────
-void test_scalar_codecs() {
+TEST_CASE("test_scalar_codecs") {
     // string
     Json j1; ds::string_codec{}.to_json(std::string("hi"), j1);
     std::string s1; ds::ErrorList e1;
@@ -104,7 +105,7 @@ void test_scalar_codecs() {
     expect(ds::bool_codec{}.from_json(j4, b4, e4, "b") && b4, "bool roundtrip");
     TEST_PASS("scalar codecs roundtrip");
 }
-void test_int_range_validation() {
+TEST_CASE("test_int_range_validation") {
     Json j; j = Json(int64_t{99});
     int v = 0; ds::ErrorList e;
     expect(!ds::int_codec{0, 10}.from_json(j, v, e, "level"),
@@ -112,13 +113,13 @@ void test_int_range_validation() {
     expect(e.size() == 1 && e.errors()[0].path == "level", "range error path");
     TEST_PASS("int range validation");
 }
-void test_type_mismatch() {
+TEST_CASE("test_type_mismatch") {
     Json j; j = Json(std::string("x"));   // string where number expected
     int v = 0; ds::ErrorList e;
     expect(!ds::int_codec{}.from_json(j, v, e, "n"), "type mismatch rejected");
     TEST_PASS("type mismatch rejected");
 }
-void test_scalar_csv_roundtrip() {
+TEST_CASE("test_scalar_csv_roundtrip") {
     std::string c1; ds::string_codec{}.to_csv(std::string("hi"), c1);
     std::string s1; ds::ErrorList e1;
     expect(ds::string_codec{}.from_csv(c1, s1, e1, "s") && s1 == "hi", "string csv roundtrip");
@@ -133,7 +134,7 @@ void test_scalar_csv_roundtrip() {
     expect(ds::bool_codec{}.from_csv(c4, b4, e4, "b") && b4, "bool csv roundtrip");
     TEST_PASS("scalar csv roundtrip");
 }
-void test_csv_range_and_partial_rejected() {
+TEST_CASE("test_csv_range_and_partial_rejected") {
     int v = 0; ds::ErrorList e;
     expect(!ds::int_codec{0, 10}.from_csv("500", v, e, "lv"), "csv range rejected");
     expect(e.size() == 1, "csv range error");
@@ -141,7 +142,7 @@ void test_csv_range_and_partial_rejected() {
     expect(!ds::int_codec{}.from_csv("42abc", v2, e2, "lv"), "csv partial parse rejected");
     TEST_PASS("csv range + partial rejected");
 }
-void test_int_narrow_type_guard() {
+TEST_CASE("test_int_narrow_type_guard") {
     // int32_t 目标收到超出 int32 范围的值 → 拒绝，而非静默截断（review M2）
     Json j; j = Json(int64_t{3000000000LL});
     int32_t v = 0; ds::ErrorList e;
@@ -156,7 +157,7 @@ void test_int_narrow_type_guard() {
     expect(ds::int_codec{}.from_json(j2, ok, e3, "n") && ok == 42, "in-range int32 still ok");
     TEST_PASS("int_codec narrow-type guard");
 }
-void test_int_double_bounds_no_ub() {
+TEST_CASE("test_int_double_bounds_no_ub") {
     // 超大 double（1e300，超出 int64）→ cast 前拦截（防 [conv.fpint] UB，review M1）
     Json j = Json::parse("{\"x\": 1e300}");
     int v = 0; ds::ErrorList e;
@@ -181,7 +182,7 @@ void test_int_double_bounds_no_ub() {
     expect(!ds::int_codec{}.from_json(j5["x"], v5, e5, "x"), "fractional double rejected");
     TEST_PASS("int_codec double bounds no UB");
 }
-void test_csv_trailing_separator_no_spurious() {
+TEST_CASE("test_csv_trailing_separator_no_spurious") {
     // 尾随 ';' 不再产出多余空元素（review L1）
     std::vector<std::string> v;
     ds::ErrorList e;
@@ -201,7 +202,7 @@ void test_csv_trailing_separator_no_spurious() {
            "set trailing sep no empty element");
     TEST_PASS("csv trailing separator no spurious element");
 }
-void test_float_csv_roundtrip_exact() {
+TEST_CASE("test_float_csv_roundtrip_exact") {
     // float_codec::to_csv 输出可被 from_csv 精确往返（to_chars shortest-roundtrip 保证）
     const double vals[] = {0.0, 1.0, 3.141592653589793, 1e-300, 1.7976931348623157e308};
     bool all_ok = true;
@@ -233,7 +234,7 @@ using PersonJson = ds::json::Schema<PersonSchema>;
 using PersonCsv = ds::csv::Schema<PersonSchema>;
 static_assert(std::tuple_size_v<decltype(PersonSchema::fields)> == 3, "schema fields constexpr-evaluable");
 
-void test_json_roundtrip() {
+TEST_CASE("test_json_roundtrip") {
     Person p{"alice", 30, true};
     Json j = PersonJson::serialize(p);
     Person out;
@@ -242,14 +243,14 @@ void test_json_roundtrip() {
     expect(out.name == "alice" && out.age == 30 && out.active, "roundtrip equal");
     TEST_PASS("json roundtrip");
 }
-void test_json_required_missing() {
+TEST_CASE("test_json_required_missing") {
     Json j = Json::object().set("age", Json(int64_t{5}));   // name missing
     Person out; ds::ErrorList e;
     expect(!PersonJson::parse(j, out, e), "required missing fails");
     expect(e.size() == 1 && e.errors()[0].path == "name", "missing required path");
     TEST_PASS("json required missing");
 }
-void test_json_unknown_key_tolerant_vs_strict() {
+TEST_CASE("test_json_unknown_key_tolerant_vs_strict") {
     Json j = Json::object()
         .set("name", Json(std::string("bob")))
         .set("age", Json(int64_t{1}))
@@ -263,7 +264,7 @@ void test_json_unknown_key_tolerant_vs_strict() {
     expect(e2.size() == 1 && e2.errors()[0].path == "extra", "unknown key path");
     TEST_PASS("json unknown key tolerant/strict");
 }
-void test_json_parse_or_throw() {
+TEST_CASE("test_json_parse_or_throw") {
     Json j = Json::object().set("age", Json(int64_t{5}));
     Person out;
     bool threw = false;
@@ -272,7 +273,7 @@ void test_json_parse_or_throw() {
     expect(threw, "parse_or_throw throws on errors");
     TEST_PASS("json parse_or_throw");
 }
-void test_json_collective_multi_error() {
+TEST_CASE("test_json_collective_multi_error") {
     // name missing (required) AND age wrong type (string where int expected) AND active wrong type
     Json j = Json::object()
         .set("age", Json(std::string("oops")))
@@ -350,7 +351,7 @@ struct EquipSchema {
 };
 using EquipJson = ds::json::Schema<EquipSchema>;
 
-void test_text_codec_roundtrip() {
+TEST_CASE("test_text_codec_roundtrip") {
     Equip eq{NSID("minecraft:diamond_sword"), MCE::Java, 1561};
     Json j = EquipJson::serialize(eq);
     Equip out; ds::ErrorList e;
@@ -360,14 +361,14 @@ void test_text_codec_roundtrip() {
     expect(out.durability == 1561, "int roundtrip");
     TEST_PASS("text_codec (NSID + enum) roundtrip");
 }
-void test_text_codec_invalid_rejected() {
+TEST_CASE("test_text_codec_invalid_rejected") {
     Json j = Json::object().set("id", Json(std::string("BadID!"))).set("durability", Json(int64_t{1}));
     Equip out; ds::ErrorList e;
     expect(!EquipJson::parse(j, out, e), "invalid NSID rejected");
     expect(e.size() == 1 && e.errors()[0].path == "id", "NSID invalid error path");
     TEST_PASS("text_codec invalid value rejected");
 }
-void test_json_codec() {
+TEST_CASE("test_json_codec") {
     Holder h{{3, 4}};
     Json j = HolderJson::serialize(h);
     Holder out; ds::ErrorList e;
@@ -400,7 +401,7 @@ struct ValsSchema {
 };
 using ValsJson = ds::json::Schema<ValsSchema>;
 
-void test_vector_codec() {
+TEST_CASE("test_vector_codec") {
     Vals v{{1, 2, 3}, {}, std::nullopt};
     Json j = ValsJson::serialize(v);
     Vals out; ds::ErrorList e;
@@ -408,7 +409,7 @@ void test_vector_codec() {
     expect(out.nums.size() == 3 && out.nums[0] == 1 && out.nums[2] == 3, "vector roundtrip");
     TEST_PASS("vector codec roundtrip");
 }
-void test_set_codec() {
+TEST_CASE("test_set_codec") {
     Vals v{{}, {"b", "a", "c"}, std::nullopt};
     Json j = ValsJson::serialize(v);
     Vals out; ds::ErrorList e;
@@ -425,7 +426,7 @@ void test_set_codec() {
            "set emitted deterministically sorted");
     TEST_PASS("set codec roundtrip");
 }
-void test_optional_codec() {
+TEST_CASE("test_optional_codec") {
     Vals v{{}, {}, 42};
     Json j = ValsJson::serialize(v);
     Vals out; ds::ErrorList e;
@@ -456,7 +457,7 @@ struct CondSchema {
 };
 using CondJson = ds::json::Schema<CondSchema>;
 
-void test_conditional_emit() {
+TEST_CASE("test_conditional_emit") {
     Cond c1{5, true, 0};
     Json j1 = CondJson::serialize(c1);
     expect(j1.has("limited_level"), "emitted when provided");
@@ -465,7 +466,7 @@ void test_conditional_emit() {
     expect(!j2.has("limited_level"), "skipped when not provided");
     TEST_PASS("conditional emit predicate");
 }
-void test_alias_nested_form() {
+TEST_CASE("test_alias_nested_form") {
     Json j = Json::object()
         .set("min_cost", Json::object().set("base", Json(int64_t{10})));
     Cond out; ds::ErrorList e;
@@ -475,7 +476,7 @@ void test_alias_nested_form() {
 }
 
 // ── 8. CSV 绑定 ────────────────────────────────────────────────────
-void test_csv_header_and_roundtrip() {
+TEST_CASE("test_csv_header_and_roundtrip") {
     auto hdr = PersonCsv::header();
     expect(hdr.size() == 3 && hdr[0] == "name" && hdr[1] == "age", "header order");
     Person p{"alice", 30, true};
@@ -487,7 +488,7 @@ void test_csv_header_and_roundtrip() {
     expect(out.name == "alice" && out.age == 30 && out.active, "csv roundtrip");
     TEST_PASS("csv header + row roundtrip");
 }
-void test_csv_column_missing_optional() {
+TEST_CASE("test_csv_column_missing_optional") {
     // 缺 age 列（可选）→ 保持默认；缺 name 列（必填）→ 报错
     auto hdr = PersonCsv::header();
     Person out; ds::ErrorList e;
@@ -498,7 +499,7 @@ void test_csv_column_missing_optional() {
     expect(e2.size() == 1 && e2.errors()[0].path == "name", "missing required col path");
     TEST_PASS("csv missing optional vs required column");
 }
-void test_csv_set_join_and_quotes() {
+TEST_CASE("test_csv_set_join_and_quotes") {
     Vals v{{}, {"x", "a"}, std::nullopt};
     using ValsCsv = ds::csv::Schema<ValsSchema>;
     auto row = ValsCsv::serialize_row(v);
@@ -523,7 +524,7 @@ struct NoteSchema {
 };
 using NoteCsv = ds::csv::Schema<NoteSchema>;
 
-void test_csv_full_text_roundtrip() {
+TEST_CASE("test_csv_full_text_roundtrip") {
     Person p{"alice, bob", 30, true};
     auto row = PersonCsv::serialize_row(p);
     auto table = ::csv::CsvTable{PersonCsv::header(), row};
@@ -542,7 +543,7 @@ void test_csv_full_text_roundtrip() {
     expect(out.name == "alice, bob" && out.age == 30 && out.active, "full text roundtrip values");
     TEST_PASS("csv full text roundtrip");
 }
-void test_csv_required_empty_string_roundtrip() {
+TEST_CASE("test_csv_required_empty_string_roundtrip") {
     Note note{std::string{}, 7};   // required label is empty
     auto row = NoteCsv::serialize_row(note);
     expect(row[0].empty(), "empty label cell");
@@ -565,7 +566,7 @@ struct CostSchema {
 };
 using CostJson = ds::json::Schema<CostSchema>;
 
-void test_min_cost_dual_form() {
+TEST_CASE("test_min_cost_dual_form") {
     // 嵌套形态（MC 官方）
     Json nested = Json::object()
         .set("min_cost", Json::object()
@@ -635,7 +636,7 @@ EnchInfoLike make_ench() {
     return e;
 }
 
-void test_enchlike_json_roundtrip() {
+TEST_CASE("test_enchlike_json_roundtrip") {
     EnchInfoLike e = make_ench();
     Json j = EnchJson::serialize(e);
     std::string s = j.to_string();
@@ -656,7 +657,7 @@ void test_enchlike_json_roundtrip() {
     TEST_PASS("EnchInfoLike JSON roundtrip");
 }
 
-void test_presence_flag_absent() {
+TEST_CASE("test_presence_flag_absent") {
     Json j = Json::object()
         .set("id", Json(std::string("minecraft:sharpness")))
         .set("max_level", Json(int64_t{5}))
@@ -667,7 +668,7 @@ void test_presence_flag_absent() {
     TEST_PASS("presence flag false when field absent");
 }
 
-void test_presence_flag_cleared_on_failed_parse() {
+TEST_CASE("test_presence_flag_cleared_on_failed_parse") {
     EnchInfoLike o;
     ds::ErrorList err;
     Json okj = Json::object()
@@ -687,7 +688,7 @@ void test_presence_flag_cleared_on_failed_parse() {
     expect(!o.limited_level_provided, "stale flag cleared on codec failure");
     TEST_PASS("presence flag cleared on failed parse");
 }
-void test_enchlike_platform_legacy_alias() {
+TEST_CASE("test_enchlike_platform_legacy_alias") {
     Json j = Json::object()
         .set("id", Json(std::string("minecraft:sharpness")))
         .set("max_level", Json(int64_t{5}))
@@ -698,7 +699,7 @@ void test_enchlike_platform_legacy_alias() {
     expect(out.platform == "bedrock", "legacy alias sourced");
     TEST_PASS("legacy platform alias (supported_platform)");
 }
-void test_enchlike_csv_roundtrip() {
+TEST_CASE("test_enchlike_csv_roundtrip") {
     EnchInfoLike e = make_ench();
     auto hdr = EnchCsv::header();
     expect(hdr[2] == "platform", "csv header third col is platform");
@@ -714,7 +715,7 @@ void test_enchlike_csv_roundtrip() {
     TEST_PASS("EnchInfoLike CSV roundtrip");
 }
 
-void test_csv_presence_zero_counts_as_present() {
+TEST_CASE("test_csv_presence_zero_counts_as_present") {
     EnchInfoLike e = make_ench();
     e.limited_level_provided = false;   // limited_level stays 0
     auto row = EnchCsv::serialize_row(e);
@@ -736,7 +737,7 @@ struct IntSetSchema {
 };
 using IntSetJson = ds::json::Schema<IntSetSchema>;
 
-void test_set_codec_int_roundtrip() {
+TEST_CASE("test_set_codec_int_roundtrip") {
     IntSet s{{5, 1, 3}};
     Json j = IntSetJson::serialize(s);
     // values emitted as JSON numbers, sorted
@@ -763,7 +764,7 @@ struct NsidSetSchema {
 using NsidSetJson = ds::json::Schema<NsidSetSchema>;
 using NsidSetCsv  = ds::csv::Schema<NsidSetSchema>;
 
-void test_nsid_set_roundtrip() {
+TEST_CASE("test_nsid_set_roundtrip") {
     NsidSet s{ {NSID("minecraft:sharpness"), NSID("minecraft:knockback")} };
     // JSON
     Json j = NsidSetJson::serialize(s);
@@ -795,7 +796,7 @@ struct HintSchema {
 };
 using HintJson = ds::json::Schema<HintSchema>;
 
-void test_custom_codec_value_roundtrip_with_conditional_emit() {
+TEST_CASE("test_custom_codec_value_roundtrip_with_conditional_emit") {
     // The value roundtrips and the emit predicate gates serialization. The
     // presence-derived flag (limited_level_provided) is NOT reconstructed by
     // this schema: it declares no presence_flag, so the binder never touches
@@ -830,7 +831,7 @@ struct InvariantSchema {
 };
 using InvariantJson = ds::json::Schema<InvariantSchema>;
 
-void test_validate_hook() {
+TEST_CASE("test_validate_hook") {
     Json okj = Json::object()
         .set("max_level", Json(int64_t{5})).set("multiplier", Json(int64_t{2}));
     Invariant ok; ds::ErrorList eok;
@@ -844,7 +845,7 @@ void test_validate_hook() {
     TEST_PASS("schema validate hook cross-field");
 }
 
-void test_validate_hook_csv() {
+TEST_CASE("test_validate_hook_csv") {
     using InvariantCsv = ds::csv::Schema<InvariantSchema>;
     auto row = InvariantCsv::serialize_row(Invariant{1, 5});   // violates invariant
     Invariant out; ds::ErrorList err;
@@ -880,7 +881,7 @@ struct EmployeeSchema {
 };
 using EmployeeJson = ds::json::Schema<EmployeeSchema>;
 
-void test_object_codec_roundtrip() {
+TEST_CASE("test_object_codec_roundtrip") {
     Employee e{"alice", {"1 Main St", "Springfield"}};
     Json j = EmployeeJson::serialize(e);
     expect(j.has("home") && j["home"].type() == JsonType::Object, "nested field serialized as object");
@@ -918,7 +919,7 @@ struct CareerSchema {
 };
 using CareerJson = ds::json::Schema<CareerSchema>;
 
-void test_object_codec_array_roundtrip() {
+TEST_CASE("test_object_codec_array_roundtrip") {
     Career c{"bob", {{"dev", 3}, {"lead", 5}}};
     Json j = CareerJson::serialize(c);
     auto arr = j["jobs"].as<Json::Array>();
@@ -935,7 +936,7 @@ void test_object_codec_array_roundtrip() {
     TEST_PASS("vector_codec<object_codec> array roundtrip");
 }
 
-void test_object_codec_required_nested_missing() {
+TEST_CASE("test_object_codec_required_nested_missing") {
     // 外层必填嵌套字段整体缺省 → 错误路径为外层字段名 "home"
     Json j = Json::object().set("name", Json(std::string("alice")));
     Employee out; ds::ErrorList err;
@@ -953,7 +954,7 @@ void test_object_codec_required_nested_missing() {
     TEST_PASS("object_codec required nested field missing");
 }
 
-void test_object_codec_wrong_type() {
+TEST_CASE("test_object_codec_wrong_type") {
     Json j = Json::object()
         .set("name", Json(std::string("alice")))
         .set("home", Json(std::string("not-an-object")));   // 字符串而非对象
@@ -964,7 +965,7 @@ void test_object_codec_wrong_type() {
     TEST_PASS("object_codec wrong type (string where object expected)");
 }
 
-void test_object_codec_nested_unknown_key_tolerant() {
+TEST_CASE("test_object_codec_nested_unknown_key_tolerant") {
     Json j = Json::object()
         .set("name", Json(std::string("alice")))
         .set("home", Json::object()
@@ -1005,7 +1006,7 @@ struct NestedHolderSchema {
 };
 using NestedHolderJson = ds::json::Schema<NestedHolderSchema>;
 
-void test_object_codec_nested_validate_hook() {
+TEST_CASE("test_object_codec_nested_validate_hook") {
     Json okj = Json::object()
         .set("tag", Json(std::string("x")))
         .set("range", Json::object().set("lo", Json(int64_t{1})).set("hi", Json(int64_t{5})));
@@ -1024,7 +1025,7 @@ void test_object_codec_nested_validate_hook() {
     TEST_PASS("object_codec nested validate hook invoked");
 }
 
-void test_object_codec_csv_rejected() {
+TEST_CASE("test_object_codec_csv_rejected") {
     // CSV 无嵌套对象表示：to_csv 抛错防静默丢失（同 json_codec）；from_csv 记错拒绝。
     expect_throws_as<std::logic_error>([&] {
         std::string cell;
@@ -1051,7 +1052,7 @@ struct EmpOptSchema {
 };
 using EmpOptJson = ds::json::Schema<EmpOptSchema>;
 
-void test_object_codec_optional_nested() {
+TEST_CASE("test_object_codec_optional_nested") {
     EmpOpt e{"bob", Addr{"2 Oak", "Metropolis"}};
     Json j = EmpOptJson::serialize(e);
     expect(j.has("home") && j["home"].type() == JsonType::Object, "optional nested serialized as object");
@@ -1096,7 +1097,7 @@ struct DeepOuterSchema {
 };
 using DeepOuterJson = ds::json::Schema<DeepOuterSchema>;
 
-void test_object_codec_deep_nesting() {
+TEST_CASE("test_object_codec_deep_nesting") {
     DeepOuter d{{{42}}};
     Json j = DeepOuterJson::serialize(d);
     expect(j.has("mid") && j["mid"].has("leaf") && j["mid"]["leaf"]["v"].as<int64_t>() == 42,
@@ -1127,7 +1128,7 @@ struct GridSchema {
 };
 using GridJson = ds::json::Schema<GridSchema>;
 
-void test_object_codec_array_error_path_prefix() {
+TEST_CASE("test_object_codec_array_error_path_prefix") {
     Json j = Json::parse(R"({"rows":[{"name":"a"},{}]})");
     Grid out; ds::ErrorList err;
     expect(!GridJson::parse(j, out, err), "element missing required fails");
@@ -1137,60 +1138,3 @@ void test_object_codec_array_error_path_prefix() {
     TEST_PASS("object_codec array element error path prefixed");
 }
 
-int main() {
-    test_error_collection();
-    test_validation_error_aggregates();
-    test_field_descriptor();
-    test_field_emit_predicate();
-    test_field_aliases_and_required();
-    test_scalar_codecs();
-    test_int_range_validation();
-    test_type_mismatch();
-    test_scalar_csv_roundtrip();
-    test_csv_range_and_partial_rejected();
-    test_int_narrow_type_guard();
-    test_int_double_bounds_no_ub();
-    test_csv_trailing_separator_no_spurious();
-    test_float_csv_roundtrip_exact();
-    test_json_roundtrip();
-    test_json_required_missing();
-    test_json_unknown_key_tolerant_vs_strict();
-    test_json_parse_or_throw();
-    test_json_collective_multi_error();
-    test_text_codec_roundtrip();
-    test_text_codec_invalid_rejected();
-    test_json_codec();
-    test_vector_codec();
-    test_set_codec();
-    test_optional_codec();
-    test_conditional_emit();
-    test_alias_nested_form();
-    test_csv_header_and_roundtrip();
-    test_csv_column_missing_optional();
-    test_csv_set_join_and_quotes();
-    test_csv_full_text_roundtrip();
-    test_csv_required_empty_string_roundtrip();
-    test_min_cost_dual_form();
-    test_enchlike_json_roundtrip();
-    test_enchlike_platform_legacy_alias();
-    test_enchlike_csv_roundtrip();
-    test_csv_presence_zero_counts_as_present();
-    test_presence_flag_absent();
-    test_presence_flag_cleared_on_failed_parse();
-    test_set_codec_int_roundtrip();
-    test_nsid_set_roundtrip();
-    test_custom_codec_value_roundtrip_with_conditional_emit();
-    test_validate_hook();
-    test_validate_hook_csv();
-    test_object_codec_roundtrip();
-    test_object_codec_array_roundtrip();
-    test_object_codec_required_nested_missing();
-    test_object_codec_wrong_type();
-    test_object_codec_nested_unknown_key_tolerant();
-    test_object_codec_nested_validate_hook();
-    test_object_codec_csv_rejected();
-    test_object_codec_optional_nested();
-    test_object_codec_deep_nesting();
-    test_object_codec_array_error_path_prefix();
-    return print_summary();
-}

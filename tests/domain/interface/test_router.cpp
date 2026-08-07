@@ -1,7 +1,8 @@
 // tests/domain/interface/test_router.cpp
+#define BESQ_TEST_MAIN
 #include "domain/interface/components/http/Router.h"
 #include "domain/interface/components/http/HttpController.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 #include <string>
 
 using namespace web;
@@ -108,12 +109,11 @@ void test_bad_body_400() {
 }
 } // namespace
 
-int main() {
+TEST_CASE("test_router") {
     test_ok();
     test_404_405();
     test_head();
     test_percent_decode_path();
     test_bad_body_400();
     TEST_PASS("test_router");
-    return print_summary();
 }

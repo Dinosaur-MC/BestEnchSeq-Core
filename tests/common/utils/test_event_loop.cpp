@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/EventLoop.hpp"
 #include "utils/queue/SegmentedMPMCQueue.hpp"
 #include <atomic>
@@ -41,7 +42,7 @@ static void drain(Loop& loop) {
 // Basic lifecycle
 // ============================================================================
 
-void test_default_constructed() {
+TEST_CASE("test_default_constructed") {
     MPMCEventLoop<> loop;
     expect(!loop.is_running(), "not running before start");
     expect(loop.empty(), "empty before start");
@@ -49,7 +50,7 @@ void test_default_constructed() {
     std::cout << "PASS: test_default_constructed" << std::endl;
 }
 
-void test_start_stop() {
+TEST_CASE("test_start_stop") {
     MPMCEventLoop<> loop;
     loop.start();
     expect(loop.is_running(), "running after start");
@@ -58,7 +59,7 @@ void test_start_stop() {
     std::cout << "PASS: test_start_stop" << std::endl;
 }
 
-void test_start_twice() {
+TEST_CASE("test_start_twice") {
     MPMCEventLoop<> loop;
     loop.start();
     loop.start();   // should be no-op
@@ -67,7 +68,7 @@ void test_start_twice() {
     std::cout << "PASS: test_start_twice" << std::endl;
 }
 
-void test_stop_twice() {
+TEST_CASE("test_stop_twice") {
     MPMCEventLoop<> loop;
     loop.start();
     loop.stop();
@@ -76,14 +77,14 @@ void test_stop_twice() {
     std::cout << "PASS: test_stop_twice" << std::endl;
 }
 
-void test_stop_without_start() {
+TEST_CASE("test_stop_without_start") {
     MPMCEventLoop<> loop;
     loop.stop();    // should not crash
     expect(!loop.is_running(), "not running");
     std::cout << "PASS: test_stop_without_start" << std::endl;
 }
 
-void test_raii_stop() {
+TEST_CASE("test_raii_stop") {
     // stop() is called by ~EventLoop — verify no crash
     {
         MPMCEventLoop<> loop;
@@ -97,7 +98,7 @@ void test_raii_stop() {
 // Task execution
 // ============================================================================
 
-void test_single_post() {
+TEST_CASE("test_single_post") {
     MPMCEventLoop<> loop;
     std::atomic<int> val{0};
 
@@ -110,7 +111,7 @@ void test_single_post() {
     std::cout << "PASS: test_single_post" << std::endl;
 }
 
-void test_post_order() {
+TEST_CASE("test_post_order") {
     MPMCEventLoop<> loop;
     std::vector<int> results;
 
@@ -130,7 +131,7 @@ void test_post_order() {
     std::cout << "PASS: test_post_order" << std::endl;
 }
 
-void test_post_many() {
+TEST_CASE("test_post_many") {
     constexpr int N = 10000;
     MPMCEventLoop<> loop;
     std::atomic<int64_t> sum{0};
@@ -150,7 +151,7 @@ void test_post_many() {
 // post_batch
 // ============================================================================
 
-void test_post_batch() {
+TEST_CASE("test_post_batch") {
     MPMCEventLoop<> loop;
     std::atomic<int> count{0};
 
@@ -167,7 +168,7 @@ void test_post_batch() {
     std::cout << "PASS: test_post_batch" << std::endl;
 }
 
-void test_post_batch_empty() {
+TEST_CASE("test_post_batch_empty") {
     MPMCEventLoop<> loop;
     std::vector<std::function<void()>> empty;
 
@@ -182,7 +183,7 @@ void test_post_batch_empty() {
 // Bounded queue
 // ============================================================================
 
-void test_bounded_full() {
+TEST_CASE("test_bounded_full") {
     // Capacity = 4, so at most 4 tasks queued at once.
     // Use try_post without starting the loop to test bounded capacity.
     BoundedEventLoop<std::function<void()>, 4> loop;
@@ -203,7 +204,7 @@ void test_bounded_full() {
     std::cout << "PASS: test_bounded_full" << std::endl;
 }
 
-void test_bounded_batch_partial() {
+TEST_CASE("test_bounded_batch_partial") {
     // Batch more than capacity — verify partial acceptance
     BoundedEventLoop<std::function<void()>, 4> loop;
 
@@ -224,7 +225,7 @@ void test_bounded_batch_partial() {
 // SPSC variant
 // ============================================================================
 
-void test_spsc_basic() {
+TEST_CASE("test_spsc_basic") {
     SPSCEventLoop<std::function<void()>, 16> loop;
     std::atomic<int> val{0};
 
@@ -244,7 +245,7 @@ void test_spsc_basic() {
 // Concurrent producers
 // ============================================================================
 
-void test_concurrent_producers() {
+TEST_CASE("test_concurrent_producers") {
     constexpr int kProducers  = 4;
     constexpr int kTasksEach  = 5000;
     constexpr int kTotalTasks = kProducers * kTasksEach;
@@ -283,7 +284,7 @@ void test_concurrent_producers() {
 // Wakeup race regression test
 // ============================================================================
 
-void test_wakeup_race() {
+TEST_CASE("test_wakeup_race") {
     // This test targets the lost-wakeup race between "drain empty" and
     // "atomic::wait".  If the consumer reads _wake after the producer has
     // notified but before wait() blocks, it can sleep forever on the old
@@ -331,7 +332,7 @@ void test_wakeup_race() {
 // Move-only callables (requires explicit Task type)
 // ============================================================================
 
-void test_move_only_task() {
+TEST_CASE("test_move_only_task") {
     using MoveTask = std::packaged_task<void()>;
     EventLoop<MoveTask, SegmentedMPMCQueue<MoveTask, 128>> loop;
 
@@ -356,7 +357,7 @@ void test_move_only_task() {
 // Memory: tasks destroyed on stop (not leaked)
 // ============================================================================
 
-void test_destroy_on_stop() {
+TEST_CASE("test_destroy_on_stop") {
     std::atomic<int> destroyed{0};
     std::atomic<int> executed{0};
 
@@ -384,50 +385,3 @@ void test_destroy_on_stop() {
 // main
 // ============================================================================
 
-int main() {
-    std::cout << "=== EventLoop Tests ===" << std::endl;
-    try {
-        // Lifecycle
-        test_default_constructed();
-        test_start_stop();
-        test_start_twice();
-        test_stop_twice();
-        test_stop_without_start();
-        test_raii_stop();
-
-        // Task execution
-        test_single_post();
-        test_post_order();
-        test_post_many();
-
-        // post_batch
-        test_post_batch();
-        test_post_batch_empty();
-
-        // Bounded
-        test_bounded_full();
-        test_bounded_batch_partial();
-
-        // SPSC variant
-        test_spsc_basic();
-
-        // Concurrent
-        test_concurrent_producers();
-
-        // Wakeup race (regression)
-        test_wakeup_race();
-
-        // Move-only
-        test_move_only_task();
-
-        // Cleanup
-        test_destroy_on_stop();
-
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

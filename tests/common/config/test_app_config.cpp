@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "AppConfig.h"
 #include "utils/EnvUtil.hpp"
 
@@ -36,7 +37,7 @@ void clear_runtime_env() {
     unset_env("BESQ_LANG");
 }
 
-void test_default_values() {
+TEST_CASE("test_default_values") {
     // Unset our test env vars to ensure defaults apply
     clear_runtime_env();
     ConfigFileGuard guard(AppConfig::config_file_path());   // no config.json
@@ -56,7 +57,7 @@ void test_default_values() {
     std::cout << "  PASS: test_default_values" << std::endl;
 }
 
-void test_env_memory_mb() {
+TEST_CASE("test_env_memory_mb") {
     set_env("BESQ_MEMORY_MB", "4096");
 
     auto cfg = AppConfig::load();
@@ -69,7 +70,7 @@ void test_env_memory_mb() {
     std::cout << "  PASS: test_env_memory_mb" << std::endl;
 }
 
-void test_env_verbose() {
+TEST_CASE("test_env_verbose") {
     set_env("BESQ_VERBOSE", "true");
 
     auto cfg = AppConfig::load();
@@ -81,7 +82,7 @@ void test_env_verbose() {
     std::cout << "  PASS: test_env_verbose" << std::endl;
 }
 
-void test_env_data_dir() {
+TEST_CASE("test_env_data_dir") {
     set_env("BESQ_DATA_DIR", "/custom/data");
 
     auto cfg = AppConfig::load();
@@ -93,7 +94,7 @@ void test_env_data_dir() {
     std::cout << "  PASS: test_env_data_dir" << std::endl;
 }
 
-void test_config_file_layer() {
+TEST_CASE("test_config_file_layer") {
     // config.json seeds the runtime-writable fields when env vars are unset
     // (priority: env > config.json > default).
     clear_runtime_env();
@@ -110,7 +111,7 @@ void test_config_file_layer() {
     std::cout << "  PASS: test_config_file_layer" << std::endl;
 }
 
-void test_env_overrides_config() {
+TEST_CASE("test_env_overrides_config") {
     clear_runtime_env();
     ConfigFileGuard guard(AppConfig::config_file_path());
     write_config(R"({"lang":"zh_CN","log_level":3,"log_console":false,"log_console_level":0})");
@@ -128,7 +129,7 @@ void test_env_overrides_config() {
     std::cout << "  PASS: test_env_overrides_config" << std::endl;
 }
 
-void test_corrupt_config_defaults() {
+TEST_CASE("test_corrupt_config_defaults") {
     // A malformed config.json must not crash load() — it falls back to the
     // defaults (LOG_WARN inside AppConfig, no throw).
     clear_runtime_env();
@@ -142,7 +143,7 @@ void test_corrupt_config_defaults() {
     std::cout << "  PASS: test_corrupt_config_defaults" << std::endl;
 }
 
-void test_config_out_of_range_level() {
+TEST_CASE("test_config_out_of_range_level") {
     // Hand-edited config files may carry out-of-range levels; they must be
     // clamped (0..3) instead of overflowing LogLevel.
     clear_runtime_env();
@@ -156,7 +157,7 @@ void test_config_out_of_range_level() {
     std::cout << "  PASS: test_config_out_of_range_level" << std::endl;
 }
 
-void test_save_roundtrip() {
+TEST_CASE("test_save_roundtrip") {
     // save_config_file → the file exists and load_config_file round-trips it.
     ConfigFileGuard guard(AppConfig::config_file_path());
     Json obj = Json::object();
@@ -178,7 +179,7 @@ void test_save_roundtrip() {
     std::cout << "  PASS: test_save_roundtrip" << std::endl;
 }
 
-void test_save_failure() {
+TEST_CASE("test_save_failure") {
     // Unwritable path (parent dir does not exist) → false, no throw.
     expect(!AppConfig::save_config_file(Json::object(), "no_such_dir_xyz/config.json"),
            "unwritable path returns false");
@@ -192,24 +193,3 @@ void test_save_failure() {
 
 } // anonymous namespace
 
-int main() {
-    std::cout << "=== AppConfig Tests ===" << std::endl;
-
-    try {
-        test_default_values();
-        test_env_memory_mb();
-        test_env_verbose();
-        test_env_data_dir();
-        test_config_file_layer();
-        test_env_overrides_config();
-        test_corrupt_config_defaults();
-        test_config_out_of_range_level();
-        test_save_roundtrip();
-        test_save_failure();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/components/Serializer.h"
 #include "domain/business/schemas/EnchInfoSchema.h"
 #include "domain/orchestration/components/EnchSerializer.h"
@@ -6,7 +7,7 @@
 // ─── test_serialize_ench ───────────────────────────────────────────────
 // Round-trip an Ench through Json: serialize, deserialize, verify fields.
 
-void test_serialize_ench() {
+TEST_CASE("test_serialize_ench") {
     Ench ench(NSID("minecraft:sharpness"), "Sharpness", 5);
 
     Json j;
@@ -26,7 +27,7 @@ void test_serialize_ench() {
 // ─── test_serialize_enchinfo ───────────────────────────────────────────
 // Round-trip EnchInfo with exclusive_set and supported_items.
 
-void test_serialize_enchinfo() {
+TEST_CASE("test_serialize_enchinfo") {
     std::unordered_set<NSID> exclusive_set = {
         NSID("minecraft:smite"),
         NSID("minecraft:bane_of_arthropods")
@@ -76,7 +77,7 @@ void test_serialize_enchinfo() {
 // 'supported_platform'). from_json reads both — legacy profiles with the old
 // key still load.
 
-void test_enchinfo_platform_key() {
+TEST_CASE("test_enchinfo_platform_key") {
     EnchInfo info{NSID("minecraft:sharpness"), "Sharpness", MCE::Bedrock,
                   5, 5, 1, false, {}, {}};
     Json j;
@@ -100,7 +101,7 @@ void test_enchinfo_platform_key() {
 // through EnchInfo JSON. Non-zero values are serialized; absent / zero
 // values default to 0 and are NOT emitted.
 
-void test_serialize_enchinfo_min_cost() {
+TEST_CASE("test_serialize_enchinfo_min_cost") {
     std::unordered_set<NSID> exclusive_set = {NSID("minecraft:smite")};
     std::unordered_set<NSID> applicable = {NSID("#minecraft:sword")};
     EnchInfo info{
@@ -179,7 +180,7 @@ void test_serialize_enchinfo_min_cost() {
 // ─── test_serialize_enchset ────────────────────────────────────────────
 // Round-trip an EnchSet with 3 entries.
 
-void test_serialize_enchset() {
+TEST_CASE("test_serialize_enchset") {
     EnchSet set;
     set.emplace(NSID("minecraft:sharpness"), "Sharpness", 5);
     set.emplace(NSID("minecraft:unbreaking"), "Unbreaking", 3);
@@ -205,7 +206,7 @@ void test_serialize_enchset() {
 // ─── test_serialize_equipment ──────────────────────────────────────────
 // Round-trip an Equipment instance.
 
-void test_serialize_equipment() {
+TEST_CASE("test_serialize_equipment") {
     Equipment eq{
         NSID("minecraft:diamond_sword"), "Diamond Sword",
         EquipmentTag::sword(), 1561
@@ -232,7 +233,7 @@ void test_serialize_equipment() {
 // ─── test_serialize_equipment_tag ──────────────────────────────────────
 // Round-trip an EquipmentTag.
 
-void test_serialize_equipment_tag() {
+TEST_CASE("test_serialize_equipment_tag") {
     EquipmentTag tag{NSID("#minecraft:sword"), "sword"};
 
     Json j;
@@ -252,7 +253,7 @@ void test_serialize_equipment_tag() {
 // ─── test_serialize_item ───────────────────────────────────────────────
 // Round-trip an Item with enchantments.
 
-void test_serialize_item() {
+TEST_CASE("test_serialize_item") {
     EnchSet enchs;
     enchs.emplace(NSID("minecraft:sharpness"), "Sharpness", 5);
     enchs.emplace(NSID("minecraft:unbreaking"), "Unbreaking", 3);
@@ -283,7 +284,7 @@ void test_serialize_item() {
 // ─── test_serialize_solution_step ──────────────────────────────────────
 // Round-trip a Solution::EnchStep with costs.
 
-void test_serialize_solution_step() {
+TEST_CASE("test_serialize_solution_step") {
     EnchSet step_enchs;
     step_enchs.emplace(NSID("minecraft:sharpness"), "Sharpness", 3);
     Item item_a(NSID("minecraft:diamond_sword"), step_enchs, 1, 500);
@@ -315,7 +316,7 @@ void test_serialize_solution_step() {
 // ─── test_serialize_solution ───────────────────────────────────────────
 // Round-trip a full Solution with steps and metadata.
 
-void test_serialize_solution() {
+TEST_CASE("test_serialize_solution") {
     // Original enchantments applied
     EnchSet original;
     original.emplace(NSID("minecraft:sharpness"), "Sharpness", 3);
@@ -397,7 +398,7 @@ void test_serialize_solution() {
 // ─── test_serialize_equipment_registry ─────────────────────────────────
 // Round-trip EquipmentRegistry with 2 entries.
 
-void test_serialize_equipment_registry() {
+TEST_CASE("test_serialize_equipment_registry") {
     std::vector<Equipment> eqs = {
         Equipment{
             NSID("minecraft:diamond_sword"), "Diamond Sword",
@@ -429,7 +430,7 @@ void test_serialize_equipment_registry() {
 // ─── test_serialize_tag_registry ─────────────────────────────
 // Round-trip TagRegistry with 2 tags.
 
-void test_serialize_tag_registry() {
+TEST_CASE("test_serialize_tag_registry") {
     std::vector<EquipmentTag> tags = {
         {NSID("#minecraft:sword"), "sword"},
         {NSID("#minecraft:axe"), "axe"}
@@ -457,7 +458,7 @@ void test_serialize_tag_registry() {
 // ─── test_serialize_ench_registry ──────────────────────────────────────
 // Round-trip EnchantmentRegistry with 2 entries including exclusive_set.
 
-void test_serialize_ench_registry() {
+TEST_CASE("test_serialize_ench_registry") {
     std::unordered_set<NSID> excl_sharp = {NSID("minecraft:smite")};
     std::unordered_set<NSID> excl_smite = {NSID("minecraft:sharpness")};
     std::unordered_set<NSID> applicable = {NSID("#minecraft:sword")};
@@ -493,7 +494,7 @@ void test_serialize_ench_registry() {
 // ─── test_serializer_mce_helpers ───────────────────────────────────────
 // Test mce_to_string and string_to_mce round-trip for all MCE values.
 
-void test_serializer_mce_helpers() {
+TEST_CASE("test_serializer_mce_helpers") {
     struct TestCase { MCE value; std::string_view expected; };
     TestCase cases[] = {
         {MCE::None,    "none"},
@@ -528,7 +529,7 @@ void test_serializer_mce_helpers() {
 // ─── test_serializer_to_from_string ────────────────────────────────────
 // Round-trip Json through Serializer::to_string and ::from_string.
 
-void test_serializer_to_from_string() {
+TEST_CASE("test_serializer_to_from_string") {
     Json::Object obj;
     obj["name"]  = Json(Json::String("test"));
     obj["value"] = Json(Json::Number(42));
@@ -554,7 +555,7 @@ void test_serializer_to_from_string() {
 // ─── test_to_mc_official_strings ──────────────────────────────────────────
 // Serialize EnchInfo vector to MC official format strings and verify keys/content.
 
-void test_to_mc_official_strings() {
+TEST_CASE("test_to_mc_official_strings") {
     // Create TagRegistry with sword tag
     TagRegistry tag_reg;
     tag_reg.insert({NSID("#minecraft:sword"), "sword"});
@@ -616,7 +617,7 @@ void test_to_mc_official_strings() {
 // ─── test_profile_dependencies_roundtrip ───────────────────────────────
 // Round-trip ProfileMetadata.dependencies through Profile JSON.
 
-void test_profile_dependencies_roundtrip() {
+TEST_CASE("test_profile_dependencies_roundtrip") {
     // B-T13: profile dependencies are plain std::string keys (not NSID).
     Profile p("test:pack");
     p.set_dependencies({"builtin:vanilla", "enchantencore"});
@@ -635,7 +636,7 @@ void test_profile_dependencies_roundtrip() {
 // the identity key when empty, and is only serialized when set AND distinct
 // from the key (mirroring the key → no JSON noise).
 
-void test_profile_display_name() {
+TEST_CASE("test_profile_display_name") {
     // Fallback: empty display_name → display_name() returns the identity key.
     Profile p("my:pack");
     expect_eq(p.display_name(), std::string("my:pack"),
@@ -681,33 +682,3 @@ void test_profile_display_name() {
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────
-
-int main() {
-    try {
-        test_serialize_ench();
-        test_serialize_enchinfo();
-        test_enchinfo_platform_key();
-        test_serialize_enchinfo_min_cost();
-        test_serialize_enchset();
-        test_serialize_equipment();
-        test_serialize_equipment_tag();
-        test_serialize_item();
-        test_serialize_solution_step();
-        test_serialize_solution();
-        test_serialize_equipment_registry();
-        test_serialize_tag_registry();
-        test_serialize_ench_registry();
-        test_serializer_mce_helpers();
-        test_serializer_to_from_string();
-        test_to_mc_official_strings();
-        test_profile_dependencies_roundtrip();
-        test_profile_display_name();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

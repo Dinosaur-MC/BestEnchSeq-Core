@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/components/RegistryHelper.h"
 
 namespace {
@@ -18,7 +19,7 @@ Profile make_p2(const std::string& name, std::initializer_list<NSID> ids) {
 
 } // namespace
 
-void test_registry_helper_set_ops() {
+TEST_CASE("test_registry_helper_set_ops") {
     auto a = make_p2("a", {NSID("minecraft:sharpness"), NSID("minecraft:knockback")});
     auto b = make_p2("b", {NSID("minecraft:knockback"), NSID("minecraft:smite")});
 
@@ -40,7 +41,7 @@ void test_registry_helper_set_ops() {
     TEST_PASS("registry_helper set ops");
 }
 
-void test_registry_helper_diff() {
+TEST_CASE("test_registry_helper_diff") {
     auto a = make_p2("a", {NSID("minecraft:sharpness"), NSID("minecraft:knockback")});
     auto b = make_p2("b", {NSID("minecraft:knockback"), NSID("minecraft:smite")});
     auto d = RegistryHelper::diff(a, b);
@@ -57,7 +58,7 @@ void test_registry_helper_diff() {
     TEST_PASS("registry_helper diff");
 }
 
-void test_registry_helper_operators() {
+TEST_CASE("test_registry_helper_operators") {
     auto a = make_p2("a", {NSID("minecraft:sharpness")});
     auto b = make_p2("b", {NSID("minecraft:smite")});
 
@@ -76,7 +77,7 @@ void test_registry_helper_operators() {
     TEST_PASS("registry_helper operators");
 }
 
-void test_registry_helper_builder() {
+TEST_CASE("test_registry_helper_builder") {
     auto a = make_p2("a", {NSID("minecraft:sharpness")});
     auto b = make_p2("b", {NSID("minecraft:smite")});
 
@@ -94,7 +95,7 @@ void test_registry_helper_builder() {
     TEST_PASS("registry_helper builder chain");
 }
 
-void test_registry_helper_merge_override() {
+TEST_CASE("test_registry_helper_merge_override") {
     auto a = make_p("a", 5);
     auto b = make_p("b", 6);
     auto m = RegistryHelper::merge("m", a, b);
@@ -102,7 +103,7 @@ void test_registry_helper_merge_override() {
     TEST_PASS("test_registry_helper_merge_override");
 }
 
-void test_registry_helper_validate() {
+TEST_CASE("test_registry_helper_validate") {
     Profile p("v");
     p.add_enchantment({NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false, {}, {NSID("#minecraft:swords")}});
     // smite exclusive-refs sharpness (exists) → valid
@@ -115,29 +116,10 @@ void test_registry_helper_validate() {
     TEST_PASS("test_registry_helper_validate");
 }
 
-void test_registry_helper_validate_max_level() {
+TEST_CASE("test_registry_helper_validate_max_level") {
     // max_level < 1 is invalid regardless of exclusive refs
     Profile p("ml");
     p.add_enchantment({NSID("minecraft:y"), "Y", MCE::All, 0, 0, 1, false, {}, {NSID("#minecraft:swords")}});
     expect(!RegistryHelper::validate(p), "max_level < 1 fails validation");
     TEST_PASS("test_registry_helper_validate_max_level");
-}
-
-int main() {
-    try {
-        test_registry_helper_merge_override();
-        test_registry_helper_validate();
-        test_registry_helper_validate_max_level();
-        test_registry_helper_set_ops();
-        test_registry_helper_diff();
-        test_registry_helper_operators();
-        test_registry_helper_builder();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
 }

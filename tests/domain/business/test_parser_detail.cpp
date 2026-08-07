@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 
 #include "domain/business/parsers/ParserShared.h"
 #include "domain/business/components/FormatDetector.h"
@@ -14,19 +15,19 @@
 
 // ─── make_id ───────────────────────────────────────────────────────────────
 
-void test_make_id_bare() {
+TEST_CASE("test_make_id_bare") {
     NSID id = business::parser_detail::make_id("sharpness");
     expect(id == NSID("minecraft:sharpness"), "make_id bare -> minecraft:sharpness");
     std::cout << "PASS: test_make_id_bare" << std::endl;
 }
 
-void test_make_id_namespaced() {
+TEST_CASE("test_make_id_namespaced") {
     NSID id = business::parser_detail::make_id("mod:custom");
     expect(id == NSID("mod:custom"), "make_id namespaced -> mod:custom");
     std::cout << "PASS: test_make_id_namespaced" << std::endl;
 }
 
-void test_make_id_custom_ns() {
+TEST_CASE("test_make_id_custom_ns") {
     NSID id = business::parser_detail::make_id("excavate", "thermalfoundation");
     expect(id == NSID("thermalfoundation:excavate"),
            "make_id custom ns -> thermalfoundation:excavate");
@@ -35,7 +36,7 @@ void test_make_id_custom_ns() {
 
 // ─── derive_display_name ───────────────────────────────────────────────────
 
-void test_derive_display_name() {
+TEST_CASE("test_derive_display_name") {
     std::string d1 = business::parser_detail::derive_display_name("sharpness");
     expect_eq(d1, std::string("Sharpness"), "derive_display_name sharpness -> Sharpness");
 
@@ -51,7 +52,7 @@ void test_derive_display_name() {
 
 // ─── get_category_suffix ───────────────────────────────────────────────────
 
-void test_get_category_suffix() {
+TEST_CASE("test_get_category_suffix") {
     std::string s1 = business::parser_detail::get_category_suffix("diamond_sword");
     expect_eq(s1, std::string("sword"), "get_category_suffix diamond_sword -> sword");
 
@@ -72,31 +73,31 @@ void test_get_category_suffix() {
 // Section B — FormatDetector::detect()
 // ============================================================================
 
-void test_detect_json_ext() {
+TEST_CASE("test_detect_json_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/vanilla.json"));
     expect_eq(fmt, DataFormat::NativeJson, "detect .json -> NativeJson");
     std::cout << "PASS: test_detect_json_ext" << std::endl;
 }
 
-void test_detect_csv_ext() {
+TEST_CASE("test_detect_csv_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/enchants.csv"));
     expect_eq(fmt, DataFormat::NativeCsv, "detect .csv -> NativeCsv");
     std::cout << "PASS: test_detect_csv_ext" << std::endl;
 }
 
-void test_detect_unknown_ext() {
+TEST_CASE("test_detect_unknown_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/unknown.txt"));
     expect_eq(fmt, DataFormat::Unknown, "detect .txt -> Unknown");
     std::cout << "PASS: test_detect_unknown_ext" << std::endl;
 }
 
-void test_detect_no_ext() {
+TEST_CASE("test_detect_no_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/noext"));
     expect_eq(fmt, DataFormat::Unknown, "detect no extension -> Unknown");
     std::cout << "PASS: test_detect_no_ext" << std::endl;
 }
 
-void test_detect_mc_dir() {
+TEST_CASE("test_detect_mc_dir") {
     // Directory structure detection (the path likely doesn't exist in test
     // context, so this should just verify no crash and return Unknown).
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/mc_official"));
@@ -109,7 +110,7 @@ void test_detect_mc_dir() {
 // Section C — FormatDetector::parse() carries datapack item_tags (#24)
 // ============================================================================
 
-void test_format_detector_mc_official_carries_item_tags() {
+TEST_CASE("test_format_detector_mc_official_carries_item_tags") {
     // Build a minimal datapack in a temp dir (committed fixtures under
     // data/tests/datapack/ are bare enchantment JSONs, not full pack dirs).
     auto dir = std::filesystem::temp_directory_path() / "fmt_det_item_tags";
@@ -147,31 +148,3 @@ void test_format_detector_mc_official_carries_item_tags() {
 // ============================================================================
 // Main
 // ============================================================================
-
-int main() {
-    try {
-        test_make_id_bare();
-        test_make_id_namespaced();
-        test_make_id_custom_ns();
-
-        test_derive_display_name();
-
-        test_get_category_suffix();
-
-        test_detect_json_ext();
-        test_detect_csv_ext();
-        test_detect_unknown_ext();
-        test_detect_no_ext();
-        test_detect_mc_dir();
-
-        // Section C — FormatDetector::parse() carries datapack item_tags
-        test_format_detector_mc_official_carries_item_tags();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

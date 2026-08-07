@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "utils/queue/SPMCQueue.hpp"
 #include <atomic>
 #include <chrono>
@@ -8,7 +9,7 @@
 
 // ─── Single-threaded basics ───
 
-void test_push_read() {
+TEST_CASE("test_push_read") {
     SPMCQueue<int, 4> q;
     expect(q.count() == 0, "empty queue count = 0");
     q.try_push(42);
@@ -22,7 +23,7 @@ void test_push_read() {
     std::cout << "PASS: test_push_read" << std::endl;
 }
 
-void test_overflow_drops_oldest() {
+TEST_CASE("test_overflow_drops_oldest") {
     SPMCQueue<int, 4> q;
     q.try_push(1); q.try_push(2); q.try_push(3); q.try_push(4);
     expect(q.count() == 4, "4 pushes = 4 count");
@@ -36,7 +37,7 @@ void test_overflow_drops_oldest() {
     std::cout << "PASS: test_overflow_drops_oldest" << std::endl;
 }
 
-void test_read_all_caught_up() {
+TEST_CASE("test_read_all_caught_up") {
     SPMCQueue<int, 8> q;
     q.try_push(10); q.try_push(20); q.try_push(30);
     auto cursor = q.read_cursor();
@@ -48,7 +49,7 @@ void test_read_all_caught_up() {
     std::cout << "PASS: test_read_all_caught_up" << std::endl;
 }
 
-void test_multiple_cursors() {
+TEST_CASE("test_multiple_cursors") {
     SPMCQueue<int, 16> q;
     for (int i = 0; i < 10; i++) q.try_push(i * 10);
 
@@ -64,7 +65,7 @@ void test_multiple_cursors() {
 
 // ─── Multi-threaded tests ───
 
-void test_producer_then_consumer() {
+TEST_CASE("test_producer_then_consumer") {
     constexpr int N = 100000;
     SPMCQueue<int, 64> q;
 
@@ -88,7 +89,7 @@ void test_producer_then_consumer() {
     std::cout << "PASS: test_producer_then_consumer (" << N << " items)" << std::endl;
 }
 
-void test_spmc_two_consumers() {
+TEST_CASE("test_spmc_two_consumers") {
     constexpr int N = 50000;
     SPMCQueue<int, 256> q;
 
@@ -137,7 +138,7 @@ void test_spmc_two_consumers() {
               << " total=" << total << ")" << std::endl;
 }
 
-void test_overflow_with_producer_lead() {
+TEST_CASE("test_overflow_with_producer_lead") {
     // Producer runs far ahead, consumer lags — forces overwrite.
     // Check observable behavior: push more than capacity, then verify
     // the consumer can still read valid items (approximately the most recent N).
@@ -171,7 +172,7 @@ void test_overflow_with_producer_lead() {
               << std::endl;
 }
 
-void test_concurrent_push_pop() {
+TEST_CASE("test_concurrent_push_pop") {
     constexpr int N = 100000;
     SPMCQueue<int, 64> q;
 
@@ -224,23 +225,3 @@ void test_concurrent_push_pop() {
               << consumed.load() << "/" << N << " items)" << std::endl;
 }
 
-int main() {
-    std::cout << "=== Single-threaded ===" << std::endl;
-    try {
-        test_push_read();
-        test_overflow_drops_oldest();
-        test_read_all_caught_up();
-        test_multiple_cursors();
-
-        std::cout << "=== Multi-threaded ===" << std::endl;
-        test_producer_then_consumer();
-        test_spmc_two_consumers();
-        test_overflow_with_producer_lead();
-        test_concurrent_push_pop();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
-}

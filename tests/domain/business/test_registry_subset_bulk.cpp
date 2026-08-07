@@ -1,4 +1,5 @@
-#include "framework/test_utils.h"
+#define BESQ_TEST_MAIN
+#include "framework/test_framework.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"
 #include "domain/business/types/EquipmentTag.h"
@@ -27,7 +28,7 @@ bool supports_platform(const EnchInfo& e, MCE platform) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── A1: Filter by max_level ------------------------------------------------
-void test_subset_by_max_level() {
+TEST_CASE("test_subset_by_max_level") {
     std::vector<EnchInfo> infos;
     infos.emplace_back(NSID("minecraft:ench_1"), "Ench 1", MCE::All, 1, 1, 1, false,
                        std::unordered_set<NSID>{}, std::unordered_set<NSID>{});
@@ -52,7 +53,7 @@ void test_subset_by_max_level() {
 }
 
 // ── A2: Filter by platform -------------------------------------------------
-void test_subset_by_platform() {
+TEST_CASE("test_subset_by_platform") {
     std::vector<EnchInfo> infos;
     // Java-only
     infos.emplace_back(NSID("minecraft:ench_java"), "Java", MCE::Java, 5, 5, 1, false,
@@ -79,7 +80,7 @@ void test_subset_by_platform() {
 }
 
 // ── A3: Filter by applicable equipment -------------------------------------
-void test_subset_by_applicable() {
+TEST_CASE("test_subset_by_applicable") {
     std::vector<EnchInfo> infos;
     // Sharpness applies to swords
     infos.emplace_back(NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
@@ -108,7 +109,7 @@ void test_subset_by_applicable() {
 }
 
 // ── A4: Empty result -------------------------------------------------------
-void test_subset_empty_result() {
+TEST_CASE("test_subset_empty_result") {
     std::vector<EnchInfo> infos;
     infos.emplace_back(NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
                        std::unordered_set<NSID>{}, std::unordered_set<NSID>{});
@@ -127,7 +128,7 @@ void test_subset_empty_result() {
 }
 
 // ── A5: All match ----------------------------------------------------------
-void test_subset_all_match() {
+TEST_CASE("test_subset_all_match") {
     std::vector<EnchInfo> infos;
     infos.emplace_back(NSID("minecraft:sharpness"), "Sharpness", MCE::All, 5, 5, 1, false,
                        std::unordered_set<NSID>{}, std::unordered_set<NSID>{});
@@ -150,7 +151,7 @@ void test_subset_all_match() {
 }
 
 // ── A6: Subset on EquipmentRegistry by category ----------------------------
-void test_subset_equipment() {
+TEST_CASE("test_subset_equipment") {
     std::vector<Equipment> eqs;
     eqs.emplace_back(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword",
                                 EquipmentTag::sword(), 1561});
@@ -191,7 +192,7 @@ void test_subset_equipment() {
 }
 
 // ── A7: Chained subsets ----------------------------------------------------
-void test_subset_chained() {
+TEST_CASE("test_subset_chained") {
     std::vector<EnchInfo> infos;
     // max_level=5, Java
     infos.emplace_back(NSID("minecraft:ench_a"), "Ench A", MCE::Java, 5, 5, 1, false,
@@ -237,7 +238,7 @@ void test_subset_chained() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── B8: Bulk insert 200 ----------------------------------------------------
-void test_bulk_insert_200() {
+TEST_CASE("test_bulk_insert_200") {
     EnchantmentRegistry reg;
 
     for (int i = 0; i < 200; ++i) {
@@ -272,7 +273,7 @@ void test_bulk_insert_200() {
 }
 
 // ── B9: Bulk insert 100, erase 30, verify ----------------------------------
-void test_bulk_insert_erase_mixed() {
+TEST_CASE("test_bulk_insert_erase_mixed") {
     EnchantmentRegistry reg;
 
     // Insert 100 items
@@ -314,7 +315,7 @@ void test_bulk_insert_erase_mixed() {
 }
 
 // ── B10: Bulk insert 100, update 20, verify --------------------------------
-void test_bulk_update() {
+TEST_CASE("test_bulk_update") {
     EnchantmentRegistry reg;
 
     // Insert 100 items
@@ -363,29 +364,3 @@ void test_bulk_update() {
 // =============================================================================
 // main
 // =============================================================================
-
-int main() {
-    std::cout << "=== Registry Subset & Bulk Tests ===" << std::endl;
-    try {
-        // Section A — Subset / Filter
-        test_subset_by_max_level();
-        test_subset_by_platform();
-        test_subset_by_applicable();
-        test_subset_empty_result();
-        test_subset_all_match();
-        test_subset_equipment();
-        test_subset_chained();
-
-        // Section B — Large-scale Bulk Operations
-        test_bulk_insert_200();
-        test_bulk_insert_erase_mixed();
-        test_bulk_update();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-        return 1;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-        return 1;
-    }
-    return print_summary();
-}

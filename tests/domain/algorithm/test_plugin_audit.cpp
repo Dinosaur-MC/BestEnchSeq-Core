@@ -10,9 +10,10 @@
 ///   Linux    — ELF scanner (audit_elf)
 ///   Cross    — empty / truncated / misnamed input
 
+#define BESQ_TEST_MAIN
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/plugin/PluginAudit.h"
-#include "framework/test_utils.h"
+#include "framework/test_framework.h"
 
 #include <cstdio>
 #include <cstring>
@@ -212,7 +213,7 @@ std::vector<uint8_t> make_pe64_with_section(uint32_t characteristics) {
 
 // ── Boundary / edge cases (cross-platform) ─────────────────────
 
-void test_audit_empty_file() {
+TEST_CASE("test_audit_empty_file") {
     auto report = audit_plugin_binary("");
     expect(!report.passed, "audit: empty path returns passed=false");
 
@@ -229,7 +230,7 @@ void test_audit_empty_file() {
     std::cout << "PASS: test_audit_empty_file" << std::endl;
 }
 
-void test_audit_truncated_binary() {
+TEST_CASE("test_audit_truncated_binary") {
     // Just "MZ" (2 bytes) — too small for any parser
     const std::vector<uint8_t> tiny = {'M', 'Z'};
     TempFile tf(tiny);
@@ -257,7 +258,7 @@ void test_audit_truncated_binary() {
 
 #if defined(_WIN32)
 
-void test_audit_valid_pe() {
+TEST_CASE("test_audit_valid_pe") {
     auto pe = make_pe64_base();
     TempFile tf(pe);
     if (!tf.valid()) {
@@ -272,7 +273,7 @@ void test_audit_valid_pe() {
     std::cout << "PASS: test_audit_valid_pe" << std::endl;
 }
 
-void test_audit_pe_wx_section() {
+TEST_CASE("test_audit_pe_wx_section") {
     // Section with both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE
     constexpr uint32_t WX = 0xE0000020; // WRITE | EXECUTE | READ
     auto pe = make_pe64_with_section(WX);
@@ -287,7 +288,7 @@ void test_audit_pe_wx_section() {
     std::cout << "PASS: test_audit_pe_wx_section" << std::endl;
 }
 
-void test_audit_pe_32bit_rejected() {
+TEST_CASE("test_audit_pe_32bit_rejected") {
     auto pe = make_pe64_base();
     // Change Optional Header Magic from PE32+ (0x020B) to PE32 (0x010B)
     // at offset 152 (128 + 4 + 20 = start of optional header).
@@ -305,7 +306,7 @@ void test_audit_pe_32bit_rejected() {
 
 #elif defined(__linux__)
 
-void test_audit_valid_elf() {
+TEST_CASE("test_audit_valid_elf") {
     auto elf = make_elf64_base(); // section-less: structurally valid, opaque
     TempFile tf(elf);
     if (!tf.valid()) {
@@ -321,7 +322,7 @@ void test_audit_valid_elf() {
     std::cout << "PASS: test_audit_valid_elf" << std::endl;
 }
 
-void test_audit_elf_wx_segment() {
+TEST_CASE("test_audit_elf_wx_segment") {
     // PF_W | PF_X = 2 | 1 = 3  (ELF: PF_X=1, PF_W=2, PF_R=4)
     constexpr uint32_t PF_W = 2, PF_X = 1;
     auto elf = make_elf64_with_phdr(PF_W | PF_X);
@@ -336,7 +337,7 @@ void test_audit_elf_wx_segment() {
     std::cout << "PASS: test_audit_elf_wx_segment" << std::endl;
 }
 
-void test_audit_elf_32bit_rejected() {
+TEST_CASE("test_audit_elf_32bit_rejected") {
     auto elf = make_elf64_base();
     // Change EI_CLASS from 2 (64-bit) to 1 (32-bit)
     elf[4] = 1;
@@ -350,7 +351,7 @@ void test_audit_elf_32bit_rejected() {
     std::cout << "PASS: test_audit_elf_32bit_rejected" << std::endl;
 }
 
-void test_audit_elf_safe_segment() {
+TEST_CASE("test_audit_elf_safe_segment") {
     // PF_R | PF_X = 5 (read + execute, no write — safe)
     constexpr uint32_t PF_R = 4, PF_X = 1;
     auto elf = make_elf64_with_phdr(PF_R | PF_X);
@@ -371,7 +372,7 @@ void test_audit_elf_safe_segment() {
 
 // ─── AlgorithmLoader integration ───────────────────────────────
 
-void test_audit_after_failed_load() {
+TEST_CASE("test_audit_after_failed_load") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -387,7 +388,7 @@ void test_audit_after_failed_load() {
     std::cout << "PASS: test_audit_after_failed_load" << std::endl;
 }
 
-void test_audit_get_report_builtin() {
+TEST_CASE("test_audit_get_report_builtin") {
     AlgorithmLoader loader;
     loader.load_builtin();
 
@@ -396,34 +397,4 @@ void test_audit_get_report_builtin() {
     expect(report == nullptr, "audit: built-in algo has no audit report");
 
     std::cout << "PASS: test_audit_get_report_builtin" << std::endl;
-}
-
-// ======================================================================
-//  main
-// ======================================================================
-
-int main() {
-    try {
-        test_audit_empty_file();
-        test_audit_truncated_binary();
-
-#if defined(_WIN32)
-        test_audit_valid_pe();
-        test_audit_pe_wx_section();
-        test_audit_pe_32bit_rejected();
-#elif defined(__linux__)
-        test_audit_valid_elf();
-        test_audit_elf_wx_segment();
-        test_audit_elf_32bit_rejected();
-        test_audit_elf_safe_segment();
-#endif
-
-        test_audit_after_failed_load();
-        test_audit_get_report_builtin();
-    } catch (const test_error& e) {
-        std::cerr << "FAILED: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "UNEXPECTED: " << e.what() << std::endl;
-    }
-    return print_summary();
 }
