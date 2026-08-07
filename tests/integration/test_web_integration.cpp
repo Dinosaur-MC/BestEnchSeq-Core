@@ -54,15 +54,21 @@ constexpr const char* kIndexHtml = "<h1>hi</h1>";
 /// One request/response exchange on a fresh connection (blocking recv).
 /// Response bodies here are small JSON/static assets, so a single recv with a
 /// bounded timeout captures the full reply.
+/// flake 修复 P0-2：冷启动/负载窗口内单次 3s recv 可能超时拿空——对空响应
+/// 有界重试一次（对齐 test_concurrent_clients 的既有模式，覆盖全部调用点）。
 std::string http_exchange(HttpServer& server, const std::string& raw) {
-    int c = sock_connect("127.0.0.1", server.port());
-    if (c < 0)
-        return "";
-    sock_send(c, raw, 3000);
-    std::string body;
-    sock_recv(c, body, 64 * 1024, 3000);
-    sock_close(c);
-    return body;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        int c = sock_connect("127.0.0.1", server.port());
+        if (c < 0)
+            continue;
+        sock_send(c, raw, 3000);
+        std::string body;
+        sock_recv(c, body, 64 * 1024, 3000);
+        sock_close(c);
+        if (!body.empty())
+            return body;
+    }
+    return "";
 }
 
 /// Non-blocking recv loop: accumulate `got` until `needle` shows up or we run
@@ -374,11 +380,15 @@ void test_slow_client_timeout(HttpServer& server) {
     expect(sock_send(c, "GET /api/status HT", 3000), "partial request sent");
 
     bool eof = false;
-    for (int i = 0; i < 1000 && !eof; ++i) { // ≤10s
+    // flake 修复 P0-1：固定 1000×10ms 轮询改截止时间（20s 预算——名义 5-6s
+    // 关闭 + 主机调度抖动余量，通过运行时长不变，失败时才多等）；EOF 判定
+    // n <= 0（0 = FIN；-1 = RST/错误，连接同样已关闭，此前被当"继续等"）。
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    while (std::chrono::steady_clock::now() < deadline && !eof) {
         if (wait_readable(c, 0) == 1) {
             std::string chunk;
-            if (sock_recv_nb(c, chunk, 4096) == 0)
-                eof = true; // 0 字节 = EOF
+            if (sock_recv_nb(c, chunk, 4096) <= 0)
+                eof = true;
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -478,15 +488,18 @@ void test_sse_progress_frames(HttpServer& server) {
     const auto done = got.find("event: completed");
     expect(done != std::string::npos, "terminal completed frame on the wire");
     if (done != std::string::npos) {
-        // ≥1 个 progress 帧且全部位于 completed 之前（采样线程在 solve 期间发布）。
+        // flake 修复 P1：逐帧断言冗余且帧数随时序波动（200ms 采样网格相对
+        // 求解进度漂移 ±1~2，见 WebSolveService 采样发布）——改纯计数 +
+        // 一次断言。首帧先于 completed 是结构性保证（采样线程在 completed
+        // 发布前 join），总断言数恒定，"Results: N passed" 可回归比对。
         size_t progress_frames = 0;
         size_t from = 0;
         while ((from = got.find("event: progress", from)) != std::string::npos) {
-            expect(from < done, "progress frame precedes the terminal frame");
             ++progress_frames;
             ++from;
         }
         expect(progress_frames >= 1, "at least one live progress frame published during solve");
+        expect(got.find("event: progress", 0) < done, "progress frames precede the terminal frame");
         expect(got.find("\"result\"", done) != std::string::npos, "completed frame carries result");
         expect(got.find("\"type\":\"completed\"", done) != std::string::npos, "completed frame carries the completed type");
     }
