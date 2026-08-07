@@ -4,6 +4,8 @@
 // 注意：#define 必须在唯一的 include 之前（pragma once 会让第二次 include 空转）。
 #define BESQ_TEST_MAIN
 #include "framework/test_framework.h"
+#include <condition_variable>
+#include <mutex>
 #include <stdexcept>
 
 TEST_CASE("positive: registry runs") {
@@ -28,4 +30,22 @@ TEST_CASE("negative: unknown throw") {
 
 TEST_CASE("skip: conditional") {
     SKIP("self-test skip reason");
+}
+
+TEST_CASE_TIMEOUT("timeout: infinite loop", 1) {
+    for (;;);  // 忙循环：验证杀线程路径（async cancel / TerminateThread）
+}
+
+TEST_CASE_TIMEOUT("timeout: deadlock", 1) {
+    // 确定阻塞（各平台一致）：条件变量永不被唤醒。注：非递归互斥量二次加锁在
+    // MSVC 上抛异常而非死锁，故用 cv.wait 构造真阻塞，验证阻塞中杀线程路径。
+    std::mutex m;
+    std::condition_variable cv;
+    std::unique_lock<std::mutex> lk(m);
+    cv.wait(lk);
+}
+
+TEST_CASE("positive: after kill") {
+    // 注册在超时负用例之后：验证 OS 杀线程后进程健康、后续 case 仍能运行。
+    expect(true, "process healthy after thread kill");
 }

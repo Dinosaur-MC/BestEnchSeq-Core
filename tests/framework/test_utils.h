@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -13,9 +14,11 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-// Test counters
-inline int tests_passed = 0;
-inline int tests_failed = 0;
+// Test counters — atomic: per-case 超时机制下卡死线程与主线程可能并发计数
+// （超时后被杀线程的残余增量与 print_summary 的读取），原子化消除数据竞争。
+// 既有 ++/+= 用法与隐式读完全兼容。
+inline std::atomic<int> tests_passed = 0;
+inline std::atomic<int> tests_failed = 0;
 
 // Assertion-level verbose flag (--verbose from the shared main).
 inline bool test_verbose = false;
