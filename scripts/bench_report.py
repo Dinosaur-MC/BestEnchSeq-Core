@@ -31,13 +31,70 @@ from collections import OrderedDict
 # ------------------------------------------------------------
 # 解析单个文件
 # ------------------------------------------------------------
+def parse_json(content):
+    """解析 forge_benchmark --json 的 dataset 结构化输出；映射到与文本解析
+    相同的内部结构（解析层改进：JSON 优先 + 文本回退，spec
+    2026-08-07-bench-report-json-design.md）。
+
+    status 全集合：ok|skip|no-solution|timeout|failed——仅 ok 为有效记录
+    （参与最优比较），其余与文本路径的 no-solution 同级（无效记录）。
+    wall（median/p95/best/iterations）随记录保留，供历史/后续图表使用。"""
+    import json
+
+    data = json.loads(content)
+    datasets = OrderedDict()  # dataset_key -> {algo: record}
+    dataset_order = []  # 首次出现顺序
+    algo_orders = {}  # dataset_key -> [algo] 顺序
+
+    for ds in data.get("datasets", []):
+        name = ds.get("name", "")
+        ench_count = ds.get("ench_count", 0)
+        max_lvl = ds.get("max_lvl", 0)
+        # 重建展示名：与文本解析的 dataset 头同源（"crossbow (4 enchants,
+        # max 30L)"），下游 extract_enchs_count/分组/排序逻辑零改动。
+        ds_key = f"{name} ({ench_count} enchants, max {max_lvl}L)"
+        if ds_key not in datasets:
+            datasets[ds_key] = OrderedDict()
+            dataset_order.append(ds_key)
+            algo_orders[ds_key] = []
+        for r in ds.get("results", []):
+            algo = r.get("algo", "")
+            status = r.get("status", "failed")
+            if status == "ok":
+                rec = {
+                    "status": "✅",
+                    "L": int(r.get("L", 0)),
+                    "time_ms": int(r.get("comp_ms", 0)),
+                }
+            elif status == "skip":
+                # note 已含 "SKIP (predicted ...)" 前缀（forge 侧同源），直接用
+                rec = {"status": r.get("note", "SKIP")}
+            elif status == "no-solution":
+                rec = {"status": "no solution"}
+            else:  # timeout / failed
+                rec = {"status": status, "note": r.get("note", "")}
+            wall = r.get("wall")
+            if wall:
+                rec["wall"] = wall
+            _update_record(datasets[ds_key], algo_orders[ds_key], algo, rec)
+
+    return None, None, datasets, dataset_order, algo_orders
+
+
 def parse_file(filepath):
-    """解析基准输出文件，返回 (header, latest_time, datasets_dict, dataset_order, algo_orders)"""
+    """解析基准输出文件，返回 (header, latest_time, datasets_dict, dataset_order, algo_orders)。
+    JSON 优先（forge_benchmark --json）；否则文本回退（原解析原样保留）。"""
     if not os.path.exists(filepath):
         return None, None, OrderedDict(), [], {}
 
     with open(filepath, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+        content = f.read()
+
+    # JSON 检测：内容以 { 开头（evaluate.sh 另存的 benchmark.json 亦如此）
+    if content.lstrip().startswith("{"):
+        return parse_json(content)
+
+    lines = content.splitlines()
 
     header_line = None
     times = []
@@ -49,7 +106,6 @@ def parse_file(filepath):
     in_benchmark = False
 
     for line in lines:
-        line = line.strip("\n")
         if not line:
             continue
 

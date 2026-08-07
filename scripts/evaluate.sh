@@ -202,6 +202,11 @@ if [ $benchmark_check -eq 1 ]; then
         mv "$benchmark_dir/benchmark.txt" "$benchmark_dir/benchmark.txt.bak"
     fi
     echo "Benchmark running in $build_type build with program args: $program_args" | tee "$benchmark_dir/benchmark.txt"
-    "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args 2>&1 | tee -a "$benchmark_dir/benchmark.txt"
-    python3 scripts/bench_report.py "$benchmark_dir" --img
+    # --json：文本（benchmark.txt，人类日志 + 回退解析）与纯 JSON
+    # （benchmark.json，解析层 JSON 优先路径）双输出
+    "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args --json 2>&1 \
+        | tee -a "$benchmark_dir/benchmark.txt" > "$benchmark_dir/fb_full.txt"
+    awk 'f{print} /^=== Done ===$/{f=1}' "$benchmark_dir/fb_full.txt" > "$benchmark_dir/benchmark.json"
+    rm -f "$benchmark_dir/fb_full.txt"
+    python3 scripts/bench_report.py "$benchmark_dir/benchmark.json" "$benchmark_dir" --img
 fi
