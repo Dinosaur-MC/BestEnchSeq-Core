@@ -12,6 +12,7 @@
 
 #define BESQ_BENCH_MAIN
 #include "framework/bench_framework.h"
+BENCH_TITLE("EventLoop Benchmarks")
 
 #include "utils/EventLoop.hpp"
 #include "utils/queue/SegmentedMPMCQueue.hpp"

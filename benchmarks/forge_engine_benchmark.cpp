@@ -17,6 +17,7 @@
 
 #define BESQ_BENCH_MAIN
 #include "framework/bench_framework.h"
+BENCH_TITLE("ForgeEngine Benchmarks")
 
 #include "domain/algorithm/forge_engine/ForgeEngine.h"
 #include "domain/algorithm/registries/EnchReg.h"
@@ -387,25 +388,25 @@ static std::function<void()> make_batch_runner(std::function<void()> single) {
             for (int sz = 0; sz < 3; ++sz) {
                 const TestPair& pair = cfg.pair[op][sz];
                 reg.push_back(bench::Case{
-                    cfg.label + " forge_into/" + op_names[op] + "/" + SIZES[sz].label + batch_suffix,
+                    std::string("forge_into/") + op_names[op] + "/" + SIZES[sz].label + batch_suffix,
                     make_batch_runner(make_forge_into_runner(cfg.engine, b.reg, pair.target, pair.sacrifice)),
                     {}, {}, 0, cfg.label, K_OPS, {}});
                 // pure_forge_into is measured for Merge only
                 if (op == 0) {
                     reg.push_back(bench::Case{
-                        cfg.label + " pure_forge_into/" + SIZES[sz].label + batch_suffix,
+                        std::string("pure_forge_into/") + SIZES[sz].label + batch_suffix,
                         make_batch_runner(make_pure_forge_runner(cfg.engine, b.reg, pair.target, pair.sacrifice)),
                         {}, {}, 0, cfg.label, K_OPS, {}});
                 }
             }
         }
         reg.push_back(bench::Case{
-            cfg.label + " estimate_forge_cost/S" + batch_suffix,
+            std::string("estimate_forge_cost/S") + batch_suffix,
             make_batch_runner(make_estimate_runner(cfg.engine, b.reg, cfg.estimate_pair.target, cfg.estimate_pair.sacrifice)),
             {}, {}, 0, cfg.label, K_OPS, {}});
         // forge() copy overhead — compare with forge_into/Merge/M
         reg.push_back(bench::Case{
-            cfg.label + " forge(copy)/Merge/M" + batch_suffix,
+            std::string("forge(copy)/Merge/M") + batch_suffix,
             make_batch_runner(make_forge_runner(cfg.engine, b.reg, cfg.copy_pair.target, cfg.copy_pair.sacrifice)),
             {}, {}, 0, cfg.label, K_OPS, {}});
     }

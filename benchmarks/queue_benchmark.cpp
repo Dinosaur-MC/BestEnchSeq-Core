@@ -12,6 +12,7 @@
 
 #define BESQ_BENCH_MAIN
 #include "framework/bench_framework.h"
+BENCH_TITLE("Lock-Free Queue Benchmarks")
 
 #include "utils/queue/SPSCQueue.hpp"
 #include "utils/queue/BoundedMPMCQueue.hpp"

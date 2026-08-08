@@ -49,6 +49,12 @@ inline std::vector<Case>& registry() {
     return r;
 }
 
+// 基准大标题（BENCH_TITLE 注册；启动即打印于横幅）。
+inline std::string& title() {
+    static std::string t;
+    return t;
+}
+
 struct Registrar {
     Registrar(const char* name, void (*body)(), int iters,
               std::string group = {}, int64_t ops_per_iter = 0,
@@ -69,12 +75,12 @@ struct Stats {
     int warmup = 0;  // 实际使用的 warmup 次数（标注输出）
 };
 
-/// 自适应迭代数：单次试跑估时 → 目标 ~1s，clamp [3, 1000]；慢 case 直接 1。
+/// 自适应迭代数：单次试跑估时 → 目标 ~1s，clamp [10, 1'000'000]；慢 case 直接 1。
 inline int auto_iterations(int64_t shot_ns) {
     if (shot_ns > 200'000'000)
         return 1;
     int n = static_cast<int>(1'000'000'000 / std::max<int64_t>(shot_ns, 1));
-    return std::clamp(n, 3, 1000);
+    return std::clamp(n, 10, 1'000'000);
 }
 
 /// 运行一个 case：warmup（不计时）→ 自适应或显式迭代 → 统计。
@@ -289,11 +295,12 @@ inline void render_table(const std::string& group, const std::vector<Result>& ro
         if (has_ops)
             row.push_back(fmt_ops(r.ops_per_sec));
         if (has_base) {
-            if (r.c->baseline.empty()) {
-                row.push_back("—");  // 基准行自身无 speedup
+            // 基准行自身，或基准被 --filter 排除（speedup 未找到）→ " -- "
+            if (r.c->baseline.empty() || r.speedup <= 0.0) {
+                row.push_back(" -- ");
             } else {
                 char buf[16];
-                std::snprintf(buf, sizeof buf, "%.2fx", r.speedup);
+                std::snprintf(buf, sizeof(buf), "%.2fx", r.speedup);
                 row.push_back(buf);
             }
         }
@@ -340,6 +347,34 @@ inline void render_table(const std::string& group, const std::vector<Result>& ro
 
 /// 执行全部匹配 case：按组渐进渲染二维表（组完成即打印），末尾 summary。
 inline int run(const std::vector<Case>& cases, const Config& cfg) {
+    // 启动横幅（立即打印；测试量 = 具体操作量 Σ ops_per_iter，非迭代数）
+    if (!cfg.list_only) {
+        int64_t declared_ops = 0;
+        size_t matched_cases = 0;
+        for (const auto& c : cases)
+            if (detail::match(c.name, cfg.filter)) {
+                ++matched_cases;
+                declared_ops += c.ops_per_iter;
+            }
+        const std::string t = title().empty() ? "Benchmark" : title();
+        const size_t bar = t.size() + 6;
+        for (size_t k = 0; k < bar; ++k)
+            std::cout << "═";
+        std::cout << "\n  " << t << "\n";
+        for (size_t k = 0; k < bar; ++k)
+            std::cout << "═";
+        std::cout << "\n";
+        std::cout << "  cases: " << matched_cases
+                  << " · declared ops/iter: "
+                  << (declared_ops > 0 ? fmt_ops(declared_ops) : "—")
+                  << " · warmup: " << cfg.warmup
+                  << " · iterations: "
+                  << (cfg.iterations > 0 ? std::to_string(cfg.iterations)
+                                         : "auto")
+                  << "\n"
+                  << std::endl;
+    }
+
     if (cfg.list_only) {
         for (const auto& c : cases)
             if (detail::match(c.name, cfg.filter))
@@ -452,10 +487,17 @@ inline int run(const std::vector<Case>& cases, const Config& cfg) {
                       << group_ms[g] << "ms (" << group_iters[g]
                       << " iters)\n";
         }
+        // 已执行具体操作量 = Σ ops_per_iter × (iterations + warmup)
+        int64_t executed_ops = 0;
+        for (const auto& r : all)
+            if (r.c->ops_per_iter > 0)
+                executed_ops += r.c->ops_per_iter *
+                                (static_cast<int64_t>(r.s.iterations) + r.s.warmup);
         std::cout << "  " << detail::pad("Total", 32) << all.size()
                   << " cases, " << sum_ms << "ms"
-                  << " (iterations: " << sum_iters
-                  << ", warmup: " << total_warmup << ")" << std::endl;
+                  << " (ops: " << (executed_ops > 0 ? fmt_ops(executed_ops) : "—")
+                  << " executed · iterations: " << sum_iters
+                  << " · warmup: " << total_warmup << ")" << std::endl;
     }
     return 0;
 }
@@ -464,6 +506,12 @@ inline int run(const std::vector<Case>& cases, const Config& cfg) {
 
 #define BESQ_CAT2(a, b) a##b
 #define BESQ_CAT(a, b) BESQ_CAT2(a, b)
+
+/// 基准大标题（include 后声明；启动横幅立即打印）。
+///   BENCH_TITLE("Lock-Free Queue Benchmarks")
+#define BENCH_TITLE(name) \
+    static const bool BESQ_CAT(bench_title_, __LINE__) = \
+        (::bench::title() = (name), true);
 
 /// 注册：仅 body（iterations = 0 = 自适应；独立组）。
 #define BENCH_CASE(name) \

@@ -13,6 +13,7 @@
 
 #define BESQ_BENCH_MAIN
 #include "framework/bench_framework.h"
+BENCH_TITLE("ThreadPool Benchmarks")
 
 #include "utils/thread/ThreadPool.h"
 
