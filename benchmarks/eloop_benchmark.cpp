@@ -72,22 +72,22 @@ static void bench_pipeline(Loop& loop, int64_t n) {
     loop.stop();
 }
 
-BENCH_CASE("mpmc event loop pipeline") {
+BENCH_CASE_GROUP("mpmc event loop pipeline", "pipeline", OPS_EV) {
     EventLoop<std::function<void()>, SegmentedMPMCQueue<std::function<void()>, 1024>> loop;
     bench_pipeline(loop, OPS_EV);
 }
 
-BENCH_CASE("mpsc event loop pipeline") {
+BENCH_CASE_GROUP("mpsc event loop pipeline", "pipeline", OPS_EV) {
     EventLoop<std::function<void()>, SegmentedMPSCQueue<std::function<void()>>> loop;
     bench_pipeline(loop, OPS_EV);
 }
 
-BENCH_CASE("bounded-mpmc event loop pipeline") {
+BENCH_CASE_GROUP("bounded-mpmc event loop pipeline", "pipeline", OPS_EV) {
     EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>> loop;
     bench_pipeline(loop, OPS_EV);
 }
 
-BENCH_CASE("bounded-mpsc event loop pipeline") {
+BENCH_CASE_GROUP("bounded-mpsc event loop pipeline", "pipeline", OPS_EV) {
     EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>> loop;
     bench_pipeline(loop, OPS_EV);
 }
@@ -117,56 +117,56 @@ static void bench_multiproducer(int64_t n, int n_threads) {
     loop.stop();
 }
 
-BENCH_CASE("mpmc event loop 2P post+exec") {
+BENCH_CASE_GROUP("mpmc event loop 2P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, SegmentedMPMCQueue<std::function<void()>, 1024>>
     >(OPS_MP, 2);
 }
-BENCH_CASE("mpsc event loop 2P post+exec") {
+BENCH_CASE_GROUP("mpsc event loop 2P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<MPSCEventLoop<>>(OPS_MP, 2);
 }
-BENCH_CASE("bounded-mpmc event loop 2P post+exec") {
+BENCH_CASE_GROUP("bounded-mpmc event loop 2P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
     >(OPS_MP, 2);
 }
-BENCH_CASE("bounded-mpsc event loop 2P post+exec") {
+BENCH_CASE_GROUP("bounded-mpsc event loop 2P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
     >(OPS_MP, 2);
 }
-BENCH_CASE("mpmc event loop 4P post+exec") {
+BENCH_CASE_GROUP("mpmc event loop 4P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, SegmentedMPMCQueue<std::function<void()>, 1024>>
     >(OPS_MP, 4);
 }
-BENCH_CASE("mpsc event loop 4P post+exec") {
+BENCH_CASE_GROUP("mpsc event loop 4P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<MPSCEventLoop<>>(OPS_MP, 4);
 }
-BENCH_CASE("bounded-mpmc event loop 4P post+exec") {
+BENCH_CASE_GROUP("bounded-mpmc event loop 4P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
     >(OPS_MP, 4);
 }
-BENCH_CASE("bounded-mpsc event loop 4P post+exec") {
+BENCH_CASE_GROUP("bounded-mpsc event loop 4P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
     >(OPS_MP, 4);
 }
-BENCH_CASE("mpmc event loop 8P post+exec") {
+BENCH_CASE_GROUP("mpmc event loop 8P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, SegmentedMPMCQueue<std::function<void()>, 1024>>
     >(OPS_MP, 8);
 }
-BENCH_CASE("mpsc event loop 8P post+exec") {
+BENCH_CASE_GROUP("mpsc event loop 8P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<MPSCEventLoop<>>(OPS_MP, 8);
 }
-BENCH_CASE("bounded-mpmc event loop 8P post+exec") {
+BENCH_CASE_GROUP("bounded-mpmc event loop 8P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, BoundedMPMCQueue<std::function<void()>, 4096>>
     >(OPS_MP, 8);
 }
-BENCH_CASE("bounded-mpsc event loop 8P post+exec") {
+BENCH_CASE_GROUP("bounded-mpsc event loop 8P post+exec", "multi-producer", OPS_MP) {
     bench_multiproducer<
         EventLoop<std::function<void()>, BoundedMPSCQueue<std::function<void()>, 4096>>
     >(OPS_MP, 8);
@@ -183,13 +183,20 @@ BENCH_CASE("bounded-mpsc event loop 8P post+exec") {
 static MPMCEventLoop<> s_latency_loop;
 static bool s_latency_started = false;
 
-BENCH_CASE_FULL("mpmc event loop drain latency", 0,
-                [] {
-                    if (!s_latency_started) {
-                        s_latency_loop.start();
-                        s_latency_started = true;
-                    }
-                },
-                [] {}) {
+// BENCH_CASE_FULL has no group/ops parameters, so register the drain-latency
+// case directly (same body/setup/teardown, plus group "drain latency" and
+// ops = 1 post+wait round trip per iteration).
+static void bench_drain_latency();
+static const ::bench::Registrar bench_reg_drain_latency(
+    "mpmc event loop drain latency", &bench_drain_latency, 0,
+    "drain latency", 1, "",
+    [] {
+        if (!s_latency_started) {
+            s_latency_loop.start();
+            s_latency_started = true;
+        }
+    },
+    [] {});
+static void bench_drain_latency() {
     drain(s_latency_loop);
 }

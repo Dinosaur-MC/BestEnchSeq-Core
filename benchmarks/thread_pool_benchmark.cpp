@@ -138,17 +138,21 @@ std::string thread_label(int tc) {
     auto& reg = ::bench::registry();
     const std::vector<int> counts = make_thread_counts();
 
-    auto add_case = [&reg](std::string name, std::function<void()> setup,
+    auto add_case = [&reg](std::string name, std::string group, int64_t ops,
+                           std::string baseline, std::function<void()> setup,
                            std::function<void()> teardown,
                            std::function<void()> body) {
         reg.push_back(bench::Case{std::move(name), std::move(body),
-                                  std::move(setup), std::move(teardown), 0});
+                                  std::move(setup), std::move(teardown), 0,
+                                  std::move(group), ops, std::move(baseline)});
     };
 
     // ── 1. Fine-grained task throughput (empty tasks; tc <= 4) ──────────
     for (int tc : counts) {
         if (tc > 4) continue;
         add_case("empty task throughput (" + thread_label(tc) + ")",
+                 "Fine-grained task throughput", OPS_BATCH,
+                 tc == 1 ? "" : "empty task throughput (1 thread)",
                  [tc] { fixture_pool_setup(tc); }, fixture_pool_teardown,
                  [] { bench_throughput(*g_pool, OPS_BATCH); });
     }
@@ -157,6 +161,8 @@ std::string thread_label(int tc) {
     for (int tc : counts) {
         if (tc > 8) continue;
         add_case("heavy task throughput (" + thread_label(tc) + ")",
+                 "Heavy task throughput", OPS_HEAVY,
+                 tc == 1 ? "" : "heavy task throughput (1 thread)",
                  [tc] { fixture_pool_setup(tc); }, fixture_pool_teardown,
                  [] { bench_throughput(*g_pool, OPS_HEAVY); });
     }
@@ -164,6 +170,8 @@ std::string thread_label(int tc) {
     // ── 3. parallel_for — tiny work (just store) ────────────────────────
     for (int tc : counts) {
         add_case("parallel_for store only (" + thread_label(tc) + ")",
+                 "parallel_for throughput (store only)", OPS_PAR_FOR,
+                 tc == 1 ? "" : "parallel_for store only (1 thread)",
                  [tc] { fixture_i64_setup(tc); }, fixture_i64_teardown,
                  [] { bench_parallel_for(*g_pool, OPS_PAR_FOR,
                                           [](int64_t i) { g_data_i64[i] = i; }); });
@@ -172,6 +180,8 @@ std::string thread_label(int tc) {
     // ── 4. parallel_for — medium work (sqrt + write) ────────────────────
     for (int tc : counts) {
         add_case("parallel_for sqrt (" + thread_label(tc) + ")",
+                 "parallel_for throughput (sqrt + write)", OPS_PAR_FOR,
+                 tc == 1 ? "" : "parallel_for sqrt (1 thread)",
                  [tc] { fixture_f64_setup(tc); }, fixture_f64_teardown,
                  [] { bench_parallel_for(*g_pool, OPS_PAR_FOR,
                                           [](int64_t i) {
@@ -182,6 +192,8 @@ std::string thread_label(int tc) {
     // ── 5. parallel_for scalability (sqrt + log work) ───────────────────
     for (int tc : counts) {
         add_case("parallel_for scalability (" + thread_label(tc) + ")",
+                 "parallel_for scalability", OPS_PAR_FOR,
+                 tc == 1 ? "" : "parallel_for scalability (1 thread)",
                  [tc] { fixture_f64_setup(tc); }, fixture_f64_teardown,
                  [] { bench_parallel_for(*g_pool, OPS_PAR_FOR,
                                           [](int64_t i) {

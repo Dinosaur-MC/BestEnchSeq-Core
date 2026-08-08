@@ -389,25 +389,25 @@ static std::function<void()> make_batch_runner(std::function<void()> single) {
                 reg.push_back(bench::Case{
                     cfg.label + " forge_into/" + op_names[op] + "/" + SIZES[sz].label + batch_suffix,
                     make_batch_runner(make_forge_into_runner(cfg.engine, b.reg, pair.target, pair.sacrifice)),
-                    {}, {}, 0});
+                    {}, {}, 0, cfg.label, K_OPS, {}});
                 // pure_forge_into is measured for Merge only
                 if (op == 0) {
                     reg.push_back(bench::Case{
                         cfg.label + " pure_forge_into/" + SIZES[sz].label + batch_suffix,
                         make_batch_runner(make_pure_forge_runner(cfg.engine, b.reg, pair.target, pair.sacrifice)),
-                        {}, {}, 0});
+                        {}, {}, 0, cfg.label, K_OPS, {}});
                 }
             }
         }
         reg.push_back(bench::Case{
             cfg.label + " estimate_forge_cost/S" + batch_suffix,
             make_batch_runner(make_estimate_runner(cfg.engine, b.reg, cfg.estimate_pair.target, cfg.estimate_pair.sacrifice)),
-            {}, {}, 0});
+            {}, {}, 0, cfg.label, K_OPS, {}});
         // forge() copy overhead — compare with forge_into/Merge/M
         reg.push_back(bench::Case{
             cfg.label + " forge(copy)/Merge/M" + batch_suffix,
             make_batch_runner(make_forge_runner(cfg.engine, b.reg, cfg.copy_pair.target, cfg.copy_pair.sacrifice)),
-            {}, {}, 0});
+            {}, {}, 0, cfg.label, K_OPS, {}});
     }
     return true;
 }();

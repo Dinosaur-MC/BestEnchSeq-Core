@@ -72,27 +72,27 @@ static void bench_seq(Queue& q, int64_t n_pairs) {
     sink.flush();
 }
 
-BENCH_CASE("spsc push/pop") {
+BENCH_CASE_GROUP("spsc push/pop", "Sequential throughput", OPS_SEQ) {
     static SPSCQueue<int, 4096> q;
     bench_seq(q, OPS_SEQ);
 }
 
-BENCH_CASE("bounded-mpmc push/pop") {
+BENCH_CASE_GROUP("bounded-mpmc push/pop", "Sequential throughput", OPS_SEQ) {
     static BoundedMPMCQueue<int, 4096> q;
     bench_seq(q, OPS_SEQ);
 }
 
-BENCH_CASE("segmented-mpmc push/pop") {
+BENCH_CASE_GROUP("segmented-mpmc push/pop", "Sequential throughput", OPS_SEG) {
     static SegmentedMPMCQueue<int, 1024> q;
     bench_seq(q, OPS_SEG);
 }
 
-BENCH_CASE("bounded-mpsc push/pop") {
+BENCH_CASE_GROUP("bounded-mpsc push/pop", "Sequential throughput", OPS_SEQ) {
     static BoundedMPSCQueue<int, 4096> q;
     bench_seq(q, OPS_SEQ);
 }
 
-BENCH_CASE("segmented-mpsc push/pop") {
+BENCH_CASE_GROUP("segmented-mpsc push/pop", "Sequential throughput", OPS_SEG) {
     static SegmentedMPSCQueue<int> q;
     bench_seq(q, OPS_SEG);
 }
@@ -105,35 +105,35 @@ BENCH_CASE("segmented-mpsc push/pop") {
 //  collected inside the benchmark).
 // ═══════════════════════════════════════════════════════════════════════════
 
-BENCH_CASE("spsc round-trip latency") {
+BENCH_CASE_GROUP("spsc round-trip latency", "Round-trip latency", 1) {
     static SPSCQueue<int, 64> q;
     int v;
     while (!q.try_push(42)) {}
     q.try_pop(v);
 }
 
-BENCH_CASE("bounded-mpmc round-trip latency") {
+BENCH_CASE_GROUP("bounded-mpmc round-trip latency", "Round-trip latency", 1) {
     static BoundedMPMCQueue<int, 64> q;
     int v;
     while (!q.try_push(42)) {}
     q.try_pop(v);
 }
 
-BENCH_CASE("segmented-mpmc round-trip latency") {
+BENCH_CASE_GROUP("segmented-mpmc round-trip latency", "Round-trip latency", 1) {
     static SegmentedMPMCQueue<int, 64> q;
     int v;
     while (!q.try_push(42)) {}
     q.try_pop(v);
 }
 
-BENCH_CASE("bounded-mpsc round-trip latency") {
+BENCH_CASE_GROUP("bounded-mpsc round-trip latency", "Round-trip latency", 1) {
     static BoundedMPSCQueue<int, 64> q;
     int v;
     while (!q.try_push(42)) {}
     q.try_pop(v);
 }
 
-BENCH_CASE("segmented-mpsc round-trip latency") {
+BENCH_CASE_GROUP("segmented-mpsc round-trip latency", "Round-trip latency", 1) {
     static SegmentedMPSCQueue<int> q;
     int v;
     while (!q.try_push(42)) {}
@@ -184,28 +184,28 @@ static void bench_concurrent_mp(int64_t n, int n_producers) {
     consumer.join();
 }
 
-BENCH_CASE("bounded-mpmc 2-producer push/pop") {
+BENCH_CASE_GROUP("bounded-mpmc 2-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, 2);
 }
-BENCH_CASE("segmented-mpmc 2-producer push/pop") {
+BENCH_CASE_GROUP("segmented-mpmc 2-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, 2);
 }
-BENCH_CASE("bounded-mpsc 2-producer push/pop") {
+BENCH_CASE_GROUP("bounded-mpsc 2-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, 2);
 }
-BENCH_CASE("segmented-mpsc 2-producer push/pop") {
+BENCH_CASE_GROUP("segmented-mpsc 2-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<SegmentedMPSCQueue<int>>(OPS_MP, 2);
 }
-BENCH_CASE("bounded-mpmc 4-producer push/pop") {
+BENCH_CASE_GROUP("bounded-mpmc 4-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<BoundedMPMCQueue<int, 4096>>(OPS_MP, 4);
 }
-BENCH_CASE("segmented-mpmc 4-producer push/pop") {
+BENCH_CASE_GROUP("segmented-mpmc 4-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<SegmentedMPMCQueue<int, 1024>>(OPS_MP, 4);
 }
-BENCH_CASE("bounded-mpsc 4-producer push/pop") {
+BENCH_CASE_GROUP("bounded-mpsc 4-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<BoundedMPSCQueue<int, 4096>>(OPS_MP, 4);
 }
-BENCH_CASE("segmented-mpsc 4-producer push/pop") {
+BENCH_CASE_GROUP("segmented-mpsc 4-producer push/pop", "Multi-producer throughput", OPS_MP) {
     bench_concurrent_mp<SegmentedMPSCQueue<int>>(OPS_MP, 4);
 }
 
@@ -213,7 +213,7 @@ BENCH_CASE("segmented-mpsc 4-producer push/pop") {
 //  Virtual-dispatch overhead  (IQueue vs direct)
 // ═══════════════════════════════════════════════════════════════════════════
 
-BENCH_CASE("spsc direct push/pop (virtual baseline)") {
+BENCH_CASE_GROUP("spsc direct push/pop (virtual baseline)", "Virtual dispatch overhead", OPS_VIRT) {
     static SPSCQueue<int, 4096> q;
     Sink sink;
     int v;
@@ -225,7 +225,7 @@ BENCH_CASE("spsc direct push/pop (virtual baseline)") {
     sink.flush();
 }
 
-BENCH_CASE("spsc push/pop via QueueAdaptor::underlying()") {
+BENCH_CASE_COMPARE("spsc push/pop via QueueAdaptor::underlying()", "Virtual dispatch overhead", OPS_VIRT, "spsc direct push/pop (virtual baseline)") {
     static QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
     Sink sink;
     int v;
@@ -237,7 +237,7 @@ BENCH_CASE("spsc push/pop via QueueAdaptor::underlying()") {
     sink.flush();
 }
 
-BENCH_CASE("spsc push/pop via IQueue virtual dispatch") {
+BENCH_CASE_COMPARE("spsc push/pop via IQueue virtual dispatch", "Virtual dispatch overhead", OPS_VIRT, "spsc direct push/pop (virtual baseline)") {
     static QueueAdaptor<int, SPSCQueue<int, 4096>> adapted;
     IQueue<int>& virt = adapted;
     Sink sink;
