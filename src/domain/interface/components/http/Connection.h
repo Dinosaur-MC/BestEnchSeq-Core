@@ -64,6 +64,10 @@ public:
 
     /// 一次非阻塞推进。router 提供分发。超时由调用方（Reactor）管。
     bool process(const Router& router);
+    /// 逻辑关闭：翻 _alive + 触发 on_close 回调，不关 socket。真正的 sock_close
+    /// 只在 ~Connection 执行——严格晚于 Reactor::remove_connection 的注销
+    /// （on_closed → unregister_fd，pmutex 内擦 home_of/want_write），保证
+    /// select 期间 socket 永不被关闭、已关闭句柄不残留注册表。
     void close();
 
     /// 升级为 SSE 流模式。返回 true 表示已挂载（连接存活且尚未流模式），否则 false。

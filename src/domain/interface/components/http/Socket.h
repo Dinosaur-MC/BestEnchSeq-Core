@@ -33,7 +33,9 @@ bool set_send_buffer(int fd, int bytes);
 void set_nonblocking(int fd);
 
 /// Nonblocking read: >0 = bytes read; 0 = would-block (EAGAIN/WSAEWOULDBLOCK);
-/// -1 = error/closed.
+/// -1 = hard error (RST/EBADF); -2 = peer FIN (EOF). would-block 与 EOF 严格
+/// 区分——调用方不得再以 0 兼作两者（probe-then-recv 消歧存在句柄复用窗口，
+/// 会把 would-block 误读为 FIN 杀死正常连接）。
 int sock_recv_nb(int fd, std::string& out, size_t max_bytes);
 
 /// Nonblocking write: returns bytes written (0 = would-block, -1 = error).

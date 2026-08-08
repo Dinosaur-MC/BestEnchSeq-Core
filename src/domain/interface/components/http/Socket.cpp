@@ -82,6 +82,14 @@ void set_nonblocking(int fd) {
 #endif
 }
 
+/// 非阻塞读。返回语义（调用方依赖，勿改）：
+///   >0  读到字节（写入 out）
+///    0  无数据（would-block，非错误）
+///   -1  硬错误（对端 RST / EBADF 等）
+///   -2  对端 FIN（EOF）——与 would-block 严格区分。旧实现 0 同时表示两者，
+///       process() 靠"先就绪探测再 recv"消歧，探针与 recv 之间存在句柄复用
+///       窗口（Windows 句柄池 LIFO 回收极快），探针可读而 recv 落空 → 0 被
+///       误读为 FIN → 正常连接被立即关闭（SSE 流分支同样死于 would-block）。
 int sock_recv_nb(int fd, std::string& out, size_t max_bytes) {
     out.clear();
     if (fd < 0) return -1;
@@ -105,7 +113,8 @@ int sock_recv_nb(int fd, std::string& out, size_t max_bytes) {
     }
 #endif
     if (n > 0) out.assign(buf, static_cast<size_t>(n));
-    return static_cast<int>(n);  // 0 = clean close
+    if (n == 0) return -2;  // EOF 哨兵：与 would-block(0) 严格区分
+    return static_cast<int>(n);
 }
 
 int sock_send_nb(int fd, const char* data, size_t len) {

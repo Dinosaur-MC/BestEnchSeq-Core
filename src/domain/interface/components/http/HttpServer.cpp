@@ -8,6 +8,7 @@
 #include <atomic>
 #include "Socket.h"
 #include "Reactor.h"
+#include "Connection.h" // 注册表所有者 alive() 检查（仅弱指针无法识别已逻辑关闭的连接）
 #include "common/log/log.hpp"
 
 #ifdef _WIN32
@@ -83,6 +84,14 @@ struct HttpServer::Impl {
         Handler handler;
     };
 
+    /// 一条注册：归属 Reactor 索引 + 连接所有者（weak）。所有者死亡（weak 失效）
+    /// 的注册由 poller 投递/清扫时清理——fd 复用后旧注册不会残留，杜绝 select
+    /// 对无主 fd 持续自旋投递（观测到 48k 次同 fd MISS 风暴）。
+    struct Registration {
+        size_t home;
+        std::weak_ptr<Connection> owner;
+    };
+
     TcpListener listener;
     std::atomic<bool> running{false};
     std::atomic<size_t> next_reactor{0}; // round-robin 归属游标
@@ -90,8 +99,8 @@ struct HttpServer::Impl {
 
     // poller 注册表（Poller 线程 + Reactor 线程经 pmutex 共享）
     std::mutex pmutex;
-    std::unordered_map<int, size_t> home_of;  // fd → 归属 Reactor 索引
-    std::unordered_map<int, bool> want_write; // fd → 是否监听写就绪
+    std::unordered_map<int, Registration> home_of; // fd → {归属, 所有者}
+    std::unordered_map<int, bool> want_write;      // fd → 是否监听写就绪
     // 超时清扫节拍（仅 poller 线程读写，无需原子）
     std::chrono::steady_clock::time_point last_sweep{std::chrono::steady_clock::now()};
 
@@ -213,16 +222,28 @@ void HttpServer::poll_once() {
             FD_SET(native_fd(listener_fd), &rfds);
             maxfd = listener_fd;
         }
-        for (const auto& [fd, home] : impl.home_of) {
+        for (auto it = impl.home_of.begin(); it != impl.home_of.end();) {
+            const int fd = it->first;
+            // 所有者已死（weak 失效或 _alive=false——逻辑关闭后对象可能仍被
+            // hub/排队任务引用存活）：清理注册，不再轮询。否则 select 对残留
+            // fd 持续自旋投递（已关闭连接 socket 上的未读 FIN/数据永报可读），
+            // 队列堆积饿死其余连接（观测到 48k 次同 fd MISS 风暴）。
+            auto sp = it->second.owner.lock();
+            if (!sp || !sp->alive()) {
+                impl.want_write.erase(fd);
+                it = impl.home_of.erase(it);
+                continue;
+            }
             if (fds.size() >= kMaxPolled)
                 break; // 连接集合上限 FD_SETSIZE-1：给监听 fd 留位（M1）
             fds.push_back(fd);
             FD_SET(native_fd(fd), &rfds);
-            auto it = impl.want_write.find(fd);
-            if (it != impl.want_write.end() && it->second)
+            auto ww = impl.want_write.find(fd);
+            if (ww != impl.want_write.end() && ww->second)
                 FD_SET(native_fd(fd), &wfds);
             if (fd > maxfd)
                 maxfd = fd;
+            ++it;
         }
         if (maxfd < 0)
             return;
@@ -250,28 +271,36 @@ void HttpServer::poll_once() {
                 // "永不轮询 → 客户端永久挂起"。达上限拒绝新 accept（立即关闭，
                 // 不响应任何字节）——保证每个被准入的连接都被 select 轮询（I-3
                 // accept-cap 修复）。
-                if (impl.home_of.size() < kAdmitCap) {
-                    home = impl.next_reactor.fetch_add(1, std::memory_order_relaxed) % impl.workers;
-                    impl.home_of.emplace(c, home);
-                    impl.want_write.emplace(c, false);
-                } else {
+                if (impl.home_of.size() >= kAdmitCap) {
                     LOG_WARN("connection rejected: capacity cap %zu", kAdmitCap);
                     sock_close(c); // 达上限：拒绝新连接（accept 后立即关闭，无响应）
                     continue;
                 }
-                impl.reactors[home]->add_connection(c);
-                LOG_DEBUG("accept fd=%d -> reactor %zu", c, home);
+                home = impl.next_reactor.fetch_add(1, std::memory_order_relaxed) % impl.workers;
+                // 先建连接（conns 登记 + 驱动首发），后登记 poller 注册表——
+                // 顺序不可颠倒：若先登记 home_of 而 add_connection 因同号 fd
+                // 复用早退（conns 已有旧连接），会出现"注册在 poller 却无
+                // Connection"的孤儿 → select 对无主 fd 自旋投递。
+                auto conn = impl.reactors[home]->add_connection(c);
+                if (!conn) {
+                    LOG_WARN("connection rejected: fd %d collides with live conn", c);
+                    sock_close(c);
+                    continue;
+                }
+                impl.home_of.emplace(c, Impl::Registration{home, conn});
+                impl.want_write.emplace(c, false);
             }
         }
 
         // ④ 连接 fd 按归属投递（与 select 同一 pmutex 作用域：就绪状态与注册表
         // 一致，杜绝投递到 select 返回后刚被注销/关闭的 fd）。
         for (int fd : fds) {
-            size_t home;
             auto it = impl.home_of.find(fd);
             if (it == impl.home_of.end())
                 continue; // 防御：持锁跨 select，正常不应被注销
-            home = it->second;
+            if (!it->second.owner.lock())
+                continue; // 所有者已死（本轮的防御性复查）
+            size_t home = it->second.home;
             bool rd = FD_ISSET(fd, &rfds) != 0;
             bool wr = FD_ISSET(fd, &wfds) != 0;
             if (rd)
@@ -288,8 +317,16 @@ void HttpServer::sweep_expired() {
     // 保证不对已注销/已关闭的 fd 投递。投递本身（loop.post）是锁无关操作，不构成
     // 锁序环（poller: pmutex → 队列；Reactor: 队列消费 → pmutex，队列锁不跨任务持有）。
     std::lock_guard lk(impl.pmutex);
-    for (const auto& [fd, home] : impl.home_of)
-        impl.reactors[home]->check_timeout(fd);
+    for (auto it = impl.home_of.begin(); it != impl.home_of.end();) {
+        auto sp = it->second.owner.lock();
+        if (!sp || !sp->alive()) {
+            impl.want_write.erase(it->first);
+            it = impl.home_of.erase(it); // 所有者已死（weak 失效或已逻辑关闭）：清理注册（防自旋）
+            continue;
+        }
+        impl.reactors[it->second.home]->check_timeout(it->first);
+        ++it;
+    }
 }
 
 void HttpServer::unregister_fd(int fd) {
@@ -298,6 +335,9 @@ void HttpServer::unregister_fd(int fd) {
     std::lock_guard lk(_impl->pmutex);
     _impl->home_of.erase(fd);
     _impl->want_write.erase(fd);
+    // 不在此关 socket：注册表注销必须无条件执行（防 select 对已拆除连接的 fd
+    // 持续自旋投递 → 队列堆积饿死其余连接）；socket 关闭由 Reactor 按对象身份
+    // 决定（迟到拆除不得误杀 fd 复用后的新连接），且严格晚于本注销（安全顺序）。
 }
 
 void HttpServer::set_fd_interest(int fd, bool want_write) {

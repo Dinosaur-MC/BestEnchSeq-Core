@@ -99,10 +99,11 @@ TEST_CASE("test_http_server") {
     for (int round = 0; round < 800 && !saw_eof; ++round) {
         eof_count = 0;
         for (int c : cs) {
-            // wait_readable==1（可读/错误）+ recv 0 字节 = 对端 EOF。
+            // wait_readable==1（可读/错误）+ recv EOF 哨兵（-2，原为 0）=
+            // 对端 EOF。
             if (wait_readable(c, 0) == 1) {
                 std::string chunk;
-                if (sock_recv_nb(c, chunk, 4096) == 0)
+                if (sock_recv_nb(c, chunk, 4096) == -2)
                     ++eof_count; // EOF，无字节
             }
         }
@@ -119,7 +120,7 @@ TEST_CASE("test_http_server") {
     for (int c : cs) {
         if (wait_readable(c, 0) == 1) {
             std::string chunk;
-            if (sock_recv_nb(c, chunk, 4096) == 0)
+            if (sock_recv_nb(c, chunk, 4096) == -2)
                 continue; // EOF → 被拒连接
         }
         ++alive;

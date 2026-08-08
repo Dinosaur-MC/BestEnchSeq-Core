@@ -25,7 +25,7 @@
 // All waits are bounded loops; nothing can hang the suite indefinitely.
 // =============================================================================
 
-#include "common/log/logger.h"
+#include "common/log/Logger.h"
 #include "common/log/LogRingBuffer.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/HttpServer.h"
@@ -35,6 +35,7 @@
 
 #include "framework/test_framework.h"
 #include <atomic>
+#include <cstdio>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -386,15 +387,21 @@ void test_slow_client_timeout(HttpServer& server) {
     // 关闭 + 主机调度抖动余量，通过运行时长不变，失败时才多等）；EOF 判定
     // n <= 0（0 = FIN；-1 = RST/错误，连接同样已关闭，此前被当"继续等"）。
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+    int stray = 0;
     while (std::chrono::steady_clock::now() < deadline && !eof) {
         if (wait_readable(c, 0) == 1) {
             std::string chunk;
-            if (sock_recv_nb(c, chunk, 4096) <= 0)
+            const int n = sock_recv_nb(c, chunk, 4096);
+            if (n <= 0)
                 eof = true;
+            else
+                stray += n;
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
+    if (!eof)
+        std::fprintf(stderr, "[DIAG-WIN] slow_client no EOF, stray=%d\n", stray);
     expect(eof, "server closed the stalled partial-request connection (5s cap)");
     sock_close(c);
 }

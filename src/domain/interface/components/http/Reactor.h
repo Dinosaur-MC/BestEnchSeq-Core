@@ -5,6 +5,8 @@
 
 namespace web {
 
+class Connection;  // 仅指针参数（remove_connection），定义在 Connection.h
+
 /// 单个 home loop：一个 EventLoop 消费线程 + 该 loop 专属的连接表。
 /// 连接事件（读/写/关闭/SSE帧）只在本 loop 线程处理 → 连接零锁。
 class Reactor {
@@ -25,8 +27,11 @@ public:
 
     void start();                // 启动消费线程
     void stop();                 // 停止并 join（优雅 drain）
-    void add_connection(int fd); // 从 poller 线程调用
-    void remove_connection(int fd);
+    /// 从 poller 线程调用：登记连接并返回其 shared_ptr（供 poller 注册表携带
+    /// 所有者）；fd 撞号（conns 已有同号连接）返回 nullptr，调用方应关闭 socket。
+    std::shared_ptr<Connection> add_connection(int fd);
+    /// 按对象身份拆除连接（fd 复用安全：conns[fd] 非本对象则 no-op）。
+    void remove_connection(int fd, const std::shared_ptr<Connection>& conn);
     void on_readable(int fd); // poller 投递
     void on_writable(int fd);
     /// 超时清扫（I-3）：poller 线程每 ~1s 对每个 fd 调用。post 到 home loop，

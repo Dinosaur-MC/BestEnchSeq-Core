@@ -21,14 +21,21 @@ Connection::Connection(int fd, std::string id) : _fd(fd), _id(std::move(id)) {
     touch();  // 活动基准：从 accept/构造时刻起计时（空闲 keep-alive 30s 到期）
 }
 
-Connection::~Connection() { close(); }
+Connection::~Connection() {
+    close();
+    // 仅对未走注销路径的连接（单元测试直调/从未注册）在此关闭 socket。
+    // 服务器路径的 socket 关闭在 remove_connection → on_closed（unregister_fd）
+    // 内、pmutex 下完成，随后 detach_fd() 置 _fd=-1——这里不会二次关闭。
+    if (_fd >= 0) {
+        sock_close(_fd);
+        _fd = -1;
+    }
+}
 
 void Connection::close() {
     if (_alive) {
         LOG_DEBUG("conn %s closed", _id.c_str());
         _alive = false;
-        sock_close(_fd);
-        _fd = -1;
         // 关闭回调只触发一次：连接真正关闭后（_alive 已翻 false）通知订阅方退订。
         // 先移出再执行，避免回调重入 close() 时再次触发。
         auto cb = std::move(_on_close);
@@ -121,10 +128,12 @@ bool Connection::process(const Router& router) {
         if (_alive && wait_readable(_fd, 0) != 0) {   // 就绪探测：可读或错误
             std::string chunk;
             int n = sock_recv_nb(_fd, chunk, 64 * 1024);
-            if (n == 0 || n == -1) {                  // 可读 + 0 字节 = 对端 FIN；错误同样收尾
+            if (n == -2 || n == -1) {                  // EOF（哨兵 -2）或硬错误 → 收尾
                 close();                              // 触发 on_close → 控制器退订 → 无泄漏
                 return had_out;
             }
+            if (n == 0) return had_out;               // would-block（0）：探针与 recv 间的
+                                                      // 句柄复用窗口所致，非 FIN——不能关连接
             // n > 0：对端发了字节（流模式下不是合法 HTTP 请求）→ 丢弃，继续流。
             touch();
         }
@@ -219,8 +228,10 @@ bool Connection::process(const Router& router) {
         if (wait_readable(_fd, 0) == 0) break;
         std::string chunk;
         int n = sock_recv_nb(_fd, chunk, 64 * 1024);
-        if (n == -1) { close(); return progress; }
-        if (n == 0) { _pending_eof = true; break; }   // 可读 + 0 字节 → 对端 FIN
+        if (n == -2) { _pending_eof = true; break; }  // EOF 哨兵（recv 返回 0）
+        if (n == -1) { close(); return progress; }    // 硬错误 → 关闭
+        if (n == 0) break;                            // would-block：探针与 recv 间的
+                                                      // 句柄复用窗口所致，等下次推进
         _in += chunk;
         _partial = true;                    // 收到过字节 → 请求已部分到达（慢读计时）
         touch();
