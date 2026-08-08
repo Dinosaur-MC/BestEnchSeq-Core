@@ -109,8 +109,6 @@ TEST_CASE("test_ench_copy_construction") {
                          std::unordered_set<NSID>{}});
     expect(reg2.size() == 5, "copy ctor: dest after insert == 5");
     expect(reg1.size() == 3, "copy ctor: source unchanged after dest insert");
-
-    std::cout << "PASS: test_ench_copy_construction" << std::endl;
 }
 
 TEST_CASE("test_ench_copy_assignment") {
@@ -130,8 +128,6 @@ TEST_CASE("test_ench_copy_assignment") {
     expect(reg2.size() == 4, "copy assign: dest unchanged after source erase");
     expect(reg2.contains(NSID("sharpness")), "copy assign: dest still has sharpness");
     expect(reg2.is_incompatible(NSID("sharpness"), NSID("smite")), "copy assign: dest incompatibility preserved");
-
-    std::cout << "PASS: test_ench_copy_assignment" << std::endl;
 }
 
 TEST_CASE("test_ench_move_construction") {
@@ -162,8 +158,6 @@ TEST_CASE("test_ench_move_construction") {
     // Moved-from object is safely destructible and re-usable
     reg1 = EnchantmentRegistry(); // re-assign to empty — no crash
     expect(reg1.size() == 0, "move ctor: re-assigned moved-from source is empty");
-
-    std::cout << "PASS: test_ench_move_construction" << std::endl;
 }
 
 TEST_CASE("test_ench_move_assignment") {
@@ -180,7 +174,6 @@ TEST_CASE("test_ench_move_assignment") {
     expect(!reg2.is_incompatible(NSID("sharpness"), NSID("unbreaking")), "move assign: dest compatibility preserved");
 
     // Safe to destroy both
-    std::cout << "PASS: test_ench_move_assignment" << std::endl;
 }
 
 TEST_CASE("test_ench_self_assignment") {
@@ -200,8 +193,6 @@ TEST_CASE("test_ench_self_assignment") {
     expect(reg.contains(NSID("mending")), "self assign: mending present");
     expect(reg.is_incompatible(NSID("sharpness"), NSID("smite")), "self assign: incompatibility preserved");
     expect(!reg.is_incompatible(NSID("sharpness"), NSID("unbreaking")), "self assign: compatibility preserved");
-
-    std::cout << "PASS: test_ench_self_assignment" << std::endl;
 }
 
 // ============================================================================
@@ -234,8 +225,6 @@ TEST_CASE("test_eq_copy_construction") {
     expect(reg1.size() == 2, "eq copy ctor: source after erase == 2");
     expect(reg2.size() == 3, "eq copy ctor: dest unchanged after source erase");
     expect(reg2.contains(NSID("minecraft:iron_sword")), "eq copy ctor: dest still has iron_sword");
-
-    std::cout << "PASS: test_eq_copy_construction" << std::endl;
 }
 
 TEST_CASE("test_eq_move_construction") {
@@ -254,8 +243,6 @@ TEST_CASE("test_eq_move_construction") {
     // get_by_category still works
     auto swords = reg2.get_by_category(EquipmentTag::sword());
     expect(swords.size() == 2, "eq move ctor: dest swords by category == 2");
-
-    std::cout << "PASS: test_eq_move_construction" << std::endl;
 }
 
 // ============================================================================
@@ -300,8 +287,6 @@ TEST_CASE("test_tag_copy") {
     expect(reg1.size() == 3, "tag copy: source after erase == 3");
     expect(reg2.size() == 4, "tag copy: dest unchanged after source erase");
     expect(reg2.contains(NSID("#minecraft:mace")), "tag copy: dest still has custom mace after source erase");
-
-    std::cout << "PASS: test_tag_copy" << std::endl;
 }
 
 TEST_CASE("test_tag_move") {
@@ -331,8 +316,6 @@ TEST_CASE("test_tag_move") {
         threw = true;
     }
     expect(threw, "tag move: dest get(\"nonexistent\") throws out_of_range");
-
-    std::cout << "PASS: test_tag_move" << std::endl;
 }
 
 } // anonymous namespace

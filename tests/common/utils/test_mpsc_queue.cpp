@@ -27,15 +27,12 @@ TEST_CASE("test_push_pop") {
     expect(val == 42, "value should be 42");
     expect(q.empty(), "empty after pop");
     expect(q.size() == 0, "size == 0 after pop");
-
-    std::cout << "PASS: test_push_pop" << std::endl;
 }
 
 TEST_CASE("test_empty_pop_returns_false") {
     SegmentedMPSCQueue<int> q;
     int val{};
     expect(!q.try_pop(val), "pop on empty returns false");
-    std::cout << "PASS: test_empty_pop_returns_false" << std::endl;
 }
 
 TEST_CASE("test_fifo_order") {
@@ -51,7 +48,6 @@ TEST_CASE("test_fifo_order") {
         ++expected;
     }
     expect(expected == N, "should pop all N items");
-    std::cout << "PASS: test_fifo_order (" << N << " items)" << std::endl;
 }
 
 TEST_CASE("test_interleaved_push_pop") {
@@ -63,7 +59,6 @@ TEST_CASE("test_interleaved_push_pop") {
         expect(val == i, "value should match");
     }
     expect(q.empty(), "queue should be empty after interleaved ops");
-    std::cout << "PASS: test_interleaved_push_pop" << std::endl;
 }
 
 TEST_CASE("test_clear") {
@@ -83,14 +78,11 @@ TEST_CASE("test_clear") {
     int val{};
     expect(q.try_pop(val), "pop after clear should succeed");
     expect(val == 42, "value after clear should match");
-
-    std::cout << "PASS: test_clear" << std::endl;
 }
 
 TEST_CASE("test_capacity_is_zero") {
     SegmentedMPSCQueue<int> q;
     expect(q.capacity() == 0, "unbounded queue reports capacity == 0");
-    std::cout << "PASS: test_capacity_is_zero" << std::endl;
 }
 
 // ─── Non-trivial type ───
@@ -116,8 +108,6 @@ TEST_CASE("test_move_only_type") {
     expect(q.try_pop(val), "pop move-only");
     expect(val.id == 2 && val.name == "bob", "second value");
     expect(!q.try_pop(val), "queue empty");
-
-    std::cout << "PASS: test_move_only_type" << std::endl;
 }
 
 struct NonDefaultConstructible {
@@ -140,8 +130,6 @@ TEST_CASE("test_non_default_constructible") {
     expect(q.try_pop(val), "pop nDefaultConstructible");
     expect(val.value == 99, "second value");
     expect(!q.try_pop(val), "queue empty");
-
-    std::cout << "PASS: test_non_default_constructible" << std::endl;
 }
 
 TEST_CASE("test_clear_non_default_constructible") {
@@ -158,8 +146,6 @@ TEST_CASE("test_clear_non_default_constructible") {
     expect(q.try_push(NonDefaultConstructible(4)), "push after clear");
     NonDefaultConstructible val{0};
     expect(q.try_pop(val) && val.value == 4, "pop after clear");
-
-    std::cout << "PASS: test_clear_non_default_constructible" << std::endl;
 }
 
 // ─── Multi-threaded tests ───
@@ -219,7 +205,6 @@ TEST_CASE("test_two_producers_one_consumer") {
 
     expect(consumed.load() == TOTAL, "should consume all items. Got: " + std::to_string(consumed.load()));
     expect(sum_in.load() == sum_out.load(), "sum in should equal sum out");
-    std::cout << "PASS: test_two_producers_one_consumer (" << consumed.load() << "/" << TOTAL << " items)" << std::endl;
 }
 
 TEST_CASE("test_multi_producer_stress") {
@@ -342,7 +327,6 @@ TEST_CASE("test_sequence_uniqueness") {
 
     expect(consumed.load() == TOTAL, "should consume all unique items. Got: " + std::to_string(consumed.load()));
     expect(seen.size() == static_cast<size_t>(TOTAL), "set size should match total. Got: " + std::to_string(seen.size()));
-    std::cout << "PASS: test_sequence_uniqueness (" << seen.size() << "/" << TOTAL << " unique)" << std::endl;
 }
 
 // ─── QueueType concept check ───
@@ -355,8 +339,6 @@ TEST_CASE("test_queue_type_concept") {
     // Move-only type
     static_assert(QueueType<SegmentedMPSCQueue<std::unique_ptr<int>>, std::unique_ptr<int>>,
                   "SegmentedMPSCQueue<unique_ptr> must satisfy QueueType");
-
-    std::cout << "PASS: test_queue_type_concept" << std::endl;
 }
 
 // ─── QueueAdaptor integration ───
@@ -380,6 +362,4 @@ TEST_CASE("test_queue_adaptor_integration") {
     underlying.try_push(99);
     expect(adaptor.try_pop(val), "pop via adaptor after underlying push");
     expect(val == 99, "value from underlying push");
-
-    std::cout << "PASS: test_queue_adaptor_integration" << std::endl;
 }

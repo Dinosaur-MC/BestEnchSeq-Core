@@ -24,15 +24,12 @@ TEST_CASE("test_push_pop") {
     expect(val == 42, "value should be 42");
     expect(q.empty(), "empty after pop");
     expect(q.size() == 0, "size == 0 after pop");
-
-    std::cout << "PASS: test_push_pop" << std::endl;
 }
 
 TEST_CASE("test_empty_pop_returns_false") {
     SegmentedMPMCQueue<int, 64> q;
     int val{};
     expect(!q.try_pop(val), "pop on empty returns false");
-    std::cout << "PASS: test_empty_pop_returns_false" << std::endl;
 }
 
 TEST_CASE("test_fifo_order") {
@@ -48,7 +45,6 @@ TEST_CASE("test_fifo_order") {
         ++expected;
     }
     expect(expected == N, "should pop all N items");
-    std::cout << "PASS: test_fifo_order (" << N << " items)" << std::endl;
 }
 
 TEST_CASE("test_large_push_pop") {
@@ -66,7 +62,6 @@ TEST_CASE("test_large_push_pop") {
         ++expected;
     }
     expect(expected == N, "should pop all N items across blocks");
-    std::cout << "PASS: test_large_push_pop (" << N << " items across blocks)" << std::endl;
 }
 
 TEST_CASE("test_interleaved_push_pop") {
@@ -78,7 +73,6 @@ TEST_CASE("test_interleaved_push_pop") {
         expect(val == i, "value should match");
     }
     expect(q.empty(), "queue should be empty after interleaved ops");
-    std::cout << "PASS: test_interleaved_push_pop" << std::endl;
 }
 
 // ─── Multi-threaded tests ───
@@ -137,7 +131,6 @@ TEST_CASE("test_two_producers_one_consumer") {
 
     expect(consumed.load() == TOTAL, "should consume all items. Got: " + std::to_string(consumed.load()));
     expect(sum_in.load() == sum_out.load(), "sum in should equal sum out");
-    std::cout << "PASS: test_two_producers_one_consumer (" << consumed.load() << "/" << TOTAL << " items)" << std::endl;
 }
 
 TEST_CASE("test_one_producer_two_consumers") {
@@ -274,6 +267,4 @@ TEST_CASE("test_move_only_type") {
     expect(q.try_pop(val), "pop move-only");
     expect(val.id == 2 && val.name == "bob", "second value");
     expect(!q.try_pop(val), "queue empty");
-
-    std::cout << "PASS: test_move_only_type" << std::endl;
 }

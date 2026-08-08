@@ -14,8 +14,6 @@ TEST_CASE("test_loader_builtin_list") {
 
     auto names = loader.list();
     expect(names.size() >= 3, "built-in list contains at least 3 algorithms");
-
-    std::cout << "PASS: test_loader_builtin_list" << std::endl;
 }
 
 TEST_CASE("test_loader_contains") {
@@ -26,8 +24,6 @@ TEST_CASE("test_loader_contains") {
     expect(!loader.contains("dfs"), "contains: dfs is not built-in (moved to plugin)");
     expect(loader.contains("hamming"), "contains: hamming is available");
     expect(!loader.contains("nonexistent_algo"), "contains: unknown algorithm absent");
-
-    std::cout << "PASS: test_loader_contains" << std::endl;
 }
 
 TEST_CASE("test_loader_create") {
@@ -51,8 +47,6 @@ TEST_CASE("test_loader_create") {
         auto algo = loader.create("unknown_algo");
         expect(algo == nullptr, "create: unknown algorithm returns null");
     }
-
-    std::cout << "PASS: test_loader_create" << std::endl;
 }
 
 TEST_CASE("test_loader_size") {
@@ -61,8 +55,6 @@ TEST_CASE("test_loader_size") {
 
     auto names = loader.list();
     expect(loader.size() == names.size(), "size() equals list().size()");
-
-    std::cout << "PASS: test_loader_size" << std::endl;
 }
 
 TEST_CASE("test_loader_double_load") {
@@ -83,8 +75,6 @@ TEST_CASE("test_loader_double_load") {
     expect(!loader.contains("astar"), "double load: astar absent (moved to plugin)");
     expect(!loader.contains("dfs"), "double load: dfs absent (moved to plugin)");
     expect(loader.contains("hamming"), "double load: hamming still present");
-
-    std::cout << "PASS: test_loader_double_load" << std::endl;
 }
 
 // ─── Audit tests ───────────────────────────────────────────────────
@@ -95,8 +85,6 @@ TEST_CASE("test_audit_default_state") {
 
     // Before any plugin load, last_audit() should be nullptr
     expect(loader.last_audit() == nullptr, "audit: last_audit is null before any load");
-
-    std::cout << "PASS: test_audit_default_state" << std::endl;
 }
 
 TEST_CASE("test_audit_static_method") {
@@ -108,8 +96,6 @@ TEST_CASE("test_audit_static_method") {
     // because the binary format will not be recognized.
     auto report2 = audit_plugin_binary("test_algorithm_loader.cpp");
     expect(!report2.passed, "audit: non-binary file returns passed=false");
-
-    std::cout << "PASS: test_audit_static_method" << std::endl;
 }
 
 TEST_CASE("test_audit_report_defaults") {
@@ -120,6 +106,4 @@ TEST_CASE("test_audit_report_defaults") {
     expect(r.extra_exports.empty(), "audit: default report has no extra exports");
     expect(r.dangerous_imports.empty(), "audit: default report has no dangerous imports");
     expect(r.linked_libraries.empty(), "audit: default report has no linked libs");
-
-    std::cout << "PASS: test_audit_report_defaults" << std::endl;
 }

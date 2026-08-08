@@ -31,14 +31,12 @@ TEST_CASE("test_ench_construct") {
     Ench e(SHARPNESS(), "Sharpness", 3);
     expect(e.id == SHARPNESS(), "ench id sharpness");
     expect(e.level == 3, "ench level 3");
-    std::cout << "PASS: test_ench_construct" << std::endl;
 }
 
 TEST_CASE("test_ench_default") {
     Ench e;
     expect(e.id.empty(), "default id empty");
     expect(e.level == 1, "default level 1");
-    std::cout << "PASS: test_ench_default" << std::endl;
 }
 
 TEST_CASE("test_ench_equality") {
@@ -48,7 +46,6 @@ TEST_CASE("test_ench_equality") {
     expect(a == b, "same id+level");
     expect(!(a == c), "different level");
     expect(!(b == c), "different level");
-    std::cout << "PASS: test_ench_equality" << std::endl;
 }
 
 TEST_CASE("test_ench_hash") {
@@ -60,7 +57,6 @@ TEST_CASE("test_ench_hash") {
     expect(hasher(a) == hasher(b), "same values → same hash");
     // Different enchants at same level should have different hash (highly likely)
     expect(hasher(a) != hasher(c), "different enchants → different hash");
-    std::cout << "PASS: test_ench_hash" << std::endl;
 }
 
 // ─── EnchSet ────────────────────────────────────────────────────────────
@@ -69,7 +65,6 @@ TEST_CASE("test_enchset_empty") {
     EnchSet s;
     expect(s.empty(), "default empty");
     expect(s.size() == 0, "size 0");
-    std::cout << "PASS: test_enchset_empty" << std::endl;
 }
 
 TEST_CASE("test_enchset_insert_and_find") {
@@ -83,7 +78,6 @@ TEST_CASE("test_enchset_insert_and_find") {
     expect(s.find(SMITE()) != s.end(), "find smite");
     expect(s.find(UNBREAKING()) != s.end(), "find unbreaking");
     expect(s.find(NSID("minecraft:unknown")) == s.end(), "not find unknown");
-    std::cout << "PASS: test_enchset_insert_and_find" << std::endl;
 }
 
 TEST_CASE("test_enchset_erase") {
@@ -94,7 +88,6 @@ TEST_CASE("test_enchset_erase") {
     expect(s.size() == 1, "size 1 after erase");
     expect(s.find(SMITE()) != s.end(), "smite remains");
     expect(s.find(SHARPNESS()) == s.end(), "sharpness gone");
-    std::cout << "PASS: test_enchset_erase" << std::endl;
 }
 
 // ─── Item ───────────────────────────────────────────────────────────────
@@ -104,7 +97,6 @@ TEST_CASE("test_item_default") {
     expect(stack.enchantments.empty(), "default item has no enchants");
     expect(stack.prior_penalty == 0, "default penalty 0");
     expect(!stack.is_book(), "default item is not a book");
-    std::cout << "PASS: test_item_default" << std::endl;
 }
 
 TEST_CASE("test_item_book") {
@@ -115,7 +107,6 @@ TEST_CASE("test_item_book") {
     expect(stack.enchantments.size() == 2, "two enchants");
     expect(stack.prior_penalty == 2, "penalty 2");
     expect(stack.is_book(), "book item");
-    std::cout << "PASS: test_item_book" << std::endl;
 }
 
 // ─── Item boundaries ─────────────────────────────────────────────────────
@@ -140,8 +131,6 @@ TEST_CASE("test_item_boundaries") {
     Item eq(NSID("minecraft:diamond_sword"), EnchSet{}, 0, 1561);
     expect(eq.is_equipment(), "sword item is equipment");
     expect(!eq.is_book(), "sword item is not a book");
-
-    std::cout << "PASS: test_item_boundaries" << std::endl;
 }
 
 // ─── Solution derived metrics ───────────────────────────────────────────
@@ -170,8 +159,6 @@ TEST_CASE("test_solution_derived_metrics") {
     bad.steps = {s1};
     bad.max_cost_step_index = 5; // out of range
     expect_eq(bad.get_peak_level_cost(), 0, "out-of-range peak index → 0");
-
-    std::cout << "PASS: test_solution_derived_metrics" << std::endl;
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────

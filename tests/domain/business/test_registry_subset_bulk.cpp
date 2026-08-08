@@ -47,8 +47,6 @@ TEST_CASE("test_subset_by_max_level") {
     expect(subset.contains(NSID("minecraft:ench_4")), "subset contains ench_4 (max_level=4)");
     expect(!subset.contains(NSID("minecraft:ench_1")), "subset excludes ench_1 (max_level=1)");
     expect(!subset.contains(NSID("minecraft:ench_2")), "subset excludes ench_2 (max_level=2)");
-
-    std::cout << "PASS: test_subset_by_max_level" << std::endl;
 }
 
 // ── A2: Filter by platform -------------------------------------------------
@@ -73,8 +71,6 @@ TEST_CASE("test_subset_by_platform") {
     expect(subset.contains(NSID("minecraft:ench_java")), "subset contains Java-only ench");
     expect(subset.contains(NSID("minecraft:ench_all")), "subset contains All-platform ench");
     expect(!subset.contains(NSID("minecraft:ench_bedrock")), "subset excludes Bedrock-only ench");
-
-    std::cout << "PASS: test_subset_by_platform" << std::endl;
 }
 
 // ── A3: Filter by applicable equipment -------------------------------------
@@ -98,8 +94,6 @@ TEST_CASE("test_subset_by_applicable") {
     expect(subset.contains(NSID("minecraft:sharpness")), "subset contains sharpness (applies to sword)");
     expect(!subset.contains(NSID("minecraft:protection")), "subset excludes protection (applies to chestplate)");
     expect(!subset.contains(NSID("minecraft:unbreaking")), "subset excludes unbreaking (no applicable equipments)");
-
-    std::cout << "PASS: test_subset_by_applicable" << std::endl;
 }
 
 // ── A4: Empty result -------------------------------------------------------
@@ -116,8 +110,6 @@ TEST_CASE("test_subset_empty_result") {
 
     expect(subset.size() == 0, "subset(match nothing) size == 0");
     expect(subset.empty(), "subset(match nothing) is empty");
-
-    std::cout << "PASS: test_subset_empty_result" << std::endl;
 }
 
 // ── A5: All match ----------------------------------------------------------
@@ -138,8 +130,6 @@ TEST_CASE("test_subset_all_match") {
     expect(subset.contains(NSID("minecraft:sharpness")), "subset contains sharpness");
     expect(subset.contains(NSID("minecraft:smite")), "subset contains smite");
     expect(subset.contains(NSID("minecraft:unbreaking")), "subset contains unbreaking");
-
-    std::cout << "PASS: test_subset_all_match" << std::endl;
 }
 
 // ── A6: Subset on EquipmentRegistry by category ----------------------------
@@ -172,8 +162,6 @@ TEST_CASE("test_subset_equipment") {
 
     expect(chestplates.size() == 1, "subset(chestplate category) size == 1");
     expect(chestplates.contains(NSID("minecraft:diamond_chestplate")), "subset has diamond_chestplate");
-
-    std::cout << "PASS: test_subset_equipment" << std::endl;
 }
 
 // ── A7: Chained subsets ----------------------------------------------------
@@ -212,8 +200,6 @@ TEST_CASE("test_subset_chained") {
     expect(subset2.contains(NSID("minecraft:ench_a")), "chain: second subset has ench_a (Java+max>=3)");
     expect(subset2.contains(NSID("minecraft:ench_e")), "chain: second subset has ench_e (All+max>=3)");
     expect(!subset2.contains(NSID("minecraft:ench_b")), "chain: second subset excludes ench_b (Bedrock)");
-
-    std::cout << "PASS: test_subset_chained" << std::endl;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -248,8 +234,6 @@ TEST_CASE("test_bulk_insert_200") {
     const auto& last = reg.at(NSID("minecraft:ench_199"));
     expect(last.name == "Ench 199", "bulk insert 200: ench_199 name");
     expect(last.max_level == 5, "bulk insert 200: ench_199 max_level");
-
-    std::cout << "PASS: test_bulk_insert_200" << std::endl;
 }
 
 // ── B9: Bulk insert 100, erase 30, verify ----------------------------------
@@ -285,8 +269,6 @@ TEST_CASE("test_bulk_insert_erase_mixed") {
         std::string id_str = "minecraft:test_" + std::to_string(i);
         expect(reg.contains(NSID(id_str)), "bulk erase: remaining test_" + std::to_string(i) + " found");
     }
-
-    std::cout << "PASS: test_bulk_insert_erase_mixed" << std::endl;
 }
 
 // ── B10: Bulk insert 100, update 20, verify --------------------------------
@@ -327,8 +309,6 @@ TEST_CASE("test_bulk_update") {
         expect(ench.max_level == 5, "bulk update: upd_" + std::to_string(i) + " max_level == 5 (unchanged)");
         expect(ench.name == "Upd " + std::to_string(i), "bulk update: upd_" + std::to_string(i) + " name unchanged");
     }
-
-    std::cout << "PASS: test_bulk_update" << std::endl;
 }
 
 } // anonymous namespace

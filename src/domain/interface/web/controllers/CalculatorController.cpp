@@ -106,9 +106,11 @@ Response CalculatorController::events(const HttpRequest& req, const PathParams& 
     // req.stream 恒为连接（Connection 实现 StreamChannel）；单元测试直调时可能为空，
     // 此时订阅仍注册但帧被静默丢弃。
     auto ch = req.stream;
+    // replay_last=true：任务键终态帧对迟到订阅者重放（根治"订阅晚于发布 →
+    // 帧丢失"竞态，见 SseHub 注释）。
     auto sub = _hub.subscribe(id, [ch](const std::string&, std::string frame) {
         if (ch) ch->post_frame(std::move(frame));
-    });
+    }, true);
     _streams.emplace(sub, id);
     // 迟到订阅者（如 SPA 重连）立即收到任务的最新进度帧，而非直到下一次 publish
     // 才有任何输出（spec §7 帧形状：{"type":"progress","progress":<p>}）。任务已完成

@@ -270,6 +270,8 @@ void test_task_failed_snapshot(HttpServer& server) {
 // place long before the completed publish. The stream head (200 + text/event-
 // stream) and the completed frame are both read from the live socket.
 void test_sse_events(HttpServer& server) {
+    // 根治后（SseHub 每任务保留最后一帧，迟到订阅者 subscribe 即重放）：
+    // 订阅晚于 completed 发布不再丢帧——小 solve 即可，窗口无关。
     const std::string body = "{\"target\":{\"item\":\"diamond_chestplate\",\"enchants\":["
                              "{\"id\":\"protection\",\"level\":4},{\"id\":\"thorns\",\"level\":3},"
                              "{\"id\":\"unbreaking\",\"level\":3},{\"id\":\"mending\",\"level\":1}]},"
@@ -293,8 +295,8 @@ void test_sse_events(HttpServer& server) {
     expect(got.find("text/event-stream") != std::string::npos, "SSE content-type");
     expect(got.find("Content-Length") == std::string::npos, "SSE head has no Content-Length (open-ended stream)");
 
-    // Completed frame: the solve finishes ~100ms+ after the task was submitted;
-    // 3s budget covers it with a wide margin.
+    // Completed frame: solve 快（dp_merge 小目标 ~100ms），订阅建立或在其
+    // 后——SseHub 重放保证终态帧必达；3s 预算宽裕。
     recv_until(c, got, "event: completed", 300);
     const auto pos = got.find("event: completed");
     expect(pos != std::string::npos, "SSE completed event frame on the wire");

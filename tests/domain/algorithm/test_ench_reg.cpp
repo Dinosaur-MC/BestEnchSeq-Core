@@ -82,8 +82,6 @@ TEST_CASE("test_basic_init_and_size") {
 
     expect(fx.reg.size() == 4, "size: should have 4 enchantments");
     expect(fx.reg.get_target_equip().id == NSID("test"), "target: should be equipment id test");
-
-    std::cout << "PASS: test_basic_init_and_size" << std::endl;
 }
 
 TEST_CASE("test_safe_get_bounds") {
@@ -106,8 +104,6 @@ TEST_CASE("test_safe_get_bounds") {
         threw = true;
     }
     expect(threw, "get(): should throw on negative id");
-
-    std::cout << "PASS: test_safe_get_bounds" << std::endl;
 }
 
 TEST_CASE("test_conflict_detection") {
@@ -125,8 +121,6 @@ TEST_CASE("test_conflict_detection") {
     // Self-check should NOT conflict
     expect(!fx.reg.is_conflict(0, 0), "conflict: self should NOT conflict");
     expect(!fx.reg.is_conflict(1, 1), "conflict: self should NOT conflict");
-
-    std::cout << "PASS: test_conflict_detection" << std::endl;
 }
 
 TEST_CASE("test_multiplier_and_max_level") {
@@ -139,8 +133,6 @@ TEST_CASE("test_multiplier_and_max_level") {
     // knockback: mult=2, max_lvl=2
     expect(fx.reg[1].mul == 2, "multiplier: knockback should be 2");
     expect(fx.reg[1].max_lvl == 2, "max_level: knockback should be 2");
-
-    std::cout << "PASS: test_multiplier_and_max_level" << std::endl;
 }
 
 // ─── algorithm::EnchSet dedicated tests ────────────────────────────
@@ -165,8 +157,6 @@ TEST_CASE("test_enchset_hash_consistency") {
     set3.insert({2, 2});
     auto h4 = set3.hash();
     expect(h1 != h4, "enchset hash: different ids should differ");
-
-    std::cout << "PASS: test_enchset_hash_consistency" << std::endl;
 }
 
 TEST_CASE("test_enchset_mutable_iterator_write") {
@@ -194,8 +184,6 @@ TEST_CASE("test_enchset_mutable_iterator_write") {
     // Verify find still works after mutation
     expect(set.contains(2) && set[2] == 4, "find(2) should return updated level 4");
     expect(set.contains(0) && set[0] == 5, "find(0) should return unchanged level 5");
-
-    std::cout << "PASS: test_enchset_mutable_iterator_write" << std::endl;
 }
 
 TEST_CASE("test_enchset_empty_and_single") {
@@ -213,8 +201,6 @@ TEST_CASE("test_enchset_empty_and_single") {
     single.insert({3, 2});
     expect(single.size() == 1, "enchset single: update same id, size still 1");
     expect(single.contains(3) && single[3] == 2, "enchset single: find(3) level updated to 2");
-
-    std::cout << "PASS: test_enchset_empty_and_single" << std::endl;
 }
 
 } // anonymous namespace

@@ -35,8 +35,6 @@ TEST_CASE("test_create_profile") {
     bool added = p.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
     expect(added, "add_enchantment should succeed");
     expect(p.has_enchantment(NSID("minecraft:sharpness")), "profile should contain sharpness");
-
-    std::cout << "PASS: test_create_profile" << std::endl;
 }
 
 // ─── Test: Create From ──────────────────────────────────────────────────
@@ -61,8 +59,6 @@ TEST_CASE("test_create_from") {
     b.add_enchantment(make_ench("minecraft:unbreaking", "Unbreaking", 3));
     expect(b.has_enchantment(NSID("minecraft:unbreaking")), "B should have unbreaking after add");
     expect(!a.has_enchantment(NSID("minecraft:unbreaking")), "A should NOT have unbreaking (independence)");
-
-    std::cout << "PASS: test_create_from" << std::endl;
 }
 
 // ─── Test: Remove Profile ───────────────────────────────────────────────
@@ -77,8 +73,6 @@ TEST_CASE("test_remove_profile") {
     expect(mgr.size() == 1, "size should be 1 after removing one profile");
     expect(!mgr.exists("test:a"), "removed profile should not exist");
     expect(mgr.exists("test:b"), "remaining profile should still exist");
-
-    std::cout << "PASS: test_remove_profile" << std::endl;
 }
 
 // ─── Test: Remove Nonexistent ───────────────────────────────────────────
@@ -90,8 +84,6 @@ TEST_CASE("test_remove_nonexistent") {
     bool removed = mgr.remove("test:nonexistent");
     expect(!removed, "remove should return false for nonexistent profile");
     expect(mgr.size() == 1, "size should remain unchanged");
-
-    std::cout << "PASS: test_remove_nonexistent" << std::endl;
 }
 
 // ─── Test: Activate and Active ──────────────────────────────────────────
@@ -110,8 +102,6 @@ TEST_CASE("test_activate_and_active") {
     // Activate second profile
     mgr.activate("test:b");
     expect(mgr.active_name() == "test:b", "active name should be b after switching");
-
-    std::cout << "PASS: test_activate_and_active" << std::endl;
 }
 
 // ─── Test: Activate Nonexistent Throws ──────────────────────────────────
@@ -122,8 +112,6 @@ TEST_CASE("test_activate_nonexistent_throws") {
 
     expect_throws_as<std::runtime_error>([&]() { mgr.activate("test:nonexistent"); },
                                          "activate() should throw for nonexistent profile");
-
-    std::cout << "PASS: test_activate_nonexistent_throws" << std::endl;
 }
 
 // ─── Test: Empty Active Throws ──────────────────────────────────────────
@@ -132,8 +120,6 @@ TEST_CASE("test_empty_active_throws") {
     ProfileManager mgr; // no profiles
 
     expect_throws_as<std::runtime_error>([&]() { mgr.active(); }, "active() should throw when manager is empty");
-
-    std::cout << "PASS: test_empty_active_throws" << std::endl;
 }
 
 // ─── Test: List ─────────────────────────────────────────────────────────
@@ -160,8 +146,6 @@ TEST_CASE("test_list") {
     expect(found_alpha, "list should contain alpha");
     expect(found_beta, "list should contain beta");
     expect(found_gamma, "list should contain gamma");
-
-    std::cout << "PASS: test_list" << std::endl;
 }
 
 // ─── Test: Find ─────────────────────────────────────────────────────────
@@ -175,8 +159,6 @@ TEST_CASE("test_find") {
 
     Profile* q = mgr.find("test:unknown");
     expect(q == nullptr, "find() should return null for unknown profile");
-
-    std::cout << "PASS: test_find" << std::endl;
 }
 
 // ─── Test: Snapshot ─────────────────────────────────────────────────────
@@ -203,8 +185,6 @@ TEST_CASE("test_snapshot") {
     expect(a.has_enchantment(NSID("minecraft:protection")), "A should have protection after add");
     expect(!snap.has_enchantment(NSID("minecraft:protection")), "snapshot should NOT have protection (immutable)");
     expect(a.ench().size() == snap.ench().size() + 1, "snapshot should have one fewer enchantment than A");
-
-    std::cout << "PASS: test_snapshot" << std::endl;
 }
 
 // ─── Test: Branch ───────────────────────────────────────────────────────
@@ -227,8 +207,6 @@ TEST_CASE("test_branch") {
     branch.add_enchantment(make_ench("minecraft:unbreaking", "Unbreaking", 3));
     expect(branch.has_enchantment(NSID("minecraft:unbreaking")), "branch should have unbreaking");
     expect(!a.has_enchantment(NSID("minecraft:unbreaking")), "A should NOT have unbreaking (branch independence)");
-
-    std::cout << "PASS: test_branch" << std::endl;
 }
 
 // ─── Test: Merge ────────────────────────────────────────────────────────
@@ -255,8 +233,6 @@ TEST_CASE("test_merge") {
     // B unchanged
     expect(b.has_enchantment(NSID("minecraft:unbreaking")), "B should still have unbreaking");
     expect(b.ench().size() == 1, "B should still have 1 enchantment");
-
-    std::cout << "PASS: test_merge" << std::endl;
 }
 
 // ─── Test: Merge with missing source/dest throws (I-2 regression) ────────
@@ -283,8 +259,6 @@ TEST_CASE("test_create_empty_profile_structure") {
     expect(p.ench().size() == 0, "empty profile should have 0 enchantments");
     expect(p.eq().size() == 0, "empty profile should have 0 equipment");
     expect(p.tags().size() == 0, "empty profile should have 0 tags");
-
-    std::cout << "PASS: test_create_empty_profile_structure" << std::endl;
 }
 
 // ─── Test: Dependency Chain (transitive topological resolution) ──────

@@ -39,6 +39,18 @@ TEST_CASE("test_http_server") {
     expect(server.port() > 0, "server reports bound port");
 
     std::thread srv([&] { server.run(); });
+    // RAII（遗留清扫 2026-08-08）：断言失败回卷时停止服务器并 join——
+    // 否则 joinable 线程析构 → std::terminate 崩溃而非 FAIL 报告。
+    struct ServerGuard {
+        web::HttpServer& s;
+        std::thread& t;
+        ~ServerGuard() {
+            if (t.joinable()) {
+                s.stop();
+                t.join();
+            }
+        }
+    } guard{server, srv};
 
     // 8 个并发客户端同时 GET /health
     std::atomic<int> ok{0};

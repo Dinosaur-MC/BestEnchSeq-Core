@@ -18,8 +18,6 @@ TEST_CASE("test_push_pop") {
     expect(val == 42, "value should be 42");
     expect(q.empty(), "empty after pop");
     expect(!q.try_pop(val), "pop on empty returns false");
-
-    std::cout << "PASS: test_push_pop" << std::endl;
 }
 
 TEST_CASE("test_drop_on_full") {
@@ -42,8 +40,6 @@ TEST_CASE("test_drop_on_full") {
     expect(q.try_pop(val) && val == 3, "third should be 3");
     expect(q.try_pop(val) && val == 4, "fourth should be 4");
     expect(!q.try_pop(val), "queue should be empty");
-
-    std::cout << "PASS: test_drop_on_full" << std::endl;
 }
 
 TEST_CASE("test_sequential_producer_consumer") {
@@ -60,7 +56,6 @@ TEST_CASE("test_sequential_producer_consumer") {
         count++;
     }
     std::cout << "  (read " << count << " values from " << N << ")" << std::endl;
-    std::cout << "PASS: test_sequential_producer_consumer" << std::endl;
 }
 
 TEST_CASE("test_consumer_catch_up") {
@@ -81,7 +76,6 @@ TEST_CASE("test_consumer_catch_up") {
         count++;
     }
     std::cout << "  (read " << count << " values from " << N << ")" << std::endl;
-    std::cout << "PASS: test_consumer_catch_up" << std::endl;
 }
 
 TEST_CASE("test_peek") {
@@ -97,8 +91,6 @@ TEST_CASE("test_peek") {
 
     q.try_pop(val);
     expect(!q.front(val), "peek after pop returns false");
-
-    std::cout << "PASS: test_peek" << std::endl;
 }
 
 TEST_CASE("test_concurrent_push_pop") {
@@ -148,5 +140,4 @@ TEST_CASE("test_concurrent_push_pop") {
 
     expect(consumed.load() == N, "SPSC: should consume exactly all pushed items");
     expect(order_ok.load(), "SPSC: items should be in FIFO order");
-    std::cout << "PASS: test_concurrent_push_pop (consumed " << consumed.load() << "/" << N << " items)" << std::endl;
 }

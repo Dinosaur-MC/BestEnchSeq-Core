@@ -15,7 +15,6 @@ TEST_CASE("test_level_to_exp") {
     expect(ExpCalculator::level_to_exp(31) == 1507, "level 31 → 1507 exp");
     // Level 32 → (9×1024 − 325×32 + 4440)/2 = (9216 − 10400 + 4440)/2 = 3256/2 = 1628
     expect(ExpCalculator::level_to_exp(32) == 1628, "level 32 → 1628 exp");
-    std::cout << "PASS: test_level_to_exp" << std::endl;
 }
 
 TEST_CASE("test_peak_analysis") {
@@ -34,5 +33,4 @@ TEST_CASE("test_peak_analysis") {
     expect(ExpCalculator::peak_level_cost(steps.begin(), steps.end()) == 10, "peak level cost should be 10");
     expect(ExpCalculator::peak_exp_cost(steps.begin(), steps.end()) == ExpCalculator::level_to_exp(10),
            "peak exp cost should match level_to_exp(10)");
-    std::cout << "PASS: test_peak_analysis" << std::endl;
 }

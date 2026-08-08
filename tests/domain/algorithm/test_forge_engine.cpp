@@ -132,7 +132,6 @@ TEST_CASE("test_forge_books") {
     auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
     expect(result.enchs.contains(sid) && result.enchs[sid] == 4, "book+book: should keep max level (4)");
     expect(cost == 4, "book+book cost should be 4");
-    std::cout << "PASS: test_forge_books (cost=" << cost << ")" << std::endl;
 }
 
 TEST_CASE("test_forge_equipment_with_book") {
@@ -145,7 +144,6 @@ TEST_CASE("test_forge_equipment_with_book") {
     auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
     expect(result.enchs.contains(sid) && result.enchs[sid] == 5, "result should have sharpness 5");
     expect(cost == 5, "forge cost for sharpness 5 to empty sword should be 5");
-    std::cout << "PASS: test_forge_equipment_with_book (cost=" << cost << ")" << std::endl;
 }
 
 TEST_CASE("test_forge_incompatible_rejected") {
@@ -164,7 +162,6 @@ TEST_CASE("test_forge_incompatible_rejected") {
                "non-conflicting sharpness 5 should be preserved after incompatible forge");
     }
     expect(cost == 1, "incompatible penalty cost should be 1 (JE)");
-    std::cout << "PASS: test_forge_incompatible_rejected (cost=" << cost << ")" << std::endl;
 }
 
 TEST_CASE("test_forge_not_forgeable") {
@@ -173,7 +170,6 @@ TEST_CASE("test_forge_not_forgeable") {
     algorithm::Item mat{algorithm::ItemType::Material, 0, 0, {}};
     auto book = fx.make_book(fx.id("sharpness"), 1);
     expect(!engine.is_forgeable(mat, book), "material target should not be forgeable");
-    std::cout << "PASS: test_forge_not_forgeable" << std::endl;
 }
 
 // ─── Sub-operation tests ──────────────────────────────────────────
@@ -186,7 +182,6 @@ TEST_CASE("test_penalty_cost") {
     expect(engine.penalty_cost(3) == 7, "penalty_cost(3) should be 7");
     expect(engine.penalty_cost(4) == 15, "penalty_cost(4) should be 15");
     expect(engine.penalty_cost(5) == 31, "penalty_cost(5) should be 31");
-    std::cout << "PASS: test_penalty_cost" << std::endl;
 }
 
 TEST_CASE("test_estimate_forge_cost") {
@@ -201,7 +196,6 @@ TEST_CASE("test_estimate_forge_cost") {
     auto book2 = fx.make_book(fx.id("knockback"), 2);
     int32_t est2 = engine.estimate_forge_cost(eq_ppn, book2, fx.reg);
     expect(est2 == 5, "estimate_forge_cost: equip(ppn2)+knock2 should be 5");
-    std::cout << "PASS: test_estimate_forge_cost" << std::endl;
 }
 
 // ─── BE platform tests ────────────────────────────────────────────
@@ -226,7 +220,6 @@ TEST_CASE("test_be_forge_cost") {
 
     auto [je_result, je_cost] = je_engine.forge(eq, book, fx.reg);
     expect(je_cost == 4, "JE forge: sharpness 3+4 should cost 4");
-    std::cout << "PASS: test_be_forge_cost (BE=" << be_cost << ", JE=" << je_cost << ")" << std::endl;
 }
 
 TEST_CASE("test_be_conflict_cost") {
@@ -249,7 +242,6 @@ TEST_CASE("test_be_conflict_cost") {
 
     auto [je_result, je_cost] = je_engine.forge(eq, book, fx.reg);
     expect(je_cost == 1, "JE forge: conflict should cost 1");
-    std::cout << "PASS: test_be_conflict_cost (BE=" << be_cost << ", JE=" << je_cost << ")" << std::endl;
 }
 
 // ─── forge_into mutation tests ────────────────────────────────────
@@ -269,7 +261,6 @@ TEST_CASE("test_ppn_recalculation") {
     book_c.ppn = 0;
     (void)engine.forge_into(equip, book_c, fx.reg);
     expect(equip.ppn == 4, "PPN after equip(3)+book(0) should be 4");
-    std::cout << "PASS: test_ppn_recalculation" << std::endl;
 }
 
 TEST_CASE("test_same_level_upgrade") {
@@ -290,7 +281,6 @@ TEST_CASE("test_same_level_upgrade") {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
         expect(result2.enchs.contains(sid) && result2.enchs[sid] == 5, "max level combine: 5+5 should stay 5");
     }
-    std::cout << "PASS: test_same_level_upgrade" << std::endl;
 }
 
 TEST_CASE("test_different_level_max") {
@@ -303,7 +293,6 @@ TEST_CASE("test_different_level_max") {
         auto sid = static_cast<algorithm::Ench::value_type>(fx.id("sharpness"));
         expect(result.enchs.contains(sid) && result.enchs[sid] == 5, "different level combine: 5+3 should stay 5");
     }
-    std::cout << "PASS: test_different_level_max" << std::endl;
 }
 
 // ─── Malformed item / error path tests ─────────────────────────────
@@ -324,7 +313,6 @@ TEST_CASE("test_invalid_enchant_level_rejected") {
         expect(result.enchs.contains(sid) && result.enchs[sid] == 3,
                "book with rejected enchant should not reduce equipment's level");
     }
-    std::cout << "PASS: test_invalid_enchant_level_rejected (cost=" << cost << ")" << std::endl;
 }
 
 TEST_CASE("test_zero_level_enchant_rejected") {
@@ -342,7 +330,6 @@ TEST_CASE("test_zero_level_enchant_rejected") {
         expect(result.enchs.contains(sid) && result.enchs[sid] == 3,
                "book with zero-level enchant should not affect equipment");
     }
-    std::cout << "PASS: test_zero_level_enchant_rejected (cost=" << cost << ")" << std::endl;
 }
 
 // ─── Additional sub-operation boundary tests ─────────────────────────

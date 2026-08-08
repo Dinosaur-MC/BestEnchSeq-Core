@@ -83,7 +83,6 @@ TEST_CASE("test_roundtrip_basic") {
     expect(ipc::read_frame(p.read_fd, type, got), "ipc: read_frame succeeds");
     expect(type == ipc::MsgType::MsgGetName, "ipc: type round-trips");
     expect(got == payload, "ipc: payload round-trips");
-    std::cout << "PASS: test_roundtrip_basic" << std::endl;
 }
 
 TEST_CASE("test_roundtrip_empty") {
@@ -96,7 +95,6 @@ TEST_CASE("test_roundtrip_empty") {
     expect(ipc::read_frame(p.read_fd, type, got), "ipc: read empty frame");
     expect(type == ipc::MsgType::MsgResult, "ipc: empty frame type");
     expect(got.empty(), "ipc: empty payload");
-    std::cout << "PASS: test_roundtrip_empty" << std::endl;
 }
 
 TEST_CASE("test_roundtrip_large") {
@@ -117,7 +115,6 @@ TEST_CASE("test_roundtrip_large") {
     expect(type == ipc::MsgType::MsgRun, "ipc: frame type");
     expect(got.size() == payload.size(), "ipc: frame size matches");
     expect(got == payload, "ipc: frame payload matches");
-    std::cout << "PASS: test_roundtrip_large" << std::endl;
 }
 
 /// AlgorithmOutput codec round-trip: the worker's final result must survive
@@ -151,7 +148,6 @@ TEST_CASE("test_algorithm_output_roundtrip") {
                back.solutions[0].steps[0].cost == 7,
            "output: solutions round-trip");
     expect(back.final_item.type == ItemType::Equip && back.final_item.dur == 1561, "output: final_item round-trips");
-    std::cout << "PASS: test_algorithm_output_roundtrip" << std::endl;
 }
 
 TEST_CASE("test_multiple_frames_order") {
@@ -170,7 +166,6 @@ TEST_CASE("test_multiple_frames_order") {
     expect(ipc::read_frame(p.read_fd, t, v) && t == ipc::MsgType::MsgProgress && v == a, "frame 1 order");
     expect(ipc::read_frame(p.read_fd, t, v) && t == ipc::MsgType::MsgSolution && v == b, "frame 2 order");
     expect(ipc::read_frame(p.read_fd, t, v) && t == ipc::MsgType::MsgResult && v == c, "frame 3 order");
-    std::cout << "PASS: test_multiple_frames_order" << std::endl;
 }
 
 /// Large-payload CHUNKING round-trip: a payload just past kDirectMax (>16 MiB)
@@ -198,5 +193,4 @@ TEST_CASE("test_chunked_roundtrip") {
     expect(read_ok, "chunked: read_frame succeeds");
     expect(got_type == ipc::MsgType::MsgCheckpoint, "chunked: type round-trips");
     expect(got.size() == n && got == payload, "chunked: payload transparently reassembled");
-    std::cout << "PASS: test_chunked_roundtrip (" << (n >> 20) << " MiB+)" << std::endl;
 }

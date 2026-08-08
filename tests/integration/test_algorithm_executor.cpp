@@ -95,14 +95,12 @@ void test_constructor_null() {
         threw = true;
     }
     expect(threw, "null algorithm should throw");
-    std::cout << "PASS: test_constructor_null" << std::endl;
 }
 
 void test_initial_state() {
     auto algo = std::make_unique<TestAlgorithm>();
     AlgorithmExecutor executor(std::move(algo));
     expect(executor.state() == AlgorithmState::Idle, "initial state should be Idle");
-    std::cout << "PASS: test_initial_state" << std::endl;
 }
 
 void test_executor_lifecycle() {
@@ -116,7 +114,6 @@ void test_executor_lifecycle() {
     auto final_state = executor.wait();
     expect(final_state == AlgorithmState::Completed, "should complete successfully");
     expect(executor.state() == AlgorithmState::Completed, "state should be Completed after wait");
-    std::cout << "PASS: test_executor_lifecycle" << std::endl;
 }
 
 void test_double_start() {
@@ -133,7 +130,6 @@ void test_double_start() {
     }
     expect(threw, "double start should throw std::logic_error");
     executor.wait();
-    std::cout << "PASS: test_double_start" << std::endl;
 }
 
 void test_reset_and_rerun() {
@@ -150,7 +146,6 @@ void test_reset_and_rerun() {
 
     executor.start(g_test_input);
     expect(executor.wait() == AlgorithmState::Completed, "re-run completes");
-    std::cout << "PASS: test_reset_and_rerun" << std::endl;
 }
 
 void test_reset_refuses_while_running() {
@@ -165,7 +160,6 @@ void test_reset_refuses_while_running() {
     expect(executor.state() == AlgorithmState::Running, "should be Running");
     expect(executor.reset() == false, "reset() while Running refused");
     executor.wait();
-    std::cout << "PASS: test_reset_refuses_while_running" << std::endl;
 }
 
 void test_executor_cancel() {
@@ -185,7 +179,6 @@ void test_executor_cancel() {
 
     auto final_state = executor.wait();
     expect(final_state == AlgorithmState::Cancelled, "should be Cancelled after wait");
-    std::cout << "PASS: test_executor_cancel" << std::endl;
 }
 
 void test_executor_pause_resume() {
@@ -211,7 +204,6 @@ void test_executor_pause_resume() {
 
     auto final_state = executor.wait();
     expect(final_state == AlgorithmState::Completed, "should complete after resume");
-    std::cout << "PASS: test_executor_pause_resume" << std::endl;
 }
 
 void test_cancel_before_start_noop() {
@@ -225,7 +217,6 @@ void test_cancel_before_start_noop() {
     executor.start(g_test_input);
     executor.wait();
     expect(executor.state() == AlgorithmState::Completed, "executor should still run after pre-start cancel()");
-    std::cout << "PASS: test_cancel_before_start_noop" << std::endl;
 }
 
 void test_pause_resume_before_start_noop() {
@@ -240,7 +231,6 @@ void test_pause_resume_before_start_noop() {
     executor.start(g_test_input);
     executor.wait();
     expect(executor.state() == AlgorithmState::Completed, "executor should still run after pre-start pause/resume");
-    std::cout << "PASS: test_pause_resume_before_start_noop" << std::endl;
 }
 
 void test_executor_progress() {
@@ -251,7 +241,6 @@ void test_executor_progress() {
     executor.wait();
 
     expect(executor.progress() > 0, "executor.progress() should return > 0 after execution");
-    std::cout << "PASS: test_executor_progress" << std::endl;
 }
 
 void test_output_not_valid_before_completion() {
@@ -265,7 +254,6 @@ void test_output_not_valid_before_completion() {
 
     executor.cancel();
     executor.wait();
-    std::cout << "PASS: test_output_not_valid_before_completion" << std::endl;
 }
 
 void test_output_has_steps_after_completion() {
@@ -282,7 +270,6 @@ void test_output_has_steps_after_completion() {
     expect(out.solutions.size() == 1, "should have one solution");
     expect(out.solutions[0].steps.size() == 1, "solution should have one step");
     expect(out.solutions[0].steps[0].cost == 4, "step cost should match reported value");
-    std::cout << "PASS: test_output_has_steps_after_completion" << std::endl;
 }
 
 void test_serialization_stubs() {
@@ -294,7 +281,6 @@ void test_serialization_stubs() {
 
     bool restored = executor.restore_state({});
     expect(!restored, "restore_state should return false");
-    std::cout << "PASS: test_serialization_stubs" << std::endl;
 }
 
 void test_executor_throwing_algorithm() {
@@ -306,7 +292,6 @@ void test_executor_throwing_algorithm() {
     auto final_state = executor.wait();
     expect(final_state == AlgorithmState::Failed, "throwing algorithm should result in Failed state");
     expect(executor.state() == AlgorithmState::Failed, "state should be Failed after throwing algorithm");
-    std::cout << "PASS: test_executor_throwing_algorithm" << std::endl;
 }
 
 // ─── dp_merge large-N + timeout cancellation ────────────────────────────
@@ -377,7 +362,6 @@ void test_dp_merge_large_n_timeout_cancel() {
     auto out = executor.output();
     expect(final_state == AlgorithmState::Cancelled, "dp_merge with >20 items should be cancellable mid-search");
     expect(executor.output().solutions.empty(), "a cancelled dp_merge search should not produce a fake solution");
-    std::cout << "PASS: test_dp_merge_large_n_timeout_cancel" << std::endl;
 }
 
 void test_dp_merge_large_n_completes() {
@@ -388,7 +372,6 @@ void test_dp_merge_large_n_completes() {
     auto out = executor.output();
     expect(final_state == AlgorithmState::Completed, "dp_merge with a reachable input should complete with a solution");
     expect(!out.solutions.empty(), "dp_merge large-N solution should be non-empty");
-    std::cout << "PASS: test_dp_merge_large_n_completes" << std::endl;
 }
 
 void test_timeout_with_slow_algorithm() {
@@ -403,7 +386,6 @@ void test_timeout_with_slow_algorithm() {
     auto final_state = executor.wait();
     expect(final_state == AlgorithmState::Cancelled,
            "executor timeout should surface as Cancelled for a cooperative algorithm");
-    std::cout << "PASS: test_timeout_with_slow_algorithm" << std::endl;
 }
 
 TEST_CASE("test_algorithm_executor") {

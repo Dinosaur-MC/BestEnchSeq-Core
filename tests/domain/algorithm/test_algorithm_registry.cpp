@@ -49,8 +49,6 @@ TEST_CASE("test_basic_register_create") {
 
     auto missing = reg.create("nonexistent");
     expect(missing == nullptr, "create: missing algo should return null");
-
-    std::cout << "PASS: test_basic_register_create" << std::endl;
 }
 
 TEST_CASE("test_list_and_size") {
@@ -65,8 +63,6 @@ TEST_CASE("test_list_and_size") {
     expect(reg.size() == 2, "size: 2 after two registrations");
     auto list = reg.list();
     expect(list.size() == 2, "list: should have 2 entries");
-
-    std::cout << "PASS: test_list_and_size" << std::endl;
 }
 
 TEST_CASE("test_unregister") {
@@ -81,8 +77,6 @@ TEST_CASE("test_unregister") {
 
     // Unregister nonexistent should not throw
     reg.unregister_algorithm("does_not_exist");
-
-    std::cout << "PASS: test_unregister" << std::endl;
 }
 
 TEST_CASE("test_unregister_preserves_others") {
@@ -103,8 +97,6 @@ TEST_CASE("test_unregister_preserves_others") {
     expect(reg.contains("keep_a"), "unregister_multi: keep_a still present");
     expect(!reg.contains("remove_b"), "unregister_multi: remove_b gone");
     expect(reg.contains("keep_c"), "unregister_multi: keep_c still present");
-
-    std::cout << "PASS: test_unregister_preserves_others" << std::endl;
 }
 
 TEST_CASE("test_contains_and_list") {
@@ -117,8 +109,6 @@ TEST_CASE("test_contains_and_list") {
 
     auto items = reg.list();
     expect(items.size() == 1, "list: should have 1 entry");
-
-    std::cout << "PASS: test_contains_and_list" << std::endl;
 }
 
 TEST_CASE("test_duplicate_registration") {
@@ -133,6 +123,4 @@ TEST_CASE("test_duplicate_registration") {
 
     auto algo = reg.create("dup_test");
     expect(algo != nullptr, "duplicate: create returns non-null after second registration");
-
-    std::cout << "PASS: test_duplicate_registration" << std::endl;
 }

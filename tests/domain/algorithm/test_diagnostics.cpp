@@ -46,8 +46,6 @@ TEST_CASE("test_algorithm_diagnostics_flush") {
     expect(std::get<int64_t>(entries[2].value) == 1, "diag_schema_version should default to 1");
     expect(std::string(entries[3].key) == "normalized_explored_states", "fourth key should be 'normalized_explored_states'");
     expect(std::get<int64_t>(entries[3].value) == -1, "normalized_explored_states should default to -1");
-
-    std::cout << "PASS: test_algorithm_diagnostics_flush" << std::endl;
 }
 
 // ─── SearchDiagnostics::flush ────────────────────────────────────────────
@@ -97,8 +95,6 @@ TEST_CASE("test_search_diagnostics_flush") {
     expect(found_final_bound, "SearchDiagnostics flush should include final_bound");
     expect(found_solutions_found, "SearchDiagnostics flush should include solutions_found");
     expect(found_max_depth, "SearchDiagnostics flush should include max_depth");
-
-    std::cout << "PASS: test_search_diagnostics_flush" << std::endl;
 }
 
 // ─── PoolSearchDiagnostics::flush ────────────────────────────────────────
@@ -152,8 +148,6 @@ TEST_CASE("test_pool_search_diagnostics_flush") {
     expect(found_items_pool_capacity, "Pool flush should include items_pool_capacity");
     expect(found_step_pool_used, "Pool flush should include step_pool_used");
     expect(found_step_pool_capacity, "Pool flush should include step_pool_capacity");
-
-    std::cout << "PASS: test_pool_search_diagnostics_flush" << std::endl;
 }
 
 // ─── DiagnosticsWriter::write (smoke test) ───────────────────────────────
@@ -172,8 +166,6 @@ TEST_CASE("test_diagnostics_writer_skip_short") {
 
     // If we reach here the function exists, links, and doesn't crash
     expect(true, "DiagnosticsWriter::write should be callable without error");
-
-    std::cout << "PASS: test_diagnostics_writer_skip_short" << std::endl;
 }
 
 // ─── DiagnosticsWriter::Entry ────────────────────────────────────────────
@@ -203,8 +195,6 @@ TEST_CASE("test_diagnostics_writer_entry") {
     // int64_t is index 0 (first alternative), string is index 1
     expect(str_entry.value.index() == 1, "string variant should have index 1");
     expect(int_entry.value.index() == 0, "int64_t variant should have index 0");
-
-    std::cout << "PASS: test_diagnostics_writer_entry" << std::endl;
 }
 
 // ─── SearchDiagnostics::flush — unreported optional fields ───────────────
@@ -236,8 +226,6 @@ TEST_CASE("test_search_diagnostics_skip_unreported") {
     }
     expect(!found_solutions, "solutions_found must be omitted at -1 sentinel");
     expect(!found_max_depth, "max_depth must be omitted at -1 sentinel");
-
-    std::cout << "PASS: test_search_diagnostics_skip_unreported" << std::endl;
 }
 
 // ─── PartitionDpDiagnostics::flush ───────────────────────────────────────
@@ -302,7 +290,6 @@ TEST_CASE("test_partition_dp_diagnostics_flush") {
            "all dp_* keys should be flushed");
     expect(!found_pass_b, "dp_pass_b_ran must be omitted when Pass B did not run");
     expect(!found_solutions && !found_max_depth, "solutions_found / max_depth must be omitted when not reported (DP)");
-    std::cout << "PASS: test_partition_dp_diagnostics_flush" << std::endl;
 
     // Pass B ran → dp_pass_b_ran=1 is reported.
     diag.dp_pass_b_ran = true;
@@ -316,7 +303,6 @@ TEST_CASE("test_partition_dp_diagnostics_flush") {
         }
     expect(found_pass_b_true, "dp_pass_b_ran=1 must be reported when Pass B ran");
     expect(entries_b.size() == 15, "running Pass B adds one entry (15 total)");
-    std::cout << "PASS: test_partition_dp_diagnostics_pass_b" << std::endl;
 }
 
 // ─── DiagnosticsWriter file output (logs/diag/*.log) ─────────────────────

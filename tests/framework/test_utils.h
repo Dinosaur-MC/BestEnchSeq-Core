@@ -139,11 +139,11 @@ inline void expect_approx(double actual, double expected, double epsilon, const 
     }
 }
 
-// Helper macro: prints "PASS: name" and increments the test counter.
-// Provides consistent, machine-parseable success output across all test files.
+// Helper macro: increments the test counter WITHOUT printing——框架共享 main
+// 已逐 case 打印 "PASS: <name>"，宏内打印会造成双 PASS 行（遗留清理，
+// 2026-08-08）。计数语义不变（迁移基线依赖其计数）。
 #define TEST_PASS(name)                                                                                                        \
     do {                                                                                                                       \
-        std::cout << "PASS: " << (name) << std::endl;                                                                          \
         ++tests_passed;                                                                                                        \
     } while (false)
 

@@ -59,8 +59,6 @@ TEST_CASE("test_format_book_solution") {
 
     auto formatted = OutputFormatter::format_compact({solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format: should produce non-empty output");
-
-    std::cout << "PASS: test_format_book_solution" << std::endl;
 }
 
 // ─── Test 2: format a combined solution with raw adapter ────────────
@@ -92,8 +90,6 @@ TEST_CASE("test_format_combined_solution") {
 
     auto formatted = OutputFormatter::format_compact({solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format_combined: should produce non-empty output");
-
-    std::cout << "PASS: test_format_combined_solution" << std::endl;
 }
 
 // ─── Test 3: format with no steps (edge case) ──────────────────────
@@ -110,8 +106,6 @@ TEST_CASE("test_format_no_steps") {
 
     auto formatted = OutputFormatter::format_compact({solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format_no_steps: should still produce output");
-
-    std::cout << "PASS: test_format_no_steps" << std::endl;
 }
 
 // ─── Test 4: format with unsuccesful solution (zero steps) ─────────
@@ -128,8 +122,6 @@ TEST_CASE("test_format_unsuccessful") {
 
     auto formatted = OutputFormatter::format_compact({solution}, profile, AlgorithmMode::direct);
     expect(!formatted.empty(), "format_unsuccessful: should still produce output");
-
-    std::cout << "PASS: test_format_unsuccessful" << std::endl;
 }
 
 // ─── Test 5: format with multiple steps ─────────────────────────────
@@ -177,7 +169,6 @@ TEST_CASE("test_format_multi_step") {
 
     // Multi-step output should be non-empty (size comparison removed as
     // format_compact output varies from the old format() API)
-    std::cout << "PASS: test_format_multi_step" << std::endl;
 }
 
 // ─── Test 6: verbose item format with new simplified format ──────────
@@ -243,8 +234,6 @@ TEST_CASE("test_format_verbose_final_item") {
     // Note: tr() returns the key when Language is not initialized in tests
     expect(output.find("output.verbose.final_item") != std::string::npos, "verbose output should contain Final Item section");
     expect(output.find("diamond_chestplate") != std::string::npos, "final item should reference the correct equipment");
-
-    std::cout << "PASS: test_format_verbose_final_item" << std::endl;
 }
 
 // ─── Test 9: verbose format with too expensive warning ───────────────
@@ -272,8 +261,6 @@ TEST_CASE("test_format_verbose_too_expensive") {
     auto output = OutputFormatter::format_verbose({solution}, profile, AlgorithmMode::direct);
     // Note: tr() returns the key itself when Language is not initialized in tests
     expect(output.find("output.verbose.too_expensive") != std::string::npos, "verbose output should warn about too expensive");
-
-    std::cout << "PASS: test_format_verbose_too_expensive" << std::endl;
 }
 
 // ─── Test: format_json emits real equipment data + C ABI-aligned root ──

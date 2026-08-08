@@ -42,7 +42,6 @@ TEST_CASE("test_default_constructed") {
     expect(!loop.is_running(), "not running before start");
     expect(loop.empty(), "empty before start");
     expect(loop.pending() == 0, "zero pending before start");
-    std::cout << "PASS: test_default_constructed" << std::endl;
 }
 
 TEST_CASE("test_start_stop") {
@@ -51,7 +50,6 @@ TEST_CASE("test_start_stop") {
     expect(loop.is_running(), "running after start");
     loop.stop();
     expect(!loop.is_running(), "stopped after stop");
-    std::cout << "PASS: test_start_stop" << std::endl;
 }
 
 TEST_CASE("test_start_twice") {
@@ -60,7 +58,6 @@ TEST_CASE("test_start_twice") {
     loop.start(); // should be no-op
     expect(loop.is_running(), "still running");
     loop.stop();
-    std::cout << "PASS: test_start_twice" << std::endl;
 }
 
 TEST_CASE("test_stop_twice") {
@@ -69,14 +66,12 @@ TEST_CASE("test_stop_twice") {
     loop.stop();
     loop.stop(); // should be no-op
     expect(!loop.is_running(), "still stopped");
-    std::cout << "PASS: test_stop_twice" << std::endl;
 }
 
 TEST_CASE("test_stop_without_start") {
     MPMCEventLoop<> loop;
     loop.stop(); // should not crash
     expect(!loop.is_running(), "not running");
-    std::cout << "PASS: test_stop_without_start" << std::endl;
 }
 
 TEST_CASE("test_raii_stop") {
@@ -86,7 +81,6 @@ TEST_CASE("test_raii_stop") {
         loop.start();
         loop.post([] { /* do nothing */ });
     }
-    std::cout << "PASS: test_raii_stop" << std::endl;
 }
 
 // ============================================================================
@@ -103,7 +97,6 @@ TEST_CASE("test_single_post") {
 
     expect(val.load() == 42, "single post should execute");
     loop.stop();
-    std::cout << "PASS: test_single_post" << std::endl;
 }
 
 TEST_CASE("test_post_order") {
@@ -123,7 +116,6 @@ TEST_CASE("test_post_order") {
     expect(results[2] == 3, "order[2] == 3");
     expect(results[3] == 4, "order[3] == 4");
     loop.stop();
-    std::cout << "PASS: test_post_order" << std::endl;
 }
 
 TEST_CASE("test_post_many") {
@@ -139,7 +131,6 @@ TEST_CASE("test_post_many") {
     int64_t expected = static_cast<int64_t>(N) * (N - 1) / 2;
     expect(sum.load() == expected, "all tasks accounted for");
     loop.stop();
-    std::cout << "PASS: test_post_many (" << N << " tasks)" << std::endl;
 }
 
 // ============================================================================
@@ -160,7 +151,6 @@ TEST_CASE("test_post_batch") {
 
     expect(count.load() == 100, "all 100 batched tasks executed");
     loop.stop();
-    std::cout << "PASS: test_post_batch" << std::endl;
 }
 
 TEST_CASE("test_post_batch_empty") {
@@ -171,7 +161,6 @@ TEST_CASE("test_post_batch_empty") {
     loop.post_batch(empty.begin(), empty.end());
     expect(loop.pending() == 0, "empty batch posts nothing");
     loop.stop();
-    std::cout << "PASS: test_post_batch_empty" << std::endl;
 }
 
 // ============================================================================
@@ -196,7 +185,6 @@ TEST_CASE("test_bounded_full") {
     int c = count.load();
     expect(c == 4, "exactly 4 executed (was " + std::to_string(c) + ")");
     loop.stop();
-    std::cout << "PASS: test_bounded_full" << std::endl;
 }
 
 TEST_CASE("test_bounded_batch_partial") {
@@ -212,7 +200,6 @@ TEST_CASE("test_bounded_batch_partial") {
     expect(posted <= 4, "at most 4 batched items accepted (got " + std::to_string(posted) + ")");
     expect(posted > 0, "at least 1 batched item accepted");
     loop.stop();
-    std::cout << "PASS: test_bounded_batch_partial" << std::endl;
 }
 
 // ============================================================================
@@ -232,7 +219,6 @@ TEST_CASE("test_spsc_basic") {
     drain(loop);
     expect(val.load() == 99, "second task executes");
     loop.stop();
-    std::cout << "PASS: test_spsc_basic" << std::endl;
 }
 
 // ============================================================================
@@ -269,7 +255,6 @@ TEST_CASE("test_concurrent_producers") {
 
     expect(sum.load() == expected, "all concurrent tasks accounted for");
     loop.stop();
-    std::cout << "PASS: test_concurrent_producers (" << kTotalTasks << " tasks from " << kProducers << " threads)" << std::endl;
 }
 
 // ============================================================================
@@ -317,7 +302,6 @@ TEST_CASE("test_wakeup_race") {
     loop.stop();
 
     expect(task_done.load(), "wakeup race: task executed");
-    std::cout << "PASS: test_wakeup_race" << std::endl;
 }
 
 // ============================================================================
@@ -342,7 +326,6 @@ TEST_CASE("test_move_only_task") {
     fut.wait(); // wait for execution
     expect(val.load() == 42, "move-only task executed via post()");
     loop.stop();
-    std::cout << "PASS: test_move_only_task" << std::endl;
 }
 
 // ============================================================================
@@ -370,7 +353,6 @@ TEST_CASE("test_destroy_on_stop") {
     }
 
     expect(executed.load() == 1, "task was posted");
-    std::cout << "PASS: test_destroy_on_stop" << std::endl;
 }
 
 // ============================================================================

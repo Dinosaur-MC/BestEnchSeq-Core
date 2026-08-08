@@ -13,7 +13,6 @@ TEST_CASE("test_cancel") {
     expect(!ctx.is_cancelled(), "initially not cancelled");
     ctx.cancel();
     expect(ctx.is_cancelled(), "cancelled after cancel()");
-    std::cout << "PASS: test_cancel" << std::endl;
 }
 
 TEST_CASE("test_pause_resume") {
@@ -34,14 +33,12 @@ TEST_CASE("test_pause_resume") {
     ctx.resume();
     t.join();
     expect(resumed, "should have resumed");
-    std::cout << "PASS: test_pause_resume" << std::endl;
 }
 
 TEST_CASE("test_progress") {
     algorithm::ExecutionContext ctx(1, "test");
     ctx.report_progress(50, ProgressStatus::Exploring);
     expect(ctx.progress() == 0.5, "progress should be 0.5");
-    std::cout << "PASS: test_progress" << std::endl;
 }
 
 TEST_CASE("test_diagnostic_log") {
@@ -61,7 +58,6 @@ TEST_CASE("test_diagnostic_log") {
     expect(retrieved->status == "Complete", "status should be Complete");
     expect(retrieved->solution_cost == 42, "solution_cost should be 42");
     expect(ctx.consume_exit_diagnostics() == nullptr, "no diagnostics after consume");
-    std::cout << "PASS: test_diagnostic_log" << std::endl;
 }
 
 TEST_CASE("test_solution_accumulation") {
@@ -75,7 +71,6 @@ TEST_CASE("test_solution_accumulation") {
     auto solutions = ctx.get_solutions();
     expect(solutions.size() == 1, "should accumulate one solution");
     expect(solutions[0].total_cost == 8, "total cost should be 8");
-    std::cout << "PASS: test_solution_accumulation" << std::endl;
 }
 
 TEST_CASE("test_wait_if_paused_resume") {
@@ -97,7 +92,6 @@ TEST_CASE("test_wait_if_paused_resume") {
     ctx.resume();
     algo_thread.join();
     expect(resumed, "algo should have resumed");
-    std::cout << "PASS: test_wait_if_paused_resume" << std::endl;
 }
 
 // ─── Mock observer + observer dispatch tests ─────────────────────────────────
@@ -163,7 +157,6 @@ TEST_CASE("test_observer_progress") {
     expect(obs->seen_task == 42, "task_id matches");
     expect(obs->last_pct == 50, "pct is 50");
     DiagnosticsService::instance().detach_observer(obs);
-    std::cout << "PASS: test_observer_progress" << std::endl;
 }
 
 TEST_CASE("test_observer_solution") {
@@ -180,7 +173,6 @@ TEST_CASE("test_observer_solution") {
     expect(obs->solution_cnt == 1, "on_solution_found called once");
     expect(obs->seen_task == 7, "task_id matches");
     DiagnosticsService::instance().detach_observer(obs);
-    std::cout << "PASS: test_observer_solution" << std::endl;
 }
 
 TEST_CASE("test_observer_solution_rvalue") {
@@ -200,7 +192,6 @@ TEST_CASE("test_observer_solution_rvalue") {
     expect(sols.size() == 1, "one solution accumulated");
     expect(sols[0].total_cost == 10, "total_cost correct");
     DiagnosticsService::instance().detach_observer(obs);
-    std::cout << "PASS: test_observer_solution_rvalue" << std::endl;
 }
 
 TEST_CASE("test_observer_state_change") {
@@ -216,7 +207,6 @@ TEST_CASE("test_observer_state_change") {
     expect(obs->last_prev == AlgorithmState::Running, "prev is Running");
     expect(obs->last_curr == AlgorithmState::Completed, "curr is Completed");
     DiagnosticsService::instance().detach_observer(obs);
-    std::cout << "PASS: test_observer_state_change" << std::endl;
 }
 
 TEST_CASE("test_observer_exit") {
@@ -251,7 +241,6 @@ TEST_CASE("test_observer_exit") {
     expect(obs->last_output.task_id == 33, "output task_id matches");
     expect(obs->last_output.algorithm_name == "test_exit", "algo name matches");
     DiagnosticsService::instance().detach_observer(obs);
-    std::cout << "PASS: test_observer_exit" << std::endl;
 }
 
 TEST_CASE("test_observer_task_id_filter") {
@@ -270,5 +259,4 @@ TEST_CASE("test_observer_task_id_filter") {
     expect(obs->state_cnt == 1, "filtered non-matching task_id (count unchanged)");
 
     DiagnosticsService::instance().detach_observer(obs);
-    std::cout << "PASS: test_observer_task_id_filter" << std::endl;
 }

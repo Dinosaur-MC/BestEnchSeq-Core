@@ -226,8 +226,6 @@ TEST_CASE("test_audit_empty_file") {
     }
     auto r = audit_plugin_binary(tf.path);
     expect(!r.passed, "audit: 0-byte file returns passed=false");
-
-    std::cout << "PASS: test_audit_empty_file" << std::endl;
 }
 
 TEST_CASE("test_audit_truncated_binary") {
@@ -250,8 +248,6 @@ TEST_CASE("test_audit_truncated_binary") {
     }
     auto r2 = audit_plugin_binary(tf2.path);
     expect(!r2.passed, "audit: truncated 4-byte ELF returns passed=false");
-
-    std::cout << "PASS: test_audit_truncated_binary" << std::endl;
 }
 
 // ── Valid native binary ────────────────────────────────────────
@@ -270,7 +266,6 @@ TEST_CASE("test_audit_valid_pe") {
     expect(!r.has_wx_segment, "audit: minimal PE64 has no W+X");
     expect(r.extra_exports.empty(), "audit: minimal PE64 has no exports");
     expect(r.dangerous_imports.empty(), "audit: minimal PE64 has no imports");
-    std::cout << "PASS: test_audit_valid_pe" << std::endl;
 }
 
 TEST_CASE("test_audit_pe_wx_section") {
@@ -285,7 +280,6 @@ TEST_CASE("test_audit_pe_wx_section") {
     auto r = audit_plugin_binary(tf.path);
     expect(!r.passed, "audit: PE with W+X rejected");
     expect(r.has_wx_segment, "audit: PE with W+X flags has_wx_segment");
-    std::cout << "PASS: test_audit_pe_wx_section" << std::endl;
 }
 
 TEST_CASE("test_audit_pe_32bit_rejected") {
@@ -301,7 +295,6 @@ TEST_CASE("test_audit_pe_32bit_rejected") {
     }
     auto r = audit_plugin_binary(tf.path);
     expect(!r.passed, "audit: 32-bit PE is rejected");
-    std::cout << "PASS: test_audit_pe_32bit_rejected" << std::endl;
 }
 
 #elif defined(__linux__)
@@ -319,7 +312,6 @@ TEST_CASE("test_audit_valid_elf") {
     expect(!r.has_wx_segment, "audit: minimal ELF64 has no W+X");
     expect(r.extra_exports.empty(), "audit: minimal ELF64 has no exports");
     expect(r.dangerous_imports.empty(), "audit: minimal ELF64 has no imports");
-    std::cout << "PASS: test_audit_valid_elf" << std::endl;
 }
 
 TEST_CASE("test_audit_elf_wx_segment") {
@@ -334,7 +326,6 @@ TEST_CASE("test_audit_elf_wx_segment") {
     auto r = audit_plugin_binary(tf.path);
     expect(!r.passed, "audit: ELF with W+X rejected");
     expect(r.has_wx_segment, "audit: ELF with W+X flags has_wx_segment");
-    std::cout << "PASS: test_audit_elf_wx_segment" << std::endl;
 }
 
 TEST_CASE("test_audit_elf_32bit_rejected") {
@@ -348,7 +339,6 @@ TEST_CASE("test_audit_elf_32bit_rejected") {
     }
     auto r = audit_plugin_binary(tf.path);
     expect(!r.passed, "audit: 32-bit ELF is rejected");
-    std::cout << "PASS: test_audit_elf_32bit_rejected" << std::endl;
 }
 
 TEST_CASE("test_audit_elf_safe_segment") {
@@ -365,7 +355,6 @@ TEST_CASE("test_audit_elf_safe_segment") {
     // a valid file and should pass.
     expect(r.passed, "audit: ELF with RX segment passes");
     expect(!r.has_wx_segment, "audit: ELF with RX has no W+X");
-    std::cout << "PASS: test_audit_elf_safe_segment" << std::endl;
 }
 
 #endif // platform-specific
@@ -384,8 +373,6 @@ TEST_CASE("test_audit_after_failed_load") {
     // last_audit may be nullptr or contain a report depending on
     // where load_plugin failed — both are acceptable states.
     // The important thing is no crash and no UB.
-
-    std::cout << "PASS: test_audit_after_failed_load" << std::endl;
 }
 
 TEST_CASE("test_audit_get_report_builtin") {
@@ -395,6 +382,4 @@ TEST_CASE("test_audit_get_report_builtin") {
     // Built-in algorithms are NOT plugins, so no audit report.
     auto* report = loader.get_audit_report("dp_merge");
     expect(report == nullptr, "audit: built-in algo has no audit report");
-
-    std::cout << "PASS: test_audit_get_report_builtin" << std::endl;
 }

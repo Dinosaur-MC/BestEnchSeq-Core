@@ -1146,6 +1146,23 @@ void test_stream_channel(TestApp& app) {
 
 /// SseHub::clear()（Fix 1 的公开 API）：清空全部订阅。clear 后订阅计数归零，
 /// publish 不再送达任何通道。WebModule 析构体在 Impl 成员析构前调用它来排空 hub。
+/// SseHub 最后一帧重放（根治"订阅晚于发布 → 帧丢失"竞态，见
+/// test_web_integration P2 记录）：迟到订阅者立即收到该任务最近一帧。
+void test_hub_replay_late_subscriber(TestApp& app) {
+    app.hub.publish("replay_t", "event: completed\ndata: {}\n\n");
+    app.hub.publish("replay_t", "data: last\n\n");
+    std::string got;
+    auto sub = app.hub.subscribe("replay_t",
+                                 [&](const std::string&, std::string f) { got = std::move(f); },
+                                 true);  // 任务键语义：开启重放
+    expect(got == "data: last\n\n", "late subscriber receives the last published frame");
+    // 新发布仍正常广播到既有订阅者。
+    got.clear();
+    app.hub.publish("replay_t", "data: next\n\n");
+    expect(got == "data: next\n\n", "subsequent publish reaches subscriber");
+    app.hub.unsubscribe("replay_t", sub);
+}
+
 void test_hub_clear(TestApp& app) {
     auto fake = std::make_shared<FakeChannel>();
     LogsController lc(app.ctx, app.hub);
@@ -1411,6 +1428,7 @@ TEST_CASE("test_web_api") {
     test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）
     test_stream_close_hook(app);  // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
     test_hub_clear(app);          // SseHub::clear() 清空全部订阅
+    test_hub_replay_late_subscriber(app);  // 迟到订阅者重放（SSE 终态帧竞态根治）
     test_task_diagnostics(app);   // T2: 任务诊断事件流（diagnostics/diag_exit + SSE diag 帧）
     test_calculator(app);         // §12.1: failed/cancelled 快照、任务字段、unload-409
     test_logs(app);               // §12.1: since 非法 → 400

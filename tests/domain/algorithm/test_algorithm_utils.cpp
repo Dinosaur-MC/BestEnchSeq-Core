@@ -24,6 +24,4 @@ TEST_CASE("test_hash_combine") {
     hash_combine(hb, 2);
     hash_combine(hb, 1);
     expect(ha != hb, "hash combine should be order-sensitive");
-
-    std::cout << "PASS: test_hash_combine" << std::endl;
 }

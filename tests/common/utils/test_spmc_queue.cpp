@@ -20,7 +20,6 @@ TEST_CASE("test_push_read") {
     expect(q.read(cursor, val), "should read pushed value");
     expect(val == 42, "value should be 42");
     expect(!q.read(cursor, val), "no more items");
-    std::cout << "PASS: test_push_read" << std::endl;
 }
 
 TEST_CASE("test_overflow_drops_oldest") {
@@ -38,7 +37,6 @@ TEST_CASE("test_overflow_drops_oldest") {
     int val{};
     expect(!q.read(old_cursor, val), "old cursor should skip overwritten data");
     expect(q.read(old_cursor, val), "after jump, should get valid data");
-    std::cout << "PASS: test_overflow_drops_oldest" << std::endl;
 }
 
 TEST_CASE("test_read_all_caught_up") {
@@ -52,7 +50,6 @@ TEST_CASE("test_read_all_caught_up") {
     expect(q.read(cursor, val) && val == 20, "second item");
     expect(q.read(cursor, val) && val == 30, "third item");
     expect(!q.read(cursor, val), "no fourth item");
-    std::cout << "PASS: test_read_all_caught_up" << std::endl;
 }
 
 TEST_CASE("test_multiple_cursors") {
@@ -69,7 +66,6 @@ TEST_CASE("test_multiple_cursors") {
         b.push_back(val);
     expect(a.size() == 10 && b.size() == 10, "both cursors read all");
     expect(a == b, "both cursors see same data");
-    std::cout << "PASS: test_multiple_cursors" << std::endl;
 }
 
 // ─── Multi-threaded tests ───
@@ -94,7 +90,6 @@ TEST_CASE("test_producer_then_consumer") {
         count++;
     }
     std::cout << "  (read " << count << " values from " << N << ")" << std::endl;
-    std::cout << "PASS: test_producer_then_consumer (" << N << " items)" << std::endl;
 }
 
 TEST_CASE("test_spmc_two_consumers") {
@@ -225,5 +220,4 @@ TEST_CASE("test_concurrent_push_pop") {
     if (consumed.load() == N) {
         expect(order_ok.load(), "if all items delivered, must be FIFO");
     }
-    std::cout << "PASS: test_concurrent_push_pop (consumed " << consumed.load() << "/" << N << " items)" << std::endl;
 }

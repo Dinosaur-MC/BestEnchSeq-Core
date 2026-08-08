@@ -37,8 +37,6 @@ TEST_CASE("test_initialize_and_get") {
     // Get by NSID
     const auto& by_name = reg.at(NSID("minecraft:iron_sword"));
     expect(by_name.max_durability == 250, "at(iron_sword): durability");
-
-    std::cout << "PASS: test_initialize_and_get" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,8 +60,6 @@ TEST_CASE("test_get_bounds") {
 
     // contains for existing
     expect(reg.contains(NSID("minecraft:diamond_sword")), "contains(\"diamond_sword\") == true");
-
-    std::cout << "PASS: test_get_bounds" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,8 +93,6 @@ TEST_CASE("test_get_by_category") {
     // Query for non-existent category returns empty
     auto empty = reg.get_by_category(NSID("minecraft:non_existent_category"));
     expect(empty.empty(), "unknown category returns empty vector");
-
-    std::cout << "PASS: test_get_by_category" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +114,6 @@ TEST_CASE("test_data_access") {
 
     // Unknown name is not in the map
     expect(data_map.find(NSID("nonexistent")) == data_map.end(), "unknown name not in data()");
-
-    std::cout << "PASS: test_data_access" << std::endl;
 }
 
 // ---------------------------------------------------------------------------

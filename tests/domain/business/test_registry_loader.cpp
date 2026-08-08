@@ -125,8 +125,6 @@ TEST_CASE("test_loader_ench_dto_to_reg") {
     const auto& prot = ench_reg.at(NSID("minecraft:protection"));
     expect(prot.supported_items.size() == 1, "protection applicable to 1 category");
     expect(prot.supported_items.contains(NSID("#minecraft:helmet")), "protection applicable to #minecraft:helmet");
-
-    std::cout << "PASS: test_loader_ench_dto_to_reg" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,8 +181,6 @@ TEST_CASE("test_loader_eq_dto_to_reg") {
         expect(dh.category == EquipmentTag::helmet(), "diamond_helmet category = helmet");
         expect(dh.max_durability == 363, "diamond_helmet durability");
     }
-
-    std::cout << "PASS: test_loader_eq_dto_to_reg" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,8 +250,6 @@ TEST_CASE("test_loader_json_roundtrip") {
     EnchantmentRegistry empty_ench;
     Json bad_json = Json::null();
     expect(!loader.from_json(empty_ench, bad_json), "from_json with null JSON returns false");
-
-    std::cout << "PASS: test_loader_json_roundtrip" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -351,8 +345,6 @@ TEST_CASE("test_loader_resolve_full") {
         expect(excl.size() == 1, "sharpness exclusive_set has 1 entry");
         expect(excl.contains(NSID("minecraft:smite")), "bare 'smite' resolved to namespaced NSID minecraft:smite");
     }
-
-    std::cout << "PASS: test_loader_resolve_full" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -377,7 +369,6 @@ TEST_CASE("test_loader_supported_items_resolution") {
     loader.resolve(ench_data, no_eq, tag_reg, eq_reg, ench_reg, &base_tags);
     const auto& e = ench_reg.at(NSID("minecraft:leeching"));
     expect(e.supported_items.contains(NSID("#minecraft:swords")), "supported_items keeps #tag reference");
-    std::cout << "PASS: test_loader_supported_items_resolution" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -408,8 +399,6 @@ TEST_CASE("test_loader_supported_items_concrete_and_drop") {
            "concrete ID reference preserved in supported_items");
     expect(!ench_reg.contains(NSID("minecraft:test_bad_ref")), "unresolvable concrete ID enchantment dropped");
     expect(!ench_reg.contains(NSID("minecraft:test_bad_tag")), "undefined #tag enchantment dropped");
-
-    std::cout << "PASS: test_loader_supported_items_concrete_and_drop" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -452,8 +441,6 @@ TEST_CASE("test_loader_vanilla_tag_fallback") {
     // is_treasure flows from the parsed JSON field (B-T19), not the old
     // `limited_level == 0` heuristic.
     expect(e.is_treasure, "vanilla_tag: is_treasure carried from JSON field");
-
-    std::cout << "PASS: test_loader_vanilla_tag_fallback" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -727,8 +714,6 @@ TEST_CASE("test_tag_resolve_basic") {
     auto direct = resolver.resolve("minecraft:sharpness");
     expect(direct.size() == 1, "concrete id returns set of 1");
     expect(direct.contains("minecraft:sharpness"), "passthrough works");
-
-    std::cout << "PASS: test_tag_resolve_basic" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -747,7 +732,6 @@ TEST_CASE("test_tag_resolve_composite") {
     expect(result.contains("minecraft:sharpness"), "direct entry via weapons tag");
     expect(result.contains("minecraft:smite"), "transitive via melee tag");
     expect(result.contains("minecraft:bane_of_arthropods"), "transitive via melee tag");
-    std::cout << "PASS: test_tag_resolve_composite" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -768,8 +752,6 @@ TEST_CASE("test_tag_unknown_tag") {
     // Empty reference should also return empty
     auto empty_ref = resolver.resolve("");
     expect(empty_ref.empty(), "empty string reference returns empty set");
-
-    std::cout << "PASS: test_tag_unknown_tag" << std::endl;
 }
 
 // ---------------------------------------------------------------------------

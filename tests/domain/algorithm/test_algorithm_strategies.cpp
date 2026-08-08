@@ -218,14 +218,12 @@ void test_dfs_simple() {
     auto ctx = TestContext({book(ID_SHARPNESS, 5)}, {{ID_SHARPNESS, 5}});
     auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx);
     expect(cost > 0, "dfs: simple forge should produce positive cost");
-    std::cout << "PASS: test_dfs_simple (cost=" << cost << ")" << std::endl;
 }
 
 void test_dfs_two_books() {
     auto ctx = TestContext({book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)}, {{ID_SHARPNESS, 4}});
     auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx);
     expect(cost > 0, "dfs: two books should produce positive cost");
-    std::cout << "PASS: test_dfs_two_books (cost=" << cost << ")" << std::endl;
 }
 
 void test_dfs_target_unreachable() {
@@ -235,7 +233,6 @@ void test_dfs_target_unreachable() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_BANE, 5}});
     auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx);
     expect(cost == -1, "dfs: unreachable target should return -1");
-    std::cout << "PASS: test_dfs_target_unreachable" << std::endl;
 }
 
 void test_dfs_target_already_met() {
@@ -245,7 +242,6 @@ void test_dfs_target_already_met() {
     source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
     auto cost = run_strategy(std::make_unique<DFSAlgorithm>(), ctx, source);
     expect(cost >= 0, "dfs: target already met should produce result");
-    std::cout << "PASS: test_dfs_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
 // ========================================================================
@@ -256,7 +252,6 @@ void test_astar_simple() {
     auto ctx = TestContext({book(ID_SHARPNESS, 5)}, {{ID_SHARPNESS, 5}});
     auto cost = run_strategy(std::make_unique<AStarAlgorithm>(), ctx);
     expect(cost > 0, "astar: simple forge should produce positive cost");
-    std::cout << "PASS: test_astar_simple (cost=" << cost << ")" << std::endl;
 }
 
 void test_astar_target_already_met() {
@@ -266,7 +261,6 @@ void test_astar_target_already_met() {
     source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
     auto cost = run_strategy(std::make_unique<AStarAlgorithm>(), ctx, source);
     expect(cost >= 0, "astar: target already met should produce result");
-    std::cout << "PASS: test_astar_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
 // ========================================================================
@@ -277,14 +271,12 @@ void test_hamming_simple() {
     auto ctx = TestContext({book(ID_SHARPNESS, 5)}, {{ID_SHARPNESS, 5}});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
     expect(cost > 0, "hamming: simple forge should produce positive cost");
-    std::cout << "PASS: test_hamming_simple (cost=" << cost << ")" << std::endl;
 }
 
 void test_hamming_two_books() {
     auto ctx = TestContext({book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)}, {{ID_SHARPNESS, 4}});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
     expect(cost > 0, "hamming: two books should produce positive cost");
-    std::cout << "PASS: test_hamming_two_books (cost=" << cost << ")" << std::endl;
 }
 
 void test_hamming_target_already_met() {
@@ -293,7 +285,6 @@ void test_hamming_target_already_met() {
     source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx, source);
     expect(cost >= 0, "hamming: target already met should produce result");
-    std::cout << "PASS: test_hamming_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
 void test_hamming_target_unreachable() {
@@ -303,7 +294,6 @@ void test_hamming_target_unreachable() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_BANE, 5}});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
     expect(cost == -1, "hamming: unreachable target should return -1");
-    std::cout << "PASS: test_hamming_target_unreachable" << std::endl;
 }
 
 void test_hamming_pre_enchanted_equip() {
@@ -314,14 +304,12 @@ void test_hamming_pre_enchanted_equip() {
     source.push_back(algorithm::Ench{ID_KNOCKBACK, 2});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx, source);
     expect(cost > 0, "hamming: pre-enchanted equip should produce positive cost");
-    std::cout << "PASS: test_hamming_pre_enchanted_equip (cost=" << cost << ")" << std::endl;
 }
 
 void test_hamming_durability_repair() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}});
     auto cost = run_strategy(std::make_unique<HammingAlgorithm>(), ctx);
     expect(cost > 0, "hamming: simple forge should produce positive cost");
-    std::cout << "PASS: test_hamming_durability_repair (cost=" << cost << ")" << std::endl;
 }
 
 // ========================================================================
@@ -332,14 +320,12 @@ void test_bbdp_simple() {
     auto ctx = TestContext({book(ID_SHARPNESS, 5)}, {{ID_SHARPNESS, 5}});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
     expect(cost > 0, "bb_dp: simple forge should produce positive cost");
-    std::cout << "PASS: test_bbdp_simple (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_two_books() {
     auto ctx = TestContext({book(ID_SHARPNESS, 3), book(ID_SHARPNESS, 4)}, {{ID_SHARPNESS, 4}});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
     expect(cost > 0, "bb_dp: two books should produce positive cost");
-    std::cout << "PASS: test_bbdp_two_books (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_target_already_met() {
@@ -348,7 +334,6 @@ void test_bbdp_target_already_met() {
     source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx, source);
     expect(cost >= 0, "bb_dp: target already met should produce result");
-    std::cout << "PASS: test_bbdp_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_target_unreachable() {
@@ -358,7 +343,6 @@ void test_bbdp_target_unreachable() {
     auto ctx = TestContext({}, {{ID_SHARPNESS, 5}, {ID_BANE, 5}});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
     expect(cost == -1, "bb_dp: unreachable target should return -1");
-    std::cout << "PASS: test_bbdp_target_unreachable" << std::endl;
 }
 
 void test_bbdp_pre_enchanted_equip() {
@@ -369,7 +353,6 @@ void test_bbdp_pre_enchanted_equip() {
     source.push_back(algorithm::Ench{ID_KNOCKBACK, 2});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx, source);
     expect(cost > 0, "bb_dp: pre-enchanted equip should produce positive cost");
-    std::cout << "PASS: test_bbdp_pre_enchanted_equip (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_matches_astar() {
@@ -378,7 +361,6 @@ void test_bbdp_matches_astar() {
     auto astar_cost = run_strategy(std::make_unique<AStarAlgorithm>(), ctx);
     auto bbdp_cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
     expect(astar_cost > 0 && bbdp_cost == astar_cost, "bb_dp: optimal cost should match astar");
-    std::cout << "PASS: test_bbdp_matches_astar (cost=" << bbdp_cost << ", astar=" << astar_cost << ")" << std::endl;
 }
 
 void test_bbdp_max_step_cost() {
@@ -388,7 +370,6 @@ void test_bbdp_max_step_cost() {
     auto ctx = TestContext({book(ID_SHARPNESS, 5), book(ID_KNOCKBACK, 2)}, {{ID_SHARPNESS, 5}, {ID_KNOCKBACK, 2}});
     auto cost = run_strategy(std::make_unique<BBDpAlgorithm>(), ctx);
     expect(cost > 0, "bb_dp: default max_step_cost should still solve");
-    std::cout << "PASS: test_bbdp_max_step_cost (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_max_step_cost_disabled() {
@@ -397,7 +378,6 @@ void test_bbdp_max_step_cost_disabled() {
     auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
                                  [](algorithm::AlgorithmConfig& c) { c.search.max_step_cost = 0; });
     expect(cost > 0, "bb_dp: max_step_cost=0 should still solve");
-    std::cout << "PASS: test_bbdp_max_step_cost_disabled (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_beam_width() {
@@ -407,7 +387,6 @@ void test_bbdp_beam_width() {
     auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
                                  [](algorithm::AlgorithmConfig& c) { c.search.beam_width = 4; });
     expect(cost > 0, "bb_dp: beam_width=4 should produce a valid solution");
-    std::cout << "PASS: test_bbdp_beam_width (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_cap_infeasible_fallback() {
@@ -418,7 +397,6 @@ void test_bbdp_cap_infeasible_fallback() {
     auto cost = run_strategy_cfg(std::make_unique<BBDpAlgorithm>(), ctx,
                                  [](algorithm::AlgorithmConfig& c) { c.search.max_step_cost = 1; });
     expect(cost > 0, "bb_dp: infeasible cap should fall back to the optimum");
-    std::cout << "PASS: test_bbdp_cap_infeasible_fallback (cost=" << cost << ")" << std::endl;
 }
 
 void test_bbdp_final_item_meets_target() {
@@ -485,7 +463,6 @@ void test_dpmerge_target_already_met() {
     source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
     auto cost = run_strategy(std::make_unique<DPMergeAlgorithm>(), ctx, source);
     expect(cost >= 0, "dp_merge: target already met should produce result");
-    std::cout << "PASS: test_dpmerge_target_already_met (cost=" << cost << ")" << std::endl;
 }
 
 void test_dpmerge_source_exceeds_target() {
@@ -495,7 +472,6 @@ void test_dpmerge_source_exceeds_target() {
     source.push_back(algorithm::Ench{ID_SHARPNESS, 5});
     auto cost = run_strategy(std::make_unique<DPMergeAlgorithm>(), ctx, source);
     expect(cost >= 0, "dp_merge: source exceeding target should produce result");
-    std::cout << "PASS: test_dpmerge_source_exceeds_target (cost=" << cost << ")" << std::endl;
 }
 
 // ========================================================================
@@ -518,7 +494,6 @@ void test_simulate_direct_already_met() {
     expect(HammingAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (hamming)");
     expect(BBDpAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (bb_dp)");
     expect(DPMergeAlgorithm{}.simulate(input), "simulate: source == target direct should be reachable (dp_merge)");
-    std::cout << "PASS: test_simulate_direct_already_met" << std::endl;
 }
 
 void test_simulate_direct_source_exceeds() {
@@ -531,7 +506,6 @@ void test_simulate_direct_source_exceeds() {
     input.data = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 5}}};
 
     expect(DFSAlgorithm{}.simulate(input), "simulate: source level > target level should be reachable");
-    std::cout << "PASS: test_simulate_direct_source_exceeds" << std::endl;
 }
 
 void test_simulate_direct_below_target() {
@@ -544,7 +518,6 @@ void test_simulate_direct_below_target() {
     input.data = algorithm::DirectPayload{EnchCollection{algorithm::Ench{ID_SHARPNESS, 2}}};
 
     expect(DFSAlgorithm{}.simulate(input), "simulate: source below target should be reachable");
-    std::cout << "PASS: test_simulate_direct_below_target" << std::endl;
 }
 
 void test_simulate_inventory_empty_pool() {
@@ -557,7 +530,6 @@ void test_simulate_inventory_empty_pool() {
     input.data = algorithm::InventoryPayload{algorithm::ItemCollection{}, {}};
 
     expect(!DFSAlgorithm{}.simulate(input), "simulate: empty inventory pool should be unreachable");
-    std::cout << "PASS: test_simulate_inventory_empty_pool" << std::endl;
 }
 
 void test_simulate_inventory_equip_no_book() {
@@ -571,7 +543,6 @@ void test_simulate_inventory_equip_no_book() {
     input.data = algorithm::InventoryPayload{algorithm::ItemCollection{empty_book}, {0}};
 
     expect(!DFSAlgorithm{}.simulate(input), "simulate: equipment target without a non-empty book should be unreachable");
-    std::cout << "PASS: test_simulate_inventory_equip_no_book" << std::endl;
 }
 
 void test_simulate_inventory_with_book() {
@@ -586,7 +557,6 @@ void test_simulate_inventory_with_book() {
     input.data = algorithm::InventoryPayload{algorithm::ItemCollection{book_item}, {0}};
 
     expect(DFSAlgorithm{}.simulate(input), "simulate: inventory with a non-empty book should be reachable");
-    std::cout << "PASS: test_simulate_inventory_with_book" << std::endl;
 }
 
 // ========================================================================

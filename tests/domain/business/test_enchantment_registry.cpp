@@ -36,8 +36,6 @@ TEST_CASE("test_initialize_and_get") {
     auto it = reg.find(NSID("minecraft:sharpness"));
     expect(it != reg.end(), "find(sharpness) should be found");
     expect(it->max_level == 5, "find(sharpness)->max_level");
-
-    std::cout << "PASS: test_initialize_and_get" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,8 +59,6 @@ TEST_CASE("test_get_bounds") {
 
     // contains for existing
     expect(reg.contains(NSID("minecraft:sharpness")), "contains(\"sharpness\") == true");
-
-    std::cout << "PASS: test_get_bounds" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,8 +97,6 @@ TEST_CASE("test_check_validation") {
     bad_excl.emplace_back(NSID("test"), "Test", MCE::Java, 1, 1, 1, false, std::unordered_set<NSID>{NSID("nonexistent_ench")},
                           std::unordered_set<NSID>{});
     expect(!EnchantmentRegistry::check_validation(bad_excl), "bad exclusive ref should fail");
-
-    std::cout << "PASS: test_check_validation" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,8 +143,6 @@ TEST_CASE("test_is_incompatible") {
 
     // Same enchantment is never incompatible with itself
     expect(!reg.is_incompatible(sharp_it->id, sharp_it->id), "same ench is never incompatible");
-
-    std::cout << "PASS: test_is_incompatible" << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,8 +164,6 @@ TEST_CASE("test_exclusive_set_access") {
     // Enchantment with no incompatibilities
     const auto& empty = reg.get_exclusive_set(NSID("nonexistent"));
     expect(empty.empty(), "exclusive_set for unknown NSID should be empty");
-
-    std::cout << "PASS: test_exclusive_set_access" << std::endl;
 }
 
 // ---------------------------------------------------------------------------

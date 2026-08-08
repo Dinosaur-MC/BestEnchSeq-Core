@@ -47,8 +47,6 @@ TEST_CASE("test_export_registry_json") {
     auto result = ExportPipeline::run(profile, req);
     expect(result.success, "export_registry_json: should succeed");
     expect(!result.content.empty(), "export_registry_json: content should be non-empty");
-
-    std::cout << "PASS: test_export_registry_json" << std::endl;
 }
 
 // ─── Test 9: export registry as CSV ────────────────────────────────
@@ -71,8 +69,6 @@ TEST_CASE("test_export_registry_csv") {
     auto result = ExportPipeline::run(profile, req);
     expect(result.success, "export_registry_csv: should succeed");
     expect(!result.content.empty(), "export_registry_csv: content should be non-empty");
-
-    std::cout << "PASS: test_export_registry_csv" << std::endl;
 }
 
 // ─── Test 10: export solution ──────────────────────────────────────
@@ -110,8 +106,6 @@ TEST_CASE("test_export_solution") {
     auto result = ExportPipeline::run(profile, req);
     expect(result.success, "export_solution: should succeed");
     expect(!result.content.empty(), "export_solution: content should be non-empty");
-
-    std::cout << "PASS: test_export_solution" << std::endl;
 }
 
 // ─── Test 11: CSV export → import roundtrip ────────────────────────
@@ -188,8 +182,6 @@ TEST_CASE("test_export_solution_json_metadata") {
     expect_eq(root["algorithm"].as_string(), "dp_merge", "export_solution_json_metadata: algorithm=dp_merge");
     expect_eq(root["computation_time_ms"].as_int(), int64_t(42), "export_solution_json_metadata: computation_time_ms=42");
     expect_eq(root["schema_version"].as_string(), "1.1", "export_solution_json_metadata: schema_version=1.1");
-
-    std::cout << "PASS: test_export_solution_json_metadata" << std::endl;
 }
 
 // ─── Test 13: format_for_path 扩展名推断 ──────────────────────────────
@@ -201,8 +193,6 @@ TEST_CASE("test_export_format_for_path") {
     expect_eq(ExportPipeline::format_for_path("a.json"), ExportRequest::Format::Json, "format_for_path: .json → Json");
     expect_eq(ExportPipeline::format_for_path("a.txt"), ExportRequest::Format::Json, "format_for_path: .txt → Json (default)");
     expect_eq(ExportPipeline::format_for_path("noext"), ExportRequest::Format::Json, "format_for_path: noext → Json (default)");
-
-    std::cout << "PASS: test_export_format_for_path" << std::endl;
 }
 
 // ─── Test 14: Registry+McOfficial 文件导出到临时目录 ─────────────────
@@ -231,7 +221,6 @@ TEST_CASE("test_export_registry_mc_official_file") {
     expect(fs::file_size(sharpness) > 0, "export_registry_mc_official_file: sharpness.json non-empty");
 
     fs::remove_all(dir);
-    std::cout << "PASS: test_export_registry_mc_official_file" << std::endl;
 }
 
 // ─── Test 15: Solution+Verbose 文件导出到临时文件 ─────────────────────
@@ -272,7 +261,6 @@ TEST_CASE("test_export_solution_verbose_file") {
     expect(fs::file_size(out) > 0, "export_solution_verbose_file: file non-empty");
 
     fs::remove_all(dir);
-    std::cout << "PASS: test_export_solution_verbose_file" << std::endl;
 }
 
 } // anonymous namespace

@@ -29,8 +29,6 @@ TEST_CASE("test_builtins_present") {
     expect(categories.size() == 14, "builtins: should have 14 builtin tags");
     expect(categories.contains(NSID("#minecraft:sword")), "builtins: sword should be present");
     expect(!categories.contains(NSID("#minecraft:any")), "builtins: 'any' is not a builtin tag");
-
-    std::cout << "PASS: test_builtins_present" << std::endl;
 }
 
 TEST_CASE("test_lookup_throwing") {
@@ -54,8 +52,6 @@ TEST_CASE("test_lookup_throwing") {
 
     expect(!categories.contains(NSID("#minecraft:nonexistent")),
            "lookup: contains(\"#minecraft:nonexistent\") should be false");
-
-    std::cout << "PASS: test_lookup_throwing" << std::endl;
 }
 
 TEST_CASE("test_custom_categories") {
@@ -68,8 +64,6 @@ TEST_CASE("test_custom_categories") {
 
     expect(categories.contains(NSID("#minecraft:mace")), "custom: mace should be present");
     expect(categories.contains(NSID("#minecraft:wand")), "custom: wand should be present");
-
-    std::cout << "PASS: test_custom_categories" << std::endl;
 }
 
 TEST_CASE("test_duplicate_custom_skipped") {
@@ -83,6 +77,4 @@ TEST_CASE("test_duplicate_custom_skipped") {
 
     // boots should still be present
     expect(categories.contains(NSID("#minecraft:boots")), "duplicate: boots should still be present");
-
-    std::cout << "PASS: test_duplicate_custom_skipped" << std::endl;
 }

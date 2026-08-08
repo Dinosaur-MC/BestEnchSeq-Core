@@ -62,8 +62,6 @@ TEST_CASE("test_json_parse_basic") {
     expect_eq(equipment[0].id, std::string("minecraft:diamond_sword"), "json_basic: eq id");
     expect_eq(equipment[0].display_name, std::string("Diamond Sword"), "json_basic: eq display_name");
     expect_eq(equipment[0].category, std::string("sword"), "json_basic: eq category");
-
-    std::cout << "PASS: test_json_parse_basic" << std::endl;
 }
 
 // ─── test_json_parse_with_exclusive ────────────────────────────────────
@@ -96,8 +94,6 @@ TEST_CASE("test_json_parse_with_exclusive") {
         }
     }
     expect(has_smite, "json_exclusive: exclusive_with contains smite");
-
-    std::cout << "PASS: test_json_parse_with_exclusive" << std::endl;
 }
 
 // ─── test_json_parse_with_applicable ───────────────────────────────────
@@ -131,8 +127,6 @@ TEST_CASE("test_json_parse_with_applicable") {
         }
     }
     expect(has_tag, "json_applicable: applicable_to contains raw #minecraft:sword");
-
-    std::cout << "PASS: test_json_parse_with_applicable" << std::endl;
 }
 
 // ─── test_json_parse_min_cost_flat ─────────────────────────────────────
@@ -154,8 +148,6 @@ TEST_CASE("test_json_parse_min_cost_flat") {
     expect_eq(enchantments[0].min_cost_base, 10, "min_cost_flat: min_cost_base");
     expect_eq(enchantments[0].min_cost_per_level, 7, "min_cost_flat: min_cost_per_level");
     expect(enchantments[0].limited_level_provided == false, "min_cost_flat: no limited_level hint");
-
-    std::cout << "PASS: test_json_parse_min_cost_flat" << std::endl;
 }
 
 // ─── test_json_parse_min_cost_nested ───────────────────────────────────
@@ -178,8 +170,6 @@ TEST_CASE("test_json_parse_min_cost_nested") {
     expect_eq(enchantments[0].min_cost_base, 5, "min_cost_nested: min_cost.base");
     expect_eq(enchantments[0].min_cost_per_level, 9, "min_cost_nested: min_cost.per_level_above_first");
     expect(enchantments[0].limited_level_provided == false, "min_cost_nested: no limited_level hint");
-
-    std::cout << "PASS: test_json_parse_min_cost_nested" << std::endl;
 }
 
 // ─── test_json_parse_min_cost_default ──────────────────────────────────
@@ -201,8 +191,6 @@ TEST_CASE("test_json_parse_min_cost_default") {
     expect_eq(enchantments[0].min_cost_per_level, 0, "min_cost_default: per_level defaults 0");
     expect_eq(enchantments[0].limited_level, 0, "min_cost_default: limited_level defaults 0");
     expect(enchantments[0].limited_level_provided == false, "min_cost_default: no hint (fallback → max_level)");
-
-    std::cout << "PASS: test_json_parse_min_cost_default" << std::endl;
 }
 
 // ─── test_json_parse_limited_level_hint ────────────────────────────────
@@ -225,8 +213,6 @@ TEST_CASE("test_json_parse_limited_level_hint") {
     expect(enchantments[0].limited_level_provided == true, "ll_hint: limited_level_provided true");
     expect_eq(enchantments[0].min_cost_base, 0, "ll_hint: min_cost_base 0 (no min_cost)");
     expect_eq(enchantments[0].min_cost_per_level, 0, "ll_hint: min_cost_per_level 0 (no min_cost)");
-
-    std::cout << "PASS: test_json_parse_limited_level_hint" << std::endl;
 }
 
 // ─── test_json_parse_platform ──────────────────────────────────────────
@@ -285,8 +271,6 @@ TEST_CASE("test_json_parse_empty") {
 
     expect(enchantments.empty(), "json_empty: no enchantments");
     expect(equipment.empty(), "json_empty: no equipment");
-
-    std::cout << "PASS: test_json_parse_empty" << std::endl;
 }
 
 // ─── test_json_parse_via_Json ──────────────────────────────────────────
@@ -338,8 +322,6 @@ TEST_CASE("test_json_parse_via_Json") {
     expect_eq(equipment[0].id, std::string("minecraft:diamond_sword"), "json_manual: eq id");
     expect_eq(equipment[0].display_name, std::string("Diamond Sword"), "json_manual: eq display_name");
     expect_eq(equipment[0].category, std::string("sword"), "json_manual: eq category");
-
-    std::cout << "PASS: test_json_parse_via_Json" << std::endl;
 }
 
 // ============================================================================
@@ -365,8 +347,6 @@ TEST_CASE("test_csv_parse_basic") {
     expect_eq(enchantments[0].display_name, std::string("Sharpness"), "csv_basic: ench display_name");
     expect_eq(enchantments[0].max_level, 5, "csv_basic: ench max_level");
     expect_eq(enchantments[0].multiplier, 1, "csv_basic: ench multiplier");
-
-    std::cout << "PASS: test_csv_parse_basic" << std::endl;
 }
 
 // ─── test_csv_parse_with_exclusive ─────────────────────────────────────
@@ -391,8 +371,6 @@ TEST_CASE("test_csv_parse_with_exclusive") {
         }
     }
     expect(has_smite, "csv_exclusive: exclusive_with contains smite");
-
-    std::cout << "PASS: test_csv_parse_with_exclusive" << std::endl;
 }
 
 // ─── test_csv_parse_empty_header_only ──────────────────────────────────
@@ -404,8 +382,6 @@ TEST_CASE("test_csv_parse_empty_header_only") {
     auto enchantments = NativeCsvParser::parse(csv);
 
     expect(enchantments.empty(), "csv_empty_header: no enchantments");
-
-    std::cout << "PASS: test_csv_parse_empty_header_only" << std::endl;
 }
 
 // ─── test_csv_parse_multiple_rows ──────────────────────────────────────
@@ -423,8 +399,6 @@ TEST_CASE("test_csv_parse_multiple_rows") {
     expect_eq(enchantments[0].id, std::string("minecraft:sharpness"), "csv_multi: ench[0].id");
     expect_eq(enchantments[1].id, std::string("minecraft:smite"), "csv_multi: ench[1].id");
     expect_eq(enchantments[2].id, std::string("minecraft:unbreaking"), "csv_multi: ench[2].id");
-
-    std::cout << "PASS: test_csv_parse_multiple_rows" << std::endl;
 }
 
 // ─── test_csv_parse_is_treasure ─────────────────────────────────────────

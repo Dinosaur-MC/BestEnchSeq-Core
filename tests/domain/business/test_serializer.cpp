@@ -20,8 +20,6 @@ TEST_CASE("test_serialize_ench") {
     expect(e2.id == NSID("minecraft:sharpness"), "serialize_ench: id");
     // name field is deprecated — after round-trip it becomes empty
     expect(e2.level == 5, "serialize_ench: level");
-
-    std::cout << "PASS: test_serialize_ench" << std::endl;
 }
 
 // ─── test_serialize_enchinfo ───────────────────────────────────────────
@@ -54,8 +52,6 @@ TEST_CASE("test_serialize_enchinfo") {
     expect(i2.supported_items.size() == 2, "enchinfo round-trip: supported_items size");
     expect(i2.supported_items.count(NSID("#minecraft:sword")) == 1, "enchinfo round-trip: applicable contains sword");
     expect(i2.supported_items.count(NSID("#minecraft:axe")) == 1, "enchinfo round-trip: applicable contains axe");
-
-    std::cout << "PASS: test_serialize_enchinfo" << std::endl;
 }
 
 // ─── test_enchinfo_platform_key ────────────────────────────────────────
@@ -147,8 +143,6 @@ TEST_CASE("test_serialize_enchinfo_min_cost") {
     hj >> h2;
     expect(h2.limited_level == 5, "limited_level preserved round-trip");
     expect(h2.limited_level_provided == true, "limited_level_provided preserved round-trip");
-
-    std::cout << "PASS: test_serialize_enchinfo_min_cost" << std::endl;
 }
 
 // ─── test_serialize_enchset ────────────────────────────────────────────
@@ -170,8 +164,6 @@ TEST_CASE("test_serialize_enchset") {
     expect(s2.find(NSID("minecraft:sharpness")) != s2.end(), "enchset round-trip: contains sharpness");
     expect(s2.find(NSID("minecraft:unbreaking")) != s2.end(), "enchset round-trip: contains unbreaking");
     expect(s2.find(NSID("minecraft:mending")) != s2.end(), "enchset round-trip: contains mending");
-
-    std::cout << "PASS: test_serialize_enchset" << std::endl;
 }
 
 // ─── test_serialize_equipment ──────────────────────────────────────────
@@ -190,8 +182,6 @@ TEST_CASE("test_serialize_equipment") {
     expect(e2.name == "Diamond Sword", "equipment round-trip: name");
     expect(e2.category == EquipmentTag::sword(), "equipment round-trip: category");
     expect(e2.max_durability == 1561, "equipment round-trip: max_durability");
-
-    std::cout << "PASS: test_serialize_equipment" << std::endl;
 }
 
 // ─── test_serialize_equipment_tag ──────────────────────────────────────
@@ -208,8 +198,6 @@ TEST_CASE("test_serialize_equipment_tag") {
 
     expect(t2.id == NSID("#minecraft:sword"), "equipment_tag round-trip: id");
     expect(t2.name == "sword", "equipment_tag round-trip: name");
-
-    std::cout << "PASS: test_serialize_equipment_tag" << std::endl;
 }
 
 // ─── test_serialize_item ───────────────────────────────────────────────
@@ -233,8 +221,6 @@ TEST_CASE("test_serialize_item") {
     expect(i2.enchantments.find(NSID("minecraft:unbreaking")) != i2.enchantments.end(), "item round-trip: contains unbreaking");
     expect(i2.prior_penalty == 2, "item round-trip: prior_penalty");
     expect(i2.durability == 500, "item round-trip: durability");
-
-    std::cout << "PASS: test_serialize_item" << std::endl;
 }
 
 // ─── test_serialize_solution_step ──────────────────────────────────────
@@ -261,8 +247,6 @@ TEST_CASE("test_serialize_solution_step") {
     expect(s2.item_b.id == NSID("minecraft:enchanted_book"), "step round-trip: item_b id");
     expect(s2.exp_level_cost == 10, "step round-trip: exp_level_cost");
     expect(s2.exp_cost == 50, "step round-trip: exp_cost");
-
-    std::cout << "PASS: test_serialize_solution_step" << std::endl;
 }
 
 // ─── test_serialize_solution ───────────────────────────────────────────
@@ -325,8 +309,6 @@ TEST_CASE("test_serialize_solution") {
     expect(s2.steps[0].exp_cost == 60, "solution round-trip: step[0].exp_cost");
     expect(s2.available_items.size() == 1, "solution round-trip: available_items count");
     expect(s2.available_items[0].id == NSID("minecraft:enchanted_book"), "solution round-trip: available item id");
-
-    std::cout << "PASS: test_serialize_solution" << std::endl;
 }
 
 // ─── test_serialize_equipment_registry ─────────────────────────────────
@@ -347,8 +329,6 @@ TEST_CASE("test_serialize_equipment_registry") {
     expect(reg2.size() == 2, "equipment registry round-trip: size 2");
     expect(reg2.contains(NSID("minecraft:diamond_sword")), "equipment registry round-trip: contains diamond_sword");
     expect(reg2.contains(NSID("minecraft:diamond_chestplate")), "equipment registry round-trip: contains diamond_chestplate");
-
-    std::cout << "PASS: test_serialize_equipment_registry" << std::endl;
 }
 
 // ─── test_serialize_tag_registry ─────────────────────────────
@@ -369,8 +349,6 @@ TEST_CASE("test_serialize_tag_registry") {
     //   id = "#minecraft:<name>"
     expect(reg2.contains(NSID("#minecraft:sword")), "equipment tag registry round-trip: contains sword");
     expect(reg2.contains(NSID("#minecraft:axe")), "equipment tag registry round-trip: contains axe");
-
-    std::cout << "PASS: test_serialize_tag_registry" << std::endl;
 }
 
 // ─── test_serialize_ench_registry ──────────────────────────────────────
@@ -398,8 +376,6 @@ TEST_CASE("test_serialize_ench_registry") {
            "ench registry round-trip: sharpness incompatible with smite");
     expect(reg2.is_incompatible(NSID("minecraft:smite"), NSID("minecraft:sharpness")),
            "ench registry round-trip: smite incompatible with sharpness");
-
-    std::cout << "PASS: test_serialize_ench_registry" << std::endl;
 }
 
 // ─── test_serializer_mce_helpers ───────────────────────────────────────
@@ -430,8 +406,6 @@ TEST_CASE("test_serializer_mce_helpers") {
     expect(Serializer::string_to_mce("BedRock") == MCE::Bedrock, "string_to_mce mixed case BedRock");
     expect(Serializer::string_to_mce("ALL") == MCE::All, "string_to_mce uppercase ALL");
     expect(Serializer::string_to_mce("unknown") == MCE::None, "string_to_mce unknown returns None");
-
-    std::cout << "PASS: test_serializer_mce_helpers" << std::endl;
 }
 
 // ─── test_serializer_to_from_string ────────────────────────────────────
@@ -454,8 +428,6 @@ TEST_CASE("test_serializer_to_from_string") {
     Json parsed_compact = Serializer::from_string(compact);
     expect(parsed_compact.is_valid(), "from_string on compact style returns valid Json");
     expect(parsed == original, "Json after to_string/from_string round-trip equals original");
-
-    std::cout << "PASS: test_serializer_to_from_string" << std::endl;
 }
 
 // ─── test_to_mc_official_strings ──────────────────────────────────────────
@@ -502,8 +474,6 @@ TEST_CASE("test_to_mc_official_strings") {
     expect(smite_content.find("anvil_cost") != std::string::npos, "smite content contains anvil_cost");
     expect(smite_content.find("exclusive_set") != std::string::npos, "smite content contains exclusive_set");
     expect(smite_content.find("minecraft:sharpness") != std::string::npos, "smite exclusive_set contains minecraft:sharpness");
-
-    std::cout << "PASS: test_to_mc_official_strings" << std::endl;
 }
 
 // ─── test_profile_dependencies_roundtrip ───────────────────────────────

@@ -18,19 +18,16 @@
 TEST_CASE("test_make_id_bare") {
     NSID id = business::parser_detail::make_id("sharpness");
     expect(id == NSID("minecraft:sharpness"), "make_id bare -> minecraft:sharpness");
-    std::cout << "PASS: test_make_id_bare" << std::endl;
 }
 
 TEST_CASE("test_make_id_namespaced") {
     NSID id = business::parser_detail::make_id("mod:custom");
     expect(id == NSID("mod:custom"), "make_id namespaced -> mod:custom");
-    std::cout << "PASS: test_make_id_namespaced" << std::endl;
 }
 
 TEST_CASE("test_make_id_custom_ns") {
     NSID id = business::parser_detail::make_id("excavate", "thermalfoundation");
     expect(id == NSID("thermalfoundation:excavate"), "make_id custom ns -> thermalfoundation:excavate");
-    std::cout << "PASS: test_make_id_custom_ns" << std::endl;
 }
 
 // ─── derive_display_name ───────────────────────────────────────────────────
@@ -44,8 +41,6 @@ TEST_CASE("test_derive_display_name") {
 
     std::string d3 = business::parser_detail::derive_display_name("minecraft:sharpness");
     expect_eq(d3, std::string("Sharpness"), "derive_display_name minecraft:sharpness -> Sharpness");
-
-    std::cout << "PASS: test_derive_display_name" << std::endl;
 }
 
 // ─── get_category_suffix ───────────────────────────────────────────────────
@@ -62,8 +57,6 @@ TEST_CASE("test_get_category_suffix") {
 
     std::string s4 = business::parser_detail::get_category_suffix("unknown_item");
     expect_eq(s4, std::string("unknown_item"), "get_category_suffix unknown_item -> unknown_item");
-
-    std::cout << "PASS: test_get_category_suffix" << std::endl;
 }
 
 // ============================================================================
@@ -73,25 +66,21 @@ TEST_CASE("test_get_category_suffix") {
 TEST_CASE("test_detect_json_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/vanilla.json"));
     expect_eq(fmt, DataFormat::NativeJson, "detect .json -> NativeJson");
-    std::cout << "PASS: test_detect_json_ext" << std::endl;
 }
 
 TEST_CASE("test_detect_csv_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/enchants.csv"));
     expect_eq(fmt, DataFormat::NativeCsv, "detect .csv -> NativeCsv");
-    std::cout << "PASS: test_detect_csv_ext" << std::endl;
 }
 
 TEST_CASE("test_detect_unknown_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/unknown.txt"));
     expect_eq(fmt, DataFormat::Unknown, "detect .txt -> Unknown");
-    std::cout << "PASS: test_detect_unknown_ext" << std::endl;
 }
 
 TEST_CASE("test_detect_no_ext") {
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/noext"));
     expect_eq(fmt, DataFormat::Unknown, "detect no extension -> Unknown");
-    std::cout << "PASS: test_detect_no_ext" << std::endl;
 }
 
 TEST_CASE("test_detect_mc_dir") {
@@ -99,7 +88,6 @@ TEST_CASE("test_detect_mc_dir") {
     // context, so this should just verify no crash and return Unknown).
     DataFormat fmt = FormatDetector::detect(std::filesystem::path("data/mc_official"));
     // No crash — any return value is acceptable for non-existent paths.
-    std::cout << "PASS: test_detect_mc_dir (no crash)" << std::endl;
     (void)fmt;
 }
 
