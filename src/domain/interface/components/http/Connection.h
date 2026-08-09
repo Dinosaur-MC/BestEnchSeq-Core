@@ -55,6 +55,12 @@ public:
     int fd() const { return _fd; }
     const std::string& id() const { return _id; }
     bool alive() const { return _alive; }
+    /// 卸下 socket 所有权（服务器注销路径专用）：置 _fd = -1，使 ~Connection
+    /// 不再关闭 socket——关闭权移交 HttpServer 的延迟关闭队列（poller 线程
+    /// drain，保证 select 快照中的 fd 永不提前关闭）。仅经 Reactor::remove_
+    /// connection / close_all（服务器路径）调用；单元测试直调/从未注册的连接
+    /// 不卸下，析构仍自行关闭。
+    void detach_fd() { _fd = -1; }
     /// 是否处于 SSE 流模式。
     bool streaming() const { return _stream != nullptr; }
     /// keep-alive 连接可接受输入时即应读（对端 FIN 后不再读）；流模式不再读请求。
@@ -64,10 +70,12 @@ public:
 
     /// 一次非阻塞推进。router 提供分发。超时由调用方（Reactor）管。
     bool process(const Router& router);
-    /// 逻辑关闭：翻 _alive + 触发 on_close 回调，不关 socket。真正的 sock_close
-    /// 只在 ~Connection 执行——严格晚于 Reactor::remove_connection 的注销
-    /// （on_closed → unregister_fd，pmutex 内擦 home_of/want_write），保证
-    /// select 期间 socket 永不被关闭、已关闭句柄不残留注册表。
+    /// 逻辑关闭：翻 _alive + 触发 on_close 回调，不关 socket。服务器路径的
+    /// sock_close 由 HttpServer 延迟关闭队列（poller 线程 drain）执行——严格
+    /// 晚于 Reactor::remove_connection 的注销（on_closed → unregister_fd，
+    /// pmutex 内擦 home_of/want_write + 关闭入队）与 detach_fd()，保证 select
+    /// 快照中的 fd 永不提前关闭、已关闭句柄不残留注册表。仅单元测试直调/从未
+    /// 注册的连接由 ~Connection 自行关闭（未 detach）。
     void close();
 
     /// 升级为 SSE 流模式。返回 true 表示已挂载（连接存活且尚未流模式），否则 false。

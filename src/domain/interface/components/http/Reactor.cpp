@@ -90,14 +90,17 @@ void Reactor::remove_connection(int fd, const std::shared_ptr<Connection>& conn)
     // 匹配：先逻辑关闭（翻 _alive + 触发 on_close → hub 退订释放引用）——否则
     // 被引用保持存活（hub/队列任务）的连接从 conns 删除后 _alive 仍是 true，
     // poller 的 alive 注册检查放行 → 残留注册让 select 无限自旋投递 MISS 洪泛
-    // 饿死其他连接，且析构延迟导致 sock_close 延迟、对端收不到 EOF。
+    // 饿死其他连接，且析构延迟导致关闭延迟、对端收不到 EOF。
     conn->close();
-    // 注销（pmutex 内擦 home_of/want_write）→ conns.erase → 析构关 socket。
-    // 注销先于关闭（安全顺序）；socket 关闭是析构的唯一职责。
+    // 注销（pmutex 内擦 home_of/want_write + 延迟关闭入队）→ 卸下 fd（析构不再
+    // 关 socket，关闭权归 poller 的 close_queue drain）→ conns.erase（对象析构）。
+    // 注销先于关闭（安全顺序）；socket 关闭是 poller 线程的唯一职责（延迟到
+    // 下一轮 select 快照构建前，快照 fd 永不被提前关闭）。
     if (_impl->on_closed)
         _impl->on_closed(fd);
+    conn->detach_fd();
     std::lock_guard lk(_impl->mutex);
-    _impl->conns.erase(fd);  // 析构 → sock_close（严格晚于注销）
+    _impl->conns.erase(fd);
 }
 
 void Reactor::on_readable(int fd) {
@@ -146,10 +149,11 @@ void Reactor::close_all() {
     }
     for (auto& [fd, conn] : conns) {
         if (_impl->on_closed)
-            _impl->on_closed(fd); // pmutex 内注销（先于关闭，安全顺序）
+            _impl->on_closed(fd); // pmutex 内注销 + 延迟关闭入队（先于关闭，安全顺序）
+        conn->detach_fd();        // 析构不再关 socket——关闭权归 close_queue drain
     }
     std::lock_guard lk(_impl->mutex);
-    _impl->conns.clear(); // 析构 → close() + sock_close（唯一关闭点，严格晚于注销）
+    _impl->conns.clear(); // 析构（已卸下 fd，不关 socket）
 }
 
 size_t Reactor::connection_count() const {

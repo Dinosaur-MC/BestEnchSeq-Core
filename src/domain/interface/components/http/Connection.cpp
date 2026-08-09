@@ -24,8 +24,9 @@ Connection::Connection(int fd, std::string id) : _fd(fd), _id(std::move(id)) {
 Connection::~Connection() {
     close();
     // 仅对未走注销路径的连接（单元测试直调/从未注册）在此关闭 socket。
-    // 服务器路径的 socket 关闭在 remove_connection → on_closed（unregister_fd）
-    // 内、pmutex 下完成，随后 detach_fd() 置 _fd=-1——这里不会二次关闭。
+    // 服务器路径经 remove_connection/close_all 注销后 detach_fd() 置 _fd=-1，
+    // 关闭权移交 HttpServer 的延迟关闭队列（poller 线程 drain）——这里不关闭，
+    // 也不会二次关闭。
     if (_fd >= 0) {
         sock_close(_fd);
         _fd = -1;

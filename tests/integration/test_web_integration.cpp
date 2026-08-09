@@ -18,6 +18,9 @@
 //      test_web_api)
 //  6. SSE over the real socket   → GET /api/tasks/{id}/events: stream head +
 //     a live `event: completed` + `data:` frame (Reactor→Connection→wire)
+//  6b. close-storm SSE regression → 32 rapid connect/close cycles while an SSE
+//     stream is open; the completed frame must still arrive within budget
+//     (pins the poller lock-starvation fix, see the case comment)
 //  7. Error envelope             → 404 {error,code}; 405 + Allow
 //  8. Concurrent clients         → 4 threads each GET /health → all 200
 //  9. Path traversal             → GET /public/../secret → 404
@@ -309,6 +312,57 @@ void test_sse_events(HttpServer& server) {
 }
 
 // ---------------------------------------------------------------------------
+// Case 6b (P3 回归): close-storm 下 SSE 帧必须准时送达。
+//
+// 根因（2026-08-09）：poller 全程持 pmutex 跨 select()；短连接风暴（快速
+// connect→close）在对端留下未处理的 FIN，select 每轮立即就绪，poller 以微秒
+// 间隔连续重锁（自旋），Reactor 线程的 unregister_fd/set_fd_interest 在 futex
+// 唤醒竞速中连续落败 → 被饿死数秒（WSL 实测 ≥3s），SSE 帧（排队在饿死的
+// drive 之后）整体冻结、客户端 3s 内收不到终态帧（旧代码 WSL 5/5 失败）。
+// 修复：快照 fd 集合持锁构建 → 无锁 select → 重取锁按身份校验投递；socket
+// 关闭延迟到 poller 线程（close_queue drain），快照 fd 永不提前关闭。
+//
+// 本用例把回归钉死：SSE 流开启期间连续开关 32 条短连接（每条约 1 个 FIN
+// 进入 poller 的 select 集合——正是旧实现的饿死触发器），终态帧必须在 2s
+// 预算内到达（修复后 ~200ms；饿死时 >3s，用例超时即失败）。
+void test_sse_under_close_storm(HttpServer& server) {
+    const std::string body = "{\"target\":{\"item\":\"diamond_chestplate\",\"enchants\":["
+                             "{\"id\":\"protection\",\"level\":4},{\"id\":\"thorns\",\"level\":3},"
+                             "{\"id\":\"unbreaking\",\"level\":3},{\"id\":\"mending\",\"level\":1}]},"
+                             "\"source\":[{\"id\":\"protection\",\"level\":3},"
+                             "{\"id\":\"thorns\",\"level\":2}],\"algorithm\":\"dp_merge\"}";
+    auto resp = post_task(server, body);
+    const std::string id = extract_task_id(resp);
+    expect(!id.empty(), "storm task created");
+
+    int c = sock_connect("127.0.0.1", server.port());
+    expect(c >= 0, "storm SSE client connects");
+    sock_send(c, "GET /api/tasks/" + id + "/events HTTP/1.1\r\nHost: x\r\n\r\n", 3000);
+    set_nonblocking(c);
+
+    std::string got;
+    recv_until(c, got, "text/event-stream", 200);
+    expect(got.find("text/event-stream") != std::string::npos, "storm stream head");
+
+    // Close-storm：32 条快速 connect→send→close（SseHub 订阅保持开放）。
+    for (int i = 0; i < 32; ++i) {
+        int h = sock_connect("127.0.0.1", server.port());
+        if (h < 0)
+            continue;
+        sock_send(h, "GET /health HTTP/1.1\r\nHost: x\r\n\r\n", 1000);
+        std::string buf;
+        sock_recv(h, buf, 4096, 1000);
+        sock_close(h);
+    }
+
+    // 终态帧必须准时到达（2s 预算；solve ~100ms + 风暴 ~100ms 后余量充足）。
+    recv_until(c, got, "event: completed", 200);
+    expect(got.find("event: completed") != std::string::npos,
+           "SSE completed frame delivered during close-storm");
+    sock_close(c);
+}
+
+// ---------------------------------------------------------------------------
 // Case 7: error envelope (404 + 405/Allow)
 // ---------------------------------------------------------------------------
 void test_error_envelopes(HttpServer& server) {
@@ -551,6 +605,7 @@ static void run_suite() {
         test_task_submit_and_poll(server);
         test_task_failed_snapshot(server);
         test_sse_events(server);
+        test_sse_under_close_storm(server);
         test_concurrent_clients(server);
         test_path_traversal(server);
         test_slow_client_timeout(server);
