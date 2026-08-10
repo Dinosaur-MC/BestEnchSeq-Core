@@ -10,6 +10,7 @@
 #include "Reactor.h"
 #include "Connection.h" // 注册表所有者 alive() 检查（仅弱指针无法识别已逻辑关闭的连接）
 #include "Middleware.h"
+#include "AccessLog.h"
 #include "common/log/log.hpp"
 
 #ifdef _WIN32
@@ -183,6 +184,14 @@ void HttpServer::run() {
     // Connection::process 拿到的仍是一个 Handler——传输路径零改动。
     for (auto it = impl.middlewares.rbegin(); it != impl.middlewares.rend(); ++it)
         dispatch = [m = *it, prev = std::move(dispatch)](const HttpRequest& req) {
+            return m(req, prev);
+        };
+
+    // 默认访问日志（Combined 格式，INFO 级）：位于所有用户中间件之外——
+    // 限流 429 等一切到达的请求都记录（nginx 惯例）。set_access_log(false)
+    // 关闭；需要可信代理 XFF 策略时自装 make_access_logger(policy)。
+    if (impl.access_log)
+        dispatch = [m = make_access_logger(), prev = std::move(dispatch)](const HttpRequest& req) {
             return m(req, prev);
         };
 

@@ -4,9 +4,13 @@
 #define BESQ_TEST_MAIN
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Middleware.h"
+#include "domain/interface/components/http/AccessLog.h"
 #include "domain/interface/components/http/RateLimiter.h"
 #include "domain/interface/components/http/Socket.h"
+#include "common/log/Logger.h"
+#include "common/log/LogRingBuffer.h"
 #include "framework/test_framework.h"
+#include <regex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -208,6 +212,86 @@ TEST_CASE("test_ratelimit") {
            "slots=2 admits two IPs");
     expect(rl4(e3, next).status == 200, "third IP admitted after eviction");
     expect(rl4(e1, next).status == 200, "evicted IP re-claims a slot");
+}
+
+// ---------------------------------------------------------------------------
+// 访问日志（直接调用中间件 + 合成请求；经异步 Logger 落 ring 后断言）
+// ---------------------------------------------------------------------------
+TEST_CASE("test_access_log") {
+    auto ring = std::make_shared<LogRingBuffer>(4096);
+    Logger::instance().set_ring_buffer(ring);
+    auto logger = make_access_logger(ClientAddrPolicy{});
+
+    auto wait_line = [&](const std::string& needle) {
+        for (int i = 0; i < 200; ++i) {
+            for (const auto& r : ring->snapshot(LogLevel::Info, 4096))
+                if (r.message.find(needle) != std::string::npos)
+                    return r.message;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return std::string();
+    };
+
+    // 正常请求：字段齐全
+    HttpRequest req;
+    req.remote_addr = "127.0.0.1";
+    req.method = Method::Get;
+    req.path = "/api/status";
+    req.version = "HTTP/1.1";
+    logger(req, [](const HttpRequest&) { return json_ok(); });  // body 11 字节
+    const std::string line = wait_line("\"GET /api/status HTTP/1.1\" 200");
+    expect(!line.empty(), "CLF line logged at INFO");
+    if (!line.empty()) {
+        expect(line.rfind("127.0.0.1 - - [", 0) == 0, "CLF prefix: ip - - [");
+        const size_t lb = line.find('[');
+        const size_t rb = line.find(']');
+        static const std::regex ts_re(
+            R"(^\[[0-9]{2}/[A-Z][a-z]{2}/[0-9]{4}:[0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{4}\]$)",
+            std::regex::ECMAScript);
+        expect(lb != std::string::npos && rb != std::string::npos && rb > lb &&
+                   std::regex_match(line.substr(lb, rb - lb + 1), ts_re),
+               "CLF timestamp [dd/Mon/yyyy:HH:mm:ss +zzzz]");
+        expect(line.find("\"GET /api/status HTTP/1.1\" 200 11 \"-\" \"-\"") != std::string::npos,
+               "request line + status + bytes; missing ref/ua are dashes");
+    }
+
+    // 带 Referer/UA：原样引用
+    HttpRequest req2 = req;
+    req2.path = "/api/profiles";
+    req2.headers.emplace_back("Referer", "http://localhost:18789/");
+    req2.headers.emplace_back("User-Agent", "besq-test/1.0");
+    logger(req2, [](const HttpRequest&) { return json_ok(); });
+    expect(!wait_line("\"GET /api/profiles HTTP/1.1\" 200 11 \"http://localhost:18789/\" \"besq-test/1.0\"")
+                .empty(),
+           "referer and user-agent quoted in place");
+
+    // 流式响应：bytes = "-"
+    HttpRequest req3 = req;
+    req3.path = "/api/events";
+    logger(req3, [](const HttpRequest&) { return sse_stream_response(); });
+    expect(!wait_line("\"GET /api/events HTTP/1.1\" 200 - \"-\" \"-\"").empty(),
+           "stream response logs dash bytes");
+
+    // 日志注入消毒：path 控制字符 → '_'
+    // 注：`"/a\x01" "b"` 而非 "/a\x01b"——后者的 \x01b 是单个十六进制转义
+    // 0x1b(ESC)，b 不构成字面字符；相邻字面量拼接才得到 \x01 后跟 'b'。
+    HttpRequest req4 = req;
+    req4.path = "/a\x01" "b";
+    logger(req4, [](const HttpRequest&) { return json_ok(); });
+    expect(!wait_line("\"GET /a_b HTTP/1.1\"").empty(), "control chars sanitized");
+
+    // 429 也记（限流器短路在访问日志内侧 → 日志看到 429）
+    RateLimitConfig cfg;
+    cfg.enabled = true;
+    cfg.ip_rps = 1000.0;
+    cfg.ip_burst = 0;   // 桶容量 0 → 恒 429
+    auto limiter = make_rate_limiter(cfg);
+    Next final = [](const HttpRequest&) { return json_ok(); };
+    Next inner = [&](const HttpRequest& r) { return limiter(r, final); };
+    HttpRequest req5 = req;
+    req5.path = "/limited";
+    logger(req5, inner);
+    expect(!wait_line("\"GET /limited HTTP/1.1\" 429").empty(), "rate-limited request logged with 429");
 }
 
 } // namespace
