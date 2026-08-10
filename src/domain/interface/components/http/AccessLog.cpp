@@ -1,7 +1,7 @@
 #include "AccessLog.h"
 #include "common/log/Logger.h"
 #include <chrono>
-#include <cstdio>
+#include <ctime>
 #include <string>
 
 namespace web {
@@ -47,7 +47,10 @@ void AccessLogger::log_line(const HttpRequest& req, const HttpResponse& resp) {
     std::string bytes = "-";
     if (!resp.is_stream && !resp.body.empty())
         bytes = std::to_string(resp.body.size());
-    std::string line = (req.remote_addr.empty() ? "-" : req.remote_addr) + " - - " +
+    // 客户端 IP 与限流 key 同一来源（client_addr：可信代理 XFF 策略）——Nginx
+    // 前置部署下访问日志记真实客户端而非代理地址（设计文档 §5）。
+    const std::string ip = client_addr(req, _policy);
+    std::string line = (ip.empty() ? "-" : ip) + " - - " +
                        clf_timestamp() + " \"" + sanitize_for_log(request_line(req)) + "\" " +
                        std::to_string(resp.status) + " " + bytes + " " +
                        quote_or_dash(req.header("Referer")) + " " +

@@ -16,8 +16,8 @@ public:
     HttpResponse operator()(const HttpRequest& req, const Next& next);
 
 private:
-    static void log_line(const HttpRequest& req, const HttpResponse& resp);
-    static std::string request_line(const HttpRequest& req);
+    void log_line(const HttpRequest& req, const HttpResponse& resp);
+    std::string request_line(const HttpRequest& req);
     ClientAddrPolicy _policy;
 };
 

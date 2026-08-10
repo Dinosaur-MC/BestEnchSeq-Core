@@ -292,6 +292,14 @@ TEST_CASE("test_access_log") {
     req5.path = "/limited";
     logger(req5, inner);
     expect(!wait_line("\"GET /limited HTTP/1.1\" 429").empty(), "rate-limited request logged with 429");
+
+    // 可信代理：trust_forwarded 下 IP 字段解析为 XFF 最右条目（与限流 key 同一函数）
+    auto logger_trust = make_access_logger(ClientAddrPolicy{.trust_forwarded = true});
+    HttpRequest reqx = req;
+    reqx.path = "/api/trust";
+    reqx.headers.emplace_back("X-Forwarded-For", "203.0.113.9");
+    logger_trust(reqx, [](const HttpRequest&) { return json_ok(); });
+    expect(!wait_line("203.0.113.9 - - [").empty(), "trusted XFF IP in log line");
 }
 
 } // namespace
