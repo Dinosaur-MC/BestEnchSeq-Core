@@ -23,7 +23,10 @@ constexpr uint64_t kMaxScaled = 0xFFFFFFFFu; // 高 32 位满值
 
 } // namespace
 
-RateLimiter::RateLimiter(RateLimitConfig cfg) : _table(new Slot[cfg.slots > 0 ? cfg.slots : 1]), _cfg(std::move(cfg)) {}
+RateLimiter::RateLimiter(RateLimitConfig cfg) : _table(new Slot[cfg.slots > 0 ? cfg.slots : 1]), _cfg(std::move(cfg)) {
+    if (_cfg.slots == 0)
+        _cfg.slots = 1;   // locate() 的取模除数归一（与分配守卫一致）
+}
 
 bool RateLimiter::take(std::atomic<uint64_t>& st, double rate, double cap) {
     using namespace std::chrono;

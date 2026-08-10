@@ -216,6 +216,14 @@ TEST_CASE("test_ratelimit") {
     expect(rl4(e1, next).status == 200 && rl4(e2, next).status == 200, "slots=2 admits two IPs");
     expect(rl4(e3, next).status == 200, "third IP admitted after eviction");
     expect(rl4(e1, next).status == 200, "evicted IP re-claims a slot");
+
+    // slots=0 配置不得崩溃（构造归一为 1）
+    RateLimitConfig cfg0 = cfg;
+    cfg0.slots = 0;
+    auto rl0 = make_rate_limiter(cfg0);
+    HttpRequest z;
+    z.remote_addr = "10.1.1.1";
+    expect(rl0(z, next).status == 200, "slots=0 normalized without crash");
 }
 
 // ---------------------------------------------------------------------------
