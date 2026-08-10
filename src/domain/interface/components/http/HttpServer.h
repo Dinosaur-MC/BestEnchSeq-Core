@@ -42,8 +42,9 @@ public:
     /// 按注册序嵌套，首个注册者最外层。默认访问日志（set_access_log(true)）
     /// 位于所有用户中间件之外（见 AccessLog.h）。
     void use(Middleware m);
-    /// 默认访问日志开关（默认开启；接入 run() 在后续任务）。关闭后可用
-    /// use(make_access_logger(policy)) 自装自定义策略版本。
+    /// 默认访问日志开关（默认开启）：run() 内自动装配 make_access_logger() 于
+    /// 所有用户中间件之外——限流 429 等一切到达的请求都记录（见 AccessLog.h）。
+    /// 关闭后可用 use(make_access_logger(policy)) 自装自定义策略版本。
     void set_access_log(bool on);
 
     /// 阻塞运行；内部起 1 Poller 线程 + workers 个 Reactor 线程。stop() 后返回。

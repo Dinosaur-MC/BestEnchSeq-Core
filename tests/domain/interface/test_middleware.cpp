@@ -300,6 +300,15 @@ TEST_CASE("test_access_log") {
     reqx.headers.emplace_back("X-Forwarded-For", "203.0.113.9");
     logger_trust(reqx, [](const HttpRequest&) { return json_ok(); });
     expect(!wait_line("203.0.113.9 - - [").empty(), "trusted XFF IP in log line");
+
+    // XFF 条目客户端可控：控制字符必须消毒（日志注入面统一）
+    // 注：`"203.0.113.9\x01" "evil"` 而非 `"203.0.113.9\x01evil"`——\x01e 会被
+    // 十六进制转义贪婪吞掉 'e'（与上方 /a\x01 同款写法）。
+    HttpRequest reqy = req;
+    reqy.path = "/api/trust2";
+    reqy.headers.emplace_back("X-Forwarded-For", "203.0.113.9\x01" "evil");
+    logger_trust(reqy, [](const HttpRequest&) { return json_ok(); });
+    expect(!wait_line("203.0.113.9_evil - - [").empty(), "XFF control chars sanitized");
 }
 
 } // namespace

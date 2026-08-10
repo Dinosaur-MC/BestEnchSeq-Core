@@ -48,8 +48,9 @@ void AccessLogger::log_line(const HttpRequest& req, const HttpResponse& resp) {
     if (!resp.is_stream && !resp.body.empty())
         bytes = std::to_string(resp.body.size());
     // 客户端 IP 与限流 key 同一来源（client_addr：可信代理 XFF 策略）——Nginx
-    // 前置部署下访问日志记真实客户端而非代理地址（设计文档 §5）。
-    const std::string ip = client_addr(req, _policy);
+    // 前置部署下访问日志记真实客户端而非代理地址（设计文档 §5）。XFF 条目完全
+    // 客户端可控：控制字符必须消毒（否则经控制台镜像形成终端转义注入）。
+    const std::string ip = sanitize_for_log(client_addr(req, _policy));
     std::string line = (ip.empty() ? "-" : ip) + " - - " +
                        clf_timestamp() + " \"" + sanitize_for_log(request_line(req)) + "\" " +
                        std::to_string(resp.status) + " " + bytes + " " +
