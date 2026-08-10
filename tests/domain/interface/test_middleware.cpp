@@ -4,6 +4,7 @@
 #define BESQ_TEST_MAIN
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Middleware.h"
+#include "domain/interface/components/http/RateLimiter.h"
 #include "domain/interface/components/http/Socket.h"
 #include "framework/test_framework.h"
 #include <string>
@@ -116,6 +117,81 @@ TEST_CASE("test_client_addr") {
     expect(client_addr(req, p) == "127.0.0.1", "missing XFF falls back to peer addr");
     req.remote_addr.clear();
     expect(client_addr(req, p).empty(), "no peer addr yields empty");
+}
+
+// ---------------------------------------------------------------------------
+// 限流器（直接调用中间件，合成 HttpRequest——不走线，确定性测试）
+// ---------------------------------------------------------------------------
+TEST_CASE("test_ratelimit") {
+    RateLimitConfig cfg;
+    cfg.enabled = true;
+    cfg.ip_rps = 1000.0;        // 1 token/ms：恢复测试毫秒级
+    cfg.ip_burst = 2;
+    cfg.global_rps = 100000.0;  // 全局几乎不限（叠加测试单独配置）
+    cfg.global_burst = 100000;
+    auto rl = make_rate_limiter(cfg);
+    int served = 0;
+    Next next = [&served](const HttpRequest&) {
+        ++served;
+        return json_ok();
+    };
+    HttpRequest req;
+    req.remote_addr = "1.2.3.4";
+
+    // 突发上限：burst=2 → 第 3 个 429
+    for (int i = 0; i < 3; ++i)
+        rl(req, next);
+    expect(served == 2, "burst 2 admits first two requests");
+    auto r429 = rl(req, next);
+    expect(r429.status == 429, "third+ request denied");
+    expect(r429.header_value("Retry-After") != "", "Retry-After header present");
+    expect(r429.body.find("\"code\"") != std::string::npos, "error envelope carries code");
+    expect(r429.body.find("RATE_LIMITED") != std::string::npos, "envelope code RATE_LIMITED");
+
+    // 桶恢复：速率 1 token/ms → 5ms 后恢复
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    expect(rl(req, next).status == 200, "recovered after refill");
+
+    // 每 IP 隔离：另一 IP 独立计桶
+    HttpRequest req2;
+    req2.remote_addr = "5.6.7.8";
+    served = 0;
+    for (int i = 0; i < 3; ++i)
+        rl(req2, next);
+    expect(served == 2, "per-IP buckets are independent");
+
+    // XFF 采信：trust_forwarded 下 key = XFF 最右条目（对端 127.0.0.1 可信）
+    RateLimitConfig cfg2 = cfg;
+    cfg2.client_addr_policy.trust_forwarded = true;
+    auto rl2 = make_rate_limiter(cfg2);
+    HttpRequest reqx;
+    reqx.remote_addr = "127.0.0.1";
+    reqx.headers.emplace_back("X-Forwarded-For", "9.9.9.9");
+    served = 0;
+    for (int i = 0; i < 3; ++i)
+        rl2(reqx, next);
+    expect(served == 2, "XFF-based key buckets by forwarded IP");
+
+    // 全局桶叠加：全局容量 1 → 第二个请求即 429（无论 IP）
+    RateLimitConfig cfg3 = cfg;
+    cfg3.global_rps = 0.001;
+    cfg3.global_burst = 1;
+    auto rl3 = make_rate_limiter(cfg3);
+    served = 0;
+    HttpRequest rA;
+    rA.remote_addr = "1.1.1.1";
+    HttpRequest rB;
+    rB.remote_addr = "2.2.2.2";
+    rl3(rA, next);
+    rl3(rB, next);
+    expect(rl3(rA, next).status == 429, "global bucket exhausted limits all IPs");
+
+    // disabled：透传
+    RateLimitConfig off;
+    auto rlOff = make_rate_limiter(off);
+    served = 0;
+    expect(rlOff(req, next).status == 200, "disabled limiter passes through");
+    expect(served == 1, "disabled limiter invokes next");
 }
 
 } // namespace

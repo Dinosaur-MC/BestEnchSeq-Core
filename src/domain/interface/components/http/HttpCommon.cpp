@@ -193,6 +193,7 @@ const char* reason_phrase(int status) {
         case 405: return "Method Not Allowed";
         case 409: return "Conflict";
         case 413: return "Payload Too Large";
+        case 429: return "Too Many Requests";
         case 500: return "Internal Server Error";
     }
     return "Error";
