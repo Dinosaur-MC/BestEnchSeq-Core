@@ -29,6 +29,10 @@ void sock_close(int fd);
 /// auto-tuning (Linux may buffer megabytes; Windows defaults are small).
 bool set_send_buffer(int fd, int bytes);
 
+/// Peer IPv4 address of a connected socket ("127.0.0.1"); "" on failure.
+/// Used for rate-limit keys and access-log client IPs.
+std::string sock_peer_addr(int fd);
+
 /// Switch a socket to nonblocking mode (FIONBIO on Winsock / O_NONBLOCK on POSIX).
 void set_nonblocking(int fd);
 

@@ -32,6 +32,37 @@ public:
         return HttpResponse::not_found();
     }
 };
+
+// ---------------------------------------------------------------------------
+// HttpRequest 元数据捕获：remote_addr（对端 IP，限流 key / 访问日志 IP 字段）
+// 与 version（线格式版本，访问日志请求行）。
+// ---------------------------------------------------------------------------
+static void test_request_meta_capture() {
+    TcpListener l;
+    expect(l.listen("127.0.0.1", 0), "listen");
+    int client = sock_connect("127.0.0.1", l.bound_port());
+    expect(client >= 0, "connect");
+    int fd = l.accept();
+    expect(fd >= 0, "accept");
+    set_nonblocking(fd);
+    set_nonblocking(client);
+    Connection conn(fd, "id-meta");
+    std::string remote, version;
+    Connection::Router router = [&](const HttpRequest& req) {
+        remote = req.remote_addr;
+        version = req.version;
+        return HttpResponse::json(200, "OK", R"({})");
+    };
+    expect(sock_send(client, "GET /ping HTTP/1.1\r\nHost: x\r\n\r\n"), "send");
+    for (int i = 0; i < 100 && remote.empty(); ++i) {
+        conn.process(router);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    expect(remote == "127.0.0.1", "remote_addr is the peer address");
+    expect(version == "HTTP/1.1", "version captured from request line");
+    sock_close(client);
+    conn.close();
+}
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -347,6 +378,7 @@ static void test_timeout_sweep() {
 // Main
 // ---------------------------------------------------------------------------
 TEST_CASE("test_connection") {
+    test_request_meta_capture();
     test_keepalive_two_requests();
     test_split_body_post();
     test_connection_close_semantics();

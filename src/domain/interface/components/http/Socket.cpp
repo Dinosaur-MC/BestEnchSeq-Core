@@ -296,6 +296,22 @@ void sock_close(int fd) {
     if (fd >= 0) close_native(native(fd));
 }
 
+std::string sock_peer_addr(int fd) {
+    if (fd < 0) return "";
+    sockaddr_in peer{};
+#ifdef _WIN32
+    int len = sizeof(peer);
+#else
+    socklen_t len = sizeof(peer);
+#endif
+    if (::getpeername(native(fd), reinterpret_cast<sockaddr*>(&peer), &len) != 0)
+        return "";
+    char buf[INET_ADDRSTRLEN] = {0};
+    if (!inet_ntop(AF_INET, &peer.sin_addr, buf, sizeof(buf)))
+        return "";
+    return buf;
+}
+
 bool set_send_buffer(int fd, int bytes) {
     if (fd < 0) return false;
     return ::setsockopt(native(fd), SOL_SOCKET, SO_SNDBUF,

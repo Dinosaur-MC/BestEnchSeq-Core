@@ -19,6 +19,7 @@ std::string sanitize_for_log(const std::string& s) {
 
 Connection::Connection(int fd, std::string id) : _fd(fd), _id(std::move(id)) {
     touch();  // 活动基准：从 accept/构造时刻起计时（空闲 keep-alive 30s 到期）
+    _remote = sock_peer_addr(fd);    // 对端 IP：限流 key 与访问日志 IP 字段
 }
 
 Connection::~Connection() {
@@ -158,6 +159,7 @@ bool Connection::process(const Router& router) {
     // 时读，导致 body 落在后续 TCP 分段时永远 Incomplete 卡死。
     for (;;) {
         HttpRequest req;
+        req.remote_addr = _remote;   // 对端 IP：限流 key 与访问日志客户端 IP 字段
         // 分发前把本连接挂到 req.stream：SSE events handler 用 StreamChannel 把
         // SseHub 帧投递回来。真实传输路径上连接由 shared_ptr 持有（enable_shared_
         // from_this 可解析）；单元测试里连接可能是栈对象 → shared_from_this 抛

@@ -95,6 +95,7 @@ ParseResult parse_incremental(const std::string& buf, size_t& consumed, HttpRequ
         return ParseResult::BadRequest;
     if (version != "HTTP/1.1" && version != "HTTP/1.0")
         return ParseResult::BadRequest;
+    out.version = version;
 
     // Split path / query：path 保持 raw（未解码；{param} 段由 Router::match_segments
     // 捕获时逐段 percent-decode——整路径解码会把 %2F 变成分隔符并二次解码，破坏 %2F 数据），

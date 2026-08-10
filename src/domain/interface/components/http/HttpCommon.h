@@ -55,6 +55,11 @@ struct HttpRequest {
     ///                      Connection 在等待 body 时据此发送 `100 Continue`。
     bool keep_alive = true;
     bool expect_continue = false;
+    /// 对端 IPv4 地址（getpeername，Connection 构造时捕获）。限流 key 与访问
+    /// 日志客户端 IP 字段的来源；单元测试直调/非连接上下文为空串。
+    std::string remote_addr;
+    /// 请求行 HTTP 版本（"HTTP/1.1"/"HTTP/1.0"，解析器填充）——访问日志请求行。
+    std::string version;
     std::string header(const std::string& name) const;   // 大小写不敏感，缺省 ""
 };
 

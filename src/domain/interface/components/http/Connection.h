@@ -106,6 +106,7 @@ private:
     void flush_stream();         // 心跳 + 取走流缓冲 → drain_out()
     void touch();                // 任何 recv/send 进展 → 刷新 _last_activity
 
+    std::string _remote;             // 对端 IP（getpeername，构造时捕获一次）
     int _fd;
     std::string _id;
     bool _alive = true;
