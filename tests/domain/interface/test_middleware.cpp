@@ -98,4 +98,24 @@ TEST_CASE("test_middleware_chain") {
     expect(order2.size() == 1 && order2[0] == "S", "downstream handler not invoked");
 }
 
+// ---------------------------------------------------------------------------
+// client_addr：默认忽略 XFF；trust_forwarded + 可信对端时取 XFF 最右条目。
+// ---------------------------------------------------------------------------
+TEST_CASE("test_client_addr") {
+    HttpRequest req;
+    req.remote_addr = "127.0.0.1";
+    req.headers.emplace_back("X-Forwarded-For", "1.2.3.4, 5.6.7.8");
+    ClientAddrPolicy p;
+    expect(client_addr(req, p) == "127.0.0.1", "XFF ignored by default");
+    p.trust_forwarded = true;
+    expect(client_addr(req, p) == "5.6.7.8", "rightmost XFF entry trusted");
+    p.trusted_proxies = {"10.0.0.1"};
+    expect(client_addr(req, p) == "127.0.0.1", "untrusted peer falls back to peer addr");
+    p.trusted_proxies = {"127.0.0.1"};
+    req.headers.clear();
+    expect(client_addr(req, p) == "127.0.0.1", "missing XFF falls back to peer addr");
+    req.remote_addr.clear();
+    expect(client_addr(req, p).empty(), "no peer addr yields empty");
+}
+
 } // namespace
