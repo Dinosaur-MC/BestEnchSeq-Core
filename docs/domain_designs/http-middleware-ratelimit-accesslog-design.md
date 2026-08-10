@@ -141,7 +141,7 @@ struct RateLimitConfig {
 | 时间戳 | `[%d/%b/%Y:%H:%M:%S %z]`（`localtime_r`/`localtime_s` 线程安全版本） |
 | 请求行 | `"METHOD path HTTP/1.1"`（path 原始未解码） |
 | status | `resp.status`（含 429/404/405/500） |
-| bytes | `resp.to_bytes(req.keep_alive).size()`；`is_stream` → `-`；0 字节 → `-` |
+| bytes | `resp.body.size()`（CLF `%b` 惯例：响应 **body** 字节数、不含头部，与 Apache/nginx 一致）；`is_stream` → `-`；0 字节 → `-` |
 | Referer / User-Agent | `req.header(...)` 缺省 `-`；**日志注入消毒**（控制字符替换 `_`） |
 
 行为：
