@@ -311,4 +311,70 @@ TEST_CASE("test_access_log") {
     expect(!wait_line("203.0.113.9_evil - - [").empty(), "XFF control chars sanitized");
 }
 
+// ---------------------------------------------------------------------------
+// 端到端：真实 HttpServer + 限流 + 默认访问日志，真实 socket。
+// ---------------------------------------------------------------------------
+TEST_CASE("test_middleware_e2e") {
+    auto ring = std::make_shared<LogRingBuffer>(4096);
+    Logger::instance().set_ring_buffer(ring);
+    HttpServer server;
+    server.set_handler(Method::Get, "/health",
+                       [](const HttpRequest&) { return json_ok(); });
+    RateLimitConfig cfg;
+    cfg.enabled = true;
+    cfg.ip_rps = 200.0;         // 0.2 token/ms：补 1 枚需 ≥5ms（防真实 socket 往返时序抖动）
+    cfg.ip_burst = 2;
+    cfg.global_rps = 1000000.0;
+    cfg.global_burst = 1000000;
+    server.use(make_rate_limiter(cfg));   // 默认访问日志自动最外层
+    expect(server.start("127.0.0.1", 0), "server starts");
+    std::thread srv([&] { server.run(); });
+    struct ServerGuard {
+        HttpServer& s;
+        std::thread& t;
+        ~ServerGuard() {
+            if (t.joinable()) {
+                s.stop();
+                t.join();
+            }
+        }
+    } guard{server, srv};
+
+    auto get = [&]() {
+        int c = sock_connect("127.0.0.1", server.port());
+        expect(c >= 0, "client connects");
+        sock_send(c, "GET /health HTTP/1.1\r\nHost: x\r\n\r\n", 3000);
+        std::string got;
+        sock_recv(c, got, 4096, 3000);
+        sock_close(c);
+        return got;
+    };
+
+    const std::string r1 = get();
+    const std::string r2 = get();
+    const std::string r3 = get();
+    expect(r1.find("200 OK") != std::string::npos, "first request 200");
+    expect(r2.find("200 OK") != std::string::npos, "second request 200");
+    expect(r3.find("429 Too Many Requests") != std::string::npos, "third request 429 with reason phrase");
+    expect(r3.find("Retry-After:") != std::string::npos, "429 carries Retry-After on the wire");
+
+    // 桶恢复（50ms 补 10 枚，封顶 burst=2）→ 200
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    expect(get().find("200 OK") != std::string::npos, "recovered after refill");
+
+    // 默认访问日志：200 与 429 都上线（ring 异步落盘，有界等待）
+    bool saw_200 = false, saw_429 = false;
+    for (int i = 0; i < 200 && !(saw_200 && saw_429); ++i) {
+        for (const auto& r : ring->snapshot(LogLevel::Info, 4096)) {
+            if (r.message.find("\"GET /health HTTP/1.1\" 200") != std::string::npos)
+                saw_200 = true;
+            if (r.message.find("\"GET /health HTTP/1.1\" 429") != std::string::npos)
+                saw_429 = true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(saw_200, "200 logged by default access log");
+    expect(saw_429, "429 logged by default access log");
+}
+
 } // namespace
