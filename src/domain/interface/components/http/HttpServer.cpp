@@ -9,6 +9,7 @@
 #include "Socket.h"
 #include "Reactor.h"
 #include "Connection.h" // 注册表所有者 alive() 检查（仅弱指针无法识别已逻辑关闭的连接）
+#include "Middleware.h"
 #include "common/log/log.hpp"
 
 #ifdef _WIN32
@@ -112,6 +113,8 @@ struct HttpServer::Impl {
 
     std::vector<Route> routes;
     Handler fallback;
+    std::vector<Middleware> middlewares;
+    bool access_log = true;
 };
 
 bool HttpServer::start(const std::string& host, uint16_t port, size_t workers) {
@@ -142,6 +145,18 @@ void HttpServer::set_fallback(Handler h) {
     _impl->fallback = std::move(h);
 }
 
+void HttpServer::use(Middleware m) {
+    if (!_impl)
+        _impl = std::make_unique<Impl>();
+    _impl->middlewares.push_back(std::move(m));
+}
+
+void HttpServer::set_access_log(bool on) {
+    if (!_impl)
+        _impl = std::make_unique<Impl>();
+    _impl->access_log = on;
+}
+
 void HttpServer::stop() noexcept {
     if (_impl)
         _impl->running.store(false, std::memory_order_release);
@@ -163,6 +178,13 @@ void HttpServer::run() {
             return fallback(req);
         return HttpResponse::json(404, "Not Found", "{\"ok\":false,\"error\":\"not found\"}");
     };
+
+    // middleware 链组装（run 前快照；逆序嵌套 → 注册序 = 外层→内层）。
+    // Connection::process 拿到的仍是一个 Handler——传输路径零改动。
+    for (auto it = impl.middlewares.rbegin(); it != impl.middlewares.rend(); ++it)
+        dispatch = [m = *it, prev = std::move(dispatch)](const HttpRequest& req) {
+            return m(req, prev);
+        };
 
     // 起 N 个 Reactor（EventLoop 消费线程）。
     impl.reactors.resize(impl.workers);
