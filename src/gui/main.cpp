@@ -6,6 +6,7 @@
 #include "common/log/LogRingBuffer.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/HttpServer.h"
+#include "domain/interface/components/http/RateLimiter.h"
 #include "domain/interface/web/WebModule.h"
 #include <cstdlib>
 #include <filesystem>
@@ -370,6 +371,13 @@ int main(int argc, char* argv[]) try {
     server.set_fallback([&](const web::HttpRequest& r) {
         return module.dispatch(r);
     });
+
+    // 限流（默认关闭；GUI 显式开启，本地宽松阈值）。部署经 Nginx 前置时：
+    // rl.client_addr_policy.trust_forwarded = true;（对端恒为 nginx）
+    web::RateLimitConfig rl;
+    rl.enabled = true;
+    server.use(web::make_rate_limiter(rl));
+    // 访问日志默认开启（Combined 格式，INFO 级，见 AccessLog.h）。
 
     if (!server.start(cfg.gui_host, cfg.gui_port, cfg.gui_workers)) {
         LOG_ERROR("failed to bind %s:%u", cfg.gui_host.c_str(),
