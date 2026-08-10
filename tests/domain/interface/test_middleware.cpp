@@ -2,13 +2,13 @@
 // HTTP middleware 链 + 限流 + 访问日志（components/http）
 // =============================================================================
 #define BESQ_TEST_MAIN
-#include "domain/interface/components/http/HttpServer.h"
-#include "domain/interface/components/http/Middleware.h"
-#include "domain/interface/components/http/AccessLog.h"
-#include "domain/interface/components/http/RateLimiter.h"
-#include "domain/interface/components/http/Socket.h"
 #include "common/log/Logger.h"
 #include "common/log/LogRingBuffer.h"
+#include "domain/interface/components/http/AccessLog.h"
+#include "domain/interface/components/http/HttpServer.h"
+#include "domain/interface/components/http/Middleware.h"
+#include "domain/interface/components/http/RateLimiter.h"
+#include "domain/interface/components/http/Socket.h"
 #include "framework/test_framework.h"
 #include <regex>
 #include <string>
@@ -19,7 +19,9 @@ using namespace web;
 
 namespace {
 
-HttpResponse json_ok() { return HttpResponse::json(200, "OK", R"({"ok":true})"); }
+HttpResponse json_ok() {
+    return HttpResponse::json(200, "OK", R"({"ok":true})");
+}
 
 // ---------------------------------------------------------------------------
 // 链序与短路：真实 HttpServer + 真实 socket。
@@ -35,8 +37,10 @@ TEST_CASE("test_middleware_chain") {
         order.push_back("B");
         return next(req);
     });
-    server.set_handler(Method::Get, "/health",
-                       [&order](const HttpRequest&) { order.push_back("H"); return json_ok(); });
+    server.set_handler(Method::Get, "/health", [&order](const HttpRequest&) {
+        order.push_back("H");
+        return json_ok();
+    });
     expect(server.start("127.0.0.1", 0), "server starts");
     std::thread srv([&] { server.run(); });
     struct ServerGuard {
@@ -69,8 +73,7 @@ TEST_CASE("test_middleware_chain") {
     order.clear();
     auto nf = get("/nope");
     expect(nf.find("404") != std::string::npos, "404 goes through the chain");
-    expect(order.size() == 2 && order[0] == "A" && order[1] == "B",
-           "404 still passes through middlewares");
+    expect(order.size() == 2 && order[0] == "A" && order[1] == "B", "404 still passes through middlewares");
 
     // 短路：不调 next → 后链不执行
     HttpServer server2;
@@ -79,8 +82,10 @@ TEST_CASE("test_middleware_chain") {
         order2.push_back("S");
         return HttpResponse::error(403, "FORBIDDEN", "blocked");
     });
-    server2.set_handler(Method::Get, "/health",
-                        [&order2](const HttpRequest&) { order2.push_back("H"); return json_ok(); });
+    server2.set_handler(Method::Get, "/health", [&order2](const HttpRequest&) {
+        order2.push_back("H");
+        return json_ok();
+    });
     expect(server2.start("127.0.0.1", 0), "server2 starts");
     std::thread srv2([&] { server2.run(); });
     struct ServerGuard2 {
@@ -129,9 +134,9 @@ TEST_CASE("test_client_addr") {
 TEST_CASE("test_ratelimit") {
     RateLimitConfig cfg;
     cfg.enabled = true;
-    cfg.ip_rps = 200.0;        // 0.2 token/ms：补 1 枚需 ≥5ms（防时序抖动）；恢复测试 50ms
+    cfg.ip_rps = 200.0; // 0.2 token/ms：补 1 枚需 ≥5ms（防时序抖动）；恢复测试 50ms
     cfg.ip_burst = 2;
-    cfg.global_rps = 100000.0;  // 全局几乎不限（叠加测试单独配置）
+    cfg.global_rps = 100000.0; // 全局几乎不限（叠加测试单独配置）
     cfg.global_burst = 100000;
     auto rl = make_rate_limiter(cfg);
     int served = 0;
@@ -208,8 +213,7 @@ TEST_CASE("test_ratelimit") {
     e2.remote_addr = "10.0.0.2";
     HttpRequest e3;
     e3.remote_addr = "10.0.0.3";
-    expect(rl4(e1, next).status == 200 && rl4(e2, next).status == 200,
-           "slots=2 admits two IPs");
+    expect(rl4(e1, next).status == 200 && rl4(e2, next).status == 200, "slots=2 admits two IPs");
     expect(rl4(e3, next).status == 200, "third IP admitted after eviction");
     expect(rl4(e1, next).status == 200, "evicted IP re-claims a slot");
 }
@@ -238,16 +242,15 @@ TEST_CASE("test_access_log") {
     req.method = Method::Get;
     req.path = "/api/status";
     req.version = "HTTP/1.1";
-    logger(req, [](const HttpRequest&) { return json_ok(); });  // body 11 字节
+    logger(req, [](const HttpRequest&) { return json_ok(); }); // body 11 字节
     const std::string line = wait_line("\"GET /api/status HTTP/1.1\" 200");
     expect(!line.empty(), "CLF line logged at INFO");
     if (!line.empty()) {
         expect(line.rfind("127.0.0.1 - - [", 0) == 0, "CLF prefix: ip - - [");
         const size_t lb = line.find('[');
         const size_t rb = line.find(']');
-        static const std::regex ts_re(
-            R"(^\[[0-9]{2}/[A-Z][a-z]{2}/[0-9]{4}:[0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{4}\]$)",
-            std::regex::ECMAScript);
+        static const std::regex ts_re(R"(^\[[0-9]{2}/[A-Z][a-z]{2}/[0-9]{4}:[0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{4}\]$)",
+                                      std::regex::ECMAScript);
         expect(lb != std::string::npos && rb != std::string::npos && rb > lb &&
                    std::regex_match(line.substr(lb, rb - lb + 1), ts_re),
                "CLF timestamp [dd/Mon/yyyy:HH:mm:ss +zzzz]");
@@ -261,22 +264,21 @@ TEST_CASE("test_access_log") {
     req2.headers.emplace_back("Referer", "http://localhost:18789/");
     req2.headers.emplace_back("User-Agent", "besq-test/1.0");
     logger(req2, [](const HttpRequest&) { return json_ok(); });
-    expect(!wait_line("\"GET /api/profiles HTTP/1.1\" 200 11 \"http://localhost:18789/\" \"besq-test/1.0\"")
-                .empty(),
+    expect(!wait_line("\"GET /api/profiles HTTP/1.1\" 200 11 \"http://localhost:18789/\" \"besq-test/1.0\"").empty(),
            "referer and user-agent quoted in place");
 
     // 流式响应：bytes = "-"
     HttpRequest req3 = req;
     req3.path = "/api/events";
     logger(req3, [](const HttpRequest&) { return sse_stream_response(); });
-    expect(!wait_line("\"GET /api/events HTTP/1.1\" 200 - \"-\" \"-\"").empty(),
-           "stream response logs dash bytes");
+    expect(!wait_line("\"GET /api/events HTTP/1.1\" 200 - \"-\" \"-\"").empty(), "stream response logs dash bytes");
 
     // 日志注入消毒：path 控制字符 → '_'
     // 注：`"/a\x01" "b"` 而非 "/a\x01b"——后者的 \x01b 是单个十六进制转义
     // 0x1b(ESC)，b 不构成字面字符；相邻字面量拼接才得到 \x01 后跟 'b'。
     HttpRequest req4 = req;
-    req4.path = "/a\x01" "b";
+    req4.path = "/a\x01"
+                "b";
     logger(req4, [](const HttpRequest&) { return json_ok(); });
     expect(!wait_line("\"GET /a_b HTTP/1.1\"").empty(), "control chars sanitized");
 
@@ -284,7 +286,7 @@ TEST_CASE("test_access_log") {
     RateLimitConfig cfg;
     cfg.enabled = true;
     cfg.ip_rps = 1000.0;
-    cfg.ip_burst = 0;   // 桶容量 0 → 恒 429
+    cfg.ip_burst = 0; // 桶容量 0 → 恒 429
     auto limiter = make_rate_limiter(cfg);
     Next final = [](const HttpRequest&) { return json_ok(); };
     Next inner = [&](const HttpRequest& r) { return limiter(r, final); };
@@ -306,7 +308,8 @@ TEST_CASE("test_access_log") {
     // 十六进制转义贪婪吞掉 'e'（与上方 /a\x01 同款写法）。
     HttpRequest reqy = req;
     reqy.path = "/api/trust2";
-    reqy.headers.emplace_back("X-Forwarded-For", "203.0.113.9\x01" "evil");
+    reqy.headers.emplace_back("X-Forwarded-For", "203.0.113.9\x01"
+                                                 "evil");
     logger_trust(reqy, [](const HttpRequest&) { return json_ok(); });
     expect(!wait_line("203.0.113.9_evil - - [").empty(), "XFF control chars sanitized");
 }
@@ -318,15 +321,14 @@ TEST_CASE("test_middleware_e2e") {
     auto ring = std::make_shared<LogRingBuffer>(4096);
     Logger::instance().set_ring_buffer(ring);
     HttpServer server;
-    server.set_handler(Method::Get, "/health",
-                       [](const HttpRequest&) { return json_ok(); });
+    server.set_handler(Method::Get, "/health", [](const HttpRequest&) { return json_ok(); });
     RateLimitConfig cfg;
     cfg.enabled = true;
-    cfg.ip_rps = 200.0;         // 0.2 token/ms：补 1 枚需 ≥5ms（防真实 socket 往返时序抖动）
+    cfg.ip_rps = 200.0; // 0.2 token/ms：补 1 枚需 ≥5ms（防真实 socket 往返时序抖动）
     cfg.ip_burst = 2;
     cfg.global_rps = 1000000.0;
     cfg.global_burst = 1000000;
-    server.use(make_rate_limiter(cfg));   // 默认访问日志自动最外层
+    server.use(make_rate_limiter(cfg)); // 默认访问日志自动最外层
     expect(server.start("127.0.0.1", 0), "server starts");
     std::thread srv([&] { server.run(); });
     struct ServerGuard {

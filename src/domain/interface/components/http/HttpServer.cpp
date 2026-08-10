@@ -1,17 +1,17 @@
 #include "HttpServer.h"
 
+#include "AccessLog.h"
+#include "common/log/log.hpp"
+#include "Connection.h" // 注册表所有者 alive() 检查（仅弱指针无法识别已逻辑关闭的连接）
+#include "Middleware.h"
+#include "Reactor.h"
+#include "Socket.h"
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <thread>
 #include <vector>
-#include <atomic>
-#include "Socket.h"
-#include "Reactor.h"
-#include "Connection.h" // 注册表所有者 alive() 检查（仅弱指针无法识别已逻辑关闭的连接）
-#include "Middleware.h"
-#include "AccessLog.h"
-#include "common/log/log.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -37,7 +37,7 @@ constexpr int kPollTimeoutMs = 50;      // 单轮 select 有界超时（监听 +
 constexpr size_t kMaxPolled = FD_SETSIZE - 1;
 // 准入上限（Windows min 宏会咬 std::min，故用三元）。
 constexpr size_t kAdmitCap = (kMaxConnections < kMaxPolled) ? kMaxConnections : kMaxPolled;
-constexpr int kSweepIntervalMs = 1000;  // 超时清扫节拍（spec §4.2）
+constexpr int kSweepIntervalMs = 1000; // 超时清扫节拍（spec §4.2）
 
 #ifdef _WIN32
 using NativeFd = SOCKET;
@@ -125,8 +125,8 @@ bool HttpServer::start(const std::string& host, uint16_t port, size_t workers) {
     _impl->running.store(false, std::memory_order_release);
     if (!_impl->listener.listen(host, port))
         return false;
-    LOG_INFO("http server start: %s:%u (workers=%zu)", host.c_str(),
-             static_cast<unsigned>(_impl->listener.bound_port()), _impl->workers);
+    LOG_INFO("http server start: %s:%u (workers=%zu)", host.c_str(), static_cast<unsigned>(_impl->listener.bound_port()),
+             _impl->workers);
     return true;
 }
 
@@ -183,17 +183,13 @@ void HttpServer::run() {
     // middleware 链组装（run 前快照；逆序嵌套 → 注册序 = 外层→内层）。
     // Connection::process 拿到的仍是一个 Handler——传输路径零改动。
     for (auto it = impl.middlewares.rbegin(); it != impl.middlewares.rend(); ++it)
-        dispatch = [m = *it, prev = std::move(dispatch)](const HttpRequest& req) {
-            return m(req, prev);
-        };
+        dispatch = [m = *it, prev = std::move(dispatch)](const HttpRequest& req) { return m(req, prev); };
 
     // 默认访问日志（Combined 格式，INFO 级）：位于所有用户中间件之外——
     // 限流 429 等一切到达的请求都记录（nginx 惯例）。set_access_log(false)
     // 关闭；需要可信代理 XFF 策略时自装 make_access_logger(policy)。
     if (impl.access_log)
-        dispatch = [m = make_access_logger(), prev = std::move(dispatch)](const HttpRequest& req) {
-            return m(req, prev);
-        };
+        dispatch = [m = make_access_logger(), prev = std::move(dispatch)](const HttpRequest& req) { return m(req, prev); };
 
     // 起 N 个 Reactor（EventLoop 消费线程）。
     impl.reactors.resize(impl.workers);
@@ -256,7 +252,7 @@ void HttpServer::poll_once() {
     // 不会对已关闭 fd 执行（EBADF 防线）。
     struct PollEntry {
         int fd;
-        std::shared_ptr<Connection> owner;  // 身份快照（fd 复用检测）
+        std::shared_ptr<Connection> owner; // 身份快照（fd 复用检测）
         size_t home;
         bool ww;
     };
@@ -281,8 +277,7 @@ void HttpServer::poll_once() {
             if (entries.size() >= kMaxPolled)
                 break; // 连接集合上限 FD_SETSIZE-1：给监听 fd 留位（M1）
             auto ww = impl.want_write.find(fd);
-            entries.push_back(PollEntry{fd, std::move(sp), it->second.home,
-                                        ww != impl.want_write.end() && ww->second});
+            entries.push_back(PollEntry{fd, std::move(sp), it->second.home, ww != impl.want_write.end() && ww->second});
             ++it;
         }
     }

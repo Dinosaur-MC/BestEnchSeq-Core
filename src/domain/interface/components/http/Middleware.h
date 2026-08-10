@@ -15,7 +15,7 @@ using Middleware = std::function<HttpResponse(const HttpRequest&, const Next&)>;
 /// 客户端 IP 解析策略（限流 key 与访问日志客户端 IP 共用，见 client_addr）。
 struct ClientAddrPolicy {
     /// true = 直连对端 ∈ trusted_proxies 时采信 X-Forwarded-For 最右条目
-    ///（Nginx 前置部署）；false（默认）= XFF 完全忽略（防伪造头绕过限流）。
+    /// （Nginx 前置部署）；false（默认）= XFF 完全忽略（防伪造头绕过限流）。
     bool trust_forwarded = false;
     std::vector<std::string> trusted_proxies = {"127.0.0.1"};
 };

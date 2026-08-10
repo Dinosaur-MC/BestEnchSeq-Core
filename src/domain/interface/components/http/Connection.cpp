@@ -1,7 +1,7 @@
 // src/domain/interface/components/http/Connection.cpp
 #include "Connection.h"
-#include "Socket.h"
 #include "common/log/log.hpp"
+#include "Socket.h"
 #include <memory>
 
 namespace web {
@@ -12,14 +12,15 @@ namespace {
 std::string sanitize_for_log(const std::string& s) {
     std::string out = s;
     for (char& c : out)
-        if (static_cast<unsigned char>(c) < 0x20) c = '_';
+        if (static_cast<unsigned char>(c) < 0x20)
+            c = '_';
     return out;
 }
 } // namespace
 
 Connection::Connection(int fd, std::string id) : _fd(fd), _id(std::move(id)) {
-    touch();  // 活动基准：从 accept/构造时刻起计时（空闲 keep-alive 30s 到期）
-    _remote = sock_peer_addr(fd);    // 对端 IP：限流 key 与访问日志 IP 字段
+    touch();                      // 活动基准：从 accept/构造时刻起计时（空闲 keep-alive 30s 到期）
+    _remote = sock_peer_addr(fd); // 对端 IP：限流 key 与访问日志 IP 字段
 }
 
 Connection::~Connection() {
@@ -42,7 +43,8 @@ void Connection::close() {
         // 先移出再执行，避免回调重入 close() 时再次触发。
         auto cb = std::move(_on_close);
         _on_close = nullptr;
-        if (cb) cb();
+        if (cb)
+            cb();
     }
 }
 
@@ -63,7 +65,8 @@ void Connection::post_frame(std::string frame) {
 }
 
 void Connection::push_sse_frame(std::string frame) {
-    if (!_alive) return;
+    if (!_alive)
+        return;
     if (_stream) {
         _stream->raw(std::move(frame));
         flush_stream();
@@ -76,16 +79,22 @@ void Connection::drain_out() {
     size_t off = 0;
     while (off < _out.size()) {
         int n = sock_send_nb(_fd, _out.data() + off, _out.size() - off);
-        if (n == -1) { close(); return; }    // 硬错误（含对端断开）→ 关闭连接
-        if (n == 0) break;                   // would-block，等下次推进/WRITABLE
+        if (n == -1) {
+            close();
+            return;
+        } // 硬错误（含对端断开）→ 关闭连接
+        if (n == 0)
+            break; // would-block，等下次推进/WRITABLE
         off += static_cast<size_t>(n);
-        touch();                             // 发出字节 = 活动（重置 30s 空闲计时）
+        touch(); // 发出字节 = 活动（重置 30s 空闲计时）
     }
-    if (off > 0) _out.erase(0, off);
+    if (off > 0)
+        _out.erase(0, off);
 }
 
 void Connection::flush_stream() {
-    if (!_alive || !_stream) return;
+    if (!_alive || !_stream)
+        return;
     auto now = std::chrono::steady_clock::now();
     // 心跳：流缓冲空闲超过 heartbeat_interval 且无新帧 → 注入 `: ping` 注释帧，
     // 供客户端/中间层保活，并让下一次写失败暴露对端断开。
@@ -106,7 +115,8 @@ void Connection::flush_stream() {
 }
 
 bool Connection::set_stream(std::shared_ptr<SseStream> sse) {
-    if (!_alive || _stream || !sse) return false;
+    if (!_alive || _stream || !sse)
+        return false;
     _stream = std::move(sse);
     _last_write = std::chrono::steady_clock::now();
     touch();
@@ -114,12 +124,15 @@ bool Connection::set_stream(std::shared_ptr<SseStream> sse) {
 }
 
 void Connection::push_sse_frame() {
-    if (!_alive) return;
-    if (_stream) flush_stream();
+    if (!_alive)
+        return;
+    if (_stream)
+        flush_stream();
 }
 
 bool Connection::process(const Router& router) {
-    if (!_alive) return false;
+    if (!_alive)
+        return false;
 
     // SSE 流模式：不再解析请求，只补完积压输出（写失败 → close 在 drain_out 内）。
     // 同时消费已就绪的输入（对端数据 / FIN）：否则对端 FIN 后 select 每轮都报告该 fd
@@ -127,15 +140,16 @@ bool Connection::process(const Router& router) {
     if (_stream) {
         bool had_out = !_out.empty();
         flush_stream();
-        if (_alive && wait_readable(_fd, 0) != 0) {   // 就绪探测：可读或错误
+        if (_alive && wait_readable(_fd, 0) != 0) { // 就绪探测：可读或错误
             std::string chunk;
             int n = sock_recv_nb(_fd, chunk, 64 * 1024);
-            if (n == -2 || n == -1) {                  // EOF（哨兵 -2）或硬错误 → 收尾
-                close();                              // 触发 on_close → 控制器退订 → 无泄漏
+            if (n == -2 || n == -1) { // EOF（哨兵 -2）或硬错误 → 收尾
+                close();              // 触发 on_close → 控制器退订 → 无泄漏
                 return had_out;
             }
-            if (n == 0) return had_out;               // would-block（0）：探针与 recv 间的
-                                                      // 句柄复用窗口所致，非 FIN——不能关连接
+            if (n == 0)
+                return had_out; // would-block（0）：探针与 recv 间的
+                                // 句柄复用窗口所致，非 FIN——不能关连接
             // n > 0：对端发了字节（流模式下不是合法 HTTP 请求）→ 丢弃，继续流。
             touch();
         }
@@ -149,7 +163,8 @@ bool Connection::process(const Router& router) {
     // 坏字节不再被反复解析，每连接至多一条 400）。
     if (_pending_eof) {
         drain_out();
-        if (_out.empty()) close();
+        if (_out.empty())
+            close();
         return false;
     }
 
@@ -159,7 +174,7 @@ bool Connection::process(const Router& router) {
     // 时读，导致 body 落在后续 TCP 分段时永远 Incomplete 卡死。
     for (;;) {
         HttpRequest req;
-        req.remote_addr = _remote;   // 对端 IP：限流 key 与访问日志客户端 IP 字段
+        req.remote_addr = _remote; // 对端 IP：限流 key 与访问日志客户端 IP 字段
         // 分发前把本连接挂到 req.stream：SSE events handler 用 StreamChannel 把
         // SseHub 帧投递回来。真实传输路径上连接由 shared_ptr 持有（enable_shared_
         // from_this 可解析）；单元测试里连接可能是栈对象 → shared_from_this 抛
@@ -176,17 +191,17 @@ bool Connection::process(const Router& router) {
             // 剩余缓冲是下一条请求的起始字节（pipelining）→ 视为已部分到达；
             // 缓冲空 → 回到空闲 keep-alive（30s 计时）。
             _partial = !_in.empty();
-            _sent_continue = false;         // 下一条请求可重新获得 `100 Continue`
+            _sent_continue = false; // 下一条请求可重新获得 `100 Continue`
             touch();
             auto resp = router(req);
             // 请求行日志：流升级后 process() 走流分支（_stream）不再解析请求，此句在
             // 流连接上只在升级时执行一次（不逐帧刷屏），普通请求每请求记一次。
             // 路径消毒：客户端可控字节可能含控制字符 → 防日志注入。
-            LOG_DEBUG("%s %s -> %d", method_name(req.method), sanitize_for_log(req.path).c_str(),
-                      resp.status);
+            LOG_DEBUG("%s %s -> %d", method_name(req.method), sanitize_for_log(req.path).c_str(), resp.status);
             // Connection: close（HTTP/1.0 或显式 close）→ 复用 _pending_eof 机制：
             // 停止再读，输出清空后关闭。守卫保证缓冲中的遗留字节不再被解析。
-            if (!req.keep_alive) _pending_eof = true;
+            if (!req.keep_alive)
+                _pending_eof = true;
             if (resp.is_stream) {
                 // 升级为 SSE 流模式：写响应头，连接转入只写路径（push_sse_frame）。
                 if (!_stream) {
@@ -196,26 +211,32 @@ bool Connection::process(const Router& router) {
                 }
                 _out += resp.to_bytes();
                 progress = true;
-                if (_out.size() > kMaxOutBytes) { close(); return progress; }
-                break;                      // 流式连接脱离请求解析，不再读后续请求
+                if (_out.size() > kMaxOutBytes) {
+                    close();
+                    return progress;
+                }
+                break; // 流式连接脱离请求解析，不再读后续请求
             }
             _out += resp.to_bytes(req.keep_alive);
             progress = true;
-            if (_out.size() > kMaxOutBytes) { close(); return progress; }
-            if (!req.keep_alive) break;     // 关闭语义：不再解析管道遗留字节
-            continue;                       // pipeline: may be another complete request buffered
+            if (_out.size() > kMaxOutBytes) {
+                close();
+                return progress;
+            }
+            if (!req.keep_alive)
+                break; // 关闭语义：不再解析管道遗留字节
+            continue;  // pipeline: may be another complete request buffered
         }
         if (pr == ParseResult::BadRequest) {
             LOG_WARN("malformed request from conn %s", _id.c_str());
             _out += HttpResponse::bad_request("BAD_REQUEST", "malformed request").to_bytes(false);
-            _pending_eof = true;            // 坏字节不会消失：不再解析，输出清空后关闭
+            _pending_eof = true; // 坏字节不会消失：不再解析，输出清空后关闭
             break;
         }
         if (pr == ParseResult::EntityTooLarge) {
             LOG_WARN("request body too large from conn %s", _id.c_str());
-            _out += HttpResponse::error(413, "BODY_TOO_LARGE", "request body too large")
-                        .to_bytes(false);
-            _pending_eof = true;            // 超出上限的 body 无法消费 → 响应后关闭
+            _out += HttpResponse::error(413, "BODY_TOO_LARGE", "request body too large").to_bytes(false);
+            _pending_eof = true; // 超出上限的 body 无法消费 → 响应后关闭
             break;
         }
         // Incomplete → need more bytes from the socket. sock_recv_nb 的 0 既可能
@@ -228,22 +249,31 @@ bool Connection::process(const Router& router) {
             _sent_continue = true;
             drain_out();
         }
-        if (wait_readable(_fd, 0) == 0) break;
+        if (wait_readable(_fd, 0) == 0)
+            break;
         std::string chunk;
         int n = sock_recv_nb(_fd, chunk, 64 * 1024);
-        if (n == -2) { _pending_eof = true; break; }  // EOF 哨兵（recv 返回 0）
-        if (n == -1) { close(); return progress; }    // 硬错误 → 关闭
-        if (n == 0) break;                            // would-block：探针与 recv 间的
-                                                      // 句柄复用窗口所致，等下次推进
+        if (n == -2) {
+            _pending_eof = true;
+            break;
+        } // EOF 哨兵（recv 返回 0）
+        if (n == -1) {
+            close();
+            return progress;
+        } // 硬错误 → 关闭
+        if (n == 0)
+            break; // would-block：探针与 recv 间的
+                   // 句柄复用窗口所致，等下次推进
         _in += chunk;
-        _partial = true;                    // 收到过字节 → 请求已部分到达（慢读计时）
+        _partial = true; // 收到过字节 → 请求已部分到达（慢读计时）
         touch();
         progress = true;
     }
 
     drain_out();
     // EOF 且输出已全部写出 → 收尾关闭（对端不会再发数据）。
-    if (_pending_eof && _out.empty()) close();
+    if (_pending_eof && _out.empty())
+        close();
     return progress;
 }
 
@@ -251,9 +281,9 @@ void Connection::touch() {
     _last_activity = std::chrono::steady_clock::now();
 }
 
-Connection::SweepAction Connection::sweep_check(
-    std::chrono::steady_clock::time_point now) const {
-    if (!_alive) return SweepAction::None;
+Connection::SweepAction Connection::sweep_check(std::chrono::steady_clock::time_point now) const {
+    if (!_alive)
+        return SweepAction::None;
     if (_stream) {
         // SSE 流模式：> heartbeat_interval 无帧写出 → 心跳 ping（flush 时注入
         // `: ping`；写失败 → drain_out 关闭，对端断开检测）。心跳本身会推进

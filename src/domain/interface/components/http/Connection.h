@@ -35,8 +35,7 @@ inline constexpr size_t kMaxOutBytes = 8 * 1024 * 1024;
 ///
 /// 超时（I-3）：每次 recv/send 进展更新 `_last_activity`；poller 每 ~1s 清扫时经
 /// Reactor 投递 `sweep_check(now)`（home loop 线程执行，零锁）决定心跳/关闭。
-class Connection : public StreamChannel,
-                   public std::enable_shared_from_this<Connection> {
+class Connection : public StreamChannel, public std::enable_shared_from_this<Connection> {
 public:
     using Router = std::function<HttpResponse(const HttpRequest&)>;
 
@@ -102,25 +101,25 @@ public:
     SweepAction sweep_check(std::chrono::steady_clock::time_point now) const;
 
 private:
-    void drain_out();            // 尽力写 _out；n==-1（硬错误/对端断开）→ 关闭
-    void flush_stream();         // 心跳 + 取走流缓冲 → drain_out()
-    void touch();                // 任何 recv/send 进展 → 刷新 _last_activity
+    void drain_out();    // 尽力写 _out；n==-1（硬错误/对端断开）→ 关闭
+    void flush_stream(); // 心跳 + 取走流缓冲 → drain_out()
+    void touch();        // 任何 recv/send 进展 → 刷新 _last_activity
 
-    std::string _remote;             // 对端 IP（getpeername，构造时捕获一次）
+    std::string _remote; // 对端 IP（getpeername，构造时捕获一次）
     int _fd;
     std::string _id;
     bool _alive = true;
-    bool _pending_eof = false;   // 输出清空后关闭（对端 FIN / Connection: close / 400/413）
-    bool _partial = false;       // 请求已部分到达（半请求/半 body/管道残留）→ 慢读计时
-    bool _sent_continue = false; // 本请求已发过 `100 Continue`（防重复；Complete 时复位）
-    std::string _in;             // 未消费输入缓冲
-    std::string _out;            // 待写输出缓冲
-    HttpParser _parser;          // 增量解析器（内部保留半请求状态）
-    std::shared_ptr<SseStream> _stream;                 // 非空 = SSE 流模式
-    std::chrono::steady_clock::time_point _last_write;  // 最近一次写出帧的时间（心跳节流）
+    bool _pending_eof = false;                            // 输出清空后关闭（对端 FIN / Connection: close / 400/413）
+    bool _partial = false;                                // 请求已部分到达（半请求/半 body/管道残留）→ 慢读计时
+    bool _sent_continue = false;                          // 本请求已发过 `100 Continue`（防重复；Complete 时复位）
+    std::string _in;                                      // 未消费输入缓冲
+    std::string _out;                                     // 待写输出缓冲
+    HttpParser _parser;                                   // 增量解析器（内部保留半请求状态）
+    std::shared_ptr<SseStream> _stream;                   // 非空 = SSE 流模式
+    std::chrono::steady_clock::time_point _last_write;    // 最近一次写出帧的时间（心跳节流）
     std::chrono::steady_clock::time_point _last_activity; // 最近一次 recv/send 进展
-    std::function<void(std::string)> _frame_sink;       // Reactor 注入的 home-loop 帧汇
-    std::function<void()> _on_close;                    // 连接关闭回调（触发一次后清空）
+    std::function<void(std::string)> _frame_sink;         // Reactor 注入的 home-loop 帧汇
+    std::function<void()> _on_close;                      // 连接关闭回调（触发一次后清空）
 };
 
 } // namespace web

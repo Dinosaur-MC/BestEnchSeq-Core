@@ -18,21 +18,19 @@ uint64_t fnv1a(const std::string& s) {
     return h ? h : 1;
 }
 
-constexpr uint64_t kScale = 65536;             // 定点比例 ×2^16
-constexpr uint64_t kMaxScaled = 0xFFFFFFFFu;   // 高 32 位满值
+constexpr uint64_t kScale = 65536;           // 定点比例 ×2^16
+constexpr uint64_t kMaxScaled = 0xFFFFFFFFu; // 高 32 位满值
 
 } // namespace
 
-RateLimiter::RateLimiter(RateLimitConfig cfg)
-    : _table(new Slot[cfg.slots > 0 ? cfg.slots : 1]), _cfg(std::move(cfg)) {}
+RateLimiter::RateLimiter(RateLimitConfig cfg) : _table(new Slot[cfg.slots > 0 ? cfg.slots : 1]), _cfg(std::move(cfg)) {}
 
 bool RateLimiter::take(std::atomic<uint64_t>& st, double rate, double cap) {
     using namespace std::chrono;
     // 低 32 位毫秒时间戳：无符号回绕算术正确（49.7 天周期；闲置超周期时
     // refill 被 cap 钳制，无害）。
-    const uint64_t now_ms = static_cast<uint64_t>(
-        duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count()) &
-                            0xFFFFFFFFu;
+    const uint64_t now_ms =
+        static_cast<uint64_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count()) & 0xFFFFFFFFu;
     const uint64_t cap_scaled = std::min<uint64_t>(cap, kMaxScaled / kScale) * kScale;
     const double rate_scaled = rate * (static_cast<double>(kScale) / 1000.0); // 每毫秒定点令牌
     uint64_t word = st.load(std::memory_order_relaxed);
@@ -41,9 +39,9 @@ bool RateLimiter::take(std::atomic<uint64_t>& st, double rate, double cap) {
         const uint64_t last = word & 0xFFFFFFFFu;
         uint64_t next_tokens = tokens;
         if (last == 0) {
-            next_tokens = cap_scaled;                      // 首次使用：满桶
+            next_tokens = cap_scaled; // 首次使用：满桶
         } else {
-            const uint64_t elapsed = (now_ms - last) & 0xFFFFFFFFu;   // 回绕安全
+            const uint64_t elapsed = (now_ms - last) & 0xFFFFFFFFu; // 回绕安全
             // 饱和加法防溢出（cap 封顶后再封一次）
             if (elapsed >= (cap_scaled - tokens) / rate_scaled)
                 next_tokens = cap_scaled;
@@ -54,7 +52,7 @@ bool RateLimiter::take(std::atomic<uint64_t>& st, double rate, double cap) {
             const uint64_t next_word = ((next_tokens - kScale) << 32) | now_ms;
             if (st.compare_exchange_weak(word, next_word, std::memory_order_relaxed))
                 return true;
-            continue;                                      // word 已被刷新，重算
+            continue; // word 已被刷新，重算
         }
         // 无令牌：尽力推进时间（下个请求从 now 起算 refill）
         st.compare_exchange_weak(word, (next_tokens << 32) | now_ms, std::memory_order_relaxed);
@@ -66,9 +64,8 @@ HttpResponse RateLimiter::denied(double rate) {
     HttpResponse r = HttpResponse::error(429, "RATE_LIMITED", "rate limit exceeded");
     double wait_s = 0;
     if (rate > 0)
-        wait_s = std::ceil(1.0 / rate);                    // 保守：至少 1 枚令牌的等待
-    r.headers.emplace_back("Retry-After",
-                           std::to_string(static_cast<long>(wait_s)));
+        wait_s = std::ceil(1.0 / rate); // 保守：至少 1 枚令牌的等待
+    r.headers.emplace_back("Retry-After", std::to_string(static_cast<long>(wait_s)));
     return r;
 }
 
@@ -82,8 +79,8 @@ RateLimiter::Slot* RateLimiter::locate(const std::string& ip) {
             return slot;
         if (cur == 0) {
             if (slot->hash.compare_exchange_weak(cur, h, std::memory_order_relaxed))
-                return slot;                                // 认领空槽
-            continue;                                       // 他者先占，继续探测
+                return slot; // 认领空槽
+            continue;        // 他者先占，继续探测
         }
     }
     // 表满：替换第一个异主槽（仅当活跃 IP 数 > slots 时发生；被换 IP 下次
@@ -98,7 +95,7 @@ RateLimiter::Slot* RateLimiter::locate(const std::string& ip) {
             }
         }
     }
-    return &_table[h % n];                                  // 极端竞争兜底
+    return &_table[h % n]; // 极端竞争兜底
 }
 
 HttpResponse RateLimiter::operator()(const HttpRequest& req, const Next& next) {
@@ -116,8 +113,7 @@ HttpResponse RateLimiter::operator()(const HttpRequest& req, const Next& next) {
 }
 
 Middleware make_rate_limiter(RateLimitConfig cfg) {
-    return Middleware{[r = std::make_shared<RateLimiter>(std::move(cfg))](
-                          const HttpRequest& req, const Next& next) {
+    return Middleware{[r = std::make_shared<RateLimiter>(std::move(cfg))](const HttpRequest& req, const Next& next) {
         return (*r)(req, next);
     }};
 }

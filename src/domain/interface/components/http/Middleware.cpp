@@ -10,9 +10,7 @@ std::string rightmost_xff(const HttpRequest& req) {
     if (xff.empty())
         return "";
     const size_t comma = xff.rfind(',');
-    const std::string_view last = comma == std::string::npos
-                                      ? std::string_view(xff)
-                                      : std::string_view(xff).substr(comma + 1);
+    const std::string_view last = comma == std::string::npos ? std::string_view(xff) : std::string_view(xff).substr(comma + 1);
     const size_t b = last.find_first_not_of(" \t");
     const size_t e = last.find_last_not_of(" \t");
     if (b == std::string_view::npos || e == std::string_view::npos)

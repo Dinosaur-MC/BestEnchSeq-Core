@@ -136,21 +136,24 @@ std::string_view frontend_view_pager();
 
 static std::string read_file(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(f)),
-                       std::istreambuf_iterator<char>());
+    return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 }
 
 /// Served frontend assets: URL → content type + embedded-symbol accessor.
 /// MUST stay in sync with the embed_resource loops in CMakeLists.txt.
-struct Asset { const char* url; const char* type; std::string_view (*embed)(); };
+struct Asset {
+    const char* url;
+    const char* type;
+    std::string_view (*embed)();
+};
 static constexpr Asset kAssets[] = {
     {"/index.html", "text/html", besq::data::frontend_index_html},
-    {"/styles.css", "text/css",  besq::data::frontend_styles_css},
-    {"/app.js",     "text/javascript", besq::data::frontend_app_js},
-    {"/api.js",     "text/javascript", besq::data::frontend_api_js},
-    {"/i18n.js",    "text/javascript", besq::data::frontend_i18n_js},
+    {"/styles.css", "text/css", besq::data::frontend_styles_css},
+    {"/app.js", "text/javascript", besq::data::frontend_app_js},
+    {"/api.js", "text/javascript", besq::data::frontend_api_js},
+    {"/i18n.js", "text/javascript", besq::data::frontend_i18n_js},
     {"/names_zh.js", "text/javascript", besq::data::frontend_names_zh_js},
-    {"/sprite.js",  "text/javascript", besq::data::frontend_sprite_js},
+    {"/sprite.js", "text/javascript", besq::data::frontend_sprite_js},
     {"/vendor/icons/bow.png", "image/png", besq::data::frontend_vendor_icons_bow_png},
     {"/vendor/icons/brush.png", "image/png", besq::data::frontend_vendor_icons_brush_png},
     {"/vendor/icons/carrot_on_a_stick.png", "image/png", besq::data::frontend_vendor_icons_carrot_on_a_stick_png},
@@ -238,15 +241,15 @@ static constexpr Asset kAssets[] = {
     {"/vendor/icons/wooden_spear.png", "image/png", besq::data::frontend_vendor_icons_wooden_spear_png},
     {"/vendor/icons/wooden_sword.png", "image/png", besq::data::frontend_vendor_icons_wooden_sword_png},
     {"/vendor/icons/sprite.png", "image/png", besq::data::frontend_vendor_icons_sprite_png},
-    {"/vendor/mdui/mdui.css",       "text/css",        besq::data::frontend_vendor_mdui_mdui_css},
+    {"/vendor/mdui/mdui.css", "text/css", besq::data::frontend_vendor_mdui_mdui_css},
     {"/vendor/mdui/mdui.global.js", "text/javascript", besq::data::frontend_vendor_mdui_mdui_global_js},
     {"/views/calculator.js", "text/javascript", besq::data::frontend_view_calculator},
-    {"/views/profiles.js",   "text/javascript", besq::data::frontend_view_profiles},
+    {"/views/profiles.js", "text/javascript", besq::data::frontend_view_profiles},
     {"/views/algorithms.js", "text/javascript", besq::data::frontend_view_algorithms},
-    {"/views/logs.js",       "text/javascript", besq::data::frontend_view_logs},
-    {"/views/settings.js",   "text/javascript", besq::data::frontend_view_settings},
-    {"/views/status.js",     "text/javascript", besq::data::frontend_view_status},
-    {"/views/pager.js",      "text/javascript", besq::data::frontend_view_pager},
+    {"/views/logs.js", "text/javascript", besq::data::frontend_view_logs},
+    {"/views/settings.js", "text/javascript", besq::data::frontend_view_settings},
+    {"/views/status.js", "text/javascript", besq::data::frontend_view_status},
+    {"/views/pager.js", "text/javascript", besq::data::frontend_view_pager},
 };
 
 /// Build the static-resource table. When `frontend_dir` is non-empty (dev
@@ -317,30 +320,31 @@ int main(int argc, char* argv[]) try {
     setup_logger(cfg.logger_config());
 
     bool open_browser = cfg.gui_open_browser;
-    std::string frontend_dir;   // --frontend-dir (dev hot reload)
+    std::string frontend_dir; // --frontend-dir (dev hot reload)
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         if (a == "--help" || a == "-h") {
-            std::cout
-                << "besq-gui — BestEnchSeq Web GUI\n"
-                << "Usage: besq-gui [--browser] [--frontend-dir DIR]\n"
-                << "  --browser           open the default browser (the v1 host)\n"
-                << "  --frontend-dir DIR  serve the SPA from DIR (dev hot-reload)\n"
-                << "Environment: BESQ_GUI_HOST, BESQ_GUI_PORT, BESQ_GUI_OPEN_BROWSER\n"
-                << "             BESQ_GUI_WORKERS (consumer threads, default 2)\n"
-                << "             BESQ_GUI_RES_DIR (optional /public disk root)\n"
-                << "             BESQ_LANG (language; config.json lang otherwise)\n"
-                << "Runtime settings (lang/log_level/log_console/log_console_level) are\n"
-                << "persisted to <cwd>/config.json by PATCH /api/settings and reloaded\n"
-                << "at startup (env vars still win: env > config.json > default)\n";
+            std::cout << "besq-gui — BestEnchSeq Web GUI\n"
+                      << "Usage: besq-gui [--browser] [--frontend-dir DIR]\n"
+                      << "  --browser           open the default browser (the v1 host)\n"
+                      << "  --frontend-dir DIR  serve the SPA from DIR (dev hot-reload)\n"
+                      << "Environment: BESQ_GUI_HOST, BESQ_GUI_PORT, BESQ_GUI_OPEN_BROWSER\n"
+                      << "             BESQ_GUI_WORKERS (consumer threads, default 2)\n"
+                      << "             BESQ_GUI_RES_DIR (optional /public disk root)\n"
+                      << "             BESQ_LANG (language; config.json lang otherwise)\n"
+                      << "Runtime settings (lang/log_level/log_console/log_console_level) are\n"
+                      << "persisted to <cwd>/config.json by PATCH /api/settings and reloaded\n"
+                      << "at startup (env vars still win: env > config.json > default)\n";
             return 0;
         }
         if (a == "--version" || a == "-V") {
             std::cout << "besq-gui " << BESQ_VERSION << "\n";
             return 0;
         }
-        if (a == "--browser") open_browser = true;
-        else if (a == "--frontend-dir" && i + 1 < argc) frontend_dir = argv[++i];
+        if (a == "--browser")
+            open_browser = true;
+        else if (a == "--frontend-dir" && i + 1 < argc)
+            frontend_dir = argv[++i];
     }
 
     BesqContext ctx;
@@ -368,9 +372,7 @@ int main(int argc, char* argv[]) try {
         module.mount_res_dir(res_dir);
 
     // fallback 仅在 server 存活期内被调用；module 声明在后（后析构），引用始终有效。
-    server.set_fallback([&](const web::HttpRequest& r) {
-        return module.dispatch(r);
-    });
+    server.set_fallback([&](const web::HttpRequest& r) { return module.dispatch(r); });
 
     // 限流（默认关闭；GUI 显式开启，本地宽松阈值）。部署经 Nginx 前置时：
     // rl.client_addr_policy.trust_forwarded = true;（对端恒为 nginx）
@@ -380,8 +382,7 @@ int main(int argc, char* argv[]) try {
     // 访问日志默认开启（Combined 格式，INFO 级，见 AccessLog.h）。
 
     if (!server.start(cfg.gui_host, cfg.gui_port, cfg.gui_workers)) {
-        LOG_ERROR("failed to bind %s:%u", cfg.gui_host.c_str(),
-                  static_cast<unsigned>(cfg.gui_port));
+        LOG_ERROR("failed to bind %s:%u", cfg.gui_host.c_str(), static_cast<unsigned>(cfg.gui_port));
         std::cerr << "besq-gui: failed to bind " << cfg.gui_host << ":" << cfg.gui_port << "\n";
         return 1;
     }

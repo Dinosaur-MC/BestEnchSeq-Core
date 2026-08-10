@@ -9,11 +9,12 @@ namespace web {
 namespace {
 
 /// 日志消毒：客户端可控字节（path/referer/UA）可能含控制字符 → 替换为 '_'
-///（与 Connection::sanitize_for_log 同款，防日志注入）。
+/// （与 Connection::sanitize_for_log 同款，防日志注入）。
 std::string sanitize_for_log(const std::string& s) {
     std::string out = s;
     for (char& c : out)
-        if (static_cast<unsigned char>(c) < 0x20) c = '_';
+        if (static_cast<unsigned char>(c) < 0x20)
+            c = '_';
     return out;
 }
 
@@ -39,8 +40,7 @@ std::string quote_or_dash(const std::string& s) {
 } // namespace
 
 std::string AccessLogger::request_line(const HttpRequest& req) {
-    return std::string(method_name(req.method)) + " " + req.path + " " +
-           (req.version.empty() ? "HTTP/1.1" : req.version);
+    return std::string(method_name(req.method)) + " " + req.path + " " + (req.version.empty() ? "HTTP/1.1" : req.version);
 }
 
 void AccessLogger::log_line(const HttpRequest& req, const HttpResponse& resp) {
@@ -51,10 +51,8 @@ void AccessLogger::log_line(const HttpRequest& req, const HttpResponse& resp) {
     // 前置部署下访问日志记真实客户端而非代理地址（设计文档 §5）。XFF 条目完全
     // 客户端可控：控制字符必须消毒（否则经控制台镜像形成终端转义注入）。
     const std::string ip = sanitize_for_log(client_addr(req, _policy));
-    std::string line = (ip.empty() ? "-" : ip) + " - - " +
-                       clf_timestamp() + " \"" + sanitize_for_log(request_line(req)) + "\" " +
-                       std::to_string(resp.status) + " " + bytes + " " +
-                       quote_or_dash(req.header("Referer")) + " " +
+    std::string line = (ip.empty() ? "-" : ip) + " - - " + clf_timestamp() + " \"" + sanitize_for_log(request_line(req)) +
+                       "\" " + std::to_string(resp.status) + " " + bytes + " " + quote_or_dash(req.header("Referer")) + " " +
                        quote_or_dash(req.header("User-Agent"));
     Logger::instance().info(std::move(line));
 }
