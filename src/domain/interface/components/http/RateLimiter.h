@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 
 namespace web {
 
@@ -45,7 +44,7 @@ private:
     /// 单桶取令牌：refill + consume + last 推进一次 CAS 原子完成。
     /// false = 桶空（调用方构造 429）。首次使用（last==0）视为满桶。
     static bool take(std::atomic<uint64_t>& st, double rate, double cap);
-    /// 429：Retry-After = ceil((1 - tokens) / rate) 秒（rate<=0 → 0）。
+    /// 429：Retry-After = ceil(1 / rate) 秒（保守：至少 1 枚令牌的等待；rate<=0 → 0）。
     static HttpResponse denied(double rate);
 
     std::unique_ptr<Slot[]> _table;     // slots 个槽，构造期一次性分配

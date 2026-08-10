@@ -125,7 +125,7 @@ TEST_CASE("test_client_addr") {
 TEST_CASE("test_ratelimit") {
     RateLimitConfig cfg;
     cfg.enabled = true;
-    cfg.ip_rps = 1000.0;        // 1 token/ms：恢复测试毫秒级
+    cfg.ip_rps = 200.0;        // 0.2 token/ms：补 1 枚需 ≥5ms（防时序抖动）；恢复测试 50ms
     cfg.ip_burst = 2;
     cfg.global_rps = 100000.0;  // 全局几乎不限（叠加测试单独配置）
     cfg.global_burst = 100000;
@@ -148,8 +148,8 @@ TEST_CASE("test_ratelimit") {
     expect(r429.body.find("\"code\"") != std::string::npos, "error envelope carries code");
     expect(r429.body.find("RATE_LIMITED") != std::string::npos, "envelope code RATE_LIMITED");
 
-    // 桶恢复：速率 1 token/ms → 5ms 后恢复
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    // 桶恢复：速率 0.2 token/ms → 50ms 补 10 枚（封顶 burst=2）后恢复
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     expect(rl(req, next).status == 200, "recovered after refill");
 
     // 每 IP 隔离：另一 IP 独立计桶
@@ -192,6 +192,22 @@ TEST_CASE("test_ratelimit") {
     served = 0;
     expect(rlOff(req, next).status == 200, "disabled limiter passes through");
     expect(served == 1, "disabled limiter invokes next");
+
+    // 表满淘汰路径：slots=2 + 3 个 IP → 触发替换分支（不崩溃、语义可接受）
+    RateLimitConfig cfg4 = cfg;
+    cfg4.slots = 2;
+    auto rl4 = make_rate_limiter(cfg4);
+    served = 0;
+    HttpRequest e1;
+    e1.remote_addr = "10.0.0.1";
+    HttpRequest e2;
+    e2.remote_addr = "10.0.0.2";
+    HttpRequest e3;
+    e3.remote_addr = "10.0.0.3";
+    expect(rl4(e1, next).status == 200 && rl4(e2, next).status == 200,
+           "slots=2 admits two IPs");
+    expect(rl4(e3, next).status == 200, "third IP admitted after eviction");
+    expect(rl4(e1, next).status == 200, "evicted IP re-claims a slot");
 }
 
 } // namespace
