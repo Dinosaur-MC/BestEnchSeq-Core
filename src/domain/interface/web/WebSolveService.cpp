@@ -137,13 +137,33 @@ WebSolveService::~WebSolveService() {
     _ctx.abort_solve();
     // Publish-window race: a worker may be inside BesqContext::solve() before
     // the pipeline has published the executor handle (resolve_effective /
-    // create_executor), so the abort above can find no executor and be lost —
-    // the solve would then run to completion and this join would block for its
-    // full duration.  Retry once after a short grace: by then the pipeline has
-    // published, the retry's cancel() lands on an Idle executor and is recorded
-    // as pending, so the run aborts at its first cancellation check.
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    _ctx.abort_solve();
+    // create_executor / simulate — tens of ms on slow filesystems), so the
+    // abort above can find no executor and be lost — the solve would then run
+    // to completion and this join would block for its full natural duration
+    // (a long dp_merge can exceed the test framework's per-case timeout and
+    // be pthread_cancelled inside this noexcept destructor → std::terminate).
+    // Close the window deterministically: keep aborting until every worker has
+    // fully exited (`finished`, set as the worker's very last action — see
+    // start()) or a bounded deadline passes.  The moment the pipeline
+    // publishes, the next abort's cancel() lands on the live executor (or on
+    // an Idle one, recorded as pending) and the run stops at its first
+    // cancellation check within milliseconds, so the join below returns
+    // promptly.  Each abort on an empty handle is a cheap no-op; the deadline
+    // only bounds the poll itself for the (unobserved) case of a worker that
+    // never publishes.
+    const auto poll_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000);
+    while (std::chrono::steady_clock::now() < poll_deadline) {
+        bool any_live = false;
+        for (const auto& t : tasks)
+            if (!t->finished.load(std::memory_order_acquire)) {
+                any_live = true;
+                break;
+            }
+        if (!any_live)
+            break;
+        _ctx.abort_solve();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     for (const auto& t : tasks)
         if (t->worker.joinable())
             t->worker.join();
@@ -197,9 +217,12 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 ++it;
                 continue;
             }
-            if (!t->finished.load(std::memory_order_acquire)) { ++it; continue; }
+            if (!t->finished.load(std::memory_order_acquire)) {
+                ++it;
+                continue;
+            }
             to_reap.push_back(t);
-            it = _tasks.erase(it);       // 先出表（锁内），引用由 to_reap 持有
+            it = _tasks.erase(it); // 先出表（锁内），引用由 to_reap 持有
         }
         task = std::make_shared<Task>();
         task->numeric_id = ++_next_id;

@@ -5,7 +5,7 @@
 // =============================================================================
 #define BESQ_TEST_MAIN
 #include "common/io/json.h"
-#include "common/log/logger.h"
+#include "common/log/Logger.h"
 #include "common/log/LogRingBuffer.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/interface/BesqContext.h"
@@ -1152,9 +1152,9 @@ void test_hub_replay_late_subscriber(TestApp& app) {
     app.hub.publish("replay_t", "event: completed\ndata: {}\n\n");
     app.hub.publish("replay_t", "data: last\n\n");
     std::string got;
-    auto sub = app.hub.subscribe("replay_t",
-                                 [&](const std::string&, std::string f) { got = std::move(f); },
-                                 true);  // 任务键语义：开启重放
+    auto sub = app.hub.subscribe(
+        "replay_t", [&](const std::string&, std::string f) { got = std::move(f); },
+        true); // 任务键语义：开启重放
     expect(got == "data: last\n\n", "late subscriber receives the last published frame");
     // 新发布仍正常广播到既有订阅者。
     got.clear();
@@ -1424,15 +1424,60 @@ TEST_CASE("test_web_api") {
     test_enchantables(app);    // §12.1: /enchantables/{item} 适用附魔查询
     test_fs(app);              // 目录选择器：/api/fs/list（根锁 + 非法路径 400）
     test_algorithms(app);
-    test_stream_channel(app);     // 须在 test_calculator 之前（单活动槽）
-    test_failed_frame_shape(app); // failed SSE 帧字节格式（hub 级，确定性）
-    test_stream_close_hook(app);  // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
-    test_hub_clear(app);          // SseHub::clear() 清空全部订阅
-    test_hub_replay_late_subscriber(app);  // 迟到订阅者重放（SSE 终态帧竞态根治）
-    test_task_diagnostics(app);   // T2: 任务诊断事件流（diagnostics/diag_exit + SSE diag 帧）
-    test_calculator(app);         // §12.1: failed/cancelled 快照、任务字段、unload-409
-    test_logs(app);               // §12.1: since 非法 → 400
+    test_stream_channel(app);             // 须在 test_calculator 之前（单活动槽）
+    test_failed_frame_shape(app);         // failed SSE 帧字节格式（hub 级，确定性）
+    test_stream_close_hook(app);          // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
+    test_hub_clear(app);                  // SseHub::clear() 清空全部订阅
+    test_hub_replay_late_subscriber(app); // 迟到订阅者重放（SSE 终态帧竞态根治）
+    test_task_diagnostics(app);           // T2: 任务诊断事件流（diagnostics/diag_exit + SSE diag 帧）
+    test_calculator(app);                 // §12.1: failed/cancelled 快照、任务字段、unload-409
+    test_logs(app);                       // §12.1: since 非法 → 400
     test_web_module(app.ctx);
     test_router_500(); // §12.1: 未捕获异常 → 500 INTERNAL_ERROR envelope
     TEST_PASS("test_web_api");
+}
+
+/// A7b 回归：WebSolveService 关机竞态（WSL 下 ~WebSolveService 内
+/// std::terminate → exit 134）。
+///
+/// test_calculator 的重任务（18-ench dp_merge，自然求解 >40s）在 case 结束
+/// 时故意保持 Running，由 TestApp 析构（→ ~WebSolveService）取消并 join。
+/// 发布窗口竞态：worker 在 executor 句柄发布前（gate/快照/apply/simulate，
+/// WSL 上 40-70ms）的 abort 全部落空 → join 阻塞到求解自然完成（>40s），
+/// 超过测试框架 30s 的 per-case 超时，被 pthread_cancel（async cancel）的
+/// 强制 unwind 打进 noexcept 析构 → std::terminate。本 case 用同一重任务 +
+/// 提交后立即析构（确定性落在发布窗口内）复现该路径：修复后 dtor 的 abort
+/// 轮询在句柄发布后立即取消求解，join ~100ms 内返回（case 秒级 PASS）；
+/// 修复前 WSL 上确定性 SIGABRT（exit 134），Windows 上 join 阻塞 30s 后
+/// case 被标 TIMEOUT。
+TEST_CASE("web_solve_shutdown_race") {
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.load_profiles();
+    {
+        // 同 test_calculator 的重任务载荷：18 个自定义剑魔咒的 dp_merge。
+        for (int i = 0; i < 18; ++i) {
+            EnchInfo info;
+            info.id = NSID("test:e_" + std::to_string(i));
+            info.name = "E " + std::to_string(i);
+            info.max_level = 5;
+            info.multiplier = 1;
+            info.supported_items.insert(NSID("#minecraft:swords"));
+            expect(ctx.add_enchantment(info), "shutdown seed ench " + std::to_string(i));
+        }
+        TestApp app(ctx);
+        std::string heavy = R"({"target":{"item":"netherite_sword","enchants":[)";
+        for (int i = 0; i < 18; ++i) {
+            if (i)
+                heavy += ",";
+            heavy += R"({"id":"test:e_)" + std::to_string(i) + R"(","level":5})";
+        }
+        heavy += R"(]},"algorithm":"dp_merge"})";
+        auto r = app.call(Method::Post, "/api/tasks", heavy);
+        expect(r.status == 202, "shutdown-race task submit 202");
+        // 立即析构 TestApp：worker 此刻大概率仍在发布窗口内（gate/快照/
+        // apply），dtor 必须持续 abort 直至句柄发布并取消求解，join 快速
+        // 返回。（本 case 正常完成本身就是断言——修复前 WSL 在此 SIGABRT。）
+    }
+    TEST_PASS("web_solve_shutdown_race");
 }

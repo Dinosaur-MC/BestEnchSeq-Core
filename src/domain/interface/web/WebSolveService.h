@@ -1,6 +1,6 @@
 #pragma once
-#include "domain/interface/web/WebSchema.h"
 #include "common/io/json.h"
+#include "domain/interface/web/WebSchema.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -19,9 +19,9 @@ enum class TaskState : uint8_t { Running, Paused, Completed, Failed, Cancelled }
 /// Polled snapshot of one solve task.
 struct TaskStatus {
     TaskState state = TaskState::Running;
-    double progress = 0.0;      // 0..1 while Running
-    std::string result;         // formatted JSON (mode-appropriate), when Completed
-    std::string error;          // human message when Failed
+    double progress = 0.0; // 0..1 while Running
+    std::string result;    // formatted JSON (mode-appropriate), when Completed
+    std::string error;     // human message when Failed
     int64_t task_id = 0;
     /// 已产生的算法诊断事件（紧凑 JSON，上限 500，超出丢最旧）。
     std::vector<Json> diagnostics;
@@ -47,8 +47,7 @@ public:
     /// `hub` is an optional SSE frame sink (Task 14: SseHub). Null keeps the
     /// pre-SSE behavior (polling snapshot via status()) — the 2-arg form is
     /// still supported for backward compatibility.
-    explicit WebSolveService(BesqContext& ctx, std::mutex& ctx_gate,
-                             web::SseHub* hub = nullptr);
+    explicit WebSolveService(BesqContext& ctx, std::mutex& ctx_gate, web::SseHub* hub = nullptr);
     ~WebSolveService();
 
     WebSolveService(const WebSolveService&) = delete;
@@ -105,7 +104,9 @@ private:
         /// access to *this/_ctx. Gates task reaping: a terminal task may only
         /// be erased from the table once its worker has fully exited (and been
         /// joined) — never while the worker still runs, and never by destroying
-        /// a still-joinable thread (which would std::terminate).
+        /// a still-joinable thread (which would std::terminate). Also polled by
+        /// the destructor's shutdown loop to close the executor publish-window
+        /// race (abort until the worker exits or the handle is published).
         std::atomic<bool> finished{false};
         /// The worker holds a shared_ptr<Task> copy; joined by the destructor
         /// (or by the reap loop before erase) so no worker outlives *this/_ctx.
@@ -115,9 +116,9 @@ private:
     };
 
     BesqContext& _ctx;
-    std::mutex& _ctx_gate;       // web-layer gate, shared with WebModule
-    web::SseHub* _hub;           // optional SSE frame sink; null = polling only
-    mutable std::mutex _tasks_mutex;  // mutable: has_active() is const
+    std::mutex& _ctx_gate;           // web-layer gate, shared with WebModule
+    web::SseHub* _hub;               // optional SSE frame sink; null = polling only
+    mutable std::mutex _tasks_mutex; // mutable: has_active() is const
     std::unordered_map<std::string, std::shared_ptr<Task>> _tasks;
     int64_t _next_id = 0;
 };
