@@ -14,7 +14,7 @@ class BesqContext;
 namespace web {
 class SseHub;
 
-enum class TaskState { Running, Paused, Completed, Failed, Cancelled };
+enum class TaskState : uint8_t { Running, Paused, Completed, Failed, Cancelled };
 
 /// Polled snapshot of one solve task.
 struct TaskStatus {
@@ -86,14 +86,20 @@ private:
     struct Task {
         std::string id;
         int64_t numeric_id = 0;
-        TaskState state = TaskState::Running;
-        std::string result;
-        std::string error;
+        /// 原子状态字：状态机转移用 CAS（cancel/pause/resume/worker 终态提交），
+        /// 读方 acquire 快照；终态（Completed/Failed）一经提交不被覆盖。
+        std::atomic<TaskState> state{TaskState::Running};
+        /// 结果/错误：原子共享指针交换（写方 store、读方拷贝快照，无锁读）。
+        /// 写序：payload 先（release）、state 后（release）——状态可观察时
+        /// 载荷必已可见。
+        std::atomic<std::shared_ptr<const std::string>> result{nullptr};
+        std::atomic<std::shared_ptr<const std::string>> error{nullptr};
         /// 算法诊断事件流（WebDiagObserver 转出的紧凑 JSON；worker 回调写入，
-        /// 上限 500，超出丢最旧）。task->mutex 保护。
+        /// 上限 500，超出丢最旧）。仅 worker 写、status() 拷贝快照——
+        /// task->mutex 只护这两者。
         std::vector<Json> diagnostics;
         /// exit 事件的结构化 KV（{"kind":"exit",...}）；尚未产生时为 Json::null()。
-        /// task->mutex 保护。
+        /// task->mutex 保护（同 diagnostics）。
         Json diag_exit = Json::null();
         /// Set (release) as the worker thread's very last action, after every
         /// access to *this/_ctx. Gates task reaping: a terminal task may only
@@ -104,6 +110,7 @@ private:
         /// The worker holds a shared_ptr<Task> copy; joined by the destructor
         /// (or by the reap loop before erase) so no worker outlives *this/_ctx.
         std::thread worker;
+        /// 仅护 diagnostics/diag_exit 快照（其余字段已原子化）。
         std::mutex mutex;
     };
 

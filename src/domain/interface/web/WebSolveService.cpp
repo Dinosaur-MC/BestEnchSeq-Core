@@ -119,10 +119,18 @@ WebSolveService::~WebSolveService() {
         std::lock_guard<std::mutex> lock(_tasks_mutex);
         tasks.reserve(_tasks.size());
         for (const auto& [id, t] : _tasks) {
-            std::lock_guard<std::mutex> tl(t->mutex);
             // Paused 同样算活动槽（batch C）：executor 仍活着，需先取消才能退出。
-            if (t->state == TaskState::Running || t->state == TaskState::Paused)
-                t->state = TaskState::Cancelled;
+            // CAS 循环 Running/Paused→Cancelled：竞态失败（pause 翻为 Paused
+            // 等）重试；worker 已提交终态（Completed/Failed）则 CAS 失败保留
+            // 终态（旧锁语义：终态不被覆盖）。
+            TaskState expected = t->state.load(std::memory_order_acquire);
+            for (;;) {
+                if (expected != TaskState::Running && expected != TaskState::Paused)
+                    break;
+                if (t->state.compare_exchange_weak(expected, TaskState::Cancelled, std::memory_order_acq_rel,
+                                                   std::memory_order_acquire))
+                    break;
+            }
             tasks.push_back(t);
         }
     }
@@ -144,9 +152,9 @@ WebSolveService::~WebSolveService() {
 bool WebSolveService::has_active() const {
     std::lock_guard<std::mutex> lock(_tasks_mutex);
     for (const auto& [id, t] : _tasks) {
-        std::lock_guard<std::mutex> tl(t->mutex);
         // Paused 仍占单活动槽（batch C）：executor 活着、求解未结束。
-        if (t->state == TaskState::Running || t->state == TaskState::Paused)
+        auto st = t->state.load(std::memory_order_acquire);
+        if (st == TaskState::Running || st == TaskState::Paused)
             return true;
     }
     return false;
@@ -161,11 +169,12 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
     {
         std::lock_guard<std::mutex> lock(_tasks_mutex);
         // Inline the active check — has_active() would re-lock the same mutex.
-        // Each task's mutex guards its state against the worker's writes.
+        // Task state is atomic: a snapshot load per task suffices (a single
+        // atomic state store is never observably torn).
         // Paused counts as active too (batch C): the executor is still live.
         for (const auto& [tid, t] : _tasks) {
-            std::lock_guard<std::mutex> tl(t->mutex);
-            if (t->state == TaskState::Running || t->state == TaskState::Paused)
+            auto st = t->state.load(std::memory_order_acquire);
+            if (st == TaskState::Running || st == TaskState::Paused)
                 throw WebHttpError(409, "TASK_ACTIVE", "a solve is already running");
         }
         // Reap terminal tasks so the table stays bounded (long-lived server;
@@ -182,10 +191,11 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
         // active-check above stays authoritative.
         for (auto it = _tasks.begin(); it != _tasks.end();) {
             auto& t = it->second;
-            {
-                std::lock_guard<std::mutex> tl(t->mutex);
-                // Paused 同 Running 保留（batch C）：非终态，不能回收。
-                if (t->state == TaskState::Running || t->state == TaskState::Paused) { ++it; continue; }
+            // Paused 同 Running 保留（batch C）：非终态，不能回收。
+            auto st = t->state.load(std::memory_order_acquire);
+            if (st == TaskState::Running || st == TaskState::Paused) {
+                ++it;
+                continue;
             }
             if (!t->finished.load(std::memory_order_acquire)) { ++it; continue; }
             to_reap.push_back(t);
@@ -233,13 +243,10 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 // while a previous task still held the gate. A cancelled task
                 // must never start a stray solve, violating the
                 // single-active-slot invariant.
-                {
-                    std::lock_guard<std::mutex> lock(task->mutex);
-                    if (task->state == TaskState::Cancelled) {
-                        if (_hub)
-                            _hub->unsubscribe_all(task->id);
-                        return;
-                    }
+                if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
+                    if (_hub)
+                        _hub->unsubscribe_all(task->id);
+                    return;
                 }
                 request = build_request(dto, _ctx);      // 纯 DTO→请求（下界/边界校验）
                 snapshot = _ctx.solve_snapshot(request); // 校验+剪枝（未知/超限在此抛）
@@ -252,15 +259,12 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                         request.target_item.durability = eq_it->max_durability;
                 }
             } // gate 释放——solve 全程无锁（快照自包含，零 profile 引用）
-            // 取消复查（gate 外；task->mutex 只护任务状态）：gate 段很短，但
-            // 取消仍可能落在构建期间——solve 前的最后一道闸。
-            {
-                std::lock_guard<std::mutex> lock(task->mutex);
-                if (task->state == TaskState::Cancelled) {
-                    if (_hub)
-                        _hub->unsubscribe_all(task->id);
-                    return;
-                }
+            // 取消复查（gate 外；状态是原子字）：gate 段很短，但取消仍可能
+            // 落在构建期间——solve 前的最后一道闸。
+            if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
+                if (_hub)
+                    _hub->unsubscribe_all(task->id);
+                return;
             }
             double initial_progress = 0.0;
             if (_hub) {
@@ -334,6 +338,7 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 std::string frame;
                 if (_hub)
                     frame = sse_frame("diag", event);
+                // 仅 diagnostics 快照（其余字段已原子化，此锁不再护状态）。
                 {
                     std::lock_guard<std::mutex> lock(task->mutex);
                     if (task->diagnostics.size() >= 500)
@@ -373,19 +378,27 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 std::lock_guard<std::mutex> gate_lock(_ctx_gate);
                 result_json = _ctx.format(result, request.mode, "json");
             }
-            // Task bookkeeping is NOT gated — commit the result under
-            // task->mutex only. A cancel that fired during format() is honored
-            // here; the worker must never report a completed task it was asked
-            // to cancel.
+            // Task bookkeeping is NOT gated — commit atomically. A cancel that
+            // fired during format() is honored here; the worker must never
+            // report a completed task it was asked to cancel. Order: result
+            // first (release), then CAS state → Completed — once Completed is
+            // observable to a status() acquire read, the result is guaranteed
+            // visible. A pause that lost the race is a lost no-op and the task
+            // simply completes (documented); cancel wins (bail above).
+            task->result.store(std::make_shared<const std::string>(result_json),
+                               std::memory_order_release); // copy (not move): result_json is still needed for the SSE frame
             {
-                std::lock_guard<std::mutex> lock(task->mutex);
-                if (task->state == TaskState::Cancelled) {
-                    if (_hub)
-                        _hub->unsubscribe_all(task->id);
-                    return;
+                TaskState expected = task->state.load(std::memory_order_acquire);
+                for (;;) {
+                    if (expected == TaskState::Cancelled) {
+                        if (_hub)
+                            _hub->unsubscribe_all(task->id);
+                        return;
+                    }
+                    if (task->state.compare_exchange_weak(expected, TaskState::Completed, std::memory_order_release,
+                                                          std::memory_order_acquire))
+                        break;
                 }
-                task->state = TaskState::Completed;
-                task->result = result_json; // copy (not move): result_json is still needed for the SSE frame
             }
             if (_hub) {
                 Json obj = Json::object();
@@ -399,13 +412,13 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 _hub->unsubscribe_all(task->id);
             }
         } catch (const std::exception& e) {
-            std::string error_msg;
-            {
-                std::lock_guard<std::mutex> lock(task->mutex);
-                task->state = TaskState::Failed;
-                task->error = e.what();
-                error_msg = task->error;
-            }
+            std::string error_msg = e.what();
+            // error 先（release）、state 后（release）：Failed 一旦可观察，
+            // error 必已可见。无条件提交（旧锁语义）：异常路径下任务以
+            // Failed 告终（即使 cancel 已置 Cancelled，取消意图仍经
+            // abort_solve 实现，状态字以 worker 终态为准）。
+            task->error.store(std::make_shared<const std::string>(error_msg), std::memory_order_release);
+            task->state.store(TaskState::Failed, std::memory_order_release);
             if (_hub) {
                 Json obj = Json::object();
                 obj["type"] = Json("failed");
@@ -429,16 +442,21 @@ TaskStatus WebSolveService::status(const std::string& id) {
     }
     TaskStatus out;
     out.task_id = task->numeric_id;
-    std::lock_guard<std::mutex> lock(task->mutex);
-    out.state = task->state;
-    out.error = task->error;
-    // 诊断字段随快照一起拷贝（上限 500，拷贝代价有界）。
-    out.diagnostics = task->diagnostics;
-    out.diag_exit = task->diag_exit;
-    if (task->state == TaskState::Completed) {
+    out.state = task->state.load(std::memory_order_acquire);
+    if (auto p = task->error.load(std::memory_order_acquire))
+        out.error = *p;
+    // 诊断字段随快照一起拷贝（上限 500，拷贝代价有界）；仅 worker 写、
+    // 这里拷贝 → task->mutex 只护这两者。
+    {
+        std::lock_guard<std::mutex> lock(task->mutex);
+        out.diagnostics = task->diagnostics;
+        out.diag_exit = task->diag_exit;
+    }
+    if (out.state == TaskState::Completed) {
         out.progress = 1.0;
-        out.result = task->result;
-    } else if (task->state == TaskState::Running || task->state == TaskState::Paused) {
+        if (auto p = task->result.load(std::memory_order_acquire))
+            out.result = *p;
+    } else if (out.state == TaskState::Running || out.state == TaskState::Paused) {
         // Paused 时 executor 冻结在暂停点，progress() 返回冻结值（batch C）。
         auto prog = _ctx.solve_progress();
         out.progress = prog.progress;
@@ -455,13 +473,19 @@ bool WebSolveService::cancel(const std::string& id) {
             return false;
         task = it->second;
     }
+    // CAS Running/Paused→Cancelled：终态（Completed/Failed）不被覆盖——与旧
+    // 锁语义一致（非 Running/Paused 直接返回 false）。
     {
-        std::lock_guard<std::mutex> lock(task->mutex);
-        // Paused 也可取消（batch C）：abort_solve 的 exec->cancel() 会唤醒
-        // 冻结在暂停点的算法线程。
-        if (task->state != TaskState::Running && task->state != TaskState::Paused)
-            return false;
-        task->state = TaskState::Cancelled;
+        TaskState expected = task->state.load(std::memory_order_acquire);
+        for (;;) {
+            // Paused 也可取消（batch C）：abort_solve 的 exec->cancel() 会唤醒
+            // 冻结在暂停点的算法线程。
+            if (expected != TaskState::Running && expected != TaskState::Paused)
+                return false;
+            if (task->state.compare_exchange_weak(expected, TaskState::Cancelled, std::memory_order_acq_rel,
+                                                  std::memory_order_acquire))
+                break;
+        }
     }
     _ctx.abort_solve(); // cancel() on the live executor is a safe no-op if idle
     // Publish-window retry (same race as the destructor): if the worker is
@@ -483,12 +507,13 @@ bool WebSolveService::pause(const std::string& id) {
             throw WebHttpError(404, "TASK_NOT_FOUND", "unknown task: " + id);
         task = it->second;
     }
+    // CAS Running→Paused：失败时 expected 携带实际状态，错误信息与旧锁版一致。
     {
-        std::lock_guard<std::mutex> lock(task->mutex);
-        if (task->state != TaskState::Running)
+        TaskState expected = TaskState::Running;
+        if (!task->state.compare_exchange_strong(expected, TaskState::Paused, std::memory_order_acq_rel,
+                                                 std::memory_order_acquire))
             throw WebHttpError(409, "TASK_NOT_PAUSABLE",
-                               task->state == TaskState::Paused ? "task is already paused" : "task is not running");
-        task->state = TaskState::Paused;
+                               expected == TaskState::Paused ? "task is already paused" : "task is not running");
     }
     // 触发 executor 暂停。与 cancel 相同的发布窗口竞态：executor 句柄未发布时
     // pause_solve 是空操作，任务直接跑完（web 层状态随后被 worker 提交为
@@ -510,11 +535,12 @@ bool WebSolveService::resume(const std::string& id) {
             throw WebHttpError(404, "TASK_NOT_FOUND", "unknown task: " + id);
         task = it->second;
     }
+    // CAS Paused→Running：仅暂停态可恢复（与旧锁版一致）。
     {
-        std::lock_guard<std::mutex> lock(task->mutex);
-        if (task->state != TaskState::Paused)
+        TaskState expected = TaskState::Paused;
+        if (!task->state.compare_exchange_strong(expected, TaskState::Running, std::memory_order_acq_rel,
+                                                 std::memory_order_acquire))
             throw WebHttpError(409, "TASK_NOT_RESUMABLE", "task is not paused");
-        task->state = TaskState::Running;
     }
     _ctx.resume_solve();
     return true;
