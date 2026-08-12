@@ -1,4 +1,7 @@
 #pragma once
+#include <array>
+#include <atomic>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -27,7 +30,7 @@ public:
     /// 清空某 task 的全部订阅（task 收尾调用）。
     void unsubscribe_all(const std::string& task_id);
 
-    /// 清空全部订阅（WebModule 关机调用）。交换出 `_subs` 到局部变量后锁外析构，
+    /// 清空全部订阅（WebModule 关机调用）。逐片 swap 到局部变量后锁外析构，
     /// 不打断在途 publish（publish 持锁拷贝列表后锁外调用）。析构订阅回调会释放其
     /// 捕获的 shared_ptr<Connection>，触发连接 close() → on_close（控制器退订）。
     /// 必须在 Reactor/控制器销毁与 solve worker join 之前调用（见 WebModule.h 注释）。
@@ -46,12 +49,21 @@ private:
         SubId id;
         FrameFn fn;
     };
-    mutable std::mutex _mutex;
-    std::unordered_map<std::string, std::vector<Sub>> _subs;
-    /// 每任务最后一帧（重放用；unsubscribe_all 不清除——任务收尾后迟到
-    /// 订阅者仍应拿到终态帧；随 clear() 一起释放）。
-    std::unordered_map<std::string, std::string> _last_frame;
-    SubId _next = 0;
+    /// 按键分片：每片独立 mutex + 子表 + 末帧缓存（锁竞争 ÷64；clear 逐片
+    /// swap 后锁外析构）。
+    struct Shard {
+        /// mutable：subscriber_count 是 const 方法，仍需上片锁。
+        mutable std::mutex mutex;
+        std::unordered_map<std::string, std::vector<Sub>> subs;
+        /// 每任务最后一帧（重放用；unsubscribe_all 不清除——任务收尾后迟到
+        /// 订阅者仍应拿到终态帧；随 clear() 一起释放）。
+        std::unordered_map<std::string, std::string> last_frame;
+    };
+    static constexpr size_t kShards = 64;
+    static size_t shard_of(const std::string& key);   // FNV-1a 取模 kShards
+
+    std::array<Shard, kShards> _shards;
+    std::atomic<SubId> _next{0};
 };
 
 } // namespace web
