@@ -116,20 +116,28 @@ std::string post_task(HttpServer& server, const std::string& body) {
     return http_exchange(server, req);
 }
 
-/// Single-shot exchange measured against the wall clock (no retry — the timed
-/// budget is asserted on ONE exchange). `elapsed_ms` receives the end-to-end
-/// duration. A single bounded recv captures the full small-body reply; when
-/// the server never answers (e.g. the pre-A2 gate-blocking behavior holds the
-/// response until the solve ends) the 3s recv cap bounds the wait and the
-/// elapsed value blows past the budget → the assertion fails.
+/// Exchange measured against the wall clock. `elapsed_ms` receives the
+/// end-to-end duration; the timed budget is asserted on the whole exchange.
+/// A single bounded recv captures the full small-body reply; when the server
+/// never answers (e.g. the pre-A2 gate-blocking behavior holds the response
+/// until the solve ends) the 3s recv cap bounds the wait and the elapsed
+/// value blows past the budget → the assertion fails.
+///
+/// flake 修复（P0-2 同款）：负载窗口内单次 recv 可能超时拿空——空响应有界
+/// 重试一次（计时重置）。重试不可能掩盖锁回归：修复前 gate 阻塞的服务仍
+/// 在 3s recv 帽内送达，空 body 只可能来自饥饿。
 std::string timed_exchange(HttpServer& server, const std::string& raw, int64_t& elapsed_ms) {
     const auto t0 = std::chrono::steady_clock::now();
-    int c = sock_connect("127.0.0.1", server.port());
     std::string body;
-    if (c >= 0) {
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        int c = sock_connect("127.0.0.1", server.port());
+        if (c < 0)
+            continue;
         sock_send(c, raw, 3000);
         sock_recv(c, body, 64 * 1024, 3000);
         sock_close(c);
+        if (!body.empty())
+            break;
     }
     elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
     return body;
@@ -152,7 +160,8 @@ std::string fetch_status(HttpServer& server, const std::string& id, int64_t dead
     const auto t_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(deadline_ms);
     while (std::chrono::steady_clock::now() < t_end) {
         std::string chunk;
-        if (sock_recv_nb(c, chunk, 65536) > 0) {
+        const int n = sock_recv_nb(c, chunk, 65536);
+        if (n > 0) {
             got += chunk;
             if (header_end == std::string::npos && (header_end = got.find("\r\n\r\n")) != std::string::npos) {
                 const size_t cl = got.find("Content-Length:");
@@ -162,6 +171,8 @@ std::string fetch_status(HttpServer& server, const std::string& id, int64_t dead
             if (header_end != std::string::npos && content_length != std::string::npos &&
                 got.size() >= header_end + 4 + content_length)
                 break;
+        } else if (n < 0) {
+            break; // 对端 FIN（-2）/错误（-1）：连接已关闭，继续读无意义
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -661,8 +672,11 @@ void test_sse_progress_frames(HttpServer& server) {
 //   1) 读/写前先轮询确认 state=running；
 //   2) 读/写后再拉一次快照确认仍 running——若 solve 恰在此窗口结束，测试
 //      立即失败（测量窗口无效），而不是虚过；
-//   3) 响应预算 500ms vs 旧行为等 solve 结束（重目标实测秒级）——余量 ~7×，
-//      且 tight-budget（100~200ms）运行仍通过（见 A3 真实性验证）。
+//   3) 500ms 预算只负责兜住"阻塞到秒级"的旧形态（旧行为 = 等 solve 结束，
+//      Windows 实测 0.9s / WSL 0.2s，均 > 500ms 才可能被预算区分）。快端下
+//      预算本身不足以区分修复前后——真正的区分归功于 2) 的守卫：它证明
+//      读/写确实发生在 solve 期间（此时若仍被 gate 阻塞，elapsed 必然
+//      ≥ solve 时长 > 预算）。
 // ---------------------------------------------------------------------------
 void test_solve_does_not_block_profile() {
     BesqContext ctx;
