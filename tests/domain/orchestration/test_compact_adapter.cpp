@@ -38,10 +38,12 @@ Profile make_sword_profile() {
     return profile;
 }
 
-// Helper: apply with the profile's attached TagResolver (all profiles in this
-// test file attach one).
+// Helper: build the production snapshot from the profile, then apply on it
+// (the pipeline path — validation of unknown/over-max enchants + equipment
+// happens in build_solve_snapshot, apply's own checks stay in apply).
 algorithm::AlgorithmInput apply_for(const Profile& profile, const SolveRequest& request) {
-    return CompactAdapter::apply(profile, request, *profile.tag_resolver());
+    auto snap = orchestration::build_solve_snapshot(request, profile);
+    return CompactAdapter::apply(snap, request, snap.tag_resolver());
 }
 
 // Helper: create a SolveRequest for simple direct-mode tests
@@ -88,16 +90,19 @@ TEST_CASE("test_apply_with_target") {
     TEST_PASS("test_apply_with_target");
 }
 
-// ─── Test 3: unknown enchant ID is silently dropped (no throw) ───
+// ─── Test 3: unknown enchant ID is rejected at the snapshot boundary ───
+// (The old apply-level "silently drop unknown ids" is superseded: the solve
+// path builds a SolveSnapshot first, and build_solve_snapshot throws for
+// unknown enchantments — extraction is validation.)
 TEST_CASE("test_apply_invalid_enchant_id") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("minecraft:nonexistent"), "Nonexistent", 1);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
     auto request = make_request(target_item);
-    auto input = apply_for(profile, request);
 
-    expect(input.target.enchs.empty(), "target should be empty (invalid ID silently dropped)");
+    expect_throws_as<std::runtime_error>([&] { apply_for(profile, request); },
+                                         "unknown enchant rejected during snapshot build");
 
     TEST_PASS("test_apply_invalid_enchant_id");
 }
@@ -117,17 +122,31 @@ TEST_CASE("test_apply_level_exceeds_max_throws") {
 }
 
 // ─── Test 5: inapplicable enchant is excluded from EnchReg ───
+// Snapshot 边界：只有请求引用的魔咒进入快照（sharpness + protection 由池内
+// 书拉入）；apply 再按目标装备过滤适用性——protection 对剑目标不适用被剪掉。
 TEST_CASE("test_apply_inapplicable_enchant") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
-    auto request = make_request(target_item);
-    auto input = apply_for(profile, request);
 
-    // Global registry has 3 enchants; only 2 (sharpness, knockback) are
-    // sword-applicable. protection is chestplate-only.
-    expect(input.registry.size() == 2, "ench_reg should only have sword-applicable enchantments (2, not 3)");
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("sharpness"), "Sharpness", 3);
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);
+    EnchSet prot_enchs;
+    prot_enchs.emplace(NSID("protection"), "Protection", 4); // chestplate-only
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"), prot_enchs, 0);
+    request.payload = std::move(payload);
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = apply_for(profile, request);
+    // 快照含 sharpness + protection；apply 对剑目标过滤后只留 sharpness。
+    expect(input.registry.size() == 1, "ench_reg should only have sword-applicable enchantments (sharpness, not protection)");
 
     TEST_PASS("test_apply_inapplicable_enchant");
 }
@@ -152,11 +171,25 @@ TEST_CASE("test_pruning_only_applicable") {
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
-    auto request = make_request(target_item);
-    auto input = apply_for(profile, request);
 
-    // Global registry has 3 enchants; only 2 (sharpness, knockback) are sword-applicable
-    expect(input.registry.size() == 2, "ench_reg should only have sword-applicable enchantments (2, not 3)");
+    // 同 Test 5：池内 sharpness 书 + protection 书；protection（chestplate-only）
+    // 对剑目标不适用，apply 的压缩注册表只留 sharpness。
+    SolveRequest request;
+    request.target_item = target_item;
+    request.mode = AlgorithmMode::inventory;
+    InventoryPayload payload;
+    EnchSet book_enchs;
+    book_enchs.emplace(NSID("sharpness"), "Sharpness", 3);
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"), book_enchs, 0);
+    EnchSet prot_enchs;
+    prot_enchs.emplace(NSID("protection"), "Protection", 4);
+    payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"), prot_enchs, 0);
+    request.payload = std::move(payload);
+    request.forge_config.platform = MCE::Java;
+    request.search_config = algorithm::SearchConfig{};
+
+    auto input = apply_for(profile, request);
+    expect(input.registry.size() == 1, "ench_reg should only have sword-applicable enchantments (sharpness, not protection)");
 
     TEST_PASS("test_pruning_only_applicable");
 }
@@ -419,7 +452,8 @@ TEST_CASE("test_apply_supported_items_tag_intersection") {
     req.payload = std::move(payload);
     req.forge_config = algorithm::ForgeConfig{};
 
-    auto input = CompactAdapter::apply(p, req, *p.tag_resolver());
+    auto snap = orchestration::build_solve_snapshot(req, p);
+    auto input = CompactAdapter::apply(snap, req, snap.tag_resolver());
 
     bool sharpness_present = false;
     for (const auto& gid : input.registry.get_global_ids())
@@ -451,7 +485,8 @@ TEST_CASE("test_apply_platform_filter") {
     req.forge_config = algorithm::ForgeConfig{};
     req.forge_config.platform = MCE::Bedrock;
 
-    auto input = CompactAdapter::apply(p, req, *p.tag_resolver());
+    auto snap = orchestration::build_solve_snapshot(req, p);
+    auto input = CompactAdapter::apply(snap, req, snap.tag_resolver());
     for (const auto& gid : input.registry.get_global_ids())
         expect(gid != NSID("minecraft:sharpness"), "Java-only sharpness excluded from Bedrock solve");
     TEST_PASS("test_apply_platform_filter");
@@ -461,10 +496,12 @@ TEST_CASE("test_apply_platform_filter") {
 // A book (→ enchanted_book) can hold enchantments from any category: neither
 // sharpness (sword-only) nor protection (chestplate-only) is applicable to a
 // book via the tag system, yet both must enter the compact registry.
+// （快照边界：目标同时引用两个魔咒，二者都被拉入快照。）
 TEST_CASE("test_apply_book_target_all_enchants_applicable") {
     auto profile = make_sword_profile();
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
+    target_enchs.emplace(NSID("protection"), "Protection", 4);
     Item target_item(NSID("minecraft:enchanted_book"), target_enchs, 0, 0);
     auto request = make_request(target_item);
     auto input = apply_for(profile, request);
@@ -488,7 +525,8 @@ TEST_CASE("test_apply_book_target_all_enchants_applicable") {
 //     protection (inapplicable to the sword).  The heterogeneous filter drops the
 //     sword first (SRS: pool = books + same-id equipment only), so the inapplicable
 //     enchant never reaches validation — no throw, empty pool.  Matching-id
-//     equipment still validates (see test_apply_inventory_equipment_inapplicable_throws). ───
+//     equipment still validates (see test_apply_inventory_equipment_inapplicable_throws).
+//     （快照边界校验 inventory 装备 id——sword/chestplate 均已注册，快照构建不抛。） ───
 TEST_CASE("test_apply_inventory_hetero_equipment_skips_validation") {
     Profile p("test:invbad");
     p.add_equipment({NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561});
@@ -516,7 +554,8 @@ TEST_CASE("test_apply_inventory_hetero_equipment_skips_validation") {
     items.push_back(Item(NSID("minecraft:diamond_sword"), esc, 0, 1561));
     req.payload = InventoryPayload{items, {}};
 
-    auto input = CompactAdapter::apply(p, req, *p.tag_resolver());
+    auto snap = orchestration::build_solve_snapshot(req, p);
+    auto input = CompactAdapter::apply(snap, req, snap.tag_resolver());
     expect(input.available().empty(), "heterogeneous equipment excluded before applicability validation (no throw)");
     TEST_PASS("test_apply_inventory_hetero_equipment_skips_validation");
 }
@@ -548,6 +587,10 @@ TEST_CASE("test_apply_inventory_same_id_equipment_kept") {
 // ─── Test 22: mismatched-id equipment is excluded and its priority dropped ───
 TEST_CASE("test_apply_inventory_hetero_equipment_excluded") {
     auto profile = make_sword_profile();
+    // 快照边界校验所有 inventory 装备 id——异类装备也必须注册（真实 profile
+    // 必然如此）；apply 的异类过滤在其后按 id 排除。
+    profile.add_equipment({NSID("minecraft:diamond_chestplate"), "Diamond Chestplate",
+                           EquipmentTag::chestplate(), 528});
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
@@ -631,6 +674,9 @@ TEST_CASE("test_apply_inventory_empty_book_dropped") {
 //     books kept, priorities stay parallel to available ───
 TEST_CASE("test_apply_inventory_mixed_pool_parallel_priorities") {
     auto profile = make_sword_profile();
+    // 同 Test 22：异类装备（chestplate）须注册——快照边界校验全部装备 id。
+    profile.add_equipment({NSID("minecraft:diamond_chestplate"), "Diamond Chestplate",
+                           EquipmentTag::chestplate(), 528});
     EnchSet target_enchs;
     target_enchs.emplace(NSID("sharpness"), "Sharpness", 5);
     Item target_item(NSID("minecraft:diamond_sword"), target_enchs, 0, 1561);
@@ -673,7 +719,7 @@ TEST_CASE("test_apply_inventory_empty_target_throws") {
 
     bool threw = false;
     try {
-        (void)CompactAdapter::apply(profile, request, *profile.tag_resolver());
+        (void)apply_for(profile, request);
     } catch (const std::runtime_error&) {
         threw = true;
     }

@@ -36,14 +36,15 @@ bool CompactAdapter::is_applicable(const EnchInfo &info, const NSID &item_id,
 }
 
 // ============================================================================
-// apply — Profile + SolveRequest -> AlgorithmInput
+// apply — SolveSnapshot + SolveRequest -> AlgorithmInput
 // ============================================================================
 
-algorithm::AlgorithmInput CompactAdapter::apply(const Profile &profile, const SolveRequest &request,
+algorithm::AlgorithmInput CompactAdapter::apply(const orchestration::SolveSnapshot &snapshot,
+                                                const SolveRequest &request,
                                                 const TagResolver &tag_resolver) {
     // ── 1. Resolve registries and equipment ─────────────────────────────
-    const auto &ench_registry = profile.ench();
-    const auto &eq_registry   = profile.eq();
+    const auto &ench_registry = snapshot.ench();
+    const auto &eq_registry   = snapshot.eq();
 
     // Look up target equipment by item id.  Books may not be in the
     // equipment registry — fall back to a minimal placeholder.

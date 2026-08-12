@@ -405,12 +405,17 @@ bool BesqContext::unload_algorithm(const std::string& name) {
     return true;
 }
 
-SolveResult BesqContext::solve(const SolveRequest& request) {
-    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+SolveResult BesqContext::solve(const SolveRequest& request, const orchestration::SolveSnapshot& snapshot) {
+    // P0 锁攻破：solve 只消费自包含快照，不触碰 ProfileManager——无 gate 竞争。
     _impl->active_executor.store(nullptr);
-    auto result = SolvePipeline::run(profile, request, _impl->algo_loader, &_impl->active_executor);
+    auto result = SolvePipeline::run(snapshot, request, _impl->algo_loader, &_impl->active_executor);
     _impl->active_executor.store(nullptr);
     return result;
+}
+
+SolveResult BesqContext::solve(const SolveRequest& request) {
+    // 单线程 CLI/ABI 路径的包装：内部 resolve + 构建快照 + 双参 solve。
+    return solve(request, solve_snapshot(request));
 }
 
 orchestration::SolveSnapshot BesqContext::solve_snapshot(const SolveRequest& request) const {

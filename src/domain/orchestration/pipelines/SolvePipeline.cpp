@@ -4,8 +4,8 @@
 #include "domain/algorithm/IExecutor.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/business/components/TagResolver.h"
-#include "domain/business/types/Profile.h"
 #include "domain/orchestration/components/CompactAdapter.h"
+#include "domain/orchestration/types/SolveSnapshot.h"
 #include <chrono>
 #include <string>
 #include <unordered_map>
@@ -26,17 +26,17 @@ struct ExecutorHandleGuard {
     }
 };
 
-/// Build a TagResolver from the profile's equipment → category mapping when
-/// the profile does not carry an explicit resolver.  Each equipment id is
+/// Build a TagResolver from the snapshot's equipment → category mapping when
+/// the snapshot does not carry an explicit resolver.  Each equipment id is
 /// recorded as a member of its `#tag` category, reproducing the legacy
 /// category-match semantics for profiles loaded without tag membership data.
 /// TODO(T7/T10): attach a real TagResolver at profile load time (ProfileLoader
 /// already builds the tag universe) so mod profiles with real-MC-tag
 /// supported_items don't lose applicability via this category-derived fallback.
-TagResolver fallback_tag_resolver(const Profile& profile) {
+TagResolver fallback_tag_resolver(const orchestration::SolveSnapshot& snapshot) {
     TagResolver tr;
     std::unordered_map<std::string, std::unordered_set<std::string>> members;
-    for (const auto& [id, eq] : profile.eq().data()) {
+    for (const auto& [id, eq] : snapshot.eq().data()) {
         if (!eq.category.is_tag())
             continue;
         members[eq.category.str().substr(1)].insert(id.str());
@@ -48,12 +48,12 @@ TagResolver fallback_tag_resolver(const Profile& profile) {
 
 } // namespace
 
-SolveResult SolvePipeline::run(const Profile& profile,
+SolveResult SolvePipeline::run(const orchestration::SolveSnapshot& snapshot,
                                const SolveRequest& request,
                                algorithm::AlgorithmLoader& loader,
                                ActiveExecutorHandle* out_executor) {
     // Stage 1: Apply
-    auto s1 = stage_apply(profile, request);
+    auto s1 = stage_apply(snapshot, request);
 
     // Stage 2: Execute
     auto s2 = stage_execute(s1.algo_input, request.algorithm, loader, out_executor);
@@ -73,15 +73,16 @@ SolveResult SolvePipeline::run(const Profile& profile,
     return result;
 }
 
-SolvePipeline::Stage1Result SolvePipeline::stage_apply(const Profile& profile, const SolveRequest& request) {
+SolvePipeline::Stage1Result SolvePipeline::stage_apply(const orchestration::SolveSnapshot& snapshot,
+                                                       const SolveRequest& request) {
     Stage1Result result;
-    const TagResolver* tr = profile.tag_resolver();
+    const TagResolver* tr = &snapshot.tag_resolver();
     TagResolver fallback;
-    if (!tr) {
-        fallback = fallback_tag_resolver(profile);
+    if (tr->empty()) {
+        fallback = fallback_tag_resolver(snapshot);
         tr = &fallback;
     }
-    result.algo_input = CompactAdapter::apply(profile, request, *tr);
+    result.algo_input = CompactAdapter::apply(snapshot, request, *tr);
     result.target_eq_nsid = request.target_item.id;
     return result;
 }

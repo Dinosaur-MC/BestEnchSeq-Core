@@ -155,13 +155,18 @@ public:
     SolveProgress solve_progress() const noexcept;
 
     // ── Solve ──
-    SolveResult solve(const SolveRequest& request);
-    void abort_solve();
-
-    /// 按请求剪枝的有效视图快照（P0 锁攻破）：gate 内构建、含全部校验；
-    /// solve 改跑快照后不再持有 ProfileManager 有效视图缓存引用。
+    /// P0：gate 内按请求构建剪枝快照（含全部校验）；solve 跑在快照上。
     /// 未知魔咒/装备抛 std::runtime_error。
     orchestration::SolveSnapshot solve_snapshot(const SolveRequest& request) const;
+
+    /// P0：无 gate——管线消费快照，不触碰 ProfileManager。快照由
+    /// solve_snapshot()（gate 内）先行构建，solve 全程零 profile 引用。
+    SolveResult solve(const SolveRequest& request, const orchestration::SolveSnapshot& snapshot);
+
+    /// 单参包装（CLI/ABI 单线程路径，无 gate 竞争）：内部 resolve +
+    /// build_snapshot + 双参 solve。
+    SolveResult solve(const SolveRequest& request);
+    void abort_solve();
 
     /// Pause the in-flight solve at its next pause point (batch C). Follows the
     /// abort_solve pattern: copies the atomic executor handle and calls

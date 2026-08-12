@@ -1,10 +1,10 @@
 #pragma once
 #include "domain/algorithm/types/Item.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
-#include "domain/business/types/Profile.h"
 #include "domain/business/types/Item.h"
 #include "domain/business/types/Solution.h"
 #include "domain/orchestration/types/SolveRequest.h"
+#include "domain/orchestration/types/SolveSnapshot.h"
 #include "common/CommonTypes.h"
 #include <unordered_set>
 #include <vector>
@@ -28,7 +28,7 @@ struct CompactAdapter {
                               const std::unordered_set<NSID>& item_tags,
                               MCE platform);
 
-    /// Build AlgorithmInput from Profile + SolveRequest.
+    /// Build AlgorithmInput from SolveSnapshot + SolveRequest.
     /// Internally builds EnchReg with correct NSID -> local_id mapping,
     /// eliminating the previous ench.id = 0 TEMP workaround.
     ///
@@ -38,7 +38,7 @@ struct CompactAdapter {
     ///   ∨ ∃ t ∈ E.supported_items: t is #tag ∧ t ∈ tag_resolver.tags_of(I.id)
     ///                                          (tag intersection)
     static algorithm::AlgorithmInput apply(
-        const Profile& profile,
+        const orchestration::SolveSnapshot& snapshot,
         const SolveRequest& request,
         const TagResolver& tag_resolver
     );

@@ -101,3 +101,20 @@ TEST_CASE("test_solve_snapshot_max_level") {
     expect(threw, "source level above max_level throws during snapshot build");
     TEST_PASS("test_solve_snapshot_max_level");
 }
+
+// 快照路径求解端到端：solve(request, snapshot) 与旧路径结果一致
+TEST_CASE("test_solve_snapshot_solve") {
+    BesqContext ctx;
+    ctx.load_builtin();
+    SolveRequest req;
+    req.mode = AlgorithmMode::direct;
+    req.target_item = Item{NSID("minecraft:diamond_sword"), EnchSet{{NSID("minecraft:sharpness"), 5}}, 0, 1561};
+    req.payload = DirectPayload{EnchSet{{NSID("minecraft:sharpness"), 2}}};
+    req.algorithm = "dp_merge";
+    auto snap = ctx.solve_snapshot(req);
+    auto result = ctx.solve(req, snap);
+    expect(result.success, "snapshot-based solve succeeds");
+    expect(!result.solutions.empty(), "snapshot-based solve produces solutions");
+    expect(result.solutions[0].target_item.id == NSID("minecraft:diamond_sword"), "target preserved");
+    TEST_PASS("test_solve_snapshot_solve");
+}

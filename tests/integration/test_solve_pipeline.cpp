@@ -18,10 +18,18 @@
 #include "domain/business/types/Profile.h"
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/orchestration/pipelines/SolvePipeline.h"
+#include "domain/orchestration/types/SolveSnapshot.h"
 #include "framework/test_framework.h"
 #include <string>
 
 namespace {
+
+/// Run the production pipeline path: build the pruned snapshot first (which is
+/// also where unknown/over-max enchants are validated), then run on it.
+SolveResult run_solve(const Profile& profile, const SolveRequest& req, algorithm::AlgorithmLoader& loader) {
+    auto snap = orchestration::build_solve_snapshot(req, profile);
+    return SolvePipeline::run(snap, req, loader);
+}
 
 Profile make_builtin_profile() {
     TagRegistry cat_reg;
@@ -53,7 +61,7 @@ void test_unknown_algo() {
 
     bool threw = false;
     try {
-        SolvePipeline::run(profile, req, loader);
+        run_solve(profile, req, loader);
     } catch (const std::runtime_error& e) {
         threw = std::string(e.what()).find("Unknown algorithm") != std::string::npos;
     }
@@ -72,7 +80,7 @@ void test_unsupported_mode() {
 
     bool threw = false;
     try {
-        SolvePipeline::run(profile, req, loader);
+        run_solve(profile, req, loader);
     } catch (const std::runtime_error& e) {
         threw = std::string(e.what()).find("does not support") != std::string::npos;
     }
@@ -92,7 +100,7 @@ void test_conflicting_target_not_solvable() {
     bool empty_result = false;
     bool rejected = false;
     try {
-        auto result = SolvePipeline::run(profile, req, loader);
+        auto result = run_solve(profile, req, loader);
         empty_result = !result.success && result.solutions.empty();
     } catch (...) {
         rejected = true;

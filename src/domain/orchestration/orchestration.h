@@ -10,6 +10,7 @@
 // ── Types ──
 #include "domain/orchestration/types/SolveRequest.h"    // IWYU pragma: export
 #include "domain/orchestration/types/SolveResult.h"     // IWYU pragma: export
+#include "domain/orchestration/types/SolveSnapshot.h"   // IWYU pragma: export
 #include "domain/orchestration/types/ManageRequest.h"   // IWYU pragma: export
 #include "domain/orchestration/types/ManageResult.h"    // IWYU pragma: export
 #include "domain/orchestration/types/ExportRequest.h"   // IWYU pragma: export

@@ -56,6 +56,11 @@ class TagResolver {
     /// Resolves on-the-fly; threads through the mutable cache.
     const std::unordered_set<std::string> *get_tag(const std::string &ns, const std::string &name) const;
 
+    /// True when no raw tags are registered (snapshot resolvers built from
+    /// requests that reference no `#` tags).  Callers fall back to
+    /// category-derived tags when empty.
+    bool empty() const noexcept { return _raw_tags.empty(); }
+
     /// Programmatically add a raw tag (backward-compatible overload).
     /// Each value is stored as EntryRef (no '#') or TagRef (starts with '#').
     void add_tag(const std::string &key, const std::unordered_set<std::string> &values);

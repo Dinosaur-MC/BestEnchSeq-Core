@@ -15,6 +15,7 @@
 #include "domain/interface/cli/ItemParser.h"
 #include "domain/orchestration/components/OutputFormatter.h"
 #include "domain/orchestration/pipelines/SolvePipeline.h"
+#include "domain/orchestration/types/SolveSnapshot.h"
 #define BESQ_TEST_MAIN
 
 #include "framework/test_framework.h"
@@ -22,6 +23,13 @@
 #include <iostream>
 
 namespace {
+
+/// Run the production pipeline path: build the pruned snapshot first, then
+/// run on it (mirrors BesqContext::solve's two-step flow).
+SolveResult run_solve(const Profile& profile, const SolveRequest& req, algorithm::AlgorithmLoader& loader) {
+    auto snap = orchestration::build_solve_snapshot(req, profile);
+    return SolvePipeline::run(snap, req, loader);
+}
 
 // ---------------------------------------------------------------------------
 // Helper: build a test Profile loaded with builtin vanilla data
@@ -67,7 +75,7 @@ void test_full_pipeline_direct() {
     SolveRequest request = make_direct_request(target_item);
     algorithm::AlgorithmLoader loader;
     loader.load_builtin();
-    auto result = SolvePipeline::run(profile, request, loader);
+    auto result = run_solve(profile, request, loader);
 
     expect(result.success, "full_pipeline_direct: solve should succeed");
     expect(!result.solutions.empty(), "full_pipeline_direct: should have solutions");
@@ -119,7 +127,7 @@ void test_full_pipeline_inventory() {
 
     algorithm::AlgorithmLoader loader;
     loader.load_builtin();
-    auto result = SolvePipeline::run(profile, request, loader);
+    auto result = run_solve(profile, request, loader);
 
     expect(result.success, "full_pipeline_inventory: solve should succeed");
     expect(!result.solutions.empty(), "full_pipeline_inventory: should have solutions");
@@ -208,7 +216,7 @@ void test_full_pipeline_execute() {
 
     algorithm::AlgorithmLoader loader;
     loader.load_builtin();
-    auto result = SolvePipeline::run(profile, request, loader);
+    auto result = run_solve(profile, request, loader);
 
     expect(result.success, "execute: solve should succeed");
     expect(!result.solutions.empty(), "execute: should have solutions");

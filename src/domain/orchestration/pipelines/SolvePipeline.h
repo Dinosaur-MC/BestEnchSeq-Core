@@ -6,7 +6,9 @@
 #include <atomic>
 #include <memory>
 
-class Profile;
+namespace orchestration {
+class SolveSnapshot;
+} // namespace orchestration
 namespace algorithm {
 class AlgorithmLoader;
 class IExecutor;
@@ -27,7 +29,7 @@ struct SolvePipeline {
     /// @param out_executor  Optional — set to the shared executor handle during
     ///                      stage_execute; cleared after stage_execute returns.
     ///                      Use for cross-thread cancellation (besq_abort_solve).
-    static SolveResult run(const Profile& profile,
+    static SolveResult run(const orchestration::SolveSnapshot& snapshot,
                            const SolveRequest& request,
                            algorithm::AlgorithmLoader& loader,
                            ActiveExecutorHandle* out_executor = nullptr);
@@ -43,7 +45,7 @@ struct SolvePipeline {
         std::string algorithm_name;
     };
 
-    static Stage1Result stage_apply(const Profile& profile, const SolveRequest& request);
+    static Stage1Result stage_apply(const orchestration::SolveSnapshot& snapshot, const SolveRequest& request);
     static Stage2Result stage_execute(algorithm::AlgorithmInput& algo_input,
                                       const std::string& algorithm,
                                       algorithm::AlgorithmLoader& loader,

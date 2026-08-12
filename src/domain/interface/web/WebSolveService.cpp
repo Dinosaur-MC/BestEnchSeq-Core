@@ -1,12 +1,13 @@
 #include "WebSolveService.h"
-#include "SseHub.h"
-#include "WebDiagObserver.h"
+#include "common/i18n/Language.h"
+#include "common/io/json.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/Router.h"
 #include "domain/orchestration/types/SolveRequest.h"
-#include "common/io/json.h"
-#include "common/i18n/Language.h"
+#include "domain/orchestration/types/SolveSnapshot.h"
+#include "SseHub.h"
+#include "WebDiagObserver.h"
 #include <chrono>
 #include <utility>
 #include <vector>
@@ -15,41 +16,40 @@ namespace web {
 
 namespace {
 
-EnchSet build_source(const std::vector<InvEnchDto>& source, const EnchantmentRegistry& ench_reg) {
+/// 附魔 DTO → EnchSet。只保留 level<1 下界检查（A1 审查遗留：快照只校验上界
+/// level > max_level，level=0 会静默穿过 apply）；未知魔咒/上界由
+/// solve_snapshot 校验（同款错误信息）。
+EnchSet build_source(const std::vector<InvEnchDto>& source) {
     EnchSet out;
     for (const auto& e : source) {
-        auto it = ench_reg.find(NSID(e.id));
-        if (it == ench_reg.end())
-            throw std::runtime_error(tr_fmt("cli.err.unknown_ench", e.id));
-        if (e.level < 1 || e.level > it->max_level)
-            throw std::runtime_error(tr_fmt("main.err.ench_level_exceeds_max", e.id, e.level, it->max_level));
-        out.emplace(it->id, it->name, e.level);
+        if (e.level < 1)
+            throw std::runtime_error(tr_fmt("main.err.ench_level_exceeds_max", e.id, e.level, 1));
+        out.emplace(NSID(e.id), std::string{}, e.level);
     }
     return out;
 }
 
-Item build_target(const InvTargetDto& t, const EnchantmentRegistry& ench_reg,
-                  const EquipmentRegistry& eq_reg) {
+/// 目标 DTO → Item。装备定义（未知 id / max_durability）由 solve_snapshot
+/// 校验并回填——此处不再查注册表；durability 由 worker 在快照构建后以快照
+/// eq（注册表为准）补齐。
+Item build_target(const InvTargetDto& t) {
     Item item;
     if (t.item == "book" || t.item == "enchanted_book") {
         item.id = NSID("minecraft:enchanted_book");
     } else {
-        auto eq_it = eq_reg.find(NSID(t.item));
-        if (eq_it == eq_reg.end())
-            throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", t.item));
-        item.id = eq_it->id;
-        item.durability = eq_it->max_durability;
+        item.id = NSID(t.item);
     }
-    item.enchantments = build_source(t.enchants, ench_reg);
+    item.enchantments = build_source(t.enchants);
     return item;
 }
 
 SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
-    const auto& ench_reg = ctx.enchantments();
+    // 仅 inventory 分支保留的 durability>max 边界检查需要 eq_reg（A1 审查遗留：
+    // 快照不复核耐久）；未知装备走快照校验。
     const auto& eq_reg = ctx.equipment();
 
     SolveRequest req;
-    req.target_item = build_target(dto.target, ench_reg, eq_reg);
+    req.target_item = build_target(dto.target);
 
     bool inventory = !dto.items.empty();
     req.mode = inventory ? AlgorithmMode::inventory : AlgorithmMode::direct;
@@ -58,37 +58,43 @@ SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
         // items → InventoryPayload (mirrors CAbiBindings::parse_inventory_payload)
         InventoryPayload payload;
         for (const auto& it : dto.items) {
-            EnchSet ench_set = build_source(it.enchants, ench_reg);
+            EnchSet ench_set = build_source(it.enchants);
             if (it.type == "book") {
                 payload.extra_items.emplace_back(NSID("minecraft:enchanted_book"), ench_set, it.prior_penalty);
             } else {
                 auto eq_it = eq_reg.find(NSID(it.id));
-                if (eq_it == eq_reg.end())
-                    throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", it.id));
-                int32_t dur = it.durability > 0 ? it.durability : eq_it->max_durability;
-                if (dur > eq_it->max_durability)
-                    throw std::runtime_error("durability exceeds max for '" + it.id + "'");
-                payload.extra_items.emplace_back(eq_it->id, ench_set, it.prior_penalty, dur);
+                if (eq_it != eq_reg.end()) {
+                    int32_t dur = it.durability > 0 ? it.durability : eq_it->max_durability;
+                    if (dur > eq_it->max_durability)
+                        throw std::runtime_error("durability exceeds max for '" + it.id + "'");
+                    payload.extra_items.emplace_back(eq_it->id, ench_set, it.prior_penalty, dur);
+                } else {
+                    // 未知装备：留原值，solve_snapshot 随即抛 cli.err.unknown_equipment。
+                    payload.extra_items.emplace_back(NSID(it.id), ench_set, it.prior_penalty,
+                                                     it.durability > 0 ? it.durability : 0);
+                }
             }
             payload.extra_item_priorities.push_back(it.priority);
         }
         req.payload = std::move(payload);
     } else {
-        req.payload = DirectPayload{build_source(dto.source, ench_reg)};
+        req.payload = DirectPayload{build_source(dto.source)};
     }
 
     // Mode-appropriate default (mirrors the C ABI): dp_merge is direct-only;
     // hamming supports both modes. An empty algorithm in inventory mode MUST
     // NOT resolve to dp_merge (it would throw unsupported_mode).
-    req.algorithm = dto.algorithm.empty() ? (inventory ? "hamming" : "dp_merge")
-                                          : dto.algorithm;
+    req.algorithm = dto.algorithm.empty() ? (inventory ? "hamming" : "dp_merge") : dto.algorithm;
     req.forge_config.platform = MCE::Java;
     // "允许不兼容" 接通（batch C）：wire 键 ignore_incompatible → ForgeConfig 的
     // ignore_imcompatible（内部拼写保留）。默认 false = 严格冲突。
     req.forge_config.ignore_imcompatible = dto.ignore_incompatible;
-    if (dto.max_solutions > 0) req.search_config.max_solutions = dto.max_solutions;
-    if (dto.max_search_time_ms > 0) req.search_config.max_search_time = std::chrono::milliseconds(dto.max_search_time_ms);
-    if (dto.max_threads > 0) req.search_config.max_threads = dto.max_threads;
+    if (dto.max_solutions > 0)
+        req.search_config.max_solutions = dto.max_solutions;
+    if (dto.max_search_time_ms > 0)
+        req.search_config.max_search_time = std::chrono::milliseconds(dto.max_search_time_ms);
+    if (dto.max_threads > 0)
+        req.search_config.max_threads = dto.max_threads;
     return req;
 }
 
@@ -131,7 +137,8 @@ WebSolveService::~WebSolveService() {
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     _ctx.abort_solve();
     for (const auto& t : tasks)
-        if (t->worker.joinable()) t->worker.join();
+        if (t->worker.joinable())
+            t->worker.join();
 }
 
 bool WebSolveService::has_active() const {
@@ -172,10 +179,17 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             {
                 std::lock_guard<std::mutex> tl(t->mutex);
                 // Paused 同 Running 保留（batch C）：非终态，不能回收。
-                if (t->state == TaskState::Running || t->state == TaskState::Paused) { ++it; continue; }
+                if (t->state == TaskState::Running || t->state == TaskState::Paused) {
+                    ++it;
+                    continue;
+                }
             }
-            if (!t->finished.load(std::memory_order_acquire)) { ++it; continue; }
-            if (t->worker.joinable()) t->worker.join();
+            if (!t->finished.load(std::memory_order_acquire)) {
+                ++it;
+                continue;
+            }
+            if (t->worker.joinable())
+                t->worker.join();
             it = _tasks.erase(it);
         }
         task = std::make_shared<Task>();
@@ -197,16 +211,17 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
         } done_guard{task};
         std::string result_json;
         try {
+            // ── 快照 + 请求（gate 内，µs-ms）──
+            // The shared context gate serializes access to the shared
+            // BesqContext's ProfileManager effective view: resolve_effective()
+            // rebuilds a mutable cache (_effective_cache/_dep_graph), so
+            // overlapping access against server-thread profile mutations would
+            // be a data race. Only the snapshot build (and format below) go
+            // through it — everything between runs on the self-contained
+            // snapshot: solve() is lock-free, zero profile references.
+            SolveRequest request;
+            orchestration::SolveSnapshot snapshot;
             {
-                // The shared context gate serializes ALL access to the shared
-                // BesqContext — against profile mutations on the server thread
-                // (WebModule holds the same gate around every ApiProfiles call)
-                // and against other workers. Its registries are reached through
-                // resolve_effective(), which rebuilds a mutable cache
-                // (ProfileManager::_effective_cache/_dep_graph), so overlapping
-                // access would be a data race — not even the read-only-looking
-                // request build is safe (ctx.enchantments()/equipment() go
-                // through it too).
                 std::lock_guard<std::mutex> gate_lock(_ctx_gate);
                 // Re-check cancellation under the gate: cancel() may have fired
                 // while a previous task still held the gate. A cancelled task
@@ -215,119 +230,143 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 {
                     std::lock_guard<std::mutex> lock(task->mutex);
                     if (task->state == TaskState::Cancelled) {
-                        if (_hub) _hub->unsubscribe_all(task->id);
+                        if (_hub)
+                            _hub->unsubscribe_all(task->id);
                         return;
                     }
                 }
-                auto request = build_request(dto, _ctx);
+                request = build_request(dto, _ctx);      // 纯 DTO→请求（下界/边界校验）
+                snapshot = _ctx.solve_snapshot(request); // 校验+剪枝（未知/超限在此抛）
+                // 回填目标装备 max_durability：build_request 不再查注册表，而
+                // CompactAdapter::apply 透传 request.durability——以快照 eq
+                // （注册表为准）补齐，保持旧 build_target 语义。
+                if (!request.target_item.is_book()) {
+                    auto eq_it = snapshot.eq().find(request.target_item.id);
+                    if (eq_it != snapshot.eq().end())
+                        request.target_item.durability = eq_it->max_durability;
+                }
+            } // gate 释放——solve 全程无锁（快照自包含，零 profile 引用）
+            // 取消复查（gate 外；task->mutex 只护任务状态）：gate 段很短，但
+            // 取消仍可能落在构建期间——solve 前的最后一道闸。
+            {
+                std::lock_guard<std::mutex> lock(task->mutex);
+                if (task->state == TaskState::Cancelled) {
+                    if (_hub)
+                        _hub->unsubscribe_all(task->id);
+                    return;
+                }
+            }
+            double initial_progress = 0.0;
+            if (_hub) {
+                // 初始 progress 帧（I-2b）：solve 前的原子快照。
+                auto prog = _ctx.solve_progress();
+                initial_progress = prog.progress;
+                Json obj = Json::object();
+                obj["type"] = Json("progress");
+                obj["progress"] = Json(prog.progress);
+                _hub->publish(task->id, sse_frame("progress", obj));
+            }
+            // 周期性 progress 采样（I-2a）：solve() 阻塞本 worker 期间，短命
+            // 采样线程每 ~200ms 读一次 _ctx.solve_progress()（线程安全原子读，
+            // 专为轮询设计），进度变化即向 hub 发布
+            // {"type":"progress","progress":<p>}。采样线程在 solve() 返回的
+            // 每个退出路径（正常/异常/cancel）上被停止并 join；终态帧
+            // （completed/failed）只会在采样停止后发布。
+            struct SamplerStop {
+                std::atomic<bool>* flag;
+                std::thread* th;
+                void stop() {
+                    if (!flag)
+                        return;
+                    flag->store(false, std::memory_order_release);
+                    if (th->joinable())
+                        th->join(); // 采样线程至多晚一帧（200ms 内）
+                    flag = nullptr; // 幂等：已停
+                }
+                ~SamplerStop() { stop(); }
+            };
+            std::atomic<bool> sampling{true};
+            std::thread sampler;
+            SamplerStop sampler_stop{_hub ? &sampling : nullptr, &sampler};
+            if (_hub) {
+                sampler = std::thread([this, task, &sampling, initial_progress] {
+                    double last = initial_progress; // 与初始帧同基准，进度变了才发
+                    for (;;) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                        if (!sampling.load(std::memory_order_acquire))
+                            return;
+                        const auto prog = _ctx.solve_progress();
+                        if (prog.progress == last)
+                            continue;
+                        last = prog.progress;
+                        try {
+                            Json obj = Json::object();
+                            obj["type"] = Json("progress");
+                            obj["progress"] = Json(prog.progress);
+                            _hub->publish(task->id, sse_frame("progress", obj));
+                        } catch (...) {
+                            // 采样帧丢失可接受：hub/帧构造不抛，防御兜底。
+                        }
+                    }
+                });
+            }
+            // ── 算法诊断事件流（T2）──
+            // 观察者必须在 solve() 前注册：executor 在 solve() 内部创建并
+            // start()，事件从算法执行一开始（首个 Progress）就推送。
+            // attach 前先 flush() 排空上一任务可能仍停留在诊断队列中的
+            // 尾部事件——EventLoop 是异步派发，单活动槽保证当前任务的事件
+            // 是 attach 期间唯一的事件源，但上一任务的 Exit 等事件可能在
+            // 本任务 attach 后才被派发，不排空会串任务误归属。
+            //
+            // 沙箱模式限制：BESQ_SANDBOX=1 时 executor 在 besq-worker
+            // 子进程中运行，诊断事件推送发生在子进程的 DiagnosticsService
+            // 里（沙箱无诊断 IPC 桥回父进程），因此沙箱任务不产生任何
+            // 诊断事件（diagnostics 为空、diag_exit 为 null）。
+            algorithm::DiagnosticsService::instance().flush();
+            auto diag_observer = algorithm::IAlgorithmObserver::create<WebDiagObserver>([this, task](Json event) {
+                // 先序列化 SSE 帧（随后 event 被 move 进 diagnostics）。
+                std::string frame;
+                if (_hub)
+                    frame = sse_frame("diag", event);
                 {
                     std::lock_guard<std::mutex> lock(task->mutex);
-                    if (task->state == TaskState::Cancelled) {
-                        if (_hub) _hub->unsubscribe_all(task->id);
-                        return;
-                    }
+                    if (task->diagnostics.size() >= 500)
+                        task->diagnostics.erase(task->diagnostics.begin());
+                    // exit 事件额外存一份结构化 KV（副本：列表各持一份）。
+                    if (event.has("kind") && event["kind"].as<std::string>() == "exit")
+                        task->diag_exit = event;
+                    task->diagnostics.push_back(std::move(event));
                 }
-                double initial_progress = 0.0;
-                if (_hub) {
-                    // 初始 progress 帧（I-2b）：solve 前的原子快照。
-                    auto prog = _ctx.solve_progress();
-                    initial_progress = prog.progress;
-                    Json obj = Json::object();
-                    obj["type"] = Json("progress");
-                    obj["progress"] = Json(prog.progress);
-                    _hub->publish(task->id, sse_frame("progress", obj));
-                }
-                // 周期性 progress 采样（I-2a）：solve() 阻塞本 worker 期间，短命
-                // 采样线程每 ~200ms 读一次 _ctx.solve_progress()（线程安全原子读，
-                // 专为轮询设计），进度变化即向 hub 发布
-                // {"type":"progress","progress":<p>}。采样线程在 solve() 返回的
-                // 每个退出路径（正常/异常/cancel）上被停止并 join；终态帧
-                // （completed/failed）只会在采样停止后发布。
-                struct SamplerStop {
-                    std::atomic<bool>* flag;
-                    std::thread* th;
-                    void stop() {
-                        if (!flag) return;
-                        flag->store(false, std::memory_order_release);
-                        if (th->joinable()) th->join();  // 采样线程至多晚一帧（200ms 内）
-                        flag = nullptr;                  // 幂等：已停
-                    }
-                    ~SamplerStop() { stop(); }
-                };
-                std::atomic<bool> sampling{true};
-                std::thread sampler;
-                SamplerStop sampler_stop{_hub ? &sampling : nullptr, &sampler};
-                if (_hub) {
-                    sampler = std::thread([this, task, &sampling, initial_progress] {
-                        double last = initial_progress;  // 与初始帧同基准，进度变了才发
-                        for (;;) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                            if (!sampling.load(std::memory_order_acquire)) return;
-                            const auto prog = _ctx.solve_progress();
-                            if (prog.progress == last) continue;
-                            last = prog.progress;
-                            try {
-                                Json obj = Json::object();
-                                obj["type"] = Json("progress");
-                                obj["progress"] = Json(prog.progress);
-                                _hub->publish(task->id, sse_frame("progress", obj));
-                            } catch (...) {
-                                // 采样帧丢失可接受：hub/帧构造不抛，防御兜底。
-                            }
-                        }
-                    });
-                }
-                // ── 算法诊断事件流（T2）──
-                // 观察者必须在 solve() 前注册：executor 在 solve() 内部创建并
-                // start()，事件从算法执行一开始（首个 Progress）就推送。
-                // attach 前先 flush() 排空上一任务可能仍停留在诊断队列中的
-                // 尾部事件——EventLoop 是异步派发，单活动槽保证当前任务的事件
-                // 是 attach 期间唯一的事件源，但上一任务的 Exit 等事件可能在
-                // 本任务 attach 后才被派发，不排空会串任务误归属。
-                //
-                // 沙箱模式限制：BESQ_SANDBOX=1 时 executor 在 besq-worker
-                // 子进程中运行，诊断事件推送发生在子进程的 DiagnosticsService
-                // 里（沙箱无诊断 IPC 桥回父进程），因此沙箱任务不产生任何
-                // 诊断事件（diagnostics 为空、diag_exit 为 null）。
-                algorithm::DiagnosticsService::instance().flush();
-                auto diag_observer =
-                    algorithm::IAlgorithmObserver::create<WebDiagObserver>(
-                    [this, task](Json event) {
-                        // 先序列化 SSE 帧（随后 event 被 move 进 diagnostics）。
-                        std::string frame;
-                        if (_hub) frame = sse_frame("diag", event);
-                        {
-                            std::lock_guard<std::mutex> lock(task->mutex);
-                            if (task->diagnostics.size() >= 500)
-                                task->diagnostics.erase(task->diagnostics.begin());
-                            // exit 事件额外存一份结构化 KV（副本：列表各持一份）。
-                            if (event.has("kind") && event["kind"].as<std::string>() == "exit")
-                                task->diag_exit = event;
-                            task->diagnostics.push_back(std::move(event));
-                        }
-                        if (_hub) _hub->publish(task->id, std::move(frame));
-                    });
-                // Single active slot is enforced above; solve() runs to
-                // completion (or cancel()). The result carries the executor's
-                // real output. solve() 一返回就停采样（join），之后才 format 与
-                // 发布终态帧——进度帧严格先于 completed/failed。
-                auto result = _ctx.solve(request);
-                sampler_stop.stop();
-                // solve() 返回前 exit 事件必已入队（_finalize 在 wait() 内同步
-                // 执行），但 EventLoop 是异步派发——必须 flush() 到派发完成
-                // （含本观察者收到 exit）后再 detach，否则尾部事件会因 detach
-                // 而丢失。flush() 返回时所有已入队事件的 observer 回调均已执行
-                // 完毕，随后 detach 不存在在途回调。
-                algorithm::DiagnosticsService::instance().flush();
-                // 显式 detach，而不是依赖析构自动 detach：DiagnosticsService
-                // 的 _observers 持有本观察者的第二个 shared_ptr，局部变量析构
-                // 只把引用计数 2→1，析构函数（及其中断的自动 detach）根本不会
-                // 运行——不显式 detach 会让观察者永久滞留（长跑服务器累积泄漏，
-                // 且进程退出时单例析构会在 use_count==0 时触发 shared_from_this
-                // 的 bad_weak_ptr → abort）。
-                algorithm::DiagnosticsService::instance().detach_observer(diag_observer);
+                if (_hub)
+                    _hub->publish(task->id, std::move(frame));
+            });
+            // Single active slot is enforced above; solve() runs to
+            // completion (or cancel()). The result carries the executor's
+            // real output. solve() 一返回就停采样（join），之后才 format 与
+            // 发布终态帧——进度帧严格先于 completed/failed。
+            // solve 跑在自包含快照上（P0 锁攻破）：无 gate、无 profile 引用。
+            auto result = _ctx.solve(request, snapshot);
+            sampler_stop.stop();
+            // solve() 返回前 exit 事件必已入队（_finalize 在 wait() 内同步
+            // 执行），但 EventLoop 是异步派发——必须 flush() 到派发完成
+            // （含本观察者收到 exit）后再 detach，否则尾部事件会因 detach
+            // 而丢失。flush() 返回时所有已入队事件的 observer 回调均已执行
+            // 完毕，随后 detach 不存在在途回调。
+            algorithm::DiagnosticsService::instance().flush();
+            // 显式 detach，而不是依赖析构自动 detach：DiagnosticsService
+            // 的 _observers 持有本观察者的第二个 shared_ptr，局部变量析构
+            // 只把引用计数 2→1，析构函数（及其中断的自动 detach）根本不会
+            // 运行——不显式 detach 会让观察者永久滞留（长跑服务器累积泄漏，
+            // 且进程退出时单例析构会在 use_count==0 时触发 shared_from_this
+            // 的 bad_weak_ptr → abort）。
+            algorithm::DiagnosticsService::instance().detach_observer(diag_observer);
+            // format() 走 resolve_effective（ProfileManager 有效视图缓存
+            // 重建，无内部锁）——短暂重新取 gate（ms 级；旧路径是 solve
+            // 全程持锁，秒~分钟级），profile 读写只在此窗口排队。
+            {
+                std::lock_guard<std::mutex> gate_lock(_ctx_gate);
                 result_json = _ctx.format(result, request.mode, "json");
-            }  // _ctx_gate released before the task-state write
+            }
             // Task bookkeeping is NOT gated — commit the result under
             // task->mutex only. A cancel that fired during format() is honored
             // here; the worker must never report a completed task it was asked
@@ -335,11 +374,12 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             {
                 std::lock_guard<std::mutex> lock(task->mutex);
                 if (task->state == TaskState::Cancelled) {
-                    if (_hub) _hub->unsubscribe_all(task->id);
+                    if (_hub)
+                        _hub->unsubscribe_all(task->id);
                     return;
                 }
                 task->state = TaskState::Completed;
-                task->result = result_json;  // copy (not move): result_json is still needed for the SSE frame
+                task->result = result_json; // copy (not move): result_json is still needed for the SSE frame
             }
             if (_hub) {
                 Json obj = Json::object();
@@ -347,7 +387,7 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 try {
                     obj["result"] = Json::parse(result_json);
                 } catch (const JsonException&) {
-                    obj["result"] = Json(result_json);  // keep a valid envelope even if result isn't strict JSON
+                    obj["result"] = Json(result_json); // keep a valid envelope even if result isn't strict JSON
                 }
                 _hub->publish(task->id, sse_frame("completed", obj));
                 _hub->unsubscribe_all(task->id);
@@ -405,7 +445,8 @@ bool WebSolveService::cancel(const std::string& id) {
     {
         std::lock_guard<std::mutex> lock(_tasks_mutex);
         auto it = _tasks.find(id);
-        if (it == _tasks.end()) return false;
+        if (it == _tasks.end())
+            return false;
         task = it->second;
     }
     {
@@ -416,7 +457,7 @@ bool WebSolveService::cancel(const std::string& id) {
             return false;
         task->state = TaskState::Cancelled;
     }
-        _ctx.abort_solve();  // cancel() on the live executor is a safe no-op if idle
+    _ctx.abort_solve(); // cancel() on the live executor is a safe no-op if idle
     // Publish-window retry (same race as the destructor): if the worker is
     // inside BesqContext::solve() before the pipeline published the executor
     // handle, the first abort found nothing.  The retry lands on an Idle
@@ -438,10 +479,9 @@ bool WebSolveService::pause(const std::string& id) {
     }
     {
         std::lock_guard<std::mutex> lock(task->mutex);
-                if (task->state != TaskState::Running)
+        if (task->state != TaskState::Running)
             throw WebHttpError(409, "TASK_NOT_PAUSABLE",
-                               task->state == TaskState::Paused ? "task is already paused"
-                                                                : "task is not running");
+                               task->state == TaskState::Paused ? "task is already paused" : "task is not running");
         task->state = TaskState::Paused;
     }
     // 触发 executor 暂停。与 cancel 相同的发布窗口竞态：executor 句柄未发布时
@@ -466,7 +506,7 @@ bool WebSolveService::resume(const std::string& id) {
     }
     {
         std::lock_guard<std::mutex> lock(task->mutex);
-                if (task->state != TaskState::Paused)
+        if (task->state != TaskState::Paused)
             throw WebHttpError(409, "TASK_NOT_RESUMABLE", "task is not paused");
         task->state = TaskState::Running;
     }
