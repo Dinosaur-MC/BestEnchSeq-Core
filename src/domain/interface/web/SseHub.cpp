@@ -13,14 +13,13 @@ size_t SseHub::shard_of(const std::string& key) {
     return static_cast<size_t>(h % kShards);
 }
 
-SseHub::SubId SseHub::subscribe(const std::string& task_id, FrameFn fn,
-                                bool replay_last) {
+SseHub::SubId SseHub::subscribe(const std::string& task_id, FrameFn fn, bool replay_last) {
     auto& shard = _shards[shard_of(task_id)];
     std::string replay;
     SubId id;
     {
         std::lock_guard<std::mutex> lock(shard.mutex);
-        id = ++_next;   // 原子自增：分片后无全局锁，id 跨片唯一
+        id = ++_next; // 原子自增：分片后无全局锁，id 跨片唯一
         shard.subs[task_id].push_back(Sub{id, fn});
         if (replay_last) {
             auto it = shard.last_frame.find(task_id);
@@ -41,7 +40,8 @@ void SseHub::unsubscribe(const std::string& task_id, SubId id) {
     auto& shard = _shards[shard_of(task_id)];
     std::lock_guard<std::mutex> lock(shard.mutex);
     auto it = shard.subs.find(task_id);
-    if (it == shard.subs.end()) return;
+    if (it == shard.subs.end())
+        return;
     auto& vec = it->second;
     for (auto sit = vec.begin(); sit != vec.end(); ++sit) {
         if (sit->id == id) {
@@ -49,13 +49,14 @@ void SseHub::unsubscribe(const std::string& task_id, SubId id) {
             break;
         }
     }
-    if (vec.empty()) shard.subs.erase(it);
+    if (vec.empty())
+        shard.subs.erase(it);
 }
 
 void SseHub::unsubscribe_all(const std::string& task_id) {
     auto& shard = _shards[shard_of(task_id)];
     std::lock_guard<std::mutex> lock(shard.mutex);
-    shard.subs.erase(task_id);   // 末帧保留：任务收尾后迟到订阅者仍可拿到终态帧
+    shard.subs.erase(task_id); // 末帧保留：任务收尾后迟到订阅者仍可拿到终态帧
 }
 
 void SseHub::clear() {
@@ -73,7 +74,7 @@ void SseHub::clear() {
             frames.swap(shard.last_frame);
         }
         subs.clear();
-        frames.clear();   // 重放帧随清空释放
+        frames.clear(); // 重放帧随清空释放
     }
 }
 
@@ -88,10 +89,12 @@ void SseHub::publish(const std::string& task_id, std::string frame) {
         // 订阅晚于终态发布的客户端仍能拿到 completed/failed 帧。
         shard.last_frame[task_id] = frame;
         auto it = shard.subs.find(task_id);
-        if (it == shard.subs.end()) return;
+        if (it == shard.subs.end())
+            return;
         subs = it->second;
     }
-    for (const auto& sub : subs) sub.fn(task_id, frame);
+    for (const auto& sub : subs)
+        sub.fn(task_id, frame);
 }
 
 size_t SseHub::subscriber_count(const std::string& task_id) const {

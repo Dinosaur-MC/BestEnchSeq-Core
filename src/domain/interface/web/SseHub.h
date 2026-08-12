@@ -21,8 +21,7 @@ public:
     /// replay_last=true：订阅时立即重放该任务最近一帧——根治"订阅晚于发布 →
     /// 帧丢失"竞态（终态帧对迟到订阅者可见）。仅任务键语义使用（终态帧
     /// 重放有意义）；实时流键（如 logs）不得开启——旧帧跨订阅者泄漏。
-    SubId subscribe(const std::string& task_id, FrameFn fn,
-                    bool replay_last = false);
+    SubId subscribe(const std::string& task_id, FrameFn fn, bool replay_last = false);
 
     /// 取消单个订阅；无副作用当 task/订阅不存在。
     void unsubscribe(const std::string& task_id, SubId id);
@@ -60,7 +59,7 @@ private:
         std::unordered_map<std::string, std::string> last_frame;
     };
     static constexpr size_t kShards = 64;
-    static size_t shard_of(const std::string& key);   // FNV-1a 取模 kShards
+    static size_t shard_of(const std::string& key); // FNV-1a 取模 kShards
 
     std::array<Shard, kShards> _shards;
     std::atomic<SubId> _next{0};
