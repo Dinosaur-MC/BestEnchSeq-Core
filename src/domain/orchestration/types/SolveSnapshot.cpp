@@ -16,16 +16,22 @@ class EnchantCollector {
 public:
     EnchantCollector(const EnchantmentRegistry& src, EnchantmentRegistry& out) : _src(src), _out(out) {}
 
-    void collect(const NSID& id) {
-        if (_seen.count(id))
-            return;
+    /// 收集魔咒（含 exclusive_set 闭包）。level >= 0 表示请求显式引用的等级
+    /// ——构建即校验：超 max_level 抛出。闭包成员以 level = -1 传入（仅拉入
+    /// 冲突矩阵，无等级语义，不校验）。lookup/校验先于 _seen 去重：即使某
+    /// 魔咒先经闭包入快照，其后的显式请求等级仍会被校验。
+    void collect(const NSID& id, int32_t level) {
         auto it = _src.find(id);
         if (it == _src.end())
             throw std::runtime_error(tr_fmt("cli.err.unknown_ench", id.str()));
+        if (level > it->max_level)
+            throw std::runtime_error(tr_fmt("main.err.ench_level_exceeds_max", id.str(), level, it->max_level));
+        if (_seen.count(id))
+            return;
         _seen.insert(id);
         _out.insert(*it);
         for (const NSID& member : it->exclusive_set)
-            collect(member);
+            collect(member, -1);
     }
 
 private:
@@ -47,17 +53,25 @@ SolveSnapshot build_solve_snapshot(const SolveRequest& request, const Profile& e
         snap.eq().insert(*eq_it);
     }
 
-    // 2. 目标魔咒 + payload 魔咒（exclusive_set 闭包）
+    // 2. 目标魔咒 + payload 魔咒（exclusive_set 闭包）；inventory 物品的
+    //    装备定义一并收集（与目标装备路径同款校验）
     EnchantCollector collector(effective.ench(), snap.ench());
     for (const Ench& e : request.target_item.enchantments)
-        collector.collect(e.id);
+        collector.collect(e.id, e.level);
     if (const auto* direct = std::get_if<DirectPayload>(&request.payload)) {
         for (const Ench& e : direct->source_enchantments)
-            collector.collect(e.id);
+            collector.collect(e.id, e.level);
     } else if (const auto* inv = std::get_if<InventoryPayload>(&request.payload)) {
-        for (const Item& item : inv->extra_items)
+        for (const Item& item : inv->extra_items) {
+            if (!item.is_book()) {
+                auto eq_it = effective.eq().find(item.id);
+                if (eq_it == effective.eq().end())
+                    throw std::runtime_error(tr_fmt("cli.err.unknown_equipment", item.id.str()));
+                snap.eq().insert(*eq_it);
+            }
             for (const Ench& e : item.enchantments)
-                collector.collect(e.id);
+                collector.collect(e.id, e.level);
+        }
     }
 
     // 3. tag 子集：收集到的魔咒 supported_items 中的 `#` 引用
