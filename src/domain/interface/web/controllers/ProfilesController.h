@@ -10,9 +10,9 @@ namespace web {
 /// registries. Replaces the old ApiProfiles resource with full REST semantics
 /// (web-http-modernize design §6.1/§8.1).
 ///
-/// Every handler that touches _ctx serializes against the solve worker by
-/// holding _gate FIRST — the same mutex WebSolveService holds for its whole
-/// _ctx window (ProfileManager's effective-view cache is mutable and unlocked).
+/// Every handler that touches _ctx holds _gate FIRST — it guards BesqContext
+/// business-resource access, mutually exclusive with the solve worker's
+/// snapshot build / format (the solve itself runs lock-free on the snapshot).
 class ProfilesController : public HttpController<ProfilesController> {
 public:
     using Self = ProfilesController;

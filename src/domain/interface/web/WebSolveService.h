@@ -36,12 +36,13 @@ struct TaskStatus {
 /// The BesqContext must outlive this service; workers hold a reference to it.
 ///
 /// `ctx_gate` is the web-layer context gate (owned by WebModule). The solve
-/// worker holds it for its ENTIRE `_ctx` access window (build_request + solve
-/// + format), and WebModule's profile routes hold it around every ApiProfiles
-/// call. It therefore serializes a running solve against profile mutations
-/// arriving on the server thread — both sides mutate ProfileManager's
-/// unlocked effective-view cache via resolve_effective(), so overlapping
-/// access would be a data race.
+/// worker holds it only briefly — while building the SolveSnapshot and while
+/// formatting the result; the solve itself runs lock-free on the
+/// self-contained snapshot (zero profile references). Format needs the gate
+/// because resolve_effective() rebuilds ProfileManager's unlocked
+/// effective-view cache. WebModule's profile routes hold the same gate around
+/// every profile mutation, so snapshot build / format and profile mutations
+/// never overlap.
 class WebSolveService {
 public:
     /// `hub` is an optional SSE frame sink (Task 14: SseHub). Null keeps the

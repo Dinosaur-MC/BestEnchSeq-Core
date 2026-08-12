@@ -76,14 +76,14 @@ Response AlgorithmController::unload(const HttpRequest&, const PathParams&, cons
     }
     // A running solve may be holding the plugin's executor instance — refuse
     // to unload while one is active (single-slot invariant).  Checked BEFORE
-    // the gate on purpose: the solve worker holds the gate for its whole _ctx
-    // window, so a gate-first check could only ever observe a completed task
-    // (the 409 would depend on racing the worker's first gate acquisition).
-    // The check reads WebSolveService task state (mutex-guarded) and is
-    // advisory — the mutation below is still serialized on the gate, and a
-    // solve starting between check and mutation fails cleanly (its
-    // create_executor happens after ours, and the loader rejects the unloaded
-    // algorithm).
+    // the gate: the worker no longer holds the gate for the whole solve (P0
+    // snapshot decoupling — it only takes it briefly for snapshot build and
+    // format), so a gate-first check would block behind those µs/ms windows
+    // only to reach a decision that's already made. has_active() reads task
+    // state (mutex-guarded) and the check is advisory — the mutation below is
+    // still serialized on the gate, and a solve starting between check and
+    // mutation fails cleanly (its create_executor happens after ours, and the
+    // loader rejects the unloaded algorithm).
     if (_svc.has_active())
         throw WebHttpError(409, "TASK_ACTIVE", "cannot unload algorithm while a solve is running");
     // Same gate as list(): unload_algorithm() mutates the loader registry.

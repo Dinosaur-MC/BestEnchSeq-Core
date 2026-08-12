@@ -16,7 +16,8 @@ struct Reactor::Impl {
     OnClosed on_closed;                                         // fd 关闭 → poller 注销
     OnInterest on_interest;                                     // fd → wants_write → poller 写兴趣
     std::unordered_map<int, std::shared_ptr<Connection>> conns; // 仅经 mutex 访问
-    std::mutex mutex;                                           // 保护 conns 跨线程增删
+    std::mutex mutex; // 保护 conns 跨线程增删；评估后保留（每 reactor 一把、µs 级临界区，
+                      // 彻底消灭需跨线程两跳委托，收益 < 风险，见 lock-attack 设计文档 §3.3）
 };
 
 Reactor::Reactor(Handler h) : _impl(std::make_unique<Impl>()) {

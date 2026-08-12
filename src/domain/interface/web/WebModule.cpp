@@ -46,10 +46,9 @@ std::string log_sse_frame(const LogRecord& e) {
 
 } // namespace
 
-/// WebModule 会话状态。`_ctx_gate` 序列化 solve worker（WebSolveService 持有它
-/// 覆盖整个 _ctx 访问窗口）与 server 线程上的 profile 变更——两侧都经
-/// resolve_effective() 触碰 ProfileManager 未加锁的有效视图缓存。`_solve` 声明在
-/// `_ctx_gate`/`_hub` 之后，ctor 里把两者按引用传给 WebSolveService。
+/// WebModule 会话状态。`_ctx_gate` 序列化 profile 变更与 solve worker 的
+/// 快照构建/format；solve 本体在 SolveSnapshot 上执行、不持 gate。`_solve`
+/// 声明在 `_ctx_gate`/`_hub` 之后，ctor 里把两者按引用传给 WebSolveService。
 struct WebModule::Impl {
     BesqContext& _ctx;
     std::mutex _ctx_gate;
