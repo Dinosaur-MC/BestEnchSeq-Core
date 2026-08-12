@@ -155,6 +155,9 @@ bool WebSolveService::has_active() const {
 std::string WebSolveService::start(const WebTaskDto& dto) {
     std::shared_ptr<Task> task;
     std::string id;
+    // reap 收集区：锁内填充待回收任务，锁外 join+释放（见下方 reap 循环与
+    // 锁区后的 join 循环）——任务出表后其引用由 to_reap 持有，生命周期明确。
+    std::vector<std::shared_ptr<Task>> to_reap;
     {
         std::lock_guard<std::mutex> lock(_tasks_mutex);
         // Inline the active check — has_active() would re-lock the same mutex.
@@ -167,8 +170,11 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
         }
         // Reap terminal tasks so the table stays bounded (long-lived server;
         // a finished task's result is no longer needed once a new solve starts).
-        // A task is erased ONLY after its worker has fully exited (`finished`)
-        // and been joined — a terminal state alone is insufficient, because the
+        // 锁内只收集待回收任务；join/释放全部在锁外完成——持锁跨 join 是坏
+        // 味道：取消路径下 worker 收尾可能拉长 loop 线程（submit 调用方）的
+        // 持锁时间。任务状态在 worker 退出后不再变化，锁外二次确认恒真。
+        // A task is collected ONLY after its worker has fully exited
+        // (`finished`) — a terminal state alone is insufficient, because the
         // worker may still be unwinding (e.g. format() after setting Completed,
         // or a cancelled solve() returning). Erasing earlier would let the
         // worker's last shared_ptr release destroy its own still-joinable
@@ -179,18 +185,11 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             {
                 std::lock_guard<std::mutex> tl(t->mutex);
                 // Paused 同 Running 保留（batch C）：非终态，不能回收。
-                if (t->state == TaskState::Running || t->state == TaskState::Paused) {
-                    ++it;
-                    continue;
-                }
+                if (t->state == TaskState::Running || t->state == TaskState::Paused) { ++it; continue; }
             }
-            if (!t->finished.load(std::memory_order_acquire)) {
-                ++it;
-                continue;
-            }
-            if (t->worker.joinable())
-                t->worker.join();
-            it = _tasks.erase(it);
+            if (!t->finished.load(std::memory_order_acquire)) { ++it; continue; }
+            to_reap.push_back(t);
+            it = _tasks.erase(it);       // 先出表（锁内），引用由 to_reap 持有
         }
         task = std::make_shared<Task>();
         task->numeric_id = ++_next_id;
@@ -199,12 +198,19 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
         _tasks[id] = task;
     }
 
+    // join 锁外执行：finished==true 已保证 worker 完全退出，join 即时返回；
+    // to_reap 随本函数结束在锁外析构（Task 已 join，shared_ptr 释放安全）。
+    for (auto& t : to_reap)
+        if (t->worker.joinable())
+            t->worker.join();
+
     // Worker thread runs the blocking solve; it outlives this call. The thread
     // is joined by the destructor (not detached) so no worker outlives *this.
     task->worker = std::thread([this, task, dto]() mutable {
         // DoneGuard sets `finished` on every exit path (early cancel returns
-        // included), so the reap loop can safely join + erase this task once
-        // the worker has stopped touching *this/_ctx.
+        // included), so the start() reap pass can safely collect (锁内) and
+        // join + erase this task once the worker has stopped touching
+        // *this/_ctx.
         struct DoneGuard {
             std::shared_ptr<Task> t;
             ~DoneGuard() { t->finished.store(true, std::memory_order_release); }
