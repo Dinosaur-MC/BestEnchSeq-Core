@@ -54,7 +54,8 @@ private:
     void poller_main();         // Poller 线程主体
     void poll_once();           // 一轮 select：accept + 连接就绪投递 + 超时清扫
     void sweep_expired();       // 每 ~1s：把每个连接的超时复查投递给归属 Reactor
-    void unregister_fd(int fd); // Reactor 关闭连接时调用（poller 注销 + 延迟关闭入队）
+    void unregister_fd(int fd); // Reactor 关闭连接时调用（推事件：poller 注销 + 延迟关闭入队）
+    void drain_poll_events();   // 注册表写事件 drain（poller 每轮开头独占应用；关机兜底）
     void drain_close_queue();   // 关闭延迟队列（socket close 唯一归属；poller 每轮 + 关机）
     void set_fd_interest(int fd, bool want_write);
 

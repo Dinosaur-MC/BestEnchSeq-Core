@@ -138,8 +138,7 @@ std::string timed_exchange(HttpServer& server, const std::string& raw, int64_t& 
         sock_send(c, raw, 3000);
         sock_recv(c, body, 64 * 1024, 3000);
         sock_close(c);
-        last_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+        last_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         if (!body.empty())
             break;
     }
@@ -403,8 +402,9 @@ void test_sse_events(HttpServer& server) {
 // 间隔连续重锁（自旋），Reactor 线程的 unregister_fd/set_fd_interest 在 futex
 // 唤醒竞速中连续落败 → 被饿死数秒（WSL 实测 ≥3s），SSE 帧（排队在饿死的
 // drive 之后）整体冻结、客户端 3s 内收不到终态帧（旧代码 WSL 5/5 失败）。
-// 修复：快照 fd 集合持锁构建 → 无锁 select → 重取锁按身份校验投递；socket
-// 关闭延迟到 poller 线程（close_queue drain），快照 fd 永不提前关闭。
+// 修复：注册表写操作改事件队列（loop 线程推事件、poller 每轮 drain 独占应用），
+// pmutex 整体删除；socket 关闭延迟到 poller 线程（close_queue drain），快照 fd
+// 永不提前关闭。
 //
 // 本用例把回归钉死：SSE 流开启期间连续开关 32 条短连接（每条约 1 个 FIN
 // 进入 poller 的 select 集合——正是旧实现的饿死触发器），终态帧必须在 2s
@@ -441,8 +441,7 @@ void test_sse_under_close_storm(HttpServer& server) {
 
     // 终态帧必须准时到达（2s 预算；solve ~100ms + 风暴 ~100ms 后余量充足）。
     recv_until(c, got, "event: completed", 200);
-    expect(got.find("event: completed") != std::string::npos,
-           "SSE completed frame delivered during close-storm");
+    expect(got.find("event: completed") != std::string::npos, "SSE completed frame delivered during close-storm");
     sock_close(c);
 }
 

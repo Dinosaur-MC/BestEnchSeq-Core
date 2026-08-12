@@ -71,10 +71,10 @@ public:
     bool process(const Router& router);
     /// 逻辑关闭：翻 _alive + 触发 on_close 回调，不关 socket。服务器路径的
     /// sock_close 由 HttpServer 延迟关闭队列（poller 线程 drain）执行——严格
-    /// 晚于 Reactor::remove_connection 的注销（on_closed → unregister_fd，
-    /// pmutex 内擦 home_of/want_write + 关闭入队）与 detach_fd()，保证 select
-    /// 快照中的 fd 永不提前关闭、已关闭句柄不残留注册表。仅单元测试直调/从未
-    /// 注册的连接由 ~Connection 自行关闭（未 detach）。
+    /// 晚于 Reactor::remove_connection 的注销（on_closed → unregister_fd 推事件，
+    /// poller drain 时独占应用：擦 home_of/want_write + 关闭入队）与 detach_fd()，
+    /// 保证 select 快照中的 fd 永不提前关闭、已关闭句柄不残留注册表。仅单元测试
+    /// 直调/从未注册的连接由 ~Connection 自行关闭（未 detach）。
     void close();
 
     /// 升级为 SSE 流模式。返回 true 表示已挂载（连接存活且尚未流模式），否则 false。

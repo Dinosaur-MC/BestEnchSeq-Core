@@ -2,6 +2,7 @@
 
 #include "AccessLog.h"
 #include "common/log/log.hpp"
+#include "common/utils/queue/SegmentedMPSCQueue.hpp"
 #include "Connection.h" // 注册表所有者 alive() 检查（仅弱指针无法识别已逻辑关闭的连接）
 #include "Middleware.h"
 #include "Reactor.h"
@@ -9,7 +10,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -99,16 +99,31 @@ struct HttpServer::Impl {
     std::atomic<size_t> next_reactor{0}; // round-robin 归属游标
     size_t workers = 2;
 
-    // poller 注册表（Poller 线程 + Reactor 线程经 pmutex 共享）
-    std::mutex pmutex;
+    // poller 注册表（Poller 线程独占读写；loop 线程只经 poll_events 事件队列写，
+    // 每轮 poll_once 开头 drain 独占应用 → 无锁，pmutex 已整体删除）
     std::unordered_map<int, Registration> home_of; // fd → {归属, 所有者}
     std::unordered_map<int, bool> want_write;      // fd → 是否监听写就绪
-    // 延迟关闭队列（socket close 的唯一归属）：Reactor 线程在 unregister_fd 里
-    // 入队（pmutex 内），poller 线程每轮开头清空。保证 select 期间快照中的 fd
-    // 永不提前关闭（无锁 select 的 EBADF 防线，见 poll_once 注释）。
+    // 延迟关闭队列（socket close 的唯一归属）：drain_poll_events 应用 Unregister
+    // 事件时入队，poller 线程每轮开头清空。保证 select 期间快照中的 fd 永不提前
+    // 关闭（无锁 select 的 EBADF 防线，见 poll_once 注释）。
     std::vector<int> close_queue;
     // 超时清扫节拍（仅 poller 线程读写，无需原子）
     std::chrono::steady_clock::time_point last_sweep{std::chrono::steady_clock::now()};
+
+    /// loop 线程 → poller 的注册表写事件（锁自由队列；poller 独占应用 →
+    /// pmutex 可整体删除：poller 是 home_of/want_write/close_queue 唯一
+    /// 读者+写者）。
+    struct PollEvent {
+        enum class Op : uint8_t { Unregister, Interest } op;
+        int fd;
+        bool want_write = false;
+    };
+    /// 队列类型：loop 线程（多个 Reactor 各自推）→ poller 单消费者。
+    /// SegmentedMPSCQueue 是 Multi-Producer Single-Consumer（多生产者单消费者，
+    /// 见 common/utils/queue/SegmentedMPSCQueue.hpp 头部注释）——多 Reactor 推 +
+    /// poller 单读正合适（设计文档 §3.2 指定复用）。try_push 恒真（无界），写
+    /// 事件永不被丢弃——丢弃 Unregister 会让死 fd 残留 select 自旋风暴。
+    SegmentedMPSCQueue<PollEvent> poll_events;
 
     std::vector<std::unique_ptr<Reactor>> reactors;
 
@@ -212,8 +227,11 @@ void HttpServer::run() {
         r->stop();
     }
     impl.reactors.clear();
-    // poller 已退出（上面 poller.join() 返回）：close_all 入队的延迟关闭不再有
-    // poller drain——此处兜底清空（幂等：每 fd 至多入队一次，swap 即清）。
+    // poller 已退出（上面 poller.join() 返回）且各 loop 线程已 join：close_all
+    // 推入的注销事件不再有 poller drain——此处兜底应用（Unregister → 延迟关闭
+    // 入队），随后清空关闭队列（幂等：每 fd 至多入队一次，swap 即清）。此时
+    // 队列单消费者约束成立：全部生产者（loop 线程）已 join。
+    drain_poll_events();
     drain_close_queue();
 }
 
@@ -225,8 +243,12 @@ void HttpServer::poller_main() {
 void HttpServer::poll_once() {
     auto& impl = *_impl;
 
-    // ① 延迟关闭队列清空（socket close 唯一归属，见 unregister_fd 注释）：
-    // 先于快照构建——本轮的 select 快照只包含仍打开（未入队）的 fd。
+    // ① 注册表写事件 drain + 延迟关闭队列清空（socket close 唯一归属）：
+    // 先于快照构建——本轮的 select 快照只包含仍打开（未注销）的 fd。
+    // 事件由 loop 线程（unregister_fd / set_fd_interest）推入锁自由队列，
+    // poller 独占应用：Unregister → 擦注册 + 关闭入队；Interest → 更新写兴趣。
+    // drain 在每轮最前、快照在其后构建 → 顺序天然一致，快照内读无需锁。
+    drain_poll_events();
     drain_close_queue();
 
     // ② 超时清扫（I-3）：每 ~1s 复查所有连接——独立于 select 结果，空闲服务器
@@ -239,17 +261,17 @@ void HttpServer::poll_once() {
         impl.last_sweep = sweep_now;
     }
 
-    // ③ 快照构建（pmutex 内，µs 级）：fd 列表 + 所有者身份 + 写兴趣，随后
-    // 立即释放锁。
+    // ③ 快照构建（无锁）：fd 列表 + 所有者身份 + 写兴趣。
     //
-    // 锁范围修复（2026-08-09，根因：锁饿死）：旧实现全程持 pmutex 跨 select——
-    // 对端 FIN/未读数据使 select 每轮立即就绪（就绪 fd 未被消费则永不超时），
-    // poller 以微秒间隔连续重锁，Reactor 线程的 unregister_fd/set_fd_interest
-    // 在 futex 唤醒竞速中连续落败 → 连接关闭/写兴趣更新被饿死数秒（WSL 观测
-    // 3s+，SSE 帧送达随之整体冻结）。现改为：快照持有 shared_ptr 身份 → 无锁
-    // select → 重取锁后按"快照身份 == 注册表现况"双重校验再投递。快照中的 fd
-    // 在本轮 select 期间绝不被关闭（关闭延迟到下一轮 ① drain），故无锁 select
-    // 不会对已关闭 fd 执行（EBADF 防线）。
+    // 注册表由 poller 独占读写（loop 线程只经 ① 的事件队列写）——快照构建、
+    // sweep、drain 全部无锁。历史背景（2026-08-09，根因：锁饿死）：旧实现全程
+    // 持 pmutex 跨 select——对端 FIN/未读数据使 select 每轮立即就绪（就绪 fd 未
+    // 被消费则永不超时），poller 以微秒间隔连续重锁，Reactor 线程的 unregister_
+    // fd/set_fd_interest 在 futex 唤醒竞速中连续落败 → 连接关闭/写兴趣更新被饿死
+    // 数秒（WSL 观测 3s+，SSE 帧送达随之整体冻结）。该根因已随 pmutex 删除从
+    // 结构上消失。快照持有 shared_ptr 身份 → 无锁 select → 投递前按"快照身份
+    // == 注册表现况"双重校验。快照中的 fd 在本轮 select 期间绝不被关闭（关闭
+    // 延迟到下一轮 ① drain），故无锁 select 不会对已关闭 fd 执行（EBADF 防线）。
     struct PollEntry {
         int fd;
         std::shared_ptr<Connection> owner; // 身份快照（fd 复用检测）
@@ -260,7 +282,6 @@ void HttpServer::poll_once() {
     entries.reserve(kMaxPolled);
     int listener_fd = -1;
     {
-        std::lock_guard lk(impl.pmutex);
         listener_fd = impl.listener.fd();
         for (auto it = impl.home_of.begin(); it != impl.home_of.end();) {
             const int fd = it->first;
@@ -308,9 +329,9 @@ void HttpServer::poll_once() {
     if (!impl.running.load(std::memory_order_acquire))
         return; // stop 发生在 select 阻塞期 → 直接退出
 
-    // ⑤ 重取锁：accept + 就绪投递（快照身份校验，杜绝 fd 复用串扰）。
-    std::lock_guard lk(impl.pmutex);
-
+    // ⑤ 无锁：accept + 就绪投递（poller 独占注册表；快照身份校验杜绝 fd 复用
+    // 串扰）。
+    //
     // ⑤a 监听 fd 就绪 → accept 全部待连接 → round-robin 分片归属。
     if (listener_fd >= 0 && FD_ISSET(listener_fd, &rfds)) {
         // wait_ready(0) 非阻塞探测：无待连接即停，避免阻塞 accept 挂死 poll 循环。
@@ -369,10 +390,9 @@ void HttpServer::poll_once() {
 
 void HttpServer::sweep_expired() {
     auto& impl = *_impl;
-    // 持 pmutex 遍历注册表：与 Reactor 的 unregister_fd（on_closed → 注销）串行化，
-    // 保证不对已注销/已关闭的 fd 投递。投递本身（loop.post）是锁无关操作，不构成
-    // 锁序环（poller: pmutex → 队列；Reactor: 队列消费 → pmutex，队列锁不跨任务持有）。
-    std::lock_guard lk(impl.pmutex);
+    // 注册表由 poller 独占读写（loop 线程只经事件队列写）——遍历无需锁；投递
+    // 本身（loop.post）是锁无关操作。已注销/已关闭的 fd 在 ① drain 时已从注册
+    // 表擦除，不会在这里被投递。
     for (auto it = impl.home_of.begin(); it != impl.home_of.end();) {
         auto sp = it->second.owner.lock();
         if (!sp || !sp->alive()) {
@@ -388,28 +408,45 @@ void HttpServer::sweep_expired() {
 void HttpServer::unregister_fd(int fd) {
     if (!_impl)
         return;
-    std::lock_guard lk(_impl->pmutex);
-    _impl->home_of.erase(fd);
-    _impl->want_write.erase(fd);
-    // 不在此关 socket：socket 关闭延迟到 poller 线程的 close_queue drain——
-    // 注册表注销必须无条件执行（防 select 对已拆除连接的 fd 持续自旋投递 →
-    // 队列堆积饿死其余连接）；而 select 的 fd 快照可能仍引用本 fd，若在
-    // Reactor 线程立即关闭会命中"无锁 select 对已关闭 fd"竞态（EBADF）。
+    // 推事件（锁自由队列，不持锁）：poller 每轮 ① drain 时独占应用——擦注册 +
+    // 关闭入队。socket 不在 loop 线程关闭：select 的 fd 快照可能仍引用本 fd，
+    // 若在 Reactor 线程立即关闭会命中"无锁 select 对已关闭 fd"竞态（EBADF）。
     // 延迟关闭保证快照中的 fd 在本轮 select 期间永不被关闭。关闭严格晚于
     // 注销（安全顺序），且由 poller 单线程执行、每 fd 至多一次（注销是
-    // 身份校验过的幂等路径，见 Reactor::remove_connection）。
-    _impl->close_queue.push_back(fd);
+    // 身份校验过的幂等路径，见 Reactor::remove_connection）。事件迟到时以
+    // poller 应用时的注册表现况为准（erase 幂等，fd 复用安全）。
+    _impl->poll_events.try_push(Impl::PollEvent{Impl::PollEvent::Op::Unregister, fd});
+}
+
+/// 注册表写事件 drain（poller 每轮开头独占应用；关机兜底）。
+void HttpServer::drain_poll_events() {
+    if (!_impl)
+        return;
+    auto& impl = *_impl;
+    // 独占应用（poller 单消费者；shutdown 兜底在全部生产者 join 后调用）。
+    // 同 fd 事件按推入序应用（FIFO）：Interest 先于 Unregister 者先更新后擦除；
+    // Unregister 之后到达的 Interest 因 fd 已擦除而被忽略——与注册表现况一致。
+    Impl::PollEvent ev;
+    while (impl.poll_events.try_pop(ev)) {
+        if (ev.op == Impl::PollEvent::Op::Unregister) {
+            impl.home_of.erase(ev.fd);
+            impl.want_write.erase(ev.fd);
+            impl.close_queue.push_back(ev.fd); // 关闭延迟到本轮 drain_close_queue
+        } else {                               // Interest
+            auto it = impl.want_write.find(ev.fd);
+            if (it != impl.want_write.end())
+                it->second = ev.want_write; // 未注册的 fd（已注销/未准入）：忽略
+        }
+    }
 }
 
 void HttpServer::drain_close_queue() {
     if (!_impl)
         return;
     auto& impl = *_impl;
+    // poller 独占（或关机兜底时全线程已 join）：无锁 swap。
     std::vector<int> fds;
-    {
-        std::lock_guard lk(impl.pmutex);
-        fds.swap(impl.close_queue);
-    }
+    fds.swap(impl.close_queue);
     for (int fd : fds)
         sock_close(fd);
 }
@@ -417,10 +454,9 @@ void HttpServer::drain_close_queue() {
 void HttpServer::set_fd_interest(int fd, bool want_write) {
     if (!_impl)
         return;
-    std::lock_guard lk(_impl->pmutex);
-    auto it = _impl->want_write.find(fd);
-    if (it != _impl->want_write.end())
-        it->second = want_write;
+    // 推事件（锁自由队列，不持锁）：poller 每轮 ① drain 时独占应用——写兴趣
+    // 更新最迟下一轮 select 生效（≤ kPollTimeoutMs）。
+    _impl->poll_events.try_push(Impl::PollEvent{Impl::PollEvent::Op::Interest, fd, want_write});
 }
 
 HttpServer::~HttpServer() {
@@ -433,7 +469,8 @@ HttpServer::~HttpServer() {
             r->stop();
         }
     _impl->reactors.clear();
-    drain_close_queue(); // run() 未走（start 后直接析构）时的兜底
+    drain_poll_events(); // run() 未走（start 后直接析构）时的兜底：应用残余注销事件
+    drain_close_queue(); // 同上：清空延迟关闭队列
 }
 
 } // namespace web

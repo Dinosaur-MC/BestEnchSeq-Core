@@ -1,12 +1,12 @@
 #include "Reactor.h"
+#include "common/utils/EventLoop.hpp"
+#include "Connection.h"
 #include "Socket.h"
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
-#include "common/utils/EventLoop.hpp"
-#include <mutex>
-#include "Connection.h"
 
 namespace web {
 
@@ -60,9 +60,7 @@ std::shared_ptr<Connection> Reactor::add_connection(int fd) {
         // 捕获自身 shared_ptr 形成环导致连接永不析构。
         conn->set_frame_sink([this, weak = std::weak_ptr<Connection>(conn)](std::string f) {
             if (auto sp = weak.lock())
-                _impl->loop.post([sp, f = std::move(f)]() mutable {
-                    sp->push_sse_frame(std::move(f));
-                });
+                _impl->loop.post([sp, f = std::move(f)]() mutable { sp->push_sse_frame(std::move(f)); });
         });
         _impl->conns.emplace(fd, conn);
     }
@@ -92,10 +90,10 @@ void Reactor::remove_connection(int fd, const std::shared_ptr<Connection>& conn)
     // poller 的 alive 注册检查放行 → 残留注册让 select 无限自旋投递 MISS 洪泛
     // 饿死其他连接，且析构延迟导致关闭延迟、对端收不到 EOF。
     conn->close();
-    // 注销（pmutex 内擦 home_of/want_write + 延迟关闭入队）→ 卸下 fd（析构不再
-    // 关 socket，关闭权归 poller 的 close_queue drain）→ conns.erase（对象析构）。
-    // 注销先于关闭（安全顺序）；socket 关闭是 poller 线程的唯一职责（延迟到
-    // 下一轮 select 快照构建前，快照 fd 永不被提前关闭）。
+    // 注销（on_closed → 推事件：poller drain 时擦 home_of/want_write + 延迟关闭
+    // 入队）→ 卸下 fd（析构不再关 socket，关闭权归 poller 的 close_queue drain）
+    // → conns.erase（对象析构）。注销先于关闭（安全顺序）；socket 关闭是 poller
+    // 线程的唯一职责（延迟到下一轮 select 快照构建前，快照 fd 永不被提前关闭）。
     if (_impl->on_closed)
         _impl->on_closed(fd);
     conn->detach_fd();
@@ -126,16 +124,16 @@ void Reactor::check_timeout(int fd) {
         }
         auto act = conn->sweep_check(std::chrono::steady_clock::now());
         switch (act) {
-            case Connection::SweepAction::Heartbeat:
-                // 心跳 flush：空闲 SSE 流注入 `: ping`；写失败 → drain_out 关闭
-                // （对端断开检测）。驱动 connection 自身状态机，无锁需求。
-                conn->push_sse_frame();
-                break;
-            case Connection::SweepAction::Close:
-                remove_connection(fd, conn);  // 注销（poller）→ 关闭 socket → on_close
-                break;
-            case Connection::SweepAction::None:
-                break;
+        case Connection::SweepAction::Heartbeat:
+            // 心跳 flush：空闲 SSE 流注入 `: ping`；写失败 → drain_out 关闭
+            // （对端断开检测）。驱动 connection 自身状态机，无锁需求。
+            conn->push_sse_frame();
+            break;
+        case Connection::SweepAction::Close:
+            remove_connection(fd, conn); // 注销（poller）→ 关闭 socket → on_close
+            break;
+        case Connection::SweepAction::None:
+            break;
         }
     });
 }
@@ -149,7 +147,7 @@ void Reactor::close_all() {
     }
     for (auto& [fd, conn] : conns) {
         if (_impl->on_closed)
-            _impl->on_closed(fd); // pmutex 内注销 + 延迟关闭入队（先于关闭，安全顺序）
+            _impl->on_closed(fd); // 推事件（poller 独占应用：注销 + 延迟关闭入队；先于关闭，安全顺序）
         conn->detach_fd();        // 析构不再关 socket——关闭权归 close_queue drain
     }
     std::lock_guard lk(_impl->mutex);
