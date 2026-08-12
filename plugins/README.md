@@ -71,7 +71,7 @@ rm -rf build/plugins && cmake -S plugins -B build/plugins -DCMAKE_BUILD_TYPE=<�
 
 ```bash
 # CLI 参数
-./build/bin/besq --algo-dir build/plugins --algorithm greedy \
+./build/bin/besq --algo-dir build/plugins --algorithm astar \
   --target diamond_sword --source "sharpness=5"
 
 # 环境变量

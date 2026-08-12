@@ -10,7 +10,7 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 - [x] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
 - [x] Support third-party/custom enchantments by editing custom enchantment sheet
 - [x] Support third-party/custom equipments by editing custom equipment sheet
-- [x] Pluggable algorithm strategies: hamming, dfs, astar, dp_merge, plus external plugins
+- [x] Pluggable algorithm strategies: hamming, dp_merge, bb_dp (built-in), plus external plugins (astar, dfs, idastar, diff_first, penalty_balance)
 - [x] Asynchronous execution with pause/resume/cancel and streaming progress
 - [x] Moddable forge engine via IForgeEngine virtual interface
 - [x] Profile-based data management with versioning, branching, merging
@@ -20,11 +20,11 @@ A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your encha
 - [x] Built-in + plugin algorithm strategies
 - [x] Binary checkpointing for long-running searches
 - [x] Input validation + EnchReg pruning via CompactAdapter::apply()
-- [ ] Optionally hosting a RESTful API service for external applications
+- [x] Local Web GUI (`besq-gui`) exposing a REST API + SSE event streams over the same core (a C ABI is also available via `include/besq/besq.h`)
 
 ### Quick Start
 
-**Requirements:** C++20 toolchain (Clang 15+), CMake 3.20+, Ninja.
+**Requirements:** C++20 toolchain (Clang 15+ or MSVC on Windows), CMake 3.25+, Ninja.
 The project uses C++20 features unconditionally — concepts, `if constexpr`,
 `std::jthread`, atomic `wait`/`notify`, etc. No feature-test macros or
 fallbacks. C++17 or earlier is not supported.
@@ -47,6 +47,12 @@ besq --target "diamond_sword[sharpness=5]" --source "sharpness=5"
 besq --profile builtin:vanilla --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 besq --profile-dir data/tests/profiles --profile modded_sword --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 besq --publish builtin:vanilla --publish-version 1.0 --publish-tag stable --output out/vanilla.json
+
+# External strategy plugins (astar/dfs/idastar/diff_first/penalty_balance)
+# 1. Build the host project first, then build plugins against the host build tree
+cmake -S plugins -B build/plugins -DCMAKE_PREFIX_PATH=$PWD/build
+cmake --build build/plugins
+besq --algo-dir build/plugins --list-algorithms
 ```
 
 Alternatively, invoke directly from the build directory:
@@ -64,9 +70,10 @@ cd build && ctest --output-on-failure
 ### Benchmark
 
 ```bash
-./build/bin/forge_benchmark --group sword --algo greedy,dfs
+./build/bin/forge_benchmark --group sword --algo dp_merge,bb_dp
 ./build/bin/forge_benchmark --list
 ./build/bin/forge_benchmark --help
+./build/bin/forge_benchmark --json   # machine-readable JSON summary (for bench_report.py)
 ```
 
 ## Web GUI (`besq-gui`)
@@ -91,7 +98,7 @@ The HTTP layer is built on the reusable `components/http` framework
 (`web::HttpServer`, `web::Router`, sockets/parsers/SSE streaming), with the
 interface-domain `web::WebModule` translating requests to `BesqContext` and the
 `web/controllers/*` resource groups (health/status/settings/profiles/algorithm/
-tasks/logs) mounted on the shared router.
+calculator/fs/logs) mounted on the shared router.
 
 Configuration: `BESQ_GUI_HOST` (default `127.0.0.1`), `BESQ_GUI_PORT` (default
 `0` = OS-assigned), `BESQ_GUI_OPEN_BROWSER`, `BESQ_GUI_WORKERS` (HTTP consumer
@@ -124,7 +131,7 @@ CLI → CLIApp (application runner)
 
 | Domain | Namespace | Purpose | Dependencies |
 |--------|-----------|---------|-------------|
-| `algorithm/` | `algorithm::` | Algorithm execution: compact types, forge engine, strategies, diagnostics | `common-core` + log |
+| `algorithm/` | `algorithm::` | Algorithm execution: compact types, forge engine, strategies, diagnostics | `common-core` + thread + log |
 | `business/` | `::` | Business types, registries, Profile, parsers, loaders, ProfileManager, components (RegistryHelper) | `common-core` + io + log |
 | `orchestration/` | `orchestration::` | Cross-domain wiring: pipelines, CompactAdapter, formatters | algorithm + business |
 | `interface/` | `::` | I/O boundary: CLIApp, BesqContext, C ABI | orchestration + common sub-targets |
@@ -173,7 +180,7 @@ flowchart TB
         direction TB
         AlgoInput["AlgorithmInput / AlgorithmOutput<br/>EnchReg / compact types"]
         Executor["AlgorithmExecutor / ExecutionContext"]
-        Strategies["_strategies/<br/>A* / DFS / DP Merge / Hamming"]
+        Strategies["_strategies/<br/>DP Merge / BB-DP / Hamming"]
         Forge["forge_engine/<br/>IForgeEngine / ForgeEngine"]
         Plugin["plugin/<br/>AlgorithmLoader"]
         Diag["diagnostics/<br/>IAlgorithmObserver"]
@@ -278,7 +285,9 @@ src/                          tests/                        benchmarks/
 │   ├── business/              │   └── interface/
 │   ├── orchestration/         └── integration/
 │   └── interface/
-├── data/
+├── worker/                    plugins/                      gui/frontend/
+├── gui/ (besq-gui main)       ├── astar/ … (6 strategies)    ├── index.html
+├── data/                      └── (external algorithms)      └── views/*.js
 └── include/
     └── besq/besq.h
 ```
@@ -287,15 +296,15 @@ src/                          tests/                        benchmarks/
 
 | Strategy | Type | Optimality | Scale | Origin | Mechanism |
 |----------|------|-----------|-------|--------|-----------|
-| DP Merge | Approx | No | Large | Built-in (src/) | Dynamic programming merge (default) |
-| Hamming | Approx | No | Large | Built-in (src/) | Popcount-balanced binary merge tree |
-| DFS | Exact | Yes | ≤ 8 | Built-in (src/) | B&B + hash memoization |
-| A* | Exact | Yes | ≤ 9 | Built-in (src/) | Admissible heuristic + priority queue |
-| Greedy | Approx | No | Any | Plugin (plugins/) | Cost-sorted greedy merge |
-| Penalty Balance | Approx | No | Any | Plugin (plugins/) | Merge closest penalty pairs |
-| Hierarchical | Approx | No | Large | Plugin (plugins/) | Hierarchical group-then-merge |
-| DiffFirst | Approx | No | Any | Plugin (plugins/) | PPN-layer, cheapest pair per layer |
-| IDA* | Exact | Yes | ≤ 10 | Plugin (plugins/) | Iterative deepening + TT pruning |
+| DP Merge (`dp_merge`) | Exact | Yes | ≤ 20 (map fallback beyond) | Built-in (default for direct mode) | Recursive partition DP + (EnchSet, PPN) Pareto buckets; resumable via checkpoint |
+| BB-DP (`bb_dp`) | Exact | Yes | ≤ 24 | Built-in | Branch & bound + level-wise bottom-up DP, lazy StepTree history |
+| Hamming (`hamming`) | Approx | No | Large | Built-in (default for inventory mode) | Popcount-balanced merge tree, O(n log n) |
+| A* (`astar`) | Exact | Yes | ≤ 9 | Plugin (plugins/) | Admissible heuristic + priority queue |
+| DFS (`dfs`) | Exact | Yes | ≤ 8 | Plugin (plugins/) | B&B + hash memoization |
+| IDA* (`idastar`) | Exact | Yes | ≤ 10 | Plugin (plugins/) | Iterative deepening + transposition table |
+| DiffFirst (`diff_first`) | Approx | No | Any | Plugin (plugins/) | PPN-layer, cheapest pair per layer |
+| Penalty Balance (`penalty_balance`) | Approx | No | Any | Plugin (plugins/) | Merge closest penalty pairs |
+| Malicious (`malicious`) | — (audit fixture) | — | — | Plugin (tests only) | Deliberately unsafe plugin exercising audit/sandbox rejections |
 
 All algorithms share `IForgeEngine` and compact types. New algorithms only need to implement `IAlgorithm::execute()` to gain thread management, pause/cancel, and progress reporting.
 
@@ -312,15 +321,15 @@ All algorithms share `IForgeEngine` and compact types. New algorithms only need 
 
 ### Key Design Decisions
 
-**Compact types (`algorithm::`)**: `algorithm::Enchantment` (4 bytes: int16_t id + level), `algorithm::EnchSet` (sorted vector, O(log N) lookup), `algorithm::Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
+**Compact types (`algorithm::`)**: `algorithm::Enchantment` (2 bytes: uint8_t id + level), `algorithm::EnchSet` (88-byte flat: uint8_t[64] levels + size + bitmask + lazy hash cache, O(1) access), `algorithm::Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
 
-**Flat conflict matrix**: `algorithm::EnchReg` stores an N×N `vector<char>` for O(1) incompatibility checks — single allocation, contiguous memory.
+**Flat conflict matrix**: `algorithm::EnchReg` stores a 64-entry row-mask cache — each row a uint64, i.e. a 64×64 bit matrix (512B) built as the symmetric union of exclusive sets; `get_conflict_mask(id)` returns the whole row in O(1).
 
 **EnchReg pruning**: `CompactAdapter::apply()` builds a subset of the global registry that only includes enchantments applicable to the target equipment. Smaller conflict matrix, faster lookups.
 
 **IForgeEngine virtual interface**: All forge sub-operations have default vanilla implementations. Subclass only what you need for modded rules. `ForgeEngine` overrides to respect `ForgeConfig` flags.
 
-**AlgorithmInput owns data**: `algorithm::EnchReg`, `algorithm::Item` vector, and target collection are stored by value — no pointers, no external lifetime dependencies. The struct owns two config sub-objects: `f_config` (forge config, `ForgeConfig`) and `s_config` (search config, `SearchConfig`).
+**AlgorithmInput owns data**: `EnchReg`, `Payload` (direct/inventory variant), `Item target`, and `AlgorithmConfig` (aggregating `ForgeConfig` + `SearchConfig`) are stored by value — no pointers, no external lifetime dependencies.
 
 **Profile as first-class citizen**: All pipelines receive `Profile` (or `ProfileManager`), never raw registries extracted from Profile. `Profile` owns `EnchantmentRegistry`, `EquipmentRegistry`, and `TagRegistry` as a unit. Enchantment applicability is `supported_items ∩ tags_of(item)` (real-MC item tags), resolved via the profile's attached `TagResolver`.
 
@@ -328,7 +337,7 @@ All algorithms share `IForgeEngine` and compact types. New algorithms only need 
 
 **Serialization interfaces**: Business types implement `IJsonSerializable` (`to_json()` / `from_json()`). ADL-compatible free functions in `Serializer.h` delegate to member implementations.
 
-**Four-domain layering**: `algorithm/` depends only on `besq-common-core` + log. `business/` adds domain types and registries (depends on core + io + log). `orchestration/` wires algorithm + business together. `interface/` adds CLIApp, BesqContext, C ABI (depends on orchestration + common sub-targets). `besq-common/` is split into 5 independent static libraries (core, io, log, i18n, cli) — targets link only what they need.
+**Four-domain layering**: `algorithm/` depends on `besq-common-core` + `besq-common-thread` (PUBLIC) and `log`/`io` (PRIVATE). `business/` adds domain types and registries (depends on core + io + log). `orchestration/` wires algorithm + business together. `interface/` adds CLIApp, BesqContext, C ABI (depends on orchestration + common sub-targets). `besq-common/` is split into 6 independent libraries (core, io, log, i18n, cli, thread; `log` is SHARED so the logger singleton exists once per process) — targets link only what they need.
 
 **No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
 

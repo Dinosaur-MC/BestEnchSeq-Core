@@ -1,6 +1,6 @@
 # BestEnchSeq-Core 项目设计
 
-> 版本：2.2 · 最后更新：2026-08-02
+> 版本：2.3 · 最后更新：2026-08-13
 
 ---
 
@@ -12,7 +12,7 @@
 
 | 域 | 命名空间 | 职责 | 依赖 |
 |------|---------|------|------|
-| `common/*` | — | 5 个独立子库（core/io/log/i18n/cli） | 无（各自独立） |
+| `common/*` | — | 6 个独立子库（core/io/log/i18n/cli/thread；log 为 SHARED） | 无（各自独立） |
 | `domain/algorithm/` | `algorithm::` | 紧凑类型、锻造引擎、搜索策略、诊断 | `common-core` + `log` |
 | `domain/business/` | `::` | 业务类型、注册表、Profile、解析器、加载器 | `common-core` + `io` + `log` |
 | `domain/orchestration/` | `orchestration::` | Pipeline、CompactAdapter、格式化器 | `algorithm` + `business` |
@@ -29,7 +29,7 @@
 
 Domain 类型（`Item`、`EnchSet`、`EnchInfo` 等）是"胖对象"，包含字符串字段、校验逻辑。它们适合在 CLI/JSON 边界处使用，但效率不足以支撑算法对数百万状态的搜索。
 
-Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Enchantment`）是"瘦值"，每个字段经过位宽裁剪：附魔 ID 和等级均为 `uint8_t`，`EnchSet` 使用 `uint64_t` 位掩码 + `uint8_t[64]` 等级数组（`O(1)` 查找），`EnchReg` 冲突矩阵为固定 `std::array<char, 64×64>`。它们是为 L1 缓存行优化的算法内部表示。
+Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Enchantment`）是"瘦值"，每个字段经过位宽裁剪：附魔 ID 和等级均为 `uint8_t`，`EnchSet` 使用 `uint8_t[64]` 等级数组 + size + 位掩码 + 惰性哈希缓存（`O(1)` 查找，88B），`EnchReg` 冲突矩阵为固定行掩码缓存（每行一个 uint64，即 64×64 位矩阵共 512B）。它们是为 L1 缓存行优化的算法内部表示。
 
 **转换边界**：两种模型在 `CompactAdapter` 中互转，`main.cpp` 的管线中转换各发生一次。
 
@@ -39,11 +39,10 @@ Compact 类型（`algorithm::Item`、`algorithm::EnchSet`、`algorithm::Enchantm
 
 ```cpp
 struct AlgorithmInput {
-    ForgeConfig f_config;              // 锻造配置（平台、忽略惩罚/上限等）
-    SearchConfig s_config;             // 搜索配置（最大解数、内存限制等）
-    algorithm::ItemCollection items;   // 装备 + 书
-    algorithm::EnchCollection target;  // 目标附魔
-    algorithm::EnchReg ench_reg;       // 剪枝后的紧凑注册表
+    EnchReg registry;        // 剪枝后的紧凑注册表
+    Payload data;            // direct（目标附魔）/ inventory（物品集合）variant
+    Item target;             // 目标装备
+    AlgorithmConfig config;  // 聚合 f_config（ForgeConfig）+ s_config（SearchConfig）
 };
 ```
 
@@ -161,7 +160,7 @@ struct ForgeConfig {
 EnchantmentData[] + EquipmentData[] DTO 流
      │
      ▼
-RegistryLoader::from_dto()
+RegistryLoader::resolve_own_content()  (两阶段：seed vanilla 宇宙 → 交叉验证 → 过滤回自身 id)
      │
      ├── TagRegistry            (真实 MC tag 定义：物品/enchantable/* / 附魔 tag)
      ├── EquipmentRegistry      (category 显示短名)
@@ -187,7 +186,7 @@ Business domain (src/domain/business/registries/):
        │ CompactAdapter::apply()
        ▼
 Algorithm domain (src/domain/algorithm/registries/):
-  EnchReg (fixed 64×64 conflict matrix, uint8_t dense IDs, pruned per target)
+  EnchReg (64×64 row-mask bit matrix, uint8_t dense IDs, pruned per target)
        │
        │ owned by AlgorithmInput → executor → worker thread
        ▼
@@ -206,16 +205,15 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 | 策略 | 类型 | 最优性 | 适用规模 | 来源 | 核心机制 |
 |------|------|--------|---------|------|---------|
-| Greedy | 近似 | 否 | 任意 | 插件 | 成本排序贪心 |
-| Penalty Balance | 近似 | 否 | 任意 | 插件 | 惩罚值最接近对合并 |
-| Hierarchical | 近似 | 否 | 大量 | 插件 | 分层分组 → 组内合并 |
-| DiffFirst | 近似 | 否 | 任意 | 插件 | PPN 分层，每层选最便宜对 |
-| Hamming | 近似 | 否 | 大量 | 内置 | Popcount 平衡二叉合并树 |
-| dp_merge | 精确 | 是 | ≤ 16 | 内置 | 分治 DP + (EnchSet, PPN) Pareto 分桶 |
+| hamming | 近似 | 否 | 大量 | 内置（inventory 默认） | Popcount 平衡二叉合并树 |
+| dp_merge | 精确 | 是 | ≤ 20（超限 map 兜底） | 内置（direct 默认） | 分治 DP + (EnchSet, PPN) Pareto 分桶；checkpoint 可恢复 |
 | bb_dp | 精确 | 是 | ≤ 24 | 内置 | B&B 分治 DP + Pareto + 可选 39 级上限 |
 | DFS | 精确 | 是 | ≤ 8 | 插件 | 迭代 B&B + 哈希记忆化 |
 | A* | 精确 | 是 | ≤ 9 | 插件 | 可采启发 + 优先队列 |
 | IDA* | 精确 | 是 | ≤ 10 | 插件 | 迭代加深 + TT 剪枝 |
+| DiffFirst | 近似 | 否 | 任意 | 插件 | PPN 分层，每层选最便宜对 |
+| Penalty Balance | 近似 | 否 | 任意 | 插件 | 惩罚值最接近对合并 |
+| Malicious | —（审计夹具） | — | — | 插件（仅测试） | 故意不安全的插件，供审计/沙箱拒载测试 |
 
 所有算法共用 `IForgeEngine` 接口和 compact 类型系统。新算法只需实现 `IAlgorithm::execute()`，自动获得线程管理、暂停/取消、进度报告能力。
 
@@ -229,18 +227,18 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 ### 并发模型
 
-`AlgorithmExecutor` 管理工作线程生命周期（`Idle → Running → Paused → Completed | Failed | Cancelled`）。工作线程持有 `ExecutionContext`，算法通过它报告进度、投递解方案、响应暂停/取消。
+`AlgorithmExecutor` 管理工作线程生命周期（`Idle → Running → Pausing → Paused → Completed | Failed | Cancelled`；`pause()` 同步等待算法 ack，`reset()` 允许终态复用）。工作线程持有 `ExecutionContext`，算法通过它报告进度、投递解方案、响应暂停/取消。
 
 诊断事件通过 **`DiagnosticsService` 全局单例**的异步管道传递：
 
 ```
 算法线程 → ExecutionContext::report_progress() / report_solution()
-        → DiagnosticsService::push()
-        → try_post_emplace (placement new 到 BoundedMPMCQueue<DiagnosticsEvent, 64>)
+        → DiagnosticsService::push()（非阻塞入队，满队列丢事件 + 警告）
+        → SegmentedMPSCQueue<DiagnosticsEvent>
         → EventLoop 线程 (atomic::wait 零 CPU 空闲)
         → DiagnosticsHandler
-        → DiagnosticsWriter::write() (文件持久化)
-        → AlgorithmObserver::on_*() (异步回调)
+        → DiagnosticsWriter::write() (文件持久化到 logs/diag/)
+        → IAlgorithmObserver::on_*() (异步回调)
 ```
 
 `DiagnosticsEvent` 是 4-kind tagged variant（Exit / Progress / Solution / StateChange），每个事件携带 `task_id`，Observer 可通过 `accept_task_id()` 按任务过滤。所有字符串格式化只在 EventLoop 线程的文件写入路径中发生，算法线程零开销。
@@ -273,12 +271,12 @@ Algorithm domain (src/domain/algorithm/registries/):
 **核心接口**：
 - `IAlgorithm` — 算法策略虚接口
   - `name()` / `version()` — 标识
-  - `evaluate(n)` — 预估 n 个附魔的计算时间（ms，`double`）
+  - `evaluate(n)` — 预估 n 个附魔的计算时间（秒，`double`；0 = 确定性）
   - `execute(input, ctx)` — 执行搜索
-  - `process(solution)` — 重放步骤计算最终物品
-  - `resolve(input)` — 预解析输入生成候选物品
+  - `init(input, ctx)` — 构造后预热（默认空；恢复运行时跳过缓存重建）
   - `simulate(input)` — 快速可行性检查
   - `get_forge_engine()` — 返回副本（`unique_ptr<IForgeEngine>`）
+  - `get_resolver()` — 候选物品解析（默认 `DefaultResolver`）
   - `get_serializer()` — 断点序列化（可选）
   - `supported_mode()` / `is_resumable()` — 能力声明
 - `AlgorithmExecutor` — 异步执行引擎（线程管理 + 状态机）
@@ -298,7 +296,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 **diagnostics/**：事件驱动诊断管道（`DiagnosticsService` + `IAlgorithmObserver` + `DiagnosticsWriter`）
 **serialization/**：二进制 checkpoint（`IAlgorithmSerializer` + `Checkpoint`）
 **plugin/**：`AlgorithmLoader`（内置注册 + 插件热加载）
-**resolvers/**：`ItemResolver`、`InventoryResolver`（算法级解析辅助）
+**resolvers/**：`IResolver` + `DefaultResolver`（原 ItemResolver/InventoryResolver 合并，vanilla cost-aware 选择）
 
 ### `src/domain/business/`（业务域）
 
@@ -317,8 +315,9 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 - `BesqContext`：应用会话外观，持有 ProfileManager 和 AlgorithmLoader，委托所有操作到 orchestration pipeline
 - **cli/**：`CLIApp`（CLI 入口）、`EnchParser`（`"sharpness=5"` → EnchSet）、`ItemParser`（`"diamond_sword[...]"` → Item）；`--edit` 解析内联在 CLIApp 中
-- **components/**：公共组件预留（暂无内容）
+- **components/**：`ParserShared`（接口层共享解析助手）+ 可复用 `http/` 框架（`HttpServer`/`Router`/`Connection`/SSE，独立库 `besq-http`）
 - **abi/**：`CAbiBindings`（C ABI 包装，JSON 交换）
+- **web/**：`WebModule`（8 控制器：Health/Status/Settings/Profiles/Algorithm/Calculator/Fs/Logs，`_ctx_gate` 串行化）+ `WebSolveService`（worker 线程 + `SseHub` SSE 推送，最后一帧重放）
 
 ### `src/domain/orchestration/`（编排域）
 
@@ -332,7 +331,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 ## 错误处理策略
 
-- **输入验证**：`CompactAdapter::apply()` 内部检查所有输入数据的语义正确性，聚合所有错误后抛出 `std::invalid_argument`
+- **输入验证**：`CompactAdapter::apply()` 逐项校验（未知附魔 ID 忽略、不适用/超等级抛 i18n 错误），不产生不可能方案
 - **算法执行**：异常被 `AlgorithmExecutor` 的 worker 线程捕获，状态置为 `Failed`
 - **forge 操作**：不抛异常——所有检查在 apply() 中完成，算法假设输入已通过校验
 
@@ -345,7 +344,8 @@ Algorithm domain (src/domain/algorithm/registries/):
 - `src/common/serialization/ISerializable.h` — 序列化通用根接口
 - `src/common/serialization/IJsonSerializable.h` — JSON 序列化接口
 - `src/common/serialization/IBinarySerializable.h` — 二进制序列化接口
-- `src/domain/algorithm/IAlgorithm.h` — AlgorithmInput/Output + IAlgorithm 接口
+- `src/domain/algorithm/IAlgorithm.h` — IAlgorithm 策略接口
+- `src/domain/algorithm/types/AlgorithmTypes.h` — AlgorithmInput/Output 紧凑输入输出
 - `src/domain/algorithm/AlgorithmExecutor.h/.cpp` — 异步执行引擎
 - `src/domain/algorithm/ExecutionContext.h/.cpp` — 执行控制上下文
 - `src/domain/algorithm/types/Enchantment.h/.cpp` — 紧凑类型
