@@ -216,12 +216,12 @@ ProfileMeta BesqContext::profile_metadata(const std::string& name) const {
     m.name = name;
     m.dependencies = meta.dependencies;
     m.version = meta.version;
-    m.release_tag = "";                     // Profile 无 release_tag 字段（未发布）
+    m.release_tag = ""; // Profile 无 release_tag 字段（未发布）
     m.is_root = (name == "builtin:vanilla");
     m.ench_count = p->ench().size();
     m.eq_count = p->eq().size();
     m.tag_count = p->tags().size();
-    m.format = m.is_root ? "builtin" : "";  // Profile 无 source 字段；根 profile 为内建
+    m.format = m.is_root ? "builtin" : ""; // Profile 无 source 字段；根 profile 为内建
     return m;
 }
 
@@ -398,9 +398,9 @@ AlgorithmDetail BesqContext::algorithm_detail(const std::string& name) const {
 bool BesqContext::unload_algorithm(const std::string& name) {
     auto& loader = _impl->algo_loader;
     if (!loader.contains(name))
-        return false;                 // 未知
+        return false; // 未知
     if (!loader.plugin_path(name))
-        return false;                 // 内建（可信内核）永不卸载
+        return false; // 内建（可信内核）永不卸载
     loader.unload(name);
     return true;
 }
@@ -411,6 +411,13 @@ SolveResult BesqContext::solve(const SolveRequest& request) {
     auto result = SolvePipeline::run(profile, request, _impl->algo_loader, &_impl->active_executor);
     _impl->active_executor.store(nullptr);
     return result;
+}
+
+orchestration::SolveSnapshot BesqContext::solve_snapshot(const SolveRequest& request) const {
+    // 有效视图缓存引用只在构建期间持有（调用方须在 _ctx_gate 内）；快照为
+    // 自包含复制，构建后 solve 不再依赖 profile 数据（P0 锁攻破 §1）。
+    const auto& eff = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+    return orchestration::build_solve_snapshot(request, eff);
 }
 
 BesqContext::SolveProgress BesqContext::solve_progress() const noexcept {

@@ -6,8 +6,9 @@
 #include <string_view>
 #include <vector>
 
-#include "domain/orchestration/orchestration.h"
 #include "domain/algorithm/types/AlgorithmState.h"
+#include "domain/orchestration/orchestration.h"
+#include "domain/orchestration/types/SolveSnapshot.h"
 
 namespace algorithm {
 class IExecutor;
@@ -20,9 +21,9 @@ struct AlgorithmDetail {
     std::string name;
     std::string version;
     AlgorithmOrigin origin = AlgorithmOrigin::builtin;
-    std::string plugin_path;      ///< plugin 才有
+    std::string plugin_path; ///< plugin 才有
     bool is_resumable = false;
-    std::string supported_mode;   ///< "direct" / "inventory"
+    std::string supported_mode; ///< "direct" / "inventory"
     bool has_audit = false;
 };
 
@@ -30,11 +31,11 @@ struct AlgorithmDetail {
 struct ProfileMeta {
     std::string name;
     std::vector<std::string> dependencies;
-    std::string version;      ///< 空 = 未发布
-    std::string release_tag;  ///< 空 = 未发布
+    std::string version;     ///< 空 = 未发布
+    std::string release_tag; ///< 空 = 未发布
     bool is_root = false;
     size_t ench_count = 0, eq_count = 0, tag_count = 0;
-    std::string format;       ///< native_json / csv / datapack / builtin
+    std::string format; ///< native_json / csv / datapack / builtin
 };
 
 /// Main public API class for BestEnchSeq.
@@ -156,6 +157,11 @@ public:
     // ── Solve ──
     SolveResult solve(const SolveRequest& request);
     void abort_solve();
+
+    /// 按请求剪枝的有效视图快照（P0 锁攻破）：gate 内构建、含全部校验；
+    /// solve 改跑快照后不再持有 ProfileManager 有效视图缓存引用。
+    /// 未知魔咒/装备抛 std::runtime_error。
+    orchestration::SolveSnapshot solve_snapshot(const SolveRequest& request) const;
 
     /// Pause the in-flight solve at its next pause point (batch C). Follows the
     /// abort_solve pattern: copies the atomic executor handle and calls
