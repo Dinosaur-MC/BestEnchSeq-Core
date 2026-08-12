@@ -38,8 +38,9 @@
 
 #include "framework/test_framework.h"
 #include <atomic>
-#include <cstdio>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <thread>
@@ -113,6 +114,74 @@ std::string post_task(HttpServer& server, const std::string& body) {
                       "Content-Length: " +
                       std::to_string(body.size()) + "\r\n\r\n" + body;
     return http_exchange(server, req);
+}
+
+/// Single-shot exchange measured against the wall clock (no retry — the timed
+/// budget is asserted on ONE exchange). `elapsed_ms` receives the end-to-end
+/// duration. A single bounded recv captures the full small-body reply; when
+/// the server never answers (e.g. the pre-A2 gate-blocking behavior holds the
+/// response until the solve ends) the 3s recv cap bounds the wait and the
+/// elapsed value blows past the budget → the assertion fails.
+std::string timed_exchange(HttpServer& server, const std::string& raw, int64_t& elapsed_ms) {
+    const auto t0 = std::chrono::steady_clock::now();
+    int c = sock_connect("127.0.0.1", server.port());
+    std::string body;
+    if (c >= 0) {
+        sock_send(c, raw, 3000);
+        sock_recv(c, body, 64 * 1024, 3000);
+        sock_close(c);
+    }
+    elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    return body;
+}
+
+/// Fetch one task-status snapshot in FULL. The server keeps connections alive
+/// (idle keep-alive 30s), so "response done" must be detected via
+/// Content-Length rather than a bare recv; a large completed result (heavy
+/// bb_dp solution) needs multiple recv_nb rounds. Bounded by `deadline_ms`;
+/// returns "" if the deadline hits before the full body arrives.
+std::string fetch_status(HttpServer& server, const std::string& id, int64_t deadline_ms) {
+    int c = sock_connect("127.0.0.1", server.port());
+    if (c < 0)
+        return "";
+    sock_send(c, "GET /api/tasks/" + id + " HTTP/1.1\r\nHost: x\r\n\r\n", 3000);
+    set_nonblocking(c);
+    std::string got;
+    size_t header_end = std::string::npos;
+    size_t content_length = std::string::npos;
+    const auto t_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(deadline_ms);
+    while (std::chrono::steady_clock::now() < t_end) {
+        std::string chunk;
+        if (sock_recv_nb(c, chunk, 65536) > 0) {
+            got += chunk;
+            if (header_end == std::string::npos && (header_end = got.find("\r\n\r\n")) != std::string::npos) {
+                const size_t cl = got.find("Content-Length:");
+                if (cl != std::string::npos && cl < header_end)
+                    content_length = static_cast<size_t>(std::strtoull(got.c_str() + cl + 15, nullptr, 10));
+            }
+            if (header_end != std::string::npos && content_length != std::string::npos &&
+                got.size() >= header_end + 4 + content_length)
+                break;
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    sock_close(c);
+    return got;
+}
+
+/// Repeatedly fetch task status until `needle` shows up or the deadline
+/// passes; returns the last fetched body (a completed body carries the result).
+std::string poll_status_until(HttpServer& server, const std::string& id, const char* needle, int64_t deadline_ms) {
+    std::string body;
+    const auto t_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(deadline_ms);
+    do {
+        body = fetch_status(server, id, 5000);
+        if (body.find(needle) != std::string::npos)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    } while (std::chrono::steady_clock::now() < t_end);
+    return body;
 }
 
 // ---------------------------------------------------------------------------
@@ -569,6 +638,134 @@ void test_sse_progress_frames(HttpServer& server) {
     sock_close(c);
 }
 
+// ---------------------------------------------------------------------------
+// Case 13 (P0 验收——锁攻破): 长 solve（bb_dp 重目标）期间 profile 读/写不被
+// solve 阻塞。
+//
+// 修复前（A2 前）：solve worker 持 _ctx_gate 覆盖整个 solve（秒~分钟级），
+// 任何 profile 读/写都在 gate 上排队等 solve 结束。修复后：solve 跑在自包含
+// SolveSnapshot 上，gate 只覆盖快照构建（µs-ms）与 format（ms）——profile
+// 读/写即时完成。
+//
+// Seeding 与 test_sse_progress_frames 同款（12 个 POST .../enchantments），
+// 但 supported_items 用 #minecraft:chest_armor：目标装备 diamond_chestplate
+// 的 max_durability==528 由 completed result 端到端断言（A2 审查补充，防
+// durability 回填回归——build_request 不再查注册表，durability 由 worker 在
+// 快照构建后回填，断言的正是这条链路）。
+//
+// 写操作选 POST /api/profiles/{key}/enchantments（profile 变更类，纯内存
+// 变更）而非 PATCH /api/settings：后者会把 runtime settings 持久化到
+// <cwd>/config.json，弄脏工作树。
+//
+// 时序护栏（防假阳性）：
+//   1) 读/写前先轮询确认 state=running；
+//   2) 读/写后再拉一次快照确认仍 running——若 solve 恰在此窗口结束，测试
+//      立即失败（测量窗口无效），而不是虚过；
+//   3) 响应预算 500ms vs 旧行为等 solve 结束（重目标实测秒级）——余量 ~7×，
+//      且 tight-budget（100~200ms）运行仍通过（见 A3 真实性验证）。
+// ---------------------------------------------------------------------------
+void test_solve_does_not_block_profile() {
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.load_profiles();
+    WebModule module(ctx);
+    module.set_static_resources({{"/index.html", {"text/html", kIndexHtml}}});
+    HttpServer server;
+    server.set_fallback([&](const HttpRequest& r) { return module.dispatch(r); });
+    expect(server.start("127.0.0.1", 0), "server starts");
+    std::thread srv([&] { server.run(); });
+    struct Guard {
+        HttpServer& s;
+        std::thread& t;
+        ~Guard() {
+            if (t.joinable()) {
+                s.stop();
+                t.join();
+            }
+        }
+    } guard{server, srv};
+
+    // 1. seeding 12 个胸甲适用魔咒（同 test_sse_progress_frames 的 API 形状）
+    //    → 重目标 bb_dp solve（12 魔咒 × 5 级；双平台实测 0.2~1.1s，足以提供
+    //    读/写测量窗口，远大于 500ms 预算）。
+    const int kSeed = 12;
+    for (int i = 0; i < kSeed; ++i) {
+        std::string body = R"({"id":"test:p_)" + std::to_string(i) + R"(","name":"P )" + std::to_string(i) +
+                           R"(","max_level":5,"multiplier":1,"supported_items":["#minecraft:chest_armor"]})";
+        std::string req = "POST /api/profiles/builtin:vanilla/enchantments HTTP/1.1\r\nHost: x\r\n"
+                          "Content-Type: application/json\r\nContent-Length: " +
+                          std::to_string(body.size()) + "\r\n\r\n" + body;
+        auto r = http_exchange(server, req);
+        expect(r.find("201") != std::string::npos, "seeded chestplate enchantment " + std::to_string(i));
+    }
+
+    // 2. 提交重目标 solve（direct 模式，无 source）。
+    std::string target = R"({"target":{"item":"diamond_chestplate","enchants":[)";
+    for (int i = 0; i < kSeed; ++i) {
+        if (i)
+            target += ",";
+        target += R"({"id":"test:p_)" + std::to_string(i) + R"(","level":5})";
+    }
+    target += R"(]},"algorithm":"bb_dp"})";
+    const auto t_submit = std::chrono::steady_clock::now();
+    auto resp = post_task(server, target);
+    expect(resp.find("202") != std::string::npos, "heavy bb_dp task accepted 202");
+    const std::string id = extract_task_id(resp);
+    expect(!id.empty(), "heavy task id extracted");
+
+    // 3. 等 state=running（任务一提交即 Running；有界轮询兜底调度抖动）。
+    auto running = poll_status_until(server, id, "\"state\":\"running\"", 10000);
+    expect(running.find("\"state\":\"running\"") != std::string::npos, "solve running before concurrent access");
+
+    // 读/写响应预算：旧行为等 solve 结束（秒级）→ 预算 500ms 足够区分。
+    const int64_t kProfileAccessBudgetMs = 500;
+    int64_t read_ms = 0, write_ms = 0;
+
+    // a. 并发 profile 读（enchantables）——必须 <500ms 内完成。
+    auto read_body = timed_exchange(server,
+                                    "GET /api/profiles/builtin:vanilla/enchantables/minecraft:diamond_sword "
+                                    "HTTP/1.1\r\nHost: x\r\n\r\n",
+                                    read_ms);
+    expect(read_body.find("200 OK") != std::string::npos, "profile read during solve returns 200");
+    expect(read_ms < kProfileAccessBudgetMs,
+           "profile read during solve not blocked (elapsed=" + std::to_string(read_ms) + "ms)");
+
+    // b. 并发 profile 写（变更类操作：新增附魔，纯内存）——不被 solve 阻塞。
+    std::string write_body = R"({"id":"test:p_)" + std::to_string(kSeed) + R"(","name":"P )" + std::to_string(kSeed) +
+                             R"(","max_level":5,"multiplier":1,"supported_items":["#minecraft:chest_armor"]})";
+    std::string write_req = "POST /api/profiles/builtin:vanilla/enchantments HTTP/1.1\r\nHost: x\r\n"
+                            "Content-Type: application/json\r\nContent-Length: " +
+                            std::to_string(write_body.size()) + "\r\n\r\n" + write_body;
+    auto write_resp = timed_exchange(server, write_req, write_ms);
+    expect(write_resp.find("201") != std::string::npos, "profile write during solve returns 201");
+    expect(write_ms < kProfileAccessBudgetMs,
+           "profile write during solve not blocked (elapsed=" + std::to_string(write_ms) + "ms)");
+
+    // 测量窗口有效性护栏：写之后 solve 仍在 running → 读/写确实发生在 solve 期间。
+    auto still_running = fetch_status(server, id, 5000);
+    expect(still_running.find("\"state\":\"running\"") != std::string::npos,
+           "solve still running right after the write (measurement window valid)");
+
+    // 4. solve 最终 completed（有界轮询；实测亚秒~1s，45s 预算宽裕）。
+    auto completed = poll_status_until(server, id, "\"state\":\"completed\"", 45000);
+    const auto t_done = std::chrono::steady_clock::now();
+    expect(completed.find("\"state\":\"completed\"") != std::string::npos, "solve completes end-to-end");
+    expect(completed.find("\"result\":{") != std::string::npos, "completed snapshot carries result");
+    expect(completed.find("\"success\":true") != std::string::npos, "completed solve result success");
+
+    // 5. durability 端到端（A2 审查补充）：目标装备 max_durability 回填链路
+    //    （worker 快照后回填 → apply → recall → format_json）。
+    expect(completed.find("\"durability\":528") != std::string::npos,
+           "completed result target equipment durability backfilled to 528 (diamond_chestplate)");
+    expect(completed.find("diamond_chestplate") != std::string::npos, "completed result target item is diamond_chestplate");
+
+    const int64_t solve_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_done - t_submit).count();
+    std::fprintf(stderr, "[P0-A3] read=%lldms write=%lldms solve=%lldms budget=%lldms\n", (long long)read_ms,
+                 (long long)write_ms, (long long)solve_ms, (long long)kProfileAccessBudgetMs);
+
+    TEST_PASS("test_solve_does_not_block_profile");
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -625,4 +822,8 @@ static void run_suite() {
 TEST_CASE("test_web_integration") {
     run_suite();
     TEST_PASS("test_web_integration");
+}
+
+TEST_CASE_TIMEOUT("test_solve_does_not_block_profile", 120) {
+    test_solve_does_not_block_profile();
 }
