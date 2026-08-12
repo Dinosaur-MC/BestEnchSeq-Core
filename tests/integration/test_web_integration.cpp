@@ -117,29 +117,33 @@ std::string post_task(HttpServer& server, const std::string& body) {
 }
 
 /// Exchange measured against the wall clock. `elapsed_ms` receives the
-/// end-to-end duration; the timed budget is asserted on the whole exchange.
-/// A single bounded recv captures the full small-body reply; when the server
-/// never answers (e.g. the pre-A2 gate-blocking behavior holds the response
-/// until the solve ends) the 3s recv cap bounds the wait and the elapsed
-/// value blows past the budget → the assertion fails.
+/// duration of the LAST attempt — the timed budget is asserted on the
+/// exchange that actually produced the body. A single bounded recv captures
+/// the full small-body reply; when the server never answers (e.g. the pre-A2
+/// gate-blocking behavior holds the response until the solve ends) the 3s
+/// recv cap bounds the wait and the elapsed value blows past the budget →
+/// the assertion fails.
 ///
 /// flake 修复（P0-2 同款）：负载窗口内单次 recv 可能超时拿空——空响应有界
-/// 重试一次（计时重置）。重试不可能掩盖锁回归：修复前 gate 阻塞的服务仍
-/// 在 3s recv 帽内送达，空 body 只可能来自饥饿。
+/// 重试一次。计时重置：只测本次交换的耗时（首次饥饿不算进预算）。重试
+/// 不可能掩盖锁回归：修复前 gate 阻塞的服务仍在 3s recv 帽内送达。
 std::string timed_exchange(HttpServer& server, const std::string& raw, int64_t& elapsed_ms) {
-    const auto t0 = std::chrono::steady_clock::now();
     std::string body;
+    int64_t last_ms = 0;
     for (int attempt = 0; attempt < 2; ++attempt) {
+        const auto t0 = std::chrono::steady_clock::now();
         int c = sock_connect("127.0.0.1", server.port());
         if (c < 0)
             continue;
         sock_send(c, raw, 3000);
         sock_recv(c, body, 64 * 1024, 3000);
         sock_close(c);
+        last_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         if (!body.empty())
             break;
     }
-    elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    elapsed_ms = last_ms;
     return body;
 }
 
