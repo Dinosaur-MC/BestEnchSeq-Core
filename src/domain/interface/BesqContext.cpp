@@ -11,7 +11,10 @@
 
 #include "common/i18n/Language.h"
 #include <atomic>
+#include <chrono>
+#include <deque>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,6 +32,12 @@ struct BesqContext::Impl {
     /// so cancel() can never dereference a destroyed executor (B-T22).
     std::atomic<std::shared_ptr<algorithm::IExecutor>> active_executor{nullptr};
     std::string profiles_dir; ///< overridden profiles dir ("" → default `<cwd>/profiles`)
+    /// 求解历史（接口特有状态，计划 B Task B2）：独立小锁，不占用 _ctx_gate
+    /// （gate 只护业务资源快照）——CLI/ABI 主线程与 web worker 并发写、
+    /// /api/history 读。有界环形覆盖（kMaxSolveHistory），seq 从 1 单调递增。
+    mutable std::mutex hist_mutex;
+    std::deque<SolveHistoryEvent> history;
+    uint64_t next_seq = 1;
 };
 
 // ====================================================================
@@ -415,7 +424,78 @@ SolveResult BesqContext::solve(const SolveRequest& request, const orchestration:
 
 SolveResult BesqContext::solve(const SolveRequest& request) {
     // 单线程 CLI/ABI 路径的包装：内部 resolve + 构建快照 + 双参 solve。
-    return solve(request, solve_snapshot(request));
+    // CLI 求解历史记录点（计划 B Task B2）：Submitted 于启动前，终态
+    // Completed/Failed（异常原样重抛）于结束——task_id 为空串；web 路径走
+    // 双参 solve，不经此处，不重复记录。
+    SolveHistoryEvent submitted;
+    submitted.type = SolveEventType::Submitted;
+    submitted.target = solve_target_summary(request.target_item);
+    submitted.algorithm = request.algorithm;
+    submitted.mode = (request.mode & AlgorithmMode::inventory) ? "inventory" : "direct";
+    record_solve_event(submitted);
+    try {
+        const auto solve_start = std::chrono::steady_clock::now();
+        SolveResult result = solve(request, solve_snapshot(request));
+        SolveHistoryEvent done;
+        done.type = SolveEventType::Completed;
+        done.target = submitted.target;
+        done.algorithm = submitted.algorithm;
+        done.mode = submitted.mode;
+        if (!result.solutions.empty()) {
+            // 最佳方案（solutions[0]）的成本字段。
+            done.total_level_cost = result.solutions[0].total_exp_level_cost;
+            done.total_exp_cost = result.solutions[0].total_exp_cost;
+        }
+        done.solution_count = static_cast<int64_t>(result.solutions.size());
+        done.computation_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - solve_start).count();
+        record_solve_event(done);
+        return result;
+    } catch (const std::exception& e) {
+        SolveHistoryEvent failed;
+        failed.type = SolveEventType::Failed;
+        failed.target = submitted.target;
+        failed.algorithm = submitted.algorithm;
+        failed.mode = submitted.mode;
+        failed.error_message = e.what();
+        record_solve_event(failed);
+        throw;
+    } catch (...) {
+        SolveHistoryEvent failed;
+        failed.type = SolveEventType::Failed;
+        failed.target = submitted.target;
+        failed.algorithm = submitted.algorithm;
+        failed.mode = submitted.mode;
+        failed.error_message = "unknown exception";
+        record_solve_event(failed);
+        throw;
+    }
+}
+
+void BesqContext::record_solve_event(SolveHistoryEvent ev) {
+    // 独立小锁（_hist_mutex）：绝不获取 _ctx_gate/任务表锁——web worker 在
+    // gate 区外调用，避免任何嵌套加锁路径。
+    std::lock_guard<std::mutex> lock(_impl->hist_mutex);
+    if (ev.timestamp_ms == 0)
+        ev.timestamp_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    ev.seq = _impl->next_seq++;
+    _impl->history.push_back(std::move(ev));
+    // 有界环形覆盖：超容量丢最旧。
+    if (_impl->history.size() > kMaxSolveHistory)
+        _impl->history.pop_front();
+}
+
+std::vector<SolveHistoryEvent> BesqContext::solve_history() const {
+    // 锁内拷贝快照，最新在前——/api/history 端点按此序直接切片（B3）。
+    std::vector<SolveHistoryEvent> out;
+    {
+        std::lock_guard<std::mutex> lock(_impl->hist_mutex);
+        out.reserve(_impl->history.size());
+        for (auto it = _impl->history.rbegin(); it != _impl->history.rend(); ++it)
+            out.push_back(*it);
+    }
+    return out;
 }
 
 orchestration::SolveSnapshot BesqContext::solve_snapshot(const SolveRequest& request) const {

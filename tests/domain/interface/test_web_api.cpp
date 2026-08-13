@@ -660,6 +660,21 @@ void test_calculator(TestApp& app) {
     expect(fs.status == 200 && fs.body.find("\"state\":\"failed\"") != std::string::npos, "failed snapshot state=failed");
     expect(fs.body.find("\"error\"") != std::string::npos && fs.body.find("\"progress\"") != std::string::npos,
            "failed snapshot carries error + progress fields");
+    // SolveHistory（B2）：worker 终态 Failed 事件带 error_message（与状态字一致；
+    // 状态可观察与事件记录间有微小窗口，故有界重试）。
+    bool saw_failed = false, failed_err = false;
+    for (int i = 0; i < 50 && !saw_failed; ++i) {
+        for (const auto& ev : app.ctx.solve_history()) {
+            if (ev.type != SolveEventType::Failed || ev.task_id != fail_id)
+                continue;
+            saw_failed = true;
+            failed_err = !ev.error_message.empty();
+        }
+        if (!saw_failed)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(saw_failed, "failed web task records a Failed event");
+    expect(failed_err, "Failed event carries error_message");
 
     // ── §12.1: task DTO full-field validation — every optional field accepted ──
     // One optional field per task (matrix row: 逐项); each is polled to a
@@ -764,6 +779,57 @@ void test_calculator(TestApp& app) {
         heavy += R"({"id":"test:e_)" + std::to_string(i) + R"(","level":5})";
     }
     heavy += R"(]},"algorithm":"dp_merge"})";
+
+    // ── SolveHistory web 记录点（计划 B Task B2）──
+    // 1. Completed：轻任务终态事件带 task_id/target/algorithm/mode/成本字段。
+    auto hl = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(hl.status == 202, "history task submit 202");
+    std::string hl_id = Json::parse(hl.body)["task_id"].as<std::string>();
+    bool hl_done = false;
+    for (int i = 0; i < 50 && !hl_done; ++i) {
+        auto st = app.call(Method::Get, "/api/tasks/" + hl_id);
+        if (st.status == 200)
+            hl_done = Json::parse(st.body)["state"].as<std::string>() != "running";
+        if (!hl_done)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(hl_done, "history task reached terminal state");
+    bool saw_completed = false, completed_fields = false;
+    for (int i = 0; i < 50 && !saw_completed; ++i) {
+        for (const auto& ev : app.ctx.solve_history()) {
+            if (ev.type != SolveEventType::Completed || ev.task_id != hl_id)
+                continue;
+            saw_completed = true;
+            completed_fields = ev.target.find("diamond_sword[sharpness=5") != std::string::npos && ev.algorithm == "dp_merge" &&
+                               ev.mode == "direct" && ev.total_level_cost > 0 && ev.solution_count > 0 &&
+                               ev.computation_ms >= 0;
+        }
+        if (!saw_completed)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(saw_completed, "web task records a Completed event");
+    expect(completed_fields, "Completed event carries task_id/target/algorithm/mode/costs");
+
+    // 2. Cancelled：重任务提交后立即取消 → Cancelled 事件（worker 终态闸记录；
+    // 与 heavy_cancel 同一确定性：18-ench dp_merge 提交后毫秒级不可能跑完）。
+    auto hc2 = app.call(Method::Post, "/api/tasks", heavy);
+    expect(hc2.status == 202, "history-cancel task submit 202");
+    std::string hc2_id = Json::parse(hc2.body)["task_id"].as<std::string>();
+    auto hc2_del = app.call(Method::Delete, "/api/tasks/" + hc2_id);
+    expect(hc2_del.status == 200, "cancel history task 200");
+    bool saw_cancelled = false;
+    for (int i = 0; i < 50 && !saw_cancelled; ++i) {
+        for (const auto& ev : app.ctx.solve_history())
+            if (ev.type == SolveEventType::Cancelled && ev.task_id == hc2_id)
+                saw_cancelled = true;
+        if (!saw_cancelled)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(saw_cancelled, "cancelled web task records a Cancelled event");
 
     // ── Batch C: ignore_incompatible 接通 —— 冲突目标（sharpness+smite 同
     // target）默认严格冲突（completed + result.success:false），带

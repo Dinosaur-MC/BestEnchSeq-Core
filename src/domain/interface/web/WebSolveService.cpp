@@ -98,6 +98,34 @@ SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
     return req;
 }
 
+/// DTO 目标 → 紧凑摘要（纯字符串构建，不校验不抛；如
+/// "diamond_sword[sharpness=5,smite=3]"）。历史事件显示用户提交的原始形态。
+std::string dto_target_summary(const InvTargetDto& t) {
+    std::string s = t.item;
+    s += "[";
+    bool first = true;
+    for (const auto& e : t.enchants) {
+        if (!first)
+            s += ",";
+        s += e.id + "=" + std::to_string(e.level);
+        first = false;
+    }
+    s += "]";
+    return s;
+}
+
+/// 求解历史事件公共字段（task_id/target/algorithm/mode）：与 build_request 的
+/// 默认算法解析一致（direct→dp_merge，inventory→hamming）。DTO 恒在 worker
+/// 作用域内且纯字符串构建不抛——任何记录点（含快照构建前的取消）都安全。
+SolveHistoryEvent history_event_base(const WebTaskDto& dto, const std::string& task_id) {
+    SolveHistoryEvent ev;
+    ev.task_id = task_id;
+    ev.target = dto_target_summary(dto.target);
+    ev.mode = dto.items.empty() ? "direct" : "inventory";
+    ev.algorithm = dto.algorithm.empty() ? (ev.mode == "inventory" ? "hamming" : "dp_merge") : dto.algorithm;
+    return ev;
+}
+
 /// 把 JSON payload 包成一条 SSE 帧（event + data，双换行结束）。
 std::string sse_frame(const std::string& type, const Json& payload) {
     return "event: " + type + "\ndata: " + payload.to_string() + "\n\n";
@@ -269,6 +297,12 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
                     if (_hub)
                         _hub->unsubscribe_all(task->id);
+                    // 终态 Cancelled（快照构建前取消）：记录事件——worker 是
+                    // 终态事件唯一写方，与已提交的状态字一致（record_solve_event
+                    // 独立小锁，此处 gate 内调用不嵌套取锁）。
+                    auto ev = history_event_base(dto, task->id);
+                    ev.type = SolveEventType::Cancelled;
+                    _ctx.record_solve_event(ev);
                     return;
                 }
                 request = build_request(dto, _ctx);      // 纯 DTO→请求（下界/边界校验）
@@ -287,7 +321,18 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
                 if (_hub)
                     _hub->unsubscribe_all(task->id);
+                // 终态 Cancelled（快照构建后、solve 前取消）：同 gate 内闸。
+                auto ev = history_event_base(dto, task->id);
+                ev.type = SolveEventType::Cancelled;
+                _ctx.record_solve_event(ev);
                 return;
+            }
+            // Submitted 记录点（计划 B Task B2）：快照构建成功后、solve 启动前；
+            // gate 区外、无任务表锁——record_solve_event 自带独立小锁。
+            {
+                auto ev = history_event_base(dto, task->id);
+                ev.type = SolveEventType::Submitted;
+                _ctx.record_solve_event(ev);
             }
             double initial_progress = 0.0;
             if (_hub) {
@@ -379,6 +424,8 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             // real output. solve() 一返回就停采样（join），之后才 format 与
             // 发布终态帧——进度帧严格先于 completed/failed。
             // solve 跑在自包含快照上（P0 锁攻破）：无 gate、无 profile 引用。
+            // 求解耗时起点：solve 启动 → 终态提交（Computed 事件 computation_ms）。
+            const auto solve_start = std::chrono::steady_clock::now();
             auto result = _ctx.solve(request, snapshot);
             sampler_stop.stop();
             // solve() 返回前 exit 事件必已入队（_finalize 在 wait() 内同步
@@ -416,12 +463,32 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                     if (expected == TaskState::Cancelled) {
                         if (_hub)
                             _hub->unsubscribe_all(task->id);
+                        // 终态 Cancelled（solve 后/format 期间被取消）：记录事件。
+                        auto ev = history_event_base(dto, task->id);
+                        ev.type = SolveEventType::Cancelled;
+                        _ctx.record_solve_event(ev);
                         return;
                     }
                     if (task->state.compare_exchange_weak(expected, TaskState::Completed, std::memory_order_release,
                                                           std::memory_order_acquire))
                         break;
                 }
+            }
+            // 终态 Completed 记录点（计划 B Task B2）：状态字已 CAS 提交，事件
+            // 与终态一致；成本/耗时取自 worker 局部 result 与 solve 起点计时。
+            {
+                auto ev = history_event_base(dto, task->id);
+                ev.type = SolveEventType::Completed;
+                if (!result.solutions.empty()) {
+                    // 最佳方案（solutions[0]）的成本字段。
+                    ev.total_level_cost = result.solutions[0].total_exp_level_cost;
+                    ev.total_exp_cost = result.solutions[0].total_exp_cost;
+                }
+                ev.solution_count = static_cast<int64_t>(result.solutions.size());
+                ev.computation_ms =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - solve_start)
+                        .count();
+                _ctx.record_solve_event(ev);
             }
             if (_hub) {
                 Json obj = Json::object();
@@ -442,6 +509,14 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             // abort_solve 实现，状态字以 worker 终态为准）。
             task->error.store(std::make_shared<const std::string>(error_msg), std::memory_order_release);
             task->state.store(TaskState::Failed, std::memory_order_release);
+            // 终态 Failed 记录点（计划 B Task B2）：状态字已提交，事件与终态
+            // 一致（cancel 竞态下状态被覆盖为 Failed，事件同样记录 Failed）。
+            {
+                auto ev = history_event_base(dto, task->id);
+                ev.type = SolveEventType::Failed;
+                ev.error_message = error_msg;
+                _ctx.record_solve_event(ev);
+            }
             if (_hub) {
                 Json obj = Json::object();
                 obj["type"] = Json("failed");

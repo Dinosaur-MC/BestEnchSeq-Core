@@ -38,6 +38,47 @@ struct ProfileMeta {
     std::string format; ///< native_json / csv / datapack / builtin
 };
 
+// ── SolveHistory（求解历史，计划 B Task B2）────────────────────────
+/// 求解生命周期事件类型。
+enum class SolveEventType : uint8_t { Submitted, Completed, Failed, Cancelled };
+
+/// 一次求解生命周期事件（绑定 BesqContext，每 context 有界环形覆盖，线程安全）。
+struct SolveHistoryEvent {
+    uint64_t seq = 0; ///< context 内单调递增（record_solve_event 赋值，从 1 起）
+    SolveEventType type = SolveEventType::Submitted;
+    std::string task_id;      ///< web 任务 id；CLI/ABI 求解为空串
+    std::string target;       ///< 目标物品摘要（如 minecraft:diamond_sword[minecraft:sharpness=5]）
+    std::string algorithm;    ///< 使用的算法
+    std::string mode;         ///< direct / inventory
+    int64_t timestamp_ms = 0; ///< 事件时间（wall clock ms；0 → 记录时填充）
+    // Completed 附加
+    int64_t total_level_cost = 0; ///< 最佳方案的附魔台等级总成本
+    int64_t total_exp_cost = 0;   ///< 最佳方案的经验总成本
+    int64_t solution_count = 0;
+    int64_t computation_ms = 0; ///< 求解耗时（solve 起点 → 终态）
+    // Failed 附加
+    std::string error_message;
+};
+
+/// 每 context 求解历史上限（有界环形覆盖最旧）。
+inline constexpr size_t kMaxSolveHistory = 100;
+
+/// 目标物品紧凑摘要（如 `minecraft:diamond_sword[minecraft:sharpness=5]`）。
+/// 供求解历史事件使用；空附魔集合时形如 `minecraft:diamond_sword[]`。
+inline std::string solve_target_summary(const Item& item) {
+    std::string s = item.id.str();
+    s += "[";
+    bool first = true;
+    for (const auto& e : item.enchantments) {
+        if (!first)
+            s += ",";
+        s += e.id.str() + "=" + std::to_string(e.level);
+        first = false;
+    }
+    s += "]";
+    return s;
+}
+
 /// Main public API class for BestEnchSeq.
 /// Session facade: holds session state (active profile, algorithm loader) and
 /// exposes service interfaces.  Management / export / formatting logic is
@@ -167,6 +208,15 @@ public:
     /// build_snapshot + 双参 solve。
     SolveResult solve(const SolveRequest& request);
     void abort_solve();
+
+    // ── Solve history（求解历史）──
+    /// 记录一条求解事件：内部赋 seq（从 1 单调递增）+ timestamp_ms（若为 0）
+    /// + 有界入队（超 kMaxSolveHistory 覆盖最旧）。独立小锁，不占用业务
+    /// gate——CLI/ABI 主线程与 web worker 并发写、/api/history 读。
+    void record_solve_event(SolveHistoryEvent ev);
+
+    /// 快照拷贝全部事件，最新在前（锁内拷贝，容量上限 kMaxSolveHistory）。
+    std::vector<SolveHistoryEvent> solve_history() const;
 
     /// Pause the in-flight solve at its next pause point (batch C). Follows the
     /// abort_solve pattern: copies the atomic executor handle and calls
