@@ -1,0 +1,77 @@
+name: 🐛 Bug 报告
+description: 提交一个缺陷报告，帮助我们修复问题
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提交 Bug 报告！请尽量完整填写以下信息，复现步骤越精确，修复越快。
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows
+        - WSL / Linux
+        - macOS
+        - 其他
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / 构建类型
+      description: 如 `main@f58e85be`、`Release` / `Debug`；运行 `besq --version` 可查看版本
+      placeholder: "如：Release，commit f58e85be"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 入口
+      options:
+        - CLI（besq）
+        - Web GUI（besq-gui）
+        - C ABI
+        - 插件 / 沙箱
+        - 构建 / 测试
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 请粘贴完整的命令行 / 请求 / 输入文件，以及期望行为
+      placeholder: |
+        1. 执行：besq --target "..." --source "..."
+        2. 观察到...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 粘贴完整输出、错误信息或日志（尽量包含，不要截断）
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志 / 输出文件
+      description: 如 `logs/diag/*.log`、`--format json` 输出、valgrind 报告等
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 自查清单
+      options:
+        - label: 已用最新 main 分支复现（不是旧版本行为）
+        - label: 已搜索 Issues，无重复报告
+        - label: 已排除环境因素（如插件构建类型与宿主不匹配）

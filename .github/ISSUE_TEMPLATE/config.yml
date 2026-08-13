@@ -1,0 +1,2 @@
+# Issue 模板配置：允许空白 Issue，同时展示模板选择器
+blank_issues_enabled: true

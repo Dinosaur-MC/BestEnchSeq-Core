@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 924">
+  <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    .ttl { font-size: 13px; font-weight: 600; fill: #111827; }
+    .bl  { font-size: 13px; font-weight: 600; fill: #111827; text-anchor: middle; }
+    .sb  { font-size: 11px; fill: #6b7280; text-anchor: middle; }
+    .ct  { font-size: 12px; font-weight: 600; fill: #111827; }
+    .leg { font-size: 12px; fill: #6b7280; }
+  </style>
+  <defs>
+    <marker id="arr-b" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+    </marker>
+    <marker id="arr-g" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+    </marker>
+    <marker id="arr-e" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+    </marker>
+    <marker id="arr-p" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+    </marker>
+  </defs>
+  <rect width="960" height="924" fill="#ffffff"/>
+    <rect x="220" y="36" width="230" height="64" rx="8" fill="#fffbeb" stroke="#fde68a" stroke-width="1.5"/>
+    <text x="335" y="62" class="bl" font-size="14px" font-weight="700">besq</text>
+    <text x="335" y="82" class="sb">CLI · C ABI</text>
+    <rect x="510" y="36" width="230" height="64" rx="8" fill="#fffbeb" stroke="#fde68a" stroke-width="1.5"/>
+    <text x="625" y="62" class="bl" font-size="14px" font-weight="700">besq-gui</text>
+    <text x="625" y="82" class="sb">Web GUI（REST + SSE）</text>
+    <rect x="45" y="140" width="870" height="120" rx="10" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+    <text x="65" y="162" class="ttl">interface/ — I/O 边界</text>
+    <rect x="75" y="172" width="230" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="190.0" y="196" class="bl">BesqContext</text>
+    <text x="190.0" y="214" class="sb">会话门面（pImpl）</text>
+    <rect x="345" y="172" width="220" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="455.0" y="196" class="bl">CLI · C ABI</text>
+    <text x="455.0" y="214" class="sb">CLIParser v2 · besq.h</text>
+    <rect x="605" y="172" width="280" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="745.0" y="196" class="bl">HTTP 框架 + Web 模块</text>
+    <text x="745.0" y="214" class="sb">8 控制器 · SSE · 41 路由</text>
+    <rect x="45" y="300" width="870" height="120" rx="10" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.5"/>
+    <text x="65" y="322" class="ttl">orchestration/ — 跨域胶水</text>
+    <rect x="75" y="332" width="260" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="205.0" y="356" class="bl">Solve / Manage / Export</text>
+    <text x="205.0" y="374" class="sb">无状态管线 run()</text>
+    <rect x="375" y="332" width="230" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="490.0" y="356" class="bl">CompactAdapter</text>
+    <text x="490.0" y="374" class="sb">apply() · recall()</text>
+    <rect x="645" y="332" width="220" height="68" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="755.0" y="356" class="bl">OutputFormatter</text>
+    <text x="755.0" y="374" class="sb">verbose · compact · json</text>
+    <rect x="45" y="460" width="425" height="210" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+    <text x="65" y="482" class="ttl">algorithm/ — 算法内核</text>
+    <rect x="65" y="492" width="180" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="155.0" y="516" class="bl">紧凑类型 · EnchReg</text>
+    <text x="155.0" y="534" class="sb">EnchSet · 64×64 矩阵</text>
+    <rect x="265" y="492" width="185" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="357.5" y="516" class="bl">ForgeEngine</text>
+    <text x="357.5" y="534" class="sb">Java · Bedrock 模型</text>
+    <rect x="65" y="548" width="180" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="155.0" y="572" class="bl">策略 ×3</text>
+    <text x="155.0" y="590" class="sb">dp_merge · bb_dp · hamming</text>
+    <rect x="265" y="548" width="185" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="357.5" y="572" class="bl">插件加载 · 审计</text>
+    <text x="357.5" y="590" class="sb">沙箱缝 · 热加载</text>
+    <rect x="65" y="612" width="385" height="48" rx="8" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="257.5" y="633" class="bl" font-size="12.5px">besq-worker（沙箱子进程）</text>
+    <text x="257.5" y="650" class="sb">承载 AlgorithmExecutor · seccomp · IPC 帧协议</text>
+    <rect x="490" y="460" width="425" height="210" rx="10" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+    <text x="510" y="482" class="ttl">business/ — 业务域</text>
+    <rect x="510" y="492" width="180" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="600.0" y="516" class="bl">Profile + 三注册表</text>
+    <text x="600.0" y="534" class="sb">依赖图 · 有效视图</text>
+    <rect x="710" y="492" width="185" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="802.5" y="516" class="bl">解析器 ×3</text>
+    <text x="802.5" y="534" class="sb">JSON · CSV · datapack</text>
+    <rect x="510" y="548" width="385" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="702.5" y="572" class="bl">ProfileManager</text>
+    <text x="702.5" y="590" class="sb">事务变更 · undo · publish</text>
+    <rect x="510" y="612" width="385" height="48" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="702.5" y="636" class="bl">TagResolver · LimitedLevelCalculator</text>
+    <text x="702.5" y="654" class="sb">合并 tag 宇宙 · limited_level 回填</text>
+    <rect x="45" y="710" width="870" height="80" rx="10" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+    <text x="65" y="732" class="ttl">common/ — 共享工具（零业务知识）</text>
+    <rect x="82.5" y="742" width="120" height="40" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="142.5" y="767" class="ct">core</text>
+    <rect x="217.5" y="742" width="120" height="40" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="277.5" y="767" class="ct">io</text>
+    <rect x="352.5" y="742" width="120" height="40" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="412.5" y="767" class="ct">log</text>
+    <rect x="487.5" y="742" width="120" height="40" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="547.5" y="767" class="ct">i18n</text>
+    <rect x="622.5" y="742" width="120" height="40" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="682.5" y="767" class="ct">cli</text>
+    <rect x="757.5" y="742" width="120" height="40" rx="6" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+    <text x="817.5" y="767" class="ct">thread</text>
+    <rect x="45" y="830" width="870" height="52" rx="10" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="480" y="860" class="bl" font-size="12px">builtin/ — 编译期嵌入数据：vanilla.json · item_properties · i18n 语言表</text>
+    <line x1="335" y1="100" x2="335" y2="140" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-b)"/>
+    <line x1="625" y1="100" x2="625" y2="140" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-b)"/>
+    <line x1="490" y1="260" x2="490" y2="300" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-b)"/>
+    <rect x="502" y="270" width="150" height="18" rx="4" fill="#ffffff" opacity="0.95"/>
+    <text x="558" y="283" class="sb" fill="#2563eb" font-size="12px">主调用流（求解路径）</text>
+    <line x1="257" y1="420" x2="257" y2="460" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-b)"/>
+    <line x1="703" y1="420" x2="703" y2="460" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-b)"/>
+    <line x1="257" y1="670" x2="257" y2="710" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr-g)"/>
+    <line x1="703" y1="670" x2="703" y2="710" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr-g)"/>
+    <line x1="357" y1="596" x2="357" y2="616" stroke="#9333ea" stroke-width="1.2" stroke-dasharray="4 2" marker-end="url(#arr-p)"/>
+    <path d="M915 856 L930 856 L930 560 L915 560" fill="none" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#arr-e)"/>
+    <rect x="858" y="800" width="56" height="18" rx="4" fill="#ffffff" opacity="0.95"/>
+    <text x="890" y="813" class="sb" fill="#16a34a" font-size="12px">嵌入数据</text>
+    <line x1="60" y1="904" x2="95" y2="904" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-b)"/>
+    <text x="105" y="908" class="leg">主调用流（求解路径）</text>
+    <line x1="290" y1="904" x2="325" y2="904" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr-g)"/>
+    <text x="335" y="908" class="leg">依赖</text>
+    <line x1="425" y1="904" x2="460" y2="904" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#arr-e)"/>
+    <text x="470" y="908" class="leg">嵌入数据</text>
+    <line x1="570" y1="904" x2="605" y2="904" stroke="#9333ea" stroke-width="1.2" stroke-dasharray="4 2" marker-end="url(#arr-p)"/>
+    <text x="615" y="908" class="leg">spawn（派生子进程）</text>
+</svg>

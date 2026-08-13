@@ -1,362 +1,232 @@
 # BestEnchSeq-Core
 
-## Overview
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/w/cpp/20)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)](#从源码构建)
 
-A C++20 tool (CLI: `besq`) to calculate the best enchanting order for your enchantments and enchanted books, which will try reducing your enchanting cost on anvil as far as possible. It not only supports enchantments in Vanilla Minecraft, but also those in various mods, as it uses extensible enchantment sheets and a data-driven registry system to maintain enchantment information and can easily add third-party/custom enchantments.
+> **简体中文** | [English](README.en.md)
 
-### Key Features
+BestEnchSeq-Core 是一个 **Minecraft 附魔锻造序列规划器**：给定期望的最终附魔（`--target`）与起点状态（`--source` 或库存物品），搜索**铁砧锻造成本最优**的附魔书顺序，并输出逐步锻造方案。支持铁砧惩罚（prior work penalty）、魔咒冲突、装备适用性（tag）、Java/Bedrock 平台差异与 Too Expensive（39 级）上限等完整约束。
 
-- [x] Calculate the best enchanting order/forging sequence by your given needs
-- [x] Support inventory management, providing well handling of complex enchanted items/situations (applicability, upgrade, confliction, override, prior work penalty, durability, etc.)
-- [x] Support third-party/custom enchantments by editing custom enchantment sheet
-- [x] Support third-party/custom equipments by editing custom equipment sheet
-- [x] Pluggable algorithm strategies: hamming, dp_merge, bb_dp (built-in), plus external plugins (astar, dfs, idastar, diff_first, penalty_balance)
-- [x] Asynchronous execution with pause/resume/cancel and streaming progress
-- [x] Moddable forge engine via IForgeEngine virtual interface
-- [x] Profile-based data management with versioning, branching, merging
-- [x] Profile dependencies (transitive resolution + cycle detection), effective view, versioned publish (`--publish`)
-- [x] Multi-format data loading: vanilla JSON, CSV, MC data-driven format, and datapack (`pack.mcmeta`) as profiles
-- [x] String-keyed profile identity (`--profile <key>`, root `builtin:vanilla`) — NSID reserved for MC content ids
-- [x] Built-in + plugin algorithm strategies
-- [x] Binary checkpointing for long-running searches
-- [x] Input validation + EnchReg pruning via CompactAdapter::apply()
-- [x] Local Web GUI (`besq-gui`) exposing a REST API + SSE event streams over the same core (a C ABI is also available via `include/besq/besq.h`)
+采用**数据驱动**架构：内置 vanilla 数据表，也支持自定义 JSON/CSV 数据、MC 官方 datapack 与 mod 魔咒；算法内核**可插拔**（内建 + 运行时插件热加载 + 审计/沙箱隔离）。纯标准库 C++20 实现，**零第三方依赖**（HTTP/JSON/i18n/并发组件全部自研）。
 
-### Quick Start
+## ✨ 功能特性
 
-**Requirements:** C++20 toolchain (Clang 15+ or MSVC on Windows), CMake 3.25+, Ninja.
-The project uses C++20 features unconditionally — concepts, `if constexpr`,
-`std::jthread`, atomic `wait`/`notify`, etc. No feature-test macros or
-fallbacks. C++17 or earlier is not supported.
+- **最优锻造序列**：搜索成本最优的附魔书锻造顺序（精确 + 近似算法可选）
+- **数据驱动**：vanilla JSON / CSV / MC 官方 datapack（`pack.mcmeta`）/ 自定义 mod 数据表
+- **Profile 一等公民**：依赖图（拓扑解析 + 环检测）、有效视图合并、事务式变更（undo）、版本化发布（`--publish`）
+- **可插拔算法**：内建 `dp_merge` / `bb_dp` / `hamming`；插件热加载 `astar` / `dfs` / `idastar` / `diff_first` / `penalty_balance`
+- **沙箱隔离**（`BESQ_SANDBOX=1`）：第三方插件在 `besq-worker` 子进程中运行，父进程绝不 `dlopen`；ELF/PE 静态审计（W^X、危险符号）
+- **异步执行**：暂停/恢复/取消 + 流式进度 + 二进制 checkpoint（断点续跑）
+- **三种交互面**：CLI（`besq`）、C ABI（`include/besq/besq.h`）、本地 Web GUI（`besq-gui`，REST + SSE）
+- **i18n**：内置 en_US / zh_CN，`--lang` > `BESQ_LANG` > 系统 locale 三级选择
+- **C++ 核心零第三方依赖**：自研 HTTP 服务器、JSON DOM、日志、i18n、并发队列
 
-#### From source code
+## 🚀 快速开始
+
+**要求**：C++20 编译器（Clang 15+ 或 MSVC）、CMake 3.25+、Ninja。项目无条件使用 C++20（concepts、`if constexpr`、`std::jthread`、原子 `wait`/`notify`），不支持 C++17 及更早版本。
+
+### 从源码构建
 
 ```bash
-cmake -S . -B build
+# 配置 + 构建（Clang + Ninja；Windows 亦可用 MSVC）
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-# --target 必须携带 `[附魔]`（期望最终状态），--source 为装备当前已有魔咒（起点状态）
-besq --target "diamond_sword[sharpness=5]" --source "sharpness=2"
-besq --algo-dir build/plugins --algorithm astar --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]" --source "sharpness=3"
-besq --algorithm penalty_balance --target "diamond_chestplate[protection=4,thorns=3,unbreaking=3,mending=1]"
-besq --algorithm hamming --target "netherite_sword[sharpness=5,sweeping_edge=3,looting=3,unbreaking=3,fire_aspect=2,knockback=2,mending=1,vanishing_curse=1]"
 
-# 目标已达成：--source 已 ≥ --target 时输出 0 步方案（"目标已达成"）
-besq --target "diamond_sword[sharpness=5]" --source "sharpness=5"
+# 求解：--target 为期望最终状态，--source 为起点（已附魔的装备）
+./build/bin/besq --target "diamond_sword[sharpness=5,knockback=2]" --source "sharpness=2"
 
-# Profile / datapack / publish
-besq --profile builtin:vanilla --target "diamond_sword[sharpness=5]" --source "sharpness=2"
-besq --profile-dir data/tests/profiles --profile modded_sword --target "diamond_sword[sharpness=5]" --source "sharpness=2"
-besq --publish builtin:vanilla --publish-version 1.0 --publish-tag stable --output out/vanilla.json
+# 目标已达成：--source ≥ --target 时输出 0 步方案（"目标已达成"）
+./build/bin/besq --target "diamond_sword[sharpness=5]" --source "sharpness=5"
 
-# External strategy plugins (astar/dfs/idastar/diff_first/penalty_balance)
-# 1. Build the host project first, then build plugins against the host build tree
-cmake -S plugins -B build/plugins -DCMAKE_PREFIX_PATH=$PWD/build
+# 库存模式：--input 提供自包含 JSON 任务（target/items/algorithm/profile）
+./build/bin/besq --input task.json
+./build/bin/besq --input -   # 从 stdin 读取
+
+# 其他语言输出 / JSON 输出
+./build/bin/besq --lang en_US --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+./build/bin/besq --format json --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+```
+
+### 外部算法插件
+
+```bash
+# 先构建宿主工程，再基于宿主构建树构建插件
+# （编译器与构建类型必须与宿主完全一致，否则运行时加载失败）
+cmake -S plugins -B build/plugins -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_PREFIX_PATH=$PWD/build
 cmake --build build/plugins
-besq --algo-dir build/plugins --list-algorithms
+
+# 加载插件并列出全部可用算法
+./build/bin/besq --algo-dir build/plugins --list-algorithms
+
+# 使用插件算法（astar / dfs / idastar / diff_first / penalty_balance）
+./build/bin/besq --algo-dir build/plugins --algorithm astar \
+  --target "diamond_sword[sharpness=5,looting=3,unbreaking=3]" --source "sharpness=3"
+
+# 沙箱模式：插件在 besq-worker 子进程中隔离执行
+BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
+  --target "diamond_sword[sharpness=5]" --source "sharpness=2"
 ```
 
-Alternatively, invoke directly from the build directory:
+### Profile / 数据
 
 ```bash
-./build/bin/besq --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+# 指定 profile（自动解析依赖；根 key 固定 builtin:vanilla）
+./build/bin/besq --profile builtin:vanilla --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+./build/bin/besq --profile-dir data/tests/profiles --profile modded_sword \
+  --target "diamond_sword[sharpness=5]" --source "sharpness=2"
+
+# 发布 profile：拍平有效视图为自包含 JSON
+./build/bin/besq --publish builtin:vanilla --publish-version 1.0 --publish-tag stable --output vanilla.json
+
+# 管理 profile 数据（导入 / 编辑 / 导出）
+./build/bin/besq --import mods/myenchant.json
+./build/bin/besq --edit "ench:mod,sharpness,max_level=10"
+./build/bin/besq --export out.json
 ```
 
-### Running tests
+完整的 CLI 选项见 `besq --help`（按分组渲染）。
+
+## 🖥️ Web GUI（`besq-gui`）
+
+面向玩家的本地 Web GUI，与 CLI 共享同一核心（REST API + SSE 事件流）。构建需开启 `BESQ_BUILD_GUI=ON`。
 
 ```bash
-cd build && ctest --output-on-failure
-```
-
-### Benchmark
-
-```bash
-./build/bin/forge_benchmark --group sword --algo dp_merge,bb_dp
-./build/bin/forge_benchmark --list
-./build/bin/forge_benchmark --help
-./build/bin/forge_benchmark --json   # machine-readable JSON summary (for bench_report.py)
-```
-
-## Web GUI (`besq-gui`)
-
-Player-facing local Web GUI over the same core. v1 host: the default browser
-(`--browser` / `BESQ_GUI_OPEN_BROWSER=1`); a native WebView2 window is future
-work (the Microsoft WebView2 SDK is not vendored).
-
-```bash
-# Build
+# 构建
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBESQ_BUILD_GUI=ON
 cmake --build build --target besq-gui
 
-# Run (dev mode, hot-reload SPA from disk)
-BESQ_GUI_PORT=8765 ./build/bin/besq-gui --browser --frontend-dir gui/frontend
+# 运行（默认 127.0.0.1 + OS 自动分配端口；--browser 自动打开浏览器）
+./build/bin/besq-gui --browser
 
-# Run (production single-exe, embedded SPA)
-./build/bin/besq-gui
+# 开发模式：SPA 从磁盘热重载
+BESQ_GUI_PORT=8765 ./build/bin/besq-gui --frontend-dir gui/frontend
 ```
 
-The HTTP layer is built on the reusable `components/http` framework
-(`web::HttpServer`, `web::Router`, sockets/parsers/SSE streaming), with the
-interface-domain `web::WebModule` translating requests to `BesqContext` and the
-`web/controllers/*` resource groups (health/status/settings/profiles/algorithm/
-calculator/fs/logs) mounted on the shared router.
+| 控制器 | 端点（节选） |
+|---|---|
+| Health | `GET /health` |
+| Status | `GET /api/status` |
+| Settings | `GET/PATCH /api/settings`（持久化到 `config.json`） |
+| Profiles | `/api/profiles` CRUD + activate/fork/merge/publish/rename + `{key}/enchantables/{item}` |
+| Algorithm | `GET /api/algorithms[/{name}]`、`POST .../load\|unload` |
+| Calculator | `POST /api/tasks`、`GET/DELETE /api/tasks/{id}`、`POST .../pause\|resume` |
+| Fs | `GET /api/fs/list`（目录选择器） |
+| History | `GET /api/history`（求解历史，`offset`/`limit`/`after_seq` 分页） |
 
-Configuration: `BESQ_GUI_HOST` (default `127.0.0.1`), `BESQ_GUI_PORT` (default
-`0` = OS-assigned), `BESQ_GUI_OPEN_BROWSER`, `BESQ_GUI_WORKERS` (HTTP consumer
-threads, default 2), `BESQ_GUI_RES_DIR` (optional `/public` disk root for dev
-hot-reload; falls back to `./res` then `<exe_dir>/res`). Language is set at
-runtime via `PATCH /api/settings`.
+SSE 事件流：`GET /api/tasks/{id}/events`（`progress` / `diag` / `completed` / `failed` 帧，15s 心跳）；静态资源挂载于 `/public`。
 
-Endpoints: `/health`, `/api/settings`, `/api/status`, `/api/profiles`,
-`/api/algorithms`, `/api/tasks`, `/api/history` (compute solve history with
-`offset`/`limit`/`after_seq` paging), plus `/public` for the embedded
-SPA assets (with a `--frontend-dir`/`BESQ_GUI_RES_DIR` disk fallback). SSE
-event streams: `/api/tasks/{id}/events` (solver progress).
+## 🧠 算法策略
 
-## Architecture
+| 策略 | 类型 | 最优性 | 规模 | 来源 | 机制 |
+|---|---|---|---|---|---|
+| `dp_merge` | 精确 | 是 | ≤ 20 | 内建（direct 模式默认） | 递归划分 DP + (EnchSet, PPN) Pareto 桶；支持 checkpoint 恢复 |
+| `bb_dp` | 精确 | 是 | ≤ 24 | 内建 | 分支定界 + 逐层自底向上 DP，惰性 StepTree |
+| `hamming` | 近似 | 否 | 大 | 内建（inventory 模式默认） | Popcount 均衡合并树，O(n log n) |
+| `astar` | 精确 | 是 | ≤ 9 | 插件 | 可采纳启发式 + 优先队列 |
+| `dfs` | 精确 | 是 | ≤ 8 | 插件 | 分支定界 + 哈希记忆化 |
+| `idastar` | 精确 | 是 | ≤ 10 | 插件 | 迭代加深 + 置换表 |
+| `diff_first` | 近似 | 否 | 任意 | 插件 | PPN 层内最便宜对 |
+| `penalty_balance` | 近似 | 否 | 任意 | 插件 | 合并最接近惩罚对 |
 
-The project uses a **four-domain architecture** built on shared utilities.
+新算法只需实现 `IAlgorithm::execute()` 即可获得线程管理、暂停/取消与进度上报。
 
-```
-CLI → CLIApp (application runner)
-  → BesqContext (session facade, pImpl)
-  → Orchestration Pipeline (SolvePipeline / ManagePipeline / ExportPipeline)
-  → CompactAdapter::apply() (validates + prunes EnchReg + converts)
-  → AlgorithmInput (compact) → AlgorithmExecutor → IAlgorithm
-  → AlgorithmOutput (compact steps + final_item)
-  → CompactAdapter::recall() (restores IDs + builds solutions, passes final_item)
-  → OutputFormatter (domain)
-```
+## 🏗️ 架构
 
-### Domain Overview
+四域单向分层 + 共享工具层，三个构建产物（`besq` / `besq-gui` / `besq-worker`）共享同一核心：
 
-| Domain | Namespace | Purpose | Dependencies |
-|--------|-----------|---------|-------------|
-| `algorithm/` | `algorithm::` | Algorithm execution: compact types, forge engine, strategies, diagnostics | `common-core` + thread + log |
-| `business/` | `::` | Business types, registries, Profile, parsers, loaders, ProfileManager, components (RegistryHelper) | `common-core` + io + log |
-| `orchestration/` | `orchestration::` | Cross-domain wiring: pipelines, CompactAdapter, formatters | algorithm + business |
-| `interface/` | `::` | I/O boundary: CLIApp, BesqContext, C ABI | orchestration + common sub-targets |
-
-### Source Layout
-
-```mermaid
-flowchart TB
-    %% ── Style definitions ──
-    classDef common fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px
-    classDef algo   fill:#e3f2fd,stroke:#1565c0,stroke-width:1.5px
-    classDef biz    fill:#fff3e0,stroke:#e65100,stroke-width:1.5px
-    classDef orch   fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px
-    classDef iface  fill:#fce4ec,stroke:#c62828,stroke-width:1.5px
-    classDef data   fill:#f5f5f5,stroke:#9e9e9e,stroke-width:1px,stroke-dasharray:4 3
-    classDef entry  fill:#fff9c4,stroke:#f57f17,stroke-width:2px
-    classDef legend fill:#ffffff,stroke:#cccccc,stroke-width:1px
-
-    %% ── Entry point ──
-    Entry["main.cpp / CLI"]:::entry
-    AppConfig["AppConfig.h<br/>BuildConfig.h.in"]:::data
-
-    %% ── Data sources ──
-    subgraph Data[" "]
-        Vanilla["data/builtin/*.json<br/>Vanilla + item properties"]
-        I18nData["data/i18n/*.json<br/>Translations (zh_CN, en_US)"]
-        ExtSheets["External JSON / CSV<br/>Custom registry sheets"]
-        Plugins["Plugins .so/.dll<br/>External algorithms"]
-    end
-    style Data fill:#fafafa,stroke:#bdbdbd,stroke-dasharray:6 3
-
-    %% ── Common layer ──
-    subgraph Common["common/ — Shared Libraries"]
-        direction TB
-        CT["CommonTypes.h<br/>NSID / MCE / AlgorithmMode"]
-        IO["io/<br/>JSON DOM / CsvIO / ByteStream"]
-        I18n["i18n/<br/>Language / LocaleDetector"]
-        Log["log/<br/>Async Logger"]
-        Ser["serialization/<br/>ISerializable interfaces"]
-        Utils["utils/<br/>CLIParser / Queues / MemoryPool / EventLoop"]
-    end
-    style Common fill:#f1f8e9,stroke:#558b2f
-
-    %% ── Algorithm domain ──
-    subgraph Algorithm["domain/algorithm/ — Algorithm Domain"]
-        direction TB
-        AlgoInput["AlgorithmInput / AlgorithmOutput<br/>EnchReg / compact types"]
-        Executor["AlgorithmExecutor / ExecutionContext"]
-        Strategies["_strategies/<br/>DP Merge / BB-DP / Hamming"]
-        Forge["forge_engine/<br/>IForgeEngine / ForgeEngine"]
-        Plugin["plugin/<br/>AlgorithmLoader"]
-        Diag["diagnostics/<br/>IAlgorithmObserver"]
-        Check["serialization/<br/>Binary Checkpoint"]
-    end
-    style Algorithm fill:#e3f2fd,stroke:#1565c0
-
-    %% ── Business domain ──
-    subgraph Business["domain/business/ — Business Domain"]
-        direction TB
-        Profile["Profile<br/>EnchantmentRegistry / EquipmentRegistry<br/>TagRegistry"]
-        Types["types/<br/>Ench / EnchInfo / Item / Solution / DTOs"]
-        Registries["registries/<br/>IRegistry / EnchantmentRegistry<br/>EquipmentRegistry / TagRegistry"]
-        Parsers["parsers/<br/>NativeJsonParser / NativeCsvParser<br/>McOfficialParser"]
-        Loaders["loaders/<br/>RegistryLoader / ProfileLoader"]
-        PM["ProfileManager<br/>dependencies / effective view<br/>publish / datapack"]
-        Comp["components/<br/>RegistryHelper / FormatDetector<br/>Serializer / TagResolver"]
-    end
-    style Business fill:#fff3e0,stroke:#e65100
-
-    %% ── Orchestration domain ──
-    subgraph Orchestration["domain/orchestration/ — Orchestration Domain"]
-        direction TB
-        Pipelines["pipelines/<br/>SolvePipeline / ManagePipeline / ExportPipeline"]
-        Adapter["components/<br/>CompactAdapter (apply / recall)"]
-        Formatter["components/<br/>OutputFormatter (verbose / compact / json)"]
-        EnchSer["components/<br/>EnchSerializer (JSON / CSV export)"]
-        Contracts["types/<br/>SolveRequest / SolveResult<br/>ManageRequest / ExportRequest"]
-    end
-    style Orchestration fill:#f3e5f5,stroke:#6a1b9a
-
-    %% ── Interface domain ──
-    subgraph Interface["domain/interface/ — Interface Domain"]
-        direction TB
-        Ctx["BesqContext.h/.cpp<br/>Session Facade (pImpl)"]
-        CLI["cli/<br/>CLIApp / EnchParser / ItemParser"]
-        ABI["abi/<br/>C ABI (besq.h)"]
-    end
-    style Interface fill:#fce4ec,stroke:#c62828
-
-    %% ── Tests & Benchmarks ──
-    Tests["tests/<br/>Standalone test executables"]:::data
-    Bench["benchmarks/<br/>Performance benchmarks"]:::data
-
-    %% ── Data flow arrows ──
-    Entry --> CLI
-    CLI --> Ctx
-    Ctx --> Pipelines
-    Pipelines --> Adapter
-    Adapter --> AlgoInput
-    AlgoInput --> Executor
-    Executor --> Strategies & Plugin
-    Executor --> Forge
-    Strategies --> Diag
-    AlgoInput -.-> Check
-
-    %% Business ← Data
-    ExtSheets -.-> Parsers
-    Vanilla -.-> Loaders
-    I18nData -.-> I18n
-
-    %% Orchestration ← Business
-    Adapter --> Profile
-    Pipelines -.-> Contracts
-    Pipelines --> Profile
-    Formatter --> Profile
-    EnchSer --> Profile
-    Profile --> Types & Registries
-    Loaders --> Registries
-    PM --> Profile
-
-    %% Common → all domains
-    Algorithm -.-> Common
-    Business -.-> Common
-    Orchestration -.-> Common
-    Interface -.-> Common
-
-    %% Plugin loading
-    Plugin -.-> Plugins
-
-    %% Tests & Benchmarks
-    Tests -.-> Profiles & Pipelines
-    Bench -.-> Executor
-
-    %% ── Legend ──
-    subgraph Legend[" "]
-        L1["main.cpp / Entry"]:::entry
-        L2["Data / Config / Metadata"]:::data
-    end
-    style Legend fill:#ffffff,stroke:#cccccc,stroke-width:1px
-```
-
-Directory layout mirrors the domain structure above:
+![BestEnchSeq-Core 架构](docs/diagrams/architecture-zh.svg)
 
 ```
-src/                          tests/                        benchmarks/
-├── main.cpp                   ├── common/                    └── forge_benchmark
-├── builtin/                   ├── domain/
-├── common/                    │   ├── algorithm/
-├── domain/                    │   ├── business/
-│   ├── algorithm/             │   ├── orchestration/
-│   ├── business/              │   └── interface/
-│   ├── orchestration/         └── integration/
-│   └── interface/
-├── worker/                    plugins/                      gui/frontend/
-├── gui/ (besq-gui main)       ├── astar/ … (6 strategies)    ├── index.html
-├── data/                      └── (external algorithms)      └── views/*.js
-└── include/
-    └── besq/besq.h
+CLI / GUI → BesqContext（会话门面）
+  → 编排管线（Solve / Manage / Export）
+  → CompactAdapter::apply()（业务 → 紧凑类型，裁剪 EnchReg）
+  → IExecutor（AlgorithmExecutor | SandboxedExecutor）→ IAlgorithm
+  → CompactAdapter::recall()（还原 ID + 构建方案）→ OutputFormatter
 ```
 
-### Algorithm Strategies
+关键设计：
 
-| Strategy | Type | Optimality | Scale | Origin | Mechanism |
-|----------|------|-----------|-------|--------|-----------|
-| DP Merge (`dp_merge`) | Exact | Yes | ≤ 20 (map fallback beyond) | Built-in (default for direct mode) | Recursive partition DP + (EnchSet, PPN) Pareto buckets; resumable via checkpoint |
-| BB-DP (`bb_dp`) | Exact | Yes | ≤ 24 | Built-in | Branch & bound + level-wise bottom-up DP, lazy StepTree history |
-| Hamming (`hamming`) | Approx | No | Large | Built-in (default for inventory mode) | Popcount-balanced merge tree, O(n log n) |
-| A* (`astar`) | Exact | Yes | ≤ 9 | Plugin (plugins/) | Admissible heuristic + priority queue |
-| DFS (`dfs`) | Exact | Yes | ≤ 8 | Plugin (plugins/) | B&B + hash memoization |
-| IDA* (`idastar`) | Exact | Yes | ≤ 10 | Plugin (plugins/) | Iterative deepening + transposition table |
-| DiffFirst (`diff_first`) | Approx | No | Any | Plugin (plugins/) | PPN-layer, cheapest pair per layer |
-| Penalty Balance (`penalty_balance`) | Approx | No | Any | Plugin (plugins/) | Merge closest penalty pairs |
-| Malicious (`malicious`) | — (audit fixture) | — | — | Plugin (tests only) | Deliberately unsafe plugin exercising audit/sandbox rejections |
+- **双层类型系统**：业务域胖对象（NSID 字符串键）↔ 算法域紧凑值类型（`Ench` 2B / `EnchSet` 88B / 64×64 位冲突矩阵 O(1)），由 `CompactAdapter` 唯一桥接
+- **沙箱缝在 executor 之上**：插件经 `loader.create_executor(name)` 拿到的仍是 `IExecutor`，跨进程暂停/checkpoint 语义与进程内一致
+- **Profile 一等公民**：管线只收 `Profile`/`ProfileManager`，绝不传裸注册表；适用性 = `supported_items ∩ tags_of(item)`
+- **无状态管线**：`struct XxxPipeline { static run(...) }`，无注册无虚分派
+- **共享内核**：`besq-algo-core`（SHARED）是 CLI / worker / 插件三方唯一进程内副本，保证 vtable 与堆分配器唯一
 
-All algorithms share `IForgeEngine` and compact types. New algorithms only need to implement `IAlgorithm::execute()` to gain thread management, pause/cancel, and progress reporting.
+目录与各域详细设计见 [docs/architecture-overview.md](docs/architecture-overview.md)。
 
-### Profile Management
+## 🔌 插件与沙箱
 
-`ProfileManager` (business-domain entry) manages profiles whose keys are **plain strings** (arbitrary readable names, spaces and dots kept verbatim; NSID is reserved for MC content ids). The root key is fixed at `builtin:vanilla`.
+- **插件协议**：单 C 符号 `besq_create_algorithm`，共享 vtable/堆，无需 destroy；加载前静态审计（W^X、危险导入）
+- **插件构建**：`plugins/` 独立 CMake 工程，链接宿主导出的 `besq-algo-core::besq-algo-core`；构建类型必须与宿主一致（不匹配会链接失败）
+- **沙箱**：`BESQ_SANDBOX=1` 时插件**永不 dlopen**——`SandboxedExecutor` 派生 `besq-worker` 子进程承载真执行器，父进程侧走帧协议（`MsgRun`/`Pause`/`SerializeState`，checkpoint 为不透明分块 blob）；Linux 下 seccomp 限制文件/网络/进程 syscall
+- **审计夹具**：`plugins/malicious` 为故意不安全的插件，用于验证审计/沙箱拒绝路径
 
-- **Dependencies**: `ProfileMetadata.dependencies` (string list) is resolved transitively in topological order with cycle detection (`resolve_dependencies`).
-- **Effective view**: `resolve_effective` topologically merges the dependency chain + the profile itself (upper layers win), builds a merged-tag `TagResolver`, and caches the result.
-- **Stable CRUD**: real-time validation + automatic snapshot; `undo()` rolls back the last successful change.
-- **Publish**: `--publish <key> [--publish-version <v> --publish-tag <t>]` flattens the effective view into a self-contained profile JSON (with embedded `version` / `release_tag`).
-- **Datapack**: directories with `pack.mcmeta` load as one profile via the real MC 1.21+ format (single-string/array `supported_items`, `slots`, `tag replace`, `anvil_cost`). A datapack's multiple namespaces (`data/<ns1>/`, `data/<ns2>/`, including `data/minecraft/` overriding vanilla) aggregate into that profile; the profile key is `pack.id` or the folder name verbatim.
-- **Discovery**: `<cwd>/profiles/` is scanned by default (`--profile-dir <dir>` overrides); `--profile <key>` activates any string key.
+## ⚙️ 配置
 
-### Key Design Decisions
+| 环境变量 | 说明 |
+|---|---|
+| `BESQ_LANG` | 界面语言（en_US / zh_CN），`--lang` 优先 |
+| `BESQ_SANDBOX=1` | 插件沙箱隔离（`besq-worker` 子进程） |
+| `BESQ_WORKER_PATH` | 覆盖 worker 路径（默认 `<exe_dir>/besq-worker[.exe]`，再查 PATH） |
+| `BESQ_GUI_HOST` | GUI 监听地址（默认 `127.0.0.1`） |
+| `BESQ_GUI_PORT` | GUI 端口（默认 `0` = OS 自动分配） |
+| `BESQ_GUI_OPEN_BROWSER` | 启动时自动打开浏览器 |
+| `BESQ_GUI_WORKERS` | HTTP 消费线程数（默认 2） |
+| `BESQ_GUI_RES_DIR` | `/public` 磁盘兜底根（开发热重载） |
 
-**Compact types (`algorithm::`)**: `algorithm::Enchantment` (2 bytes: uint8_t id + level), `algorithm::EnchSet` (88-byte flat: uint8_t[64] levels + size + bitmask + lazy hash cache, O(1) access), `algorithm::Item` (type + dur + ppn + enchs). No pointer indirection, no virtual dispatch, zero domain dependencies.
+## 🧪 测试与基准
 
-**Flat conflict matrix**: `algorithm::EnchReg` stores a 64-entry row-mask cache — each row a uint64, i.e. a 64×64 bit matrix (512B) built as the symmetric union of exclusive sets; `get_conflict_mask(id)` returns the whole row in O(1).
+```bash
+# 全部测试
+ctest --test-dir build --output-on-failure
 
-**EnchReg pruning**: `CompactAdapter::apply()` builds a subset of the global registry that only includes enchantments applicable to the target equipment. Smaller conflict matrix, faster lookups.
+# 单个测试目标
+cmake --build build --target test_domain_types && ./build/bin/test_domain_types
 
-**IForgeEngine virtual interface**: All forge sub-operations have default vanilla implementations. Subclass only what you need for modded rules. `ForgeEngine` overrides to respect `ForgeConfig` flags.
+# 基准（harness v2：二维表 + 分组/吞吐/对比）
+cmake --build build --target forge_benchmark
+./build/bin/forge_benchmark --group sword --algo dp_merge,bb_dp
+./build/bin/forge_benchmark --json    # 机器可读 JSON 汇总（供 scripts/bench_report.py）
+./build/bin/forge_benchmark --list    # 列出全部用例
+```
 
-**AlgorithmInput owns data**: `EnchReg`, `Payload` (direct/inventory variant), `Item target`, and `AlgorithmConfig` (aggregating `ForgeConfig` + `SearchConfig`) are stored by value — no pointers, no external lifetime dependencies.
+- 测试框架 `tests/framework/test_framework.h`：`TEST_CASE` 自动注册 + 共享 main + per-case 超时 + `SKIP`；参数 `--list` / `--filter` / `--repeat` / `--verbose`
+- 组织：common / domain（algorithm、business、interface、orchestration）/ integration（真实 socket e2e）/ system（真实 CLI 二进制）
+- 插件相关用例（plugin audit、sandbox）在插件树 + worker 缺失时自动 SKIP
 
-**Profile as first-class citizen**: All pipelines receive `Profile` (or `ProfileManager`), never raw registries extracted from Profile. `Profile` owns `EnchantmentRegistry`, `EquipmentRegistry`, and `TagRegistry` as a unit. Enchantment applicability is `supported_items ∩ tags_of(item)` (real-MC item tags), resolved via the profile's attached `TagResolver`.
+## 📜 脚本
 
-**Pipeline pattern**: Every pipeline is a standalone struct with a single `run()` method. No polymorphism, no registration — dispatch by switch at `BesqContext` or `main.cpp`.
+| 脚本 | 用途 |
+|---|---|
+| `scripts/evaluate.sh` | WSL 评估：Valgrind 泄漏检测、Callgrind/Massif/CacheGrind 分析、benchmark |
+| `scripts/bench_report.py` | benchmark 结果解析 + 趋势图 |
+| `scripts/get_vanilla_data.py` / `download_mc_lang.py` | 从 MC 客户端 jar 提取魔咒/装备数据与官方语言表（`scripts/vanilla/` 包） |
+| `scripts/gen_frontend_icons.py` | 从 vanilla 材质包生成物品图标源（`assets/item_icons/`） |
+| `scripts/gen_sprite.py` | 聚合图标源 → sprite sheet + 前端索引（`gui/frontend/vendor/icons/sprite.png`） |
+| `scripts/gen_names_zh.py` | 生成前端中文名映射（`gui/frontend/names_zh.js`） |
+| `scripts/gen_modded_profile.py` | 生成基准测试 mod profile（`data/tests/profiles/modded_sword.json`） |
+| `scripts/parse_callgrind.py` / `parse_massif.py` / `parse_cachegrind.py` | 分析输出解析 |
 
-**Serialization interfaces**: Business types implement `IJsonSerializable` (`to_json()` / `from_json()`). ADL-compatible free functions in `Serializer.h` delegate to member implementations.
+## 📚 文档导航
 
-**Four-domain layering**: `algorithm/` depends on `besq-common-core` + `besq-common-thread` (PUBLIC) and `log`/`io` (PRIVATE). `business/` adds domain types and registries (depends on core + io + log). `orchestration/` wires algorithm + business together. `interface/` adds CLIApp, BesqContext, C ABI (depends on orchestration + common sub-targets). `besq-common/` is split into 6 independent libraries (core, io, log, i18n, cli, thread; `log` is SHARED so the logger singleton exists once per process) — targets link only what they need.
+| 文档 | 内容 |
+|---|---|
+| [docs/architecture-overview.md](docs/architecture-overview.md) | 架构总览（新开发者入口） |
+| [docs/project-design.md](docs/project-design.md) | 设计理念详述 |
+| [docs/软件需求规格说明书.md](docs/软件需求规格说明书.md) | 需求规格（SRS） |
+| [docs/json-output-schema.md](docs/json-output-schema.md) | JSON 输出线格式规范 |
+| [docs/domain_designs/](docs/domain_designs/) | 各域详细设计（business / interface / orchestration / plugin-sandbox） |
+| [docs/mc/anvil-mechanics-reference.md](docs/mc/anvil-mechanics-reference.md) | Minecraft 铁砧机制参考 |
 
-**No global platform singleton**: Platform (`MCE::Java` / `MCE::Bedrock`) flows through `ForgeConfig` → `AlgorithmInput` → `IForgeEngine`. No global mutable state.
+## 🤝 贡献
 
-**CLIParser with help grouping**: Option/Flag structs carry an optional ``help_group`` field. ``format_help()`` renders options under ``--- Group Name ---`` headers. Duplicate option detection emits warnings for repeated non-flag options. All parser errors are localized via ``UserI18nTranslator``.
+欢迎提交 [Issue](https://github.com/Dinosaur-MC/BestEnchSeq-Core/issues)（Bug 报告 / 功能请求请使用对应的[模板](.github/ISSUE_TEMPLATE/)）与 Pull Request。
 
-**final_item**: ``AlgorithmOutput::final_item`` is computed by ``AlgorithmExecutor::output()`` as the target equipment with all source enchantments merged, flowing through ``CompactAdapter::recall()`` into ``Solution::final_item``. ``format_verbose()`` displays it at the end of the forge plan.
+新开发者建议从 [docs/architecture-overview.md](docs/architecture-overview.md) 的「给新开发者的第一课」开始。
 
-**Language selection**: ``CLIApp::apply_lang()`` is called early in ``main.cpp`` (before parsing) so ``--lang`` affects error messages and help text. Invalid ``--lang`` values print a warning listing available languages (``en_US``, ``zh_CN``) and fall back to the system locale. Uses ``EnvUtil`` (not raw ``getenv``) for type-safe env var access.
+## 📄 许可
 
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/evaluate.sh` | WSL-based Valgrind evaluation — leak check, Callgrind/Massif profiling, benchmark |
-| `scripts/get_vanilla_data.py` | Extract enchantment/equipment data from official Minecraft client jar → `data/builtin/vanilla.json` |
-| `scripts/parse_callgrind.py` | Parse Callgrind `callgrind.out` → function hotspot ranking |
-| `scripts/parse_massif.py` | Parse Massif `ms_print` output → heap memory change chart + allocation hotspots |
-
-## License
-
-> MIT License
+[MIT](LICENSE) © 2026 Dinosaur_MC
