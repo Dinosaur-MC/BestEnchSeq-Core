@@ -219,8 +219,11 @@ function tailHtml(sol, rootTimeMs) {
     metaLines.push(`<div>${name}${ver}</div>`);
   }
   const wallTime = rootTimeMs != null ? rootTimeMs : (m.computation_time != null ? m.computation_time : null);
-  if (wallTime != null)
-    metaLines.push(`<div>${esc(tf('res.wall_time', esc(String(wallTime))))}</div>`);
+  if (wallTime != null) {
+    // <1ms 的求解被毫秒截断为 0——显示 "<1 ms" 而非 "0"（与历史页口径一致）
+    const wallLabel = wallTime > 0 ? String(wallTime) : '<1 ms';
+    metaLines.push(`<div>${esc(tf('res.wall_time', esc(wallLabel)))}</div>`);
+  }
   if (!metaLines.length) return '';
   return `<div class="res-tail">` +
     `<div class="res-meta">${metaLines.join('')}</div>` +

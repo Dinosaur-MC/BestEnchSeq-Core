@@ -151,7 +151,9 @@ function detailHtml(result) {
 const rowHtml = (e) => {
   const isCompleted = e.type === 'completed';
   const cost = isCompleted ? String(e.total_level_cost) : dash;
-  const dur = e.computation_ms > 0 ? `${e.computation_ms} ms` : dash;
+  // 耗时 <1ms（目标已达成 0 步/快速求解）被毫秒截断为 0——Completed 显示
+  // "<1 ms"（诚实反映截断语义），Failed/Cancelled 无耗时概念保持 '—'。
+  const dur = isCompleted ? (e.computation_ms > 0 ? `${e.computation_ms} ms` : '<1 ms') : dash;
   const err = e.type === 'failed' && e.error_message ? esc(e.error_message) : dash;
   const hasResult = isCompleted && e.result && typeof e.result === 'object' &&
     Array.isArray(e.result.solutions) && e.result.solutions.length > 0;
