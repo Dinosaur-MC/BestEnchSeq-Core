@@ -1,28 +1,29 @@
 #pragma once
-#include "domain/business/registries/EnchantmentRegistry.h"
-#include "domain/business/registries/EquipmentRegistry.h"
-#include "domain/business/registries/TagRegistry.h"
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
 #include "common/serialization/IJsonSerializable.h"
+#include "domain/business/registries/EnchantmentRegistry.h"
+#include "domain/business/registries/EquipmentRegistry.h"
+#include "domain/business/registries/TagRegistry.h"
 #include <chrono>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
-class TagResolver;  // fwd — Profile stores a shared_ptr; complete type only needed at call sites
+class TagResolver; // fwd — Profile stores a shared_ptr; complete type only needed at call sites
 
 // ── Profile Metadata ──────────────────────────────────────────────────
 
 struct ProfileMetadata {
-    std::string name;          ///< Identity key (string, arbitrary — B-T13)
-    std::string display_name;  ///< Human-friendly name for UI (optional; empty → fall back to name)
+    std::string name;         ///< Identity key (string, arbitrary — B-T13)
+    std::string display_name; ///< Human-friendly name for UI (optional; empty → fall back to name)
     std::string description;
     std::string author;
     std::string version;
-    std::string parent;                          ///< Branch source profile name
-    std::vector<std::string> dependencies;       ///< 声明的直接依赖（传递解析）
+    std::string mc_version;                ///< Minecraft release id the data targets (e.g. "26.2")
+    std::string parent;                    ///< Branch source profile name
+    std::vector<std::string> dependencies; ///< 声明的直接依赖（传递解析）
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point updated_at;
 
@@ -31,31 +32,25 @@ struct ProfileMetadata {
 
     /// Name-only constructor: timestamps default to now.
     explicit ProfileMetadata(std::string name_)
-        : name(std::move(name_))
-        , created_at(std::chrono::system_clock::now())
-        , updated_at(created_at) {}
+        : name(std::move(name_)), created_at(std::chrono::system_clock::now()), updated_at(created_at) {}
 
     /// Full-parameter constructor.
-    ProfileMetadata(std::string name_, std::string desc, std::string author_,
-                    std::string ver, std::string parent_)
-        : name(std::move(name_))
-        , description(std::move(desc))
-        , author(std::move(author_))
-        , version(std::move(ver))
-        , parent(std::move(parent_))
-        , created_at(std::chrono::system_clock::now())
-        , updated_at(created_at) {}
+    ProfileMetadata(std::string name_, std::string desc, std::string author_, std::string ver, std::string parent_)
+        : name(std::move(name_)), description(std::move(desc)), author(std::move(author_)), version(std::move(ver)),
+          parent(std::move(parent_)), created_at(std::chrono::system_clock::now()), updated_at(created_at) {}
 
     // JSON keys (matching vanilla.json structure)
-    static constexpr std::string_view KEY_NAME         = "name";
+    static constexpr std::string_view KEY_NAME = "name";
     static constexpr std::string_view KEY_DISPLAY_NAME = "display_name";
     static constexpr std::string_view KEY_DESCRIPTION = "description";
-    static constexpr std::string_view KEY_AUTHOR      = "author";
-    static constexpr std::string_view KEY_VERSION     = "version";
+    static constexpr std::string_view KEY_AUTHOR = "author";
+    static constexpr std::string_view KEY_VERSION = "version";
+    static constexpr std::string_view KEY_MC_VERSION = "mc_version";
+    static constexpr std::string_view KEY_PARENT = "parent";
     static constexpr std::string_view KEY_DEPENDENCIES = "dependencies";
     static constexpr std::string_view KEY_ENCHANTMENTS = "enchantments";
-    static constexpr std::string_view KEY_EQUIPMENTS   = "equipments";
-    static constexpr std::string_view KEY_TAGS         = "tags";
+    static constexpr std::string_view KEY_EQUIPMENTS = "equipments";
+    static constexpr std::string_view KEY_TAGS = "tags";
 };
 
 // ── Profile — Business Domain First-Class Citizen ─────────────────────
@@ -74,8 +69,7 @@ public:
 
     /// Full-parameter constructor: construct with all data upfront.
     /// Takes ownership of metadata (by move) and three registries.
-    Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq,
-            TagRegistry tags);
+    Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq, TagRegistry tags);
 
     // -- Metadata -------------------------------------------------------
 
@@ -86,9 +80,7 @@ public:
 
     /// Human-friendly name for UI.  Falls back to the identity key when no
     /// display_name is set, so it always returns something non-empty.
-    std::string display_name() const {
-        return _meta.display_name.empty() ? _meta.name : _meta.display_name;
-    }
+    std::string display_name() const { return _meta.display_name.empty() ? _meta.name : _meta.display_name; }
 
     /// Set the human-friendly name (empty clears it → falls back to the key).
     void set_display_name(std::string n) { _meta.display_name = std::move(n); }

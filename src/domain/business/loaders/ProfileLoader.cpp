@@ -1,13 +1,13 @@
 #include "ProfileLoader.h"
-#include "domain/business/components/FormatDetector.h"
-#include "domain/business/components/LimitedLevelCalculator.h"
-#include "domain/business/loaders/RegistryLoader.h"
-#include "domain/business/parsers/McOfficialParser.h"
 #include "builtin/DataLoader.h"
 #include "builtin/ItemProperties.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
+#include "domain/business/components/FormatDetector.h"
+#include "domain/business/components/LimitedLevelCalculator.h"
+#include "domain/business/loaders/RegistryLoader.h"
+#include "domain/business/parsers/McOfficialParser.h"
 
 #include <filesystem>
 #include <fstream>
@@ -33,21 +33,29 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // supported_items references survive cross-validation (B-T24 #24).
         auto [ench_data, eq_data, item_tags] = FormatDetector::parse(path);
 
-        // Phase 1b: parse the profile's declared dependencies AND the profile
-        // KEY from the raw JSON root.  FormatDetector::Result carries
-        // enchantments/equipment/item_tags but NOT the top-level `dependencies`
-        // array or `name`, so re-read them here.  (CSV / MC-official formats
-        // have no JSON name/dependencies — the profile key falls back to the
-        // file stem.)
+        // Phase 1b: parse the profile's metadata (KEY + declared dependencies +
+        // description/author/version/mc_version/display_name/parent) from the
+        // raw JSON root.  FormatDetector::Result carries
+        // enchantments/equipment/item_tags but NOT the top-level metadata, so
+        // re-read them here.  (CSV / MC-official formats have no JSON metadata
+        // — the profile key falls back to the file stem, the rest stays empty.)
         std::vector<std::string> dependencies;
-        std::string json_name;
+        std::string json_name, json_description, json_author, json_version, json_mc_version, json_display_name, json_parent;
         const auto format = FormatDetector::detect(path);
         if (format == DataFormat::NativeJson || format == DataFormat::Unknown) {
             auto root = Json::parse(file_utils::read_file(path));
+            auto read_str = [&root](std::string_view key) {
+                return root.has(std::string(key)) ? root[std::string(key)].as<std::string>() : std::string{};
+            };
             // B-T26 #18: JSON top-level `name` is the profile KEY when present
             // and non-empty (user-confirmed "name 优先，fallback 文件/目录名").
-            if (root.has(std::string(ProfileMetadata::KEY_NAME)))
-                json_name = root[std::string(ProfileMetadata::KEY_NAME)].as<std::string>();
+            json_name = read_str(ProfileMetadata::KEY_NAME);
+            json_description = read_str(ProfileMetadata::KEY_DESCRIPTION);
+            json_author = read_str(ProfileMetadata::KEY_AUTHOR);
+            json_version = read_str(ProfileMetadata::KEY_VERSION);
+            json_mc_version = read_str(ProfileMetadata::KEY_MC_VERSION);
+            json_display_name = read_str(ProfileMetadata::KEY_DISPLAY_NAME);
+            json_parent = read_str(ProfileMetadata::KEY_PARENT);
             if (root.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
                 Json dep_val = root[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
                 if (dep_val.type() == JsonType::Array) {
@@ -70,8 +78,7 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         // FormatDetector::Result carries item_tags for the McOfficial branch;
         // native JSON/CSV have none, so this is a no-op for them (B-T24 #24).
         auto datapack_tags = McOfficialParser::build_item_tag_registry(item_tags);
-        auto own = RegistryLoader::resolve_own_content(
-            ench_data, eq_data, item_tags.empty() ? nullptr : &datapack_tags);
+        auto own = RegistryLoader::resolve_own_content(ench_data, eq_data, item_tags.empty() ? nullptr : &datapack_tags);
 
         // Compute limited_level uniformly (B-T18): the profile's own registry,
         // using the attached vanilla-universe resolver, BEFORE the profile is
@@ -91,8 +98,18 @@ bool ProfileLoader::load_into(Profile& profile, const std::filesystem::path& pat
         std::string key = path.stem().string();
         if (!json_name.empty())
             key = std::move(json_name);
-        profile = Profile(ProfileMetadata(std::move(key)), std::move(own.ench),
-                          std::move(own.eq), std::move(own.tags));
+        // Restore the full top-level metadata parsed in Phase 1b (C4): the
+        // name-only constructor would silently drop description/author/version/
+        // mc_version/display_name/parent.  The name-only constructor seeds the
+        // timestamps; the Profile ctor guards zero time_points anyway.
+        ProfileMetadata meta(std::move(key));
+        meta.description = std::move(json_description);
+        meta.author = std::move(json_author);
+        meta.version = std::move(json_version);
+        meta.mc_version = std::move(json_mc_version);
+        meta.display_name = std::move(json_display_name);
+        meta.parent = std::move(json_parent);
+        profile = Profile(std::move(meta), std::move(own.ench), std::move(own.eq), std::move(own.tags));
         // Restore the declared dependencies parsed in Phase 1b.
         profile.set_dependencies(std::move(dependencies));
         // Attach the vanilla tag universe resolver so the profile's `#tag`
@@ -138,8 +155,13 @@ bool ProfileLoader::load_builtin(Profile& profile) {
         // Compute limited_level uniformly (B-T18) with the builtin resolver.
         auto resolver = besq::data::make_builtin_tag_resolver();
         LimitedLevelCalculator::compute(ench_reg, *resolver, load_item_properties());
-        profile = Profile(ProfileMetadata("builtin:vanilla"), std::move(ench_reg),
-                          std::move(eq_reg), std::move(tag_reg));
+        // Restore the vanilla.json top-level metadata (description/author/
+        // version/mc_version/…) from the same content source the DTOs came
+        // from (C4).  The root profile KEY stays fixed at "builtin:vanilla" —
+        // the JSON root `name` ("Vanilla") is a display string, not the key.
+        ProfileMetadata meta = besq::data::load_builtin_metadata();
+        meta.name = "builtin:vanilla";
+        profile = Profile(std::move(meta), std::move(ench_reg), std::move(eq_reg), std::move(tag_reg));
         profile.set_tag_resolver(std::move(resolver));
         return true;
     } catch (const std::exception& e) {

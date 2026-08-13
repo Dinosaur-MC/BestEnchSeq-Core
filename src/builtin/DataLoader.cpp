@@ -1,11 +1,11 @@
 #include "DataLoader.h"
-#include "EmbeddedData.h"
+#include "common/io/FileUtils.hpp"
+#include "common/io/json.h"
 #include "domain/business/components/FormatDetector.h"
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/parsers/NativeJsonParser.h"
-#include "common/io/FileUtils.hpp"
-#include "common/io/json.h"
+#include "EmbeddedData.h"
 
 #include <filesystem>
 #include <memory>
@@ -33,8 +33,7 @@ std::string read_builtin_content(const std::filesystem::path& data_dir) {
 /// "minecraft:enchantable/sharp_weapon" — and values are the raw array
 /// entries (concrete IDs or `#`-references), preserved verbatim so nested
 /// tag expansion happens lazily at resolution time.
-std::vector<std::pair<std::string, std::vector<std::string>>>
-parse_tag_entries(const std::string& content) {
+std::vector<std::pair<std::string, std::vector<std::string>>> parse_tag_entries(const std::string& content) {
     std::vector<std::pair<std::string, std::vector<std::string>>> out;
     try {
         Json root = Json::parse(content);
@@ -83,15 +82,12 @@ TagRegistry parse_base_tags(const std::string& content) {
 
 } // namespace
 
-std::vector<std::pair<std::string, std::vector<std::string>>>
-load_builtin_tag_entries(const std::filesystem::path& data_dir) {
+std::vector<std::pair<std::string, std::vector<std::string>>> load_builtin_tag_entries(const std::filesystem::path& data_dir) {
     // Process-lifetime cache: the builtin vanilla.json is static for a given
     // data_dir, so parse it once and reuse — avoids re-parsing ~92 KB on every
     // profile load and keeps the parser seed / DataLoader seed consistent.
     // Profile loading is single-threaded in this codebase.
-    static std::unordered_map<
-        std::string, std::vector<std::pair<std::string, std::vector<std::string>>>>
-        cache;
+    static std::unordered_map<std::string, std::vector<std::pair<std::string, std::vector<std::string>>>> cache;
     const std::string key = data_dir.string();
     auto it = cache.find(key);
     if (it != cache.end())
@@ -101,21 +97,47 @@ load_builtin_tag_entries(const std::filesystem::path& data_dir) {
     return entries;
 }
 
-std::shared_ptr<TagResolver> make_builtin_tag_resolver(
-    const std::filesystem::path& data_dir) {
+std::shared_ptr<TagResolver> make_builtin_tag_resolver(const std::filesystem::path& data_dir) {
     auto resolver = std::make_shared<TagResolver>();
     for (const auto& [key, values] : load_builtin_tag_entries(data_dir))
-        resolver->add_tag(key,
-                          std::unordered_set<std::string>(values.begin(), values.end()));
+        resolver->add_tag(key, std::unordered_set<std::string>(values.begin(), values.end()));
     return resolver;
 }
 
-void load_builtin_data(
-    TagRegistry& tag_reg,
-    EnchantmentRegistry& ench_reg,
-    EquipmentRegistry& eq_reg,
-    const std::filesystem::path& data_dir
-) {
+ProfileMetadata load_builtin_metadata(const std::filesystem::path& data_dir) {
+    ProfileMetadata meta;
+    try {
+        Json root = Json::parse(read_builtin_content(data_dir));
+        if (root.type() != JsonType::Object)
+            return meta;
+        auto read_str = [&root](std::string_view key) {
+            return root.has(std::string(key)) ? root[std::string(key)].as<std::string>() : std::string{};
+        };
+        meta.name = read_str(ProfileMetadata::KEY_NAME);
+        meta.display_name = read_str(ProfileMetadata::KEY_DISPLAY_NAME);
+        meta.description = read_str(ProfileMetadata::KEY_DESCRIPTION);
+        meta.author = read_str(ProfileMetadata::KEY_AUTHOR);
+        meta.version = read_str(ProfileMetadata::KEY_VERSION);
+        meta.mc_version = read_str(ProfileMetadata::KEY_MC_VERSION);
+        meta.parent = read_str(ProfileMetadata::KEY_PARENT);
+        if (root.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
+            Json dep_val = root[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
+            if (dep_val.type() == JsonType::Array)
+                for (const auto& e : dep_val.as_array())
+                    meta.dependencies.push_back(e.as<std::string>());
+        }
+        meta.created_at = std::chrono::system_clock::now();
+        meta.updated_at = meta.created_at;
+    } catch (const std::exception&) {
+        // best-effort — a malformed override yields default (empty) metadata
+    }
+    return meta;
+}
+
+void load_builtin_data(TagRegistry& tag_reg,
+                       EnchantmentRegistry& ench_reg,
+                       EquipmentRegistry& eq_reg,
+                       const std::filesystem::path& data_dir) {
     auto vanilla_path = data_dir / "vanilla.json";
     RegistryLoader loader;
 
@@ -129,8 +151,7 @@ void load_builtin_data(
         // Filesystem path: allows user to replace builtin data (any supported
         // format; for non-JSON overrides the categories array is simply empty).
         auto parsed = FormatDetector::parse(vanilla_path);
-        loader.resolve(parsed.enchantments, parsed.equipment,
-                       tag_reg, eq_reg, ench_reg, &base_tags);
+        loader.resolve(parsed.enchantments, parsed.equipment, tag_reg, eq_reg, ench_reg, &base_tags);
     } else {
         // Embedded fallback: zero I/O, always available (native JSON).
         auto parsed = NativeJsonParser::parse_string(content);

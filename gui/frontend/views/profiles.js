@@ -216,6 +216,8 @@ function renderMeta(meta) {
     <h3>${esc(meta.name || '')}</h3>
     <table class="meta-table">
       <tr><th>name</th><td>${esc(meta.name || '')}</td></tr>
+      <tr><th>${t('prof.description')}</th><td>${esc(meta.description || '—')}</td></tr>
+      <tr><th>${t('prof.mc_version')}</th><td>${esc(meta.mc_version || '—')}</td></tr>
       <tr><th>is_root</th><td>${meta.is_root ? 'yes' : 'no'}</td></tr>
       <tr><th>format</th><td>${esc(meta.format || '')}</td></tr>
       <tr><th>enchantments</th><td>${esc(meta.ench_count ?? '')}</td></tr>

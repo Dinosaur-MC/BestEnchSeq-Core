@@ -1,11 +1,11 @@
 #include "ProfilesController.h"
-#include "domain/interface/BesqContext.h"
+#include "common/io/json.h"
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/business/types/Equipment.h"
 #include "domain/business/types/EquipmentTag.h"
+#include "domain/interface/BesqContext.h"
 #include "domain/orchestration/components/CompactAdapter.h"
-#include "common/io/json.h"
 #include <algorithm>
 #include <mutex>
 #include <string>
@@ -24,13 +24,11 @@ Json ok_json() {
 }
 
 /// Stable ordering by id — mirrors the old ApiProfiles::registry_json.
-template <typename Registry>
-Json registry_json(const Registry& reg) {
+template <typename Registry> Json registry_json(const Registry& reg) {
     std::vector<typename Registry::value_type> entries;
     for (const auto& e : reg)
         entries.push_back(e);
-    std::sort(entries.begin(), entries.end(),
-              [](const auto& a, const auto& b) { return a.id.str() < b.id.str(); });
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.id.str() < b.id.str(); });
     Json arr = Json::array();
     for (const auto& e : entries)
         arr.push_back(e.to_json());
@@ -102,7 +100,9 @@ Response ProfilesController::read(const HttpRequest&, const PathParams& pp) {
     for (const auto& d : meta.dependencies)
         deps.push_back(Json(d));
     o["dependencies"] = deps;
+    o["description"] = Json(meta.description);
     o["version"] = Json(meta.version);
+    o["mc_version"] = Json(meta.mc_version);
     o["release_tag"] = Json(meta.release_tag);
     o["is_root"] = Json(meta.is_root);
     o["ench_count"] = Json(static_cast<int64_t>(meta.ench_count));
@@ -295,7 +295,7 @@ Response ProfilesController::updateEnch(const HttpRequest&, const PathParams& pp
     }
     if (info.id.empty())
         throw WebHttpError(400, "INVALID_BODY", "enchantment entry requires a non-empty id");
-    auto pid = path_nsid(pp.get("name"));   // path_nsid throws 404 on an invalid NSID
+    auto pid = path_nsid(pp.get("name")); // path_nsid throws 404 on an invalid NSID
     if (pid != info.id)
         throw WebHttpError(400, "INVALID_FIELD", "path name must match body id");
     if (!_ctx.update_enchantment_to(key, info))
@@ -363,7 +363,7 @@ Response ProfilesController::updateEquip(const HttpRequest&, const PathParams& p
     }
     if (eq.id.empty())
         throw WebHttpError(400, "INVALID_BODY", "equipment entry requires a non-empty id");
-    auto pid = path_nsid(pp.get("name"));   // path_nsid throws 404 on an invalid NSID
+    auto pid = path_nsid(pp.get("name")); // path_nsid throws 404 on an invalid NSID
     if (pid != eq.id)
         throw WebHttpError(400, "INVALID_FIELD", "path name must match body id");
     if (!_ctx.update_equipment_to(key, eq))
@@ -431,7 +431,7 @@ Response ProfilesController::updateTag(const HttpRequest&, const PathParams& pp,
     }
     if (tag.id.empty())
         throw WebHttpError(400, "INVALID_BODY", "tag entry requires a non-empty id");
-    auto pid = path_nsid(pp.get("name"));   // path_nsid throws 404 on an invalid NSID
+    auto pid = path_nsid(pp.get("name")); // path_nsid throws 404 on an invalid NSID
     if (pid != tag.id)
         throw WebHttpError(400, "INVALID_FIELD", "path name must match body id");
     if (!_ctx.update_tag_to(key, tag))
@@ -482,8 +482,7 @@ Response ProfilesController::listEnchantables(const HttpRequest&, const PathPara
             hits.push_back(e);
 
     // Deterministic ordering by id (same comparator as registry_json).
-    std::sort(hits.begin(), hits.end(),
-              [](const EnchInfo& a, const EnchInfo& b) { return a.id.str() < b.id.str(); });
+    std::sort(hits.begin(), hits.end(), [](const EnchInfo& a, const EnchInfo& b) { return a.id.str() < b.id.str(); });
     Json arr = Json::array();
     for (const auto& e : hits)
         arr.push_back(e.to_json());

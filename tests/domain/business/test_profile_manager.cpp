@@ -466,6 +466,76 @@ TEST_CASE("test_pm_load_directory_json_name_key") {
     TEST_PASS("test_pm_load_directory_json_name_key");
 }
 
+// ─── Test: ProfileLoader::load restores full metadata from the JSON root ──
+// C4: description/author/version/mc_version/display_name/parent were dropped
+// by the name-only ProfileMetadata constructor in the load path.  A
+// native-JSON profile that declares them must see them restored after load
+// (both the ProfileLoader::load file path and the load_directory manager path).
+
+TEST_CASE("test_pm_loader_restores_metadata") {
+    auto dir = std::filesystem::temp_directory_path() / "besq_pm_meta_restore";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    auto f = dir / "meta.json";
+    {
+        std::ofstream out(f);
+        out << R"({
+            "name": "meta_profile",
+            "description": "Restored description",
+            "author": "Tester",
+            "version": "3.1.4",
+            "mc_version": "1.21.4",
+            "display_name": "Meta Profile",
+            "parent": "base_profile",
+            "dependencies": ["builtin:vanilla"],
+            "enchantments": [],
+            "equipments": [],
+            "categories": [],
+            "tags": {}
+        })";
+    }
+
+    // ProfileLoader::load — the file path restores every declared field.
+    ProfileLoader loader;
+    Profile p = loader.load(f);
+    expect(p.metadata().description == "Restored description", "load restores description");
+    expect(p.metadata().author == "Tester", "load restores author");
+    expect(p.metadata().version == "3.1.4", "load restores version");
+    expect(p.metadata().mc_version == "1.21.4", "load restores mc_version");
+    expect(p.metadata().display_name == "Meta Profile", "load restores display_name");
+    expect(p.metadata().parent == "base_profile", "load restores parent");
+    expect(p.dependencies().size() == 1 && p.dependencies()[0] == "builtin:vanilla", "load keeps declared dependencies");
+
+    // load_directory — the manager path restores metadata identically.
+    ProfileManager pm;
+    pm.load_directory(dir);
+    const Profile* q = pm.find("meta_profile");
+    expect(q != nullptr, "load_directory registers the JSON-name key");
+    expect(q != nullptr && q->metadata().author == "Tester", "load_directory restores author");
+    expect(q != nullptr && q->metadata().mc_version == "1.21.4", "load_directory restores mc_version");
+
+    std::filesystem::remove_all(dir);
+    TEST_PASS("test_pm_loader_restores_metadata");
+}
+
+// ─── Test: builtin:vanilla metadata restored from vanilla.json root ───────
+// C4: load_builtin used a name-only constructor so description/author/version/
+// mc_version were all dropped.  After the fix, the builtin profile carries the
+// vanilla.json top-level metadata — mc_version is the MC release id written by
+// scripts/vanilla/enchantment.py::write_output from res/vanilla/version.json
+// (currently 26.2).
+
+TEST_CASE("test_pm_builtin_metadata") {
+    ProfileLoader loader;
+    Profile p = loader.load_builtin();
+    expect(p.name() == "builtin:vanilla", "builtin key unchanged");
+    expect(!p.metadata().description.empty(), "builtin description restored (non-empty)");
+    expect(p.metadata().author == "BestEnchSeq", "builtin author restored");
+    expect(p.metadata().version == "2.0.0", "builtin version restored");
+    expect(p.metadata().mc_version == "26.2", "builtin mc_version = MC release id from res/vanilla/version.json");
+    TEST_PASS("test_pm_builtin_metadata");
+}
+
 // ─── Test: tag merge direction — higher-priority source wins (B-T26 #19) ───
 // build_tag_resolver must take member data from the LAST (highest-priority)
 // source that defines a tag, matching the effective-view merge direction

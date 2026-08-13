@@ -242,9 +242,13 @@ void test_profiles(TestApp& app) {
     // ── 2. read metadata → every ProfileMeta field present ──
     auto r = app.call(Method::Get, "/api/profiles/" + key);
     expect(r.status == 200, "profile metadata 200");
-    for (const char* f :
-         {"name", "dependencies", "is_root", "format", "ench_count", "eq_count", "tag_count", "version", "release_tag"})
+    for (const char* f : {"name", "dependencies", "is_root", "format", "ench_count", "eq_count", "tag_count", "version",
+                          "release_tag", "description", "mc_version"})
         expect(r.body.find(f) != std::string::npos, std::string("metadata field ") + f);
+    // C4: the builtin root must expose restored description + mc_version.
+    auto rj = Json::parse(r.body);
+    expect(rj.has("description") && !rj["description"].as<std::string>().empty(), "metadata description present and non-empty");
+    expect(rj.has("mc_version") && !rj["mc_version"].as<std::string>().empty(), "metadata mc_version present and non-empty");
 
     // ── 3. equipments round-trip: delete-existing → add → read → update → read → delete ──
     // `minecraft:netherite_sword` ships in the builtin profile, so the "add"

@@ -35,7 +35,9 @@ struct AlgorithmDetail {
 struct ProfileMeta {
     std::string name;
     std::vector<std::string> dependencies;
+    std::string description; ///< 概要描述（vanilla.json 顶层）
     std::string version;     ///< 空 = 未发布
+    std::string mc_version;  ///< 目标 Minecraft 版本 id（如 "26.2"；空 = 未声明）
     std::string release_tag; ///< 空 = 未发布
     bool is_root = false;
     size_t ench_count = 0, eq_count = 0, tag_count = 0;

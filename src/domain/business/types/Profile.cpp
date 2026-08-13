@@ -1,6 +1,6 @@
 #include "Profile.h"
-#include "domain/business/components/Serializer.h"  // for EnchantmentRegistry/EquipmentRegistry << >>
 #include "common/CommonTypes.h"
+#include "domain/business/components/Serializer.h" // for EnchantmentRegistry/EquipmentRegistry << >>
 
 #include <chrono>
 
@@ -10,13 +10,8 @@
 
 Profile::Profile(std::string name) : _meta(ProfileMetadata(std::move(name))) {}
 
-Profile::Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq,
-                 TagRegistry tags)
-    : _meta(std::move(meta))
-    , _ench(std::move(ench))
-    , _eq(std::move(eq))
-    , _tags(std::move(tags))
-{
+Profile::Profile(ProfileMetadata meta, EnchantmentRegistry ench, EquipmentRegistry eq, TagRegistry tags)
+    : _meta(std::move(meta)), _ench(std::move(ench)), _eq(std::move(eq)), _tags(std::move(tags)) {
     // ProfileMetadata constructors already set timestamps to now.
     // Only guard against edge cases like raw default-constructed metadata.
     if (_meta.created_at == std::chrono::system_clock::time_point{})
@@ -123,15 +118,15 @@ bool Profile::validate() const {
 
 Profile Profile::clone(const std::string& new_name) const {
     Profile p;
-    p._meta            = _meta;
-    p._meta.name       = new_name;
-    p._meta.parent     = _meta.name;
+    p._meta = _meta;
+    p._meta.name = new_name;
+    p._meta.parent = _meta.name;
     p._meta.created_at = std::chrono::system_clock::now();
     p._meta.updated_at = p._meta.created_at;
-    p._ench            = _ench;  // value-type deep copy
-    p._eq              = _eq;
-    p._tags            = _tags;
-    p._tag_resolver    = _tag_resolver;  // shared TagResolver carried across clone
+    p._ench = _ench; // value-type deep copy
+    p._eq = _eq;
+    p._tags = _tags;
+    p._tag_resolver = _tag_resolver; // shared TagResolver carried across clone
     return p;
 }
 
@@ -145,10 +140,11 @@ Profile Profile::clone(const std::string& new_name) const {
 
 Json Profile::to_json() const {
     Json obj = Json::object()
-        .set(std::string(ProfileMetadata::KEY_NAME),        Json(_meta.name))
-        .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(_meta.description))
-        .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(_meta.author))
-        .set(std::string(ProfileMetadata::KEY_VERSION),     Json(_meta.version));
+                   .set(std::string(ProfileMetadata::KEY_NAME), Json(_meta.name))
+                   .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(_meta.description))
+                   .set(std::string(ProfileMetadata::KEY_AUTHOR), Json(_meta.author))
+                   .set(std::string(ProfileMetadata::KEY_VERSION), Json(_meta.version))
+                   .set(std::string(ProfileMetadata::KEY_MC_VERSION), Json(_meta.mc_version));
 
     // Display name — only when set AND distinct from the identity key, so a
     // profile that merely mirrors its key stays noise-free.
@@ -194,15 +190,28 @@ Profile Profile::from_json_static(const Json& json) {
     if (json.type() != JsonType::Object)
         return p;
 
-    p._meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME))
-                              ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>()
-                              : "";
+    p._meta.name =
+        json.has(std::string(ProfileMetadata::KEY_NAME)) ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>() : "";
     p._meta.display_name = json.has(std::string(ProfileMetadata::KEY_DISPLAY_NAME))
-                              ? json[std::string(ProfileMetadata::KEY_DISPLAY_NAME)].as<std::string>()
+                               ? json[std::string(ProfileMetadata::KEY_DISPLAY_NAME)].as<std::string>()
+                               : "";
+    p._meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION))
+                              ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>()
                               : "";
-    p._meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
-    p._meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
-    p._meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";
+    p._meta.author = json.has(std::string(ProfileMetadata::KEY_AUTHOR))
+                         ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>()
+                         : "";
+    p._meta.version = json.has(std::string(ProfileMetadata::KEY_VERSION))
+                          ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>()
+                          : "";
+    p._meta.mc_version = json.has(std::string(ProfileMetadata::KEY_MC_VERSION))
+                             ? json[std::string(ProfileMetadata::KEY_MC_VERSION)].as<std::string>()
+                             : "";
+    // parent — restored when present in the JSON (branch source; not emitted by
+    // to_json, which keeps the pre-existing write shape).
+    p._meta.parent = json.has(std::string(ProfileMetadata::KEY_PARENT))
+                         ? json[std::string(ProfileMetadata::KEY_PARENT)].as<std::string>()
+                         : "";
 
     // Dependencies — declared direct profile dependencies
     if (json.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
@@ -213,8 +222,8 @@ Profile Profile::from_json_static(const Json& json) {
         }
     }
 
-    p._meta.created_at  = std::chrono::system_clock::now();
-    p._meta.updated_at  = p._meta.created_at;
+    p._meta.created_at = std::chrono::system_clock::now();
+    p._meta.updated_at = p._meta.created_at;
 
     // Enchantments
     if (json.has(std::string(ProfileMetadata::KEY_ENCHANTMENTS))) {
@@ -237,7 +246,7 @@ Profile Profile::from_json_static(const Json& json) {
                 if (elem.type() == JsonType::String) {
                     std::string name = elem.as<std::string>();
                     EquipmentTag tag;
-                    tag.id   = NSID("#minecraft:" + name);
+                    tag.id = NSID("#minecraft:" + name);
                     tag.name = std::move(name);
                     p._tags.insert(std::move(tag));
                 }
@@ -264,10 +273,11 @@ const Json& operator>>(const Json& json, Profile& profile) {
 
 Json& operator<<(Json& json, const ProfileMetadata& meta) {
     json = Json::object()
-        .set(std::string(ProfileMetadata::KEY_NAME),        Json(meta.name))
-        .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(meta.description))
-        .set(std::string(ProfileMetadata::KEY_AUTHOR),      Json(meta.author))
-        .set(std::string(ProfileMetadata::KEY_VERSION),     Json(meta.version));
+               .set(std::string(ProfileMetadata::KEY_NAME), Json(meta.name))
+               .set(std::string(ProfileMetadata::KEY_DESCRIPTION), Json(meta.description))
+               .set(std::string(ProfileMetadata::KEY_AUTHOR), Json(meta.author))
+               .set(std::string(ProfileMetadata::KEY_VERSION), Json(meta.version))
+               .set(std::string(ProfileMetadata::KEY_MC_VERSION), Json(meta.mc_version));
     if (!meta.display_name.empty() && meta.display_name != meta.name)
         json.set(std::string(ProfileMetadata::KEY_DISPLAY_NAME), Json(meta.display_name));
     if (!meta.dependencies.empty()) {
@@ -283,15 +293,26 @@ const Json& operator>>(const Json& json, ProfileMetadata& meta) {
     if (json.type() != JsonType::Object)
         return json;
 
-    meta.name        = json.has(std::string(ProfileMetadata::KEY_NAME))
-                           ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>()
-                           : "";
+    meta.name =
+        json.has(std::string(ProfileMetadata::KEY_NAME)) ? json[std::string(ProfileMetadata::KEY_NAME)].as<std::string>() : "";
     meta.display_name = json.has(std::string(ProfileMetadata::KEY_DISPLAY_NAME))
-                           ? json[std::string(ProfileMetadata::KEY_DISPLAY_NAME)].as<std::string>()
+                            ? json[std::string(ProfileMetadata::KEY_DISPLAY_NAME)].as<std::string>()
+                            : "";
+    meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION))
+                           ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>()
                            : "";
-    meta.description = json.has(std::string(ProfileMetadata::KEY_DESCRIPTION)) ? json[std::string(ProfileMetadata::KEY_DESCRIPTION)].as<std::string>() : "";
-    meta.author      = json.has(std::string(ProfileMetadata::KEY_AUTHOR)) ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>() : "";
-    meta.version     = json.has(std::string(ProfileMetadata::KEY_VERSION)) ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>() : "";
+    meta.author = json.has(std::string(ProfileMetadata::KEY_AUTHOR))
+                      ? json[std::string(ProfileMetadata::KEY_AUTHOR)].as<std::string>()
+                      : "";
+    meta.version = json.has(std::string(ProfileMetadata::KEY_VERSION))
+                       ? json[std::string(ProfileMetadata::KEY_VERSION)].as<std::string>()
+                       : "";
+    meta.mc_version = json.has(std::string(ProfileMetadata::KEY_MC_VERSION))
+                          ? json[std::string(ProfileMetadata::KEY_MC_VERSION)].as<std::string>()
+                          : "";
+    meta.parent = json.has(std::string(ProfileMetadata::KEY_PARENT))
+                      ? json[std::string(ProfileMetadata::KEY_PARENT)].as<std::string>()
+                      : "";
     if (json.has(std::string(ProfileMetadata::KEY_DEPENDENCIES))) {
         Json dep_val = json[std::string(ProfileMetadata::KEY_DEPENDENCIES)];
         if (dep_val.type() == JsonType::Array) {

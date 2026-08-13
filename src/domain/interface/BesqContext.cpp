@@ -224,7 +224,9 @@ ProfileMeta BesqContext::profile_metadata(const std::string& name) const {
     // metadata，故内部 meta.name 可能是旧身份。
     m.name = name;
     m.dependencies = meta.dependencies;
+    m.description = meta.description;
     m.version = meta.version;
+    m.mc_version = meta.mc_version;
     m.release_tag = ""; // Profile 无 release_tag 字段（未发布）
     m.is_root = (name == "builtin:vanilla");
     m.ench_count = p->ench().size();
