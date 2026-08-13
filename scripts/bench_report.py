@@ -25,20 +25,23 @@ import re
 import difflib
 import json
 import argparse
+import datetime
 from collections import OrderedDict
 
 
 # ------------------------------------------------------------
 # 解析单个文件
 # ------------------------------------------------------------
-def parse_json(content):
+def parse_json(content, filepath=None):
     """解析 forge_benchmark --json 的 dataset 结构化输出；映射到与文本解析
     相同的内部结构（解析层改进：JSON 优先 + 文本回退，spec
     2026-08-07-bench-report-json-design.md）。
 
     status 全集合：ok|skip|no-solution|timeout|failed——仅 ok 为有效记录
     （参与最优比较），其余与文本路径的 no-solution 同级（无效记录）。
-    wall（median/p95/best/iterations）随记录保留，供历史/后续图表使用。"""
+    wall（median/p95/best/iterations）随记录保留，供历史/后续图表使用。
+    时间戳：JSON 可选携带 "time" 字段；缺失时回退文件 mtime（≈运行结束时刻），
+    否则 main() 因 in_time 为空会跳过历史记录（JSON 迁移后的回归）。"""
     import json
 
     data = json.loads(content)
@@ -51,7 +54,8 @@ def parse_json(content):
         ench_count = ds.get("ench_count", 0)
         max_lvl = ds.get("max_lvl", 0)
         # 重建展示名：与文本解析的 dataset 头同源（"crossbow (4 enchants,
-        # max 30L)"），下游 extract_enchs_count/分组/排序逻辑零改动。
+        # max 30L)"——text 路径解析时剥掉 console 行尾 ':'，两路 key 一致才能
+        # 跨格式合并取最优），下游 extract_enchs_count/分组/排序逻辑零改动。
         ds_key = f"{name} ({ench_count} enchants, max {max_lvl}L)"
         if ds_key not in datasets:
             datasets[ds_key] = OrderedDict()
@@ -78,7 +82,14 @@ def parse_json(content):
                 rec["wall"] = wall
             _update_record(datasets[ds_key], algo_orders[ds_key], algo, rec)
 
-    return None, None, datasets, dataset_order, algo_orders
+    latest_time = None
+    if isinstance(data.get("time"), str) and data["time"]:
+        latest_time = data["time"]
+    if not latest_time and filepath and os.path.exists(filepath):
+        latest_time = datetime.datetime.fromtimestamp(os.path.getmtime(filepath)).strftime(
+            "%Y-%m-%d %H:%M:%S.%f"
+        )
+    return None, latest_time, datasets, dataset_order, algo_orders
 
 
 def parse_file(filepath):
@@ -92,7 +103,7 @@ def parse_file(filepath):
 
     # JSON 检测：内容以 { 开头（evaluate.sh 另存的 benchmark.json 亦如此）
     if content.lstrip().startswith("{"):
-        return parse_json(content)
+        return parse_json(content, filepath)
 
     lines = content.splitlines()
 
@@ -135,9 +146,11 @@ def parse_file(filepath):
         if not in_benchmark:
             continue
 
-        # 数据集头行：非缩进、包含 ':'，且不是特殊行
-        if not line.startswith(" ") and ":" in line:
-            current_dataset = line
+        # 数据集头行：非缩进、含 "(N enchants"（console 格式 "name (N enchants,
+        # max XL):"——JSON 重建不带行尾 ':'，解析时统一剥掉，两路 key 一致才能
+        # 跨格式合并取最优；该模式同时排除 "Build type: Release" 等非数据集行）
+        if not line.startswith(" ") and re.search(r"\(\d+\s+enchants?", line):
+            current_dataset = line[:-1] if line.endswith(":") else line
             if current_dataset not in datasets:
                 datasets[current_dataset] = OrderedDict()
                 dataset_order.append(current_dataset)
@@ -395,8 +408,9 @@ def extract_enchs_count(dataset_name):
 
 
 def normalize_ds_name(dataset_name):
-    """去除数据集名称中的 max level 信息，使相同附魔数的数据集统一分组"""
-    return re.sub(r",\s*max\s+\d+L", "", dataset_name)
+    """去除数据集名称中的 max level 信息及行尾 ':'，使相同附魔数的数据集统一分组
+    （历史记录含旧格式 "…enchants):"，剥 ':' 后与新格式兼容）"""
+    return re.sub(r",\s*max\s+\d+L", "", dataset_name).rstrip(":")
 
 
 def parse_group_config(config_str: str):
@@ -475,9 +489,9 @@ def plot_trends(history: dict[str, list[dict]], output_dir, group_config=None):
         offset = total_before - MAX_POINTS
         entries = entries[-MAX_POINTS:]
 
-    # 归一化数据集名称（去除 max level 差异）以便统一分组和趋势图
+    # 归一化数据集名称（去除 max level 差异 + 行尾 ':'）以便统一分组和趋势图
     def _norm(name):
-        return re.sub(r",\s*max\s+\d+L", "", name)
+        return normalize_ds_name(name)
 
     def _best_rec(e, nds, algo):
         """在 entry 中按归一化名称查找 algo 记录，多条时取最优"""

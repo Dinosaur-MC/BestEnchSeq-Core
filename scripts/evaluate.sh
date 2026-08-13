@@ -202,9 +202,11 @@ if [ $benchmark_check -eq 1 ]; then
         mv "$benchmark_dir/benchmark.txt" "$benchmark_dir/benchmark.txt.bak"
     fi
     echo "Benchmark running with program args: $program_args" | tee "$benchmark_dir/benchmark.txt"
-    # tee 写 benchmark.txt、stdout 留给终端 → 实时可见；awk 提取 === Done === 后的 JSON 段
+    # tee 写 benchmark.txt（全量含 JSON 段供下面提取）；终端经 awk 只显示
+    # === Done === 前的表格（JSON 汇总不刷屏，实时可见保留）
     "$build_dir/bin/forge_benchmark" --algo-dir "$build_dir/plugins" $program_args --json 2>&1 \
-        | tee -a "$benchmark_dir/benchmark.txt"
+        | tee -a "$benchmark_dir/benchmark.txt" \
+        | awk '/^=== Done ===$/{print; f=1; next} !f'
     awk 'f{print} /^=== Done ===$/{f=1}' "$benchmark_dir/benchmark.txt" > "$benchmark_dir/benchmark.json"
     python3 scripts/bench_report.py "$benchmark_dir/benchmark.json" "$benchmark_dir" --img
 fi
