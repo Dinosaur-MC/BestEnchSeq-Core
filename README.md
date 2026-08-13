@@ -1,3 +1,5 @@
+![BestEnchSeq-Core](docs/banner-zh.svg)
+
 # BestEnchSeq-Core
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/w/cpp/20)
@@ -6,11 +8,11 @@
 
 > **简体中文** | [English](README.en.md)
 
-BestEnchSeq-Core 是一个 **Minecraft 附魔锻造序列规划器**：给定期望的最终附魔（`--target`）与起点状态（`--source` 或库存物品），搜索**铁砧锻造成本最优**的附魔书顺序，并输出逐步锻造方案。支持铁砧惩罚（prior work penalty）、魔咒冲突、装备适用性（tag）、Java/Bedrock 平台差异与 Too Expensive（39 级）上限等完整约束。
+BestEnchSeq-Core 是 **BestEnchSeq 最佳附魔顺序计算器的 Core 版本**：给定期望的最终附魔（`--target`）与起点状态（`--source` 或库存物品），搜索**铁砧锻造成本最优**的附魔书锻造顺序，并输出逐步锻造方案。支持铁砧惩罚（prior work penalty）、魔咒冲突、装备适用性（tag）、Java/Bedrock 平台差异与 Too Expensive（39 级）上限等完整约束。
 
 采用**数据驱动**架构：内置 vanilla 数据表，也支持自定义 JSON/CSV 数据、MC 官方 datapack 与 mod 魔咒；算法内核**可插拔**（内建 + 运行时插件热加载 + 审计/沙箱隔离）。纯标准库 C++20 实现，**零第三方依赖**（HTTP/JSON/i18n/并发组件全部自研）。
 
-## ✨ 功能特性
+## 功能特性
 
 - **最优锻造序列**：搜索成本最优的附魔书锻造顺序（精确 + 近似算法可选）
 - **数据驱动**：vanilla JSON / CSV / MC 官方 datapack（`pack.mcmeta`）/ 自定义 mod 数据表
@@ -22,7 +24,7 @@ BestEnchSeq-Core 是一个 **Minecraft 附魔锻造序列规划器**：给定期
 - **i18n**：内置 en_US / zh_CN，`--lang` > `BESQ_LANG` > 系统 locale 三级选择
 - **C++ 核心零第三方依赖**：自研 HTTP 服务器、JSON DOM、日志、i18n、并发队列
 
-## 🚀 快速开始
+## 快速开始
 
 **要求**：C++20 编译器（Clang 15+ 或 MSVC）、CMake 3.25+、Ninja。项目无条件使用 C++20（concepts、`if constexpr`、`std::jthread`、原子 `wait`/`notify`），不支持 C++17 及更早版本。
 
@@ -89,7 +91,7 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 
 完整的 CLI 选项见 `besq --help`（按分组渲染）。
 
-## 🖥️ Web GUI（`besq-gui`）
+## Web GUI（`besq-gui`）
 
 面向玩家的本地 Web GUI，与 CLI 共享同一核心（REST API + SSE 事件流）。构建需开启 `BESQ_BUILD_GUI=ON`。
 
@@ -118,7 +120,7 @@ BESQ_GUI_PORT=8765 ./build/bin/besq-gui --frontend-dir gui/frontend
 
 SSE 事件流：`GET /api/tasks/{id}/events`（`progress` / `diag` / `completed` / `failed` 帧，15s 心跳）；静态资源挂载于 `/public`。
 
-## 🧠 算法策略
+## 算法策略
 
 | 策略 | 类型 | 最优性 | 规模 | 来源 | 机制 |
 |---|---|---|---|---|---|
@@ -133,7 +135,7 @@ SSE 事件流：`GET /api/tasks/{id}/events`（`progress` / `diag` / `completed`
 
 新算法只需实现 `IAlgorithm::execute()` 即可获得线程管理、暂停/取消与进度上报。
 
-## 🏗️ 架构
+## 架构
 
 四域单向分层 + 共享工具层，三个构建产物（`besq` / `besq-gui` / `besq-worker`）共享同一核心：
 
@@ -157,14 +159,14 @@ CLI / GUI → BesqContext（会话门面）
 
 目录与各域详细设计见 [docs/architecture-overview.md](docs/architecture-overview.md)。
 
-## 🔌 插件与沙箱
+## 插件与沙箱
 
 - **插件协议**：单 C 符号 `besq_create_algorithm`，共享 vtable/堆，无需 destroy；加载前静态审计（W^X、危险导入）
 - **插件构建**：`plugins/` 独立 CMake 工程，链接宿主导出的 `besq-algo-core::besq-algo-core`；构建类型必须与宿主一致（不匹配会链接失败）
 - **沙箱**：`BESQ_SANDBOX=1` 时插件**永不 dlopen**——`SandboxedExecutor` 派生 `besq-worker` 子进程承载真执行器，父进程侧走帧协议（`MsgRun`/`Pause`/`SerializeState`，checkpoint 为不透明分块 blob）；Linux 下 seccomp 限制文件/网络/进程 syscall
 - **审计夹具**：`plugins/malicious` 为故意不安全的插件，用于验证审计/沙箱拒绝路径
 
-## ⚙️ 配置
+## 配置
 
 | 环境变量 | 说明 |
 |---|---|
@@ -177,7 +179,7 @@ CLI / GUI → BesqContext（会话门面）
 | `BESQ_GUI_WORKERS` | HTTP 消费线程数（默认 2） |
 | `BESQ_GUI_RES_DIR` | `/public` 磁盘兜底根（开发热重载） |
 
-## 🧪 测试与基准
+## 测试与基准
 
 ```bash
 # 全部测试
@@ -197,7 +199,7 @@ cmake --build build --target forge_benchmark
 - 组织：common / domain（algorithm、business、interface、orchestration）/ integration（真实 socket e2e）/ system（真实 CLI 二进制）
 - 插件相关用例（plugin audit、sandbox）在插件树 + worker 缺失时自动 SKIP
 
-## 📜 脚本
+## 脚本
 
 | 脚本 | 用途 |
 |---|---|
@@ -210,7 +212,7 @@ cmake --build build --target forge_benchmark
 | `scripts/gen_modded_profile.py` | 生成基准测试 mod profile（`data/tests/profiles/modded_sword.json`） |
 | `scripts/parse_callgrind.py` / `parse_massif.py` / `parse_cachegrind.py` | 分析输出解析 |
 
-## 📚 文档导航
+## 文档导航
 
 | 文档 | 内容 |
 |---|---|
@@ -221,12 +223,12 @@ cmake --build build --target forge_benchmark
 | [docs/domain_designs/](docs/domain_designs/) | 各域详细设计（business / interface / orchestration / plugin-sandbox） |
 | [docs/mc/anvil-mechanics-reference.md](docs/mc/anvil-mechanics-reference.md) | Minecraft 铁砧机制参考 |
 
-## 🤝 贡献
+## 贡献
 
 欢迎提交 [Issue](https://github.com/Dinosaur-MC/BestEnchSeq-Core/issues)（Bug 报告 / 功能请求请使用对应的[模板](.github/ISSUE_TEMPLATE/)）与 Pull Request。
 
 新开发者建议从 [docs/architecture-overview.md](docs/architecture-overview.md) 的「给新开发者的第一课」开始。
 
-## 📄 许可
+## 许可
 
 [MIT](LICENSE) © 2026 Dinosaur_MC

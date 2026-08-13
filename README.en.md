@@ -1,3 +1,5 @@
+![BestEnchSeq-Core](docs/banner-en.svg)
+
 # BestEnchSeq-Core
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)](https://en.cppreference.com/w/cpp/20)
@@ -6,11 +8,11 @@
 
 > **English** | [简体中文](README.md)
 
-BestEnchSeq-Core is a **Minecraft enchanting-order planner**: given a desired final state (`--target`) and a starting state (`--source` or an inventory), it searches for the **cost-optimal anvil forging sequence** of enchanted books and prints a step-by-step plan. It models the full constraint set — prior work penalty, enchantment conflicts, equipment applicability (tags), Java/Bedrock platform differences, and the Too Expensive (level 39) ceiling.
+BestEnchSeq-Core is the **core engine of BestEnchSeq, the best enchanting-order calculator**: given a desired final state (`--target`) and a starting state (`--source` or an inventory), it searches for the **cost-optimal anvil forging sequence** of enchanted books and prints a step-by-step plan. It models the full constraint set — prior work penalty, enchantment conflicts, equipment applicability (tags), Java/Bedrock platform differences, and the Too Expensive (level 39) ceiling.
 
 The project is **data-driven**: built-in vanilla data tables, plus custom JSON/CSV sheets, official Minecraft datapacks, and modded enchantments. The algorithm kernel is **pluggable** (built-in strategies + runtime plugin hot-loading + audit/sandbox isolation). Pure C++20 with the standard library only — **zero third-party dependencies** (HTTP, JSON, i18n and concurrency components are all self-built).
 
-## ✨ Features
+## Features
 
 - **Optimal forging sequences**: cost-optimal book order (exact + approximate strategies)
 - **Data-driven**: vanilla JSON / CSV / official datapack (`pack.mcmeta`) / custom mod sheets
@@ -22,7 +24,7 @@ The project is **data-driven**: built-in vanilla data tables, plus custom JSON/C
 - **i18n**: built-in en_US / zh_CN; `--lang` > `BESQ_LANG` > system locale
 - **Zero third-party dependencies in the C++ core**: self-built HTTP server, JSON DOM, logger, i18n, concurrent queues
 
-## 🚀 Quick Start
+## Quick Start
 
 **Requirements**: a C++20 compiler (Clang 15+ or MSVC), CMake 3.25+, Ninja. The project uses C++20 unconditionally (concepts, `if constexpr`, `std::jthread`, atomic `wait`/`notify`) — C++17 and earlier are not supported.
 
@@ -89,7 +91,7 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 
 Run `besq --help` for the complete, grouped CLI reference.
 
-## 🖥️ Web GUI (`besq-gui`)
+## Web GUI (`besq-gui`)
 
 A player-facing local Web GUI over the same core (REST API + SSE event streams). Build with `BESQ_BUILD_GUI=ON`.
 
@@ -118,7 +120,7 @@ BESQ_GUI_PORT=8765 ./build/bin/besq-gui --frontend-dir gui/frontend
 
 SSE event stream: `GET /api/tasks/{id}/events` (`progress` / `diag` / `completed` / `failed` frames, 15s heartbeat); static assets under `/public`.
 
-## 🧠 Algorithm Strategies
+## Algorithm Strategies
 
 | Strategy | Type | Optimality | Scale | Origin | Mechanism |
 |---|---|---|---|---|---|
@@ -133,7 +135,7 @@ SSE event stream: `GET /api/tasks/{id}/events` (`progress` / `diag` / `completed
 
 New algorithms only need to implement `IAlgorithm::execute()` to gain thread management, pause/cancel, and progress reporting.
 
-## 🏗️ Architecture
+## Architecture
 
 Four-domain one-way layering on top of shared utilities. Three artifacts (`besq` / `besq-gui` / `besq-worker`) share the same core:
 
@@ -157,14 +159,14 @@ Key design decisions:
 
 Directory layout and per-domain design details: [docs/architecture-overview.md](docs/architecture-overview.md).
 
-## 🔌 Plugins & Sandbox
+## Plugins & Sandbox
 
 - **Plugin protocol**: single C symbol `besq_create_algorithm`; shared vtable/heap, no destroy needed; static audit before load (W^X, dangerous imports)
 - **Plugin build**: `plugins/` is a standalone CMake project linking the host-exported `besq-algo-core::besq-algo-core`; the build type must match the host (a mismatch fails the link)
 - **Sandbox**: with `BESQ_SANDBOX=1` plugins are **never dlopened** — `SandboxedExecutor` spawns a `besq-worker` subprocess hosting the real executor; the parent speaks a framed protocol (`MsgRun`/`Pause`/`SerializeState`, checkpoints as opaque chunked blobs); seccomp on Linux restricts file/network/process syscalls
 - **Audit fixture**: `plugins/malicious` is a deliberately unsafe plugin used to exercise audit/sandbox rejection paths
 
-## ⚙️ Configuration
+## Configuration
 
 | Environment variable | Description |
 |---|---|
@@ -177,7 +179,7 @@ Directory layout and per-domain design details: [docs/architecture-overview.md](
 | `BESQ_GUI_WORKERS` | HTTP consumer threads (default 2) |
 | `BESQ_GUI_RES_DIR` | `/public` disk fallback root (dev hot-reload) |
 
-## 🧪 Tests & Benchmarks
+## Tests & Benchmarks
 
 ```bash
 # All tests
@@ -197,7 +199,7 @@ cmake --build build --target forge_benchmark
 - Organization: common / domain (algorithm, business, interface, orchestration) / integration (real-socket e2e) / system (real CLI binary)
 - Plugin-related cases (audit, sandbox) auto-SKIP when the plugin tree or worker is absent
 
-## 📜 Scripts
+## Scripts
 
 | Script | Purpose |
 |---|---|
@@ -210,7 +212,7 @@ cmake --build build --target forge_benchmark
 | `scripts/gen_modded_profile.py` | Generate the benchmark mod profile (`data/tests/profiles/modded_sword.json`) |
 | `scripts/parse_callgrind.py` / `parse_massif.py` / `parse_cachegrind.py` | Profiler output parsers |
 
-## 📚 Documentation
+## Documentation
 
 | Document | Contents |
 |---|---|
@@ -221,12 +223,12 @@ cmake --build build --target forge_benchmark
 | [docs/domain_designs/](docs/domain_designs/) | Per-domain design docs (business / interface / orchestration / plugin-sandbox) |
 | [docs/mc/anvil-mechanics-reference.md](docs/mc/anvil-mechanics-reference.md) | Minecraft anvil mechanics reference |
 
-## 🤝 Contributing
+## Contributing
 
 Issues and pull requests are welcome. Please use the [issue templates](.github/ISSUE_TEMPLATE/) for bug reports and feature requests.
 
 New developers: start with "First lesson for new developers" in [docs/architecture-overview.md](docs/architecture-overview.md).
 
-## 📄 License
+## License
 
 [MIT](LICENSE) © 2026 Dinosaur_MC
