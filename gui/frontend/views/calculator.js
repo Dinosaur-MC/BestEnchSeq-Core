@@ -206,7 +206,10 @@ function finalItemHtml(sol) {
 
 // Algorithm info + action buttons (copy text / save image). The buttons are
 // bound to onCopy/onSave in renderSolution after insert (events-on-insert).
-function tailHtml(sol) {
+// `rootTimeMs` = 结果根 computation_time_ms（SolvePipeline 计时）——耗时三处
+// 同源（C1）：计算器页/历史事件/任务结果根共用同一口径；缺失（旧数据）回退
+// 每方案 metadata.computation_time 保留兼容。
+function tailHtml(sol, rootTimeMs) {
   const m = sol.metadata || {};
   const metaLines = [];
   if (m.algorithm_name || m.algorithm_version) {
@@ -214,8 +217,9 @@ function tailHtml(sol) {
     const ver = m.algorithm_version ? ` · ${esc(tf('res.version', m.algorithm_version))}` : '';
     metaLines.push(`<div>${name}${ver}</div>`);
   }
-  if (m.computation_time != null)
-    metaLines.push(`<div>${esc(tf('res.wall_time', esc(String(m.computation_time))))}</div>`);
+  const wallTime = rootTimeMs != null ? rootTimeMs : (m.computation_time != null ? m.computation_time : null);
+  if (wallTime != null)
+    metaLines.push(`<div>${esc(tf('res.wall_time', esc(String(wallTime))))}</div>`);
   if (!metaLines.length) return '';
   return `<div class="res-tail">` +
     `<div class="res-meta">${metaLines.join('')}</div>` +
@@ -754,7 +758,7 @@ export async function renderCanvas(sol) {
   return canvas;
 }
 
-function renderSolution(el, sol) {
+function renderSolution(el, sol, rootTimeMs) {
   const card = document.createElement('div');
   card.className = 'card res-solution';
   const steps = sol.steps || [];
@@ -770,7 +774,7 @@ function renderSolution(el, sol) {
     ${infeasible}
     ${steps.length ? `<div class="res-steps">${steps.map(stepRowHtml).join('')}</div>` : zeroStep}
     ${finalItemHtml(sol)}
-    ${tailHtml(sol)}`;
+    ${tailHtml(sol, rootTimeMs)}`;
   el.appendChild(card);
   // T4: real copy/save actions; each button is disabled while its operation is
   // in flight so a double-click cannot fire two writes.
@@ -806,12 +810,12 @@ function renderResult(result) {
       const panel = document.createElement('mdui-tab-panel');
       panel.setAttribute('slot', 'panel');
       panel.setAttribute('value', `sol-${i + 1}`);
-      renderSolution(panel, sol);
+      renderSolution(panel, sol, result.computation_time_ms);
       tabs.appendChild(panel);
     });
     el.appendChild(tabs);
   } else {
-    sols.forEach((sol) => renderSolution(el, sol));
+    sols.forEach((sol) => renderSolution(el, sol, result.computation_time_ms));
   }
   if (result.success === false && sols.length === 0)
     showError(t('calc.unreachable'));

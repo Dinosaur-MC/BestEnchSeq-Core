@@ -39,6 +39,8 @@ const char* solve_type_name(SolveEventType t) {
 
 /// 单条事件序列化为 JSON 对象：SolveHistoryEvent 全字段，无关类型字段填缺省值
 /// （Completed 外的 total_level_cost 等为 0，Failed 外的 error_message 为空串）。
+/// result 字段（C1）：Completed 事件为完整结果 JSON 对象（parse 失败回退字符串），
+/// 其余类型为 null。
 Json event_to_json(const SolveHistoryEvent& ev) {
     Json o = Json::object();
     o["seq"] = Json(static_cast<int64_t>(ev.seq));
@@ -53,6 +55,15 @@ Json event_to_json(const SolveHistoryEvent& ev) {
     o["solution_count"] = Json(ev.solution_count);
     o["computation_ms"] = Json(ev.computation_ms);
     o["error_message"] = Json(ev.error_message);
+    if (!ev.result_json.empty()) {
+        try {
+            o["result"] = Json::parse(ev.result_json);
+        } catch (const JsonException&) {
+            o["result"] = Json(ev.result_json); // 解析失败回退原始字符串
+        }
+    } else {
+        o["result"] = Json::null();
+    }
     return o;
 }
 } // namespace

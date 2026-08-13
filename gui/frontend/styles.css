@@ -163,6 +163,17 @@ tr.conflict { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .hist-type.cancelled { color: #e6c85a; border-color: #e6c85a;
   background: color-mix(in srgb, #e6c85a 15%, transparent); }
 .hist-err { color: var(--danger); font-size: 13px; word-break: break-word; }
+/* C1: 方案详情展开控件 + 展开行 */
+.hist-action { white-space: nowrap; }
+.hist-view {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.25rem 0.625rem; font-size: 0.8125rem; cursor: pointer;
+  white-space: nowrap;
+}
+.hist-view:hover { border-color: var(--accent-2); color: var(--accent-2); }
+.hist-detail > td { padding: 0.75rem 0.5rem; }
+.res-solhead { font-weight: 600; font-size: 0.875rem; margin-bottom: 0.5rem; }
 
 /* ── MDUI theme alignment (mdui.css loads first; same-specificity overrides win) ──
    Map the MDUI design tokens onto the app palette so dropdown/menu/select/switch

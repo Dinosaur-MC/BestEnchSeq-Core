@@ -1058,6 +1058,7 @@ void test_history(TestApp& app) {
     // 有界重试吸收（与 test_calculator 的 B2 断言同款）；断言全在循环外。
     bool saw_completed = false, completed_fields = false;
     bool seq_desc = true, all_fields = true, checked_any = false;
+    bool result_null_others = true; // 非 Completed 事件 result 为 null
     int64_t total_n = -1;
     size_t arr_n = 0;
     for (int i = 0; i < 50 && !saw_completed; ++i) {
@@ -1072,22 +1073,29 @@ void test_history(TestApp& app) {
         for (const auto& ev : arr) {
             checked_any = true;
             for (const char* f : {"seq", "type", "task_id", "target", "algorithm", "mode", "timestamp_ms", "total_level_cost",
-                                  "total_exp_cost", "solution_count", "computation_ms", "error_message"})
+                                  "total_exp_cost", "solution_count", "computation_ms", "error_message", "result"})
                 all_fields = all_fields && ev.has(f);
             auto s = ev["seq"].as<int64_t>();
             seq_desc = seq_desc && s < prev;
             prev = s;
             if (ev["type"].as<std::string>() == "completed") {
                 saw_completed = true;
+                // C1：Completed 事件 result 为完整结果 JSON 对象（含 solutions 数组）。
+                const auto r = ev["result"];
                 completed_fields = ev["task_id"].as<std::string>() == id && ev["total_level_cost"].as<int64_t>() > 0 &&
-                                   ev["computation_ms"].as<int64_t>() >= 0;
+                                   ev["computation_ms"].as<int64_t>() >= 0 && r.type() == JsonType::Object &&
+                                   r.has("solutions") && r["solutions"].type() == JsonType::Array &&
+                                   !r["solutions"].as_array().empty();
+            } else {
+                result_null_others = result_null_others && ev["result"].is_null();
             }
         }
         if (!saw_completed)
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     expect(saw_completed, "history contains a completed event");
-    expect(completed_fields, "completed event carries task_id/costs/ms");
+    expect(completed_fields, "completed event carries task_id/costs/ms + result solutions");
+    expect(result_null_others, "non-completed events carry null result");
     expect(seq_desc, "events newest-first (seq strictly descending)");
     expect(checked_any && all_fields, "every event serializes all SolveHistoryEvent fields");
     expect(total_n == 2, "history total == 2 (submitted+completed)");

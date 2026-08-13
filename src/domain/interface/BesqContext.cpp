@@ -434,7 +434,6 @@ SolveResult BesqContext::solve(const SolveRequest& request) {
     submitted.mode = (request.mode & AlgorithmMode::inventory) ? "inventory" : "direct";
     record_solve_event(submitted);
     try {
-        const auto solve_start = std::chrono::steady_clock::now();
         SolveResult result = solve(request, solve_snapshot(request));
         SolveHistoryEvent done;
         done.type = SolveEventType::Completed;
@@ -447,8 +446,12 @@ SolveResult BesqContext::solve(const SolveRequest& request) {
             done.total_exp_cost = result.solutions[0].total_exp_cost;
         }
         done.solution_count = static_cast<int64_t>(result.solutions.size());
-        done.computation_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - solve_start).count();
+        // 耗时三处同源（C1）：取 SolveResult::computation_time_ms（SolvePipeline
+        // stage_execute 计时），与任务结果根字段/历史事件口径一致。
+        done.computation_ms = result.computation_time_ms;
+        // 完整结果 JSON（C1：历史页方案详情）；与 web 记录点同源——format 即
+        // 任务结果根字段的序列化（CLI/ABI 一致性）。
+        done.result_json = format(result, request.mode, "json");
         record_solve_event(done);
         return result;
     } catch (const std::exception& e) {

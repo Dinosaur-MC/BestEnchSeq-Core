@@ -2,6 +2,7 @@
 // SolveSnapshot：按请求剪枝的有效视图快照（P0 锁攻破）
 // =============================================================================
 #define BESQ_TEST_MAIN
+#include "common/io/json.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/orchestration/types/SolveSnapshot.h"
 #include "framework/test_framework.h"
@@ -140,6 +141,13 @@ TEST_CASE("test_solve_history") {
     expect(hist[0].total_exp_cost > 0, "completed carries total_exp_cost");
     expect(hist[0].solution_count > 0, "completed carries solution_count");
     expect(hist[0].computation_ms >= 0, "completed carries computation_ms");
+    // C1：Completed 事件携带完整结果 JSON（方案详情同源），可解析且含 solutions。
+    expect(!hist[0].result_json.empty(), "completed carries result_json");
+    {
+        auto rj = Json::parse(hist[0].result_json);
+        expect(rj.has("solutions") && rj["solutions"].type() == JsonType::Array && !rj["solutions"].as_array().empty(),
+               "result_json parses with non-empty solutions");
+    }
 
     // ── 2. Failed：非法请求（未知魔咒）→ Submitted + Failed，异常原样重抛 ──
     SolveRequest bad = req;
@@ -154,6 +162,7 @@ TEST_CASE("test_solve_history") {
     hist = ctx.solve_history();
     expect(hist[0].type == SolveEventType::Failed, "latest event is Failed");
     expect(!hist[0].error_message.empty(), "failed event carries error_message");
+    expect(hist[0].result_json.empty(), "failed event result_json empty");
     expect(hist[0].seq == hist[1].seq + 1, "failed event seq consecutive with its submitted");
 
     // ── 3. 有界覆盖：灌入超过容量的合成事件 → 最多 kMaxSolveHistory 条、seq 连续 ──

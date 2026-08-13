@@ -424,8 +424,8 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             // real output. solve() 一返回就停采样（join），之后才 format 与
             // 发布终态帧——进度帧严格先于 completed/failed。
             // solve 跑在自包含快照上（P0 锁攻破）：无 gate、无 profile 引用。
-            // 求解耗时起点：solve 启动 → 终态提交（Computed 事件 computation_ms）。
-            const auto solve_start = std::chrono::steady_clock::now();
+            // 求解耗时由 SolveResult::computation_time_ms 承载（SolvePipeline
+            // stage_execute 计时），历史事件与任务结果根字段同源（C1）。
             auto result = _ctx.solve(request, snapshot);
             sampler_stop.stop();
             // solve() 返回前 exit 事件必已入队（_finalize 在 wait() 内同步
@@ -485,9 +485,13 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                     ev.total_exp_cost = result.solutions[0].total_exp_cost;
                 }
                 ev.solution_count = static_cast<int64_t>(result.solutions.size());
-                ev.computation_ms =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - solve_start)
-                        .count();
+                // 耗时三处同源（C1）：取 SolveResult::computation_time_ms（与任务
+                // 结果根字段 computation_time_ms 同一来源；旧口径是 solve 包装层
+                // 起表的 wall 计时）。
+                ev.computation_ms = result.computation_time_ms;
+                // C1：方案详情——与 task->result 同源的完整结果 JSON（copy 语义：
+                // result_json 在作用域内，record_solve_event 按值入队）。
+                ev.result_json = result_json;
                 _ctx.record_solve_event(ev);
             }
             if (_hub) {

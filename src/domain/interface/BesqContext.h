@@ -55,7 +55,8 @@ struct SolveHistoryEvent {
     int64_t total_level_cost = 0; ///< 最佳方案的附魔台等级总成本
     int64_t total_exp_cost = 0;   ///< 最佳方案的经验总成本
     int64_t solution_count = 0;
-    int64_t computation_ms = 0; ///< 求解耗时（solve 起点 → 终态）
+    int64_t computation_ms = 0; ///< 求解耗时（= SolveResult::computation_time_ms，三处同源）
+    std::string result_json;    ///< 完整结果 JSON（仅 Completed 填充；其余类型空串）
     // Failed 附加
     std::string error_message;
 };

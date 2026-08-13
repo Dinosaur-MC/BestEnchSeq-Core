@@ -602,8 +602,12 @@ void test_history_endpoints(HttpServer& server) {
         seq0 = pev[0]["seq"].as<int64_t>();
         if (pev[0].has("type") && pev[0]["type"].as<std::string>() == "completed") {
             first_completed = true;
+            // C1：Completed 事件 result 字段含方案数据（solutions 数组非空）。
             cost_fields = pev[0].has("total_level_cost") && pev[0]["total_level_cost"].as<int64_t>() > 0 &&
-                          pev[0].has("computation_ms") && pev[0]["computation_ms"].as<int64_t>() >= 0;
+                          pev[0].has("computation_ms") && pev[0]["computation_ms"].as<int64_t>() >= 0 && pev[0].has("result") &&
+                          !pev[0]["result"].is_null() && pev[0]["result"].has("solutions") &&
+                          pev[0]["result"]["solutions"].type() == JsonType::Array &&
+                          !pev[0]["result"]["solutions"].as_array().empty();
         }
         page_ok = first_completed && cost_fields && pj["next_offset"].as<int64_t>() == 1;
         if (!page_ok)
