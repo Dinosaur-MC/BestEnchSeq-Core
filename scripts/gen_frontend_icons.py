@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate gui/frontend/vendor/icons/ — 16x16 item icons for the Web GUI.
+"""Regenerate the 16x16 item-icon sources for the Web GUI sprite sheet.
 
 Sources:
 - res/vanilla/assets/minecraft/textures/item/<id>.png (the vanilla resource
@@ -11,13 +11,18 @@ Sources:
 - shield / misc have no item texture — they get a generated placeholder so
   the picker rows stay visually consistent.
 
-The PNGs are committed (git) and embedded into besq-gui via GUI_ASSET_NAMES
-+ kAssets; the frontend serves them at /public/vendor/icons/<id>.png with an
-onerror-hide fallback for non-vanilla (modded) ids.
+Pipeline: this script writes the per-id sources to assets/item_icons/, then
+runs scripts/gen_sprite.py which aggregates them into the single sprite
+sheet gui/frontend/vendor/icons/sprite.png + the tile index sprite.js.
+The sheet is the only icon asset embedded into besq-gui (GUI_ASSET_NAMES +
+kAssets); the frontend crops tiles from it via sprite.js (background
+position / canvas source rect). Individual per-id PNGs are never shipped.
 
 Run from the repo root:  uv run python scripts/gen_frontend_icons.py
 """
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -25,7 +30,7 @@ from PIL import Image, ImageDraw
 ROOT = Path(__file__).resolve().parent.parent
 VANILLA = ROOT / "data" / "builtin" / "vanilla.json"
 TEX = ROOT / "res" / "vanilla" / "assets" / "minecraft" / "textures" / "item"
-OUT = ROOT / "gui" / "frontend" / "vendor" / "icons"
+OUT = ROOT / "assets" / "item_icons"
 SIZE = 16
 
 REMAP = {
@@ -61,6 +66,10 @@ def main() -> None:
             img = img.resize((SIZE, SIZE), Image.LANCZOS)
         img.save(OUT / f"{id_}.png")
     print(f"wrote {len(ids)} icons to {OUT}")
+    # 聚合为 sprite sheet + 前端索引（同一来源顺序，保证 tile 与 id 同步）
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "gen_sprite.py")], check=True
+    )
 
 
 if __name__ == "__main__":
