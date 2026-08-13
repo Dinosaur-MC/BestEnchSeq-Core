@@ -107,10 +107,10 @@ hot-reload; falls back to `./res` then `<exe_dir>/res`). Language is set at
 runtime via `PATCH /api/settings`.
 
 Endpoints: `/health`, `/api/settings`, `/api/status`, `/api/profiles`,
-`/api/algorithms`, `/api/tasks`, `/api/logs`, plus `/public` for the embedded
+`/api/algorithms`, `/api/tasks`, `/api/history` (compute solve history with
+`offset`/`limit`/`after_seq` paging), plus `/public` for the embedded
 SPA assets (with a `--frontend-dir`/`BESQ_GUI_RES_DIR` disk fallback). SSE
-event streams: `/api/tasks/{id}/events` (solver progress) and
-`/api/logs/events` (incremental log tail).
+event streams: `/api/tasks/{id}/events` (solver progress).
 
 ## Architecture
 
