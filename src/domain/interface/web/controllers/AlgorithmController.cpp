@@ -1,8 +1,8 @@
 #include "AlgorithmController.h"
-#include "domain/interface/BesqContext.h"
-#include "domain/interface/web/WebSolveService.h"
-#include "domain/interface/components/http/Router.h"
 #include "common/io/json.h"
+#include "domain/interface/BesqContext.h"
+#include "domain/interface/components/http/Router.h"
+#include "domain/interface/web/WebSolveService.h"
 #include <string>
 
 namespace web {
@@ -43,6 +43,8 @@ Response AlgorithmController::detail(const HttpRequest&, const PathParams& pp) {
     o["is_resumable"] = Json(d.is_resumable);
     o["supported_mode"] = Json(d.supported_mode);
     o["has_audit"] = Json(d.has_audit);
+    // evaluate: 有效 → 数字（秒），无实例 → null。
+    o["evaluate"] = d.predicted_sec ? Json(*d.predicted_sec) : Json::null();
     return Response::json(200, "OK", o.to_string());
 }
 

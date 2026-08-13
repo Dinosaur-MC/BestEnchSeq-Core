@@ -377,10 +377,13 @@ mdui-select::part(text-field__input) { height: 36px; }
 
 /* ── Algorithms: inline detail expansion row (batch B) ── */
 .alg-detail-row td { background: var(--panel-2); }
-.alg-detail-row .meta-table { margin: 0; }
+/* 嵌套在 <td colspan=5> 里继承全局 `table { width: 100% }` → 值列 stretch 到
+   整行宽；收回 auto（同 .diag-table 方案），键列 nowrap 防断词。 */
+.alg-detail-row .meta-table { width: auto; margin: 0; }
 .alg-detail-row .meta-table th, .alg-detail-row .meta-table td {
   border-bottom: none; padding: 2px 14px 2px 0;
 }
+.alg-detail-row .meta-table th { white-space: nowrap; }
 
 /* ── Directory picker dialog (batch B, /api/fs/list) ── */
 .fs-picker { display: flex; flex-direction: column; gap: 10px; min-width: 340px; }

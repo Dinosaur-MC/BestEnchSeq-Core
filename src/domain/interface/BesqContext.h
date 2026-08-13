@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,6 +26,9 @@ struct AlgorithmDetail {
     bool is_resumable = false;
     std::string supported_mode; ///< "direct" / "inventory"
     bool has_audit = false;
+    /// IAlgorithm::evaluate(16) 预估耗时（秒）；算法无法就地实例化时为空
+    /// （如沙箱模式插件——父进程从不 dlopen，create() 返回 nullptr）。
+    std::optional<double> predicted_sec;
 };
 
 /// Named-profile metadata snapshot (profile_metadata 返回）。

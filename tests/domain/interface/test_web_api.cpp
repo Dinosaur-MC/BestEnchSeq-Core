@@ -608,8 +608,20 @@ void test_algorithms(TestApp& app) {
     // detail → every AlgorithmDetail field serialized.
     auto d = app.call(Method::Get, "/api/algorithms/dp_merge");
     expect(d.status == 200, "algorithm detail 200");
-    for (const char* f : {"name", "version", "origin", "supported_mode", "is_resumable", "plugin_path", "has_audit"})
+    for (const char* f :
+         {"name", "version", "origin", "supported_mode", "is_resumable", "plugin_path", "has_audit", "evaluate"})
         expect(d.body.find(f) != std::string::npos, std::string("detail field ") + f);
+
+    // evaluate → predicted seconds for N=16: dp_merge is a search DP (> 0);
+    // hamming is deterministic (exactly 0 — a valid number, not "absent").
+    auto dj = Json::parse(d.body);
+    expect(dj.has("evaluate") && dj["evaluate"].type() == JsonType::Number, "dp_merge evaluate present as number");
+    expect(dj["evaluate"].as_double() > 0.0, "dp_merge evaluate(16) > 0");
+    auto h = app.call(Method::Get, "/api/algorithms/hamming");
+    auto hj = Json::parse(h.body);
+    expect(h.status == 200 && hj.has("evaluate") && hj["evaluate"].type() == JsonType::Number &&
+               hj["evaluate"].as_double() == 0.0,
+           "hamming evaluate present and 0 (deterministic)");
 
     // Unloading a builtin (trusted kernel) is rejected → 400 UNLOAD_REJECTED.
     // No solve is active at this point, so the gate (409 TASK_ACTIVE) is clear.

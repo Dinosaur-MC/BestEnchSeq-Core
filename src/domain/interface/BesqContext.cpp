@@ -392,6 +392,9 @@ AlgorithmDetail BesqContext::algorithm_detail(const std::string& name) const {
     if (algo) {
         d.version = std::string(algo->version());
         d.is_resumable = algo->is_resumable();
+        // 固定 N=16 采样预估秒数（搜索型 >0，确定性算法 =0）；create() 为
+        // nullptr（沙箱模式插件）时留空，序列化为 null。
+        d.predicted_sec = algo->evaluate(16);
         // supported_mode 是位掩码（direct|inventory）；精确 == 会丢掉 both 能力。
         const auto mode = algo->supported_mode();
         if ((mode & AlgorithmMode::direct) && (mode & AlgorithmMode::inventory))

@@ -20,15 +20,19 @@ const MODE_KEYS = { direct: 'alg.mode_direct', inventory: 'alg.mode_inventory', 
 function modeLabel(m) { return (m && MODE_KEYS[m]) ? t(MODE_KEYS[m]) : (m || ''); }
 
 // The full detail meta table (every AlgorithmDetail field) — rendered into
-// the inline expansion row directly under the algorithm's entry.
+// the inline expansion row directly under the algorithm's entry.  Missing
+// values render '—' (or the builtin label for the plugin-path row, since
+// builtins have no path by definition); evaluate() is null for algorithms
+// that cannot be instantiated in-process (e.g. sandboxed plugins).
 function detailHtml(d) {
   return `<table class="meta-table">
     <tr><th>${t('alg.origin')}</th><td>${esc(d.origin === 'plugin' ? t('alg.plugin') : t('alg.builtin'))}</td></tr>
-    <tr><th>${t('alg.version')}</th><td>${esc(d.version || '')}</td></tr>
+    <tr><th>${t('alg.version')}</th><td>${esc(d.version || '—')}</td></tr>
     <tr><th>${t('alg.mode')}</th><td>${esc(modeLabel(d.supported_mode))}</td></tr>
     <tr><th>${t('alg.resumable')}</th><td>${d.is_resumable ? t('status.solve_yes') : t('status.solve_no')}</td></tr>
     <tr><th>${t('alg.audit')}</th><td>${d.has_audit ? t('status.solve_yes') : t('status.solve_no')}</td></tr>
-    <tr><th>${t('alg.plugin_path')}</th><td class="mono">${esc(d.plugin_path || '')}</td></tr>
+    <tr><th>${t('alg.evaluate')}</th><td>${d.evaluate != null ? esc(`${Number(d.evaluate).toFixed(2)} s`) : '—'}</td></tr>
+    <tr><th>${t('alg.plugin_path')}</th><td class="mono">${esc(d.plugin_path || (d.origin === 'plugin' ? '—' : t('alg.builtin')))}</td></tr>
   </table>`;
 }
 
