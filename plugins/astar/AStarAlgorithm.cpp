@@ -8,7 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <memory>
-#include <queue>
+
 namespace algorithm {
 
 using namespace algorithm;
