@@ -1,0 +1,4 @@
+# 统一 LF 行尾：所有文本文件提交与检出均为 LF（git 自动识别二进制）。
+* text=auto eol=lf
+# 二进制显式声明（PNG 数据字节可能含 0x0D，不可做行尾处理）。
+*.png binary

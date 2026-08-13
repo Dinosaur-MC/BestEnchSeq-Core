@@ -74,7 +74,9 @@ def main() -> None:
         "}",
         "",
     ]
-    OUT.write_text("\n".join(lines), encoding="utf-8")
+    # 统一 LF 行尾（.gitattributes: * text=auto eol=lf）。
+    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines))
     print(f"wrote {OUT} with {len(mapping)} entries")
 
 if __name__ == "__main__":

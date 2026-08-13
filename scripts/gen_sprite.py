@@ -102,9 +102,8 @@ def main():
         sys.exit(f"error: no source icons in {SRC_DIR}")
     rows = (len(tiles) + COLS - 1) // COLS
     build_sheet(tiles).save(SHEET_PATH)
-    # CRLF：提交版 sprite.js blob 即 CRLF（旧生成器遗留），保持同款行尾
-    # 使再生成时 diff 只含头部注释一行，而非整文件行尾 churn。
-    with open(INDEX_PATH, "w", encoding="utf-8", newline="\r\n") as f:
+    # 统一 LF 行尾（.gitattributes: * text=auto eol=lf）。
+    with open(INDEX_PATH, "w", encoding="utf-8", newline="\n") as f:
         f.write(build_index(tiles, rows))
     print(f"wrote {SHEET_PATH} ({len(tiles)} tiles, {COLS}x{rows})")
     print(f"wrote {INDEX_PATH}")
