@@ -23,7 +23,7 @@ SRC_DIR = os.path.join(ROOT, "assets", "item_icons")
 SHEET_PATH = os.path.join(ROOT, "gui", "frontend", "vendor", "icons", "sprite.png")
 INDEX_PATH = os.path.join(ROOT, "gui", "frontend", "sprite.js")
 
-TILE = 16
+TILE = 32
 COLS = 10
 
 
