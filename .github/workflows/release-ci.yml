@@ -1,0 +1,50 @@
+name: Release CI
+
+# 推送新的 v 前缀 tag（如 v1.2.3）时自动构建 + 测试。
+# 宿主侧直接走 CMakePresets.json 的 `full` preset（Release + clang +
+# CLI/Sandbox/GUI + tests + benchmarks），再构建插件（插件用例依赖插件树
+# + worker，两者齐备故不会 SKIP）。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test (full preset, clang)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (ninja + clang)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang
+
+      - name: Configure host (full preset)
+        run: cmake --preset full
+
+      - name: Build host (besq / besq-gui / besq-worker / tests / benchmarks)
+        run: cmake --build --preset full -j$(nproc)
+
+      # 插件构建类型与编译器必须与宿主一致（不匹配会链接失败）；
+      # plugins/ 无 preset，按 CLAUDE.md 显式传参
+      - name: Configure plugins
+        run: >
+          cmake -S plugins -B build/plugins -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_PREFIX_PATH=$PWD/build
+
+      - name: Build plugins
+        run: cmake --build build/plugins -j$(nproc)
+
+      # 串行执行（test_web_integration 有已知时序 flake，串行最稳）
+      - name: Run tests
+        run: ctest --preset full --output-on-failure
