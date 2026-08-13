@@ -667,7 +667,10 @@ void run_case(const TestCase& tc, const Profile& profile,
     // Iterate algos in sorted order
     // ════════════════════════════════════════════════════════════════════
     for (const auto& algo_name : algos) {
-        std::cout << "  " << std::left << std::setw(18) << algo_name;
+        // 前缀行立即 flush：算法运行可长达 --max-time 秒，管道缓冲下
+        // 不 flush 则运行期间终端/文件零输出（实时反馈依赖此行先到）。
+        std::cout << "  " << std::left << std::setw(18) << algo_name
+                  << std::flush;
 
         auto plus = algo_name.find('+');
         if (plus != std::string::npos) {
@@ -844,8 +847,14 @@ int main(int argc, char* argv[]) {
     Logger::instance().set_console_enabled(false);
 
     // ── Load profiles & test cases before CLI parsing (needed for group validation) ──
-    std::cout << "=== Dataset Benchmark ===\n"
-              << "Loading profiles..." << std::endl;
+    // build type 程序自报（NDEBUG = 编译期既定事实，本工程仅 Debug/Release）。
+    std::cout << "=== Dataset Benchmark ===\n";
+#ifdef NDEBUG
+    std::cout << "Build type: Release\n";
+#else
+    std::cout << "Build type: Debug\n";
+#endif
+    std::cout << "Loading profiles..." << std::endl;
     load_profiles("data/tests/profiles");
 
     std::cout << "Loading test cases..." << std::endl;
