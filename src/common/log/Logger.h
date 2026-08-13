@@ -4,13 +4,15 @@
 #include <atomic>
 #include <cstdio>
 #include <fstream>
-#include <memory>
+#include <functional>
+#include <mutex>
 #include <string>
-
-class LogRingBuffer;  // common/log/LogRingBuffer.h — forward decl only here
+#include <utility>
+#include <vector>
 
 /// Async logger: messages pushed to a lock-free MPMC queue from any thread.
-/// Dedicated worker writes to logs/<timestamp>.log + latest.log.
+/// Dedicated worker consumes entries and runs them through the consumer chain
+/// (console mirror → file sink → test capture → future persistence).
 /// Rotation keeps at most 5 historic runs.
 ///
 /// Zero-CPU idle: when no messages are queued the worker thread blocks in
@@ -31,36 +33,32 @@ public:
     void log(LogLevel level, std::string message);
 
     /// Convenience helpers (plain string).
-    void info(std::string msg)  { log(LogLevel::Info,  std::move(msg)); }
-    void warn(std::string msg)  { log(LogLevel::Warn,  std::move(msg)); }
+    void info(std::string msg) { log(LogLevel::Info, std::move(msg)); }
+    void warn(std::string msg) { log(LogLevel::Warn, std::move(msg)); }
     void error(std::string msg) { log(LogLevel::Error, std::move(msg)); }
     void debug(std::string msg) { log(LogLevel::Debug, std::move(msg)); }
 
     /// printf-style format helpers.
-    template<typename... Args>
-    void info_fmt(const char* fmt, Args&&... args) {
+    template <typename... Args> void info_fmt(const char* fmt, Args&&... args) {
         printf(LogLevel::Info, fmt, std::forward<Args>(args)...);
     }
-    template<typename... Args>
-    void warn_fmt(const char* fmt, Args&&... args) {
+    template <typename... Args> void warn_fmt(const char* fmt, Args&&... args) {
         printf(LogLevel::Warn, fmt, std::forward<Args>(args)...);
     }
-    template<typename... Args>
-    void error_fmt(const char* fmt, Args&&... args) {
+    template <typename... Args> void error_fmt(const char* fmt, Args&&... args) {
         printf(LogLevel::Error, fmt, std::forward<Args>(args)...);
     }
-    template<typename... Args>
-    void debug_fmt(const char* fmt, Args&&... args) {
+    template <typename... Args> void debug_fmt(const char* fmt, Args&&... args) {
         printf(LogLevel::Debug, fmt, std::forward<Args>(args)...);
     }
 
     /// printf-style format and push.
-    template<typename... Args>
-    void printf(LogLevel level, const char* fmt, Args&&... args) {
+    template <typename... Args> void printf(LogLevel level, const char* fmt, Args&&... args) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-security"
         int sz = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (sz < 0) return;
+        if (sz < 0)
+            return;
         std::string buf(static_cast<size_t>(sz) + 1, '\0');
         std::snprintf(buf.data(), buf.size(), fmt, std::forward<Args>(args)...);
 #pragma clang diagnostic pop
@@ -70,6 +68,18 @@ public:
 
     /// Flush pending messages synchronously.
     void flush();
+
+    /// ── Consumer chain ──────────────────────────────────────────────────
+    /// Everything that reads logs is a consumer (console, file, test capture,
+    /// future persistence).  Registered consumers are invoked serially on the
+    /// worker thread, in registration order — a read-only "middleware" chain.
+    ///
+    /// add_consumer takes effect immediately (even before the worker starts);
+    /// returns a token for remove_consumer.  A consumer that throws is caught
+    /// and dropped — one broken consumer does not break the chain.
+    using ConsumerId = uint64_t;
+    ConsumerId add_consumer(std::function<void(const LogEntry&)> consumer);
+    void remove_consumer(ConsumerId id);
 
     /// ── Runtime configuration ────────────────────────────────────────────
 
@@ -96,55 +106,71 @@ public:
     void set_console_level(LogLevel lv) noexcept { _console_level.store(lv, std::memory_order_release); }
     LogLevel console_level() const noexcept { return _console_level.load(std::memory_order_acquire); }
 
-    /// Optional bounded ring buffer for /api/logs. When set, every log() call
-    /// also pushes a copy here (thread-safe, bounded). Atomic: set_ring_buffer
-    /// writes from one thread while log() reads it from any thread.
-    void set_ring_buffer(std::shared_ptr<LogRingBuffer> ring) noexcept {
-        _ring_buffer.store(std::move(ring));
-    }
-    /// The configured ring buffer (may be null). WebModule reads it for
-    /// /api/logs.
-    std::shared_ptr<LogRingBuffer> ring_buffer() const noexcept {
-        return _ring_buffer.load();
-    }
-
 private:
-    // ── FileHandler ────────────────────────────────────────────────────
-    // Consumes LogEntry instances on the EventLoop worker thread.
-    // Files are opened in the constructor (before worker starts) and
-    // written from the worker thread.
-    struct FileHandler {
-        explicit FileHandler(std::string log_dir,
-                             std::atomic<uint64_t>* pp = nullptr,
-                             size_t* rp = nullptr,
-                             std::atomic<bool>* ce = nullptr,
-                             std::atomic<LogLevel>* cl = nullptr,
-                             std::atomic<LogLevel>* fl = nullptr);
+    using ConsumerFn = std::function<void(const LogEntry&)>;
+
+    // ── Consumer chain ──────────────────────────────────────────────────
+    // The consumer table.  Guarded by a small mutex: registration/removal
+    // happens at startup or in tests, the chain traversal runs on the worker.
+    struct ConsumerChain {
+        std::mutex mutex;
+        std::vector<std::pair<ConsumerId, ConsumerFn>> consumers;
+        ConsumerId next_id = 0;
+    };
+
+    /// EventLoop data-mode handler: forwards each dequeued entry to the
+    /// consumer chain — snapshot the table under the lock, then invoke the
+    /// consumers outside the lock, each in its own try/catch (a broken
+    /// consumer is dropped, the chain continues); the processed counter is
+    /// bumped at the end of the chain.
+    struct ChainHandler {
+        ConsumerChain* chain;
+        std::atomic<uint64_t>* processed_ptr;
         void operator()(LogEntry entry);
+    };
+
+    // ── Console consumer ───────────────────────────────────────────────
+    // Mirror log lines to the terminal: Warn/Error → stderr, Debug/Info →
+    // stdout.  Gated by the console threshold (_console_level) and the
+    // _console_enabled flag — semantics unchanged from the old FileHandler.
+    struct ConsoleConsumer {
+        explicit ConsoleConsumer(std::atomic<bool>* ce, std::atomic<LogLevel>* cl)
+            : console_enabled_ptr(ce), console_level_ptr(cl) {}
+        void operator()(const LogEntry& entry) const;
+
+        std::atomic<bool>* console_enabled_ptr;
+        std::atomic<LogLevel>* console_level_ptr;
+    };
+
+    // ── File consumer ──────────────────────────────────────────────────
+    // Write entries gated by the file threshold (_level) to
+    // logs/<timestamp>.log + latest.log, with rotation keeping at most
+    // `retention` historic runs.  Files are opened in the constructor
+    // (before the worker starts) and written from the worker thread.
+    struct FileConsumer {
+        explicit FileConsumer(std::string log_dir, size_t* rp, std::atomic<LogLevel>* fl);
+        void operator()(const LogEntry& entry);
         void rotate();
 
         std::string log_dir;
         std::ofstream run_file;
         std::ofstream latest_file;
-        std::atomic<uint64_t>* processed_ptr{nullptr};
-        size_t* retention_ptr{nullptr};
-        std::atomic<bool>* console_enabled_ptr{nullptr};
-        std::atomic<LogLevel>* console_level_ptr{nullptr};
-        std::atomic<LogLevel>* file_level_ptr{nullptr};
+        size_t* retention_ptr;
+        std::atomic<LogLevel>* file_level_ptr;
     };
 
-    explicit Logger(const LoggerConfig &cfg = {});
+    explicit Logger(const LoggerConfig& cfg = {});
 
-    // _console_*, _max_retention and _processed MUST precede _loop because
-    // the FileHandler constructor receives pointers to them (via the _loop
-    // initializer list). C++ initializes members in declaration order, so
-    // these must come before _loop.
+    // _console_*, _max_retention, _processed and _chain MUST precede _loop:
+    // their addresses are captured by _loop's ChainHandler initializer.
+    // C++ initializes members in declaration order, so these must come
+    // before _loop.
     std::atomic<uint64_t> _enqueued{0};
     std::atomic<uint64_t> _processed{0};
     size_t _max_retention{5};
     std::atomic<bool> _console_enabled{true};
     std::atomic<LogLevel> _console_level{LogLevel::Warn};
     std::atomic<LogLevel> _level{LogLevel::Debug};
-    EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, FileHandler> _loop;
-    std::atomic<std::shared_ptr<LogRingBuffer>> _ring_buffer;
+    ConsumerChain _chain;
+    EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, ChainHandler> _loop{ChainHandler{&_chain, &_processed}};
 };

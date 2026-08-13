@@ -29,7 +29,6 @@
 // =============================================================================
 
 #include "common/log/Logger.h"
-#include "common/log/LogRingBuffer.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Socket.h"
@@ -794,11 +793,6 @@ static void run_suite() {
     BesqContext ctx;
     ctx.load_builtin();
     ctx.load_profiles();
-
-    // I-1：/api/logs/events 实时尾。ring 必须在 WebModule 构造前安装——构造期注册
-    // 一次监听器（Logger singleton 持有 ring，生命周期覆盖整个 suite）。
-    auto ring = std::make_shared<LogRingBuffer>(1024);
-    Logger::instance().set_ring_buffer(ring);
 
     WebModule module(ctx);
     module.set_static_resources({

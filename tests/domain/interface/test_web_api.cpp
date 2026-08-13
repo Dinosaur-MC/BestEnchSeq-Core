@@ -5,8 +5,6 @@
 // =============================================================================
 #define BESQ_TEST_MAIN
 #include "common/io/json.h"
-#include "common/log/Logger.h"
-#include "common/log/LogRingBuffer.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/Router.h"
@@ -974,20 +972,12 @@ void test_logs(TestApp& app) {
 
     // ── Fix 3 additions ──
 
-    // Exact empty-ring shape: no ring installed → {"logs":[],"next":0}. If a
-    // ring is present in the test environment, derive the expected cursor from
-    // its current contents instead (deterministic either way).
+    // B1 起 Logger 不再有 ring（tail 恒空）→ {"logs":[],"next":0}。
     auto empty = app.call(Method::Get, "/api/logs");
     expect(empty.status == 200, "logs empty tail 200");
     auto ej = Json::parse(empty.body);
     expect(ej["logs"].type() == JsonType::Array && ej["logs"].as_array().empty(), "logs exact empty array");
-    int64_t expected_next = 0;
-    if (auto ring = Logger::instance().ring_buffer()) {
-        auto snap = ring->snapshot(LogLevel::Debug, 200);
-        if (!snap.empty())
-            expected_next = snap.back().timestamp_ms;
-    }
-    expect(ej["next"].as<int64_t>() == expected_next, "logs exact next cursor");
+    expect(ej["next"].as<int64_t>() == 0, "logs exact next cursor");
 
     // Overflow / negative limit → 400.
     auto ovf = app.call(Method::Get, "/api/logs?limit=99999999999999999999");

@@ -9,15 +9,17 @@
 
 #define BESQ_TEST_MAIN
 #include "common/log/Logger.h"
-#include "common/log/LogRingBuffer.h"
 #include "common/log/LogTypes.h"
 #include "framework/test_framework.h"
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -111,51 +113,6 @@ void test_setters_roundtrip(Logger& logger) {
     TEST_PASS("logger: setter/getter round-trips");
 }
 
-// LogRingBuffer live listeners (I-1): add_listener/remove_listener + push
-// notification. ring->push is called synchronously on the log() caller's
-// thread, so listener invocations are directly observable.
-void test_ring_listeners() {
-    auto ring = std::make_shared<LogRingBuffer>(8);
-
-    // Backward compat: no listeners → snapshot/clear unchanged.
-    ring->push(LogLevel::Info, "seed");
-    auto snap = ring->snapshot(LogLevel::Debug, 100);
-    expect(snap.size() == 1 && snap[0].message == "seed", "snapshot unchanged without listeners");
-
-    std::vector<std::string> got1, got2;
-    auto id1 = ring->add_listener([&](const LogRecord& e) { got1.push_back(e.message); });
-    auto id2 = ring->add_listener([&](const LogRecord& e) { got2.push_back(e.message); });
-
-    // 未知 id 移除是无操作（不误伤已有监听器）。
-    ring->remove_listener(9999);
-
-    ring->push(LogLevel::Warn, "live-a");
-    expect(got1.size() == 1 && got1[0] == "live-a", "listener 1 notified on push");
-    expect(got2.size() == 1 && got2[0] == "live-a", "listener 2 notified on push");
-
-    // 记录字段：level/timestamp/message 完整传递。
-    auto got = ring->snapshot(LogLevel::Debug, 100);
-    expect(got.size() >= 2, "ring retains pushed records");
-    expect(got.back().level == LogLevel::Warn && got.back().message == "live-a", "record level+message preserved");
-    expect(got.back().timestamp_ms > 0, "record timestamp populated");
-
-    // 移除后不再通知。
-    ring->remove_listener(id1);
-    ring->push(LogLevel::Info, "live-b");
-    expect(got1.size() == 1, "removed listener no longer notified");
-    expect(got2.size() == 2 && got2[1] == "live-b", "remaining listener still notified");
-
-    // clear() 不动监听器（仅清缓冲）。
-    ring->clear();
-    expect(ring->snapshot(LogLevel::Debug, 100).empty(), "clear empties the buffer");
-    ring->push(LogLevel::Info, "live-c");
-    expect(got2.size() == 3, "listener survives clear()");
-
-    ring->remove_listener(id2);
-    ring->remove_listener(id2); // 幂等
-    TEST_PASS("logger: ring buffer listeners");
-}
-
 void test_concurrent_writes(Logger& logger, const fs::path& log_dir) {
     logger.set_level(LogLevel::Debug);
     std::vector<std::thread> threads;
@@ -208,5 +165,68 @@ TEST_CASE("test_logger") {
     test_setters_roundtrip(logger);
     test_concurrent_writes(logger, cwd.dir());
     test_rotation_prunes(logger, cwd.dir());
-    test_ring_listeners();
+}
+
+// 消费者链：注册即生效、worker 线程串行调用、坏消费者不中断链、移除后不再接收。
+TEST_CASE("test_logger_consumers") {
+    // 捕获消费者（worker 线程写、本线程读——用一把小 mutex 消除数据竞争）。
+    std::mutex cap_mtx;
+    std::vector<std::string> got;
+    auto cid = Logger::instance().add_consumer([&](const LogEntry& e) {
+        std::lock_guard<std::mutex> lk(cap_mtx);
+        got.push_back(e.message);
+    });
+    // 坏消费者：每条都抛——链必须继续（消费者异常被捕获丢弃）。
+    auto bad_id = Logger::instance().add_consumer([](const LogEntry&) { throw std::runtime_error("boom"); });
+
+    // 注册即生效：info 一条标记消息 → 有界等待（≤2s）→ 断言收到。
+    Logger::instance().info("consumer-chain-marker");
+    bool found = false;
+    for (int i = 0; i < 200 && !found; ++i) {
+        {
+            std::lock_guard<std::mutex> lk(cap_mtx);
+            for (const auto& m : got)
+                if (m.find("consumer-chain-marker") != std::string::npos) {
+                    found = true;
+                    break;
+                }
+        }
+        if (!found)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(found, "consumer receives entries (bounded wait)");
+
+    // 坏消费者未中断链：坏消费者注册于捕获消费者之后——若链中断，上面的标记
+    // 就传不到捕获消费者（已断言）；再显式发一条验证链仍完整。
+    Logger::instance().info("consumer-chain-marker-2");
+    Logger::instance().flush(); // worker 串行处理完毕
+    {
+        std::lock_guard<std::mutex> lk(cap_mtx);
+        bool second = false;
+        for (const auto& m : got)
+            if (m.find("consumer-chain-marker-2") != std::string::npos) {
+                second = true;
+                break;
+            }
+        expect(second, "chain continues after bad consumer throws");
+    }
+
+    // 移除捕获消费者 → 不再收到（remove 前 flush 排空，无在途调用）。
+    Logger::instance().flush();
+    Logger::instance().remove_consumer(cid);
+    Logger::instance().remove_consumer(bad_id);
+    Logger::instance().info("consumer-chain-marker-3");
+    Logger::instance().flush();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50)); // worker 异步兜底
+    {
+        std::lock_guard<std::mutex> lk(cap_mtx);
+        bool after = false;
+        for (const auto& m : got)
+            if (m.find("consumer-chain-marker-3") != std::string::npos) {
+                after = true;
+                break;
+            }
+        expect(!after, "removed consumer no longer receives entries");
+    }
+    TEST_PASS("test_logger_consumers");
 }

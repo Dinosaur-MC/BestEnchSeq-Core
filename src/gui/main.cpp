@@ -3,7 +3,6 @@
 #include "builtin/I18nLoader.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
-#include "common/log/LogRingBuffer.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/RateLimiter.h"
@@ -350,10 +349,6 @@ int main(int argc, char* argv[]) try {
     BesqContext ctx;
     ctx.load_builtin();
     ctx.load_profiles();
-
-    // Ring buffer for /api/logs.
-    auto ring = std::make_shared<LogRingBuffer>(1024);
-    Logger::instance().set_ring_buffer(ring);
 
     // WebModule 做全部路由（/health, /api/*, /public 静态 + SSE），HTTP 服务器只负责
     // 字节 ↔ dispatch 桥接。dispatch 结果原样返回，避免 HttpResponse::json 重包装把

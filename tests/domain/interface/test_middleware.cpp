@@ -3,7 +3,6 @@
 // =============================================================================
 #define BESQ_TEST_MAIN
 #include "common/log/Logger.h"
-#include "common/log/LogRingBuffer.h"
 #include "domain/interface/components/http/AccessLog.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Middleware.h"
@@ -227,18 +226,26 @@ TEST_CASE("test_ratelimit") {
 }
 
 // ---------------------------------------------------------------------------
-// 访问日志（直接调用中间件 + 合成请求；经异步 Logger 落 ring 后断言）
+// 访问日志（直接调用中间件 + 合成请求；经异步 Logger 消费者捕获后断言）
 // ---------------------------------------------------------------------------
 TEST_CASE("test_access_log") {
-    auto ring = std::make_shared<LogRingBuffer>(4096);
-    Logger::instance().set_ring_buffer(ring);
+    // 测试捕获消费者（替代已删除的 LogRingBuffer）。
+    std::mutex cap_mtx;
+    std::vector<std::string> captured;
+    auto cid = Logger::instance().add_consumer([&](const LogEntry& e) {
+        std::lock_guard<std::mutex> lk(cap_mtx);
+        captured.push_back(e.message);
+    });
     auto logger = make_access_logger(ClientAddrPolicy{});
 
     auto wait_line = [&](const std::string& needle) {
         for (int i = 0; i < 200; ++i) {
-            for (const auto& r : ring->snapshot(LogLevel::Info, 4096))
-                if (r.message.find(needle) != std::string::npos)
-                    return r.message;
+            {
+                std::lock_guard<std::mutex> lk(cap_mtx);
+                for (const auto& m : captured)
+                    if (m.find(needle) != std::string::npos)
+                        return m;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return std::string();
@@ -320,14 +327,29 @@ TEST_CASE("test_access_log") {
                                                  "evil");
     logger_trust(reqy, [](const HttpRequest&) { return json_ok(); });
     expect(!wait_line("203.0.113.9_evil - - [").empty(), "XFF control chars sanitized");
+
+    // 先 flush 排空队列再移除（无在途调用触及 captured）。
+    Logger::instance().flush();
+    Logger::instance().remove_consumer(cid);
 }
 
 // ---------------------------------------------------------------------------
 // 端到端：真实 HttpServer + 限流 + 默认访问日志，真实 socket。
 // ---------------------------------------------------------------------------
 TEST_CASE("test_middleware_e2e") {
-    auto ring = std::make_shared<LogRingBuffer>(4096);
-    Logger::instance().set_ring_buffer(ring);
+    std::mutex cap_mtx;
+    std::vector<std::string> captured;
+    auto cid = Logger::instance().add_consumer([&](const LogEntry& e) {
+        std::lock_guard<std::mutex> lk(cap_mtx);
+        captured.push_back(e.message);
+    });
+    auto saw = [&](const std::string& needle) {
+        std::lock_guard<std::mutex> lk(cap_mtx);
+        for (const auto& m : captured)
+            if (m.find(needle) != std::string::npos)
+                return true;
+        return false;
+    };
     HttpServer server;
     server.set_handler(Method::Get, "/health", [](const HttpRequest&) { return json_ok(); });
     RateLimitConfig cfg;
@@ -372,19 +394,20 @@ TEST_CASE("test_middleware_e2e") {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     expect(get().find("200 OK") != std::string::npos, "recovered after refill");
 
-    // 默认访问日志：200 与 429 都上线（ring 异步落盘，有界等待）
+    // 默认访问日志：200 与 429 都上线（消费者异步捕获，有界等待）
     bool saw_200 = false, saw_429 = false;
     for (int i = 0; i < 200 && !(saw_200 && saw_429); ++i) {
-        for (const auto& r : ring->snapshot(LogLevel::Info, 4096)) {
-            if (r.message.find("\"GET /health HTTP/1.1\" 200") != std::string::npos)
-                saw_200 = true;
-            if (r.message.find("\"GET /health HTTP/1.1\" 429") != std::string::npos)
-                saw_429 = true;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        saw_200 = saw("\"GET /health HTTP/1.1\" 200");
+        saw_429 = saw("\"GET /health HTTP/1.1\" 429");
+        if (!(saw_200 && saw_429))
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     expect(saw_200, "200 logged by default access log");
     expect(saw_429, "429 logged by default access log");
+
+    // 先 flush 排空队列再移除（无在途调用触及 captured）。
+    Logger::instance().flush();
+    Logger::instance().remove_consumer(cid);
 }
 
 } // namespace
