@@ -6,7 +6,7 @@
 #include "domain/interface/web/controllers/CalculatorController.h"
 #include "domain/interface/web/controllers/FsController.h"
 #include "domain/interface/web/controllers/HealthController.h"
-#include "domain/interface/web/controllers/LogsController.h"
+#include "domain/interface/web/controllers/HistoryController.h"
 #include "domain/interface/web/controllers/ProfilesController.h"
 #include "domain/interface/web/controllers/SettingsController.h"
 #include "domain/interface/web/controllers/StatusController.h"
@@ -37,7 +37,7 @@ WebModule::WebModule(BesqContext& ctx) : _impl(std::make_unique<Impl>(ctx)) {
     _impl->_router.register_controller<AlgorithmController>(ctx, _impl->_solve, _impl->_ctx_gate);
     _impl->_router.register_controller<CalculatorController>(_impl->_solve, _impl->_hub);
     _impl->_router.register_controller<FsController>();
-    _impl->_router.register_controller<LogsController>(ctx, _impl->_hub);
+    _impl->_router.register_controller<HistoryController>(ctx);
 }
 
 WebModule::~WebModule() {

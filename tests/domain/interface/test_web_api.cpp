@@ -1,7 +1,6 @@
 // =============================================================================
 // Web API tests (modern controllers): Health/Status/Settings/Profiles over
-// web::Router. Algorithm/Calculator/Logs controllers arrive in later tasks and
-// extend this file.
+// web::Router. Algorithm/Calculator/History controllers extend this file.
 // =============================================================================
 #define BESQ_TEST_MAIN
 #include "common/io/json.h"
@@ -13,7 +12,7 @@
 #include "domain/interface/web/controllers/CalculatorController.h"
 #include "domain/interface/web/controllers/FsController.h"
 #include "domain/interface/web/controllers/HealthController.h"
-#include "domain/interface/web/controllers/LogsController.h"
+#include "domain/interface/web/controllers/HistoryController.h"
 #include "domain/interface/web/controllers/ProfilesController.h"
 #include "domain/interface/web/controllers/SettingsController.h"
 #include "domain/interface/web/controllers/StatusController.h"
@@ -50,7 +49,7 @@ struct TestApp {
         router.register_controller<AlgorithmController>(c, *solve, gate);
         router.register_controller<CalculatorController>(*solve, hub);
         router.register_controller<FsController>();
-        router.register_controller<LogsController>(c, hub);
+        router.register_controller<HistoryController>(c);
     }
     HttpResponse call(Method m, std::string path, std::string body = "") {
         // Mirror HttpParser: split path from the ?query=... string (real requests
@@ -1021,49 +1020,151 @@ void test_calculator(TestApp& app) {
     // TestApp (owning WebSolveService) is destroyed at the end of main().
 }
 
-void test_logs(TestApp& app) {
-    // The test never installs a ring buffer, so the incremental tail is empty
-    // but well-formed: {"logs":[],"next":0}.
-    auto l = app.call(Method::Get, "/api/logs?limit=5");
-    expect(l.status == 200 && l.body.find("logs") != std::string::npos, "logs tail 200 contains logs");
-    expect(l.body.find("next") != std::string::npos, "logs tail carries next cursor");
+void test_history(TestApp& app) {
+    // /api/history 替代已删除的 /api/logs*（计划 B Task B3）。
+    // 契约（设计文档 §2.4）：{"events":[...],"total":N,"next_offset":M}，最新在前；
+    // ?offset=N&limit=M 分页（offset 从 0）；?after_seq=N 游标（只返回 seq > N，
+    // 增量拉取，作为过滤先于 offset/limit 切片）。
+    // 本用例须在首个任务提交前运行（空历史断言确定性成立）。
 
-    // Non-numeric limit → 400 INVALID_FIELD.
-    auto bad = app.call(Method::Get, "/api/logs?limit=x");
-    expect(bad.status == 400 && bad.body.find("INVALID_FIELD") != std::string::npos, "invalid limit 400 INVALID_FIELD");
-
-    // events endpoint → stream response (frame delivery is the transport task).
-    auto ev = app.call(Method::Get, "/api/logs/events");
-    expect(ev.status == 200 && ev.is_stream && ev.content_type == "text/event-stream", "logs events stream response");
-
-    // ── Fix 3 additions ──
-
-    // B1 起 Logger 不再有 ring（tail 恒空）→ {"logs":[],"next":0}。
-    auto empty = app.call(Method::Get, "/api/logs");
-    expect(empty.status == 200, "logs empty tail 200");
+    // ── 1. 空历史：events 空数组 + total=0 + next_offset=0 ──
+    auto empty = app.call(Method::Get, "/api/history");
+    expect(empty.status == 200, "history 200");
     auto ej = Json::parse(empty.body);
-    expect(ej["logs"].type() == JsonType::Array && ej["logs"].as_array().empty(), "logs exact empty array");
-    expect(ej["next"].as<int64_t>() == 0, "logs exact next cursor");
+    expect(ej["events"].type() == JsonType::Array && ej["events"].as_array().empty(), "history empty events array");
+    expect(ej["total"].as<int64_t>() == 0, "history total 0 when empty");
+    expect(ej["next_offset"].as<int64_t>() == 0, "history next_offset 0 when empty");
 
-    // Overflow / negative limit → 400.
-    auto ovf = app.call(Method::Get, "/api/logs?limit=99999999999999999999");
-    expect(ovf.status == 400 && ovf.body.find("code") != std::string::npos, "limit overflow 400");
-    auto neg = app.call(Method::Get, "/api/logs?limit=-1");
-    expect(neg.status == 400 && neg.body.find("code") != std::string::npos, "limit negative 400");
+    // ── 2. 提交一个已完成任务（Submitted + Completed 两条事件）──
+    auto t = app.call(Method::Post, "/api/tasks", R"({
+        "target": {"item":"diamond_sword","enchants":[{"id":"sharpness","level":5}]},
+        "algorithm":"dp_merge",
+        "max_solutions":1
+    })");
+    expect(t.status == 202, "history task submit 202");
+    std::string id = Json::parse(t.body)["task_id"].as<std::string>();
+    bool done = false;
+    for (int i = 0; i < 50 && !done; ++i) {
+        auto st = app.call(Method::Get, "/api/tasks/" + id);
+        if (st.status == 200)
+            done = Json::parse(st.body)["state"].as<std::string>() != "running";
+        if (!done)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(done, "history task reached terminal state");
 
-    // Explicit limit=0 → empty slice (cursor stays put), not a full dump.
-    auto zero = app.call(Method::Get, "/api/logs?limit=0");
-    expect(zero.status == 200, "limit=0 tail 200");
+    // ── 3. 普通查询：事件字段全量序列化 + total=2 + 最新在前（seq 严格递减）──
+    // 状态字可观察与事件记录间有微小窗口（终态提交 → record_solve_event），
+    // 有界重试吸收（与 test_calculator 的 B2 断言同款）；断言全在循环外。
+    bool saw_completed = false, completed_fields = false;
+    bool seq_desc = true, all_fields = true, checked_any = false;
+    int64_t total_n = -1;
+    size_t arr_n = 0;
+    for (int i = 0; i < 50 && !saw_completed; ++i) {
+        auto h = app.call(Method::Get, "/api/history");
+        if (h.status != 200)
+            continue;
+        auto hj = Json::parse(h.body);
+        total_n = hj["total"].as<int64_t>();
+        auto arr = hj["events"].as_array();
+        arr_n = arr.size();
+        int64_t prev = INT64_MAX;
+        for (const auto& ev : arr) {
+            checked_any = true;
+            for (const char* f : {"seq", "type", "task_id", "target", "algorithm", "mode", "timestamp_ms", "total_level_cost",
+                                  "total_exp_cost", "solution_count", "computation_ms", "error_message"})
+                all_fields = all_fields && ev.has(f);
+            auto s = ev["seq"].as<int64_t>();
+            seq_desc = seq_desc && s < prev;
+            prev = s;
+            if (ev["type"].as<std::string>() == "completed") {
+                saw_completed = true;
+                completed_fields = ev["task_id"].as<std::string>() == id && ev["total_level_cost"].as<int64_t>() > 0 &&
+                                   ev["computation_ms"].as<int64_t>() >= 0;
+            }
+        }
+        if (!saw_completed)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(saw_completed, "history contains a completed event");
+    expect(completed_fields, "completed event carries task_id/costs/ms");
+    expect(seq_desc, "events newest-first (seq strictly descending)");
+    expect(checked_any && all_fields, "every event serializes all SolveHistoryEvent fields");
+    expect(total_n == 2, "history total == 2 (submitted+completed)");
+    expect(arr_n == 2, "history events size 2");
+
+    // ── 4. 分页：offset=0&limit=1 → 恰 1 条 + next_offset=1；offset 越界/limit=0 ──
+    auto pg = app.call(Method::Get, "/api/history?offset=0&limit=1");
+    expect(pg.status == 200, "history page 200");
+    auto pj = Json::parse(pg.body);
+    auto pev = pj["events"].as_array();
+    expect(pev.size() == 1, "limit=1 returns exactly one event");
+    expect(pj["next_offset"].as<int64_t>() == 1, "next_offset = offset + page size");
+    auto seq0 = pev[0]["seq"].as<int64_t>();
+    expect(pev[0]["type"].as<std::string>() == "completed", "first page event is the completed event");
+
+    auto off1 = app.call(Method::Get, "/api/history?offset=1&limit=1");
+    expect(off1.status == 200, "history offset=1 200");
+    auto o1 = Json::parse(off1.body);
+    auto o1v = o1["events"].as_array();
+    expect(o1v.size() == 1, "offset=1 returns the second event");
+    expect(o1v[0]["seq"].as<int64_t>() < seq0, "offset=1 event is older than the first");
+    expect(o1["next_offset"].as<int64_t>() == 2, "next_offset = offset + page size (page 2)");
+
+    // offset 越界（≥ 条数）→ 空数组，next_offset 停在 offset。
+    auto past = app.call(Method::Get, "/api/history?offset=99&limit=5");
+    expect(past.status == 200, "history offset past end 200");
+    auto pj2 = Json::parse(past.body);
+    expect(pj2["events"].as_array().empty(), "offset past end returns empty events");
+    expect(pj2["next_offset"].as<int64_t>() == 99, "offset past end next_offset stays at offset");
+
+    // limit=0 → 空数组（显式零条），非全量转储。
+    auto zero = app.call(Method::Get, "/api/history?limit=0");
+    expect(zero.status == 200, "limit=0 200");
     auto zj = Json::parse(zero.body);
-    expect(zj["logs"].type() == JsonType::Array && zj["logs"].as_array().empty(), "limit=0 exact empty array");
-    expect(zj["next"].as<int64_t>() == 0, "limit=0 next 0");
+    expect(zj["events"].as_array().empty(), "limit=0 empty events");
+    expect(zj["next_offset"].as<int64_t>() == 0, "limit=0 next_offset 0");
 
-    // ── §12.1: invalid `since` → 400 (only `limit` was covered above) ──
-    auto bad_since = app.call(Method::Get, "/api/logs?since=abc");
-    expect(bad_since.status == 400 && bad_since.body.find("INVALID_FIELD") != std::string::npos,
-           "invalid since 400 INVALID_FIELD");
-    auto neg_since = app.call(Method::Get, "/api/logs?since=-5");
-    expect(neg_since.status == 400 && neg_since.body.find("code") != std::string::npos, "negative since 400");
+    // ── 5. 游标：after_seq=<最新 seq-1> → 只返回 seq > N 的事件（恰该条）──
+    auto cur = app.call(Method::Get, "/api/history?after_seq=" + std::to_string(seq0 - 1));
+    expect(cur.status == 200, "history cursor 200");
+    auto cj = Json::parse(cur.body);
+    auto carr = cj["events"].as_array();
+    expect(carr.size() == 1, "after_seq keeps exactly the events with seq > N");
+    expect(carr[0]["seq"].as<int64_t>() == seq0, "after_seq page contains the expected event");
+    expect(cj["next_offset"].as<int64_t>() == 1, "cursor page next_offset = page size");
+
+    // 游标 + 分页叠加：after_seq 先过滤，offset/limit 在过滤结果上切片。
+    auto cur_pg = app.call(Method::Get, "/api/history?after_seq=0&limit=1");
+    expect(cur_pg.status == 200, "cursor+limit 200");
+    auto cp = Json::parse(cur_pg.body);
+    auto cpv = cp["events"].as_array();
+    expect(cpv.size() == 1 && cpv[0]["seq"].as<int64_t>() == seq0, "cursor+limit combines as filter-then-slice");
+
+    // ── 6. 参数校验：非数字/负数/溢出 → 400 INVALID_FIELD ──
+    auto bad_limit = app.call(Method::Get, "/api/history?limit=x");
+    expect(bad_limit.status == 400 && bad_limit.body.find("INVALID_FIELD") != std::string::npos,
+           "invalid limit 400 INVALID_FIELD");
+    auto neg_limit = app.call(Method::Get, "/api/history?limit=-1");
+    expect(neg_limit.status == 400 && neg_limit.body.find("code") != std::string::npos, "negative limit 400");
+    auto ovf = app.call(Method::Get, "/api/history?limit=99999999999999999999");
+    expect(ovf.status == 400 && ovf.body.find("code") != std::string::npos, "limit overflow 400");
+    auto bad_offset = app.call(Method::Get, "/api/history?offset=abc");
+    expect(bad_offset.status == 400 && bad_offset.body.find("INVALID_FIELD") != std::string::npos,
+           "invalid offset 400 INVALID_FIELD");
+    auto neg_offset = app.call(Method::Get, "/api/history?offset=-3");
+    expect(neg_offset.status == 400 && neg_offset.body.find("code") != std::string::npos, "negative offset 400");
+    auto bad_seq = app.call(Method::Get, "/api/history?after_seq=x");
+    expect(bad_seq.status == 400 && bad_seq.body.find("INVALID_FIELD") != std::string::npos,
+           "invalid after_seq 400 INVALID_FIELD");
+    auto neg_seq = app.call(Method::Get, "/api/history?after_seq=-1");
+    expect(neg_seq.status == 400 && neg_seq.body.find("code") != std::string::npos, "negative after_seq 400");
+
+    // ── 7. /api/logs* 已删除 → 404 ──
+    auto gone = app.call(Method::Get, "/api/logs");
+    expect(gone.status == 404 && gone.body.find("code") != std::string::npos, "/api/logs deleted 404");
+    auto gone_ev = app.call(Method::Get, "/api/logs/events");
+    expect(gone_ev.status == 404 && gone_ev.body.find("code") != std::string::npos, "/api/logs/events deleted 404");
 }
 
 // ── Fake StreamChannel: captures every frame delivered to the "connection" ──
@@ -1220,61 +1321,91 @@ void test_hub_replay_late_subscriber(TestApp& app) {
 }
 
 void test_hub_clear(TestApp& app) {
-    auto fake = std::make_shared<FakeChannel>();
-    LogsController lc(app.ctx, app.hub);
-    HttpRequest req;
-    req.method = Method::Get;
-    req.path = "/api/logs/events";
-    req.stream = fake;
-    auto r = lc.events(req);
-    expect(r.status == 200 && r.is_stream, "logs events stream response via channel");
-    expect(app.hub.subscriber_count("logs") == 1, "logs subscription registered before clear");
+    // LogsController 已删除（B3），hub 只剩任务键：直接订阅一个合成键验证
+    // clear() 语义（与键无关）：清空全部订阅、此后 publish 不再送达。
+    std::string got;
+    auto sub = app.hub.subscribe("clear_t", [&](const std::string&, std::string f) { got = std::move(f); });
+    expect(app.hub.subscriber_count("clear_t") == 1, "subscription registered before clear");
+
+    app.hub.publish("clear_t", "data: hi\n\n");
+    expect(got == "data: hi\n\n", "frame delivered before clear");
 
     app.hub.clear();
-    expect(app.hub.subscriber_count("logs") == 0, "hub cleared all subscriptions");
+    expect(app.hub.subscriber_count("clear_t") == 0, "hub cleared all subscriptions");
 
-    app.hub.publish("logs", "data: nope\n\n");
-    bool leaked = false;
-    for (const auto& f : fake->snapshot())
-        if (f == "data: nope\n\n")
-            leaked = true;
-    expect(!leaked, "no frame delivered after clear");
+    got.clear();
+    app.hub.publish("clear_t", "data: nope\n\n");
+    expect(got.empty(), "no frame delivered after clear");
+    (void)sub;
 }
 
 /// 连接关闭钩子测试（确定性证明 on_close → 退订 的接线）：
-/// 用 "logs" 键最确定 —— 该键无任何自动退订（WebSolveService 只清任务键），
-/// 唯一能把它从 1 清零的机制就是 LogsController 注册的 on_close 回调。
+/// LogsController 已删除（B3）后 hub 只剩任务键——用重任务（18 自定义魔咒的
+/// dp_merge，秒级求解）占住单槽：订阅建立后任务必仍在 Running，此时 fire_close
+/// 后订阅数归零的唯一路径就是 CalculatorController::events 注册的 on_close 回调
+/// （任务未完成，WebSolveService 不会 unsubscribe_all）。
 void test_stream_close_hook(TestApp& app) {
+    // 前置：种子 18 个剑适用自定义魔咒（同 test_calculator 的载荷），使重任务
+    // 在订阅窗口内确定性保持 Running。diamond_sword 未被 test_profiles 删除。
+    for (int i = 0; i < 18; ++i) {
+        EnchInfo info;
+        info.id = NSID("test:hook_" + std::to_string(i));
+        info.name = "Hook " + std::to_string(i);
+        info.max_level = 5;
+        info.multiplier = 1;
+        info.supported_items.insert(NSID("#minecraft:swords"));
+        expect(app.ctx.add_enchantment(info), "close-hook seed ench " + std::to_string(i));
+    }
+    std::string heavy = R"({"target":{"item":"diamond_sword","enchants":[)";
+    for (int i = 0; i < 18; ++i) {
+        if (i)
+            heavy += ",";
+        heavy += R"({"id":"test:hook_)" + std::to_string(i) + R"(","level":5})";
+    }
+    heavy += R"(]},"algorithm":"dp_merge"})";
+    auto r = app.call(Method::Post, "/api/tasks", heavy);
+    expect(r.status == 202, "close-hook task submit 202");
+    std::string id = Json::parse(r.body)["task_id"].as<std::string>();
+
     auto fake = std::make_shared<FakeChannel>();
-    LogsController lc(app.ctx, app.hub);
+    CalculatorController ctrl(*app.solve, app.hub);
     HttpRequest req;
     req.method = Method::Get;
-    req.path = "/api/logs/events";
+    req.path = "/api/tasks/" + id + "/events";
     req.stream = fake;
-    auto r = lc.events(req);
-    expect(r.status == 200 && r.is_stream, "logs events stream response via channel");
-    expect(app.hub.subscriber_count("logs") == 1, "logs subscription registered");
+    PathParams pp;
+    pp.kv.emplace_back("id", id);
+    auto st = ctrl.events(req, pp);
+    expect(st.status == 200 && st.is_stream, "close-hook events stream response via channel");
+    expect(app.hub.subscriber_count(id) == 1, "close-hook subscription registered");
 
-    // 关闭前帧投递链路正常。
-    app.hub.publish("logs", "data: hi\n\n");
-    bool got = false;
-    for (const auto& f : fake->snapshot())
-        if (f == "data: hi\n\n")
-            got = true;
-    expect(got, "frame delivered before close");
-
-    // 模拟客户端断开 → on_close 回调 → 退订（唯一清零路径，证明接线生效）。
-    expect(fake->on_close_cb != nullptr, "on_close callback registered on logs channel");
+    // 模拟客户端断开 → on_close 回调 → 退订（任务仍在 Running，唯一清零路径）。
+    expect(fake->on_close_cb != nullptr, "on_close callback registered on task channel");
     fake->fire_close();
-    expect(app.hub.subscriber_count("logs") == 0, "logs subscription dropped after close");
+    expect(app.hub.subscriber_count(id) == 0, "task subscription dropped after close");
 
     // 退订后 publish 不再送达该通道（死连接回调已从 hub 移除）。
-    app.hub.publish("logs", "data: nope\n\n");
+    app.hub.publish(id, "data: nope\n\n");
     bool leaked = false;
     for (const auto& f : fake->snapshot())
         if (f == "data: nope\n\n")
             leaked = true;
     expect(!leaked, "no frame delivered after close");
+
+    // 清理单活动槽：取消并等待 cancelled（慢求解不等待自然完成，同 test_calculator）。
+    auto c = app.call(Method::Delete, "/api/tasks/" + id);
+    expect(c.status == 200, "cancel close-hook task");
+    bool cancelled = false;
+    for (int i = 0; i < 50 && !cancelled; ++i) {
+        auto ts = app.call(Method::Get, "/api/tasks/" + id);
+        if (ts.status == 200) {
+            auto tj = Json::parse(ts.body);
+            cancelled = tj["state"].as<std::string>() == "cancelled";
+        }
+        if (!cancelled)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(cancelled, "close-hook task cancelled");
 }
 
 /// §12.1 complement: the `failed` SSE frame's byte format.
@@ -1472,6 +1603,8 @@ TEST_CASE("test_web_api") {
     ctx.load_builtin();
     ctx.load_profiles();
     TestApp app(ctx);
+    test_history(app); // /api/history：空历史 → 提交任务 → 普通/分页/游标/400 + /api/logs 404
+                       // （须在首个任务提交前运行：空历史断言确定性成立）
     test_health(app);
     test_status(app);
     test_settings(app);
@@ -1482,12 +1615,11 @@ TEST_CASE("test_web_api") {
     test_algorithms(app);
     test_stream_channel(app);             // 须在 test_calculator 之前（单活动槽）
     test_failed_frame_shape(app);         // failed SSE 帧字节格式（hub 级，确定性）
-    test_stream_close_hook(app);          // on_close → 退订 接线测试（依赖 logs 键未被 test_logs 污染）
+    test_stream_close_hook(app);          // on_close → 退订 接线测试（重任务确定性）
     test_hub_clear(app);                  // SseHub::clear() 清空全部订阅
     test_hub_replay_late_subscriber(app); // 迟到订阅者重放（SSE 终态帧竞态根治）
     test_task_diagnostics(app);           // T2: 任务诊断事件流（diagnostics/diag_exit + SSE diag 帧）
     test_calculator(app);                 // §12.1: failed/cancelled 快照、任务字段、unload-409
-    test_logs(app);                       // §12.1: since 非法 → 400
     test_web_module(app.ctx);
     test_router_500(); // §12.1: 未捕获异常 → 500 INTERNAL_ERROR envelope
     TEST_PASS("test_web_api");

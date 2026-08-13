@@ -15,9 +15,9 @@ namespace web {
 /// requests and BesqContext, exactly per interface-domain-design.md §4.
 ///
 /// Assembles all modern controllers (health/status/settings/profiles/algorithm/
-/// calculator/fs/logs) onto one `web::Router`, plus the StaticFileServer for
+/// calculator/fs/history) onto one `web::Router`, plus the StaticFileServer for
 /// `/public` (embedded + optional disk root), plus a session-owned SseHub that
-/// the calculator/logs SSE events handlers subscribe to. Errors map to
+/// the calculator SSE events handler subscribes to. Errors map to
 /// `{ok:false,error}` envelopes with the status codes from the design spec:
 /// 400 input / 404 unknown / 409 conflict / 500 internal.
 class WebModule {

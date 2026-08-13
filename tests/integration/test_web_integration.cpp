@@ -24,11 +24,12 @@
 //  7. Error envelope             → 404 {error,code}; 405 + Allow
 //  8. Concurrent clients         → 4 threads each GET /health → all 200
 //  9. Path traversal             → GET /public/../secret → 404
+// 10. /api/history               → 普通查询 + 分页（offset/limit）+ 游标（after_seq）
+//      + Completed 事件字段完整性；/api/logs* → 404（端点已删，替代原 logs SSE 用例）
 //
 // All waits are bounded loops; nothing can hang the suite indefinitely.
 // =============================================================================
 
-#include "common/log/Logger.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/Socket.h"
@@ -86,6 +87,13 @@ void recv_until(int client, std::string& got, const char* needle, int max_tries)
         else
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+}
+
+/// 从完整 HTTP 响应（头 + 体）中切出 JSON body（http_exchange 返回原始字节流，
+/// 含响应头——需要结构化断言时先切 body 再 Json::parse）。
+std::string response_body(const std::string& resp) {
+    const auto sep = resp.find("\r\n\r\n");
+    return sep == std::string::npos ? std::string() : resp.substr(sep + 4);
 }
 
 /// Pull `"task_id":"..."` out of a 202 response body (tolerant of the compact
@@ -543,37 +551,82 @@ void test_slow_client_timeout(HttpServer& server) {
 }
 
 // ---------------------------------------------------------------------------
-// Case 11 (I-1): /api/logs/events live tail over the real SSE wire.
+// Case 11 (I-1): /api/history 端到端——真实 socket 上普通查询 + 分页 + 游标 +
+// Completed 事件字段完整性；/api/logs* 已删除 → 404。
 //
-// Requires a LogRingBuffer installed BEFORE WebModule construction (run_suite
-// does that) so WebModule registers its one-time listener. A log() call then
-// fans out: ring push → listener → hub "logs" key → SSE subscriber connection.
-// The client must receive a `data: {"logs":[...]}` frame carrying the marker.
+// 前置先跑一个已完成任务（与 test_task_submit_and_poll 同 body 与轮询），保证
+// 存在带成本字段的 Completed 事件。事件记录在状态字提交之后立即进行——状态
+// 可观察与事件可查询间有微小窗口，用有界重试吸收（断言全在循环外，计数恒定）。
 // ---------------------------------------------------------------------------
-void test_logs_sse_live(HttpServer& server) {
-    int c = sock_connect("127.0.0.1", server.port());
-    expect(c >= 0, "logs SSE client connects");
-    sock_send(c, "GET /api/logs/events HTTP/1.1\r\nHost: x\r\n\r\n", 3000);
-    set_nonblocking(c);
-
-    std::string got;
-    recv_until(c, got, "text/event-stream", 200); // 流头先就绪
-    expect(got.find("HTTP/1.1 200 OK") != std::string::npos, "logs SSE stream head 200");
-    expect(got.find("text/event-stream") != std::string::npos, "logs SSE content-type");
-
-    // 订阅建立后再写日志 → 监听器 → hub → SSE 连接。
-    Logger::instance().info("besq-live-marker-42");
-    const std::string marker = "besq-live-marker-42";
-    recv_until(c, got, marker.c_str(), 400); // ≤4s
-    const auto pos = got.find(marker);
-    expect(pos != std::string::npos, "live log frame reaches the SSE client");
-    if (pos != std::string::npos) {
-        // 帧字段在 marker 之前（seq/level 先于 message）→ 用 rfind 从 marker 向前找。
-        expect(got.rfind("data: ", pos) != std::string::npos, "live frame is an SSE data frame");
-        expect(got.rfind("\"logs\"", pos) != std::string::npos, "live frame carries the {logs:[...]} envelope");
-        expect(got.rfind("\"level\"", pos) != std::string::npos, "live frame record carries level");
+void test_history_endpoints(HttpServer& server) {
+    const std::string body = "{\"target\":{\"item\":\"diamond_sword\",\"enchants\":"
+                             "[{\"id\":\"sharpness\",\"level\":5}]},\"algorithm\":\"dp_merge\","
+                             "\"max_solutions\":1}";
+    auto cpost = post_task(server, body);
+    expect(cpost.find("202") != std::string::npos, "history task submit 202");
+    const std::string id = extract_task_id(cpost);
+    expect(!id.empty(), "history task id extracted");
+    bool completed = false;
+    for (int i = 0; i < 50 && !completed; ++i) {
+        auto st = http_exchange(server, "GET /api/tasks/" + id + " HTTP/1.1\r\nHost: x\r\n\r\n");
+        if (st.find("\"state\":\"completed\"") != std::string::npos)
+            completed = true;
+        else if (st.find("\"state\":\"failed\"") != std::string::npos)
+            break; // surfaced by the completed assertion below
+        else
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    sock_close(c);
+    expect(completed, "history task completes end-to-end");
+
+    // 1. 普通查询 → 200；body 含 events 数组与 total（≥ 本次任务的 2 条事件）。
+    auto h = http_exchange(server, "GET /api/history HTTP/1.1\r\nHost: x\r\n\r\n");
+    expect(h.find("200 OK") != std::string::npos, "history responds 200");
+    expect(h.find("\"events\"") != std::string::npos, "history carries events array");
+    expect(h.find("\"total\"") != std::string::npos, "history carries total");
+    auto hj = Json::parse(response_body(h));
+    expect(hj["total"].as<int64_t>() >= 2, "history total covers the task events");
+    expect(!hj["events"].as_array().empty(), "history events non-empty");
+
+    // 2. 分页：offset=0&limit=1 → 恰 1 条 + next_offset=1；最新一条必为本任务
+    //    Completed（有界重试直到事件记录落地；断言在循环外）。
+    int64_t seq0 = -1;
+    bool page_ok = false, first_completed = false, cost_fields = false;
+    for (int i = 0; i < 50 && !page_ok; ++i) {
+        auto pg = http_exchange(server, "GET /api/history?offset=0&limit=1 HTTP/1.1\r\nHost: x\r\n\r\n");
+        if (pg.find("200 OK") == std::string::npos)
+            continue;
+        auto pj = Json::parse(response_body(pg));
+        auto pev = pj["events"].as_array();
+        if (pev.size() != 1 || !pev[0].has("task_id") || pev[0]["task_id"].as<std::string>() != id)
+            continue; // 事件记录未落地：最新一条还是更早任务的事件
+        seq0 = pev[0]["seq"].as<int64_t>();
+        if (pev[0].has("type") && pev[0]["type"].as<std::string>() == "completed") {
+            first_completed = true;
+            cost_fields = pev[0].has("total_level_cost") && pev[0]["total_level_cost"].as<int64_t>() > 0 &&
+                          pev[0].has("computation_ms") && pev[0]["computation_ms"].as<int64_t>() >= 0;
+        }
+        page_ok = first_completed && cost_fields && pj["next_offset"].as<int64_t>() == 1;
+        if (!page_ok)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    expect(page_ok, "limit=1 page: exactly one event + next_offset=1");
+    expect(first_completed, "newest history event is the completed event");
+    expect(cost_fields, "completed event carries total_level_cost/computation_ms");
+
+    // 3. 游标：after_seq=<最新一条 seq-1> → 只返回 seq > N 的事件（含该条）。
+    auto cur = http_exchange(server, "GET /api/history?after_seq=" + std::to_string(seq0 - 1) + " HTTP/1.1\r\nHost: x\r\n\r\n");
+    expect(cur.find("200 OK") != std::string::npos, "history cursor 200");
+    bool found = false;
+    for (const auto& ev : Json::parse(response_body(cur))["events"].as_array())
+        if (ev["seq"].as<int64_t>() == seq0)
+            found = true;
+    expect(found, "after_seq page contains the expected event");
+
+    // 4. /api/logs* 已删除 → 404。
+    auto gone = http_exchange(server, "GET /api/logs HTTP/1.1\r\nHost: x\r\n\r\n");
+    expect(gone.find("404") != std::string::npos, "/api/logs deleted 404");
+    auto gone_ev = http_exchange(server, "GET /api/logs/events HTTP/1.1\r\nHost: x\r\n\r\n");
+    expect(gone_ev.find("404") != std::string::npos, "/api/logs/events deleted 404");
 }
 
 // ---------------------------------------------------------------------------
@@ -817,7 +870,7 @@ static void run_suite() {
         test_concurrent_clients(server);
         test_path_traversal(server);
         test_slow_client_timeout(server);
-        test_logs_sse_live(server);
+        test_history_endpoints(server);
         test_sse_progress_frames(server);
     } catch (...) {
         // A stray expect failure must not leave the accept-loop thread joinable.

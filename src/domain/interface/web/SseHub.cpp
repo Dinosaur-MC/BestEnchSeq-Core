@@ -30,7 +30,7 @@ SseHub::SubId SseHub::subscribe(const std::string& task_id, FrameFn fn, bool rep
     // 锁外重放（回调可能 re-enter hub；与 publish 的锁外调用一致）。
     // 根治"订阅晚于发布 → 帧丢失"竞态（SSE completed 帧等终态帧对
     // 迟到订阅者可见，见 test_web_integration P2 记录）。仅任务键开启；
-    // 实时流键（logs）默认关闭——旧帧不得跨订阅者泄漏。
+    // 实时流键默认关闭——旧帧不得跨订阅者泄漏（B3 起 hub 纯任务键）。
     if (!replay.empty())
         fn(task_id, std::move(replay));
     return id;

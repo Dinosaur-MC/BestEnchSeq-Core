@@ -20,7 +20,8 @@ public:
     /// 订阅 task 帧；返回订阅 id（用于取消）。task 完成/失败后由订阅方取消。
     /// replay_last=true：订阅时立即重放该任务最近一帧——根治"订阅晚于发布 →
     /// 帧丢失"竞态（终态帧对迟到订阅者可见）。仅任务键语义使用（终态帧
-    /// 重放有意义）；实时流键（如 logs）不得开启——旧帧跨订阅者泄漏。
+    /// 重放有意义）；实时流键不得开启——旧帧跨订阅者泄漏。
+    /// （B3 起 hub 纯任务键：/api/logs* 与 logs 键已随 LogsController 删除。）
     SubId subscribe(const std::string& task_id, FrameFn fn, bool replay_last = false);
 
     /// 取消单个订阅；无副作用当 task/订阅不存在。
