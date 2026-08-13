@@ -33,7 +33,8 @@ const state = {
   sel: new Map(),       // shortId → {target, source, id}
   conflicts: new Map(), // shortId → [shortId of exclusive-set members, ...]
   profileVersion: '',   // active profile metadata version (data schema ver; "" → "—")
-  mcVersion: '',        // MC data version from /public/version.json ("26.2"; "" → "—")
+  mcVersion: '',        // MC data version ("26.2"; "" → "—") — profile.mc_version
+                        // 优先（embedded 可用），/public/version.json 兜底（dev）
 };
 
 // Backend path params are matched literally (no URL-decoding), and profile
@@ -1396,7 +1397,7 @@ export async function render(el) {
   clearInterval(pollTimer);
 
   el.innerHTML = `
-    <h2>${t('calc.title')}</h2>
+    <h2>${t('calc.title')}<span class="calc-profile" id="calc-profile"></span></h2>
     <div class="card">
       <label>${t('calc.item')}</label>
       <mdui-dropdown id="calc-item-dd" placement="bottom-start">
@@ -1542,7 +1543,12 @@ export async function render(el) {
     ]);
     if (el.dataset.view !== myView) return;
     state.profileVersion = (prof && prof.version) || '';
-    state.mcVersion = (mcVer && mcVer.name) || '';
+    // MC 版本：profile.mc_version（C4 全链路，embedded/发布模式可用）优先，
+    // /public/version.json 仅 dev 模式挂载，兜底。profile.version 是数据包
+    // schema 版本（2.0.0），不是 MC 版本——不得用于 MC 版本显示。
+    state.mcVersion = (prof && prof.mc_version) || (mcVer && mcVer.name) || '';
+    const pfEl = document.getElementById('calc-profile');
+    if (pfEl) pfEl.textContent = `${t('calc.profile')}: ${state.key}`;
     fillAlgorithms(Array.isArray(algos) ? algos : []);
     fillItemMenu(el, myView, eqs);
     const raw = Array.isArray(eqs) ? eqs : (eqs && eqs.equipments) || [];
