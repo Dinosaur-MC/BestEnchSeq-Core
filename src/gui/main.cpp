@@ -313,8 +313,8 @@ int main(int argc, char* argv[]) try {
     if (!cfg.runtime_lang.empty())
         LanguageManager::instance().select(cfg.runtime_lang);
     // GUI 进程覆盖 console 阈值到 Info：启动/关闭/错误进 console 可见；DEBUG
-    // 请求行仍进 ring（logs 页可查）不刷 console。仅此进程覆盖，CLI 不受影响
-    // （CLAUDE.md 的 json/compact 机器输出保护）。
+    // 行只进文件（FileConsumer 按文件阈值门控）不刷 console。仅此进程覆盖，
+    // CLI 不受影响（CLAUDE.md 的 json/compact 机器输出保护）。
     cfg.log_console_level = 1;
     setup_logger(cfg.logger_config());
 

@@ -54,7 +54,6 @@ endif()
 
 add_library(besq-common-log SHARED
     "${CMAKE_CURRENT_SOURCE_DIR}/log/Logger.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/log/LogRingBuffer.cpp"
 )
 target_include_directories(besq-common-log PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>       # → #include "log/Logger.h"

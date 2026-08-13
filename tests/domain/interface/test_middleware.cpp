@@ -229,7 +229,7 @@ TEST_CASE("test_ratelimit") {
 // 访问日志（直接调用中间件 + 合成请求；经异步 Logger 消费者捕获后断言）
 // ---------------------------------------------------------------------------
 TEST_CASE("test_access_log") {
-    // 测试捕获消费者（替代已删除的 LogRingBuffer）。
+    // 测试捕获消费者：经 Logger 消费者链捕获访问日志行（同步队列消费）。
     std::mutex cap_mtx;
     std::vector<std::string> captured;
     auto cid = Logger::instance().add_consumer([&](const LogEntry& e) {
