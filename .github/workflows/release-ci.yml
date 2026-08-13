@@ -22,13 +22,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies (ninja + clang)
+      - name: Install dependencies (ninja + clang-18)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang
+          sudo apt-get install -y ninja-build clang-18
 
+      # 宿主走 full preset，但 preset 内钉的是 clang/clang++ 符号名；
+      # clang-18 包只装版本号符号，命令行 -D 覆盖 preset cacheVariables
+      # （CMake 门禁要求 Clang >= 18）
       - name: Configure host (full preset)
-        run: cmake --preset full
+        run: >
+          cmake --preset full
+          -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
 
       - name: Build host (besq / besq-gui / besq-worker / tests / benchmarks)
         run: cmake --build --preset full -j$(nproc)
@@ -39,7 +44,7 @@ jobs:
         run: >
           cmake -S plugins -B build/plugins -G Ninja
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
           -DCMAKE_PREFIX_PATH=$PWD/build
 
       - name: Build plugins

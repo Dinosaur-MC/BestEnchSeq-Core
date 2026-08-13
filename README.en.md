@@ -26,7 +26,7 @@ The project is **data-driven**: built-in vanilla data tables, plus custom JSON/C
 
 ## Quick Start
 
-**Requirements**: a C++20 compiler (Clang 15+ or MSVC), CMake 3.25+, Ninja. The project uses C++20 unconditionally (concepts, `if constexpr`, `std::jthread`, atomic `wait`/`notify`) — C++17 and earlier are not supported.
+**Requirements**: a C++20 compiler (Clang 18+ or MSVC), CMake 3.25+, Ninja. The project uses C++20 unconditionally (concepts, `if constexpr`, `std::jthread`, atomic `wait`/`notify`) — C++17 and earlier are not supported.
 
 ### Build from Source
 

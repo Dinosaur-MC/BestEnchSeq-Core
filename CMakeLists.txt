@@ -26,6 +26,21 @@ if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
         "    cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=clang++")
 endif()
 
+# Clang 下限 18：编译期路由校验（HttpController.h 的 consteval validate_routes）
+# 依赖完整 consteval 实现，Clang < 18 支持不完整（官方不定义 __cpp_consteval，
+# 已知 "not a constant expression" 误报与运行时推迟类 CodeGen 崩溃）。
+# 仅约束纯 LLVM Clang（AppleClang 版本号体系不同，不在此限）。
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 18)
+    message(FATAL_ERROR
+        "BestEnchSeq-Core requires Clang 18+ (consteval route validation\n"
+        "  is not reliable before Clang 18).\n"
+        "  Detected: Clang ${CMAKE_CXX_COMPILER_VERSION}\n"
+        "  Install Clang 18 or newer (e.g. apt install clang-18 or the\n"
+        "  official LLVM installer) and re-run:\n"
+        "    cmake --preset full          # or cli/debug\n"
+        "    cmake -B build -G Ninja -DCMAKE_CXX_COMPILER=clang++")
+endif()
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Compiler flags
 # ═══════════════════════════════════════════════════════════════════════════════

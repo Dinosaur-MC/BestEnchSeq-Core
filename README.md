@@ -26,7 +26,7 @@ BestEnchSeq-Core 是 **BestEnchSeq 最佳附魔顺序计算器的 Core 版本**�
 
 ## 快速开始
 
-**要求**：C++20 编译器（Clang 15+ 或 MSVC）、CMake 3.25+、Ninja。项目无条件使用 C++20（concepts、`if constexpr`、`std::jthread`、原子 `wait`/`notify`），不支持 C++17 及更早版本。
+**要求**：C++20 编译器（Clang 18+ 或 MSVC）、CMake 3.25+、Ninja。项目无条件使用 C++20（concepts、`if constexpr`、`std::jthread`、原子 `wait`/`notify`），不支持 C++17 及更早版本。
 
 ### 从源码构建
 
