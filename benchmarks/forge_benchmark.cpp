@@ -220,6 +220,29 @@ static double predicted_sec(const algorithm::IAlgorithm& algo, int ench_count) {
     return algo.evaluate(static_cast<int16_t>(ench_count));
 }
 
+/// 紧凑秒数显示：保留至多 \p sig 位有效数字，位数超限自动转科学计数法并取近似
+/// （替代 std::to_string 的固定 6 位小数：166843836040012.781250s → 1.668e14s、
+/// 67092.872935s → 6.709e4s、预算 100.000000s → 100s；过小数同理 0.0000704 → 7.04e-5）。
+static std::string format_sec(double secs, int sig = 4) {
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.*g", sig, secs);
+    std::string s(buf);
+    // %g 的指数带 '+' 与前导零（1.668e+14 / 7.04e-05），清理为 1.668e14 / 7.04e-5
+    size_t p = s.find('e');
+    if (p != std::string::npos) {
+        size_t i = p + 1;
+        if (i < s.size() && (s[i] == '+' || s[i] == '-')) {
+            if (s[i] == '+')
+                s.erase(i, 1);
+            else
+                ++i;  // 负号保留，跳过
+        }
+        while (i < s.size() - 1 && s[i] == '0')
+            s.erase(i, 1);  // 指数前导零：e+04 → e4，e-05 → e-5
+    }
+    return s;
+}
+
 /// Largest e in [0, TIER_MAX_ENCH] whose predicted time fits the tier budget
 /// (evaluate() is monotonic in the enchant count → binary search).
 static int max_ench_for_tier(const algorithm::IAlgorithm& algo, int tier) {
@@ -688,8 +711,8 @@ void run_case(const TestCase& tc, const Profile& profile,
             if (should_skip(*main_algo, static_cast<int>(tc.wanted.size()),
                             tier, no_skip)) {
                 const std::string note = "SKIP (predicted " +
-                    std::to_string(predicted_sec(*main_algo, tc.wanted.size())) +
-                    "s > " + std::to_string(tier_budget_sec(tier)) + "s budget)";
+                    format_sec(predicted_sec(*main_algo, tc.wanted.size())) +
+                    "s > " + format_sec(tier_budget_sec(tier)) + "s budget)";
                 std::cout << note << std::endl;
                 rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                                 tc.max_cost, main_name, RunStatus::Skip, 0, 0,
@@ -774,8 +797,8 @@ void run_case(const TestCase& tc, const Profile& profile,
         }
         if (should_skip(*algo, static_cast<int>(tc.wanted.size()), tier, no_skip)) {
             const std::string note = "SKIP (predicted " +
-                std::to_string(predicted_sec(*algo, tc.wanted.size())) +
-                "s > " + std::to_string(tier_budget_sec(tier)) + "s budget)";
+                format_sec(predicted_sec(*algo, tc.wanted.size())) +
+                "s > " + format_sec(tier_budget_sec(tier)) + "s budget)";
             std::cout << note << std::endl;
             rows.push_back({ds_display, static_cast<int>(tc.wanted.size()),
                             tc.max_cost, algo_name, RunStatus::Skip, 0, 0,
