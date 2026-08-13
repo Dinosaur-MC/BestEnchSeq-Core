@@ -145,8 +145,8 @@ struct RateLimitConfig {
 | Referer / User-Agent | `req.header(...)` 缺省 `-`；**日志注入消毒**（控制字符替换 `_`） |
 
 行为：
-- 输出 `Logger::instance().info(...)` → INFO 级 → 全局异步日志（控制台 + ring，
-  `/api/logs/events` SSE 自动可见）；
+- 输出 `Logger::instance().info(...)` → INFO 级 → 全局异步日志消费者链（控制台 +
+  文件消费者，测试/未来持久化经 `add_consumer` 注册）；
 - **429 也记**（nginx 惯例：一切到达的请求都记）；
 - **异常兜底**：`next()` 抛异常时记 500 后重抛（防御性）；
 - **解析级 400/413 不记**（解析阶段被 Connection 拦截，不进入 middleware；与 nginx

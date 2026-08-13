@@ -232,7 +232,7 @@ class IForgeEngine {
 | Algorithm | `GET /api/algorithms[/{name}]`、`POST .../load|unload` |
 | Calculator | `POST /api/tasks`、`GET/DELETE /api/tasks/{id}`、`POST .../pause|resume`、`GET /api/tasks/{id}/events`（SSE） |
 | Fs | `GET /api/fs/list`（目录选择器，越界防护） |
-| Logs | `GET /api/logs`、`GET /api/logs/events`（增量日志尾） |
+| History | `GET /api/history`（求解历史，`offset`/`limit`/`after_seq` 分页） |
 
 ---
 
