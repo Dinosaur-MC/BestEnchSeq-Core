@@ -318,7 +318,7 @@ double IDAStarAlgorithm::evaluate(int16_t ench_count) const noexcept {
     // 12 enchs tail):
     //   t(e) ≈ 7.04e-5 × 3.496^e   seconds   (2-point fit +30% safety)
     // Feasible ≤ 9 at the 10 s tier-4 budget; 10+ measured no solution.
-    return 7.04e-5 * std::pow(3.496, static_cast<double>(ench_count));
+    return 0.0310 * std::exp(1.4653e-4 * std::pow(3.0, static_cast<double>(ench_count)));
 }
 
 
