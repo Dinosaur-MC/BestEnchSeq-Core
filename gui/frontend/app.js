@@ -3,11 +3,11 @@ import { http, showError, clearError } from './api.js';
 import * as calculator from './views/calculator.js';
 import * as profiles from './views/profiles.js';
 import * as algorithms from './views/algorithms.js';
-import * as logs from './views/logs.js';
+import * as history from './views/history.js';
 import * as settings from './views/settings.js';
 import * as status from './views/status.js';
 
-const views = { calculator, profiles, algorithms, logs, settings, status };
+const views = { calculator, profiles, algorithms, history, settings, status };
 
 // showError/clearError live in api.js — imported above (no module cycle).
 

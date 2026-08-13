@@ -127,7 +127,7 @@ std::string_view frontend_vendor_mdui_mdui_global_js();
 std::string_view frontend_view_calculator();
 std::string_view frontend_view_profiles();
 std::string_view frontend_view_algorithms();
-std::string_view frontend_view_logs();
+std::string_view frontend_view_history();
 std::string_view frontend_view_settings();
 std::string_view frontend_view_status();
 std::string_view frontend_view_pager();
@@ -245,7 +245,7 @@ static constexpr Asset kAssets[] = {
     {"/views/calculator.js", "text/javascript", besq::data::frontend_view_calculator},
     {"/views/profiles.js", "text/javascript", besq::data::frontend_view_profiles},
     {"/views/algorithms.js", "text/javascript", besq::data::frontend_view_algorithms},
-    {"/views/logs.js", "text/javascript", besq::data::frontend_view_logs},
+    {"/views/history.js", "text/javascript", besq::data::frontend_view_history},
     {"/views/settings.js", "text/javascript", besq::data::frontend_view_settings},
     {"/views/status.js", "text/javascript", besq::data::frontend_view_status},
     {"/views/pager.js", "text/javascript", besq::data::frontend_view_pager},

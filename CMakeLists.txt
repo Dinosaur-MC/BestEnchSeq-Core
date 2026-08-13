@@ -297,7 +297,7 @@ if(BESQ_BUILD_GUI)
                        OUTPUT "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
         list(APPEND GUI_FRONTEND_SRCS "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
     endforeach()
-    set(GUI_VIEW_NAMES calculator profiles algorithms logs settings status pager)
+    set(GUI_VIEW_NAMES calculator profiles algorithms history settings status pager)
     foreach(name IN LISTS GUI_VIEW_NAMES)
         embed_resource(INPUT "${GUI_FRONTEND}/views/${name}.js" SYMBOL frontend_view_${name}
                        OUTPUT "${BESQ_GENERATED_DIR}/Frontend_view_${name}.cpp")
