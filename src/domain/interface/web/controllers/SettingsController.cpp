@@ -11,32 +11,42 @@ namespace {
 
 /// Current settings snapshot — mirrors the old ApiSettings::handle_get
 /// (field names/shape unchanged; machine format, not localized).  The
-/// writable set is lang / log_level / log_console / log_console_level; the
-/// gui_* / memory_mb / sandbox_enabled fields are read-only (set at
-/// startup — the server is already bound).
-Json build_settings_json() {
+/// writable set is lang / log_level / log_console / log_console_level /
+/// log_retention; the gui_* / memory_mb / sandbox_enabled and the path
+/// fields (data_dir/log_dir/algo_dir) are read-only (set at startup — the
+/// server is already bound).
+///
+/// `effective_port` is the actually bound port (WebModule injects it after
+/// server.start(); 0 when not injected, e.g. tests driving the Router
+/// directly).  gui_port prefers it — the configured 0 means "OS auto-assign".
+Json build_settings_json(uint16_t effective_port) {
     const auto& cfg = AppConfig::get();
     Json o = Json::object();
     o["lang"] = Json(std::string(LanguageManager::instance().active().name()));
     o["gui_host"] = Json(cfg.gui_host);
-    o["gui_port"] = Json(static_cast<int64_t>(cfg.gui_port));
+    o["gui_port"] = Json(static_cast<int64_t>(effective_port != 0 ? effective_port : cfg.gui_port));
     o["gui_open_browser"] = Json(cfg.gui_open_browser);
     o["gui_workers"] = Json(static_cast<int64_t>(cfg.gui_workers));
     o["memory_mb"] = Json(cfg.memory_mb);
     o["sandbox_enabled"] = Json(cfg.sandbox_enabled);
     o["log_level"] = Json(static_cast<int64_t>(Logger::instance().get_level()));
+    o["log_retention"] = Json(static_cast<int64_t>(Logger::instance().get_retention()));
     o["log_console"] = Json(Logger::instance().console_enabled());
     o["log_console_level"] = Json(static_cast<int64_t>(Logger::instance().console_level()));
+    o["data_dir"] = Json(cfg.data_dir);
+    o["log_dir"] = Json(cfg.log_dir);
+    o["algo_dir"] = Json(cfg.algo_dir);
     return o;
 }
 
-/// Serialize the current runtime state of the four writable settings —
+/// Serialize the current runtime state of the five writable settings —
 /// exactly what config.json persists (lang is LanguageManager state, not an
 /// AppConfig field).
 Json runtime_settings_json() {
     Json o = Json::object();
     o["lang"] = Json(std::string(LanguageManager::instance().active().name()));
     o["log_level"] = Json(static_cast<int64_t>(Logger::instance().get_level()));
+    o["log_retention"] = Json(static_cast<int64_t>(Logger::instance().get_retention()));
     o["log_console"] = Json(Logger::instance().console_enabled());
     o["log_console_level"] = Json(static_cast<int64_t>(Logger::instance().console_level()));
     return o;
@@ -67,7 +77,8 @@ Response SettingsController::get() {
     // Same gate as patch(): reads LanguageManager/Logger state that the solve
     // worker (tr/tr_fmt) and concurrent reactor handlers touch.
     std::lock_guard<std::mutex> lock(_gate);
-    return Response::json(200, "OK", build_settings_json().to_string());
+    const uint16_t port = _effective_port ? _effective_port->load() : 0;
+    return Response::json(200, "OK", build_settings_json(port).to_string());
 }
 
 Response SettingsController::patch(const HttpRequest&, const PathParams&, const Json& body) {
@@ -92,6 +103,15 @@ Response SettingsController::patch(const HttpRequest&, const PathParams&, const 
         if (body.has("log_console_level"))
             Logger::instance().set_console_level(
                 static_cast<LogLevel>(checked_log_level(body["log_console_level"], "log_console_level")));
+        // Bound-check before casting: negative would wrap into size_t and
+        // turn rotation into "delete everything".  Read as int64_t so
+        // oversized integers (e.g. 2^63+1) are rejected instead of wrapping.
+        if (body.has("log_retention")) {
+            const int64_t rv = body["log_retention"].as<int64_t>();
+            if (rv < 0)
+                throw WebHttpError(400, "INVALID_FIELD", "log_retention must be >= 0");
+            Logger::instance().set_retention(static_cast<size_t>(rv));
+        }
     } catch (const JsonException&) {
         throw WebHttpError(400, "INVALID_FIELD", "invalid settings field type");
     }
@@ -102,7 +122,7 @@ Response SettingsController::patch(const HttpRequest&, const PathParams&, const 
     // the PATCH still succeeds.
     AppConfig::save_config_file(runtime_settings_json());
 
-    return Response::json(200, "OK", build_settings_json().to_string());
+    return Response::json(200, "OK", build_settings_json(_effective_port ? _effective_port->load() : 0).to_string());
 }
 
 } // namespace web

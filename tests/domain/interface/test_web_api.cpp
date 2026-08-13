@@ -3,6 +3,7 @@
 // web::Router. Algorithm/Calculator/History controllers extend this file.
 // =============================================================================
 #define BESQ_TEST_MAIN
+#include "AppConfig.h"
 #include "common/io/json.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/interface/BesqContext.h"
@@ -150,6 +151,39 @@ void test_settings(TestApp& app) {
     expect(scj2["log_console"].as<bool>() == false, "log_console false reflected by GET");
     (void)app.call(Method::Patch, "/api/settings", R"({"log_console":true})");
 
+    // ── C2: log_retention editable round-trip ──
+
+    // PATCH log_retention → 200, GET reflects it.
+    auto lr = app.call(Method::Patch, "/api/settings", R"({"log_retention":7})");
+    expect(lr.status == 200, "patch log_retention 200");
+    auto lrg = app.call(Method::Get, "/api/settings");
+    auto lrj = Json::parse(lrg.body);
+    expect(lrj.has("log_retention") && lrj["log_retention"].as<int64_t>() == 7, "log_retention reflected by GET");
+
+    // Negative retention → 400 INVALID_FIELD (must not wrap into size_t).
+    auto lrb = app.call(Method::Patch, "/api/settings", R"({"log_retention":-1})");
+    expect(lrb.status == 400 && lrb.body.find("INVALID_FIELD") != std::string::npos, "negative log_retention 400");
+
+    // Non-numeric retention → 400 INVALID_FIELD (JsonException → 400).
+    auto lrt = app.call(Method::Patch, "/api/settings", R"({"log_retention":"x"})");
+    expect(lrt.status == 400 && lrt.body.find("INVALID_FIELD") != std::string::npos, "log_retention bad type 400");
+    (void)app.call(Method::Patch, "/api/settings", R"({"log_retention":5})"); // restore the default
+
+    // ── C2: GET read-only path fields (set at startup, never writable) ──
+    auto pth = app.call(Method::Get, "/api/settings");
+    auto pj = Json::parse(pth.body);
+    expect(pj.has("data_dir") && pj["data_dir"].type() == JsonType::String, "GET carries data_dir");
+    expect(pj.has("log_dir") && pj["log_dir"].type() == JsonType::String, "GET carries log_dir");
+    expect(pj.has("algo_dir") && pj["algo_dir"].type() == JsonType::String, "GET carries algo_dir");
+
+    // ── C2: gui_port semantics without server injection ──
+    // TestApp drives the Router directly (no WebModule, no real server): the
+    // effective port is never injected, so gui_port must stay the configured
+    // value. The injected-override path is covered in test_web_module (which
+    // builds the real WebModule wiring).
+    expect(pj.has("gui_port") && pj["gui_port"].as<int64_t>() == static_cast<int64_t>(AppConfig::get().gui_port),
+           "gui_port stays the configured value without server injection");
+
     // ── GET read-only service fields (batch D): startup-only info is exposed
     //    so the settings page can display it ──
     auto sg = app.call(Method::Get, "/api/settings");
@@ -159,7 +193,7 @@ void test_settings(TestApp& app) {
     expect(sgj.has("sandbox_enabled") && sgj["sandbox_enabled"].type() == JsonType::Bool, "GET carries sandbox_enabled");
 
     // ── config.json persistence (batch D): a successful PATCH writes the
-    //    four runtime fields to <cwd>/config.json (best-effort) ──
+    //    five runtime fields to <cwd>/config.json (best-effort) ──
     const std::string cfg_path = "config.json";
     std::error_code ec;
     std::filesystem::remove(cfg_path, ec); // stale file from an earlier run
@@ -167,12 +201,13 @@ void test_settings(TestApp& app) {
     expect(persist.status == 200, "persistence patch 200");
     expect(std::filesystem::exists(cfg_path), "PATCH wrote config.json");
     bool cfg_shape = false, cfg_lang = false;
-    bool cfg_lv = false, cfg_cc = false, cfg_cl = false;
+    bool cfg_lv = false, cfg_cc = false, cfg_cl = false, cfg_ret = false;
     if (std::filesystem::exists(cfg_path)) {
         std::ifstream in(cfg_path);
         std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         auto cj = Json::parse(content);
-        cfg_shape = cj.has("lang") && cj.has("log_level") && cj.has("log_console") && cj.has("log_console_level");
+        cfg_shape = cj.has("lang") && cj.has("log_level") && cj.has("log_console") && cj.has("log_console_level") &&
+                    cj.has("log_retention");
         // lang is whatever the LanguageManager currently has active (no
         // translations are registered in the test process, so the name is
         // "" there) — assert the field exists as a string, not its value.
@@ -180,12 +215,15 @@ void test_settings(TestApp& app) {
         cfg_lv = cj["log_level"].as<int64_t>() == 1;
         cfg_cc = cj["log_console"].as<bool>() == false;
         cfg_cl = cj["log_console_level"].as<int64_t>() == 3;
+        // log_retention was restored to 5 right above the persistence PATCH.
+        cfg_ret = cj["log_retention"].as<int64_t>() == 5;
     }
-    expect(cfg_shape, "config.json carries all 4 runtime fields");
+    expect(cfg_shape, "config.json carries all 5 runtime fields");
     expect(cfg_lang, "config.json carries a non-empty lang");
     expect(cfg_lv, "config.json log_level persisted as 1");
     expect(cfg_cc, "config.json log_console persisted as false");
     expect(cfg_cl, "config.json log_console_level persisted as 3");
+    expect(cfg_ret, "config.json log_retention persisted as 5");
     // Restore the benign state the earlier cases established (the restore
     // PATCH rewrites config.json), then drop the file.
     (void)app.call(Method::Patch, "/api/settings", R"({"log_level":2,"log_console":true,"log_console_level":2})");
@@ -1241,6 +1279,27 @@ void test_web_module(BesqContext& ctx) {
     pn.path = "/public/nope";
     auto r4 = module.dispatch(pn);
     expect(r4.status == 404, "unknown static asset 404");
+
+    // ── C2: effective-port injection (real WebModule → SettingsController
+    //    wiring).  Without injection the settings gui_port is the configured
+    //    value; after set_effective_port() it reports the injected port —
+    //    exactly what main.cpp does with HttpServer::port() post-bind. ──
+    HttpRequest st0;
+    st0.method = Method::Get;
+    st0.path = "/api/settings";
+    auto s0 = module.dispatch(st0);
+    auto sj0 = Json::parse(s0.body);
+    expect(s0.status == 200 && sj0.has("gui_port") &&
+               sj0["gui_port"].as<int64_t>() == static_cast<int64_t>(AppConfig::get().gui_port),
+           "no injection → gui_port stays the configured value");
+
+    module.set_effective_port(4321);
+    HttpRequest st1;
+    st1.method = Method::Get;
+    st1.path = "/api/settings";
+    auto s1 = module.dispatch(st1);
+    auto sj1 = Json::parse(s1.body);
+    expect(s1.status == 200 && sj1["gui_port"].as<int64_t>() == 4321, "injected effective port overrides configured gui_port");
 }
 
 /// StreamChannel 桥接测试：CalculatorController::events 把 req.stream 上的帧投递通道

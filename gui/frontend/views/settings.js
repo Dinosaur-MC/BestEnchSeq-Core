@@ -39,6 +39,8 @@ export async function render(el) {
     <div class="card set-group">
       <h3>${t('set.group_log')}</h3>
       ${editableRow(t('set.log_level'), levelSelect('set-loglevel', s.log_level))}
+      ${editableRow(t('set.log_retention'),
+        `<input type="number" id="set-log-retention" min="0" step="1" value="${s.log_retention}">`)}
       ${editableRow(t('set.log_console'),
         `<mdui-switch id="set-log-console" ${s.log_console ? 'checked' : ''}></mdui-switch>`)}
       ${editableRow(t('set.log_console_level'), levelSelect('set-console-level', s.log_console_level))}
@@ -51,6 +53,9 @@ export async function render(el) {
       ${roRow(t('set.gui_workers'), String(s.gui_workers))}
       ${roRow(t('set.memory_mb'), String(s.memory_mb))}
       ${roRow(t('set.sandbox_enabled'), s.sandbox_enabled ? t('set.on') : t('set.off'))}
+      ${roRow(t('set.data_dir'), esc(s.data_dir))}
+      ${roRow(t('set.log_dir'), esc(s.log_dir))}
+      ${roRow(t('set.algo_dir'), esc(s.algo_dir))}
     </div>
     <div class="set-actions">
       <button id="set-save">${t('set.save')}</button>
@@ -62,6 +67,7 @@ export async function render(el) {
       const body = {
         lang: document.getElementById('set-lang').value,
         log_level: parseInt(document.getElementById('set-loglevel').value, 10),
+        log_retention: parseInt(document.getElementById('set-log-retention').value, 10),
         log_console: document.getElementById('set-log-console').checked,
         log_console_level: parseInt(document.getElementById('set-console-level').value, 10),
       };

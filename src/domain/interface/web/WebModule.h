@@ -38,6 +38,11 @@ public:
     /// Mount a disk root as a `/public` fallback (dev hot-reload); optional.
     void mount_res_dir(std::filesystem::path root);
 
+    /// 回填实际绑定端口（HttpServer::port()——配置 0 = OS 自动分配，绑定后
+    /// >0）。GET /api/settings 的 gui_port 用它覆盖配置值，设置页显示真实
+    /// 端口。须在 server.start() 成功后、任何请求到达前调用（main.cpp）。
+    void set_effective_port(uint16_t port) noexcept;
+
     /// Dispatch one HTTP request. Never throws; returns a response
     /// (200/307/400/404/405/409/500) with a JSON envelope on errors.
     HttpResponse dispatch(const HttpRequest& req);

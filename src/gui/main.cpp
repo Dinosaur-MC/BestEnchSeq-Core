@@ -382,6 +382,10 @@ int main(int argc, char* argv[]) try {
         return 1;
     }
 
+    // 回填实际绑定端口：配置 0 = OS 自动分配，HttpServer::port() 拿到真实端口
+    // 后注入 WebModule——GET /api/settings 的 gui_port 显示它（设置页）。
+    module.set_effective_port(server.port());
+
     const auto url = "http://" + cfg.gui_host + ":" + std::to_string(server.port()) + "/";
     LOG_INFO("besq-gui listening at %s", url.c_str());
     std::cout << "besq-gui serving at " << url << "\n";

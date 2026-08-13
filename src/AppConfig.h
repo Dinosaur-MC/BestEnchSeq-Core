@@ -16,7 +16,7 @@
 ///   1. Environment variables (BESQ_*)
 ///   2. <cwd>/config.json — the runtime-persisted settings file written by
 ///      PATCH /api/settings (lang / log_level / log_console /
-///      log_console_level)
+///      log_console_level / log_retention)
 ///   3. Hard-coded defaults
 ///
 /// The config file lives in the working directory (not <exe_dir>/): cwd is
@@ -101,6 +101,8 @@ struct AppConfig {
                 cfg.log_console_level = checked_level(file["log_console_level"],
                                                       "log_console_level",
                                                       cfg.log_console_level);
+            if (file.has("log_retention"))
+                cfg.log_retention = checked_retention(file["log_retention"], cfg.log_retention);
         }
 
         // ── env layer (overrides config.json per-field) ──
@@ -184,6 +186,23 @@ private:
                      field, static_cast<long long>(lv), def);
         } catch (const JsonException&) {
             LOG_WARN("config.json %s is not a number, using default %d", field, def);
+        }
+        return def;
+    }
+
+    /// Bound-check a JSON retention value before it enters the Logger:
+    /// negative would wrap into size_t (rotation then deletes every historic
+    /// run).  Negative / non-numeric → the field's own default (`def`) with a
+    /// LOG_WARN.
+    static size_t checked_retention(const Json& v, size_t def) noexcept {
+        try {
+            int64_t rv = v.as<int64_t>();
+            if (rv >= 0)
+                return static_cast<size_t>(rv);
+            LOG_WARN("config.json log_retention negative (%lld), using default %zu",
+                     static_cast<long long>(rv), def);
+        } catch (const JsonException&) {
+            LOG_WARN("config.json log_retention is not a number, using default %zu", def);
         }
         return def;
     }

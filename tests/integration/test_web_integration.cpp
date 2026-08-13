@@ -241,6 +241,13 @@ void test_health_status_settings(HttpServer& server) {
     expect(settings.find("200 OK") != std::string::npos, "settings responds 200");
     expect(settings.find("lang") != std::string::npos, "settings lang field");
     expect(settings.find("log_level") != std::string::npos, "settings log_level field");
+
+    // C2: with the server bound to port 0 (OS auto-assign), gui_port must be
+    // the ACTUAL bound port (WebModule::set_effective_port → controller), not
+    // the configured 0.
+    expect(server.port() != 0, "server bound a real (non-zero) port");
+    expect(settings.find("\"gui_port\":" + std::to_string(server.port())) != std::string::npos,
+           "settings gui_port is the real bound port");
 }
 
 // ---------------------------------------------------------------------------
@@ -859,6 +866,10 @@ static void run_suite() {
     HttpServer server;
     server.set_fallback([&](const HttpRequest& r) { return module.dispatch(r); });
     expect(server.start("127.0.0.1", 0), "server starts");
+    // C2: real binding — the settings page must show the actually bound port
+    // (port 0 = OS auto-assign; HttpServer::port() resolves it post-bind),
+    // mirroring src/gui/main.cpp.
+    module.set_effective_port(server.port());
     std::thread server_thread([&] { server.run(); });
 
     try {

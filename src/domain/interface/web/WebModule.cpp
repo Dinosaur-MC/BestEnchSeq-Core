@@ -10,6 +10,7 @@
 #include "domain/interface/web/controllers/ProfilesController.h"
 #include "domain/interface/web/controllers/SettingsController.h"
 #include "domain/interface/web/controllers/StatusController.h"
+#include <atomic>
 #include <string>
 #include <utility>
 
@@ -25,6 +26,9 @@ struct WebModule::Impl {
     web::WebSolveService _solve;
     Router _router;
     StaticFileServer _sfs;
+    /// 实际绑定端口（HttpServer::port()，server.start() 后注入；0 = 未注入/
+    /// 测试直连 Router）。atomic：reactor 线程上的 GET /api/settings 读它。
+    std::atomic<uint16_t> _effective_port{0};
 
     explicit Impl(BesqContext& ctx) : _ctx(ctx), _solve(ctx, _ctx_gate, &_hub) {}
 };
@@ -32,7 +36,7 @@ struct WebModule::Impl {
 WebModule::WebModule(BesqContext& ctx) : _impl(std::make_unique<Impl>(ctx)) {
     _impl->_router.register_controller<HealthController>();
     _impl->_router.register_controller<StatusController>(ctx, _impl->_ctx_gate);
-    _impl->_router.register_controller<SettingsController>(_impl->_ctx_gate);
+    _impl->_router.register_controller<SettingsController>(_impl->_ctx_gate, &_impl->_effective_port);
     _impl->_router.register_controller<ProfilesController>(ctx, _impl->_ctx_gate);
     _impl->_router.register_controller<AlgorithmController>(ctx, _impl->_solve, _impl->_ctx_gate);
     _impl->_router.register_controller<CalculatorController>(_impl->_solve, _impl->_hub);
@@ -63,6 +67,10 @@ void WebModule::set_static_resources(std::map<std::string, StaticResource> embed
 
 void WebModule::mount_res_dir(std::filesystem::path root) {
     _impl->_sfs.mount_disk("/public", std::move(root));
+}
+
+void WebModule::set_effective_port(uint16_t port) noexcept {
+    _impl->_effective_port.store(port);
 }
 
 HttpResponse WebModule::dispatch(const HttpRequest& req) {
