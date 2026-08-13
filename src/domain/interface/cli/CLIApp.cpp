@@ -312,7 +312,12 @@ struct CLIApp::UserI18nTranslator {
         }
     }
 
-    std::string operator()(std::string_view key) const { return tr(key); }
+    std::string operator()(std::string_view key) const {
+        // 唯一带 {0} 占位符的帮助条目：注入编译期 BESQ_MAX_SOLUTIONS
+        if (key == "cli.help.solutions_desc")
+            return tr_fmt(key, BESQ_MAX_SOLUTIONS);
+        return tr(key);
+    }
 };
 
 // ============================================================================
