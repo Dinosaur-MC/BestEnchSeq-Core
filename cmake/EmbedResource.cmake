@@ -174,14 +174,31 @@ function(besq_embed_resources)
         endforeach()
 
         set(_out "${BESQ_GENERATED_DIR}/builtin/${_g}_assets.cpp")
+
+        # Pass the member lists via manifest FILES, not -D arguments: the
+        # custom command runs through a shell (/bin/sh -c on Ninja/Linux,
+        # cmd.exe on Windows) and a `;`-joined -D value would be split by the
+        # shell — observed as "/bin/sh: line 1: -DGROUP_MEMBERS=...: command
+        # not found" on WSL.  Manifests are written at configure time and
+        # read back with file(STRINGS) (one entry per line), immune to any
+        # shell metacharacter in member names or paths.
+        string(ASCII 10 _NL)
+        set(_manifest "${BESQ_GENERATED_DIR}/builtin/${_g}.members.txt")
+        string(JOIN "${_NL}" _members_text ${_g_members})
+        file(WRITE "${_manifest}" "${_members_text}${_NL}")
+        set(_members_manifest "${BESQ_GENERATED_DIR}/builtin/${_g}.group_members.txt")
+        string(JOIN "${_NL}" _own_text ${_own_members})
+        file(WRITE "${_members_manifest}" "${_own_text}${_NL}")
+
         add_custom_command(
             OUTPUT  "${_out}"
             DEPENDS ${_g_paths} "${BESQ_EMBEDDED_HEADER}" "${BESQ_EMBEDDED_GEN_SCRIPT}"
+                    "${_manifest}" "${_members_manifest}"
             COMMAND "${CMAKE_COMMAND}"
                 "-DGROUP=${_g}"
                 "-DOUTPUT=${_out}"
-                "-DMEMBERS=${_g_members}"
-                "-DGROUP_MEMBERS=${_own_members}"
+                "-DLIST_FILE=${_manifest}"
+                "-DGROUP_MEMBERS_FILE=${_members_manifest}"
                 -P "${BESQ_EMBEDDED_GEN_SCRIPT}"
             COMMENT "Generating embedded resource implementation: ${_g}_assets.cpp"
         )

@@ -31,12 +31,15 @@ endif()
 #
 # 2. Group implementation (build time, per group):
 #      cmake -DGROUP=<g> -DOUTPUT=<path>
-#            -DMEMBERS="m1=path;m2=path" -DGROUP_MEMBERS="m1;m2"
+#            -DLIST_FILE=<manifest> -DGROUP_MEMBERS_FILE=<manifest>
 #            -P EmbedResource_gen.cmake
-#    Writes one .cpp with constexpr byte arrays for the group's resources and
-#    the out-of-line definition of detail::<group>_raw(): own-group members
-#    return their data, everything else returns an empty view.  The inline
-#    dispatcher in the header is what keeps cross-group access defined.
+#    The manifests (member=path lines / member-name lines, written at
+#    configure time) keep the shell-invoked command free of `;`-joined
+#    values.  Writes one .cpp with constexpr byte arrays for the group's
+#    resources and the out-of-line definition of detail::<group>_raw():
+#    own-group members return their data, everything else returns an empty
+#    view.  The inline dispatcher in the header is what keeps cross-group
+#    access defined.
 
 string(ASCII 10 _NL)
 
@@ -191,9 +194,15 @@ endif()
 # ────────────────────────────────────────────────────────────────────────────
 # Mode 2: group implementation
 # ────────────────────────────────────────────────────────────────────────────
-if(NOT GROUP OR NOT OUTPUT OR NOT MEMBERS OR NOT GROUP_MEMBERS)
-    message(FATAL_ERROR "EmbedResource_gen: group mode requires GROUP/OUTPUT/MEMBERS/GROUP_MEMBERS")
+if(NOT GROUP OR NOT OUTPUT OR NOT LIST_FILE OR NOT GROUP_MEMBERS_FILE)
+    message(FATAL_ERROR "EmbedResource_gen: group mode requires GROUP/OUTPUT/LIST_FILE/GROUP_MEMBERS_FILE")
 endif()
+
+# Read the member lists from manifest files (one entry per line) instead of
+# -D arguments: the command runs through a shell, and `;`-joined values
+# would be split (see EmbedResource.cmake).
+file(STRINGS "${LIST_FILE}" MEMBERS)
+file(STRINGS "${GROUP_MEMBERS_FILE}" GROUP_MEMBERS)
 
 # --- byte arrays for this group's resources ---------------------------------
 set(_arrays "")
