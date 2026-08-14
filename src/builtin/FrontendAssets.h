@@ -8,4 +8,4 @@
 // 见 src/builtin/EmbeddedData.h 的说明；本壳仅为不熟悉生成机制的开发者
 // 提供语义化入口。
 // ────────────────────────────────────────────────────────────────────────────
-#include "builtin/EmbeddedResources_generated.h"
+#include "builtin/EmbeddedResources_generated.h" // IWYU pragma: export
