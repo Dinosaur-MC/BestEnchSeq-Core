@@ -2,6 +2,14 @@
 #
 # Build/configure-time generator for the embedded-resource access layer.
 # Called by EmbedResource.cmake's besq_embed_resources() — never by hand.
+
+# Script mode (`cmake -P`) has NO cmake_minimum_required/project() context, so
+# policies fall back to OLD on CMake < 4.0 — without this, `IN_LIST` (CMP0057,
+# NEW since 3.3) fails with "Unknown arguments".  The project requires
+# CMake >= 3.25, so NEW is always safe here.
+if(POLICY CMP0057)
+    cmake_policy(SET CMP0057 NEW)
+endif()
 #
 # Two modes:
 #
