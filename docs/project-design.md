@@ -197,7 +197,7 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 ### 国际化 (i18n)
 
-采用自定义轻量字符串表方案（`common/i18n/Language.h/.cpp`）。翻译数据以 JSON 格式存储在 `data/i18n/`，通过 `EmbedResource.cmake` 编译时嵌入二进制。所有用户可见输出（CLI 帮助文本、错误消息、锻造方案输出）使用 `tr("key")` / `tr_fmt("key", ...)`。
+采用自定义轻量字符串表方案（`common/i18n/Language.h/.cpp`）。翻译数据以 JSON 格式存储在 `data/i18n/`，通过 `besq_embed_resources()`（cmake/EmbedResource.cmake）编译时嵌入二进制。所有用户可见输出（CLI 帮助文本、错误消息、锻造方案输出）使用 `tr("key")` / `tr_fmt("key", ...)`。
 
 语言选择三级降级：`--lang` CLI 标志 > `BESQ_LANG` 环境变量 > 系统 locale 自动检测。先支持中文 (`zh_CN`) 和英文 (`en_US`)，架构可扩展。机器可读格式（compact、JSON）和日志不翻译。
 
@@ -247,13 +247,13 @@ Algorithm domain (src/domain/algorithm/registries/):
 
 ## 模块职责（四域架构）
 
-### `src/builtin/`（内置数据层）
+### `src/builtin/`（嵌入资源收集层）
 
-项目级内置数据工具，由 `ProfileLoader::load_builtin()` 调用。
+**职责边界**：只负责嵌入资源的收集（编译期嵌入）与 raw data 访问（`std::string_view`）；不做解析、不做 I/O、零项目内依赖。所有解析/加载/注册逻辑归属各自领域层。
 
-- `DataLoader`：读取编译时嵌入的 `vanilla.json` → 输出 DTO 流
-- `EmbeddedData`：声明由 CMake `EmbedResource.cmake` 嵌入的二进制资源
-- `ItemProperties`：原版物品属性定义（耐久度、最大合并等级等）
+- `EmbeddedData.h` / `FrontendAssets.h`：手写壳头，转发到自动生成的 `builtin/EmbeddedResources_generated.h`（统一枚举 `ResourceId` + `raw()` / `resource_name()` / `group_of()`）
+- 生成物（`build/generated/builtin/`）：枚举与接口头、每资源 constexpr 字节数组 TU、组级分派 TU——全部由 CMake `besq_embed_resources()` 声明自动生成（单一事实源 = CMakeLists.txt）
+- 加载侧对应物（已迁出 builtin）：`BuiltinData`（business/loaders）、`ItemProperties`（business/components）、`BuiltinI18n`（interface/components）
 
 ### `src/common/`（共享工具层）
 

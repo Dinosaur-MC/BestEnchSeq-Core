@@ -701,13 +701,13 @@ NSID "minecraft:sharpness"
 **数据流：**
 
 ```
-编译时嵌入（EmbedResource.cmake）
-  data/i18n/en_US.json          → i18n_en_US()      (UI 字符串)
-  data/i18n/zh_CN.json          → i18n_zh_CN()      (UI 字符串)
-  data/i18n/minecraft/en_US.json → mc_i18n_en_US()  (Minecraft 实体名称)
-  data/i18n/minecraft/zh_CN.json → mc_i18n_zh_CN()  (Minecraft 实体名称)
+编译时嵌入（`besq_embed_resources()`，见 src/builtin/README.md）
+  data/i18n/en_US.json          → raw(ResourceId::data_i18n_en_US)   (UI 字符串)
+  data/i18n/zh_CN.json          → raw(ResourceId::data_i18n_zh_CN)   (UI 字符串)
+  data/i18n/minecraft/en_US.json → raw(ResourceId::data_mc_i18n_en_US) (Minecraft 实体名称)
+  data/i18n/minecraft/zh_CN.json → raw(ResourceId::data_mc_i18n_zh_CN) (Minecraft 实体名称)
 
-启动时合并（I18nLoader::register_builtin_translations）
+启动时合并（BuiltinI18n::register_builtin_translations）
   "zh_CN" = UI_zh_CN.merge(MC_zh_CN)
   "en_US" = UI_en_US.merge(MC_en_US)
 

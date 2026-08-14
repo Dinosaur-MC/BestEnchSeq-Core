@@ -109,16 +109,14 @@ CLI       besq（EXE）—— 链 besq-core + besq-domain-interface
 ```cmake
 # 算法域（src/domain/algorithm/CMakeLists.txt）
 add_library(besq-algo-core SHARED <算法域源文件 + 插件框架 + 策略>)
-# 核心（根 CMakeLists）——编译内嵌数据 + 链三域
-add_library(besq-core STATIC <builtin/*.cpp + embedded>)  # 现在是 INTERFACE 聚合
+# 核心（根 CMakeLists）——内嵌数据生成物编入 business，core 为纯聚合
+add_library(besq-core STATIC <BuiltinCore.cpp 锚点>)
 target_link_libraries(besq-core PUBLIC orchestration business algo-core)
 # 宿主无 -rdynamic（插件从 libbesq-algo-core.so 解析）
-add_executable(besq src/main.cpp)        # 链 besq-core + interface
+add_executable(besq src/main.cpp)        # 链 interface + core（interface 在前）
 add_executable(besq-worker src/worker/main.cpp)  # 链 besq-algo-core（共享）
-# 注意：business ↔ builtin 是真实循环静态依赖，UNIX 链接必须用
-#   -Wl,--start-group besq-core besq-domain-business -Wl,--end-group
-# group 必须同时包住 core 与 business——只包 core（或单独的 builtin 库）
-# 会让 business 落在 group 外而失效。
+# 无循环依赖：内嵌数据（raw 访问器）与加载器（BuiltinData）同编入
+# besq-domain-business，归档自洽，UNIX 左到右链接即可（无 --start-group）。
 ```
 
 ## 4. 隔离机制
@@ -418,7 +416,7 @@ M4（可选）：
 - [x] worker 链 `besq-algo-core`，同导出
 - [x] 插件纯净扩展（Linux INTERFACE 裸解析 / Windows 静态内核）
 - [x] `besq-coreConfig.cmake.in` 只提供 `besq-algo-core::besq-algo-core`
-- [x] UNIX 链接 `--start-group` 解决 business↔builtin 循环（group 须含 core/business/orchestration/interface/algo 整条链）
+- [x] ~~UNIX 链接 `--start-group` 解决 business↔builtin 循环~~ — 已消除：builtin 收敛为纯资源壳层，内嵌数据与加载器同编入 `besq-domain-business`，归档自洽，左到右链接（2026-08 重构）
 - [x] 清理过时产物（besq-core.dll/besq-minimal.lib/besq-domain-algorithm.lib/besq-builtin.lib）
 - [x] 预设 full/debug/minimal/cli/sandbox
 - [x] Windows 65 测试全通过 + CLI/worker/插件功能验证

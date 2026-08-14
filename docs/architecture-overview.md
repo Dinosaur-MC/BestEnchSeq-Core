@@ -62,7 +62,8 @@ cmake --build build --target forge_benchmark
   │ core · io · log · i18n · cli · thread          │
   │ ds/（header-only schema 引擎）                  │
   └───────────────────────────────────────────────┘
-  builtin/（编译期嵌入 vanilla.json / item_properties / i18n）
+  builtin/（嵌入资源壳层：vanilla.json / item_properties / i18n / 前端资产，编译期嵌入，
+           由 CMake besq_embed_resources() 自动生成，零项目内依赖）
 ```
 
 ### 域职责与依赖约束（红线）
@@ -71,17 +72,17 @@ cmake --build build --target forge_benchmark
 |---|---|---|---|---|
 | `common/` | `::`/`besq::` | NSID/MCE、JSON DOM、日志、i18n、队列、CLIParser、schema 引擎 | — | 任何域 |
 | `domain/algorithm/` | `algorithm::` | 紧凑类型、EnchReg、ForgeEngine、搜索策略、诊断、checkpoint、插件加载、沙箱 | common | business、orchestration、interface |
-| `domain/business/` | `::` | EnchInfo/Item/Solution/Profile、三个注册表、解析器、ProfileManager | common、builtin | algorithm、orchestration、interface |
+| `domain/business/` | `::` | EnchInfo/Item/Solution/Profile、三个注册表、解析器、ProfileManager、BuiltinData/ItemProperties | common、builtin | algorithm、orchestration、interface |
 | `domain/orchestration/` | `orchestration::` | Solve/Manage/Export 管线、CompactAdapter、OutputFormatter | algorithm、business、common | interface |
 | `domain/interface/` | `::` | BesqContext、CLIApp、C ABI、HTTP 框架、Web 模块 | orchestration、business、algorithm（诊断）、common | — |
 
-> `builtin/` 是唯一例外：它既是数据层（供 business 消费）又引用 business 类型（`DataLoader` 输出注册表），与 business 构成真实静态循环——CMake 用 `-Wl,--start-group` 包住整条链解决。
+> `builtin/` 是纯资源壳层：只含转发壳头（`EmbeddedData.h`/`FrontendAssets.h`）与 CMake 生成的编译期嵌入物（枚举 + constexpr 字节数组 + 访问器），零项目内依赖。数据加载（`BuiltinData`）、属性解析（`ItemProperties`）、i18n 注册（`BuiltinI18n`）均已迁入各自领域层，**business↔builtin 循环已消除**，UNIX 链接不再需要 `--start-group`（归档自洽，左到右解析）。
 
 ### 构建产物与"共享内核"原则
 
 - **`besq-algo-core` 是 SHARED 库**，且是全项目唯一进程内副本：CLI、`besq-worker`、插件三方链接同一份 `.dll/.so`，保证 `IAlgorithm` vtable、`DiagnosticsService` 单例、堆分配器唯一（历史上"静态内核 + -rdynamic"方案在 dlopen 时 SEGV，已弃用）。
 - **`besq-common-log` 也是 SHARED**：Logger 单例每进程必须一份。
-- `besq-core` 是 STATIC 聚合（algorithm + business + orchestration + builtin + 内嵌数据），接口域由宿主显式补充。
+- `besq-core` 是 STATIC 聚合（algorithm + business + orchestration + 锚点 TU），接口域由宿主显式补充；内嵌数据生成物（data/frontend 资源 TU）编入 `besq-domain-business`（与加载器同归档，无跨归档回引）。
 - 插件构建：宿主 configure 时渲染 `build/besq-coreConfig.cmake`，导出唯一 IMPORTED 目标 `besq-algo-core::besq-algo-core` 与诊断宏定义（保证与宿主 ODR 一致）。插件强制与宿主**同编译器、同构建类型**。
 
 ---
@@ -93,7 +94,7 @@ src/
 ├── main.cpp                  # CLI 入口（apply_lang → CLIApp::run）
 ├── AppConfig.h               # 运行时配置（env 读取：BESQ_LANG/SANDBOX/GUI_*…）
 ├── BuildConfig.h.in          # 生成头（BESQ_VERSION 等）
-├── builtin/                  # DataLoader / ItemProperties / I18nLoader + 嵌入资源访问器
+├── builtin/                  # 嵌入资源收集层（EmbeddedData/FrontendAssets 壳头 + 生成物锚点；枚举/接口/实现由 CMake besq_embed_resources 全自动生成，零项目内依赖）
 ├── common/                   # 共享工具（6 个独立库）
 │   ├── ds/  i18n/  io/  log/  serialization/  utils/（含 cli/CLIParser v2、queue/、thread/）
 ├── domain/
