@@ -219,9 +219,14 @@ foreach(_r IN LISTS MEMBERS)
     string(LENGTH "${_hex}" _hex_len)
     math(EXPR _data_len "${_hex_len} / 2")
 
-    set(_bytes "")
+    # Build the byte-array body with LINEAR complexity: collect per-line
+    # strings in a list, then one string(JOIN).  Repeated string(APPEND) into
+    # one growing string is O(n^2) on older CMakes and makes the 300 KB+
+    # i18n resources look like a hang (esp. on slow filesystems like WSL
+    # /mnt/...).  32 bytes per line keeps the line strings small.
+    set(_lines "")
     set(_i 0)
-    set(_per_line 16)
+    set(_per_line 32)
     while(_i LESS _hex_len)
         set(_line "")
         set(_sep "")
@@ -233,11 +238,12 @@ foreach(_r IN LISTS MEMBERS)
             math(EXPR _i "${_i} + 2")
             math(EXPR _j "${_j} + 1")
         endwhile()
-        string(APPEND _bytes "    ${_line},${_NL}")
+        list(APPEND _lines "    ${_line},")
     endwhile()
+    string(JOIN "${_NL}" _bytes_text ${_lines})
 
     string(APPEND _arrays
-        "constexpr std::array<unsigned char, ${_data_len}> k${_member} = {${_NL}${_bytes}};${_NL}${_NL}")
+        "constexpr std::array<unsigned char, ${_data_len}> k${_member} = {${_NL}${_bytes_text}${_NL}};${_NL}${_NL}")
 endforeach()
 
 # --- detail::<group>_raw(): own-group members return data, others {} --------
