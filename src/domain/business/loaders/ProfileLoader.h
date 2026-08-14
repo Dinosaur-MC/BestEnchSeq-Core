@@ -23,7 +23,8 @@ public:
     /// Load into an existing Profile from JSON.
     bool from_json(Profile& profile, const Json& json);
 
-    /// Load built-in vanilla data (delegates to project-level builtin/DataLoader).
+    /// Load built-in vanilla data (delegates to BuiltinData, which reads the
+    /// embedded resources via the builtin raw accessor).
     Profile load_builtin();
 
     /// Load built-in vanilla data into an existing Profile.

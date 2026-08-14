@@ -17,4 +17,5 @@ target_link_libraries(besq-domain-business
 
 target_include_directories(besq-domain-business PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+    ${BESQ_GENERATED_DIR}        # → #include "builtin/EmbeddedResources_generated.h" (via builtin/EmbeddedData.h)
 )

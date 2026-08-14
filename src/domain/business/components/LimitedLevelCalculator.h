@@ -1,6 +1,6 @@
 #pragma once
 
-#include "builtin/ItemProperties.h"
+#include "domain/business/components/ItemProperties.h"
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 

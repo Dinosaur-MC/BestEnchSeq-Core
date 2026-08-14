@@ -1,6 +1,6 @@
-#include "I18nLoader.h"
-#include "common/io/json.h"
+#include "BuiltinI18n.h"
 #include "builtin/EmbeddedData.h"
+#include "common/io/json.h"
 
 static Language load_from_resource(
     std::string_view embedded_json,
@@ -20,9 +20,9 @@ static Language load_from_resource(
 void register_builtin_translations(LanguageManager& lm) {
     // Each pair shares the same language code — register_language internally
     // merges translations when a language with that key already exists.
-    lm.register_language(load_from_resource(besq::data::i18n_zh_CN(), "zh_CN"));
-    lm.register_language(load_from_resource(besq::data::mc_i18n_zh_CN(), "zh_CN"));
+    lm.register_language(load_from_resource(besq::data::raw(besq::data::ResourceId::data_i18n_zh_CN), "zh_CN"));
+    lm.register_language(load_from_resource(besq::data::raw(besq::data::ResourceId::data_mc_i18n_zh_CN), "zh_CN"));
 
-    lm.register_language(load_from_resource(besq::data::i18n_en_US(), "en_US"));
-    lm.register_language(load_from_resource(besq::data::mc_i18n_en_US(), "en_US"));
+    lm.register_language(load_from_resource(besq::data::raw(besq::data::ResourceId::data_i18n_en_US), "en_US"));
+    lm.register_language(load_from_resource(besq::data::raw(besq::data::ResourceId::data_mc_i18n_en_US), "en_US"));
 }

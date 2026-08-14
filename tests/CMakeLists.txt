@@ -58,26 +58,12 @@ function(besq_test_common_props NAME)
 endfunction()
 
 # ── Core link set (DRY) ────────────────────────────────────────────
-# business ↔ builtin is a real circular static-lib dependency: business
-# parsers call besq::data::* (compiled into besq-core's builtin objects),
-# which fill business registries.  GNU ld needs the whole reference chain
-# (core → orchestration → business, plus the late entry points) inside
-# one --start-group.  Windows lld-link resolves cycles automatically.
-if(UNIX)
-    set(BESQ_TEST_CORE_LIBS
-        -Wl,--start-group
-        besq-core besq-domain-business besq-domain-orchestration besq-algo-core
-        -Wl,--end-group
-    )
-    set(BESQ_TEST_CORE_LIBS_INTERFACE
-        -Wl,--start-group
-        besq-core besq-domain-business besq-domain-orchestration besq-algo-core besq-domain-interface
-        -Wl,--end-group
-    )
-else()
-    set(BESQ_TEST_CORE_LIBS besq-core)
-    set(BESQ_TEST_CORE_LIBS_INTERFACE besq-core besq-domain-interface)
-endif()
+# Left-to-right static resolution (no --start-group): embedded data lives in
+# besq-domain-business next to its loader, so the archives are acyclic and
+# the aggregate's PUBLIC dependency order (orchestration → business →
+# algo-core) satisfies both GNU ld and lld.
+set(BESQ_TEST_CORE_LIBS besq-core)
+set(BESQ_TEST_CORE_LIBS_INTERFACE besq-domain-interface besq-core)
 
 # Default: link besq-core for domain tests.
 function(besq_test NAME SOURCE)

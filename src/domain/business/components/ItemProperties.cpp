@@ -1,5 +1,5 @@
 #include "ItemProperties.h"
-#include "EmbeddedData.h"
+#include "builtin/EmbeddedData.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 
@@ -11,7 +11,7 @@ std::unordered_map<std::string, ItemProperty> load_item_properties() {
     std::string content;
 
     // Try embedded data first (always available in release builds)
-    content = std::string(besq::data::item_properties());
+    content = std::string(besq::data::raw(besq::data::ResourceId::data_item_properties));
 
     if (content.empty()) {
         // Fallback: try filesystem

@@ -170,7 +170,7 @@ RegistryLoader::resolve_own_content()  (两阶段：seed vanilla 宇宙 → 交�
 Profile (ench() + eq() + tags() 三元组)
 ```
 
-内置数据通过 `ProfileLoader::load_builtin()` 加载，委托 `builtin/DataLoader` 层读取嵌入的 vanilla.json。
+内置数据通过 `ProfileLoader::load_builtin()` 加载，委托 `BuiltinData`（domain/business/loaders/）读取嵌入的 vanilla.json（raw 字节来自 builtin 统一 raw 访问器，由 CMake `besq_embed_resources()` 自动生成）。
 `--import` CLI 选项调用 `FormatDetector` 自动识别格式（JSON / CSV / MC Official）。
 
 ### 注册表体系

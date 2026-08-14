@@ -4,7 +4,7 @@
 // Tests the full pipeline with builtin data across all formatting modes.
 // =============================================================================
 
-#include "builtin/DataLoader.h"
+#include "domain/business/loaders/BuiltinData.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/business/registries/EnchantmentRegistry.h"
 #include "domain/business/registries/EquipmentRegistry.h"

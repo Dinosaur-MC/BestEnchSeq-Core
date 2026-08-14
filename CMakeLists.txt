@@ -120,49 +120,16 @@ configure_file(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Embedded data (OBJECT library — reusable across targets)
+# Embedded resources (generated access layer)
 # ═══════════════════════════════════════════════════════════════════════════════
+# The embedded-resource access layer is fully generated from the
+# besq_embed_resources() declarations below (single source of truth):
+#   - shared header  ${BESQ_GENERATED_DIR}/builtin/EmbeddedResources_generated.h
+#     (enum class ResourceId + constexpr raw()/resource_name()/group_of())
+#   - one implementation per group, compiled into the group's target
+#     (data → besq-core, frontend → besq-gui; other groups return empty views)
+# See cmake/EmbedResource.cmake for the API and validation rules.
 include(${CMAKE_SOURCE_DIR}/cmake/EmbedResource.cmake)
-
-embed_resource(
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/vanilla.json"
-    SYMBOL vanilla_json
-    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
-)
-embed_resource(
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/item_properties.json"
-    SYMBOL item_properties
-    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_item_props.cpp"
-)
-embed_resource(
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/zh_CN.json"
-    SYMBOL i18n_zh_CN
-    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_zh_CN.cpp"
-)
-embed_resource(
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/en_US.json"
-    SYMBOL i18n_en_US
-    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_en_US.cpp"
-)
-embed_resource(
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/minecraft/zh_CN.json"
-    SYMBOL mc_i18n_zh_CN
-    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_zh_CN.cpp"
-)
-embed_resource(
-    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/minecraft/en_US.json"
-    SYMBOL mc_i18n_en_US
-    OUTPUT "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_en_US.cpp"
-)
-
-set(BESQ_EMBEDDED_SRCS
-    "${BESQ_GENERATED_DIR}/EmbeddedData_vanilla.cpp"
-    "${BESQ_GENERATED_DIR}/EmbeddedData_item_props.cpp"
-    "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_zh_CN.cpp"
-    "${BESQ_GENERATED_DIR}/EmbeddedData_i18n_en_US.cpp"
-    "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_zh_CN.cpp"
-    "${BESQ_GENERATED_DIR}/EmbeddedData_mc_i18n_en_US.cpp"
-)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Sub-projects (static libraries per domain)
@@ -173,23 +140,32 @@ add_subdirectory(src/domain)
 # ═══════════════════════════════════════════════════════════════════════════════
 # besq-core (STATIC) — BESQ 核心: 算法域 + 业务域 + 编排域 + 内嵌数据 (排除接口域)
 # ═══════════════════════════════════════════════════════════════════════════════
-# Compiles the built-in data bootstrap (DataLoader / ItemProperties / I18nLoader
-# + embedded resources) directly into the core, and links the three non-interface
-# domains.  Statically linked into hosts (the CLI), never a shared DLL.
-# The interface domain is added by the CLI executable.
+# Compiles the embedded data resources (generated data_assets.cpp) directly into
+# the core, and links the three non-interface domains.  Statically linked into
+# hosts (the CLI), never a shared DLL.  The interface domain is added by the
+# CLI executable.
 add_library(besq-core STATIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/DataLoader.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/ItemProperties.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/I18nLoader.cpp
-    ${BESQ_EMBEDDED_SRCS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/builtin/BuiltinCore.cpp
 )
 target_link_libraries(besq-core PUBLIC
     besq-domain-orchestration   # links besq-algo-core + besq-domain-business
     besq-domain-business
     besq-algo-core
 )
-target_link_libraries(besq-core PRIVATE
-    besq-common-i18n            # LanguageManager for I18nLoader
+
+# Data resource group (compiled into besq-domain-business, next to the
+# BuiltinData loader that consumes it — keeps the archive self-contained so
+# UNIX links need no --start-group; besq-core stays a pure aggregate).
+besq_embed_resources(
+    GROUPS
+        data besq-domain-business
+    RESOURCES
+        data_vanilla_json=${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/vanilla.json
+        data_item_properties=${CMAKE_CURRENT_SOURCE_DIR}/data/builtin/item_properties.json
+        data_i18n_zh_CN=${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/zh_CN.json
+        data_i18n_en_US=${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/en_US.json
+        data_mc_i18n_zh_CN=${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/minecraft/zh_CN.json
+        data_mc_i18n_en_US=${CMAKE_CURRENT_SOURCE_DIR}/data/i18n/minecraft/en_US.json
 )
 target_include_directories(besq-core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
@@ -235,19 +211,14 @@ if(BESQ_BUILD_CLI)
     add_executable(besq
         ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     )
-    if(UNIX)
-        # business ↔ builtin is a real circular static-lib dependency, and the
-        # entry points (interface/orchestration → business → builtin) sit
-        # across archives.  The group MUST bracket the WHOLE chain — core,
-        # business, orchestration, AND interface — not just core+business
-        # (that leaves interface outside, whose late business pulls then
-        # reference builtin after core was already scanned).
-        target_link_libraries(besq PRIVATE
-            -Wl,--start-group besq-core besq-domain-business besq-domain-orchestration besq-domain-interface besq-algo-core -Wl,--end-group
-        )
-    else()
-        target_link_libraries(besq PRIVATE besq-core besq-domain-interface)
-    endif()
+    # Dependency order: interface first, then the core aggregate — the
+    # business archive is self-contained (BuiltinData + embedded data live in
+    # besq-domain-business), so plain left-to-right static resolution works on
+    # both GNU ld and lld with no --start-group.
+    target_link_libraries(besq PRIVATE
+        besq-domain-interface
+        besq-core
+    )
     target_include_directories(besq PRIVATE
         ${BESQ_GENERATED_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/include   # → #include "besq/besq.h"
@@ -286,41 +257,52 @@ endif()
 # besq-gui (guarded by BESQ_BUILD_GUI) — Web GUI host (browser host, v1; WebView2 future work)
 # ═══════════════════════════════════════════════════════════════════════════════
 if(BESQ_BUILD_GUI)
-    # Embedded frontend assets (single-exe distribution)
-    # served files must match the kAssets table in src/gui/main.cpp
+    # Embedded frontend assets (single-exe distribution): declared once in the
+    # frontend resource group below — the generator emits the shared enum +
+    # frontend_assets.cpp (compiled into besq-gui).  The kAssets URL table in
+    # src/gui/main.cpp maps URLs to ResourceId members and MUST stay in sync
+    # with the member names declared here.
     set(GUI_FRONTEND ${CMAKE_CURRENT_SOURCE_DIR}/gui/frontend)
     # 图标只嵌 sprite sheet 单图（前端按 sprite.js 定位裁剪）；
     # 源图 assets/item_icons/，重生成: python3 scripts/gen_sprite.py
-    set(GUI_ASSET_NAMES index.html styles.css app.js api.js i18n.js names_zh.js sprite.js
-                        vendor/mdui/mdui.css vendor/mdui/mdui.global.js
-                        vendor/icons/sprite.png)
-    foreach(name IN LISTS GUI_ASSET_NAMES)
-        string(REPLACE "." "_" sym "frontend_${name}")
-        string(REPLACE "/" "_" sym "${sym}") # vendor/mdui/mdui.css → frontend_vendor_mdui_mdui_css
-        embed_resource(INPUT "${GUI_FRONTEND}/${name}" SYMBOL ${sym}
-                       OUTPUT "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
-        list(APPEND GUI_FRONTEND_SRCS "${BESQ_GENERATED_DIR}/Frontend_${sym}.cpp")
-    endforeach()
-    set(GUI_VIEW_NAMES calculator profiles algorithms history settings status pager)
-    foreach(name IN LISTS GUI_VIEW_NAMES)
-        embed_resource(INPUT "${GUI_FRONTEND}/views/${name}.js" SYMBOL frontend_view_${name}
-                       OUTPUT "${BESQ_GENERATED_DIR}/Frontend_view_${name}.cpp")
-        list(APPEND GUI_FRONTEND_SRCS "${BESQ_GENERATED_DIR}/Frontend_view_${name}.cpp")
-    endforeach()
 
     add_executable(besq-gui
         ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/main.cpp
-        ${GUI_FRONTEND_SRCS}
     )
-    # UNIX: the whole chain must be bracketed in one --start-group (same
-    # circular static-lib rationale as the besq target above).
-    if(UNIX)
-        target_link_libraries(besq-gui PRIVATE
-            -Wl,--start-group besq-core besq-domain-business besq-domain-orchestration besq-domain-interface besq-algo-core -Wl,--end-group
-        )
-    else()
-        target_link_libraries(besq-gui PRIVATE besq-core besq-domain-interface)
-    endif()
+    # Frontend resource group.  The implementation is compiled into
+    # besq-domain-business (same archive as the data group): the inline
+    # raw() dispatcher references EVERY group's accessor at every call site
+    # (no dead-branch elimination in Debug), so all definitions must live in
+    # a library every consumer links — otherwise CLI/GUI would need separate
+    # frontend_raw/data_raw definitions and statically collide.
+    besq_embed_resources(
+        GROUPS
+            frontend besq-domain-business
+        RESOURCES
+            frontend_index_html=${GUI_FRONTEND}/index.html
+            frontend_styles_css=${GUI_FRONTEND}/styles.css
+            frontend_app_js=${GUI_FRONTEND}/app.js
+            frontend_api_js=${GUI_FRONTEND}/api.js
+            frontend_i18n_js=${GUI_FRONTEND}/i18n.js
+            frontend_names_zh_js=${GUI_FRONTEND}/names_zh.js
+            frontend_sprite_js=${GUI_FRONTEND}/sprite.js
+            frontend_vendor_icons_sprite_png=${GUI_FRONTEND}/vendor/icons/sprite.png
+            frontend_vendor_mdui_mdui_css=${GUI_FRONTEND}/vendor/mdui/mdui.css
+            frontend_vendor_mdui_mdui_global_js=${GUI_FRONTEND}/vendor/mdui/mdui.global.js
+            frontend_view_calculator=${GUI_FRONTEND}/views/calculator.js
+            frontend_view_profiles=${GUI_FRONTEND}/views/profiles.js
+            frontend_view_algorithms=${GUI_FRONTEND}/views/algorithms.js
+            frontend_view_history=${GUI_FRONTEND}/views/history.js
+            frontend_view_settings=${GUI_FRONTEND}/views/settings.js
+            frontend_view_status=${GUI_FRONTEND}/views/status.js
+            frontend_view_pager=${GUI_FRONTEND}/views/pager.js
+    )
+    # Left-to-right static resolution (no --start-group): interface first,
+    # then the core aggregate — see the besq target above.
+    target_link_libraries(besq-gui PRIVATE
+        besq-domain-interface
+        besq-core
+    )
     target_include_directories(besq-gui PRIVATE
         ${BESQ_GENERATED_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/include

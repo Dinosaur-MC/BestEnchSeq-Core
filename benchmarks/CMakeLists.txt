@@ -18,14 +18,13 @@ function(besq_bench NAME SOURCE)
         ${BENCH_INCLUDE}
         ${BESQ_GENERATED_DIR}
     )
-    if(UNIX)
-        target_link_libraries(${NAME} PRIVATE
-            -Wl,--start-group besq-core besq-domain-business besq-domain-orchestration besq-algo-core -Wl,--end-group
-            Threads::Threads
-        )
-    else()
-        target_link_libraries(${NAME} PRIVATE besq-core Threads::Threads)
-    endif()
+    # Left-to-right static resolution (no --start-group) — the aggregate's
+    # PUBLIC dependency order (orchestration → business → algo-core) is
+    # acyclic; embedded data lives inside besq-domain-business.
+    target_link_libraries(${NAME} PRIVATE
+        besq-core
+        Threads::Threads
+    )
 endfunction()
 
 # ── forge_benchmark (full algorithm benchmark) ──

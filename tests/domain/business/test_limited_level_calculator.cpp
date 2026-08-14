@@ -1,5 +1,5 @@
 #define BESQ_TEST_MAIN
-#include "builtin/ItemProperties.h"
+#include "domain/business/components/ItemProperties.h"
 #include "common/CommonTypes.h"
 #include "common/io/json.h"
 #include "domain/business/components/LimitedLevelCalculator.h"

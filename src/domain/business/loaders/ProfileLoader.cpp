@@ -1,6 +1,6 @@
 #include "ProfileLoader.h"
-#include "builtin/DataLoader.h"
-#include "builtin/ItemProperties.h"
+#include "BuiltinData.h"
+#include "domain/business/components/ItemProperties.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"

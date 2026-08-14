@@ -13,7 +13,8 @@ struct ItemProperty {
     std::string category;         // equipment category name
 };
 
-/// Load item properties from the embedded item_properties.json data.
-/// Falls back to filesystem path if embedded data is unavailable.
+/// Load item properties from the embedded item_properties.json data
+/// (raw(ResourceId::data_item_properties)), with a filesystem fallback at
+/// `data/builtin/item_properties.json` when the embedded copy is unavailable.
 /// Returns a map of item short ID → property.
 std::unordered_map<std::string, ItemProperty> load_item_properties();

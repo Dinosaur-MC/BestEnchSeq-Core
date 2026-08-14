@@ -1,6 +1,6 @@
 #include "NativeJsonParser.h"
 #include "ParserShared.h"
-#include "builtin/DataLoader.h"
+#include "domain/business/loaders/BuiltinData.h"
 #include "builtin/EmbeddedData.h"
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/schemas/EnchInfoSchema.h"

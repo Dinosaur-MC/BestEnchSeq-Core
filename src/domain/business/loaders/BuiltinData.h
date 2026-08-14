@@ -15,9 +15,11 @@ namespace besq::data {
 
 /// Load builtin enchantment and equipment data.
 ///
-/// Tries filesystem first (allows user to replace builtin data), falls back
-/// to data embedded in the binary.  Accepts explicit registry references
-/// so both main.cpp (local instances) and benchmarks (singletons) can use it.
+/// Tries the embedded vanilla.json first (via raw(ResourceId::data_vanilla_json)),
+/// then a filesystem override at `data_dir` when present (allows users to
+/// replace builtin data).  Accepts explicit registry references so both the
+/// profile bootstrap (ProfileLoader) and the two-phase validation universe
+/// (RegistryLoader) can use it.
 void load_builtin_data(TagRegistry& tag_reg,
                        EnchantmentRegistry& ench_reg,
                        EquipmentRegistry& eq_reg,
@@ -31,9 +33,9 @@ void load_builtin_data(TagRegistry& tag_reg,
 /// e.g. "minecraft:swords", "minecraft:enchantable/sharp_weapon" — and
 /// values are the raw array entries (concrete IDs or `#`-references),
 /// preserved verbatim so nested tag expansion happens lazily at resolution
-/// time.  Both `DataLoader` (base_tags / resolver seeding) and the parser
-/// (`seed_vanilla_tags`) route through this so embedded vs override never
-/// diverge.  Results are cached per data_dir for the process lifetime.
+/// time.  Both `load_builtin_data` (base_tags / resolver seeding) and the
+/// parsers (`seed_vanilla_tags`) route through this so embedded vs override
+/// never diverge.  Results are cached per data_dir for the process lifetime.
 std::vector<std::pair<std::string, std::vector<std::string>>>
 load_builtin_tag_entries(const std::filesystem::path& data_dir = "data/builtin");
 

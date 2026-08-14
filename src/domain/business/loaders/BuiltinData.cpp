@@ -1,11 +1,11 @@
-#include "DataLoader.h"
+#include "BuiltinData.h"
+#include "builtin/EmbeddedData.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "domain/business/components/FormatDetector.h"
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/loaders/RegistryLoader.h"
 #include "domain/business/parsers/NativeJsonParser.h"
-#include "EmbeddedData.h"
 
 #include <filesystem>
 #include <memory>
@@ -18,14 +18,14 @@ namespace besq::data {
 
 namespace {
 
-/// Read the builtin vanilla.json raw content once (filesystem override or
-/// embedded), so the tag seed and the DTO parse come from the same single
-/// read.
+/// Read the builtin vanilla.json raw content: filesystem override when
+/// present, otherwise the compile-time embedded copy (single read — the tag
+/// seed and the DTO parse come from the same source).
 std::string read_builtin_content(const std::filesystem::path& data_dir) {
     auto vanilla_path = data_dir / "vanilla.json";
     if (std::filesystem::exists(vanilla_path))
         return file_utils::read_file(vanilla_path);
-    return std::string{vanilla_json()};
+    return std::string{raw(ResourceId::data_vanilla_json)};
 }
 
 /// Parse the builtin vanilla.json `tags` object into {key, values} pairs.
@@ -69,8 +69,8 @@ std::vector<std::pair<std::string, std::vector<std::string>>> parse_tag_entries(
 /// object of vanilla.json — real MC item + enchantment tags).  This is the
 /// vanilla fallback tag universe: a `#tag` supported_items reference only
 /// survives cross-validation when it is defined here.
-/// TODO(T10): replaces the T6 stopgap that derived synthetic
-/// `#minecraft:<category>` tags from the equipment categories array.
+/// (T10: replaces the T6 stopgap that derived synthetic
+/// `#minecraft:<category>` tags from the equipment categories array.)
 TagRegistry parse_base_tags(const std::string& content) {
     TagRegistry base_tags;
     for (const auto& [key, values] : parse_tag_entries(content)) {

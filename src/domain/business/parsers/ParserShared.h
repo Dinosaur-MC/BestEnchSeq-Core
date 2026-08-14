@@ -1,7 +1,7 @@
 #pragma once
 
 #include "domain/business/components/TagResolver.h"
-#include "builtin/ItemProperties.h"
+#include "domain/business/components/ItemProperties.h"
 #include "common/CommonTypes.h"
 
 #include <cstdint>

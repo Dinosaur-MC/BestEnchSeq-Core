@@ -427,7 +427,7 @@ public:
     Profile from_json(const Json& json);
     bool from_json(Profile& profile, const Json& json);
 
-    /// Load built-in vanilla data (delegates to builtin/DataLoader).
+    /// Load built-in vanilla data (delegates to BuiltinData → raw 访问器).
     Profile load_builtin();
     bool load_builtin(Profile& profile);
 
@@ -457,7 +457,8 @@ File → FormatDetector::detect(path) → [NativeJsonParser | NativeCsvParser | 
 **Builtin pipeline**:
 ```
 ProfileLoader::load_builtin()
-  → besq::data::load_builtin_data()          (project-level resource tool, stays in src/builtin/)
+  → besq::data::load_builtin_data()          (BuiltinData, domain/business/loaders/ —
+                                              raw 字节来自 builtin 统一 raw 访问器)
   → RegistryLoader::from_dto()
   → Profile + set_tag_resolver(内置 vanilla tag resolver)
 ```
@@ -742,8 +743,8 @@ Registry types (`EnchantmentRegistry`, `EquipmentRegistry`, `TagRegistry`) keep 
 
 | File | Reason |
 |------|--------|
-| `builtin/DataLoader.h/cpp` | Project-level resource tool; `ProfileLoader::load_builtin()` calls it internally |
-| `builtin/EmbeddedData.h` | Same as above |
+| `business/loaders/BuiltinData.h/cpp` | 内建数据加载（原 builtin/DataLoader 迁入）；raw 字节来自 `builtin` 统一访问器 |
+| `builtin/EmbeddedData.h` + `FrontendAssets.h` | 嵌入资源壳头（内容由 CMake `besq_embed_resources()` 自动生成，零项目内依赖） |
 | `business/registries/IRegistry.h` | Core registry template — unchanged |
 | `business/registries/EnchantmentRegistry.h/cpp` | Core registry — unchanged |
 | `business/registries/EquipmentRegistry.h/cpp` | Core registry — unchanged |

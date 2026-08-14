@@ -7,7 +7,7 @@
 // =============================================================================
 
 #define BESQ_TEST_MAIN
-#include "builtin/I18nLoader.h"
+#include "domain/interface/components/BuiltinI18n.h"
 #include "common/i18n/Language.h"
 #include "common/utils/EnvUtil.hpp"
 #include "domain/algorithm/types/ConfigTypes.h"

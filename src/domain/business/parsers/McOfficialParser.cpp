@@ -1,6 +1,6 @@
 #include "McOfficialParser.h"
 #include "ParserShared.h"
-#include "builtin/DataLoader.h"
+#include "domain/business/loaders/BuiltinData.h"
 #include "domain/business/components/TagResolver.h"
 #include "common/io/json.h"
 #include "common/log/log.hpp"

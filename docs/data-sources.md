@@ -696,7 +696,7 @@ NSID "minecraft:sharpness"
 |------|------|
 | `src/common/i18n/NsidDisplay.h` | `ench_display_name()` / `item_display_name()` — NSID 推导 + `tr()` 查询 |
 | `src/common/i18n/Language.h` | `Language` / `LanguageManager` — 翻译表 + 多语言切换 |
-| `src/builtin/I18nLoader.cpp` | 启动时注册 UI 翻译 + Minecraft 实体名称到同一 Language 实例 |
+| `src/domain/interface/components/BuiltinI18n.cpp` | 启动时注册 UI 翻译 + Minecraft 实体名称到同一 Language 实例（raw 表来自 builtin 统一访问器） |
 
 **数据流：**
 

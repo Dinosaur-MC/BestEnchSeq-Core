@@ -1,6 +1,6 @@
 #include "AppConfig.h"
 #include "domain/interface/cli/CLIApp.h"
-#include "builtin/I18nLoader.h"
+#include "domain/interface/components/BuiltinI18n.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
 

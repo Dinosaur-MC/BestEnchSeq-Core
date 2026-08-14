@@ -1,7 +1,7 @@
 #include "RegistryLoader.h"
 #include "domain/business/components/Serializer.h"
 #include "domain/business/parsers/ParserShared.h"
-#include "builtin/DataLoader.h"
+#include "BuiltinData.h"
 #include "common/CommonTypes.h"
 #include "common/log/log.hpp"
 

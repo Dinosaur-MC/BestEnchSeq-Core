@@ -1,5 +1,5 @@
 #include "ParserShared.h"
-#include "builtin/ItemProperties.h"
+#include "domain/business/components/ItemProperties.h"
 
 namespace business::parser_detail {
 
