@@ -10,7 +10,8 @@
 | `FrontendAssets.h` | 手写壳头 | 前端资源语义化入口（转发到同一生成头） |
 | `BuiltinCore.cpp` | 手写占位 TU | besq-core 聚合库的锚点（CMake 要求 target 非空） |
 | `EmbeddedResources_generated.h` | **自动生成** | `enum class ResourceId`（data_/frontend_ 前缀防撞）+ inline `raw()` / `resource_name()` / `group_of()` |
-| `<group>_assets.cpp`（data/frontend） | **自动生成** | 每组 constexpr 字节数组 + `detail::<group>_raw()` 实现，编入 `besq-domain-business` |
+| `<member>.cpp`（每资源一个） | **自动生成** | constexpr 字节数组 + `detail::<member>()` 访问器（小 TU，并行编译） |
+| `<group>_raw.cpp`（每组一个） | **自动生成** | 组级分派 switch（`detail::<group>_raw()`），编入 `besq-domain-business` |
 
 ## 单一事实源
 

@@ -14,12 +14,14 @@
 #       enum class ResourceId { <all members, group-prefixed>, COUNT };
 #       constexpr raw() / resource_name() / group_of() declarations.
 #
-#   - One implementation per group, ${BESQ_GENERATED_DIR}/builtin/<group>_assets.cpp
-#     (build time, DEPENDS on the group's resource files + shared header):
-#       constexpr byte arrays + switch-coverage implementations.  Own-group
-#       members return their data; other groups' members return an empty
-#       view.  No `default` branch, so -Wswitch flags any enumerator the
-#       implementation does not cover.
+#   - One TU per resource, ${BESQ_GENERATED_DIR}/builtin/<member>.cpp
+#     (build time): constexpr byte array + detail::<member>() accessor.
+#     Small TUs compile in parallel — a single merged file would serialize
+#     multi-MB constexpr arrays and slow the build dramatically.
+#
+#   - One tiny group dispatcher per group, ${BESQ_GENERATED_DIR}/builtin/<group>_raw.cpp
+#     (build time): switch routing ResourceId → detail::<member>(), with a
+#     `default` returning an empty view for other groups' members.
 #
 # Member names MUST start with their group name + "_" (e.g. data_vanilla_json
 # for group "data").  The generator validates at configure time:
@@ -150,7 +152,10 @@ function(besq_embed_resources)
         message(FATAL_ERROR "besq_embed_resources: shared header generation failed (${_gen_res})")
     endif()
 
-    # ── 4. Group implementations (build time, per group) ───────────────────
+    # ── 4. Implementations (build time) ───────────────────────────────────
+    # One TU per resource (builtin/<member>.cpp) — keeps each translation
+    # unit small so the big byte arrays compile IN PARALLEL; one tiny group
+    # dispatcher (builtin/<group>_raw.cpp) routes ResourceId → accessor.
     foreach(_g IN LISTS _groups)
         # collect this group's members + paths (cross-call view)
         set(_g_members "")
@@ -164,56 +169,59 @@ function(besq_embed_resources)
             endif()
         endforeach()
 
-        # member names owned by THIS group (subset for switch generation)
-        set(_own_members "")
-        foreach(_m IN LISTS _all_members)
-            get_property(_owner DIRECTORY PROPERTY BESQ_EMBEDDED_GROUP_${_m})
-            if(_owner STREQUAL "${_g}")
-                list(APPEND _own_members "${_m}")
-            endif()
+        set(_tgt "${BESQ_EMBEDDED_TARGET_${_g}}")
+        set(_all_outs "")
+
+        # 4a. per-resource TUs
+        foreach(_r IN LISTS _g_members)
+            string(FIND "${_r}" "=" _eq)
+            string(SUBSTRING "${_r}" 0 ${_eq} _member)
+            math(EXPR _eq1 "${_eq} + 1")
+            string(SUBSTRING "${_r}" ${_eq1} -1 _path)
+            set(_out "${BESQ_GENERATED_DIR}/builtin/${_member}.cpp")
+            add_custom_command(
+                OUTPUT  "${_out}"
+                DEPENDS "${_path}" "${BESQ_EMBEDDED_HEADER}" "${BESQ_EMBEDDED_GEN_SCRIPT}"
+                COMMAND "${CMAKE_COMMAND}"
+                    "-DMEMBER=${_member}"
+                    "-DPATH=${_path}"
+                    "-DOUTPUT=${_out}"
+                    -P "${BESQ_EMBEDDED_GEN_SCRIPT}"
+                COMMENT "Generating embedded resource: ${_member}"
+            )
+            set_source_files_properties("${_out}" PROPERTIES GENERATED TRUE)
+            target_sources("${_tgt}" PRIVATE "${_out}")
+            list(APPEND _all_outs "${_out}")
         endforeach()
 
-        set(_out "${BESQ_GENERATED_DIR}/builtin/${_g}_assets.cpp")
-
-        # Pass the member lists via manifest FILES, not -D arguments: the
-        # custom command runs through a shell (/bin/sh -c on Ninja/Linux,
-        # cmd.exe on Windows) and a `;`-joined -D value would be split by the
-        # shell — observed as "/bin/sh: line 1: -DGROUP_MEMBERS=...: command
-        # not found" on WSL.  Manifests are written at configure time and
-        # read back with file(STRINGS) (one entry per line), immune to any
-        # shell metacharacter in member names or paths.
+        # 4b. group dispatcher (member list via manifest — shell-safe)
         string(ASCII 10 _NL)
         set(_manifest "${BESQ_GENERATED_DIR}/builtin/${_g}.members.txt")
         string(JOIN "${_NL}" _members_text ${_g_members})
         file(WRITE "${_manifest}" "${_members_text}${_NL}")
-        set(_members_manifest "${BESQ_GENERATED_DIR}/builtin/${_g}.group_members.txt")
-        string(JOIN "${_NL}" _own_text ${_own_members})
-        file(WRITE "${_members_manifest}" "${_own_text}${_NL}")
-
+        set(_out "${BESQ_GENERATED_DIR}/builtin/${_g}_raw.cpp")
         add_custom_command(
             OUTPUT  "${_out}"
-            DEPENDS ${_g_paths} "${BESQ_EMBEDDED_HEADER}" "${BESQ_EMBEDDED_GEN_SCRIPT}"
-                    "${_manifest}" "${_members_manifest}"
+            DEPENDS "${_manifest}" "${BESQ_EMBEDDED_HEADER}" "${BESQ_EMBEDDED_GEN_SCRIPT}"
             COMMAND "${CMAKE_COMMAND}"
                 "-DGROUP=${_g}"
                 "-DOUTPUT=${_out}"
                 "-DLIST_FILE=${_manifest}"
-                "-DGROUP_MEMBERS_FILE=${_members_manifest}"
                 -P "${BESQ_EMBEDDED_GEN_SCRIPT}"
-            COMMENT "Generating embedded resource implementation: ${_g}_assets.cpp"
+            COMMENT "Generating embedded resource dispatcher: ${_g}_raw.cpp"
         )
         set_source_files_properties("${_out}" PROPERTIES GENERATED TRUE)
-
-        set(_tgt "${BESQ_EMBEDDED_TARGET_${_g}}")
         target_sources("${_tgt}" PRIVATE "${_out}")
+        list(APPEND _all_outs "${_out}")
+
         # Cross-directory bridge: CMake's Ninja generator does not associate a
         # custom command registered in a PARENT directory with a source file of
         # a target defined in a SUBDIRECTORY (verified on CMake 4.0).  Force
         # the ordering explicitly via a custom target so the generated .cpp
-        # always exists before it is compiled.
+        # files always exist before they are compiled.
         set(_gen_target "besq_embed_gen_${_g}")
-        add_custom_target("${_gen_target}" DEPENDS "${_out}")
+        add_custom_target("${_gen_target}" DEPENDS ${_all_outs})
         add_dependencies("${_tgt}" "${_gen_target}")
-        message(STATUS "besq_embed_resources: group '${_g}' (${_own_members} members) → ${_out}")
+        message(STATUS "besq_embed_resources: group '${_g}' (${_g_members} members) → builtin/<member>.cpp + ${_g}_raw.cpp")
     endforeach()
 endfunction()
