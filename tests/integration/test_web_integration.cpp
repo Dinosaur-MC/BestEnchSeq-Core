@@ -732,7 +732,7 @@ void test_sse_progress_frames(HttpServer& server) {
 //
 // 写操作选 POST /api/profiles/{key}/enchantments（profile 变更类，纯内存
 // 变更）而非 PATCH /api/settings：后者会把 runtime settings 持久化到
-// <cwd>/config.json，弄脏工作树。
+// <exe_dir>/config.json，弄脏工作树。
 //
 // 时序护栏（防假阳性）：
 //   1) 读/写前先轮询确认 state=running；

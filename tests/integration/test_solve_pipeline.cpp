@@ -11,7 +11,14 @@
 
 #define BESQ_TEST_MAIN
 
+#include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
+#include "domain/algorithm/_strategies/dp_merge/DPMergeStateSerializer.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Equipment.h"
 #include "domain/business/loaders/BuiltinData.h"
+#include "domain/interface/BesqContext.h"
 #include "domain/interface/components/BuiltinI18n.h"
 #include "common/i18n/Language.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
@@ -20,6 +27,8 @@
 #include "domain/orchestration/pipelines/SolvePipeline.h"
 #include "domain/orchestration/types/SolveSnapshot.h"
 #include "framework/test_framework.h"
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 namespace {
@@ -109,6 +118,71 @@ void test_conflicting_target_not_solvable() {
     TEST_PASS("solve pipeline: conflicting target not solvable");
 }
 
+void test_resume_from_checkpoint() {
+    // Build a dp_merge checkpoint (small direct-mode input, pre-run so the
+    // memo cache is populated), write it to a temp file, then resume it via
+    // BesqContext::solve_from_checkpoint — the full CLI --resume / GUI
+    // restore path: peek → create executor from tag → start(blob) → recall.
+    // NOTE: compact types are explicitly qualified (business/orchestration
+    // expose same-named global types, so `using namespace algorithm` is
+    // ambiguous here).
+    algorithm::DPMergeStateSerializer ser;
+    algorithm::DPMergeAlgorithm algo;
+
+    std::vector<algorithm::EnchInfo> infos(1);
+    infos[0].id = 0;
+    infos[0].mul = 1;
+    infos[0].mul_b = 1;
+    infos[0].max_lvl = 5;
+    infos[0].exc_mask = 0;
+    infos[0].applicable = true;
+    algorithm::Equipment eq;
+    eq.id = NSID("minecraft:diamond_sword");
+    eq.max_durability = 1561;
+    eq.applicable_enchs.insert(0);
+
+    algorithm::AlgorithmInput input;
+    input.config.forge.platform = MCE::Java;
+    input.config.mode = AlgorithmMode::direct; // global enum (CommonTypes.h)
+    input.registry.init(std::move(infos), {NSID("minecraft:sharpness")}, eq);
+    input.data = algorithm::DirectPayload{};
+    input.target.type = algorithm::ItemType::Equip;
+    input.target.enchs.insert(algorithm::Ench{0, 5});
+    algorithm::ExecutionContext ctx(0, "dp_merge");
+    algo.init(input, ctx);
+    algo.execute(input, ctx);
+    auto blob = ser.serialize(algo, input);
+    expect(!blob.empty(), "checkpoint serialized");
+
+    const auto tmp = std::filesystem::temp_directory_path() / "besq_ckpt_resume.ckpt";
+    {
+        std::ofstream out(tmp, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(blob.data()), static_cast<std::streamsize>(blob.size()));
+        expect(static_cast<bool>(out), "checkpoint file written");
+    }
+
+    BesqContext bctx;
+    bctx.load_builtin();
+    auto ck = bctx.solve_from_checkpoint(tmp.string());
+    expect(ck.result.success && !ck.result.solutions.empty(),
+           "resumed solve produces solutions");
+    expect(ck.result.algorithm_used == "dp_merge", "algorithm taken from checkpoint tag");
+    expect(ck.mode == AlgorithmMode::direct, "mode taken from checkpoint input");
+
+    // Invalid file → clear error (not a crash / empty result).
+    bool threw = false;
+    try {
+        (void)bctx.solve_from_checkpoint("no_such_ckpt_file_xyz.ckpt");
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    expect(threw, "missing checkpoint file throws");
+
+    std::error_code ec;
+    std::filesystem::remove(tmp, ec);
+    TEST_PASS("solve_from_checkpoint: resume produces a full result");
+}
+
 } // anonymous namespace
 
 TEST_CASE("test_solve_pipeline") {
@@ -118,4 +192,5 @@ TEST_CASE("test_solve_pipeline") {
     test_unknown_algo();
     test_unsupported_mode();
     test_conflicting_target_not_solvable();
+    test_resume_from_checkpoint();
 }

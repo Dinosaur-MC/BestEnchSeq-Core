@@ -4,6 +4,7 @@
 #include "common/log/log.hpp"
 #include "common/log/LogTypes.h"
 #include "common/utils/EnvUtil.hpp"
+#include "common/utils/ExeDir.hpp"
 #include <cstdint>
 #include <fstream>
 #include <iterator>
@@ -14,54 +15,56 @@
 /// Values are loaded at construction time with the following precedence
 /// (highest first):
 ///   1. Environment variables (BESQ_*)
-///   2. <cwd>/config.json — the runtime-persisted settings file written by
-///      PATCH /api/settings (lang / log_level / log_console /
+///   2. <exe_dir>/config.json — the runtime-persisted settings file written
+///      by PATCH /api/settings (lang / log_level / log_console /
 ///      log_console_level / log_retention)
 ///   3. Hard-coded defaults
 ///
-/// The config file lives in the working directory (not <exe_dir>/): cwd is
-/// already the app's data base (data_dir "data/builtin", log_dir "logs" are
-/// cwd-relative), and <exe_dir> may be read-only (installed locations) or a
-/// shared build tree that a runtime PATCH must not pollute.  Env vars still
-/// win so a command-line override always beats the file.  Every consumer of
-/// AppConfig::load() (CLI + GUI) applies the same precedence.
+/// Runtime default paths (config.json / logs / algorithms / states /
+/// profiles) all resolve against the executable's own directory (exe_dir()),
+/// so behavior is independent of the process CWD.  <exe_dir> is assumed
+/// writable (local tooling); env vars still win so a command-line override
+/// always beats the file.  Every consumer of AppConfig::load() (CLI + GUI)
+/// applies the same precedence.
 ///
 /// Environment variable reference:
 ///   BESQ_MEMORY_MB       — Memory budget in MB for A* search          (default: 2048)
 ///   BESQ_VERBOSE         — Enable verbose diagnostic output           (default: false)
-///   BESQ_DATA_DIR        — Built-in data directory path                (default: "data/builtin")
-///   BESQ_ALGO_DIR        — Algorithm plugin directory path             (default: auto — <exe_dir>/algorithms/)
-///   BESQ_LOG_DIR         — Log output directory                        (default: "logs")
+///   BESQ_ALGO_DIR        — Algorithm plugin directory path             (default: <exe_dir>/algorithms/)
+///   BESQ_LOG_DIR         — Log output directory                        (default: <exe_dir>/logs)
 ///   BESQ_LOG_LEVEL       — Minimum log level (0=debug,1=info,2=warn,3=error, default: 0)
 ///   BESQ_LOG_RETENTION   — Max historic log files to keep during rotation (default: 5)
 ///   BESQ_LOG_CONSOLE     — Mirror logs to console: Warn/Error→stderr, Debug/Info→stdout (default: 1; keep level ≥2 with --format json/compact)
 ///   BESQ_LOG_CONSOLE_LEVEL — Console mirror threshold (0=debug,1=info,2=warn,3=error, default: 2)
 ///   BESQ_SANDBOX         — Run algorithm plugins in a sandboxed worker (default: 0)
 ///   BESQ_WORKER_PATH     — Path to besq-worker binary (default: auto — <exe_dir>/besq-worker[.exe], then PATH)
+///   BESQ_STATE_DIR       — Algorithm checkpoint directory               (default: <exe_dir>/states)
+///   BESQ_STATE_AUTOSAVE  — Auto-save a checkpoint when a GUI solve is paused (default: 0)
 ///   BESQ_GUI_HOST        — GUI HTTP server bind address (default: "127.0.0.1")
 ///   BESQ_GUI_PORT        — GUI HTTP server port; 0 = auto-assign a free ephemeral port (default: 0)
 ///   BESQ_GUI_OPEN_BROWSER— Open the default browser (v1 host; a WebView2 native window is future work)
 ///                          (default: 0)
 ///   BESQ_GUI_WORKERS     — GUI HTTP server consumer threads (default: 2)
-///   BESQ_GUI_RES_DIR     — /public disk root; "" → resolved at runtime (default: <exe_dir>/res, then <cwd>/res)
+///   BESQ_GUI_RES_DIR     — /public disk root; "" → embedded assets only (default: none)
 ///   BESQ_LANG            — Language code for the GUI (default: config.json lang, else en_US)
 struct AppConfig {
     int64_t  memory_mb       = 2048;
     bool     verbose         = false;
-    std::string data_dir     = "data/builtin";
-    std::string algo_dir     = "algorithms";   // <exe_dir>/algorithms/
-    std::string log_dir      = "logs";
+    std::string algo_dir     = (exe_dir() / "algorithms").string(); // <exe_dir>/algorithms/
+    std::string log_dir      = (exe_dir() / "logs").string();       // <exe_dir>/logs
     int32_t  log_level       = 0;     // 0=Debug, 1=Info, 2=Warn, 3=Error
     size_t   log_retention   = 5;
     bool     log_console       = true;  // mirror to console (stderr/stdout)
     int32_t  log_console_level = 2;     // console threshold (0=Debug..3=Error)
     bool     sandbox_enabled   = false; // run plugins in a sandboxed worker
     std::string sandbox_worker_path;    // besq-worker binary ("" → <exe_dir>/besq-worker[.exe], then PATH)
+    std::string state_dir     = (exe_dir() / "states").string();    // <exe_dir>/states
+    bool     state_autosave   = false;  // save a checkpoint automatically on GUI pause
     std::string gui_host = "127.0.0.1"; // GUI HTTP server bind address
     uint16_t    gui_port = 0;           // GUI HTTP server port (0 = auto-assign free port)
     bool        gui_open_browser = false; // v1 host: open the default browser (a WebView2 native window is future work)
     size_t      gui_workers = 2;        // GUI HTTP server consumer threads
-    std::string gui_res_dir;            // /public disk root ("" → resolved at runtime)
+    std::string gui_res_dir;            // /public disk root ("" → embedded assets only)
     std::string runtime_lang;           // language from config.json / BESQ_LANG (the GUI applies it at startup)
 
     /// Global app configuration singleton — loads BESQ_* env vars on first
@@ -72,10 +75,12 @@ struct AppConfig {
         return cfg;
     }
 
-    /// Path of the runtime-persisted config file (<cwd>/config.json — the
-    /// same base directory as data_dir/log_dir; <exe_dir> may be read-only
-    /// or a shared build tree, and PATCH must be able to write it).
-    static std::string config_file_path() noexcept { return "config.json"; }
+    /// Path of the runtime-persisted config file (<exe_dir>/config.json).
+    /// Falls back to "config.json" (CWD) when exe_dir() is unavailable.
+    static std::string config_file_path() noexcept {
+        const auto dir = exe_dir();
+        return dir.empty() ? std::string("config.json") : (dir / "config.json").string();
+    }
 
     /// Load configuration from environment variables, applying defaults
     /// for any variables that are not set.  Precedence: env > config.json
@@ -108,7 +113,6 @@ struct AppConfig {
         // ── env layer (overrides config.json per-field) ──
         cfg.memory_mb     = get_env<int64_t> ("BESQ_MEMORY_MB",     cfg.memory_mb);
         cfg.verbose       = get_env<bool>    ("BESQ_VERBOSE",       cfg.verbose);
-        cfg.data_dir      = get_env<std::string>("BESQ_DATA_DIR",  cfg.data_dir);
         cfg.algo_dir      = get_env<std::string>("BESQ_ALGO_DIR",  cfg.algo_dir);
         cfg.log_dir       = get_env<std::string>("BESQ_LOG_DIR",   cfg.log_dir);
         cfg.log_level     = get_env<int32_t>  ("BESQ_LOG_LEVEL",    cfg.log_level);
@@ -117,6 +121,8 @@ struct AppConfig {
         cfg.log_console_level = get_env<int32_t>("BESQ_LOG_CONSOLE_LEVEL", cfg.log_console_level);
         cfg.sandbox_enabled   = get_env<bool>   ("BESQ_SANDBOX",       cfg.sandbox_enabled);
         cfg.sandbox_worker_path = get_env_str   ("BESQ_WORKER_PATH");
+        cfg.state_dir         = get_env<std::string>("BESQ_STATE_DIR",  cfg.state_dir);
+        cfg.state_autosave    = get_env<bool>   ("BESQ_STATE_AUTOSAVE", cfg.state_autosave);
         cfg.gui_host         = get_env<std::string>("BESQ_GUI_HOST",           cfg.gui_host);
         cfg.gui_port         = get_env<uint16_t>   ("BESQ_GUI_PORT",           cfg.gui_port);
         cfg.gui_open_browser = get_env<bool>       ("BESQ_GUI_OPEN_BROWSER",   cfg.gui_open_browser);

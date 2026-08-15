@@ -2,6 +2,7 @@
 #include "AppConfig.h"
 #include "framework/test_framework.h"
 #include "utils/EnvUtil.hpp"
+#include "utils/ExeDir.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -46,12 +47,18 @@ TEST_CASE("test_default_values") {
 
     expect(cfg.memory_mb == 2048, "default memory_mb should be 2048");
     expect(cfg.verbose == false, "default verbose should be false");
-    expect(cfg.data_dir == "data/builtin", "default data_dir");
-    expect(cfg.log_dir == "logs", "default log_dir");
+    // Runtime default paths resolve against exe_dir() (exe-dir defaults design).
+    const auto exe = exe_dir();
+    const std::string expected_log = (exe / "logs").string();
+    const std::string expected_state = (exe / "states").string();
+    expect(cfg.log_dir == expected_log, "default log_dir is <exe_dir>/logs");
+    expect(cfg.state_dir == expected_state, "default state_dir is <exe_dir>/states");
+    expect(cfg.state_autosave == false, "default state_autosave false");
     expect(cfg.log_level == 0, "default log_level 0");
     expect(cfg.log_console == true, "default log_console true");
     expect(cfg.runtime_lang.empty(), "default runtime_lang empty");
-    expect(AppConfig::config_file_path() == "config.json", "config file path is <cwd>/config.json");
+    expect(AppConfig::config_file_path() == (exe / "config.json").string(),
+           "config file path is <exe_dir>/config.json");
 
     std::cout << "  PASS: test_default_values" << std::endl;
 }
@@ -79,18 +86,6 @@ TEST_CASE("test_env_verbose") {
     unset_env("BESQ_VERBOSE");
 
     std::cout << "  PASS: test_env_verbose" << std::endl;
-}
-
-TEST_CASE("test_env_data_dir") {
-    set_env("BESQ_DATA_DIR", "/custom/data");
-
-    auto cfg = AppConfig::load();
-
-    expect(cfg.data_dir == "/custom/data", "env BESQ_DATA_DIR");
-
-    unset_env("BESQ_DATA_DIR");
-
-    std::cout << "  PASS: test_env_data_dir" << std::endl;
 }
 
 TEST_CASE("test_config_file_layer") {

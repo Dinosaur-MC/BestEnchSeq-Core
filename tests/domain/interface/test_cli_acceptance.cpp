@@ -362,6 +362,35 @@ TEST_CASE("test_input_alone_valid") {
 }
 
 // ---------------------------------------------------------------------------
+// Test: --resume parsing (checkpoint resume; self-contained)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_resume_parsing") {
+    {
+        const char* argv[] = {"besq", "--resume", "states/task-3.ckpt"};
+        auto config = CLIApp::parse(3, const_cast<char**>(argv));
+        expect(config.resume.has_value() && *config.resume == "states/task-3.ckpt",
+               "--resume should be set");
+        expect(config.target.empty(), "--resume alone must not require --target");
+        TEST_PASS("--resume parses cleanly (gate exemption)");
+    }
+    {
+        // --resume + --target is a contradiction (checkpoint is self-contained).
+        const char* argv[] = {"besq", "--resume", "x.ckpt", "--target", "diamond_sword[sharpness=5]"};
+        expect_throws([&] { CLIApp::parse(5, const_cast<char**>(argv)); },
+                      "--resume with --target should throw");
+        TEST_PASS("--resume + --target throws");
+    }
+    {
+        // Empty --resume path is rejected.
+        const char* argv[] = {"besq", "--resume", ""};
+        expect_throws([&] { CLIApp::parse(3, const_cast<char**>(argv)); },
+                      "empty --resume path should throw");
+        TEST_PASS("empty --resume throws");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Test: build_solve_request — --input drives the whole inventory solve config
 // ---------------------------------------------------------------------------
 

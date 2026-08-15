@@ -27,6 +27,9 @@ public:
             BESQ_ROUTE(Post,   "/api/tasks/{id}/pause",  pause),
             BESQ_ROUTE(Post,   "/api/tasks/{id}/resume", resume),
             BESQ_ROUTE(Get,    "/api/tasks/{id}/events", events),
+            BESQ_ROUTE(Post,   "/api/tasks/{id}/checkpoint", checkpoint),
+            BESQ_ROUTE(Post,   "/api/checkpoints/restore",   restore),
+            BESQ_ROUTE(Get,    "/api/checkpoints",           list_checkpoints),
         };
     }
 
@@ -36,6 +39,14 @@ public:
     Response pause(const HttpRequest&, const PathParams&);
     Response resume(const HttpRequest&, const PathParams&);
     Response events(const HttpRequest&, const PathParams&);
+    /// Persist a PAUSED task's algorithm state (manual checkpoint; nothing is
+    /// saved automatically unless BESQ_STATE_AUTOSAVE=1).
+    Response checkpoint(const HttpRequest&, const PathParams&);
+    /// Restore a computation from a checkpoint file as a new task (independent
+    /// of pause/resume; body: {"path": "<checkpoint file>"}).
+    Response restore(const HttpRequest&, const PathParams&, const Json&);
+    /// List checkpoint files in the state directory (for manual selection).
+    Response list_checkpoints(const HttpRequest&, const PathParams&);
 
 private:
     WebSolveService& _svc;

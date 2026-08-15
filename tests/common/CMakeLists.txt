@@ -101,6 +101,12 @@ target_include_directories(test_env_util PRIVATE ${TEST_INCLUDE})
 add_test(NAME test_env_util COMMAND test_env_util)
 set_tests_properties(test_env_util PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
 
+# exe_dir() (header-only; basis for all runtime default paths)
+add_executable(test_exe_dir utils/test_exe_dir.cpp)
+target_include_directories(test_exe_dir PRIVATE ${TEST_INCLUDE})
+add_test(NAME test_exe_dir COMMAND test_exe_dir)
+set_tests_properties(test_exe_dir PROPERTIES WORKING_DIRECTORY ${PROJECT_ROOT})
+
 # ExpCalculator (needs business types -> besq-core link)
 add_executable(test_exp_calculator utils/test_exp_calculator.cpp)
 target_include_directories(test_exp_calculator PRIVATE ${TEST_INCLUDE} ${PROJECT_ROOT}/include)

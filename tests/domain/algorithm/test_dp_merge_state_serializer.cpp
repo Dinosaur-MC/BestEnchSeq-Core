@@ -1,11 +1,16 @@
 #define BESQ_TEST_MAIN
+#include "domain/algorithm/IExecutor.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
 #include "domain/algorithm/_strategies/dp_merge/DPMergeStateSerializer.h"
 #include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/algorithm/types/ConfigTypes.h"
 #include "domain/algorithm/types/Enchantment.h"
 #include "domain/algorithm/types/Equipment.h"
 #include "framework/test_framework.h"
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <span>
 using namespace algorithm;
@@ -161,4 +166,53 @@ TEST_CASE("test_dp_merge_populated_cache_roundtrip") {
     };
     expect(without_timestamp(blob1) == without_timestamp(blob2), "restore must be faithful (re-serialize identical)");
     TEST_PASS("test_dp_merge_populated_cache_roundtrip");
+}
+
+// ─── IExecutor::peek / extract_input / file roundtrip ────────────────────
+//
+// The resume flow (CLI --resume / GUI restore) inspects a checkpoint blob
+// WITHOUT an executor: IExecutor::peek validates it and returns the stamped
+// algorithm tag (used to create the executor), and
+// IAlgorithmSerializer::extract_input reads the input section out for
+// CompactAdapter::recall after start(checkpoint) has finished.
+
+TEST_CASE("test_checkpoint_peek_and_file_roundtrip") {
+    DPMergeStateSerializer ser;
+    DPMergeAlgorithm algo;
+    AlgorithmInput input = run_small_solve(algo);
+    auto blob = ser.serialize(algo, input);
+    expect(!blob.empty(), "serialize should produce bytes");
+
+    // peek: valid blob → algorithm_tag = "dp_merge".
+    auto meta = IExecutor::peek(blob);
+    expect(meta.algorithm_tag == "dp_merge", "peek returns the stamped algorithm tag");
+
+    // extract_input: input section survives without an algorithm instance.
+    AlgorithmInput extracted;
+    expect(IAlgorithmSerializer::extract_input(blob, extracted), "extract_input succeeds");
+    expect(extracted.target.type == input.target.type, "extracted target matches");
+
+    // Invalid blobs: empty / garbage → empty tag / false.
+    expect(IExecutor::peek(std::span<const uint8_t>()).algorithm_tag.empty(), "peek rejects empty blob");
+    const std::vector<uint8_t> garbage{1, 2, 3, 4};
+    expect(IExecutor::peek(garbage).algorithm_tag.empty(), "peek rejects garbage");
+    AlgorithmInput out2;
+    expect(!IAlgorithmSerializer::extract_input(garbage, out2), "extract_input rejects garbage");
+
+    // File roundtrip: serialize → temp file → read back → peek again.
+    const auto tmp = std::filesystem::temp_directory_path() / "besq_ckpt_roundtrip.ckpt";
+    {
+        std::ofstream out(tmp, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(blob.data()), static_cast<std::streamsize>(blob.size()));
+        expect(static_cast<bool>(out), "checkpoint file written");
+    }
+    expect(std::filesystem::exists(tmp), "checkpoint file exists on disk");
+    std::ifstream in(tmp, std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::vector<uint8_t> read_back(content.begin(), content.end());
+    auto meta2 = IExecutor::peek(read_back);
+    expect(meta2.algorithm_tag == "dp_merge", "peek on file bytes returns tag");
+    std::error_code ec;
+    std::filesystem::remove(tmp, ec);
+    TEST_PASS("test_checkpoint_peek_and_file_roundtrip");
 }

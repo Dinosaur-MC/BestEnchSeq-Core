@@ -1,6 +1,7 @@
 #include "domain/algorithm/sandbox/SandboxedExecutor.h"
 #include "AppConfig.h"
 #include "common/log/log.hpp"
+#include "common/utils/ExeDir.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -27,26 +28,6 @@ namespace algorithm {
 
 namespace {
 
-/// Directory containing the current executable (empty if unavailable).
-std::string current_exe_dir() {
-#if defined(__linux__)
-    char buf[4096];
-    ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (n <= 0)
-        return {};
-    buf[n] = '\0';
-    return std::filesystem::path(buf).parent_path().string();
-#elif defined(_WIN32)
-    char buf[MAX_PATH];
-    DWORD n = ::GetModuleFileNameA(nullptr, buf, MAX_PATH);
-    if (n == 0)
-        return {};
-    return std::filesystem::path(buf).parent_path().string();
-#else
-    return {};
-#endif
-}
-
 /// Worker binary name suffix (".exe" on Windows, "" elsewhere).
 const char* worker_exe_suffix() {
 #if defined(_WIN32)
@@ -69,9 +50,9 @@ std::string resolve_worker_path(const std::string& given) {
         } else {
             // The worker ships alongside the host executable — try there first so
             // BESQ_SANDBOX=1 works without the worker on PATH.
-            const std::string dir = current_exe_dir();
+            const auto dir = exe_dir();
             if (!dir.empty()) {
-                const std::string candidate = dir + "/besq-worker" + worker_exe_suffix();
+                const std::string candidate = (dir / ("besq-worker" + std::string(worker_exe_suffix()))).string();
                 if (std::filesystem::exists(candidate))
                     result = candidate;
             }

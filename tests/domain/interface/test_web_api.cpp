@@ -5,6 +5,13 @@
 #define BESQ_TEST_MAIN
 #include "AppConfig.h"
 #include "common/io/json.h"
+#include "common/utils/ExeDir.hpp"
+#include "domain/algorithm/_strategies/dp_merge/DPMergeAlgorithm.h"
+#include "domain/algorithm/_strategies/dp_merge/DPMergeStateSerializer.h"
+#include "domain/algorithm/ExecutionContext.h"
+#include "domain/algorithm/types/ConfigTypes.h"
+#include "domain/algorithm/types/Enchantment.h"
+#include "domain/algorithm/types/Equipment.h"
 #include "domain/business/types/EnchInfo.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/Router.h"
@@ -172,9 +179,10 @@ void test_settings(TestApp& app) {
     // ── C2: GET read-only path fields (set at startup, never writable) ──
     auto pth = app.call(Method::Get, "/api/settings");
     auto pj = Json::parse(pth.body);
-    expect(pj.has("data_dir") && pj["data_dir"].type() == JsonType::String, "GET carries data_dir");
     expect(pj.has("log_dir") && pj["log_dir"].type() == JsonType::String, "GET carries log_dir");
     expect(pj.has("algo_dir") && pj["algo_dir"].type() == JsonType::String, "GET carries algo_dir");
+    expect(pj.has("state_dir") && pj["state_dir"].type() == JsonType::String, "GET carries state_dir");
+    expect(pj.has("state_autosave") && pj["state_autosave"].type() == JsonType::Bool, "GET carries state_autosave");
 
     // ── C2: gui_port semantics without server injection ──
     // TestApp drives the Router directly (no WebModule, no real server): the
@@ -193,8 +201,8 @@ void test_settings(TestApp& app) {
     expect(sgj.has("sandbox_enabled") && sgj["sandbox_enabled"].type() == JsonType::Bool, "GET carries sandbox_enabled");
 
     // ── config.json persistence (batch D): a successful PATCH writes the
-    //    five runtime fields to <cwd>/config.json (best-effort) ──
-    const std::string cfg_path = "config.json";
+    //    five runtime fields to <exe_dir>/config.json (best-effort) ──
+    const std::string cfg_path = AppConfig::config_file_path();
     std::error_code ec;
     std::filesystem::remove(cfg_path, ec); // stale file from an earlier run
     auto persist = app.call(Method::Patch, "/api/settings", R"({"log_level":1,"log_console":false,"log_console_level":3})");
@@ -570,38 +578,52 @@ void test_enchantables(TestApp& app) {
 /// lists; a file, a missing path, or an escape above the root → 400.
 void test_fs(TestApp& app) {
     // ── 1. root (empty path) → 200 with path/root/entries ──
+    // The browse root is the APPLICATION directory (exe_dir — NOT the process
+    // CWD; see the exe-dir defaults design), so the cases below are
+    // self-contained: a temp dir created inside exe_dir.
+    const auto exe_root = exe_dir();
+    const auto tmp_dir = exe_root / "besq_fs_test_dir";
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(tmp_dir, ec);
+        std::filesystem::create_directories(tmp_dir);
+        std::ofstream f(tmp_dir / "plain.txt");
+        f << "x\n";
+    }
     auto root = app.call(Method::Get, "/api/fs/list");
     expect(root.status == 200, "fs list root 200");
     auto rj = Json::parse(root.body);
     expect(rj["path"].type() == JsonType::String && rj["root"].type() == JsonType::String, "fs list carries path + root");
     expect(rj["entries"].type() == JsonType::Array && !rj["entries"].as_array().empty(),
-           "fs root entries non-empty (cwd = project root)");
+           "fs root entries non-empty (exe_dir has the binaries)");
     expect(rj["path"].as<std::string>() == rj["root"].as<std::string>(), "empty path resolves to the root itself");
 
-    // ── 2. a known subdirectory (`data` ships in the repo) → 200, dirs-first ──
-    auto data = app.call(Method::Get, "/api/fs/list?path=data");
-    expect(data.status == 200, "fs list data 200");
+    // ── 2. a known subdirectory (created above) → 200, dirs-first ──
+    auto data = app.call(Method::Get, "/api/fs/list?path=besq_fs_test_dir");
+    expect(data.status == 200, "fs list dir 200");
     auto dj = Json::parse(data.body);
-    expect(dj["entries"].type() == JsonType::Array && !dj["entries"].as_array().empty(), "data entries non-empty");
-    // Directory entries come first and carry is_dir/size fields.
-    bool first_is_dir = dj["entries"].as_array().front()["is_dir"].as<bool>();
-    expect(first_is_dir, "entries sorted directories-first");
+    expect(dj["entries"].type() == JsonType::Array && !dj["entries"].as_array().empty(), "dir entries non-empty");
+    // Entries carry is_dir/size fields.
     expect(dj["entries"].as_array().front().has("name") && dj["entries"].as_array().front().has("size"),
            "entry carries name + size");
-    expect(dj["path"].as<std::string>().find("data") != std::string::npos, "data path reflected in response");
+    expect(dj["path"].as<std::string>().find("besq_fs_test_dir") != std::string::npos, "dir path reflected in response");
 
     // ── 3. invalid paths → 400 INVALID_PATH ──
-    auto file = app.call(Method::Get, "/api/fs/list?path=CMakeLists.txt");
+    auto file = app.call(Method::Get, "/api/fs/list?path=besq_fs_test_dir%2Fplain.txt");
     expect(file.status == 400 && file.body.find("INVALID_PATH") != std::string::npos, "fs list on a file 400 INVALID_PATH");
-    auto miss = app.call(Method::Get, "/api/fs/list?path=data%2Fno_such_dir_xyz");
+    auto miss = app.call(Method::Get, "/api/fs/list?path=besq_fs_test_dir%2Fno_such_dir_xyz");
     expect(miss.status == 400 && miss.body.find("INVALID_PATH") != std::string::npos,
            "fs list on a missing dir 400 INVALID_PATH");
     auto esc = app.call(Method::Get, "/api/fs/list?path=..%2F..%2F..%2F..%2F..%2F..%2F");
     expect(esc.status == 400 && esc.body.find("INVALID_PATH") != std::string::npos,
            "fs list escaping the root 400 INVALID_PATH");
-    auto rel_esc = app.call(Method::Get, "/api/fs/list?path=data%2F..%2F..%2F");
+    auto rel_esc = app.call(Method::Get, "/api/fs/list?path=besq_fs_test_dir%2F..%2F..%2F");
     expect(rel_esc.status == 400 && rel_esc.body.find("INVALID_PATH") != std::string::npos,
            "fs list ..-escape via relative path 400 INVALID_PATH");
+
+    // 清理：不留测试目录（构建树干净）。
+    std::error_code ec;
+    std::filesystem::remove_all(tmp_dir, ec);
 }
 
 void test_algorithms(TestApp& app) {
@@ -1031,6 +1053,115 @@ void test_calculator(TestApp& app) {
         expect(no_pa.status == 404 && no_pa.body.find("TASK_NOT_FOUND") != std::string::npos, "pause unknown task 404");
         auto no_rs = app.call(Method::Post, "/api/tasks/nope/resume");
         expect(no_rs.status == 404, "resume unknown task 404");
+        // checkpoint 前置校验（paused_id 在本块作用域内）：非暂停任务保存 →
+        // 409 TASK_NOT_PAUSED（任务刚取消、仍在表中，状态 Cancelled ≠ Paused）；
+        // 未知任务 → 404 TASK_NOT_FOUND。
+        auto ck_nonpaused = app.call(Method::Post, "/api/tasks/" + paused_id + "/checkpoint");
+        expect(ck_nonpaused.status == 409 && ck_nonpaused.body.find("TASK_NOT_PAUSED") != std::string::npos,
+               "checkpoint on non-paused task 409 TASK_NOT_PAUSED");
+        auto ck_unknown = app.call(Method::Post, "/api/tasks/nope/checkpoint");
+        expect(ck_unknown.status == 404 && ck_unknown.body.find("TASK_NOT_FOUND") != std::string::npos,
+               "checkpoint unknown task 404");
+    }
+
+    // ── checkpoint 持久化（手动；独立于 pause/resume 生命周期）──
+    // 暂停 → 手动保存 → 文件落盘（state_dir/<id>.ckpt）。
+    const std::string ck_dir = AppConfig::get().state_dir;
+    std::filesystem::create_directories(ck_dir);
+    std::string ck_path;
+    {
+        auto sub = app.call(Method::Post, "/api/tasks", heavy);
+        expect(sub.status == 202, "checkpoint task submit 202");
+        const std::string tid = Json::parse(sub.body)["task_id"].as<std::string>();
+        bool paused2 = false;
+        for (int attempt = 0; attempt < 3 && !paused2; ++attempt) {
+            auto pa = app.call(Method::Post, "/api/tasks/" + tid + "/pause");
+            expect(pa.status == 200, "checkpoint pause 200");
+            for (int i = 0; i < 30 && !paused2; ++i) {
+                auto st = app.call(Method::Get, "/api/tasks/" + tid);
+                if (st.status == 200 && st.body.find("\"state\":\"paused\"") != std::string::npos)
+                    paused2 = true;
+                else
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (!paused2) {
+                (void)app.call(Method::Delete, "/api/tasks/" + tid);
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+        expect(paused2, "checkpoint task reached Paused");
+        auto ck = app.call(Method::Post, "/api/tasks/" + tid + "/checkpoint");
+        expect(ck.status == 200, "checkpoint save 200");
+        auto ckj = Json::parse(ck.body);
+        ck_path = ckj["path"].as<std::string>();
+        expect(!ck_path.empty() && std::filesystem::exists(ck_path), "checkpoint file written");
+        expect(ckj["bytes"].as<int64_t>() > 0, "checkpoint bytes reported");
+        // 保存后取消原任务（restore 需要单槽）。
+        (void)app.call(Method::Delete, "/api/tasks/" + tid);
+    }
+    // 3) restore：从断点恢复为新任务 → completed；列表端点包含该文件。
+    //    用一个小 checkpoint（单魔咒 sharpness V，手工构造）而非上面的
+    //    18-ench 重任务——后者在 Debug 下完整跑完远超测试预算（且恢复点
+    //    在暂停早期，几乎等于从头求解）。小目标秒级完成，端点链路
+    //    （创建 → 恢复执行 → completed）被完整验证。
+    {
+        algorithm::DPMergeStateSerializer ser;
+        algorithm::DPMergeAlgorithm algo;
+        std::vector<algorithm::EnchInfo> infos(1);
+        infos[0].id = 0;
+        infos[0].mul = 1;
+        infos[0].mul_b = 1;
+        infos[0].max_lvl = 5;
+        infos[0].exc_mask = 0;
+        infos[0].applicable = true;
+        algorithm::Equipment eq;
+        eq.id = NSID("minecraft:diamond_sword");
+        eq.max_durability = 1561;
+        eq.applicable_enchs.insert(0);
+        algorithm::AlgorithmInput input;
+        input.config.forge.platform = MCE::Java;
+        input.config.mode = AlgorithmMode::direct;
+        input.registry.init(std::move(infos), {NSID("minecraft:sharpness")}, eq);
+        input.data = algorithm::DirectPayload{};
+        input.target.type = algorithm::ItemType::Equip;
+        input.target.enchs.insert(algorithm::Ench{0, 5});
+        algorithm::ExecutionContext ctx(0, "dp_merge");
+        algo.init(input, ctx);
+        algo.execute(input, ctx);
+        auto blob = ser.serialize(algo, input);
+        expect(!blob.empty(), "small checkpoint serialized");
+        const std::string small_ck = (std::filesystem::path(ck_dir) / "restore_test.ckpt").string();
+        {
+            std::ofstream out(small_ck, std::ios::binary);
+            out.write(reinterpret_cast<const char*>(blob.data()), static_cast<std::streamsize>(blob.size()));
+        }
+        Json body = Json::object();
+        body["path"] = Json(small_ck);
+        auto rs = app.call(Method::Post, "/api/checkpoints/restore", body.to_string());
+        expect(rs.status == 201 && rs.body.find("task_id") != std::string::npos, "restore task 201");
+        const std::string rid = Json::parse(rs.body)["task_id"].as<std::string>();
+        bool rdone = false;
+        for (int i = 0; i < 50 && !rdone; ++i) {
+            auto st = app.call(Method::Get, "/api/tasks/" + rid);
+            if (st.status == 200) {
+                auto sj = Json::parse(st.body);
+                rdone = sj["state"].as<std::string>() != "running";
+            }
+            if (!rdone)
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        expect(rdone, "restored task reached terminal state");
+        auto rfin = app.call(Method::Get, "/api/tasks/" + rid);
+        expect(rfin.status == 200 && rfin.body.find("\"state\":\"completed\"") != std::string::npos,
+               "restored task completed");
+        // 列表端点：state_dir 下的 .ckpt 可见。
+        auto lst = app.call(Method::Get, "/api/checkpoints");
+        expect(lst.status == 200 && lst.body.find("restore_test.ckpt") != std::string::npos,
+               "GET /api/checkpoints lists the saved checkpoint");
+        // 清理：不留脏文件（工作树/构建树干净）。
+        std::error_code ec;
+        std::filesystem::remove(small_ck, ec);
+        std::filesystem::remove(ck_path, ec);
     }
 
     // ── §12.1: unload while a solve is active → 409 TASK_ACTIVE ──

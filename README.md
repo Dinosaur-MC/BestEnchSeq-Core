@@ -89,6 +89,20 @@ BESQ_SANDBOX=1 ./build/bin/besq --algo-dir build/plugins --algorithm astar \
 ./build/bin/besq --export out.json
 ```
 
+### 断点续跑（checkpoint）
+
+二进制 checkpoint 保存算法暂停时的完整求解状态（input + 搜索状态），可从断点恢复计算：
+
+```bash
+# GUI：暂停任务 → POST /api/tasks/{id}/checkpoint 手动保存到 <exe_dir>/states/
+#      （BESQ_STATE_DIR 覆盖；BESQ_STATE_AUTOSAVE=1 可在暂停时自动保存）
+# 从断点恢复（自包含：无需 --target/--source；与 --target/--input 互斥）
+./build/bin/besq --resume <exe_dir>/states/task-3.ckpt
+# GUI 恢复端点：POST /api/checkpoints/restore {"path": "<ckpt>"}；GET /api/checkpoints 列出
+```
+
+> 运行时默认路径（profiles/、logs/、states/、config.json）全部基于**可执行文件所在目录**（`common/utils/ExeDir.hpp`），与启动 CWD 无关；`--profile-dir` / `BESQ_*` 显式指定照常覆盖。
+
 完整的 CLI 选项见 `besq --help`（按分组渲染）。
 
 ## Web GUI（`besq-gui`）

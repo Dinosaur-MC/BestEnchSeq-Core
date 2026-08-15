@@ -237,7 +237,7 @@ Algorithm domain (src/domain/algorithm/registries/):
         → SegmentedMPSCQueue<DiagnosticsEvent>
         → EventLoop 线程 (atomic::wait 零 CPU 空闲)
         → DiagnosticsHandler
-        → DiagnosticsWriter::write() (文件持久化到 logs/diag/)
+        → DiagnosticsWriter::write() (文件持久化到 <exe_dir>/logs/diag/)
         → IAlgorithmObserver::on_*() (异步回调)
 ```
 

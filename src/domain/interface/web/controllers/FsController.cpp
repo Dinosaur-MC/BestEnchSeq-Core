@@ -2,6 +2,7 @@
 #include "domain/interface/components/http/Router.h"
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
+#include "common/utils/ExeDir.hpp"
 #include <filesystem>
 #include <string>
 
@@ -41,15 +42,20 @@ bool resolve_within(const std::filesystem::path& root, const std::string& raw,
 } // namespace
 
 Response FsController::list(const HttpRequest& req) {
+    // Browse root: the application directory (exe_dir()), NOT the process CWD
+    // — consistent with all other runtime default paths.  Falls back to the
+    // working directory when exe_dir() is unavailable.
+    const auto exe = exe_dir();
     std::error_code ec;
-    const std::filesystem::path root = std::filesystem::current_path(ec);
+    const std::filesystem::path root = exe.empty() ? std::filesystem::current_path(ec)
+                                                   : std::filesystem::path(exe);
     if (ec)
-        throw WebHttpError(500, "INTERNAL_ERROR", "cannot resolve the working directory");
+        throw WebHttpError(500, "INTERNAL_ERROR", "cannot resolve the application directory");
 
     std::filesystem::path target;
     if (!resolve_within(root, req.query.get("path"), target))
         throw WebHttpError(400, "INVALID_PATH",
-                           "path must be an existing directory inside the working directory");
+                           "path must be an existing directory inside the application directory");
 
     Json o = Json::object();
     o["path"] = Json(target.generic_string());

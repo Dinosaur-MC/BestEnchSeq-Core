@@ -196,7 +196,23 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
-    // 8. Solve
+    // 8. Resume from checkpoint (self-contained: no target/source needed)
+    if (config.resume) {
+        auto ck = _ctx.solve_from_checkpoint(*config.resume);
+        auto output = _ctx.format(ck.result, ck.mode, config.format);
+        if (config.output) {
+            std::ofstream out(*config.output);
+            if (!out) throw std::runtime_error(
+                tr_fmt("main.err.output_failed", *config.output));
+            out << output;
+        } else {
+            std::cout << output;
+        }
+        flush_output();
+        return 0;
+    }
+
+    // 9. Solve
     if (!config.target.empty() || config.input) {
         SolveRequest request = CLIApp::build_solve_request(config, _ctx);
 
@@ -279,6 +295,7 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<std::string>{.long_name = "publish-version",  .help_key = "cli.help.publish_version_desc", .help_group = "cli.help.group_profile"},
     Option<std::string>{.long_name = "publish-tag",      .help_key = "cli.help.publish_tag_desc",   .help_group = "cli.help.group_profile"},
     Option<std::string>{.long_name = "algo-opt",         .help_key = "cli.help.algo_opt_desc",      .help_group = "cli.help.group_advanced"},
+    Option<std::string>{.long_name = "resume",           .help_key = "cli.help.resume_desc",        .help_group = "cli.help.group_advanced"},
 };
 
 } // anonymous namespace
@@ -491,11 +508,19 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
         throw std::runtime_error(tr_fmt("cli.err.empty_algo_dir"));
     if (cfg.export_path.has_value() && cfg.export_path->empty())
         throw std::runtime_error(tr_fmt("cli.err.empty_export"));
+    if (cfg.resume.has_value() && cfg.resume->empty())
+        throw std::runtime_error(tr("cli.err.empty_resume"));
+    // --resume is a self-contained checkpoint: no target/source/input needed,
+    // and mixing it with them is a contradiction (the checkpoint carries its
+    // own AlgorithmInput).
+    if (cfg.resume.has_value() && (!cfg.target.empty() || cfg.input.has_value()))
+        throw std::runtime_error(tr("cli.err.resume_conflict"));
 
     if (!cfg.help && !cfg.version && !cfg.list_algorithms) {
         if (cfg.target.empty() && !cfg.input.has_value()
             && !cfg.export_path.has_value()
-            && !cfg.publish.has_value()) {
+            && !cfg.publish.has_value()
+            && !cfg.resume.has_value()) {
             if (argc <= 1) {
                 // Pure no-args: show brief usage + hint, then exit cleanly
                 std::cout << tr_fmt("cli.help.usage", prog) << "\n";

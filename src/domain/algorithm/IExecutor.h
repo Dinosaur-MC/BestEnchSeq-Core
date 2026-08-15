@@ -12,10 +12,12 @@
 /// seam moved ABOVE the executor instead of tearing
 /// executor/context/algorithm apart and reconnecting them over IPC.
 
+#include "domain/algorithm/serialization/Checkpoint.h"
 #include "domain/algorithm/types/AlgorithmState.h"
 #include "domain/algorithm/types/AlgorithmTypes.h"
 
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -24,6 +26,15 @@ namespace algorithm {
 class IExecutor {
 public:
     virtual ~IExecutor() noexcept = default;
+
+    /// Inspect a checkpoint blob without constructing an executor: validates
+    /// magic/version/CRC and returns the checkpoint's MetaHeader, whose
+    /// algorithm_tag names the algorithm that wrote it.  The resume flow
+    /// (CLI --resume / GUI restore) uses it to create the right executor,
+    /// then calls start(blob) to restore the computation.
+    /// Returns a MetaHeader with an EMPTY algorithm_tag when the blob is not
+    /// a valid checkpoint — callers must check before use.
+    static checkpoint::MetaHeader peek(std::span<const uint8_t> data);
 
     // ── Metadata / preflight ──────────────────────────────────────────
     virtual std::string_view name() const noexcept = 0;

@@ -1,6 +1,8 @@
 #include "DiagnosticsWriter.h"
 #ifndef BESQ_DISABLE_DIAGNOSTICS
 
+#include "common/utils/ExeDir.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -12,6 +14,15 @@
 namespace {
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
+
+/// Diagnostic KV files live in <exe_dir>/logs/diag (independent of the
+/// Logger's BESQ_LOG_DIR — same semantics as before, exe-relative base now;
+/// see the exe-dir defaults design).  Falls back to the CWD-relative
+/// "logs/diag" when exe_dir() is unavailable.
+std::filesystem::path diag_dir() {
+    const auto exe = exe_dir();
+    return exe.empty() ? std::filesystem::path("logs/diag") : exe / "logs" / "diag";
+}
 
 struct LogFileInfo {
     std::string ts;
@@ -40,7 +51,7 @@ LogFileInfo make_log_info() {
 }
 
 void ensure_diag_dir() {
-    std::filesystem::create_directories("logs/diag");
+    std::filesystem::create_directories(diag_dir());
 }
 
 /// Maximum number of diagnostic log files to retain.  Oldest files beyond
@@ -51,7 +62,7 @@ inline constexpr size_t MAX_DIAG_FILES = 128;
 void trim_diag_dir() {
     namespace fs = std::filesystem;
 
-    fs::path dir("logs/diag");
+    fs::path dir = diag_dir();
     std::error_code ec;
     auto it = fs::directory_iterator(dir, ec);
     if (ec) return;  // directory doesn't exist yet — nothing to trim
@@ -89,9 +100,8 @@ void DiagnosticsWriter::write(std::string_view algorithm_name,
     ensure_diag_dir();
     auto info = make_log_info();
 
-    std::string path = std::string("logs/diag/")
-                     + std::string(algorithm_name) + "_"
-                     + info.ts + "_" + info.rand_part + ".log";
+    std::string path = (diag_dir() / (std::string(algorithm_name) + "_"
+                                      + info.ts + "_" + info.rand_part + ".log")).string();
     std::ofstream ofs(path);
     if (!ofs) return;
 

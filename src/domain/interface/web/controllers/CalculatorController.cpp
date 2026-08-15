@@ -1,11 +1,14 @@
 #include "CalculatorController.h"
-#include "domain/interface/web/WebSolveService.h"
-#include "domain/interface/web/SseHub.h"
-#include "domain/interface/web/WebSchema.h"
+#include "AppConfig.h"
+#include "common/io/FileUtils.hpp"
+#include "common/io/json.h"
 #include "domain/interface/components/http/Router.h"
 #include "domain/interface/components/http/StreamChannel.h"
+#include "domain/interface/web/SseHub.h"
+#include "domain/interface/web/WebSchema.h"
+#include "domain/interface/web/WebSolveService.h"
 #include "ds/Error.h"
-#include "common/io/json.h"
+#include <filesystem>
 #include <string>
 
 namespace web {
@@ -92,9 +95,50 @@ Response CalculatorController::pause(const HttpRequest&, const PathParams& pp) {
 
 Response CalculatorController::resume(const HttpRequest&, const PathParams& pp) {
     // _svc.resume 抛出：未知任务 404；非 Paused 409 TASK_NOT_RESUMABLE。
+    // 暂停恢复专用——与 checkpoint 持久化/恢复无关（见 checkpoint/restore）。
     _svc.resume(pp.get("id"));
     Json o = Json::object();
     o["ok"] = Json(true);
+    return Response::json(200, "OK", o.to_string());
+}
+
+Response CalculatorController::checkpoint(const HttpRequest&, const PathParams& pp) {
+    // _svc.save_checkpoint 抛出：未知任务 404；非 Paused 409 TASK_NOT_PAUSED；
+    // 不可序列化 400 CHECKPOINT_FAILED。手动持久化——暂停后不自动保存
+    // （除非 BESQ_STATE_AUTOSAVE=1）。
+    auto info = _svc.save_checkpoint(pp.get("id"));
+    return Response::json(200, "OK", info.to_string());
+}
+
+Response CalculatorController::restore(const HttpRequest&, const PathParams&, const Json& body) {
+    if (!body.is_valid() || body.type() != JsonType::Object || !body.has("path"))
+        throw WebHttpError(400, "INVALID_FIELD", "restore body requires a 'path' string");
+    const std::string path = body["path"].as<std::string>();
+    if (path.empty())
+        throw WebHttpError(400, "INVALID_FIELD", "path must not be empty");
+    // 新任务（独立于暂停/恢复生命周期）；文件校验在 worker 内完成（坏文件 →
+    // Failed 任务带错误信息）。409 TASK_ACTIVE 由服务层单槽检查抛出。
+    const std::string id = _svc.restore(path);
+    Json o = Json::object();
+    o["task_id"] = Json(id);
+    return Response::created("/api/tasks/" + id, o.to_string());
+}
+
+Response CalculatorController::list_checkpoints(const HttpRequest&, const PathParams&) {
+    // 列出状态目录下的 checkpoint 文件（供手动选择恢复）。
+    const std::string dir = AppConfig::get().state_dir;
+    Json arr = Json::array();
+    for (const auto& e : file_utils::list_directory(dir)) {
+        if (e.is_dir || e.name.size() < 5 || e.name.compare(e.name.size() - 5, 5, ".ckpt") != 0)
+            continue;
+        Json je = Json::object();
+        je["name"] = Json(e.name);
+        je["size"] = Json(static_cast<int64_t>(e.size));
+        je["path"] = Json((std::filesystem::path(dir) / e.name).string());
+        arr.push_back(std::move(je));
+    }
+    Json o = Json::object();
+    o["checkpoints"] = arr;
     return Response::json(200, "OK", o.to_string());
 }
 

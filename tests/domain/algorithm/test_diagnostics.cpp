@@ -1,5 +1,6 @@
 #define BESQ_TEST_MAIN
 #include "astar/AStarDiagnostics.h"
+#include "common/utils/ExeDir.hpp"
 #include "domain/algorithm/diagnostics/AlgorithmDiagnostics.h"
 #include "domain/algorithm/diagnostics/DiagnosticsWriter.h"
 #include "framework/test_framework.h"
@@ -306,36 +307,31 @@ TEST_CASE("test_partition_dp_diagnostics_flush") {
 }
 
 // ─── DiagnosticsWriter file output (logs/diag/*.log) ─────────────────────
-// The writer emits logs/diag/<algo>_<ts>_<rand>.log relative to CWD.  These
-// tests chdir to a fresh temp dir so they never touch the project tree.
+// The writer emits <exe_dir>/logs/diag/<algo>_<ts>_<rand>.log (exe-relative
+// base — see the exe-dir defaults design; NOT CWD-relative).  These tests
+// clean the diag dir before/after so they never pollute the build tree.
 
 namespace {
-int g_diag_cwd_counter = 0;
-
-class DiagCwdGuard {
+/// RAII: wipe <exe_dir>/logs/diag on construction (start clean) and on
+/// destruction (no artifacts).  remove_all errors are ignored — a concurrent
+/// writer (another test running in parallel) may hold a file open.
+class DiagDirGuard {
 public:
-    DiagCwdGuard() {
-        _orig = std::filesystem::current_path();
-        _tmp = std::filesystem::temp_directory_path() / ("besq_diag_test_" + std::to_string(++g_diag_cwd_counter));
-        std::filesystem::remove_all(_tmp);
-        std::filesystem::create_directories(_tmp);
-        std::filesystem::current_path(_tmp);
-    }
-    ~DiagCwdGuard() {
+    DiagDirGuard() {
         std::error_code ec;
-        std::filesystem::current_path(_orig, ec);
-        std::filesystem::remove_all(_tmp, ec);
+        std::filesystem::remove_all(exe_dir() / "logs" / "diag", ec);
     }
-    const std::filesystem::path& dir() const { return _tmp; }
-
-private:
-    std::filesystem::path _orig, _tmp;
+    ~DiagDirGuard() {
+        std::error_code ec;
+        std::filesystem::remove_all(exe_dir() / "logs" / "diag", ec);
+    }
+    std::filesystem::path dir() const { return exe_dir() / "logs" / "diag"; }
 };
 
 size_t count_diag_files(const std::filesystem::path& dir) {
     size_t n = 0;
     std::error_code ec;
-    for (auto& e : std::filesystem::directory_iterator(dir / "logs" / "diag", ec))
+    for (auto& e : std::filesystem::directory_iterator(dir, ec))
         if (e.path().extension() == ".log")
             ++n;
     return n;
@@ -343,7 +339,7 @@ size_t count_diag_files(const std::filesystem::path& dir) {
 } // anonymous namespace
 
 TEST_CASE("test_diagnostics_writer_writes_file") {
-    DiagCwdGuard cwd;
+    DiagDirGuard diag;
     std::vector<DiagnosticsWriter::Entry> entries;
     entries.emplace_back("found_solutions", int64_t(7));
     entries.emplace_back("note", std::string("hello"));
@@ -352,7 +348,7 @@ TEST_CASE("test_diagnostics_writer_writes_file") {
     bool found = false;
     std::string content;
     std::error_code ec;
-    for (auto& e : std::filesystem::directory_iterator(cwd.dir() / "logs" / "diag", ec)) {
+    for (auto& e : std::filesystem::directory_iterator(diag.dir(), ec)) {
         if (e.path().filename().string().rfind("algo_w_", 0) == 0) {
             found = true;
             std::ifstream f(e.path());
@@ -361,7 +357,7 @@ TEST_CASE("test_diagnostics_writer_writes_file") {
             content = ss.str();
         }
     }
-    expect(found, "write created logs/diag/algo_w_*.log");
+    expect(found, "write created <exe_dir>/logs/diag/algo_w_*.log");
     expect(content.find("algorithm=algo_w") != std::string::npos, "log has algorithm line");
     expect(content.find("status=Complete") != std::string::npos, "log has status line");
     expect(content.find("wall_ms=100") != std::string::npos, "log has wall_ms line");
@@ -371,28 +367,28 @@ TEST_CASE("test_diagnostics_writer_writes_file") {
 }
 
 TEST_CASE("test_diagnostics_writer_short_creates_nothing") {
-    DiagCwdGuard cwd;
+    DiagDirGuard diag;  // 先清空：断言"目录不存在"才确定性强
     std::vector<DiagnosticsWriter::Entry> entries;
     entries.emplace_back("k", int64_t(1));
     DiagnosticsWriter::write("algo_short", entries, 5, "ok"); // wall_ms < 10
 
-    expect(!std::filesystem::exists(cwd.dir() / "logs" / "diag"), "wall_ms < 10 writes no diagnostic file");
+    expect(!std::filesystem::exists(diag.dir()), "wall_ms < 10 writes no diagnostic file");
     TEST_PASS("diagnostics writer short-run skip");
 }
 
 TEST_CASE("test_diagnostics_writer_trims") {
-    DiagCwdGuard cwd;
+    DiagDirGuard diag;
     // Pre-create 130 fake diagnostic logs (over MAX_DIAG_FILES = 128).
-    std::filesystem::create_directories(cwd.dir() / "logs" / "diag");
+    std::filesystem::create_directories(diag.dir());
     for (int i = 0; i < 130; ++i) {
-        std::ofstream f(cwd.dir() / "logs" / "diag" / ("old_" + std::to_string(i) + ".log"));
+        std::ofstream f(diag.dir() / ("old_" + std::to_string(i) + ".log"));
         f << "x\n";
     }
     std::vector<DiagnosticsWriter::Entry> entries;
     entries.emplace_back("k", int64_t(1));
     DiagnosticsWriter::write("algo_trim", entries, 200, "Complete"); // +1 → 131
 
-    const auto n = count_diag_files(cwd.dir());
+    const auto n = count_diag_files(diag.dir());
     expect(n <= 128, "trim pruned the directory to MAX_DIAG_FILES");
     expect(n < 131, "trim actually removed files");
     TEST_PASS("diagnostics writer trim");

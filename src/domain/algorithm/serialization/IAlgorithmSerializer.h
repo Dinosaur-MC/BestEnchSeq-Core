@@ -19,6 +19,13 @@ public:
     std::vector<uint8_t> serialize(const IAlgorithm& algo, const AlgorithmInput& input) const;
     bool deserialize(IAlgorithm& algo, AlgorithmInput& out_input, std::span<const uint8_t> data) const;
 
+    /// Extract JUST the input section from a checkpoint blob — no algorithm
+    /// instance and no algorithm-state restoration needed.  The resume flow
+    /// (CLI --resume / GUI restore) uses it to obtain the AlgorithmInput for
+    /// CompactAdapter::recall after start(checkpoint) has finished, without
+    /// exposing executor internals.  Returns false on any validation failure.
+    static bool extract_input(std::span<const uint8_t> data, AlgorithmInput& out);
+
     /// Public access to JUST the algorithm-state sections (no checkpoint
     /// wrapping).  Used by the sandbox worker's IPC layer, which must produce
     /// / consume the state sections on behalf of the parent's proxy serializer.

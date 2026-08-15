@@ -13,7 +13,7 @@ namespace {
 /// (field names/shape unchanged; machine format, not localized).  The
 /// writable set is lang / log_level / log_console / log_console_level /
 /// log_retention; the gui_* / memory_mb / sandbox_enabled and the path
-/// fields (data_dir/log_dir/algo_dir) are read-only (set at startup — the
+/// fields (log_dir/algo_dir/state_dir) are read-only (set at startup — the
 /// server is already bound).
 ///
 /// `effective_port` is the actually bound port (WebModule injects it after
@@ -33,9 +33,10 @@ Json build_settings_json(uint16_t effective_port) {
     o["log_retention"] = Json(static_cast<int64_t>(Logger::instance().get_retention()));
     o["log_console"] = Json(Logger::instance().console_enabled());
     o["log_console_level"] = Json(static_cast<int64_t>(Logger::instance().console_level()));
-    o["data_dir"] = Json(cfg.data_dir);
     o["log_dir"] = Json(cfg.log_dir);
     o["algo_dir"] = Json(cfg.algo_dir);
+    o["state_dir"] = Json(cfg.state_dir);
+    o["state_autosave"] = Json(cfg.state_autosave);
     return o;
 }
 

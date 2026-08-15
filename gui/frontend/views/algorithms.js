@@ -44,9 +44,10 @@ function fmtSize(n) {
 }
 
 // Open the mdui-dialog directory picker for `input`. The listing comes from
-// GET /api/fs/list, which resolves paths against the server's working
-// directory and rejects anything outside it (400 INVALID_PATH) — so the
-// picker cannot browse above the root and the Up button disables there.
+// GET /api/fs/list, which resolves paths against the server's application
+// directory (exe_dir — NOT the process CWD) and rejects anything outside it
+// (400 INVALID_PATH) — so the picker cannot browse above the root and the Up
+// button disables there.
 // Directories navigate (one level per click), files are shown read-only, and
 // [Select this directory] writes the current path back into `input`.
 function openPicker(input, viewEl) {

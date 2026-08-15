@@ -53,9 +53,10 @@ export async function render(el) {
       ${roRow(t('set.gui_workers'), String(s.gui_workers))}
       ${roRow(t('set.memory_mb'), String(s.memory_mb))}
       ${roRow(t('set.sandbox_enabled'), s.sandbox_enabled ? t('set.on') : t('set.off'))}
-      ${roRow(t('set.data_dir'), esc(s.data_dir))}
       ${roRow(t('set.log_dir'), esc(s.log_dir))}
       ${roRow(t('set.algo_dir'), esc(s.algo_dir))}
+      ${roRow(t('set.state_dir'), esc(s.state_dir))}
+      ${roRow(t('set.state_autosave'), s.state_autosave ? t('set.on') : t('set.off'))}
     </div>
     <div class="set-actions">
       <button id="set-save">${t('set.save')}</button>

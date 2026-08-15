@@ -1,6 +1,7 @@
 #include "domain/interface/BesqContext.h"
 #include "domain/algorithm/IExecutor.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/ProfileManager.h"
 #include "domain/orchestration/pipelines/ExportPipeline.h"
@@ -10,10 +11,14 @@
 #include "domain/orchestration/types/ManageRequest.h"
 
 #include "common/i18n/Language.h"
+#include "common/io/FileUtils.hpp"
+#include "common/log/log.hpp"
+#include "common/utils/ExeDir.hpp"
 #include <atomic>
 #include <chrono>
 #include <deque>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -86,10 +91,13 @@ void BesqContext::set_profiles_dir(const std::string& dir) {
 }
 
 void BesqContext::load_profiles() {
-    // Default directory is `<cwd>/profiles` (no argv available at this layer;
-    // the CLI `--profile-dir` in T9 overrides via set_profiles_dir).
-    std::filesystem::path dir = _impl->profiles_dir.empty() ? (std::filesystem::current_path() / "profiles")
-                                                            : std::filesystem::path(_impl->profiles_dir);
+    // Default directory is <exe_dir>/profiles (no argv available at this
+    // layer; the CLI `--profile-dir` in T9 overrides via set_profiles_dir).
+    // Falls back to <cwd>/profiles when exe_dir() is unavailable.
+    const auto exe = exe_dir();
+    std::filesystem::path dir = _impl->profiles_dir.empty()
+        ? (exe.empty() ? std::filesystem::current_path() / "profiles" : exe / "profiles")
+        : std::filesystem::path(_impl->profiles_dir);
     ManageRequest req;
     req.action = ManageRequest::Action::LoadDirectory;
     req.dir_path = dir.string();
@@ -549,4 +557,75 @@ void BesqContext::resume_solve() {
     if (exec) {
         exec->resume();
     }
+}
+
+bool BesqContext::save_solve_state(const std::string& path) {
+    // Same handle-copy discipline as pause_solve: the shared_ptr copy keeps
+    // the executor alive across serialize_state().  Valid only while Paused —
+    // serialize_state() waits for algorithm quiescence and returns an empty
+    // blob for any other state / non-serializable algorithm.
+    auto exec = _impl->active_executor.load();
+    if (!exec)
+        return false;
+    auto blob = exec->serialize_state();
+    if (blob.empty())
+        return false;
+    try {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        if (!out)
+            return false;
+        out.write(reinterpret_cast<const char*>(blob.data()),
+                  static_cast<std::streamsize>(blob.size()));
+        return static_cast<bool>(out);
+    } catch (const std::exception& e) {
+        LOG_ERROR("Failed to save solve state to '%s': %s", path.c_str(), e.what());
+        return false;
+    }
+}
+
+BesqContext::CheckpointSolveResult BesqContext::solve_from_checkpoint(const std::string& path) {
+    // 1. Read the blob and peek its algorithm tag (validates magic/version/CRC).
+    const std::string content = file_utils::read_file(path); // throws on missing file
+    const std::vector<uint8_t> blob(content.begin(), content.end());
+    const auto meta = algorithm::IExecutor::peek(blob);
+    if (meta.algorithm_tag.empty())
+        throw std::runtime_error("Invalid checkpoint file (bad magic/version/CRC): " + path);
+
+    // 2. Extract the input BEFORE running — recall needs it after start() and
+    //    the failure must be reported before any executor work starts.
+    algorithm::AlgorithmInput input;
+    if (!algorithm::IAlgorithmSerializer::extract_input(blob, input))
+        throw std::runtime_error("Invalid checkpoint file (missing input section): " + path);
+
+    // 3. Create the executor from the stamped algorithm name.
+    auto executor = _impl->algo_loader.create_executor(meta.algorithm_tag);
+    if (!executor) {
+        auto available = _impl->algo_loader.list();
+        std::string avail_str;
+        for (size_t i = 0; i < available.size(); ++i) {
+            if (i > 0)
+                avail_str += ", ";
+            avail_str += available[i];
+        }
+        throw std::runtime_error(tr_fmt("pipeline.err.unknown_algo", meta.algorithm_tag, avail_str));
+    }
+    auto shared = std::shared_ptr<algorithm::IExecutor>(std::move(executor));
+
+    // 4. Publish the handle (abort/pause work as for solve()), restore the
+    //    computation via start(blob), then recall the compact output.
+    _impl->active_executor.store(shared);
+    try {
+        shared->start(blob);
+        shared->wait();
+    } catch (...) {
+        _impl->active_executor.store(nullptr);
+        throw;
+    }
+    auto output = shared->output();
+    _impl->active_executor.store(nullptr);
+
+    auto result = SolvePipeline::stage_recall(output, input);
+    result.algorithm_used = output.algorithm_name;
+    result.computation_time_ms = output.computation_time.count();
+    return CheckpointSolveResult{std::move(result), input.config.mode};
 }

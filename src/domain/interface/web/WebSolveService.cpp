@@ -1,7 +1,11 @@
 #include "WebSolveService.h"
+#include "AppConfig.h"
 #include "common/i18n/Language.h"
+#include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
+#include "domain/algorithm/IExecutor.h"
 #include "domain/algorithm/diagnostics/DiagnosticsService.h"
+#include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/interface/BesqContext.h"
 #include "domain/interface/components/http/Router.h"
 #include "domain/orchestration/types/SolveRequest.h"
@@ -9,6 +13,7 @@
 #include "SseHub.h"
 #include "WebDiagObserver.h"
 #include <chrono>
+#include <filesystem>
 #include <utility>
 #include <vector>
 
@@ -114,24 +119,49 @@ std::string dto_target_summary(const InvTargetDto& t) {
     return s;
 }
 
-/// 求解历史事件公共字段（task_id/target/algorithm/mode）：与 build_request 的
-/// 默认算法解析一致（direct→dp_merge，inventory→hamming）。DTO 恒在 worker
-/// 作用域内且纯字符串构建不抛——任何记录点（含快照构建前的取消）都安全。
-SolveHistoryEvent history_event_base(const WebTaskDto& dto, const std::string& task_id) {
-    SolveHistoryEvent ev;
-    ev.task_id = task_id;
-    ev.target = dto_target_summary(dto.target);
-    ev.mode = dto.items.empty() ? "direct" : "inventory";
-    ev.algorithm = dto.algorithm.empty() ? (ev.mode == "inventory" ? "hamming" : "dp_merge") : dto.algorithm;
-    return ev;
-}
-
 /// 把 JSON payload 包成一条 SSE 帧（event + data，双换行结束）。
 std::string sse_frame(const std::string& type, const Json& payload) {
     return "event: " + type + "\ndata: " + payload.to_string() + "\n\n";
 }
 
+/// RAII join for a progress-sampler thread (see WebSolveService::start_sampler).
+struct SamplerStop {
+    std::atomic<bool>* flag;
+    std::thread* th;
+    void stop() {
+        if (!flag)
+            return;
+        flag->store(false, std::memory_order_release);
+        if (th->joinable())
+            th->join(); // 采样线程至多晚一帧（200ms 内）
+        flag = nullptr; // 幂等：已停
+    }
+    ~SamplerStop() { stop(); }
+};
+
 } // namespace
+
+// ── Event metadata helpers ───────────────────────────────────────────────
+
+WebSolveService::EventMeta WebSolveService::meta_from_dto(const WebTaskDto& dto) {
+    EventMeta meta;
+    meta.target = dto_target_summary(dto.target);
+    meta.mode = dto.items.empty() ? "direct" : "inventory";
+    meta.algorithm = dto.algorithm.empty() ? (meta.mode == "inventory" ? "hamming" : "dp_merge") : dto.algorithm;
+    return meta;
+}
+
+SolveHistoryEvent WebSolveService::ev_for(const EventMeta& meta,
+                                          const std::string& task_id,
+                                          SolveEventType type) {
+    SolveHistoryEvent ev;
+    ev.type = type;
+    ev.task_id = task_id;
+    ev.target = meta.target;
+    ev.algorithm = meta.algorithm;
+    ev.mode = meta.mode;
+    return ev;
+}
 
 WebSolveService::WebSolveService(BesqContext& ctx, std::mutex& ctx_gate, web::SseHub* hub)
     : _ctx(ctx), _ctx_gate(ctx_gate), _hub(hub) {}
@@ -209,6 +239,157 @@ bool WebSolveService::has_active() const {
 }
 
 std::string WebSolveService::start(const WebTaskDto& dto) {
+    auto [task, id] = reserve_task();
+    const EventMeta meta = meta_from_dto(dto);
+
+    // Worker thread runs the blocking solve; it outlives this call. The thread
+    // is joined by the destructor (not detached) so no worker outlives *this.
+    task->worker = std::thread([this, task, dto, meta]() mutable {
+        // DoneGuard sets `finished` on every exit path (early cancel returns
+        // included), so the start() reap pass can safely collect (锁内) and
+        // join + erase this task once the worker has stopped touching
+        // *this/_ctx.
+        struct DoneGuard {
+            std::shared_ptr<Task> t;
+            ~DoneGuard() { t->finished.store(true, std::memory_order_release); }
+        } done_guard{task};
+        std::string result_json;
+        try {
+            // ── 快照 + 请求（gate 内，µs-ms）──
+            // The shared context gate serializes access to the shared
+            // BesqContext's ProfileManager effective view: resolve_effective()
+            // rebuilds a mutable cache (_effective_cache/_dep_graph), so
+            // overlapping access against server-thread profile mutations would
+            // be a data race. Only the snapshot build (and format below) go
+            // through it — everything between runs on the self-contained
+            // snapshot: solve() is lock-free, zero profile references.
+            SolveRequest request;
+            orchestration::SolveSnapshot snapshot;
+            {
+                std::lock_guard<std::mutex> gate_lock(_ctx_gate);
+                // Re-check cancellation under the gate: cancel() may have fired
+                // while a previous task still held the gate. A cancelled task
+                // must never start a stray solve, violating the
+                // single-active-slot invariant.
+                if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
+                    // 终态 Cancelled（快照构建前取消）：记录事件——worker 是
+                    // 终态事件唯一写方，与已提交的状态字一致（record_solve_event
+                    // 独立小锁，此处 gate 内调用不嵌套取锁）。
+                    commit_cancelled(task, meta);
+                    return;
+                }
+                request = build_request(dto, _ctx);      // 纯 DTO→请求（下界/边界校验）
+                snapshot = _ctx.solve_snapshot(request); // 校验+剪枝（未知/超限在此抛）
+                // 回填目标装备 max_durability：build_request 不再查注册表，而
+                // CompactAdapter::apply 透传 request.durability——以快照 eq
+                // （注册表为准）补齐，保持旧 build_target 语义。
+                if (!request.target_item.is_book()) {
+                    auto eq_it = snapshot.eq().find(request.target_item.id);
+                    if (eq_it != snapshot.eq().end())
+                        request.target_item.durability = eq_it->max_durability;
+                }
+            } // gate 释放——solve 全程无锁（快照自包含，零 profile 引用）
+            // 取消复查（gate 外；状态是原子字）：gate 段很短，但取消仍可能
+            // 落在构建期间——solve 前的最后一道闸。
+            if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
+                // 终态 Cancelled（快照构建后、solve 前取消）：同 gate 内闸。
+                commit_cancelled(task, meta);
+                return;
+            }
+            // Submitted 记录点（计划 B Task B2）：快照构建成功后、solve 启动前；
+            // gate 区外、无任务表锁——record_solve_event 自带独立小锁。
+            {
+                _ctx.record_solve_event(ev_for(meta, task->id, SolveEventType::Submitted));
+            }
+            double initial_progress = 0.0;
+            if (_hub) {
+                // 初始 progress 帧（I-2b）：solve 前的原子快照。
+                auto prog = _ctx.solve_progress();
+                initial_progress = prog.progress;
+                Json obj = Json::object();
+                obj["type"] = Json("progress");
+                obj["progress"] = Json(prog.progress);
+                _hub->publish(task->id, sse_frame("progress", obj));
+            }
+            // 周期性 progress 采样（I-2a）：solve() 阻塞本 worker 期间，短命
+            // 采样线程每 ~200ms 读一次 _ctx.solve_progress()（线程安全原子读，
+            // 专为轮询设计），进度变化即向 hub 发布
+            // {"type":"progress","progress":<p>}。采样线程在 solve() 返回的
+            // 每个退出路径（正常/异常/cancel）上被停止并 join；终态帧
+            // （completed/failed）只会在采样停止后发布。
+            std::atomic<bool> sampling{true};
+            std::thread sampler;
+            SamplerStop sampler_stop{_hub ? &sampling : nullptr, &sampler};
+            if (_hub)
+                sampler = start_sampler(task, initial_progress, sampling);
+            // ── 算法诊断事件流（T2）──
+            // 观察者必须在 solve() 前注册：executor 在 solve() 内部创建并
+            // start()，事件从算法执行一开始（首个 Progress）就推送。
+            // attach 前先 flush() 排空上一任务可能仍停留在诊断队列中的
+            // 尾部事件——EventLoop 是异步派发，单活动槽保证当前任务的事件
+            // 是 attach 期间唯一的事件源，但上一任务的 Exit 等事件可能在
+            // 本任务 attach 后才被派发，不排空会串任务误归属。
+            //
+            // 沙箱模式限制：BESQ_SANDBOX=1 时 executor 在 besq-worker
+            // 子进程中运行，诊断事件推送发生在子进程的 DiagnosticsService
+            // 里（沙箱无诊断 IPC 桥回父进程），因此沙箱任务不产生任何
+            // 诊断事件（diagnostics 为空、diag_exit 为 null）。
+            algorithm::DiagnosticsService::instance().flush();
+            auto diag_observer = attach_diag(task);
+            // Single active slot is enforced above; solve() runs to
+            // completion (or cancel()). The result carries the executor's
+            // real output. solve() 一返回就停采样（join），之后才 format 与
+            // 发布终态帧——进度帧严格先于 completed/failed。
+            // solve 跑在自包含快照上（P0 锁攻破）：无 gate、无 profile 引用。
+            // 求解耗时由 SolveResult::computation_time_ms 承载（SolvePipeline
+            // stage_execute 计时），历史事件与任务结果根字段同源（C1）。
+            auto result = _ctx.solve(request, snapshot);
+            sampler_stop.stop();
+            // solve() 返回前 exit 事件必已入队（_finalize 在 wait() 内同步
+            // 执行），但 EventLoop 是异步派发——必须 flush() 到派发完成
+            // （含本观察者收到 exit）后再 detach，否则尾部事件会因 detach
+            // 而丢失。flush() 返回时所有已入队事件的 observer 回调均已执行
+            // 完毕，随后 detach 不存在在途回调。
+            algorithm::DiagnosticsService::instance().flush();
+            // 显式 detach，而不是依赖析构自动 detach：DiagnosticsService
+            // 的 _observers 持有本观察者的第二个 shared_ptr，局部变量析构
+            // 只把引用计数 2→1，析构函数（及其中断的自动 detach）根本不会
+            // 运行——不显式 detach 会让观察者永久滞留（长跑服务器累积泄漏，
+            // 且进程退出时单例析构会在 use_count==0 时触发 shared_from_this
+            // 的 bad_weak_ptr → abort）。
+            algorithm::DiagnosticsService::instance().detach_observer(diag_observer);
+            // format() 走 resolve_effective（ProfileManager 有效视图缓存
+            // 重建，无内部锁）——短暂重新取 gate（ms 级；旧路径是 solve
+            // 全程持锁，秒~分钟级），profile 读写只在此窗口排队。
+            {
+                std::lock_guard<std::mutex> gate_lock(_ctx_gate);
+                result_json = _ctx.format(result, request.mode, "json");
+            }
+            // Task bookkeeping is NOT gated — commit atomically. A cancel that
+            // fired during format() is honored here; the worker must never
+            // report a completed task it was asked to cancel. Order: result
+            // first (release), then CAS state → Completed — once Completed is
+            // observable to a status() acquire read, the result is guaranteed
+            // visible. A pause that lost the race is a lost no-op and the task
+            // simply completes (documented); cancel wins (bail above).
+            commit_completed(task, meta, result, result_json);
+        } catch (const std::exception& e) {
+            std::string error_msg = e.what();
+            // error 先（release）、state 后（release）：Failed 一旦可观察，
+            // error 必已可见。无条件提交（旧锁语义）：异常路径下任务以
+            // Failed 告终（即使 cancel 已置 Cancelled，取消意图仍经
+            // abort_solve 实现，状态字以 worker 终态为准）。
+            commit_failed(task, meta, error_msg);
+        }
+    });
+    return id;
+}
+
+// ============================================================================
+// Task-slot reservation + worker epilogue helpers (shared by start/restore)
+// ============================================================================
+
+std::pair<std::shared_ptr<WebSolveService::Task>, std::string> WebSolveService::reserve_task() {
     std::shared_ptr<Task> task;
     std::string id;
     // reap 收集区：锁内填充待回收任务，锁外 join+释放（见下方 reap 循环与
@@ -264,12 +445,191 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
     for (auto& t : to_reap)
         if (t->worker.joinable())
             t->worker.join();
+    return {std::move(task), id};
+}
 
-    // Worker thread runs the blocking solve; it outlives this call. The thread
-    // is joined by the destructor (not detached) so no worker outlives *this.
-    task->worker = std::thread([this, task, dto]() mutable {
+std::thread WebSolveService::start_sampler(const std::shared_ptr<Task>& task, double initial_progress,
+                                           std::atomic<bool>& sampling) {
+    // 周期性 progress 采样：solve() 阻塞本 worker 期间，短命采样线程每 ~200ms
+    // 读一次 _ctx.solve_progress()（线程安全原子读，专为轮询设计），进度变化
+    // 即向 hub 发布 {"type":"progress","progress":<p>}。采样线程在 solve()
+    // 返回的每个退出路径（正常/异常/cancel）上被 SamplerStop 停止并 join；
+    // 终态帧（completed/failed）只会在采样停止后发布。
+    return std::thread([this, task, &sampling, initial_progress] {
+        double last = initial_progress; // 与初始帧同基准，进度变了才发
+        for (;;) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            if (!sampling.load(std::memory_order_acquire))
+                return;
+            const auto prog = _ctx.solve_progress();
+            if (prog.progress == last)
+                continue;
+            last = prog.progress;
+            try {
+                Json obj = Json::object();
+                obj["type"] = Json("progress");
+                obj["progress"] = Json(prog.progress);
+                _hub->publish(task->id, sse_frame("progress", obj));
+            } catch (...) {
+                // 采样帧丢失可接受：hub/帧构造不抛，防御兜底。
+            }
+        }
+    });
+}
+
+std::shared_ptr<algorithm::IAlgorithmObserver> WebSolveService::attach_diag(
+    const std::shared_ptr<Task>& task) {
+    // ── 算法诊断事件流（T2）──
+    // 观察者必须在 solve() 前注册：executor 在 solve() 内部创建并 start()，
+    // 事件从算法执行一开始（首个 Progress）就推送。attach 前先 flush() 排空
+    // 上一任务可能仍停留在诊断队列中的尾部事件——EventLoop 是异步派发，单
+    // 活动槽保证当前任务的事件是 attach 期间唯一的事件源，但上一任务的 Exit
+    // 等事件可能在本任务 attach 后才被派发，不排空会串任务误归属。
+    //
+    // 沙箱模式限制：BESQ_SANDBOX=1 时 executor 在 besq-worker 子进程中运行，
+    // 诊断事件推送发生在子进程的 DiagnosticsService 里（沙箱无诊断 IPC 桥回
+    // 父进程），因此沙箱任务不产生任何诊断事件（diagnostics 为空、diag_exit
+    // 为 null）。
+    algorithm::DiagnosticsService::instance().flush();
+    return algorithm::IAlgorithmObserver::create<WebDiagObserver>([this, task](Json event) {
+        // 先序列化 SSE 帧（随后 event 被 move 进 diagnostics）。
+        std::string frame;
+        if (_hub)
+            frame = sse_frame("diag", event);
+        // 仅 diagnostics 快照（其余字段已原子化，此锁不再护状态）。
+        {
+            std::lock_guard<std::mutex> lock(task->mutex);
+            if (task->diagnostics.size() >= 500)
+                task->diagnostics.erase(task->diagnostics.begin());
+            // exit 事件额外存一份结构化 KV（副本：列表各持一份）。
+            if (event.has("kind") && event["kind"].as<std::string>() == "exit")
+                task->diag_exit = event;
+            task->diagnostics.push_back(std::move(event));
+        }
+        if (_hub)
+            _hub->publish(task->id, std::move(frame));
+    });
+}
+
+void WebSolveService::commit_cancelled(const std::shared_ptr<Task>& task, const EventMeta& meta) {
+    if (_hub)
+        _hub->unsubscribe_all(task->id);
+    // 终态 Cancelled：worker 是终态事件唯一写方，与已提交的状态字一致
+    // （record_solve_event 独立小锁，此处不嵌套取锁）。
+    _ctx.record_solve_event(ev_for(meta, task->id, SolveEventType::Cancelled));
+}
+
+void WebSolveService::commit_completed(const std::shared_ptr<Task>& task, const EventMeta& meta,
+                                       const SolveResult& result, const std::string& result_json) {
+    // Task bookkeeping is NOT gated — commit atomically. A cancel that fired
+    // during format() is honored here; the worker must never report a completed
+    // task it was asked to cancel. Order: result first (release), then CAS
+    // state → Completed — once Completed is observable to a status() acquire
+    // read, the result is guaranteed visible.
+    task->result.store(std::make_shared<const std::string>(result_json),
+                       std::memory_order_release); // copy (not move): result_json is still needed for the SSE frame
+    {
+        TaskState expected = task->state.load(std::memory_order_acquire);
+        for (;;) {
+            if (expected == TaskState::Cancelled) {
+                // 终态 Cancelled（solve 后/format 期间被取消）：记录事件。
+                commit_cancelled(task, meta);
+                return;
+            }
+            if (task->state.compare_exchange_weak(expected, TaskState::Completed, std::memory_order_release,
+                                                  std::memory_order_acquire))
+                break;
+        }
+    }
+    // 终态 Completed 记录点（计划 B Task B2）：状态字已 CAS 提交，事件与终态
+    // 一致；成本/耗时取自 worker 局部 result 与 solve 起点计时。
+    auto ev = ev_for(meta, task->id, SolveEventType::Completed);
+    if (!result.solutions.empty()) {
+        // 最佳方案（solutions[0]）的成本字段。
+        ev.total_level_cost = result.solutions[0].total_exp_level_cost;
+        ev.total_exp_cost = result.solutions[0].total_exp_cost;
+    }
+    ev.solution_count = static_cast<int64_t>(result.solutions.size());
+    // 耗时三处同源（C1）：取 SolveResult::computation_time_ms（与任务结果根
+    // 字段 computation_time_ms 同一来源；旧口径是 solve 包装层起表的 wall 计时）。
+    ev.computation_ms = result.computation_time_ms;
+    // C1：方案详情——与 task->result 同源的完整结果 JSON（copy 语义：
+    // result_json 在作用域内，record_solve_event 按值入队）。
+    ev.result_json = result_json;
+    _ctx.record_solve_event(ev);
+    if (_hub) {
+        Json obj = Json::object();
+        obj["type"] = Json("completed");
+        try {
+            obj["result"] = Json::parse(result_json);
+        } catch (const JsonException&) {
+            obj["result"] = Json(result_json); // keep a valid envelope even if result isn't strict JSON
+        }
+        _hub->publish(task->id, sse_frame("completed", obj));
+        _hub->unsubscribe_all(task->id);
+    }
+}
+
+void WebSolveService::commit_failed(const std::shared_ptr<Task>& task, const EventMeta& meta,
+                                    const std::string& error) {
+    // error 先（release）、state 后（release）：Failed 一旦可观察，error 必已
+    // 可见。无条件提交（旧锁语义）：异常路径下任务以 Failed 告终（即使 cancel
+    // 已置 Cancelled，取消意图仍经 abort_solve 实现，状态字以 worker 终态为准）。
+    task->error.store(std::make_shared<const std::string>(error), std::memory_order_release);
+    task->state.store(TaskState::Failed, std::memory_order_release);
+    // 终态 Failed 记录点（计划 B Task B2）：状态字已提交，事件与终态一致。
+    auto ev = ev_for(meta, task->id, SolveEventType::Failed);
+    ev.error_message = error;
+    _ctx.record_solve_event(ev);
+    if (_hub) {
+        Json obj = Json::object();
+        obj["type"] = Json("failed");
+        obj["error"] = Json(error);
+        _hub->publish(task->id, sse_frame("failed", obj));
+        _hub->unsubscribe_all(task->id);
+    }
+}
+
+// ============================================================================
+// Checkpoint persistence (manual; autosave opt-in via BESQ_STATE_AUTOSAVE)
+// ============================================================================
+
+Json WebSolveService::save_checkpoint(const std::string& id) {
+    std::shared_ptr<Task> task;
+    {
+        std::lock_guard<std::mutex> lock(_tasks_mutex);
+        auto it = _tasks.find(id);
+        if (it == _tasks.end())
+            throw WebHttpError(404, "TASK_NOT_FOUND", "unknown task: " + id);
+        task = it->second;
+    }
+    // Checkpointing is only meaningful on a quiesced (Paused) executor —
+    // serialize_state() waits for the algorithm's quiescence ack and returns
+    // an empty blob otherwise.
+    if (task->state.load(std::memory_order_acquire) != TaskState::Paused)
+        throw WebHttpError(409, "TASK_NOT_PAUSED", "checkpoint requires a paused task");
+
+    const auto& cfg = AppConfig::get();
+    const std::filesystem::path dir(cfg.state_dir);
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::string path = (dir / (id + ".ckpt")).string();
+    if (!_ctx.save_solve_state(path))
+        throw WebHttpError(400, "CHECKPOINT_FAILED",
+                           "algorithm is not serializable or the paused state is empty");
+
+    const auto bytes = std::filesystem::file_size(path, ec);
+    Json o = Json::object();
+    o["path"] = Json(path);
+    o["bytes"] = Json(ec ? static_cast<int64_t>(0) : static_cast<int64_t>(bytes));
+    return o;
+}
+
+std::string WebSolveService::restore(const std::string& path) {
+    auto [task, id] = reserve_task();
+    task->worker = std::thread([this, task, path]() {
         // DoneGuard sets `finished` on every exit path (early cancel returns
-        // included), so the start() reap pass can safely collect (锁内) and
+        // included), so reserve_task()'s reap pass can safely collect and
         // join + erase this task once the worker has stopped touching
         // *this/_ctx.
         struct DoneGuard {
@@ -277,62 +637,34 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
             ~DoneGuard() { t->finished.store(true, std::memory_order_release); }
         } done_guard{task};
         std::string result_json;
+        EventMeta meta;
         try {
-            // ── 快照 + 请求（gate 内，µs-ms）──
-            // The shared context gate serializes access to the shared
-            // BesqContext's ProfileManager effective view: resolve_effective()
-            // rebuilds a mutable cache (_effective_cache/_dep_graph), so
-            // overlapping access against server-thread profile mutations would
-            // be a data race. Only the snapshot build (and format below) go
-            // through it — everything between runs on the self-contained
-            // snapshot: solve() is lock-free, zero profile references.
-            SolveRequest request;
-            orchestration::SolveSnapshot snapshot;
-            {
-                std::lock_guard<std::mutex> gate_lock(_ctx_gate);
-                // Re-check cancellation under the gate: cancel() may have fired
-                // while a previous task still held the gate. A cancelled task
-                // must never start a stray solve, violating the
-                // single-active-slot invariant.
-                if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
-                    if (_hub)
-                        _hub->unsubscribe_all(task->id);
-                    // 终态 Cancelled（快照构建前取消）：记录事件——worker 是
-                    // 终态事件唯一写方，与已提交的状态字一致（record_solve_event
-                    // 独立小锁，此处 gate 内调用不嵌套取锁）。
-                    auto ev = history_event_base(dto, task->id);
-                    ev.type = SolveEventType::Cancelled;
-                    _ctx.record_solve_event(ev);
-                    return;
-                }
-                request = build_request(dto, _ctx);      // 纯 DTO→请求（下界/边界校验）
-                snapshot = _ctx.solve_snapshot(request); // 校验+剪枝（未知/超限在此抛）
-                // 回填目标装备 max_durability：build_request 不再查注册表，而
-                // CompactAdapter::apply 透传 request.durability——以快照 eq
-                // （注册表为准）补齐，保持旧 build_target 语义。
-                if (!request.target_item.is_book()) {
-                    auto eq_it = snapshot.eq().find(request.target_item.id);
-                    if (eq_it != snapshot.eq().end())
-                        request.target_item.durability = eq_it->max_durability;
-                }
-            } // gate 释放——solve 全程无锁（快照自包含，零 profile 引用）
-            // 取消复查（gate 外；状态是原子字）：gate 段很短，但取消仍可能
-            // 落在构建期间——solve 前的最后一道闸。
+            // ── 取消复查（锁外；原子字）──
             if (task->state.load(std::memory_order_acquire) == TaskState::Cancelled) {
-                if (_hub)
-                    _hub->unsubscribe_all(task->id);
-                // 终态 Cancelled（快照构建后、solve 前取消）：同 gate 内闸。
-                auto ev = history_event_base(dto, task->id);
-                ev.type = SolveEventType::Cancelled;
-                _ctx.record_solve_event(ev);
+                // 终态 Cancelled（checkpoint 解析前取消）：记录事件。
+                meta = EventMeta{path, "", ""};
+                commit_cancelled(task, meta);
                 return;
             }
-            // Submitted 记录点（计划 B Task B2）：快照构建成功后、solve 启动前；
-            // gate 区外、无任务表锁——record_solve_event 自带独立小锁。
+            // ── 解析 checkpoint 头部 → 历史事件元数据（peek 校验 + input 摘要）──
+            // 与 BesqContext::solve_from_checkpoint 相同的文件读取；此处只取
+            // 摘要供历史事件/进度显示，实际恢复在 solve_from_checkpoint 内完成
+            // （自包含 checkpoint：无 gate、零 profile 引用）。
+            const std::string content = file_utils::read_file(path);
+            const std::vector<uint8_t> blob(content.begin(), content.end());
+            const auto hdr = algorithm::IExecutor::peek(blob);
+            algorithm::AlgorithmInput input;
+            const bool has_input = algorithm::IAlgorithmSerializer::extract_input(blob, input);
+            // 历史事件的目标摘要：checkpoint 的 compact Item 无 NSID，退化为
+            // 文件名（如 "task-3.ckpt"）；mode 从恢复的 input 取。
+            meta = EventMeta{
+                std::filesystem::path(path).filename().string(),
+                hdr.algorithm_tag.empty() ? std::string("?") : hdr.algorithm_tag,
+                has_input ? ((input.config.mode & AlgorithmMode::inventory) ? "inventory" : "direct")
+                          : std::string("direct"),
+            };
             {
-                auto ev = history_event_base(dto, task->id);
-                ev.type = SolveEventType::Submitted;
-                _ctx.record_solve_event(ev);
+                _ctx.record_solve_event(ev_for(meta, task->id, SolveEventType::Submitted));
             }
             double initial_progress = 0.0;
             if (_hub) {
@@ -344,190 +676,28 @@ std::string WebSolveService::start(const WebTaskDto& dto) {
                 obj["progress"] = Json(prog.progress);
                 _hub->publish(task->id, sse_frame("progress", obj));
             }
-            // 周期性 progress 采样（I-2a）：solve() 阻塞本 worker 期间，短命
-            // 采样线程每 ~200ms 读一次 _ctx.solve_progress()（线程安全原子读，
-            // 专为轮询设计），进度变化即向 hub 发布
-            // {"type":"progress","progress":<p>}。采样线程在 solve() 返回的
-            // 每个退出路径（正常/异常/cancel）上被停止并 join；终态帧
-            // （completed/failed）只会在采样停止后发布。
-            struct SamplerStop {
-                std::atomic<bool>* flag;
-                std::thread* th;
-                void stop() {
-                    if (!flag)
-                        return;
-                    flag->store(false, std::memory_order_release);
-                    if (th->joinable())
-                        th->join(); // 采样线程至多晚一帧（200ms 内）
-                    flag = nullptr; // 幂等：已停
-                }
-                ~SamplerStop() { stop(); }
-            };
             std::atomic<bool> sampling{true};
             std::thread sampler;
             SamplerStop sampler_stop{_hub ? &sampling : nullptr, &sampler};
-            if (_hub) {
-                sampler = std::thread([this, task, &sampling, initial_progress] {
-                    double last = initial_progress; // 与初始帧同基准，进度变了才发
-                    for (;;) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                        if (!sampling.load(std::memory_order_acquire))
-                            return;
-                        const auto prog = _ctx.solve_progress();
-                        if (prog.progress == last)
-                            continue;
-                        last = prog.progress;
-                        try {
-                            Json obj = Json::object();
-                            obj["type"] = Json("progress");
-                            obj["progress"] = Json(prog.progress);
-                            _hub->publish(task->id, sse_frame("progress", obj));
-                        } catch (...) {
-                            // 采样帧丢失可接受：hub/帧构造不抛，防御兜底。
-                        }
-                    }
-                });
-            }
-            // ── 算法诊断事件流（T2）──
-            // 观察者必须在 solve() 前注册：executor 在 solve() 内部创建并
-            // start()，事件从算法执行一开始（首个 Progress）就推送。
-            // attach 前先 flush() 排空上一任务可能仍停留在诊断队列中的
-            // 尾部事件——EventLoop 是异步派发，单活动槽保证当前任务的事件
-            // 是 attach 期间唯一的事件源，但上一任务的 Exit 等事件可能在
-            // 本任务 attach 后才被派发，不排空会串任务误归属。
-            //
-            // 沙箱模式限制：BESQ_SANDBOX=1 时 executor 在 besq-worker
-            // 子进程中运行，诊断事件推送发生在子进程的 DiagnosticsService
-            // 里（沙箱无诊断 IPC 桥回父进程），因此沙箱任务不产生任何
-            // 诊断事件（diagnostics 为空、diag_exit 为 null）。
-            algorithm::DiagnosticsService::instance().flush();
-            auto diag_observer = algorithm::IAlgorithmObserver::create<WebDiagObserver>([this, task](Json event) {
-                // 先序列化 SSE 帧（随后 event 被 move 进 diagnostics）。
-                std::string frame;
-                if (_hub)
-                    frame = sse_frame("diag", event);
-                // 仅 diagnostics 快照（其余字段已原子化，此锁不再护状态）。
-                {
-                    std::lock_guard<std::mutex> lock(task->mutex);
-                    if (task->diagnostics.size() >= 500)
-                        task->diagnostics.erase(task->diagnostics.begin());
-                    // exit 事件额外存一份结构化 KV（副本：列表各持一份）。
-                    if (event.has("kind") && event["kind"].as<std::string>() == "exit")
-                        task->diag_exit = event;
-                    task->diagnostics.push_back(std::move(event));
-                }
-                if (_hub)
-                    _hub->publish(task->id, std::move(frame));
-            });
-            // Single active slot is enforced above; solve() runs to
-            // completion (or cancel()). The result carries the executor's
-            // real output. solve() 一返回就停采样（join），之后才 format 与
-            // 发布终态帧——进度帧严格先于 completed/failed。
-            // solve 跑在自包含快照上（P0 锁攻破）：无 gate、无 profile 引用。
-            // 求解耗时由 SolveResult::computation_time_ms 承载（SolvePipeline
-            // stage_execute 计时），历史事件与任务结果根字段同源（C1）。
-            auto result = _ctx.solve(request, snapshot);
+            if (_hub)
+                sampler = start_sampler(task, initial_progress, sampling);
+            // 诊断观察者：restore 同样产生算法执行事件（恢复的算法会报告
+            // 恢复后的进度），与 solve worker 相同的 attach/flush/detach 纪律。
+            auto diag_observer = attach_diag(task);
+            // 恢复计算（阻塞至完成/取消/暂停）。
+            auto ck = _ctx.solve_from_checkpoint(path);
             sampler_stop.stop();
-            // solve() 返回前 exit 事件必已入队（_finalize 在 wait() 内同步
-            // 执行），但 EventLoop 是异步派发——必须 flush() 到派发完成
-            // （含本观察者收到 exit）后再 detach，否则尾部事件会因 detach
-            // 而丢失。flush() 返回时所有已入队事件的 observer 回调均已执行
-            // 完毕，随后 detach 不存在在途回调。
             algorithm::DiagnosticsService::instance().flush();
-            // 显式 detach，而不是依赖析构自动 detach：DiagnosticsService
-            // 的 _observers 持有本观察者的第二个 shared_ptr，局部变量析构
-            // 只把引用计数 2→1，析构函数（及其中断的自动 detach）根本不会
-            // 运行——不显式 detach 会让观察者永久滞留（长跑服务器累积泄漏，
-            // 且进程退出时单例析构会在 use_count==0 时触发 shared_from_this
-            // 的 bad_weak_ptr → abort）。
             algorithm::DiagnosticsService::instance().detach_observer(diag_observer);
-            // format() 走 resolve_effective（ProfileManager 有效视图缓存
-            // 重建，无内部锁）——短暂重新取 gate（ms 级；旧路径是 solve
-            // 全程持锁，秒~分钟级），profile 读写只在此窗口排队。
+            // format() 走 resolve_effective（ProfileManager 有效视图缓存重建，
+            // 无内部锁）——短暂重新取 gate（ms 级），profile 读写只在此窗口排队。
             {
                 std::lock_guard<std::mutex> gate_lock(_ctx_gate);
-                result_json = _ctx.format(result, request.mode, "json");
+                result_json = _ctx.format(ck.result, ck.mode, "json");
             }
-            // Task bookkeeping is NOT gated — commit atomically. A cancel that
-            // fired during format() is honored here; the worker must never
-            // report a completed task it was asked to cancel. Order: result
-            // first (release), then CAS state → Completed — once Completed is
-            // observable to a status() acquire read, the result is guaranteed
-            // visible. A pause that lost the race is a lost no-op and the task
-            // simply completes (documented); cancel wins (bail above).
-            task->result.store(std::make_shared<const std::string>(result_json),
-                               std::memory_order_release); // copy (not move): result_json is still needed for the SSE frame
-            {
-                TaskState expected = task->state.load(std::memory_order_acquire);
-                for (;;) {
-                    if (expected == TaskState::Cancelled) {
-                        if (_hub)
-                            _hub->unsubscribe_all(task->id);
-                        // 终态 Cancelled（solve 后/format 期间被取消）：记录事件。
-                        auto ev = history_event_base(dto, task->id);
-                        ev.type = SolveEventType::Cancelled;
-                        _ctx.record_solve_event(ev);
-                        return;
-                    }
-                    if (task->state.compare_exchange_weak(expected, TaskState::Completed, std::memory_order_release,
-                                                          std::memory_order_acquire))
-                        break;
-                }
-            }
-            // 终态 Completed 记录点（计划 B Task B2）：状态字已 CAS 提交，事件
-            // 与终态一致；成本/耗时取自 worker 局部 result 与 solve 起点计时。
-            {
-                auto ev = history_event_base(dto, task->id);
-                ev.type = SolveEventType::Completed;
-                if (!result.solutions.empty()) {
-                    // 最佳方案（solutions[0]）的成本字段。
-                    ev.total_level_cost = result.solutions[0].total_exp_level_cost;
-                    ev.total_exp_cost = result.solutions[0].total_exp_cost;
-                }
-                ev.solution_count = static_cast<int64_t>(result.solutions.size());
-                // 耗时三处同源（C1）：取 SolveResult::computation_time_ms（与任务
-                // 结果根字段 computation_time_ms 同一来源；旧口径是 solve 包装层
-                // 起表的 wall 计时）。
-                ev.computation_ms = result.computation_time_ms;
-                // C1：方案详情——与 task->result 同源的完整结果 JSON（copy 语义：
-                // result_json 在作用域内，record_solve_event 按值入队）。
-                ev.result_json = result_json;
-                _ctx.record_solve_event(ev);
-            }
-            if (_hub) {
-                Json obj = Json::object();
-                obj["type"] = Json("completed");
-                try {
-                    obj["result"] = Json::parse(result_json);
-                } catch (const JsonException&) {
-                    obj["result"] = Json(result_json); // keep a valid envelope even if result isn't strict JSON
-                }
-                _hub->publish(task->id, sse_frame("completed", obj));
-                _hub->unsubscribe_all(task->id);
-            }
+            commit_completed(task, meta, ck.result, result_json);
         } catch (const std::exception& e) {
-            std::string error_msg = e.what();
-            // error 先（release）、state 后（release）：Failed 一旦可观察，
-            // error 必已可见。无条件提交（旧锁语义）：异常路径下任务以
-            // Failed 告终（即使 cancel 已置 Cancelled，取消意图仍经
-            // abort_solve 实现，状态字以 worker 终态为准）。
-            task->error.store(std::make_shared<const std::string>(error_msg), std::memory_order_release);
-            task->state.store(TaskState::Failed, std::memory_order_release);
-            // 终态 Failed 记录点（计划 B Task B2）：状态字已提交，事件与终态
-            // 一致（cancel 竞态下状态被覆盖为 Failed，事件同样记录 Failed）。
-            {
-                auto ev = history_event_base(dto, task->id);
-                ev.type = SolveEventType::Failed;
-                ev.error_message = error_msg;
-                _ctx.record_solve_event(ev);
-            }
-            if (_hub) {
-                Json obj = Json::object();
-                obj["type"] = Json("failed");
-                obj["error"] = Json(error_msg);
-                _hub->publish(task->id, sse_frame("failed", obj));
-                _hub->unsubscribe_all(task->id);
-            }
+            commit_failed(task, meta, e.what());
         }
     });
     return id;
@@ -625,6 +795,16 @@ bool WebSolveService::pause(const std::string& id) {
     _ctx.pause_solve();
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     _ctx.pause_solve();
+    // BESQ_STATE_AUTOSAVE=1 时暂停即持久化（默认关闭：保存是显式用户动作，
+    // POST /api/tasks/{id}/checkpoint）。自动保存失败（不可序列化算法等）
+    // 不阻断暂停本身。
+    if (AppConfig::get().state_autosave) {
+        try {
+            save_checkpoint(id);
+        } catch (const WebHttpError&) {
+            // best-effort: 自动保存失败保持静默，暂停照常生效
+        }
+    }
     return true;
 }
 

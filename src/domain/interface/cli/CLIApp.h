@@ -40,6 +40,7 @@ public:
         std::optional<std::string> publish_version;
         std::optional<std::string> publish_tag;
         std::optional<std::string> algo_dir;
+        std::optional<std::string> resume;       // --resume <checkpoint file>
         std::string platform = "auto";
         std::optional<std::string> output;
         std::string format   = "text";
@@ -123,6 +124,7 @@ private:
         cfg.publish_version = std::get<25>(v);
         cfg.publish_tag     = std::get<26>(v);
         cfg.algo_opt_pairs  = std::get<27>(v).value_or(Config{}.algo_opt_pairs);
+        cfg.resume          = std::get<28>(v);
         return cfg;
     }
 };

@@ -1,10 +1,11 @@
 #include "AppConfig.h"
 #include "BuildConfig.h"
 #include "builtin/FrontendAssets.h"
-#include "domain/interface/components/BuiltinI18n.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
+#include "common/utils/ExeDir.hpp"
 #include "domain/interface/BesqContext.h"
+#include "domain/interface/components/BuiltinI18n.h"
 #include "domain/interface/components/http/HttpServer.h"
 #include "domain/interface/components/http/RateLimiter.h"
 #include "domain/interface/web/WebModule.h"
@@ -86,39 +87,12 @@ static std::map<std::string, web::StaticResource> build_static(const std::string
     return m;
 }
 
-/// Directory containing the current executable (best-effort; "" if unknown).
-static std::string current_exe_dir() {
-#if defined(__linux__)
-    char buf[4096];
-    ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (n <= 0)
-        return {};
-    buf[n] = '\0';
-    return std::filesystem::path(buf).parent_path().string();
-#elif defined(_WIN32)
-    char buf[MAX_PATH];
-    DWORD n = ::GetModuleFileNameA(nullptr, buf, MAX_PATH);
-    if (n == 0)
-        return {};
-    return std::filesystem::path(buf).parent_path().string();
-#else
-    return {};
-#endif
-}
-
-/// /public 磁盘根（可选，dev 模式）。解析序：cfg.gui_res_dir（来自
-/// BESQ_GUI_RES_DIR，"" 时跳过）→ ./res → <exe_dir>/res；都不存在 → 空（跳过挂载）。
+/// /public 磁盘根（可选，部署自定义）。仅响应显式 BESQ_GUI_RES_DIR——前端
+/// 静态资源全部编译期嵌入，默认零磁盘读取（无自动检测项；--frontend-dir
+/// 是 dev 热重载的独立通道）。
 static std::filesystem::path resolve_res_dir(const std::string& res_dir) {
     if (!res_dir.empty() && std::filesystem::is_directory(res_dir))
         return std::filesystem::path(res_dir);
-    if (std::filesystem::is_directory("./res"))
-        return std::filesystem::path("./res");
-    const std::string dir = current_exe_dir();
-    if (!dir.empty()) {
-        auto candidate = std::filesystem::path(dir) / "res";
-        if (std::filesystem::is_directory(candidate))
-            return candidate;
-    }
     return {};
 }
 
@@ -149,7 +123,7 @@ int main(int argc, char* argv[]) try {
                       << "             BESQ_GUI_RES_DIR (optional /public disk root)\n"
                       << "             BESQ_LANG (language; config.json lang otherwise)\n"
                       << "Runtime settings (lang/log_level/log_console/log_console_level) are\n"
-                      << "persisted to <cwd>/config.json by PATCH /api/settings and reloaded\n"
+                      << "persisted to <exe_dir>/config.json by PATCH /api/settings and reloaded\n"
                       << "at startup (env vars still win: env > config.json > default)\n";
             return 0;
         }

@@ -1,15 +1,26 @@
 #pragma once
 #include "common/io/json.h"
 #include "domain/interface/web/WebSchema.h"
+#include "domain/orchestration/types/SolveResult.h"
 #include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 class BesqContext;
+
+// Global-scope types from BesqContext.h (forward-declared to keep this header
+// light; WebSolveService.cpp includes BesqContext.h for the full definitions).
+struct SolveHistoryEvent;
+enum class SolveEventType : uint8_t;
+
+namespace algorithm {
+class IAlgorithmObserver;
+} // namespace algorithm
 
 namespace web {
 class SseHub;
@@ -77,6 +88,22 @@ public:
     /// WebHttpError(409, TASK_NOT_RESUMABLE) when the task is not Paused.
     bool resume(const std::string& id);
 
+    /// Save a checkpoint of a PAUSED task into the state directory
+    /// (state_dir/<id>.ckpt; BESQ_STATE_DIR overrides).  Explicit user action —
+    /// nothing is saved automatically unless BESQ_STATE_AUTOSAVE=1.  Throws
+    /// WebHttpError(404) unknown task, WebHttpError(409, TASK_NOT_PAUSED) when
+    /// not Paused, WebHttpError(400, CHECKPOINT_FAILED) when the algorithm is
+    /// not serializable / the state is empty.  Returns {path, bytes}.
+    Json save_checkpoint(const std::string& id);
+
+    /// Restore a computation from a checkpoint file as a NEW task — an
+    /// independent lifecycle from pause/resume (the checkpoint is
+    /// self-contained; the worker runs BesqContext::solve_from_checkpoint).
+    /// Returns the task id; single-active-slot rules apply (409 TASK_ACTIVE).
+    /// The checkpoint file itself is validated inside the worker — a bad file
+    /// surfaces as a Failed task with the error message.
+    std::string restore(const std::string& path);
+
     /// True while any task is Running or Paused (drives /api/status + 409).
     /// A paused task still occupies the single active slot — the executor is
     /// live and blocked at a pause point, so a new solve must not start.
@@ -115,6 +142,46 @@ private:
         /// 仅护 diagnostics/diag_exit 快照（其余字段已原子化）。
         std::mutex mutex;
     };
+
+    /// Solve-history metadata (what history_event_base() extracted from the
+    /// DTO): target summary / algorithm / mode.  The restore path builds it
+    /// from the checkpoint's input instead.
+    struct EventMeta {
+        std::string target;
+        std::string algorithm;
+        std::string mode;
+    };
+
+    static SolveHistoryEvent ev_for(const EventMeta& meta, const std::string& task_id,
+                                    SolveEventType type);
+    /// EventMeta from a DTO — mirrors build_request's default algorithm
+    /// resolution (direct→dp_merge, inventory→hamming).  Pure string building,
+    /// never throws, safe at any record point (including pre-snapshot cancel).
+    static EventMeta meta_from_dto(const WebTaskDto& dto);
+
+    /// Reserve a task slot: lock-held single-active-slot check + reap of
+    /// finished tasks + Task creation (id = task-N).  Joins reaped workers
+    /// outside the lock.  Throws WebHttpError(409, TASK_ACTIVE) when busy.
+    std::pair<std::shared_ptr<Task>, std::string> reserve_task();
+
+    /// Progress sampler thread for a worker: ~200ms poll of
+    /// _ctx.solve_progress(), publishing changed values as SSE progress
+    /// frames.  Owns nothing; the worker's SamplerStop joins it.
+    std::thread start_sampler(const std::shared_ptr<Task>& task, double initial_progress,
+                              std::atomic<bool>& sampling);
+
+    /// Attach the WebDiagObserver to the DiagnosticsService (callers must
+    /// flush() before and after, and detach_observer() when done).
+    std::shared_ptr<algorithm::IAlgorithmObserver> attach_diag(const std::shared_ptr<Task>& task);
+
+    /// Worker epilogue helpers — shared by the solve worker and the restore
+    /// worker so terminal-state commits (result/error store, state CAS,
+    /// history events, SSE frames) stay identical on both paths.
+    void commit_cancelled(const std::shared_ptr<Task>& task, const EventMeta& meta);
+    void commit_completed(const std::shared_ptr<Task>& task, const EventMeta& meta,
+                          const SolveResult& result, const std::string& result_json);
+    void commit_failed(const std::shared_ptr<Task>& task, const EventMeta& meta,
+                       const std::string& error);
 
     BesqContext& _ctx;
     std::mutex& _ctx_gate;           // web-layer gate, shared with WebModule

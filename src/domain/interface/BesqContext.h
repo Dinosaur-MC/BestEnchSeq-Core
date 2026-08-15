@@ -232,8 +232,31 @@ public:
     void pause_solve();
 
     /// Resume a paused solve (batch C): IExecutor::resume() on the live handle.
-    /// No-op when nothing is running.
+    /// No-op when nothing is running.  Pause/resume only — checkpoint
+    /// persistence/restore are separate APIs (save_solve_state /
+    /// solve_from_checkpoint).
     void resume_solve();
+
+    /// Serialize the paused in-flight solve into \p path (a binary checkpoint
+    /// blob).  Valid only while the solve is Paused — serialize_state() waits
+    /// for algorithm quiescence; non-serializable algorithms or an empty blob
+    /// return false.  Callers pick the file (GUI endpoint / CLI tooling).
+    bool save_solve_state(const std::string& path);
+
+    /// Result of solve_from_checkpoint: the solve result plus the algorithm
+    /// mode recovered from the checkpoint's input (CLI formatting needs it).
+    struct CheckpointSolveResult {
+        SolveResult result;
+        AlgorithmMode mode;
+    };
+
+    /// Resume a computation from a checkpoint file (CLI --resume / GUI
+    /// restore endpoint).  Reads the blob, peeks its algorithm tag via
+    /// IExecutor::peek, creates the executor and calls start(blob) — no
+    /// target/source re-specification needed.  Publishes the active executor
+    /// handle during the run (abort/pause work as for solve()).  Throws on
+    /// invalid checkpoint / unknown algorithm.
+    CheckpointSolveResult solve_from_checkpoint(const std::string& path);
 
     // ── Format ──
     std::string format(const SolveResult& result, AlgorithmMode mode, std::string_view fmt) const;

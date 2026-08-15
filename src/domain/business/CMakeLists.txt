@@ -19,3 +19,9 @@ target_include_directories(besq-domain-business PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
     ${BESQ_GENERATED_DIR}        # → #include "builtin/EmbeddedResources_generated.h" (via builtin/EmbeddedData.h)
 )
+
+# Read-only build config: the runtime disk-override directory for builtin data
+# (embedded resources' paths are compile-time-only; see BuiltinData.h).
+target_compile_definitions(besq-domain-business PUBLIC
+    BESQ_BUILD_DATA_DIR="data/builtin"
+)

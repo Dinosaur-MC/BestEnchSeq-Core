@@ -76,4 +76,39 @@ bool IAlgorithmSerializer::deserialize(
     return _deserialize_state(algo, algo_sections);
 }
 
+bool IAlgorithmSerializer::extract_input(
+    std::span<const uint8_t> data, AlgorithmInput& out)
+{
+    // Same header validation as deserialize(): magic + version peek, then a
+    // full parse.  No algorithm instance is touched — only the input section
+    // is read out.
+    constexpr size_t MIN_CHECKPOINT_BYTES = 37; // fixed header (29) + empty tag overhead (8)
+    if (data.size() < MIN_CHECKPOINT_BYTES)
+        return false;
+
+    {
+        ByteStreamReader peek_r(data.data(), data.size());
+        uint32_t peek_magic = peek_r.u32();
+        uint16_t peek_ver   = peek_r.u16();
+        if (!peek_r.ok() || peek_magic != checkpoint::FILE_MAGIC ||
+            peek_ver != checkpoint::FILE_VERSION)
+            return false;
+    }
+
+    checkpoint::Checkpoint cp;
+    ByteStreamReader r(data.data(), data.size());
+    r >> cp;
+    if (!r.ok() || !cp.verify())
+        return false;
+
+    for (auto& sec : cp.sections) {
+        if (sec.header.type == checkpoint::SECTION_TYPE_INPUT) {
+            ByteStreamReader pr(sec.payload.data(), sec.payload.size());
+            pr >> out;
+            return pr.ok();
+        }
+    }
+    return false;
+}
+
 } // namespace algorithm
