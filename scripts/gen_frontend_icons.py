@@ -11,6 +11,10 @@ Sources:
 - shield is a 3D-model item with no item/ texture and a model-UV entity
   texture — it gets a dedicated 2D silhouette icon (SPECIAL) whose colors
   are sampled from entity/shield/shield_base_nopattern.png.
+- leather armor icons are part-composited + tinted (see leather_icon): the
+  base layer is a grey leather shape that gets the default dye tint
+  0xA06540 applied, then the pre-tinted brown overlay layer is composited
+  on top — a single flat item/ texture would render grey and untinted.
 - misc has no real texture (placeholder category id in vanilla.json) — it
   gets a generated placeholder so the picker rows stay visually consistent.
 
@@ -46,6 +50,10 @@ PLACEHOLDER = {"misc"}  # 无真实材质（vanilla.json 中的占位类别 id�
 
 # 有专门 2D 绘制函数的 id（3D 模型物品，直接铺 UV 纹理很难看）
 SPECIAL = {"shield": "shield_icon"}
+
+# 皮革盔甲：材质是部件合成 + 调色的（见 leather_icon），不能直接取单张贴图
+LEATHER = {"leather_helmet", "leather_chestplate", "leather_leggings", "leather_boots"}
+LEATHER_TINT = (160, 101, 64)  # 默认染色 0xA06540（无 display.color 时的皮革棕）
 
 RENDERER = ROOT / "scripts" / "render_item_3d.py"
 SHIELD_MODEL = ROOT / "assets" / "models" / "shield.json"
@@ -94,11 +102,36 @@ def shield_icon() -> Image.Image:
         os.unlink(out)
 
 
+def leather_icon(id_: str) -> Image.Image:
+    """皮革盔甲图标 = 部件合成 + 调色（与 MC 1.9+ item 模型一致）。
+
+    models/item/leather_<part>.json 有两层：layer0 = leather_<part>.png
+    （灰度皮革形状），layer1 = leather_<part>_overlay.png（预染成棕色的
+    装饰层，chestplate 无装饰 = 全透明）。ItemRenderer 只对 layer0 施加
+    物品染色（tint index 0）：逐像素 RGB × tint/255（四舍五入，从 overlay
+    像素与染色结果同色系可证）；layer1 不染色直接 alpha-over 叠加。
+    """
+    base = Image.open(TEX_ITEM / f"{id_}.png").convert("RGBA")
+    overlay = Image.open(TEX_ITEM / f"{id_}_overlay.png").convert("RGBA")
+    r, g, b = LEATHER_TINT
+    px = base.load()
+    for y in range(base.height):
+        for x in range(base.width):
+            pr, pg, pb, pa = px[x, y]
+            if pa:
+                px[x, y] = ((pr * r + 127) // 255,
+                            (pg * g + 127) // 255,
+                            (pb * b + 127) // 255, pa)
+    return Image.alpha_composite(base, overlay)
+
+
 def load(id_: str) -> Image.Image:
     if id_ in PLACEHOLDER:
         return placeholder()
     if id_ in SPECIAL:
         return globals()[SPECIAL[id_]]()
+    if id_ in LEATHER:
+        return leather_icon(id_)
     kind, name = REMAP.get(id_, ("item", id_))
     base = TEX_ENTITY if kind == "entity" else TEX_ITEM
     return Image.open(base / f"{name}.png").convert("RGBA")
