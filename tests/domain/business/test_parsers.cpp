@@ -718,6 +718,32 @@ TEST_CASE("test_mc_parse_files_basic") {
     TEST_PASS("test_mc_parse_files_basic");
 }
 
+// ─── test_mc_parse_tags_enchantment_excluded ─────────────────────────────
+// data/<ns>/tags/enchantment/*.json (the STANDARD enchantment-tag
+// location) must NOT be parsed as enchantment files.  A substring match on
+// "/enchantment/" used to catch them, extracting ns="minecraft/tags" and
+// producing a "Skipping (max_level=0, anvil_cost=0)" WARN per tag file.
+
+TEST_CASE("test_mc_parse_tags_enchantment_excluded") {
+    std::unordered_map<std::string, std::string> files;
+    files["data/minecraft/tags/enchantment/treasure.json"] = R"({
+        "values": ["minecraft:mending", "minecraft:frost_walker"]
+    })";
+    files["data/minecraft/enchantment/sharpness.json"] = R"({
+        "anvil_cost": 1,
+        "max_level": 5,
+        "exclusive_set": [],
+        "supported_items": ["#minecraft:sword"]
+    })";
+
+    auto result = McOfficialParser::parse_files(files);
+    expect_eq(static_cast<int>(result.enchantments.size()), 1,
+              "tags/enchantment/*.json is NOT parsed as an enchantment");
+    expect_eq(result.enchantments[0].id, std::string("minecraft:sharpness"),
+              "only the real enchantment path (data/<ns>/enchantment/) is parsed");
+    TEST_PASS("test_mc_parse_tags_enchantment_excluded");
+}
+
 // ─── test_mc_parse_files_empty ─────────────────────────────────────────
 // parse_files() with an empty file map. Verify empty results with no crash.
 

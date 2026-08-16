@@ -111,29 +111,38 @@ bool parse_enchantment_path(const std::string& path,
                             std::string& out_ns,
                             std::string& out_filename)
 {
-    // Expected: "data/<ns>/enchantment/<id>.json"
-    // Also accept backslash on Windows
+    // Expected: "data/<ns>/enchantment/<id>.json" — the `enchantment` segment
+    // must be the DIRECT child of the namespace.  A substring match on
+    // "/enchantment/" would also hit the STANDARD tag location
+    // "data/<ns>/tags/enchantment/<tag>.json", mis-parsing tag files as
+    // enchantments (they have no max_level/anvil_cost → a "Skipping" WARN
+    // per file).  Also accept backslash on Windows.
     std::string p = path;
     for (auto& c : p) { if (c == '\\') c = '/'; }
 
-    // Find "/enchantment/" segment
-    auto ench_pos = p.find("/enchantment/");
-    if (ench_pos == std::string::npos) return false;
-
-    // Extract namespace: after "data/" up to "/enchantment/"
     auto data_pos = p.find("data/");
     if (data_pos == std::string::npos) return false;
-    auto ns_start = data_pos + 5;  // length of "data/"
-    out_ns = p.substr(ns_start, ench_pos - ns_start);
+    const size_t ns_start = data_pos + 5;  // length of "data/"
+    const size_t ns_end = p.find('/', ns_start);
+    if (ns_end == std::string::npos) return false;
+    const std::string ns = p.substr(ns_start, ns_end - ns_start);
+    if (ns.empty()) return false;
 
-    // Extract filename (without extension)
-    auto fname_start = ench_pos + 13;  // length of "/enchantment/"
+    // The segment right after the namespace MUST be "enchantment" (length 13
+    // including both slashes); "data/<ns>/tags/enchantment/…" fails here.
+    if (p.compare(ns_end, 13, "/enchantment/") != 0) return false;
+
+    // Extract filename (without extension); nested subpaths are kept as-is
+    // (NSID validation rejects them later if invalid).
+    const size_t fname_start = ns_end + 13;  // length of "/enchantment/"
+    if (fname_start >= p.size()) return false;
     auto dot_pos = p.find('.', fname_start);
     if (dot_pos == std::string::npos) {
         out_filename = p.substr(fname_start);
     } else {
         out_filename = p.substr(fname_start, dot_pos - fname_start);
     }
+    out_ns = ns;
     return true;
 }
 
