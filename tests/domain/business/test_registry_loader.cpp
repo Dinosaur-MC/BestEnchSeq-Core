@@ -285,6 +285,7 @@ TEST_CASE("test_loader_new_over_old") {
 TEST_CASE("test_loader_field_level_merge") {
     TagRegistry tag_reg;
     tag_reg.insert({NSID("#minecraft:sword"), "sword"});
+    tag_reg.insert({NSID("#minecraft:axe"), "axe"});
     RegistryLoader loader;
     EquipmentRegistry eq_reg;
 
@@ -320,6 +321,24 @@ TEST_CASE("test_loader_field_level_merge") {
     expect(sh.multiplier == 4, "provided multiplier wins");
     expect(sh.exclusive_set.count(NSID("minecraft:smite")) == 1, "empty new exclusive_set keeps old");
     expect(sh.supported_items.count(NSID("#minecraft:sword")) == 1, "supported_items intact");
+
+    // ── 集合字段 = 并集（union），不是整体替换 ──────────────────────────
+    // datapack 重声明 vanilla 魔咒时几乎总是"扩展"适用性/互斥（MC tag 默认
+    // replace=false 追加合并）；收窄声明会与世界中已存在的物品（如已锻造的
+    // axe[sharpness]）产生历史冲突，因此新集合元素追加到旧集合。
+    std::vector<business::loader::EnchantmentData> m3;
+    m3.push_back({"minecraft:sharpness", "", 0, 0, 0, false,
+                  {"bane_of_arthropods"}, {"#minecraft:axe"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, m3);
+    const auto& sh3 = ench_reg.at(NSID("minecraft:sharpness"));
+    expect(sh3.exclusive_set.count(NSID("minecraft:smite")) == 1,
+           "union keeps old exclusive member");
+    expect(sh3.exclusive_set.count(NSID("minecraft:bane_of_arthropods")) == 1,
+           "union adds new exclusive member");
+    expect(sh3.supported_items.count(NSID("#minecraft:sword")) == 1,
+           "union keeps old supported item");
+    expect(sh3.supported_items.count(NSID("#minecraft:axe")) == 1,
+           "union adds new supported item");
 
     // ── 数据校验：只有"三重全无"（无耐久+无分类+无名）的垃圾条目才不入库 ──
     // 无耐久但有名字/分类（新版 MC / 模组的可附魔无耐久物品）→ 合法放行。

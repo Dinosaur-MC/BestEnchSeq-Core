@@ -52,6 +52,14 @@ bool equip_content_equal(const Equipment& a, const Equipment& b) {
 /// A new name that differs from the old one ONLY in case (datapack-derived
 /// sentence case vs vanilla Title Case) keeps the old (curated) name — it is
 /// representation noise, not a rename.
+/// SET fields (exclusive_set / supported_items) MERGE as a union — they are
+/// never replaced wholesale.  MC's own increment mechanism (tags) defaults to
+/// replace=false → append-merge, and a datapack re-declaring a vanilla
+/// enchantment virtually always EXTENDS applicability/exclusivity.  A
+/// narrowing declaration would contradict items that already exist in the
+/// world (an axe[sharpness] forged before the pack stays valid), so "new
+/// wins" on a set would create history conflicts.  An empty new set is a
+/// no-op (intentional clearing has no MC mechanism at this level anyway).
 EnchInfo merge_ench(const EnchInfo& old, const EnchInfo& in) {
     EnchInfo out = old;
     if (!in.name.empty() && !string_utils::iequals(in.name, old.name)) out.name = in.name;
@@ -63,8 +71,8 @@ EnchInfo merge_ench(const EnchInfo& old, const EnchInfo& in) {
     }
     if (in.multiplier > 0) out.multiplier = in.multiplier;
     if (in.is_treasure) out.is_treasure = true;
-    if (!in.exclusive_set.empty()) out.exclusive_set = in.exclusive_set;
-    if (!in.supported_items.empty()) out.supported_items = in.supported_items;
+    out.exclusive_set.insert(in.exclusive_set.begin(), in.exclusive_set.end());
+    out.supported_items.insert(in.supported_items.begin(), in.supported_items.end());
     if (in.min_cost_base > 0) out.min_cost_base = in.min_cost_base;
     if (in.min_cost_per_level > 0) out.min_cost_per_level = in.min_cost_per_level;
     return out;
@@ -143,11 +151,13 @@ void RegistryLoader::from_dto(
         info.is_treasure       = d.is_treasure;   // 数据值（解析自 vanilla.json / datapack treasure tag）
         info.exclusive_set     = std::move(exclusive_nsid);
         info.supported_items   = std::move(supported);
-        // NEW WINS over OLD, FIELD-LEVEL: provided fields replace, absent
-        // fields (empty/0/false) keep the old value.  Content-identical
-        // redefinitions are silent; a CONFLICTING replacement warns.
-        // The FINAL value is validated before it may enter the registry — a
-        // still-invalid entry (even after merging) is dropped, never stored.
+        // NEW WINS over OLD, FIELD-LEVEL: provided scalar fields replace,
+        // absent fields (empty/0/false) keep the old value; SET fields
+        // (exclusive_set / supported_items) merge as a UNION (see merge_ench).
+        // Content-identical redefinitions are silent; a CONFLICTING
+        // replacement warns.  The FINAL value is validated before it may
+        // enter the registry — a still-invalid entry (even after merging) is
+        // dropped, never stored.
         EnchInfo final_ench = std::move(info);
         bool conflicting = false;
         if (auto it = reg.find(final_ench.id); it != reg.end()) {
