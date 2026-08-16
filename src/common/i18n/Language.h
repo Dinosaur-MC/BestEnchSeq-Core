@@ -114,6 +114,13 @@ class LanguageManager {
     /// Returns true if the file was found, parsed and registered.
     bool load_language(std::string_view code);
 
+    /// Load EVERY `{code}.json` in `langs_dir` (auto-load: pre-registers the
+    /// on-disk language set so available() lists them and select() needs no
+    /// IO).  Same merge semantics as load_language — an existing language's
+    /// table is merged, on-disk keys overriding the embedded ones.  Returns
+    /// the number of successfully loaded files; a missing directory → 0.
+    size_t load_all_from_disk();
+
   private:
     LanguageManager()                                   = default;
     LanguageManager(const LanguageManager &)            = delete;

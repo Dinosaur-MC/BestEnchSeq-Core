@@ -391,6 +391,34 @@ TEST_CASE("test_resume_parsing") {
 }
 
 // ---------------------------------------------------------------------------
+// Test: --list-profiles / --list-langs parsing (gate-exempt info flags)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_list_flags_parsing") {
+    {
+        const char* argv[] = {"besq", "--list-profiles"};
+        auto config = CLIApp::parse(2, const_cast<char**>(argv));
+        expect(config.list_profiles, "--list-profiles should be set");
+        expect(config.target.empty(), "--list-profiles alone must not require --target");
+        TEST_PASS("--list-profiles parses cleanly (gate exemption)");
+    }
+    {
+        const char* argv[] = {"besq", "--list-langs"};
+        auto config = CLIApp::parse(2, const_cast<char**>(argv));
+        expect(config.list_langs, "--list-langs should be set");
+        expect(config.target.empty(), "--list-langs alone must not require --target");
+        TEST_PASS("--list-langs parses cleanly (gate exemption)");
+    }
+    {
+        const char* argv[] = {"besq", "--list-profiles", "--list-langs", "--verbose"};
+        auto config = CLIApp::parse(4, const_cast<char**>(argv));
+        expect(config.list_profiles && config.list_langs && config.verbose,
+               "both flags coexist");
+        TEST_PASS("--list-profiles + --list-langs coexist");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Test: build_solve_request — --input drives the whole inventory solve config
 // ---------------------------------------------------------------------------
 

@@ -1814,8 +1814,7 @@ void test_router_500() {
 
 TEST_CASE("test_web_api") {
     BesqContext ctx;
-    ctx.load_builtin();
-    ctx.load_profiles();
+    ctx.auto_load();  // domain-wide auto-load (builtin → profiles → algos → langs)
     TestApp app(ctx);
     test_history(app); // /api/history：空历史 → 提交任务 → 普通/分页/游标/400 + /api/logs 404
                        // （须在首个任务提交前运行：空历史断言确定性成立）
@@ -1854,8 +1853,7 @@ TEST_CASE("test_web_api") {
 /// case 被标 TIMEOUT。
 TEST_CASE("web_solve_shutdown_race") {
     BesqContext ctx;
-    ctx.load_builtin();
-    ctx.load_profiles();
+    ctx.auto_load();  // domain-wide auto-load (builtin → profiles → algos → langs)
     {
         // 同 test_calculator 的重任务载荷：18 个自定义剑魔咒的 dp_merge。
         for (int i = 0; i < 18; ++i) {

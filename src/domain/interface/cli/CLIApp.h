@@ -55,6 +55,8 @@ public:
         bool version         = false;
         bool brief_usage     = false;
         bool list_algorithms = false;
+        bool list_profiles   = false;  // --list-profiles
+        bool list_langs      = false;  // --list-langs
     };
 
     // ── Parser methods ──
@@ -125,6 +127,8 @@ private:
         cfg.publish_tag     = std::get<26>(v);
         cfg.algo_opt_pairs  = std::get<27>(v).value_or(Config{}.algo_opt_pairs);
         cfg.resume          = std::get<28>(v);
+        cfg.list_profiles   = std::get<29>(v);
+        cfg.list_langs      = std::get<30>(v);
         return cfg;
     }
 };

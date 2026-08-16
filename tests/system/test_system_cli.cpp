@@ -160,6 +160,22 @@ void test_list_algorithms(const std::string& bin) {
     TEST_PASS("system: --list-algorithms");
 }
 
+void test_list_profiles_langs(const std::string& bin) {
+    // --list-profiles: auto-load runs, builtin:vanilla is always present.
+    auto rp = run_besq(bin, {"--lang", "en_US", "--list-profiles"});
+    expect_eq(rp.exit_code, 0, "--list-profiles: exit 0");
+    expect_contains(rp.out, "Available profiles (", "--list-profiles: header");
+    expect_contains(rp.out, "builtin:vanilla", "--list-profiles: has builtin:vanilla");
+    expect_contains(rp.out, "(active)", "--list-profiles: active marker");
+    // --list-langs: built-in languages are always available.
+    auto rl = run_besq(bin, {"--lang", "en_US", "--list-langs"});
+    expect_eq(rl.exit_code, 0, "--list-langs: exit 0");
+    expect_contains(rl.out, "Available languages (", "--list-langs: header");
+    expect_contains(rl.out, "en_US", "--list-langs: has en_US");
+    expect_contains(rl.out, "zh_CN", "--list-langs: has zh_CN");
+    TEST_PASS("system: --list-profiles / --list-langs");
+}
+
 void test_solve_text(const std::string& bin) {
     auto r = run_besq(bin, {"--lang", "en_US", kMaxTime, kMaxTimeVal, "--target", "diamond_sword[sharpness=5,knockback=2]"});
     expect_eq(r.exit_code, 0, "solve text: exit 0");
@@ -409,6 +425,7 @@ TEST_CASE("test_system_cli") {
     test_help(bin);
     test_version(bin);
     test_list_algorithms(bin);
+    test_list_profiles_langs(bin);
     test_solve_text(bin);
     test_solve_compact(bin);
     test_solve_json(bin);

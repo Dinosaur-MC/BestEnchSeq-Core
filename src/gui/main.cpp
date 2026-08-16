@@ -138,8 +138,9 @@ int main(int argc, char* argv[]) try {
     }
 
     BesqContext ctx;
-    ctx.load_builtin();
-    ctx.load_profiles();
+    // 领域通用自动加载：内建数据 → profiles → 算法插件 → 磁盘语言
+    // （AutoLoadPipeline；默认目录均基于 exe 目录）。
+    ctx.auto_load();
 
     // WebModule 做全部路由（/health, /api/*, /public 静态 + SSE），HTTP 服务器只负责
     // 字节 ↔ dispatch 桥接。dispatch 结果原样返回，避免 HttpResponse::json 重包装把

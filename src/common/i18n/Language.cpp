@@ -3,6 +3,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 
 namespace {
@@ -172,6 +173,28 @@ void LanguageManager::set_langs_dir(std::filesystem::path dir) {
 
 bool LanguageManager::load_language(std::string_view code) {
     return load_language_from_disk(code);
+}
+
+size_t LanguageManager::load_all_from_disk() {
+    if (_langs_dir.empty())
+        return 0;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(_langs_dir, ec) || ec)
+        return 0;
+
+    size_t loaded = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(_langs_dir, ec)) {
+        if (ec)
+            break;
+        if (!entry.is_regular_file(ec) || ec)
+            continue;
+        const auto& path = entry.path();
+        if (path.extension() != ".json")
+            continue;
+        if (load_language_from_disk(path.stem().string()))
+            ++loaded;
+    }
+    return loaded;
 }
 
 bool LanguageManager::load_language_from_disk(std::string_view code) {

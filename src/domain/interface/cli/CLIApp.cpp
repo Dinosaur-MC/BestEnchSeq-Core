@@ -120,7 +120,12 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
-    // 2. Load algorithm plugins
+    // 2. Domain-wide auto-load (built-in → profiles → algorithms → langs).
+    //    Explicit --algo-dir below appends to the auto-loaded set (a later
+    //    same-name plugin replaces the earlier registration).
+    _ctx.auto_load();
+
+    // 2b. --algo-dir explicit plugin directory (appends to auto-load)
     if (config.algo_dir)
         _ctx.load_algorithms(*config.algo_dir);
 
@@ -149,16 +154,38 @@ int CLIApp::run(int argc, char* argv[]) {
     }
 
     // 4. Profile selection
-    //    load_profiles() scans `<cwd>/profiles` (or --profile-dir).  It is a
-    //    safe no-op when the directory does not exist and never changes the
-    //    active profile, so the default flow (builtin:vanilla active via
-    //    load_builtin) stays intact.  activate_profile must run before any
-    //    --import/--edit so those operations land in the chosen profile.
+    //    auto_load() (step 1) already scanned `<exe_dir>/profiles` (safe
+    //    no-op when missing).  --profile-dir overrides: re-scan the chosen
+    //    directory.  activate_profile must run before any --import/--edit so
+    //    those operations land in the chosen profile.
     if (config.profile_dir)
         _ctx.set_profiles_dir(*config.profile_dir);
     _ctx.load_profiles();
     if (config.profile)
         _ctx.activate_profile(*config.profile);
+
+    // 4b. --list-profiles / --list-langs
+    if (config.list_profiles) {
+        auto profiles = _ctx.list_profiles();
+        std::cout << tr_fmt("cli.msg.list_profiles", profiles.size()) << "\n";
+        const auto active = _ctx.active_profile();
+        for (const auto& p : profiles) {
+            std::cout << "  " << p;
+            if (p == active)
+                std::cout << " " << tr("cli.msg.list_profiles_active");
+            std::cout << "\n";
+        }
+        flush_output();
+        return 0;
+    }
+    if (config.list_langs) {
+        auto langs = LanguageManager::instance().available();
+        std::cout << tr_fmt("cli.msg.list_langs", langs.size()) << "\n";
+        for (const auto& l : langs)
+            std::cout << "  " << l << "\n";
+        flush_output();
+        return 0;
+    }
 
     // 5. Profile data operations (target the active profile)
     if (config.import_files) {
@@ -296,6 +323,8 @@ const auto BESQ_OPTIONS = OptionTable{
     Option<std::string>{.long_name = "publish-tag",      .help_key = "cli.help.publish_tag_desc",   .help_group = "cli.help.group_profile"},
     Option<std::string>{.long_name = "algo-opt",         .help_key = "cli.help.algo_opt_desc",      .help_group = "cli.help.group_advanced"},
     Option<std::string>{.long_name = "resume",           .help_key = "cli.help.resume_desc",        .help_group = "cli.help.group_advanced"},
+    Flag    {.long_name = "list-profiles",               .help_key = "cli.help.list_profiles_desc", .help_group = "cli.help.group_info"},
+    Flag    {.long_name = "list-langs",                  .help_key = "cli.help.list_langs_desc",    .help_group = "cli.help.group_info"},
 };
 
 } // anonymous namespace
@@ -516,7 +545,7 @@ CLIApp::Config CLIApp::parse(int argc, char* argv[]) {
     if (cfg.resume.has_value() && (!cfg.target.empty() || cfg.input.has_value()))
         throw std::runtime_error(tr("cli.err.resume_conflict"));
 
-    if (!cfg.help && !cfg.version && !cfg.list_algorithms) {
+    if (!cfg.help && !cfg.version && !cfg.list_algorithms && !cfg.list_profiles && !cfg.list_langs) {
         if (cfg.target.empty() && !cfg.input.has_value()
             && !cfg.export_path.has_value()
             && !cfg.publish.has_value()

@@ -1,9 +1,11 @@
 #include "domain/interface/BesqContext.h"
+#include "AppConfig.h"
 #include "domain/algorithm/IExecutor.h"
 #include "domain/algorithm/plugin/AlgorithmLoader.h"
 #include "domain/algorithm/serialization/IAlgorithmSerializer.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/ProfileManager.h"
+#include "domain/orchestration/pipelines/AutoLoadPipeline.h"
 #include "domain/orchestration/pipelines/ExportPipeline.h"
 #include "domain/orchestration/pipelines/ManagePipeline.h"
 #include "domain/orchestration/pipelines/SolvePipeline.h"
@@ -88,6 +90,16 @@ void BesqContext::load_data(const std::vector<std::string>& filters) {
 
 void BesqContext::set_profiles_dir(const std::string& dir) {
     _impl->profiles_dir = dir;
+}
+
+void BesqContext::auto_load() {
+    AutoLoadRequest req;
+    if (!_impl->profiles_dir.empty())
+        req.profiles_dir = std::filesystem::path(_impl->profiles_dir);
+    // algorithms_dir: AppConfig default is already <exe_dir>/algorithms;
+    // BESQ_ALGO_DIR (env) overrides it.  langs stays exe-defaulted.
+    req.algorithms_dir = std::filesystem::path(AppConfig::get().algo_dir);
+    AutoLoadPipeline::run(_impl->profiles, _impl->loader, _impl->algo_loader, req);
 }
 
 void BesqContext::load_profiles() {

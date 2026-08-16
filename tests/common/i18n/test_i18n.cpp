@@ -1,6 +1,8 @@
 #define BESQ_TEST_MAIN
 #include "common/i18n/Language.h"
 #include "framework/test_framework.h"
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 
 namespace {
@@ -196,6 +198,68 @@ TEST_CASE("test_active_fallback_when_no_languages") {
     const Language& fallback = LanguageManager::instance().active();
     std::string_view val = fallback.get("anything");
     expect_eq(std::string(val), std::string("anything"), "active() fallback should return key as-is");
+}
+
+// ─── Auto-load from disk (load_all_from_disk) ────────────────────────────
+// Set-union semantics: on-disk {code}.json files are merged into the
+// registered language (if any) — conflicting keys are OVERWRITTEN by the
+// on-disk value, keys only present in the embedded table are preserved, and
+// brand-new codes are registered.  Kept at the END of the file: it adds a
+// language to the singleton, and the earlier available() size assertions
+// must run first.
+
+TEST_CASE("test_language_load_all_from_disk") {
+    auto& lm = LanguageManager::instance();
+    ensure_test_languages(); // en_US + zh_CN (embedded-style registration)
+
+    const auto tmp = std::filesystem::temp_directory_path() / "besq_i18n_autoload";
+    std::error_code ec;
+    std::filesystem::remove_all(tmp, ec);
+    std::filesystem::create_directories(tmp);
+
+    // on-disk en_US: overwrite `greeting`, add a disk-only key.
+    // (custom raw-string delimiter: the content contains `)"` — e.g. "(disk)"
+    // — which would end the default R"(...)" early.)
+    {
+        std::ofstream f(tmp / "en_US.json");
+        f << R"json({"language":"en_US","strings":{"greeting":"Hello (disk)","disk_only":"from disk"}})json";
+    }
+    // brand-new language fr_FR.
+    {
+        std::ofstream f(tmp / "fr_FR.json");
+        f << R"json({"language":"fr_FR","strings":{"greeting":"Bonjour"}})json";
+    }
+    // a non-language file must be skipped.
+    {
+        std::ofstream f(tmp / "notes.txt");
+        f << "not a language";
+    }
+
+    lm.set_langs_dir(tmp);
+    const size_t loaded = lm.load_all_from_disk();
+    expect_eq(loaded, size_t(2), "load_all_from_disk loads the 2 valid json files");
+
+    // available() now lists fr_FR too.
+    bool has_fr = false;
+    for (const auto& code : lm.available())
+        if (code == "fr_FR")
+            has_fr = true;
+    expect(has_fr, "fr_FR registered from disk");
+
+    // Merge: conflicting key overwritten by the on-disk value.
+    lm.select("en_US");
+    expect_eq(std::string(tr("greeting")), std::string("Hello (disk)"),
+              "on-disk value overwrites the embedded key");
+    // New key added, embedded-only keys preserved (greeting is the only
+    // embedded key here; disk_only proves the union).
+    expect_eq(std::string(tr("disk_only")), std::string("from disk"),
+              "disk-only key present after merge");
+    lm.select("fr_FR");
+    expect_eq(std::string(tr("greeting")), std::string("Bonjour"),
+              "fr_FR active with its disk table");
+
+    std::filesystem::remove_all(tmp, ec);
+    TEST_PASS("language load_all_from_disk (set-union merge)");
 }
 
 } // anonymous namespace

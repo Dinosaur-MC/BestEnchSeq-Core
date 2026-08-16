@@ -107,6 +107,14 @@ public:
     void load_file(const std::string& path);
     void load_data(const std::vector<std::string>& filters);
 
+    /// Domain-wide auto-load (the CLI/GUI startup entry): built-in data
+    /// first, then external profiles / algorithm plugins / on-disk languages
+    /// — order + conflict rules are owned by orchestration::AutoLoadPipeline
+    /// (profiles replace-on-conflict, algorithms new-version-wins, langs
+    /// set-union merge).  Defaults are exe-relative; set_profiles_dir() and
+    /// BESQ_ALGO_DIR overrides are honored.  Safe no-op for missing dirs.
+    void auto_load();
+
     /// Override the default profiles directory (default: `<cwd>/profiles`).
     void set_profiles_dir(const std::string& dir);
 

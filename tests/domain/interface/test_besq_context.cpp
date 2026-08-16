@@ -243,6 +243,51 @@ TEST_CASE("test_besq_default_profiles_scan") {
 }
 
 // ---------------------------------------------------------------------------
+// Test: auto_load — domain-wide auto-load entry (built-in → profiles →
+// algorithms → langs; conflict rules owned by AutoLoadPipeline)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_besq_auto_load") {
+    // Temporary directory with one external profile (depends on vanilla).
+    auto tmp = std::filesystem::temp_directory_path() / "besq_auto_load";
+    std::filesystem::remove_all(tmp);
+    std::filesystem::create_directories(tmp);
+    {
+        std::ofstream f(tmp / "modauto.json");
+        f << R"({"name":"modauto","dependencies":["builtin:vanilla"],"enchantments":[{"id":"mod:auto","name":"Auto","platform":"java","max_level":1,"multiplier":1,"supported_items":["#minecraft:swords"]}]})";
+    }
+
+    BesqContext ctx;
+    ctx.set_profiles_dir(tmp.string());  // honored by auto_load
+    ctx.auto_load();
+
+    // 1. Built-in FIRST: root present and activated.
+    expect(ctx.active_profile() == "builtin:vanilla", "auto_load activates builtin:vanilla");
+    // 2. External profile loaded AFTER built-in (same-key replace would also
+    //    be honored — see ProfileManager::load_directory).
+    bool has_root = false, has_mod = false;
+    for (const auto& p : ctx.list_profiles()) {
+        if (p == "builtin:vanilla")
+            has_root = true;
+        if (p == "modauto")
+            has_mod = true;
+    }
+    expect(has_root && has_mod, "auto_load loads builtin + external profile");
+    ctx.activate_profile("modauto");
+    expect(ctx.enchantments().contains(NSID("mod:auto")), "auto-loaded profile effective view usable");
+
+    // 3. Algorithms: built-ins kept (plugin dir missing → silent 0).
+    bool has_dp = false;
+    for (const auto& a : ctx.list_algorithms())
+        if (a == "dp_merge")
+            has_dp = true;
+    expect(has_dp, "auto_load keeps builtin algorithms");
+
+    std::filesystem::remove_all(tmp);
+    TEST_PASS("BesqContext auto_load");
+}
+
+// ---------------------------------------------------------------------------
 // Test: effective_profile — dependency-merged effective view accessor
 // ---------------------------------------------------------------------------
 
