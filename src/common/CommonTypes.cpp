@@ -26,8 +26,7 @@ inline bool validate_path(const std::string_view &s) {
     size_t start = 0;
     for (;;) {
         auto slash = s.find('/', start);
-        auto seg   = s.substr(start,
-                              slash == std::string_view::npos ? s.size() - start : slash - start);
+        auto seg   = s.substr(start, slash == std::string_view::npos ? s.size() - start : slash - start);
         if (seg == "." || seg == "..")
             return false;
         if (slash == std::string_view::npos)
@@ -41,10 +40,13 @@ inline bool validate_path(const std::string_view &s) {
 
 NSID::NSID(const std::string_view &ns, const std::string_view &id) : _ns(ns), _id(id) {
     if (_ns.empty()) {
-        _ns     = "minecraft";
-        _is_tag = false;
+        _ns = "minecraft";
     } else if (_ns.starts_with("#")) {
         _ns     = _ns.substr(1);
+        _is_tag = true;
+    }
+    if (_id.starts_with("#")) {
+        _id     = _id.substr(1);
         _is_tag = true;
     }
     if (!validate_ns(_ns) || !validate_path(_id)) {
@@ -63,7 +65,8 @@ NSID::NSID(const std::string_view &strid) {
 }
 
 std::string NSID::str() const {
-    if (_ns.empty() && _id.empty()) return "";
+    if (_ns.empty() || _id.empty())
+        return "";
     return _is_tag ? "#" + _ns + ":" + _id : _ns + ":" + _id;
 }
 
