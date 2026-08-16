@@ -94,13 +94,17 @@ void RegistryLoader::from_dto(
         info.is_treasure       = d.is_treasure;   // 数据值（解析自 vanilla.json / datapack treasure tag）
         info.exclusive_set     = std::move(exclusive_nsid);
         info.supported_items   = std::move(supported);
-        auto [it, inserted] = reg.insert(std::move(info));
-        if (!inserted && !ench_content_equal(*it, info)) {
-            // 同 id 但内容冲突：新条目想覆盖不同的数据——保留旧条目并提示
-            // （纯重复（内容一致）静默——datapack 重声明 vanilla 条目很常见）。
-            LOG_WARN("Keeping existing enchantment '%s': conflicting duplicate (different content), new entry dropped",
+        // NEW WINS over OLD: a later definition replaces an existing entry
+        // (mods overriding vanilla values, datapack re-declarations, …).
+        // Content-identical redefinitions are silent (routine); a CONFLICTING
+        // replacement (same id, different data) is worth a warning.
+        bool conflicting = false;
+        if (auto it = reg.find(info.id); it != reg.end() && !ench_content_equal(*it, info))
+            conflicting = true;
+        reg.insert_or_assign(info);
+        if (conflicting)
+            LOG_WARN("Replacing existing enchantment '%s' with conflicting data (new entry wins)",
                      d.id.c_str());
-        }
     }
 }
 
@@ -124,13 +128,14 @@ void RegistryLoader::from_dto(
         eq.category       = (cat_it != tag_reg.end()) ? cat_it->id : cat_nsid;
         eq.max_durability = d.max_durability;
 
-        auto [it, inserted] = reg.insert(std::move(eq));
-        if (!inserted && !equip_content_equal(*it, eq)) {
-            // 同 id 但内容冲突才提示；纯重复（内容一致）静默（常见：datapack
-            // 重声明 vanilla 装备）。
-            LOG_WARN("Keeping existing equipment '%s': conflicting duplicate (different content), new entry dropped",
+        // NEW WINS over OLD (same semantics as enchantments above).
+        bool conflicting = false;
+        if (auto it = reg.find(eq.id); it != reg.end() && !equip_content_equal(*it, eq))
+            conflicting = true;
+        reg.insert_or_assign(eq);
+        if (conflicting)
+            LOG_WARN("Replacing existing equipment '%s' with conflicting data (new entry wins)",
                      d.id.c_str());
-        }
     }
 }
 

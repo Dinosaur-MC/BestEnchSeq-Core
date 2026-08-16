@@ -183,6 +183,45 @@ TEST_CASE("test_loader_eq_dto_to_reg") {
     }
 }
 
+// ─── New-over-old: a later definition REPLACES an existing entry ─────────
+// RegistryLoader semantics: NEW WINS over OLD — a redefinition with the same
+// id overwrites the earlier entry (mods overriding vanilla values, datapack
+// re-declarations).  Content-identical redefinitions are silent; only a
+// CONFLICTING replacement warns.
+
+TEST_CASE("test_loader_new_over_old") {
+    TagRegistry tag_reg;
+    tag_reg.insert({NSID("#minecraft:sword"), "sword"});
+    RegistryLoader loader;
+    EnchantmentRegistry ench_reg;
+    EquipmentRegistry eq_reg;
+
+    // 第一次定义：vanilla 风格 sharpness（max_level 5）→ 生效。
+    std::vector<business::loader::EnchantmentData> v1;
+    v1.push_back({"minecraft:sharpness", "Sharpness", 1, 5, 5, false, {"smite"}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, v1);
+    expect(ench_reg.at(NSID("minecraft:sharpness")).max_level == 5, "first definition applies");
+
+    // 第二次定义：mod 覆盖（max_level 10）→ 新覆盖旧。
+    std::vector<business::loader::EnchantmentData> v2;
+    v2.push_back({"minecraft:sharpness", "Sharpness", 1, 10, 10, false, {"smite"}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, v2);
+    expect(ench_reg.size() == 1, "redefinition does not add a second entry");
+    expect(ench_reg.at(NSID("minecraft:sharpness")).max_level == 10, "NEW wins over OLD (mod override)");
+
+    // 装备同样：重新定义 max_durability → 新值生效。
+    std::vector<business::loader::EquipmentData> e1;
+    e1.push_back({"minecraft:diamond_sword", "Diamond Sword", "sword", 1561});
+    loader.from_dto(eq_reg, tag_reg, e1);
+    std::vector<business::loader::EquipmentData> e2;
+    e2.push_back({"minecraft:diamond_sword", "Diamond Sword", "sword", 9999});
+    loader.from_dto(eq_reg, tag_reg, e2);
+    expect(eq_reg.size() == 1, "equipment redefinition keeps one entry");
+    expect(eq_reg.at(NSID("minecraft:diamond_sword")).max_durability == 9999, "equipment NEW wins over OLD");
+
+    TEST_PASS("test_loader_new_over_old");
+}
+
 // ---------------------------------------------------------------------------
 // 3. JSON roundtrip: registry -> Json -> registry, then verify contents.
 // ---------------------------------------------------------------------------
