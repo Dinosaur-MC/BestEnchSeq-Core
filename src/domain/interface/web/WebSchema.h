@@ -31,6 +31,11 @@ struct WebTaskDto {
     /// 允许不兼容（batch C）：转发到 ForgeConfig.ignore_imcompatible（内部拼写
     /// 保留），wire 键用正确的 incompatible 拼写。false = 严格冲突（默认）。
     bool ignore_incompatible = false;
+
+    /// 忽略附魔惩罚成本（ForgeConfig.ignore_penalty_cost）。
+    bool ignore_penalty_cost = false;
+    /// 忽略装备+装备修理附加费（ForgeConfig.ignore_repair_cost）。
+    bool ignore_repair_cost = false;
 };
 
 struct WebTaskSchema {
@@ -46,6 +51,8 @@ struct WebTaskSchema {
             "max_search_time", &Type::max_search_time_ms, ds::int_codec{}), // wire key per spec §4.2; _ms is C++-side unit doc
         ds::field("max_threads", &Type::max_threads, ds::int_codec{}),
         ds::field("ignore_incompatible", &Type::ignore_incompatible, ds::bool_codec{}),
+        ds::field("ignore_penalty_cost", &Type::ignore_penalty_cost, ds::bool_codec{}),
+        ds::field("ignore_repair_cost", &Type::ignore_repair_cost, ds::bool_codec{}),
     };
 };
 

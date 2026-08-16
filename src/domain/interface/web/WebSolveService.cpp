@@ -94,6 +94,8 @@ SolveRequest build_request(const WebTaskDto& dto, const BesqContext& ctx) {
     // "允许不兼容" 接通（batch C）：wire 键 ignore_incompatible → ForgeConfig 的
     // ignore_imcompatible（内部拼写保留）。默认 false = 严格冲突。
     req.forge_config.ignore_imcompatible = dto.ignore_incompatible;
+    req.forge_config.ignore_penalty_cost = dto.ignore_penalty_cost;
+    req.forge_config.ignore_repair_cost = dto.ignore_repair_cost;
     if (dto.max_solutions > 0)
         req.search_config.max_solutions = dto.max_solutions;
     if (dto.max_search_time_ms > 0)
