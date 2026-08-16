@@ -30,6 +30,44 @@ bool equip_content_equal(const Equipment& a, const Equipment& b) {
     return a.name == b.name && a.category == b.category && a.max_durability == b.max_durability;
 }
 
+/// FIELD-LEVEL merge for duplicate NSIDs: NEW WINS per field, but only for
+/// fields the new entry actually PROVIDED.  Datapack entries derived from
+/// item tags can be partial (e.g. max_durability=0 when the item is missing
+/// from item_properties, or an empty display name); a whole-entry replace
+/// would clobber the vanilla values with empty/defaults.  Absent fields are
+/// treated as "not provided" and keep the old value:
+///   strings:   empty            → keep old
+///   numbers:   <= 0             → keep old
+///   sets:      empty            → keep old (cannot distinguish intentional
+///              clearing from "not provided")
+///   is_treasure:false           → keep old (same ambiguity; true still wins)
+///   platform:  None             → keep old
+EnchInfo merge_ench(const EnchInfo& old, const EnchInfo& in) {
+    EnchInfo out = old;
+    if (!in.name.empty()) out.name = in.name;
+    if (in.supported_platform != MCE::None) out.supported_platform = in.supported_platform;
+    if (in.max_level > 0) out.max_level = in.max_level;
+    if (in.limited_level_provided) {
+        out.limited_level = in.limited_level;
+        out.limited_level_provided = true;
+    }
+    if (in.multiplier > 0) out.multiplier = in.multiplier;
+    if (in.is_treasure) out.is_treasure = true;
+    if (!in.exclusive_set.empty()) out.exclusive_set = in.exclusive_set;
+    if (!in.supported_items.empty()) out.supported_items = in.supported_items;
+    if (in.min_cost_base > 0) out.min_cost_base = in.min_cost_base;
+    if (in.min_cost_per_level > 0) out.min_cost_per_level = in.min_cost_per_level;
+    return out;
+}
+
+Equipment merge_equip(const Equipment& old, const Equipment& in) {
+    Equipment out = old;
+    if (!in.name.empty()) out.name = in.name;
+    if (!in.category.str().empty()) out.category = in.category;
+    if (in.max_durability > 0) out.max_durability = in.max_durability;
+    return out;
+}
+
 } // namespace
 
 // ============================================================================
@@ -94,14 +132,23 @@ void RegistryLoader::from_dto(
         info.is_treasure       = d.is_treasure;   // 数据值（解析自 vanilla.json / datapack treasure tag）
         info.exclusive_set     = std::move(exclusive_nsid);
         info.supported_items   = std::move(supported);
-        // NEW WINS over OLD: a later definition replaces an existing entry
-        // (mods overriding vanilla values, datapack re-declarations, …).
-        // Content-identical redefinitions are silent (routine); a CONFLICTING
-        // replacement (same id, different data) is worth a warning.
+        // NEW WINS over OLD, FIELD-LEVEL: provided fields replace, absent
+        // fields (empty/0/false) keep the old value.  Content-identical
+        // redefinitions are silent; a CONFLICTING replacement warns.
+        // The FINAL value is validated before it may enter the registry — a
+        // still-invalid entry (even after merging) is dropped, never stored.
+        EnchInfo final_ench = std::move(info);
         bool conflicting = false;
-        if (auto it = reg.find(info.id); it != reg.end() && !ench_content_equal(*it, info))
-            conflicting = true;
-        reg.insert_or_assign(info);
+        if (auto it = reg.find(final_ench.id); it != reg.end()) {
+            final_ench = merge_ench(*it, final_ench);
+            conflicting = !ench_content_equal(*it, final_ench);
+        }
+        if (final_ench.max_level <= 0 || final_ench.multiplier <= 0) {
+            LOG_WARN("Skipping enchantment '%s': invalid max_level=%d multiplier=%d — not registered",
+                     final_ench.id.str().c_str(), final_ench.max_level, final_ench.multiplier);
+            continue;
+        }
+        reg.insert_or_assign(final_ench);
         if (conflicting)
             LOG_WARN("Replacing existing enchantment '%s' with conflicting data (new entry wins)",
                      d.id.c_str());
@@ -128,11 +175,23 @@ void RegistryLoader::from_dto(
         eq.category       = (cat_it != tag_reg.end()) ? cat_it->id : cat_nsid;
         eq.max_durability = d.max_durability;
 
-        // NEW WINS over OLD (same semantics as enchantments above).
+        // NEW WINS over OLD, FIELD-LEVEL (same semantics as enchantments):
+        // partial datapack derivations (empty name / durability 0) must not
+        // clobber the vanilla fields.  The FINAL value is validated before
+        // registration — an entry that is still invalid (no durability) is
+        // dropped, never stored.
+        Equipment final_eq = std::move(eq);
         bool conflicting = false;
-        if (auto it = reg.find(eq.id); it != reg.end() && !equip_content_equal(*it, eq))
-            conflicting = true;
-        reg.insert_or_assign(eq);
+        if (auto it = reg.find(final_eq.id); it != reg.end()) {
+            final_eq = merge_equip(*it, final_eq);
+            conflicting = !equip_content_equal(*it, final_eq);
+        }
+        if (final_eq.max_durability <= 0) {
+            LOG_WARN("Skipping equipment '%s': invalid max_durability (%d) — not registered",
+                     final_eq.id.str().c_str(), final_eq.max_durability);
+            continue;
+        }
+        reg.insert_or_assign(final_eq);
         if (conflicting)
             LOG_WARN("Replacing existing equipment '%s' with conflicting data (new entry wins)",
                      d.id.c_str());

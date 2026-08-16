@@ -222,6 +222,71 @@ TEST_CASE("test_loader_new_over_old") {
     TEST_PASS("test_loader_new_over_old");
 }
 
+// ─── Field-level merge: a PARTIAL redefinition keeps the old fields ──────
+// Datapack equipment derived from item tags can be incomplete (empty name /
+// durability 0 when the item is missing from item_properties).  A whole-entry
+// replace would clobber the vanilla values — provided fields win, absent
+// fields (empty/0/false) keep the old value.
+
+TEST_CASE("test_loader_field_level_merge") {
+    TagRegistry tag_reg;
+    tag_reg.insert({NSID("#minecraft:sword"), "sword"});
+    RegistryLoader loader;
+    EquipmentRegistry eq_reg;
+
+    // 完整 vanilla 风格定义。
+    std::vector<business::loader::EquipmentData> v1;
+    v1.push_back({"minecraft:diamond_sword", "Diamond Sword", "sword", 1561});
+    loader.from_dto(eq_reg, tag_reg, v1);
+
+    // 部分派生条目：name 为空、max_durability=0（物品不在 item_properties）——
+    // 只显式提供 category。合并后 name/durability 保留旧值，category 被覆盖。
+    std::vector<business::loader::EquipmentData> v2;
+    v2.push_back({"minecraft:diamond_sword", "", "pickaxe", 0});
+    loader.from_dto(eq_reg, tag_reg, v2);
+
+    const auto& ds = eq_reg.at(NSID("minecraft:diamond_sword"));
+    expect(ds.name == "Diamond Sword", "empty new name keeps the old name");
+    expect(ds.max_durability == 1561, "durability 0 keeps the old durability");
+    expect(ds.category == EquipmentTag::pickaxe(), "provided category wins");
+
+    // 魔咒同样：部分定义只改 multiplier，其余保留。
+    // (applicable_to 必须非空——空 supported_items 的魔咒会被整体跳过，
+    // 到不了字段级合并；exclusive_with 留空 → 旧 exclusive_set 保留。)
+    EnchantmentRegistry ench_reg;
+    std::vector<business::loader::EnchantmentData> m1;
+    m1.push_back({"minecraft:sharpness", "Sharpness", 1, 5, 5, false, {"smite"}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, m1);
+    std::vector<business::loader::EnchantmentData> m2;
+    m2.push_back({"minecraft:sharpness", "", 4, 0, 0, false, {}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, m2);
+    const auto& sh = ench_reg.at(NSID("minecraft:sharpness"));
+    expect(sh.name == "Sharpness", "empty new name keeps old name");
+    expect(sh.max_level == 5, "max_level 0 keeps old max_level");
+    expect(sh.multiplier == 4, "provided multiplier wins");
+    expect(sh.exclusive_set.count(NSID("minecraft:smite")) == 1, "empty new exclusive_set keeps old");
+    expect(sh.supported_items.count(NSID("#minecraft:sword")) == 1, "supported_items intact");
+
+    // ── 数据校验：残缺条目（合并后仍无效）不得进入注册表 ──
+    // 全新装备 id + max_durability=0 → 丢弃（不入库）。
+    std::vector<business::loader::EquipmentData> bad_eq;
+    bad_eq.push_back({"minecraft:broken_sword", "Broken Sword", "sword", 0});
+    loader.from_dto(eq_reg, tag_reg, bad_eq);
+    expect(!eq_reg.contains(NSID("minecraft:broken_sword")),
+           "invalid equipment (max_durability 0) not registered");
+    // 全新魔咒 id + multiplier=0 → 丢弃。
+    std::vector<business::loader::EnchantmentData> bad_ench;
+    bad_ench.push_back({"minecraft:broken", "Broken", 0, 3, 3, false, {}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, bad_ench);
+    expect(!ench_reg.contains(NSID("minecraft:broken")),
+           "invalid enchantment (multiplier 0) not registered");
+    // 已有的合法条目不受影响。
+    expect(eq_reg.contains(NSID("minecraft:diamond_sword")), "valid equipment unaffected");
+    expect(ench_reg.contains(NSID("minecraft:sharpness")), "valid enchantment unaffected");
+
+    TEST_PASS("test_loader_field_level_merge");
+}
+
 // ---------------------------------------------------------------------------
 // 3. JSON roundtrip: registry -> Json -> registry, then verify contents.
 // ---------------------------------------------------------------------------
