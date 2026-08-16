@@ -267,14 +267,20 @@ TEST_CASE("test_loader_field_level_merge") {
     expect(sh.exclusive_set.count(NSID("minecraft:smite")) == 1, "empty new exclusive_set keeps old");
     expect(sh.supported_items.count(NSID("#minecraft:sword")) == 1, "supported_items intact");
 
-    // ── 数据校验：残缺条目（合并后仍无效）不得进入注册表 ──
-    // 全新装备 id + max_durability=0 → 丢弃（不入库）。
-    std::vector<business::loader::EquipmentData> bad_eq;
-    bad_eq.push_back({"minecraft:broken_sword", "Broken Sword", "sword", 0});
-    loader.from_dto(eq_reg, tag_reg, bad_eq);
-    expect(!eq_reg.contains(NSID("minecraft:broken_sword")),
-           "invalid equipment (max_durability 0) not registered");
-    // 全新魔咒 id + multiplier=0 → 丢弃。
+    // ── 数据校验：只有"三重全无"（无耐久+无分类+无名）的垃圾条目才不入库 ──
+    // 无耐久但有名字/分类（新版 MC / 模组的可附魔无耐久物品）→ 合法放行。
+    std::vector<business::loader::EquipmentData> mod_eq;
+    mod_eq.push_back({"minecraft:broken_sword", "Broken Sword", "sword", 0});
+    loader.from_dto(eq_reg, tag_reg, mod_eq);
+    expect(eq_reg.contains(NSID("minecraft:broken_sword")),
+           "no-durability item with name+category is legal (mod items)");
+    // 无耐久 + 无分类（category = id 后缀，未推导）+ 无名 → 垃圾，丢弃。
+    std::vector<business::loader::EquipmentData> junk;
+    junk.push_back({"minecraft:junk_item", "", "junk_item", 0});
+    loader.from_dto(eq_reg, tag_reg, junk);
+    expect(!eq_reg.contains(NSID("minecraft:junk_item")),
+           "junk entry (no durability/category/name) not registered");
+    // 全新魔咒 id + multiplier=0 → 丢弃（魔咒无耐久概念，multiplier 无效即无效）。
     std::vector<business::loader::EnchantmentData> bad_ench;
     bad_ench.push_back({"minecraft:broken", "Broken", 0, 3, 3, false, {}, {"#minecraft:sword"}});
     loader.from_dto(ench_reg, tag_reg, eq_reg, bad_ench);

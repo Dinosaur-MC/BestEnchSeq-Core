@@ -178,17 +178,24 @@ void RegistryLoader::from_dto(
         // NEW WINS over OLD, FIELD-LEVEL (same semantics as enchantments):
         // partial datapack derivations (empty name / durability 0) must not
         // clobber the vanilla fields.  The FINAL value is validated before
-        // registration — an entry that is still invalid (no durability) is
-        // dropped, never stored.
+        // registration — but "no durability" is NOT invalid by itself:
+        // newer MC items AND mod items can be enchantable with no max_damage
+        // component (durability 0, category possibly underivable).  Only an
+        // entry with NO durability, NO category AND NO name (nothing usable
+        // about it at all) is dropped as junk.
         Equipment final_eq = std::move(eq);
         bool conflicting = false;
         if (auto it = reg.find(final_eq.id); it != reg.end()) {
             final_eq = merge_equip(*it, final_eq);
             conflicting = !equip_content_equal(*it, final_eq);
         }
-        if (final_eq.max_durability <= 0) {
-            LOG_WARN("Skipping equipment '%s': invalid max_durability (%d) — not registered",
-                     final_eq.id.str().c_str(), final_eq.max_durability);
+        const auto colon = final_eq.id.str().find(':');
+        const std::string id_suffix =
+            colon == std::string::npos ? final_eq.id.str() : final_eq.id.str().substr(colon + 1);
+        const bool uncategorized = final_eq.category.str() == "#minecraft:" + id_suffix;
+        if (final_eq.max_durability <= 0 && uncategorized && final_eq.name.empty()) {
+            LOG_WARN("Skipping equipment '%s': no durability, no category, no name — not registered",
+                     final_eq.id.str().c_str());
             continue;
         }
         reg.insert_or_assign(final_eq);
