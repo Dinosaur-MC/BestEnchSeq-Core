@@ -13,6 +13,10 @@ enum class LogLevel : uint8_t {
 struct LogEntry {
     LogLevel level;
     std::string message;
+    /// True when the console mirror already printed this entry synchronously
+    /// (the LOG_* sync path) — the worker's ConsoleConsumer must skip it so
+    /// it is not printed twice; the FileConsumer still writes it.
+    bool console_printed = false;
 };
 
 /// Typed Logger configuration.  AppConfig loads the BESQ_LOG_* env vars and

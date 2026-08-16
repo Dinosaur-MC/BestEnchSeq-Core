@@ -736,9 +736,9 @@ void SandboxedExecutor::spawn_worker() {
         jeli.ProcessMemoryLimit = 512u * 1024 * 1024; // 512 MB
         jeli.JobMemoryLimit = 512u * 1024 * 1024;
         if (!::SetInformationJobObject(job, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli)))
-            LOG_WARN("sandbox: SetInformationJobObject failed — worker has no resource limits");
+            LOG_WARN_ASYNC("sandbox: SetInformationJobObject failed — worker has no resource limits");
         if (!::AssignProcessToJobObject(job, pi.hProcess))
-            LOG_WARN("sandbox: AssignProcessToJobObject failed — worker NOT in Job Object");
+            LOG_WARN_ASYNC("sandbox: AssignProcessToJobObject failed — worker NOT in Job Object");
     }
 
     _fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(from_child_rd), _O_RDONLY | _O_BINARY);

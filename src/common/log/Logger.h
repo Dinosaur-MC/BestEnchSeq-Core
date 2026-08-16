@@ -32,13 +32,26 @@ public:
     /// Push a log message (non-blocking). Silently drops when queue full.
     void log(LogLevel level, std::string message);
 
-    /// Convenience helpers (plain string).
+    /// SYNC path: print to the console mirror IMMEDIATELY (gated by
+    /// console_enabled/console_level), then enqueue for the async file sink
+    /// with the console_printed flag so the worker's ConsoleConsumer skips it.
+    /// Use for low-frequency, user-visible diagnostics (startup, errors);
+    /// hot paths should use the ASYNC helpers (log()/info_fmt_async) instead.
+    void log_sync(LogLevel level, std::string message);
+
+    /// Convenience helpers (plain string) — ASYNC (queue → consumer chain).
     void info(std::string msg) { log(LogLevel::Info, std::move(msg)); }
     void warn(std::string msg) { log(LogLevel::Warn, std::move(msg)); }
     void error(std::string msg) { log(LogLevel::Error, std::move(msg)); }
     void debug(std::string msg) { log(LogLevel::Debug, std::move(msg)); }
 
-    /// printf-style format helpers.
+    /// Convenience helpers (plain string) — SYNC console + async file.
+    void info_sync(std::string msg) { log_sync(LogLevel::Info, std::move(msg)); }
+    void warn_sync(std::string msg) { log_sync(LogLevel::Warn, std::move(msg)); }
+    void error_sync(std::string msg) { log_sync(LogLevel::Error, std::move(msg)); }
+    void debug_sync(std::string msg) { log_sync(LogLevel::Debug, std::move(msg)); }
+
+    /// printf-style format helpers — ASYNC.
     template <typename... Args> void info_fmt(const char* fmt, Args&&... args) {
         printf(LogLevel::Info, fmt, std::forward<Args>(args)...);
     }
@@ -52,18 +65,28 @@ public:
         printf(LogLevel::Debug, fmt, std::forward<Args>(args)...);
     }
 
-    /// printf-style format and push.
+    /// printf-style format helpers — SYNC console + async file.
+    template <typename... Args> void info_fmt_sync(const char* fmt, Args&&... args) {
+        printf_sync(LogLevel::Info, fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args> void warn_fmt_sync(const char* fmt, Args&&... args) {
+        printf_sync(LogLevel::Warn, fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args> void error_fmt_sync(const char* fmt, Args&&... args) {
+        printf_sync(LogLevel::Error, fmt, std::forward<Args>(args)...);
+    }
+    template <typename... Args> void debug_fmt_sync(const char* fmt, Args&&... args) {
+        printf_sync(LogLevel::Debug, fmt, std::forward<Args>(args)...);
+    }
+
+    /// printf-style format and push — ASYNC.
     template <typename... Args> void printf(LogLevel level, const char* fmt, Args&&... args) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-security"
-        int sz = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
-        if (sz < 0)
-            return;
-        std::string buf(static_cast<size_t>(sz) + 1, '\0');
-        std::snprintf(buf.data(), buf.size(), fmt, std::forward<Args>(args)...);
-#pragma clang diagnostic pop
-        buf.resize(static_cast<size_t>(sz));
-        log(level, std::move(buf));
+        _format_and_log(level, fmt, std::forward<Args>(args)...);
+    }
+
+    /// printf-style format, SYNC console + async file.
+    template <typename... Args> void printf_sync(LogLevel level, const char* fmt, Args&&... args) {
+        _format_and_log_sync(level, fmt, std::forward<Args>(args)...);
     }
 
     /// Flush pending messages synchronously.
@@ -108,6 +131,27 @@ public:
 
 private:
     using ConsumerFn = std::function<void(const LogEntry&)>;
+
+    /// Format into a string (shared by the async printf and the sync
+    /// printf_sync; avoids duplicating the snprintf dance).
+    template <typename... Args> static std::string _format(const char* fmt, Args&&... args) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-security"
+        int sz = std::snprintf(nullptr, 0, fmt, std::forward<Args>(args)...);
+        if (sz < 0)
+            return {};
+        std::string buf(static_cast<size_t>(sz) + 1, '\0');
+        std::snprintf(buf.data(), buf.size(), fmt, std::forward<Args>(args)...);
+#pragma clang diagnostic pop
+        buf.resize(static_cast<size_t>(sz));
+        return buf;
+    }
+    template <typename... Args> void _format_and_log(LogLevel level, const char* fmt, Args&&... args) {
+        log(level, _format(fmt, std::forward<Args>(args)...));
+    }
+    template <typename... Args> void _format_and_log_sync(LogLevel level, const char* fmt, Args&&... args) {
+        log_sync(level, _format(fmt, std::forward<Args>(args)...));
+    }
 
     // ── Consumer chain ──────────────────────────────────────────────────
     // The consumer table.  Guarded by a small mutex: registration/removal
@@ -171,6 +215,10 @@ private:
     std::atomic<bool> _console_enabled{true};
     std::atomic<LogLevel> _console_level{LogLevel::Warn};
     std::atomic<LogLevel> _level{LogLevel::Debug};
+    /// Console mirror instance used BOTH by the async worker chain (registered
+    /// as a consumer in the ctor) and by the sync log_sync() path.  fprintf on
+    /// a FILE* is thread-safe, so the sync path needs no extra lock.
+    ConsoleConsumer _console{&_console_enabled, &_console_level};
     ConsumerChain _chain;
     EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, ChainHandler> _loop{ChainHandler{&_chain, &_processed}};
 };

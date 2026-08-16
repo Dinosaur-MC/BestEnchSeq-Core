@@ -96,7 +96,7 @@ void AlgorithmLoader::load_builtin() {
 
     besq_register_builtin_strategies(_registry);
 
-    LOG_INFO("Registered %zu built-in algorithm strategy/ies", _registry.size());
+    LOG_INFO_ASYNC("Registered %zu built-in algorithm strategy/ies", _registry.size());
 }
 
 // ====================================================================
@@ -116,7 +116,7 @@ size_t AlgorithmLoader::scan_and_load(const std::string& dir_path) {
     namespace fs = std::filesystem;
 
     if (!fs::is_directory(dir_path)) {
-        LOG_WARN("Algorithms directory not found: %s", dir_path.c_str());
+        LOG_WARN_ASYNC("Algorithms directory not found: %s", dir_path.c_str());
         return 0;
     }
 
@@ -131,7 +131,7 @@ size_t AlgorithmLoader::scan_and_load(const std::string& dir_path) {
             ++count;
     }
 
-    LOG_INFO("Loaded %zu algorithm plugin(s) from %s", count, dir_path.c_str());
+    LOG_INFO_ASYNC("Loaded %zu algorithm plugin(s) from %s", count, dir_path.c_str());
     return count;
 }
 
@@ -140,7 +140,7 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     auto resolved = std::filesystem::weakly_canonical(so_path).string();
     for (const auto& p : _plugins)
         if (p.path == resolved) {
-            LOG_WARN("Algorithm plugin already loaded: %s", so_path.c_str());
+            LOG_WARN_ASYNC("Algorithm plugin already loaded: %s", so_path.c_str());
             return true;
         }
 
@@ -150,13 +150,13 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
 
     // W^X segment is a hard reject — indicates a JIT / code-injection risk.
     if (audit.has_wx_segment) {
-        LOG_ERROR("[Audit] REFUSED '%s' — W+X memory segment (exploit risk)", so_path.c_str());
+        LOG_ERROR_ASYNC("[Audit] REFUSED '%s' — W+X memory segment (exploit risk)", so_path.c_str());
         return false;
     }
 
     // General audit failure (corrupted / truncated / non-native format).
     if (!audit.passed) {
-        LOG_ERROR("[Audit] REFUSED '%s' — binary audit failed (corrupted or "
+        LOG_ERROR_ASYNC("[Audit] REFUSED '%s' — binary audit failed (corrupted or "
                   "unrecognized format)",
                   so_path.c_str());
         return false;
@@ -165,20 +165,20 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     // Log extra exports (if any) — diagnostic noise, not a user-facing warning.
     if (!audit.extra_exports.empty()) {
         // clang-format off
-        LOG_DEBUG("[Audit] '%s' exports %zu unexpected symbol(s):", so_path.c_str(),
+        LOG_DEBUG_ASYNC("[Audit] '%s' exports %zu unexpected symbol(s):", so_path.c_str(),
                   audit.extra_exports.size());
         for (const auto &s : audit.extra_exports)
-            LOG_DEBUG("[Audit]   export → %s", s.c_str());
+            LOG_DEBUG_ASYNC("[Audit]   export → %s", s.c_str());
         // clang-format on
     }
 
     // Log dangerous imports (if any)
     if (!audit.dangerous_imports.empty()) {
         // clang-format off
-        LOG_WARN("[Audit] '%s' imports %zu dangerous symbol(s):", so_path.c_str(),
+        LOG_WARN_ASYNC("[Audit] '%s' imports %zu dangerous symbol(s):", so_path.c_str(),
                  audit.dangerous_imports.size());
         for (const auto &s : audit.dangerous_imports)
-            LOG_WARN("[Audit]   import → %s", s.c_str());
+            LOG_WARN_ASYNC("[Audit]   import → %s", s.c_str());
         // clang-format on
     }
 
@@ -190,7 +190,7 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
                 joined += ", ";
             joined += lib;
         }
-        LOG_INFO("[Audit] '%s' links: %s", so_path.c_str(), joined.c_str());
+        LOG_INFO_ASYNC("[Audit] '%s' links: %s", so_path.c_str(), joined.c_str());
     }
 
     // ── Non-sandbox mode: NO containment layer ────────────────────────
@@ -204,13 +204,13 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
         // An opaque binary (no section headers / no dynsym) cannot be
         // certified as pure-compute — refuse without a sandbox, same policy
         // as dangerous imports.
-        LOG_ERROR("[Audit] REFUSED '%s' — binary audit incomplete (opaque).  "
+        LOG_ERROR_ASYNC("[Audit] REFUSED '%s' — binary audit incomplete (opaque).  "
                   "Run with BESQ_SANDBOX=1 to load it sandboxed.",
                   so_path.c_str());
         return false;
     }
     if (!_sandbox_enabled && !audit.dangerous_imports.empty()) {
-        LOG_ERROR("[Audit] REFUSED '%s' — imports %zu dangerous symbol(s) "
+        LOG_ERROR_ASYNC("[Audit] REFUSED '%s' — imports %zu dangerous symbol(s) "
                   "(no sandbox).  Run with BESQ_SANDBOX=1 to load it sandboxed.",
                   so_path.c_str(), audit.dangerous_imports.size());
         return false;
@@ -230,14 +230,14 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
             auto probe = std::make_unique<SandboxedExecutor>(resolved, "");
             algo_name = std::string(probe->name());
         } catch (const std::exception& e) {
-            LOG_WARN("Plugin '%s' sandbox probe failed: %s", so_path.c_str(), e.what());
+            LOG_WARN_ASYNC("Plugin '%s' sandbox probe failed: %s", so_path.c_str(), e.what());
             return false;
         }
         // Name collision: a sandboxed plugin must not shadow a trusted builtin
         // (or a previously-loaded plugin) — that would silently change what the
         // name means under BESQ_SANDBOX=1.  Refuse with a clear warning.
         if (_registry.contains(algo_name) || _sandboxed.contains(algo_name)) {
-            LOG_WARN("Plugin '%s' name '%s' collides with an existing algorithm — refusing", so_path.c_str(),
+            LOG_WARN_ASYNC("Plugin '%s' name '%s' collides with an existing algorithm — refusing", so_path.c_str(),
                      algo_name.c_str());
             return false;
         }
@@ -247,14 +247,14 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
         plugin.path = std::move(resolved);
         plugin.audit = std::move(audit);
         _plugins.push_back(std::move(plugin));
-        LOG_INFO("Loaded algorithm plugin (sandboxed): %s (from %s)", algo_name.c_str(), so_path.c_str());
+        LOG_INFO_ASYNC("Loaded algorithm plugin (sandboxed): %s (from %s)", algo_name.c_str(), so_path.c_str());
         return true;
     }
 
     // ── Step 2: dlopen (in-process mode only) ────────────────────────
     void* handle = dl_open(resolved);
     if (!handle) {
-        LOG_WARN("Failed to load algorithm plugin '%s': %s", so_path.c_str(), dl_error().c_str());
+        LOG_WARN_ASYNC("Failed to load algorithm plugin '%s': %s", so_path.c_str(), dl_error().c_str());
         return false;
     }
 
@@ -268,7 +268,7 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     // ── Step 5: Probe (validate ABI by creating an instance) ─────────
     std::unique_ptr<IAlgorithm> probe(static_cast<IAlgorithm*>(create_fn()));
     if (!probe) {
-        LOG_WARN("Plugin '%s' returned null from create", so_path.c_str());
+        LOG_WARN_ASYNC("Plugin '%s' returned null from create", so_path.c_str());
         dl_close(handle);
         return false;
     }
@@ -290,7 +290,7 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
     plugin.audit = std::move(audit);
     _plugins.push_back(std::move(plugin));
 
-    LOG_INFO("Loaded algorithm plugin: %s (from %s)", algo_name.c_str(), so_path.c_str());
+    LOG_INFO_ASYNC("Loaded algorithm plugin: %s (from %s)", algo_name.c_str(), so_path.c_str());
     return true;
 }
 
@@ -301,7 +301,7 @@ bool AlgorithmLoader::load_plugin(const std::string& so_path) {
 bool AlgorithmLoader::resolve_plugin(void* handle, const std::string& path, BesqCreateFn& out_create) {
     auto create_fn = reinterpret_cast<BesqCreateFn>(dl_sym(handle, BESQ_PLUGIN_CREATE_SYM));
     if (!create_fn) {
-        LOG_WARN("Plugin '%s' missing '%s': %s", path.c_str(), BESQ_PLUGIN_CREATE_SYM, dl_error().c_str());
+        LOG_WARN_ASYNC("Plugin '%s' missing '%s': %s", path.c_str(), BESQ_PLUGIN_CREATE_SYM, dl_error().c_str());
         return false;
     }
 
@@ -377,7 +377,7 @@ void AlgorithmLoader::unload(const std::string& name) {
         dl_close(it->handle);
     _plugins.erase(it);
 
-    LOG_INFO("Unloaded algorithm plugin: %s", name.c_str());
+    LOG_INFO_ASYNC("Unloaded algorithm plugin: %s", name.c_str());
 }
 
 void AlgorithmLoader::unload_all() {

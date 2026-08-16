@@ -278,7 +278,7 @@ static PluginAuditReport audit_elf(const std::string& path) {
     PluginAuditReport report;
     MappedFile mf;
     if (!mf.map(path)) {
-        LOG_WARN("[Audit] Cannot open '%s' for scanning", path.c_str());
+        LOG_WARN_ASYNC("[Audit] Cannot open '%s' for scanning", path.c_str());
         report.passed = false;
         return report;
     }
@@ -289,27 +289,27 @@ static PluginAuditReport audit_elf(const std::string& path) {
 
     // ── Verify ELF magic & 64-bit ───────────────────────────────────
     if (fsize < EI_NIDENT || memcmp(base, ELFMAG, SELFMAG) != 0) {
-        LOG_WARN("[Audit] '%s' is not an ELF file", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' is not an ELF file", path.c_str());
         report.passed = false;
         return report;
     }
     const auto* ehdr = reinterpret_cast<const Elf64_Ehdr*>(base);
     if (ehdr->e_ident[EI_CLASS] != ELFCLASS64) {
-        LOG_WARN("[Audit] '%s' is not 64-bit ELF", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' is not 64-bit ELF", path.c_str());
         report.passed = false;
         return report;
     }
     // Structures are interpreted in host byte order — refuse anything but
     // little-endian (the only order the supported toolchains emit).
     if (ehdr->e_ident[EI_DATA] != ELFDATA2LSB) {
-        LOG_WARN("[Audit] '%s' is not little-endian ELF — unsupported", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' is not little-endian ELF — unsupported", path.c_str());
         report.passed = false;
         return report;
     }
 
     // ── Program headers → W^X check ─────────────────────────────────
     if (ehdr->e_phoff + static_cast<uint64_t>(ehdr->e_phnum) * sizeof(Elf64_Phdr) > fsize) {
-        LOG_WARN("[Audit] '%s' has truncated program headers", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' has truncated program headers", path.c_str());
         report.passed = false;
         return report;
     }
@@ -330,7 +330,7 @@ static PluginAuditReport audit_elf(const std::string& path) {
         // without a sandbox and permits them when contained (like a dangerous
         // import).  Not a hard `passed=false`: the file may be a legitimate
         // section-less ELF.
-        LOG_WARN("[Audit] '%s' has no valid section headers — audit limited", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' has no valid section headers — audit limited", path.c_str());
         report.limited = true;
         return report;
     }
@@ -359,7 +359,7 @@ static PluginAuditReport audit_elf(const std::string& path) {
     if (!dynsym_sec || !dynstr_sec) {
         // No dynamic symbols → imports/exports invisible to the audit.  Mark
         // `limited` (opaque), same loader policy as above.
-        LOG_WARN("[Audit] '%s' has no dynamic symbol table — audit limited", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' has no dynamic symbol table — audit limited", path.c_str());
         report.limited = true;
         return report;
     }
@@ -367,13 +367,13 @@ static PluginAuditReport audit_elf(const std::string& path) {
     // ── Parse .dynsym → exports + imports ──────────────────────────
     const size_t sym_count = dynsym_sec->sh_size / sizeof(Elf64_Sym);
     if (dynsym_sec->sh_offset + dynsym_sec->sh_size > fsize) {
-        LOG_WARN("[Audit] '%s' has truncated .dynsym", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' has truncated .dynsym", path.c_str());
         return report;
     }
     const auto* syms = reinterpret_cast<const Elf64_Sym*>(base + dynsym_sec->sh_offset);
     // ── Validate .dynstr section fits in file before dereferencing ──
     if (dynstr_sec->sh_offset + dynstr_sec->sh_size > fsize) {
-        LOG_WARN("[Audit] '%s' has truncated .dynstr", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' has truncated .dynstr", path.c_str());
         return report;
     }
     const auto* strtab = reinterpret_cast<const char*>(base + dynstr_sec->sh_offset);
@@ -463,7 +463,7 @@ static PluginAuditReport audit_pe(const std::string& path) {
     PluginAuditReport report;
     MappedFile mf;
     if (!mf.map(path)) {
-        LOG_WARN("[Audit] Cannot open '%s' for scanning", path.c_str());
+        LOG_WARN_ASYNC("[Audit] Cannot open '%s' for scanning", path.c_str());
         report.passed = false;
         return report;
     }
@@ -474,32 +474,32 @@ static PluginAuditReport audit_pe(const std::string& path) {
 
     // ── Verify DOS header & NT signature ───────────────────────────
     if (fsize < sizeof(IMAGE_DOS_HEADER)) {
-        LOG_WARN("[Audit] '%s' is truncated", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' is truncated", path.c_str());
         report.passed = false;
         return report;
     }
     const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
     if (dos->e_magic != IMAGE_DOS_SIGNATURE) {
-        LOG_WARN("[Audit] '%s' is not a PE file (bad DOS magic)", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' is not a PE file (bad DOS magic)", path.c_str());
         report.passed = false;
         return report;
     }
 
     const LONG nt_offset = dos->e_lfanew;
     if (nt_offset < 0 || static_cast<DWORD>(nt_offset) + sizeof(IMAGE_NT_HEADERS64) > fsize) {
-        LOG_WARN("[Audit] '%s' has invalid NT header offset", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' has invalid NT header offset", path.c_str());
         report.passed = false;
         return report;
     }
 
     const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + nt_offset);
     if (nt->Signature != IMAGE_NT_SIGNATURE) {
-        LOG_WARN("[Audit] '%s' has bad NT signature", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' has bad NT signature", path.c_str());
         report.passed = false;
         return report;
     }
     if (nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
-        LOG_WARN("[Audit] '%s' is not 64-bit PE", path.c_str());
+        LOG_WARN_ASYNC("[Audit] '%s' is not 64-bit PE", path.c_str());
         report.passed = false;
         return report;
     }
@@ -640,13 +640,13 @@ PluginAuditReport audit_plugin_binary(const std::string& so_path) {
 #elif defined(__APPLE__)
     PluginAuditReport r;
     r.passed = false; // Mach-O scanning not yet implemented
-    LOG_WARN("[Audit] Binary scanning not available on macOS: %s", so_path.c_str());
+    LOG_WARN_ASYNC("[Audit] Binary scanning not available on macOS: %s", so_path.c_str());
     return r;
 #else
     // Unknown platform: no scanner → cannot certify the plugin → fail closed.
     PluginAuditReport r;
     r.passed = false;
-    LOG_WARN("[Audit] Binary scanning not available on this platform");
+    LOG_WARN_ASYNC("[Audit] Binary scanning not available on this platform");
     return r;
 #endif
 }

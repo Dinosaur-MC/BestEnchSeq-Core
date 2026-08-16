@@ -53,9 +53,9 @@ void DiagnosticsService::set_persist(bool enabled) noexcept {
 
 void DiagnosticsService::_on_push_failed(const char* algo_name) {
     if (algo_name)
-        LOG_WARN("diagnostics queue full, event dropped (algo=%s)", algo_name);
+        LOG_WARN_ASYNC("diagnostics queue full, event dropped (algo=%s)", algo_name);
     else
-        LOG_WARN("diagnostics queue full, event dropped");
+        LOG_WARN_ASYNC("diagnostics queue full, event dropped");
 }
 
 std::vector<std::shared_ptr<IAlgorithmObserver>> DiagnosticsService::snapshot_observers() {

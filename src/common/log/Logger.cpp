@@ -100,6 +100,11 @@ void Logger::ChainHandler::operator()(LogEntry entry) {
 // Async, but flushed per-line; the Logger destructor drains on exit.
 
 void Logger::ConsoleConsumer::operator()(const LogEntry& entry) const {
+    // The sync path (LOG_* / log_sync) already printed this entry directly —
+    // skip it here so it is never printed twice (the FileConsumer still
+    // receives it for the async file sink).
+    if (entry.console_printed)
+        return;
     if (!console_enabled_ptr || !console_enabled_ptr->load(std::memory_order_acquire))
         return;
     const auto cl = console_level_ptr ? console_level_ptr->load(std::memory_order_acquire) : LogLevel::Warn;
@@ -188,12 +193,13 @@ Logger::Logger(const LoggerConfig& cfg)
     : _max_retention(cfg.retention), _console_enabled(cfg.console_enabled),
       _console_level(static_cast<LogLevel>(cfg.console_level)), _level(static_cast<LogLevel>(cfg.level)) {
     // 内建消费者在 worker 启动前注册（注册即生效）：控制台镜像与落盘是两个
-    // 独立消费者，阈值/门控语义与拆分前的 FileHandler 一致。FileConsumer
+    // 独立消费者，阈值/门控语义与拆分前的 FileHandler 一致。控制台消费者走
+    // 成员 _console（同步 log_sync 路径共用同一实例/门控）；FileConsumer
     // 持有 move-only 的 ofstream——经 shared_ptr 捕获进 std::function。
     // Console mirror defaults to enabled at Warn.  The host overrides via
     // AppConfig → setup_logger() (BESQ_LOG_CONSOLE / BESQ_LOG_CONSOLE_LEVEL);
     // the constructor does no env parsing of its own.
-    add_consumer([c = ConsoleConsumer(&_console_enabled, &_console_level)](const LogEntry& e) { c(e); });
+    add_consumer([this](const LogEntry& e) { _console(e); });
     add_consumer([fc = std::make_shared<FileConsumer>(cfg.log_dir, &_max_retention, &_level)](const LogEntry& e) { (*fc)(e); });
     _loop.start();
 }
@@ -205,7 +211,19 @@ Logger::~Logger() {
 void Logger::log(LogLevel level, std::string message) {
     // log() 恒入队——过滤是各消费者的职责（"都不显示则 drop"的预过滤删除）；
     // 队列满时 try_post 失败自然丢弃。enqueued 只计成功入队条目，flush 语义不变。
-    if (_loop.try_post(LogEntry{level, std::move(message)})) {
+    if (_loop.try_post(LogEntry{level, std::move(message), /*console_printed=*/false})) {
+        _enqueued.fetch_add(1, std::memory_order_release);
+    }
+}
+
+void Logger::log_sync(LogLevel level, std::string message) {
+    // SYNC console: print immediately (gated by console_enabled/console_level
+    // inside ConsoleConsumer::operator()); the file sink stays ASYNC — the
+    // entry is enqueued with console_printed=true so the worker's console
+    // consumer skips it (no double print) while the FileConsumer writes it.
+    LogEntry entry{level, message, /*console_printed=*/true};
+    _console(entry);
+    if (_loop.try_post(LogEntry{level, std::move(message), /*console_printed=*/true})) {
         _enqueued.fetch_add(1, std::memory_order_release);
     }
 }

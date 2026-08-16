@@ -10,6 +10,7 @@
 #define BESQ_TEST_MAIN
 #include "common/log/Logger.h"
 #include "common/log/LogTypes.h"
+#include "common/log/log.hpp"
 #include "framework/test_framework.h"
 
 #include <chrono>
@@ -229,4 +230,68 @@ TEST_CASE("test_logger_consumers") {
         expect(!after, "removed consumer no longer receives entries");
     }
     TEST_PASS("test_logger_consumers");
+}
+
+// ─── SYNC console + async file (LOG_* vs LOG_*_ASYNC) ────────────────────
+// The sync path prints the console line IMMEDIATELY and enqueues the entry
+// with console_printed=true so the worker's ConsoleConsumer skips it (no
+// double print) while the FileConsumer still writes it.  The async path
+// enqueues with console_printed=false.  Assert via a capture consumer —
+// the console print itself is gated by the same flags the consumer sees.
+
+TEST_CASE("test_logger_sync_async_paths") {
+    auto& logger = Logger::instance();
+    logger.set_console_enabled(false); // keep the console mirror quiet
+    std::mutex cap_mtx;
+    std::vector<LogEntry> got;
+    auto cid = logger.add_consumer([&](const LogEntry& e) {
+        std::lock_guard<std::mutex> lk(cap_mtx);
+        got.push_back(e);
+    });
+
+    LOG_INFO("sync-marker");          // LOG_* → sync console + async file
+    LOG_WARN("sync-warn-marker");
+    LOG_INFO_ASYNC("async-marker");   // LOG_*_ASYNC → fully async
+    besq::log::flush();
+    // 有界等待：worker 处理完（flush 已排空；再兜底等待捕获到达）。
+    // NOTE: match with a leading space (" sync-marker") — "async-marker"
+    // contains "sync-marker" as a substring and would otherwise overwrite
+    // the sync flags with the async entry's console_printed.
+    bool sync_seen = false, warn_seen = false, async_seen = false;
+    bool sync_printed = false, warn_printed = false, async_printed = true;
+    for (int i = 0; i < 200 && !(sync_seen && warn_seen && async_seen); ++i) {
+        {
+            std::lock_guard<std::mutex> lk(cap_mtx);
+            for (const auto& e : got) {
+                if (e.message.find(" sync-marker") != std::string::npos) {
+                    sync_seen = true;
+                    sync_printed = e.console_printed;
+                }
+                if (e.message.find("sync-warn-marker") != std::string::npos) {
+                    warn_seen = true;
+                    warn_printed = e.console_printed;
+                }
+                if (e.message.find("async-marker") != std::string::npos) {
+                    async_seen = true;
+                    async_printed = e.console_printed;
+                }
+            }
+        }
+        if (!(sync_seen && warn_seen && async_seen))
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(sync_seen, "sync LOG_* entry reaches the consumer chain (file sink)");
+    expect(sync_printed, "sync entry carries console_printed (console already emitted)");
+    expect(warn_seen && warn_printed, "sync WARN entry carries console_printed");
+    expect(async_seen, "async LOG_*_ASYNC entry reaches the consumer chain");
+    expect(!async_printed, "async entry does NOT carry console_printed");
+
+    // 宏级验证：LOG_*（同步）与 LOG_*_ASYNC（异步）都在 BESQ_DISABLE_LOGGER
+    // 未定义时解析；标志语义已由上方断言覆盖。
+    LOG_DEBUG("sync-debug-marker");
+    LOG_DEBUG_ASYNC("async-debug-marker");
+    besq::log::flush();
+
+    logger.remove_consumer(cid);
+    TEST_PASS("logger sync (console immediate) + async (queue) paths");
 }
