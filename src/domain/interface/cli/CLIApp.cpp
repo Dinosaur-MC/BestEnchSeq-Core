@@ -11,7 +11,6 @@
 #include "common/i18n/LocaleDetector.h"
 #include "common/utils/cli/CLIParser.hpp"
 #include "BuildConfig.h"
-#include "common/utils/ExeDir.hpp"
 #include "common/utils/StringUtils.hpp"
 #include "common/utils/EnvUtil.hpp"
 #include "common/log/log.hpp"
@@ -102,6 +101,22 @@ int CLIApp::run(int argc, char* argv[]) {
     // 1. Parse CLI args
     auto config = CLIApp::parse(argc, argv);
 
+    // CLI console logging: OFF by default (silent — diagnostics go to the
+    // log files only); --verbose turns it on.  An explicit BESQ_LOG_CONSOLE
+    // env wins over the default.  For machine formats (json/compact) verbose
+    // only opens Warn+ (stderr) so stdout stays parseable; text mode opens
+    // Debug+.
+    {
+        auto& cfg = AppConfig::get();
+        if (!config.verbose && get_env_str("BESQ_LOG_CONSOLE").empty())
+            cfg.log_console = false;
+        if (config.verbose) {
+            cfg.log_console = true;
+            cfg.log_console_level = (config.format == "text") ? 0 : 2;
+        }
+        setup_logger(cfg.logger_config());
+    }
+
     // Re-select language if --lang was explicitly set
     // (LanguageManager::select handles case/_/- normalization)
     if (!config.lang.empty()) {
@@ -125,11 +140,11 @@ int CLIApp::run(int argc, char* argv[]) {
     // 1b. --list-langs: language-only listing — NO domain auto-load (which
     //     would parse profiles/plugins and surface unrelated warnings, e.g.
     //     a broken datapack in the profiles dir).  Only the on-disk langs
-    //     directory is pre-registered (missing → silent).
+    //     directory (AppConfig.langs_dir) is pre-registered (missing → silent).
     if (config.list_langs) {
-        const auto dir = exe_dir();
-        if (!dir.empty()) {
-            LanguageManager::instance().set_langs_dir(dir / "langs");
+        const std::string langs_dir = AppConfig::get().langs_dir;
+        if (!langs_dir.empty()) {
+            LanguageManager::instance().set_langs_dir(langs_dir);
             LanguageManager::instance().load_all_from_disk();
         }
         auto langs = LanguageManager::instance().available();

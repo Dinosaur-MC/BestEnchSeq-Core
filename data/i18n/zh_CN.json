@@ -36,7 +36,7 @@
     "cli.help.max_time_desc": "最大搜索时间 (秒) (0 = 不限, 默认: 180; 对所有策略生效)",
     "cli.help.max_threads_desc": "并行策略 (bb_dp, dp_merge) 的线程池大小; 0 = 自动。单线程 hamming（及以插件加载的 astar/dfs）忽略",
     "cli.help.algo_opt_desc": "算法专用选项，key=value 对 (逗号分隔); 键由策略私有 (如 bb_dp.chunk_bits)",
-    "cli.help.verbose_desc": "完成后显示算法诊断计数器",
+    "cli.help.verbose_desc": "完成后显示算法诊断计数器；同时开启控制台日志输出（默认关闭）",
     "cli.help.lang_desc": "界面语言: zh_CN (自动), en_US",
     "cli.help.ench_format_header": "附魔格式",
     "cli.help.ench_format_id_level": "id=level                例如 sharpness=5",

@@ -36,7 +36,7 @@
     "cli.help.max_time_desc": "Max search time in seconds (0 = unlimited, default: 180; applies to all strategies)",
     "cli.help.max_threads_desc": "Max thread pool size for parallel strategies (bb_dp, dp_merge); 0 = auto. No-op for single-threaded hamming (and astar/dfs when loaded as plugins)",
     "cli.help.algo_opt_desc": "Algorithm-specific options as key=value pairs (comma-separated); keys are strategy-owned (e.g. bb_dp.chunk_bits)",
-    "cli.help.verbose_desc": "Show algorithm diagnostic counters on completion",
+    "cli.help.verbose_desc": "Show algorithm diagnostic counters on completion;\n                           also enable console log output (off by default)",
     "cli.help.lang_desc": "Interface language: zh_CN (auto), en_US",
     "cli.help.ench_format_header": "Enchantment formats",
     "cli.help.ench_format_id_level": "id=level                e.g., sharpness=5",

@@ -3,7 +3,6 @@
 #include "domain/interface/components/BuiltinI18n.h"
 #include "common/i18n/Language.h"
 #include "common/log/log.hpp"
-#include "common/utils/ExeDir.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -14,12 +13,11 @@ int main(int argc, char* argv[]) try {
 
     // ── i18n setup ──
     register_builtin_translations(LanguageManager::instance());
-    // On-demand language file directory (next to executable → langs/<code>.json;
-    // argv[0] can be relative / PATH-resolved, exe_dir() is authoritative).
+    // On-demand language file directory (AppConfig: <exe_dir>/langs default,
+    // BESQ_LANG_DIR overrides).
     try {
-        const auto dir = exe_dir();
-        if (!dir.empty())
-            LanguageManager::instance().set_langs_dir(dir / "langs");
+        if (!app_cfg.langs_dir.empty())
+            LanguageManager::instance().set_langs_dir(app_cfg.langs_dir);
     } catch (...) {}
     CLIApp::apply_lang(argc, argv);
 

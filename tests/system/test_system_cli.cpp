@@ -343,10 +343,16 @@ void test_plugin_malicious_refused(const std::string& bin) {
                   << std::endl;
         return;
     }
-    auto r = run_besq(bin, {"--lang", "en_US", "--algo-dir", dir, "--list-algorithms"});
+    // --verbose: console logging is OFF by default, and the audit refusal is
+    // an ERROR log — visible on stderr only when console logging is enabled.
+    // (Verbose audit DEBUG lines may mention the plugin path on stdout, so
+    // assert on the strategy LIST line ("  name" prefix) instead of the raw
+    // stream.)
+    auto r = run_besq(bin, {"--lang", "en_US", "--verbose", "--algo-dir", dir, "--list-algorithms"});
     expect_eq(r.exit_code, 0, "plugin audit-refused: list still exits 0");
     expect_contains(r.err, "[Audit] REFUSED", "plugin audit-refused: stderr marks REFUSED");
-    expect(r.out.find("malicious") == std::string::npos, "plugin audit-refused: malicious NOT registered");
+    expect(r.out.find("  malicious") == std::string::npos,
+           "plugin audit-refused: malicious NOT in the strategy list");
     TEST_PASS("system: malicious plugin refused by audit");
 }
 

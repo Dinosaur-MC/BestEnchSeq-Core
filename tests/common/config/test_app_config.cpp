@@ -51,8 +51,10 @@ TEST_CASE("test_default_values") {
     const auto exe = exe_dir();
     const std::string expected_log = (exe / "logs").string();
     const std::string expected_state = (exe / "states").string();
+    const std::string expected_langs = (exe / "langs").string();
     expect(cfg.log_dir == expected_log, "default log_dir is <exe_dir>/logs");
     expect(cfg.state_dir == expected_state, "default state_dir is <exe_dir>/states");
+    expect(cfg.langs_dir == expected_langs, "default langs_dir is <exe_dir>/langs");
     expect(cfg.state_autosave == false, "default state_autosave false");
     expect(cfg.log_level == 0, "default log_level 0");
     expect(cfg.log_console == true, "default log_console true");

@@ -96,9 +96,11 @@ void BesqContext::auto_load() {
     AutoLoadRequest req;
     if (!_impl->profiles_dir.empty())
         req.profiles_dir = std::filesystem::path(_impl->profiles_dir);
-    // algorithms_dir: AppConfig default is already <exe_dir>/algorithms;
-    // BESQ_ALGO_DIR (env) overrides it.  langs stays exe-defaulted.
+    // algorithms_dir / langs_dir: AppConfig defaults are already exe-relative
+    // (<exe_dir>/algorithms, <exe_dir>/langs); BESQ_ALGO_DIR / BESQ_LANG_DIR
+    // (env) override them.
     req.algorithms_dir = std::filesystem::path(AppConfig::get().algo_dir);
+    req.langs_dir = std::filesystem::path(AppConfig::get().langs_dir);
     AutoLoadPipeline::run(_impl->profiles, _impl->loader, _impl->algo_loader, req);
 }
 
