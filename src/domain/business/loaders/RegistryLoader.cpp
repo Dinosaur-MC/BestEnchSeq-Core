@@ -4,6 +4,7 @@
 #include "BuiltinData.h"
 #include "common/CommonTypes.h"
 #include "common/log/log.hpp"
+#include "common/utils/StringUtils.hpp"
 
 #include <string>
 #include <unordered_set>
@@ -18,7 +19,12 @@ namespace {
 /// re-declaring a vanilla entry) cannot be told apart from a CONFLICTING one
 /// (same id, different data).  Only the latter deserves a warning.
 bool ench_content_equal(const EnchInfo& a, const EnchInfo& b) {
-    return a.name == b.name && a.supported_platform == b.supported_platform &&
+    // Name compared case-insensitively: display names from different sources
+    // legitimately differ in case (vanilla Title Case "Copper Boots" vs
+    // datapack-derived sentence case "Copper boots"); a case-only difference
+    // is representation noise, NOT a content conflict.
+    return string_utils::iequals(a.name, b.name) &&
+           a.supported_platform == b.supported_platform &&
            a.max_level == b.max_level && a.limited_level == b.limited_level &&
            a.limited_level_provided == b.limited_level_provided &&
            a.multiplier == b.multiplier && a.is_treasure == b.is_treasure &&
@@ -27,7 +33,8 @@ bool ench_content_equal(const EnchInfo& a, const EnchInfo& b) {
 }
 
 bool equip_content_equal(const Equipment& a, const Equipment& b) {
-    return a.name == b.name && a.category == b.category && a.max_durability == b.max_durability;
+    return string_utils::iequals(a.name, b.name) && a.category == b.category &&
+           a.max_durability == b.max_durability;
 }
 
 /// FIELD-LEVEL merge for duplicate NSIDs: NEW WINS per field, but only for
@@ -42,9 +49,12 @@ bool equip_content_equal(const Equipment& a, const Equipment& b) {
 ///              clearing from "not provided")
 ///   is_treasure:false           → keep old (same ambiguity; true still wins)
 ///   platform:  None             → keep old
+/// A new name that differs from the old one ONLY in case (datapack-derived
+/// sentence case vs vanilla Title Case) keeps the old (curated) name — it is
+/// representation noise, not a rename.
 EnchInfo merge_ench(const EnchInfo& old, const EnchInfo& in) {
     EnchInfo out = old;
-    if (!in.name.empty()) out.name = in.name;
+    if (!in.name.empty() && !string_utils::iequals(in.name, old.name)) out.name = in.name;
     if (in.supported_platform != MCE::None) out.supported_platform = in.supported_platform;
     if (in.max_level > 0) out.max_level = in.max_level;
     if (in.limited_level_provided) {
@@ -62,7 +72,8 @@ EnchInfo merge_ench(const EnchInfo& old, const EnchInfo& in) {
 
 Equipment merge_equip(const Equipment& old, const Equipment& in) {
     Equipment out = old;
-    if (!in.name.empty()) out.name = in.name;
+    // Case-only name differences keep the old (curated) name — see merge_ench.
+    if (!in.name.empty() && !string_utils::iequals(in.name, old.name)) out.name = in.name;
     if (!in.category.str().empty()) out.category = in.category;
     if (in.max_durability > 0) out.max_durability = in.max_durability;
     return out;

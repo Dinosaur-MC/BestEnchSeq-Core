@@ -1,9 +1,20 @@
 #pragma once
+#include <cctype>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace string_utils {
+
+inline bool iequals(const std::string_view &a, const std::string_view &b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i])))
+            return false;
+    }
+    return true;
+}
 
 inline std::string to_lower(const std::string_view &str) {
     std::string result = std::string(str);

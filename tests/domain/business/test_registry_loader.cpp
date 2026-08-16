@@ -183,6 +183,60 @@ TEST_CASE("test_loader_eq_dto_to_reg") {
     }
 }
 
+// ─── Case-only name differences are NOT conflicts ───────────────────────
+// Datapack-derived display names are sentence case ("Copper boots" via
+// derive_display_name) while vanilla.json names are Title Case ("Copper
+// Boots").  A case-only rename must be SILENT (no conflict WARN) and must
+// keep the old curated name; a genuinely different name is a real rename
+// and still wins.
+
+TEST_CASE("test_loader_case_only_name_not_conflict") {
+    TagRegistry tag_reg;
+    tag_reg.insert({NSID("#minecraft:sword"), "sword"});
+    tag_reg.insert({NSID("#minecraft:boots"), "boots"});
+    RegistryLoader loader;
+    EquipmentRegistry eq_reg;
+    EnchantmentRegistry ench_reg;
+
+    // 装备：vanilla 风格 Title Case 定义。
+    std::vector<business::loader::EquipmentData> v1;
+    v1.push_back({"minecraft:copper_boots", "Copper Boots", "boots", 143});
+    loader.from_dto(eq_reg, tag_reg, v1);
+
+    // datapack 派生重定义：仅大小写不同 → 静默，保留旧名（curated Title Case）。
+    std::vector<business::loader::EquipmentData> v2;
+    v2.push_back({"minecraft:copper_boots", "Copper boots", "boots", 143});
+    loader.from_dto(eq_reg, tag_reg, v2);
+    const auto& cb = eq_reg.at(NSID("minecraft:copper_boots"));
+    expect(cb.name == "Copper Boots", "case-only rename keeps the curated name");
+    expect(cb.max_durability == 143, "durability intact after case-only redefinition");
+    expect(eq_reg.size() == 1, "case-only redefinition does not add an entry");
+
+    // 真正的改名（不同词）→ 新覆盖旧。
+    std::vector<business::loader::EquipmentData> v3;
+    v3.push_back({"minecraft:copper_boots", "Copper Sabatons", "boots", 143});
+    loader.from_dto(eq_reg, tag_reg, v3);
+    expect(eq_reg.at(NSID("minecraft:copper_boots")).name == "Copper Sabatons",
+           "genuine rename still wins");
+
+    // 魔咒侧同一规则：多词名 "Fire Aspect" vs 派生 "Fire aspect"。
+    std::vector<business::loader::EnchantmentData> m1;
+    m1.push_back({"minecraft:fire_aspect", "Fire Aspect", 1, 2, 2, false, {}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, m1);
+    std::vector<business::loader::EnchantmentData> m2;
+    m2.push_back({"minecraft:fire_aspect", "Fire aspect", 1, 2, 2, false, {}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, m2);
+    expect(ench_reg.at(NSID("minecraft:fire_aspect")).name == "Fire Aspect",
+           "enchantment case-only rename keeps old name");
+    std::vector<business::loader::EnchantmentData> m3;
+    m3.push_back({"minecraft:fire_aspect", "Flame Edge", 1, 2, 2, false, {}, {"#minecraft:sword"}});
+    loader.from_dto(ench_reg, tag_reg, eq_reg, m3);
+    expect(ench_reg.at(NSID("minecraft:fire_aspect")).name == "Flame Edge",
+           "enchantment genuine rename still wins");
+
+    TEST_PASS("test_loader_case_only_name_not_conflict");
+}
+
 // ─── New-over-old: a later definition REPLACES an existing entry ─────────
 // RegistryLoader semantics: NEW WINS over OLD — a redefinition with the same
 // id overwrites the earlier entry (mods overriding vanilla values, datapack
