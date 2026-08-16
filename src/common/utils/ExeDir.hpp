@@ -25,53 +25,56 @@
 #endif
 
 /// Directory containing the current executable (best-effort; empty if
-/// unknown).  Cached after the first call — the executable path is fixed for
-/// the process lifetime.
+/// unknown).
+///
+/// NO static cache on purpose: the resolver is called during static
+/// teardown (e.g. DiagnosticsService's destructor drains queued events,
+/// whose handler writes diagnostics via diag_dir() → exe_dir()).  A cached
+/// path object destroyed before that singleton would be read-after-destruction
+/// (UB — observed as a Linux exit-time SegFault; Windows teardown order
+/// happened to be safe).  One syscall per call (~µs) is negligible here.
 inline std::filesystem::path exe_dir() noexcept {
-    static const std::filesystem::path cached = []() -> std::filesystem::path {
 #if defined(_WIN32)
-        // GetModuleFileNameW with a growing buffer — MAX_PATH truncation must
-        // not silently cut the path.
-        DWORD size = MAX_PATH;
-        std::wstring buf(size, L'\0');
-        for (;;) {
-            const DWORD n = ::GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
-            if (n == 0)
-                return {};
-            if (n < buf.size()) {
-                buf.resize(n);
-                break;
-            }
-            buf.resize(buf.size() * 2);
+    // GetModuleFileNameW with a growing buffer — MAX_PATH truncation must
+    // not silently cut the path.
+    DWORD size = MAX_PATH;
+    std::wstring buf(size, L'\0');
+    for (;;) {
+        const DWORD n = ::GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+        if (n == 0)
+            return {};
+        if (n < buf.size()) {
+            buf.resize(n);
+            break;
         }
-        return std::filesystem::path(buf).parent_path();
+        buf.resize(buf.size() * 2);
+    }
+    return std::filesystem::path(buf).parent_path();
 #elif defined(__linux__)
-        // readlink("/proc/self/exe") with a growing buffer.
-        size_t size = 256;
-        for (;;) {
-            std::string buf(size, '\0');
-            const ssize_t n = ::readlink("/proc/self/exe", buf.data(), buf.size() - 1);
-            if (n < 0)
-                return {};
-            if (static_cast<size_t>(n) < buf.size() - 1) {
-                buf.resize(static_cast<size_t>(n));
-                return std::filesystem::path(buf).parent_path();
-            }
-            size *= 2;
-        }
-#elif defined(__APPLE__)
-        // _NSGetExecutablePath: first call returns the required buffer size.
-        uint32_t size = 0;
-        if (::_NSGetExecutablePath(nullptr, &size) != 0) {
-            std::string buf(size, '\0');
-            if (::_NSGetExecutablePath(buf.data(), &size) != 0)
-                return {};
+    // readlink("/proc/self/exe") with a growing buffer.
+    size_t size = 256;
+    for (;;) {
+        std::string buf(size, '\0');
+        const ssize_t n = ::readlink("/proc/self/exe", buf.data(), buf.size() - 1);
+        if (n < 0)
+            return {};
+        if (static_cast<size_t>(n) < buf.size() - 1) {
+            buf.resize(static_cast<size_t>(n));
             return std::filesystem::path(buf).parent_path();
         }
-        return {};
+        size *= 2;
+    }
+#elif defined(__APPLE__)
+    // _NSGetExecutablePath: first call returns the required buffer size.
+    uint32_t size = 0;
+    if (::_NSGetExecutablePath(nullptr, &size) != 0) {
+        std::string buf(size, '\0');
+        if (::_NSGetExecutablePath(buf.data(), &size) != 0)
+            return {};
+        return std::filesystem::path(buf).parent_path();
+    }
+    return {};
 #else
-        return {};
+    return {};
 #endif
-    }();
-    return cached;
 }
