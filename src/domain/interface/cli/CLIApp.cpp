@@ -10,6 +10,7 @@
 #include "common/i18n/LocaleDetector.h"
 #include "common/utils/cli/CLIParser.hpp"
 #include "BuildConfig.h"
+#include "common/utils/ExeDir.hpp"
 #include "common/utils/StringUtils.hpp"
 #include "common/utils/EnvUtil.hpp"
 #include "common/log/log.hpp"
@@ -120,10 +121,31 @@ int CLIApp::run(int argc, char* argv[]) {
         return 0;
     }
 
+    // 1b. --list-langs: language-only listing — NO domain auto-load (which
+    //     would parse profiles/plugins and surface unrelated warnings, e.g.
+    //     a broken datapack in the profiles dir).  Only the on-disk langs
+    //     directory is pre-registered (missing → silent).
+    if (config.list_langs) {
+        const auto dir = exe_dir();
+        if (!dir.empty()) {
+            LanguageManager::instance().set_langs_dir(dir / "langs");
+            LanguageManager::instance().load_all_from_disk();
+        }
+        auto langs = LanguageManager::instance().available();
+        std::cout << tr_fmt("cli.msg.list_langs", langs.size()) << "\n";
+        for (const auto& l : langs)
+            std::cout << "  " << l << "\n";
+        flush_output();
+        return 0;
+    }
+
     // 2. Domain-wide auto-load (built-in → profiles → algorithms → langs).
     //    Explicit --algo-dir below appends to the auto-loaded set (a later
     //    same-name plugin replaces the earlier registration).
-    _ctx.auto_load();
+    //    --list-profiles skips it too: the CLIApp constructor already loaded
+    //    builtin and step 4 below re-scans the profiles directory.
+    if (!config.list_profiles)
+        _ctx.auto_load();
 
     // 2b. --algo-dir explicit plugin directory (appends to auto-load)
     if (config.algo_dir)
@@ -164,7 +186,8 @@ int CLIApp::run(int argc, char* argv[]) {
     if (config.profile)
         _ctx.activate_profile(*config.profile);
 
-    // 4b. --list-profiles / --list-langs
+    // 4b. --list-profiles (needs built-in + profiles only — already loaded
+    //     above; no algorithm/language auto-load noise).
     if (config.list_profiles) {
         auto profiles = _ctx.list_profiles();
         std::cout << tr_fmt("cli.msg.list_profiles", profiles.size()) << "\n";
@@ -175,14 +198,6 @@ int CLIApp::run(int argc, char* argv[]) {
                 std::cout << " " << tr("cli.msg.list_profiles_active");
             std::cout << "\n";
         }
-        flush_output();
-        return 0;
-    }
-    if (config.list_langs) {
-        auto langs = LanguageManager::instance().available();
-        std::cout << tr_fmt("cli.msg.list_langs", langs.size()) << "\n";
-        for (const auto& l : langs)
-            std::cout << "  " << l << "\n";
         flush_output();
         return 0;
     }
