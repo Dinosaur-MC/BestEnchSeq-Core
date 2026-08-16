@@ -1,4 +1,5 @@
 #include "domain/interface/cli/CLIApp.h"
+#include "AppConfig.h"
 #include "domain/interface/cli/EnchParser.h"
 #include "domain/interface/cli/InventoryParser.h"
 #include "domain/interface/cli/InventorySchema.h"
@@ -142,10 +143,23 @@ int CLIApp::run(int argc, char* argv[]) {
     // 2. Domain-wide auto-load (built-in → profiles → algorithms → langs).
     //    Explicit --algo-dir below appends to the auto-loaded set (a later
     //    same-name plugin replaces the earlier registration).
-    //    --list-profiles skips it too: the CLIApp constructor already loaded
-    //    builtin and step 4 below re-scans the profiles directory.
-    if (!config.list_profiles)
+    //    The info-only flags skip it and load only what they list, so a
+    //    broken profile (e.g. a bad datapack) never spams unrelated output:
+    //      --list-langs      → languages only (handled at 1b)
+    //      --list-profiles   → builtin + profiles (step 4)
+    //      --list-algorithms → builtin + algorithms (2a below)
+    if (!config.list_profiles && !config.list_algorithms)
         _ctx.auto_load();
+
+    // 2a. --list-algorithms: auto-scan the default plugin directory
+    //     (exe-relative / BESQ_ALGO_DIR) so the list reflects what auto-load
+    //     would have loaded — without touching profiles/langs.  Missing dir
+    //     → silent.
+    if (config.list_algorithms) {
+        const std::string algo_dir = AppConfig::get().algo_dir;
+        if (std::filesystem::is_directory(algo_dir))
+            _ctx.load_algorithms(algo_dir);
+    }
 
     // 2b. --algo-dir explicit plugin directory (appends to auto-load)
     if (config.algo_dir)
