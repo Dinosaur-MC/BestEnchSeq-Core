@@ -10,6 +10,28 @@
 #include <utility>
 #include <vector>
 
+namespace {
+
+/// Content-equality for duplicate-NSID conflict detection.  EnchInfo/Equipment
+/// operator== compares ONLY the id (registry key), so a plain duplicate (a
+/// redefinition with identical content — very common, e.g. a datapack
+/// re-declaring a vanilla entry) cannot be told apart from a CONFLICTING one
+/// (same id, different data).  Only the latter deserves a warning.
+bool ench_content_equal(const EnchInfo& a, const EnchInfo& b) {
+    return a.name == b.name && a.supported_platform == b.supported_platform &&
+           a.max_level == b.max_level && a.limited_level == b.limited_level &&
+           a.limited_level_provided == b.limited_level_provided &&
+           a.multiplier == b.multiplier && a.is_treasure == b.is_treasure &&
+           a.exclusive_set == b.exclusive_set && a.supported_items == b.supported_items &&
+           a.min_cost_base == b.min_cost_base && a.min_cost_per_level == b.min_cost_per_level;
+}
+
+bool equip_content_equal(const Equipment& a, const Equipment& b) {
+    return a.name == b.name && a.category == b.category && a.max_durability == b.max_durability;
+}
+
+} // namespace
+
 // ============================================================================
 // DTO → Registry
 // ============================================================================
@@ -72,9 +94,13 @@ void RegistryLoader::from_dto(
         info.is_treasure       = d.is_treasure;   // 数据值（解析自 vanilla.json / datapack treasure tag）
         info.exclusive_set     = std::move(exclusive_nsid);
         info.supported_items   = std::move(supported);
-        if (!reg.insert(std::move(info)).second)
-            LOG_WARN("Keeping existing enchantment '%s': duplicate NSID, new entry dropped",
+        auto [it, inserted] = reg.insert(std::move(info));
+        if (!inserted && !ench_content_equal(*it, info)) {
+            // 同 id 但内容冲突：新条目想覆盖不同的数据——保留旧条目并提示
+            // （纯重复（内容一致）静默——datapack 重声明 vanilla 条目很常见）。
+            LOG_WARN("Keeping existing enchantment '%s': conflicting duplicate (different content), new entry dropped",
                      d.id.c_str());
+        }
     }
 }
 
@@ -98,9 +124,13 @@ void RegistryLoader::from_dto(
         eq.category       = (cat_it != tag_reg.end()) ? cat_it->id : cat_nsid;
         eq.max_durability = d.max_durability;
 
-        if (!reg.insert(std::move(eq)).second)
-            LOG_WARN("Keeping existing equipment '%s': duplicate NSID, new entry dropped",
+        auto [it, inserted] = reg.insert(std::move(eq));
+        if (!inserted && !equip_content_equal(*it, eq)) {
+            // 同 id 但内容冲突才提示；纯重复（内容一致）静默（常见：datapack
+            // 重声明 vanilla 装备）。
+            LOG_WARN("Keeping existing equipment '%s': conflicting duplicate (different content), new entry dropped",
                      d.id.c_str());
+        }
     }
 }
 
