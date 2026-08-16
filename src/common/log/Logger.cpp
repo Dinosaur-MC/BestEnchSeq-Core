@@ -200,8 +200,19 @@ Logger::Logger(const LoggerConfig& cfg)
     // AppConfig → setup_logger() (BESQ_LOG_CONSOLE / BESQ_LOG_CONSOLE_LEVEL);
     // the constructor does no env parsing of its own.
     add_consumer([this](const LogEntry& e) { _console(e); });
-    add_consumer([fc = std::make_shared<FileConsumer>(cfg.log_dir, &_max_retention, &_level)](const LogEntry& e) { (*fc)(e); });
+    _file_consumer_id = add_consumer([fc = std::make_shared<FileConsumer>(cfg.log_dir, &_max_retention, &_level)](const LogEntry& e) { (*fc)(e); });
     _loop.start();
+}
+
+void Logger::set_log_dir(const std::string& dir) {
+    // Rebuild the file sink (rotation runs on construction).  The old
+    // consumer is removed first so a rebuilt FileConsumer re-opens files in
+    // `dir`; entries queued during the swap go to whichever consumer the
+    // worker snapshots — bounded, best-effort (same as any config change).
+    if (_file_consumer_id != 0)
+        remove_consumer(_file_consumer_id);
+    _file_consumer_id = add_consumer(
+        [fc = std::make_shared<FileConsumer>(dir, &_max_retention, &_level)](const LogEntry& e) { (*fc)(e); });
 }
 
 Logger::~Logger() {
@@ -217,13 +228,16 @@ void Logger::log(LogLevel level, std::string message) {
 }
 
 void Logger::log_sync(LogLevel level, std::string message) {
-    // SYNC console: print immediately (gated by console_enabled/console_level
-    // inside ConsoleConsumer::operator()); the file sink stays ASYNC — the
-    // entry is enqueued with console_printed=true so the worker's console
-    // consumer skips it (no double print) while the FileConsumer writes it.
-    LogEntry entry{level, message, /*console_printed=*/true};
+    // SYNC console: print immediately.  The console entry must NOT carry the
+    // console_printed flag — ConsoleConsumer skips flagged entries (that
+    // flag exists to stop the WORKER from re-printing).  After the sync
+    // print (const& — the entry is untouched), flag it and move it into the
+    // queue so the worker's console consumer skips the already-printed line
+    // while the FileConsumer still writes it.
+    LogEntry entry{level, std::move(message), /*console_printed=*/false};
     _console(entry);
-    if (_loop.try_post(LogEntry{level, std::move(message), /*console_printed=*/true})) {
+    entry.console_printed = true;
+    if (_loop.try_post(std::move(entry))) {
         _enqueued.fetch_add(1, std::memory_order_release);
     }
 }

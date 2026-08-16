@@ -1,4 +1,5 @@
 #pragma once
+#include "common/utils/ExeDir.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -27,5 +28,8 @@ struct LoggerConfig {
     size_t  retention       = 5;    // max historic log files kept during rotation
     bool    console_enabled = true; // mirror to stderr (Warn/Error) / stdout (Debug/Info)
     int32_t console_level   = 2;    // console mirror threshold
-    std::string log_dir     = "logs";
+    /// Exe-relative default (<exe_dir>/logs) so ANY process that constructs
+    /// the Logger without an explicit setup_logger (tests, embedders) still
+    /// writes next to the executable, never to the CWD.
+    std::string log_dir     = (exe_dir() / "logs").string();
 };

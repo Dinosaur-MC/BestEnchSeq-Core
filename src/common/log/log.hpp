@@ -89,6 +89,10 @@ inline void setup_logger(const LoggerConfig &cfg = {}) {
       : cfg.console_level >= 2 ? LogLevel::Warn
       : cfg.console_level >= 1 ? LogLevel::Info
       :                          LogLevel::Debug);
+    // Re-point the file sink: wins over any directory the Logger was
+    // constructed with (BESQ_LOG_DIR / AppConfig log_dir must always apply,
+    // even when a log call constructed the singleton before setup_logger).
+    Logger::instance().set_log_dir(cfg.log_dir);
 }
 
 namespace besq {

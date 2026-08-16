@@ -159,6 +159,9 @@ TEST_CASE("test_logger") {
     }
 
     auto& logger = Logger::instance();
+    // 默认 log_dir 已是 <exe_dir>/logs（exe-dir 基准）——测试显式落到临时
+    // 目录（set_log_dir 重建 FileConsumer，构造时同样执行 rotate 剪枝）。
+    logger.set_log_dir((cwd.dir() / "logs").string());
     logger.set_console_enabled(false); // keep the console mirror quiet
 
     test_basic_logging(logger, cwd.dir());

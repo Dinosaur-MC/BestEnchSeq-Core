@@ -92,6 +92,12 @@ public:
     /// Flush pending messages synchronously.
     void flush();
 
+    /// Re-point the file sink at `dir` — the file consumer is rebuilt with
+    /// the new directory.  setup_logger() calls this so an explicit
+    /// BESQ_LOG_DIR / AppConfig log_dir wins even when the Logger singleton
+    /// was already constructed (e.g. by a log call before setup_logger).
+    void set_log_dir(const std::string& dir);
+
     /// ── Consumer chain ──────────────────────────────────────────────────
     /// Everything that reads logs is a consumer (console, file, test capture,
     /// future persistence).  Registered consumers are invoked serially on the
@@ -220,5 +226,7 @@ private:
     /// a FILE* is thread-safe, so the sync path needs no extra lock.
     ConsoleConsumer _console{&_console_enabled, &_console_level};
     ConsumerChain _chain;
+    /// Consumer id of the file sink (set_log_dir rebuilds it).
+    ConsumerId _file_consumer_id = 0;
     EventLoop<LogEntry, SegmentedMPSCQueue<LogEntry>, ChainHandler> _loop{ChainHandler{&_chain, &_processed}};
 };
