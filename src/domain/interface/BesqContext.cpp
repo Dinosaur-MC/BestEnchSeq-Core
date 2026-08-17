@@ -39,6 +39,7 @@ struct BesqContext::Impl {
     /// so cancel() can never dereference a destroyed executor (B-T22).
     std::atomic<std::shared_ptr<algorithm::IExecutor>> active_executor{nullptr};
     std::string profiles_dir; ///< overridden profiles dir ("" → default `<cwd>/profiles`)
+    std::vector<std::string> active_group; ///< 组合激活的成员（空 = 单 profile 模式）
     /// 求解历史（接口特有状态，计划 B Task B2）：独立小锁，不占用 _ctx_gate
     /// （gate 只护业务资源快照）——CLI/ABI 主线程与 web worker 并发写、
     /// /api/history 读。有界环形覆盖（kMaxSolveHistory），seq 从 1 单调递增。
@@ -135,6 +136,34 @@ void BesqContext::activate_profile(const std::string& name) {
     req.action = ManageRequest::Action::ActivateProfile;
     req.profile_name = name;
     ManagePipeline::run(_impl->profiles, _impl->loader, req);
+    _impl->active_group.clear();  // 单 profile 激活清除组合
+}
+
+std::vector<std::string> BesqContext::active_profiles() const {
+    if (!_impl->active_group.empty())
+        return _impl->active_group;
+    return {_impl->profiles.active_name()};
+}
+
+bool BesqContext::composite_active() const noexcept {
+    return _impl->active_group.size() > 1;
+}
+
+void BesqContext::activate_profile_group(std::vector<std::string> members) {
+    // 校验全部成员存在（缺失 → profile_not_found）；组合（≥2）时预热缓存并
+    // 触发环检测（resolve_effective_group 内部抛错）。
+    for (const auto& m : members)
+        if (!_impl->profiles.exists(m))
+            throw std::runtime_error(tr_fmt("cli.err.profile_not_found", m));
+    if (members.size() > 1)
+        (void)_impl->profiles.resolve_effective_group(members);
+    _impl->active_group = std::move(members);
+}
+
+const Profile& BesqContext::_resolve_active() const {
+    if (_impl->active_group.size() > 1)
+        return _impl->profiles.resolve_effective_group(_impl->active_group);
+    return _impl->profiles.resolve_effective(_impl->profiles.active_name());
 }
 
 void BesqContext::fork_profile(const std::string& source, const std::string& dest) {
@@ -332,7 +361,7 @@ void BesqContext::import_profile(const std::string& path) {
 }
 
 bool BesqContext::export_profile(const std::string& path) const {
-    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+    auto& profile = _resolve_active();
     ExportRequest req;
     req.target = ExportRequest::TargetType::Registry;
     req.output_path = path;
@@ -341,7 +370,7 @@ bool BesqContext::export_profile(const std::string& path) const {
 }
 
 std::string BesqContext::export_profile_to_string() const {
-    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+    auto& profile = _resolve_active();
     ExportRequest req;
     req.target = ExportRequest::TargetType::Registry;
     req.format = ExportRequest::Format::Json;
@@ -354,15 +383,15 @@ std::string BesqContext::export_profile_to_string() const {
 // ====================================================================
 
 const EnchantmentRegistry& BesqContext::enchantments() const noexcept {
-    return _impl->profiles.resolve_effective(_impl->profiles.active_name()).ench();
+    return _resolve_active().ench();
 }
 
 const EquipmentRegistry& BesqContext::equipment() const noexcept {
-    return _impl->profiles.resolve_effective(_impl->profiles.active_name()).eq();
+    return _resolve_active().eq();
 }
 
 const TagRegistry& BesqContext::categories() const noexcept {
-    return _impl->profiles.resolve_effective(_impl->profiles.active_name()).tags();
+    return _resolve_active().tags();
 }
 
 // ====================================================================
@@ -370,7 +399,7 @@ const TagRegistry& BesqContext::categories() const noexcept {
 // ====================================================================
 
 std::string BesqContext::format(const SolveResult& result, AlgorithmMode mode, std::string_view fmt) const {
-    auto& profile = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+    auto& profile = _resolve_active();
     ExportRequest req;
     req.target = ExportRequest::TargetType::Solution;
     req.format = (fmt == "json")      ? ExportRequest::Format::Json
@@ -531,7 +560,7 @@ std::vector<SolveHistoryEvent> BesqContext::solve_history() const {
 orchestration::SolveSnapshot BesqContext::solve_snapshot(const SolveRequest& request) const {
     // 有效视图缓存引用只在构建期间持有（调用方须在 _ctx_gate 内）；快照为
     // 自包含复制，构建后 solve 不再依赖 profile 数据（P0 锁攻破 §1）。
-    const auto& eff = _impl->profiles.resolve_effective(_impl->profiles.active_name());
+    const auto& eff = _resolve_active();
     return orchestration::build_solve_snapshot(request, eff);
 }
 

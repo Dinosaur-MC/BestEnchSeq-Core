@@ -100,6 +100,7 @@
     "cli.err.inventory_rejects_source": "In inventory mode, specify desired enchantments via --target brackets (e.g. --target \"diamond_sword[sharpness=5]\"); --source is not supported",
     "cli.err.inventory_requires_target": "Inventory task requires a target item (JSON 'target' or --target)",
     "cli.err.profile_not_found": "Profile not found: '{0}'",
+    "cli.err.composite_readonly": "Composite profile mode is read-only; --import/--edit need a single profile target",
     "cli.err.invalid_edit_op": "Invalid edit: '{0}'",
     "cli.err.invalid_edit_header": "Invalid edit header: '{0}'",
     "cli.err.empty_edit_id": "Empty id in edit operation: '{0}'",

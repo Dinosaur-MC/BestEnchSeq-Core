@@ -354,6 +354,50 @@ TEST_CASE("test_besq_export") {
 }
 
 // ---------------------------------------------------------------------------
+// Test: Composite profile activation — active_profiles / composite_active /
+// activate_profile_group / _resolve_active drives the read-only views
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_ctx_group_activate_and_resolve") {
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.fork_profile("builtin:vanilla", "group_a");
+    ctx.fork_profile("builtin:vanilla", "group_b");
+    ctx.add_enchantment_to("group_a", EnchInfo{NSID("mod:ember"), "Ember", MCE::All, 3, 3, 2, false,
+                                               {}, {NSID("#minecraft:swords")}});
+    ctx.add_equipment_to("group_b", Equipment{NSID("mod:ember_boots"), "Ember Boots",
+                                              NSID("#minecraft:boots"), 143});
+
+    expect(ctx.active_profiles().size() == 1, "single profile before group activation");
+    expect(!ctx.composite_active(), "not composite before group activation");
+
+    ctx.activate_profile_group({"group_a", "group_b"});
+    expect(ctx.composite_active(), "composite active after group activation");
+    expect(ctx.active_profiles() == std::vector<std::string>({"group_a", "group_b"}),
+           "active_profiles returns members in order");
+    expect(ctx.enchantments().contains(NSID("mod:ember")), "group view includes group_a enchant");
+    expect(ctx.equipment().contains(NSID("mod:ember_boots")), "group view includes group_b equipment");
+    expect(ctx.enchantments().contains(NSID("minecraft:sharpness")), "implicit vanilla base present in group view");
+
+    // 单 profile 激活清除组合。
+    ctx.activate_profile("group_a");
+    expect(!ctx.composite_active(), "single activation clears the group");
+    expect(!ctx.equipment().contains(NSID("mod:ember_boots")),
+           "group_b equipment gone after switching to single profile");
+
+    // 组合成员不存在 → throw。
+    bool threw = false;
+    try {
+        ctx.activate_profile_group({"group_a", "missing"});
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "group activation with unknown member throws");
+
+    TEST_PASS("test_ctx_group_activate_and_resolve");
+}
+
+// ---------------------------------------------------------------------------
 // Test: import_profile invalidates the effective-view cache
 // ---------------------------------------------------------------------------
 

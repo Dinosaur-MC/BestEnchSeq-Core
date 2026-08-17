@@ -25,6 +25,22 @@
 // CLIApp — Application runner
 // ============================================================================
 
+namespace {
+
+/// 组合 profile key：逗号分隔 + trim + 忽略空段。单段 = 单 profile。
+/// 定义在 run() 之前（run 的 profile selection 使用）。
+std::vector<std::string> split_profile_members(const std::string& value) {
+    std::vector<std::string> members;
+    for (const auto& seg : string_utils::split(value, ',')) {
+        std::string m = string_utils::trim(seg);
+        if (!m.empty())
+            members.push_back(std::move(m));
+    }
+    return members;
+}
+
+} // namespace
+
 std::string CLIApp::detect_target(int argc, char* argv[]) {
     for (int i = 1; i < argc - 1; ++i) {
         if (std::string_view(argv[i]) == "--api")
@@ -212,24 +228,34 @@ int CLIApp::run(int argc, char* argv[]) {
     if (config.profile_dir)
         _ctx.set_profiles_dir(*config.profile_dir);
     _ctx.load_profiles();
-    if (config.profile)
-        _ctx.activate_profile(*config.profile);
+    if (config.profile) {
+        auto members = split_profile_members(*config.profile);
+        if (members.size() > 1)
+            _ctx.activate_profile_group(std::move(members));
+        else if (members.size() == 1)
+            _ctx.activate_profile(members.front());
+        // 空组合 → 保持默认（builtin:vanilla）
+    }
 
     // 4b. --list-profiles (needs built-in + profiles only — already loaded
     //     above; no algorithm/language auto-load noise).
     if (config.list_profiles) {
         auto profiles = _ctx.list_profiles();
         std::cout << tr_fmt("cli.msg.list_profiles", profiles.size()) << "\n";
-        const auto active = _ctx.active_profile();
+        const auto actives = _ctx.active_profiles();
         for (const auto& p : profiles) {
             std::cout << "  " << p;
-            if (p == active)
+            if (std::find(actives.begin(), actives.end(), p) != actives.end())
                 std::cout << " " << tr("cli.msg.list_profiles_active");
             std::cout << "\n";
         }
         flush_output();
         return 0;
     }
+
+    // 组合模式是只读视图：--import/--edit 需要单 profile 写目标。
+    if (_ctx.composite_active() && (config.import_files || config.edit_ops))
+        throw std::runtime_error(tr("cli.err.composite_readonly"));
 
     // 5. Profile data operations (target the active profile)
     if (config.import_files) {
@@ -667,10 +693,16 @@ SolveRequest CLIApp::build_solve_request(const Config& config, BesqContext& ctx)
         // （profile_explicit 由 argv token 判定，见 parse()；profile 字段本身
         //   携带 default_v="builtin:vanilla"，无法区分显式/缺省）
         if (!config.profile_explicit && !dto.profile.empty()) {
-            auto profiles = ctx.list_profiles();
-            if (std::find(profiles.begin(), profiles.end(), dto.profile) == profiles.end())
-                throw std::runtime_error(tr_fmt("cli.err.profile_not_found", dto.profile));
-            ctx.activate_profile(dto.profile);   // side effect: changes active profile
+            auto members = split_profile_members(dto.profile);
+            for (const auto& m : members) {
+                auto profiles = ctx.list_profiles();
+                if (std::find(profiles.begin(), profiles.end(), m) == profiles.end())
+                    throw std::runtime_error(tr_fmt("cli.err.profile_not_found", m));
+            }
+            if (members.size() > 1)
+                ctx.activate_profile_group(std::move(members));
+            else if (members.size() == 1)
+                ctx.activate_profile(members.front());
         }
         auto inv = InventoryParser::build_inventory(dto, ctx.enchantments(), ctx.equipment());
 

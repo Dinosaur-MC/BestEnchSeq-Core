@@ -509,6 +509,31 @@ static std::string make_modded_profiles_dir() {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: temp profiles dir with TWO independent profiles: combo_a (mod:ember)
+// and combo_b (mod:flame), both depending on vanilla.
+// ---------------------------------------------------------------------------
+static std::string make_combo_profiles_dir() {
+    auto tmp = std::filesystem::temp_directory_path() / "besq_combo_profiles";
+    std::filesystem::remove_all(tmp);
+    std::filesystem::create_directories(tmp);
+    {
+        std::ofstream f(tmp / "combo_a.json");
+        f << R"({"name":"combo_a","dependencies":["builtin:vanilla"],
+                  "enchantments":[{"id":"mod:ember","name":"Ember","platform":"java",
+                                   "max_level":3,"multiplier":2,
+                                   "supported_items":["#minecraft:swords"]}]})";
+    }
+    {
+        std::ofstream f(tmp / "combo_b.json");
+        f << R"({"name":"combo_b","dependencies":["builtin:vanilla"],
+                  "enchantments":[{"id":"mod:flame","name":"Flame","platform":"java",
+                                   "max_level":2,"multiplier":2,
+                                   "supported_items":["#minecraft:swords"]}]})";
+    }
+    return tmp.string();
+}
+
+// ---------------------------------------------------------------------------
 // Test: build_solve_request — JSON "profile" activates the profile BEFORE
 // cross-validation, so profile-only content resolves
 // ---------------------------------------------------------------------------
@@ -583,6 +608,56 @@ TEST_CASE("test_inventory_explicit_profile_overrides_json") {
 
     std::filesystem::remove_all(tmp);
     TEST_PASS("inventory wiring: explicit --profile overrides JSON profile");
+}
+
+// ---------------------------------------------------------------------------
+// Test: composite --profile value (a,b) parses verbatim; activation happens in
+// CLIApp::run, the parser only passes it through.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_profile_group_parsing") {
+    std::string tmp = make_combo_profiles_dir();
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.set_profiles_dir(tmp);
+    ctx.load_profiles();
+
+    // --profile a,b 解析为原始值（激活发生在 CLIApp::run，解析层只透传）。
+    const char* argv[] = {"besq", "--profile", "combo_a,combo_b", "--target", "diamond_sword[sharpness=1]"};
+    auto config = CLIApp::parse(5, const_cast<char**>(argv));
+    expect(config.profile && *config.profile == "combo_a,combo_b", "--profile composite value parsed verbatim");
+
+    std::filesystem::remove_all(tmp);
+    TEST_PASS("composite --profile value parsing");
+}
+
+// ---------------------------------------------------------------------------
+// Test: build_solve_request — a comma-separated JSON "profile" field activates
+// a composite group before cross-validation, so both members' content resolves
+// ---------------------------------------------------------------------------
+
+TEST_CASE("test_inventory_composite_profile_json") {
+    std::string tmp = make_combo_profiles_dir();
+    BesqContext ctx;
+    ctx.load_builtin();
+    ctx.set_profiles_dir(tmp);
+    ctx.load_profiles();
+
+    // JSON profile 字段逗号分隔 → build_solve_request 激活组合；两成员的魔咒都可用。
+    TempInvFile f(R"({
+        "profile": "combo_a,combo_b",
+        "target": { "item": "diamond_sword", "enchants": [{"id":"mod:ember","level":1},{"id":"mod:flame","level":1}] },
+        "items": [ { "type": "book", "enchants": [{"id":"mod:ember","level":1}] } ]
+    })");
+    const char* argv[] = {"besq", "--input", f.c_str()};
+    auto config = CLIApp::parse(3, const_cast<char**>(argv));
+    auto req = CLIApp::build_solve_request(config, ctx);
+    expect(ctx.composite_active(), "composite activated from JSON profile field");
+    expect(req.target_item.enchantments.size() == 2,
+           "both member enchantments resolvable in the composite view");
+
+    std::filesystem::remove_all(tmp);
+    TEST_PASS("inventory wiring: JSON composite profile activates group");
 }
 
 // ---------------------------------------------------------------------------

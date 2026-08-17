@@ -100,6 +100,7 @@
     "cli.err.inventory_rejects_source": "库存模式下请用 --target \"item[期望魔咒]\" 指定目标魔咒；--source 不支持",
     "cli.err.inventory_requires_target": "库存任务需要目标物品（JSON 'target' 或 --target）",
     "cli.err.profile_not_found": "未找到 profile: '{0}'",
+    "cli.err.composite_readonly": "组合 profile 模式为只读视图；--import/--edit 需要单个 profile 写目标",
     "cli.err.invalid_edit_op": "无效编辑: '{0}'",
     "cli.err.invalid_edit_header": "无效编辑头: '{0}'",
     "cli.err.empty_edit_id": "编辑操作中 ID 为空: '{0}'",

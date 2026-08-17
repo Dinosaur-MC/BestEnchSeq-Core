@@ -125,8 +125,16 @@ public:
 
     // ── Profile management ──
     std::string active_profile() const noexcept;
+    /// 当前激活的 profile 成员列表（组合 = 成员；单 profile = {name}）。
+    std::vector<std::string> active_profiles() const;
+    /// 当前是否组合模式（≥2 个成员）。
+    bool composite_active() const noexcept;
     std::vector<std::string> list_profiles() const;
     void activate_profile(const std::string& name);
+    /// 激活 profile 组合（成员按给定次序，后覆盖前；隐式 vanilla base）。
+    /// 成员不存在或任一成员处于依赖环 → throw std::runtime_error。
+    /// 空列表 = 清除组合（回退单 profile 模式）。≤1 个成员 = 单 profile 激活。
+    void activate_profile_group(std::vector<std::string> members);
     void fork_profile(const std::string& source, const std::string& dest);
     void merge_profile(const std::string& source, const std::string& dest);
     void remove_profile(const std::string& name);
@@ -280,6 +288,10 @@ public:
     bool unload_algorithm(const std::string& name);
 
 private:
+    /// 当前激活的有效视图：组合时 = resolve_effective_group(成员)，否则 =
+    /// resolve_effective(active_name())。所有求解/查看/导出消费点统一走这里。
+    const Profile& _resolve_active() const;
+
     struct Impl;
     std::unique_ptr<Impl> _impl;
 };
