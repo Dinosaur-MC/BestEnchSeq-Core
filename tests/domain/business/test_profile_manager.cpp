@@ -414,6 +414,49 @@ TEST_CASE("test_pm_effective_view") {
     TEST_PASS("test_pm_effective_view");
 }
 
+// ─── Test: merge is insert_or_assign for ALL domains (upper overrides lower) ──
+// 终审发现：RegistryHelper::merge 的 equipment/tags 分支原本是 add-if-absent
+// （下层赢），与魔咒分支及 ProfileManager::merge 文档语义（"Source entries
+// overwrite dest entries on conflict"）矛盾——datapack 对 vanilla 装备的字段
+// 修改（如 max_durability=999）在 effective 视图里被静默丢弃。统一为
+// insert_or_assign 后上层覆盖下层。
+
+TEST_CASE("test_pm_merge_equipment_tag_upper_wins") {
+    ProfileManager pm;
+    auto& vanilla = pm.create("builtin:vanilla");
+    vanilla.add_equipment(Equipment{NSID("minecraft:copper_boots"), "Copper Boots", NSID("#minecraft:boots"), 143});
+    vanilla.add_tag({NSID("#minecraft:boots"), "boots"});
+
+    // datapack 风格上层：修改 vanilla 装备字段 + 覆盖 vanilla tag 名 + 新增内容。
+    auto& pack = pm.create("mod_eq");
+    pack.set_dependencies({"builtin:vanilla"});
+    pack.add_equipment(Equipment{NSID("minecraft:copper_boots"), "Copper Boots", NSID("#minecraft:boots"), 999});
+    pack.add_equipment(Equipment{NSID("minecraft:mod_blade"), "Mod Blade", NSID("#minecraft:sword"), 777});
+    pack.add_tag({NSID("#minecraft:boots"), "boots-overridden"});
+    pack.add_tag({NSID("#minecraft:new_tag"), "new_tag"});
+
+    const Profile& eff = pm.resolve_effective("mod_eq");
+    // 装备：上层覆盖下层（原 add-if-absent 会保留 vanilla 的 143 —— bug）。
+    expect_eq(eff.eq().at(NSID("minecraft:copper_boots")).max_durability, 999,
+              "upper equipment field override wins in effective view");
+    expect_eq(eff.eq().at(NSID("minecraft:mod_blade")).max_durability, 777,
+              "new upper equipment present");
+    // tag 名：上层覆盖下层。
+    expect_eq(eff.tags().at(NSID("#minecraft:boots")).name, "boots-overridden",
+              "upper tag name wins in effective view");
+    expect(eff.tags().contains(NSID("#minecraft:new_tag")), "new upper tag present");
+
+    // ProfileManager::merge（用户级 merge 操作）同样 insert_or_assign。
+    pm.create("dest");
+    pm.merge("mod_eq", "dest");
+    expect_eq(pm.find("dest")->eq().at(NSID("minecraft:copper_boots")).max_durability, 999,
+              "ProfileManager::merge overwrites dest equipment on conflict");
+    expect_eq(pm.find("dest")->tags().at(NSID("#minecraft:boots")).name, "boots-overridden",
+              "ProfileManager::merge overwrites dest tag on conflict");
+
+    TEST_PASS("test_pm_merge_equipment_tag_upper_wins");
+}
+
 // ─── Test: JSON `name` is the profile key (load_directory + ProfileLoader agree) ──
 // B-T26 #18: the same file must load under the SAME key via load_directory and
 // ProfileLoader::load.  JSON top-level `name` wins when present and non-empty;
@@ -732,6 +775,47 @@ TEST_CASE("test_pm_group_publish") {
 
     std::filesystem::remove(tmp);
     TEST_PASS("test_pm_group_publish");
+}
+
+// ─── Publish round-trip: the published file must reload via ProfileLoader ──
+// 终审发现（既有 bug）：to_json 把 equipment category 序列化为完整 NSID
+// ("#minecraft:bow")，而 ProfileLoader 两阶段路径在 from_dto 里无条件拼
+// "#minecraft:" + category → 双重前缀非法。修复后产物可被 ProfileLoader
+// 重新加载，category 语义不变（tag 形式）。
+
+TEST_CASE("test_pm_publish_roundtrip_reload") {
+    ProfileManager pm;
+    auto& vanilla = pm.create("builtin:vanilla");
+    vanilla.add_equipment(Equipment{NSID("minecraft:bow"), "Bow", NSID("#minecraft:bow"), 384});
+    // mod 前缀魔咒（vanilla 宇宙没有）→ 断言保真时不会被内置数据兜底掩盖。
+    vanilla.add_enchantment(EnchInfo{NSID("mod:power"), "Power", MCE::All, 7, 7, 2, false,
+                                     {}, {NSID("#minecraft:swords")}});
+
+    auto tmp = std::filesystem::temp_directory_path() / "besq_publish_roundtrip.json";
+    std::filesystem::remove(tmp);
+    expect(pm.publish("builtin:vanilla", "1.0", "", tmp), "single-profile publish succeeds");
+
+    // 经 ProfileLoader（与 load_directory 相同的两阶段 RegistryLoader 路径）
+    // 重新加载——修复前在此抛 '#minecraft:#minecraft:bow' is invalid。
+    ProfileLoader loader;
+    Profile reloaded = loader.load(tmp);
+    expect(reloaded.has_equipment(NSID("minecraft:bow")), "reloaded publish has equipment");
+    if (reloaded.has_equipment(NSID("minecraft:bow"))) {
+        const auto& bow = reloaded.eq().at(NSID("minecraft:bow"));
+        expect_eq(bow.max_durability, 384, "reloaded durability intact");
+        expect(bow.category.is_tag() && bow.category.get_id() == "bow",
+               "reloaded category keeps tag form #minecraft:bow");
+    }
+    expect(reloaded.has_enchantment(NSID("mod:power")), "reloaded publish has mod enchantment");
+    if (reloaded.has_enchantment(NSID("mod:power"))) {
+        const auto& power = reloaded.ench().at(NSID("mod:power"));
+        expect_eq(power.max_level, 7, "reloaded enchantment content preserved (not vanilla fallback)");
+        expect(power.supported_items.count(NSID("#minecraft:swords")) == 1,
+               "reloaded supported_items preserved");
+    }
+
+    std::filesystem::remove(tmp);
+    TEST_PASS("test_pm_publish_roundtrip_reload");
 }
 
 // ─── Test: Manager-level edit (real-time validation) + snapshot/undo ────

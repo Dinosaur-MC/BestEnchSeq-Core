@@ -182,7 +182,14 @@ void RegistryLoader::from_dto(
     const std::vector<business::loader::EquipmentData>& data)
 {
     for (const auto& d : data) {
-        NSID cat_nsid("#minecraft:" + d.category);
+        // category 表示兼容：datapack 派生/native JSON 用短名（"bow"）→ 拼 tag
+        // 形式；publish/export 产物经 to_json 序列化为完整 NSID（"#minecraft:bow"）
+        // → 直接使用（否则 "#minecraft:" + "#minecraft:bow" 双重前缀非法）。
+        // （终审发现：publish round-trip 既有 bug——产物无法被 ProfileLoader 重载。）
+        std::string cat_raw = d.category;
+        if (cat_raw.find(':') == std::string::npos)
+            cat_raw = "#minecraft:" + cat_raw;
+        NSID cat_nsid(std::move(cat_raw));
         auto cat_it = tag_reg.find(cat_nsid);
 
         Equipment eq;
