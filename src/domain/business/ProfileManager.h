@@ -123,6 +123,13 @@ public:
     /// 任何 profile 变更（manager 级 mutation）都会使缓存失效。
     const Profile& resolve_effective(const std::string& profile) const;
 
+    /// 组合有效视图：按给定次序合并多个 profile。隐式 vanilla base（最低）+
+    /// 各成员的依赖链（拓扑序）展开，整体去重（保留最后出现位置，用户显式
+    /// 顺序优先），上层覆盖下层，合并 tag 宇宙 TagResolver。缓存按逗号拼接
+    /// key 存入 _effective_cache（notify_mutated 统一失效）。
+    /// 成员不存在或任一成员处于依赖环 → throw std::runtime_error。
+    const Profile& resolve_effective_group(const std::vector<std::string>& members) const;
+
     /// 从目录加载全部 profile（native JSON/CSV + datapack 子目录），构建依赖图。
     void load_directory(const std::filesystem::path& dir);
 

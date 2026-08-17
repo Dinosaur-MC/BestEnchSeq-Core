@@ -2,6 +2,7 @@
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "domain/business/components/FormatDetector.h"
+#include "domain/business/components/Serializer.h"
 #include "domain/business/components/TagResolver.h"
 #include "domain/business/loaders/ProfileLoader.h"
 #include "domain/business/ProfileManager.h"
@@ -13,6 +14,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 // ─── Helper: create an enchantment info for testing ─────────────────────
@@ -589,6 +591,147 @@ TEST_CASE("test_pm_effective_injects_vanilla") {
                   "vanilla equipment has real max_durability (not a 0 placeholder)");
     expect(eff.has_enchantment(NSID("minecraft:sharpness")), "effective view includes vanilla enchant");
     TEST_PASS("test_pm_effective_injects_vanilla");
+}
+
+// ─── Profile group (composite) effective views ─────────────────────────
+
+TEST_CASE("test_pm_group_effective_merge") {
+    ProfileManager pm;
+    auto& vanilla = pm.create("builtin:vanilla");
+    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561});
+    auto& a = pm.create("pack_a");
+    a.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 7));
+    auto& b = pm.create("pack_b");
+    b.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 3));
+    b.add_equipment(Equipment{NSID("minecraft:copper_boots"), "Copper Boots", NSID("#minecraft:boots"), 143});
+
+    const Profile& eff = pm.resolve_effective_group({"pack_a", "pack_b"});
+    expect(eff.has_enchantment(NSID("minecraft:sharpness")), "group view includes member enchant");
+    expect_eq(eff.ench().at(NSID("minecraft:sharpness")).max_level, 3, "later member wins (pack_b over pack_a)");
+    expect(eff.has_equipment(NSID("minecraft:copper_boots")), "group view includes pack_b equipment");
+    expect(eff.has_equipment(NSID("minecraft:diamond_sword")), "group view includes implicit vanilla base");
+
+    TEST_PASS("test_pm_group_effective_merge");
+}
+
+TEST_CASE("test_pm_group_dedup_last_wins") {
+    ProfileManager pm;
+    pm.create("builtin:vanilla");
+    auto& a = pm.create("pack_a");
+    a.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 9));
+    auto& b = pm.create("pack_b");
+    b.set_dependencies({"pack_a"});
+    b.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 4));
+
+    // 组合 b,a：b 依赖 a → 展开 vanilla,a,b,a → 去重（保留最后出现）→ vanilla,b,a。
+    const Profile& eff = pm.resolve_effective_group({"pack_b", "pack_a"});
+    expect_eq(eff.ench().at(NSID("minecraft:sharpness")).max_level, 9,
+              "user order wins: explicit pack_a listed last overrides its position in pack_b's chain");
+
+    TEST_PASS("test_pm_group_dedup_last_wins");
+}
+
+TEST_CASE("test_pm_group_implicit_vanilla") {
+    ProfileManager pm;
+    auto& vanilla = pm.create("builtin:vanilla");
+    vanilla.add_equipment(Equipment{NSID("minecraft:diamond_sword"), "Diamond Sword", NSID("#minecraft:sword"), 1561});
+    // datapack 风格成员：无 dependencies（datapack 格式无法声明依赖链）。
+    auto& pack = pm.create("enchantology_like");
+    pack.add_enchantment(make_ench("mod:ember", "Ember", 3));
+
+    const Profile& eff = pm.resolve_effective_group({"enchantology_like"});
+    expect(eff.has_equipment(NSID("minecraft:diamond_sword")),
+           "group member without declared deps still gets implicit vanilla base");
+    expect(eff.has_enchantment(NSID("mod:ember")), "member content present");
+    expect(eff.tag_resolver() != nullptr, "group view has a TagResolver");
+
+    TEST_PASS("test_pm_group_implicit_vanilla");
+}
+
+TEST_CASE("test_pm_group_member_not_found") {
+    ProfileManager pm;
+    pm.create("builtin:vanilla");
+    pm.create("pack_a");
+    bool threw = false;
+    try {
+        pm.resolve_effective_group({"pack_a", "missing_pack"});
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "group with an unknown member throws");
+
+    TEST_PASS("test_pm_group_member_not_found");
+}
+
+TEST_CASE("test_pm_group_cycle_throws") {
+    ProfileManager pm;
+    auto& a = pm.create("pack_a");
+    auto& b = pm.create("pack_b");
+    a.set_dependencies({"pack_b"});
+    b.set_dependencies({"pack_a"});
+    bool threw = false;
+    try {
+        pm.resolve_effective_group({"pack_a"});
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect(threw, "group containing a cyclic member throws");
+
+    TEST_PASS("test_pm_group_cycle_throws");
+}
+
+TEST_CASE("test_pm_group_cache_invalidate") {
+    ProfileManager pm;
+    pm.create("builtin:vanilla");
+    auto& a = pm.create("pack_a");
+    a.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
+    auto& b = pm.create("pack_b");
+    b.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 2));
+
+    expect_eq(pm.resolve_effective_group({"pack_a", "pack_b"}).ench().at(NSID("minecraft:sharpness")).max_level, 2,
+              "first resolve (pack_b wins)");
+
+    // manager 级变更 → 有效视图缓存失效 → 组合视图反映新值。
+    EnchInfo updated = b.ench().at(NSID("minecraft:sharpness"));
+    updated.max_level = 8;
+    expect(pm.update_enchantment("pack_b", updated), "update succeeds");
+    expect_eq(pm.resolve_effective_group({"pack_a", "pack_b"}).ench().at(NSID("minecraft:sharpness")).max_level, 8,
+              "group cache invalidated by manager mutation");
+
+    TEST_PASS("test_pm_group_cache_invalidate");
+}
+
+TEST_CASE("test_pm_group_publish") {
+    ProfileManager pm;
+    auto& vanilla = pm.create("builtin:vanilla");
+    vanilla.add_enchantment(make_ench("minecraft:sharpness", "Sharpness", 5));
+    auto& a = pm.create("pack_a");
+    a.add_enchantment(make_ench("mod:ember", "Ember", 3));
+    auto& b = pm.create("pack_b");
+    b.add_enchantment(make_ench("mod:flame", "Flame", 2));
+
+    auto tmp = std::filesystem::temp_directory_path() / "besq_group_publish.json";
+    std::filesystem::remove(tmp);
+    expect(pm.publish("pack_a,pack_b", "1.0", "", tmp), "composite publish succeeds");
+    expect(std::filesystem::exists(tmp), "publish file written");
+
+    // 拍平的组合视图应包含两成员内容 + 隐式 vanilla。
+    Profile loaded;
+    {
+        std::ifstream f(tmp);
+        std::stringstream ss;
+        ss << f.rdbuf();
+        auto json = Json::parse(ss.str());
+        json >> loaded;
+    }
+    expect(loaded.has_enchantment(NSID("mod:ember")), "published composite has pack_a enchant");
+    expect(loaded.has_enchantment(NSID("mod:flame")), "published composite has pack_b enchant");
+    expect(loaded.has_enchantment(NSID("minecraft:sharpness")), "published composite has implicit vanilla base");
+    // 组合含未知成员 → 失败。
+    expect(!pm.publish("pack_a,missing_pack", "1.0", "", tmp), "composite publish with unknown member fails");
+
+    std::filesystem::remove(tmp);
+    TEST_PASS("test_pm_group_publish");
 }
 
 // ─── Test: Manager-level edit (real-time validation) + snapshot/undo ────

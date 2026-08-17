@@ -10,7 +10,9 @@
 #include "common/io/FileUtils.hpp"
 #include "common/io/json.h"
 #include "common/log/log.hpp"
+#include "common/utils/StringUtils.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -448,6 +450,77 @@ const Profile& ProfileManager::resolve_effective(const std::string& profile) con
     return out;
 }
 
+// ── Effective view: profile group (composite) ─────────────────────────
+
+const Profile& ProfileManager::resolve_effective_group(
+    const std::vector<std::string>& members) const
+{
+    // 与 resolve_effective 相同：先重建邻接表，直接 set_dependencies() 的
+    // 变更会使缓存失效（B-T14 M-1）。
+    _build_graph();
+
+    // 缓存 key：逗号拼接（profile key 约定不含逗号）。
+    std::string key;
+    for (size_t i = 0; i < members.size(); ++i) {
+        if (i) key += ',';
+        key += members[i];
+    }
+    auto cache_it = _effective_cache.find(key);
+    if (cache_it != _effective_cache.end())
+        return *cache_it->second;
+
+    // 校验：成员必须存在；任一成员处于依赖环 → 报错（与 resolve_effective
+    // 的 B-T26 #21 一致，不静默降级）。
+    for (const auto& m : members) {
+        if (!_find(m))
+            throw std::runtime_error("Profile '" + m + "' not found");
+        if (is_cyclic(m)) {
+            LOG_ERROR("Profile '%s' has a dependency cycle", m.c_str());
+            throw std::runtime_error("Profile '" + m + "' has a dependency cycle");
+        }
+    }
+
+    // 展开：每个成员 = 依赖链（拓扑序，依赖在前）+ 成员自身。
+    std::vector<std::string> expanded;
+    for (const auto& m : members) {
+        const auto chain = resolve_dependencies(m);
+        expanded.insert(expanded.end(), chain.begin(), chain.end());
+        expanded.push_back(m);
+    }
+
+    // 隐式 vanilla 注入（硬性步骤——datapack 成员无法声明 dependencies，其
+    // vanilla base 完全依赖此注入；与 resolve_effective 的 B-T26 #20 一致）。
+    const bool has_vanilla =
+        std::find(expanded.begin(), expanded.end(), "builtin:vanilla") != expanded.end();
+    if (!has_vanilla && _find("builtin:vanilla"))
+        expanded.insert(expanded.begin(), "builtin:vanilla");
+
+    // 去重：保留最后出现位置（用户显式顺序总是赢）。
+    std::vector<std::string> order;
+    {
+        std::unordered_set<std::string> seen;
+        for (auto it = expanded.rbegin(); it != expanded.rend(); ++it)
+            if (seen.insert(*it).second)
+                order.push_back(*it);
+        std::reverse(order.begin(), order.end());
+    }
+
+    // 拓扑合并（上层覆盖下层）+ 合并 tag 宇宙 TagResolver（与 resolve_effective
+    // 同构）。
+    std::vector<const Profile*> sources;
+    for (const auto& n : order)
+        if (const Profile* p = _find(n))
+            sources.push_back(p);
+    auto eff = std::make_unique<Profile>(key);
+    for (const Profile* src : sources)
+        RegistryHelper::merge(*eff, *src);
+    eff->set_tag_resolver(RegistryHelper::build_tag_resolver(*eff, sources));
+
+    Profile& out = *eff;
+    _effective_cache[key] = std::move(eff);
+    return out;
+}
+
 // ── Load directory ────────────────────────────────────────────────────
 
 void ProfileManager::load_directory(const std::filesystem::path& dir) {
@@ -656,16 +729,33 @@ size_t ProfileManager::cross_validate(const std::string& profile) {
 
 bool ProfileManager::publish(const std::string& profile, const std::string& version,
                              const std::string& tag, const std::filesystem::path& out) {
-    if (_find(profile) == nullptr) return false;
-    const Profile& eff = resolve_effective(profile);
+    // 组合 key：逗号分隔成员（profile key 约定不含逗号），全部成员存在才有效。
+    std::vector<std::string> members;
+    for (const auto& seg : string_utils::split(profile, ',')) {
+        std::string m = string_utils::trim(seg);
+        if (!m.empty())
+            members.push_back(std::move(m));
+    }
+    if (members.empty())
+        return false;
+    for (const auto& m : members)
+        if (_find(m) == nullptr)
+            return false;
+
+    const bool is_group = members.size() > 1;
+    const Profile& eff = is_group ? resolve_effective_group(members)
+                                  : resolve_effective(members.front());
     Json json = eff.to_json();
     // The effective view is metadata-stripped (built from registry merges), so
     // emit the source profile's human-friendly display_name explicitly when it
-    // is set and distinct from the identity key.
-    if (const Profile* src = _find(profile)) {
-        const std::string dn = src->display_name();
-        if (!dn.empty() && dn != profile)
-            json.set(std::string(ProfileMetadata::KEY_DISPLAY_NAME), Json(dn));
+    // is set and distinct from the identity key (single-profile only — a
+    // composite view has no single source name).
+    if (!is_group) {
+        if (const Profile* src = _find(members.front())) {
+            const std::string dn = src->display_name();
+            if (!dn.empty() && dn != members.front())
+                json.set(std::string(ProfileMetadata::KEY_DISPLAY_NAME), Json(dn));
+        }
     }
     json.set("version", Json(version));
     if (!tag.empty())
