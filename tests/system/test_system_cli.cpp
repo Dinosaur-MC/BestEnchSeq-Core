@@ -16,6 +16,7 @@
 #include "common/utils/EnvUtil.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -174,6 +175,61 @@ void test_list_profiles_langs(const std::string& bin) {
     expect_contains(rl.out, "en_US", "--list-langs: has en_US");
     expect_contains(rl.out, "zh_CN", "--list-langs: has zh_CN");
     TEST_PASS("system: --list-profiles / --list-langs");
+}
+
+void test_profile_group_combo(const std::string& bin) {
+    // Composite profile end-to-end: two temp profiles (combo_a: mod:ember,
+    // combo_b: mod:flame, both depending on vanilla) combined via `--profile a,b`.
+    auto tmp = std::filesystem::temp_directory_path() / "besq_sys_combo";
+    std::filesystem::remove_all(tmp);
+    std::filesystem::create_directories(tmp);
+    {
+        std::ofstream f(tmp / "combo_a.json");
+        f << R"({"name":"combo_a","dependencies":["builtin:vanilla"],
+                  "enchantments":[{"id":"mod:ember","name":"Ember","platform":"java",
+                                   "max_level":3,"multiplier":2,
+                                   "supported_items":["#minecraft:swords"]}]})";
+    }
+    {
+        std::ofstream f(tmp / "combo_b.json");
+        f << R"({"name":"combo_b","dependencies":["builtin:vanilla"],
+                  "enchantments":[{"id":"mod:flame","name":"Flame","platform":"java",
+                                   "max_level":2,"multiplier":2,
+                                   "supported_items":["#minecraft:swords"]}]})";
+    }
+
+    // --profile a,b --list-profiles: both members are marked (active).
+    auto r = run_besq(bin, {"--lang", "en_US", "--profile-dir", tmp.string(), "--profile", "combo_a,combo_b",
+                            "--list-profiles"});
+    expect_eq(r.exit_code, 0, "composite --list-profiles: exit 0");
+    expect_contains(r.out, "combo_a (active)", "composite list marks combo_a active");
+    expect_contains(r.out, "combo_b (active)", "composite list marks combo_b active");
+
+    // Composite solve: the target uses both members' enchantments → a plan is
+    // reachable.  --verbose makes the text output attach the raw NSID
+    // ("Flame (mod:flame)"); without it only the display name "Flame" prints.
+    auto r2 = run_besq(bin, {"--lang", "en_US", "--verbose", kMaxTime, kMaxTimeVal, "--profile-dir", tmp.string(),
+                             "--profile", "combo_a,combo_b", "--target", "diamond_sword[mod:ember=1,mod:flame=1]",
+                             "--source", "mod:ember=1"});
+    expect_eq(r2.exit_code, 0, "composite solve: exit 0");
+    expect_contains(r2.out, "mod:flame", "composite solve uses combo_b enchant");
+
+    // Composite + --edit → read-only rejection.  parse() requires a
+    // target/input/export/publish/resume to reach run()'s guard (otherwise
+    // "Missing --target or --export" fires first), so the invocation carries a
+    // --target; run() throws the composite read-only error (main prints it to
+    // stderr — check both streams).
+    auto r3 = run_besq(bin, {"--lang", "en_US", "--profile-dir", tmp.string(), "--profile", "combo_a,combo_b",
+                             "--edit", "ench:add,mod:ember", "--target", "diamond_sword[sharpness=1]"});
+    expect(r3.exit_code != 0, "composite + --edit rejected");
+    expect_contains(r3.out + r3.err, "read-only", "composite edit error mentions read-only");
+
+    // Composite with an unknown member → rejected.
+    auto r4 = run_besq(bin, {"--lang", "en_US", "--profile-dir", tmp.string(), "--profile", "combo_a,missing",
+                             "--list-profiles"});
+    expect(r4.exit_code != 0, "composite with unknown member rejected");
+
+    std::filesystem::remove_all(tmp);
 }
 
 void test_solve_text(const std::string& bin) {
@@ -432,6 +488,7 @@ TEST_CASE("test_system_cli") {
     test_version(bin);
     test_list_algorithms(bin);
     test_list_profiles_langs(bin);
+    test_profile_group_combo(bin);
     test_solve_text(bin);
     test_solve_compact(bin);
     test_solve_json(bin);
