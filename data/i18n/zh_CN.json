@@ -20,7 +20,7 @@
     "cli.help.import_desc": "导入数据文件到活跃 profile（JSON / CSV / MC Official 格式）\n                           （支持逗号分隔列表）",
     "cli.help.edit_desc": "运行前修改活跃 profile 的数据\n                           格式: <目标>:<动作>,<id>[,<字段>=<值>...]\n                           目标: ench | eq | cat  动作: add | mod | rm\n                           例如 --edit \"ench:mod,sharpness,max_level=10\"",
     "cli.help.export_desc": "导出活跃 profile 的数据到文件 (.json / .csv) 或 stdout (--export -)",
-    "cli.help.profile_desc": "用于求解的活跃 profile（自动处理依赖）",
+    "cli.help.profile_desc": "用于求解的活跃 profile（自动处理依赖；逗号分隔组合多个 profile，后者覆盖前者）",
     "cli.help.profile_dir_desc": "profile 目录（默认 <exe_dir>/profiles）",
     "cli.help.publish_desc": "将 profile 发布为自包含文件：--publish <key>",
     "cli.help.publish_version_desc": "--publish 的版本号",

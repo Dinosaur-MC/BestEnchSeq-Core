@@ -375,6 +375,7 @@ TEST_CASE("test_ctx_group_activate_and_resolve") {
     expect(ctx.composite_active(), "composite active after group activation");
     expect(ctx.active_profiles() == std::vector<std::string>({"group_a", "group_b"}),
            "active_profiles returns members in order");
+    expect(ctx.active_profile() == "group_a", "single-value accessor returns the FIRST member");
     expect(ctx.enchantments().contains(NSID("mod:ember")), "group view includes group_a enchant");
     expect(ctx.equipment().contains(NSID("mod:ember_boots")), "group view includes group_b equipment");
     expect(ctx.enchantments().contains(NSID("minecraft:sharpness")), "implicit vanilla base present in group view");

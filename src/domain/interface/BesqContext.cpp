@@ -157,6 +157,10 @@ void BesqContext::activate_profile_group(std::vector<std::string> members) {
             throw std::runtime_error(tr_fmt("cli.err.profile_not_found", m));
     if (members.size() > 1)
         (void)_impl->profiles.resolve_effective_group(members);
+    // 单值访问器 active_profile() 返回第一个成员（设计 §2.1）：同步 manager
+    // 激活状态，使 GUI/ABI 的 active-profile 展示在组合模式下指向首个成员。
+    if (!members.empty())
+        _impl->profiles.activate(members.front());
     _impl->active_group = std::move(members);
 }
 
