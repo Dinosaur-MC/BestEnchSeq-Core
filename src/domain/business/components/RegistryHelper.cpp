@@ -164,16 +164,29 @@ void RegistryHelper::merge(Profile& dest, const Profile& src) {
             dest.add_enchantment(info);
     }
 
-    // Equipment: add if absent (do not clobber dest's definition)
+    // Equipment: src wins on conflict (insert_or_assign) — same direction as
+    // enchantments and the documented merge semantics (ProfileManager.h:
+    // "Source entries overwrite dest entries on conflict").  The old
+    // add-if-absent let the LOWER layer win in effective views, silently
+    // dropping a datapack's field override of a vanilla equipment (e.g.
+    // max_durability=999 on copper_boots resolved to vanilla's 143).  Junk
+    // protection is unnecessary here: entries entering a merge already went
+    // through resolve_own_content's field-level merge + validation, so a
+    // partial entry cannot clobber a complete one (empty/0 fields kept old).
     for (const auto& [id, eq] : src.eq().data()) {
-        if (!dest.eq().contains(id))
-            dest.add_equipment(eq);
+        if (dest.eq().contains(id))
+            dest.remove_equipment(id);  // Profile has no update_equipment — remove+add
+        dest.add_equipment(eq);
     }
 
-    // Tags: add if absent
+    // Tags: src wins on conflict (insert_or_assign) — same direction as
+    // enchantments/equipment; the member data lives in the TagResolver
+    // (LAST source wins, see build_tag_resolver), the registry name follows
+    // the same upper-over-lower rule.
     for (const auto& [id, tag] : src.tags().data()) {
-        if (!dest.tags().contains(id))
-            dest.add_tag(tag);
+        if (dest.tags().contains(id))
+            dest.remove_tag(id);
+        dest.add_tag(tag);
     }
 }
 
