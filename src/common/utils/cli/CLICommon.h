@@ -168,8 +168,8 @@ private:
 
     template<size_t... Is>
     constexpr void check_unique_names(std::index_sequence<Is...>) const noexcept {
-        const auto long_names  = std::array{ entry_long(std::get<Is>(entries))... };
-        const auto short_names = std::array{ entry_short(std::get<Is>(entries))... };
+        const auto long_names  = std::array<std::string_view, sizeof...(Is)>{ entry_long(std::get<Is>(entries))... };
+        const auto short_names = std::array<char, sizeof...(Is)>{ entry_short(std::get<Is>(entries))... };
         for (size_t i = 0; i < long_names.size(); ++i)
             for (size_t j = i + 1; j < long_names.size(); ++j) {
                 // Unreachable in a correct table.  Runs at process startup (the
@@ -191,7 +191,7 @@ private:
             }
 
         // ── command names: non-empty and unique ──
-        const auto cmd_names = std::array{ entry_command_name(std::get<Is>(entries))... };
+        const auto cmd_names = std::array<std::string_view, sizeof...(Is)>{ entry_command_name(std::get<Is>(entries))... };
         for (size_t i = 0; i < cmd_names.size(); ++i) {
             if (cmd_names[i].empty()) continue;
             for (size_t j = i + 1; j < cmd_names.size(); ++j)

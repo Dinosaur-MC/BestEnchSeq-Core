@@ -309,5 +309,8 @@ TEST_CASE("test_subcmd_type_layer") {
     expect(!top.ok(), "ok() must recurse into command slots");
     auto msgs = top.all_messages();
     expect(msgs.size() == 1 && msgs[0] == "nested err", "all_messages flattens nested messages");
+    // 叶子 Command<> 实例化空 OptionTable<>（回归：空包 std::array{} CTAD 地雷）
+    const auto leaf = OptionTable{Command<>{.name = "leaf", .help_key = "Leaf"}};
+    expect(std::get<0>(leaf.entries).name == "leaf", "leaf command table constructs and validates");
     TEST_PASS("subcmd type layer");
 }
